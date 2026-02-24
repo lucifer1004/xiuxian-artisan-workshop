@@ -106,8 +106,8 @@ class TestEmbeddingServiceInitialization:
             assert service._backend == "fallback"
             assert service._client_mode is False
 
-    def test_initialization_ollama_normalizes_localhost_to_ipv4(self):
-        """Should normalize localhost API base to IPv4 loopback for Ollama."""
+    def test_initialization_ollama_preserves_configured_api_base(self):
+        """Should preserve configured API base exactly for Ollama."""
         from omni.foundation.services.embedding import EmbeddingService
 
         with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
@@ -123,7 +123,7 @@ class TestEmbeddingServiceInitialization:
             service.initialize()
 
             assert service._backend == "litellm"
-            assert service._litellm_api_base == "http://127.0.0.1:11434"
+            assert service._litellm_api_base == "http://localhost:11434"
 
     def test_initialization_auto_detects_server(self):
         """Should connect as client when server port is already in use."""
@@ -241,10 +241,14 @@ class TestEmbeddingServiceEmbed:
         from omni.foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
-        EmbeddingService._initialized = True
-        EmbeddingService._backend = "fallback"
-        EmbeddingService._dimension = 3
-        EmbeddingService._client_mode = False
+        service = EmbeddingService()
+        service._initialized = True
+        service._backend = "fallback"
+        service._dimension = 3
+        service._client_mode = False
+        service._client_url = "http://127.0.0.1:18501"
+        service._embed_cache_key = None
+        service._embed_cache_value = None
 
     def teardown_method(self):
         """Cleanup after each test."""
@@ -276,15 +280,19 @@ class TestEmbeddingServiceEmbed:
         """Should use HTTP client in client mode."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        EmbeddingService._client_mode = True
-        EmbeddingService._client_url = "http://127.0.0.1:18501"
+        service = EmbeddingService()
+        service._initialized = True
+        service._backend = "http"
+        service._client_mode = True
+        service._client_url = "http://127.0.0.1:18501"
+        service._embed_cache_key = None
+        service._embed_cache_value = None
 
         mock_response = [[0.1, 0.2, 0.3]]
         with patch(
             "omni.foundation.services.embedding.EmbeddingService._embed_http",
             return_value=mock_response,
         ) as mock_client:
-            service = EmbeddingService()
             result = service.embed("test")
 
             assert result == mock_response
@@ -299,9 +307,10 @@ class TestEmbeddingServiceProperties:
         from omni.foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
-        EmbeddingService._initialized = True
-        EmbeddingService._backend = "fallback"
-        EmbeddingService._dimension = 2560
+        service = EmbeddingService()
+        service._initialized = True
+        service._backend = "fallback"
+        service._dimension = 2560
 
     def test_backend_property(self):
         """Should return backend type."""
@@ -484,11 +493,14 @@ class TestEmbeddingServiceHttpRaisesOnFailure:
         from omni.foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
-        EmbeddingService._initialized = True
-        EmbeddingService._backend = "http"
-        EmbeddingService._client_mode = True
-        EmbeddingService._client_url = "http://127.0.0.1:18501"
-        EmbeddingService._dimension = 256
+        service = EmbeddingService()
+        service._initialized = True
+        service._backend = "http"
+        service._client_mode = True
+        service._client_url = "http://127.0.0.1:18501"
+        service._dimension = 256
+        service._embed_cache_key = None
+        service._embed_cache_value = None
 
     def teardown_method(self):
         from omni.foundation.services.embedding import EmbeddingService
@@ -531,12 +543,13 @@ class TestEmbeddingServiceLiteLLMResilience:
         from omni.foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
-        EmbeddingService._initialized = True
-        EmbeddingService._backend = "litellm"
-        EmbeddingService._litellm_model = "ollama/qwen3-embedding:0.6b"
-        EmbeddingService._litellm_api_base = "http://localhost:11434"
-        EmbeddingService._litellm_circuit_open_until = 0.0
-        EmbeddingService._litellm_last_error = None
+        service = EmbeddingService()
+        service._initialized = True
+        service._backend = "litellm"
+        service._litellm_model = "ollama/qwen3-embedding:0.6b"
+        service._litellm_api_base = "http://localhost:11434"
+        service._litellm_circuit_open_until = 0.0
+        service._litellm_last_error = None
 
     def teardown_method(self):
         from omni.foundation.services.embedding import EmbeddingService
@@ -615,7 +628,7 @@ class TestEmbeddingServiceLiteLLMResilience:
         assert service._litellm_circuit_open_until == 0.0
         assert service._litellm_last_error is None
 
-    def test_embed_litellm_retries_loopback_alias_and_recovers(self):
+    def test_embed_litellm_retries_with_same_configured_api_base(self):
         from omni.foundation.services.embedding import EmbeddingService
 
         service = EmbeddingService()
@@ -631,11 +644,14 @@ class TestEmbeddingServiceLiteLLMResilience:
         class _Resp:
             data = [{"embedding": [0.1, 0.2, 0.3]}]
 
+        seen_api_base: list[str | None] = []
+
         def _embedding_side_effect(*_args, **kwargs):
             api_base = kwargs.get("api_base")
+            seen_api_base.append(api_base)
             if api_base == "http://localhost:11434":
-                raise RuntimeError("Connection refused")
-            if api_base == "http://127.0.0.1:11434":
+                if len(seen_api_base) == 1:
+                    raise RuntimeError("Connection refused")
                 return _Resp()
             raise AssertionError(f"unexpected api_base: {api_base}")
 
@@ -647,7 +663,8 @@ class TestEmbeddingServiceLiteLLMResilience:
         assert len(vectors) == 1
         assert vectors[0][:3] == [0.1, 0.2, 0.3]
         assert mock_embedding.call_count == 2
-        assert service._litellm_api_base == "http://127.0.0.1:11434"
+        assert seen_api_base == ["http://localhost:11434", "http://localhost:11434"]
+        assert service._litellm_api_base == "http://localhost:11434"
 
 
 class TestEmbeddingServiceFallbackDimension:

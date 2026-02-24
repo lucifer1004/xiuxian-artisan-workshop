@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import sys
 from typing import Any
 
 
@@ -17,9 +18,8 @@ def test_run_skills_verbose_reports_after_result(monkeypatch) -> None:
         def report(self, *, output_json: bool = False) -> None:
             events.append(f"report:{output_json}")
 
-    async def _fake_run_skill_with_monitor(
-        _skill: str,
-        _command: str,
+    async def _fake_run_tool_with_monitor(
+        _tool: str,
         _args: dict[str, Any],
         *,
         output_json: bool = False,
@@ -44,7 +44,10 @@ def test_run_skills_verbose_reports_after_result(monkeypatch) -> None:
     monkeypatch.setattr("omni.agent.cli.runner.run_async_blocking", _run_async_blocking)
     monkeypatch.setattr("omni.agent.cli.runner.print_result", _fake_print_result)
     monkeypatch.setattr("omni.agent.cli.runner.err_console.print", lambda *args, **kwargs: None)
-    monkeypatch.setattr("omni.core.skills.run_skill_with_monitor", _fake_run_skill_with_monitor)
+    monkeypatch.setattr(
+        "omni.core.skills.runner.run_tool_with_monitor",
+        _fake_run_tool_with_monitor,
+    )
     monkeypatch.setattr(
         "omni.foundation.api.tool_context.run_with_execution_timeout",
         lambda coro: coro,
@@ -73,9 +76,8 @@ def test_run_skills_verbose_json_reports_after_result(monkeypatch) -> None:
         def report(self, *, output_json: bool = False) -> None:
             events.append(f"report:{output_json}")
 
-    async def _fake_run_skill_with_monitor(
-        _skill: str,
-        _command: str,
+    async def _fake_run_tool_with_monitor(
+        _tool: str,
         _args: dict[str, Any],
         *,
         output_json: bool = False,
@@ -104,7 +106,10 @@ def test_run_skills_verbose_json_reports_after_result(monkeypatch) -> None:
     monkeypatch.setattr("omni.agent.cli.runner.run_async_blocking", _run_async_blocking)
     monkeypatch.setattr("omni.agent.cli.runner.print_result", _fake_print_result)
     monkeypatch.setattr("omni.agent.cli.runner.err_console.print", lambda *args, **kwargs: None)
-    monkeypatch.setattr("omni.core.skills.run_skill_with_monitor", _fake_run_skill_with_monitor)
+    monkeypatch.setattr(
+        "omni.core.skills.runner.run_tool_with_monitor",
+        _fake_run_tool_with_monitor,
+    )
     monkeypatch.setattr(
         "omni.foundation.api.tool_context.run_with_execution_timeout",
         lambda coro: coro,
@@ -123,3 +128,96 @@ def test_run_skills_verbose_json_reports_after_result(monkeypatch) -> None:
     report_events = [idx for idx, event in enumerate(events) if event.startswith("report:")]
     assert report_events, f"missing report event, got: {events}"
     assert events.index("print_result:True") < report_events[0], events
+
+
+def test_run_skills_json_mode_skips_cli_decorations(monkeypatch) -> None:
+    """JSON mode should skip CLI execution banner and completion decoration."""
+    from omni.agent.cli.runner import run_skills
+
+    events: list[str] = []
+
+    class _FakeMonitor:
+        def report(self, *, output_json: bool = False) -> None:
+            events.append(f"report:{output_json}")
+
+    async def _fake_run_tool_with_monitor(
+        _tool: str,
+        _args: dict[str, Any],
+        *,
+        output_json: bool = False,
+        auto_report: bool = False,
+    ):
+        assert auto_report is False
+        assert output_json is True
+        return ('{"status":"success"}', _FakeMonitor())
+
+    async def _fake_close_embedding_client() -> None:
+        return None
+
+    def _run_async_blocking(awaitable):
+        return asyncio.run(awaitable)
+
+    def _fake_print_result(_result: Any, _is_tty: bool, _json_output: bool) -> None:
+        events.append(f"print_result:{_json_output}")
+
+    monkeypatch.setattr("omni.agent.cli.runner.run_async_blocking", _run_async_blocking)
+    monkeypatch.setattr("omni.agent.cli.runner.print_result", _fake_print_result)
+    monkeypatch.setattr(
+        "omni.agent.cli.runner.err_console.print",
+        lambda *args, **kwargs: events.append("err_print"),
+    )
+    monkeypatch.setattr(
+        "omni.core.skills.runner.run_tool_with_monitor",
+        _fake_run_tool_with_monitor,
+    )
+    monkeypatch.setattr(
+        "omni.foundation.api.tool_context.run_with_execution_timeout",
+        lambda coro: coro,
+    )
+    monkeypatch.setattr(
+        "omni.foundation.embedding_client.close_embedding_client",
+        _fake_close_embedding_client,
+    )
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+
+    run_skills(
+        ["knowledge.recall", '{"query":"x"}'],
+        json_output=True,
+        log_handler=lambda msg: events.append(f"log:{msg}"),
+    )
+
+    assert "print_result:True" in events
+    assert not any(event.startswith("log:") for event in events)
+    assert "err_print" not in events
+
+
+def test_run_skills_reuse_process_non_json_uses_daemon_payload(monkeypatch) -> None:
+    """Non-JSON reuse path should render daemon payload without monitor report."""
+    from omni.agent.cli.runner import run_skills
+
+    events: list[str] = []
+
+    def _fake_payload(*_args, **_kwargs):
+        return 0, '{"status":"success","source":"daemon"}'
+
+    def _fake_print_result(_result: Any, _is_tty: bool, _json_output: bool) -> None:
+        events.append(f"print_result:{_json_output}")
+        assert isinstance(_result, dict)
+        assert _result.get("source") == "daemon"
+
+    monkeypatch.setattr("omni.agent.cli.runner_json.run_skills_json_payload", _fake_payload)
+    monkeypatch.setattr("omni.agent.cli.runner.print_result", _fake_print_result)
+    monkeypatch.setattr(
+        "omni.agent.cli.runner.err_console.print",
+        lambda *args, **kwargs: events.append("err_print"),
+    )
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+
+    run_skills(
+        ["knowledge.search", '{"query":"x"}'],
+        json_output=False,
+        reuse_process=True,
+    )
+
+    assert "print_result:False" in events
+    assert "err_print" not in events

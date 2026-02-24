@@ -98,6 +98,65 @@ async def test_evaluate_link_graph_recall_policy_returns_graph_rows(
 
 
 @pytest.mark.asyncio
+async def test_evaluate_link_graph_recall_policy_uses_plan_budget_rows_per_source(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """When plan provides budget.rows_per_source, fetch should honor it."""
+    monkeypatch.setattr(
+        recall_policy,
+        "resolve_link_graph_policy_config",
+        lambda mode=None: _policy_config(mode or "hybrid"),
+    )
+
+    async def _fake_plan(*_args, **_kwargs):
+        plan = _plan(
+            requested_mode="hybrid",
+            selected_mode="graph_only",
+            reason="graph_sufficient",
+        )
+        plan.budget = SimpleNamespace(rows_per_source=2)
+        return plan
+
+    monkeypatch.setattr(recall_policy, "plan_link_graph_retrieval", _fake_plan)
+    monkeypatch.setattr(
+        recall_policy,
+        "serialize_link_graph_retrieval_plan",
+        lambda _plan_obj: {"schema": "omni.link_graph.retrieval_plan.v1"},
+    )
+    monkeypatch.setattr(
+        recall_policy,
+        "get_link_graph_retrieval_plan_schema_id",
+        lambda: "https://schemas.omni.dev/omni.link_graph.retrieval_plan.v1.schema.json",
+    )
+
+    captured: dict[str, object] = {}
+
+    async def _fake_fetch(**kwargs):
+        captured.update(kwargs)
+        return [
+            {
+                "content": "graph row",
+                "source": "docs/a.md",
+                "score": 0.91,
+                "title": "A",
+                "section": "",
+            }
+        ]
+
+    monkeypatch.setattr(recall_policy, "fetch_graph_rows_by_policy", _fake_fetch)
+
+    _ = await recall_policy.evaluate_link_graph_recall_policy(
+        query="architecture",
+        limit=3,
+        retrieval_mode="hybrid",
+        store=object(),
+        collection="knowledge_chunks",
+    )
+
+    assert captured.get("rows_per_source") == 2
+
+
+@pytest.mark.asyncio
 async def test_evaluate_link_graph_recall_policy_marks_graph_only_empty(
     monkeypatch: pytest.MonkeyPatch,
 ):

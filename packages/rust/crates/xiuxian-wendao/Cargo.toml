@@ -2,8 +2,8 @@
 name = "xiuxian-wendao"
 version.workspace = true
 edition.workspace = true
-description = "High-performance knowledge management with LanceDB storage"
-authors = ["Omni-Dev-Fusion Team"]
+description = "High-performance knowledge and link-graph runtime with Valkey-first storage"
+authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
 default-run = "wendao"
@@ -13,9 +13,6 @@ name = "wendao"
 path = "src/bin/wendao.rs"
 
 [dependencies]
-# LanceDB core
-lance = { workspace = true }
-lance-arrow = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
@@ -23,13 +20,10 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", 
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = "0.9"
+serde_yaml = { workspace = true }
 toml = "0.8"
-chrono = { workspace = true }
+chrono = { workspace = true, features = ["clock", "serde"] }
 uuid = { workspace = true }
-
-# Async stream combinators (for Lance scan → collect)
-futures = "0.3"
 
 # Path resolution
 dirs = "5"
@@ -41,7 +35,6 @@ anyhow = { workspace = true }
 
 # Reuse common types
 omni-types = { path = "../omni-types" }
-omni-vector = { path = "../omni-vector" }
 
 # Macro utilities
 omni-macros = { path = "../omni-macros" }
@@ -63,6 +56,9 @@ rayon = "1.11"
 
 # Unicode normalization for entity deduplication
 unicode-normalization = "0.1"
+
+# Graph algorithms
+petgraph = { workspace = true }
 
 # Logging
 log = { workspace = true }

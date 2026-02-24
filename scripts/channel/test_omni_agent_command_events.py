@@ -8,7 +8,7 @@ This script is the Python implementation for `test-omni-agent-command-events.sh`
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import os
 import re
@@ -19,33 +19,34 @@ from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-try:
-    from test_config_resolver import (
-        group_profile_chat_ids,
-        group_profile_int,
-        normalize_telegram_session_partition_mode,
-        session_partition_mode_from_runtime_log,
-        telegram_session_partition_mode,
-        telegram_webhook_secret_token,
-    )
-except ModuleNotFoundError as import_err:
-    _resolver_path = Path(__file__).resolve().with_name("test_config_resolver.py")
-    _resolver_spec = importlib.util.spec_from_file_location("test_config_resolver", _resolver_path)
-    if _resolver_spec is None or _resolver_spec.loader is None:
-        raise RuntimeError(f"failed to load resolver module from {_resolver_path}") from import_err
-    _resolver_module = importlib.util.module_from_spec(_resolver_spec)
-    sys.modules.setdefault(_resolver_spec.name, _resolver_module)
-    _resolver_spec.loader.exec_module(_resolver_module)
-    group_profile_chat_ids = _resolver_module.group_profile_chat_ids
-    group_profile_int = _resolver_module.group_profile_int
-    normalize_telegram_session_partition_mode = (
-        _resolver_module.normalize_telegram_session_partition_mode
-    )
-    session_partition_mode_from_runtime_log = (
-        _resolver_module.session_partition_mode_from_runtime_log
-    )
-    telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
-    telegram_webhook_secret_token = _resolver_module.telegram_webhook_secret_token
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+load_sibling_module = importlib.import_module("module_loader").load_sibling_module
+
+_resolver_module = load_sibling_module(
+    module_name="config_resolver",
+    file_name="config_resolver.py",
+    caller_file=__file__,
+    error_context="resolver module",
+)
+group_profile_chat_ids = _resolver_module.group_profile_chat_ids
+group_profile_int = _resolver_module.group_profile_int
+normalize_telegram_session_partition_mode = (
+    _resolver_module.normalize_telegram_session_partition_mode
+)
+session_partition_mode_from_runtime_log = _resolver_module.session_partition_mode_from_runtime_log
+telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
+telegram_webhook_secret_token = _resolver_module.telegram_webhook_secret_token
+
+_log_io_module = load_sibling_module(
+    module_name="log_io",
+    file_name="log_io.py",
+    caller_file=__file__,
+    error_context="shared log I/O helpers",
+)
+_shared_read_log_tail_lines = _log_io_module.read_log_tail_lines
 
 FORBIDDEN_LOG_PATTERN = "tools/call: Mcp error"
 SUITES = ("core", "control", "admin", "all")
@@ -54,6 +55,8 @@ ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 SESSION_KEY_RE = re.compile(r"\bsession_key\s*=\s*(?:\"|')?([-\d]+(?::[-\d]+){1,2})(?:\"|')?")
 PARSED_MESSAGE_CHAT_ID_RE = re.compile(r"\bchat_id\s*=\s*Some\((-?\d+)\)")
 MESSAGE_THREAD_ID_RE = re.compile(r"\bmessage_thread_id\s*=\s*Some\((\d+)\)")
+TARGET_SESSION_SCOPE_PLACEHOLDER = "__target_session_scope__"
+RUNTIME_LOG_TAIL_BYTES = 256 * 1024
 
 
 @dataclass(frozen=True)
@@ -271,6 +274,10 @@ def runtime_log_file() -> Path:
     return Path(os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/omni-agent-webhook.log"))
 
 
+def read_log_tail_lines(path: Path, tail_bytes: int = RUNTIME_LOG_TAIL_BYTES) -> list[str]:
+    return _shared_read_log_tail_lines(path, tail_bytes=tail_bytes)
+
+
 def resolve_runtime_partition_mode() -> str | None:
     override = os.environ.get("OMNI_BLACKBOX_SESSION_PARTITION_MODE", "").strip()
     normalized_override = normalize_telegram_session_partition_mode(override)
@@ -291,7 +298,7 @@ def infer_group_thread_id_from_runtime_log(chat_id: int | None) -> int | None:
     if not log_path.exists():
         return None
 
-    lines = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    lines = read_log_tail_lines(log_path)
     for raw_line in reversed(lines):
         line = ANSI_ESCAPE_RE.sub("", raw_line)
         if "Parsed message, forwarding to agent" not in line:
@@ -456,7 +463,12 @@ def build_cases(
             prompt="/session memory json",
             event_name="telegram.command.session_memory_json.replied",
             suites=("core",),
-            extra_args=("--expect-reply-json-field", "json_kind=session_memory"),
+            extra_args=(
+                "--expect-reply-json-field",
+                "json_kind=session_memory",
+                "--expect-reply-json-field",
+                f"json_session_scope={TARGET_SESSION_SCOPE_PLACEHOLDER}",
+            ),
         ),
         ProbeCase(
             case_id="session_feedback_up_json",

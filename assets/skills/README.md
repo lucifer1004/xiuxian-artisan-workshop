@@ -50,7 +50,7 @@ async def call_tool(name, arguments): ...
 
 - Direct control over tool listing/execution
 - Explicit error handling for TaskGroup
-- Optional uvloop (SSE mode) + orjson for performance
+  嗯。- Optional uvloop (SSE mode) + orjson for performance
 - No FastMCP dependency overhead
 
 ## Cascading Templates

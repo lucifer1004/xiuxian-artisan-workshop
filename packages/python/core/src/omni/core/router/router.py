@@ -13,12 +13,17 @@ from __future__ import annotations
 
 import asyncio
 from enum import StrEnum
-from typing import Callable
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from omni.foundation.config.logging import get_logger
-from omni.core.skills.runtime import SkillContext
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from omni.core.router.indexer import SkillIndexer
+    from omni.core.skills.runtime import SkillContext
 
 logger = get_logger("omni.core.router")
 
@@ -63,6 +68,18 @@ class RouteResult(BaseModel):
     input_schema_digest: str | None = Field(
         default=None,
         description="Stable digest of the selected command input schema",
+    )
+    description: str = Field(
+        default="",
+        description="Matched command description",
+    )
+    file_path: str = Field(
+        default="",
+        description="Source file path of the matched command",
+    )
+    input_schema: dict[str, Any] = Field(
+        default_factory=dict,
+        description="JSON schema for command input parameters",
     )
 
 
@@ -347,13 +364,12 @@ class UnifiedRouter:
                                 registered_cmd = f"{skill_name}.{cmd_word}"
                                 native_func = f"{skill_name}_{cmd_word}"
 
-                                if hasattr(loader, "native_functions"):
-                                    if (
-                                        cmd_word in loader.native_functions
-                                        or native_func in loader.native_functions
-                                    ):
-                                        native_command_matches[skill_name] = cmd_word
-                                        logger.debug(f"Native match: {skill_name}.{cmd_word}")
+                                if hasattr(loader, "native_functions") and (
+                                    cmd_word in loader.native_functions
+                                    or native_func in loader.native_functions
+                                ):
+                                    native_command_matches[skill_name] = cmd_word
+                                    logger.debug(f"Native match: {skill_name}.{cmd_word}")
 
                                 if registered_cmd in ctx.list_commands():
                                     candidates[registered_cmd] = max(

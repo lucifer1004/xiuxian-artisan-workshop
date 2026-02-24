@@ -10,6 +10,7 @@ const MEMORY_RECALL_SNAPSHOT_SESSION_PREFIX: &str = "__session_memory_recall__:"
 const MEMORY_RECALL_SNAPSHOT_MESSAGE_NAME: &str = "agent.memory.recall.snapshot";
 const EMBEDDING_SOURCE_EMBEDDING: &str = "embedding";
 const EMBEDDING_SOURCE_EMBEDDING_REPAIRED: &str = "embedding_repaired";
+const EMBEDDING_SOURCE_UNAVAILABLE: &str = "embedding_unavailable";
 const EMBEDDING_SOURCE_HASH: &str = "hash";
 const EMBEDDING_SOURCE_UNKNOWN: &str = "unknown";
 
@@ -21,6 +22,7 @@ pub enum SessionMemoryRecallDecision {
 }
 
 impl SessionMemoryRecallDecision {
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Injected => "injected",
@@ -83,6 +85,7 @@ struct StoredSessionMemoryRecallSnapshot {
 }
 
 impl SessionMemoryRecallSnapshot {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_plan(
         plan: MemoryRecallPlan,
         active_turns_estimate: usize,
@@ -187,7 +190,7 @@ impl StoredSessionMemoryRecallSnapshot {
 fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
+        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
         .unwrap_or(0)
 }
 
@@ -199,6 +202,7 @@ fn normalize_embedding_source(value: &str) -> &'static str {
     match value {
         EMBEDDING_SOURCE_EMBEDDING => EMBEDDING_SOURCE_EMBEDDING,
         EMBEDDING_SOURCE_EMBEDDING_REPAIRED => EMBEDDING_SOURCE_EMBEDDING_REPAIRED,
+        EMBEDDING_SOURCE_UNAVAILABLE => EMBEDDING_SOURCE_UNAVAILABLE,
         EMBEDDING_SOURCE_HASH => EMBEDDING_SOURCE_HASH,
         _ => EMBEDDING_SOURCE_UNKNOWN,
     }

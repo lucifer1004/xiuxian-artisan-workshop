@@ -13,6 +13,8 @@ import re
 import sys
 from pathlib import Path
 
+from log_io import iter_log_lines
+
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -350,9 +352,11 @@ def main() -> int:
         print(f"Error: log file not found: {log_file}", file=sys.stderr)
         return 2
 
-    content = log_file.read_text(encoding="utf-8", errors="replace")
-    lines = content.splitlines()
-    stripped_lines = [strip_ansi(line) for line in lines]
+    lines: list[str] = []
+    stripped_lines: list[str] = []
+    for line in iter_log_lines(log_file, errors="replace"):
+        lines.append(line)
+        stripped_lines.append(strip_ansi(line))
     return run_checks(
         lines=lines,
         stripped_lines=stripped_lines,

@@ -96,8 +96,9 @@ impl Episode {
         intent_embedding: Vec<f32>,
         experience: String,
         outcome: String,
-        scope: String,
+        scope: impl Into<String>,
     ) -> Self {
+        let scope = scope.into();
         Self {
             id,
             intent,

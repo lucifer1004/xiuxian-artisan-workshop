@@ -1,6 +1,9 @@
 use std::time::Duration;
 
 use crate::agent::Agent;
+use std::sync::Arc;
+use tokio::sync::watch;
+use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ForegroundTurnOutcome {
@@ -13,28 +16,67 @@ pub(crate) enum ForegroundTurnOutcome {
     TimedOut {
         reply: String,
     },
+    Interrupted {
+        reply: String,
+    },
 }
 
 pub(crate) fn build_session_id(channel: &str, session_key: &str) -> String {
     format!("{channel}:{session_key}")
 }
 
-pub(crate) async fn run_foreground_turn(
-    agent: &Agent,
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_foreground_turn_with_interrupt(
+    agent: Arc<Agent>,
     session_id: &str,
     content: &str,
     timeout_secs: u64,
     timeout_reply: String,
+    mut interrupt_rx: watch::Receiver<u64>,
+    interrupt_generation: u64,
+    interrupted_reply: String,
 ) -> ForegroundTurnOutcome {
-    let result = tokio::time::timeout(
-        Duration::from_secs(timeout_secs),
-        agent.run_turn(session_id, content),
-    )
-    .await;
+    let session_id = session_id.to_string();
+    let content = content.to_string();
+    let mut turn_task = tokio::spawn(async move { agent.run_turn(&session_id, &content).await });
+    let timeout = tokio::time::sleep(Duration::from_secs(timeout_secs));
+    tokio::pin!(timeout);
 
+    loop {
+        tokio::select! {
+            result = &mut turn_task => {
+                return match result {
+                    Ok(result) => map_turn_execution_result(result),
+                    Err(join_error) => ForegroundTurnOutcome::Failed {
+                        reply: "Error: foreground worker task failed unexpectedly.".to_string(),
+                        error_chain: format!("foreground worker task join error: {join_error}"),
+                        error_kind: "runtime_join",
+                    },
+                };
+            }
+            () = &mut timeout => {
+                abort_turn_task(&mut turn_task).await;
+                return ForegroundTurnOutcome::TimedOut { reply: timeout_reply };
+            }
+            changed = interrupt_rx.changed() => {
+                if changed.is_ok() && *interrupt_rx.borrow() != interrupt_generation {
+                    abort_turn_task(&mut turn_task).await;
+                    return ForegroundTurnOutcome::Interrupted { reply: interrupted_reply };
+                }
+            }
+        }
+    }
+}
+
+async fn abort_turn_task(turn_task: &mut JoinHandle<Result<String, anyhow::Error>>) {
+    turn_task.abort();
+    let _ = tokio::time::timeout(Duration::from_millis(100), turn_task).await;
+}
+
+fn map_turn_execution_result(result: Result<String, anyhow::Error>) -> ForegroundTurnOutcome {
     match result {
-        Ok(Ok(output)) => ForegroundTurnOutcome::Succeeded(output),
-        Ok(Err(error)) => {
+        Ok(output) => ForegroundTurnOutcome::Succeeded(output),
+        Err(error) => {
             let error_chain = format!("{error:#}");
             let error_kind = classify_turn_error(&error_chain);
             ForegroundTurnOutcome::Failed {
@@ -43,9 +85,6 @@ pub(crate) async fn run_foreground_turn(
                 error_kind,
             }
         }
-        Err(_) => ForegroundTurnOutcome::TimedOut {
-            reply: timeout_reply,
-        },
     }
 }
 

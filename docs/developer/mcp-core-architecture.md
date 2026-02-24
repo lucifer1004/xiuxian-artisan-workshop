@@ -1,3 +1,13 @@
+---
+title: "MCP Core Architecture"
+category: "developer"
+tags:
+  - developer
+  - mcp
+saliency_base: 6.3
+decay_rate: 0.04
+---
+
 # MCP Core Architecture
 
 > Trinity Architecture - Agent Layer (L3 Transport)

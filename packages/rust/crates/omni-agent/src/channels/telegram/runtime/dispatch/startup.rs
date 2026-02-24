@@ -9,8 +9,11 @@ use crate::channels::telegram::session_gate::SessionGate;
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::{JobCompletion, JobManager, JobManagerConfig, TurnRunner};
 
+use super::interrupt::ForegroundInterruptController;
 use super::worker_pool::spawn_foreground_dispatcher;
 
+#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::type_complexity)]
 pub(in crate::channels::telegram::runtime) fn start_telegram_runtime(
     agent: Arc<Agent>,
     channel: Arc<dyn Channel>,
@@ -18,6 +21,7 @@ pub(in crate::channels::telegram::runtime) fn start_telegram_runtime(
 ) -> Result<(
     String,
     mpsc::Sender<ChannelMessage>,
+    ForegroundInterruptController,
     tokio::task::JoinHandle<()>,
     Arc<JobManager>,
     mpsc::Receiver<JobCompletion>,
@@ -30,12 +34,14 @@ pub(in crate::channels::telegram::runtime) fn start_telegram_runtime(
         backend = %session_gate_backend,
         "telegram foreground session gate ready"
     );
+    let interrupt_controller = ForegroundInterruptController::default();
     let foreground_dispatcher = spawn_foreground_dispatcher(
         Arc::clone(&agent),
         Arc::clone(&channel),
         foreground_rx,
         runtime_config,
         session_gate,
+        interrupt_controller.clone(),
     );
 
     let runner: Arc<dyn TurnRunner> = agent;
@@ -43,6 +49,7 @@ pub(in crate::channels::telegram::runtime) fn start_telegram_runtime(
     Ok((
         session_gate_backend,
         foreground_tx,
+        interrupt_controller,
         foreground_dispatcher,
         job_manager,
         completion_rx,

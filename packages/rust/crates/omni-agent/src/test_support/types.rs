@@ -5,6 +5,7 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
+    #[must_use]
     pub const fn is_json(self) -> bool {
         matches!(self, Self::Json)
     }
@@ -72,6 +73,7 @@ pub enum SessionPartitionMode {
 }
 
 impl SessionPartitionMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Chat => "chat",
@@ -106,6 +108,7 @@ pub enum ManagedControlCommand {
     ResumeStatus,
     ResumeDrop,
     SessionAdmin,
+    SessionInjection,
     SessionPartition,
 }
 

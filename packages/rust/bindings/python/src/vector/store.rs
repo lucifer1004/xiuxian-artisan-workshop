@@ -39,11 +39,7 @@ fn should_cache_store(path: &str) -> bool {
     if path == ":memory:" {
         return false;
     }
-    Path::new(path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| name != "knowledge.lance")
-        .unwrap_or(true)
+    Path::new(path).file_name().and_then(|name| name.to_str()) != Some("knowledge.lance")
 }
 
 pub(crate) async fn get_or_create_store(
@@ -89,17 +85,14 @@ pub(crate) async fn get_or_create_store(
 pub(crate) fn evict_store_cache(path: Option<&str>) -> usize {
     STORE_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
-        match path {
-            Some(target) => {
-                let before = cache.len();
-                cache.retain(|key, _| key.path != target);
-                before.saturating_sub(cache.len())
-            }
-            None => {
-                let count = cache.len();
-                cache.clear();
-                count
-            }
+        if let Some(target) = path {
+            let before = cache.len();
+            cache.retain(|key, _| key.path != target);
+            before.saturating_sub(cache.len())
+        } else {
+            let count = cache.len();
+            cache.clear();
+            count
         }
     })
 }

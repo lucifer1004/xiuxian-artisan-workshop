@@ -128,11 +128,12 @@ fn calibrate_confidence_with_attributes(
     let (mut conf, mut final_score) = calibrate_confidence(score, profile);
 
     // Clear winner: top is far ahead of second
-    if let Some(s2) = second_score {
-        if score >= profile.medium_threshold && (score - s2) >= CLEAR_WINNER_GAP {
-            conf = "high";
-            final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
-        }
+    if let Some(s2) = second_score
+        && score >= profile.medium_threshold
+        && (score - s2) >= CLEAR_WINNER_GAP
+    {
+        conf = "high";
+        final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
     }
 
     let kw = keyword_score.unwrap_or(0.0);
@@ -182,11 +183,7 @@ fn canonicalize_json_value(value: &serde_json::Value) -> serde_json::Value {
 
 fn build_input_schema_digest(input_schema: &serde_json::Value) -> String {
     let normalized = omni_vector::skill::normalize_input_schema_value(input_schema);
-    if normalized
-        .as_object()
-        .map(|object| object.is_empty())
-        .unwrap_or(true)
-    {
+    if normalized.as_object().is_none_or(serde_json::Map::is_empty) {
         return "sha256:empty".to_string();
     }
     let canonical = canonicalize_json_value(&normalized);
@@ -231,7 +228,8 @@ struct PySearchOptions {
     fragment_readahead: Option<usize>,
     batch_readahead: Option<usize>,
     scan_limit: Option<usize>,
-    /// Columns to include in IPC output (e.g. ["id", "content", "_distance"]). Reduces payload for batch search.
+    /// Columns to include in IPC output (for example: `"id"`, `"content"`, `"_distance"`).
+    /// Reduces payload for batch search.
     #[serde(default)]
     projection: Option<Vec<String>>,
 }
@@ -294,14 +292,14 @@ pub(crate) fn search_optimized_async(
         let json_results: Vec<String> = results
             .into_iter()
             .map(|r| {
-                let score = 1.0f64 / (1.0f64 + r.distance.max(0.0));
+                let match_score = 1.0f64 / (1.0f64 + r.distance.max(0.0));
                 serde_json::json!({
                     "schema": "omni.vector.search.v1",
                     "id": r.id,
                     "content": r.content,
                     "metadata": r.metadata,
                     "distance": r.distance,
-                    "score": score,
+                    "score": match_score,
                 })
                 .to_string()
             })
@@ -532,7 +530,7 @@ pub(crate) fn search_tools_async(
             .unwrap_or_default()
             .sanitize();
 
-        let py_results = pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
+        pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
             let mut dicts = Vec::with_capacity(results.len());
             for (idx, r) in results.iter().enumerate() {
                 let second_score = results.get(idx + 1).map(|s| s.score);
@@ -582,8 +580,7 @@ pub(crate) fn search_tools_async(
                 dicts.push(dict.into_pyobject(py)?.into());
             }
             Ok(dicts)
-        });
-        py_results
+        })
     })
 }
 
@@ -698,7 +695,7 @@ pub(crate) fn agentic_search_async(
             .unwrap_or_default()
             .sanitize();
 
-        let py_results = pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
+        pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
             let mut dicts = Vec::with_capacity(results.len());
             for (idx, r) in results.iter().enumerate() {
                 let second_score = results.get(idx + 1).map(|s| s.score);
@@ -748,8 +745,7 @@ pub(crate) fn agentic_search_async(
                 dicts.push(dict.into_pyobject(py)?.into());
             }
             Ok(dicts)
-        });
-        py_results
+        })
     })
 }
 
@@ -789,7 +785,7 @@ pub(crate) fn load_tool_registry_async(
             .unwrap_or_default()
             .sanitize();
 
-        let py_results = pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
+        pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
             let mut dicts = Vec::with_capacity(results.len());
             for r in results {
                 let (confidence, final_score) = calibrate_confidence(r.score, &confidence_profile);
@@ -832,8 +828,7 @@ pub(crate) fn load_tool_registry_async(
                 dicts.push(dict.into_pyobject(py)?.into());
             }
             Ok(dicts)
-        });
-        py_results
+        })
     })
 }
 

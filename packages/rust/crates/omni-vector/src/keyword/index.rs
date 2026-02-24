@@ -39,7 +39,7 @@ pub struct KeywordIndex {
     pub intents: Field,
 }
 
-#[allow(clippy::missing_errors_doc, clippy::doc_markdown)]
+#[allow(clippy::doc_markdown)]
 impl KeywordIndex {
     /// Helper to create a fresh index with correct schema
     fn create_new_index(path: &Path) -> Result<Index, TantivyError> {
@@ -129,7 +129,12 @@ impl KeywordIndex {
         })
     }
 
-    /// Create a new KeywordIndex or open existing one
+    /// Create a new `KeywordIndex` or open an existing one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when directory creation fails, index open/create fails,
+    /// schema fields are missing, or reader initialization fails.
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, VectorStoreError> {
         let base_path = path.as_ref();
         let index_path = base_path.join("keyword_index");
@@ -199,7 +204,11 @@ impl KeywordIndex {
         })
     }
 
-    /// Add or update a document in the index
+    /// Add or update one document in the index.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when writer creation, document write/commit, or reader reload fails.
     pub fn upsert_document(
         &self,
         name: &str,
@@ -239,7 +248,11 @@ impl KeywordIndex {
         Ok(())
     }
 
-    /// Bulk upsert documents. Reuses a cached IndexWriter when possible.
+    /// Bulk upsert documents. Reuses a cached `IndexWriter` when possible.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when writer creation, document write/commit, or reader reload fails.
     pub fn bulk_upsert<I>(&self, docs: I) -> Result<(), VectorStoreError>
     where
         I: IntoIterator<Item = (String, String, String, Vec<String>, Vec<String>)>,
@@ -277,7 +290,11 @@ impl KeywordIndex {
         Ok(())
     }
 
-    /// Batch index ToolRecords. Reuses cached IndexWriter when possible.
+    /// Batch index tool records. Reuses a cached `IndexWriter` when possible.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when writer creation, document write/commit, or reader reload fails.
     pub fn index_batch(&self, tools: &[ToolSearchResult]) -> Result<(), TantivyError> {
         let mut cache = self.writer_cache.borrow_mut();
         if cache.is_none() {
@@ -306,7 +323,11 @@ impl KeywordIndex {
         Ok(())
     }
 
-    /// Search the index with BM25 scoring
+    /// Search the index with `BM25` scoring.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when query parsing, search execution, or document fetch fails.
     pub fn search(
         &self,
         query_str: &str,
@@ -402,11 +423,10 @@ impl KeywordIndex {
         Ok(results)
     }
 
-    /// Get the number of documents in the index
-    #[allow(clippy::unnecessary_wraps)]
-    pub fn count_documents(&self) -> Result<u64, VectorStoreError> {
-        let searcher = self.reader.searcher();
-        Ok(searcher.num_docs())
+    /// Get the number of documents in the index.
+    #[must_use]
+    pub fn count_documents(&self) -> u64 {
+        self.reader.searcher().num_docs()
     }
 
     /// Check if index exists
@@ -417,7 +437,11 @@ impl KeywordIndex {
             .exists()
     }
 
-    /// Retrieve a full ToolSearchResult from the index by tool_name (Rescue Mode)
+    /// Retrieve a full `ToolSearchResult` from the index by tool name.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when term search or document fetch fails.
     pub fn get_tool(&self, name: &str) -> Result<Option<ToolSearchResult>, VectorStoreError> {
         let searcher = self.reader.searcher();
         let term = Term::from_field_text(self.tool_name, name);

@@ -47,6 +47,7 @@ pub struct CrawlShortcut {
 
 impl CrawlShortcut {
     /// Build MCP arguments payload for `crawl4ai.crawl_url`.
+    #[must_use]
     pub fn to_arguments(&self) -> serde_json::Value {
         let mut args = serde_json::Map::new();
         args.insert(
@@ -76,6 +77,7 @@ impl CrawlShortcut {
 
 /// Parse command-style crawl input:
 /// `crawl <url> [--depth <n>] [--raw|--skeleton|--smart] [--fit-markdown|--no-fit-markdown] [--return-skeleton]`.
+#[must_use]
 pub fn parse_crawl_shortcut(input: &str) -> Option<CrawlShortcut> {
     let mut parts = input.split_whitespace();
     let verb = parts.next()?;
@@ -89,9 +91,7 @@ pub fn parse_crawl_shortcut(input: &str) -> Option<CrawlShortcut> {
             '"' | '\'' | '`' | '<' | '>' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';'
         )
     });
-    if !(url.starts_with("http://") || url.starts_with("https://")) {
-        None
-    } else {
+    if url.starts_with("http://") || url.starts_with("https://") {
         let mut shortcut = CrawlShortcut {
             url: url.to_string(),
             fit_markdown: true,
@@ -137,11 +137,14 @@ pub fn parse_crawl_shortcut(input: &str) -> Option<CrawlShortcut> {
             }
         }
         Some(shortcut)
+    } else {
+        None
     }
 }
 
-/// Parse explicit REPL mode forcing regular ReAct path:
+/// Parse explicit REPL mode forcing regular `ReAct` path:
 /// `react <message>`.
+#[must_use]
 pub fn parse_react_shortcut(input: &str) -> Option<String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -163,6 +166,7 @@ pub fn parse_react_shortcut(input: &str) -> Option<String> {
 
 /// Parse command-style graph bridge input:
 /// `graph <tool_name> [<json_object_args>]`.
+#[must_use]
 pub fn parse_graph_bridge_shortcut(input: &str) -> Option<GraphBridgeShortcut> {
     parse_workflow_bridge_shortcut(input)
         .filter(|shortcut| shortcut.mode == WorkflowBridgeMode::Graph)
@@ -171,6 +175,7 @@ pub fn parse_graph_bridge_shortcut(input: &str) -> Option<GraphBridgeShortcut> {
 /// Parse command-style workflow bridge input:
 /// - `graph <tool_name> [<json_object_args>]`
 /// - `omega <tool_name> [<json_object_args>]`
+#[must_use]
 pub fn parse_workflow_bridge_shortcut(input: &str) -> Option<GraphBridgeShortcut> {
     let trimmed = input.trim();
     if trimmed.is_empty() {

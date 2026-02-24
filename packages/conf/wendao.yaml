@@ -27,6 +27,7 @@ link_graph:
     - "assets/knowledge"
     - "docs"
     - ".data/harvested"
+    - ".data/research/papers"
   # Additional directory excludes (non-hidden). Hidden/runtime dirs are always
   # excluded by built-in policy; entries starting with "." are ignored here.
   exclude_dirs:
@@ -42,6 +43,58 @@ link_graph:
     valkey_url: "redis://127.0.0.1:6379/0"
     key_prefix: "xiuxian_wendao:link_graph:index"
     ttl_seconds: 300
+  # Runtime guards for related-note PPR traversal.
+  related_ppr:
+    # Bound candidate fan-out before kernel build.
+    max_candidates: 4096
+    # Bound seed-based partition fan-out.
+    max_partitions: 8
+    # End-to-end runtime budget for one related query.
+    time_budget_ms: 250.0
+  # Graph-first retrieval policy runtime knobs (WG4).
+  retrieval_mode: "hybrid"
+  candidate_multiplier: 4
+  max_sources: 8
+  hybrid:
+    min_hits: 2
+    min_top_score: 0.25
+  graph_rows_per_source: 8
+  # Agentic suggested-link passive logging (Phase A: log only, no mutation).
+  agentic:
+    suggested_link:
+      # Max stream entries retained in Valkey list.
+      max_entries: 2000
+      # Optional stream TTL seconds; null keeps stream persistent.
+      ttl_seconds: null
+    search:
+      # Engine-level default for including provisional suggestions in search payload.
+      include_provisional_default: false
+      # Max provisional suggestions included when enabled.
+      provisional_limit: 50
+    expansion:
+      # Max worker partitions for one bounded expansion planning cycle.
+      max_workers: 4
+      # Max candidate notes selected before pair generation.
+      max_candidates: 256
+      # Max candidate pairs assigned to one worker.
+      max_pairs_per_worker: 128
+      # End-to-end planner wall-clock budget in milliseconds.
+      time_budget_ms: 250.0
+    execution:
+      # Per-worker runtime budget for bounded execution cycle.
+      worker_time_budget_ms: 120.0
+      # Default persistence mode for `wendao agentic run` (can override via CLI).
+      persist_suggestions_default: false
+      # Max retry attempts when one persistence write fails.
+      persist_retry_attempts: 2
+      # Max latest-state rows scanned for idempotency dedupe.
+      idempotency_scan_limit: 2000
+      # Suggested-link relation label used by execution runtime.
+      relation: "related_to"
+      # Agent id stamped on execution-generated proposals.
+      agent_id: "qianhuan-architect"
+      # Human-readable evidence prefix for execution-generated proposals.
+      evidence_prefix: "agentic expansion bridge candidate"
   # Response-time stats probe budget (seconds) for search(mode=link_graph|hybrid).
   # Keeps graph_stats useful without blocking long on cold miss.
   stats_response_probe_timeout_sec: 0.05

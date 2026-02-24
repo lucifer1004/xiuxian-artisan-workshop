@@ -521,7 +521,9 @@ def _recalibrate_confidence(
         elif conf == "medium":
             final = min(medium_base + score * medium_scale, medium_cap)
         else:
-            final = max(score, low_floor)
+            # Keep low-confidence scores within the low band to preserve
+            # confidence/score contract invariants.
+            final = min(max(score, low_floor), medium_base)
 
         r["confidence"] = conf
         r["final_score"] = final
@@ -642,6 +644,7 @@ class HybridSearch:
         # Custom embedding function (set by CLI for MCP server access)
         self._embed_func: Callable[[list[str]], Awaitable[list[list[float]]]] | None = None
         self._relationship_graph: dict[str, list[tuple[str, float]]] | None = None
+        self._keyword_only_vector: list[float] | None = None
 
     def _get_relationship_graph(self) -> dict[str, list[tuple[str, float]]] | None:
         """Lazy-load skill relationship graph for associative rerank."""
@@ -663,6 +666,18 @@ class HybridSearch:
             self._relationship_graph = {}
         return self._relationship_graph
 
+    def _get_keyword_only_vector(self) -> list[float]:
+        """Return a cached zero vector for BM25-first searches that skip embedding calls."""
+        if self._keyword_only_vector is not None:
+            return self._keyword_only_vector
+        dim = int(getattr(self._store, "_dimension", 0) or 0)
+        if dim <= 0:
+            from omni.foundation.services.index_dimension import get_effective_embedding_dimension
+
+            dim = int(get_effective_embedding_dimension())
+        self._keyword_only_vector = [0.0] * max(1, dim)
+        return self._keyword_only_vector
+
     async def search(
         self,
         query: str,
@@ -671,6 +686,7 @@ class HybridSearch:
         confidence_profile: dict[str, float] | None = None,
         intent_override: str | None = None,
         skip_translation: bool = False,
+        keyword_only: bool = False,
         record_timings: dict[str, float] | None = None,
     ) -> list[dict[str, Any]]:
         """Perform hybrid search using Rust omni-vector engine.
@@ -692,6 +708,8 @@ class HybridSearch:
                 instead of rule-based classification. One of "exact", "semantic", "hybrid", "category".
             skip_translation: If True, do not translate non-English query; use as-is with embedding.
                 Speeds up routing when embedding is multilingual (e.g. route test).
+            keyword_only: If True, skip embedding calls and run BM25-first routing with a
+                cached zero-vector placeholder. Useful for low-latency discovery flows.
 
         Returns:
             List of result dictionaries, sorted by score descending. Each dict contains:
@@ -756,25 +774,69 @@ class HybridSearch:
                 effective_query,
             )
 
-        # Get query embedding from intent-focused text (required for vector search)
+        # Get query embedding from intent-focused text (required for vector search),
+        # unless keyword-only fast path is requested.
         if record_timings is not None and _t_search_start is not None:
             record_timings["pre_embed_s"] = time.perf_counter() - _t_search_start
-        _t_embed_0 = time.perf_counter() if record_timings is not None else None
-        if self._embed_func is not None:
-            # Custom embedding function (async)
-            vectors = await self._embed_func([intent_text])
-            if vectors and len(vectors) > 0:
-                query_vector = vectors[0]
-            else:
-                # Fallback to local embedding
-                embed_service = self._get_embed_service()
-                query_vector = embed_service.embed(intent_text)[0]
+        if keyword_only:
+            query_vector = self._get_keyword_only_vector()
+            if record_timings is not None:
+                record_timings["embed_s"] = 0.0
         else:
-            # Default: use local embedding service
-            embed_service = self._get_embed_service()
-            query_vector = embed_service.embed(intent_text)[0]
-        if record_timings is not None and _t_embed_0 is not None:
-            record_timings["embed_s"] = time.perf_counter() - _t_embed_0
+            from omni.foundation.services.embedding import EmbeddingUnavailableError
+
+            _t_embed_0 = time.perf_counter() if record_timings is not None else None
+            try:
+                if self._embed_func is not None:
+                    # Custom embedding function (async)
+                    vectors = await self._embed_func([intent_text])
+                    if vectors and len(vectors) > 0:
+                        query_vector = vectors[0]
+                    else:
+                        # Fallback to local embedding
+                        embed_service = self._get_embed_service()
+                        query_vector = embed_service.embed(intent_text)[0]
+                else:
+                    # Default: use local embedding service
+                    embed_service = self._get_embed_service()
+                    query_vector = embed_service.embed(intent_text)[0]
+            except EmbeddingUnavailableError as exc:
+                # Keep routing functional in local/unit environments when embedding
+                # backend is temporarily unavailable.
+                keyword_only = True
+                query_vector = self._get_keyword_only_vector()
+                if any(ord(ch) > 127 for ch in intent_text):
+                    from omni.core.router.translate import routing_fallback_for_non_english
+
+                    fallback_text = routing_fallback_for_non_english(effective_query) or (
+                        routing_fallback_for_non_english(query)
+                    )
+                    if fallback_text:
+                        intent_text = normalize_for_routing(fallback_text)
+                logger.warning(
+                    "Hybrid search embedding unavailable; falling back to keyword-only routing",
+                    error=str(exc),
+                )
+            except Exception as exc:  # noqa: BLE001
+                # Defensive fallback: configuration or runtime embedding errors
+                # must not take down routing in keyword-capable environments.
+                keyword_only = True
+                query_vector = self._get_keyword_only_vector()
+                if any(ord(ch) > 127 for ch in intent_text):
+                    from omni.core.router.translate import routing_fallback_for_non_english
+
+                    fallback_text = routing_fallback_for_non_english(effective_query) or (
+                        routing_fallback_for_non_english(query)
+                    )
+                    if fallback_text:
+                        intent_text = normalize_for_routing(fallback_text)
+                logger.warning(
+                    "Hybrid search embedding failed; falling back to keyword-only routing",
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
+            if record_timings is not None and _t_embed_0 is not None:
+                record_timings["embed_s"] = time.perf_counter() - _t_embed_0
         _t_embed_end = time.perf_counter() if record_timings is not None else None
 
         # Use agentic search when available (intent + category_filter from rule-based or optional LLM).
@@ -787,6 +849,8 @@ class HybridSearch:
 
         if intent_override is not None:
             resolved_intent, category_filter = intent_override, None
+        elif keyword_only:
+            resolved_intent, category_filter = "exact", None
         elif get_setting("router.intent.use_llm"):
             intent_result = await classify_tool_search_intent_with_llm(effective_query)
             if intent_result is not None:
@@ -803,16 +867,17 @@ class HybridSearch:
         else:
             intent_result = classify_tool_search_intent_full(effective_query)
             resolved_intent, category_filter = intent_result.intent, intent_result.category_filter
-        # --- Dual-Core Fusion Weights ---
+        # --- Fusion Weights ---
         # Compute once, apply to both Rust search engine and Python-side bridges.
         # This ensures a single intent analysis drives the entire pipeline.
         fusion = None
-        try:
-            from omni.rag.dual_core import compute_fusion_weights
+        if not keyword_only:
+            try:
+                from omni.rag.fusion import compute_fusion_weights
 
-            fusion = compute_fusion_weights(effective_query)
-        except Exception:
-            pass  # Non-fatal; defaults will be used
+                fusion = compute_fusion_weights(effective_query)
+            except Exception:
+                pass  # Non-fatal; defaults will be used
 
         # Rerank is always on in hybrid search (metadata-aware boost after RRF fusion).
         fusion_kw = {}
@@ -826,7 +891,11 @@ class HybridSearch:
         # effective_query replaces "https://..." with "github url", so use original query for this check.
         has_concrete_url = "url" in param_types and _query_has_concrete_url(query)
         has_rerank_signals = bool(param_types) or bool(_intent_terms_from_query(effective_query))
-        rust_limit = min(limit * 20, 200) if (has_rerank_signals and has_concrete_url) else limit
+        rust_limit = (
+            limit
+            if keyword_only
+            else (min(limit * 20, 200) if (has_rerank_signals and has_concrete_url) else limit)
+        )
 
         if record_timings is not None and _t_embed_end is not None:
             record_timings["intent_fusion_s"] = time.perf_counter() - _t_embed_end
@@ -960,7 +1029,7 @@ class HybridSearch:
         # Reuses the fusion weights computed above (single intent analysis).
         if fusion is not None:
             try:
-                from omni.rag.dual_core import apply_kg_rerank
+                from omni.rag.fusion import apply_kg_rerank
 
                 formatted = apply_kg_rerank(
                     formatted, effective_query, fusion_scale=fusion.kg_rerank_scale

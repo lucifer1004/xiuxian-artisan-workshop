@@ -97,4 +97,9 @@ pub struct OmegaDecision {
     pub reason: String,
     /// Optional policy profile identifier.
     pub policy_id: Option<String>,
+    /// 2026 Strategic Extension: Threshold for trajectory drift detection.
+    /// If semantic drift exceeds this value, Omega triggers re-planning.
+    pub drift_tolerance: Option<f32>,
+    /// Turn index when the next strategic re-calibration is mandatory.
+    pub next_audit_turn: Option<u32>,
 }

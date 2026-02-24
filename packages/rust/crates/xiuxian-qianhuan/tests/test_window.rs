@@ -7,7 +7,7 @@ use xiuxian_qianhuan::{
 
 #[test]
 fn parse_and_render_xml_roundtrip() {
-    let raw = r#"
+    let raw = r"
 <system_prompt_injection>
   <qa>
     <q>What is the current deployment target?</q>
@@ -19,9 +19,12 @@ fn parse_and_render_xml_roundtrip() {
     <a>Do not use file-based memory fallback.</a>
   </qa>
 </system_prompt_injection>
-"#;
-    let window = SystemPromptInjectionWindow::from_xml(raw, InjectionWindowConfig::default())
-        .expect("xml should parse");
+";
+    let window = match SystemPromptInjectionWindow::from_xml(raw, InjectionWindowConfig::default())
+    {
+        Ok(window) => window,
+        Err(error) => panic!("xml should parse: {error}"),
+    };
     assert_eq!(window.len(), 2);
 
     let rendered = window.render_xml();
@@ -62,9 +65,12 @@ fn normalize_xml_enforces_window_limits() {
 
 #[test]
 fn parse_single_qa_without_root_is_supported() {
-    let raw = r#"<qa><q>q</q><a>a</a></qa>"#;
-    let window = SystemPromptInjectionWindow::from_xml(raw, InjectionWindowConfig::default())
-        .expect("single qa should parse");
+    let raw = r"<qa><q>q</q><a>a</a></qa>";
+    let window = match SystemPromptInjectionWindow::from_xml(raw, InjectionWindowConfig::default())
+    {
+        Ok(window) => window,
+        Err(error) => panic!("single qa should parse: {error}"),
+    };
     assert_eq!(window.len(), 1);
     let rendered = window.render_xml();
     assert!(rendered.starts_with(&format!("<{SYSTEM_PROMPT_INJECTION_TAG}>")));
@@ -72,8 +78,10 @@ fn parse_single_qa_without_root_is_supported() {
 
 #[test]
 fn parse_rejects_invalid_payload() {
-    let raw = r#"<system_prompt_injection><qa><q>question only</q></qa></system_prompt_injection>"#;
-    let error = SystemPromptInjectionWindow::from_xml(raw, InjectionWindowConfig::default())
-        .expect_err("invalid qa should fail");
+    let raw = r"<system_prompt_injection><qa><q>question only</q></qa></system_prompt_injection>";
+    let Err(error) = SystemPromptInjectionWindow::from_xml(raw, InjectionWindowConfig::default())
+    else {
+        panic!("invalid qa should fail");
+    };
     assert_eq!(error, InjectionError::MissingAnswer);
 }

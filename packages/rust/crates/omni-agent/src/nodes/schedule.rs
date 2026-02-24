@@ -8,6 +8,7 @@ use omni_agent::{
 
 use crate::agent_builder::build_agent;
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_schedule_mode(
     prompt: String,
     interval_secs: u64,

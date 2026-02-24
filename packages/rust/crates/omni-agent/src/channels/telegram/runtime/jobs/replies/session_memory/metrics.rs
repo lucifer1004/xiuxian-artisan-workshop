@@ -28,6 +28,13 @@ pub(super) fn format_memory_recall_metrics_lines(
             metrics.avg_injected_per_injected
         ),
         format!(
+            "- `embedding_success_total={}` / `embedding_timeout_total={}` / `embedding_cooldown_reject_total={}` / `embedding_unavailable_total={}`",
+            metrics.embedding_success_total,
+            metrics.embedding_timeout_total,
+            metrics.embedding_cooldown_reject_total,
+            metrics.embedding_unavailable_total
+        ),
+        format!(
             "- `latency_buckets_ms`: `<=10:{}` `<=25:{}` `<=50:{}` `<=100:{}` `<=250:{}` `<=500:{}` `>500:{}`",
             metrics.latency_buckets.le_10ms,
             metrics.latency_buckets.le_25ms,
@@ -57,6 +64,10 @@ pub(super) fn format_memory_recall_metrics_json(
         "avg_selected_per_completed": metrics.avg_selected_per_completed,
         "avg_injected_per_injected": metrics.avg_injected_per_injected,
         "injected_rate": metrics.injected_rate,
+        "embedding_success_total": metrics.embedding_success_total,
+        "embedding_timeout_total": metrics.embedding_timeout_total,
+        "embedding_cooldown_reject_total": metrics.embedding_cooldown_reject_total,
+        "embedding_unavailable_total": metrics.embedding_unavailable_total,
         "latency_buckets_ms": {
             "le_10ms": metrics.latency_buckets.le_10ms,
             "le_25ms": metrics.latency_buckets.le_25ms,

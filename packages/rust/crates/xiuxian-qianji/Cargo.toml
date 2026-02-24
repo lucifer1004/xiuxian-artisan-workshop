@@ -1,0 +1,39 @@
+[package]
+name = "xiuxian-qianji"
+version.workspace = true
+edition.workspace = true
+description = "Qianji (Thousand Mechanisms) - High-performance probabilistic workflow engine"
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+default = []
+llm = ["dep:xiuxian-llm"]
+pyo3 = ["dep:pyo3"]
+
+[dependencies]
+petgraph = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+toml = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+futures = "0.3"
+rand = "0.8"
+xiuxian-wendao = { path = "../xiuxian-wendao" }
+xiuxian-qianhuan = { path = "../xiuxian-qianhuan" }
+xiuxian-llm = { path = "../xiuxian-llm", optional = true }
+pyo3 = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
+
+[lib]
+name = "xiuxian_qianji"
+path = "src/lib.rs"

@@ -3,15 +3,21 @@ name = "xiuxian-qianhuan"
 version.workspace = true
 edition.workspace = true
 description = "Xiuxian-Qianhuan prompt injection engine with XML Q&A contracts"
-authors = ["Omni-Dev-Fusion Team"]
+authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
 
 [dependencies]
+async-trait = "0.1"
 serde = { workspace = true, features = ["derive"] }
+toml = { workspace = true }
+pyo3 = { workspace = true }
+futures = "0.3"
+quick-xml = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true

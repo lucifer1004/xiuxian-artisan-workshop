@@ -9,6 +9,10 @@ use std::collections::HashMap;
 
 /// Code chunk for semantic partitioning (Python binding)
 #[pyclass]
+#[allow(
+    clippy::unsafe_derive_deserialize,
+    reason = "PyO3-bound DTO type does not deserialize untrusted data in unsafe contexts."
+)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PyCodeChunk {
     /// Chunk identifier
@@ -97,6 +101,10 @@ impl PyCodeChunk {
 
 /// Extract result struct for Python
 #[pyclass]
+#[allow(
+    clippy::unsafe_derive_deserialize,
+    reason = "PyO3-bound DTO type does not deserialize untrusted data in unsafe contexts."
+)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PyExtractResult {
     /// Matched code text
@@ -184,7 +192,7 @@ pub fn py_extract_items(
 
     let capture_opts: Option<Vec<&str>> = captures
         .as_ref()
-        .map(|v| v.iter().map(|s| s.as_str()).collect());
+        .map(|values| values.iter().map(String::as_str).collect());
 
     let results = omni_ast::extract_items(&content, &pattern, lang, capture_opts);
 
@@ -246,7 +254,7 @@ pub fn py_get_supported_languages() -> Vec<String> {
 ///     content: Source code content
 ///     file_path: Path to the file (for ID generation)
 ///     language: Programming language (e.g., "python", "rust")
-///     patterns: AST patterns to match (e.g., ["def $NAME", "class $NAME"])
+///     patterns: AST patterns to match (for example: `"def $NAME"`, `"class $NAME"`)
 ///     min_lines: Minimum lines for a chunk to be included (default: 1)
 ///     max_lines: Maximum lines for a chunk (0 = no limit, default: 0)
 ///
@@ -267,7 +275,7 @@ pub fn py_chunk_code(
         .try_into()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid language: {}", e)))?;
 
-    let pattern_refs: Vec<&str> = patterns.iter().map(|s| s.as_str()).collect();
+    let pattern_refs: Vec<&str> = patterns.iter().map(String::as_str).collect();
 
     let chunks = omni_ast::chunk_code(
         &content,

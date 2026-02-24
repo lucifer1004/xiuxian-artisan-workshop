@@ -10,15 +10,17 @@ All methods return ToolResponse for unified MCP format.
 
 from __future__ import annotations
 
-import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from omni.core.errors import CoreErrorCode, OmniError
-from omni.core.responses import ResponseStatus, ToolResponse
+from omni.core.errors import CoreErrorCode
+from omni.core.responses import ToolResponse
+from omni.foundation.utils import json_codec as json
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,7 @@ class OmniCellRunner:
             enable_shellcheck: Enable ShellCheck validation (default: True)
         """
         self._rust_bridge: Any | None = None
+        self._executor: ThreadPoolExecutor | None = None
         self._init_rust_bridge(nu_path, enable_shellcheck)
 
     def _init_rust_bridge(self, nu_path: str, enable_shellcheck: bool) -> None:
@@ -76,6 +79,9 @@ class OmniCellRunner:
             from omni_core_rs import PyOmniCell
 
             self._rust_bridge = PyOmniCell(nu_path=nu_path, enable_shellcheck=enable_shellcheck)
+            # Dedicated worker thread reduces default-executor scheduling jitter for frequent
+            # short-lived OmniCell calls.
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="omnicell")
             logger.info("OmniCell Rust bridge initialized successfully")
 
         except ImportError:
@@ -84,6 +90,18 @@ class OmniCellRunner:
                 "Run `uv sync --reinstall-package omni-core-rs` to enable."
             )
             self._rust_bridge = None
+            self._executor = None
+
+    def close(self) -> None:
+        """Release runner resources."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=False)
+            self._executor = None
+
+    def __del__(self) -> None:
+        """Best-effort resource cleanup."""
+        with suppress(Exception):
+            self.close()
 
     def classify(self, command: str) -> ActionType:
         """Classify command intent using Rust AST analyzer.
@@ -151,14 +169,22 @@ class OmniCellRunner:
         try:
             # Run sync Rust bridge call in thread pool with timeout
             loop = asyncio.get_running_loop()
+            execute_with_action = getattr(self._rust_bridge, "execute_with_action", None)
+            if callable(execute_with_action):
+
+                def execute_fn() -> Any:
+                    return execute_with_action(command, action.value, ensure_structured)
+            else:
+
+                def execute_fn() -> Any:
+                    return self._rust_bridge.execute(command, ensure_structured)
+
             try:
                 raw_json = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        None, lambda: self._rust_bridge.execute(command, ensure_structured)
-                    ),
+                    loop.run_in_executor(self._executor, execute_fn),
                     timeout=30.0,  # 30 second timeout
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return ToolResponse.error(
                     message=f"Command timed out after 30 seconds: {command[:100]}...",
                     code=CoreErrorCode.TOOL_TIMEOUT.value,
@@ -225,7 +251,6 @@ class OmniCellRunner:
     ) -> ToolResponse:
         """Fallback execution via subprocess when Rust bridge unavailable."""
         import asyncio
-        import subprocess
 
         try:
             # Build command with JSON output
@@ -478,7 +503,7 @@ class OmniCellRunner:
     def _read_file_sync(self, path: str) -> str | None:
         """Synchronous file read."""
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 content = f.read()
                 # Truncate if too large (1MB limit)
                 if len(content) > 1024 * 1024:

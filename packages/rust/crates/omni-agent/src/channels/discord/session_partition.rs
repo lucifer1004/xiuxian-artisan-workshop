@@ -25,23 +25,24 @@ impl DiscordSessionPartition {
     /// - `channel`
     /// - `user`
     /// - `guild_user`
+    #[must_use]
     pub fn from_env() -> Self {
         let Some(raw) = std::env::var("OMNI_AGENT_DISCORD_SESSION_PARTITION").ok() else {
             return Self::default();
         };
-        match raw.parse() {
-            Ok(mode) => mode,
-            Err(_) => {
-                tracing::warn!(
-                    value = %raw,
-                    "invalid OMNI_AGENT_DISCORD_SESSION_PARTITION; using guild_channel_user"
-                );
-                Self::default()
-            }
+        if let Ok(mode) = raw.parse() {
+            mode
+        } else {
+            tracing::warn!(
+                value = %raw,
+                "invalid OMNI_AGENT_DISCORD_SESSION_PARTITION; using guild_channel_user"
+            );
+            Self::default()
         }
     }
 
     /// Build a session key from Discord identifiers.
+    #[must_use]
     pub fn build_session_key(self, scope: &str, channel_id: &str, user_identity: &str) -> String {
         match self {
             Self::GuildChannelUser => format!("{scope}:{channel_id}:{user_identity}"),

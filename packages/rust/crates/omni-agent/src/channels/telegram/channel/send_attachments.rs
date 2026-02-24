@@ -117,7 +117,7 @@ impl TelegramChannel {
                     file_bytes,
                 });
                 continue;
-            };
+            }
 
             return Ok(false);
         }

@@ -10,8 +10,10 @@ Output: JSON-serialized result on stdout. On failure, error message on stderr an
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
+from contextlib import suppress
 
 
 def _main() -> int:
@@ -24,6 +26,7 @@ def _main() -> int:
 
     skill_name = sys.argv[1]
     command_name = sys.argv[2]
+    tool_name = f"{skill_name}.{command_name}"
 
     try:
         raw = sys.stdin.read()
@@ -33,10 +36,9 @@ def _main() -> int:
         return 1
 
     try:
-        from omni.core.skills.runner import run_skill
-        import asyncio
+        from omni.core.skills.runner import run_tool
 
-        result = asyncio.run(run_skill(skill_name, command_name, args))
+        result = asyncio.run(run_tool(tool_name, args))
         # Serialize for JSON; allow non-dict result (e.g. str)
         if isinstance(result, (dict, list, str, int, float, bool, type(None))):
             out = result
@@ -46,10 +48,8 @@ def _main() -> int:
         return 0
     except Exception as e:
         sys.stderr.write(f"{type(e).__name__}: {e}\n")
-        try:
+        with suppress(Exception):
             print(json.dumps({"success": False, "error": str(e)}, ensure_ascii=False))
-        except Exception:
-            pass
         return 1
 
 

@@ -8,6 +8,8 @@ Run from project root:
     uv run pytest packages/python/core/tests/units/skills/test_discovery_service.py -v
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 
 
@@ -185,6 +187,122 @@ class TestSkillDiscoveryServiceWeightedRRF:
         except Exception as e:
             # If Rust fails, should not raise (fallback should handle it)
             pytest.fail(f"Search should not raise: {e}")
+
+    @pytest.mark.asyncio
+    async def test_discover_all_reuses_instance_cache(self, monkeypatch):
+        """discover_all should reuse in-memory cache within TTL window."""
+        from omni.core.skills.discovery import SkillDiscoveryService
+
+        mock_store = MagicMock()
+        mock_store.list_all_tools = MagicMock(
+            return_value=[
+                {
+                    "skill_name": "git",
+                    "tool_name": "git.status",
+                    "description": "Get git status",
+                    "file_path": "assets/skills/git/scripts/status.py",
+                }
+            ]
+        )
+        monkeypatch.setattr("omni.core.skills.discovery.get_vector_store", lambda: mock_store)
+
+        SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE = []
+        SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT = 0.0
+        service = SkillDiscoveryService()
+        try:
+            first = await service.discover_all()
+            second = await service.discover_all()
+        finally:
+            SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE = []
+            SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT = 0.0
+
+        assert len(first) == 1
+        assert len(second) == 1
+        assert first[0].name == "git"
+        assert second[0].name == "git"
+        assert mock_store.list_all_tools.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_refresh_cache_invalidates_discover_all_cache(self, monkeypatch):
+        """_refresh_cache should clear stale cache and load updated store snapshot."""
+        from omni.core.skills.discovery import SkillDiscoveryService
+
+        initial_tools = [
+            {
+                "skill_name": "git",
+                "tool_name": "git.status",
+                "description": "Get git status",
+                "file_path": "assets/skills/git/scripts/status.py",
+            }
+        ]
+        refreshed_tools = [
+            {
+                "skill_name": "git",
+                "tool_name": "git.status",
+                "description": "Get git status",
+                "file_path": "assets/skills/git/scripts/status.py",
+            },
+            {
+                "skill_name": "memory",
+                "tool_name": "memory.save_memory",
+                "description": "Save memory",
+                "file_path": "assets/skills/memory/scripts/memory.py",
+            },
+        ]
+
+        mock_store = MagicMock()
+        mock_store.list_all_tools = MagicMock(side_effect=[initial_tools, refreshed_tools])
+        monkeypatch.setattr("omni.core.skills.discovery.get_vector_store", lambda: mock_store)
+
+        SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE = []
+        SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT = 0.0
+        service = SkillDiscoveryService()
+        try:
+            before_refresh = await service.discover_all()
+            await service._refresh_cache()
+            after_refresh = await service.discover_all()
+        finally:
+            SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE = []
+            SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT = 0.0
+
+        assert len(before_refresh) == 1
+        assert len(after_refresh) == 2
+        assert mock_store.list_all_tools.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_discover_all_reuses_shared_cache_across_instances(self, monkeypatch):
+        """discover_all should reuse process-local shared cache across service instances."""
+        from omni.core.skills.discovery import SkillDiscoveryService
+
+        mock_store = MagicMock()
+        mock_store.list_all_tools = MagicMock(
+            return_value=[
+                {
+                    "skill_name": "git",
+                    "tool_name": "git.status",
+                    "description": "Get git status",
+                    "file_path": "assets/skills/git/scripts/status.py",
+                }
+            ]
+        )
+        monkeypatch.setattr("omni.core.skills.discovery.get_vector_store", lambda: mock_store)
+
+        SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE = []
+        SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT = 0.0
+        service_a = SkillDiscoveryService()
+        service_b = SkillDiscoveryService()
+        try:
+            first = await service_a.discover_all()
+            second = await service_b.discover_all()
+        finally:
+            SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE = []
+            SkillDiscoveryService._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT = 0.0
+
+        assert len(first) == 1
+        assert len(second) == 1
+        assert first[0].name == "git"
+        assert second[0].name == "git"
+        assert mock_store.list_all_tools.call_count == 1
 
 
 class TestGenerateUsageTemplate:

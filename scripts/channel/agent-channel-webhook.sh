@@ -2,9 +2,6 @@
 # Run Telegram channel in webhook mode: ensure valkey, start ngrok, set webhook, run agent.
 # Usage: TELEGRAM_BOT_TOKEN=xxx ./scripts/channel/agent-channel-webhook.sh [valkey_port]
 # Requires: ngrok installed, ngrok authtoken (NGROK_AUTHTOKEN env or ngrok config add-authtoken)
-#
-# Allowed users: TELEGRAM_ALLOWED_USERS env, or telegram.allowed_users from settings.yaml.
-# Examples: TELEGRAM_ALLOWED_USERS="*" (allow all), TELEGRAM_ALLOWED_USERS="username,12345" (allowlist).
 
 set -euo pipefail
 
@@ -14,7 +11,7 @@ cd "${PROJECT_ROOT}"
 LOG_FILE="${OMNI_CHANNEL_LOG_FILE:-.run/logs/omni-agent-webhook.log}"
 mkdir -p "$(dirname "${LOG_FILE}")"
 
-# Source .env if present (TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USERS, TELEGRAM_WEBHOOK_SECRET, etc.)
+# Source .env if present (TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, etc.)
 if [ -f .env ]; then
   set -a
   # shellcheck source=/dev/null
@@ -42,13 +39,10 @@ fi
 #   2) telegram.webhook_secret_token from settings
 #   3) auto-generate ephemeral secret (local dev fallback)
 if [ -z "${TELEGRAM_WEBHOOK_SECRET:-}" ]; then
-  TELEGRAM_WEBHOOK_SECRET=$(uv run python -c "
-from omni.foundation.config.settings import get_setting
-print(get_setting('telegram.webhook_secret_token') or '')
-" 2>/dev/null) || true
+  TELEGRAM_WEBHOOK_SECRET="$(uv run python scripts/channel/read_telegram_setting.py --key webhook_secret_token 2>/dev/null)" || true
 fi
 if [ -z "${TELEGRAM_WEBHOOK_SECRET:-}" ]; then
-  TELEGRAM_WEBHOOK_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+  TELEGRAM_WEBHOOK_SECRET="$(python3 scripts/channel/generate_secret_token.py --length 32)"
   echo "Warning: TELEGRAM_WEBHOOK_SECRET not set; generated ephemeral local secret token."
 fi
 export TELEGRAM_WEBHOOK_SECRET
@@ -58,22 +52,47 @@ if ! command -v ngrok >/dev/null 2>&1; then
   exit 1
 fi
 
-WEBHOOK_PORT="${WEBHOOK_PORT:-8081}"
-NGROK_PID=""
+SETTINGS_WEBHOOK_BIND=""
+SETTINGS_WEBHOOK_BIND="$(uv run python scripts/channel/read_telegram_setting.py --key webhook_bind 2>/dev/null)" || true
 
-# Resolve allowed users/groups: env > settings.yaml
-if [ -z "${TELEGRAM_ALLOWED_USERS:-}" ]; then
-  TELEGRAM_ALLOWED_USERS=$(uv run python -c "
-from omni.foundation.config.settings import get_setting
-print(get_setting('telegram.allowed_users') or '')
-" 2>/dev/null) || true
+WEBHOOK_BIND="${WEBHOOK_BIND:-}"
+if [ -z "${WEBHOOK_BIND}" ] && [ -n "${SETTINGS_WEBHOOK_BIND}" ]; then
+  WEBHOOK_BIND="${SETTINGS_WEBHOOK_BIND}"
 fi
-if [ -z "${TELEGRAM_ALLOWED_GROUPS:-}" ]; then
-  TELEGRAM_ALLOWED_GROUPS=$(uv run python -c "
-from omni.foundation.config.settings import get_setting
-print(get_setting('telegram.allowed_groups') or '')
-" 2>/dev/null) || true
+
+resolved_webhook_host=""
+resolved_webhook_port=""
+
+if [ -n "${WEBHOOK_BIND}" ]; then
+  resolved_webhook_host="${WEBHOOK_BIND%:*}"
+  resolved_webhook_port="${WEBHOOK_BIND##*:}"
 fi
+
+if [ -n "${WEBHOOK_PORT:-}" ]; then
+  resolved_webhook_port="${WEBHOOK_PORT}"
+fi
+
+if [ -n "${WEBHOOK_HOST:-}" ]; then
+  resolved_webhook_host="${WEBHOOK_HOST}"
+fi
+
+if [ -z "${resolved_webhook_host}" ]; then
+  resolved_webhook_host="127.0.0.1"
+fi
+if [ -z "${resolved_webhook_port}" ]; then
+  resolved_webhook_port="18081"
+fi
+
+if ! [[ ${resolved_webhook_port} =~ ^[0-9]+$ ]] || [ "${resolved_webhook_port}" -le 0 ] || [ "${resolved_webhook_port}" -gt 65535 ]; then
+  echo "Error: invalid webhook port '${resolved_webhook_port}'. Set WEBHOOK_PORT or telegram.webhook_bind." >&2
+  exit 1
+fi
+
+WEBHOOK_PORT="${resolved_webhook_port}"
+WEBHOOK_BIND="${resolved_webhook_host}:${WEBHOOK_PORT}"
+export WEBHOOK_PORT
+export WEBHOOK_BIND
+NGROK_PID=""
 
 cleanup() {
   if [ -n "$NGROK_PID" ]; then
@@ -111,16 +130,7 @@ echo "Step 3/4: Fetching public URL from ngrok..."
 NGROK_URL=""
 for _ in $(seq 1 15); do
   # Try ngrok local API first (port 4040)
-  NGROK_URL=$(curl -s --connect-timeout 2 http://127.0.0.1:4040/api/tunnels 2>/dev/null | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    if d.get('tunnels'):
-        t = d['tunnels'][0]
-        print(t.get('public_url', ''))
-except Exception:
-    pass
-" 2>/dev/null) || true
+  NGROK_URL="$(curl -s --connect-timeout 2 http://127.0.0.1:4040/api/tunnels 2>/dev/null | python3 scripts/channel/extract_ngrok_public_url.py 2>/dev/null)" || true
   if [ -n "$NGROK_URL" ]; then
     break
   fi
@@ -180,8 +190,8 @@ fi
 echo ""
 echo "Step 4/4: Starting omni-agent channel (webhook mode)..."
 echo "  VALKEY_URL='${VALKEY_URL}'"
-echo "  TELEGRAM_ALLOWED_USERS='${TELEGRAM_ALLOWED_USERS:-}'"
-echo "  TELEGRAM_ALLOWED_GROUPS='${TELEGRAM_ALLOWED_GROUPS:-}'"
+echo "  WEBHOOK_BIND='${WEBHOOK_BIND}'"
+echo "  Telegram ACL source='.config/omni-dev-fusion/settings.yaml (telegram.acl.*)'"
 echo "  TELEGRAM_WEBHOOK_SECRET='***${TELEGRAM_WEBHOOK_SECRET: -6}'"
 export RUST_LOG="${RUST_LOG:-omni_agent=debug}"
 export RUST_BACKTRACE="${RUST_BACKTRACE:-1}"
@@ -207,8 +217,6 @@ python3 scripts/channel/agent_channel_runtime_monitor.py \
   cargo run -p omni-agent -- channel \
   --mode webhook \
   --verbose \
-  --webhook-bind "0.0.0.0:${WEBHOOK_PORT}" \
+  --webhook-bind "${WEBHOOK_BIND}" \
   --webhook-secret-token "${TELEGRAM_WEBHOOK_SECRET}" \
-  --allowed-users "${TELEGRAM_ALLOWED_USERS:-}" \
-  --allowed-groups "${TELEGRAM_ALLOWED_GROUPS:-}" \
   "$@"

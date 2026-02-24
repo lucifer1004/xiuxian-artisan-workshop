@@ -4,17 +4,20 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::agent::Agent;
+use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::{JobCompletion, JobManager};
 
-use super::super::jobs::{handle_inbound_message, push_background_completion};
+use super::super::jobs::{handle_inbound_message_with_interrupt, push_background_completion};
 use super::server::drain_finished_webhook_server;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn run_webhook_event_loop(
     inbound_rx: &mut mpsc::Receiver<ChannelMessage>,
     completion_rx: &mut mpsc::Receiver<JobCompletion>,
     channel_for_send: &Arc<dyn Channel>,
     foreground_tx: &mpsc::Sender<ChannelMessage>,
+    interrupt_controller: &ForegroundInterruptController,
     job_manager: &Arc<JobManager>,
     agent: &Arc<Agent>,
     webhook_server: &mut tokio::task::JoinHandle<std::io::Result<()>>,
@@ -26,7 +29,7 @@ pub(super) async fn run_webhook_event_loop(
                 let Some(msg) = maybe_msg else {
                     break;
                 };
-                if !handle_inbound_message(msg, channel_for_send, foreground_tx, job_manager, agent).await {
+                if !handle_inbound_message_with_interrupt(msg, channel_for_send, foreground_tx, interrupt_controller, job_manager, agent).await {
                     break;
                 }
             }

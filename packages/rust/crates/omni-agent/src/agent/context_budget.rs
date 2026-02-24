@@ -7,9 +7,9 @@ pub(crate) const SESSION_SUMMARY_MESSAGE_NAME: &str = "session.summary.segment";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MessageClass {
-    NonSystem,
-    RegularSystem,
-    SummarySystem,
+    Non,
+    Regular,
+    Summary,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -87,9 +87,9 @@ impl ContextBudgetReport {
 
     fn class_mut(&mut self, class: MessageClass) -> &mut ContextBudgetClassStats {
         match class {
-            MessageClass::NonSystem => &mut self.non_system,
-            MessageClass::RegularSystem => &mut self.regular_system,
-            MessageClass::SummarySystem => &mut self.summary_system,
+            MessageClass::Non => &mut self.non_system,
+            MessageClass::Regular => &mut self.regular_system,
+            MessageClass::Summary => &mut self.summary_system,
         }
     }
 }
@@ -117,6 +117,7 @@ pub(crate) struct ContextBudgetPruneResult {
 }
 
 #[doc(hidden)]
+#[must_use]
 pub fn prune_messages_for_token_budget(
     messages: Vec<ChatMessage>,
     budget_tokens: usize,
@@ -131,6 +132,7 @@ pub fn prune_messages_for_token_budget(
     .messages
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn prune_messages_for_token_budget_with_strategy(
     messages: Vec<ChatMessage>,
     budget_tokens: usize,
@@ -177,9 +179,9 @@ pub(crate) fn prune_messages_for_token_budget_with_strategy(
             message,
         };
         match class {
-            MessageClass::NonSystem => non_system.push(indexed),
-            MessageClass::RegularSystem => regular_system.push(indexed),
-            MessageClass::SummarySystem => summary_system.push(indexed),
+            MessageClass::Non => non_system.push(indexed),
+            MessageClass::Regular => regular_system.push(indexed),
+            MessageClass::Summary => summary_system.push(indexed),
         }
     }
 
@@ -193,20 +195,19 @@ pub(crate) fn prune_messages_for_token_budget_with_strategy(
     let mut selected = Vec::new();
     let mut used_tokens = 0usize;
 
-    if let Some(latest_non_system) = non_system.last().cloned() {
-        if let Some(trimmed) =
+    if let Some(latest_non_system) = non_system.last().cloned()
+        && let Some(trimmed) =
             truncate_message_to_budget(latest_non_system.message, effective_budget)
-        {
-            let kept_tokens = estimated_message_tokens(&trimmed);
-            used_tokens = used_tokens.saturating_add(kept_tokens);
-            selected.push(SelectedMessage {
-                index: latest_non_system.index,
-                class: latest_non_system.class,
-                original_tokens: latest_non_system.original_tokens,
-                kept_tokens,
-                message: trimmed,
-            });
-        }
+    {
+        let kept_tokens = estimated_message_tokens(&trimmed);
+        used_tokens = used_tokens.saturating_add(kept_tokens);
+        selected.push(SelectedMessage {
+            index: latest_non_system.index,
+            class: latest_non_system.class,
+            original_tokens: latest_non_system.original_tokens,
+            kept_tokens,
+            message: trimmed,
+        });
     }
 
     let mut candidates = Vec::new();
@@ -280,9 +281,7 @@ fn truncate_message_to_budget(message: ChatMessage, budget_tokens: usize) -> Opt
         return Some(message);
     }
 
-    let Some(content) = message.content.clone() else {
-        return None;
-    };
+    let content = message.content.clone()?;
 
     let overhead = estimated_message_overhead_tokens(&message);
     if overhead >= budget_tokens {
@@ -301,12 +300,12 @@ fn truncate_message_to_budget(message: ChatMessage, budget_tokens: usize) -> Opt
 fn classify_message(message: &ChatMessage) -> MessageClass {
     if message.role == "system" {
         if is_summary_system_message(message) {
-            MessageClass::SummarySystem
+            MessageClass::Summary
         } else {
-            MessageClass::RegularSystem
+            MessageClass::Regular
         }
     } else {
-        MessageClass::NonSystem
+        MessageClass::Non
     }
 }
 

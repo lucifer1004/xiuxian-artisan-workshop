@@ -39,6 +39,7 @@ pub(crate) fn estimate_messages_tokens(messages: &[ChatMessage]) -> usize {
 }
 
 /// Derive dynamic memory-recall parameters from current context pressure.
+#[allow(clippy::cast_precision_loss)]
 pub(crate) fn plan_memory_recall(input: MemoryRecallInput) -> MemoryRecallPlan {
     let mut k1 = input.base_k1.max(1);
     let mut k2 = input.base_k2.max(1).min(k1);
@@ -60,13 +61,13 @@ pub(crate) fn plan_memory_recall(input: MemoryRecallInput) -> MemoryRecallPlan {
     };
 
     if budget_pressure >= 1.0 {
-        k2 = k2.min(2).max(1);
+        k2 = k2.clamp(1, 2);
         k1 = k1.min(8).max(k2);
         lambda = (lambda + 0.2).clamp(0.0, 0.95);
         min_score = 0.20;
         max_context_chars = (300 + k2.saturating_mul(160)).clamp(320, 700);
     } else if budget_pressure >= 0.8 {
-        k2 = k2.min(3).max(1);
+        k2 = k2.clamp(1, 3);
         k1 = k1.min(12).max(k2);
         lambda = (lambda + 0.1).clamp(0.0, 0.90);
         min_score = 0.15;
@@ -150,6 +151,7 @@ fn recency_beta(plan: &MemoryRecallPlan) -> f32 {
     }
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn episode_recency_score(episode: &Episode, now_unix_ms: i64, half_life_hours: f32) -> f32 {
     if !half_life_hours.is_finite() || half_life_hours <= 0.0 {
         return 1.0;
@@ -261,7 +263,7 @@ fn clamp_lambda(value: f32) -> f32 {
 fn now_unix_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as i64)
+        .map(|duration| i64::try_from(duration.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or(0)
 }
 

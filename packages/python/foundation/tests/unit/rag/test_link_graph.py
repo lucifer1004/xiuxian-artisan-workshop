@@ -533,7 +533,7 @@ async def test_fake_graph_backend_stats_are_normalized() -> None:
 
 
 @pytest.mark.asyncio
-async def test_wendao_backend_stats_requires_rust_engine(
+async def test_wendao_backend_stats_returns_normalized_shape(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -542,12 +542,13 @@ async def test_wendao_backend_stats_requires_rust_engine(
     monkeypatch.setattr(wendao_backend_module, "get_setting", lambda key, default=None: default)
 
     backend = WendaoLinkGraphBackend(notebook_dir=str(tmp_path / "notebook"))
-    with pytest.raises(RuntimeError, match="engine unavailable"):
-        await backend.stats()
+    stats = await backend.stats()
+    assert stats.keys() == {"total_notes", "orphans", "links_in_graph", "nodes_in_graph"}
+    assert all(isinstance(value, int) and value >= 0 for value in stats.values())
 
 
 @pytest.mark.asyncio
-async def test_wendao_backend_toc_requires_rust_engine(
+async def test_wendao_backend_toc_returns_entries(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -556,8 +557,13 @@ async def test_wendao_backend_toc_requires_rust_engine(
     monkeypatch.setattr(wendao_backend_module, "get_setting", lambda key, default=None: default)
 
     backend = WendaoLinkGraphBackend(notebook_dir=str(tmp_path / "notebook"))
-    with pytest.raises(RuntimeError, match="engine unavailable"):
-        await backend.toc(limit=10)
+    toc = await backend.toc(limit=10)
+    assert isinstance(toc, list)
+    assert len(toc) <= 10
+    if toc:
+        first = toc[0]
+        assert isinstance(first, dict)
+        assert {"id", "title", "tags", "lead", "path"}.issubset(first.keys())
 
 
 @pytest.mark.asyncio
@@ -717,6 +723,25 @@ async def test_wendao_backend_search_planned_returns_effective_options(
                     "sort_terms": [{"field": "path", "order": "asc"}],
                     "filters": {"tags": {"any": ["architecture", "design"], "not": ["draft"]}},
                 },
+                "requested_mode": "hybrid",
+                "selected_mode": "graph_only",
+                "reason": "graph_sufficient",
+                "graph_hit_count": 2,
+                "source_hint_count": 2,
+                "graph_confidence_score": 0.88,
+                "graph_confidence_level": "high",
+                "retrieval_plan": {
+                    "schema": "omni.link_graph.retrieval_plan.v1",
+                    "requested_mode": "hybrid",
+                    "selected_mode": "graph_only",
+                    "reason": "graph_sufficient",
+                    "backend_name": "wendao",
+                    "graph_hit_count": 2,
+                    "source_hint_count": 2,
+                    "graph_confidence_score": 0.88,
+                    "graph_confidence_level": "high",
+                    "budget": {"candidate_limit": 20, "max_sources": 8, "rows_per_source": 8},
+                },
                 "results": fake_engine._results_payload(),
             }
         )
@@ -739,6 +764,15 @@ async def test_wendao_backend_search_planned_returns_effective_options(
         "sort_terms": [{"field": "path", "order": "asc"}],
         "filters": {"tags": {"any": ["architecture", "design"], "not": ["draft"]}},
     }
+    assert planned["requested_mode"] == "hybrid"
+    assert planned["selected_mode"] == "graph_only"
+    assert planned["reason"] == "graph_sufficient"
+    assert planned["graph_hit_count"] == 2
+    assert planned["source_hint_count"] == 2
+    assert planned["graph_confidence_score"] == pytest.approx(0.88)
+    assert planned["graph_confidence_level"] == "high"
+    assert isinstance(planned["retrieval_plan"], dict)
+    assert planned["retrieval_plan"]["schema"] == "omni.link_graph.retrieval_plan.v1"
     assert [hit.stem for hit in planned["hits"]] == ["note-a", "note-b"]
     assert len(fake_engine.search_planned_calls) == 1
 

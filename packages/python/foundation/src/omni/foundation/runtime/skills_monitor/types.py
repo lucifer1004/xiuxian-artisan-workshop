@@ -8,7 +8,7 @@ from typing import Any
 
 @dataclass
 class PhaseEvent:
-    """A single phase/event during skill execution (embed, vector_search, dual_core, etc.)."""
+    """A single phase/event during skill execution (embed, vector_search, fusion, etc.)."""
 
     phase: str
     duration_ms: float

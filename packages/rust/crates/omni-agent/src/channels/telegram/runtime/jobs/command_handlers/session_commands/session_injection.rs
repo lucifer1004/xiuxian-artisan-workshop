@@ -19,6 +19,7 @@ use crate::channels::telegram::commands::{
     SessionInjectionAction, parse_session_injection_command,
 };
 
+#[allow(clippy::too_many_lines)]
 pub(in crate::channels::telegram::runtime::jobs) async fn try_handle_session_injection_command(
     msg: &ChannelMessage,
     channel: &Arc<dyn Channel>,

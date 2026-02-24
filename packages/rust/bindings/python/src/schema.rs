@@ -36,6 +36,23 @@ pub fn py_get_schema_json(type_name: &str) -> PyResult<String> {
     }
 }
 
+/// Get canonical JSON Schema by schema identifier.
+///
+/// This API is for runtime schema validation where callers use canonical IDs
+/// such as `omni.agent.server_info.v1` or `omni.vector.tool_search.v1`.
+///
+/// # Errors
+/// Raises `ValueError` if the schema identifier is unknown.
+#[pyfunction]
+#[pyo3(signature = (name))]
+pub fn py_get_named_schema_json(name: &str) -> PyResult<String> {
+    xiuxian_wendao::schemas::get_schema(name)
+        .map(std::string::ToString::to_string)
+        .ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!("Unknown schema identifier: {}", name))
+        })
+}
+
 /// Get list of all registered type names.
 ///
 /// # Returns

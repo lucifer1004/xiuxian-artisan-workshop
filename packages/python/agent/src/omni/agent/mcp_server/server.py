@@ -612,11 +612,16 @@ class AgentMCPServer:
                 try:
                     start_t = time.time()
                     from omni.agent.mcp_server.memory_monitor import amemory_monitor_scope
+                    from omni.core.skills.runner import run_tool
                     from omni.foundation.api.tool_context import run_with_execution_timeout
 
                     async with amemory_monitor_scope(name):
                         result = await run_with_execution_timeout(
-                            self._kernel.execute_tool(real_command, arguments, caller="mcp")
+                            run_tool(
+                                real_command,
+                                arguments,
+                                kernel=self._kernel,
+                            )
                         )
                     duration = time.time() - start_t
 
@@ -926,9 +931,8 @@ class AgentMCPServer:
     async def _list_skill_resources_from_db(self) -> list[Resource]:
         """List skill-declared resources from Rust LanceDB (skills table).
 
-        Uses list_all_resources() when the table has a metadata column and rows
-        with resource_uri. Falls back to filesystem scan when DB returns none
-        (e.g. before reindex or legacy tables).
+        Uses list_all_resources() rows with ``resource_uri`` from the canonical
+        Rust index. When empty, callers should run reindex to populate DB rows.
         """
         resources: list[Resource] = []
         try:
@@ -954,41 +958,8 @@ class AgentMCPServer:
             logger.debug(f"Failed to list resources from DB: {e}")
 
         if not resources:
-            logger.warning(
-                "No resources found in DB, using fallback (this should not happen after reindex)"
-            )
-            resources = await self._discover_skill_resources_fallback()
+            logger.warning("No resources found in DB. Run reindex to populate skill resources.")
         return resources
-
-    async def _discover_skill_resources_fallback(self) -> list[Resource]:
-        """Fallback: scan scripts for @skill_resource when DB has no resource rows."""
-        from omni.core.kernel.components.skill_loader import load_skill_resources
-        from omni.foundation.config.skills import SKILLS_DIR
-
-        out: list[Resource] = []
-        skills_dir = SKILLS_DIR()
-        if not skills_dir.exists():
-            return out
-        for skill_path in sorted(skills_dir.iterdir()):
-            scripts_dir = skill_path / "scripts"
-            if not scripts_dir.is_dir():
-                continue
-            try:
-                res_map = await load_skill_resources(skill_path.name, scripts_dir)
-                for res_name, func in res_map.items():
-                    config = getattr(func, "_resource_config", {})
-                    uri = config.get("resource_uri") or f"omni://skill/{skill_path.name}/{res_name}"
-                    out.append(
-                        Resource(
-                            uri=AnyUrl(uri),
-                            name=f"{skill_path.name}/{res_name}",
-                            description=config.get("description", ""),
-                            mimeType=config.get("mime_type", "application/json"),
-                        )
-                    )
-            except Exception as e:
-                logger.debug(f"Failed to scan resources for skill {skill_path.name}: {e}")
-        return out
 
     async def _read_skill_resource(self, uri_str: str) -> str:
         """Read a skill resource by URI ``omni://skill/{skill}/{name}``.

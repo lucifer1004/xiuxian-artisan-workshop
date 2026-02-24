@@ -3,7 +3,7 @@ name = "omni-mcp-client"
 version.workspace = true
 edition.workspace = true
 description = "MCP client for omni-agent: connect to MCP servers via Streamable HTTP or stdio (ref: codex-rs)"
-authors = ["Omni-Dev-Fusion Team"]
+authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
 

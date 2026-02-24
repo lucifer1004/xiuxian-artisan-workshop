@@ -15,6 +15,9 @@ use super::types::{RecurringScheduleConfig, RecurringScheduleOutcome};
 /// The loop submits one job per tick, collects completion events, and stops when:
 /// - `max_runs` submissions are reached, or
 /// - Ctrl+C is received.
+///
+/// # Errors
+/// Returns an error when config validation fails or job submission fails.
 pub async fn run_recurring_schedule(
     manager: Arc<JobManager>,
     mut completion_rx: mpsc::Receiver<JobCompletion>,

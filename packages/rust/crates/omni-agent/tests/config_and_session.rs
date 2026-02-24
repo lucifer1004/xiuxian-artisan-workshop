@@ -1,3 +1,37 @@
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
+
 //! Unit tests: config and session store (no network).
 
 use omni_agent::{AgentConfig, ChatMessage, ContextBudgetStrategy, MemoryConfig, SessionStore};
@@ -18,6 +52,7 @@ fn config_default_mcp_servers_empty() {
     assert_eq!(config.mcp_pool_size, 4);
     assert_eq!(config.mcp_handshake_timeout_secs, 30);
     assert_eq!(config.mcp_connect_retries, 3);
+    assert!(config.mcp_strict_startup);
     assert_eq!(config.mcp_connect_retry_backoff_ms, 1_000);
     assert_eq!(config.mcp_tool_timeout_secs, 180);
     assert_eq!(config.mcp_list_tools_cache_ttl_ms, 1_000);

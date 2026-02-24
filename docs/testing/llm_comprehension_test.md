@@ -1,3 +1,13 @@
+---
+title: "LLM Comprehension Test: Omega Architecture"
+category: "testing"
+tags:
+  - testing
+  - llm_comprehension_test
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # LLM Comprehension Test: Omega Architecture
 
 This document contains a set of questions and expected answers to verify if an LLM (after reading the documentation in `docs/llm/` and `docs/human/architecture/`) has a correct understanding of the Omni-Dev-Fusion system.

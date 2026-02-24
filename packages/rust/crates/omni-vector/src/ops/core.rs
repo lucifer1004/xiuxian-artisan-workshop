@@ -158,6 +158,24 @@ impl VectorStore {
             m.insert("description".to_string(), desc.to_string());
             m
         };
+        let vector_dimension = if let Ok(value) = i32::try_from(self.dimension) {
+            value
+        } else {
+            let fallback = if let Ok(value) = i32::try_from(DEFAULT_DIMENSION) {
+                value
+            } else {
+                log::warn!(
+                    "DEFAULT_DIMENSION {DEFAULT_DIMENSION} exceeds i32 range; clamping to i32::MAX"
+                );
+                i32::MAX
+            };
+            log::warn!(
+                "vector dimension {} exceeds i32 range; falling back to {}",
+                self.dimension,
+                fallback
+            );
+            fallback
+        };
 
         let fields = vec![
             Field::new(ID_COLUMN, DataType::Utf8, false)
@@ -166,7 +184,7 @@ impl VectorStore {
                 VECTOR_COLUMN,
                 DataType::FixedSizeList(
                     Arc::new(Field::new("item", DataType::Float32, true)),
-                    i32::try_from(self.dimension).unwrap_or(1536),
+                    vector_dimension,
                 ),
                 false,
             )

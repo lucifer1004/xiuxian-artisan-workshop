@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Arc, ArrowError, CheckpointRecord, CheckpointStore, RecordBatch, RecordBatchIterator, Result,
+    VectorStoreError,
+};
 
 impl CheckpointStore {
     /// Save a checkpoint.
@@ -37,13 +40,19 @@ impl CheckpointStore {
             .clone()
             .unwrap_or_else(|| vec![0.0; self.dimension]);
         let flat_values: Vec<f32> = embedding;
+        let list_dimension = i32::try_from(self.dimension).map_err(|_| {
+            VectorStoreError::General(format!(
+                "checkpoint dimension {} exceeds i32 range",
+                self.dimension
+            ))
+        })?;
         let vector_array = lance::deps::arrow_array::FixedSizeListArray::try_new(
             Arc::new(lance::deps::arrow_schema::Field::new(
                 "item",
                 lance::deps::arrow_schema::DataType::Float32,
                 true,
             )),
-            i32::try_from(self.dimension).unwrap_or(1536),
+            list_dimension,
             Arc::new(lance::deps::arrow_array::Float32Array::from(flat_values)),
             None,
         )

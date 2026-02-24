@@ -16,6 +16,8 @@ Usage:
 from .common import agent_src, common_src, project_root, setup_import_paths
 from .asyncio import run_async_blocking
 from .fs import find_files_by_extension, find_markdown_files
+from .json_codec import JSONDecodeError, dump as json_dump, dumps as json_dumps
+from .json_codec import load as json_load, loads as json_loads
 from .skills import (
     current_skill_dir,
     skill_asset,
@@ -32,6 +34,11 @@ __all__ = [
     "current_skill_dir",
     "find_files_by_extension",
     "find_markdown_files",
+    "JSONDecodeError",
+    "json_dump",
+    "json_dumps",
+    "json_load",
+    "json_loads",
     "project_root",
     "render_string",
     "run_async_blocking",

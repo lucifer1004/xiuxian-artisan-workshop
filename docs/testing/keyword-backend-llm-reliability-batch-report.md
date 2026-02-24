@@ -1,3 +1,13 @@
+---
+title: "Keyword Backend LLM Reliability Batch Report"
+category: "testing"
+tags:
+  - testing
+  - keyword
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Keyword Backend LLM Reliability Batch Report
 
 - Date: `2026-02-12`

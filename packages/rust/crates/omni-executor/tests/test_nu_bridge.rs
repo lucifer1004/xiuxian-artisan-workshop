@@ -1,6 +1,19 @@
 //! Integration tests for Nushell system bridge.
 
 use omni_executor::{ActionType, NuConfig, NuSystemBridge};
+use std::fs;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+fn create_temp_dir(prefix: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("{prefix}_{}_{}", std::process::id(), nanos));
+    fs::create_dir_all(&dir).expect("failed to create temp dir");
+    dir
+}
 
 #[test]
 fn test_new_bridge_has_default_config() {
@@ -117,6 +130,15 @@ fn test_validate_safety_blocks_fork_bomb() {
 }
 
 #[test]
+fn test_validate_safety_repeated_command_is_stable() {
+    let bridge = NuSystemBridge::new();
+    let cmd = "echo hello";
+
+    assert!(bridge.validate_safety(cmd).is_ok());
+    assert!(bridge.validate_safety(cmd).is_ok());
+}
+
+#[test]
 fn test_config_default_values() {
     let config = NuConfig::default();
 
@@ -144,4 +166,83 @@ fn test_action_type_variants() {
     assert_eq!(ActionType::Observe, ActionType::Observe);
     assert_eq!(ActionType::Mutate, ActionType::Mutate);
     assert_ne!(ActionType::Observe, ActionType::Mutate);
+}
+
+#[test]
+fn test_execute_observe_ls_fast_path_works_without_nu_binary() {
+    let bridge = NuSystemBridge::with_config(NuConfig {
+        nu_path: "/path/that/does/not/exist/nu".to_string(),
+        enable_shellcheck: false,
+        ..Default::default()
+    });
+
+    let result = bridge.execute_with_action("ls .", ActionType::Observe, true);
+    assert!(result.is_ok());
+    assert!(result.expect("ls fast-path should succeed").is_array());
+}
+
+#[test]
+fn test_execute_observe_ls_fast_path_hides_dotfiles_by_default() {
+    let temp_dir = create_temp_dir("omni_executor_ls_default");
+    fs::write(temp_dir.join("visible.txt"), b"visible").expect("failed to create visible file");
+    fs::write(temp_dir.join(".hidden.txt"), b"hidden").expect("failed to create hidden file");
+
+    let bridge = NuSystemBridge::with_config(NuConfig {
+        nu_path: "/path/that/does/not/exist/nu".to_string(),
+        enable_shellcheck: false,
+        ..Default::default()
+    });
+    let command = format!("ls {}", temp_dir.display());
+    let rows = bridge
+        .execute_with_action(&command, ActionType::Observe, true)
+        .expect("ls fast-path should succeed")
+        .as_array()
+        .cloned()
+        .expect("ls fast-path should return array");
+
+    let names: Vec<String> = rows
+        .iter()
+        .filter_map(|row| {
+            row.get("name")
+                .and_then(|v| v.as_str())
+                .map(ToOwned::to_owned)
+        })
+        .collect();
+    assert!(names.iter().any(|name| name == "visible.txt"));
+    assert!(!names.iter().any(|name| name == ".hidden.txt"));
+
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_execute_observe_ls_fast_path_can_include_dotfiles() {
+    let temp_dir = create_temp_dir("omni_executor_ls_all");
+    fs::write(temp_dir.join("visible.txt"), b"visible").expect("failed to create visible file");
+    fs::write(temp_dir.join(".hidden.txt"), b"hidden").expect("failed to create hidden file");
+
+    let bridge = NuSystemBridge::with_config(NuConfig {
+        nu_path: "/path/that/does/not/exist/nu".to_string(),
+        enable_shellcheck: false,
+        ..Default::default()
+    });
+    let command = format!("ls -a {}", temp_dir.display());
+    let rows = bridge
+        .execute_with_action(&command, ActionType::Observe, true)
+        .expect("ls fast-path should succeed")
+        .as_array()
+        .cloned()
+        .expect("ls fast-path should return array");
+
+    let names: Vec<String> = rows
+        .iter()
+        .filter_map(|row| {
+            row.get("name")
+                .and_then(|v| v.as_str())
+                .map(ToOwned::to_owned)
+        })
+        .collect();
+    assert!(names.iter().any(|name| name == "visible.txt"));
+    assert!(names.iter().any(|name| name == ".hidden.txt"));
+
+    let _ = fs::remove_dir_all(&temp_dir);
 }

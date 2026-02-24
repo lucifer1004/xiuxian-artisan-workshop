@@ -1,3 +1,37 @@
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
+
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -74,6 +108,7 @@ async fn runtime_handle_inbound_session_memory_without_snapshot() -> Result<()> 
             .0
             .contains("No memory recall snapshot found for this session yet.")
     );
+    assert!(sent[0].0.contains("- Session scope: `telegram:-200:888`"));
     assert!(sent[0].0.contains("### Persistence"));
     assert!(sent[0].0.contains("`startup_load_status=not_configured`"));
     assert!(sent[0].0.contains("`backend_ready=no`"));
@@ -110,6 +145,7 @@ async fn runtime_handle_inbound_session_memory_without_snapshot_reports_json() -
     let payload: serde_json::Value = serde_json::from_str(&sent[0].0)?;
     assert_eq!(payload["kind"], "session_memory");
     assert_eq!(payload["available"], false);
+    assert_eq!(payload["session_scope"], "telegram:-200:888");
     assert_eq!(payload["status"], "not_found");
     assert!(payload["runtime"].is_object());
     assert_eq!(payload["runtime"]["memory_enabled"], false);
@@ -119,6 +155,10 @@ async fn runtime_handle_inbound_session_memory_without_snapshot_reports_json() -
     assert!(payload["runtime"]["gate_obsolete_threshold"].is_null());
     assert!(payload["metrics"].is_object());
     assert_eq!(payload["metrics"]["planned_total"], 0);
+    assert_eq!(payload["metrics"]["embedding_success_total"], 0);
+    assert_eq!(payload["metrics"]["embedding_timeout_total"], 0);
+    assert_eq!(payload["metrics"]["embedding_cooldown_reject_total"], 0);
+    assert_eq!(payload["metrics"]["embedding_unavailable_total"], 0);
     Ok(())
 }
 
@@ -179,6 +219,7 @@ async fn runtime_handle_inbound_session_memory_reports_latest_snapshot() -> Resu
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
     assert!(sent[0].0.contains("## Session Memory"));
+    assert!(sent[0].0.contains("- Session scope: `telegram:-200:888`"));
     assert!(sent[0].0.contains("- Decision: `injected`"));
     assert!(sent[0].0.contains("- Query tokens: `14`"));
     assert!(sent[0].0.contains("- Recall feedback bias: `-0.210`"));
@@ -254,6 +295,7 @@ async fn runtime_handle_inbound_session_memory_reports_latest_snapshot_json() ->
     let payload: serde_json::Value = serde_json::from_str(&sent[0].0)?;
     assert_eq!(payload["kind"], "session_memory");
     assert_eq!(payload["available"], true);
+    assert_eq!(payload["session_scope"], session_id);
     assert_eq!(payload["decision"], "skipped");
     assert_eq!(payload["query_tokens"], 9);
     let recall_feedback_bias = payload["recall_feedback_bias"]
@@ -275,6 +317,10 @@ async fn runtime_handle_inbound_session_memory_reports_latest_snapshot_json() ->
     assert!(payload["metrics"].is_object());
     assert_eq!(payload["metrics"]["planned_total"], 0);
     assert_eq!(payload["metrics"]["completed_total"], 0);
+    assert_eq!(payload["metrics"]["embedding_success_total"], 0);
+    assert_eq!(payload["metrics"]["embedding_timeout_total"], 0);
+    assert_eq!(payload["metrics"]["embedding_cooldown_reject_total"], 0);
+    assert_eq!(payload["metrics"]["embedding_unavailable_total"], 0);
     Ok(())
 }
 
@@ -302,6 +348,7 @@ async fn runtime_handle_inbound_session_memory_telegram_uses_compact_not_found_v
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
     assert!(sent[0].0.contains("## Session Memory"));
+    assert!(sent[0].0.contains("- Session scope: `telegram:-200:888`"));
     assert!(sent[0].0.contains("### Persistence"));
     assert!(
         sent[0].0.contains(
@@ -370,6 +417,7 @@ async fn runtime_handle_inbound_session_memory_telegram_uses_compact_snapshot_vi
 
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
+    assert!(sent[0].0.contains("- Session scope: `telegram:-200:888`"));
     assert!(sent[0].0.contains("### Trigger - Decision"));
     assert!(
         sent[0]

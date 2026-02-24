@@ -11,7 +11,44 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from omni.foundation.api.schema_locator import resolve_schema_file_path
 from omni.foundation.config.settings import get_setting, get_settings
+
+
+def _coerce_int(value: object, *, default: int) -> int:
+    """Parse integer config with safe default fallback."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_float(value: object, *, default: float) -> float:
+    """Parse float config with safe default fallback."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_bool(value: object, *, default: bool) -> bool:
+    """Parse bool config with string-safe handling."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        return default
+    return bool(value)
 
 
 class RouterConfidenceProfile(BaseModel):
@@ -123,30 +160,39 @@ def load_router_search_config(
     Explicit arguments override settings values.
     """
 
+    active_profile = str(get_setting("router.search.active_profile", "balanced") or "balanced")
+    profiles = get_setting("router.search.profiles", _default_profiles()) or _default_profiles()
+
     return RouterSearchConfig(
-        active_profile=str(get_setting("router.search.active_profile")),
-        auto_profile_select=bool(get_setting("router.search.auto_profile_select")),
-        profiles=get_setting("router.search.profiles") or _default_profiles(),
-        default_limit=int(get_setting("router.search.default_limit")),
-        default_threshold=float(get_setting("router.search.default_threshold")),
-        rerank=bool(get_setting("router.search.rerank")),
+        active_profile=active_profile,
+        auto_profile_select=_coerce_bool(
+            get_setting("router.search.auto_profile_select", True),
+            default=True,
+        ),
+        profiles=profiles,
+        default_limit=_coerce_int(get_setting("router.search.default_limit", 10), default=10),
+        default_threshold=_coerce_float(
+            get_setting("router.search.default_threshold", 0.2),
+            default=0.2,
+        ),
+        rerank=_coerce_bool(get_setting("router.search.rerank", True), default=True),
         semantic_weight=(
-            float(get_setting("router.search.semantic_weight"))
+            _coerce_float(get_setting("router.search.semantic_weight", 0.7), default=0.7)
             if semantic_weight is None
             else semantic_weight
         ),
         keyword_weight=(
-            float(get_setting("router.search.keyword_weight"))
+            _coerce_float(get_setting("router.search.keyword_weight", 0.3), default=0.3)
             if keyword_weight is None
             else keyword_weight
         ),
         adaptive_threshold_step=(
-            float(get_setting("router.search.adaptive_threshold_step"))
+            _coerce_float(get_setting("router.search.adaptive_threshold_step", 0.15), default=0.15)
             if adaptive_threshold_step is None
             else adaptive_threshold_step
         ),
         adaptive_max_attempts=(
-            int(get_setting("router.search.adaptive_max_attempts"))
+            _coerce_int(get_setting("router.search.adaptive_max_attempts", 3), default=3)
             if adaptive_max_attempts is None
             else adaptive_max_attempts
         ),
@@ -158,10 +204,7 @@ def router_search_json_schema() -> dict:
     return RouterSearchConfig.model_json_schema()
 
 
-# Default schema file in packages/shared (SSOT for router search config schema).
-_SHARED_ROUTER_SEARCH_CONFIG_SCHEMA = (
-    "packages/shared/schemas/omni.router.search_config.v1.schema.json"
-)
+_ROUTER_SEARCH_SCHEMA_NAME = "omni.router.search_config.v1.schema.json"
 
 
 def resolve_router_schema_path(schema_path: str | Path | None = None) -> Path:
@@ -170,25 +213,34 @@ def resolve_router_schema_path(schema_path: str | Path | None = None) -> Path:
     Priority:
     1. Explicit `schema_path` argument
     2. `router.search.schema_file` from settings
-    3. Default: project root's packages/shared/schemas/omni.router.search_config.v1.schema.json
+    3. Default: resolved schema in Rust crate resources (`omni-agent/resources`)
 
-    Paths starting with "packages/shared/" are resolved relative to project root;
+    Paths starting with "packages/" are resolved relative to project root;
     other relative paths are resolved relative to conf_dir (--conf).
     """
     if schema_path is not None:
         return Path(schema_path)
 
-    configured = get_setting("router.search.schema_file") or _SHARED_ROUTER_SEARCH_CONFIG_SCHEMA
-    configured_path = Path(str(configured))
-    if configured_path.is_absolute():
-        return configured_path
-    # SSOT: resolve packages/shared/... relative to project root
-    if str(configured_path).replace("\\", "/").startswith("packages/shared/"):
-        from omni.foundation.runtime.gitops import get_project_root
+    configured = get_setting("router.search.schema_file")
+    if configured:
+        configured_path = Path(str(configured))
+        if configured_path.is_absolute():
+            return configured_path
+        if str(configured_path).replace("\\", "/").startswith("packages/"):
+            from omni.foundation.runtime.gitops import get_project_root
 
-        return get_project_root() / configured_path
+            return get_project_root() / configured_path
+        conf_dir = Path(get_settings().conf_dir)
+        return conf_dir / configured_path
+
+    resolved = resolve_schema_file_path(
+        _ROUTER_SEARCH_SCHEMA_NAME,
+        preferred_crates=("omni-agent",),
+    )
+    if resolved.exists():
+        return resolved
     conf_dir = Path(get_settings().conf_dir)
-    return conf_dir / configured_path
+    return conf_dir / _ROUTER_SEARCH_SCHEMA_NAME
 
 
 def write_router_search_json_schema(schema_path: str | Path | None = None) -> Path:

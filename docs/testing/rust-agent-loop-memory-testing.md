@@ -1,3 +1,13 @@
+---
+title: "Rust Agent: Loop, ReAct, and Memory Testing"
+category: "testing"
+tags:
+  - testing
+  - rust
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Rust Agent: Loop, ReAct, and Memory Testing
 
 > How the omni-agent loop aligns with Nanobot/ZeroClaw and how we test loop, ReAct (tool roundtrip), and omni-memory in one place.

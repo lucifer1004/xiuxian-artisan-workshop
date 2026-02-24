@@ -18,6 +18,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import orjson
+import structlog
 import uvicorn
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
@@ -27,6 +28,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from omni.agent.mcp_server.observability import MCPRequestObservability
+
 from .embedding_http import (
     _embedding_overloaded_response,
     _embedding_timeout_response,
@@ -134,8 +136,9 @@ def create_sse_app(
         mcp_session_id=None,
         security_settings=security_settings,
     )
+    observability_logger = structlog.get_logger("omni.agent.mcp_server.observability")
     request_observability = MCPRequestObservability(
-        logger=logger,
+        logger=observability_logger,
         log_interval_secs=20.0,
         latency_window_size=1024,
     )

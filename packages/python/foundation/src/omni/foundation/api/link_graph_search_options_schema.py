@@ -6,11 +6,12 @@ This module freezes search options payloads crossing common Python/Rust layers.
 
 from __future__ import annotations
 
-import json
 from functools import lru_cache
 from typing import Any, Literal, cast
 
 from jsonschema import Draft202012Validator
+
+from .schema_provider import get_schema
 
 SCHEMA_NAME = "omni.link_graph.search_options.v2.schema.json"
 SCHEMA_VERSION = "omni.link_graph.search_options.v2"
@@ -163,43 +164,19 @@ def _coerce_related_ppr_payload(
     return out or None
 
 
-def get_schema_path():
-    """Path to shared LinkGraph search options schema."""
-    from omni.foundation.config.paths import get_config_paths
-
-    primary = get_config_paths().project_root / "packages" / "shared" / "schemas" / SCHEMA_NAME
-    if primary.exists():
-        return primary
-    try:
-        from omni.foundation.runtime.gitops import get_project_root
-
-        fallback = get_project_root() / "packages" / "shared" / "schemas" / SCHEMA_NAME
-        if fallback.exists():
-            return fallback
-    except Exception:
-        pass
-    return primary
-
-
 @lru_cache(maxsize=1)
 def get_validator() -> Draft202012Validator:
     """Cached validator for LinkGraph search options schema."""
-    path = get_schema_path()
-    if not path.exists():
-        raise FileNotFoundError(f"LinkGraph search options schema not found: {path}")
-    return Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
+    return Draft202012Validator(get_schema(SCHEMA_VERSION))
 
 
 @lru_cache(maxsize=1)
 def get_schema_id() -> str:
     """Return JSON schema `$id` from LinkGraph search options schema."""
-    path = get_schema_path()
-    if not path.exists():
-        raise FileNotFoundError(f"LinkGraph search options schema not found: {path}")
-    schema = json.loads(path.read_text(encoding="utf-8"))
+    schema = get_schema(SCHEMA_VERSION)
     schema_id = str(schema.get("$id", "")).strip()
     if not schema_id:
-        raise ValueError(f"LinkGraph search options schema missing $id: {path}")
+        raise ValueError("LinkGraph search options schema missing $id")
     return schema_id
 
 
@@ -373,7 +350,6 @@ __all__ = [
     "SortOrder",
     "build_options_record",
     "get_schema_id",
-    "get_schema_path",
     "get_validator",
     "validate",
 ]

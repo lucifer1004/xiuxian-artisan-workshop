@@ -25,12 +25,28 @@ pub struct MemoryConfig {
     /// Path to the memory store (directory).
     #[serde(default = "default_memory_path")]
     pub path: String,
+    /// Optional embedding backend override for memory runtime.
+    ///
+    /// Supported values:
+    /// - `http`: legacy `/embed/batch` endpoint
+    /// - `openai_http`/`mistral_rs`: OpenAI-compatible `/v1/embeddings` endpoint
+    /// - `litellm_rs`: Rust `litellm-rs` provider path
+    ///
+    /// When unset, backend selection follows runtime settings / environment defaults.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding_backend: Option<String>,
     /// Optional embedding client base URL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embedding_base_url: Option<String>,
     /// Optional embedding model id used by the embedding service.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embedding_model: Option<String>,
+    /// Optional max input texts per embedding batch request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding_batch_max_size: Option<usize>,
+    /// Optional max concurrent embedding chunks per batch request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding_batch_max_concurrency: Option<usize>,
     /// Embedding dimension for intent vectors (must match encoder).
     #[serde(default = "default_embedding_dim")]
     pub embedding_dim: usize,
@@ -126,15 +142,16 @@ fn default_memory_path() -> String {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        .map_or_else(
+            || std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            PathBuf::from,
+        );
 
     let data_home = std::env::var("PRJ_DATA_HOME")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| root.join(".data"));
+        .map_or_else(|| root.join(".data"), PathBuf::from);
 
     data_home
         .join("omni-agent")
@@ -225,8 +242,11 @@ impl Default for MemoryConfig {
     fn default() -> Self {
         Self {
             path: default_memory_path(),
+            embedding_backend: None,
             embedding_base_url: None,
             embedding_model: None,
+            embedding_batch_max_size: None,
+            embedding_batch_max_concurrency: None,
             embedding_dim: default_embedding_dim(),
             table_name: default_memory_table(),
             recall_k1: default_recall_k1(),
@@ -262,11 +282,11 @@ impl Default for MemoryConfig {
 /// Agent config: inference API + MCP server list + optional memory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
-    /// Chat completions endpoint (e.g. `https://api.openai.com/v1/chat/completions` or LiteLLM).
+    /// Chat completions endpoint (e.g. `https://api.openai.com/v1/chat/completions` or `LiteLLM`).
     pub inference_url: String,
     /// Model id (e.g. `gpt-4o-mini`, `claude-3-5-sonnet`).
     pub model: String,
-    /// API key; if None, read from env OPENAI_API_KEY or ANTHROPIC_API_KEY depending on URL.
+    /// API key; if None, read from env `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` depending on URL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
     /// MCP servers to connect to (tools from all are merged).
@@ -281,6 +301,10 @@ pub struct AgentConfig {
     /// MCP connect retries before failing startup.
     #[serde(default = "default_mcp_connect_retries")]
     pub mcp_connect_retries: u32,
+    /// If true, MCP startup/connect failures abort agent startup.
+    /// If false, agent starts without MCP and degrades tool execution gracefully.
+    #[serde(default = "default_mcp_strict_startup")]
+    pub mcp_strict_startup: bool,
     /// Initial backoff between MCP connect retries, in milliseconds.
     #[serde(default = "default_mcp_connect_retry_backoff_ms")]
     pub mcp_connect_retry_backoff_ms: u64,
@@ -293,10 +317,10 @@ pub struct AgentConfig {
     /// Max tool-call rounds per user turn (avoid infinite loops).
     #[serde(default = "default_max_tool_rounds")]
     pub max_tool_rounds: u32,
-    /// Optional omni-memory config (two-phase recall + store_episode). None = memory disabled.
+    /// Optional omni-memory config (two-phase recall + `store_episode`). None = memory disabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory: Option<MemoryConfig>,
-    /// If set, use omni-window (ring buffer) for session history with this max turns; context for LLM is built from window. None = use in-memory SessionStore (unbounded).
+    /// If set, use omni-window (ring buffer) for session history with this max turns; context for LLM is built from window. None = use in-memory `SessionStore` (unbounded).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_max_turns: Option<usize>,
     /// When window turn count >= this, consolidate oldest segment into omni-memory. None = consolidation disabled.
@@ -339,6 +363,10 @@ fn default_mcp_handshake_timeout_secs() -> u64 {
 
 fn default_mcp_connect_retries() -> u32 {
     3
+}
+
+fn default_mcp_strict_startup() -> bool {
+    true
 }
 
 fn default_mcp_connect_retry_backoff_ms() -> u64 {
@@ -385,6 +413,7 @@ pub enum ContextBudgetStrategy {
 }
 
 impl ContextBudgetStrategy {
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::RecentFirst => "recent_first",
@@ -403,6 +432,7 @@ impl Default for AgentConfig {
             mcp_pool_size: default_mcp_pool_size(),
             mcp_handshake_timeout_secs: default_mcp_handshake_timeout_secs(),
             mcp_connect_retries: default_mcp_connect_retries(),
+            mcp_strict_startup: default_mcp_strict_startup(),
             mcp_connect_retry_backoff_ms: default_mcp_connect_retry_backoff_ms(),
             mcp_tool_timeout_secs: default_mcp_tool_timeout_secs(),
             mcp_list_tools_cache_ttl_ms: default_mcp_list_tools_cache_ttl_ms(),
@@ -421,11 +451,11 @@ impl Default for AgentConfig {
     }
 }
 
-/// Default LiteLLM proxy path (when using `litellm --port 4000`).
+/// Default `LiteLLM` proxy path (when using `litellm --port 4000`).
 pub const LITELLM_DEFAULT_URL: &str = "http://127.0.0.1:4000/v1/chat/completions";
 
 impl AgentConfig {
-    /// Build config that uses a LiteLLM proxy as the inference endpoint.
+    /// Build config that uses a `LiteLLM` proxy as the inference endpoint.
     pub fn litellm(model: impl Into<String>) -> Self {
         let inference_url =
             std::env::var("LITELLM_PROXY_URL").unwrap_or_else(|_| LITELLM_DEFAULT_URL.to_string());
@@ -438,6 +468,7 @@ impl AgentConfig {
             mcp_pool_size: default_mcp_pool_size(),
             mcp_handshake_timeout_secs: default_mcp_handshake_timeout_secs(),
             mcp_connect_retries: default_mcp_connect_retries(),
+            mcp_strict_startup: default_mcp_strict_startup(),
             mcp_connect_retry_backoff_ms: default_mcp_connect_retry_backoff_ms(),
             mcp_tool_timeout_secs: default_mcp_tool_timeout_secs(),
             mcp_list_tools_cache_ttl_ms: default_mcp_list_tools_cache_ttl_ms(),
@@ -455,9 +486,10 @@ impl AgentConfig {
         }
     }
 
-    /// Resolve API key: config value, or env (OPENAI_API_KEY / ANTHROPIC_API_KEY).
+    /// Resolve API key: config value, or env (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`).
     /// When inference goes to our own MCP server (127.0.0.1 / localhost), returns None
     /// so we do not send a key — the server holds the key and forwards to the real LLM.
+    #[must_use]
     pub fn resolve_api_key(&self) -> Option<String> {
         if let Some(ref k) = self.api_key {
             return Some(k.clone());

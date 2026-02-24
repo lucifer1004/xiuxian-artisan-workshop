@@ -192,6 +192,70 @@ async def _embed_skill_vectors(store: Any, skills_db_path: str) -> int:
 
     from omni.foundation.services.embedding import get_embedding_service
 
+    def _is_empty(value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return not value.strip()
+        if isinstance(value, (list, dict, tuple, set)):
+            return len(value) == 0
+        return False
+
+    def _normalize_metadata_shape(row: dict[str, Any]) -> dict[str, Any]:
+        """Normalize row metadata to the flat command schema expected by Rust search.
+
+        Expected canonical shape:
+          {"metadata": {"type": "command", ...}}
+        """
+        raw_meta = row.get("metadata")
+        meta: dict[str, Any] = {}
+        if isinstance(raw_meta, dict):
+            meta = dict(raw_meta)
+        elif isinstance(raw_meta, str):
+            try:
+                parsed = _json.loads(raw_meta)
+                if isinstance(parsed, dict):
+                    meta = parsed
+            except Exception:
+                meta = {}
+
+        if isinstance(meta.get("metadata"), dict):
+            raise ValueError(
+                "Invalid skills metadata contract: nested `metadata.metadata` is not supported. "
+                "Rebuild skills index with canonical command metadata."
+            )
+
+        for key in (
+            "type",
+            "skill_name",
+            "tool_name",
+            "command",
+            "file_path",
+            "category",
+            "routing_keywords",
+            "intents",
+            "input_schema",
+            "resource_uri",
+            "parameters",
+            "function_name",
+            "docstring",
+            "file_hash",
+            "skill_tools_refers",
+            "annotations",
+        ):
+            value = row.get(key)
+            if _is_empty(value):
+                continue
+            if _is_empty(meta.get(key)):
+                meta[key] = value
+
+        tool_name = str(meta.get("tool_name") or "")
+        if "type" not in meta and "." in tool_name:
+            # Preserve routable command entries when legacy metadata omitted `type`.
+            meta["type"] = "command"
+
+        return meta
+
     try:
         entries = await store.list_all("skills")
         if not entries:
@@ -205,7 +269,7 @@ async def _embed_skill_vectors(store: Any, skills_db_path: str) -> int:
                 continue
             ids.append(entry_id)
             contents.append(content)
-            meta = {k: v for k, v in data.items() if k not in ("id", "content")}
+            meta = _normalize_metadata_shape(data)
             metadatas.append(_json.dumps(meta))
         if not ids:
             return 0

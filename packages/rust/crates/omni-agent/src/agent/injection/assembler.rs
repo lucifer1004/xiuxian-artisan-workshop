@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use xiuxian_qianhuan::{
-    InjectionOrderStrategy, InjectionPolicy, InjectionSnapshot, PromptContextBlock,
+    InjectionMode, InjectionOrderStrategy, InjectionPolicy, InjectionSnapshot, PromptContextBlock,
     PromptContextCategory, RoleMixProfile, RoleMixRole,
 };
 
@@ -26,7 +26,7 @@ pub(super) fn assemble_snapshot(
         .collect::<Vec<_>>();
 
     sort_blocks(&mut selected, &policy);
-    let role_mix = select_role_mix(&policy, &selected);
+    let role_mix = Some(select_role_mix(&policy, &selected));
 
     let mut retained = Vec::new();
     for block in selected {
@@ -138,10 +138,8 @@ fn prioritize_anchors(blocks: Vec<PromptContextBlock>) -> Vec<PromptContextBlock
     anchors.into_iter().chain(others).collect()
 }
 
-fn select_role_mix(
-    policy: &InjectionPolicy,
-    blocks: &[PromptContextBlock],
-) -> Option<RoleMixProfile> {
+#[allow(clippy::too_many_lines)]
+fn select_role_mix(policy: &InjectionPolicy, blocks: &[PromptContextBlock]) -> RoleMixProfile {
     let mut roles = Vec::new();
     let mut seen = HashSet::new();
 
@@ -219,28 +217,45 @@ fn select_role_mix(
         );
     }
 
-    let qualifies_multi_domain = roles.len() >= 2;
-    let force_hybrid = matches!(policy.mode, xiuxian_qianhuan::InjectionMode::Hybrid);
-    if !force_hybrid && !qualifies_multi_domain {
-        return None;
-    }
     if roles.is_empty() {
-        return None;
+        roles.push(RoleMixRole {
+            role: "session_context_curator".to_string(),
+            weight: 1.0,
+        });
     }
 
-    let rationale = if force_hybrid {
-        "policy.mode=hybrid requested role-mix injection".to_string()
-    } else {
-        format!(
-            "multi-domain context detected across {} role domains",
-            roles.len()
-        )
-    };
-    Some(RoleMixProfile {
-        profile_id: "role_mix.hybrid.v1".to_string(),
-        roles,
-        rationale,
-    })
+    match policy.mode {
+        InjectionMode::Single => {
+            let primary = roles.first().cloned().unwrap_or(RoleMixRole {
+                role: "session_context_curator".to_string(),
+                weight: 1.0,
+            });
+            RoleMixProfile {
+                profile_id: "role_mix.single.v1".to_string(),
+                roles: vec![primary.clone()],
+                rationale: format!(
+                    "policy.mode=single selected deterministic primary role `{}`",
+                    primary.role
+                ),
+            }
+        }
+        InjectionMode::Classified => RoleMixProfile {
+            profile_id: "role_mix.classified.v1".to_string(),
+            rationale: format!(
+                "policy.mode=classified selected {} role domains from retained blocks",
+                roles.len()
+            ),
+            roles,
+        },
+        InjectionMode::Hybrid => RoleMixProfile {
+            profile_id: "role_mix.hybrid.v1".to_string(),
+            rationale: format!(
+                "policy.mode=hybrid selected {} role domains for mixed-context synthesis",
+                roles.len()
+            ),
+            roles,
+        },
+    }
 }
 
 fn push_role(

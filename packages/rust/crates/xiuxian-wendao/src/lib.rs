@@ -2,11 +2,11 @@
 //!
 //! Module layout (by domain):
 //! - `types` / `knowledge_py`: Knowledge entries and categories
-//! - `storage` / `storage_py`: `LanceDB` persistence
+//! - `storage` / `storage_py`: Valkey-backed persistence
 //! - `sync` / `sync_py`: Incremental file sync engine
 //! - `entity` / `graph` / `graph_py`: Knowledge graph (entities, relations, search)
-//! - `enhancer` / `enhancer_py`: LinkGraph note enhancement
-//! - `link_graph_refs` / `link_graph_refs_py`: LinkGraph entity references
+//! - `enhancer` / `enhancer_py`: `LinkGraph` note enhancement
+//! - `link_graph_refs` / `link_graph_refs_py`: `LinkGraph` entity references
 //! - `dependency_indexer` / `dep_indexer_py`: Dependency scanning
 //! - `unified_symbol` / `unified_symbol_py`: Cross-language symbol index
 //!
@@ -46,10 +46,12 @@ use pyo3::prelude::*;
 // ---------------------------------------------------------------------------
 mod entity;
 pub mod graph;
+/// HMAS blackboard protocol contracts and validators.
 pub mod hmas;
 pub mod kg_cache;
 pub mod link_graph;
 pub mod link_graph_py;
+pub mod schemas;
 mod storage;
 mod sync;
 mod types;
@@ -59,14 +61,17 @@ mod types;
 // ---------------------------------------------------------------------------
 pub mod graph_py;
 pub mod knowledge_py;
+mod python_module;
+/// Python bindings for accessing bundled JSON schemas by canonical name.
+pub mod schema_py;
 pub mod storage_py;
 pub mod sync_py;
 
 // ---------------------------------------------------------------------------
-// Dual-core recall boost (Rust computation, Python thin wrapper)
+// Fusion recall boost (Rust computation, Python thin wrapper)
 // ---------------------------------------------------------------------------
-mod dual_core;
-pub mod dual_core_py;
+mod fusion;
+pub mod fusion_py;
 
 // ---------------------------------------------------------------------------
 // Feature modules (enhancer, link graph refs, dependency, unified symbol)
@@ -109,16 +114,31 @@ pub use hmas::{
     validate_blackboard_file, validate_blackboard_markdown,
 };
 pub use link_graph::{
-    LINK_GRAPH_SALIENCY_SCHEMA_VERSION, LinkGraphDirection, LinkGraphDocument, LinkGraphEdgeType,
-    LinkGraphHit, LinkGraphIndex, LinkGraphLinkFilter, LinkGraphMatchStrategy, LinkGraphMetadata,
-    LinkGraphNeighbor, LinkGraphPprSubgraphMode, LinkGraphRelatedFilter,
-    LinkGraphRelatedPprDiagnostics, LinkGraphRelatedPprOptions, LinkGraphSaliencyPolicy,
-    LinkGraphSaliencyState, LinkGraphSaliencyTouchRequest, LinkGraphScope, LinkGraphSearchFilters,
-    LinkGraphSearchOptions, LinkGraphSortField, LinkGraphSortOrder, LinkGraphSortTerm,
-    LinkGraphStats, LinkGraphTagFilter, ParsedLinkGraphQuery, compute_link_graph_saliency,
-    parse_search_query, resolve_link_graph_index_runtime, set_link_graph_config_home_override,
+    LINK_GRAPH_RETRIEVAL_PLAN_SCHEMA_VERSION, LINK_GRAPH_SALIENCY_SCHEMA_VERSION,
+    LINK_GRAPH_SUGGESTED_LINK_DECISION_SCHEMA_VERSION, LINK_GRAPH_SUGGESTED_LINK_SCHEMA_VERSION,
+    LinkGraphAgenticCandidatePair, LinkGraphAgenticExecutionConfig,
+    LinkGraphAgenticExecutionResult, LinkGraphAgenticExpansionConfig,
+    LinkGraphAgenticExpansionPlan, LinkGraphAgenticWorkerExecution, LinkGraphAgenticWorkerPhase,
+    LinkGraphAgenticWorkerPlan, LinkGraphAttachment, LinkGraphAttachmentHit,
+    LinkGraphAttachmentKind, LinkGraphConfidenceLevel, LinkGraphDirection, LinkGraphDocument,
+    LinkGraphEdgeType, LinkGraphHit, LinkGraphIndex, LinkGraphLinkFilter, LinkGraphMatchStrategy,
+    LinkGraphMetadata, LinkGraphNeighbor, LinkGraphPassage, LinkGraphPprSubgraphMode,
+    LinkGraphRelatedFilter, LinkGraphRelatedPprDiagnostics, LinkGraphRelatedPprOptions,
+    LinkGraphRetrievalBudget, LinkGraphRetrievalMode, LinkGraphRetrievalPlanRecord,
+    LinkGraphSaliencyPolicy, LinkGraphSaliencyState, LinkGraphSaliencyTouchRequest, LinkGraphScope,
+    LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSortField, LinkGraphSortOrder,
+    LinkGraphSortTerm, LinkGraphStats, LinkGraphSuggestedLink, LinkGraphSuggestedLinkDecision,
+    LinkGraphSuggestedLinkDecisionRequest, LinkGraphSuggestedLinkDecisionResult,
+    LinkGraphSuggestedLinkRequest, LinkGraphSuggestedLinkState, LinkGraphTagFilter,
+    ParsedLinkGraphQuery, compute_link_graph_saliency, narrate_subgraph, parse_search_query,
+    resolve_link_graph_index_runtime, set_link_graph_config_home_override,
     set_link_graph_wendao_config_override, valkey_saliency_del, valkey_saliency_get,
     valkey_saliency_get_with_valkey, valkey_saliency_touch, valkey_saliency_touch_with_valkey,
+    valkey_suggested_link_decide, valkey_suggested_link_decide_with_valkey,
+    valkey_suggested_link_decisions_recent, valkey_suggested_link_decisions_recent_with_valkey,
+    valkey_suggested_link_log, valkey_suggested_link_log_with_valkey, valkey_suggested_link_recent,
+    valkey_suggested_link_recent_latest, valkey_suggested_link_recent_latest_with_valkey,
+    valkey_suggested_link_recent_with_valkey,
 };
 pub use link_graph_py::{
     PyLinkGraphEngine, link_graph_stats_cache_del, link_graph_stats_cache_get,
@@ -142,7 +162,7 @@ pub use unified_symbol_py::{PyUnifiedIndexStats, PyUnifiedSymbol, PyUnifiedSymbo
 // Re-export PyO3 types for convenience
 pub use graph_py::{
     PyEntity, PyEntityType, PyKnowledgeGraph, PyQueryIntent, PyRelation, PySkillDoc,
-    extract_query_intent, invalidate_kg_cache, load_kg_from_lance_cached,
+    extract_query_intent, invalidate_kg_cache, load_kg_from_valkey_cached,
 };
 pub use knowledge_py::{PyKnowledgeCategory, PyKnowledgeEntry, create_knowledge_entry};
 pub use storage_py::PyKnowledgeStorage;
@@ -155,68 +175,5 @@ pub use sync_py::{PySyncEngine, PySyncResult, compute_hash};
 /// Python module definition — delegates to domain-specific binding modules.
 #[pymodule]
 fn _xiuxian_wendao(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
-    // Knowledge types
-    m.add_class::<knowledge_py::PyKnowledgeCategory>()?;
-    m.add_class::<knowledge_py::PyKnowledgeEntry>()?;
-    m.add_function(wrap_pyfunction!(knowledge_py::create_knowledge_entry, py)?)?;
-
-    // Storage
-    m.add_class::<storage_py::PyKnowledgeStorage>()?;
-
-    // Sync
-    m.add_class::<sync_py::PySyncEngine>()?;
-    m.add_class::<sync_py::PySyncResult>()?;
-    m.add_function(wrap_pyfunction!(sync_py::compute_hash, py)?)?;
-
-    // Knowledge graph
-    m.add_class::<graph_py::PyEntity>()?;
-    m.add_class::<graph_py::PyRelation>()?;
-    m.add_class::<graph_py::PyKnowledgeGraph>()?;
-    m.add_class::<graph_py::PySkillDoc>()?;
-    m.add_class::<graph_py::PyQueryIntent>()?;
-    m.add_function(wrap_pyfunction!(graph_py::extract_query_intent, py)?)?;
-    m.add_function(wrap_pyfunction!(graph_py::invalidate_kg_cache, py)?)?;
-    m.add_function(wrap_pyfunction!(graph_py::load_kg_from_lance_cached, py)?)?;
-    m.add_class::<link_graph_py::PyLinkGraphEngine>()?;
-    m.add_function(wrap_pyfunction!(
-        link_graph_py::link_graph_stats_cache_get,
-        py
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        link_graph_py::link_graph_stats_cache_set,
-        py
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        link_graph_py::link_graph_stats_cache_del,
-        py
-    )?)?;
-
-    // LinkGraph entity references
-    m.add_class::<PyLinkGraphEntityRef>()?;
-    m.add_class::<PyLinkGraphRefStats>()?;
-    m.add_function(wrap_pyfunction!(link_graph_extract_entity_refs, py)?)?;
-    m.add_function(wrap_pyfunction!(link_graph_get_ref_stats, py)?)?;
-    m.add_function(wrap_pyfunction!(link_graph_parse_entity_ref, py)?)?;
-    m.add_function(wrap_pyfunction!(link_graph_is_valid_ref, py)?)?;
-    m.add_function(wrap_pyfunction!(link_graph_count_refs, py)?)?;
-    m.add_function(wrap_pyfunction!(link_graph_find_referencing_notes, py)?)?;
-
-    // Enhancer
-    m.add_class::<PyEnhancedNote>()?;
-    m.add_class::<PyNoteFrontmatter>()?;
-    m.add_class::<PyInferredRelation>()?;
-    m.add_function(wrap_pyfunction!(link_graph_enhance_note, py)?)?;
-    m.add_function(wrap_pyfunction!(link_graph_enhance_notes_batch, py)?)?;
-    m.add_function(wrap_pyfunction!(link_graph_parse_frontmatter, py)?)?;
-
-    // Dual-core recall boost (LinkGraph proximity)
-    m.add_function(wrap_pyfunction!(
-        dual_core_py::apply_link_graph_proximity_boost_py,
-        py
-    )?)?;
-
-    // Unified symbol index
-    unified_symbol_py::register_unified_symbol_module(m)?;
-
-    Ok(())
+    python_module::register(py, m)
 }

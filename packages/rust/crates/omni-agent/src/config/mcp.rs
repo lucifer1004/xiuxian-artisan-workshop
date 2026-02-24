@@ -32,6 +32,9 @@ pub struct McpServerEntryFile {
 /// Load MCP server list from a config file. No env fallback.
 ///
 /// Returns empty list if file is missing or has no mcpServers.
+///
+/// # Errors
+/// Returns an error when file read or JSON parse fails.
 pub fn load_mcp_config(path: &Path) -> Result<Vec<McpServerEntry>> {
     if !path.exists() {
         return Ok(Vec::new());

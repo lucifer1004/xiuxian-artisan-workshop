@@ -261,6 +261,79 @@ def _monitor_enabled() -> bool:
     return flag in {"1", "true", "yes", "on"}
 
 
+def _split_tool_name(tool_name: str) -> tuple[str, str]:
+    """Parse and validate ``skill.command`` tool identifier."""
+    value = str(tool_name).strip()
+    if "." not in value:
+        raise ValueError(f"Invalid tool name format: {value}. Use skill.command")
+    skill_name, command_name = value.split(".", 1)
+    skill_name = skill_name.strip()
+    command_name = command_name.strip()
+    if not skill_name or not command_name:
+        raise ValueError(f"Invalid tool name format: {value}. Use skill.command")
+    return skill_name, command_name
+
+
+async def _run_with_monitor_scope(
+    tool_id: str,
+    *,
+    output_json: bool,
+    auto_report: bool,
+    runner: Any,
+) -> tuple[Any, Any | None]:
+    """Execute runner under optional shared skills-monitor scope."""
+    if _monitor_enabled():
+        try:
+            from omni.foundation.runtime.skills_monitor import (
+                get_current_monitor,
+                skills_monitor_scope,
+            )
+        except Exception as e:
+            logger.debug("skills_monitor_unavailable", tool=tool_id, error=str(e))
+        else:
+            if get_current_monitor() is None:
+                async with skills_monitor_scope(
+                    tool_id,
+                    verbose=True,
+                    output_json=output_json,
+                    auto_report=auto_report,
+                ) as monitor:
+                    result = await runner()
+                return result, (None if auto_report else monitor)
+
+    return await runner(), None
+
+
+async def _run_via_kernel_direct(kernel: Any, tool_name: str, cmd_args: dict[str, Any]) -> Any:
+    """Execute ``tool_name`` directly on a ready kernel's loaded skill context."""
+    skill_name, command_name = _split_tool_name(tool_name)
+    skill_context = getattr(kernel, "skill_context", None)
+    if skill_context is None:
+        raise ValueError("Kernel has no skill_context; cannot execute tool directly.")
+    skill = skill_context.get_skill(skill_name)
+    if skill is None:
+        raise ValueError(f"Skill not found: {skill_name}")
+    if not hasattr(skill, "execute"):
+        raise ValueError(f"Skill '{skill_name}' is not executable.")
+
+    execute_started = time.perf_counter()
+    exec_rss_before, exec_peak_before = _read_memory_snapshot()
+    run_before_skill_execute()
+    try:
+        return await skill.execute(command_name, **cmd_args)
+    finally:
+        run_after_skill_execute()
+        exec_rss_after, exec_peak_after = _read_memory_snapshot()
+        _record_runner_phase(
+            "runner.kernel.direct.execute",
+            (time.perf_counter() - execute_started) * 1000,
+            tool=tool_name,
+            **_memory_phase_fields(
+                exec_rss_before, exec_peak_before, exec_rss_after, exec_peak_after
+            ),
+        )
+
+
 async def run_skill(
     skill_name: str,
     command_name: str,
@@ -312,26 +385,85 @@ async def run_skill_with_monitor(
     cmd_args = args or {}
     tool_id = f"{skill_name}.{command_name}"
 
-    if _monitor_enabled():
+    async def _runner() -> Any:
+        return await _run_with_fallback(skill_name, command_name, cmd_args)
+
+    return await _run_with_monitor_scope(
+        tool_id,
+        output_json=output_json,
+        auto_report=auto_report,
+        runner=_runner,
+    )
+
+
+async def run_tool(
+    tool_name: str,
+    args: dict[str, Any] | None = None,
+    *,
+    kernel: Any | None = None,
+) -> Any:
+    """Unified tool run by full tool id (``skill.command``).
+
+    Execution strategy is strict (no fallback):
+    - ``kernel`` provided and ready: direct kernel skill-context execution.
+    - no kernel: targeted fast-path execution only.
+    """
+    result, _monitor = await run_tool_with_monitor(
+        tool_name,
+        args,
+        kernel=kernel,
+        output_json=False,
+        auto_report=True,
+    )
+    return result
+
+
+async def run_tool_with_monitor(
+    tool_name: str,
+    args: dict[str, Any] | None = None,
+    *,
+    kernel: Any | None = None,
+    output_json: bool = False,
+    auto_report: bool = True,
+) -> tuple[Any, Any | None]:
+    """Unified tool run + optional monitor control for ``skill.command`` identifiers.
+
+    This API is strict and intentionally has no fallback chain.
+    """
+    cmd_args = args or {}
+    skill_name, command_name = _split_tool_name(tool_name)
+    tool_id = f"{skill_name}.{command_name}"
+
+    if kernel is not None and bool(getattr(kernel, "is_ready", False)):
+
+        async def _runner() -> Any:
+            return await _run_via_kernel_direct(kernel, tool_id, cmd_args)
+
+        return await _run_with_monitor_scope(
+            tool_id,
+            output_json=output_json,
+            auto_report=auto_report,
+            runner=_runner,
+        )
+
+    async def _runner_fast_only() -> Any:
         try:
-            from omni.foundation.runtime.skills_monitor import (
-                get_current_monitor,
-                skills_monitor_scope,
-            )
-        except Exception as e:
-            logger.debug("skills_monitor_unavailable", tool=tool_id, error=str(e))
-        else:
-            if get_current_monitor() is None:
-                async with skills_monitor_scope(
-                    tool_id,
-                    verbose=True,
-                    output_json=output_json,
-                    auto_report=auto_report,
-                ) as monitor:
-                    result = await _run_with_fallback(skill_name, command_name, cmd_args)
-                return result, (None if auto_report else monitor)
+            return await _run_fast_path(skill_name, command_name, cmd_args)
+        except FastPathUnavailable as e:
+            raise ValueError(f"Unified tool path unavailable for '{tool_id}': {e}") from e
 
-    return await _run_with_fallback(skill_name, command_name, cmd_args), None
+    return await _run_with_monitor_scope(
+        tool_id,
+        output_json=output_json,
+        auto_report=auto_report,
+        runner=_runner_fast_only,
+    )
 
 
-__all__ = ["FastPathUnavailable", "run_skill", "run_skill_with_monitor"]
+__all__ = [
+    "FastPathUnavailable",
+    "run_skill",
+    "run_skill_with_monitor",
+    "run_tool",
+    "run_tool_with_monitor",
+]

@@ -20,6 +20,10 @@ impl SystemPromptInjectionWindow {
     }
 
     /// Parse XML and construct a bounded injection window.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InjectionError`] when XML parsing fails.
     pub fn from_xml(raw: &str, config: InjectionWindowConfig) -> Result<Self, InjectionError> {
         let parsed = xml::parse_qa_entries(raw)?;
         let mut window = Self::new(config);
@@ -30,6 +34,10 @@ impl SystemPromptInjectionWindow {
     }
 
     /// Parse and normalize XML under window limits.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InjectionError`] when XML parsing fails.
     pub fn normalize_xml(
         raw: &str,
         config: InjectionWindowConfig,

@@ -65,7 +65,8 @@ class TestSkillReindex:
             result = runner.invoke(app, ["skill", "reindex", "--json"])
 
         assert result.exit_code == 0
-        assert mock_run_async_blocking.call_count >= 2
+        # Rust-side reindex now performs scan+apply in a single async call.
+        assert mock_run_async_blocking.call_count >= 1
         assert "storage" in result.output.lower() or "lancedb" in result.output.lower()
 
 

@@ -3,7 +3,7 @@ name = "omni-memory"
 version.workspace = true
 edition.workspace = true
 description = "Self-evolving memory engine with Q-Learning and Two-Phase Search"
-authors = ["Omni-Dev-Fusion Team"]
+authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
 

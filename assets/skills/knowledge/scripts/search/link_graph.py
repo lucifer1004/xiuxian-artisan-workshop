@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import copy
+import json
+import time
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
@@ -14,6 +17,9 @@ from omni.rag.link_graph import (
 from omni.rag.link_graph.models import LinkGraphSearchOptions
 
 logger = get_logger("skill.knowledge.search.link_graph")
+
+_LINK_GRAPH_SEARCH_CACHE_TTL_SECONDS = 5.0
+_LINK_GRAPH_SEARCH_CACHE: dict[str, tuple[dict[str, Any], float]] = {}
 
 
 def _normalize_graph_stats(raw: Any) -> dict[str, int]:
@@ -37,10 +43,47 @@ def _split_graph_stats_payload(payload: Any) -> tuple[dict[str, int], dict[str, 
     return _normalize_graph_stats(payload), {}
 
 
-def _get_backend(paths: ConfigPaths | None = None):
-    if paths is None:
-        paths = ConfigPaths()
-    return get_link_graph_backend(notebook_dir=str(paths.project_root))
+def _resolve_paths(paths: ConfigPaths | None = None) -> ConfigPaths:
+    return paths if paths is not None else ConfigPaths()
+
+
+def _search_cache_key(
+    *,
+    notebook_dir: str,
+    query: str,
+    max_results: int,
+    normalized_options: dict[str, Any],
+) -> str:
+    options_json = json.dumps(
+        normalized_options,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return f"{notebook_dir}|{query}|{max_results}|{options_json}"
+
+
+def _search_cache_get(key: str) -> dict[str, Any] | None:
+    cached = _LINK_GRAPH_SEARCH_CACHE.get(key)
+    if cached is None:
+        return None
+    payload, expires_at = cached
+    if time.monotonic() >= expires_at:
+        _LINK_GRAPH_SEARCH_CACHE.pop(key, None)
+        return None
+    return copy.deepcopy(payload)
+
+
+def _search_cache_put(key: str, payload: dict[str, Any]) -> None:
+    _LINK_GRAPH_SEARCH_CACHE[key] = (
+        copy.deepcopy(payload),
+        time.monotonic() + _LINK_GRAPH_SEARCH_CACHE_TTL_SECONDS,
+    )
+
+
+def clear_link_graph_search_cache() -> None:
+    """Clear process-local link_graph search response cache."""
+    _LINK_GRAPH_SEARCH_CACHE.clear()
 
 
 async def run_link_graph_search(
@@ -50,6 +93,7 @@ async def run_link_graph_search(
     paths: ConfigPaths | None = None,
 ) -> dict[str, Any]:
     """Run LinkGraph-only search; returns success, query, total, results, graph_stats."""
+    resolved_paths = _resolve_paths(paths)
     options_model = (
         search_options
         if isinstance(search_options, LinkGraphSearchOptions)
@@ -57,9 +101,19 @@ async def run_link_graph_search(
     )
     options_record = options_model.to_record()
     normalized_options = {k: v for k, v in options_record.items() if k != "schema"}
-
-    backend = _get_backend(paths)
     bounded_results = max(1, int(max_results))
+    notebook_dir = str(resolved_paths.project_root)
+    cache_key = _search_cache_key(
+        notebook_dir=notebook_dir,
+        query=query,
+        max_results=bounded_results,
+        normalized_options=normalized_options,
+    )
+    cached_payload = _search_cache_get(cache_key)
+    if cached_payload is not None:
+        return cached_payload
+
+    backend = get_link_graph_backend(notebook_dir=notebook_dir)
     planned = await backend.search_planned(
         query,
         limit=bounded_results,
@@ -69,7 +123,7 @@ async def run_link_graph_search(
         raise RuntimeError("link_graph search_planned contract violation: expected object payload")
 
     planned_query_raw = planned.get("query")
-    parsed_query = str(planned_query_raw).strip() if planned_query_raw is not None else str(query)
+    parsed_query = str(planned_query_raw).strip() if planned_query_raw is not None else ""
 
     planned_options = planned.get("search_options")
     if not isinstance(planned_options, dict):
@@ -94,7 +148,7 @@ async def run_link_graph_search(
         include_meta=True,
     )
     graph_stats, graph_stats_meta = _split_graph_stats_payload(graph_stats_payload)
-    return {
+    payload = {
         "success": True,
         "query": query,
         "parsed_query": parsed_query,
@@ -104,6 +158,8 @@ async def run_link_graph_search(
         "graph_stats": graph_stats,
         "graph_stats_meta": graph_stats_meta,
     }
+    _search_cache_put(cache_key, payload)
+    return payload
 
 
-__all__ = ["run_link_graph_search"]
+__all__ = ["clear_link_graph_search_cache", "run_link_graph_search"]

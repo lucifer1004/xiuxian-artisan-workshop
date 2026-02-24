@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 
 import omni.foundation.api.link_graph_policy_schema as link_graph_policy_schema
-from omni.foundation.api.link_graph_policy_schema import build_plan_record, get_schema_id, validate
+from omni.foundation.api.link_graph_policy_schema import (
+    build_plan_record,
+    get_reason_enum,
+    get_schema_id,
+    validate,
+)
 
 
 def test_build_plan_record_roundtrip() -> None:
@@ -32,6 +37,12 @@ def test_get_schema_id() -> None:
     assert schema_id.endswith("/omni.link_graph.retrieval_plan.v1.schema.json")
 
 
+def test_get_reason_enum_contains_graph_sufficient() -> None:
+    reasons = get_reason_enum()
+    assert "graph_sufficient" in reasons
+    assert "graph_policy_missing" in reasons
+
+
 def test_validate_rejects_invalid_confidence_level() -> None:
     payload = build_plan_record(
         requested_mode="hybrid",
@@ -51,12 +62,34 @@ def test_validate_rejects_invalid_confidence_level() -> None:
         validate(payload)
 
 
-def test_get_validator_raises_when_schema_file_missing(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+def test_validate_rejects_invalid_reason() -> None:
+    payload = build_plan_record(
+        requested_mode="hybrid",
+        selected_mode="vector_only",
+        reason="graph_insufficient",
+        backend_name="wendao",
+        graph_hit_count=0,
+        source_hint_count=0,
+        graph_confidence_score=0.0,
+        graph_confidence_level="none",
+        budget_candidate_limit=10,
+        budget_max_sources=5,
+        budget_rows_per_source=8,
+    )
+    payload["reason"] = "unknown_reason"
+    with pytest.raises(ValueError, match="reason"):
+        validate(payload)
+
+
+def test_get_validator_raises_when_rust_schema_backend_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     link_graph_policy_schema.get_validator.cache_clear()
-    missing_path = tmp_path / "missing.schema.json"
-    monkeypatch.setattr(link_graph_policy_schema, "get_schema_path", lambda: missing_path)
-    with pytest.raises(FileNotFoundError, match="retrieval plan schema not found"):
+    monkeypatch.setattr(
+        link_graph_policy_schema,
+        "get_schema",
+        lambda _name: (_ for _ in ()).throw(ImportError("Rust schema backend unavailable")),
+    )
+    with pytest.raises(ImportError, match="Rust schema backend unavailable"):
         link_graph_policy_schema.get_validator()
     link_graph_policy_schema.get_validator.cache_clear()

@@ -22,10 +22,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.config.link_graph_runtime import (
-    LINK_GRAPH_CACHE_VALKEY_URL_ENV,
-    get_link_graph_cache_valkey_url,
-)
+from omni.foundation.config.paths import get_config_paths
+from omni.foundation.runtime.gitops import get_project_root
 
 
 @dataclass
@@ -42,14 +40,31 @@ class RunResult:
 
 
 def _resolve_project_root() -> Path:
-    prj_root = os.environ.get("PRJ_ROOT")
-    if prj_root:
-        return Path(prj_root).expanduser().resolve()
-    raw = subprocess.check_output(
-        ["git", "rev-parse", "--show-toplevel"],
-        text=True,
-    ).strip()
-    return Path(raw).resolve()
+    try:
+        return get_project_root().resolve()
+    except Exception:
+        prj_root = os.environ.get("PRJ_ROOT")
+        if prj_root:
+            return Path(prj_root).expanduser().resolve()
+        raw = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            text=True,
+        ).strip()
+        return Path(raw).resolve()
+
+
+def _resolve_default_config_path() -> Path:
+    return get_config_paths().wendao_settings_file.resolve()
+
+
+def _resolve_env_target_bin(project_root: Path, profile: str) -> Path | None:
+    raw_target_dir = os.environ.get("CARGO_TARGET_DIR")
+    if not raw_target_dir:
+        return None
+    target_dir = Path(raw_target_dir).expanduser()
+    if not target_dir.is_absolute():
+        target_dir = (project_root / target_dir).resolve()
+    return target_dir / profile / "wendao"
 
 
 def _resolve_binary(project_root: Path, binary: str | None, build: bool, release: bool) -> Path:
@@ -60,21 +75,40 @@ def _resolve_binary(project_root: Path, binary: str | None, build: bool, release
         return resolved
 
     profile = "release" if release else "debug"
+    env_target_bin = _resolve_env_target_bin(project_root, profile)
     default_bin = project_root / "target" / profile / "wendao"
-    if build or not default_bin.exists():
+    codex_cache_bin = project_root / ".cache" / "target-codex-wendao" / profile / "wendao"
+
+    if not build:
+        if env_target_bin is not None and env_target_bin.exists():
+            return env_target_bin
+        if default_bin.exists():
+            return default_bin
+        if codex_cache_bin.exists():
+            return codex_cache_bin
+
+    if build or (not default_bin.exists() and not codex_cache_bin.exists()):
         cmd = ["cargo", "build", "-p", "xiuxian-wendao", "--bin", "wendao"]
         if release:
             cmd.append("--release")
         subprocess.run(cmd, cwd=project_root, check=True)
-    if not default_bin.exists():
-        raise FileNotFoundError(f"wendao binary not found after build: {default_bin}")
-    return default_bin
+    if env_target_bin is not None and env_target_bin.exists():
+        return env_target_bin
+    if default_bin.exists():
+        return default_bin
+    if codex_cache_bin.exists():
+        return codex_cache_bin
+    raise FileNotFoundError(
+        "wendao binary not found after build: "
+        f"{default_bin} (also checked {codex_cache_bin} and {env_target_bin})"
+    )
 
 
 def _build_cmd(
     *,
     binary: Path,
     root: Path,
+    config: Path | None,
     stem: str,
     max_distance: int,
     limit: int,
@@ -83,18 +117,22 @@ def _build_cmd(
     ppr_tol: float | None,
     ppr_subgraph_mode: str | None,
 ) -> list[str]:
-    cmd = [
-        str(binary),
-        "--root",
-        str(root),
-        "related",
-        stem,
-        "--max-distance",
-        str(max_distance),
-        "--limit",
-        str(limit),
-        "--verbose",
-    ]
+    cmd = [str(binary)]
+    if config is not None:
+        cmd.extend(["--conf", str(config)])
+    cmd.extend(
+        [
+            "--root",
+            str(root),
+            "related",
+            stem,
+            "--max-distance",
+            str(max_distance),
+            "--limit",
+            str(limit),
+            "--verbose",
+        ]
+    )
     if ppr_alpha is not None:
         cmd.extend(["--ppr-alpha", str(ppr_alpha)])
     if ppr_max_iter is not None:
@@ -106,36 +144,169 @@ def _build_cmd(
     return cmd
 
 
+def _pick_disambiguated_seed(candidates: list[Any], current_seed: str) -> str | None:
+    path_values: list[str] = []
+    stem_values: list[str] = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        path = str(candidate.get("path") or "").strip()
+        stem = str(candidate.get("stem") or "").strip()
+        if path and path != current_seed:
+            path_values.append(path)
+        if stem and stem != current_seed:
+            stem_values.append(stem)
+
+    # Prefer path-like candidates (with a directory component) because basename-only
+    # names such as `README.md` are often still ambiguous in large notebooks.
+    for path in path_values:
+        if "/" in path or "\\" in path:
+            return path
+    if path_values:
+        return path_values[0]
+    if stem_values:
+        return stem_values[0]
+    return None
+
+
 def _run_once(cmd: list[str], timeout_s: float) -> RunResult:
     start = time.perf_counter()
     env = os.environ.copy()
-    # Unified resolver: settings (wendao.yaml) first, then VALKEY_URL env fallback.
-    env[LINK_GRAPH_CACHE_VALKEY_URL_ENV] = get_link_graph_cache_valkey_url(env=env)
-    try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-            env=env,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        elapsed_ms = (time.perf_counter() - start) * 1000.0
-        return RunResult(
-            elapsed_ms=elapsed_ms,
-            ok=False,
-            result_count=0,
-            subgraph_count=0,
-            kernel_duration_ms=0.0,
-            partition_duration_ms=0.0,
-            fusion_duration_ms=0.0,
-            total_duration_ms=0.0,
-            error=f"timeout ({timeout_s}s)",
-        )
+    active_cmd = list(cmd)
+    payload: dict[str, Any] | None = None
+    for _attempt in range(3):
+        try:
+            proc = subprocess.run(
+                active_cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+                env=env,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            return RunResult(
+                elapsed_ms=elapsed_ms,
+                ok=False,
+                result_count=0,
+                subgraph_count=0,
+                kernel_duration_ms=0.0,
+                partition_duration_ms=0.0,
+                fusion_duration_ms=0.0,
+                total_duration_ms=0.0,
+                error=f"timeout ({timeout_s}s)",
+            )
+
+        if proc.returncode != 0:
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            return RunResult(
+                elapsed_ms=elapsed_ms,
+                ok=False,
+                result_count=0,
+                subgraph_count=0,
+                kernel_duration_ms=0.0,
+                partition_duration_ms=0.0,
+                fusion_duration_ms=0.0,
+                total_duration_ms=0.0,
+                error=(proc.stderr or proc.stdout or f"exit={proc.returncode}").strip(),
+            )
+
+        try:
+            parsed = json.loads(proc.stdout)
+        except Exception as exc:
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            return RunResult(
+                elapsed_ms=elapsed_ms,
+                ok=False,
+                result_count=0,
+                subgraph_count=0,
+                kernel_duration_ms=0.0,
+                partition_duration_ms=0.0,
+                fusion_duration_ms=0.0,
+                total_duration_ms=0.0,
+                error=f"invalid-json: {exc}",
+            )
+
+        if isinstance(parsed, dict) and parsed.get("error") == "ambiguous_stem":
+            candidates = parsed.get("candidates")
+            if not isinstance(candidates, list) or not candidates:
+                elapsed_ms = (time.perf_counter() - start) * 1000.0
+                return RunResult(
+                    elapsed_ms=elapsed_ms,
+                    ok=False,
+                    result_count=0,
+                    subgraph_count=0,
+                    kernel_duration_ms=0.0,
+                    partition_duration_ms=0.0,
+                    fusion_duration_ms=0.0,
+                    total_duration_ms=0.0,
+                    error="ambiguous_stem: no candidates to resolve",
+                )
+            try:
+                related_idx = active_cmd.index("related")
+            except ValueError:
+                elapsed_ms = (time.perf_counter() - start) * 1000.0
+                return RunResult(
+                    elapsed_ms=elapsed_ms,
+                    ok=False,
+                    result_count=0,
+                    subgraph_count=0,
+                    kernel_duration_ms=0.0,
+                    partition_duration_ms=0.0,
+                    fusion_duration_ms=0.0,
+                    total_duration_ms=0.0,
+                    error="ambiguous_stem: related command shape changed",
+                )
+            if related_idx + 1 >= len(active_cmd):
+                elapsed_ms = (time.perf_counter() - start) * 1000.0
+                return RunResult(
+                    elapsed_ms=elapsed_ms,
+                    ok=False,
+                    result_count=0,
+                    subgraph_count=0,
+                    kernel_duration_ms=0.0,
+                    partition_duration_ms=0.0,
+                    fusion_duration_ms=0.0,
+                    total_duration_ms=0.0,
+                    error="ambiguous_stem: missing related seed argument",
+                )
+            current_seed = str(active_cmd[related_idx + 1])
+            resolved = _pick_disambiguated_seed(candidates, current_seed)
+            if not resolved:
+                elapsed_ms = (time.perf_counter() - start) * 1000.0
+                return RunResult(
+                    elapsed_ms=elapsed_ms,
+                    ok=False,
+                    result_count=0,
+                    subgraph_count=0,
+                    kernel_duration_ms=0.0,
+                    partition_duration_ms=0.0,
+                    fusion_duration_ms=0.0,
+                    total_duration_ms=0.0,
+                    error="ambiguous_stem: candidate missing path/stem",
+                )
+            active_cmd[related_idx + 1] = resolved
+            continue
+
+        if not isinstance(parsed, dict):
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            return RunResult(
+                elapsed_ms=elapsed_ms,
+                ok=False,
+                result_count=0,
+                subgraph_count=0,
+                kernel_duration_ms=0.0,
+                partition_duration_ms=0.0,
+                fusion_duration_ms=0.0,
+                total_duration_ms=0.0,
+                error="invalid-json: expected object payload",
+            )
+        payload = parsed
+        break
 
     elapsed_ms = (time.perf_counter() - start) * 1000.0
-    if proc.returncode != 0:
+    if not isinstance(payload, dict):
         return RunResult(
             elapsed_ms=elapsed_ms,
             ok=False,
@@ -145,22 +316,12 @@ def _run_once(cmd: list[str], timeout_s: float) -> RunResult:
             partition_duration_ms=0.0,
             fusion_duration_ms=0.0,
             total_duration_ms=0.0,
-            error=(proc.stderr or proc.stdout or f"exit={proc.returncode}").strip(),
+            error="invalid-json: missing diagnostics payload",
         )
-
-    try:
-        payload = json.loads(proc.stdout)
-        results = payload.get("results")
-        result_count = len(results) if isinstance(results, list) else 0
-        diagnostics = payload.get("diagnostics")
-        if not isinstance(diagnostics, dict):
-            raise ValueError("missing diagnostics payload")
-        subgraph_count = int(diagnostics.get("subgraph_count", 0))
-        kernel_duration_ms = float(diagnostics.get("kernel_duration_ms", 0.0))
-        partition_duration_ms = float(diagnostics.get("partition_duration_ms", 0.0))
-        fusion_duration_ms = float(diagnostics.get("fusion_duration_ms", 0.0))
-        total_duration_ms = float(diagnostics.get("total_duration_ms", 0.0))
-    except Exception as exc:  # noqa: BLE001
+    results = payload.get("results")
+    result_count = len(results) if isinstance(results, list) else 0
+    diagnostics = payload.get("diagnostics")
+    if not isinstance(diagnostics, dict):
         return RunResult(
             elapsed_ms=elapsed_ms,
             ok=False,
@@ -170,8 +331,13 @@ def _run_once(cmd: list[str], timeout_s: float) -> RunResult:
             partition_duration_ms=0.0,
             fusion_duration_ms=0.0,
             total_duration_ms=0.0,
-            error=f"invalid-json: {exc}",
+            error="invalid-json: missing diagnostics payload",
         )
+    subgraph_count = int(diagnostics.get("subgraph_count", 0))
+    kernel_duration_ms = float(diagnostics.get("kernel_duration_ms", 0.0))
+    partition_duration_ms = float(diagnostics.get("partition_duration_ms", 0.0))
+    fusion_duration_ms = float(diagnostics.get("fusion_duration_ms", 0.0))
+    total_duration_ms = float(diagnostics.get("total_duration_ms", 0.0))
 
     return RunResult(
         elapsed_ms=elapsed_ms,
@@ -192,7 +358,7 @@ def _p95_ms(values: list[float]) -> float:
     if len(values) == 1:
         return values[0]
     sorted_values = sorted(values)
-    idx = max(0, int(round(0.95 * (len(sorted_values) - 1))))
+    idx = max(0, round(0.95 * (len(sorted_values) - 1)))
     return sorted_values[idx]
 
 
@@ -218,6 +384,11 @@ def main() -> int:
         "--binary",
         default=None,
         help="Path to wendao binary (default: target/debug/wendao)",
+    )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="wendao config path (defaults to config API: $PRJ_CONFIG_HOME/omni-dev-fusion/wendao.yaml)",
     )
     parser.add_argument(
         "--release",
@@ -258,13 +429,25 @@ def main() -> int:
             build=not args.no_build,
             release=bool(args.release),
         )
-    except Exception as exc:  # noqa: BLE001
+        if args.config:
+            config_arg = Path(args.config).expanduser()
+            config_path = (
+                config_arg.resolve()
+                if config_arg.is_absolute()
+                else (project_root / config_arg).resolve()
+            )
+        else:
+            config_path = _resolve_default_config_path()
+        if not config_path.exists():
+            raise FileNotFoundError(f"config not found: {config_path}")
+    except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
     cmd = _build_cmd(
         binary=binary,
         root=Path(args.root).expanduser().resolve(),
+        config=config_path,
         stem=args.stem,
         max_distance=max(1, int(args.max_distance)),
         limit=max(1, int(args.limit)),
@@ -322,7 +505,7 @@ def main() -> int:
         gates_failed.append(f"run_failures={len(failures)}")
 
     payload: dict[str, Any] = {
-        "schema": "omni.wendao.related_benchmark.v1",
+        "schema": "xiuxian_wendao.related_benchmark.v1",
         "binary": str(binary),
         "profile": "release" if args.release else "debug",
         "cmd": cmd,

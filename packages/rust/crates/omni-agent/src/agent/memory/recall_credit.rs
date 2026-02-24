@@ -73,7 +73,9 @@ fn credit_weight(rank: usize, total: usize, score: f32) -> f32 {
     let rank_weight = if total <= 1 {
         1.0
     } else {
-        1.0 - (rank as f32 / (total.saturating_sub(1)) as f32)
+        let rank_f = f32::from(u16::try_from(rank).unwrap_or(u16::MAX));
+        let total_f = f32::from(u16::try_from(total.saturating_sub(1)).unwrap_or(u16::MAX));
+        1.0 - (rank_f / total_f.max(1.0))
     };
     let score_weight = normalize_score_weight(score);
     (0.20 + (rank_weight * 0.55) + (score_weight * 0.25)).clamp(0.15, 1.0)
@@ -83,7 +85,7 @@ fn normalize_score_weight(score: f32) -> f32 {
     if !score.is_finite() {
         return 0.0;
     }
-    ((score.clamp(-1.0, 1.0) + 1.0) / 2.0).clamp(0.0, 1.0)
+    f32::midpoint(score.clamp(-1.0, 1.0), 1.0).clamp(0.0, 1.0)
 }
 
 #[cfg(test)]

@@ -1,32 +1,57 @@
+agent:
+  llm_backend: litellm_rs
+
 telegram:
-  allowed_users: 1304799691,1304799692,1304799693,1304799694
-  allowed_groups: "*"
+  acl:
+    allow:
+      users: ["1304799691", "1304799692", "1304799693", "1304799694"]
+      groups: ["*"]
+    admin:
+      users: ["1304799691", "1304799692", "1304799693", "1304799694"]
+    control:
+      allow_from:
+        users: ["1304799691", "1304799692", "1304799693", "1304799694"]
+    slash:
+      global:
+        users: ["1304799691", "1304799692", "1304799693", "1304799694"]
   session_admin_persist: true
-  admin_users: 1304799691,1304799692,1304799693,1304799694
-  control_command_allow_from: 1304799691,1304799692,1304799693,1304799694
-  slash_command_allow_from: 1304799691,1304799692,1304799693,1304799694
   groups:
     "-5101776367":
       topics:
         "42":
-          admin_users: "1001"
+          admin_users:
+            users: ["1001"]
 discord:
-  allowed_users: tao3k
-  allowed_guilds: ""
-  admin_users: tao3k
-  control_command_allow_from: tao3k
-  slash_command_allow_from: tao3k
+  acl:
+    allow:
+      users: ["tao3k"]
+    admin:
+      users: ["tao3k"]
+    control:
+      allow_from:
+        users: ["tao3k"]
+    slash:
+      global:
+        users: ["tao3k"]
 embedding:
+  backend: litellm_rs
   client_url: http://127.0.0.1:3002
+  batch_max_size: 128
+  batch_max_concurrency: 1
   provider: ollama
   litellm_model: ollama/qwen3-embedding:0.6b
   litellm_api_base: http://127.0.0.1:11434
   dimension: 1024
+memory:
+  embedding_backend: litellm_rs
+  embedding_base_url: http://127.0.0.1:3002
+  embedding_model: ollama/qwen3-embedding:0.6b
+  embedding_dim: 1024
 mcp:
   preferred_embed_port: 3002
   agent_list_tools_cache_ttl_ms: 1000
   embed_max_concurrency: 24
   embed_queue_wait_timeout_secs: 1.0
-  embed_request_timeout_secs: 20.0
+  embed_request_timeout_secs: 15.0
   tools_list:
-    max_in_flight: 90
+    max_in_flight: 64

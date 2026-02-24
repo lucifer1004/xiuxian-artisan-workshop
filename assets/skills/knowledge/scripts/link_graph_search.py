@@ -35,6 +35,40 @@ def _get_link_graph_backend(paths: ConfigPaths | None = None) -> Any:
     return get_link_graph_backend(notebook_dir=str(resolved_paths.project_root))
 
 
+def _get_link_graph_module() -> Any:
+    """Load link_graph module lazily to keep test monkeypatching effective."""
+    return importlib.import_module("omni.rag.link_graph")
+
+
+async def _read_link_graph_stats(
+    backend: Any,
+    *,
+    include_meta: bool = False,
+) -> dict[str, Any] | tuple[dict[str, Any], dict[str, Any]]:
+    """Read stats via common cache policy when available, fallback to backend.stats()."""
+    link_graph = _get_link_graph_module()
+    getter = getattr(link_graph, "get_link_graph_stats_for_response", None)
+    if callable(getter):
+        stats_payload = await getter(backend, fallback={}, include_meta=include_meta)
+        if include_meta:
+            if isinstance(stats_payload, tuple) and len(stats_payload) == 2:
+                stats, meta = stats_payload
+                return (
+                    stats if isinstance(stats, dict) else {},
+                    meta if isinstance(meta, dict) else {},
+                )
+            return (stats_payload if isinstance(stats_payload, dict) else {}, {})
+        return stats_payload if isinstance(stats_payload, dict) else {}
+
+    direct_stats = await backend.stats()
+    if include_meta:
+        return (
+            direct_stats if isinstance(direct_stats, dict) else {},
+            {},
+        )
+    return direct_stats if isinstance(direct_stats, dict) else {}
+
+
 # =============================================================================
 # Skill Resources (read-only data via omni://skill/knowledge/*)
 # =============================================================================
@@ -49,7 +83,8 @@ async def link_graph_stats_resource() -> dict:
     """LinkGraph knowledge base statistics as a resource."""
     try:
         backend = _get_link_graph_backend()
-        return await backend.stats()
+        stats = await _read_link_graph_stats(backend, include_meta=False)
+        return stats if isinstance(stats, dict) else {}
     except Exception as e:
         return build_error_response(error=str(e))
 
@@ -136,6 +171,38 @@ def _get_run_search():
             spec.loader.exec_module(mod)
             return mod.run_search
     raise ImportError("Could not import run_search from search package")
+
+
+def _clear_link_graph_search_cache() -> None:
+    """Best-effort cache clear for link_graph search adapter cache."""
+    try:
+        from search import clear_link_graph_search_cache
+
+        clear_link_graph_search_cache()
+        return
+    except ImportError:
+        pass
+
+    this_dir = Path(__file__).resolve().parent
+    if str(this_dir) not in sys.path:
+        sys.path.insert(0, str(this_dir))
+    try:
+        from search import clear_link_graph_search_cache
+
+        clear_link_graph_search_cache()
+    except Exception:
+        logger.debug("LinkGraph search cache clear skipped", exc_info=True)
+
+
+def _clear_link_graph_stats_cache() -> None:
+    """Best-effort cache clear for link_graph stats cache."""
+    try:
+        link_graph = _get_link_graph_module()
+        clear_fn = getattr(link_graph, "clear_link_graph_stats_cache", None)
+        if callable(clear_fn):
+            clear_fn()
+    except Exception:
+        logger.debug("LinkGraph stats cache clear skipped", exc_info=True)
 
 
 async def _run_unified_search(
@@ -312,8 +379,12 @@ async def link_graph_stats(
     """Get LinkGraph knowledge base statistics via common backend cache policy."""
     try:
         backend = _get_link_graph_backend(paths)
-        stats = await backend.stats()
-        return {"success": True, "stats": stats}
+        stats, meta = await _read_link_graph_stats(backend, include_meta=True)
+        return {
+            "success": True,
+            "stats": stats,
+            "graph_stats_meta": meta,
+        }
     except Exception as e:
         logger.error(f"LinkGraph stats failed: {e}")
         raise
@@ -355,6 +426,8 @@ async def link_graph_refresh_index(
         payload.update(result)
     else:
         payload["result"] = result
+    _clear_link_graph_search_cache()
+    _clear_link_graph_stats_cache()
     return payload
 
 

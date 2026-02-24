@@ -8,6 +8,10 @@ pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_T
     "telegram.command.session_resume_status.replied";
 pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_RESUME_DROP_REPLIED: &str =
     "telegram.command.session_resume_drop.replied";
+pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_STOP_REPLIED: &str =
+    "telegram.command.session_stop.replied";
+pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_STOP_IDLE_REPLIED: &str =
+    "telegram.command.session_stop_idle.replied";
 pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_CONTROL_ADMIN_REQUIRED_REPLIED: &str =
     "telegram.command.control_admin_required.replied";
 pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SLASH_HELP_REPLIED: &str =

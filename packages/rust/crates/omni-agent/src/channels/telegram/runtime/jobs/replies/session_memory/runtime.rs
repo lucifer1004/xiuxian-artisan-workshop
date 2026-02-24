@@ -76,6 +76,7 @@ pub(super) fn format_memory_runtime_status_lines(
     ]
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub(super) fn format_memory_runtime_status_json(
     status: crate::agent::MemoryRuntimeStatusSnapshot,
 ) -> serde_json::Value {

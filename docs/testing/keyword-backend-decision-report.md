@@ -1,3 +1,13 @@
+---
+title: "Keyword Backend Decision Report"
+category: "testing"
+tags:
+  - testing
+  - keyword
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Keyword Backend Decision Report
 
 - Generated at: `2026-02-12 19:30:07Z`

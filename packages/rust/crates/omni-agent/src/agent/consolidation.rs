@@ -1,11 +1,11 @@
 /// Build intent (first user message), experience (assistant responses joined), outcome (completed/error).
 #[doc(hidden)]
+#[must_use]
 pub fn summarise_drained_turns(drained: &[(String, String, u32)]) -> (String, String, String) {
     let intent = drained
         .iter()
         .find(|(role, _, _)| role == "user")
-        .map(|(_, c, _)| c.as_str())
-        .unwrap_or("(no user message)")
+        .map_or("(no user message)", |(_, c, _)| c.as_str())
         .to_string();
     let experience: String = drained
         .iter()
@@ -57,8 +57,11 @@ fn compact_single_line(input: &str, max_chars: usize) -> String {
 }
 
 pub(crate) fn now_unix_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
+    u64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis(),
+    )
+    .unwrap_or(u64::MAX)
 }

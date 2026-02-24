@@ -80,7 +80,7 @@ pub(in super::super) fn format_session_partition_admin_required(
         "- `reason`: `admin_required`".to_string(),
         format!("- `sender`: `{sender}`"),
         format!("- `current_mode`: `{current_mode}`"),
-        "- `hint`: Ask an identity allowed by `telegram.control_command_allow_from` (or `telegram.admin_command_rules` / `telegram.admin_users`) to run `/session partition ...`."
+        "- `hint`: Ask an identity allowed by `telegram.acl.control.allow_from.users` (or `telegram.acl.control.rules` / `telegram.acl.admin.users`) to run `/session partition ...`."
             .to_string(),
     ]
     .join("\n")
@@ -96,7 +96,7 @@ pub(in super::super) fn format_session_partition_admin_required_json(
         "reason": "admin_required",
         "sender": sender,
         "current_mode": current_mode,
-        "hint": "Ask an identity allowed by telegram.control_command_allow_from (or telegram.admin_command_rules / telegram.admin_users) to run /session partition ...",
+        "hint": "Ask an identity allowed by telegram.acl.control.allow_from.users (or telegram.acl.control.rules / telegram.acl.admin.users) to run /session partition ...",
     })
     .to_string()
 }

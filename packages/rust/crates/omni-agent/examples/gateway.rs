@@ -21,17 +21,13 @@ async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (mode, rest) = args
         .split_first()
-        .map(|(m, r)| (m.as_str(), r))
-        .unwrap_or(("gateway", &[][..]));
-    match mode {
-        "stdio" => {
-            let (session_id, mcp_config_path) = parse_stdio_args(rest);
-            run_stdio_mode(session_id, mcp_config_path).await
-        }
-        _ => {
-            let (bind_addr, mcp_config_path) = parse_gateway_args(rest);
-            run_gateway(bind_addr, mcp_config_path).await
-        }
+        .map_or(("gateway", &[][..]), |(m, r)| (m.as_str(), r));
+    if mode == "stdio" {
+        let (session_id, mcp_config_path) = parse_stdio_args(rest);
+        run_stdio_mode(session_id, mcp_config_path).await
+    } else {
+        let (bind_addr, mcp_config_path) = parse_gateway_args(rest);
+        run_gateway(bind_addr, mcp_config_path).await
     }
 }
 
@@ -41,7 +37,7 @@ fn parse_gateway_args(args: &[String]) -> (String, PathBuf) {
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--bind" && i + 1 < args.len() {
-            bind = args[i + 1].clone();
+            bind.clone_from(&args[i + 1]);
             i += 2;
             continue;
         }
@@ -61,7 +57,7 @@ fn parse_stdio_args(args: &[String]) -> (String, PathBuf) {
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--session-id" && i + 1 < args.len() {
-            session_id = args[i + 1].clone();
+            session_id.clone_from(&args[i + 1]);
             i += 2;
             continue;
         }

@@ -101,12 +101,26 @@ async def evaluate_link_graph_recall_policy(
         if base.retrieval_path != "graph_only":
             return base
 
+        budget = getattr(plan, "budget", None)
+        budget_rows_per_source = getattr(budget, "rows_per_source", None)
+        try:
+            resolved_rows_per_source = max(
+                1,
+                int(
+                    budget_rows_per_source
+                    if budget_rows_per_source is not None
+                    else policy_config.graph_rows_per_source
+                ),
+            )
+        except (TypeError, ValueError):
+            resolved_rows_per_source = max(1, int(policy_config.graph_rows_per_source))
+
         graph_rows = await fetch_graph_rows_by_policy(
             store=store,
             collection=collection,
             source_hints=list(getattr(plan, "source_hints", ()) or ()),
             limit=limit,
-            rows_per_source=policy_config.graph_rows_per_source,
+            rows_per_source=resolved_rows_per_source,
         )
         if graph_rows:
             return replace(base, graph_rows=tuple(graph_rows))

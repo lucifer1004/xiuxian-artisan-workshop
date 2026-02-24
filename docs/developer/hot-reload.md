@@ -1,3 +1,13 @@
+---
+title: "Hot Reload Mechanism"
+category: "developer"
+tags:
+  - developer
+  - hot
+saliency_base: 6.3
+decay_rate: 0.04
+---
+
 # Hot Reload Mechanism
 
 > One Tool + Trinity Architecture - Hot Reload for Skills

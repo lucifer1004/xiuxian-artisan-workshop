@@ -1,3 +1,13 @@
+---
+title: "ast-grep-core 0.40.5 Developer Guide"
+category: "developer"
+tags:
+  - developer
+  - ast
+saliency_base: 6.3
+decay_rate: 0.04
+---
+
 # ast-grep-core 0.40.5 Developer Guide
 
 > Based on the Cartographer migration experience

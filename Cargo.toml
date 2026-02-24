@@ -23,16 +23,19 @@ members = [
     "packages/rust/crates/omni-types",
     "packages/rust/crates/omni-vector",
     "packages/rust/crates/xiuxian-qianhuan",
+    "packages/rust/crates/xiuxian-llm",
     "packages/rust/crates/omni-window",
-    "packages/rust/crates/omni-mcp-client",
+    "packages/rust/crates/xiuxian-mcp",
     "packages/rust/crates/omni-agent",
+    "packages/rust/crates/xiuxian-qianji",
+    "packages/rust/crates/xiuxian-memory",
 ]
 
 # Workspace package metadata (inherited by all crates)
 [workspace.package]
 version = "0.1.1"
 edition = "2024"
-authors = ["Omni-Dev-Fusion Team"]
+authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
 description = "Omni-Dev-Fusion Fusion - Trinity Architecture with Rust Core"
@@ -43,6 +46,8 @@ description = "Omni-Dev-Fusion Fusion - Trinity Architecture with Rust Core"
 tokio = { version = "1.49.0", features = ["full"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+serde_yaml = "0.9"
+toml = "0.8"
 anyhow = "1.0.100"
 thiserror = "2.0.17"
 walkdir = "2.5.0"
@@ -52,6 +57,9 @@ tracing = "0.1"
 globset = "0.4"
 rand = "0.8"
 comrak = { version = "0.50.0", default-features = false }
+quick-xml = "0.39.2"
+petgraph = "0.7"
+async-trait = "0.1"
 
 # Git operations (libgit2 for performance)
 git2 = "0.20.3"
@@ -64,13 +72,15 @@ pyo3-asyncio = { version = "0.27", features = ["tokio"] }
 tiktoken-rs = "0.9.1"
 memchr = "2.7.6"
 tempfile = "3.24"
+sha2 = "0.10"
+hex = "0.4"
 
 # JSON Schema generation for Schema Singularity (SSOT)
 schemars = "0.8.21"
 jsonschema = "0.18.3"
 
 # LanceDB for vector storage (2.0: v2 manifest default, create_index returns IndexMetadata)
-lance = "2.0"
+lance = { version = "2.0", default-features = false }
 lance-arrow = "2.0"
 
 # Arrow IPC for analytics (Rust RecordBatch → bytes → Python pyarrow); used in bindings only
@@ -86,8 +96,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rayon = "1.11"
 
 # MCP client (omni-agent Phase A; ref: codex-rs rmcp-client)
-# Note: rmcp 0.15 requires "server" feature for client build (task_manager/handler refs)
-rmcp = { version = "0.15", default-features = false, features = [
+# Note: rmcp 0.16 still requires "server" feature for client build (task_manager/handler refs)
+rmcp = { version = "0.16", default-features = false, features = [
     "client",
     "server",
     "macros",
@@ -96,7 +106,7 @@ rmcp = { version = "0.15", default-features = false, features = [
     "transport-streamable-http-server",
     "transport-child-process",
 ] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 
 # CLI and HTTP (omni-agent gateway)
 clap = { version = "4.5", features = ["derive"] }

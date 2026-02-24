@@ -1,9 +1,10 @@
 use crate::agent::Agent;
 use crate::channels::managed_runtime::turn::{
-    ForegroundTurnOutcome, build_session_id, run_foreground_turn,
+    ForegroundTurnOutcome, build_session_id, run_foreground_turn_with_interrupt,
 };
 use crate::channels::traits::{Channel, ChannelMessage};
 use std::sync::Arc;
+use tokio::sync::watch;
 
 use super::preview::log_preview;
 
@@ -12,6 +13,7 @@ pub(super) async fn process_foreground_message(
     channel: Arc<dyn Channel>,
     msg: ChannelMessage,
     turn_timeout_secs: u64,
+    interrupt_rx: watch::Receiver<u64>,
 ) {
     let session_id = build_session_id(&msg.channel, &msg.session_key);
     tracing::info!(
@@ -23,15 +25,16 @@ pub(super) async fn process_foreground_message(
         tracing::debug!("Failed to start typing: {error}");
     }
 
-    let result = run_foreground_turn(
-        agent.as_ref(),
+    let interrupt_generation = *interrupt_rx.borrow();
+    let result = run_foreground_turn_with_interrupt(
+        Arc::clone(&agent),
         &session_id,
         &msg.content,
         turn_timeout_secs,
-        format!(
-            "Request timed out after {}s. Use `/bg <prompt>` for long-running tasks.",
-            turn_timeout_secs
-        ),
+        format!("Request timed out after {turn_timeout_secs}s. Use `/bg <prompt>` for long-running tasks."),
+        interrupt_rx,
+        interrupt_generation,
+        "Request interrupted by a newer instruction.".to_string(),
     )
     .await;
 
@@ -67,6 +70,17 @@ pub(super) async fn process_foreground_message(
                 sender = %msg.sender,
                 timeout_secs = turn_timeout_secs,
                 "foreground turn timed out"
+            );
+            reply
+        }
+        ForegroundTurnOutcome::Interrupted { reply } => {
+            tracing::warn!(
+                event = "telegram.foreground.turn.interrupted",
+                session_key = %msg.session_key,
+                channel = %msg.channel,
+                recipient = %msg.recipient,
+                sender = %msg.sender,
+                "foreground turn interrupted by control signal"
             );
             reply
         }

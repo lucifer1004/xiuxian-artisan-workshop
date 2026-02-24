@@ -120,7 +120,7 @@ impl PySkillScanner {
         }
 
         match self.inner.scan_all(path, None) {
-            Ok(metadatas) => metadatas.into_iter().map(|m| m.into()).collect(),
+            Ok(metadatas) => metadatas.into_iter().map(Into::into).collect(),
             Err(_) => Vec::new(),
         }
     }
@@ -173,7 +173,7 @@ impl PySkillScanner {
                         &metadata.routing_keywords,
                         &[],
                     ) {
-                        Ok(t) => t.into_iter().map(|t| t.into()).collect(),
+                        Ok(tools) => tools.into_iter().map(Into::into).collect(),
                         Err(_) => Vec::new(),
                     }
                 } else {
@@ -212,7 +212,7 @@ impl PySkillScanner {
                         &metadata.routing_keywords,
                         &[],
                     ) {
-                        Ok(t) => t.into_iter().map(|t| t.into()).collect(),
+                        Ok(tools) => tools.into_iter().map(Into::into).collect(),
                         Err(_) => Vec::new(),
                     }
                 } else {
@@ -283,28 +283,23 @@ pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
                 let skill_path = skills_path.join(&metadata.skill_name);
                 let scripts_path = skill_path.join("scripts");
 
-                if scripts_path.exists() {
-                    if let Ok(tools) = script_scanner.scan_scripts(
+                if scripts_path.exists()
+                    && let Ok(tools) = script_scanner.scan_scripts(
                         &scripts_path,
                         &metadata.skill_name,
                         &metadata.routing_keywords,
                         &[], // Pass empty intents
-                    ) {
-                        // Deduplicate by tool_name (keep first occurrence)
-                        for tool in tools {
-                            let tool_key = format!("{}.{}", tool.skill_name, tool.tool_name);
-                            if !tools_map.contains_key(&tool_key) {
-                                tools_map.insert(tool_key, tool);
-                            }
-                        }
+                    )
+                {
+                    // Deduplicate by tool_name (keep first occurrence)
+                    for tool in tools {
+                        let tool_key = format!("{}.{}", tool.skill_name, tool.tool_name);
+                        tools_map.entry(tool_key).or_insert(tool);
                     }
                 }
             }
 
-            tools_map
-                .into_iter()
-                .map(|(_, t): (_, ToolRecord)| t.into())
-                .collect()
+            tools_map.into_values().map(Into::into).collect()
         }
         Err(_) => Vec::new(),
     }
@@ -390,8 +385,8 @@ pub struct PySyncReport {
 impl From<omni_scanner::SyncReport> for PySyncReport {
     fn from(report: omni_scanner::SyncReport) -> Self {
         Self {
-            added: report.added.into_iter().map(|t| t.into()).collect(),
-            updated: report.updated.into_iter().map(|t| t.into()).collect(),
+            added: report.added.into_iter().map(Into::into).collect(),
+            updated: report.updated.into_iter().map(Into::into).collect(),
             deleted: report.deleted,
             unchanged_count: report.unchanged_count,
         }
@@ -479,7 +474,7 @@ pub fn scan_paths(
     let scanner = OmniToolsScanner::new();
 
     match scanner.scan_paths(&files, &skill_name, &skill_keywords, &skill_intents) {
-        Ok(tools) => tools.into_iter().map(|t| t.into()).collect(),
+        Ok(tools) => tools.into_iter().map(Into::into).collect(),
         Err(_) => Vec::new(),
     }
 }
@@ -531,7 +526,7 @@ pub fn parse_script_content(
         &skill_keywords,
         &skill_intents,
     ) {
-        Ok(tools) => tools.into_iter().map(|t| t.into()).collect(),
+        Ok(tools) => tools.into_iter().map(Into::into).collect(),
         Err(_) => Vec::new(),
     }
 }

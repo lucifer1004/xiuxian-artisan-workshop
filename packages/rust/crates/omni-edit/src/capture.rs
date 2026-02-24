@@ -27,28 +27,28 @@ pub fn substitute_captures<D: Doc>(
     // Extract and substitute all named captures
     for mv in env.get_matched_variables() {
         let (capture_name, is_multi) = match mv {
-            MetaVariable::Capture(name, _) => (Some(name.to_string()), false),
-            MetaVariable::MultiCapture(name) => (Some(name.to_string()), true),
+            MetaVariable::Capture(name, _) => (Some(name.clone()), false),
+            MetaVariable::MultiCapture(name) => (Some(name.clone()), true),
             _ => (None, false),
         };
 
-        if let Some(name) = capture_name {
-            if let Some(captured) = env.get_match(&name) {
-                let captured_text = captured.text().to_string();
+        if let Some(name) = capture_name
+            && let Some(captured) = env.get_match(&name)
+        {
+            let captured_text = captured.text().to_string();
 
-                if is_multi {
-                    // Variadic capture: try $$$NAME first, then fallback to $$$
-                    let multi_placeholder = format!("$$${}", name);
-                    if new_text.contains(&multi_placeholder) {
-                        new_text = new_text.replace(&multi_placeholder, &captured_text);
-                    } else if new_text.contains("$$$") {
-                        new_text = new_text.replacen("$$$", &captured_text, 1);
-                    }
-                } else {
-                    // Single capture: $NAME
-                    let placeholder = format!("${}", name);
-                    new_text = new_text.replace(&placeholder, &captured_text);
+            if is_multi {
+                // Variadic capture: try $$$NAME first, then fallback to $$$
+                let multi_placeholder = format!("$$${name}");
+                if new_text.contains(&multi_placeholder) {
+                    new_text = new_text.replace(&multi_placeholder, &captured_text);
+                } else if new_text.contains("$$$") {
+                    new_text = new_text.replacen("$$$", &captured_text, 1);
                 }
+            } else {
+                // Single capture: $NAME
+                let placeholder = format!("${name}");
+                new_text = new_text.replace(&placeholder, &captured_text);
             }
         }
     }
@@ -68,19 +68,19 @@ pub fn substitute_captures<D: Doc>(
 fn extract_variadic_fallback(replacement: &str, original_text: &str) -> String {
     let mut new_text = replacement.to_string();
 
-    if let Some(start_paren) = original_text.find('(') {
-        if let Some(end_paren) = original_text.rfind(')') {
-            let args = &original_text[start_paren + 1..end_paren];
+    if let Some(start_paren) = original_text.find('(')
+        && let Some(end_paren) = original_text.rfind(')')
+    {
+        let args = &original_text[start_paren + 1..end_paren];
 
-            // First handle named variadic like $$$ARGS
-            if let Ok(re) = regex::Regex::new(r"\$\$\$\w+") {
-                new_text = re.replace_all(&new_text, args).to_string();
-            }
+        // First handle named variadic like $$$ARGS
+        if let Ok(re) = regex::Regex::new(r"\$\$\$\w+") {
+            new_text = re.replace_all(&new_text, args).to_string();
+        }
 
-            // Then handle anonymous $$$
-            if new_text.contains("$$$") {
-                new_text = new_text.replacen("$$$", args, 1);
-            }
+        // Then handle anonymous $$$
+        if new_text.contains("$$$") {
+            new_text = new_text.replacen("$$$", args, 1);
         }
     }
 

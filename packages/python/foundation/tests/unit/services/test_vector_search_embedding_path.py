@@ -22,6 +22,8 @@ def _reset_vector_search_caches(monkeypatch) -> None:
     monkeypatch.setattr(vector_search, "_query_embed_persist_path", lambda: isolated_path)
     monkeypatch.setattr(vector_search, "_MCP_EMBED_FAILURE_UNTIL", {})
     monkeypatch.setattr(vector_search, "_HTTP_EMBED_FAILURE_UNTIL", {})
+    monkeypatch.setattr(vector_search, "_MCP_PORT_PROBE_CACHE", {})
+    monkeypatch.setattr(vector_search, "_is_mcp_port_reachable", lambda _port: True)
     # Keep test probe order deterministic regardless of local user config overrides.
     monkeypatch.setattr(vector_search, "_default_mcp_embed_ports", lambda: (3002, 3001, 3000))
 
@@ -426,6 +428,136 @@ async def test_run_semantic_search_reuses_persisted_last_query_embedding(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_run_semantic_search_persisted_cache_keeps_multiple_queries(monkeypatch, tmp_path):
+    """Persisted cache should retain more than one query across process restarts."""
+    from omni.foundation.services.vector import search as vector_search
+    from omni.foundation.services.vector.search import run_semantic_search
+
+    _reset_vector_search_caches(monkeypatch)
+    monkeypatch.setattr(
+        vector_search,
+        "_query_embed_persist_path",
+        lambda: tmp_path / "query-embed-last.json",
+    )
+
+    dummy_store = _DummyStore()
+    client = MagicMock()
+    client._get_store_for_collection.return_value = dummy_store
+    client._search_cache = _DummyCache()
+    client._log_error = MagicMock()
+    client._is_table_not_found = lambda _e: False
+
+    async def _seed_embed_via_mcp(texts, **_kwargs):
+        query = texts[0]
+        if query == "persist-multi-a":
+            return [[0.1, 0.2, 0.3]]
+        if query == "persist-multi-b":
+            return [[0.4, 0.5, 0.6]]
+        return [[0.7, 0.8, 0.9]]
+
+    monkeypatch.setattr("omni.agent.cli.mcp_embed.embed_via_mcp", _seed_embed_via_mcp)
+
+    # Seed two distinct queries into persisted cache.
+    _ = await run_semantic_search(
+        client=client,
+        query="persist-multi-a",
+        n_results=3,
+        collection="knowledge_chunks",
+        use_cache=False,
+    )
+    _ = await run_semantic_search(
+        client=client,
+        query="persist-multi-b",
+        n_results=3,
+        collection="knowledge_chunks",
+        use_cache=False,
+    )
+
+    # Simulate process restart (clear in-memory caches only).
+    monkeypatch.setattr(vector_search, "_QUERY_EMBED_CACHE", vector_search.OrderedDict())
+    monkeypatch.setattr(vector_search, "_QUERY_EMBED_PERSIST_LOADED", False)
+    monkeypatch.setattr(vector_search, "_QUERY_EMBED_PERSIST_RECORD", None)
+
+    async def _fail_embed_via_mcp(_texts, **_kwargs):
+        raise AssertionError("MCP should not be called when persisted cache already has query")
+
+    monkeypatch.setattr("omni.agent.cli.mcp_embed.embed_via_mcp", _fail_embed_via_mcp)
+
+    _ = await run_semantic_search(
+        client=client,
+        query="persist-multi-a",
+        n_results=3,
+        collection="knowledge_chunks",
+        use_cache=False,
+    )
+    _ = await run_semantic_search(
+        client=client,
+        query="persist-multi-b",
+        n_results=3,
+        collection="knowledge_chunks",
+        use_cache=False,
+    )
+
+    assert dummy_store.search_optimized_calls == 4
+
+
+def test_query_embed_persist_write_merges_disk_entries(monkeypatch, tmp_path):
+    """Persist write should merge disk entries to avoid cross-process overwrite loss."""
+    from omni.foundation.services.vector import search as vector_search
+
+    _reset_vector_search_caches(monkeypatch)
+    persist_path = tmp_path / "query-embed-last.json"
+    monkeypatch.setattr(vector_search, "_query_embed_persist_path", lambda: persist_path)
+
+    signature = vector_search._query_embed_signature()
+    key_disk = vector_search._query_embed_cache_key("merge-disk", signature)
+    key_stale = vector_search._query_embed_cache_key("merge-stale", signature)
+    key_new = vector_search._query_embed_cache_key("merge-new", signature)
+
+    # Existing on-disk cache entry from another process.
+    persist_path.write_text(
+        json.dumps(
+            {
+                "schema": 2,
+                "signature": signature,
+                "entries": [{"key": key_disk, "vector": [0.1, 0.2, 0.3]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    # Simulate stale in-memory state in current process.
+    vector_search._QUERY_EMBED_PERSIST_RECORD = {
+        "schema": 2,
+        "signature": signature,
+        "entries": vector_search.OrderedDict([(key_stale, (0.4, 0.5, 0.6))]),
+    }
+    vector_search._QUERY_EMBED_PERSIST_LOADED = True
+
+    vector_search._remember_persisted_query_vector("merge-new", [0.7, 0.8, 0.9])
+
+    persisted = json.loads(persist_path.read_text(encoding="utf-8"))
+    keys = [item.get("key") for item in persisted.get("entries", []) if isinstance(item, dict)]
+    assert key_disk in keys
+    assert key_stale in keys
+    assert key_new in keys
+
+
+def test_query_embed_persist_write_creates_process_lock_file(monkeypatch, tmp_path):
+    """Persist write should use companion lock file for cross-process coordination."""
+    from omni.foundation.services.vector import search as vector_search
+
+    _reset_vector_search_caches(monkeypatch)
+    persist_path = tmp_path / "query-embed-last.json"
+    monkeypatch.setattr(vector_search, "_query_embed_persist_path", lambda: persist_path)
+
+    vector_search._remember_persisted_query_vector("merge-lock", [0.1, 0.2, 0.3])
+
+    lock_path = vector_search._query_embed_persist_lock_path(persist_path)
+    assert lock_path.exists()
+
+
+@pytest.mark.asyncio
 async def test_run_semantic_search_applies_default_projection(monkeypatch):
     """Semantic search should apply projection and adaptive small scanner defaults."""
     from omni.foundation.services.vector.search import run_semantic_search
@@ -623,6 +755,57 @@ async def test_run_semantic_search_skips_http_call_when_http_backoff_active(monk
         )
 
     assert get_client_calls["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_run_semantic_search_skips_unreachable_mcp_ports(monkeypatch):
+    """Closed MCP ports should skip per-path probing and fall back to HTTP quickly."""
+    from omni.foundation.services.vector import search as vector_search
+    from omni.foundation.services.vector.search import run_semantic_search
+
+    _reset_vector_search_caches(monkeypatch)
+    monkeypatch.setattr(vector_search, "_is_mcp_port_reachable", lambda _port: False)
+
+    dummy_store = _DummyStore()
+    client = MagicMock()
+    client._get_store_for_collection.return_value = dummy_store
+    client._search_cache = _DummyCache()
+    client._log_error = MagicMock()
+    client._is_table_not_found = lambda _e: False
+
+    mcp_calls = {"count": 0}
+    captured: list[tuple[str, dict[str, object]]] = []
+
+    async def _fake_embed_via_mcp(_texts, **_kwargs):
+        mcp_calls["count"] += 1
+        return None
+
+    class _HttpClient:
+        async def embed_batch(self, _texts, timeout_seconds=None):
+            return [[0.1, 0.2, 0.3]]
+
+    def _fake_record_phase(phase: str, _duration_ms: float, **extra: object) -> None:
+        captured.append((phase, extra))
+
+    monkeypatch.setattr("omni.agent.cli.mcp_embed.embed_via_mcp", _fake_embed_via_mcp)
+    monkeypatch.setattr(
+        "omni.foundation.embedding_client.get_embedding_client",
+        lambda _base_url: _HttpClient(),
+    )
+    monkeypatch.setattr("omni.foundation.runtime.skills_monitor.record_phase", _fake_record_phase)
+
+    _ = await run_semantic_search(
+        client=client,
+        query="closed-port-skip",
+        n_results=3,
+        collection="knowledge_chunks",
+        use_cache=False,
+    )
+
+    assert mcp_calls["count"] == 0
+    assert dummy_store.search_optimized_calls == 1
+    mcp_phase = [extra for phase, extra in captured if phase == "vector.embed.mcp"][-1]
+    assert int(mcp_phase["skipped_closed_port"]) > 0
 
 
 @pytest.mark.asyncio

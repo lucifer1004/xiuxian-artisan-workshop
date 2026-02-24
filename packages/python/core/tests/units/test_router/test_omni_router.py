@@ -379,7 +379,8 @@ class TestOmniRouter:
 
             # Results should be the same (from cache)
             assert len(results1) == len(results2)
-            assert router._cache.get(query) is not None
+            cache_key = f"{query}|limit=5|threshold=0.4000|kw=0"
+            assert router._cache.get(cache_key) is not None
             assert_route_results_list(results1, allow_empty=False)
 
     @pytest.mark.asyncio

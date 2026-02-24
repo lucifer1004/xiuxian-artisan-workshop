@@ -1,5 +1,5 @@
 """
-MCP tool result schema API - single place for packages/shared/schemas/omni.mcp.tool_result.v1.
+MCP tool result schema API.
 
 Load, validate, and build payloads that conform to the shared schema so MCP clients
 (e.g. Cursor) never see result: null or invalid_union.
@@ -7,35 +7,26 @@ Load, validate, and build payloads that conform to the shared schema so MCP clie
 
 from __future__ import annotations
 
-import json
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from typing import Any
 
 from jsonschema import Draft202012Validator
 
-# SSOT: packages/shared/schemas/omni.mcp.tool_result.v1.schema.json
+from omni.foundation.utils import json_codec as json
+
+from .schema_provider import get_schema
+
+# SSOT: omni.mcp.tool_result.v1
+SCHEMA_ID = "omni.mcp.tool_result.v1"
 SCHEMA_NAME = "omni.mcp.tool_result.v1.schema.json"
 CONTENT_KEY = "content"
 IS_ERROR_KEY = "isError"
 
 
-def get_schema_path() -> Path:
-    """Path to the shared MCP tool result schema file."""
-    from omni.foundation.config.paths import get_config_paths
-
-    return get_config_paths().project_root / "packages" / "shared" / "schemas" / SCHEMA_NAME
-
-
 @lru_cache(maxsize=1)
 def get_validator() -> Draft202012Validator:
     """Cached validator for the MCP tool result schema."""
-    path = get_schema_path()
-    if not path.exists():
-        raise FileNotFoundError(f"MCP tool result schema not found: {path}")
-    return Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
+    return Draft202012Validator(get_schema(SCHEMA_ID))
 
 
 def validate(payload: dict[str, Any]) -> None:
@@ -54,8 +45,7 @@ def build_result(text: str, is_error: bool = False) -> dict[str, Any]:
         CONTENT_KEY: [{"type": "text", "text": text}],
         IS_ERROR_KEY: is_error,
     }
-    if get_schema_path().exists():
-        validate(out)
+    validate(out)
     return out
 
 
@@ -82,8 +72,7 @@ def enforce_result_shape(payload: dict[str, Any]) -> dict[str, Any]:
         CONTENT_KEY: payload[CONTENT_KEY],
         IS_ERROR_KEY: payload[IS_ERROR_KEY],
     }
-    if get_schema_path().exists():
-        validate(out)
+    validate(out)
     return out
 
 
@@ -190,11 +179,11 @@ def extract_text_content(value: Any) -> str | None:
 __all__ = [
     "CONTENT_KEY",
     "IS_ERROR_KEY",
+    "SCHEMA_ID",
     "SCHEMA_NAME",
     "build_result",
     "enforce_result_shape",
     "extract_text_content",
-    "get_schema_path",
     "get_validator",
     "is_canonical",
     "parse_result_payload",

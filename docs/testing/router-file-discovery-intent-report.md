@@ -1,3 +1,13 @@
+---
+title: "Router File Discovery Intent Report"
+category: "testing"
+tags:
+  - testing
+  - router
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Router File Discovery Intent Report
 
 ## Scope

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, bail};
 use redis::Value;
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::task::JoinHandle;
@@ -28,6 +29,8 @@ struct MemoryStreamConsumerRuntimeConfig {
     redis_url: String,
     stream_name: String,
     stream_key: String,
+    promotion_stream_key: String,
+    promotion_ledger_key: String,
     stream_consumer_group: String,
     stream_consumer_name: String,
     stream_consumer_batch_size: usize,
@@ -80,6 +83,11 @@ pub(super) fn spawn_memory_stream_consumer(
     let runtime_cfg = MemoryStreamConsumerRuntimeConfig {
         redis_url: session_redis.url,
         stream_key: format!("{}:stream:{stream_name}", session_redis.key_prefix),
+        promotion_stream_key: format!(
+            "{}:stream:knowledge.ingest.candidates",
+            session_redis.key_prefix
+        ),
+        promotion_ledger_key: format!("{}:knowledge:ingest:candidates", session_redis.key_prefix),
         stream_name: stream_name.clone(),
         stream_consumer_group,
         stream_consumer_name,
@@ -100,6 +108,8 @@ pub(super) fn spawn_memory_stream_consumer(
         event = SessionEvent::MemoryStreamConsumerStarted.as_str(),
         stream_name = %runtime_cfg.stream_name,
         stream_key = %runtime_cfg.stream_key,
+        promotion_stream_key = %runtime_cfg.promotion_stream_key,
+        promotion_ledger_key = %runtime_cfg.promotion_ledger_key,
         stream_consumer_group = %runtime_cfg.stream_consumer_group,
         stream_consumer_name = %runtime_cfg.stream_consumer_name,
         stream_consumer_batch_size = runtime_cfg.stream_consumer_batch_size,
@@ -112,6 +122,7 @@ pub(super) fn spawn_memory_stream_consumer(
     }))
 }
 
+#[allow(clippy::too_many_lines)]
 async fn run_consumer_loop(config: MemoryStreamConsumerRuntimeConfig) {
     let client = match redis::Client::open(config.redis_url.as_str()) {
         Ok(client) => client,
@@ -126,9 +137,12 @@ async fn run_consumer_loop(config: MemoryStreamConsumerRuntimeConfig) {
         }
     };
     let connection_config = stream_consumer_connection_config(config.stream_consumer_block_ms);
-    let response_timeout_ms = stream_consumer_response_timeout(config.stream_consumer_block_ms)
-        .as_millis()
-        .min(u128::from(u64::MAX)) as u64;
+    let response_timeout_ms = u64::try_from(
+        stream_consumer_response_timeout(config.stream_consumer_block_ms)
+            .as_millis()
+            .min(u128::from(u64::MAX)),
+    )
+    .unwrap_or(u64::MAX);
 
     let mut connect_failure_streak = 0_u32;
     let mut ensure_group_failure_streak = 0_u32;
@@ -207,16 +221,67 @@ async fn run_consumer_loop(config: MemoryStreamConsumerRuntimeConfig) {
             let stream_id = if read_pending { "0" } else { ">" };
             match read_stream_events(&mut connection, &config, stream_id).await {
                 Ok(events) => {
-                    read_failure_streak = 0;
                     if events.is_empty() {
                         if read_pending {
                             read_pending = false;
+                        } else {
+                            // Idle blocking polls are healthy; clear retry streak.
+                            read_failure_streak = 0;
                         }
                         continue;
                     }
+                    let mut ack_failed = false;
                     for event in events {
                         let kind = field_value_or_default(&event.fields, "kind", "unknown");
                         let session_id = non_empty_string(event.fields.get("session_id").cloned());
+                        let mut promotion_queued: Option<bool> = None;
+                        if kind == "memory_promoted" {
+                            match queue_promoted_candidate(&mut connection, &config, &event).await {
+                                Ok(inserted) => {
+                                    promotion_queued = Some(inserted);
+                                }
+                                Err(error) => {
+                                    read_failure_streak = read_failure_streak.saturating_add(1);
+                                    let retry_backoff_ms = compute_retry_backoff_ms(
+                                        RECONNECT_BACKOFF_MS,
+                                        read_failure_streak,
+                                    );
+                                    if should_surface_repeated_failure(read_failure_streak) {
+                                        tracing::warn!(
+                                            event = SessionEvent::MemoryStreamConsumerReadFailed
+                                                .as_str(),
+                                            stream_name = %config.stream_name,
+                                            stream_consumer_group = %config.stream_consumer_group,
+                                            stream_consumer_name = %config.stream_consumer_name,
+                                            event_id = %event.id,
+                                            kind = %kind,
+                                            session_id = session_id.as_deref().unwrap_or(""),
+                                            failure_streak = read_failure_streak,
+                                            retry_backoff_ms,
+                                            error = %error,
+                                            "memory stream consumer failed to queue promoted candidate"
+                                        );
+                                    } else {
+                                        tracing::trace!(
+                                            event = SessionEvent::MemoryStreamConsumerReadFailed
+                                                .as_str(),
+                                            stream_name = %config.stream_name,
+                                            stream_consumer_group = %config.stream_consumer_group,
+                                            stream_consumer_name = %config.stream_consumer_name,
+                                            event_id = %event.id,
+                                            kind = %kind,
+                                            session_id = session_id.as_deref().unwrap_or(""),
+                                            failure_streak = read_failure_streak,
+                                            retry_backoff_ms,
+                                            error = %error,
+                                            "memory stream consumer failed to queue promoted candidate"
+                                        );
+                                    }
+                                    ack_failed = true;
+                                    break;
+                                }
+                            }
+                        }
                         match ack_and_record_metrics(
                             &mut connection,
                             &config,
@@ -237,6 +302,7 @@ async fn run_consumer_loop(config: MemoryStreamConsumerRuntimeConfig) {
                                     kind = %kind,
                                     session_id = session_id.as_deref().unwrap_or(""),
                                     acked,
+                                    promotion_queued = ?promotion_queued,
                                     "memory stream event processed"
                                 );
                             }
@@ -277,9 +343,13 @@ async fn run_consumer_loop(config: MemoryStreamConsumerRuntimeConfig) {
                                         "memory stream consumer failed to ack/record event"
                                     );
                                 }
+                                ack_failed = true;
                                 break;
                             }
                         }
+                    }
+                    if !ack_failed {
+                        read_failure_streak = 0;
                     }
                 }
                 Err(error) => {
@@ -321,7 +391,6 @@ async fn run_consumer_loop(config: MemoryStreamConsumerRuntimeConfig) {
                                 Ok(()) => {
                                     read_pending = true;
                                     sleep(Duration::from_millis(retry_backoff_ms)).await;
-                                    continue;
                                 }
                                 Err(ensure_error) => {
                                     if warn {
@@ -459,10 +528,28 @@ async fn read_stream_events(
         .arg("STREAMS")
         .arg(&config.stream_key)
         .arg(stream_id);
-    let response: Value = command
-        .query_async(connection)
-        .await
-        .with_context(|| format!("xreadgroup failed for stream_id={stream_id}"))?;
+    let response: Value = match command.query_async(connection).await {
+        Ok(response) => response,
+        Err(error) if stream_id == ">" && is_idle_poll_timeout_error(&error) => {
+            tracing::trace!(
+                event = SessionEvent::MemoryStreamConsumerReadFailed.as_str(),
+                stream_name = %config.stream_name,
+                stream_consumer_group = %config.stream_consumer_group,
+                stream_consumer_name = %config.stream_consumer_name,
+                stream_id,
+                error_kind = "read_timeout_treated_as_idle_poll",
+                error = %error,
+                "xreadgroup blocking poll timed out; treating as idle poll"
+            );
+            return Ok(Vec::new());
+        }
+        Err(error) => {
+            let redis_error_summary = summarize_redis_error(&error);
+            return Err(anyhow::anyhow!(
+                "xreadgroup failed for stream_id={stream_id}: {redis_error_summary}"
+            ));
+        }
+    };
 
     parse_xreadgroup_reply(response)
 }
@@ -555,6 +642,80 @@ return acked
     Ok(acked)
 }
 
+async fn queue_promoted_candidate(
+    connection: &mut redis::aio::MultiplexedConnection,
+    config: &MemoryStreamConsumerRuntimeConfig,
+    event: &MemoryStreamEvent,
+) -> Result<bool> {
+    let episode_id = field_value_or_default(&event.fields, "episode_id", &event.id);
+    if episode_id.is_empty() {
+        bail!("memory_promoted event missing episode_id");
+    }
+    let session_id = field_value_or_default(&event.fields, "session_id", "");
+    let payload = serialize_promoted_payload(event)?;
+    let now_unix_ms = now_unix_ms();
+    let script = r#"
+local ledger_key = KEYS[1]
+local ingest_stream_key = KEYS[2]
+local episode_id = ARGV[1]
+local payload = ARGV[2]
+local source_event_id = ARGV[3]
+local session_id = ARGV[4]
+local now_unix_ms = ARGV[5]
+
+local inserted = redis.call("HSETNX", ledger_key, episode_id, payload)
+if inserted > 0 then
+  redis.call(
+    "XADD",
+    ingest_stream_key,
+    "*",
+    "kind",
+    "knowledge_ingest_candidate",
+    "source_kind",
+    "memory_promoted",
+    "episode_id",
+    episode_id,
+    "session_id",
+    session_id,
+    "source_event_id",
+    source_event_id,
+    "created_at_unix_ms",
+    now_unix_ms,
+    "payload",
+    payload
+  )
+end
+return inserted
+"#;
+    let inserted: i64 = redis::cmd("EVAL")
+        .arg(script)
+        .arg(2)
+        .arg(&config.promotion_ledger_key)
+        .arg(&config.promotion_stream_key)
+        .arg(episode_id)
+        .arg(payload)
+        .arg(&event.id)
+        .arg(session_id)
+        .arg(now_unix_ms)
+        .query_async(connection)
+        .await
+        .context("failed to queue memory_promoted event into knowledge ingest stream")?;
+
+    Ok(inserted > 0)
+}
+
+fn serialize_promoted_payload(event: &MemoryStreamEvent) -> Result<String> {
+    let mut payload = serde_json::Map::new();
+    payload.insert(
+        "stream_event_id".to_string(),
+        JsonValue::String(event.id.clone()),
+    );
+    for (key, value) in &event.fields {
+        payload.insert(key.clone(), JsonValue::String(value.clone()));
+    }
+    serde_json::to_string(&payload).context("failed to serialize promoted memory payload")
+}
+
 fn parse_xreadgroup_reply(reply: Value) -> Result<Vec<MemoryStreamEvent>> {
     match reply {
         Value::Nil => Ok(Vec::new()),
@@ -586,6 +747,7 @@ fn parse_streams_map(streams: Vec<(Value, Value)>) -> Result<Vec<MemoryStreamEve
     Ok(events)
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn parse_event_entries(entries: Option<&Value>) -> Result<Vec<MemoryStreamEvent>> {
     let Some(entries) = entries else {
         return Ok(Vec::new());
@@ -604,7 +766,7 @@ fn parse_event_entries(entries: Option<&Value>) -> Result<Vec<MemoryStreamEvent>
         let Some(event_id) = value_to_string(parts.first()) else {
             continue;
         };
-        let fields = parse_fields(parts.get(1))?;
+        let fields = parse_fields(parts.get(1));
         events.push(MemoryStreamEvent {
             id: event_id,
             fields,
@@ -613,9 +775,9 @@ fn parse_event_entries(entries: Option<&Value>) -> Result<Vec<MemoryStreamEvent>
     Ok(events)
 }
 
-fn parse_fields(value: Option<&Value>) -> Result<HashMap<String, String>> {
+fn parse_fields(value: Option<&Value>) -> HashMap<String, String> {
     let Some(value) = value else {
-        return Ok(HashMap::new());
+        return HashMap::new();
     };
 
     match value {
@@ -628,7 +790,7 @@ fn parse_fields(value: Option<&Value>) -> Result<HashMap<String, String>> {
                 let value = value_to_string(Some(field_value)).unwrap_or_default();
                 fields.insert(field_name, value);
             }
-            Ok(fields)
+            fields
         }
         Value::Array(parts) => {
             let mut fields = HashMap::with_capacity(parts.len() / 2);
@@ -639,9 +801,9 @@ fn parse_fields(value: Option<&Value>) -> Result<HashMap<String, String>> {
                 let value = value_to_string(pair.get(1)).unwrap_or_default();
                 fields.insert(field_name, value);
             }
-            Ok(fields)
+            fields
         }
-        _ => Ok(HashMap::new()),
+        _ => HashMap::new(),
     }
 }
 
@@ -662,8 +824,7 @@ fn field_value_or_default(fields: &HashMap<String, String>, key: &str, default: 
         .get(key)
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-        .unwrap_or_else(|| default.to_string())
+        .map_or_else(|| default.to_string(), ToString::to_string)
 }
 
 fn non_empty_string(value: Option<String>) -> Option<String> {
@@ -675,7 +836,8 @@ fn non_empty_string(value: Option<String>) -> Option<String> {
 fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
         .unwrap_or(0)
 }
 
@@ -686,6 +848,40 @@ fn build_consumer_name(prefix: &str) -> String {
 
 fn is_busy_group_error(error: &redis::RedisError) -> bool {
     error.to_string().to_ascii_uppercase().contains("BUSYGROUP")
+}
+
+fn summarize_redis_error(error: &redis::RedisError) -> String {
+    let mut parts = Vec::with_capacity(6);
+    parts.push(format!("kind={:?}", error.kind()));
+    parts.push(format!("category={}", error.category()));
+    parts.push(format!("timeout={}", error.is_timeout()));
+    if let Some(code) = error.code().filter(|value| !value.trim().is_empty()) {
+        parts.push(format!("code={code}"));
+    }
+    if let Some(detail) = error.detail().filter(|value| !value.trim().is_empty()) {
+        parts.push(format!("detail={detail}"));
+    }
+    let display = error.to_string();
+    if !display.trim().is_empty() {
+        parts.push(format!("display={display}"));
+    }
+    format!("redis_error{{{}}}", parts.join(", "))
+}
+
+fn is_idle_poll_timeout_error(error: &redis::RedisError) -> bool {
+    if error.is_timeout() {
+        return true;
+    }
+    let message = error.to_string().to_ascii_uppercase();
+    [
+        "TIMED OUT",
+        "TIMEOUT",
+        "DEADLINE HAS ELAPSED",
+        "WOULDBLOCK",
+        "WOULD BLOCK",
+    ]
+    .iter()
+    .any(|needle| message.contains(needle))
 }
 
 fn classify_stream_read_error(error: &anyhow::Error) -> StreamReadErrorKind {

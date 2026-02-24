@@ -10,28 +10,42 @@ from omni.agent.cli import mcp_embed as mcp_embed_module
 
 
 class TestGetCandidatePorts:
-    """Tests for candidate port order (config vs defaults)."""
+    """Tests for candidate port order (strictly from config)."""
 
     def test_default_order_when_no_config(self):
         with patch("omni.foundation.config.settings.get_setting", return_value=None):
             from omni.agent.cli.mcp_embed import _get_candidate_ports
 
             ports = _get_candidate_ports()
-        assert ports == [3002, 3001, 3000]
+        assert ports == []
 
     def test_preferred_port_first_when_configured(self):
-        with patch("omni.foundation.config.settings.get_setting", return_value=3002):
+        def _setting(key: str):
+            if key == "mcp.preferred_embed_port":
+                return 3002
+            if key == "embedding.client_url":
+                return "http://127.0.0.1:3302"
+            return None
+
+        with patch("omni.foundation.config.settings.get_setting", side_effect=_setting):
             from omni.agent.cli.mcp_embed import _get_candidate_ports
 
             ports = _get_candidate_ports()
-        assert ports == [3002]
+        assert ports == [3002, 3302]
 
-    def test_invalid_preferred_falls_back_to_default_order(self):
-        with patch("omni.foundation.config.settings.get_setting", return_value=0):
+    def test_invalid_preferred_uses_client_url_port(self):
+        def _setting(key: str):
+            if key == "mcp.preferred_embed_port":
+                return 0
+            if key == "embedding.client_url":
+                return "http://127.0.0.1:3302"
+            return None
+
+        with patch("omni.foundation.config.settings.get_setting", side_effect=_setting):
             from omni.agent.cli.mcp_embed import _get_candidate_ports
 
             ports = _get_candidate_ports()
-        assert ports == [3002, 3001, 3000]
+        assert ports == [3302]
 
 
 class TestDetectMcpPort:
@@ -80,13 +94,13 @@ class TestDetectMcpPort:
 class TestMcpPathSelection:
     """Tests for MCP path selection by port family."""
 
-    def test_modern_ports_do_not_probe_legacy_message_path(self):
+    def test_paths_do_not_include_legacy_message_path(self):
         paths = mcp_embed_module._mcp_paths_for_port(3302)
         assert paths == ("/messages/", "/mcp", "/")
 
-    def test_legacy_port_keeps_message_path(self):
+    def test_even_legacy_port_uses_modern_paths(self):
         paths = mcp_embed_module._mcp_paths_for_port(3001)
-        assert paths == ("/message", "/messages/")
+        assert paths == ("/messages/", "/mcp", "/")
 
 
 class TestMakeMcpEmbedFunc:
@@ -176,8 +190,29 @@ class TestMakeMcpEmbedFunc:
 
 class TestProbeMcpEmbedPort:
     @pytest.mark.asyncio
-    async def test_probe_prefers_mcp_http_endpoint(self):
+    async def test_probe_prefers_healthcheck_before_embed_probe(self):
         with (
+            patch.object(mcp_embed_module, "_mcp_health_ok", new=AsyncMock(return_value=True)),
+            patch.object(
+                mcp_embed_module,
+                "embed_via_mcp_http",
+                new=AsyncMock(return_value=[[0.1] * 8]),
+            ) as mock_http_path,
+            patch.object(
+                mcp_embed_module,
+                "embed_via_mcp",
+                new=AsyncMock(return_value=None),
+            ) as mock_tool_call,
+        ):
+            ok = await mcp_embed_module.probe_mcp_embed_port(3002)
+        assert ok is True
+        mock_http_path.assert_not_called()
+        mock_tool_call.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_probe_falls_back_to_embed_probe_when_healthcheck_fails(self):
+        with (
+            patch.object(mcp_embed_module, "_mcp_health_ok", new=AsyncMock(return_value=False)),
             patch.object(
                 mcp_embed_module,
                 "embed_via_mcp_http",
@@ -193,3 +228,30 @@ class TestProbeMcpEmbedPort:
         assert ok is True
         mock_http_path.assert_awaited_once()
         mock_tool_call.assert_not_called()
+
+
+class TestEmbedViaMcp:
+    @pytest.mark.asyncio
+    async def test_embed_via_mcp_prefers_direct_embed_for_modern_messages_path(self):
+        """`/messages/` on modern ports should try direct /embed path before tools/call."""
+
+        class _UnusedClient:
+            async def post(self, *_args, **_kwargs):  # pragma: no cover - should not run
+                raise AssertionError("tools/call path should not run when direct embed succeeds")
+
+        with (
+            patch.object(
+                mcp_embed_module,
+                "embed_via_mcp_http",
+                new=AsyncMock(return_value=[[0.7] * 8]),
+            ) as mock_direct,
+            patch.object(mcp_embed_module, "_get_shared_http_client", return_value=_UnusedClient()),
+        ):
+            vectors = await mcp_embed_module.embed_via_mcp(
+                ["hello"],
+                port=3002,
+                path="/messages/",
+            )
+
+        assert vectors == [[0.7] * 8]
+        mock_direct.assert_awaited_once()

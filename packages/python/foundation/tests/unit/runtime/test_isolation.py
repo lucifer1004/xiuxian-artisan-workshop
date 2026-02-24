@@ -87,6 +87,96 @@ class TestRunSkillCommand:
                 assert "https://example.com" in cmd
 
 
+class TestRunSkillCommandPersistent:
+    """Tests for persistent worker execution mode."""
+
+    def test_persistent_mode_uses_worker_transport(self):
+        """Persistent mode should write JSON request to worker stdin and parse one response line."""
+        from omni.foundation.runtime import isolation
+
+        isolation._shutdown_persistent_workers()
+        with TemporaryDirectory() as tmpdir:
+            skill_dir = Path(tmpdir)
+            (skill_dir / "scripts").mkdir()
+            (skill_dir / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+            (skill_dir / "scripts" / "engine.py").write_text("# dummy")
+
+            proc = MagicMock()
+            proc.poll.return_value = None
+            proc.stdin = MagicMock()
+            proc.stdout = MagicMock()
+
+            with (
+                patch("subprocess.Popen", return_value=proc) as mock_popen,
+                patch(
+                    "omni.foundation.runtime.isolation._readline_with_timeout",
+                    return_value='{"success": true, "content": "ok", "metadata": {}}\n',
+                ),
+            ):
+                result = isolation.run_skill_command(
+                    skill_dir=skill_dir,
+                    script_name="engine.py",
+                    args={"url": "https://example.com"},
+                    persistent=True,
+                )
+
+            assert result["success"] is True
+            assert result["content"] == "ok"
+            mock_popen.assert_called_once()
+            cmd = (
+                mock_popen.call_args[0][0]
+                if mock_popen.call_args and mock_popen.call_args[0]
+                else []
+            )
+            assert "--worker" in cmd
+            proc.stdin.write.assert_called_once()
+            isolation._shutdown_persistent_workers()
+
+    def test_persistent_worker_reused_for_same_skill_script(self):
+        """Two calls should reuse the same worker process."""
+        from omni.foundation.runtime import isolation
+
+        isolation._shutdown_persistent_workers()
+        with TemporaryDirectory() as tmpdir:
+            skill_dir = Path(tmpdir)
+            (skill_dir / "scripts").mkdir()
+            (skill_dir / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+            (skill_dir / "scripts" / "engine.py").write_text("# dummy")
+
+            proc = MagicMock()
+            proc.poll.return_value = None
+            proc.stdin = MagicMock()
+            proc.stdout = MagicMock()
+
+            with (
+                patch("subprocess.Popen", return_value=proc) as mock_popen,
+                patch(
+                    "omni.foundation.runtime.isolation._readline_with_timeout",
+                    side_effect=[
+                        '{"success": true, "content": "one", "metadata": {}}\n',
+                        '{"success": true, "content": "two", "metadata": {}}\n',
+                    ],
+                ),
+            ):
+                result_one = isolation.run_skill_command(
+                    skill_dir=skill_dir,
+                    script_name="engine.py",
+                    args={"url": "https://example.com/1"},
+                    persistent=True,
+                )
+                result_two = isolation.run_skill_command(
+                    skill_dir=skill_dir,
+                    script_name="engine.py",
+                    args={"url": "https://example.com/2"},
+                    persistent=True,
+                )
+
+            assert result_one["content"] == "one"
+            assert result_two["content"] == "two"
+            assert mock_popen.call_count == 1
+            isolation._shutdown_persistent_workers()
+
+
 class TestRunSkillCommandAsync:
     """Tests for run_skill_command_async function."""
 

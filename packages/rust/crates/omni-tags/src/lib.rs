@@ -1,4 +1,4 @@
-//! omni-tags - High-Performance Code Symbol Extraction for Omni DevEnv
+//! omni-tags - High-Performance Code Symbol Extraction for Omni `DevEnv`
 //!
 //! Features:
 //! - AST-based symbol extraction using omni-ast (ast-grep)

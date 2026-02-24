@@ -15,6 +15,14 @@ from omni.foundation.runtime.skill_optimization import is_markdown_index_chunk
 from omni.rag.retrieval import filter_recall_rows
 
 
+@pytest.fixture(autouse=True)
+def _clear_recall_single_call_cache() -> None:
+    """Keep recall single-call cache isolated across tests."""
+    recall.clear_recall_single_call_cache()
+    yield
+    recall.clear_recall_single_call_cache()
+
+
 def test_is_toc_or_index_chunk_empty_or_short():
     """Short or empty content is not TOC."""
     assert is_markdown_index_chunk("") is False
@@ -277,14 +285,20 @@ async def test_recall_action_start_batch_emits_retrieval_row_budget_phases() -> 
 
     phases: list[tuple[str, dict[str, object]]] = []
 
-    def _capture_phase(phase: str, _duration_ms: float, **extra: object) -> None:
+    def _capture_phase(
+        phase: str,
+        _started_at: float,
+        _rss_before: float | None,
+        _rss_peak_before: float | None,
+        **extra: object,
+    ) -> None:
         phases.append((phase, dict(extra)))
 
     with (
         patch.object(recall, "get_vector_store", return_value=mock_vector),
         patch.object(recall._RECALL_CHUNKED_STORE, "save", side_effect=_save),
         patch.object(recall._RECALL_CHUNKED_STORE, "load", side_effect=_load),
-        patch.object(retrieval_executor, "_record_phase", side_effect=_capture_phase),
+        patch.object(retrieval_executor, "record_phase_with_memory", side_effect=_capture_phase),
     ):
         start_out = await recall.recall(
             query="cache test",
@@ -409,6 +423,58 @@ async def test_recall_single_call_db_query_uses_limit_exactly():
     args = mock_vector.search.await_args.args
     assert args[0] == "search algorithm"
     assert args[1] == 3
+
+
+@pytest.mark.asyncio
+async def test_recall_single_call_reuses_cached_payload_for_identical_requests() -> None:
+    """Identical non-chunked recall calls should hit run_recall_single_call once within TTL."""
+    mock_vector = MagicMock()
+    mock_vector.get_store_for_collection.return_value = object()
+
+    call_counter = {"count": 0}
+
+    async def _fake_single_call(**kwargs):
+        call_counter["count"] += 1
+        return {
+            "success": True,
+            "query": kwargs.get("query", ""),
+            "found": 1,
+            "status": "success",
+            "results": [
+                {
+                    "content": "cached-result",
+                    "source": "docs/cache.md",
+                    "score": 0.9,
+                    "title": "",
+                    "section": "",
+                }
+            ],
+        }
+
+    with (
+        patch.object(recall, "get_vector_store", return_value=mock_vector),
+        patch.object(recall, "run_recall_single_call", side_effect=_fake_single_call),
+    ):
+        out1 = await recall.recall(
+            query="cache hit",
+            chunked=False,
+            limit=3,
+            preview=False,
+            retrieval_mode="vector_only",
+        )
+        out2 = await recall.recall(
+            query="cache hit",
+            chunked=False,
+            limit=3,
+            preview=False,
+            retrieval_mode="vector_only",
+        )
+
+    assert call_counter["count"] == 1
+    data1 = _parse_recall_out(out1)
+    data2 = _parse_recall_out(out2)
+    assert data1.get("status") == "success"
+    assert data2 == data1
 
 
 @pytest.mark.asyncio
@@ -600,8 +666,148 @@ async def test_recall_hybrid_mode_falls_back_to_vector_when_graph_insufficient(
 
 
 @pytest.mark.asyncio
-async def test_recall_vector_only_mode_skips_dual_core_boost() -> None:
-    """vector_only should avoid dual-core post-processing for lower latency."""
+async def test_recall_vector_failure_uses_graph_only_fallback_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Vector retrieval error should downgrade to graph-only rows when available."""
+    mock_vector = MagicMock()
+    mock_vector.get_store_for_collection.return_value = object()
+
+    async def _fake_evaluate(*_args, **_kwargs):
+        mode = str(_kwargs.get("retrieval_mode") or "")
+        if mode == "hybrid":
+            return types.SimpleNamespace(
+                retrieval_path="vector_only",
+                retrieval_reason="graph_insufficient",
+                graph_backend="fake",
+                graph_hit_count=0,
+                graph_confidence_score=0.1,
+                graph_confidence_level="low",
+                retrieval_plan_schema_id=(
+                    "https://schemas.omni.dev/omni.link_graph.retrieval_plan.v1.schema.json"
+                ),
+                retrieval_plan={
+                    "schema": "omni.link_graph.retrieval_plan.v1",
+                    "requested_mode": "hybrid",
+                    "selected_mode": "vector_only",
+                    "reason": "graph_insufficient",
+                    "backend_name": "fake",
+                    "graph_hit_count": 0,
+                    "source_hint_count": 0,
+                    "graph_confidence_score": 0.1,
+                    "graph_confidence_level": "low",
+                    "budget": {"candidate_limit": 8, "max_sources": 4, "rows_per_source": 4},
+                },
+                graph_rows=(),
+                graph_only_empty=False,
+            )
+        assert mode == "graph_only"
+        return types.SimpleNamespace(
+            retrieval_path="graph_only",
+            retrieval_reason="graph_only_requested",
+            graph_backend="fake",
+            graph_hit_count=1,
+            graph_confidence_score=0.9,
+            graph_confidence_level="high",
+            retrieval_plan_schema_id=(
+                "https://schemas.omni.dev/omni.link_graph.retrieval_plan.v1.schema.json"
+            ),
+            retrieval_plan={
+                "schema": "omni.link_graph.retrieval_plan.v1",
+                "requested_mode": "graph_only",
+                "selected_mode": "graph_only",
+                "reason": "graph_only_requested",
+                "backend_name": "fake",
+                "graph_hit_count": 1,
+                "source_hint_count": 1,
+                "graph_confidence_score": 0.9,
+                "graph_confidence_level": "high",
+                "budget": {"candidate_limit": 8, "max_sources": 4, "rows_per_source": 4},
+            },
+            graph_rows=(
+                {
+                    "content": "graph fallback result",
+                    "source": "docs/fallback.md",
+                    "score": 0.91,
+                    "title": "Fallback",
+                    "section": "",
+                },
+            ),
+            graph_only_empty=False,
+        )
+
+    fake_link_graph = types.SimpleNamespace(
+        evaluate_link_graph_recall_policy=_fake_evaluate,
+    )
+    monkeypatch.setitem(sys.modules, "omni.rag.link_graph", fake_link_graph)
+
+    with (
+        patch.object(recall, "get_vector_store", return_value=mock_vector),
+        patch.object(
+            recall,
+            "run_recall_query_rows",
+            AsyncMock(side_effect=RuntimeError("Embedding timed out after 5s")),
+        ),
+    ):
+        out = await recall.recall(
+            query="architecture",
+            chunked=False,
+            limit=2,
+            preview=False,
+            retrieval_mode="hybrid",
+        )
+
+    data = _parse_recall_out(out)
+    assert data.get("status") == "success"
+    assert data.get("retrieval_path") == "graph_only"
+    assert data.get("retrieval_reason") == "graph_only_requested"
+    assert data.get("found") == 1
+    assert data.get("results", [])[0]["source"] == "docs/fallback.md"
+
+
+@pytest.mark.asyncio
+async def test_recall_vector_failure_returns_empty_success_when_graph_fallback_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Vector retrieval error should return safe empty success when graph fallback is unavailable."""
+    mock_vector = MagicMock()
+    mock_vector.get_store_for_collection.return_value = object()
+
+    async def _raise_policy(*_args, **_kwargs):
+        raise RuntimeError("link_graph backend unavailable")
+
+    fake_link_graph = types.SimpleNamespace(
+        evaluate_link_graph_recall_policy=_raise_policy,
+    )
+    monkeypatch.setitem(sys.modules, "omni.rag.link_graph", fake_link_graph)
+
+    with (
+        patch.object(recall, "get_vector_store", return_value=mock_vector),
+        patch.object(
+            recall,
+            "run_recall_query_rows",
+            AsyncMock(side_effect=RuntimeError("Embedding timed out after 5s")),
+        ),
+    ):
+        out = await recall.recall(
+            query="architecture",
+            chunked=False,
+            limit=2,
+            preview=False,
+            retrieval_mode="hybrid",
+        )
+
+    data = _parse_recall_out(out)
+    assert data.get("status") == "success"
+    assert data.get("retrieval_path") == "vector_only"
+    assert data.get("retrieval_reason") == "vector_error_fallback_empty"
+    assert data.get("found") == 0
+    assert data.get("results") == []
+
+
+@pytest.mark.asyncio
+async def test_recall_vector_only_mode_skips_fusion_boost() -> None:
+    """vector_only should avoid fusion post-processing for lower latency."""
     mock_vector = MagicMock()
     mock_vector.get_store_for_collection.return_value = object()
     mock_vector.search = AsyncMock(
@@ -619,8 +825,8 @@ async def test_recall_vector_only_mode_skips_dual_core_boost() -> None:
         patch.object(recall, "get_vector_store", return_value=mock_vector),
         patch.object(
             recall,
-            "_apply_dual_core_recall_boost",
-            AsyncMock(side_effect=AssertionError("dual-core should not run in vector_only")),
+            "_apply_fusion_recall_boost",
+            AsyncMock(side_effect=AssertionError("fusion should not run in vector_only")),
         ),
     ):
         out = await recall.recall(
@@ -637,8 +843,8 @@ async def test_recall_vector_only_mode_skips_dual_core_boost() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dual_core_boost_skips_low_signal_query(monkeypatch: pytest.MonkeyPatch):
-    """Single-char query should skip dual-core import/execution entirely."""
+async def test_fusion_boost_skips_low_signal_query(monkeypatch: pytest.MonkeyPatch):
+    """Single-char query should skip fusion import/execution entirely."""
     called = {"compute": False, "graph": False, "kg": False}
 
     async def _fake_graph(rows, q, **kwargs):
@@ -656,14 +862,14 @@ async def test_dual_core_boost_skips_low_signal_query(monkeypatch: pytest.Monkey
         called["kg"] = True
         return rows
 
-    fake_dual_core = types.SimpleNamespace(
+    fake_fusion = types.SimpleNamespace(
         compute_fusion_weights=_fake_compute,
         link_graph_proximity_boost=_fake_graph,
         apply_kg_recall_boost=_fake_kg,
     )
-    monkeypatch.setitem(sys.modules, "omni.rag.dual_core", fake_dual_core)
+    monkeypatch.setitem(sys.modules, "omni.rag.fusion", fake_fusion)
 
     rows = [{"source": "a", "score": 0.9, "content": "hello"}]
-    out = await recall._apply_dual_core_recall_boost(rows, "x")
+    out = await recall._apply_fusion_recall_boost(rows, "x")
     assert out == rows
     assert called == {"compute": False, "graph": False, "kg": False}

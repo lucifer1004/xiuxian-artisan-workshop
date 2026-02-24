@@ -2,7 +2,7 @@
 """
 Phase-level profiling for knowledge.recall to isolate latency bottlenecks.
 
-Times: init, embed, vector_search, dual_core, total.
+Times: init, embed, vector_search, fusion, total.
 Run: uv run python scripts/recall_profile_phases.py
      uv run python scripts/recall_profile_phases.py --query "什么是 librarian"
 """
@@ -164,7 +164,7 @@ async def main() -> int:
     phases["vector_search"] = time.perf_counter() - t0
     rss["after_search"] = _rss_mb()
 
-    # Convert to result_dicts for dual_core
+    # Convert to result_dicts for fusion
     result_dicts = []
     for r in raw_results:
         meta = r.metadata if isinstance(getattr(r, "metadata", None), dict) else {}
@@ -178,13 +178,13 @@ async def main() -> int:
             }
         )
 
-    # Phase 2: dual_core boost (split into sub-phases)
-    phases["dual_core"] = 0.0
-    phases["dual_core_graph"] = 0.0
-    phases["dual_core_kg"] = 0.0
+    # Phase 2: fusion boost (split into sub-phases)
+    phases["fusion"] = 0.0
+    phases["fusion_graph"] = 0.0
+    phases["fusion_kg"] = 0.0
     if not low_signal:
         try:
-            from omni.rag.dual_core import (
+            from omni.rag.fusion import (
                 apply_kg_recall_boost,
                 compute_fusion_weights,
                 link_graph_proximity_boost,
@@ -192,13 +192,13 @@ async def main() -> int:
 
             t_fusion = time.perf_counter()
             fusion = compute_fusion_weights(query)
-            phases["dual_core_fusion"] = time.perf_counter() - t_fusion
+            phases["fusion_weights"] = time.perf_counter() - t_fusion
 
             t_graph = time.perf_counter()
             result_dicts = await link_graph_proximity_boost(
                 result_dicts, query, fusion_scale=fusion.link_graph_proximity_scale
             )
-            phases["dual_core_graph"] = time.perf_counter() - t_graph
+            phases["fusion_graph"] = time.perf_counter() - t_graph
 
             t_kg = time.perf_counter()
             result_dicts = apply_kg_recall_boost(
@@ -207,27 +207,27 @@ async def main() -> int:
                 fusion_scale=fusion.link_graph_entity_scale,
                 intent_keywords=fusion.intent_keywords,
             )
-            phases["dual_core_kg"] = time.perf_counter() - t_kg
+            phases["fusion_kg"] = time.perf_counter() - t_kg
 
-            phases["dual_core"] = (
-                phases["dual_core_fusion"] + phases["dual_core_graph"] + phases["dual_core_kg"]
+            phases["fusion"] = (
+                phases["fusion_weights"] + phases["fusion_graph"] + phases["fusion_kg"]
             )
         except Exception as e:
-            print(f"  dual_core skipped: {e}")
+            print(f"  fusion skipped: {e}")
     else:
-        phases["dual_core_skipped_low_signal"] = 1.0
-    rss["after_dual_core"] = _rss_mb()
+        phases["fusion_skipped_low_signal"] = 1.0
+    rss["after_fusion"] = _rss_mb()
 
     # Second run (cache warm): same query to measure graph cache hit.
     phases2: dict[str, float] = {}
     if not low_signal:
         try:
-            from omni.rag.dual_core import link_graph_proximity_boost
+            from omni.rag.fusion import link_graph_proximity_boost
 
             t_graph2 = time.perf_counter()
             result_dicts2 = [dict(r) for r in result_dicts]
             result_dicts2 = await link_graph_proximity_boost(result_dicts2, query, fusion_scale=1.0)
-            phases2["dual_core_graph"] = time.perf_counter() - t_graph2
+            phases2["fusion_graph"] = time.perf_counter() - t_graph2
         except Exception:
             pass
 
@@ -237,21 +237,17 @@ async def main() -> int:
     print("=" * 60)
     print(f"Query: {query!r}  limit={limit}  fetch_limit={fetch_limit}")
     if low_signal:
-        print(
-            "Note: low-signal query detected -> dual_core skipped (matches production recall path)"
-        )
+        print("Note: low-signal query detected -> fusion skipped (matches production recall path)")
     print("-" * 60)
-    total = sum(
-        v for k, v in phases.items() if k in ("init", "embed", "vector_search", "dual_core")
-    )
+    total = sum(v for k, v in phases.items() if k in ("init", "embed", "vector_search", "fusion"))
     for name in (
         "init",
         "embed",
         "vector_search",
-        "dual_core_fusion",
-        "dual_core_graph",
-        "dual_core_kg",
-        "dual_core",
+        "fusion_weights",
+        "fusion_graph",
+        "fusion_kg",
+        "fusion",
     ):
         sec = phases.get(name, 0)
         if sec == 0 and name not in phases:
@@ -261,9 +257,9 @@ async def main() -> int:
     print("-" * 60)
     print(f"  {'TOTAL':20} {total:8.2f}s")
     if phases2:
-        graph2 = phases2.get("dual_core_graph", 0)
+        graph2 = phases2.get("fusion_graph", 0)
         print()
-        print(f"  (2nd run, graph cache warm: dual_core_graph={graph2:.2f}s)")
+        print(f"  (2nd run, graph cache warm: fusion_graph={graph2:.2f}s)")
     print()
     print("RSS (MiB):", rss)
     print("  delta init:", round(rss["after_init"] - rss["start"], 1))
@@ -271,7 +267,7 @@ async def main() -> int:
     print(
         "  delta search:", round(rss["after_search"] - rss.get("after_embed", rss["after_init"]), 1)
     )
-    print("  delta dual_core:", round(rss["after_dual_core"] - rss["after_search"], 1))
+    print("  delta fusion:", round(rss["after_fusion"] - rss["after_search"], 1))
     return 0
 
 

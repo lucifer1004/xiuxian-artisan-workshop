@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from log_io import iter_log_lines
+
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 PARSED_MESSAGE_RE = re.compile(
     r"Parsed message, forwarding to agent"
@@ -94,9 +96,7 @@ def discover_groups(log_file: Path, targets: list[str]) -> dict[str, GroupObserv
     normalized_targets = {normalize_title(title): title for title in targets}
     found: dict[str, GroupObservation] = {}
 
-    for idx, raw_line in enumerate(
-        log_file.read_text(encoding="utf-8", errors="ignore").splitlines()
-    ):
+    for idx, raw_line in enumerate(iter_log_lines(log_file)):
         line = ANSI_ESCAPE_RE.sub("", raw_line)
         match = PARSED_MESSAGE_RE.search(line)
         if not match:
@@ -245,13 +245,7 @@ def main() -> int:
         print(f"  missing_titles={missing}")
     for title in present:
         obs = discovered[title]
-        print(
-            "  title={title} chat_id={chat_id} chat_type={chat_type}".format(
-                title=title,
-                chat_id=obs.chat_id,
-                chat_type=obs.chat_type,
-            )
-        )
+        print(f"  title={title} chat_id={obs.chat_id} chat_type={obs.chat_type}")
     print(f"  output_json={output_json}")
     print(f"  output_env={output_env}")
     return 0

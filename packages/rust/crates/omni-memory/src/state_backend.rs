@@ -18,9 +18,17 @@ pub trait MemoryStateStore: Send + Sync {
     }
 
     /// Load state into `store`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when backend state cannot be loaded or decoded.
     fn load(&self, store: &EpisodeStore) -> Result<()>;
 
     /// Save state from `store`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when backend state cannot be serialized or persisted.
     fn save(&self, store: &EpisodeStore) -> Result<()>;
 }
 
@@ -76,6 +84,10 @@ mod valkey {
 
     impl ValkeyMemoryStateStore {
         /// Create a Valkey memory state store.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if `redis_url` is invalid.
         pub fn new(
             redis_url: impl AsRef<str>,
             key: impl Into<String>,

@@ -8,6 +8,7 @@ IMPORTANT: These function signatures are scanned by Rust AST Scanner
 for command discovery. The actual implementation is in engine.py.
 """
 
+import importlib
 import json
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,132 @@ log = structlog.get_logger("omni.skill.crawl4ai")
 def _get_skill_dir() -> Path:
     """Get the skill directory for isolation."""
     return Path(__file__).parent.parent
+
+
+def _resolve_engine_helpers():
+    """Load pure markdown helpers from engine module without crawl dependency imports."""
+    try:
+        from engine import extract_chunk, extract_skeleton
+
+        return extract_skeleton, extract_chunk
+    except ImportError:
+        pass
+
+    pkg = __package__
+    if pkg:
+        mod = importlib.import_module(".engine", package=pkg)
+        return mod.extract_skeleton, mod.extract_chunk
+    raise ImportError("Could not import extract_skeleton/extract_chunk from engine module")
+
+
+def _build_smart_result(
+    *,
+    url: str,
+    crawl_result: dict[str, Any],
+    chunk_plan: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    """Build smart crawl summary from already-crawled content (single crawl execution)."""
+    content = str(crawl_result.get("content") or "")
+    metadata_obj = crawl_result.get("metadata")
+    metadata = metadata_obj if isinstance(metadata_obj, dict) else {}
+    title = str(metadata.get("title") or url)
+
+    extract_skeleton, extract_chunk = _resolve_engine_helpers()
+    skeleton_result = extract_skeleton(content)
+    skeleton = skeleton_result.get("skeleton", [])
+    stats = skeleton_result.get("stats", {})
+
+    plan = chunk_plan or [
+        {
+            "chunk_id": i,
+            "section_indices": [i],
+            "reason": f"Section: {section.get('title', '')}",
+        }
+        for i, section in enumerate(skeleton)
+    ]
+
+    processed_chunks: list[dict[str, Any]] = []
+    for chunk_info in plan:
+        section_indices = chunk_info.get("section_indices", [])
+        chunk_content_parts: list[str] = []
+        for sec_idx in section_indices:
+            if not isinstance(sec_idx, int) or sec_idx < 0 or sec_idx >= len(skeleton):
+                continue
+            section = skeleton[sec_idx]
+            line_start = int(section.get("line_start", 0))
+            line_end = int(section.get("line_end", line_start))
+            content_chunk = extract_chunk(content, line_start, line_end)
+            chunk_content_parts.append(f"## {section.get('title', '')}\n{content_chunk}")
+
+        processed_chunks.append(
+            {
+                "chunk_id": chunk_info.get("chunk_id", len(processed_chunks)),
+                "reason": chunk_info.get("reason", ""),
+                "content": "\n\n".join(chunk_content_parts),
+                "section_indices": section_indices,
+            }
+        )
+
+    final_summary = f"# {title}\n\n"
+    for chunk in processed_chunks:
+        final_summary += f"## Chunk {chunk.get('chunk_id', 0)}: {chunk.get('reason', '')}\n\n"
+        final_summary += str(chunk.get("content", "")) + "\n\n"
+
+    chunk_plan_text: list[str] = []
+    for chunk in plan[:10]:
+        indices = chunk.get("section_indices", [])
+        chunk_plan_text.append(
+            f"  - Chunk {chunk.get('chunk_id', '?')}: sections {indices} - {chunk.get('reason', '')}"
+        )
+    if len(plan) > 10:
+        chunk_plan_text.append(f"  ... and {len(plan) - 10} more chunks")
+
+    chunks_text: list[str] = []
+    for chunk in processed_chunks:
+        content_preview = str(chunk.get("content", ""))[:200].replace("\n", " ")
+        chunks_text.append(f"  - Chunk {chunk.get('chunk_id', '?')}: {content_preview}...")
+
+    output = f"""# Crawl Result: {title}
+
+**URL:** {url}
+**Status:** Success
+
+## Workflow Execution
+
+### 1. Crawl + Skeleton
+Extracted {len(skeleton)} sections from document
+
+### 2. LLM Chunking Plan
+{chr(10).join(chunk_plan_text) if chunk_plan_text else "  No chunks planned"}
+
+### 3. Processed Chunks ({len(processed_chunks)} total)
+{chr(10).join(chunks_text) if chunks_text else "  No chunks processed"}
+
+---
+
+## Final Summary
+
+{final_summary if final_summary else "(No summary generated)"}
+
+---
+
+## Raw Data
+
+**Skeleton:** {len(skeleton)} sections
+**Chunk Plan:** {len(plan)} chunks
+**Processed:** {len(processed_chunks)} chunks
+"""
+
+    return {
+        "success": True,
+        "url": url,
+        "content": output,
+        "metadata": metadata,
+        "skeleton": skeleton,
+        "stats": stats,
+        "chunk_plan": plan,
+        "processed_chunks": processed_chunks,
+    }
 
 
 # LLM prompt for chunk planning
@@ -195,6 +322,7 @@ async def CrawlUrl(
                 "fit_markdown": fit_markdown,
                 "max_depth": max_depth,
             },
+            persistent=True,
         )
 
         if not crawl_result.get("success"):
@@ -208,6 +336,9 @@ async def CrawlUrl(
             chunk_plan = await _generate_chunk_plan(skeleton, title)
 
     # Pass to engine (with chunk_plan if available)
+    if action_name == "smart":
+        return _build_smart_result(url=url, crawl_result=crawl_result, chunk_plan=chunk_plan)
+
     result = run_skill_command(
         skill_dir=_get_skill_dir(),
         script_name="engine.py",
@@ -220,6 +351,7 @@ async def CrawlUrl(
             "chunk_indices": chunk_indices or [],
             "chunk_plan": chunk_plan,
         },
+        persistent=True,
     )
     return result
 

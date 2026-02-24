@@ -176,12 +176,15 @@ def test_validate_rejects_unknown_link_graph_property() -> None:
         validate(payload)
 
 
-def test_get_validator_raises_when_schema_file_missing(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+def test_get_validator_raises_when_rust_schema_backend_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     skills_monitor_signals_schema.get_validator.cache_clear()
-    missing_path = tmp_path / "missing.schema.json"
-    monkeypatch.setattr(skills_monitor_signals_schema, "get_schema_path", lambda: missing_path)
-    with pytest.raises(FileNotFoundError, match="skills monitor signals schema not found"):
+    monkeypatch.setattr(
+        skills_monitor_signals_schema,
+        "get_schema",
+        lambda _name: (_ for _ in ()).throw(ImportError("Rust schema backend unavailable")),
+    )
+    with pytest.raises(ImportError, match="Rust schema backend unavailable"):
         skills_monitor_signals_schema.get_validator()
     skills_monitor_signals_schema.get_validator.cache_clear()

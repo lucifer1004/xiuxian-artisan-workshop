@@ -16,7 +16,7 @@ agent_channel_blackbox.py and emits JSON/Markdown reports.
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import os
 import re
@@ -28,37 +28,29 @@ from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-try:
-    from test_config_resolver import (
-        allowed_users_from_settings,
-        normalize_telegram_session_partition_mode,
-        session_ids_from_runtime_log,
-        session_partition_mode_from_runtime_log,
-        telegram_session_partition_mode,
-        telegram_webhook_secret_token,
-        username_from_runtime_log,
-        username_from_settings,
-    )
-except ModuleNotFoundError as import_err:
-    _resolver_path = Path(__file__).resolve().with_name("test_config_resolver.py")
-    _resolver_spec = importlib.util.spec_from_file_location("test_config_resolver", _resolver_path)
-    if _resolver_spec is None or _resolver_spec.loader is None:
-        raise RuntimeError(f"failed to load resolver module from {_resolver_path}") from import_err
-    _resolver_module = importlib.util.module_from_spec(_resolver_spec)
-    sys.modules.setdefault(_resolver_spec.name, _resolver_module)
-    _resolver_spec.loader.exec_module(_resolver_module)
-    allowed_users_from_settings = _resolver_module.allowed_users_from_settings
-    normalize_telegram_session_partition_mode = (
-        _resolver_module.normalize_telegram_session_partition_mode
-    )
-    session_ids_from_runtime_log = _resolver_module.session_ids_from_runtime_log
-    session_partition_mode_from_runtime_log = (
-        _resolver_module.session_partition_mode_from_runtime_log
-    )
-    telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
-    telegram_webhook_secret_token = _resolver_module.telegram_webhook_secret_token
-    username_from_runtime_log = _resolver_module.username_from_runtime_log
-    username_from_settings = _resolver_module.username_from_settings
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+load_sibling_module = importlib.import_module("module_loader").load_sibling_module
+
+_resolver_module = load_sibling_module(
+    module_name="config_resolver",
+    file_name="config_resolver.py",
+    caller_file=__file__,
+    error_context="resolver module",
+)
+allowed_users_from_settings = _resolver_module.allowed_users_from_settings
+default_telegram_webhook_url = _resolver_module.default_telegram_webhook_url
+normalize_telegram_session_partition_mode = (
+    _resolver_module.normalize_telegram_session_partition_mode
+)
+session_ids_from_runtime_log = _resolver_module.session_ids_from_runtime_log
+session_partition_mode_from_runtime_log = _resolver_module.session_partition_mode_from_runtime_log
+telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
+telegram_webhook_secret_token = _resolver_module.telegram_webhook_secret_token
+username_from_runtime_log = _resolver_module.username_from_runtime_log
+username_from_settings = _resolver_module.username_from_settings
 
 
 DEFAULT_MAX_WAIT = int(os.environ.get("OMNI_BLACKBOX_MAX_WAIT_SECS", "40"))
@@ -292,6 +284,7 @@ class RunnerConfig:
 
 def parse_args() -> argparse.Namespace:
     script_dir = Path(__file__).resolve().parent
+    webhook_url_default = os.environ.get("OMNI_WEBHOOK_URL") or default_telegram_webhook_url()
     parser = argparse.ArgumentParser(
         description=(
             "Run complex black-box workflow scenarios for omni-agent Telegram runtime "
@@ -315,10 +308,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--webhook-url",
-        default=os.environ.get(
-            "OMNI_WEBHOOK_URL",
-            f"http://127.0.0.1:{os.environ.get('WEBHOOK_PORT', '8081')}/telegram/webhook",
-        ),
+        default=webhook_url_default,
         help="Telegram webhook endpoint.",
     )
     parser.add_argument(

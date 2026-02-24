@@ -32,6 +32,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "recall_rows_from_vector_results": (".rows", "recall_rows_from_vector_results"),
     "run_recall_hybrid_rows": (".executor", "run_recall_hybrid_rows"),
     "run_recall_query_rows": (".executor", "run_recall_query_rows"),
+    "run_recall_single_call": (".single_call", "run_recall_single_call"),
     "run_recall_semantic_rows": (".executor", "run_recall_semantic_rows"),
 }
 

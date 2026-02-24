@@ -1,0 +1,32 @@
+# CyberXiuXian Project Registry (DFS-2026)
+
+This repository follows the **Filesystem-Based Documentation Hierarchy (DFS-2026)**. Access documentation via these deterministic namespaces:
+
+## [00] Vision (Philosophy & Strategy)
+
+- [Trinity Manifesto](TRINITY_MANIFESTO.md): The core decoupled cognitive vision.
+
+## [01] Core (Quadrilateral Specifications)
+
+- **Wendao**: [Graph Enhancement](../01_core/wendao/graph-enhancement.md), [PPR Algorithm](../01_core/wendao/ppr-algorithm.md).
+- **Memory**: [MemRL Evolution](../01_core/memory/memrl-evolution.md).
+- **Qianhuan**: [Orchestration Spec](../01_core/qianhuan/orchestration-spec.md).
+- **Omega**: [Strategic Governance](../01_core/omega/trinity-control.md).
+
+## [02] Dev (Rules & Handbooks)
+
+- [Hierarchy Standard](../02_dev/standards/DOCUMENTATION_HIERARCHY.md): Path authority rules.
+- [Traceability](../02_dev/standards/TRACEABILITY_POLICY.md): Proof of work standard.
+- [Developer Handbook](../02_dev/HANDBOOK.md): Guides and technical details.
+
+## [03] Features (The Verified Truth)
+
+- [Qianhuan Audit](../03_features/qianhuan-audit-closure.md): Evidence of implementation.
+
+## [04] Chronicles (History)
+
+- [Milestones](../04_chronicles/MILESTONES.md): Project timeline.
+
+## [99] LLM (Machine Interface)
+
+- [Reading Guide](../99_llm/READING_GUIDE.md): Bootstrapping for AI Agents.

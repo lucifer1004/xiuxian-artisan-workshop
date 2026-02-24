@@ -2,7 +2,9 @@
 
 mod config;
 mod dispatch;
+mod gateway;
 mod ingress;
+mod interrupt;
 mod managed;
 mod run;
 #[cfg(test)]
@@ -10,9 +12,12 @@ mod run;
 mod tests;
 
 pub use config::DiscordRuntimeConfig;
+pub use gateway::run_discord_gateway;
 pub use ingress::{
     DiscordIngressApp, build_discord_ingress_app,
     build_discord_ingress_app_with_control_command_policy,
     build_discord_ingress_app_with_partition_and_control_command_policy,
 };
 pub use run::run_discord_ingress;
+
+pub(in crate::channels::discord::runtime) use interrupt::ForegroundInterruptController;

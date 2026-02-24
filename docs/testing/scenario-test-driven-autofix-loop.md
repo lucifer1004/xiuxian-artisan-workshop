@@ -1,3 +1,13 @@
+---
+title: "Test-Driven Auto-Fix Loop (Scenario 1)"
+category: "testing"
+tags:
+  - testing
+  - scenario
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Test-Driven Auto-Fix Loop (Scenario 1)
 
 ## Overview

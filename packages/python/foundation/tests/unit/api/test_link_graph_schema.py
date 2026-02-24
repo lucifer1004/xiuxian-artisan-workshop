@@ -45,12 +45,15 @@ def test_validate_records_rejects_invalid_item() -> None:
         validate_records([good, bad])
 
 
-def test_get_validator_raises_when_schema_file_missing(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+def test_get_validator_raises_when_rust_schema_backend_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     link_graph_schema.get_validator.cache_clear()
-    missing_path = tmp_path / "missing.schema.json"
-    monkeypatch.setattr(link_graph_schema, "get_schema_path", lambda: missing_path)
-    with pytest.raises(FileNotFoundError, match="Link graph schema not found"):
+    monkeypatch.setattr(
+        link_graph_schema,
+        "get_schema",
+        lambda _name: (_ for _ in ()).throw(ImportError("Rust schema backend unavailable")),
+    )
+    with pytest.raises(ImportError, match="Rust schema backend unavailable"):
         link_graph_schema.get_validator()
     link_graph_schema.get_validator.cache_clear()

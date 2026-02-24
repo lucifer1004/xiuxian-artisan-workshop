@@ -1,3 +1,37 @@
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
+
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -5,11 +39,13 @@ use async_trait::async_trait;
 use tokio::sync::{Mutex, RwLock, mpsc};
 
 use crate::agent::Agent;
-use crate::channels::traits::{Channel, ChannelMessage};
+use crate::channels::traits::{Channel, ChannelMessage, RecipientCommandAdminUsersMutation};
 use crate::config::AgentConfig;
 use crate::jobs::{JobManager, JobManagerConfig, TurnRunner};
 
+pub(super) use super::super::ForegroundInterruptController;
 pub(super) use super::super::dispatch::process_discord_message;
+pub(super) use super::super::dispatch::process_discord_message_with_interrupt;
 
 #[derive(Default)]
 pub(super) struct MockChannel {
@@ -17,6 +53,7 @@ pub(super) struct MockChannel {
     partition_mode: RwLock<String>,
     allow_control_commands: bool,
     denied_slash_scopes: Vec<String>,
+    recipient_admin_users: RwLock<std::collections::HashMap<String, Vec<String>>>,
 }
 
 impl MockChannel {
@@ -32,6 +69,7 @@ impl MockChannel {
                 .into_iter()
                 .map(|scope| scope.as_ref().to_string())
                 .collect(),
+            recipient_admin_users: RwLock::new(std::collections::HashMap::new()),
         }
     }
 
@@ -72,11 +110,102 @@ impl Channel for MockChannel {
         self.allow_control_commands
     }
 
+    fn is_authorized_for_control_command_for_recipient(
+        &self,
+        identity: &str,
+        _command_text: &str,
+        recipient: &str,
+    ) -> bool {
+        if self.allow_control_commands {
+            return true;
+        }
+        self.recipient_admin_users
+            .try_read()
+            .ok()
+            .and_then(|guard| guard.get(recipient).cloned())
+            .is_some_and(|admins| admins.iter().any(|entry| entry == "*" || entry == identity))
+    }
+
     fn is_authorized_for_slash_command(&self, _identity: &str, command_scope: &str) -> bool {
         !self
             .denied_slash_scopes
             .iter()
             .any(|scope| scope == command_scope)
+    }
+
+    fn is_authorized_for_slash_command_for_recipient(
+        &self,
+        identity: &str,
+        command_scope: &str,
+        recipient: &str,
+    ) -> bool {
+        if self.is_authorized_for_slash_command(identity, command_scope) {
+            return true;
+        }
+        self.recipient_admin_users
+            .try_read()
+            .ok()
+            .and_then(|guard| guard.get(recipient).cloned())
+            .is_some_and(|admins| admins.iter().any(|entry| entry == "*" || entry == identity))
+    }
+
+    fn recipient_command_admin_users(
+        &self,
+        recipient: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        Ok(self
+            .recipient_admin_users
+            .try_read()
+            .ok()
+            .and_then(|guard| guard.get(recipient).cloned()))
+    }
+
+    fn mutate_recipient_command_admin_users(
+        &self,
+        recipient: &str,
+        mutation: RecipientCommandAdminUsersMutation,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        let recipient = recipient.trim();
+        if recipient.is_empty() {
+            return Err(anyhow::anyhow!("recipient is required"));
+        }
+        let mut guard = self
+            .recipient_admin_users
+            .try_write()
+            .map_err(|_| anyhow::anyhow!("failed to acquire recipient ACL lock"))?;
+        let current = guard.get(recipient).cloned();
+        let next = match mutation {
+            RecipientCommandAdminUsersMutation::Clear => None,
+            RecipientCommandAdminUsersMutation::Set(entries) => Some(entries),
+            RecipientCommandAdminUsersMutation::Add(entries) => {
+                let mut merged = current.unwrap_or_default();
+                merged.extend(entries);
+                Some(merged)
+            }
+            RecipientCommandAdminUsersMutation::Remove(entries) => {
+                let Some(existing) = current else {
+                    return Ok(None);
+                };
+                let filtered: Vec<String> = existing
+                    .into_iter()
+                    .filter(|entry| !entries.iter().any(|candidate| candidate == entry))
+                    .collect();
+                if filtered.is_empty() {
+                    None
+                } else {
+                    Some(filtered)
+                }
+            }
+        };
+        match next.clone() {
+            Some(entries) => {
+                guard.insert(recipient.to_string(), entries);
+            }
+            None => {
+                guard.remove(recipient);
+            }
+        }
+        Ok(next)
     }
 
     async fn send(&self, message: &str, recipient: &str) -> Result<()> {

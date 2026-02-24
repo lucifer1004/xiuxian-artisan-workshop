@@ -1,4 +1,36 @@
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
 use super::{MemoryRecallMetricsState, ratio_as_f32};
 use crate::agent::SessionMemoryRecallDecision;
@@ -32,6 +64,10 @@ fn metrics_snapshot_aggregates_counts_and_rates() {
     assert!((snapshot.avg_selected_per_completed - 2.0).abs() < 0.001);
     assert!((snapshot.avg_injected_per_injected - 2.0).abs() < 0.001);
     assert!((snapshot.injected_rate - 0.5).abs() < 0.001);
+    assert_eq!(snapshot.embedding_success_total, 0);
+    assert_eq!(snapshot.embedding_timeout_total, 0);
+    assert_eq!(snapshot.embedding_cooldown_reject_total, 0);
+    assert_eq!(snapshot.embedding_unavailable_total, 0);
 }
 
 #[test]
@@ -54,4 +90,22 @@ fn metrics_latency_buckets_are_classified_deterministically() {
     assert_eq!(snapshot.latency_buckets.le_250ms, 1);
     assert_eq!(snapshot.latency_buckets.le_500ms, 1);
     assert_eq!(snapshot.latency_buckets.gt_500ms, 1);
+}
+
+#[test]
+fn metrics_snapshot_tracks_embedding_outcome_counters() {
+    let mut state = MemoryRecallMetricsState::default();
+
+    state.observe_embedding_success();
+    state.observe_embedding_success();
+    state.observe_embedding_timeout();
+    state.observe_embedding_cooldown_reject();
+    state.observe_embedding_cooldown_reject();
+    state.observe_embedding_unavailable();
+
+    let snapshot = state.snapshot();
+    assert_eq!(snapshot.embedding_success_total, 2);
+    assert_eq!(snapshot.embedding_timeout_total, 1);
+    assert_eq!(snapshot.embedding_cooldown_reject_total, 2);
+    assert_eq!(snapshot.embedding_unavailable_total, 1);
 }

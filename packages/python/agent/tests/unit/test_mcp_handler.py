@@ -11,6 +11,7 @@ Detects issues like:
 import asyncio
 import json
 import subprocess
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -523,6 +524,53 @@ def _canonical_tool_result_shape(resp: dict) -> bool:
         if not isinstance(item, dict) or item.get("type") != "text" or "text" not in item:
             return False
     return True
+
+
+@pytest.mark.asyncio
+async def test_call_tool_uses_unified_runner_and_json_serializes_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """MCP call path should use unified runner and preserve dict payload as JSON text."""
+    handler = AgentMCPHandler()
+    handler._kernel = SimpleNamespace(is_ready=True)
+
+    async def _fake_run_tool(
+        tool_name: str,
+        args: dict | None = None,
+        *,
+        kernel=None,
+    ):
+        assert tool_name == "knowledge.stats"
+        assert args == {"collection": "knowledge_chunks"}
+        assert kernel is handler._kernel
+        return {"success": True, "collection": "knowledge_chunks"}
+
+    @asynccontextmanager
+    async def _noop_memory_scope(_name: str):
+        yield
+
+    monkeypatch.setattr("omni.core.skills.runner.run_tool", _fake_run_tool)
+    monkeypatch.setattr(
+        "omni.foundation.api.tool_context.run_with_execution_timeout",
+        lambda coro: coro,
+    )
+    monkeypatch.setattr(
+        "omni.agent.mcp_server.memory_monitor.amemory_monitor_scope",
+        _noop_memory_scope,
+    )
+
+    response = await handler._handle_call_tool(
+        {
+            "id": 99,
+            "params": {
+                "name": "knowledge.stats",
+                "arguments": {"collection": "knowledge_chunks"},
+            },
+        }
+    )
+    assert _canonical_tool_result_shape(response)
+    text = response["result"]["content"][0]["text"]
+    assert json.loads(text) == {"success": True, "collection": "knowledge_chunks"}
 
 
 @pytest.mark.asyncio

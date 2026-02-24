@@ -71,7 +71,7 @@ pub struct MemoryGateDecision {
     pub verdict: MemoryGateVerdict,
     /// Confidence score in [0, 1].
     pub confidence: f32,
-    /// ReAct evidence references.
+    /// `ReAct` evidence references.
     pub react_evidence_refs: Vec<String>,
     /// Graph evidence references.
     pub graph_evidence_refs: Vec<String>,
@@ -86,7 +86,7 @@ pub struct MemoryGateDecision {
 /// Utility ledger that powers gate decisions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MemoryUtilityLedger {
-    /// ReAct re-validation score.
+    /// `ReAct` re-validation score.
     pub react_revalidation_score: f32,
     /// Graph structural consistency score.
     pub graph_consistency_score: f32,

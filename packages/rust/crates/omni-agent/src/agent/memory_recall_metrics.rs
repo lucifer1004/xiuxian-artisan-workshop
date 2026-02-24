@@ -30,6 +30,10 @@ pub struct MemoryRecallMetricsSnapshot {
     pub avg_injected_per_injected: f32,
     pub injected_rate: f32,
     pub latency_buckets: MemoryRecallLatencyBucketsSnapshot,
+    pub embedding_success_total: u64,
+    pub embedding_timeout_total: u64,
+    pub embedding_cooldown_reject_total: u64,
+    pub embedding_unavailable_total: u64,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -42,6 +46,10 @@ pub(crate) struct MemoryRecallMetricsState {
     context_chars_injected_total: u64,
     pipeline_duration_ms_total: u64,
     latency_buckets: MemoryRecallLatencyBucketsSnapshot,
+    embedding_success_total: u64,
+    embedding_timeout_total: u64,
+    embedding_cooldown_reject_total: u64,
+    embedding_unavailable_total: u64,
 }
 
 impl MemoryRecallMetricsState {
@@ -59,10 +67,10 @@ impl MemoryRecallMetricsState {
     ) {
         match decision {
             SessionMemoryRecallDecision::Injected => {
-                self.injected_total = self.injected_total.saturating_add(1)
+                self.injected_total = self.injected_total.saturating_add(1);
             }
             SessionMemoryRecallDecision::Skipped => {
-                self.skipped_total = self.skipped_total.saturating_add(1)
+                self.skipped_total = self.skipped_total.saturating_add(1);
             }
         }
 
@@ -97,6 +105,23 @@ impl MemoryRecallMetricsState {
         }
     }
 
+    fn observe_embedding_success(&mut self) {
+        self.embedding_success_total = self.embedding_success_total.saturating_add(1);
+    }
+
+    fn observe_embedding_timeout(&mut self) {
+        self.embedding_timeout_total = self.embedding_timeout_total.saturating_add(1);
+    }
+
+    fn observe_embedding_cooldown_reject(&mut self) {
+        self.embedding_cooldown_reject_total =
+            self.embedding_cooldown_reject_total.saturating_add(1);
+    }
+
+    fn observe_embedding_unavailable(&mut self) {
+        self.embedding_unavailable_total = self.embedding_unavailable_total.saturating_add(1);
+    }
+
     fn snapshot(self) -> MemoryRecallMetricsSnapshot {
         let completed_total = self.injected_total.saturating_add(self.skipped_total);
         MemoryRecallMetricsSnapshot {
@@ -117,10 +142,15 @@ impl MemoryRecallMetricsState {
             avg_injected_per_injected: ratio_as_f32(self.injected_items_total, self.injected_total),
             injected_rate: ratio_as_f32(self.injected_total, completed_total),
             latency_buckets: self.latency_buckets,
+            embedding_success_total: self.embedding_success_total,
+            embedding_timeout_total: self.embedding_timeout_total,
+            embedding_cooldown_reject_total: self.embedding_cooldown_reject_total,
+            embedding_unavailable_total: self.embedding_unavailable_total,
         }
     }
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn ratio_as_f32(numerator: u64, denominator: u64) -> f32 {
     if denominator == 0 {
         0.0
@@ -132,7 +162,8 @@ fn ratio_as_f32(numerator: u64, denominator: u64) -> f32 {
 fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
         .unwrap_or(0)
 }
 
@@ -158,6 +189,26 @@ impl Agent {
             context_chars_injected,
             pipeline_duration_ms,
         );
+    }
+
+    pub(crate) async fn record_memory_embedding_success_metric(&self) {
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_embedding_success();
+    }
+
+    pub(crate) async fn record_memory_embedding_timeout_metric(&self) {
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_embedding_timeout();
+    }
+
+    pub(crate) async fn record_memory_embedding_cooldown_reject_metric(&self) {
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_embedding_cooldown_reject();
+    }
+
+    pub(crate) async fn record_memory_embedding_unavailable_metric(&self) {
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_embedding_unavailable();
     }
 
     pub async fn inspect_memory_recall_metrics(&self) -> MemoryRecallMetricsSnapshot {

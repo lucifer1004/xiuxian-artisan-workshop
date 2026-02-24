@@ -271,6 +271,30 @@ class TestHybridSearchWithMockedStore:
         assert call_kwargs.get("limit") == 3
 
     @pytest.mark.asyncio
+    async def test_search_keyword_only_skips_embedding_and_uses_exact_intent(self):
+        """keyword_only=True should bypass embedding service and force exact (BM25-first) intent."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        search._embed_func = AsyncMock(
+            side_effect=AssertionError("embedding should not be called in keyword_only mode")
+        )
+        mock_store = MagicMock(spec=["agentic_search"])
+        mock_store.agentic_search = AsyncMock(return_value=[])
+        mock_store._dimension = 8
+        search._store = mock_store
+
+        await search.search("find files quickly", limit=4, skip_translation=True, keyword_only=True)
+
+        call_kwargs = mock_store.agentic_search.call_args.kwargs
+        assert call_kwargs.get("intent") == "exact"
+        assert call_kwargs.get("limit") == 4
+        query_vector = call_kwargs.get("query_vector")
+        assert isinstance(query_vector, list)
+        assert len(query_vector) == 8
+        assert all(v == 0.0 for v in query_vector)
+
+    @pytest.mark.asyncio
     async def test_rust_limit_expanded_when_query_has_concrete_url(self):
         """When query contains concrete URL (https://...), agentic_search receives expanded limit so URL tools (crawl4ai) can enter top-N."""
         from omni.core.router.hybrid_search import HybridSearch

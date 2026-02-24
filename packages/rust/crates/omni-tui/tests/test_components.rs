@@ -1,3 +1,5 @@
+//! Component-level tests for foldable panel behavior.
+
 use omni_tui::components::{FoldablePanel, PanelCollection, PanelState};
 
 #[test]

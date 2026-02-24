@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Namespace-scoped schema version for LinkGraph saliency persistence.
+/// Namespace-scoped schema version for `LinkGraph` saliency persistence.
 pub const LINK_GRAPH_SALIENCY_SCHEMA_VERSION: &str = "xiuxian_wendao.link_graph.saliency.v1";
 
 /// Default frontmatter/in-memory saliency base when not explicitly configured.
@@ -10,9 +10,13 @@ pub const DEFAULT_DECAY_RATE: f64 = 0.05;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+/// Runtime policy that clamps and scales saliency updates.
 pub struct LinkGraphSaliencyPolicy {
+    /// Activation boost coefficient.
     pub alpha: f64,
+    /// Lower clamp bound for saliency.
     pub minimum: f64,
+    /// Upper clamp bound for saliency.
     pub maximum: f64,
 }
 
@@ -27,6 +31,7 @@ impl Default for LinkGraphSaliencyPolicy {
 }
 
 impl LinkGraphSaliencyPolicy {
+    /// Normalize policy values into a stable numeric range.
     #[must_use]
     pub fn normalized(self) -> Self {
         let alpha = if self.alpha.is_finite() {
@@ -59,35 +64,52 @@ impl LinkGraphSaliencyPolicy {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+/// Persisted saliency snapshot for a single `LinkGraph` node.
 pub struct LinkGraphSaliencyState {
+    /// Persistence schema version.
     pub schema: String,
+    /// Canonical graph node id.
     pub node_id: String,
+    /// Baseline saliency used for next settlement.
     pub saliency_base: f64,
+    /// Exponential decay rate.
     pub decay_rate: f64,
     /// Historical touch count (observability only). The online score update uses
     /// per-touch delta and settles new saliency as the next baseline.
     pub activation_count: u64,
+    /// Last access timestamp (unix seconds).
     pub last_accessed_unix: i64,
+    /// Current settled saliency value.
     pub current_saliency: f64,
+    /// Last update timestamp (unix seconds as float).
     pub updated_at_unix: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+/// Request payload used to apply one saliency touch/update operation.
 pub struct LinkGraphSaliencyTouchRequest {
+    /// Target graph node id.
     pub node_id: String,
+    /// Activation delta applied by this touch.
     #[serde(default)]
     pub activation_delta: u64,
+    /// Optional baseline override.
     #[serde(default)]
     pub saliency_base: Option<f64>,
+    /// Optional decay-rate override.
     #[serde(default)]
     pub decay_rate: Option<f64>,
+    /// Optional policy alpha override.
     #[serde(default)]
     pub alpha: Option<f64>,
+    /// Optional policy minimum override.
     #[serde(default)]
     pub minimum_saliency: Option<f64>,
+    /// Optional policy maximum override.
     #[serde(default)]
     pub maximum_saliency: Option<f64>,
+    /// Optional timestamp override for deterministic tests.
     #[serde(default)]
     pub now_unix: Option<i64>,
 }

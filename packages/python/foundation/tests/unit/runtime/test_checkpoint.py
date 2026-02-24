@@ -318,6 +318,17 @@ class TestImportPathValidation:
             "checkpoint.py should NOT import from 'bindings.python', use 'omni_core_rs' instead"
         )
 
+    def test_legacy_schema_compat_layer_removed(self):
+        """Checkpoint module must not mirror schemas to legacy shared path."""
+        import inspect
+
+        import omni.foundation.checkpoint as checkpoint_module
+
+        source = inspect.getsource(checkpoint_module)
+
+        assert "_ensure_rust_checkpoint_schema_compat" not in source
+        assert "packages/shared/schemas" not in source
+
     def test_foundation_checkpoint_integration(self):
         """Integration test: verify checkpoint module integrates with foundation."""
         from omni.foundation.checkpoint import (

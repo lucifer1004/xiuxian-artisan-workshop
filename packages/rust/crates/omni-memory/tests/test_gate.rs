@@ -48,6 +48,20 @@ fn gate_policy_promote_decision_is_deterministic() {
     assert_eq!(decision_a.verdict, MemoryGateVerdict::Promote);
     assert_eq!(decision_a.next_action, "promote");
     assert!(decision_a.confidence >= 0.55);
+    assert_eq!(
+        decision_a.react_evidence_refs,
+        vec!["react:validation:pass".to_string()]
+    );
+    assert_eq!(
+        decision_a.graph_evidence_refs,
+        vec!["graph:path:plan->execute->verify".to_string()]
+    );
+    assert!(
+        decision_a
+            .omega_factors
+            .iter()
+            .any(|factor| factor.starts_with("utility_score="))
+    );
 }
 
 #[test]
@@ -97,4 +111,26 @@ fn gate_event_matches_contract_shape() {
             | MemoryLifecycleState::Promoted
     ));
     assert!(value["decision"]["next_action"].is_string());
+    assert_eq!(
+        value["decision"]["react_evidence_refs"]
+            .as_array()
+            .expect("react evidence refs should be an array")
+            .len(),
+        1
+    );
+    assert_eq!(
+        value["decision"]["graph_evidence_refs"]
+            .as_array()
+            .expect("graph evidence refs should be an array")
+            .len(),
+        1
+    );
+    assert!(
+        value["decision"]["omega_factors"]
+            .as_array()
+            .expect("omega factors should be an array")
+            .len()
+            >= 4,
+        "omega factors should include baseline utility metadata"
+    );
 }

@@ -190,11 +190,10 @@ class TestIntegrationParameterOrder:
         # We'll test by calling search_tools directly and verifying
         # the result structure includes expected fields
 
-        # Generate embedding
+        # Use a deterministic vector; this test validates parameter ordering,
+        # not embedding backend connectivity.
         test_query = "unique_test_query_xyz"
-        query_vec = store._embedding_service.embed(test_query)
-        if isinstance(query_vec[0], list):
-            query_vec = query_vec[0]
+        query_vec = [0.1] * int(store._dimension)
 
         # Call search_tools directly with keyword
         results = await store.search_tools(
@@ -230,11 +229,9 @@ class TestIntegrationParameterOrder:
             enable_keyword_index=True,
         )
 
-        # Generate query vector
+        # Use a deterministic vector; this test validates Rust call order only.
         test_query = "git commit"
-        query_vec = store._embedding_service.embed(test_query)
-        if isinstance(query_vec[0], list):
-            query_vec = query_vec[0]
+        query_vec = [0.1] * int(store._dimension)
 
         # Direct Rust call with preferred new signature, then fallback for old binary.
         try:

@@ -136,7 +136,25 @@ def _routing_fallback_for_non_english(query: str) -> str | None:
     url_match = re.search(r"https?://[^\s]+", query)
     if url_match:
         return "research " + url_match.group(0).strip()
+    # Fallback for common CJK intent phrases so keyword-only routing can still
+    # recover meaningful candidates when translation LLM is unavailable.
+    intent_tokens: list[str] = []
+    if re.search(r"(研究|分析|仓库|代码库|repo|repository)", query, re.IGNORECASE):
+        intent_tokens.extend(["research", "repository"])
+    if re.search(r"(爬取|抓取|网站|网页|链接|url|link|crawl)", query, re.IGNORECASE):
+        intent_tokens.extend(["crawl", "url", "web"])
+    if re.search(r"(提取|抽取|数据|内容|extract)", query, re.IGNORECASE):
+        intent_tokens.extend(["extract", "data"])
+    if intent_tokens:
+        # Stable de-dup preserving order.
+        deduped = list(dict.fromkeys(intent_tokens))
+        return " ".join(deduped)
     return None
+
+
+def routing_fallback_for_non_english(query: str) -> str | None:
+    """Public wrapper for non-English routing fallback phrase generation."""
+    return _routing_fallback_for_non_english(query)
 
 
 _ENRICH_KEYWORDS_SYSTEM = """You are a search-indexing assistant. Given a tool's short description and its existing routing keywords, suggest additional English keywords or short phrases that users might type when looking for this tool.

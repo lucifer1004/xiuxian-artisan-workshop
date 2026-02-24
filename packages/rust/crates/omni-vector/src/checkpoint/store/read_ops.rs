@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Array, CHECKPOINT_TIMESTAMP_COLUMN, CONTENT_COLUMN, CheckpointStore, ID_COLUMN, Result,
+    THREAD_ID_COLUMN, TryStreamExt, VectorStoreError,
+};
 
 impl CheckpointStore {
     /// Get the latest checkpoint for a thread.

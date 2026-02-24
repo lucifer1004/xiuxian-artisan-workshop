@@ -21,13 +21,16 @@ def test_username_from_settings_prefers_user_override(tmp_path: Path, monkeypatc
 
     system_settings = tmp_path / "packages" / "conf" / "settings.yaml"
     system_settings.parent.mkdir(parents=True)
-    system_settings.write_text('telegram:\n  allowed_users: "system_user"\n', encoding="utf-8")
+    system_settings.write_text(
+        'telegram:\n  acl:\n    allow:\n      users: ["system_user"]\n',
+        encoding="utf-8",
+    )
 
     user_conf_home = tmp_path / "custom_conf"
     user_settings = user_conf_home / "omni-dev-fusion" / "settings.yaml"
     user_settings.parent.mkdir(parents=True)
     user_settings.write_text(
-        'telegram:\n  allowed_users: "override_user,backup_user"\n',
+        'telegram:\n  acl:\n    allow:\n      users: ["override_user", "backup_user"]\n',
         encoding="utf-8",
     )
 
@@ -40,7 +43,10 @@ def test_username_from_settings_uses_system_when_user_missing(tmp_path: Path, mo
 
     system_settings = tmp_path / "packages" / "conf" / "settings.yaml"
     system_settings.parent.mkdir(parents=True)
-    system_settings.write_text('telegram:\n  allowed_users: "system_user"\n', encoding="utf-8")
+    system_settings.write_text(
+        'telegram:\n  acl:\n    allow:\n      users: ["system_user"]\n',
+        encoding="utf-8",
+    )
 
     monkeypatch.delenv("PRJ_CONFIG_HOME", raising=False)
     assert resolver.username_from_settings(tmp_path) == "system_user"
@@ -51,7 +57,7 @@ def test_username_from_runtime_log_strips_ansi(tmp_path: Path) -> None:
 
     log_file = tmp_path / "runtime.log"
     log_file.write_text(
-        "\x1b[2m2026-02-18T00:00:00Z\x1b[0m INFO --allowed-users tao3k,backup\n",
+        "\x1b[2m2026-02-18T00:00:00Z\x1b[0m INFO event=test username=tao3k\n",
         encoding="utf-8",
     )
 
@@ -142,6 +148,34 @@ def test_telegram_webhook_secret_token_falls_back_to_settings(monkeypatch, tmp_p
     assert resolver.telegram_webhook_secret_token(tmp_path) == "settings-secret"
 
 
+def test_telegram_webhook_port_prefers_env(monkeypatch, tmp_path: Path) -> None:
+    resolver = _load_resolver_module()
+
+    monkeypatch.setenv("WEBHOOK_PORT", "19091")
+    assert resolver.telegram_webhook_port(tmp_path) == 19091
+
+
+def test_telegram_webhook_port_falls_back_to_settings_bind(monkeypatch, tmp_path: Path) -> None:
+    resolver = _load_resolver_module()
+
+    monkeypatch.delenv("WEBHOOK_PORT", raising=False)
+    monkeypatch.delenv("WEBHOOK_BIND", raising=False)
+    system_settings = tmp_path / "packages" / "conf" / "settings.yaml"
+    system_settings.parent.mkdir(parents=True)
+    system_settings.write_text('telegram:\n  webhook_bind: "127.0.0.1:18081"\n', encoding="utf-8")
+
+    assert resolver.telegram_webhook_port(tmp_path) == 18081
+
+
+def test_default_telegram_webhook_url_uses_resolved_port(monkeypatch, tmp_path: Path) -> None:
+    resolver = _load_resolver_module()
+
+    monkeypatch.setenv("WEBHOOK_PORT", "19081")
+    assert (
+        resolver.default_telegram_webhook_url(tmp_path) == "http://127.0.0.1:19081/telegram/webhook"
+    )
+
+
 def test_normalize_telegram_session_partition_mode_aliases() -> None:
     resolver = _load_resolver_module()
 
@@ -173,3 +207,30 @@ def test_session_partition_mode_from_runtime_log_reads_json_partition_mode(tmp_p
     )
 
     assert resolver.session_partition_mode_from_runtime_log(log_file) == "chat_thread_user"
+
+
+def test_session_partition_mode_from_runtime_log_reads_tail_only(tmp_path: Path) -> None:
+    resolver = _load_resolver_module()
+
+    log_file = tmp_path / "runtime.log"
+    with log_file.open("wb") as handle:
+        handle.write(b"A" * 300_000)
+        handle.write(b"\n")
+        handle.write(b'INFO telegram command reply json summary json_partition_mode="chat_user"\n')
+
+    assert resolver.session_partition_mode_from_runtime_log(log_file) == "chat_user"
+
+
+def test_session_ids_from_runtime_log_reads_latest_key_from_tail(tmp_path: Path) -> None:
+    resolver = _load_resolver_module()
+
+    log_file = tmp_path / "runtime.log"
+    with log_file.open("wb") as handle:
+        handle.write(b"INFO Parsed message, forwarding to agent session_key=-100111222:999999999\n")
+        handle.write(b"B" * 300_000)
+        handle.write(b"\n")
+        handle.write(
+            b"INFO Parsed message, forwarding to agent session_key=-100200300:777:1304799691\n"
+        )
+
+    assert resolver.session_ids_from_runtime_log(log_file) == (-100200300, 1304799691, 777)

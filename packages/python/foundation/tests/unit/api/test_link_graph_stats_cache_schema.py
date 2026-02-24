@@ -41,16 +41,19 @@ def test_validate_rejects_invalid_schema_version() -> None:
 def test_validate_rejects_negative_stats() -> None:
     payload = _payload()
     payload["stats"]["total_notes"] = -1
-    with pytest.raises(ValueError, match="stats.total_notes"):
+    with pytest.raises(ValueError, match=r"stats\.total_notes"):
         validate(payload)
 
 
-def test_get_validator_raises_when_schema_missing(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+def test_get_validator_raises_when_rust_schema_backend_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stats_schema.get_validator.cache_clear()
-    missing_path = tmp_path / "missing.schema.json"
-    monkeypatch.setattr(stats_schema, "get_schema_path", lambda: missing_path)
-    with pytest.raises(FileNotFoundError, match="LinkGraph stats cache schema not found"):
+    monkeypatch.setattr(
+        stats_schema,
+        "get_schema",
+        lambda _name: (_ for _ in ()).throw(ImportError("Rust schema backend unavailable")),
+    )
+    with pytest.raises(ImportError, match="Rust schema backend unavailable"):
         stats_schema.get_validator()
     stats_schema.get_validator.cache_clear()

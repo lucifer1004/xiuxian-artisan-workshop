@@ -5,12 +5,14 @@ Rust-powered vector store using LanceDB bindings.
 Provides high-performance semantic search capabilities.
 """
 
-from __future__ import annotations
-
-import atexit
+import ast
 import asyncio
+import atexit
+import io
 import json
 import re
+import textwrap
+import tokenize
 from concurrent.futures import ThreadPoolExecutor
 from functools import cached_property
 from typing import Any
@@ -49,6 +51,8 @@ _DEFAULT_INDEX_CACHE_BYTES = 256 * 1024 * 1024  # 256 MiB
 _DEFAULT_MAX_CACHED_TABLES = 8
 _SKILL_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 _CANONICAL_TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$")
+_DECORATOR_TAIL_PATTERN = re.compile(r"\n\s*[A-Za-z_][A-Za-z0-9_]*\s*=")
+_DECORATOR_QUOTE_TAIL_LINE_PATTERN = re.compile(r'(?m)^\s*["\']\s*,\s*$')
 
 
 def _list_of_dicts_to_table(rows: list[dict[str, Any]]) -> Any:
@@ -71,6 +75,45 @@ def _list_of_dicts_to_table(rows: list[dict[str, Any]]) -> Any:
             else:
                 columns[k].append(v)
     return pa.table({k: pa.array(columns[k]) for k in columns})
+
+
+def _sanitize_description(raw: Any) -> str:
+    """Normalize noisy scanner descriptions to human-readable plain text."""
+    text = str(raw or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return ""
+
+    for quote in ('"""', "'''"):
+        if not text.startswith(quote):
+            continue
+        payload = text[len(quote) :]
+        closing = payload.find(quote)
+        if closing >= 0:
+            payload = payload[:closing]
+        else:
+            quote_tail = _DECORATOR_QUOTE_TAIL_LINE_PATTERN.search(payload)
+            if quote_tail is not None:
+                payload = payload[: quote_tail.start()]
+            else:
+                marker = _DECORATOR_TAIL_PATTERN.search(payload)
+                if marker is not None:
+                    payload = payload[: marker.start()]
+        text = payload.strip()
+        break
+
+    if text and text[0] in {"'", '"'}:
+        try:
+            for token in tokenize.generate_tokens(io.StringIO(text).readline):
+                if token.type == tokenize.STRING:
+                    literal = ast.literal_eval(token.string)
+                    if isinstance(literal, str):
+                        text = literal
+                    break
+        except (SyntaxError, tokenize.TokenError, ValueError):
+            pass
+
+    text = textwrap.dedent(text).strip()
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _confidence_profile_json() -> str:
@@ -252,6 +295,7 @@ class RustVectorStore:
                     import io
 
                     import pyarrow as pa
+
                     from omni.foundation.services.vector_schema import (
                         ToolSearchPayload,
                     )
@@ -792,13 +836,14 @@ class RustVectorStore:
         """Thin flatten: promote metadata to top-level. No inference - Rust is source of truth."""
         meta = entry.get("metadata")
         if not isinstance(meta, dict):
-            return entry
+            return dict(entry)
         out = {k: v for k, v in entry.items() if k != "metadata"}
         for key in ("skill_name", "tool_name", "file_path", "category", "description"):
             if key not in out or (not out.get(key) and meta.get(key)):
                 out[key] = meta.get(key, out.get(key))
         if not out.get("description") and out.get("content"):
             out["description"] = out["content"]
+        out["description"] = _sanitize_description(out.get("description"))
         return out
 
     @staticmethod
@@ -848,6 +893,7 @@ class RustVectorStore:
         flat["tool_name"] = canonical
         if not flat.get("description") and flat.get("content"):
             flat["description"] = flat["content"]
+        flat["description"] = _sanitize_description(flat.get("description"))
         return flat
 
     def list_all_tools(self) -> list[dict]:
@@ -931,7 +977,10 @@ class RustVectorStore:
         return self.get_skill_index_sync(base_path)
 
     async def list_all(
-        self, table_name: str = "knowledge", source_filter: str | None = None
+        self,
+        table_name: str = "knowledge",
+        source_filter: str | None = None,
+        row_limit: int | None = None,
     ) -> list[dict]:
         """List all entries from a table.
 
@@ -939,18 +988,23 @@ class RustVectorStore:
             table_name: Name of the table to list (default: "knowledge")
             source_filter: When set (e.g. "2601.03192.pdf"), only rows with metadata.source
                 containing this string are returned (Rust predicate pushdown, ~98% I/O reduction).
+            row_limit: Optional cap on returned rows from Rust scanner.
 
         Returns:
             List of entry dictionaries with id, content, metadata.
         """
         try:
-            json_result = self._inner.list_all_tools(table_name, source_filter)
+            json_result = self._inner.list_all_tools(table_name, source_filter, row_limit)
             entries = json.loads(json_result) if json_result else []
             logger.debug(f"Listed {len(entries)} entries from {table_name}")
             return entries
         except Exception as e:
             logger.debug(f"Failed to list entries from {table_name}: {e}")
             return []
+
+    def supports_multi_source_filter(self) -> bool:
+        """Return True when list_all source_filter supports `a||b` union syntax."""
+        return True
 
     def list_all_tools_arrow(self) -> Any:
         """List all tools from LanceDB as a pyarrow.Table.
@@ -1143,7 +1197,6 @@ def get_vector_store(
         enable_keyword_index: Enable keyword index for hybrid search (default: True)
     """
     from omni.foundation.config.dirs import get_vector_db_path
-    from omni.foundation.config.settings import get_setting
 
     if index_path is None:
         index_path = str(get_vector_db_path())
@@ -1200,8 +1253,8 @@ def evict_vector_store_cache(index_path: str | None = None) -> int:
 
 __all__ = [
     "RUST_AVAILABLE",
-    "RustVectorStore",
-    "get_vector_store",
-    "evict_vector_store_cache",
     "_DEFAULT_MAX_CACHED_TABLES",  # Re-export for PyVectorStore users
+    "RustVectorStore",
+    "evict_vector_store_cache",
+    "get_vector_store",
 ]

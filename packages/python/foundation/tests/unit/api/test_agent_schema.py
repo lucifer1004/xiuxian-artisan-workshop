@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import pytest
 
+from omni.foundation.api.schema_provider import get_schema
 from omni.foundation.api.agent_schema import (
     MESSAGE_KEY,
     NAME_KEY,
     PROTOCOL_VERSION_KEY,
+    SCHEMA_ID,
     VERSION_KEY,
     build_server_info,
     validate,
@@ -31,9 +33,9 @@ def test_build_server_info_with_message():
 
 def test_build_server_info_validates_when_schema_exists():
     """build_server_info output validates against shared schema when present."""
-    from omni.foundation.api.agent_schema import get_schema_path
-
-    if not get_schema_path().exists():
+    try:
+        get_schema(SCHEMA_ID)
+    except (ImportError, ValueError):
         pytest.skip("Shared schema not found")
     out = build_server_info()
     validate(out)
@@ -41,9 +43,9 @@ def test_build_server_info_validates_when_schema_exists():
 
 def test_validate_rejects_extra_keys():
     """validate raises when payload has additionalProperties (schema has additionalProperties: false)."""
-    from omni.foundation.api.agent_schema import get_schema_path
-
-    if not get_schema_path().exists():
+    try:
+        get_schema(SCHEMA_ID)
+    except (ImportError, ValueError):
         pytest.skip("Shared schema not found")
     payload = {
         NAME_KEY: "omni-agent",

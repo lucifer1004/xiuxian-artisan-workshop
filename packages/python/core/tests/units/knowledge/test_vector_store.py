@@ -54,8 +54,8 @@ class TestEmbeddingService:
             service._initialized = True
             service._model_loaded = True
 
-            # Patch _embed_local to return known output
-            with patch.object(service, "_embed_local", return_value=[[0.1] * dimension]):
+            # Patch fallback embedding to return known output
+            with patch.object(service, "_embed_fallback", return_value=[[0.1] * dimension]):
                 result = service.embed("test text")
                 assert isinstance(result, list)
                 assert len(result) == 1
@@ -82,7 +82,7 @@ class TestEmbeddingService:
             # Return 3 vectors for 3 texts
             with patch.object(
                 service,
-                "_embed_local",
+                "_embed_fallback",
                 return_value=[[0.1] * dimension, [0.2] * dimension, [0.3] * dimension],
             ):
                 texts = ["text1", "text2", "text3"]

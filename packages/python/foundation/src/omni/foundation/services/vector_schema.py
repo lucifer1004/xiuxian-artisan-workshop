@@ -4,10 +4,45 @@ from __future__ import annotations
 
 from functools import lru_cache
 import json
-from pathlib import Path
 from typing import Any, Literal
 
 from jsonschema import Draft202012Validator
+from ..api.schema_provider import get_schema
+
+HYBRID_SCHEMA_V1 = "omni.vector.hybrid.v1"
+VECTOR_SCHEMA_V1 = "omni.vector.search.v1"
+TOOL_SEARCH_SCHEMA_V1 = "omni.vector.tool_search.v1"
+
+
+def _tool_search_common_validator() -> Draft202012Validator:
+    return Draft202012Validator(get_schema(TOOL_SEARCH_SCHEMA_V1))
+
+
+def _validate_tool_search_common_schema(raw: dict[str, Any]) -> None:
+    validator = _tool_search_common_validator()
+    errors = sorted(validator.iter_errors(raw), key=lambda e: list(e.path))
+    if not errors:
+        return
+    first = errors[0]
+    location = ".".join(str(part) for part in first.path) or "<root>"
+    raise ValueError(f"Common schema validation failed at {location}: {first.message}")
+
+
+@lru_cache(maxsize=8)
+def _common_schema_validator(schema_id: str) -> Draft202012Validator:
+    return Draft202012Validator(get_schema(schema_id))
+
+
+def _validate_common_schema(schema_id: str, raw: dict[str, Any]) -> None:
+    validator = _common_schema_validator(schema_id)
+    errors = sorted(validator.iter_errors(raw), key=lambda e: list(e.path))
+    if not errors:
+        return
+    first = errors[0]
+    location = ".".join(str(part) for part in first.path) or "<root>"
+    raise ValueError(f"Common schema validation failed at {location}: {first.message}")
+
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -15,13 +50,6 @@ from pydantic import (
     ValidationError,
     field_validator,
 )
-
-HYBRID_SCHEMA_V1 = "omni.vector.hybrid.v1"
-VECTOR_SCHEMA_V1 = "omni.vector.search.v1"
-TOOL_SEARCH_SCHEMA_V1 = "omni.vector.tool_search.v1"
-_TOOL_SEARCH_COMMON_SCHEMA = "omni.vector.tool_search.v1.schema.json"
-_VECTOR_COMMON_SCHEMA = "omni.vector.search.v1.schema.json"
-_HYBRID_COMMON_SCHEMA = "omni.vector.hybrid.v1.schema.json"
 
 
 class HybridPayload(BaseModel):
@@ -775,7 +803,7 @@ def parse_hybrid_payload(raw: str) -> HybridPayload:
         if schema_value is not None and schema_value != HYBRID_SCHEMA_V1:
             raise ValueError(f"Unsupported hybrid schema: {schema_value}")
         payload = HybridPayload.model_validate(data)
-        _validate_common_schema(_HYBRID_COMMON_SCHEMA, data)
+        _validate_common_schema(HYBRID_SCHEMA_V1, data)
         return payload
     except ValidationError:
         raise
@@ -795,7 +823,7 @@ def parse_vector_payload(raw: str) -> VectorPayload:
         if schema_value is not None and schema_value != VECTOR_SCHEMA_V1:
             raise ValueError(f"Unsupported vector schema: {schema_value}")
         payload = VectorPayload.model_validate(data)
-        _validate_common_schema(_VECTOR_COMMON_SCHEMA, data)
+        _validate_common_schema(VECTOR_SCHEMA_V1, data)
         return payload
     except ValidationError:
         raise
@@ -816,88 +844,17 @@ def parse_tool_search_payload(raw: dict[str, Any]) -> ToolSearchPayload:
             if field.alias is not None:
                 canonical_keys.add(field.alias)
         canonical = {k: raw[k] for k in canonical_keys if k in raw}
+        for required_key in ("final_score", "confidence"):
+            if required_key not in canonical:
+                raise ValueError(
+                    f"Common schema validation failed: required property '{required_key}'"
+                )
         _validate_tool_search_common_schema(canonical)
         return ToolSearchPayload.from_mapping(canonical)
     except ValidationError:
         raise
     except ValueError:
         raise
-
-
-def _tool_search_common_schema_path() -> Path:
-    return _common_schema_path(_TOOL_SEARCH_COMMON_SCHEMA)
-
-
-@lru_cache(maxsize=1)
-def _tool_search_common_validator() -> Draft202012Validator:
-    return _common_schema_validator(_TOOL_SEARCH_COMMON_SCHEMA)
-
-
-def _validate_tool_search_common_schema(raw: dict[str, Any]) -> None:
-    validator = _tool_search_common_validator()
-    errors = sorted(validator.iter_errors(raw), key=lambda e: list(e.path))
-    if not errors:
-        return
-    first = errors[0]
-    location = ".".join(str(part) for part in first.path) or "<root>"
-    raise ValueError(f"Common schema validation failed at {location}: {first.message}")
-
-
-def get_shared_schemas_dir() -> Path:
-    """Return packages/shared/schemas directory (uses same resolution as _common_schema_path)."""
-    return _common_schema_path(_TOOL_SEARCH_COMMON_SCHEMA).parent
-
-
-def _common_schema_path(schema_name: str) -> Path:
-    """Resolve path to a shared schema file. Uses project root, with fallback from __file__."""
-    # Prefer project root from config (respects PRJ_ROOT / git toplevel)
-    try:
-        from omni.foundation.config.paths import get_config_paths
-
-        project_root = get_config_paths().project_root
-        candidate = project_root / "packages" / "shared" / "schemas" / schema_name
-        if candidate.exists():
-            return candidate
-    except Exception:
-        pass
-    # Fallback: walk up from this file to find packages/shared/schemas (e.g. when cwd is pytest tmpdir)
-    anchor = Path(__file__).resolve()
-    fallback_path: Path | None = None
-    for parent in anchor.parents:
-        schema_dir = parent / "packages" / "shared" / "schemas"
-        if schema_dir.is_dir():
-            candidate = schema_dir / schema_name
-            fallback_path = candidate
-            if candidate.exists():
-                return candidate
-            break
-    # Return path for consistent error message; validator will raise if not exists
-    if fallback_path is not None:
-        return fallback_path
-    try:
-        from omni.foundation.config.paths import get_config_paths
-
-        return get_config_paths().project_root / "packages" / "shared" / "schemas" / schema_name
-    except Exception:
-        return anchor.parent / "packages" / "shared" / "schemas" / schema_name
-
-
-@lru_cache(maxsize=8)
-def _common_schema_validator(schema_name: str) -> Draft202012Validator:
-    schema_path = _common_schema_path(schema_name)
-    if not schema_path.exists():
-        raise ValueError(f"Common schema not found: {schema_path}")
-    return Draft202012Validator(json.loads(schema_path.read_text(encoding="utf-8")))
-
-
-def _validate_common_schema(schema_name: str, raw: dict[str, Any]) -> None:
-    validator = _common_schema_validator(schema_name)
-    errors = sorted(validator.iter_errors(raw), key=lambda e: list(e.path))
-    if not errors:
-        return
-    first = errors[0]
-    location = ".".join(str(part) for part in first.path) or "<root>"
-    raise ValueError(f"Common schema validation failed at {location}: {first.message}")
 
 
 def parse_tool_router_result(raw: dict[str, Any]) -> ToolRouterResult:
@@ -939,7 +896,6 @@ __all__ = [
     "VECTOR_SCHEMA_V1",
     "HybridPayload",
     "SearchOptionsContract",
-    "get_shared_schemas_dir",
     "ToolRouterMetadata",
     "ToolRouterPayload",
     "ToolRouterResult",

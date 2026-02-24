@@ -11,7 +11,7 @@ This script combines:
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import os
 import shutil
 import subprocess
@@ -20,33 +20,30 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-try:
-    from test_config_resolver import (
-        normalize_telegram_session_partition_mode,
-        session_partition_mode_from_runtime_log,
-        telegram_session_partition_mode,
-    )
-except ModuleNotFoundError as import_err:
-    _resolver_path = Path(__file__).resolve().with_name("test_config_resolver.py")
-    _resolver_spec = importlib.util.spec_from_file_location("test_config_resolver", _resolver_path)
-    if _resolver_spec is None or _resolver_spec.loader is None:
-        raise RuntimeError(f"failed to load resolver module from {_resolver_path}") from import_err
-    _resolver_module = importlib.util.module_from_spec(_resolver_spec)
-    sys.modules.setdefault(_resolver_spec.name, _resolver_module)
-    _resolver_spec.loader.exec_module(_resolver_module)
-    normalize_telegram_session_partition_mode = (
-        _resolver_module.normalize_telegram_session_partition_mode
-    )
-    session_partition_mode_from_runtime_log = (
-        _resolver_module.session_partition_mode_from_runtime_log
-    )
-    telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+load_sibling_module = importlib.import_module("module_loader").load_sibling_module
+
+_resolver_module = load_sibling_module(
+    module_name="config_resolver",
+    file_name="config_resolver.py",
+    caller_file=__file__,
+    error_context="resolver module",
+)
+normalize_telegram_session_partition_mode = (
+    _resolver_module.normalize_telegram_session_partition_mode
+)
+session_partition_mode_from_runtime_log = _resolver_module.session_partition_mode_from_runtime_log
+telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
 
 DEFAULT_MAX_WAIT = int(os.environ.get("OMNI_BLACKBOX_MAX_WAIT_SECS", "25"))
 DEFAULT_MAX_IDLE_SECS = int(os.environ.get("OMNI_BLACKBOX_MAX_IDLE_SECS", "25"))
 DEFAULT_VALKEY_URL = os.environ.get("VALKEY_URL", "redis://127.0.0.1:6379/0")
 FORBIDDEN_LOG_PATTERN = "tools/call: Mcp error"
 DEFAULT_EVOLUTION_SCENARIO_ID = "memory_self_correction_high_complexity_dag"
+TARGET_SESSION_SCOPE_PLACEHOLDER = "__target_session_scope__"
 
 
 def default_valkey_prefix(tag: str) -> str:
@@ -208,7 +205,12 @@ def blackbox_cases(require_live_turn: bool) -> tuple[BlackboxCase, ...]:
         BlackboxCase(
             prompt="/session memory json",
             expected_event="telegram.command.session_memory_json.replied",
-            extra_args=("--expect-reply-json-field", "json_kind=session_memory"),
+            extra_args=(
+                "--expect-reply-json-field",
+                "json_kind=session_memory",
+                "--expect-reply-json-field",
+                f"json_session_scope={TARGET_SESSION_SCOPE_PLACEHOLDER}",
+            ),
         ),
         BlackboxCase(
             prompt="/session feedback up json",
@@ -347,7 +349,7 @@ def run_rust_memory_regressions() -> None:
             "omni-agent",
             "--test",
             "agent_memory_persistence_backend",
-            "memory_turn_store_succeeds_when_embedding_endpoint_is_unavailable",
+            "memory_turn_store_skips_episode_when_embedding_endpoint_is_unavailable",
             "-q",
         ],
         title="Regression: embedding endpoint down fallback (3302 unavailable)",

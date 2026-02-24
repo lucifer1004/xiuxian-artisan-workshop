@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import re
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -29,8 +28,12 @@ def _strip_ansi(text: str) -> str:
 
 def _load_route_test_schema() -> dict:
     """Load omni.router.route_test.v1 schema for contract validation."""
-    repo_root = Path(__file__).resolve().parents[6]
-    path = repo_root / "packages" / "shared" / "schemas" / "omni.router.route_test.v1.schema.json"
+    from omni.foundation.api.schema_locator import resolve_schema_file_path
+
+    path = resolve_schema_file_path(
+        "omni.router.route_test.v1.schema.json",
+        preferred_crates=("omni-agent",),
+    )
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -70,14 +73,14 @@ class TestRouteSchemaCommand:
         assert '"active_profile"' in result.output
 
     def test_route_schema_respects_active_conf_directory(self, tmp_path):
-        """Default schema output uses SSOT path (packages/shared/schemas) when using default config."""
+        """Default schema output uses resolved SSOT path when using default config."""
         conf_dir = tmp_path / "custom_conf"
         conf_dir.mkdir(parents=True, exist_ok=True)
 
         # CliRunner invokes Typer app directly (not entry_point pre-parser),
         # so we bootstrap config directory explicitly for this test.
         from omni.agent.cli.app import _bootstrap_configuration
-        from omni.foundation.runtime.gitops import get_project_root
+        from omni.foundation.api.schema_locator import resolve_schema_file_path
 
         original_conf_home = os.environ.get("PRJ_CONFIG_HOME")
         try:
@@ -87,10 +90,9 @@ class TestRouteSchemaCommand:
             result = runner.invoke(app, ["route", "schema", "--json"])
 
             assert result.exit_code == 0
-            # Default schema_file points to packages/shared (SSOT)
-            expected = (
-                get_project_root()
-                / "packages/shared/schemas/omni.router.search_config.v1.schema.json"
+            expected = resolve_schema_file_path(
+                "omni.router.search_config.v1.schema.json",
+                preferred_crates=("omni-agent",),
             )
             assert expected.exists()
             assert str(expected) in result.output

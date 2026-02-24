@@ -16,6 +16,7 @@ pub(super) struct TelegramApiError {
 }
 
 impl TelegramApiError {
+    #[allow(clippy::needless_pass_by_value)]
     pub(super) fn from_reqwest(err: reqwest::Error) -> Self {
         let body = if err.is_timeout() {
             format!("timed out: {err}")
@@ -71,7 +72,7 @@ impl TelegramApiError {
                 retry_after_secs.min(TELEGRAM_POLL_MAX_RATE_LIMIT_RETRY_SECS),
             );
         }
-        let shift = attempt.min(10) as u32;
+        let shift = u32::try_from(attempt.min(10)).unwrap_or(10);
         let backoff_ms = TELEGRAM_SEND_RETRY_BASE_MS
             .saturating_mul(1_u64 << shift)
             .min(TELEGRAM_SEND_RETRY_MAX_MS);

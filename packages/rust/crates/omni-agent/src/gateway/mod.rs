@@ -7,4 +7,5 @@ pub use http::{
     GatewayHealthResponse, GatewayMcpHealthResponse, GatewayState, MessageRequest, MessageResponse,
     router, run_http, validate_message_request,
 };
+pub(crate) use http::{embedding_routes, new_embedding_runtime};
 pub use stdio::{DEFAULT_STDIO_SESSION_ID, run_stdio};

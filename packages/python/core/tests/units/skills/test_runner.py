@@ -268,3 +268,105 @@ async def test_run_skill_with_monitor_returns_handle_when_auto_report_disabled()
     assert monitor_state["output_json"] is True
     assert monitor_state["auto_report"] is False
     mock_run.assert_awaited_once_with(*_RUN_ARGS)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_with_monitor_uses_fast_path_without_kernel():
+    """Tool-id interface should execute targeted fast-path when no kernel is provided."""
+    from omni.core.skills.runner import run_tool_with_monitor
+
+    with (
+        patch(
+            "omni.core.skills.runner._monitor_enabled",
+            return_value=False,
+        ),
+        patch(
+            "omni.core.skills.runner._run_fast_path",
+            new_callable=AsyncMock,
+            return_value=_OK_RESULT,
+        ) as mock_fast,
+        patch(
+            "omni.core.skills.runner.run_skill_with_monitor",
+            new_callable=AsyncMock,
+        ) as mock_run,
+    ):
+        out, monitor = await run_tool_with_monitor(
+            "demo.echo",
+            {"message": "hi"},
+            output_json=True,
+            auto_report=False,
+        )
+
+    assert out == _OK_RESULT
+    assert monitor is None
+    mock_fast.assert_awaited_once_with(
+        "demo",
+        "echo",
+        {"message": "hi"},
+    )
+    mock_run.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_tool_with_monitor_no_fallback_when_fast_path_unavailable():
+    """Unified tool interface should fail directly when fast-path is unavailable."""
+    from omni.core.skills.runner import FastPathUnavailable, run_tool_with_monitor
+
+    with (
+        patch(
+            "omni.core.skills.runner._monitor_enabled",
+            return_value=False,
+        ),
+        patch(
+            "omni.core.skills.runner._run_fast_path",
+            new_callable=AsyncMock,
+            side_effect=FastPathUnavailable("command not found"),
+        ),
+        patch(
+            "omni.core.skills.runner.run_skill_with_monitor",
+            new_callable=AsyncMock,
+        ) as mock_run,
+        pytest.raises(ValueError, match=r"Unified tool path unavailable"),
+    ):
+        await run_tool_with_monitor("demo.missing", {"message": "hi"})
+
+    mock_run.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_tool_with_monitor_uses_ready_kernel_direct_path():
+    """Tool-id interface should execute directly on provided ready kernel."""
+    from omni.core.skills.runner import run_tool_with_monitor
+
+    class _Skill:
+        async def execute(self, command_name: str, **kwargs):
+            assert command_name == "echo"
+            assert kwargs == {"message": "hi"}
+            return _OK_RESULT
+
+    skill = _Skill()
+    kernel = MagicMock()
+    kernel.is_ready = True
+    kernel.skill_context.get_skill.return_value = skill
+
+    with (
+        patch("omni.core.skills.runner.run_before_skill_execute", return_value=None),
+        patch("omni.core.skills.runner.run_after_skill_execute", return_value=None),
+        patch("omni.core.skills.runner._record_runner_phase", return_value=None),
+        patch("omni.core.skills.runner.run_skill_with_monitor", new_callable=AsyncMock) as mock_run,
+    ):
+        out, monitor = await run_tool_with_monitor("demo.echo", {"message": "hi"}, kernel=kernel)
+
+    assert out == _OK_RESULT
+    assert monitor is None
+    kernel.skill_context.get_skill.assert_called_once_with("demo")
+    mock_run.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_tool_with_monitor_rejects_invalid_tool_identifier():
+    """Tool-id interface should reject non skill.command identifiers."""
+    from omni.core.skills.runner import run_tool_with_monitor
+
+    with pytest.raises(ValueError, match=r"skill\.command"):
+        await run_tool_with_monitor("invalid-tool-name", {"message": "hi"})

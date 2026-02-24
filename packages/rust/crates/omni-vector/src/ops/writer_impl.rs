@@ -10,79 +10,107 @@ fn default_write_params() -> WriteParams {
 }
 
 /// Build dictionary-encoded columns for low-cardinality `SKILL_NAME` and `CATEGORY`.
-#[allow(clippy::expect_used, clippy::missing_panics_doc)]
 fn build_dictionary_columns(
     skill_names: &[String],
     categories: &[String],
-) -> (
-    lance::deps::arrow_array::DictionaryArray<Int32Type>,
-    lance::deps::arrow_array::DictionaryArray<Int32Type>,
-) {
+) -> Result<
+    (
+        lance::deps::arrow_array::DictionaryArray<Int32Type>,
+        lance::deps::arrow_array::DictionaryArray<Int32Type>,
+    ),
+    VectorStoreError,
+> {
     use lance::deps::arrow_array::{DictionaryArray, Int32Array, StringArray};
 
     let mut uniq_skill: Vec<String> = Vec::new();
     let mut map_skill: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
     for s in skill_names {
         if !map_skill.contains_key(s) {
-            let idx = i32::try_from(uniq_skill.len()).unwrap_or(i32::MAX);
+            let idx = i32::try_from(uniq_skill.len()).map_err(|_| {
+                VectorStoreError::General(
+                    "skill_name dictionary exceeds i32 key capacity".to_string(),
+                )
+            })?;
             map_skill.insert(s.clone(), idx);
             uniq_skill.push(s.clone());
         }
     }
     let keys_skill: Vec<i32> = skill_names
         .iter()
-        .map(|s| *map_skill.get(s).unwrap_or(&0))
-        .collect();
+        .map(|s| {
+            map_skill.get(s).copied().ok_or_else(|| {
+                VectorStoreError::General(format!("missing skill_name dictionary key for '{s}'"))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let values_skill = StringArray::from(uniq_skill);
     let skill_name_array = DictionaryArray::<Int32Type>::try_new(
         Int32Array::from(keys_skill),
         std::sync::Arc::new(values_skill),
     )
-    .expect("dictionary skill_name");
+    .map_err(VectorStoreError::Arrow)?;
 
     let mut uniq_cat: Vec<String> = Vec::new();
     let mut map_cat: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
     for c in categories {
         if !map_cat.contains_key(c) {
-            let idx = i32::try_from(uniq_cat.len()).unwrap_or(i32::MAX);
+            let idx = i32::try_from(uniq_cat.len()).map_err(|_| {
+                VectorStoreError::General(
+                    "category dictionary exceeds i32 key capacity".to_string(),
+                )
+            })?;
             map_cat.insert(c.clone(), idx);
             uniq_cat.push(c.clone());
         }
     }
     let keys_cat: Vec<i32> = categories
         .iter()
-        .map(|c| *map_cat.get(c).unwrap_or(&0))
-        .collect();
+        .map(|c| {
+            map_cat.get(c).copied().ok_or_else(|| {
+                VectorStoreError::General(format!("missing category dictionary key for '{c}'"))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let values_cat = StringArray::from(uniq_cat);
     let category_array = DictionaryArray::<Int32Type>::try_new(
         Int32Array::from(keys_cat),
         std::sync::Arc::new(values_cat),
     )
-    .expect("dictionary category");
+    .map_err(VectorStoreError::Arrow)?;
 
-    (skill_name_array, category_array)
+    Ok((skill_name_array, category_array))
 }
 
 /// Build a single dictionary-encoded column from string values (e.g. `TOOL_NAME`).
-#[allow(clippy::expect_used, clippy::missing_panics_doc)]
 fn build_string_dictionary(
     values: &[String],
-) -> lance::deps::arrow_array::DictionaryArray<Int32Type> {
+) -> Result<lance::deps::arrow_array::DictionaryArray<Int32Type>, VectorStoreError> {
     use lance::deps::arrow_array::{DictionaryArray, Int32Array, StringArray};
 
     let mut uniq: Vec<String> = Vec::new();
     let mut map: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
     for s in values {
         if !map.contains_key(s) {
-            let idx = i32::try_from(uniq.len()).unwrap_or(i32::MAX);
+            let idx = i32::try_from(uniq.len()).map_err(|_| {
+                VectorStoreError::General(
+                    "tool_name dictionary exceeds i32 key capacity".to_string(),
+                )
+            })?;
             map.insert(s.clone(), idx);
             uniq.push(s.clone());
         }
     }
-    let keys: Vec<i32> = values.iter().map(|s| *map.get(s).unwrap_or(&0)).collect();
+    let keys: Vec<i32> = values
+        .iter()
+        .map(|s| {
+            map.get(s).copied().ok_or_else(|| {
+                VectorStoreError::General(format!("missing tool_name dictionary key for '{s}'"))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let value_arr = StringArray::from(uniq);
     DictionaryArray::<Int32Type>::try_new(Int32Array::from(keys), std::sync::Arc::new(value_arr))
-        .expect("dictionary tool_name")
+        .map_err(VectorStoreError::Arrow)
 }
 
 /// Parse JSON with `simd-json` when possible; fallback to `serde_json` to preserve behavior.
@@ -128,7 +156,137 @@ fn has_lance_data(path: &std::path::Path) -> bool {
     path.join("_versions").exists() || path.join("data").exists()
 }
 
-#[allow(clippy::missing_errors_doc, clippy::doc_markdown)]
+struct ParsedMetadataColumns {
+    skill_name: lance::deps::arrow_array::DictionaryArray<Int32Type>,
+    category: lance::deps::arrow_array::DictionaryArray<Int32Type>,
+    tool_name: lance::deps::arrow_array::DictionaryArray<Int32Type>,
+    file_path: lance::deps::arrow_array::StringArray,
+    routing_keywords: lance::deps::arrow_array::ListArray,
+    intents: lance::deps::arrow_array::ListArray,
+}
+
+fn validate_document_batch_inputs(
+    ids_len: usize,
+    vectors: &[Vec<f32>],
+    contents_len: usize,
+    metadatas_len: usize,
+    dimension: usize,
+) -> Result<i32, VectorStoreError> {
+    if ids_len == 0 {
+        return Err(VectorStoreError::General(
+            "Cannot build record batch from empty ids".to_string(),
+        ));
+    }
+    if ids_len != vectors.len() || ids_len != contents_len || ids_len != metadatas_len {
+        return Err(VectorStoreError::General(
+            "Mismatched input lengths for ids/vectors/contents/metadatas".to_string(),
+        ));
+    }
+    if vectors[0].len() != dimension {
+        return Err(VectorStoreError::InvalidDimension {
+            expected: dimension,
+            actual: vectors[0].len(),
+        });
+    }
+    if vectors.iter().any(|vector| vector.len() != dimension) {
+        return Err(VectorStoreError::General(
+            "All vectors must match store dimension".to_string(),
+        ));
+    }
+    i32::try_from(dimension).map_err(|_| {
+        VectorStoreError::General(format!("vector dimension {dimension} exceeds i32 range"))
+    })
+}
+
+fn build_vector_list_array(
+    vectors: Vec<Vec<f32>>,
+    list_dimension: i32,
+) -> Result<lance::deps::arrow_array::FixedSizeListArray, VectorStoreError> {
+    use lance::deps::arrow_array::{FixedSizeListArray, Float32Array};
+
+    let flat_values: Vec<f32> = vectors.into_iter().flatten().collect();
+    FixedSizeListArray::try_new(
+        Arc::new(lance::deps::arrow_schema::Field::new(
+            "item",
+            lance::deps::arrow_schema::DataType::Float32,
+            true,
+        )),
+        list_dimension,
+        Arc::new(Float32Array::from(flat_values)),
+        None,
+    )
+    .map_err(VectorStoreError::Arrow)
+}
+
+fn parse_document_metadata_columns(
+    metadatas: &[String],
+    ids: &[String],
+) -> Result<ParsedMetadataColumns, VectorStoreError> {
+    use lance::deps::arrow_array::StringArray;
+    use lance::deps::arrow_array::builder::{ListBuilder, StringBuilder};
+
+    let extracts: Vec<MetadataExtract> = metadatas
+        .iter()
+        .map(|metadata| parse_metadata_extract(metadata))
+        .collect();
+    let skill_names: Vec<String> = extracts
+        .iter()
+        .map(|extract| extract.skill_name.clone().unwrap_or_default())
+        .collect();
+    let categories: Vec<String> = extracts
+        .iter()
+        .map(|extract| extract.category.clone().unwrap_or_default())
+        .collect();
+    let (skill_name, category) = build_dictionary_columns(&skill_names, &categories)?;
+
+    let tool_names: Vec<String> = extracts
+        .iter()
+        .zip(ids.iter())
+        .map(|(extract, id)| {
+            extract
+                .tool_name
+                .clone()
+                .or_else(|| extract.command.clone())
+                .unwrap_or_else(|| id.clone())
+        })
+        .collect();
+    let tool_name = build_string_dictionary(&tool_names)?;
+
+    let file_path = StringArray::from(
+        extracts
+            .iter()
+            .map(|extract| extract.file_path.clone().unwrap_or_default())
+            .collect::<Vec<_>>(),
+    );
+    let mut routing_builder = ListBuilder::new(StringBuilder::new());
+    for extract in &extracts {
+        for keyword in &extract.routing_keywords {
+            routing_builder.values().append_value(keyword.as_str());
+        }
+        routing_builder.append(true);
+    }
+    let routing_keywords = routing_builder.finish();
+
+    let mut intents_builder = ListBuilder::new(StringBuilder::new());
+    for extract in &extracts {
+        for intent in &extract.intents {
+            intents_builder.values().append_value(intent.as_str());
+        }
+        intents_builder.append(true);
+    }
+    let intents = intents_builder.finish();
+
+    Ok(ParsedMetadataColumns {
+        skill_name,
+        category,
+        tool_name,
+        file_path,
+        routing_keywords,
+        intents,
+    })
+}
+
+#[allow(clippy::doc_markdown)]
 impl VectorStore {
     fn derive_routing_keywords(tool: &OmniToolRecord) -> Vec<String> {
         let skill_token = tool.skill_name.trim();
@@ -188,7 +346,6 @@ impl VectorStore {
         None
     }
 
-    #[allow(clippy::too_many_lines, clippy::needless_pass_by_value)]
     fn build_document_batch(
         &self,
         ids: Vec<String>,
@@ -202,97 +359,19 @@ impl VectorStore {
         ),
         VectorStoreError,
     > {
-        use lance::deps::arrow_array::builder::{ListBuilder, StringBuilder};
-        use lance::deps::arrow_array::{FixedSizeListArray, Float32Array, StringArray};
+        use lance::deps::arrow_array::StringArray;
 
-        if ids.is_empty() {
-            return Err(VectorStoreError::General(
-                "Cannot build record batch from empty ids".to_string(),
-            ));
-        }
-        if ids.len() != vectors.len() || ids.len() != contents.len() || ids.len() != metadatas.len()
-        {
-            return Err(VectorStoreError::General(
-                "Mismatched input lengths for ids/vectors/contents/metadatas".to_string(),
-            ));
-        }
-        if vectors[0].len() != self.dimension {
-            return Err(VectorStoreError::InvalidDimension {
-                expected: self.dimension,
-                actual: vectors[0].len(),
-            });
-        }
-        if vectors.iter().any(|v| v.len() != self.dimension) {
-            return Err(VectorStoreError::General(
-                "All vectors must match store dimension".to_string(),
-            ));
-        }
-
-        let id_array = StringArray::from(ids.clone());
+        let list_dimension = validate_document_batch_inputs(
+            ids.len(),
+            &vectors,
+            contents.len(),
+            metadatas.len(),
+            self.dimension,
+        )?;
+        let metadata_columns = parse_document_metadata_columns(&metadatas, &ids)?;
+        let id_array = StringArray::from(ids);
         let content_array = StringArray::from(contents);
-        let flat_values: Vec<f32> = vectors.into_iter().flatten().collect();
-        let vector_array = FixedSizeListArray::try_new(
-            Arc::new(lance::deps::arrow_schema::Field::new(
-                "item",
-                lance::deps::arrow_schema::DataType::Float32,
-                true,
-            )),
-            i32::try_from(self.dimension).unwrap_or(1536),
-            Arc::new(Float32Array::from(flat_values)),
-            None,
-        )
-        .map_err(VectorStoreError::Arrow)?;
-
-        // Single-pass extraction for all Arrow-native columns (simd-json when possible).
-        let extracts: Vec<MetadataExtract> = metadatas
-            .iter()
-            .map(|s| parse_metadata_extract(s))
-            .collect();
-
-        let skill_names: Vec<String> = extracts
-            .iter()
-            .map(|e| e.skill_name.clone().unwrap_or_default())
-            .collect();
-        let categories: Vec<String> = extracts
-            .iter()
-            .map(|e| e.category.clone().unwrap_or_default())
-            .collect();
-
-        let (skill_name_array, category_array) =
-            build_dictionary_columns(&skill_names, &categories);
-        let tool_names: Vec<String> = extracts
-            .iter()
-            .zip(ids.iter())
-            .map(|(e, id)| {
-                e.tool_name
-                    .clone()
-                    .or_else(|| e.command.clone())
-                    .unwrap_or_else(|| id.clone())
-            })
-            .collect();
-        let tool_name_array = build_string_dictionary(&tool_names);
-        let file_path_array = StringArray::from(
-            extracts
-                .iter()
-                .map(|e| e.file_path.clone().unwrap_or_default())
-                .collect::<Vec<_>>(),
-        );
-        let mut rk_builder = ListBuilder::new(StringBuilder::new());
-        for e in &extracts {
-            for s in &e.routing_keywords {
-                rk_builder.values().append_value(s.as_str());
-            }
-            rk_builder.append(true);
-        }
-        let routing_keywords_array = rk_builder.finish();
-        let mut in_builder = ListBuilder::new(StringBuilder::new());
-        for e in &extracts {
-            for s in &e.intents {
-                in_builder.values().append_value(s.as_str());
-            }
-            in_builder.append(true);
-        }
-        let intents_array = in_builder.finish();
+        let vector_array = build_vector_list_array(vectors, list_dimension)?;
         let metadata_array = StringArray::from(metadatas);
 
         let schema = self.create_schema();
@@ -302,12 +381,12 @@ impl VectorStore {
                 Arc::new(id_array),
                 Arc::new(vector_array),
                 Arc::new(content_array),
-                Arc::new(skill_name_array),
-                Arc::new(category_array),
-                Arc::new(tool_name_array),
-                Arc::new(file_path_array),
-                Arc::new(routing_keywords_array),
-                Arc::new(intents_array),
+                Arc::new(metadata_columns.skill_name),
+                Arc::new(metadata_columns.category),
+                Arc::new(metadata_columns.tool_name),
+                Arc::new(metadata_columns.file_path),
+                Arc::new(metadata_columns.routing_keywords),
+                Arc::new(metadata_columns.intents),
                 Arc::new(metadata_array),
             ],
         )
@@ -316,6 +395,10 @@ impl VectorStore {
     }
 
     /// Add tool records to the vector store.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when LanceDB batch construction or write paths fail.
     #[allow(clippy::needless_pass_by_value)]
     pub async fn add(
         &self,
@@ -402,6 +485,11 @@ impl VectorStore {
     }
 
     /// Batch add documents with vectors to a table.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when input validation fails, dataset create/append fails,
+    /// or Arrow batch construction fails.
     pub async fn add_documents(
         &self,
         table_name: &str,
@@ -469,6 +557,11 @@ impl VectorStore {
 
     /// Add documents with rows grouped by a partition column so fragments align by partition
     /// (enables partition pruning at read). Partition value is read from each row's metadata JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when input validation fails, partitioned append fails,
+    /// or Arrow batch construction fails.
     pub async fn add_documents_partitioned(
         &self,
         table_name: &str,
@@ -571,6 +664,11 @@ impl VectorStore {
     /// from the caller perspective (drop then write fresh snapshot).
     ///
     /// Robustness: Never drop when batch is empty; avoids leaving table empty on caller error.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when dropping the target table, re-initializing related indexes,
+    /// or writing the replacement batch fails.
     pub async fn replace_documents(
         &mut self,
         table_name: &str,
@@ -595,6 +693,11 @@ impl VectorStore {
     }
 
     /// Merge-insert (upsert) documents using a key column (default use-case: `id`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when source batch preparation fails, dataset open/create fails,
+    /// or merge-insert execution fails.
     pub async fn merge_insert_documents(
         &self,
         table_name: &str,
@@ -648,11 +751,12 @@ impl VectorStore {
     /// Get or create a dataset. When `initial` is `Some((schema, batch))` and the table is
     /// created, that batch is written (full 10-column schema). Returns `(dataset, created)` so
     /// callers can skip appending when `created` is true.
-    #[allow(
-        clippy::too_many_lines,
-        clippy::collapsible_if,
-        clippy::missing_panics_doc
-    )]
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when opening existing data, creating a new dataset,
+    /// cleaning stale artifacts, or writing initial batches fails.
+    #[allow(clippy::collapsible_if, clippy::missing_panics_doc)]
     pub async fn get_or_create_dataset(
         &self,
         table_name: &str,

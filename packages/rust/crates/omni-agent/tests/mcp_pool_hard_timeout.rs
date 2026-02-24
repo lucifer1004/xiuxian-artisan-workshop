@@ -1,7 +1,41 @@
-//! MCP pool hard-timeout behavior tests.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
+
+//! MCP pool hard-timeout smoke tests for omni-agent MCP facade.
 //!
-//! These tests validate that a hanging MCP request is force-aborted by the pool
-//! timeout path and returns promptly instead of waiting indefinitely.
+//! Detailed timeout and timeout-budget behavior lives in
+//! `xiuxian-llm/tests/mcp_pool_hard_timeout.rs`.
 
 use std::future::pending;
 use std::time::{Duration, Instant};
@@ -99,39 +133,6 @@ async fn mcp_pool_list_tools_hard_timeout_returns_promptly() {
         .list_tools(None)
         .await
         .expect_err("list_tools should timeout");
-    let elapsed = started.elapsed();
-    let message = format!("{error:#}");
-
-    assert!(
-        message.contains("timed out after 1s"),
-        "unexpected error message: {message}"
-    );
-    assert!(
-        elapsed < Duration::from_secs(8),
-        "hard timeout should return promptly, elapsed={elapsed:?}"
-    );
-
-    server.abort();
-    let _ = server.await;
-}
-
-#[tokio::test]
-async fn mcp_pool_call_tool_hard_timeout_returns_promptly() {
-    let addr = reserve_local_addr().await;
-    let server = spawn_hanging_server(addr).await;
-    let url = format!("http://{addr}/sse");
-    let pool = connect_pool(&url, hard_timeout_test_config())
-        .await
-        .expect("connect pool");
-
-    let started = Instant::now();
-    let error = pool
-        .call_tool(
-            "mock_echo".to_string(),
-            Some(serde_json::json!({ "message": "hello" })),
-        )
-        .await
-        .expect_err("call_tool should timeout");
     let elapsed = started.elapsed();
     let message = format!("{error:#}");
 

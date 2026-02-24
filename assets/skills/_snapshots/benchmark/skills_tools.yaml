@@ -1,0 +1,349 @@
+schema: omni.skills.tools_benchmark_snapshot.v1
+updated_at_utc: "2026-02-23T05:32:35.393775+00:00"
+benchmark:
+  runs_per_tool: 5
+  warm_phase: true
+defaults:
+  regression_factor: 2.0
+  min_regression_delta_ms: 40.0
+tools:
+  advanced_tools.smart_find:
+    baseline_ms: 2.463
+    last_avg_ms: 0.83
+    last_p50_ms: 0.82
+    last_p95_ms: 0.9
+    runs: 5
+    ok: true
+    last_min_ms: 0.8
+    last_max_ms: 0.92
+    last_stdev_ms: 0.04
+  advanced_tools.smart_search:
+    baseline_ms: 11.668
+    last_avg_ms: 10.54
+    last_p50_ms: 10.12
+    last_p95_ms: 11.37
+    runs: 5
+    ok: true
+    last_min_ms: 9.91
+    last_max_ms: 11.42
+    last_stdev_ms: 0.62
+  code.code_search:
+    baseline_ms: 4.931
+    last_avg_ms: 3.03
+    last_p50_ms: 2.71
+    last_p95_ms: 4.07
+    runs: 5
+    ok: true
+    last_min_ms: 2.59
+    last_max_ms: 4.37
+    last_stdev_ms: 0.68
+  cli.skill_run.default_cold:
+    baseline_ms: 877.31
+    last_avg_ms: 857.71
+    last_p50_ms: 877.31
+    last_p95_ms: 891.36
+    runs: 3
+    ok: true
+    scenario: cli_runner
+    last_min_ms: 802.91
+    last_max_ms: 892.92
+    last_stdev_ms: 39.27
+    regression_factor: 3.0
+    min_regression_delta_ms: 120.0
+  cli.skill_run.default_warm:
+    baseline_ms: 343.53
+    last_avg_ms: 365.63
+    last_p50_ms: 343.53
+    last_p95_ms: 406.12
+    runs: 3
+    ok: true
+    scenario: cli_runner
+    last_min_ms: 340.27
+    last_max_ms: 413.08
+    last_stdev_ms: 33.58
+    regression_factor: 3.0
+    min_regression_delta_ms: 120.0
+  cli.skill_run.knowledge_search.default_cold:
+    baseline_ms: 1054.6
+    last_avg_ms: 1052.26
+    last_p50_ms: 1054.6
+    last_p95_ms: 1084.18
+    runs: 3
+    ok: true
+    scenario: cli_runner
+    last_min_ms: 1014.73
+    last_max_ms: 1087.46
+    last_stdev_ms: 29.74
+    regression_factor: 3.0
+    min_regression_delta_ms: 120.0
+  cli.skill_run.knowledge_search.default_warm:
+    baseline_ms: 348.35
+    last_avg_ms: 356.78
+    last_p50_ms: 348.35
+    last_p95_ms: 392.05
+    runs: 3
+    ok: true
+    scenario: cli_runner
+    last_min_ms: 325.08
+    last_max_ms: 396.9
+    last_stdev_ms: 29.92
+    regression_factor: 3.0
+    min_regression_delta_ms: 120.0
+  cli.skill_run.knowledge_search.no_reuse:
+    baseline_ms: 677.23
+    last_avg_ms: 662.96
+    last_p50_ms: 677.23
+    last_p95_ms: 704.0
+    runs: 3
+    ok: true
+    scenario: cli_runner
+    last_min_ms: 604.68
+    last_max_ms: 706.97
+    last_stdev_ms: 42.96
+    regression_factor: 3.0
+    min_regression_delta_ms: 120.0
+  cli.skill_run.no_reuse:
+    baseline_ms: 515.87
+    last_avg_ms: 532.26
+    last_p50_ms: 515.87
+    last_p95_ms: 563.51
+    runs: 3
+    ok: true
+    scenario: cli_runner
+    last_min_ms: 512.11
+    last_max_ms: 568.81
+    last_stdev_ms: 25.89
+    regression_factor: 3.0
+    min_regression_delta_ms: 120.0
+  crawl4ai.crawl_url:
+    baseline_ms: 42.065
+    last_avg_ms: 30.85
+    last_p50_ms: 29.73
+    last_p95_ms: 34.48
+    runs: 5
+    ok: true
+    scenario: network_http
+    last_min_ms: 27.23
+    last_max_ms: 34.53
+    last_stdev_ms: 3.0
+  crawl4ai.crawl_url.local_file:
+    baseline_ms: 2.266
+    last_avg_ms: 1.14
+    last_p50_ms: 1.09
+    last_p95_ms: 1.35
+    runs: 5
+    ok: true
+    scenario: local_file
+    last_min_ms: 0.99
+    last_max_ms: 1.38
+    last_stdev_ms: 0.15
+  demo.echo:
+    baseline_ms: 0.698
+    last_avg_ms: 0.69
+    last_p50_ms: 0.66
+    last_p95_ms: 0.77
+    runs: 5
+    ok: true
+    last_min_ms: 0.66
+    last_max_ms: 0.79
+    last_stdev_ms: 0.05
+  demo.hello:
+    baseline_ms: 0.666
+    last_avg_ms: 0.65
+    last_p50_ms: 0.66
+    last_p95_ms: 0.67
+    runs: 5
+    ok: true
+    last_min_ms: 0.63
+    last_max_ms: 0.67
+    last_stdev_ms: 0.01
+  demo.list_pipeline_examples:
+    baseline_ms: 0.663
+    last_avg_ms: 0.66
+    last_p50_ms: 0.66
+    last_p95_ms: 0.68
+    runs: 5
+    ok: true
+    last_min_ms: 0.65
+    last_max_ms: 0.69
+    last_stdev_ms: 0.01
+  demo.test_yaml_pipeline:
+    baseline_ms: 0.841
+    last_avg_ms: 0.66
+    last_p50_ms: 0.65
+    last_p95_ms: 0.68
+    runs: 5
+    ok: true
+    last_min_ms: 0.64
+    last_max_ms: 0.69
+    last_stdev_ms: 0.02
+  knowledge.get_development_context:
+    baseline_ms: 2.441
+    last_avg_ms: 2.35
+    last_p50_ms: 2.33
+    last_p95_ms: 2.51
+    runs: 5
+    ok: true
+    last_min_ms: 2.21
+    last_max_ms: 2.55
+    last_stdev_ms: 0.11
+  knowledge.link_graph_search:
+    baseline_ms: 7.527
+    last_avg_ms: 6.93
+    last_p50_ms: 6.83
+    last_p95_ms: 7.33
+    runs: 5
+    ok: true
+    last_min_ms: 6.69
+    last_max_ms: 7.46
+    last_stdev_ms: 0.27
+  knowledge.link_graph_stats:
+    baseline_ms: 2.994
+    last_avg_ms: 2.9
+    last_p50_ms: 2.88
+    last_p95_ms: 3.18
+    runs: 5
+    ok: true
+    last_min_ms: 2.72
+    last_max_ms: 3.25
+    last_stdev_ms: 0.19
+  knowledge.link_graph_toc:
+    baseline_ms: 2.119
+    last_avg_ms: 2.08
+    last_p50_ms: 2.01
+    last_p95_ms: 2.36
+    runs: 5
+    ok: true
+    last_min_ms: 1.96
+    last_max_ms: 2.45
+    last_stdev_ms: 0.18
+  knowledge.recall:
+    baseline_ms: 26.617
+    last_avg_ms: 35.36
+    last_p50_ms: 24.88
+    last_p95_ms: 65.69
+    runs: 5
+    ok: true
+    last_min_ms: 24.7
+    last_max_ms: 75.36
+    last_stdev_ms: 20.02
+  knowledge.search:
+    baseline_ms: 6.046
+    last_avg_ms: 6.97
+    last_p50_ms: 7.05
+    last_p95_ms: 7.24
+    runs: 5
+    ok: true
+    last_min_ms: 6.46
+    last_max_ms: 7.27
+    last_stdev_ms: 0.28
+  knowledge.stats:
+    baseline_ms: 2.119
+    last_avg_ms: 1.83
+    last_p50_ms: 1.77
+    last_p95_ms: 2.07
+    runs: 5
+    ok: true
+    last_min_ms: 1.68
+    last_max_ms: 2.13
+    last_stdev_ms: 0.16
+  memory.get_memory_stats:
+    baseline_ms: 2.766
+    last_avg_ms: 2.33
+    last_p50_ms: 2.27
+    last_p95_ms: 2.52
+    runs: 5
+    ok: true
+    last_min_ms: 2.23
+    last_max_ms: 2.57
+    last_stdev_ms: 0.13
+  memory.search_memory:
+    baseline_ms: 3.599
+    last_avg_ms: 0.97
+    last_p50_ms: 0.95
+    last_p95_ms: 1.07
+    runs: 5
+    ok: true
+    last_min_ms: 0.91
+    last_max_ms: 1.08
+    last_stdev_ms: 0.06
+  omniCell.nuShell:
+    baseline_ms: 21.164
+    last_avg_ms: 0.85
+    last_p50_ms: 0.77
+    last_p95_ms: 1.1
+    runs: 5
+    ok: true
+    last_min_ms: 0.75
+    last_max_ms: 1.18
+    last_stdev_ms: 0.17
+  skill.discover:
+    baseline_ms: 5.232
+    last_avg_ms: 1.26
+    last_p50_ms: 1.22
+    last_p95_ms: 1.42
+    runs: 5
+    ok: true
+    last_min_ms: 1.19
+    last_max_ms: 1.47
+    last_stdev_ms: 0.1
+  skill.list_index:
+    baseline_ms: 8.78
+    last_avg_ms: 7.51
+    last_p50_ms: 7.5
+    last_p95_ms: 7.82
+    runs: 5
+    ok: true
+    last_min_ms: 7.3
+    last_max_ms: 7.89
+    last_stdev_ms: 0.21
+  skill.list_templates:
+    baseline_ms: 1.125
+    last_avg_ms: 1.0
+    last_p50_ms: 0.97
+    last_p95_ms: 1.07
+    runs: 5
+    ok: true
+    last_min_ms: 0.96
+    last_max_ms: 1.09
+    last_stdev_ms: 0.05
+  writer.check_markdown_structure:
+    baseline_ms: 0.702
+    last_avg_ms: 0.67
+    last_p50_ms: 0.66
+    last_p95_ms: 0.71
+    runs: 5
+    ok: true
+    last_min_ms: 0.64
+    last_max_ms: 0.72
+    last_stdev_ms: 0.03
+  writer.lint_writing_style:
+    baseline_ms: 0.706
+    last_avg_ms: 0.68
+    last_p50_ms: 0.67
+    last_p95_ms: 0.71
+    runs: 5
+    ok: true
+    last_min_ms: 0.65
+    last_max_ms: 0.72
+    last_stdev_ms: 0.02
+  writer.load_writing_memory:
+    baseline_ms: 0.658
+    last_avg_ms: 0.65
+    last_p50_ms: 0.66
+    last_p95_ms: 0.67
+    runs: 5
+    ok: true
+    last_min_ms: 0.64
+    last_max_ms: 0.67
+    last_stdev_ms: 0.01
+  writer.polish_text:
+    baseline_ms: 0.764
+    last_avg_ms: 0.75
+    last_p50_ms: 0.75
+    last_p95_ms: 0.77
+    runs: 5
+    ok: true
+    last_min_ms: 0.74
+    last_max_ms: 0.77
+    last_stdev_ms: 0.01

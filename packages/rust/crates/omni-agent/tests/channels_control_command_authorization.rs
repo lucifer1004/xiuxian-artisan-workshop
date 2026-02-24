@@ -1,18 +1,62 @@
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
-use omni_agent::{Channel, TelegramChannel, TelegramSessionPartition};
+use omni_agent::{
+    Channel, TelegramChannel, TelegramCommandAdminRule, TelegramSessionPartition,
+    build_telegram_command_admin_rule,
+};
+
+fn admin_rule(selectors: &[&str], users: &[&str]) -> TelegramCommandAdminRule {
+    build_telegram_command_admin_rule(
+        selectors.iter().map(|value| value.to_string()).collect(),
+        users.iter().map(|value| value.to_string()).collect(),
+    )
+    .expect("typed admin rule should compile")
+}
 
 #[test]
 fn telegram_control_command_authorization_supports_selector_rules() {
-    let channel = TelegramChannel::new_with_partition_and_admin_users_and_command_rule_specs(
+    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rules(
         "fake-token".to_string(),
         vec!["*".to_string()],
         vec![],
         vec!["2001".to_string()],
-        vec!["/session partition=>1001,1002".to_string()],
+        None,
+        vec![admin_rule(&["/session partition"], &["1001", "1002"])],
         TelegramSessionPartition::ChatUser,
     )
-    .expect("rule specs should compile");
+    .expect("rules should compile");
 
     assert!(channel.is_authorized_for_control_command("1001", "/session partition on"));
     assert!(channel.is_authorized_for_control_command("1001", "/session partition json"));
@@ -29,15 +73,16 @@ fn telegram_control_command_authorization_supports_selector_rules() {
 
 #[test]
 fn telegram_control_command_authorization_normalizes_rule_and_sender_identities() {
-    let channel = TelegramChannel::new_with_partition_and_admin_users_and_command_rule_specs(
+    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rules(
         "fake-token".to_string(),
         vec!["*".to_string()],
         vec![],
         vec!["2001".to_string()],
-        vec!["/session partition=>telegram:1001".to_string()],
+        None,
+        vec![admin_rule(&["/session partition"], &["telegram:1001"])],
         TelegramSessionPartition::ChatUser,
     )
-    .expect("rule specs should compile");
+    .expect("rules should compile");
 
     assert!(channel.is_authorized_for_control_command("1001", "/session partition chat"));
     assert!(channel.is_authorized_for_control_command("tg:1001", "/session partition user"));
@@ -45,15 +90,19 @@ fn telegram_control_command_authorization_normalizes_rule_and_sender_identities(
 
 #[test]
 fn telegram_control_command_authorization_supports_selector_wildcards_and_bot_mentions() {
-    let channel = TelegramChannel::new_with_partition_and_admin_users_and_command_rule_specs(
+    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rules(
         "fake-token".to_string(),
         vec!["*".to_string()],
         vec![],
         vec!["2001".to_string()],
-        vec!["session.*=>3001".to_string(), "/reset=>3001".to_string()],
+        None,
+        vec![
+            admin_rule(&["session.*"], &["3001"]),
+            admin_rule(&["/reset"], &["3001"]),
+        ],
         TelegramSessionPartition::ChatUser,
     )
-    .expect("rule specs should compile");
+    .expect("rules should compile");
 
     assert!(channel.is_authorized_for_control_command("3001", "/session partition chat"));
     assert!(channel.is_authorized_for_control_command("3001", "/session reset"));
@@ -63,18 +112,19 @@ fn telegram_control_command_authorization_supports_selector_wildcards_and_bot_me
 
 #[test]
 fn telegram_control_command_authorization_supports_cmd_prefix_and_bot_suffix_in_rules() {
-    let channel = TelegramChannel::new_with_partition_and_admin_users_and_command_rule_specs(
+    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rules(
         "fake-token".to_string(),
         vec!["*".to_string()],
         vec![],
         vec!["4001".to_string()],
+        None,
         vec![
-            "cmd:/session partition=>3001".to_string(),
-            "cmd:/reset@mybot=>3001".to_string(),
+            admin_rule(&["cmd:/session partition"], &["3001"]),
+            admin_rule(&["cmd:/reset@mybot"], &["3001"]),
         ],
         TelegramSessionPartition::ChatUser,
     )
-    .expect("rule specs should compile");
+    .expect("rules should compile");
 
     assert!(channel.is_authorized_for_control_command("3001", "/session@mybot partition on"));
     assert!(channel.is_authorized_for_control_command("3001", "/reset"));
@@ -86,14 +136,8 @@ fn telegram_control_command_authorization_supports_cmd_prefix_and_bot_suffix_in_
 
 #[test]
 fn telegram_control_command_authorization_rejects_invalid_wildcard_selector() {
-    let result = TelegramChannel::new_with_partition_and_admin_users_and_command_rule_specs(
-        "fake-token".to_string(),
-        vec!["*".to_string()],
-        vec![],
-        vec!["4001".to_string()],
-        vec!["session*=>owner".to_string()],
-        TelegramSessionPartition::ChatUser,
-    );
+    let result =
+        build_telegram_command_admin_rule(vec!["session*".to_string()], vec!["owner".to_string()]);
 
     let error = match result {
         Ok(_) => panic!("invalid wildcard selector should fail fast"),
@@ -109,13 +153,13 @@ fn telegram_control_command_authorization_rejects_invalid_wildcard_selector() {
 
 #[test]
 fn telegram_control_command_authorization_control_allow_from_overrides_rules_and_admins() {
-    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rule_specs(
+    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rules(
         "fake-token".to_string(),
         vec!["*".to_string()],
         vec![],
         vec!["4001".to_string()],
         Some(vec!["3001".to_string()]),
-        vec!["/session partition=>1001".to_string()],
+        vec![admin_rule(&["/session partition"], &["1001"])],
         TelegramSessionPartition::ChatUser,
     )
     .expect("authorization policy should compile");
@@ -134,13 +178,13 @@ fn telegram_control_command_authorization_control_allow_from_overrides_rules_and
 
 #[test]
 fn telegram_control_command_authorization_control_allow_from_empty_denies_all() {
-    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rule_specs(
+    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rules(
         "fake-token".to_string(),
         vec!["*".to_string()],
         vec![],
         vec!["*".to_string()],
         Some(Vec::new()),
-        vec!["/reset,/clear=>3001".to_string()],
+        vec![admin_rule(&["/reset", "/clear"], &["3001"])],
         TelegramSessionPartition::ChatUser,
     )
     .expect("authorization policy should compile");
@@ -151,7 +195,7 @@ fn telegram_control_command_authorization_control_allow_from_empty_denies_all() 
 
 #[test]
 fn telegram_control_command_authorization_ignores_invalid_control_allow_from_entries() {
-    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rule_specs(
+    let channel = TelegramChannel::new_with_partition_and_admin_users_and_control_command_allow_from_and_command_rules(
         "fake-token".to_string(),
         vec!["*".to_string()],
         vec![],
@@ -173,29 +217,6 @@ fn telegram_control_command_authorization_ignores_invalid_control_allow_from_ent
     assert!(
         !channel.is_authorized_for_control_command("2001", "/session partition on"),
         "global control allowlist override should still take precedence over admin fallback",
-    );
-}
-
-#[test]
-fn telegram_control_command_authorization_rejects_invalid_rule_specs() {
-    let result = TelegramChannel::new_with_partition_and_admin_users_and_command_rule_specs(
-        "fake-token".to_string(),
-        vec!["*".to_string()],
-        vec![],
-        vec!["4001".to_string()],
-        vec!["invalid-spec-without-separator".to_string()],
-        TelegramSessionPartition::ChatUser,
-    );
-
-    let error = match result {
-        Ok(_) => panic!("invalid rule specs should fail fast"),
-        Err(error) => error,
-    };
-    assert!(
-        error
-            .to_string()
-            .contains("expected `<command-selector>=>user1,user2`"),
-        "unexpected error: {error}",
     );
 }
 

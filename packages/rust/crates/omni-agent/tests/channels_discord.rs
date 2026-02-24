@@ -1,6 +1,49 @@
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
-use omni_agent::{Channel, DiscordChannel, DiscordControlCommandPolicy};
+use omni_agent::{
+    Channel, DiscordChannel, DiscordCommandAdminRule, DiscordControlCommandPolicy,
+    build_discord_command_admin_rule,
+};
+
+fn admin_rule(selectors: &[&str], users: &[&str]) -> DiscordCommandAdminRule {
+    build_discord_command_admin_rule(
+        selectors.iter().map(|value| value.to_string()).collect(),
+        users.iter().map(|value| value.to_string()).collect(),
+    )
+    .expect("typed admin rule should compile")
+}
 
 #[test]
 fn discord_channel_name() {
@@ -17,7 +60,7 @@ fn discord_control_command_authorization_supports_selector_rules() {
         DiscordControlCommandPolicy::new(
             vec!["ops".to_string()],
             None,
-            vec!["/session partition=>alice,1001".to_string()],
+            vec![admin_rule(&["/session partition"], &["alice", "1001"])],
         ),
     )
     .expect("rule specs should compile");
@@ -43,7 +86,7 @@ fn discord_control_command_authorization_normalizes_rule_and_sender_identities()
         DiscordControlCommandPolicy::new(
             vec!["ops".to_string()],
             None,
-            vec!["/session partition=>@Owner".to_string()],
+            vec![admin_rule(&["/session partition"], &["@Owner"])],
         ),
     )
     .expect("rule specs should compile");
@@ -61,7 +104,10 @@ fn discord_control_command_authorization_supports_selector_wildcards() {
         DiscordControlCommandPolicy::new(
             vec!["ops".to_string()],
             None,
-            vec!["session.*=>owner".to_string(), "/reset=>owner".to_string()],
+            vec![
+                admin_rule(&["session.*"], &["owner"]),
+                admin_rule(&["/reset"], &["owner"]),
+            ],
         ),
     )
     .expect("rule specs should compile");
@@ -82,8 +128,8 @@ fn discord_control_command_authorization_supports_cmd_prefix_and_bot_suffix_in_r
             vec!["ops".to_string()],
             None,
             vec![
-                "cmd:/session partition=>owner".to_string(),
-                "cmd:/reset@mybot=>owner".to_string(),
+                admin_rule(&["cmd:/session partition"], &["owner"]),
+                admin_rule(&["cmd:/reset@mybot"], &["owner"]),
             ],
         ),
     )
@@ -99,16 +145,8 @@ fn discord_control_command_authorization_supports_cmd_prefix_and_bot_suffix_in_r
 
 #[test]
 fn discord_control_command_authorization_rejects_invalid_wildcard_selector() {
-    let result = DiscordChannel::new_with_control_command_policy(
-        "fake-token".to_string(),
-        vec!["*".to_string()],
-        vec![],
-        DiscordControlCommandPolicy::new(
-            vec!["ops".to_string()],
-            None,
-            vec!["session*=>owner".to_string()],
-        ),
-    );
+    let result =
+        build_discord_command_admin_rule(vec!["session*".to_string()], vec!["owner".to_string()]);
 
     let error = match result {
         Ok(_) => panic!("invalid wildcard selector should fail fast"),
@@ -131,7 +169,7 @@ fn discord_control_command_authorization_control_allow_from_overrides_rules_and_
         DiscordControlCommandPolicy::new(
             vec!["ops".to_string()],
             Some(vec!["owner".to_string()]),
-            vec!["/session partition=>alice".to_string()],
+            vec![admin_rule(&["/session partition"], &["alice"])],
         ),
     )
     .expect("authorization policy should compile");
@@ -157,38 +195,13 @@ fn discord_control_command_authorization_control_allow_from_empty_denies_all() {
         DiscordControlCommandPolicy::new(
             vec!["*".to_string()],
             Some(Vec::new()),
-            vec!["/reset,/clear=>owner".to_string()],
+            vec![admin_rule(&["/reset", "/clear"], &["owner"])],
         ),
     )
     .expect("authorization policy should compile");
 
     assert!(!channel.is_authorized_for_control_command("owner", "/reset"));
     assert!(!channel.is_authorized_for_control_command("alice", "/resume"));
-}
-
-#[test]
-fn discord_control_command_authorization_rejects_invalid_rule_specs() {
-    let result = DiscordChannel::new_with_control_command_policy(
-        "fake-token".to_string(),
-        vec!["*".to_string()],
-        vec![],
-        DiscordControlCommandPolicy::new(
-            vec!["ops".to_string()],
-            None,
-            vec!["invalid-spec-without-separator".to_string()],
-        ),
-    );
-
-    let error = match result {
-        Ok(_) => panic!("invalid rule specs should fail fast"),
-        Err(error) => error,
-    };
-    assert!(
-        error
-            .to_string()
-            .contains("expected `<command-selector>=>user1,user2`"),
-        "unexpected error: {error}",
-    );
 }
 
 #[tokio::test]

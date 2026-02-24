@@ -1,3 +1,13 @@
+---
+title: "Keyword Eval Model Profiles"
+category: "testing"
+tags:
+  - testing
+  - keyword
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Keyword Eval Model Profiles
 
 This document defines how keyword-backend LLM evaluation supports flexible model switching and multi-model runs.

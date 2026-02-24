@@ -1,11 +1,13 @@
 //! Tool name qualification for multiple MCP servers: `mcp__{server}__{tool}`.
 
 /// Format: `mcp__{server}__{tool}` so the agent can route tool calls to the right MCP server.
+#[must_use]
 pub fn qualify_tool_name(server: &str, tool: &str) -> String {
     format!("mcp__{server}__{tool}")
 }
 
 /// Parse a qualified name; returns `Some((server, tool))` or `None` if invalid.
+#[must_use]
 pub fn parse_qualified_tool_name(qualified: &str) -> Option<(String, String)> {
     let rest = qualified.strip_prefix("mcp__")?;
     let (server, tool) = rest.split_once("__")?;

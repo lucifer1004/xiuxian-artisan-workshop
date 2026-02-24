@@ -188,6 +188,9 @@ async def run_research_graph(repo_url: str, request: str = "Analyze"):
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
         """Targeted load should use load_command only (no non-Rust fallback load_all)."""
+        import omni.core.skills.tools_loader as tools_loader_module
+        import omni.core.skills.universal as universal_module
+
         skill_path = tmp_path / "targeted"
         skill_path.mkdir()
         (skill_path / "scripts").mkdir()
@@ -197,8 +200,10 @@ async def run_research_graph(repo_url: str, request: str = "Analyze"):
         fake_loader.__len__.return_value = 0
 
         monkeypatch.setattr(
-            "omni.core.skills.universal.create_tools_loader",
-            lambda *_args, **_kwargs: fake_loader,
+            universal_module, "create_tools_loader", lambda *_args, **_kwargs: fake_loader
+        )
+        monkeypatch.setattr(
+            tools_loader_module, "create_tools_loader", lambda *_args, **_kwargs: fake_loader
         )
 
         skill = UniversalScriptSkill("targeted", skill_path)
@@ -206,6 +211,45 @@ async def run_research_graph(repo_url: str, request: str = "Analyze"):
 
         fake_loader.load_command.assert_called_once_with("recall")
         fake_loader.load_all.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_execute_self_heals_after_empty_loader_cache(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Execute should perform one-shot reload when command cache is unexpectedly empty."""
+        skill_path = tmp_path / "self_heal"
+        skill_path.mkdir()
+        scripts_dir = skill_path / "scripts"
+        scripts_dir.mkdir()
+
+        (scripts_dir / "hello.py").write_text(
+            """
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="hello", description="Say hello")
+def hello(name: str = "World"):
+    return f"Hello, {name}!"
+"""
+        )
+
+        skill = UniversalScriptSkill("self_heal", skill_path)
+        await skill.load()
+        assert "self_heal.hello" in skill.list_commands()
+
+        load_calls = {"count": 0}
+        original_load_all = skill._tools_loader.load_all
+
+        def counted_load_all() -> None:
+            load_calls["count"] += 1
+            original_load_all()
+
+        monkeypatch.setattr(skill._tools_loader, "load_all", counted_load_all)
+        skill._tools_loader.commands.clear()
+
+        result = await skill.execute("hello", name="Ops")
+        assert load_calls["count"] == 1
+        assert isinstance(result, dict)
+        assert "self_heal.hello" in skill.list_commands()
 
 
 class TestUniversalSkillFactory:

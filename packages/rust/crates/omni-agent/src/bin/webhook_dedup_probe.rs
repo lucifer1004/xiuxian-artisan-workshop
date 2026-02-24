@@ -8,7 +8,9 @@ use std::sync::{
 use anyhow::Result;
 use axum::{Json, Router, routing::get};
 use clap::Parser;
-use omni_agent::{WebhookDedupBackend, WebhookDedupConfig, build_telegram_webhook_app};
+use omni_agent::{
+    WebhookDedupBackend, WebhookDedupConfig, build_telegram_webhook_app, load_runtime_settings,
+};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
@@ -35,13 +37,17 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+    let runtime_settings = load_runtime_settings();
     let valkey_url = args
         .valkey_url
+        .or_else(|| runtime_settings.session.valkey_url.clone())
         .or_else(|| std::env::var("VALKEY_URL").ok())
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("set --valkey-url or VALKEY_URL"))?
+        .ok_or_else(|| {
+            anyhow::anyhow!("set --valkey-url or configure session.valkey_url (or VALKEY_URL)")
+        })?
         .to_string();
 
     let (tx, mut rx) = mpsc::channel(1024);

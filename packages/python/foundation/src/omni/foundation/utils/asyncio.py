@@ -6,25 +6,34 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from collections.abc import Coroutine
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
-T = TypeVar("T")
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
 
 
-def run_async_blocking(coro: Coroutine[Any, Any, T]) -> T:
+def run_async_blocking[T](coro: Coroutine[Any, Any, T]) -> T:
     """Run a coroutine from sync code and return its result.
 
-    Always runs the coroutine in a dedicated worker thread with its own event loop.
-    This avoids "event loop is already running" and nested-loop issues when callers
-    (e.g. route test) or libraries have already set up a loop.
+    Fast path:
+    - If no event loop is running in this thread, execute directly via asyncio.run()
+      to avoid per-call thread-pool overhead in CLI hot paths.
+
+    Compatibility path:
+    - If a loop is already running (e.g. tests or embedded runtimes), execute in
+      a dedicated worker thread with its own event loop.
     """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
     with ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(_run_coro_in_thread, coro)
         return future.result()
 
 
-def _run_coro_in_thread(coro: Coroutine[Any, Any, T]) -> T:
+def _run_coro_in_thread[T](coro: Coroutine[Any, Any, T]) -> T:
     """Run a coroutine in this thread with a new event loop. Used by run_async_blocking."""
     return asyncio.run(coro)
 

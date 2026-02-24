@@ -1,15 +1,52 @@
-//! omni-core-rs - Python bindings for Omni DevEnv Rust core.
+#![allow(
+    clippy::needless_pass_by_value,
+    reason = "PyO3 boundary functions intentionally accept owned Python values."
+)]
+#![allow(
+    clippy::must_use_candidate,
+    reason = "PyO3 exports are primarily consumed from Python, not Rust call sites."
+)]
+#![allow(
+    clippy::doc_markdown,
+    reason = "Python-facing docs intentionally include function names, DSL tokens, and mixed naming."
+)]
+#![allow(
+    clippy::missing_errors_doc,
+    reason = "PyO3 wrappers map errors into Python exceptions; Rustdoc # Errors is low-value noise here."
+)]
+#![allow(
+    clippy::uninlined_format_args,
+    reason = "String templates remain explicit in cross-language error payload assembly."
+)]
+#![allow(
+    clippy::too_many_arguments,
+    reason = "Python API wrappers expose explicit keyword-argument surfaces for call-site clarity."
+)]
+#![allow(
+    clippy::unnecessary_wraps,
+    reason = "PyO3 APIs standardize `PyResult` returns even when current paths are infallible."
+)]
+#![allow(
+    clippy::unused_self,
+    reason = "PyO3 instance methods keep stable Python object method shapes."
+)]
+#![allow(
+    clippy::redundant_closure,
+    reason = "Some closures are kept for readability at Rust/Python boundary transforms."
+)]
+
+//! `omni-core-rs` - Python bindings for Omni `DevEnv` Rust core.
 //!
 //! Provides high-performance Rust implementations for:
-//! - Environment sniffing (OmniSniffer)
-//! - File I/O (read_file_safe)
-//! - Token counting (count_tokens)
-//! - Secret scanning (scan_secrets)
-//! - Code navigation (get_file_outline, search_code, search_directory)
-//! - Structural refactoring (structural_replace, structural_preview)
-//! - Vector Store (PyVectorStore for LanceDB)
-//! - Skill Tool Scanner (scan_skill_tools)
-//! - Context Assembly (ContextAssembler)
+//! - Environment sniffing (`OmniSniffer`)
+//! - File I/O (`read_file_safe`)
+//! - Token counting (`count_tokens`)
+//! - Secret scanning (`scan_secrets`)
+//! - Code navigation (`get_file_outline`, `search_code`, `search_directory`)
+//! - Structural refactoring (`structural_replace`, `structural_preview`)
+//! - Vector store (`PyVectorStore` for `LanceDB`)
+//! - Skill tool scanner (`scan_skill_tools`)
+//! - Context assembly (`ContextAssembler`)
 
 use pyo3::prelude::*;
 
@@ -95,7 +132,7 @@ pub use vector::{
 pub use tokenizer::{PyMessage, py_chunk_text, py_count_tokens, py_truncate, py_truncate_middle};
 
 // Schema Registry exports (Schema Singularity)
-pub use schema::{py_get_registered_types, py_get_schema_json};
+pub use schema::{py_get_named_schema_json, py_get_registered_types, py_get_schema_json};
 
 // Symbol Extraction (omni-tags)
 pub use tags::{
@@ -114,7 +151,7 @@ pub use xiuxian_wendao::PySyncEngine;
 pub use xiuxian_wendao::PySyncResult;
 pub use xiuxian_wendao::{
     extract_query_intent, invalidate_kg_cache, link_graph_stats_cache_del,
-    link_graph_stats_cache_get, link_graph_stats_cache_set, load_kg_from_lance_cached,
+    link_graph_stats_cache_get, link_graph_stats_cache_set, load_kg_from_valkey_cached,
 };
 
 // Session Window (omni-window, 1k–10k scale)
@@ -153,8 +190,8 @@ pub use xiuxian_wendao::link_graph_is_valid_ref;
 pub use xiuxian_wendao::link_graph_parse_entity_ref;
 pub use xiuxian_wendao::link_graph_parse_frontmatter;
 
-// Dual-core recall boost (LinkGraph proximity, Rust computation)
-pub use xiuxian_wendao::dual_core_py::apply_link_graph_proximity_boost_py;
+// Fusion recall boost (LinkGraph proximity, Rust computation)
+pub use xiuxian_wendao::fusion_py::apply_link_graph_proximity_boost_py;
 
 // AST Extraction
 pub use ast::{
@@ -175,6 +212,10 @@ pub use watcher::{
 
 /// Python module initialization
 #[pymodule]
+#[allow(
+    clippy::too_many_lines,
+    reason = "PyO3 module registration intentionally enumerates all exported bindings."
+)]
 fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Sniffer module
     m.add_class::<PyOmniSniffer>()?;
@@ -300,6 +341,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(parse_script_content, m)?)?;
 
     // Schema Registry - Dynamic JSON Schema Generation (Schema Singularity)
+    m.add_function(pyo3::wrap_pyfunction!(py_get_named_schema_json, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(py_get_schema_json, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(py_get_registered_types, m)?)?;
 
@@ -334,7 +376,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<xiuxian_wendao::PyLinkGraphEngine>()?;
     m.add_function(pyo3::wrap_pyfunction!(extract_query_intent, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(invalidate_kg_cache, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(load_kg_from_lance_cached, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(load_kg_from_valkey_cached, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(link_graph_stats_cache_get, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(link_graph_stats_cache_set, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(link_graph_stats_cache_del, m)?)?;
@@ -360,18 +402,16 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(link_graph_enhance_notes_batch, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(link_graph_parse_frontmatter, m)?)?;
 
-    // Dual-core recall boost (LinkGraph proximity)
+    // Fusion recall boost (LinkGraph proximity)
     m.add_function(pyo3::wrap_pyfunction!(
         apply_link_graph_proximity_boost_py,
         m
     )?)?;
 
     // Dependency Indexer (External crate symbol search)
-    use xiuxian_wendao::dep_indexer_py::register_dependency_indexer_module;
-    register_dependency_indexer_module(m)?;
+    xiuxian_wendao::dep_indexer_py::register_dependency_indexer_module(m)?;
 
     // Unified Symbol Index (Project + External dependency search)
-    use xiuxian_wendao::unified_symbol_py::register_unified_symbol_module;
     // NCL-driven Sandbox Executor (omni-sandbox)
     m.add_function(pyo3::wrap_pyfunction!(sandbox::sandbox_detect_platform, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(
@@ -388,7 +428,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<sandbox::NsJailExecutor>()?;
     m.add_class::<sandbox::SeatbeltExecutor>()?;
 
-    register_unified_symbol_module(m)?;
+    xiuxian_wendao::unified_symbol_py::register_unified_symbol_module(m)?;
 
     // Self-Evolving Memory (omni-memory)
     m.add_class::<PyEpisode>()?;

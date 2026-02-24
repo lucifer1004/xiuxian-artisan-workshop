@@ -272,9 +272,6 @@ end
                     *conn_guard = None;
                     last_err =
                         Some(anyhow::anyhow!(err).context("session gate valkey command failed"));
-                    if attempt == 0 {
-                        continue;
-                    }
                 }
             }
         }

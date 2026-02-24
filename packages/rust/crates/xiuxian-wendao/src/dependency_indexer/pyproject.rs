@@ -111,11 +111,17 @@ dependencies = [
 ]
 "#;
 
-        let mut file = NamedTempFile::new().unwrap();
-        file.write_all(content.as_bytes()).unwrap();
+        let mut file = NamedTempFile::new().unwrap_or_else(|error| {
+            panic!("failed to create temp file: {error}");
+        });
+        file.write_all(content.as_bytes()).unwrap_or_else(|error| {
+            panic!("failed to write temp file: {error}");
+        });
         let path = file.path().to_path_buf();
 
-        let deps = parse_pyproject_dependencies(&path).unwrap();
+        let deps = parse_pyproject_dependencies(&path).unwrap_or_else(|error| {
+            panic!("failed to parse pyproject dependencies: {error}");
+        });
 
         assert!(deps.iter().any(|d| d.name == "requests"));
         assert!(deps.iter().any(|d| d.name == "click"));

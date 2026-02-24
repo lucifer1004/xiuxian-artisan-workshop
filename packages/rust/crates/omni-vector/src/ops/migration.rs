@@ -23,21 +23,33 @@ use crate::{
 };
 use crate::{CONTENT_COLUMN, INTENTS_COLUMN, ROUTING_KEYWORDS_COLUMN};
 
-#[allow(clippy::expect_used, clippy::missing_panics_doc)]
-fn build_string_dictionary(values: &[String]) -> DictionaryArray<Int32Type> {
+fn build_string_dictionary(
+    values: &[String],
+) -> Result<DictionaryArray<Int32Type>, VectorStoreError> {
     let mut uniq: Vec<String> = Vec::new();
     let mut map: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
     for s in values {
         if !map.contains_key(s) {
-            let idx = i32::try_from(uniq.len()).unwrap_or(i32::MAX);
+            let idx = i32::try_from(uniq.len()).map_err(|_| {
+                VectorStoreError::General(
+                    "tool_name dictionary exceeds i32 key capacity".to_string(),
+                )
+            })?;
             map.insert(s.clone(), idx);
             uniq.push(s.clone());
         }
     }
-    let keys: Vec<i32> = values.iter().map(|s| *map.get(s).unwrap_or(&0)).collect();
+    let keys: Vec<i32> = values
+        .iter()
+        .map(|s| {
+            map.get(s).copied().ok_or_else(|| {
+                VectorStoreError::General(format!("missing tool_name dictionary key for '{s}'"))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let value_arr = StringArray::from(uniq);
     DictionaryArray::<Int32Type>::try_new(Int32Array::from(keys), Arc::new(value_arr))
-        .expect("dictionary tool_name")
+        .map_err(VectorStoreError::Arrow)
 }
 
 /// Current target schema version. New tables are created at this version.
@@ -95,7 +107,7 @@ fn migrate_batch_v1_to_v2(
     let tool_names: Vec<String> = (0..batch.num_rows())
         .map(|i| get_utf8_at(tool_col.as_ref(), i))
         .collect();
-    let tool_name_dict = Arc::new(build_string_dictionary(&tool_names));
+    let tool_name_dict = Arc::new(build_string_dictionary(&tool_names)?);
 
     let rk_col = batch
         .column_by_name(ROUTING_KEYWORDS_COLUMN)
@@ -159,9 +171,12 @@ fn migrate_batch_v1_to_v2(
     RecordBatch::try_new(schema_v2.clone(), columns).map_err(VectorStoreError::Arrow)
 }
 
-#[allow(clippy::missing_errors_doc)]
 impl crate::VectorStore {
     /// List pending migrations for a table (based on current schema version vs OMNI_SCHEMA_VERSION).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when opening the dataset or reading schema metadata fails.
     pub async fn check_migrations(
         &self,
         table_name: &str,
@@ -198,6 +213,11 @@ impl crate::VectorStore {
     }
 
     /// Run all pending migrations for the table (detect version, apply v1→v2, etc.).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when reading source data, converting batches, recreating
+    /// the destination table, or appending migrated batches fails.
     pub async fn migrate(&mut self, table_name: &str) -> Result<MigrateResult, VectorStoreError> {
         use lance::deps::arrow_array::RecordBatchIterator;
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -225,10 +226,8 @@ def run_monitored_process(
                     event_counts[event_token] += 1
         except KeyboardInterrupt:
             interrupted = True
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 proc.send_signal(signal.SIGINT)
-            except ProcessLookupError:
-                pass
 
     for signum, handler in previous_signal_handlers.items():
         signal.signal(signum, handler)

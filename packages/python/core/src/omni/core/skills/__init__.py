@@ -1,142 +1,105 @@
 """
-omni.core.skills - Skills System
+omni.core.skills - Skills System (lazy exports).
 
-Provides skill management:
-- registry: Skill discovery and metadata
-- runtime: Skill execution context
-- discovery: Skill finder
-- memory: Skill memory management (Rust-Native Context Hydration)
-- extensions: Extension loading system
-- tools_loader: Script loading with auto-wiring
-- universal: Zero-Code Skill container
-- index_loader: Rust-generated skill index loader
-- file_cache: Thread-safe file content cache
-- ref_parser: required_refs parser
-- hydrator: Context assembly for LLM
-- indexer: Skill Indexing Pipeline (Rust Scan -> Embed -> Store)
-- registry.holographic: Holographic Registry (virtual, LanceDB-backed)
-
-Usage:
-    from omni.core.skills.runtime import get_skill_context
-    from omni.core.skills.registry import SkillRegistry
-    from omni.core.skills.discovery import SkillDiscovery
-    from omni.core.skills.memory import SkillMemory
-    from omni.core.skills.universal import UniversalScriptSkill
-    from omni.core.skills.indexer import SkillIndexer
-    from omni.core.skills.registry.holographic import HolographicRegistry
-
-    # Context Hydration (Rust-Native)
-    from omni.core.skills import get_skill_memory
-    memory = get_skill_memory()
-    context = memory.hydrate_skill_context("researcher")
+Avoid eager package imports so fast CLI paths can import ``omni.core.skills.runner``
+without loading the full skills subsystem.
 """
 
-# Registry module (thin client - simplified)
-# Discovery module
-from .discovery import (
-    DiscoveredSkill,
-    SkillDiscoveryService,
-    is_rust_available,
-)
+from __future__ import annotations
 
-# Extensions module
-from .extensions import (
-    ExtensionWrapper,
-    SkillExtensionLoader,
-    get_extension_loader,
-)
+import importlib
+from typing import Any
 
-# Memory module
-from .memory import SkillMemory, get_skill_memory
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    # Discovery
+    "DiscoveredSkill": (".discovery", "DiscoveredSkill"),
+    "SkillDiscoveryService": (".discovery", "SkillDiscoveryService"),
+    "is_rust_available": (".discovery", "is_rust_available"),
+    # Extensions
+    "ExtensionWrapper": (".extensions", "ExtensionWrapper"),
+    "SkillExtensionLoader": (".extensions", "SkillExtensionLoader"),
+    "get_extension_loader": (".extensions", "get_extension_loader"),
+    # Memory
+    "SkillMemory": (".memory", "SkillMemory"),
+    "get_skill_memory": (".memory", "get_skill_memory"),
+    # Context Hydration
+    "SkillIndexLoader": (".index_loader", "SkillIndexLoader"),
+    "FileCache": (".file_cache", "FileCache"),
+    "RefParser": (".ref_parser", "RefParser"),
+    "ContextHydrator": (".hydrator", "ContextHydrator"),
+    # Registry
+    "SkillRegistry": (".registry", "SkillRegistry"),
+    "get_skill_registry": (".registry", "get_skill_registry"),
+    "HolographicRegistry": (".registry", "HolographicRegistry"),
+    "ToolMetadata": (".registry", "ToolMetadata"),
+    "LazyTool": (".registry", "LazyTool"),
+    # Runtime
+    "SkillContext": (".runtime", "SkillContext"),
+    "SkillManager": (".runtime", "SkillManager"),
+    "get_skill_context": (".runtime", "get_skill_context"),
+    "reset_context": (".runtime", "reset_context"),
+    "run_command": (".runtime", "run_command"),
+    # Tools loader
+    "ToolsLoader": (".tools_loader", "ToolsLoader"),
+    "create_tools_loader": (".tools_loader", "create_tools_loader"),
+    "_skill_command_registry": (".tools_loader", "_skill_command_registry"),
+    # Universal skill
+    "UniversalScriptSkill": (".universal", "UniversalScriptSkill"),
+    "UniversalSkillFactory": (".universal", "UniversalSkillFactory"),
+    "create_skill_from_assets": (".universal", "create_skill_from_assets"),
+    "create_universal_skill": (".universal", "create_universal_skill"),
+    # Runner
+    "FastPathUnavailable": (".runner", "FastPathUnavailable"),
+    "run_skill": (".runner", "run_skill"),
+    "run_skill_with_monitor": (".runner", "run_skill_with_monitor"),
+    # Indexer
+    "SkillIndexer": (".indexer", "SkillIndexer"),
+}
 
-# Context Hydration modules (Rust-Native)
-from .index_loader import SkillIndexLoader
-from .file_cache import FileCache
-from .ref_parser import RefParser
-from .hydrator import ContextHydrator
 
-from .registry import (
-    SkillRegistry,
-    get_skill_registry,
-    # Holographic Registry
-    HolographicRegistry,
-    ToolMetadata,
-    LazyTool,
-)
+def __getattr__(name: str) -> Any:
+    export = _LAZY_EXPORTS.get(name)
+    if export is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, attr_name = export
+    module = importlib.import_module(module_name, package=__name__)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value
 
-# Runtime module
-from .runtime import (
-    SkillContext,
-    SkillManager,
-    get_skill_context,
-    reset_context,
-    run_command,
-)
-
-# Tools loader module
-from .tools_loader import (
-    ToolsLoader,
-    create_tools_loader,
-    _skill_command_registry,
-)
-
-# Universal skill module
-from .universal import (
-    UniversalScriptSkill,
-    UniversalSkillFactory,
-    create_skill_from_assets,
-    create_universal_skill,
-)
-
-# Unified skill run (fast path + kernel fallback)
-from .runner import FastPathUnavailable, run_skill, run_skill_with_monitor
-
-# Indexer module
-from .indexer import SkillIndexer
 
 __all__ = [
-    # Registry
-    "SkillRegistry",
-    "get_skill_registry",
-    # Holographic Registry
-    "HolographicRegistry",
-    "ToolMetadata",
-    "LazyTool",
-    # Runtime
-    "SkillContext",
-    "SkillManager",
-    "get_skill_context",
-    "reset_context",
-    "run_command",
-    # Discovery
-    "SkillDiscoveryService",
-    "DiscoveredSkill",
-    "is_rust_available",
-    # Memory
-    "SkillMemory",
-    "get_skill_memory",
-    # Context Hydration (Rust-Native)
-    "SkillIndexLoader",
-    "FileCache",
-    "RefParser",
     "ContextHydrator",
-    # Extensions
-    "SkillExtensionLoader",
+    "DiscoveredSkill",
     "ExtensionWrapper",
-    "get_extension_loader",
-    # Tools Loader
+    "FastPathUnavailable",
+    "FileCache",
+    "HolographicRegistry",
+    "LazyTool",
+    "RefParser",
+    "SkillContext",
+    "SkillDiscoveryService",
+    "SkillExtensionLoader",
+    "SkillIndexLoader",
+    "SkillIndexer",
+    "SkillManager",
+    "SkillMemory",
+    "SkillRegistry",
+    "ToolMetadata",
     "ToolsLoader",
-    "create_tools_loader",
-    "_skill_command_registry",
-    # Universal
     "UniversalScriptSkill",
     "UniversalSkillFactory",
-    "create_universal_skill",
+    "_skill_command_registry",
     "create_skill_from_assets",
-    # Runner (unified run: fast path + kernel fallback)
+    "create_tools_loader",
+    "create_universal_skill",
+    "get_extension_loader",
+    "get_skill_context",
+    "get_skill_memory",
+    "get_skill_registry",
+    "is_rust_available",
+    "reset_context",
+    "run_command",
     "run_skill",
     "run_skill_with_monitor",
-    "FastPathUnavailable",
-    # Indexer
-    "SkillIndexer",
 ]

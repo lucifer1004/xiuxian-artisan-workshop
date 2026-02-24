@@ -20,7 +20,9 @@ LOCK_VERSION: Final[int] = 1
 HASH_ALGORITHM: Final[str] = "sha256"
 
 PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
-LOCK_PATH: Final[Path] = PROJECT_ROOT / "packages/shared/schemas/contract-freeze.lock.json"
+LOCK_PATH: Final[Path] = (
+    PROJECT_ROOT / "packages" / "rust" / "contracts" / "contract-freeze.lock.json"
+)
 
 FROZEN_FILES: Final[tuple[str, ...]] = (
     "packages/rust/crates/omni-agent/src/contracts/omega.rs",
@@ -28,9 +30,9 @@ FROZEN_FILES: Final[tuple[str, ...]] = (
     "packages/rust/crates/xiuxian-qianhuan/src/contracts/block.rs",
     "packages/rust/crates/xiuxian-qianhuan/src/contracts/policy.rs",
     "packages/rust/crates/xiuxian-qianhuan/src/contracts/snapshot.rs",
-    "packages/shared/schemas/omni.discover.match.v1.schema.json",
-    "packages/shared/schemas/omni.memory.gate_event.v1.schema.json",
-    "packages/shared/schemas/omni.agent.route_trace.v1.schema.json",
+    "packages/rust/crates/omni-agent/resources/omni.discover.match.v1.schema.json",
+    "packages/rust/crates/omni-memory/resources/omni.memory.gate_event.v1.schema.json",
+    "packages/rust/crates/omni-agent/resources/omni.agent.route_trace.v1.schema.json",
 )
 
 
@@ -70,6 +72,7 @@ def _write_lock(entries: list[dict[str, str]]) -> None:
         "algorithm": HASH_ALGORITHM,
         "entries": entries,
     }
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     LOCK_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 

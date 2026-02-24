@@ -1,0 +1,38 @@
+# Baseline cargo-deny policy for Rust dependency security gates.
+# This starts with pragmatic defaults and can be tightened incrementally.
+
+[graph]
+targets = []
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+ignore = [
+    { id = "RUSTSEC-2025-0141", reason = "bincode is unmaintained; transitive via litellm-rs/sqlx path in omni-agent; remove once upstream stack migrates off bincode 1.x" },
+    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained; transitive via lance/datafusion path in omni-vector; remove once upstream graph no longer resolves paste 1.0.x" },
+    { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile is unmaintained; transitive via reqwest 0.11 from litellm-rs/serenity in omni-agent; remove once those dependencies are on maintained pem parser stack" },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
+github = []
+gitlab = []
+bitbucket = []

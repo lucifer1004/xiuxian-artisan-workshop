@@ -1,3 +1,13 @@
+---
+title: "CLI Developer Guide"
+category: "developer"
+tags:
+  - developer
+  - cli
+saliency_base: 6.3
+decay_rate: 0.04
+---
+
 # CLI Developer Guide
 
 > **NOTE**: Core CLI commands are documented in [CLI Reference](../reference/cli.md)
@@ -131,6 +141,46 @@ Route defaults and confidence profile settings live under `router.search.*`, inc
 - `router.search.profiles.<name>`
 
 See [CLI Reference](../reference/cli.md) for user-facing command usage.
+
+---
+
+## Skill Runner Daemon (Low-Latency Path)
+
+`omni skill run` now defaults to process reuse through a local Unix-socket daemon
+to reduce repeated startup overhead.
+
+### Behavior
+
+- Default: daemon reuse is enabled.
+- Opt-out per call: pass `--no-reuse-process`.
+- JSON and non-JSON output paths both use the same reuse mechanism.
+
+### Management Commands
+
+```bash
+omni skill runner status --json
+omni skill runner start --json
+omni skill runner stop --json
+```
+
+### Examples
+
+```bash
+# Default (reuse enabled)
+omni skill run knowledge.search '{"query":"Hard Constraints","mode":"vector","max_results":3}' --json
+
+# Explicit disable
+omni skill run knowledge.search '{"query":"Hard Constraints","mode":"vector","max_results":3}' --json --no-reuse-process
+```
+
+### Isolation For Tests
+
+Set `OMNI_SKILL_RUNNER_SOCKET` to isolate daemon instances in integration tests
+or parallel runs.
+
+```bash
+OMNI_SKILL_RUNNER_SOCKET=/tmp/omni-skill-runner-test.sock omni skill runner status --json
+```
 
 ---
 

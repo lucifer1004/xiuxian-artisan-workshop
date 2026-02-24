@@ -1,3 +1,13 @@
+---
+title: "Keyword Backend Statistical Evidence"
+category: "testing"
+tags:
+  - testing
+  - keyword
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Keyword Backend Statistical Evidence
 
 - Generated at: `2026-02-12`

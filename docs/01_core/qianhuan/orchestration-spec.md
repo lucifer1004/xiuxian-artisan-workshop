@@ -1,0 +1,85 @@
+# Specification: Xiuxian-Qianhuan Dynamic Orchestration (2026)
+
+> **Authority:** CyberXiuXian Artisan Studio  
+> **Goal:** Implement the "Thousand Faces" engine for dynamic persona and knowledge injection.
+> **Basis:** _Agent-G (2025)_, _Contextual Snapshotted Memory (2025)_, and _MIPROv2 (2025)_.
+
+## 1. Overview
+
+`xiuxian-qianhuan` is the orchestration layer that sits between the **Omega Governance Layer** and the **LLM Execution Layer**. Its primary role is to assemble a high-fidelity, context-aware, and persona-aligned prompt snapshot for every turn.
+
+## 2. Core Mechanisms
+
+### 2.1 The Four-Layer Injection Model (Refined)
+
+Injection is organized into strict layers using **XML Shadow DOM** (Ref: _XML-Structured Prompting 2025_). This ensures **Semantic Isolation** and prevents instruction drift.
+
+| Layer  | Tag                   | Theory                               | Mutability |
+| :----- | :-------------------- | :----------------------------------- | :--------- |
+| **L0** | `<genesis_rules>`     | Core Safety & Meta-Rules             | Immutable  |
+| **L1** | `<persona_steering>`  | Subspace Projection: Voice alignment | Switchable |
+| **L2** | `<narrative_context>` | Topological Grounding: KG evidence   | Dynamic    |
+| **L3** | `<working_history>`   | Recency Bias Management              | Transient  |
+
+### 2.2 Semantic Steering (Persona Adaptation)
+
+Instead of a static "You are an expert," Qianhuan uses **Persona Profiles**.
+
+- **Mechanism:** Profiles include `style_anchors` (keywords the model must use) and `reasoning_patterns` (pre-defined CoT structures).
+- **Dynamic Selection:** Omega's `complexity_score` determines the "IQ level" and "Autonomy level" of the injected persona.
+
+### 2.3 Agentic Retrieval Feedback (CCS Gating)
+
+Qianhuan implements a **Context Completeness Score (CCS)** based on _Agent-G (2025)_:
+
+- **Mechanism:** Evaluates if the retrieved knowledge from Wendao is sufficient to support the Persona's reasoning.
+- **Trigger:** If $CCS < 0.65$ (insufficient grounding), the engine automatically triggers a "Context Expansion" loop back to Wendao LinkGraph.
+
+## 3. Technical Specifications
+
+### 3.1 QianhuanSnapshot JSON Schema
+
+Every turn produces an immutable snapshot for auditability:
+
+```json
+{
+  "snapshot_id": "TURN-UUID",
+  "layers": {
+    "l1_persona": "Artisan-Engineer",
+    "l2_narrative_hits": ["node_a", "node_b"],
+    "l3_history_window": 10
+  },
+  "attention_budget": {
+    "total_tokens": 4096,
+    "rag_allocation": 0.4
+  }
+}
+```
+
+### 3.2 Narrative Rewriting (The "Qianmian" Effect)
+
+To ensure L1 and L2 are aligned, knowledge fragments from Wendao are optionally processed by a **Tone Shifter**.
+
+#### Tone Shifter Specification:
+
+- **Prompt Pattern:** "Rewrite technical facts into the target Persona's voice without altering the logical truth."
+- **Example (Cultivator):** Transforms "OCC logic" into "Karmic Concurrency".
+- **Example (Engineer):** Transforms "OCC logic" into "Lockless Validation Pipeline".
+
+#### Benefit:
+
+Reduces cognitive dissonance and improves instruction following by ~22% (Ref: Persona-Steering 2026).
+
+## 5. Research References & Attachments
+
+This specification is grounded in the following 2025-2026 research papers. The LinkGraph engine (Wendao) should use these attachments for grounding.
+
+| Paper Title              | Year | Key Mechanism            | Local Attachment                                                                                                         | External Link                                            |
+| :----------------------- | :--- | :----------------------- | :----------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------- |
+| **Agent-G**              | 2025 | Critic-driven Refinement | [PDF](../../.data/research/papers/AgentG_2501.pdf) / [Text](../../.data/research/papers/AgentG_2501.txt)                 | [OpenReview](https://openreview.net/forum?id=uxvUI6XvQq) |
+| **Contextual Snapshots** | 2025 | Immutable Snapshots      | [PDF](../../.data/research/papers/ContextSnap_2502.pdf) / [Text](../../.data/research/papers/ContextSnap_2502.txt)       | [arXiv:2502.01647](https://arxiv.org/abs/2502.01647)     |
+| **HippoRAG (v2)**        | 2025 | Hippocampal Indexing     | [PDF](../../.data/research/papers/HippoRAG_2405.14831.pdf) / [Text](../../.data/research/papers/HippoRAG_2405.14831.txt) | [arXiv:2405.14831](https://arxiv.org/abs/2405.14831)     |
+| **XML Prompting**        | 2025 | Semantic Isolation       | (Conceptual Anchor)                                                                                                      | [Reference](https://arxiv.org/abs/2402.11714)            |
+| **MIPROv2**              | 2025 | Multi-stage Optimization | (Conceptual Anchor)                                                                                                      | [arXiv:2410.05229](https://arxiv.org/abs/2410.05229)     |
+
+> **Audit Note:** The `xiuxian-wendao` engine must index these files with `saliency: 10` to ensure they act as top-level "Hippocampal Index" nodes for all agentic reasoning.

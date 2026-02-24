@@ -1,5 +1,5 @@
-//! Bounded session store: session_id → ring buffer of recent turns (omni-window).
-//! Used when config.window_max_turns is set; context for LLM is built from recent turns.
+//! Bounded session store: `session_id` -> ring buffer of recent turns (`omni-window`).
+//! Used when `config.window_max_turns` is set; context for LLM is built from recent turns.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -18,7 +18,8 @@ use super::summary::SessionSummarySegment;
 const DEFAULT_SUMMARY_MAX_SEGMENTS: usize = 8;
 const DEFAULT_SUMMARY_MAX_CHARS: usize = 480;
 
-/// Bounded session store: one ring buffer (SessionWindow) per session_id. Thread-safe via RwLock.
+/// Bounded session store: one ring buffer (`SessionWindow`) per `session_id`.
+/// Thread-safe via `RwLock`.
 #[derive(Clone)]
 pub struct BoundedSessionStore {
     inner: Arc<RwLock<HashMap<String, SessionWindow>>>,
@@ -49,6 +50,9 @@ impl BoundedSessionStore {
     }
 
     /// Create a store with the given max turns per session.
+    ///
+    /// # Errors
+    /// Returns an error when Valkey-backed runtime initialization fails.
     pub fn new(max_turns: usize) -> Result<Self> {
         Self::new_with_limits(
             max_turns,
@@ -58,6 +62,9 @@ impl BoundedSessionStore {
     }
 
     /// Create a store with explicit summary limits.
+    ///
+    /// # Errors
+    /// Returns an error when Valkey-backed runtime initialization fails.
     pub fn new_with_limits(
         max_turns: usize,
         summary_max_segments: usize,
@@ -88,6 +95,9 @@ impl BoundedSessionStore {
     }
 
     /// Create a bounded store with explicit Valkey backend parameters.
+    ///
+    /// # Errors
+    /// Returns an error when Valkey backend creation fails.
     pub fn new_with_redis(
         max_turns: usize,
         redis_url: impl Into<String>,
@@ -105,6 +115,9 @@ impl BoundedSessionStore {
     }
 
     /// Create a bounded store with explicit Valkey backend and summary limits.
+    ///
+    /// # Errors
+    /// Returns an error when Valkey backend creation fails.
     pub fn new_with_redis_and_limits(
         max_turns: usize,
         redis_url: impl Into<String>,
@@ -122,7 +135,11 @@ impl BoundedSessionStore {
         ))
     }
 
-    /// Returns recent turns as ChatMessages (role + content only) for LLM context. Oldest first.
+    /// Returns recent turns as `ChatMessage` rows (`role` + `content` only) for LLM context.
+    /// Oldest first.
+    ///
+    /// # Errors
+    /// Returns an error when loading bounded window slots from Valkey fails.
     pub async fn get_recent_messages(
         &self,
         session_id: &str,
@@ -174,6 +191,9 @@ impl BoundedSessionStore {
     }
 
     /// Returns recent raw window slots (oldest to newest) for exact state snapshot/restore.
+    ///
+    /// # Errors
+    /// Returns an error when loading bounded window slots from Valkey fails.
     pub async fn get_recent_slots(
         &self,
         session_id: &str,
@@ -222,6 +242,9 @@ impl BoundedSessionStore {
     }
 
     /// Append one user/assistant turn. Creates the session window if missing.
+    ///
+    /// # Errors
+    /// Returns an error when appending bounded window slots to Valkey fails.
     pub async fn append_turn(
         &self,
         session_id: &str,
@@ -271,6 +294,9 @@ impl BoundedSessionStore {
     }
 
     /// Replace active window slots for a session with an exact raw snapshot.
+    ///
+    /// # Errors
+    /// Returns an error when replacing bounded window state in Valkey fails.
     pub async fn replace_window_slots(&self, session_id: &str, slots: &[TurnSlot]) -> Result<()> {
         if let Some(ref redis) = self.redis {
             redis.clear_window(session_id).await.with_context(|| {
@@ -326,6 +352,10 @@ impl BoundedSessionStore {
         Ok(())
     }
 
+    /// Atomically reset active bounded-session state into backup keys.
+    ///
+    /// # Errors
+    /// Returns an error when the underlying Valkey atomic reset operation fails.
     pub async fn atomic_reset_snapshot(
         &self,
         session_id: &str,
@@ -350,6 +380,10 @@ impl BoundedSessionStore {
         Ok(Some(stats))
     }
 
+    /// Atomically restore active bounded-session state from backup keys.
+    ///
+    /// # Errors
+    /// Returns an error when the underlying Valkey atomic resume operation fails.
     pub async fn atomic_resume_snapshot(
         &self,
         session_id: &str,
@@ -367,6 +401,10 @@ impl BoundedSessionStore {
             })
     }
 
+    /// Atomically delete bounded-session backup keys.
+    ///
+    /// # Errors
+    /// Returns an error when the underlying Valkey atomic drop operation fails.
     pub async fn atomic_drop_snapshot(
         &self,
         backup_session_id: &str,
@@ -386,7 +424,10 @@ impl BoundedSessionStore {
         Ok(Some(dropped))
     }
 
-    /// Session stats: (turn_count, total_tool_calls, ring_len).
+    /// Session stats: (`turn_count`, `total_tool_calls`, `ring_len`).
+    ///
+    /// # Errors
+    /// Returns an error when reading bounded-session stats from Valkey fails.
     pub async fn get_stats(&self, session_id: &str) -> Result<Option<(u64, u64, usize)>> {
         if let Some(ref redis) = self.redis {
             let stats = redis.get_window_stats(session_id).await.with_context(|| {
@@ -430,6 +471,9 @@ impl BoundedSessionStore {
     }
 
     /// Clear the session (e.g. on explicit clear).
+    ///
+    /// # Errors
+    /// Returns an error when clearing bounded-session state in Valkey fails.
     pub async fn clear(&self, session_id: &str) -> Result<()> {
         if let Some(ref redis) = self.redis {
             redis.clear_window(session_id).await.with_context(|| {
@@ -459,8 +503,11 @@ impl BoundedSessionStore {
         Ok(())
     }
 
-    /// Drain the oldest `n` turns for consolidation. Returns (role, content, tool_count) per turn.
+    /// Drain the oldest `n` turns for consolidation. Returns (role, content, `tool_count`) per turn.
     /// Call when window is at or above consolidation threshold; then summarise and store as episode.
+    ///
+    /// # Errors
+    /// Returns an error when draining bounded-session slots from Valkey fails.
     pub async fn drain_oldest_turns(
         &self,
         session_id: &str,
@@ -516,6 +563,9 @@ impl BoundedSessionStore {
     }
 
     /// Append a compact summary segment produced during consolidation.
+    ///
+    /// # Errors
+    /// Returns an error when appending summary segment to Valkey fails.
     pub async fn append_summary_segment(
         &self,
         session_id: &str,
@@ -565,6 +615,9 @@ impl BoundedSessionStore {
     }
 
     /// Get the most recent compact summary segments for prompt context injection.
+    ///
+    /// # Errors
+    /// Returns an error when loading summary segments from Valkey fails.
     pub async fn get_recent_summary_segments(
         &self,
         session_id: &str,
@@ -609,6 +662,9 @@ impl BoundedSessionStore {
     }
 
     /// Count compact summary segments for the session without loading full contents.
+    ///
+    /// # Errors
+    /// Returns an error when reading summary segment count from Valkey fails.
     pub async fn get_summary_segment_count(&self, session_id: &str) -> Result<usize> {
         if let Some(ref redis) = self.redis {
             let segment_count = redis.get_summary_len(session_id).await.with_context(|| {

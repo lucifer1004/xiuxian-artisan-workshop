@@ -8,6 +8,9 @@ use omni_vector::skill::ToolSearchResult;
 use rand::Rng;
 use serde_json::Value;
 
+const ENTITY_MATCH_ITERATIONS: usize = 100;
+const ENTITY_MATCH_MAX_DURATION_MS: u64 = 250;
+
 /// Generate test entities for benchmarking.
 fn generate_entities(count: usize) -> Vec<EntityMatch> {
     let mut entities = Vec::with_capacity(count);
@@ -76,22 +79,25 @@ fn test_entity_matching_performance() {
 
     let start = std::time::Instant::now();
 
-    for _ in 0..100 {
+    for _ in 0..ENTITY_MATCH_ITERATIONS {
         let _aware = apply_entity_boost(results.clone(), entities.clone(), 0.3, None);
     }
 
     let elapsed = start.elapsed();
 
-    // Should complete 100 iterations in under 100ms
-    let max_duration = std::time::Duration::from_millis(100);
+    // Keep benchmark guard tolerant to debug-profile and shared CI runner variance.
+    let max_duration = std::time::Duration::from_millis(ENTITY_MATCH_MAX_DURATION_MS);
     assert!(
         elapsed < max_duration,
-        "Entity matching took {:.2}ms for 100 iterations, expected < 100ms",
-        elapsed.as_secs_f64() * 1000.0
+        "Entity matching took {:.2}ms for {} iterations, expected < {}ms",
+        elapsed.as_secs_f64() * 1000.0,
+        ENTITY_MATCH_ITERATIONS,
+        ENTITY_MATCH_MAX_DURATION_MS
     );
 
     println!(
-        "Entity matching: 100 iterations x {} entities x {} results = {:.2}ms",
+        "Entity matching: {} iterations x {} entities x {} results = {:.2}ms",
+        ENTITY_MATCH_ITERATIONS,
         ENTITY_COUNT,
         RESULT_COUNT,
         elapsed.as_secs_f64() * 1000.0

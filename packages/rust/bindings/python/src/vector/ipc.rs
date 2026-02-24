@@ -18,12 +18,18 @@ fn recommendation_to_str(r: &Recommendation) -> String {
         Recommendation::RunCompaction => "run_compaction".to_string(),
         Recommendation::CreateIndices => "create_indices".to_string(),
         Recommendation::RebuildIndices => "rebuild_indices".to_string(),
-        Recommendation::Partition { column } => format!("partition:{}", column),
+        Recommendation::Partition { column } => format!("partition:{column}"),
         Recommendation::None => "none".to_string(),
     }
 }
 
-/// Encode TableHealthReport as Arrow IPC stream bytes (single RecordBatch).
+fn singleton_offsets(len: usize) -> Result<arrow::buffer::OffsetBuffer<i32>, String> {
+    let end = i32::try_from(len)
+        .map_err(|_| format!("List size {len} exceeds Arrow ListArray i32 offset range"))?;
+    Ok(arrow::buffer::OffsetBuffer::new(vec![0_i32, end].into()))
+}
+
+/// Encode `TableHealthReport` as Arrow IPC stream bytes (single `RecordBatch`).
 pub fn table_health_report_to_ipc(report: &TableHealthReport) -> Result<Vec<u8>, String> {
     let index_names: Vec<&str> = report
         .indices_status
@@ -47,8 +53,7 @@ pub fn table_health_report_to_ipc(report: &TableHealthReport) -> Result<Vec<u8>,
     let frag_ratio_arr = Arc::new(Float64Array::from(vec![report.fragmentation_ratio]));
 
     let index_names_child = StringArray::from(index_names);
-    let index_names_offsets =
-        arrow::buffer::OffsetBuffer::new(vec![0, index_names_child.len() as i32].into());
+    let index_names_offsets = singleton_offsets(index_names_child.len())?;
     let index_names_list = Arc::new(ListArray::new(
         Arc::new(Field::new("item", DataType::Utf8, true)),
         index_names_offsets,
@@ -57,8 +62,7 @@ pub fn table_health_report_to_ipc(report: &TableHealthReport) -> Result<Vec<u8>,
     ));
 
     let index_types_child = StringArray::from(index_types);
-    let index_types_offsets =
-        arrow::buffer::OffsetBuffer::new(vec![0, index_types_child.len() as i32].into());
+    let index_types_offsets = singleton_offsets(index_types_child.len())?;
     let index_types_list = Arc::new(ListArray::new(
         Arc::new(Field::new("item", DataType::Utf8, true)),
         index_types_offsets,
@@ -67,7 +71,7 @@ pub fn table_health_report_to_ipc(report: &TableHealthReport) -> Result<Vec<u8>,
     ));
 
     let rec_child = StringArray::from(rec_refs);
-    let rec_offsets = arrow::buffer::OffsetBuffer::new(vec![0, rec_child.len() as i32].into());
+    let rec_offsets = singleton_offsets(rec_child.len())?;
     let rec_list = Arc::new(ListArray::new(
         Arc::new(Field::new("item", DataType::Utf8, true)),
         rec_offsets,

@@ -19,18 +19,21 @@ Usage:
 
 from __future__ import annotations
 
+import atexit
+import json
 import os
+import selectors
 import subprocess
-from pathlib import Path
-from typing import Any
+import threading
+from contextlib import suppress
+from dataclasses import dataclass, field
+from importlib.util import find_spec
+from typing import TYPE_CHECKING, Any
 
-# High-performance JSON parsing (orjson is ~3x faster than stdlib json)
-try:
-    import orjson
+if TYPE_CHECKING:
+    from pathlib import Path
 
-    _HAS_ORJSON = True
-except ImportError:
-    _HAS_ORJSON = False
+_HAS_ORJSON = find_spec("orjson") is not None
 
 
 def _json_loads(data: str | bytes) -> Any:
@@ -44,11 +47,226 @@ def _json_loads(data: str | bytes) -> Any:
     return json.loads(data)
 
 
+def _filter_skill_args(args: dict[str, Any]) -> dict[str, Any]:
+    """Drop empty/None args before transport."""
+    filtered: dict[str, Any] = {}
+    for key, value in args.items():
+        if value is None:
+            continue
+        if isinstance(value, str) and not value:
+            continue
+        if isinstance(value, (list, dict)) and len(value) == 0:
+            continue
+        filtered[key] = value
+    return filtered
+
+
+def _resolve_local_venv_python(skill_dir: Path) -> Path | None:
+    """Return local virtualenv Python for a skill when available."""
+    candidates = (
+        skill_dir / ".venv" / "bin" / "python",
+        skill_dir / ".venv" / "Scripts" / "python.exe",
+    )
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def _build_runner_command(
+    skill_dir: Path, script_name: str, *, worker_mode: bool = False
+) -> list[str]:
+    """Build command to execute a skill script."""
+    local_python = _resolve_local_venv_python(skill_dir)
+    if local_python is not None:
+        cmd = [str(local_python), f"scripts/{script_name}"]
+    else:
+        cmd = ["uv", "run", "--quiet", "python", f"scripts/{script_name}"]
+    if worker_mode:
+        cmd.append("--worker")
+    return cmd
+
+
+def _build_runner_env(skill_dir: Path) -> dict[str, str]:
+    """Build environment for isolated skill execution."""
+    env = os.environ.copy()
+    env.setdefault("VIRTUAL_ENV", str(skill_dir / ".venv"))
+    env.setdefault("UV_PROJECT_ENVIRONMENT", ".venv")
+    return env
+
+
+def _append_cli_args(cmd: list[str], args: dict[str, Any]) -> None:
+    """Append filtered args to CLI command as --key value pairs."""
+    for key, value in _filter_skill_args(args).items():
+        cmd.append(f"--{key}")
+        if isinstance(value, bool):
+            cmd.append("true" if value else "false")
+        elif isinstance(value, (list, dict)):
+            cmd.append(json.dumps(value))
+        else:
+            cmd.append(str(value))
+
+
+def _readline_with_timeout(proc: subprocess.Popen[str], timeout: int) -> str:
+    """Read one stdout line with timeout from persistent worker."""
+    stdout = proc.stdout
+    if stdout is None:
+        raise RuntimeError("Persistent worker stdout is not available")
+
+    selector = selectors.DefaultSelector()
+    try:
+        selector.register(stdout, selectors.EVENT_READ)
+        events = selector.select(timeout=max(0, timeout))
+    finally:
+        selector.close()
+
+    if not events:
+        raise TimeoutError(f"Persistent worker timed out after {timeout}s")
+
+    line = stdout.readline()
+    if not line:
+        raise EOFError("Persistent worker exited without response")
+    return line
+
+
+@dataclass(slots=True)
+class _PersistentSkillWorker:
+    """Long-lived worker process for repeated isolated calls."""
+
+    key: str
+    cmd: list[str]
+    cwd: str
+    env: dict[str, str]
+    proc: subprocess.Popen[str] | None = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def close(self) -> None:
+        """Terminate worker process if running."""
+        proc = self.proc
+        self.proc = None
+        if proc is None:
+            return
+        if proc.poll() is not None:
+            return
+        try:
+            if proc.stdin is not None:
+                proc.stdin.close()
+        except Exception:
+            pass
+        try:
+            proc.terminate()
+            proc.wait(timeout=0.5)
+        except Exception:
+            with suppress(Exception):
+                proc.kill()
+
+    def _ensure_started(self) -> subprocess.Popen[str]:
+        """Start worker process if not running."""
+        if self.proc is not None and self.proc.poll() is None:
+            return self.proc
+        self.close()
+        self.proc = subprocess.Popen(
+            self.cmd,
+            cwd=self.cwd,
+            env=self.env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            bufsize=1,
+        )
+        return self.proc
+
+    def request(self, args: dict[str, Any], timeout: int) -> dict[str, Any]:
+        """Send one request to worker and parse JSON response."""
+        payload = _filter_skill_args(args)
+        payload_text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+        with self.lock:
+            for attempt in range(2):
+                proc = self._ensure_started()
+                try:
+                    if proc.stdin is None:
+                        raise RuntimeError("Persistent worker stdin is not available")
+                    proc.stdin.write(payload_text + "\n")
+                    proc.stdin.flush()
+                    line = _readline_with_timeout(proc, timeout)
+                    result_data = _json_loads(line)
+                    if isinstance(result_data, dict):
+                        out = dict(result_data)
+                        out.setdefault("success", True)
+                        out.setdefault("content", "")
+                        out.setdefault("metadata", {})
+                        return out
+                    return {"success": True, "content": str(result_data), "metadata": {}}
+                except TimeoutError as e:
+                    self.close()
+                    return {"success": False, "error": str(e)}
+                except (BrokenPipeError, EOFError, OSError, RuntimeError):
+                    self.close()
+                    if attempt == 1:
+                        return {
+                            "success": False,
+                            "error": "Persistent worker communication failed",
+                        }
+                    continue
+                except (ValueError, TypeError) as e:
+                    return {
+                        "success": False,
+                        "error": f"Failed to parse JSON output: {e!s}",
+                    }
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "error": f"Unexpected error: {e!s}",
+                    }
+        return {"success": False, "error": "Persistent worker request failed"}
+
+
+_PERSISTENT_WORKERS: dict[str, _PersistentSkillWorker] = {}
+_PERSISTENT_WORKERS_LOCK = threading.Lock()
+
+
+def _persistent_worker_key(skill_dir: Path, script_name: str) -> str:
+    """Stable key for per-skill persistent workers."""
+    return f"{skill_dir.resolve()}::{script_name}"
+
+
+def _get_persistent_worker(skill_dir: Path, script_name: str) -> _PersistentSkillWorker:
+    """Get or create persistent worker for the skill script."""
+    key = _persistent_worker_key(skill_dir, script_name)
+    with _PERSISTENT_WORKERS_LOCK:
+        existing = _PERSISTENT_WORKERS.get(key)
+        if existing is not None:
+            return existing
+        worker = _PersistentSkillWorker(
+            key=key,
+            cmd=_build_runner_command(skill_dir, script_name, worker_mode=True),
+            cwd=str(skill_dir),
+            env=_build_runner_env(skill_dir),
+        )
+        _PERSISTENT_WORKERS[key] = worker
+        return worker
+
+
+def _shutdown_persistent_workers() -> None:
+    """Terminate all persistent workers."""
+    with _PERSISTENT_WORKERS_LOCK:
+        workers = list(_PERSISTENT_WORKERS.values())
+        _PERSISTENT_WORKERS.clear()
+    for worker in workers:
+        worker.close()
+
+
+atexit.register(_shutdown_persistent_workers)
+
+
 def run_skill_command(
     skill_dir: Path,
     script_name: str,
     args: dict[str, Any],
     timeout: int = 60,
+    persistent: bool = False,
 ) -> dict[str, Any]:
     """Run a skill script in an isolated uv environment.
 
@@ -62,6 +280,7 @@ def run_skill_command(
         script_name: Name of the script to run (e.g., "engine.py")
         args: Dictionary of arguments to pass to the script
         timeout: Maximum execution time in seconds (default 60)
+        persistent: Reuse a long-lived worker process for repeated calls.
 
     Returns:
         Dictionary with 'success' key and either 'result' or 'error'
@@ -84,97 +303,49 @@ def run_skill_command(
             "error": f"Script not found: {script_path}",
         }
 
-    # Get project root using gitops (SSOT - Single Source of Truth)
-    from omni.foundation.runtime.gitops import get_project_root
+    if persistent:
+        worker = _get_persistent_worker(skill_dir, script_name)
+        return worker.request(args, timeout)
 
-    project_root = get_project_root()
+    cmd = _build_runner_command(skill_dir, script_name, worker_mode=False)
+    env = _build_runner_env(skill_dir)
 
-    # Ensure skill_dir is absolute for relative_to
-    if not skill_dir.is_absolute():
-        skill_dir = project_root / skill_dir
-
-    # Check if skill_dir is under project_root
-    try:
-        skill_relative = skill_dir.relative_to(project_root)
-        use_directory_flag = True
-    except ValueError:
-        # skill_dir is outside project root (e.g., temp directory)
-        # Use absolute path directly without --directory flag
-        skill_relative = skill_dir
-        use_directory_flag = False
-
-    # Build command: VIRTUAL_ENV=.venv UV_PROJECT_ENVIRONMENT=.venv uv run [--directory <path>] python scripts/<script> --arg val
-    # Setting env vars before command ensures they override devenv's values
-    cmd = [
-        "VIRTUAL_ENV=.venv",
-        "UV_PROJECT_ENVIRONMENT=.venv",
-        "uv",
-        "run",
-        "--quiet",
-    ]
-
-    # Add --directory only if skill_dir is under project_root
-    if use_directory_flag:
-        cmd.extend(["--directory", str(skill_relative)])
-
-    cmd.extend(["python", f"scripts/{script_name}"])
-
-    # Convert args to CLI flags with proper type handling
-    # - dict/list: JSON encode
-    # - Booleans: "true"/"false"
-    # - Other values: convert to string
-    # - None/empty values: omit
-    import json
-
-    for key, value in args.items():
-        # Skip None or empty values
-        if value is None:
-            continue
-        if isinstance(value, str) and not value:
-            continue
-        if isinstance(value, (list, dict)) and len(value) == 0:
-            continue
-
-        cmd.append(f"--{key}")
-
-        if isinstance(value, bool):
-            # Booleans: always pass as "true"/"false" string
-            cmd.append("true" if value else "false")
-        elif isinstance(value, (list, dict)):
-            # Complex types: JSON encode
-            cmd.append(json.dumps(value))
-        else:
-            # Other values: convert to string
-            cmd.append(str(value))
-
-    # Join command into a shell string for proper env var expansion
-    cmd_str = " ".join(cmd)
+    _append_cli_args(cmd, args)
 
     stdout = ""  # Initialize for exception handlers
 
     try:
         result = subprocess.run(
-            cmd_str,
+            cmd,
             capture_output=True,
             text=True,
             timeout=timeout,
-            shell=True,
+            cwd=str(skill_dir),
+            env=env,
         )
 
         # Parse stdout - engine.py outputs clean JSON
         stdout = result.stdout.strip()
+
+        if result.returncode != 0 and not stdout:
+            return {
+                "success": False,
+                "error": f"Script failed (exit code {result.returncode})",
+                "stderr": result.stderr.strip() if result.stderr else None,
+            }
 
         if not stdout:
             return {"success": True, "content": "", "metadata": {}}
 
         try:
             result_data = _json_loads(stdout)
-            # Engine outputs {"success": true, "content": "...", "metadata": {...}}
-            return {
-                "success": result_data.get("success", True),
-                "content": result_data.get("content", ""),
-                "metadata": result_data.get("metadata", {}),
-            }
+            if isinstance(result_data, dict):
+                out = dict(result_data)
+                out.setdefault("success", result.returncode == 0)
+                out.setdefault("content", "")
+                out.setdefault("metadata", {})
+                return out
+            return {"success": result.returncode == 0, "content": stdout, "metadata": {}}
         except (ValueError, TypeError):
             # Fallback: treat entire stdout as content
             return {"success": True, "content": stdout, "metadata": {}}
@@ -208,6 +379,7 @@ def run_skill_command_async(
     script_name: str,
     args: dict[str, Any],
     timeout: int = 60,
+    persistent: bool = False,
 ) -> dict[str, Any]:
     """
     Async wrapper for run_skill_command.
@@ -220,11 +392,12 @@ def run_skill_command_async(
         script_name: Name of the script to run
         args: Arguments to pass to the script
         timeout: Maximum execution time in seconds
+        persistent: Reuse a long-lived worker process for repeated calls.
 
     Returns:
         Dictionary with 'success' key and either 'result' or 'error'
     """
-    return run_skill_command(skill_dir, script_name, args, timeout)
+    return run_skill_command(skill_dir, script_name, args, timeout, persistent)
 
 
 def check_skill_dependencies(skill_dir: Path) -> dict[str, Any]:

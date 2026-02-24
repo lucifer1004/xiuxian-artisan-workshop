@@ -122,12 +122,15 @@ def test_validate_rejects_invalid_edge_type() -> None:
         build_options_record(edge_types=["semantic", "unknown"])  # type: ignore[list-item]
 
 
-def test_get_validator_raises_when_schema_missing(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+def test_get_validator_raises_when_rust_schema_backend_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     search_schema.get_validator.cache_clear()
-    missing_path = tmp_path / "missing.schema.json"
-    monkeypatch.setattr(search_schema, "get_schema_path", lambda: missing_path)
-    with pytest.raises(FileNotFoundError, match="LinkGraph search options schema not found"):
+    monkeypatch.setattr(
+        search_schema,
+        "get_schema",
+        lambda _name: (_ for _ in ()).throw(ImportError("Rust schema backend unavailable")),
+    )
+    with pytest.raises(ImportError, match="Rust schema backend unavailable"):
         search_schema.get_validator()
     search_schema.get_validator.cache_clear()

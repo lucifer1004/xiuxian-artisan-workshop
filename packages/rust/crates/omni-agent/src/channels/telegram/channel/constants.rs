@@ -16,6 +16,7 @@ pub(super) const TELEGRAM_SEND_RATE_LIMIT_SPREAD_STEP_MS: u64 = 50;
 pub(super) const TELEGRAM_SEND_RATE_LIMIT_SPREAD_MAX_MS: u64 = 500;
 pub(super) const TELEGRAM_MEDIA_GROUP_MAX_ITEMS: usize = 10;
 pub(super) const TELEGRAM_MAX_CAPTION_LENGTH: usize = 1024;
+pub(super) const TELEGRAM_MAX_AUTO_TEXT_CHUNKS: usize = 32;
 
 pub(super) const CHUNK_CONTINUED_PREFIX: &str = "(continued)\n\n";
 pub(super) const CHUNK_CONTINUES_SUFFIX: &str = "\n\n(continues...)";

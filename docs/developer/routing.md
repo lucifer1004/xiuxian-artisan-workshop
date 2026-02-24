@@ -1,3 +1,13 @@
+---
+title: "Routing Architecture"
+category: "developer"
+tags:
+  - developer
+  - routing
+saliency_base: 6.3
+decay_rate: 0.04
+---
+
 # Routing Architecture
 
 > **WARNING**: This document is outdated and references deleted modules.

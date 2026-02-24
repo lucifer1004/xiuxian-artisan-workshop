@@ -1,4 +1,4 @@
-//! omni-edit - Structural Code Refactoring for Omni DevEnv
+//! omni-edit - Structural Code Refactoring for Omni `DevEnv`
 //!
 //! A high-performance AST-based code modification library using ast-grep.
 //! Part of The Surgeon (CCA-Aligned Code Modification).

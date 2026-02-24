@@ -231,6 +231,84 @@ pub struct VectorSearchResult {
     pub distance: f64,
 }
 
+/// Hybrid search result payload (`omni.vector.hybrid.v1`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+pub struct HybridSearchResult {
+    /// Schema identifier.
+    pub schema: String,
+    /// Result identifier.
+    pub id: String,
+    /// Result content.
+    pub content: String,
+    /// Additional metadata.
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+    /// Result source label.
+    #[serde(default)]
+    pub source: String,
+    /// Primary ranking score.
+    pub score: f64,
+    /// Optional vector signal score.
+    #[serde(default)]
+    pub vector_score: Option<f64>,
+    /// Optional keyword signal score.
+    #[serde(default)]
+    pub keyword_score: Option<f64>,
+}
+
+/// Tool search result payload (`omni.vector.tool_search.v1`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+pub struct ToolSearchResult {
+    /// Schema identifier.
+    pub schema: String,
+    /// Human-readable display name.
+    pub name: String,
+    /// Tool description.
+    #[serde(default)]
+    pub description: String,
+    /// Tool input schema JSON object.
+    #[serde(default)]
+    pub input_schema: serde_json::Value,
+    /// Base score.
+    pub score: f64,
+    /// Optional vector signal score.
+    #[serde(default)]
+    pub vector_score: Option<f64>,
+    /// Optional keyword signal score.
+    #[serde(default)]
+    pub keyword_score: Option<f64>,
+    /// Final fused score.
+    pub final_score: f64,
+    /// Confidence label.
+    pub confidence: String,
+    /// Optional ranking explanation.
+    #[serde(default)]
+    pub ranking_reason: Option<String>,
+    /// Optional deterministic digest for `input_schema`.
+    #[serde(default)]
+    pub input_schema_digest: Option<String>,
+    /// Skill namespace.
+    #[serde(default)]
+    pub skill_name: String,
+    /// Fully-qualified tool name.
+    pub tool_name: String,
+    /// Source file path.
+    #[serde(default)]
+    pub file_path: String,
+    /// Routing keyword list.
+    #[serde(default)]
+    pub routing_keywords: Vec<String>,
+    /// Intent phrases.
+    #[serde(default)]
+    pub intents: Vec<String>,
+    /// Category label.
+    #[serde(default)]
+    pub category: String,
+    /// Parameter hints.
+    #[serde(default)]
+    pub parameters: Vec<String>,
+}
+
 /// Environment snapshot for the sensory system.
 /// This is the Rosetta Stone for Rust-Python communication.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -328,6 +406,8 @@ pub fn get_schema_json(type_name: &str) -> Result<String, SchemaError> {
         "TaskBrief" => schemars::schema_for!(TaskBrief),
         "AgentResult" => schemars::schema_for!(AgentResult),
         "AgentContext" => schemars::schema_for!(AgentContext),
+        "HybridSearchResult" => schemars::schema_for!(HybridSearchResult),
+        "ToolSearchResult" => schemars::schema_for!(ToolSearchResult),
         "VectorSearchResult" => schemars::schema_for!(VectorSearchResult),
         "EnvironmentSnapshot" => schemars::schema_for!(EnvironmentSnapshot),
         _ => return Err(SchemaError::UnknownType(type_name.to_string())),
@@ -345,6 +425,8 @@ pub fn get_registered_types() -> Vec<&'static str> {
         "TaskBrief",
         "AgentResult",
         "AgentContext",
+        "HybridSearchResult",
+        "ToolSearchResult",
         "VectorSearchResult",
         "EnvironmentSnapshot",
         "OmniTool", // Alias for SkillDefinition

@@ -702,11 +702,12 @@ impl PyVectorStore {
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    #[pyo3(signature = (table_name=None, source_filter=None))]
+    #[pyo3(signature = (table_name=None, source_filter=None, row_limit=None))]
     fn list_all_tools(
         &self,
         table_name: Option<String>,
         source_filter: Option<String>,
+        row_limit: Option<usize>,
     ) -> PyResult<String> {
         use tool_ops::list_all_tools_async;
 
@@ -720,6 +721,7 @@ impl PyVectorStore {
             self.max_cached_tables,
             &table_name,
             sf,
+            row_limit,
         )
     }
 

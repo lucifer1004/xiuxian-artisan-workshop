@@ -46,27 +46,27 @@ pub const JAVA_METHOD: &str = "$NAME(";
 // Legacy aliases for backwards compatibility
 // ============================================================================
 
-/// @deprecated Use PYTHON_CLASS instead
+/// @deprecated Use `PYTHON_CLASS` instead
 pub const PYTHON_CLASS_PATTERN: &str = PYTHON_CLASS;
-/// @deprecated Use PYTHON_DEF instead
+/// @deprecated Use `PYTHON_DEF` instead
 pub const PYTHON_DEF_PATTERN: &str = PYTHON_DEF;
-/// @deprecated Use PYTHON_ASYNC_DEF instead
+/// @deprecated Use `PYTHON_ASYNC_DEF` instead
 pub const PYTHON_ASYNC_DEF_PATTERN: &str = PYTHON_ASYNC_DEF;
-/// @deprecated Use RUST_STRUCT instead
+/// @deprecated Use `RUST_STRUCT` instead
 pub const RUST_STRUCT_PATTERN: &str = RUST_STRUCT;
-/// @deprecated Use RUST_FN instead
+/// @deprecated Use `RUST_FN` instead
 pub const RUST_FN_PATTERN: &str = RUST_FN;
-/// @deprecated Use RUST_ENUM instead
+/// @deprecated Use `RUST_ENUM` instead
 pub const RUST_ENUM_PATTERN: &str = RUST_ENUM;
-/// @deprecated Use RUST_TRAIT instead
+/// @deprecated Use `RUST_TRAIT` instead
 pub const RUST_TRAIT_PATTERN: &str = RUST_TRAIT;
-/// @deprecated Use RUST_IMPL instead
+/// @deprecated Use `RUST_IMPL` instead
 pub const RUST_IMPL_PATTERN: &str = RUST_IMPL;
-/// @deprecated Use JS_CLASS instead
+/// @deprecated Use `JS_CLASS` instead
 pub const JS_CLASS_PATTERN: &str = JS_CLASS;
-/// @deprecated Use JS_FN instead
+/// @deprecated Use `JS_FN` instead
 pub const JS_FN_PATTERN: &str = JS_FN;
-/// @deprecated Use TS_INTERFACE instead
+/// @deprecated Use `TS_INTERFACE` instead
 pub const TS_INTERFACE_PATTERN: &str = TS_INTERFACE;
 
 /// All patterns as a const array for iteration
@@ -90,7 +90,7 @@ pub const ALL_PATTERNS: &[(&str, &str)] = &[
 
 /// Patterns grouped by language
 pub mod python {
-    use super::*;
+    use super::{PYTHON_ASYNC_DEF, PYTHON_CLASS, PYTHON_DEF};
 
     /// Python symbol extraction patterns.
     pub const PATTERNS: &[(&str, &str)] = &[
@@ -102,7 +102,7 @@ pub mod python {
 
 /// Rust symbol extraction patterns.
 pub mod rust {
-    use super::*;
+    use super::{RUST_ENUM, RUST_FN, RUST_IMPL, RUST_STRUCT, RUST_TRAIT};
 
     /// Rust symbol extraction patterns.
     pub const PATTERNS: &[(&str, &str)] = &[
@@ -116,7 +116,7 @@ pub mod rust {
 
 /// JavaScript symbol extraction patterns.
 pub mod javascript {
-    use super::*;
+    use super::{JS_CLASS, JS_FN};
 
     /// JavaScript symbol extraction patterns.
     pub const PATTERNS: &[(&str, &str)] = &[("CLASS", JS_CLASS), ("FN", JS_FN)];
@@ -124,7 +124,7 @@ pub mod javascript {
 
 /// TypeScript symbol extraction patterns.
 pub mod typescript {
-    use super::*;
+    use super::TS_INTERFACE;
 
     /// TypeScript symbol extraction patterns.
     pub const PATTERNS: &[(&str, &str)] = &[("INTERFACE", TS_INTERFACE)];
@@ -132,7 +132,7 @@ pub mod typescript {
 
 /// Go symbol extraction patterns.
 pub mod go {
-    use super::*;
+    use super::{GO_FN, GO_STRUCT};
 
     /// Go symbol extraction patterns.
     pub const PATTERNS: &[(&str, &str)] = &[("STRUCT", GO_STRUCT), ("FN", GO_FN)];
@@ -140,7 +140,7 @@ pub mod go {
 
 /// Java symbol extraction patterns.
 pub mod java {
-    use super::*;
+    use super::{JAVA_CLASS, JAVA_METHOD};
 
     /// Java symbol extraction patterns.
     pub const PATTERNS: &[(&str, &str)] = &[("CLASS", JAVA_CLASS), ("METHOD", JAVA_METHOD)];

@@ -13,6 +13,7 @@ use super::constants::{
 use super::error::telegram_api_error_retry_after_secs;
 
 impl TelegramChannel {
+    #[allow(clippy::too_many_lines)]
     pub(super) async fn listen_updates(
         &self,
         tx: mpsc::Sender<ChannelMessage>,
@@ -48,9 +49,7 @@ impl TelegramChannel {
                 match http_status {
                     StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
                         anyhow::bail!(
-                            "Telegram getUpdates HTTP error (status={}): {}",
-                            http_status,
-                            description
+                            "Telegram getUpdates HTTP error (status={http_status}): {description}",
                         );
                     }
                     StatusCode::CONFLICT => {
@@ -111,9 +110,7 @@ Ensure only one process is using this bot token."
                 match error_code {
                     401 | 403 => {
                         anyhow::bail!(
-                            "Telegram getUpdates API error (code={}): {}",
-                            error_code,
-                            description
+                            "Telegram getUpdates API error (code={error_code}): {description}",
                         );
                     }
                     409 => {

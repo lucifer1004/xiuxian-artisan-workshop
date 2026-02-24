@@ -21,6 +21,8 @@ pub(crate) fn decide_for_shortcut(
                 "explicit graph shortcut selected deterministic MCP bridge for `{tool_name}`"
             ),
             policy_id: Some("omega.shortcut.graph.v1".to_string()),
+            drift_tolerance: None,
+            next_audit_turn: None,
         },
         WorkflowBridgeMode::Omega => OmegaDecision {
             route: OmegaRoute::Graph,
@@ -32,6 +34,8 @@ pub(crate) fn decide_for_shortcut(
                 "omega governance selected MCP workflow bridge for `{tool_name}` with fallback"
             ),
             policy_id: Some("omega.shortcut.omega.v1".to_string()),
+            drift_tolerance: None,
+            next_audit_turn: None,
         },
     }
 }
@@ -46,6 +50,8 @@ pub(crate) fn decide_for_standard_turn(force_react: bool) -> OmegaDecision {
             tool_trust_class: OmegaToolTrustClass::Other,
             reason: "explicit react shortcut selected standard ReAct loop".to_string(),
             policy_id: Some("omega.standard.react_shortcut.v1".to_string()),
+            drift_tolerance: None,
+            next_audit_turn: None,
         };
     }
 
@@ -57,7 +63,33 @@ pub(crate) fn decide_for_standard_turn(force_react: bool) -> OmegaDecision {
         tool_trust_class: OmegaToolTrustClass::Other,
         reason: "default runtime policy selected ReAct loop".to_string(),
         policy_id: Some("omega.standard.default.v1".to_string()),
+        drift_tolerance: None,
+        next_audit_turn: None,
     }
+}
+
+pub(crate) fn apply_quality_gate(mut decision: OmegaDecision) -> OmegaDecision {
+    if decision.route == OmegaRoute::Graph
+        && risk_rank(decision.risk_level) >= risk_rank(OmegaRiskLevel::High)
+    {
+        if decision.fallback_policy == OmegaFallbackPolicy::SwitchToGraph {
+            decision.fallback_policy = OmegaFallbackPolicy::RetryReact;
+            append_quality_gate_repair(
+                &mut decision.reason,
+                "graph_retry_loop_guard",
+                "fallback_policy:retry_react",
+            );
+        }
+        if decision.tool_trust_class == OmegaToolTrustClass::Evidence {
+            decision.tool_trust_class = OmegaToolTrustClass::Verification;
+            append_quality_gate_repair(
+                &mut decision.reason,
+                "graph_high_risk_trust_upgrade",
+                "tool_trust_class:verification",
+            );
+        }
+    }
+    decision
 }
 
 pub(crate) fn apply_policy_hint(
@@ -85,6 +117,14 @@ fn max_risk(current: OmegaRiskLevel, floor: OmegaRiskLevel) -> OmegaRiskLevel {
     } else {
         floor
     }
+}
+
+fn append_quality_gate_repair(reason: &mut String, quality_gate: &str, repair: &str) {
+    let marker = format!("quality_gate={quality_gate};repair={repair}");
+    if reason.contains(marker.as_str()) {
+        return;
+    }
+    reason.push_str(format!(" [{marker}]").as_str());
 }
 
 const fn risk_rank(level: OmegaRiskLevel) -> u8 {

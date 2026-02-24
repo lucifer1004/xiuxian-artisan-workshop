@@ -1,4 +1,4 @@
-/// Parsed section row for section-aware retrieval.
+/// Parsed section row for section-aware retrieval and `HippoRAG 2` `Passage Nodes`.
 #[derive(Debug, Clone)]
 pub struct ParsedSection {
     pub heading_path: String,
@@ -6,6 +6,8 @@ pub struct ParsedSection {
     pub heading_level: usize,
     pub section_text: String,
     pub section_text_lower: String,
+    /// List of entity IDs mentioned in this specific section.
+    pub entities: Vec<String>,
 }
 
 fn normalize_whitespace(raw: &str) -> String {
@@ -40,21 +42,32 @@ fn push_section(
     heading_path: &str,
     heading_level: usize,
     lines: &[String],
+    source_path: &std::path::Path,
+    root: &std::path::Path,
 ) {
     let section_text = lines.join("\n").trim().to_string();
     if section_text.is_empty() && heading_path.trim().is_empty() {
         return;
     }
+
+    // 2026 Refinement: Automatically identify entities within the section text (HippoRAG 2)
+    let extracted = super::links::extract_link_targets(&section_text, source_path, root);
+
     out.push(ParsedSection {
         heading_path: heading_path.to_string(),
         heading_path_lower: heading_path.to_lowercase(),
         heading_level,
         section_text_lower: section_text.to_lowercase(),
         section_text,
+        entities: extracted.note_links,
     });
 }
 
-pub(super) fn extract_sections(body: &str) -> Vec<ParsedSection> {
+pub(super) fn extract_sections(
+    body: &str,
+    source_path: &std::path::Path,
+    root: &std::path::Path,
+) -> Vec<ParsedSection> {
     let mut sections: Vec<ParsedSection> = Vec::new();
     let mut heading_stack: Vec<String> = Vec::new();
     let mut current_heading_path = String::new();
@@ -75,6 +88,8 @@ pub(super) fn extract_sections(body: &str) -> Vec<ParsedSection> {
                 &current_heading_path,
                 current_heading_level,
                 &current_lines,
+                source_path,
+                root,
             );
             current_lines.clear();
             if heading_stack.len() >= level {
@@ -93,15 +108,20 @@ pub(super) fn extract_sections(body: &str) -> Vec<ParsedSection> {
         &current_heading_path,
         current_heading_level,
         &current_lines,
+        source_path,
+        root,
     );
     if sections.is_empty() {
         let section_text = body.trim().to_string();
+        // Still need to scan if the full body is a single section
+        let extracted = super::links::extract_link_targets(&section_text, source_path, root);
         sections.push(ParsedSection {
             heading_path: String::new(),
             heading_path_lower: String::new(),
             heading_level: 0,
             section_text_lower: section_text.to_lowercase(),
             section_text,
+            entities: extracted.note_links,
         });
     }
     sections

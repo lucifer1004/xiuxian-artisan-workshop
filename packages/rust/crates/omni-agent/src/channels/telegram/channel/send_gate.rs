@@ -38,18 +38,8 @@ pub(super) struct ValkeyTelegramSendRateLimitBackend {
 
 impl TelegramSendRateLimitBackend {
     pub(super) fn from_env() -> Self {
-        let runtime_config = match TelegramSendRateLimitRuntimeConfig::from_env() {
-            Ok(config) => config,
-            Err(error) => {
-                tracing::warn!(
-                    event = "telegram.send_gate.backend.init_failed",
-                    error = %error,
-                    "failed to resolve telegram send gate runtime settings; falling back to memory backend"
-                );
-                return Self::Memory;
-            }
-        };
-        Self::from_runtime_config(runtime_config)
+        let runtime_config = TelegramSendRateLimitRuntimeConfig::from_env();
+        Self::from_runtime_config(&runtime_config)
     }
 
     pub(super) fn new_valkey_for_test(valkey_url: &str, key_prefix: &str) -> Result<Self> {
@@ -64,7 +54,7 @@ impl TelegramSendRateLimitBackend {
         }
     }
 
-    fn from_runtime_config(config: TelegramSendRateLimitRuntimeConfig) -> Self {
+    fn from_runtime_config(config: &TelegramSendRateLimitRuntimeConfig) -> Self {
         let Some(valkey_url) = config.valkey_url.as_deref() else {
             tracing::warn!(
                 event = "telegram.send_gate.backend.init_failed",
@@ -99,21 +89,26 @@ impl TelegramSendRateLimitBackend {
 }
 
 impl TelegramSendRateLimitRuntimeConfig {
-    fn from_env() -> Result<Self> {
+    fn from_env() -> Self {
         let settings = load_runtime_settings();
-        let valkey_url = non_empty_env("VALKEY_URL")
-            .or_else(|| settings.session.valkey_url.clone())
+        let valkey_url = settings
+            .session
+            .valkey_url
+            .clone()
+            .or_else(|| non_empty_env("VALKEY_URL"))
+            .as_deref()
             .and_then(non_empty_string);
 
         let key_prefix = non_empty_env(TELEGRAM_SEND_GATE_KEY_PREFIX_ENV)
             .or_else(|| settings.telegram.send_rate_limit_gate_key_prefix.clone())
+            .as_deref()
             .and_then(non_empty_string)
             .unwrap_or_else(|| DEFAULT_SEND_GATE_KEY_PREFIX.to_string());
 
-        Ok(Self {
+        Self {
             valkey_url,
             key_prefix,
-        })
+        }
     }
 }
 
@@ -165,8 +160,8 @@ return {ttl, slot}
             return Ok(None);
         }
         Ok(Some((
-            Duration::from_millis(ttl_ms as u64),
-            (slot - 1) as u64,
+            Duration::from_millis(ttl_ms.cast_unsigned()),
+            (slot - 1).cast_unsigned(),
         )))
     }
 
@@ -178,6 +173,7 @@ return {ttl, slot}
         if requested_ms == 0 {
             return Ok(None);
         }
+        let requested_ms_u64 = u64::try_from(requested_ms).unwrap_or(u64::MAX);
         let script = r#"
 local requested = tonumber(ARGV[1])
 if not requested or requested <= 0 then
@@ -198,14 +194,16 @@ return ttl
                     .arg(2)
                     .arg(self.rate_key.as_str())
                     .arg(self.spread_key.as_str())
-                    .arg(requested_ms as u64);
+                    .arg(requested_ms_u64);
                 cmd
             })
             .await?;
         if effective_ttl_ms <= 0 {
             return Ok(None);
         }
-        Ok(Some(Duration::from_millis(effective_ttl_ms as u64)))
+        Ok(Some(Duration::from_millis(
+            effective_ttl_ms.cast_unsigned(),
+        )))
     }
 
     async fn run_command<T, F>(&self, operation: &'static str, build: F) -> Result<T>
@@ -246,9 +244,6 @@ return ttl
                     last_err = Some(
                         anyhow::anyhow!(error).context("telegram send gate valkey command failed"),
                     );
-                    if attempt == 0 {
-                        continue;
-                    }
                 }
             }
         }
@@ -280,10 +275,13 @@ return ttl
 }
 
 fn non_empty_env(name: &str) -> Option<String> {
-    std::env::var(name).ok().and_then(non_empty_string)
+    std::env::var(name)
+        .ok()
+        .as_deref()
+        .and_then(non_empty_string)
 }
 
-fn non_empty_string(value: String) -> Option<String> {
+fn non_empty_string(value: &str) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         None

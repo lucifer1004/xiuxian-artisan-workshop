@@ -48,6 +48,47 @@ class SkillContext:
         self._native: dict[str, Any] = {}  # Native functions: "skill.function"
         self._reload_callbacks: list[callable] = []  # Callbacks after reload
 
+    def _loader_native_aliases(self, skill: Any) -> dict[str, Any]:
+        """Return native alias candidates currently owned by a skill loader."""
+        loader = getattr(skill, "_tools_loader", None)
+        if loader is None:
+            return {}
+        native = getattr(loader, "native_functions", None)
+        if not isinstance(native, dict):
+            return {}
+        return dict(native)
+
+    def _drop_skill_bindings(
+        self, skill_name: str, native_alias_candidates: dict[str, Any] | None = None
+    ) -> None:
+        """Remove command/native bindings for one skill from context registries."""
+        skill_prefix = f"{skill_name}."
+        old_commands_to_remove = [cmd for cmd in self._commands if cmd.startswith(skill_prefix)]
+        for cmd in old_commands_to_remove:
+            del self._commands[cmd]
+
+        old_native_to_remove = [key for key in self._native if key.startswith(skill_prefix)]
+        for key in old_native_to_remove:
+            del self._native[key]
+
+        if native_alias_candidates:
+            for alias_name, alias_func in native_alias_candidates.items():
+                if self._native.get(alias_name) is alias_func:
+                    del self._native[alias_name]
+
+    def _register_loader_bindings(self, skill_name: str, loader: Any) -> None:
+        """Register a loader's command/native bindings into context registries."""
+        commands = getattr(loader, "commands", {})
+        if isinstance(commands, dict):
+            for cmd_name, handler in commands.items():
+                self._commands[cmd_name] = handler
+
+        native_functions = getattr(loader, "native_functions", {})
+        if isinstance(native_functions, dict):
+            for func_name, func in native_functions.items():
+                self._native[f"{skill_name}.{func_name}"] = func
+                self._native[func_name] = func
+
     def register_skill(self, skill: Any) -> None:
         """Register a loaded skill (UniversalScriptSkill).
 
@@ -58,6 +99,8 @@ class SkillContext:
         """
         if hasattr(skill, "name"):
             skill_name = skill.name
+            old_skill = self._skills.get(skill_name)
+            old_native_aliases = self._loader_native_aliases(old_skill) if old_skill else {}
 
             # Save mtime for hot reload detection
             skill_path = getattr(skill, "_path", None)
@@ -75,36 +118,12 @@ class SkillContext:
 
             self._skills[skill.name] = skill
 
-            # [FIX] Clear old skill's commands before adding new ones (for hot reload)
-            # This ensures deleted files don't leave stale commands
-            old_commands_to_remove = [
-                cmd for cmd in self._commands if cmd.startswith(f"{skill_name}.")
-            ]
-            for cmd in old_commands_to_remove:
-                del self._commands[cmd]
-                logger.debug(f"[SkillContext] Removed stale command: {cmd}")
-
-            old_native_to_remove = [
-                cmd for cmd in self._native if cmd.startswith(f"{skill_name}.") or cmd == skill_name
-            ]
-            for cmd in old_native_to_remove:
-                del self._native[cmd]
+            # Clear old skill bindings before adding new ones.
+            self._drop_skill_bindings(skill_name, old_native_aliases)
 
             # Register decorated commands from the skill
             if hasattr(skill, "_tools_loader") and skill._tools_loader is not None:
-                loader = skill._tools_loader
-
-                # Register decorated commands
-                for cmd_name, handler in loader.commands.items():
-                    self._commands[cmd_name] = handler
-
-                # Register native functions (without decorator)
-                for func_name, func in loader.native_functions.items():
-                    # Store as "skill.function" for direct lookup
-                    full_name = f"{skill.name}.{func_name}"
-                    self._native[full_name] = func
-                    # Also store just the function name for skill-level lookup
-                    self._native[func_name] = func
+                self._register_loader_bindings(skill_name, skill._tools_loader)
 
             logger.debug(
                 f"Registered skill: {skill.name} ({len(self._commands)} commands, {len(self._native)} native)"
@@ -166,34 +185,66 @@ class SkillContext:
                         for mod in modules_to_remove:
                             del sys.modules[mod]
 
-                        # Clear old command cache
-                        old_commands = [k for k in self._commands if k.startswith(f"{name}.")]
-                        for cmd in old_commands:
-                            del self._commands[cmd]
+                        loader = getattr(skill, "_tools_loader", None)
+                        if loader is None:
+                            skill._mtime = current_mtime
+                            return skill
 
-                        old_native = [k for k in self._native if k.startswith(f"{name}.")]
-                        for key in old_native:
-                            del self._native[key]
+                        old_context_commands = {
+                            cmd_name: handler
+                            for cmd_name, handler in self._commands.items()
+                            if cmd_name.startswith(f"{name}.")
+                        }
+                        old_context_native = {
+                            native_name: handler
+                            for native_name, handler in self._native.items()
+                            if native_name.startswith(f"{name}.")
+                        }
+                        old_loader_commands = dict(loader.commands)
+                        old_loader_native = dict(loader.native_functions)
+                        old_native_aliases = {
+                            alias_name: alias_func
+                            for alias_name, alias_func in old_loader_native.items()
+                            if self._native.get(alias_name) is alias_func
+                        }
 
-                        # Re-import and reload scripts into skill's tools_loader
-                        if skill._tools_loader:
-                            # Clear tools_loader's internal caches
-                            skill._tools_loader.commands.clear()
-                            skill._tools_loader.native_functions.clear()
+                        self._drop_skill_bindings(name, old_loader_native)
+                        reload_ok = False
+                        reload_error: Exception | None = None
 
-                            # Reload scripts
-                            skill._tools_loader.load_all()
+                        try:
+                            loader.commands.clear()
+                            loader.native_functions.clear()
+                            loader.load_all()
 
-                            # Register new commands
-                            for cmd_name, handler in skill._tools_loader.commands.items():
-                                self._commands[cmd_name] = handler
-                            for func_name, func in skill._tools_loader.native_functions.items():
-                                full_name = f"{name}.{func_name}"
-                                self._native[full_name] = func
-                                self._native[func_name] = func
+                            has_scripts = any(scripts_path.glob("*.py"))
+                            if old_loader_commands and not loader.commands and has_scripts:
+                                raise RuntimeError(
+                                    "hot reload produced empty command set while scripts still exist"
+                                )
 
-                        # Update mtime
-                        skill._mtime = current_mtime
+                            self._register_loader_bindings(name, loader)
+                            skill._mtime = current_mtime
+                            reload_ok = True
+                        except Exception as exc:  # pragma: no cover - exercised by tests
+                            reload_error = exc
+                        finally:
+                            if not reload_ok:
+                                # Remove partial hot-reload state and restore previous snapshot.
+                                self._drop_skill_bindings(name, dict(loader.native_functions))
+                                loader.commands.clear()
+                                loader.commands.update(old_loader_commands)
+                                loader.native_functions.clear()
+                                loader.native_functions.update(old_loader_native)
+                                self._commands.update(old_context_commands)
+                                self._native.update(old_context_native)
+                                self._native.update(old_native_aliases)
+                                logger.warning(
+                                    f"Hot reload failed for skill '{name}'; "
+                                    f"restored previous command set ({reload_error})"
+                                )
+                            else:
+                                self._notify_reload()
                 except (ValueError, OSError):
                     pass  # No scripts or other error
 
@@ -238,9 +289,7 @@ class SkillContext:
         """
         if skill_name:
             return [
-                k
-                for k in self._native.keys()
-                if isinstance(k, str) and k.startswith(f"{skill_name}.")
+                k for k in self._native if isinstance(k, str) and k.startswith(f"{skill_name}.")
             ]
         return list(set(self._native.keys()))
 
@@ -270,7 +319,7 @@ class SkillContext:
         """
         from omni.core.config.loader import is_filtered
 
-        return [cmd for cmd in self._commands.keys() if is_filtered(cmd)]
+        return [cmd for cmd in self._commands if is_filtered(cmd)]
 
     def get_core_commands(self) -> list[str]:
         """List commands available in core tools (filtered excluded).
@@ -283,7 +332,7 @@ class SkillContext:
         """
         from omni.core.config.loader import is_filtered
 
-        return [cmd for cmd in self._commands.keys() if not is_filtered(cmd)]
+        return [cmd for cmd in self._commands if not is_filtered(cmd)]
 
     def get_dynamic_commands(self) -> list[str]:
         """List commands available as dynamic tools.
@@ -298,7 +347,7 @@ class SkillContext:
 
         filter_config = load_filter_commands()
         filter_set = set(filter_config.commands)
-        return [cmd for cmd in self._commands.keys() if cmd in filter_set]
+        return [cmd for cmd in self._commands if cmd in filter_set]
 
     def clear(self) -> None:
         """Clear all registered skills and commands."""
@@ -374,17 +423,16 @@ async def run_command(command: str, **kwargs) -> Any:
 
     # First try decorated command
     handler = _context.get_command(command)
-    if handler is None:
+    if handler is None and "." in command:
         # Try native function: parse "skill.func" -> skill="git", func="status"
-        if "." in command:
-            skill_name, func_name = command.split(".", 1)
-            handler = _context.get_native(skill_name, func_name)
+        skill_name, func_name = command.split(".", 1)
+        handler = _context.get_native(skill_name, func_name)
 
     if handler is None:
         available = _context.list_commands()
         raise ValueError(f"Command '{command}' not found. Available: {available}")
 
-    if hasattr(handler, "__call__"):
+    if callable(handler):
         import inspect
 
         if inspect.iscoroutinefunction(handler):

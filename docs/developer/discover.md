@@ -1,3 +1,13 @@
+---
+title: "Skill Discovery"
+category: "developer"
+tags:
+  - developer
+  - discover
+saliency_base: 6.3
+decay_rate: 0.04
+---
+
 # Skill Discovery
 
 > **WARNING**: This document is outdated and references deleted modules.

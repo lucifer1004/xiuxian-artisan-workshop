@@ -12,6 +12,8 @@ Commands:
 import json
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,21 @@ from omni.foundation.config.logging import get_logger
 from omni.foundation.config.paths import ConfigPaths
 
 logger = get_logger("skill.knowledge.best_practices")
+
+_DOC_TARGETS: tuple[str, ...] = ("docs", "assets/references", "README.md")
+_CODE_TARGETS: tuple[str, ...] = ("packages", "assets/skills")
+_RG_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="knowledge-rg")
+
+
+@lru_cache(maxsize=1)
+def _resolve_rg_exec() -> str | None:
+    """Resolve ripgrep executable once per process."""
+    return shutil.which("rg")
+
+
+def _existing_targets(root: Path, candidates: tuple[str, ...]) -> list[str]:
+    """Return existing target paths for ripgrep."""
+    return [str(path) for path in (root / item for item in candidates) if path.exists()]
 
 
 def _parse_rg_json_output(stdout: str) -> list[dict[str, Any]]:
@@ -51,7 +68,10 @@ def _run_ripgrep(
     query: str, root: Path, targets: list[str], file_types: list[str]
 ) -> list[dict[str, Any]]:
     """Execute ripgrep search and return parsed results."""
-    rg_exec = shutil.which("rg")
+    if not targets:
+        return []
+
+    rg_exec = _resolve_rg_exec()
     if not rg_exec:
         return []
 
@@ -102,28 +122,18 @@ def get_best_practice(
 
     root = paths.project_root
 
-    rg_exec = shutil.which("rg")
+    rg_exec = _resolve_rg_exec()
     if not rg_exec:
         raise RuntimeError("ripgrep (rg) not found in PATH.")
 
-    # --- Step 1: Search Documentation (Theory) ---
-    doc_targets = []
-    for p in ["docs", "assets/references", "README.md"]:
-        path = root / p
-        if path.exists():
-            doc_targets.append(str(path))
+    doc_targets = _existing_targets(root, _DOC_TARGETS)
+    code_targets = _existing_targets(root, _CODE_TARGETS)
 
-    theory_results = _run_ripgrep(topic, root, doc_targets, ["md", "markdown"])
-
-    # --- Step 2: Search Code Implementation (Practice) ---
-    code_targets = []
-    for p in ["packages", "assets/skills"]:
-        path = root / p
-        if path.exists():
-            code_targets.append(str(path))
-
-    # Exclude tests to find "production" usage patterns
-    practice_results = _run_ripgrep(topic, root, code_targets, ["py", "rust"])
+    # --- Step 1/2: Search theory and practice in parallel ---
+    theory_future = _RG_EXECUTOR.submit(_run_ripgrep, topic, root, doc_targets, ["md", "markdown"])
+    practice_future = _RG_EXECUTOR.submit(_run_ripgrep, topic, root, code_targets, ["py", "rust"])
+    theory_results = theory_future.result()
+    practice_results = practice_future.result()
 
     # Filter out test files from practice results
     practice_results = [

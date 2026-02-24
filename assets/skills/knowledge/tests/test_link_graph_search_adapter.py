@@ -96,6 +96,7 @@ def _install_link_graph(monkeypatch: pytest.MonkeyPatch, backend: _FakeBackend) 
     module = types.ModuleType("omni.rag.link_graph")
     module.get_link_graph_backend = lambda notebook_dir=None: backend
     module.LinkGraphDirection = _FakeDirection
+    _stats_cache: dict[int, dict[str, int]] = {}
 
     def _normalize(direction: str):
         raw = str(direction or "both").strip().lower()
@@ -123,6 +124,44 @@ def _install_link_graph(monkeypatch: pytest.MonkeyPatch, backend: _FakeBackend) 
 
     module.normalize_link_graph_direction = _normalize
     module.neighbors_to_link_rows = _rows
+
+    async def _get_link_graph_stats_for_response(
+        backend_obj,
+        *,
+        include_meta: bool = False,
+        **_kwargs,
+    ):
+        key = id(backend_obj)
+        cached = _stats_cache.get(key)
+        if cached is None:
+            stats = await backend_obj.stats()
+            stats = stats if isinstance(stats, dict) else {}
+            _stats_cache[key] = dict(stats)
+            meta = {
+                "source": "probe",
+                "cache_hit": False,
+                "fresh": True,
+                "age_ms": 0,
+                "refresh_scheduled": False,
+            }
+        else:
+            stats = dict(cached)
+            meta = {
+                "source": "cache",
+                "cache_hit": True,
+                "fresh": True,
+                "age_ms": 0,
+                "refresh_scheduled": False,
+            }
+        if include_meta:
+            return stats, meta
+        return stats
+
+    def _clear_link_graph_stats_cache() -> None:
+        _stats_cache.clear()
+
+    module.get_link_graph_stats_for_response = _get_link_graph_stats_for_response
+    module.clear_link_graph_stats_cache = _clear_link_graph_stats_cache
     monkeypatch.setitem(sys.modules, "omni.rag.link_graph", module)
 
 
@@ -152,20 +191,24 @@ async def test_link_graph_stats_uses_link_graph_backend(
 
     assert out["success"] is True
     assert out["stats"]["total_notes"] == 10
+    assert out["graph_stats_meta"]["source"] == "probe"
     assert backend.stats_calls == 1
 
 
 @pytest.mark.asyncio
-async def test_link_graph_stats_no_skill_local_cache(
+async def test_link_graph_stats_uses_common_cache_policy(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     backend = _FakeBackend()
     _install_link_graph(monkeypatch, backend)
     paths = types.SimpleNamespace(project_root=tmp_path)
 
-    _unwrap_skill_command_output(await link_graph_search.link_graph_stats(paths=paths))
-    _unwrap_skill_command_output(await link_graph_search.link_graph_stats(paths=paths))
-    assert backend.stats_calls == 2
+    first = _unwrap_skill_command_output(await link_graph_search.link_graph_stats(paths=paths))
+    second = _unwrap_skill_command_output(await link_graph_search.link_graph_stats(paths=paths))
+
+    assert first["graph_stats_meta"]["source"] == "probe"
+    assert second["graph_stats_meta"]["source"] == "cache"
+    assert backend.stats_calls == 1
 
 
 @pytest.mark.asyncio
@@ -308,6 +351,31 @@ async def test_link_graph_refresh_index_calls_common_backend_full(
     assert out["changed_count"] == 0
     assert out["force_full"] is True
     assert backend.refresh_calls == [([], True)]
+
+
+@pytest.mark.asyncio
+async def test_link_graph_refresh_index_clears_stats_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    backend = _FakeBackend()
+    _install_link_graph(monkeypatch, backend)
+    paths = types.SimpleNamespace(project_root=tmp_path)
+
+    _unwrap_skill_command_output(await link_graph_search.link_graph_stats(paths=paths))
+    _unwrap_skill_command_output(await link_graph_search.link_graph_stats(paths=paths))
+    assert backend.stats_calls == 1
+
+    _unwrap_skill_command_output(
+        await link_graph_search.link_graph_refresh_index(
+            changed_paths=["docs/a.md"],
+            force_full=False,
+            paths=paths,
+        )
+    )
+
+    out = _unwrap_skill_command_output(await link_graph_search.link_graph_stats(paths=paths))
+    assert out["graph_stats_meta"]["source"] == "probe"
+    assert backend.stats_calls == 2
 
 
 @pytest.mark.asyncio

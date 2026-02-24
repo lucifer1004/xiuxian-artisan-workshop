@@ -87,6 +87,33 @@ class QueryMixin:
             section_hit_count = sum(1 for hit in hits if str(hit.get("best_section") or "").strip())
 
         duration_ms = (time.perf_counter() - started_at) * 1000.0
+        requested_mode = str(payload.get("requested_mode") or "").strip().lower()
+        selected_mode = str(payload.get("selected_mode") or "").strip().lower()
+        reason = str(payload.get("reason") or "").strip()
+        retrieval_plan = (
+            payload.get("retrieval_plan")
+            if isinstance(payload.get("retrieval_plan"), dict)
+            else None
+        )
+        try:
+            graph_hit_count = max(0, int(payload.get("graph_hit_count", len(hits)) or len(hits)))
+        except (TypeError, ValueError):
+            graph_hit_count = len(hits)
+        try:
+            source_hint_count = max(0, int(payload.get("source_hint_count", 0) or 0))
+        except (TypeError, ValueError):
+            source_hint_count = 0
+        try:
+            graph_confidence_score = max(
+                0.0,
+                min(1.0, float(payload.get("graph_confidence_score", 0.0) or 0.0)),
+            )
+        except (TypeError, ValueError):
+            graph_confidence_score = 0.0
+        graph_confidence_level = (
+            str(payload.get("graph_confidence_level") or "none").strip().lower()
+        )
+
         self._record_phase(
             "link_graph.search_planned",
             duration_ms,
@@ -96,6 +123,8 @@ class QueryMixin:
             parsed_query_len=len(planned_query),
             hit_count=len(hits),
             match_strategy=str(planned_options.get("match_strategy", "")),
+            requested_mode=requested_mode,
+            selected_mode=selected_mode,
         )
         if section_hit_count > 0:
             self._record_phase(
@@ -121,6 +150,16 @@ class QueryMixin:
             "query": planned_query,
             "search_options": planned_options,
             "hits": hits,
+            "hit_count": max(len(hits), graph_hit_count),
+            "section_hit_count": section_hit_count,
+            "requested_mode": requested_mode,
+            "selected_mode": selected_mode,
+            "reason": reason,
+            "graph_hit_count": graph_hit_count,
+            "source_hint_count": source_hint_count,
+            "graph_confidence_score": graph_confidence_score,
+            "graph_confidence_level": graph_confidence_level or "none",
+            "retrieval_plan": retrieval_plan,
         }
 
     async def neighbors(

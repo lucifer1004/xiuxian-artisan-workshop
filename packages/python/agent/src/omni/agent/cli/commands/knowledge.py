@@ -139,21 +139,21 @@ def knowledge_recall(
 ) -> None:
     """Semantic recall over the knowledge vector store.
 
-    Delegates to skill runner (fast path or kernel). For full dual-core boost
+    Delegates to skill runner (fast path or kernel). For full fusion boost
     the runner loads the knowledge skill.
 
     Examples:
         omni knowledge recall "RAG Anything"
         omni knowledge recall "how does routing work" --limit 3 --json
     """
-    from omni.core.skills import run_skill
+    from omni.core.skills.runner import run_tool
     from omni.foundation.utils.asyncio import run_async_blocking
 
     limit = min(max(1, int(limit)), 10)
     cmd_args = {"query": query, "limit": limit, "collection": collection}
 
     try:
-        out = run_async_blocking(run_skill("knowledge", "recall", cmd_args))
+        out = run_async_blocking(run_tool("knowledge.recall", cmd_args))
         if isinstance(out, dict):
             out = json.dumps(out, indent=2, ensure_ascii=False)
         out_str = out if isinstance(out, str) else json.dumps(out, indent=2)

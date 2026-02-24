@@ -35,17 +35,22 @@ Unified Search Flow:
 
 import json
 import os
-from typing import TYPE_CHECKING, Any
+import re
+import time
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from pydantic import BaseModel
 
 from omni.foundation.config.dirs import get_skills_dir
 from omni.foundation.config.logging import get_logger
 from omni.foundation.services.vector_schema import parse_tool_search_payload
-from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from omni.foundation.bridge.rust_vector import RustVectorStore
 
 logger = get_logger("omni.core.discovery")
+
+_DISCOVER_ALL_CACHE_TTL_SECONDS = 5.0
 
 
 def get_vector_store() -> "RustVectorStore":
@@ -115,17 +120,17 @@ def _infer_skill_name(tool_name: str, fallback: str = "") -> str:
 
 def _py_type_to_json_type(py_type: Any) -> dict:
     """Map Python types to concise JSON Schema for LLM Context."""
-    if py_type == str:
+    if py_type is str:
         return {"type": "string"}
-    if py_type == int:
+    if py_type is int:
         return {"type": "integer"}
-    if py_type == bool:
+    if py_type is bool:
         return {"type": "boolean"}
-    if py_type == float:
+    if py_type is float:
         return {"type": "number"}
-    if py_type == list:
+    if py_type is list:
         return {"type": "array"}
-    if py_type == dict:
+    if py_type is dict:
         return {"type": "object"}
     # Handle Optional/Union types roughly for context window efficiency
     return {"type": "string", "description": str(py_type)}
@@ -321,7 +326,7 @@ class SkillDiscoveryService:
     """
 
     # Category boost mapping for query patterns
-    CATEGORY_BOOSTS: dict[tuple[str, ...], list[str]] = {
+    CATEGORY_BOOSTS: ClassVar[dict[tuple[str, ...], list[str]]] = {
         ("code", "refactor", "function", "class", "variable", "import"): [
             "engineering",
             "code_tools",
@@ -338,6 +343,8 @@ class SkillDiscoveryService:
         ("database", "sql", "query", "table"): ["database", "data"],
         ("shell", "run", "execute", "command", "bash"): ["shell", "execution"],
     }
+    _SHARED_DISCOVER_ALL_CACHE: ClassVar[list[DiscoveredSkill]] = []
+    _SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT: ClassVar[float] = 0.0
 
     def __init__(self):
         """Initialize the discovery service.
@@ -351,7 +358,8 @@ class SkillDiscoveryService:
         self._registry_loaded = False
         self._source: str = "lance"  # Track data source for testing
         # Cache for discovered skills (skill_name -> DiscoveredSkill)
-        self._cache: list[Any] = []
+        self._cache: list[DiscoveredSkill] = []
+        self._cache_expires_at: float = 0.0
 
     @property
     def source(self) -> str:
@@ -436,7 +444,6 @@ class SkillDiscoveryService:
             List of ToolMatch objects sorted by score
         """
         try:
-            import re
             from omni.foundation.services.embedding import get_embedding_service
 
             store = get_vector_store()
@@ -607,12 +614,27 @@ class SkillDiscoveryService:
         Returns:
             List of DiscoveredSkill objects sorted by name.
         """
+        now = time.monotonic()
+        cls = type(self)
+        if self._cache and now < self._cache_expires_at:
+            return list(self._cache)
+        if cls._SHARED_DISCOVER_ALL_CACHE and now < cls._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT:
+            shared = list(cls._SHARED_DISCOVER_ALL_CACHE)
+            self._cache = shared
+            self._cache_expires_at = cls._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT
+            return shared
+
         logger.debug("🔍 Accessing Skill Index from LanceDB...")
 
         store = get_vector_store()
         tools = store.list_all_tools()
 
-        return await self._build_skills_from_tools(tools)
+        skills = await self._build_skills_from_tools(tools)
+        self._cache = list(skills)
+        self._cache_expires_at = time.monotonic() + _DISCOVER_ALL_CACHE_TTL_SECONDS
+        cls._SHARED_DISCOVER_ALL_CACHE = list(skills)
+        cls._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT = self._cache_expires_at
+        return list(skills)
 
     async def _refresh_cache(self) -> None:
         """Refresh the in-memory cache by re-reading from LanceDB.
@@ -620,12 +642,21 @@ class SkillDiscoveryService:
         This is called by the file watcher when new skills are created.
         """
         logger.debug("🔄 Refreshing skill discovery cache...")
+        cls = type(self)
         self._registry_loaded = False
         self._registry.clear()
+        self._cache.clear()
+        self._cache_expires_at = 0.0
+        cls._SHARED_DISCOVER_ALL_CACHE = []
+        cls._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT = 0.0
         store = get_vector_store()
         tools = store.list_all_tools()
-        await self._build_skills_from_tools(tools)
-        logger.info(f"✅ Skill discovery cache refreshed with {len(self._cache)} skills")
+        skills = await self._build_skills_from_tools(tools)
+        self._cache = list(skills)
+        self._cache_expires_at = time.monotonic() + _DISCOVER_ALL_CACHE_TTL_SECONDS
+        cls._SHARED_DISCOVER_ALL_CACHE = list(skills)
+        cls._SHARED_DISCOVER_ALL_CACHE_EXPIRES_AT = self._cache_expires_at
+        logger.info(f"✅ Skill discovery cache refreshed with {len(skills)} skills")
 
     async def _build_skills_from_tools(self, tools: list[dict[str, Any]]) -> list[DiscoveredSkill]:
         """Build DiscoveredSkill list from tool records.
@@ -636,9 +667,6 @@ class SkillDiscoveryService:
         Returns:
             List of DiscoveredSkill objects sorted by name.
         """
-        # Cache the result for fast subsequent lookups
-        self._cache.clear()
-
         # Group tools by skill and convert to DiscoveredSkill
         skills_by_name: dict[str, dict[str, Any]] = {}
         for tool in tools:

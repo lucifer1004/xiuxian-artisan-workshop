@@ -1,19 +1,21 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use axum::{Router, routing::post};
+use axum::{Extension, Router, routing::post};
 use tokio::sync::mpsc;
 
 use crate::channels::telegram::idempotency::WebhookDedupConfig;
 use crate::channels::telegram::session_partition::TelegramSessionPartition;
 use crate::channels::telegram::{TelegramChannel, TelegramControlCommandPolicy};
 use crate::channels::traits::ChannelMessage;
+use crate::gateway::{embedding_routes, new_embedding_runtime};
 
 use super::super::app::TelegramWebhookApp;
 use super::super::handler::telegram_webhook_handler;
 use super::super::path::normalize_webhook_path;
 use super::super::state::TelegramWebhookState;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn build_telegram_webhook_app_with_partition_and_control_command_policy(
     bot_token: String,
     allowed_users: Vec<String>,
@@ -44,8 +46,11 @@ pub(super) fn build_telegram_webhook_app_with_partition_and_control_command_poli
     };
 
     let path = normalize_webhook_path(webhook_path);
+    let embedding_runtime = new_embedding_runtime();
     let app = Router::new()
         .route(&path, post(telegram_webhook_handler))
+        .merge(embedding_routes::<TelegramWebhookState>())
+        .layer(Extension(embedding_runtime))
         .with_state(webhook_state);
 
     Ok(TelegramWebhookApp {

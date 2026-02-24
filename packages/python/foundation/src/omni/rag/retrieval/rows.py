@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
+
+from omni.foundation.utils import json_codec as json
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable

@@ -27,6 +27,7 @@ impl TelegramSessionPartition {
     /// - `chat_user`
     /// - `user`
     /// - `chat_thread_user`
+    #[must_use]
     pub fn from_env() -> Self {
         let settings = load_runtime_settings();
         Self::from_lookup(
@@ -40,15 +41,14 @@ impl TelegramSessionPartition {
         F: Fn(&str) -> Option<String>,
     {
         if let Some(raw) = lookup("OMNI_AGENT_TELEGRAM_SESSION_PARTITION") {
-            return match raw.parse() {
-                Ok(mode) => mode,
-                Err(_) => {
-                    tracing::warn!(
-                        value = %raw,
-                        "invalid OMNI_AGENT_TELEGRAM_SESSION_PARTITION; using configured/default partition"
-                    );
-                    Self::parse_settings_or_default(settings_value)
-                }
+            return if let Ok(mode) = raw.parse() {
+                mode
+            } else {
+                tracing::warn!(
+                    value = %raw,
+                    "invalid OMNI_AGENT_TELEGRAM_SESSION_PARTITION; using configured/default partition"
+                );
+                Self::parse_settings_or_default(settings_value)
             };
         }
         Self::parse_settings_or_default(settings_value)
@@ -58,19 +58,19 @@ impl TelegramSessionPartition {
         let Some(raw) = settings_value else {
             return Self::default();
         };
-        match raw.parse() {
-            Ok(mode) => mode,
-            Err(_) => {
-                tracing::warn!(
-                    value = %raw,
-                    "invalid telegram.session_partition in settings; using default partition"
-                );
-                Self::default()
-            }
+        if let Ok(mode) = raw.parse() {
+            mode
+        } else {
+            tracing::warn!(
+                value = %raw,
+                "invalid telegram.session_partition in settings; using default partition"
+            );
+            Self::default()
         }
     }
 
     /// Build a session key from Telegram identifiers.
+    #[must_use]
     pub fn build_session_key(
         self,
         chat_id: &str,

@@ -344,7 +344,42 @@ class Kernel:
         """
         if not self._discovered_skills:
             logger.info(f"🔍 Discovering skills in {self._skills_dir}")
-            self._discovered_skills = await self.discovery_service.discover_all()
+            discovered = list(await self.discovery_service.discover_all())
+
+            # Keep filesystem as the final source of truth when index is stale.
+            try:
+                from omni.core.skills.discovery import DiscoveredSkill
+
+                discovered_names = {str(getattr(skill, "name", "")).strip() for skill in discovered}
+                fallback_names: list[str] = []
+                if self._skills_dir.exists():
+                    for entry in sorted(self._skills_dir.iterdir()):
+                        if not entry.is_dir() or entry.name.startswith("_"):
+                            continue
+                        skill_name = entry.name
+                        if skill_name in discovered_names:
+                            continue
+
+                        discovered.append(
+                            DiscoveredSkill.from_dict(
+                                data={"description": "", "tools": []},
+                                name=skill_name,
+                                path=str(entry),
+                            )
+                        )
+                        discovered_names.add(skill_name)
+                        fallback_names.append(skill_name)
+
+                if fallback_names:
+                    logger.warning(
+                        "Skill index missing filesystem skills; using fallback discovery",
+                        missing_count=len(fallback_names),
+                        missing_skills=sorted(fallback_names),
+                    )
+            except Exception as e:
+                logger.warning(f"Filesystem fallback discovery failed: {e}")
+
+            self._discovered_skills = discovered
             # Note: Discovery count is logged by discovery_service.discover_all()
         return self._discovered_skills
 
@@ -828,10 +863,15 @@ class Kernel:
             from omni.core.skills.runtime import reset_context
 
             reset_context()
+            self._skill_context = None
+            self._discovered_skills.clear()
             logger.debug(f"Unregistered {skills_count} skills")
 
         # Step 5: Cleanup components
         self._components.clear()
+        self._router = None
+        self._sniffer = None
+        self._security = None
 
         logger.info("👋 Kernel shutdown complete")
 

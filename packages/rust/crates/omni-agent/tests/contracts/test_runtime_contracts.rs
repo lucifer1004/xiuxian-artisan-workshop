@@ -1,6 +1,42 @@
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
+
 use omni_agent::{
-    DiscoverConfidence, DiscoverMatch, MemoryGateDecision, MemoryGateVerdict, OmegaDecision,
-    OmegaFallbackPolicy, OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass,
+    DiscoverConfidence, DiscoverMatch, GraphExecutionPlan, GraphPlanStep, GraphPlanStepKind,
+    GraphWorkflowMode, MemoryGateDecision, MemoryGateVerdict, OmegaDecision, OmegaFallbackPolicy,
+    OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass, RouteTrace, RouteTraceGraphStep,
+    RouteTraceInjection,
 };
 
 #[test]
@@ -13,6 +49,8 @@ fn omega_decision_serializes_with_snake_case_enums() {
         tool_trust_class: OmegaToolTrustClass::Verification,
         reason: "Long-horizon task requires graph decomposition.".to_string(),
         policy_id: Some("omega.policy.v1".to_string()),
+        drift_tolerance: None,
+        next_audit_turn: None,
     };
 
     let raw = serde_json::to_value(&decision).unwrap_or_else(|error| {
@@ -72,4 +110,211 @@ fn discover_match_contract_carries_confidence_and_digest() {
         .as_f64()
         .unwrap_or_else(|| panic!("missing final_score number in serialized payload"));
     assert!((final_score - 0.84).abs() < 1e-6);
+}
+
+#[test]
+fn graph_execution_plan_contract_is_stable_and_snake_case() {
+    let plan = GraphExecutionPlan {
+        plan_id: "graph-plan:graph:researcher.run:abort:evidence".to_string(),
+        plan_version: "v1".to_string(),
+        route: OmegaRoute::Graph,
+        workflow_mode: GraphWorkflowMode::Graph,
+        tool_name: "researcher.run".to_string(),
+        fallback_policy: OmegaFallbackPolicy::Abort,
+        steps: vec![
+            GraphPlanStep {
+                index: 1,
+                id: "prepare_injection_context".to_string(),
+                kind: GraphPlanStepKind::PrepareInjectionContext,
+                description: "prepare".to_string(),
+                tool_name: None,
+                fallback_action: None,
+            },
+            GraphPlanStep {
+                index: 2,
+                id: "invoke_graph_tool".to_string(),
+                kind: GraphPlanStepKind::InvokeGraphTool,
+                description: "invoke".to_string(),
+                tool_name: Some("researcher.run".to_string()),
+                fallback_action: None,
+            },
+            GraphPlanStep {
+                index: 3,
+                id: "evaluate_fallback".to_string(),
+                kind: GraphPlanStepKind::EvaluateFallback,
+                description: "fallback".to_string(),
+                tool_name: None,
+                fallback_action: Some("abort".to_string()),
+            },
+        ],
+    };
+
+    let raw = serde_json::to_value(&plan).unwrap_or_else(|error| {
+        panic!("failed to serialize graph execution plan: {error}");
+    });
+    assert_eq!(raw["route"], "graph");
+    assert_eq!(raw["workflow_mode"], "graph");
+    assert_eq!(raw["fallback_policy"], "abort");
+    assert_eq!(raw["steps"][0]["kind"], "prepare_injection_context");
+    assert_eq!(raw["steps"][1]["kind"], "invoke_graph_tool");
+    assert_eq!(raw["steps"][2]["kind"], "evaluate_fallback");
+}
+
+#[test]
+fn graph_execution_plan_contract_validation_accepts_deterministic_v1_shape() {
+    let plan = GraphExecutionPlan {
+        plan_id: "graph-plan:graph:researcher.run:abort:evidence".to_string(),
+        plan_version: "v1".to_string(),
+        route: OmegaRoute::Graph,
+        workflow_mode: GraphWorkflowMode::Graph,
+        tool_name: "researcher.run".to_string(),
+        fallback_policy: OmegaFallbackPolicy::Abort,
+        steps: vec![
+            GraphPlanStep {
+                index: 1,
+                id: "prepare_injection_context".to_string(),
+                kind: GraphPlanStepKind::PrepareInjectionContext,
+                description: "prepare".to_string(),
+                tool_name: None,
+                fallback_action: None,
+            },
+            GraphPlanStep {
+                index: 2,
+                id: "invoke_graph_tool".to_string(),
+                kind: GraphPlanStepKind::InvokeGraphTool,
+                description: "invoke".to_string(),
+                tool_name: Some("researcher.run".to_string()),
+                fallback_action: None,
+            },
+            GraphPlanStep {
+                index: 3,
+                id: "evaluate_fallback".to_string(),
+                kind: GraphPlanStepKind::EvaluateFallback,
+                description: "fallback".to_string(),
+                tool_name: None,
+                fallback_action: Some("abort".to_string()),
+            },
+        ],
+    };
+
+    plan.validate_shortcut_contract()
+        .expect("deterministic v1 graph plan should be accepted");
+}
+
+#[test]
+fn graph_execution_plan_contract_validation_rejects_invalid_fallback_action() {
+    let plan = GraphExecutionPlan {
+        plan_id: "graph-plan:graph:researcher.run:abort:evidence".to_string(),
+        plan_version: "v1".to_string(),
+        route: OmegaRoute::Graph,
+        workflow_mode: GraphWorkflowMode::Graph,
+        tool_name: "researcher.run".to_string(),
+        fallback_policy: OmegaFallbackPolicy::Abort,
+        steps: vec![
+            GraphPlanStep {
+                index: 1,
+                id: "prepare_injection_context".to_string(),
+                kind: GraphPlanStepKind::PrepareInjectionContext,
+                description: "prepare".to_string(),
+                tool_name: None,
+                fallback_action: None,
+            },
+            GraphPlanStep {
+                index: 2,
+                id: "invoke_graph_tool".to_string(),
+                kind: GraphPlanStepKind::InvokeGraphTool,
+                description: "invoke".to_string(),
+                tool_name: Some("researcher.run".to_string()),
+                fallback_action: None,
+            },
+            GraphPlanStep {
+                index: 3,
+                id: "evaluate_fallback".to_string(),
+                kind: GraphPlanStepKind::EvaluateFallback,
+                description: "fallback".to_string(),
+                tool_name: None,
+                fallback_action: Some("switch_to_python_loop".to_string()),
+            },
+        ],
+    };
+
+    let error = plan
+        .validate_shortcut_contract()
+        .expect_err("unsupported fallback action must be rejected");
+    assert!(error.contains("unsupported fallback_action"));
+}
+
+#[test]
+fn route_trace_contract_supports_plan_and_step_aggregation() {
+    let trace = RouteTrace {
+        session_id: "telegram:group-1:user-9".to_string(),
+        turn_id: 43,
+        selected_route: OmegaRoute::Graph,
+        confidence: 0.84,
+        risk_level: OmegaRiskLevel::Medium,
+        tool_trust_class: OmegaToolTrustClass::Evidence,
+        fallback_applied: Some(true),
+        fallback_policy: Some(OmegaFallbackPolicy::SwitchToGraph),
+        tool_chain: vec!["bridge.flaky".to_string()],
+        latency_ms: Some(327.1),
+        failure_taxonomy: vec!["transport".to_string()],
+        injection: Some(RouteTraceInjection {
+            blocks_used: 6,
+            chars_injected: 3_120,
+            dropped_by_budget: 1,
+        }),
+        plan_id: Some("graph-plan:omega:bridge.flaky:switch_to_graph:verification".to_string()),
+        workflow_mode: Some(GraphWorkflowMode::Omega),
+        graph_steps: Some(vec![
+            RouteTraceGraphStep {
+                index: 1,
+                id: "prepare_injection_context".to_string(),
+                kind: GraphPlanStepKind::PrepareInjectionContext,
+                attempt: 0,
+                latency_ms: 0.3,
+                status: "prepared".to_string(),
+                failure_reason: None,
+                tool_name: None,
+                fallback_action: None,
+            },
+            RouteTraceGraphStep {
+                index: 2,
+                id: "invoke_graph_tool".to_string(),
+                kind: GraphPlanStepKind::InvokeGraphTool,
+                attempt: 1,
+                latency_ms: 62.5,
+                status: "tool_call_transport_failed".to_string(),
+                failure_reason: Some("connection refused".to_string()),
+                tool_name: Some("bridge.flaky".to_string()),
+                fallback_action: None,
+            },
+            RouteTraceGraphStep {
+                index: 3,
+                id: "evaluate_fallback".to_string(),
+                kind: GraphPlanStepKind::EvaluateFallback,
+                attempt: 2,
+                latency_ms: 41.0,
+                status: "retry_succeeded_without_metadata".to_string(),
+                failure_reason: None,
+                tool_name: None,
+                fallback_action: Some("retry_bridge_without_metadata".to_string()),
+            },
+        ]),
+    };
+
+    let raw = serde_json::to_value(&trace).unwrap_or_else(|error| {
+        panic!("failed to serialize route trace contract: {error}");
+    });
+    assert_eq!(raw["selected_route"], "graph");
+    assert_eq!(raw["workflow_mode"], "omega");
+    assert_eq!(raw["fallback_policy"], "switch_to_graph");
+    assert_eq!(raw["graph_steps"][0]["kind"], "prepare_injection_context");
+    assert_eq!(
+        raw["graph_steps"][1]["status"],
+        "tool_call_transport_failed"
+    );
+    assert_eq!(
+        raw["graph_steps"][2]["fallback_action"],
+        "retry_bridge_without_metadata"
+    );
 }

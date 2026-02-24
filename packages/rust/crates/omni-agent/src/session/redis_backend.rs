@@ -19,6 +19,14 @@ const DEFAULT_SESSION_KEY_PREFIX: &str = "omni-agent:session";
 const DEFAULT_STREAM_MAX_LEN: usize = 10_000;
 const SESSION_CONTEXT_BACKUP_META_PREFIX: &str = "__session_context_backup_meta__:";
 
+fn usize_to_i64_saturating(value: usize) -> i64 {
+    i64::try_from(value).unwrap_or(i64::MAX)
+}
+
+fn usize_to_u64_saturating(value: usize) -> u64 {
+    u64::try_from(value).unwrap_or(u64::MAX)
+}
+
 #[derive(Debug, Deserialize)]
 struct LegacySessionContextBackupMetadataPayload {
     #[allow(dead_code)]
@@ -46,17 +54,17 @@ pub(crate) struct RedisSessionRuntimeSnapshot {
 impl RedisSessionConfig {
     pub(crate) fn from_env() -> Option<Self> {
         let settings = load_runtime_settings();
-        let url = std::env::var("VALKEY_URL")
-            .ok()
-            .map(|v| v.trim().to_string())
+        let url = settings
+            .session
+            .valkey_url
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_string)
             .filter(|v| !v.is_empty())
             .or_else(|| {
-                settings
-                    .session
-                    .valkey_url
-                    .as_deref()
-                    .map(str::trim)
-                    .map(str::to_string)
+                std::env::var("VALKEY_URL")
+                    .ok()
+                    .map(|v| v.trim().to_string())
                     .filter(|v| !v.is_empty())
             })?;
         let key_prefix = std::env::var("OMNI_AGENT_SESSION_VALKEY_PREFIX")
@@ -184,7 +192,8 @@ impl RedisSessionBackend {
     fn now_unix_ms() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
+            .ok()
+            .and_then(|duration| u64::try_from(duration.as_millis()).ok())
             .unwrap_or(0)
     }
 
@@ -247,9 +256,6 @@ impl RedisSessionBackend {
                     last_err = Some(
                         anyhow::anyhow!(err).context("redis command failed for session backend"),
                     );
-                    if attempt == 0 {
-                        continue;
-                    }
                 }
             }
         }
@@ -299,9 +305,6 @@ impl RedisSessionBackend {
                     last_err = Some(
                         anyhow::anyhow!(err).context("redis pipeline failed for session backend"),
                     );
-                    if attempt == 0 {
-                        continue;
-                    }
                 }
             }
         }
@@ -479,6 +482,7 @@ return count
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) async fn publish_stream_event(
         &self,
         stream_name: &str,
@@ -621,7 +625,7 @@ return event_id
             .map(serde_json::to_string)
             .collect::<std::result::Result<Vec<_>, _>>()
             .context("failed to encode window slots for redis")?;
-        let max_slots_i64 = max_slots.max(1) as i64;
+        let max_slots_i64 = usize_to_i64_saturating(max_slots.max(1));
         let ttl_secs = self.ttl_secs;
 
         self.run_pipeline::<(), _>("append_window_slots", || {
@@ -663,7 +667,7 @@ return event_id
             return Ok(Vec::new());
         }
         let key = self.window_key(session_id);
-        let limit_i64 = limit as i64;
+        let limit_i64 = usize_to_i64_saturating(limit);
         let payloads = self
             .run_command::<Vec<String>, _>("get_recent_window_slots", || {
                 let mut cmd = redis::cmd("LRANGE");
@@ -733,7 +737,7 @@ return event_id
             total_tool_calls,
             "valkey session window stats loaded"
         );
-        Ok(Some((len as u64, total_tool_calls, len)))
+        Ok(Some((usize_to_u64_saturating(len), total_tool_calls, len)))
     }
 
     pub(crate) async fn clear_window(&self, session_id: &str) -> Result<()> {
@@ -762,7 +766,7 @@ return event_id
         let key = self.summary_key(session_id);
         let encoded =
             serde_json::to_string(segment).context("failed to encode summary segment for redis")?;
-        let max_segments_i64 = max_segments.max(1) as i64;
+        let max_segments_i64 = usize_to_i64_saturating(max_segments.max(1));
         let ttl_secs = self.ttl_secs;
 
         self.run_pipeline::<(), _>("append_summary_segment", || {
@@ -799,7 +803,7 @@ return event_id
             return Ok(Vec::new());
         }
         let key = self.summary_key(session_id);
-        let limit_i64 = limit as i64;
+        let limit_i64 = usize_to_i64_saturating(limit);
         let payloads = self
             .run_command::<Vec<String>, _>("get_recent_summary_segments", || {
                 let mut cmd = redis::cmd("LRANGE");

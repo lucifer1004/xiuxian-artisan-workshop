@@ -5,7 +5,7 @@ use crate::config::{TelegramSettings, load_runtime_settings};
 const DEFAULT_INBOUND_QUEUE_CAPACITY: usize = 100;
 const DEFAULT_FOREGROUND_QUEUE_CAPACITY: usize = 256;
 const DEFAULT_FOREGROUND_MAX_IN_FLIGHT_MESSAGES: usize = 16;
-const DEFAULT_FOREGROUND_TURN_TIMEOUT_SECS: u64 = 300;
+const DEFAULT_FOREGROUND_TURN_TIMEOUT_SECS: u64 = 80;
 
 #[derive(Debug, Clone, Copy)]
 pub struct TelegramRuntimeConfig {
@@ -27,6 +27,7 @@ impl Default for TelegramRuntimeConfig {
 }
 
 impl TelegramRuntimeConfig {
+    #[must_use]
     pub fn from_env() -> Self {
         let settings = load_runtime_settings();
         Self::from_lookup(|name| std::env::var(name).ok(), Some(&settings.telegram))

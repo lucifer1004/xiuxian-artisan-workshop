@@ -16,11 +16,13 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
     snapshot: crate::agent::SessionMemoryRecallSnapshot,
     metrics: crate::agent::MemoryRecallMetricsSnapshot,
     runtime_status: crate::agent::MemoryRuntimeStatusSnapshot,
+    session_scope: &str,
 ) -> String {
     let mut lines = vec![
         "## Session Memory".to_string(),
         format!("Captured at unix ms: `{}`", snapshot.created_at_unix_ms),
-        "".to_string(),
+        format!("- Session scope: `{session_scope}`"),
+        String::new(),
         "### Trigger".to_string(),
         format!("- Decision: `{}`", snapshot.decision.as_str()),
         format!("- Query tokens: `{}`", snapshot.query_tokens),
@@ -33,18 +35,18 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
             "- Pipeline duration: `{} ms`",
             snapshot.pipeline_duration_ms
         ),
-        "".to_string(),
+        String::new(),
         "### Persistence".to_string(),
     ];
     lines.extend(format_memory_runtime_status_lines(runtime_status));
     lines.extend([
-        "".to_string(),
+        String::new(),
         "### Recall Plan".to_string(),
         format!("- `k1={}` / `k2={}`", snapshot.k1, snapshot.k2),
         format!("- `lambda={:.3}`", snapshot.lambda),
         format!("- `min_score={:.3}`", snapshot.min_score),
         format!("- `max_context_chars={}`", snapshot.max_context_chars),
-        "".to_string(),
+        String::new(),
         "### Context Pressure".to_string(),
         format!("- `budget_pressure={:.3}`", snapshot.budget_pressure),
         format!("- `window_pressure={:.3}`", snapshot.window_pressure),
@@ -60,7 +62,7 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
             "- `summary_segment_count={}`",
             snapshot.summary_segment_count
         ),
-        "".to_string(),
+        String::new(),
         "### Recall Result".to_string(),
         format!("- `recalled_total={}`", snapshot.recalled_total),
         format!("- `recalled_selected={}`", snapshot.recalled_selected),
@@ -77,23 +79,26 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
             "- `weakest_score={}`",
             format_optional_f32(snapshot.weakest_score)
         ),
-        "".to_string(),
+        String::new(),
         "### Process Metrics".to_string(),
     ]);
     lines.extend(format_memory_recall_metrics_lines(metrics));
     lines.join("\n")
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapshot_telegram(
     snapshot: crate::agent::SessionMemoryRecallSnapshot,
     metrics: crate::agent::MemoryRecallMetricsSnapshot,
     runtime_status: crate::agent::MemoryRuntimeStatusSnapshot,
+    session_scope: &str,
 ) -> String {
     let backend_ready = memory_backend_ready(&runtime_status);
     [
         "## Session Memory".to_string(),
         format!("Captured at unix ms: `{}`", snapshot.created_at_unix_ms),
-        "".to_string(),
+        format!("- Session scope: `{session_scope}`"),
+        String::new(),
         "### Trigger - Decision".to_string(),
         format!(
             "- `decision={}` `query_tokens={}` `pipeline_ms={}`",
@@ -105,7 +110,7 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
             "- `feedback_bias={:.3}` `embedding_source={}`",
             snapshot.recall_feedback_bias, snapshot.embedding_source
         ),
-        "".to_string(),
+        String::new(),
         "### Recall Result".to_string(),
         format!(
             "- `injected={}` / `selected={}` / `total={}`",
@@ -117,7 +122,7 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
             format_optional_f32(snapshot.best_score),
             format_optional_f32(snapshot.weakest_score)
         ),
-        "".to_string(),
+        String::new(),
         "### Persistence".to_string(),
         format!(
             "- `memory_enabled={}` `backend_ready={}` `startup_load_status={}`",
@@ -131,7 +136,7 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
             format_optional_string(runtime_status.configured_backend.clone())
         ),
         format_memory_gate_policy_compact_line(&runtime_status),
-        "".to_string(),
+        String::new(),
         "### Adaptive Metrics".to_string(),
         format!(
             "- `planned_total={}` `completed_total={}` `injected_total={}` `skipped_total={}`",
@@ -144,7 +149,7 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
             "- `avg_pipeline_ms={:.2}` `injected_rate={:.3}`",
             metrics.avg_pipeline_duration_ms, metrics.injected_rate
         ),
-        "".to_string(),
+        String::new(),
         "Tip: run `/session memory json` for full payload.".to_string(),
     ]
     .join("\n")
@@ -154,10 +159,12 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
     snapshot: crate::agent::SessionMemoryRecallSnapshot,
     metrics: crate::agent::MemoryRecallMetricsSnapshot,
     runtime_status: crate::agent::MemoryRuntimeStatusSnapshot,
+    session_scope: &str,
 ) -> String {
     json!({
         "kind": "session_memory",
         "available": true,
+        "session_scope": session_scope,
         "captured_at_unix_ms": snapshot.created_at_unix_ms,
         "decision": snapshot.decision.as_str(),
         "query_tokens": snapshot.query_tokens,

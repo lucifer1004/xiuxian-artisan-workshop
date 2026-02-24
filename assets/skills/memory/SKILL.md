@@ -1,6 +1,6 @@
 ---
 name: memory
-description: Use for short-term operational memory: track transient issues/workarounds, recall recent execution context, and support cleanup of stale entries.
+description: "Use for short-term operational memory: track transient issues/workarounds, recall recent execution context, and support cleanup of stale entries."
 metadata:
   author: omni-dev-fusion
   version: "1.0.0"

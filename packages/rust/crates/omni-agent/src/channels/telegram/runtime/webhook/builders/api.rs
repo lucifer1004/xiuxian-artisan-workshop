@@ -3,12 +3,15 @@ use tokio::sync::mpsc;
 
 use super::super::app::TelegramWebhookApp;
 use super::core;
-use crate::channels::telegram::TelegramControlCommandPolicy;
 use crate::channels::telegram::idempotency::WebhookDedupConfig;
 use crate::channels::telegram::session_partition::TelegramSessionPartition;
+use crate::channels::telegram::{TelegramCommandAdminRule, TelegramControlCommandPolicy};
 use crate::channels::traits::ChannelMessage;
 
 /// Build a Telegram webhook app with configured dedup backend.
+///
+/// # Errors
+/// Returns an error when channel construction or webhook app assembly fails.
 pub fn build_telegram_webhook_app(
     bot_token: String,
     allowed_users: Vec<String>,
@@ -32,6 +35,10 @@ pub fn build_telegram_webhook_app(
 }
 
 /// Build a Telegram webhook app with explicit admin user allowlist.
+///
+/// # Errors
+/// Returns an error when channel construction or webhook app assembly fails.
+#[allow(clippy::too_many_arguments)]
 pub fn build_telegram_webhook_app_with_admin_users(
     bot_token: String,
     allowed_users: Vec<String>,
@@ -57,13 +64,17 @@ pub fn build_telegram_webhook_app_with_admin_users(
 }
 
 /// Build a Telegram webhook app with explicit admin user allowlist and per-command admin rules.
+///
+/// # Errors
+/// Returns an error when channel construction or webhook app assembly fails.
+#[allow(clippy::too_many_arguments)]
 pub fn build_telegram_webhook_app_with_admin_users_and_command_rules(
     bot_token: String,
     allowed_users: Vec<String>,
     allowed_groups: Vec<String>,
     admin_users: Vec<String>,
     control_command_allow_from: Option<Vec<String>>,
-    admin_command_rule_specs: Vec<String>,
+    control_command_rules: Vec<TelegramCommandAdminRule>,
     webhook_path: &str,
     secret_token: Option<String>,
     dedup_config: WebhookDedupConfig,
@@ -76,7 +87,7 @@ pub fn build_telegram_webhook_app_with_admin_users_and_command_rules(
         TelegramControlCommandPolicy::new(
             admin_users,
             control_command_allow_from,
-            admin_command_rule_specs,
+            control_command_rules,
         ),
         webhook_path,
         secret_token,
@@ -86,6 +97,10 @@ pub fn build_telegram_webhook_app_with_admin_users_and_command_rules(
 }
 
 /// Build a Telegram webhook app with structured control-command policy.
+///
+/// # Errors
+/// Returns an error when channel construction or webhook app assembly fails.
+#[allow(clippy::too_many_arguments)]
 pub fn build_telegram_webhook_app_with_control_command_policy(
     bot_token: String,
     allowed_users: Vec<String>,
@@ -111,6 +126,10 @@ pub fn build_telegram_webhook_app_with_control_command_policy(
 
 /// Build a Telegram webhook app with explicit session partition strategy.
 #[doc(hidden)]
+///
+/// # Errors
+/// Returns an error when channel construction or webhook app assembly fails.
+#[allow(clippy::too_many_arguments)]
 pub fn build_telegram_webhook_app_with_partition(
     bot_token: String,
     allowed_users: Vec<String>,
@@ -138,6 +157,10 @@ pub fn build_telegram_webhook_app_with_partition(
 /// Build a Telegram webhook app with explicit session partition strategy and per-command admin
 /// authorization rules.
 #[doc(hidden)]
+///
+/// # Errors
+/// Returns an error when channel construction or webhook app assembly fails.
+#[allow(clippy::too_many_arguments)]
 pub fn build_telegram_webhook_app_with_partition_and_control_command_policy(
     bot_token: String,
     allowed_users: Vec<String>,

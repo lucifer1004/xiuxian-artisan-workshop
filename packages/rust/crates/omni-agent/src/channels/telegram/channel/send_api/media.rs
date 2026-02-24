@@ -128,6 +128,7 @@ impl TelegramChannel {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn send_media_file_with_retry_mode(
         &self,
         method: &str,
@@ -178,6 +179,7 @@ impl TelegramChannel {
         unreachable!("send_media_file_with_retry_mode should return before exhausting attempts")
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn send_media_file_once(
         &self,
         method: &str,
@@ -274,9 +276,8 @@ impl TelegramChannel {
         }
 
         for part in file_parts {
-            let file_part =
-                Part::bytes(part.file_bytes.clone()).file_name(part.file_name.to_string());
-            form = form.part(part.field_name.to_string(), file_part);
+            let file_part = Part::bytes(part.file_bytes.clone()).file_name(part.file_name.clone());
+            form = form.part(part.field_name.clone(), file_part);
         }
 
         let response = self

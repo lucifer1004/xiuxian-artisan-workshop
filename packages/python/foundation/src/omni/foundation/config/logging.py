@@ -183,9 +183,7 @@ class SubprocessLogFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
-        if "Popen(['git'" in msg or "subprocess.Popen" in msg:
-            return False
-        return True
+        return "Popen(['git'" not in msg and "subprocess.Popen" not in msg
 
 
 # =============================================================================
@@ -237,6 +235,7 @@ def _setup_log_filters(level: int) -> None:
         ("uvicorn", logging.WARNING),
         ("uvicorn.access", logging.WARNING),
         ("starlette", logging.WARNING),
+        ("asyncio", logging.WARNING),
         ("litellm", logging.WARNING if level > logging.DEBUG else logging.INFO),
         ("LiteLLM", logging.WARNING if level > logging.DEBUG else logging.INFO),
         ("httpx", logging.WARNING if level > logging.DEBUG else logging.INFO),
@@ -428,8 +427,8 @@ __all__ = [
     "LogHandler",
     "configure_logging",
     "format_log",
-    "get_logger",
     "get_log_level",
+    "get_logger",
     "is_verbose",
     "log_banner",
     "log_data",

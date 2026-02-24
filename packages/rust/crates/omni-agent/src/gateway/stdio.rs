@@ -12,6 +12,9 @@ pub const DEFAULT_STDIO_SESSION_ID: &str = "default";
 ///
 /// * `agent` — the agent instance
 /// * `session_id` — session ID for the conversation (e.g. from `--session-id`)
+///
+/// # Errors
+/// Returns an error when stdin reads fail or agent turn execution fails.
 pub async fn run_stdio(agent: Agent, session_id: String) -> Result<()> {
     let mut reader = BufReader::new(tokio::io::stdin()).lines();
     while let Some(line) = reader.next_line().await? {
@@ -20,7 +23,7 @@ pub async fn run_stdio(agent: Agent, session_id: String) -> Result<()> {
             continue;
         }
         let out = agent.run_turn(&session_id, line).await?;
-        println!("{}", out);
+        println!("{out}");
     }
     Ok(())
 }

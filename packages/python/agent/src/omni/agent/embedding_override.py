@@ -12,13 +12,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from omni.foundation.services.embedding import set_embedding_override
-from omni.foundation.utils.asyncio import run_async_blocking
-
 
 def _mcp_first_wrapper() -> Any:
     """Build a sync embedding wrapper that uses MCP when available (lazy, cached port)."""
     from omni.agent.cli.mcp_embed import detect_mcp_port, make_mcp_embed_func
+    from omni.foundation.utils.asyncio import run_async_blocking
 
     port: int | None = None
 
@@ -64,13 +62,23 @@ def _get_override_instance() -> Any:
 
 def _before_skill_execute() -> None:
     """Set embedding override so this execution uses MCP-first embedding (when not in MCP server)."""
+    enabled = os.environ.get("OMNI_EMBED_OVERRIDE_ENABLED", "").strip().lower()
+    if enabled in {"0", "false", "no", "off"}:
+        return
     if os.environ.get("OMNI_EMBEDDING_CLIENT_ONLY"):
         return
+    from omni.foundation.services.embedding import set_embedding_override
+
     set_embedding_override(_get_override_instance())
 
 
 def _after_skill_execute() -> None:
     """Clear embedding override after skill command finishes."""
+    enabled = os.environ.get("OMNI_EMBED_OVERRIDE_ENABLED", "").strip().lower()
+    if enabled in {"0", "false", "no", "off"}:
+        return
+    from omni.foundation.services.embedding import set_embedding_override
+
     set_embedding_override(None)
 
 

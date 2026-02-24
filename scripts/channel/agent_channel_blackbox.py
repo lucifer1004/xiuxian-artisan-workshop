@@ -10,7 +10,7 @@ This probe posts one synthetic Telegram update to local webhook endpoint, then w
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import os
 import re
@@ -19,29 +19,38 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections import Counter, deque
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-try:
-    from test_config_resolver import (
-        session_ids_from_runtime_log,
-        telegram_webhook_secret_token,
-        username_from_runtime_log,
-        username_from_settings,
-    )
-except ModuleNotFoundError as import_err:
-    _resolver_path = Path(__file__).resolve().with_name("test_config_resolver.py")
-    _resolver_spec = importlib.util.spec_from_file_location("test_config_resolver", _resolver_path)
-    if _resolver_spec is None or _resolver_spec.loader is None:
-        raise RuntimeError(f"failed to load resolver module from {_resolver_path}") from import_err
-    _resolver_module = importlib.util.module_from_spec(_resolver_spec)
-    sys.modules.setdefault(_resolver_spec.name, _resolver_module)
-    _resolver_spec.loader.exec_module(_resolver_module)
-    session_ids_from_runtime_log = _resolver_module.session_ids_from_runtime_log
-    telegram_webhook_secret_token = _resolver_module.telegram_webhook_secret_token
-    username_from_runtime_log = _resolver_module.username_from_runtime_log
-    username_from_settings = _resolver_module.username_from_settings
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+load_sibling_module = importlib.import_module("module_loader").load_sibling_module
+
+_resolver_module = load_sibling_module(
+    module_name="config_resolver",
+    file_name="config_resolver.py",
+    caller_file=__file__,
+    error_context="resolver module",
+)
+default_telegram_webhook_url = _resolver_module.default_telegram_webhook_url
+session_ids_from_runtime_log = _resolver_module.session_ids_from_runtime_log
+telegram_webhook_secret_token = _resolver_module.telegram_webhook_secret_token
+username_from_runtime_log = _resolver_module.username_from_runtime_log
+username_from_settings = _resolver_module.username_from_settings
+
+_log_io_module = load_sibling_module(
+    module_name="log_io",
+    file_name="log_io.py",
+    caller_file=__file__,
+    error_context="shared log I/O helpers",
+)
+_SharedLogCursor = _log_io_module.LogCursor
+_shared_init_log_cursor = _log_io_module.init_log_cursor
+_shared_read_new_log_lines_with_cursor = _log_io_module.read_new_log_lines_with_cursor
+_shared_tail_log_lines = _log_io_module.tail_log_lines
 
 ERROR_PATTERNS = (
     "Telegram sendMessage failed",
@@ -71,6 +80,9 @@ MCP_OBSERVABILITY_EVENTS = (
 MCP_WAITING_EVENTS = frozenset({"mcp.pool.connect.waiting", "mcp.pool.call.waiting"})
 TELEGRAM_SEND_RETRY_DELAY_MS_RE = re.compile(r"\bdelay_ms\s*=\s*(\d+)")
 TELEGRAM_SEND_RETRY_AFTER_SECS_RE = re.compile(r"\bretry_after\s*=\s*(\d+)(?:s)?\b")
+TARGET_SESSION_SCOPE_PLACEHOLDER = "__target_session_scope__"
+TELEGRAM_SESSION_SCOPE_PREFIX = "telegram:"
+DISCORD_SESSION_SCOPE_PREFIX = "discord:"
 
 
 def strip_ansi(value: str) -> str:
@@ -135,7 +147,7 @@ def parse_allow_chat_ids(values: list[str]) -> tuple[int, ...]:
 
 def parse_command_reply_event_line(value: str) -> dict[str, object] | None:
     normalized = strip_ansi(value)
-    if "telegram command reply sent" not in normalized:
+    if "command reply sent" not in normalized:
         return None
     tokens = parse_log_tokens(normalized)
     event = tokens.get("event")
@@ -152,7 +164,7 @@ def parse_command_reply_event_line(value: str) -> dict[str, object] | None:
 
 def parse_command_reply_json_summary_line(value: str) -> dict[str, str] | None:
     normalized = strip_ansi(value)
-    if "telegram command reply json summary" not in normalized:
+    if "command reply json summary" not in normalized:
         return None
     tokens = parse_log_tokens(normalized)
     if "event" not in tokens:
@@ -202,6 +214,7 @@ class ProbeConfig:
 
 
 def parse_args() -> argparse.Namespace:
+    webhook_url_default = os.environ.get("OMNI_WEBHOOK_URL") or default_telegram_webhook_url()
     parser = argparse.ArgumentParser(
         description="Inject one synthetic Telegram webhook update and wait for bot reply logs."
     )
@@ -226,10 +239,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--webhook-url",
-        default=os.environ.get(
-            "OMNI_WEBHOOK_URL",
-            f"http://127.0.0.1:{os.environ.get('WEBHOOK_PORT', '8081')}/telegram/webhook",
-        ),
+        default=webhook_url_default,
         help="Webhook URL.",
     )
     parser.add_argument(
@@ -304,8 +314,10 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         help=(
-            "Expected key=value from `telegram command reply json summary` logs "
-            "(repeatable). Example: --expect-reply-json-field json_kind=session_budget"
+            "Expected key=value from `command reply json summary` logs "
+            "(repeatable). Example: --expect-reply-json-field json_kind=session_budget. "
+            f"For session scope checks, use "
+            f"--expect-reply-json-field json_session_scope={TARGET_SESSION_SCOPE_PLACEHOLDER}."
         ),
     )
     parser.add_argument(
@@ -343,31 +355,19 @@ def parse_args() -> argparse.Namespace:
 
 
 def count_lines(path: Path) -> int:
-    if not path.exists():
-        return 0
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        return sum(1 for _ in handle)
+    return _shared_init_log_cursor(path, kind="offset").value
 
 
 def read_new_lines(path: Path, cursor: int) -> tuple[int, list[str]]:
-    if not path.exists():
-        return cursor, []
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        lines = handle.read().splitlines()
-    total = len(lines)
-    if total <= cursor:
-        return total, []
-    return total, lines[cursor:]
+    next_cursor, lines = _shared_read_new_log_lines_with_cursor(
+        path,
+        _SharedLogCursor(kind="offset", value=cursor),
+    )
+    return next_cursor.value, lines
 
 
 def tail_lines(path: Path, n: int) -> list[str]:
-    if not path.exists():
-        return []
-    buf: deque[str] = deque(maxlen=n)
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        for line in handle:
-            buf.append(line.rstrip("\n"))
-    return list(buf)
+    return _shared_tail_log_lines(path, n)
 
 
 # Backward-compatible aliases for existing test-kit imports.
@@ -461,6 +461,32 @@ def expected_session_key(
     session_partition: str | None = None,
 ) -> str:
     return expected_session_keys(chat_id, user_id, thread_id, session_partition)[0]
+
+
+def expected_session_scope_values(
+    chat_id: int,
+    user_id: int,
+    thread_id: int | None,
+    session_partition: str | None = None,
+    scope_prefixes: tuple[str, ...] = (TELEGRAM_SESSION_SCOPE_PREFIX,),
+) -> tuple[str, ...]:
+    scope_values: list[str] = []
+    for scope_prefix in scope_prefixes:
+        for session_key in expected_session_keys(chat_id, user_id, thread_id, session_partition):
+            value = f"{scope_prefix}{session_key}"
+            if value not in scope_values:
+                scope_values.append(value)
+    return tuple(scope_values)
+
+
+def expected_session_scope_prefixes(expect_events: tuple[str, ...]) -> tuple[str, ...]:
+    has_telegram = any(event.startswith("telegram.") for event in expect_events)
+    has_discord = any(event.startswith("discord.") for event in expect_events)
+    if has_telegram and not has_discord:
+        return (TELEGRAM_SESSION_SCOPE_PREFIX,)
+    if has_discord and not has_telegram:
+        return (DISCORD_SESSION_SCOPE_PREFIX,)
+    return (TELEGRAM_SESSION_SCOPE_PREFIX, DISCORD_SESSION_SCOPE_PREFIX)
 
 
 def expected_recipient_key(chat_id: int, thread_id: int | None) -> str:
@@ -604,7 +630,7 @@ def next_update_id(strong_update_id: bool) -> int:
 
 def run_probe(cfg: ProbeConfig) -> int:
     cfg.log_file.parent.mkdir(parents=True, exist_ok=True)
-    start_line = count_lines(cfg.log_file)
+    cursor = count_lines(cfg.log_file)
 
     update_id = next_update_id(cfg.strong_update_id)
     trace_id = f"bbx-{update_id}-{os.getpid()}"
@@ -681,6 +707,13 @@ def run_probe(cfg: ProbeConfig) -> int:
         cfg.thread_id,
         cfg.session_partition,
     )
+    expected_session_scopes = expected_session_scope_values(
+        cfg.chat_id,
+        cfg.user_id,
+        cfg.thread_id,
+        cfg.session_partition,
+        expected_session_scope_prefixes(cfg.expect_events),
+    )
     expected_session = expected_session_key(
         cfg.chat_id,
         cfg.user_id,
@@ -754,7 +787,18 @@ def run_probe(cfg: ProbeConfig) -> int:
         if not observation_matches_target_recipient(observation):
             return False
         session_key = str(observation.get("session_key") or "")
-        return not session_key or session_key in expected_sessions
+        if session_key:
+            return session_key in expected_sessions
+        session_scope = str(observation.get("json_session_scope") or "")
+        if session_scope:
+            return session_scope in expected_session_scopes
+        return True
+
+    def reply_json_field_matches(key: str, expected: str, observation: dict[str, str]) -> bool:
+        actual = observation.get(key)
+        if key == "json_session_scope" and expected == TARGET_SESSION_SCOPE_PLACEHOLDER:
+            return actual in expected_session_scopes
+        return actual == expected
 
     def event_line_matches_target_recipient(value: str) -> bool:
         tokens = parse_log_tokens(value)
@@ -803,17 +847,25 @@ def run_probe(cfg: ProbeConfig) -> int:
             return True, ""
         target_summary = pick_target_json_summary_observation()
         if target_summary:
-            observed_session = str(target_summary.get("session_key") or "")
-            if observed_session and observed_session not in expected_sessions:
+            observed_session_key = str(target_summary.get("session_key") or "")
+            if observed_session_key and observed_session_key not in expected_sessions:
                 return (
                     False,
                     "command_reply_json_summary "
                     f"event={target_summary.get('event')} recipient={target_summary.get('recipient')} "
-                    f"observed_session_key={observed_session}",
+                    f"observed_session_key={observed_session_key}",
+                )
+            observed_session_scope = str(target_summary.get("json_session_scope") or "")
+            if observed_session_scope and observed_session_scope not in expected_session_scopes:
+                return (
+                    False,
+                    "command_reply_json_summary "
+                    f"event={target_summary.get('event')} recipient={target_summary.get('recipient')} "
+                    f"observed_json_session_scope={observed_session_scope}",
                 )
             return True, ""
         requires_target_observation = bool(cfg.expect_reply_json_fields) or any(
-            event.startswith("telegram.command.") for event in cfg.expect_events
+            ".command." in event and event.endswith(".replied") for event in cfg.expect_events
         )
         if requires_target_observation:
             return (
@@ -841,7 +893,6 @@ def run_probe(cfg: ProbeConfig) -> int:
         emit_mcp_diagnostics()
         return code
 
-    cursor = start_line
     trace_mode = trace_id in message_text
     seen_trace = False
     seen_user_dispatch = False
@@ -898,7 +949,7 @@ def run_probe(cfg: ProbeConfig) -> int:
                         for idx, (key, expected) in enumerate(cfg.expect_reply_json_fields):
                             if matched_expect_reply_json_fields[idx]:
                                 continue
-                            if json_summary_obs.get(key) == expected:
+                            if reply_json_field_matches(key, expected, json_summary_obs):
                                 matched_expect_reply_json_fields[idx] = True
                 retry_grace_secs = telegram_send_retry_grace_seconds(line)
                 if retry_grace_secs is not None:
@@ -1067,6 +1118,7 @@ def run_probe(cfg: ProbeConfig) -> int:
                 "json_status",
                 "json_found",
                 "json_decision",
+                "json_session_scope",
                 "json_keys",
             ):
                 value = latest_summary.get(key)

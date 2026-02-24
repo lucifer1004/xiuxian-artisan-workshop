@@ -14,13 +14,16 @@ Usage:
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 
 from omni.agent.cli.app import app
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestSkillRun:
@@ -42,6 +45,90 @@ class TestSkillRun:
 
         # Should not be a usage error
         assert "requires" not in result.output.lower()
+
+    def test_run_with_reuse_process_forwards_to_runner(self, runner, monkeypatch):
+        """`skill run --reuse-process` should call run_skills with reuse flag."""
+        calls: dict[str, object] = {}
+
+        def _fake_run_skills(
+            commands,
+            *,
+            json_output=False,
+            quiet=True,
+            log_handler=None,
+            reuse_process=False,
+        ):
+            calls["commands"] = list(commands)
+            calls["json_output"] = bool(json_output)
+            calls["reuse_process"] = bool(reuse_process)
+
+        monkeypatch.setattr(
+            "omni.agent.cli.commands.skill.manage.run_skills",
+            _fake_run_skills,
+        )
+
+        result = runner.invoke(app, ["skill", "run", "knowledge.search", "--reuse-process"])
+
+        assert result.exit_code == 0
+        assert calls["commands"] == ["knowledge.search"]
+        assert calls["json_output"] is False
+        assert calls["reuse_process"] is True
+
+    def test_run_defaults_to_reuse_process(self, runner, monkeypatch):
+        """`skill run` should use daemon reuse by default."""
+        calls: dict[str, object] = {}
+
+        def _fake_run_skills(
+            commands,
+            *,
+            json_output=False,
+            quiet=True,
+            log_handler=None,
+            reuse_process=False,
+        ):
+            calls["commands"] = list(commands)
+            calls["json_output"] = bool(json_output)
+            calls["reuse_process"] = bool(reuse_process)
+
+        monkeypatch.setattr(
+            "omni.agent.cli.commands.skill.manage.run_skills",
+            _fake_run_skills,
+        )
+
+        result = runner.invoke(app, ["skill", "run", "knowledge.search"])
+
+        assert result.exit_code == 0
+        assert calls["commands"] == ["knowledge.search"]
+        assert calls["json_output"] is False
+        assert calls["reuse_process"] is True
+
+    def test_run_no_reuse_process_disables_daemon(self, runner, monkeypatch):
+        """`skill run --no-reuse-process` should disable daemon reuse."""
+        calls: dict[str, object] = {}
+
+        def _fake_run_skills(
+            commands,
+            *,
+            json_output=False,
+            quiet=True,
+            log_handler=None,
+            reuse_process=False,
+        ):
+            calls["commands"] = list(commands)
+            calls["json_output"] = bool(json_output)
+            calls["reuse_process"] = bool(reuse_process)
+
+        monkeypatch.setattr(
+            "omni.agent.cli.commands.skill.manage.run_skills",
+            _fake_run_skills,
+        )
+
+        result = runner.invoke(app, ["skill", "run", "knowledge.search", "--no-reuse-process"])
+
+        assert result.exit_code == 0
+        assert calls["commands"] == ["knowledge.search"]
+        assert calls["json_output"] is False
+        assert calls["reuse_process"] is False
 
 
 class TestSkillTest:
@@ -187,6 +274,44 @@ class TestSkillUpdateUnavailable:
 
         assert result.exit_code == 0
         assert "Unavailable" in result.output or "not available" in result.output.lower()
+
+
+class TestSkillRunnerDaemon:
+    """Tests for `omni skill runner` daemon commands."""
+
+    @pytest.fixture
+    def runner(self):
+        return CliRunner()
+
+    def test_runner_status_command(self, runner, monkeypatch):
+        """runner status should display daemon state."""
+        monkeypatch.setattr(
+            "omni.agent.cli.runner_json.get_runner_daemon_status",
+            lambda: {"running": True, "pid": 123},
+        )
+        result = runner.invoke(app, ["skill", "runner", "status"])
+        assert result.exit_code == 0
+        assert "running" in result.output.lower()
+
+    def test_runner_start_command(self, runner, monkeypatch):
+        """runner start should call start helper and print success."""
+        monkeypatch.setattr(
+            "omni.agent.cli.runner_json.start_runner_daemon",
+            lambda: {"running": True, "started": True, "pid": 321},
+        )
+        result = runner.invoke(app, ["skill", "runner", "start"])
+        assert result.exit_code == 0
+        assert "started" in result.output.lower() or "running" in result.output.lower()
+
+    def test_runner_stop_command(self, runner, monkeypatch):
+        """runner stop should call stop helper and print success."""
+        monkeypatch.setattr(
+            "omni.agent.cli.runner_json.stop_runner_daemon",
+            lambda: {"stopped": True},
+        )
+        result = runner.invoke(app, ["skill", "runner", "stop"])
+        assert result.exit_code == 0
+        assert "stopped" in result.output.lower()
 
 
 if __name__ == "__main__":

@@ -168,6 +168,29 @@ def test_select_feedback_direction_deadband_vs_strict() -> None:
     assert up == "up"
 
 
+def test_read_new_lines_returns_cursor_and_lines(monkeypatch) -> None:
+    module = _load_module()
+
+    def _fake_read_new(_path: object, _cursor: object) -> tuple[object, list[str]]:
+        return module._SharedLogCursor(kind="offset", value=29), ["bench-a", "bench-b"]
+
+    monkeypatch.setattr(module, "_shared_read_new_log_lines_with_cursor", _fake_read_new)
+    cursor, lines = module.read_new_lines(get_project_root() / ".run" / "dummy.log", 11)
+    assert cursor == 29
+    assert lines == ["bench-a", "bench-b"]
+
+
+def test_count_lines_returns_offset_cursor(monkeypatch) -> None:
+    module = _load_module()
+
+    def _fake_init_cursor(_path: object, kind: str) -> object:
+        assert kind == "offset"
+        return module._SharedLogCursor(kind="offset", value=53)
+
+    monkeypatch.setattr(module, "_shared_init_log_cursor", _fake_init_cursor)
+    assert module.count_lines(get_project_root() / ".run" / "dummy.log") == 53
+
+
 def test_has_event_matches_event_token() -> None:
     module = _load_module()
     lines = [

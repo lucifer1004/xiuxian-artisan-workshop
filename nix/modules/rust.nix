@@ -15,11 +15,13 @@ in
     pkgs.libidn2
     pkgs.libiconv
     pkgs.cargo-nextest
+    pkgs.cargo-audit
+    pkgs.cargo-deny
   ];
   # https://devenv.sh/languages/
   languages.rust = {
     enable = true;
-    channel = "nightly";
+    channel = "stable";
     # Ensure rust can link python library
     components = [
       "rustc"

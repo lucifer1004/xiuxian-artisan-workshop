@@ -5,6 +5,7 @@ pub(super) struct JsonReplySummary {
     pub(super) status: Option<String>,
     pub(super) found: Option<bool>,
     pub(super) decision: Option<String>,
+    pub(super) session_scope: Option<String>,
     pub(super) logical_session_id: Option<String>,
     pub(super) partition_key: Option<String>,
     pub(super) partition_mode: Option<String>,
@@ -45,6 +46,10 @@ pub(super) fn summarize_json_reply(message: &str) -> Option<JsonReplySummary> {
         found: object.get("found").and_then(serde_json::Value::as_bool),
         decision: object
             .get("decision")
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string),
+        session_scope: object
+            .get("session_scope")
             .and_then(serde_json::Value::as_str)
             .map(ToString::to_string),
         logical_session_id: object

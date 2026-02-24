@@ -29,7 +29,7 @@ struct StoredSessionSystemPromptInjection {
 fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
+        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
         .unwrap_or(0)
 }
 
@@ -80,6 +80,10 @@ fn validate_and_normalize_xml(raw_xml: &str) -> Result<SessionSystemPromptInject
 }
 
 impl Agent {
+    /// Upsert session-scoped system-prompt injection XML into persistent session storage.
+    ///
+    /// # Errors
+    /// Returns an error when XML is invalid or persistence fails.
     pub async fn upsert_session_system_prompt_injection_xml(
         &self,
         session_id: &str,
@@ -177,6 +181,10 @@ impl Agent {
         snapshot
     }
 
+    /// Clear session-scoped system-prompt injection payload from cache and storage.
+    ///
+    /// # Errors
+    /// Returns an error when storage clear fails.
     pub async fn clear_session_system_prompt_injection(&self, session_id: &str) -> Result<bool> {
         let removed_cache = self
             .system_prompt_injection

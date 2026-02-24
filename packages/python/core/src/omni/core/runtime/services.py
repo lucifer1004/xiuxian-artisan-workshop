@@ -30,6 +30,7 @@ class ServiceRegistry:
 
     _instance: "ServiceRegistry | None" = None
     _services: dict[str, Any] = {}
+    _missing_warned: set[str] = set()
     _lock: __import__("threading").Lock = __import__("threading").Lock()
 
     def __new__(cls) -> "ServiceRegistry":
@@ -49,6 +50,7 @@ class ServiceRegistry:
         """
         with cls._lock:
             cls._services[name] = service
+            cls._missing_warned.discard(name)
         logger.debug(f"Service registered: {name}")
 
     @classmethod
@@ -63,9 +65,13 @@ class ServiceRegistry:
         """
         with cls._lock:
             service = cls._services.get(name)
+            should_warn = False
+            if service is None and name not in cls._missing_warned:
+                cls._missing_warned.add(name)
+                should_warn = True
 
-        if service is None:
-            logger.warning(f"Service '{name}' requested but not found in registry.")
+        if should_warn:
+            logger.debug("Service '%s' requested but not found in registry.", name)
         return service
 
     @classmethod
@@ -77,6 +83,7 @@ class ServiceRegistry:
         """
         with cls._lock:
             cls._services.pop(name, None)
+            cls._missing_warned.discard(name)
         logger.debug(f"Service unregistered: {name}")
 
     @classmethod
@@ -84,6 +91,7 @@ class ServiceRegistry:
         """Remove all registered services."""
         with cls._lock:
             cls._services.clear()
+            cls._missing_warned.clear()
         logger.debug("Service registry cleared")
 
     @classmethod

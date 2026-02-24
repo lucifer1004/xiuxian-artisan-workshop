@@ -64,6 +64,13 @@ Crawl a web page with LangGraph workflow and LLM-based intelligent chunking.
 | `skeleton` | Extract lightweight TOC without full content | Quick overview, decide what to read |
 | `crawl` | Return full markdown content | Small pages, complete content needed |
 
+**Runtime Transport:**
+
+- `max_depth = 0`: Uses HTTP strategy (no browser cold-start) for lower latency.
+- `max_depth > 0`: Uses browser deep-crawl strategy (BFS) for multi-page traversal.
+- `file://...` with `max_depth = 0`: Uses local fast-path (no crawl4ai runtime bootstrap) for deterministic fixture/local-note benchmarking.
+- Persistent worker mode reuses the HTTP crawler instance across requests to reduce repeated initialization cost.
+
 **Examples:**
 
 ```python

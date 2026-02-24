@@ -30,7 +30,7 @@ def _load_probe_module() -> ModuleType:
 def _make_args(**overrides: object) -> argparse.Namespace:
     defaults: dict[str, object] = {
         "max_wait": 30,
-        "webhook_url": "http://127.0.0.1:8081/telegram/webhook",
+        "webhook_url": "http://127.0.0.1:18081/telegram/webhook",
         "log_file": ".run/logs/omni-agent-webhook.log",
         "chat_id": None,
         "chat_b": None,
@@ -229,3 +229,26 @@ def test_collect_observation_matches_zero_thread_alias() -> None:
     assert obs.parsed_b == 1
     assert obs.replied_a == 1
     assert obs.replied_b == 1
+
+
+def test_read_new_lines_returns_cursor_and_lines(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_probe_module()
+
+    def _fake_read_new(_path: object, _cursor: object) -> tuple[object, list[str]]:
+        return module._SharedLogCursor(kind="offset", value=17), ["line-a", "line-b"]
+
+    monkeypatch.setattr(module, "_shared_read_new_log_lines_with_cursor", _fake_read_new)
+    cursor, lines = module.read_new_lines(get_project_root() / ".run" / "dummy.log", 3)
+    assert cursor == 17
+    assert lines == ["line-a", "line-b"]
+
+
+def test_count_lines_returns_offset_cursor(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_probe_module()
+
+    def _fake_init_cursor(_path: object, kind: str) -> object:
+        assert kind == "offset"
+        return module._SharedLogCursor(kind="offset", value=61)
+
+    monkeypatch.setattr(module, "_shared_init_log_cursor", _fake_init_cursor)
+    assert module.count_lines(get_project_root() / ".run" / "dummy.log") == 61

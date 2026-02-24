@@ -19,7 +19,7 @@ from omni.foundation.config.paths import ConfigPaths
 
 from .hybrid import run_hybrid_search
 from .keyword import search_keyword
-from .link_graph import run_link_graph_search
+from .link_graph import clear_link_graph_search_cache, run_link_graph_search
 from .vector import run_vector_search
 
 SEARCH_MODES = ("hybrid", "keyword", "link_graph", "vector")
@@ -66,6 +66,7 @@ async def run_search(
 
 __all__ = [
     "SEARCH_MODES",
+    "clear_link_graph_search_cache",
     "run_hybrid_search",
     "run_link_graph_search",
     "run_search",

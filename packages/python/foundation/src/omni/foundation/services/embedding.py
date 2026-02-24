@@ -17,13 +17,22 @@ import os
 import time
 from contextvars import ContextVar
 from typing import Any, Protocol
-from urllib.parse import urlsplit, urlunsplit
 
 import structlog
 
 from omni.foundation.config.settings import get_setting
 
 logger = structlog.get_logger(__name__)
+
+
+def _int_setting(path: str, default: int) -> int:
+    """Read int setting with defensive fallback."""
+    try:
+        value = get_setting(path)
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
 
 # Context override so skill execution can use MCP-first embedding (set by agent via skill hooks).
 _embedding_override: ContextVar[Any | None] = ContextVar("embedding_override", default=None)
@@ -90,20 +99,9 @@ class EmbeddingService:
         *,
         is_ollama: bool,
     ) -> str | None:
-        """Normalize local loopback hostnames to reduce localhost/IPv6 ambiguity."""
-        if not api_base or not is_ollama:
-            return api_base
-        raw = api_base if "://" in api_base else f"http://{api_base}"
-        parsed = urlsplit(raw)
-        host = (parsed.hostname or "").lower()
-        if host not in {"localhost", "0.0.0.0", "::"}:
-            return api_base
-        port = parsed.port or 11434
-        netloc = f"127.0.0.1:{port}"
-        normalized = urlunsplit(
-            (parsed.scheme or "http", netloc, parsed.path, parsed.query, parsed.fragment)
-        )
-        return normalized
+        """Keep configured API base as-is (strict config semantics)."""
+        _ = is_ollama
+        return api_base
 
     @staticmethod
     def _loopback_alias_candidates(
@@ -111,32 +109,31 @@ class EmbeddingService:
         *,
         is_ollama: bool,
     ) -> list[str | None]:
+        _ = is_ollama
         if not api_base:
             return [None]
-        if not is_ollama:
-            return [api_base]
-        raw = api_base if "://" in api_base else f"http://{api_base}"
-        parsed = urlsplit(raw)
-        host = (parsed.hostname or "").lower()
-        port = parsed.port or 11434
-        path = parsed.path
-        query = parsed.query
-        fragment = parsed.fragment
-        scheme = parsed.scheme or "http"
-        candidates: list[str | None] = [api_base]
-        if host == "localhost":
-            alt = urlunsplit((scheme, f"127.0.0.1:{port}", path, query, fragment))
-            if alt not in candidates:
-                candidates.append(alt)
-        elif host == "127.0.0.1":
-            alt = urlunsplit((scheme, f"localhost:{port}", path, query, fragment))
-            if alt not in candidates:
-                candidates.append(alt)
-        return candidates
+        return [api_base]
+
+    def _reset_runtime_state(self) -> None:
+        """Reset mutable runtime state to deterministic defaults."""
+        self._dimension = 1024
+        self._backend = "fallback"
+        self._initialized = False
+        self._client_mode = False
+        self._client_url = None
+        self._embed_cache_key = None
+        self._embed_cache_value = None
+        self._litellm_model = None
+        self._litellm_api_base = None
+        self._client_retried = False
+        self._litellm_circuit_open_until = 0.0
+        self._litellm_last_error = None
 
     def __new__(cls) -> "EmbeddingService":
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            instance = super().__new__(cls)
+            instance._reset_runtime_state()
+            cls._instance = instance
         return cls._instance
 
     def _is_port_in_use(self, port: int, timeout: float = 0.5) -> bool:
@@ -207,7 +204,7 @@ class EmbeddingService:
             return
 
         provider = (get_setting("embedding.provider") or "").lower()
-        http_port = int(get_setting("embedding.http_port"))
+        http_port = _int_setting("embedding.http_port", 18501)
         http_url = get_setting("embedding.client_url") or f"http://127.0.0.1:{http_port}"
 
         # LiteLLM backend
@@ -227,7 +224,7 @@ class EmbeddingService:
                 raw_api_base,
                 is_ollama=provider == "ollama" or str(self._litellm_model).startswith("ollama/"),
             )
-            self._dimension = int(get_setting("embedding.dimension"))
+            self._dimension = _int_setting("embedding.dimension", 1024)
             self._initialized = True
             logger.info(
                 "Embedding: LiteLLM backend",
@@ -244,13 +241,13 @@ class EmbeddingService:
                 self._client_mode = True
                 self._client_url = client_url
                 self._backend = "http"
-                self._dimension = int(get_setting("embedding.dimension"))
+                self._dimension = _int_setting("embedding.dimension", 1024)
                 self._initialized = True
                 logger.info("Embedding: client mode", client_url=self._client_url)
             else:
                 if os.environ.get("OMNI_EMBEDDING_CLIENT_ONLY") == "1":
                     self._backend = "unavailable"
-                    self._dimension = int(get_setting("embedding.dimension"))
+                    self._dimension = _int_setting("embedding.dimension", 1024)
                     self._initialized = True
                     logger.warning(
                         "Embedding: client_url unreachable; client-only, embedding unavailable."
@@ -264,7 +261,7 @@ class EmbeddingService:
 
         if provider == "fallback":
             self._backend = "fallback"
-            self._dimension = int(get_setting("embedding.dimension"))
+            self._dimension = _int_setting("embedding.dimension", 1024)
             self._initialized = True
             logger.info("Embedding: fallback mode")
             return
@@ -277,7 +274,7 @@ class EmbeddingService:
                 self._client_mode = True
                 self._client_url = http_url
                 self._backend = "http"
-                self._dimension = int(get_setting("embedding.dimension"))
+                self._dimension = _int_setting("embedding.dimension", 1024)
                 self._initialized = True
                 logger.info("Embedding: auto client mode", server_url=self._client_url)
             else:
@@ -288,7 +285,7 @@ class EmbeddingService:
         else:
             # No server on port: use fallback so route test/reindex work without Ollama
             self._backend = "fallback"
-            self._dimension = int(get_setting("embedding.dimension"))
+            self._dimension = _int_setting("embedding.dimension", 1024)
             self._initialized = True
             logger.info(
                 "Embedding: auto fallback (no server on port); set provider=ollama for LiteLLM"
@@ -306,7 +303,7 @@ class EmbeddingService:
         if provider != "client":
             return
         self._client_retried = True
-        http_port = int(get_setting("embedding.http_port"))
+        http_port = _int_setting("embedding.http_port", 18501)
         client_url = get_setting("embedding.client_url") or f"http://127.0.0.1:{http_port}"
         if self._check_http_server_healthy(
             client_url, timeout=2.0
@@ -314,7 +311,7 @@ class EmbeddingService:
             self._client_mode = True
             self._client_url = client_url
             self._backend = "http"
-            self._dimension = int(get_setting("embedding.dimension"))
+            self._dimension = _int_setting("embedding.dimension", 1024)
             logger.info(
                 "Embedding: client mode (reconnected on first embed)", client_url=self._client_url
             )
@@ -340,7 +337,7 @@ class EmbeddingService:
             return
 
         provider = (get_setting("embedding.provider") or "").lower()
-        http_port = int(get_setting("embedding.http_port"))
+        http_port = _int_setting("embedding.http_port", 18501)
         http_url = get_setting("embedding.client_url") or f"http://127.0.0.1:{http_port}"
 
         if provider in ("ollama", "xinference", "litellm"):
@@ -359,7 +356,7 @@ class EmbeddingService:
                 raw_api_base,
                 is_ollama=provider == "ollama" or str(self._litellm_model).startswith("ollama/"),
             )
-            self._dimension = int(get_setting("embedding.dimension"))
+            self._dimension = _int_setting("embedding.dimension", 1024)
             self._initialized = True
             logger.info(
                 "Embedding: LiteLLM backend (no in-process model)",
@@ -375,7 +372,7 @@ class EmbeddingService:
                 self._client_mode = True
                 self._client_url = http_url
                 self._backend = "http"
-                self._dimension = int(get_setting("embedding.dimension"))
+                self._dimension = _int_setting("embedding.dimension", 1024)
                 self._initialized = True
                 logger.info(
                     "✓ Embedding: client mode (health + embed verified)", url=self._client_url
@@ -383,7 +380,7 @@ class EmbeddingService:
             else:
                 if os.environ.get("OMNI_EMBEDDING_CLIENT_ONLY") == "1":
                     self._backend = "unavailable"
-                    self._dimension = int(get_setting("embedding.dimension"))
+                    self._dimension = _int_setting("embedding.dimension", 1024)
                     self._initialized = True
                     logger.warning(
                         "Embedding: client_url unreachable; client-only mode, embedding unavailable.",
@@ -403,7 +400,7 @@ class EmbeddingService:
             self._client_mode = True
             self._client_url = http_url
             self._backend = "http"
-            self._dimension = int(get_setting("embedding.dimension"))
+            self._dimension = _int_setting("embedding.dimension", 1024)
             self._initialized = True
             logger.info(
                 "✓ Embedding: verified working server, using client mode",
@@ -412,7 +409,7 @@ class EmbeddingService:
         else:
             if os.environ.get("OMNI_EMBEDDING_CLIENT_ONLY") == "1":
                 self._backend = "unavailable"
-                self._dimension = int(get_setting("embedding.dimension"))
+                self._dimension = _int_setting("embedding.dimension", 1024)
                 self._initialized = True
                 logger.warning(
                     "Embedding: no server reachable; client-only mode, embedding unavailable."

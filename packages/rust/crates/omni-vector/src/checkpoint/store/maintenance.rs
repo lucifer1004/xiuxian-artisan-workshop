@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Array, CHECKPOINT_PARENT_ID_COLUMN, CheckpointStore, Dataset, ID_COLUMN, Result, TryStreamExt,
+    VectorStoreError,
+};
 
 impl CheckpointStore {
     /// Run one-time startup repairs for a table in the current process.
@@ -129,7 +132,7 @@ impl CheckpointStore {
         for (id, parent) in records {
             let has_dangling_parent = parent.as_ref().is_some_and(|p| !all_ids.contains(p));
             let is_unreferenced_ephemeral = !parent_refs.contains(&id)
-                && (self.looks_like_ephemeral_checkpoint_id(&id) || id.len() > 50);
+                && (Self::looks_like_ephemeral_checkpoint_id(&id) || id.len() > 50);
 
             if has_dangling_parent || is_unreferenced_ephemeral {
                 orphan_ids.insert(id);
@@ -158,7 +161,7 @@ impl CheckpointStore {
         Ok(())
     }
 
-    fn looks_like_ephemeral_checkpoint_id(&self, id: &str) -> bool {
+    fn looks_like_ephemeral_checkpoint_id(id: &str) -> bool {
         id.len() >= 36
             && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
             && id.matches('-').count() == 4

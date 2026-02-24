@@ -23,14 +23,14 @@ def _is_indexing_available() -> bool:
         # Verify RustVectorStore can be created
         _ = RustVectorStore(":memory:", 1536)
 
-        # Verify embedding service can be imported and used
+        # Verify embedding service API is present without issuing network calls.
+        # Route tests may run in environments where Ollama/client endpoints are not up.
         from omni.foundation.services.embedding import get_embedding_service
 
         service = get_embedding_service()
-        # Quick test - just verify the service can be accessed
-        _ = service.embed("test")
-
-        return True
+        return callable(getattr(service, "embed", None)) and callable(
+            getattr(service, "embed_batch", None)
+        )
     except Exception:
         return False
 
@@ -141,6 +141,25 @@ class TestSkillIndexerIndexing:
         assert count == 0
 
     @pytest.mark.asyncio
+    async def test_index_skills_handles_missing_rust_compute_hash(self, monkeypatch):
+        """Indexer should still work when Rust binding does not expose compute_hash."""
+        import omni.core.router.indexer as indexer_module
+
+        monkeypatch.setattr(indexer_module, "_compute_hash", None)
+
+        indexer = SkillIndexer(storage_path=":memory:")
+        skills = [
+            {
+                "name": "git",
+                "description": "Git operations skill",
+                "commands": [{"name": "status", "description": "Show working tree status"}],
+            }
+        ]
+
+        count = await indexer.index_skills(skills)
+        assert count == 2
+
+    @pytest.mark.asyncio
     async def test_index_skills_in_memory_mode(self):
         """Test in-memory indexing (no RustVectorStore required)."""
         indexer = SkillIndexer(storage_path=":memory:")
@@ -159,6 +178,25 @@ class TestSkillIndexerIndexing:
         count = await indexer.index_skills(skills)
 
         # Should have 1 skill entry + 2 command entries = 3 total
+        assert count == 3
+
+    @pytest.mark.asyncio
+    async def test_index_skills_accepts_tools_field_from_discovery(self):
+        """Indexer should treat discovery `tools` as command entries."""
+        indexer = SkillIndexer(storage_path=":memory:")
+
+        skills = [
+            {
+                "name": "git",
+                "description": "Git operations skill",
+                "tools": [
+                    {"name": "git.status", "description": "Show working tree status"},
+                    {"tool_name": "git.commit", "description": "Commit changes"},
+                ],
+            }
+        ]
+
+        count = await indexer.index_skills(skills)
         assert count == 3
 
     @pytest.mark.asyncio

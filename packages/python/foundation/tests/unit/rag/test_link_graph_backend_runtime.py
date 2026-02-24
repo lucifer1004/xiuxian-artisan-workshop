@@ -247,6 +247,19 @@ def test_get_link_graph_root_dir_prefers_setting_reader() -> None:
     assert resolved == "~/notes"
 
 
+def test_get_link_graph_root_dir_falls_back_to_git_toplevel() -> None:
+    def _reader(_key: str, default: object = None) -> object:
+        return default
+
+    with patch(
+        "omni.foundation.config.link_graph_runtime._resolve_link_graph_git_root_dir",
+        return_value="/tmp/git-root",
+    ):
+        resolved = get_link_graph_root_dir(setting_reader=_reader)
+
+    assert resolved == "/tmp/git-root"
+
+
 def test_get_link_graph_stats_timeouts_use_defaults() -> None:
     def _reader(_key: str, default: object = None) -> object:
         return default
@@ -563,13 +576,17 @@ def test_get_link_graph_runtime_config_uses_defaults_on_invalid_values() -> None
     def _reader(_key: str, default: object = None) -> object:
         return default
 
-    config = get_link_graph_runtime_config(
-        env={LINK_GRAPH_CACHE_VALKEY_URL_ENV: "redis://127.0.0.1:6391/0"},
-        reload_on_missing=False,
-        setting_reader=_reader,
-    )
+    with patch(
+        "omni.foundation.config.link_graph_runtime._resolve_link_graph_git_root_dir",
+        return_value="/tmp/git-root",
+    ):
+        config = get_link_graph_runtime_config(
+            env={LINK_GRAPH_CACHE_VALKEY_URL_ENV: "redis://127.0.0.1:6391/0"},
+            reload_on_missing=False,
+            setting_reader=_reader,
+        )
 
-    assert config.root_dir is None
+    assert config.root_dir == "/tmp/git-root"
     assert config.include_dirs == []
     assert config.include_dirs_auto is True
     assert config.include_dirs_auto_candidates == []

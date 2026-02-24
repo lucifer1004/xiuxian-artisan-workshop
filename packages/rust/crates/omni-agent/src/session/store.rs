@@ -1,4 +1,4 @@
-//! In-memory session store: session_id → chat messages.
+//! In-memory session store: `session_id` -> chat messages.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use crate::observability::SessionEvent;
 use super::message::ChatMessage;
 use super::redis_backend::{RedisSessionBackend, RedisSessionRuntimeSnapshot};
 
-/// In-memory store: session_id → list of messages.
+/// In-memory store: `session_id` -> list of messages.
 pub struct SessionStore {
     inner: Arc<RwLock<HashMap<String, Vec<ChatMessage>>>>,
     redis: Option<Arc<RedisSessionBackend>>,
@@ -26,6 +26,9 @@ impl SessionStore {
     }
 
     /// Create a new empty session store.
+    ///
+    /// # Errors
+    /// Returns an error when Valkey-backed runtime initialization fails.
     pub fn new() -> Result<Self> {
         let redis = match RedisSessionBackend::from_env() {
             Some(Ok(backend)) => {
@@ -46,6 +49,9 @@ impl SessionStore {
     }
 
     /// Create a store with explicit Valkey backend parameters.
+    ///
+    /// # Errors
+    /// Returns an error when Valkey backend creation fails.
     pub fn new_with_redis(
         redis_url: impl Into<String>,
         key_prefix: Option<String>,
@@ -56,6 +62,9 @@ impl SessionStore {
     }
 
     /// Append messages for a session.
+    ///
+    /// # Errors
+    /// Returns an error when persisting to Valkey fails.
     pub async fn append(&self, session_id: &str, messages: Vec<ChatMessage>) -> Result<()> {
         if messages.is_empty() {
             return Ok(());
@@ -90,6 +99,9 @@ impl SessionStore {
     }
 
     /// Get a copy of the message history for a session.
+    ///
+    /// # Errors
+    /// Returns an error when reading session history from Valkey fails.
     pub async fn get(&self, session_id: &str) -> Result<Vec<ChatMessage>> {
         if let Some(ref redis) = self.redis {
             let messages = redis.get_messages(session_id).await.with_context(|| {
@@ -117,6 +129,9 @@ impl SessionStore {
     }
 
     /// Replace full history for a session atomically.
+    ///
+    /// # Errors
+    /// Returns an error when replacing session history in Valkey fails.
     pub async fn replace(&self, session_id: &str, messages: Vec<ChatMessage>) -> Result<()> {
         if let Some(ref redis) = self.redis {
             let replaced_count = redis
@@ -152,6 +167,9 @@ impl SessionStore {
     }
 
     /// Get message count for a session without loading the full payload.
+    ///
+    /// # Errors
+    /// Returns an error when reading message count from Valkey fails.
     pub async fn len(&self, session_id: &str) -> Result<usize> {
         if let Some(ref redis) = self.redis {
             let message_count = redis.get_messages_len(session_id).await.with_context(|| {
@@ -182,6 +200,9 @@ impl SessionStore {
     }
 
     /// Clear history for a session.
+    ///
+    /// # Errors
+    /// Returns an error when clearing Valkey session state fails.
     pub async fn clear(&self, session_id: &str) -> Result<()> {
         if let Some(ref redis) = self.redis {
             redis.clear_messages(session_id).await.with_context(|| {
@@ -209,6 +230,9 @@ impl SessionStore {
     /// Publish a structured event into Valkey stream backend.
     ///
     /// Returns `Ok(None)` when Valkey backend is disabled.
+    ///
+    /// # Errors
+    /// Returns an error when publishing the event into Valkey stream fails.
     pub(crate) async fn publish_stream_event(
         &self,
         stream_name: &str,

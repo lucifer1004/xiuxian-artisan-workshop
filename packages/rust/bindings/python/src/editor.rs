@@ -32,7 +32,7 @@ impl From<BatchRefactorStats> for PyBatchRefactorStats {
             errors: stats
                 .errors
                 .into_iter()
-                .map(|(k, v)| format!("{}: {}", k, v))
+                .map(|(key, value)| format!("{key}: {value}"))
                 .collect(),
         }
     }
@@ -41,20 +41,20 @@ impl From<BatchRefactorStats> for PyBatchRefactorStats {
 /// Perform structural replace on content using ast-grep patterns.
 ///
 /// This is the pure function that operates on content strings.
-/// Use structural_preview or structural_apply for file operations.
+/// Use `structural_preview` or `structural_apply` for file operations.
 ///
 /// Args:
 ///   content: Source code content
 ///   pattern: ast-grep pattern to match (e.g., "connect($ARGS)")
 ///   replacement: Replacement pattern (e.g., "async_connect($ARGS)")
-///   language: Programming language (python, rust, javascript, typescript)
+///   language: Programming language (`python`, `rust`, `javascript`, `typescript`)
 ///
 /// Returns:
 ///   Formatted string showing diff and edit locations, or error message.
 ///
 /// Examples:
 ///   structural_replace("x = connect(a, b)", "connect($ARGS)", "safe_connect($ARGS)", "python")
-///   # Returns diff showing "x = safe_connect(a, b)"
+///   # Returns diff showing `x = safe_connect(a, b)`
 #[pyfunction]
 pub fn structural_replace(
     content: &str,
@@ -67,12 +67,12 @@ pub fn structural_replace(
             Ok(py.detach(|| {
                 match StructuralEditor::replace(content, pattern, replacement, language) {
                     Ok(result) => StructuralEditor::format_result(&result, None),
-                    Err(e) => format!("[Structural replace error: {}]", e),
+                    Err(e) => format!("[Structural replace error: {e}]"),
                 }
             }))
         })
     })
-    .unwrap_or_else(|e| format!("[Rust panic caught: {}]", e))
+    .unwrap_or_else(|e| format!("[Rust panic caught: {e}]"))
 }
 
 /// Preview structural replace on a file (no modification).
@@ -100,12 +100,12 @@ pub fn structural_preview(
             Ok(py.detach(|| {
                 match StructuralEditor::preview(&path, pattern, replacement, language) {
                     Ok(result) => StructuralEditor::format_result(&result, Some(&path)),
-                    Err(e) => format!("[Structural preview error: {}]", e),
+                    Err(e) => format!("[Structural preview error: {e}]"),
                 }
             }))
         })
     })
-    .unwrap_or_else(|e| format!("[Rust panic caught: {}]", e))
+    .unwrap_or_else(|e| format!("[Rust panic caught: {e}]"))
 }
 
 /// Apply structural replace to a file (modifies the file).
@@ -139,12 +139,12 @@ pub fn structural_apply(
                         }
                         output
                     }
-                    Err(e) => format!("[Structural apply error: {}]", e),
+                    Err(e) => format!("[Structural apply error: {e}]"),
                 },
             ))
         })
     })
-    .unwrap_or_else(|e| format!("[Rust panic caught: {}]", e))
+    .unwrap_or_else(|e| format!("[Rust panic caught: {e}]"))
 }
 
 /// Perform batch structural refactoring across a directory.

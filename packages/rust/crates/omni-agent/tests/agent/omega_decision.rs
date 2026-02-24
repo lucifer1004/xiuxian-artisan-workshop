@@ -1,8 +1,42 @@
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
+
 use crate::contracts::{
     OmegaDecision, OmegaFallbackPolicy, OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass,
 };
 
-use super::{apply_policy_hint, decide_for_standard_turn};
+use super::{apply_policy_hint, apply_quality_gate, decide_for_standard_turn};
 use crate::agent::reflection::PolicyHintDirective;
 
 #[test]
@@ -22,6 +56,8 @@ fn apply_policy_hint_overrides_route_risk_and_trust() {
         tool_trust_class: OmegaToolTrustClass::Other,
         reason: "base".to_string(),
         policy_id: Some("base".to_string()),
+        drift_tolerance: None,
+        next_audit_turn: None,
     };
     let hint = PolicyHintDirective {
         source_turn_id: 10,
@@ -44,4 +80,54 @@ fn apply_policy_hint_overrides_route_risk_and_trust() {
             .contains("policy_hint=requires_verification"),
         "reason should include applied hint for observability"
     );
+}
+
+#[test]
+fn apply_quality_gate_repairs_high_risk_graph_fallback_and_trust() {
+    let base = OmegaDecision {
+        route: OmegaRoute::Graph,
+        confidence: 0.82,
+        risk_level: OmegaRiskLevel::High,
+        fallback_policy: OmegaFallbackPolicy::SwitchToGraph,
+        tool_trust_class: OmegaToolTrustClass::Evidence,
+        reason: "omega governance selected graph bridge".to_string(),
+        policy_id: Some("omega.shortcut.omega.v1".to_string()),
+        drift_tolerance: None,
+        next_audit_turn: None,
+    };
+
+    let decision = apply_quality_gate(base);
+    assert_eq!(decision.route, OmegaRoute::Graph);
+    assert_eq!(decision.fallback_policy, OmegaFallbackPolicy::RetryReact);
+    assert_eq!(decision.tool_trust_class, OmegaToolTrustClass::Verification);
+    assert!(
+        decision
+            .reason
+            .contains("quality_gate=graph_retry_loop_guard;repair=fallback_policy:retry_react"),
+        "reason should contain explicit fallback-policy repair audit marker"
+    );
+    assert!(
+        decision.reason.contains(
+            "quality_gate=graph_high_risk_trust_upgrade;repair=tool_trust_class:verification"
+        ),
+        "reason should contain explicit trust-class repair audit marker"
+    );
+}
+
+#[test]
+fn apply_quality_gate_keeps_medium_risk_graph_policy_unchanged() {
+    let base = OmegaDecision {
+        route: OmegaRoute::Graph,
+        confidence: 0.82,
+        risk_level: OmegaRiskLevel::Medium,
+        fallback_policy: OmegaFallbackPolicy::SwitchToGraph,
+        tool_trust_class: OmegaToolTrustClass::Evidence,
+        reason: "omega governance selected graph bridge".to_string(),
+        policy_id: Some("omega.shortcut.omega.v1".to_string()),
+        drift_tolerance: None,
+        next_audit_turn: None,
+    };
+
+    let decision = apply_quality_gate(base.clone());
+    assert_eq!(decision, base);
 }

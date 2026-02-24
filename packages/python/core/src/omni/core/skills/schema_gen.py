@@ -2,7 +2,7 @@
 schema_gen.py - Tool Schema Generator
 
 Generates machine-readable schemas for all registered MCP Tools.
-Uses shared schemas from packages/shared/schemas/ for cross-language consistency.
+Uses Rust resource schemas for cross-language consistency.
 
 Usage:
     from omni.core.skills.schema_gen import generate_tool_schemas, export_openapi
@@ -27,16 +27,18 @@ from omni.core.skills.variants import get_variant_registry
 from omni.core.skills.tools_loader import _skill_command_registry
 
 
-# Path to shared schemas (packages/shared/schemas)
-def _get_shared_schemas_dir() -> Path:
-    """Get the shared schemas directory using project root API."""
-    from omni.foundation.runtime.gitops import get_project_root
+# Optional base tool schema path.
+def _get_tool_schema_path() -> Path:
+    """Resolve optional tool schema path from Rust resource layout."""
+    from omni.foundation.api.schema_locator import resolve_schema_file_path
 
-    return get_project_root() / "packages" / "shared" / "schemas"
+    return resolve_schema_file_path(
+        "tool.schema.yaml",
+        preferred_crates=("omni-scanner",),
+    )
 
 
-SHARED_SCHEMAS_DIR: Path = _get_shared_schemas_dir()
-TOOL_SCHEMA_PATH = SHARED_SCHEMAS_DIR / "tool.schema.yaml"
+TOOL_SCHEMA_PATH = _get_tool_schema_path()
 
 
 def get_tool_schemas() -> dict[str, Any]:

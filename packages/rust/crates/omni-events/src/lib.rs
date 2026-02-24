@@ -202,7 +202,7 @@ mod tests {
         let bus = EventBus::new(10);
         let mut rx = bus.subscribe();
 
-        bus.publish(OmniEvent::new("test", "topic", json!({"data": 42})));
+        let _ = bus.publish(OmniEvent::new("test", "topic", json!({"data": 42})));
 
         let received = rx.recv().await.unwrap();
         assert_eq!(received.source, "test");
@@ -215,7 +215,7 @@ mod tests {
         let mut rx1 = bus.subscribe();
         let mut rx2 = bus.subscribe();
 
-        bus.publish(OmniEvent::new("test", "topic", json!({"msg": "hello"})));
+        let _ = bus.publish(OmniEvent::new("test", "topic", json!({"msg": "hello"})));
 
         let received1 = rx1.recv().await.unwrap();
         let received2 = rx2.recv().await.unwrap();

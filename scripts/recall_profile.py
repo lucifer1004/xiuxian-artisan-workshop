@@ -211,7 +211,7 @@ async def main() -> int:
     print(f"Max RSS delta: {max_delta:+.1f} MiB")
     print("")
     print("If delta_mb is large (>100): check recall/vector/graph for leaks.")
-    print("If elapsed is high: check embedding HTTP, vector search, dual-core boost.")
+    print("If elapsed is high: check embedding HTTP, vector search, fusion boost.")
     return 0
 
 

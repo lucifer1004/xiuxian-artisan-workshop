@@ -13,7 +13,7 @@ pub(crate) async fn run_repl_mode(
     let agent = build_agent(&mcp_config_path, runtime_settings).await?;
     if let Some(q) = query {
         let out = agent.run_turn(&session_id, q.trim()).await?;
-        println!("{}", out);
+        println!("{out}");
         Ok(())
     } else {
         run_stdio(agent, session_id).await

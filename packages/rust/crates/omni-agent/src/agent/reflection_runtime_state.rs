@@ -17,6 +17,7 @@ impl Agent {
             .remove(session_id)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn reflect_turn_and_update_policy_hint(
         &self,
         session_id: &str,
@@ -34,7 +35,7 @@ impl Agent {
             ReflectiveRuntimeStage::Apply,
         ] {
             if let Err(error) = runtime.transition(stage) {
-                record_reflection_transition_error(session_id, turn_id, &error);
+                record_reflection_transition_error(session_id, turn_id, error);
                 return;
             }
             record_reflection_transition(session_id, turn_id, stage);
@@ -86,7 +87,7 @@ fn record_reflection_transition(session_id: &str, turn_id: u64, stage: Reflectiv
 fn record_reflection_transition_error(
     session_id: &str,
     turn_id: u64,
-    error: &ReflectiveRuntimeError,
+    error: ReflectiveRuntimeError,
 ) {
     tracing::warn!(
         event = SessionEvent::ReflectionLifecycleError.as_str(),

@@ -33,6 +33,7 @@ def main() -> int:
         print(f"up-to-date: {target}")
         return 0
 
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(rendered, encoding="utf-8")
     print(f"wrote: {target}")
     return 0

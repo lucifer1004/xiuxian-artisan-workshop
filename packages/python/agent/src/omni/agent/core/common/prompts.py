@@ -46,7 +46,10 @@ class PromptLoader:
         2. Absolute path as-is
         3. Relative path resolved against project root
         """
-        configured = get_setting("prompts.dir")
+        configured = get_setting("prompts.dir", "assets/prompts")
+        if configured in (None, "", "None"):
+            configured = "assets/prompts"
+
         configured_path = Path(str(configured))
         if configured_path.is_absolute():
             return configured_path

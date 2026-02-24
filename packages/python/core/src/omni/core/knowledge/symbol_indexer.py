@@ -167,11 +167,12 @@ class SymbolIndexer:
 
     def _compute_hash(self, content: str) -> str:
         """Compute hash for content using Rust xxhash (5-10x faster than MD5)."""
-        if omni_rs is None:
+        rust_compute_hash = getattr(omni_rs, "compute_hash", None) if omni_rs is not None else None
+        if rust_compute_hash is None:
             import hashlib
 
             return hashlib.md5(content.encode("utf-8")).hexdigest()
-        return omni_rs.compute_hash(content)
+        return rust_compute_hash(content)
 
     def _is_supported_file(self, path: Path) -> bool:
         """Check if file has a supported extension."""

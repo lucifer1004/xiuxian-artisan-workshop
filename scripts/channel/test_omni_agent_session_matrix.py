@@ -11,7 +11,7 @@ Step 3 validation target:
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import os
 import re
@@ -22,35 +22,28 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-try:
-    from test_config_resolver import (
-        group_profile_int,
-        normalize_telegram_session_partition_mode,
-        session_ids_from_runtime_log,
-        session_partition_mode_from_runtime_log,
-        telegram_session_partition_mode,
-        username_from_runtime_log,
-        username_from_settings,
-    )
-except ModuleNotFoundError as import_err:
-    _resolver_path = Path(__file__).resolve().with_name("test_config_resolver.py")
-    _resolver_spec = importlib.util.spec_from_file_location("test_config_resolver", _resolver_path)
-    if _resolver_spec is None or _resolver_spec.loader is None:
-        raise RuntimeError(f"failed to load resolver module from {_resolver_path}") from import_err
-    _resolver_module = importlib.util.module_from_spec(_resolver_spec)
-    sys.modules.setdefault(_resolver_spec.name, _resolver_module)
-    _resolver_spec.loader.exec_module(_resolver_module)
-    group_profile_int = _resolver_module.group_profile_int
-    normalize_telegram_session_partition_mode = (
-        _resolver_module.normalize_telegram_session_partition_mode
-    )
-    session_ids_from_runtime_log = _resolver_module.session_ids_from_runtime_log
-    session_partition_mode_from_runtime_log = (
-        _resolver_module.session_partition_mode_from_runtime_log
-    )
-    telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
-    username_from_runtime_log = _resolver_module.username_from_runtime_log
-    username_from_settings = _resolver_module.username_from_settings
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+load_sibling_module = importlib.import_module("module_loader").load_sibling_module
+
+_resolver_module = load_sibling_module(
+    module_name="config_resolver",
+    file_name="config_resolver.py",
+    caller_file=__file__,
+    error_context="resolver module",
+)
+default_telegram_webhook_url = _resolver_module.default_telegram_webhook_url
+group_profile_int = _resolver_module.group_profile_int
+normalize_telegram_session_partition_mode = (
+    _resolver_module.normalize_telegram_session_partition_mode
+)
+session_ids_from_runtime_log = _resolver_module.session_ids_from_runtime_log
+session_partition_mode_from_runtime_log = _resolver_module.session_partition_mode_from_runtime_log
+telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
+username_from_runtime_log = _resolver_module.username_from_runtime_log
+username_from_settings = _resolver_module.username_from_settings
 
 
 @dataclass(frozen=True)
@@ -104,7 +97,7 @@ class StepResult:
 
 
 RESTART_NOISE_MARKERS = (
-    "Telegram webhook listening on 0.0.0.0:8081/telegram/webhook",
+    "Telegram webhook listening on ",
     "Webhook dedup backend:",
     "Session commands: /session [json]",
     "mcp pool client connect attempt started",
@@ -112,6 +105,7 @@ RESTART_NOISE_MARKERS = (
 
 
 def parse_args() -> argparse.Namespace:
+    webhook_url_default = os.environ.get("OMNI_WEBHOOK_URL") or default_telegram_webhook_url()
     parser = argparse.ArgumentParser(
         description=(
             "Run session isolation matrix against local Telegram webhook runtime "
@@ -132,10 +126,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--webhook-url",
-        default=os.environ.get(
-            "OMNI_WEBHOOK_URL",
-            f"http://127.0.0.1:{os.environ.get('WEBHOOK_PORT', '8081')}/telegram/webhook",
-        ),
+        default=webhook_url_default,
         help="Webhook URL.",
     )
     parser.add_argument(
@@ -298,8 +289,17 @@ def session_context_result_fields(
     )
 
 
-def session_memory_result_fields() -> tuple[str, ...]:
-    return ("json_kind=session_memory",)
+def session_memory_result_fields(
+    chat_id: int,
+    user_id: int,
+    thread_id: int | None,
+    session_partition: str | None = None,
+) -> tuple[str, ...]:
+    session_key = expected_session_key(chat_id, user_id, thread_id, session_partition)
+    return (
+        "json_kind=session_memory",
+        f"json_session_scope=telegram:{session_key}",
+    )
 
 
 def _tail_text(value: str, limit_lines: int = 30) -> str:
@@ -454,7 +454,9 @@ def build_matrix_steps(cfg: ProbeConfig) -> tuple[MatrixStep, ...]:
             event="telegram.command.session_memory_json.replied",
             user_id=cfg.user_a,
             thread_id=cfg.thread_a,
-            expect_reply_json_fields=session_memory_result_fields(),
+            expect_reply_json_fields=session_memory_result_fields(
+                cfg.chat_id, cfg.user_a, cfg.thread_a, cfg.session_partition
+            ),
         ),
         MatrixStep(
             name="resume_status_session_a",
@@ -482,7 +484,9 @@ def build_matrix_steps(cfg: ProbeConfig) -> tuple[MatrixStep, ...]:
             event="telegram.command.session_memory_json.replied",
             user_id=cfg.user_b,
             thread_id=cfg.thread_b,
-            expect_reply_json_fields=session_memory_result_fields(),
+            expect_reply_json_fields=session_memory_result_fields(
+                cfg.chat_b, cfg.user_b, cfg.thread_b, cfg.session_partition
+            ),
         ),
         MatrixStep(
             name="session_status_session_c_after_a_reset",
@@ -502,7 +506,9 @@ def build_matrix_steps(cfg: ProbeConfig) -> tuple[MatrixStep, ...]:
             event="telegram.command.session_memory_json.replied",
             user_id=cfg.user_c,
             thread_id=cfg.thread_c,
-            expect_reply_json_fields=session_memory_result_fields(),
+            expect_reply_json_fields=session_memory_result_fields(
+                cfg.chat_c, cfg.user_c, cfg.thread_c, cfg.session_partition
+            ),
         ),
         MatrixStep(
             name="reset_session_b",

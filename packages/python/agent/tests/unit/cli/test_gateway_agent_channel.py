@@ -19,14 +19,6 @@ def _build_channel_app() -> typer.Typer:
 
 
 def _get_setting_for_channel(key: str):
-    if key == "telegram.allowed_users":
-        return "alice,888"
-    if key == "telegram.max_tool_rounds":
-        return 42
-    return None
-
-
-def _get_setting_for_channel_without_allowlist(key: str):
     if key == "telegram.max_tool_rounds":
         return 42
     return None
@@ -68,10 +60,6 @@ def test_channel_uses_env_token_and_execs_binary(monkeypatch):
         "channel",
         "--bot-token",
         "env-token",
-        "--allowed-users",
-        "alice,888",
-        "--allowed-groups",
-        "",
     ]
     assert os.environ["OMNI_AGENT_MAX_TOOL_ROUNDS"] == "42"
 
@@ -97,7 +85,7 @@ def test_channel_prefers_cli_token_over_env(monkeypatch):
     assert argv[token_index] == "cli-token"
 
 
-def test_channel_defaults_to_empty_allowlist_when_unconfigured(monkeypatch):
+def test_channel_forwards_only_token_runtime_flags(monkeypatch):
     app = _build_channel_app()
     runner = CliRunner()
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env-token")
@@ -105,7 +93,7 @@ def test_channel_defaults_to_empty_allowlist_when_unconfigured(monkeypatch):
     with (
         patch(
             "omni.agent.cli.commands.gateway_agent.get_setting",
-            side_effect=_get_setting_for_channel_without_allowlist,
+            side_effect=_get_setting_for_channel,
         ),
         patch("os.execvp") as m_execvp,
     ):
@@ -113,9 +101,9 @@ def test_channel_defaults_to_empty_allowlist_when_unconfigured(monkeypatch):
 
     assert result.exit_code == 0
     _, argv = m_execvp.call_args.args
-    assert "--allowed-users" in argv
-    users_index = argv.index("--allowed-users") + 1
-    assert argv[users_index] == ""
-    assert "--allowed-groups" in argv
-    groups_index = argv.index("--allowed-groups") + 1
-    assert argv[groups_index] == ""
+    assert argv == [
+        "omni-agent",
+        "channel",
+        "--bot-token",
+        "env-token",
+    ]

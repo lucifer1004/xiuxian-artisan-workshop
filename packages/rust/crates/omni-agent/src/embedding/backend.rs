@@ -1,0 +1,147 @@
+use crate::config::load_runtime_settings;
+use xiuxian_llm::embedding::backend::{EmbeddingBackendKind, parse_embedding_backend_kind};
+
+const DEFAULT_EMBED_TIMEOUT_SECS: u64 = 15;
+const MIN_EMBED_TIMEOUT_SECS: u64 = 1;
+const MAX_EMBED_TIMEOUT_SECS: u64 = 300;
+const MAX_EMBED_MAX_IN_FLIGHT: usize = 4096;
+
+pub(crate) type EmbeddingBackendMode = EmbeddingBackendKind;
+
+#[derive(Debug, Clone)]
+pub(crate) struct EmbeddingBackendSettings {
+    pub(crate) mode: EmbeddingBackendMode,
+    pub(crate) source: &'static str,
+    pub(crate) timeout_secs: u64,
+    pub(crate) max_in_flight: Option<usize>,
+    pub(crate) default_model: Option<String>,
+}
+
+pub(crate) fn resolve_backend_settings(
+    default_timeout_secs: u64,
+    backend_hint: Option<&str>,
+) -> EmbeddingBackendSettings {
+    let runtime_settings = load_runtime_settings();
+    let hint_backend = backend_hint
+        .map(str::trim)
+        .map(ToString::to_string)
+        .filter(|raw| !raw.is_empty());
+    let env_backend = non_empty_env("OMNI_AGENT_EMBED_BACKEND");
+    let settings_backend = runtime_settings
+        .embedding
+        .backend
+        .as_deref()
+        .map(str::trim)
+        .map(ToString::to_string)
+        .filter(|raw| !raw.is_empty());
+    let (mode, source) = if let Some(raw) = hint_backend.as_deref() {
+        (parse_backend_mode(Some(raw)), "memory_config")
+    } else if let Some(raw) = env_backend.as_deref() {
+        (parse_backend_mode(Some(raw)), "env")
+    } else if let Some(raw) = settings_backend.as_deref() {
+        (parse_backend_mode(Some(raw)), "settings")
+    } else if let Some(raw) = non_empty_env("OMNI_AGENT_LLM_BACKEND") {
+        let lower = raw.to_ascii_lowercase();
+        if lower == "litellm_rs" || lower == "litellm-rs" {
+            #[cfg(feature = "agent-provider-litellm")]
+            {
+                (EmbeddingBackendMode::LiteLlmRs, "llm_env")
+            }
+            #[cfg(not(feature = "agent-provider-litellm"))]
+            {
+                tracing::warn!(
+                    llm_backend = %raw,
+                    "llm backend suggests litellm-rs but embedding litellm feature is disabled; using http backend"
+                );
+                (EmbeddingBackendMode::Http, "default")
+            }
+        } else {
+            (EmbeddingBackendMode::Http, "default")
+        }
+    } else {
+        (EmbeddingBackendMode::Http, "default")
+    };
+
+    let timeout_secs = non_empty_env("OMNI_AGENT_EMBED_TIMEOUT_SECS")
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .or(runtime_settings.embedding.timeout_secs)
+        .unwrap_or(default_timeout_secs.max(DEFAULT_EMBED_TIMEOUT_SECS))
+        .clamp(MIN_EMBED_TIMEOUT_SECS, MAX_EMBED_TIMEOUT_SECS);
+
+    let max_in_flight = non_empty_env("OMNI_AGENT_EMBED_MAX_IN_FLIGHT")
+        .and_then(|raw| raw.parse::<usize>().ok())
+        .or(runtime_settings
+            .embedding
+            .max_in_flight
+            .filter(|value| *value > 0))
+        .map(|value| value.min(MAX_EMBED_MAX_IN_FLIGHT));
+
+    let default_model = non_empty_env("OMNI_AGENT_EMBED_MODEL").or_else(|| {
+        runtime_settings
+            .embedding
+            .litellm_model
+            .as_deref()
+            .map(str::trim)
+            .map(ToString::to_string)
+            .filter(|value| !value.is_empty())
+            .or_else(|| {
+                runtime_settings
+                    .embedding
+                    .model
+                    .as_deref()
+                    .map(str::trim)
+                    .map(ToString::to_string)
+                    .filter(|value| !value.is_empty())
+            })
+    });
+
+    EmbeddingBackendSettings {
+        mode,
+        source,
+        timeout_secs,
+        max_in_flight,
+        default_model,
+    }
+}
+
+fn parse_backend_mode(raw: Option<&str>) -> EmbeddingBackendMode {
+    let trimmed = raw.map(str::trim).filter(|value| !value.is_empty());
+    match parse_embedding_backend_kind(trimmed) {
+        Some(EmbeddingBackendKind::Http) => EmbeddingBackendMode::Http,
+        Some(EmbeddingBackendKind::OpenAiHttp) => EmbeddingBackendMode::OpenAiHttp,
+        Some(EmbeddingBackendKind::LiteLlmRs) => {
+            #[cfg(feature = "agent-provider-litellm")]
+            {
+                EmbeddingBackendMode::LiteLlmRs
+            }
+            #[cfg(not(feature = "agent-provider-litellm"))]
+            {
+                tracing::warn!(
+                    requested_backend = %trimmed.unwrap_or("litellm_rs"),
+                    "litellm-rs embedding backend requested but feature agent-provider-litellm is disabled; using http backend"
+                );
+                EmbeddingBackendMode::Http
+            }
+        }
+        None => {
+            if let Some(value) = trimmed {
+                tracing::warn!(
+                    invalid_value = %value,
+                    "invalid embedding backend; defaulting to http backend"
+                );
+            }
+            EmbeddingBackendMode::Http
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "../../tests/embedding/backend.rs"]
+mod tests;
+
+fn non_empty_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|raw| raw.trim().to_string())
+        .filter(|raw| !raw.is_empty())
+}

@@ -287,7 +287,20 @@ def get_link_graph_root_dir(
 ) -> str | None:
     """Resolve configured LinkGraph notebook root dir."""
     reader = setting_reader or get_setting
-    return _first_non_empty([reader("link_graph.root_dir", None)])
+    configured = _first_non_empty([reader("link_graph.root_dir", None)])
+    if configured:
+        return configured
+    return _resolve_link_graph_git_root_dir()
+
+
+def _resolve_link_graph_git_root_dir() -> str | None:
+    """Best-effort git top-level fallback when link_graph.root_dir is not configured."""
+    try:
+        from omni.foundation.runtime.gitops import get_git_toplevel
+
+        return str(get_git_toplevel())
+    except Exception:
+        return None
 
 
 def get_link_graph_retrieval_mode(

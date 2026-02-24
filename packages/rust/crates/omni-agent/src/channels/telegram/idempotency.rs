@@ -47,6 +47,7 @@ impl Default for WebhookDedupConfig {
 
 impl WebhookDedupConfig {
     /// Return a sanitized config with safe defaults.
+    #[must_use]
     pub fn normalized(mut self) -> Self {
         self.ttl_secs = self.ttl_secs.max(1);
         if let WebhookDedupBackend::Redis { key_prefix, .. } = &mut self.backend
@@ -58,6 +59,9 @@ impl WebhookDedupConfig {
     }
 
     /// Build a deduplicator from this config.
+    ///
+    /// # Errors
+    /// Returns an error when Valkey/Redis backend configuration is invalid.
     pub fn build_store(&self) -> Result<Arc<dyn UpdateDeduplicator>> {
         let normalized = self.clone().normalized();
         match normalized.backend {
@@ -79,8 +83,8 @@ impl WebhookDedupConfig {
                     "telegram webhook dedup backend initialized"
                 );
                 Ok(Arc::new(RedisUpdateDeduplicator::new(
-                    url,
-                    key_prefix,
+                    &url,
+                    &key_prefix,
                     normalized.ttl_secs,
                 )?))
             }
@@ -88,6 +92,7 @@ impl WebhookDedupConfig {
     }
 
     /// Human-readable backend name for logs.
+    #[must_use]
     pub fn backend_name(&self) -> &'static str {
         match self.backend {
             WebhookDedupBackend::Memory => "memory",
@@ -155,12 +160,12 @@ struct RedisUpdateDeduplicator {
 }
 
 impl RedisUpdateDeduplicator {
-    fn new(url: String, key_prefix: String, ttl_secs: u64) -> Result<Self> {
-        let client = redis::Client::open(url.clone())
+    fn new(url: &str, key_prefix: &str, ttl_secs: u64) -> Result<Self> {
+        let client = redis::Client::open(url)
             .with_context(|| format!("invalid redis url for webhook dedup: {url}"))?;
         Ok(Self {
             client,
-            key_prefix,
+            key_prefix: key_prefix.to_string(),
             ttl_secs: ttl_secs.max(1),
             connection: Mutex::new(None),
         })
@@ -231,9 +236,6 @@ impl RedisUpdateDeduplicator {
                     last_err = Some(
                         anyhow::anyhow!(err).context("redis SET NX EX failed for webhook dedup"),
                     );
-                    if attempt == 0 {
-                        continue;
-                    }
                 }
             }
         }

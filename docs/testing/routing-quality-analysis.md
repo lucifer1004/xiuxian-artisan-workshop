@@ -1,3 +1,13 @@
+---
+title: "Routing Quality Analysis: Why "research + URL" Ranks crawl4ai Above researcher"
+category: "testing"
+tags:
+  - testing
+  - routing
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Routing Quality Analysis: Why "research + URL" Ranks crawl4ai Above researcher
 
 ## Observed Result

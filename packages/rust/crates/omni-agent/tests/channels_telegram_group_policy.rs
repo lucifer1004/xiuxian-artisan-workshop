@@ -1,4 +1,36 @@
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
 use std::fs;
 
@@ -61,8 +93,10 @@ fn telegram_group_policy_disabled_rejects_group_messages() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
   group_policy: "disabled"
 "#,
     );
@@ -79,8 +113,10 @@ fn telegram_group_policy_allowlist_uses_group_allow_from() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
   group_policy: "allowlist"
   group_allow_from: "111"
 "#,
@@ -103,8 +139,10 @@ fn telegram_group_policy_allowlist_falls_back_to_allowed_users_when_group_allow_
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  allowed_users: "999"
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: ["999"]
+      groups: ["-200100"]
   group_policy: "allowlist"
 "#,
     );
@@ -126,8 +164,10 @@ fn telegram_group_policy_group_override_can_open_when_global_disabled() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
   group_policy: "disabled"
   groups:
     "-200100":
@@ -147,8 +187,10 @@ fn telegram_group_policy_require_mention_blocks_plain_group_text() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
   group_policy: "open"
   require_mention: true
 "#,
@@ -176,15 +218,18 @@ fn telegram_group_policy_topic_override_has_higher_priority() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
   group_policy: "open"
   groups:
     "-200100":
       topics:
         "42":
           group_policy: "allowlist"
-          allow_from: "111"
+          allow_from:
+            users: ["111"]
 "#,
     );
 
@@ -210,8 +255,10 @@ fn telegram_group_policy_wildcard_override_is_applied_before_specific_group_over
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  allowed_users: ""
-  allowed_groups: "-200100,-200200"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100", "-200200"]
   group_policy: "open"
   require_mention: false
   groups:
@@ -237,8 +284,10 @@ fn telegram_group_policy_require_mention_accepts_reply_to_bot_trigger() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
   group_policy: "open"
   require_mention: true
 "#,
@@ -256,8 +305,10 @@ fn telegram_group_policy_require_mention_accepts_entity_mention_trigger() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
   group_policy: "open"
   require_mention: true
 "#,
@@ -275,12 +326,16 @@ fn telegram_group_policy_group_admin_users_are_scoped_by_recipient() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  allowed_users: ""
-  allowed_groups: "-200100,-200200"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100", "-200200"]
+    admin:
+      users: []
   groups:
     "-200100":
-      admin_users: "111"
+      admin_users:
+        users: ["111"]
 "#,
     );
 
@@ -308,17 +363,23 @@ fn telegram_group_policy_topic_admin_users_override_group_and_wildcard_admin_use
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  allowed_users: ""
-  allowed_groups: "-200100,-200200"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100", "-200200"]
+    admin:
+      users: []
   groups:
     "*":
-      admin_users: "900"
+      admin_users:
+        users: ["900"]
     "-200100":
-      admin_users: "111"
+      admin_users:
+        users: ["111"]
       topics:
         "42":
-          admin_users: "222"
+          admin_users:
+            users: ["222"]
 "#,
     );
 
@@ -354,13 +415,19 @@ fn telegram_group_policy_group_admin_users_do_not_override_explicit_global_contr
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  control_command_allow_from: ""
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
+    admin:
+      users: []
+    control:
+      allow_from:
+        users: []
   groups:
     "-200100":
-      admin_users: "111"
+      admin_users:
+        users: ["111"]
 "#,
     );
 
@@ -372,13 +439,19 @@ fn telegram_group_policy_group_admin_users_do_not_override_explicit_global_slash
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  slash_command_allow_from: ""
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
+    admin:
+      users: []
+    slash:
+      global:
+        users: []
   groups:
     "-200100":
-      admin_users: "111"
+      admin_users:
+        users: ["111"]
 "#,
     );
 
@@ -394,9 +467,12 @@ fn telegram_group_policy_recipient_admin_users_runtime_mutation_group_scope() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
+    admin:
+      users: []
 "#,
     );
 
@@ -444,9 +520,12 @@ fn telegram_group_policy_recipient_admin_users_runtime_mutation_topic_scope() {
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
+    admin:
+      users: []
 "#,
     );
 
@@ -492,9 +571,12 @@ fn telegram_group_policy_recipient_admin_users_runtime_mutation_group_topic_isol
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
+    admin:
+      users: []
 "#,
     );
 
@@ -545,9 +627,12 @@ fn telegram_group_policy_recipient_admin_users_runtime_mutation_rejects_invalid_
     let (_temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
+    admin:
+      users: []
 "#,
     );
 
@@ -571,9 +656,12 @@ fn telegram_group_policy_recipient_admin_users_runtime_mutation_persists_when_en
     let (temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
+    admin:
+      users: []
   session_admin_persist: true
 "#,
     );
@@ -608,13 +696,25 @@ telegram:
         .groups
         .expect("group overrides should persist");
     let group = groups.get("-200100").expect("group override should exist");
-    assert_eq!(group.admin_users.as_deref(), Some("111"));
+    assert_eq!(
+        group
+            .admin_users
+            .as_ref()
+            .and_then(|value| value.users.clone()),
+        Some(vec!["111".to_string()])
+    );
     let topics = group
         .topics
         .as_ref()
         .expect("topic override should persist");
     let topic = topics.get("42").expect("topic override should exist");
-    assert_eq!(topic.admin_users.as_deref(), Some("222,333"));
+    assert_eq!(
+        topic
+            .admin_users
+            .as_ref()
+            .and_then(|value| value.users.clone()),
+        Some(vec!["222".to_string(), "333".to_string()])
+    );
 }
 
 #[test]
@@ -622,9 +722,12 @@ fn telegram_group_policy_recipient_admin_users_runtime_mutation_clear_prunes_per
     let (temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
+    admin:
+      users: []
   session_admin_persist: true
 "#,
     );
@@ -669,9 +772,12 @@ fn telegram_group_policy_recipient_admin_users_runtime_mutation_does_not_persist
     let (temp_dir, channel) = build_channel_with_settings(
         r#"
 telegram:
-  admin_users: ""
-  allowed_users: ""
-  allowed_groups: "-200100"
+  acl:
+    allow:
+      users: []
+      groups: ["-200100"]
+    admin:
+      users: []
   session_admin_persist: false
 "#,
     );

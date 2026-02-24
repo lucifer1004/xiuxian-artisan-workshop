@@ -13,11 +13,26 @@ Focus:
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import re
 import sys
 from pathlib import Path
 from typing import Any
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+load_sibling_module = importlib.import_module("module_loader").load_sibling_module
+
+_log_io_module = load_sibling_module(
+    module_name="log_io",
+    file_name="log_io.py",
+    caller_file=__file__,
+    error_context="shared log I/O helpers",
+)
+iter_log_lines = _log_io_module.iter_log_lines
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 EVENT_RE = re.compile(r'\bevent=(?:"([^"]+)"|([^\s]+))')
@@ -37,6 +52,7 @@ STAGE_TO_FLAG = {
     "dedup": "has_dedup",
     "route": "has_route",
     "injection": "has_injection",
+    "injection_mode": "has_injection_mode",
     "reflection": "has_reflection",
     "memory": "has_memory",
 }
@@ -44,6 +60,7 @@ STAGE_ERROR_MESSAGE = {
     "dedup": "missing dedup events",
     "route": "missing route events",
     "injection": "missing injection snapshot events",
+    "injection_mode": "missing injection mode in snapshot events",
     "reflection": "missing reflection events",
     "memory": "missing memory lifecycle events",
 }
@@ -99,9 +116,8 @@ def _line_matches_chat(line: str, fields: dict[str, str], chat_id: int | None) -
         return True
     normalized = str(chat_id)
     value = fields.get("chat_id", "")
-    if value:
-        if normalized in value:
-            return True
+    if value and normalized in value:
+        return True
     return f"chat_id={normalized}" in line or f"chat_id=Some({normalized})" in line
 
 
@@ -122,10 +138,7 @@ def load_trace_entries(
     if not log_file.exists():
         raise FileNotFoundError(f"log file not found: {log_file}")
     entries: list[dict[str, Any]] = []
-    for line_number, raw_line in enumerate(
-        log_file.read_text(encoding="utf-8", errors="ignore").splitlines(),
-        start=1,
-    ):
+    for line_number, raw_line in enumerate(iter_log_lines(log_file), start=1):
         line = strip_ansi(raw_line)
         event = _extract_event(line)
         if event is None:
@@ -160,12 +173,24 @@ def _first_index(entries: list[dict[str, Any]], event_name: str) -> int | None:
     return None
 
 
+def _collect_injection_modes(entries: list[dict[str, Any]]) -> set[str]:
+    modes: set[str] = set()
+    for entry in entries:
+        if entry["event"] != "session.injection.snapshot_created":
+            continue
+        raw_mode = str(entry.get("fields", {}).get("injection_mode", "")).lower()
+        if raw_mode in {"single", "classified", "hybrid"}:
+            modes.add(raw_mode)
+    return modes
+
+
 def build_trace_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
     event_counts: dict[str, int] = {}
     for entry in entries:
         event = str(entry["event"])
         event_counts[event] = event_counts.get(event, 0) + 1
 
+    injection_modes = _collect_injection_modes(entries)
     stage_flags = {
         "has_dedup": "telegram.dedup.update_accepted" in event_counts,
         "has_route": (
@@ -173,6 +198,7 @@ def build_trace_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
             or "session.route.fallback_applied" in event_counts
         ),
         "has_injection": "session.injection.snapshot_created" in event_counts,
+        "has_injection_mode": bool(injection_modes),
         "has_reflection": any(name.startswith("agent.reflection.") for name in event_counts),
         "has_memory": any(name.startswith("agent.memory.") for name in event_counts),
         "has_suggested_link": "suggested_link" in event_counts,
@@ -183,6 +209,8 @@ def build_trace_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
     injection_idx = _first_index(entries, "session.injection.snapshot_created")
     if route_idx is not None and injection_idx is not None and route_idx > injection_idx:
         warnings.append("route decision appeared after injection snapshot")
+    if stage_flags["has_injection"] and not stage_flags["has_injection_mode"]:
+        warnings.append("injection snapshot missing injection_mode field")
 
     reflection_store_idx = _first_index(entries, "agent.reflection.policy_hint.stored")
     reflection_apply_idx = _first_index(entries, "agent.reflection.policy_hint.applied")
@@ -218,6 +246,7 @@ def build_trace_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "events_total": len(entries),
         "event_counts": event_counts,
+        "injection_modes": sorted(injection_modes),
         "stage_flags": stage_flags,
         "warnings": warnings,
         "quality_score": quality_score,
@@ -275,7 +304,16 @@ def render_markdown_report(
     lines.append("| --- | --- | --- | --- | --- |")
     for entry in entries:
         notes = []
-        for key in ("session_id", "session_key", "chat_id", "route", "confidence", "verdict"):
+        for key in (
+            "session_id",
+            "session_key",
+            "chat_id",
+            "route",
+            "confidence",
+            "verdict",
+            "injection_mode",
+            "role_mix_profile_id",
+        ):
             value = entry["fields"].get(key)
             if value:
                 notes.append(f"{key}={value}")

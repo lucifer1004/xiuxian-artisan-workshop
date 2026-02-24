@@ -1,0 +1,153 @@
+use crate::channels::control_command_authorization::ControlCommandPolicy;
+use crate::channels::control_command_rule_specs::parse_control_command_rule;
+use crate::channels::managed_commands::{
+    SLASH_SCOPE_BACKGROUND_SUBMIT, SLASH_SCOPE_JOB_STATUS, SLASH_SCOPE_JOBS_SUMMARY,
+    SLASH_SCOPE_SESSION_BUDGET, SLASH_SCOPE_SESSION_FEEDBACK, SLASH_SCOPE_SESSION_MEMORY,
+    SLASH_SCOPE_SESSION_STATUS,
+};
+
+use super::auth::normalize_discord_identity;
+use super::policy::{DiscordCommandAdminRule, DiscordSlashCommandPolicy, DiscordSlashCommandRule};
+
+/// Build one Discord command-admin rule from selectors and allowlist identities.
+///
+/// # Errors
+/// Returns an error when rule selectors or identity entries are invalid.
+pub fn build_discord_command_admin_rule(
+    selectors: Vec<String>,
+    allowed_identities: Vec<String>,
+) -> anyhow::Result<DiscordCommandAdminRule> {
+    parse_control_command_rule(
+        selectors,
+        allowed_identities,
+        "discord admin command rule",
+        normalize_discord_identity,
+    )
+}
+
+pub(super) fn normalize_allowed_user_entries(entries: Vec<String>) -> Vec<String> {
+    entries
+        .into_iter()
+        .map(|entry| normalize_discord_identity(&entry))
+        .filter(|entry| !entry.is_empty())
+        .collect()
+}
+
+pub(super) fn normalize_allowed_guild_entries(entries: Vec<String>) -> Vec<String> {
+    entries
+        .into_iter()
+        .map(|entry| entry.trim().to_string())
+        .filter(|entry| !entry.is_empty())
+        .collect()
+}
+
+pub(super) fn normalize_control_command_policy(
+    policy: ControlCommandPolicy<DiscordCommandAdminRule>,
+) -> ControlCommandPolicy<DiscordCommandAdminRule> {
+    ControlCommandPolicy::new(
+        normalize_allowed_user_entries(policy.admin_users),
+        normalize_optional_allowed_user_entries(policy.control_command_allow_from),
+        policy.rules,
+    )
+}
+
+pub(super) fn build_slash_command_policy(
+    admin_users: Vec<String>,
+    slash_policy: DiscordSlashCommandPolicy,
+) -> ControlCommandPolicy<DiscordSlashCommandRule> {
+    let slash_policy = normalize_slash_command_policy(slash_policy);
+    let mut rules = Vec::new();
+
+    add_slash_rule(
+        &mut rules,
+        SLASH_SCOPE_SESSION_STATUS,
+        slash_policy.session_status_allow_from,
+        &admin_users,
+    );
+    add_slash_rule(
+        &mut rules,
+        SLASH_SCOPE_SESSION_BUDGET,
+        slash_policy.session_budget_allow_from,
+        &admin_users,
+    );
+    add_slash_rule(
+        &mut rules,
+        SLASH_SCOPE_SESSION_MEMORY,
+        slash_policy.session_memory_allow_from,
+        &admin_users,
+    );
+    add_slash_rule(
+        &mut rules,
+        SLASH_SCOPE_SESSION_FEEDBACK,
+        slash_policy.session_feedback_allow_from,
+        &admin_users,
+    );
+    add_slash_rule(
+        &mut rules,
+        SLASH_SCOPE_JOB_STATUS,
+        slash_policy.job_status_allow_from,
+        &admin_users,
+    );
+    add_slash_rule(
+        &mut rules,
+        SLASH_SCOPE_JOBS_SUMMARY,
+        slash_policy.jobs_summary_allow_from,
+        &admin_users,
+    );
+    add_slash_rule(
+        &mut rules,
+        SLASH_SCOPE_BACKGROUND_SUBMIT,
+        slash_policy.background_submit_allow_from,
+        &admin_users,
+    );
+
+    ControlCommandPolicy::new(admin_users, slash_policy.slash_command_allow_from, rules)
+}
+
+fn normalize_optional_allowed_user_entries(entries: Option<Vec<String>>) -> Option<Vec<String>> {
+    entries.map(normalize_allowed_user_entries)
+}
+
+fn normalize_slash_command_policy(policy: DiscordSlashCommandPolicy) -> DiscordSlashCommandPolicy {
+    DiscordSlashCommandPolicy {
+        slash_command_allow_from: normalize_optional_allowed_user_entries(
+            policy.slash_command_allow_from,
+        ),
+        session_status_allow_from: normalize_optional_allowed_user_entries(
+            policy.session_status_allow_from,
+        ),
+        session_budget_allow_from: normalize_optional_allowed_user_entries(
+            policy.session_budget_allow_from,
+        ),
+        session_memory_allow_from: normalize_optional_allowed_user_entries(
+            policy.session_memory_allow_from,
+        ),
+        session_feedback_allow_from: normalize_optional_allowed_user_entries(
+            policy.session_feedback_allow_from,
+        ),
+        job_status_allow_from: normalize_optional_allowed_user_entries(
+            policy.job_status_allow_from,
+        ),
+        jobs_summary_allow_from: normalize_optional_allowed_user_entries(
+            policy.jobs_summary_allow_from,
+        ),
+        background_submit_allow_from: normalize_optional_allowed_user_entries(
+            policy.background_submit_allow_from,
+        ),
+    }
+}
+
+fn add_slash_rule(
+    rules: &mut Vec<DiscordSlashCommandRule>,
+    command_scope: &'static str,
+    allow_from: Option<Vec<String>>,
+    admin_users: &[String],
+) {
+    if let Some(mut allowed_identities) = allow_from {
+        allowed_identities.extend(admin_users.iter().cloned());
+        rules.push(DiscordSlashCommandRule::new(
+            command_scope,
+            allowed_identities,
+        ));
+    }
+}

@@ -4,7 +4,7 @@ use crate::jobs::{JobMetricsSnapshot, JobStatusSnapshot};
 
 const PERMISSION_HINTS: shared_replies::PermissionHints<'static> =
     shared_replies::PermissionHints {
-        control_command_hint: "Ask an identity allowed by `telegram.control_command_allow_from` (or matching `telegram.admin_command_rules` / `telegram.admin_users`) to run this command.",
+        control_command_hint: "Ask an identity allowed by `telegram.acl.control.allow_from.users` (or matching `telegram.acl.control.rules` / `telegram.acl.admin.users`) to run this command.",
         slash_command_hint: "Ask an admin to grant this command via telegram slash command allowlist settings.",
     };
 

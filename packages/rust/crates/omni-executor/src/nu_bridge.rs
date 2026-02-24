@@ -4,10 +4,28 @@
 //! Uses AST-based analysis and external security tools for validation.
 
 use serde_json::Value;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fs;
+use std::fs::Metadata;
+use std::io::Write;
+use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use crate::error::{ExecutorError, Result};
+
+const SHELLCHECK_CACHE_MAX_ENTRIES: usize = 512;
+static SHELLCHECK_AVAILABLE: OnceLock<bool> = OnceLock::new();
+static SHELLCHECK_RESULT_CACHE: OnceLock<Mutex<HashMap<String, ShellcheckResult>>> =
+    OnceLock::new();
+
+#[derive(Debug, Clone)]
+enum ShellcheckResult {
+    Pass,
+    Violation(String),
+}
 
 /// Configuration for the Nushell bridge.
 #[derive(Debug, Clone)]
@@ -156,6 +174,137 @@ impl NuSystemBridge {
         corrected
     }
 
+    /// Try fast-path execution for simple observe commands.
+    ///
+    /// Currently supports `ls` without pipes/chaining operators and with at most one target path.
+    fn try_execute_observe_fast_path(
+        cmd: &str,
+        action: ActionType,
+        ensure_structured: bool,
+    ) -> Option<Result<Value>> {
+        if !matches!(action, ActionType::Observe) || !ensure_structured {
+            return None;
+        }
+        let (target, include_hidden) = Self::parse_ls_fast_path_request(cmd)?;
+        Some(Self::execute_ls_fast_path(&target, include_hidden))
+    }
+
+    /// Parse a command into a minimal `ls` fast-path request.
+    fn parse_ls_fast_path_request(cmd: &str) -> Option<(String, bool)> {
+        let trimmed = cmd.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        if trimmed
+            .chars()
+            .any(|c| matches!(c, '|' | ';' | '&' | '>' | '<' | '\n' | '\r'))
+        {
+            return None;
+        }
+
+        let mut tokens = trimmed.split_whitespace();
+        if tokens.next()? != "ls" {
+            return None;
+        }
+
+        let mut include_hidden = false;
+        let mut target: Option<&str> = None;
+        for token in tokens {
+            if token.starts_with("--") {
+                if token == "--all" {
+                    include_hidden = true;
+                    continue;
+                }
+                return None;
+            }
+            if token.starts_with('-') {
+                if token.chars().skip(1).any(|flag| flag == 'a') {
+                    include_hidden = true;
+                }
+                continue;
+            }
+            if target.is_some() {
+                return None;
+            }
+            if token
+                .chars()
+                .any(|c| matches!(c, '*' | '?' | '[' | ']' | '{' | '}' | '$'))
+            {
+                return None;
+            }
+            target = Some(token);
+        }
+
+        Some((target.unwrap_or(".").to_string(), include_hidden))
+    }
+
+    /// Execute `ls` fast-path directly via Rust filesystem APIs.
+    fn execute_ls_fast_path(target: &str, include_hidden: bool) -> Result<Value> {
+        let target_path = Path::new(target);
+        let metadata = fs::symlink_metadata(target_path)
+            .map_err(|e| ExecutorError::SystemError(format!("Fast-path ls failed: {e}")))?;
+
+        if metadata.is_dir() {
+            let mut rows: Vec<Value> = Vec::new();
+            let dir_entries = fs::read_dir(target_path)
+                .map_err(|e| ExecutorError::SystemError(format!("Fast-path ls failed: {e}")))?;
+            for entry in dir_entries {
+                let entry = entry
+                    .map_err(|e| ExecutorError::SystemError(format!("Fast-path ls failed: {e}")))?;
+                let name = entry.file_name().to_string_lossy().to_string();
+                if !include_hidden && name.starts_with('.') {
+                    continue;
+                }
+                let entry_path = entry.path();
+                let entry_meta = fs::symlink_metadata(&entry_path).map_err(|e| {
+                    ExecutorError::SystemError(format!("Fast-path ls metadata failed: {e}"))
+                })?;
+                rows.push(Self::build_ls_entry(&name, &entry_path, &entry_meta));
+            }
+            rows.sort_by(|left, right| {
+                let left_name = left.get("name").and_then(Value::as_str).unwrap_or_default();
+                let right_name = right
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                left_name.cmp(right_name)
+            });
+            return Ok(Value::Array(rows));
+        }
+
+        let display_name = target_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(target)
+            .to_string();
+        Ok(Value::Array(vec![Self::build_ls_entry(
+            &display_name,
+            target_path,
+            &metadata,
+        )]))
+    }
+
+    /// Build one `ls` row payload.
+    fn build_ls_entry(name: &str, path: &Path, metadata: &Metadata) -> Value {
+        let file_type = metadata.file_type();
+        let kind = if metadata.is_dir() {
+            "dir"
+        } else if metadata.is_file() {
+            "file"
+        } else if file_type.is_symlink() {
+            "symlink"
+        } else {
+            "other"
+        };
+        serde_json::json!({
+            "name": name,
+            "path": path.to_string_lossy(),
+            "type": kind,
+            "size": if metadata.is_file() { metadata.len() } else { 0_u64 },
+            "readonly": metadata.permissions().readonly(),
+        })
+    }
+
     /// Execute a Nushell command with structured output.
     ///
     /// # Arguments
@@ -169,11 +318,39 @@ impl NuSystemBridge {
     /// Returns an error when safety validation fails, the process cannot spawn, the command
     /// exits with a failure status, or the output cannot be parsed as JSON.
     pub fn execute(&self, cmd: &str, ensure_structured: bool) -> Result<Value> {
+        let inferred_action = Self::classify_action(cmd);
+        self.execute_with_action(cmd, inferred_action, ensure_structured)
+    }
+
+    /// Execute command with explicit action hint.
+    ///
+    /// This allows performance-sensitive callers to pass command intent so safety validation
+    /// can skip expensive mutation checks for clearly observe-only commands.
+    ///
+    /// # Errors
+    /// Same as [`Self::execute`].
+    pub fn execute_with_action(
+        &self,
+        cmd: &str,
+        action: ActionType,
+        ensure_structured: bool,
+    ) -> Result<Value> {
         // 0. Auto-correct mutation commands for better LLM feedback
-        let cmd = Self::auto_correct_mutation(cmd);
+        let cmd: Cow<'_, str> = if matches!(action, ActionType::Mutate) {
+            Cow::Owned(Self::auto_correct_mutation(cmd))
+        } else {
+            Cow::Borrowed(cmd)
+        };
 
         // 1. Security pre-flight check
-        self.validate_safety(&cmd)?;
+        self.validate_safety_for_action(&cmd, action)?;
+
+        // 1.5 Observe-only fast path to avoid process spawn overhead.
+        if let Some(fast_path_result) =
+            Self::try_execute_observe_fast_path(&cmd, action, ensure_structured)
+        {
+            return fast_path_result;
+        }
 
         // 2. Construct the actual command
         let final_cmd = Self::build_command(&cmd, ensure_structured);
@@ -251,6 +428,14 @@ impl NuSystemBridge {
     /// Returns an error when the command contains dangerous patterns, fails `ShellCheck`,
     /// or is rejected by the configured whitelist.
     pub fn validate_safety(&self, cmd: &str) -> Result<()> {
+        let inferred_action = Self::classify_action(cmd);
+        self.validate_safety_for_action(cmd, inferred_action)
+    }
+
+    /// Security pre-flight check with action hint for better performance.
+    ///
+    /// `observe` commands that also classify as observe skip shellcheck.
+    fn validate_safety_for_action(&self, cmd: &str, action: ActionType) -> Result<()> {
         // Step 1: Quick pattern check (immutable set)
         if Self::has_dangerous_pattern(cmd) {
             return Err(ExecutorError::SecurityViolation(
@@ -258,9 +443,15 @@ impl NuSystemBridge {
             ));
         }
 
-        // Step 2: ShellCheck validation (if enabled)
-        if self.config.enable_shellcheck {
-            Self::run_shellcheck()?;
+        // Step 2: ShellCheck validation for mutation-path commands only.
+        // Guard rail: when action hint says observe but command text still looks mutating,
+        // keep shellcheck enabled.
+        let requires_shellcheck = match action {
+            ActionType::Mutate => true,
+            ActionType::Observe => matches!(Self::classify_action(cmd), ActionType::Mutate),
+        };
+        if self.config.enable_shellcheck && requires_shellcheck {
+            Self::run_shellcheck(cmd)?;
         }
 
         // Step 3: Whitelist check
@@ -281,35 +472,82 @@ impl NuSystemBridge {
     }
 
     /// Run shellcheck for comprehensive analysis.
-    fn run_shellcheck() -> Result<()> {
-        // Skip if shellcheck not available
-        if Command::new("which").arg("shellcheck").output().is_err() {
+    fn run_shellcheck(cmd: &str) -> Result<()> {
+        // Skip if shellcheck is not available.
+        if !Self::shellcheck_available() {
             return Ok(());
         }
 
-        let output = Command::new("shellcheck")
+        // Fast-path: reuse cached verdict for identical command text.
+        if let Some(cached) = Self::get_cached_shellcheck_result(cmd) {
+            return match cached {
+                ShellcheckResult::Pass => Ok(()),
+                ShellcheckResult::Violation(error) => Err(ExecutorError::SecurityViolation(error)),
+            };
+        }
+
+        let Ok(mut child) = Command::new("shellcheck")
             .args(["-e", "SC2034", "-"]) // Allow unused vars
             .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
+            .stdout(Stdio::null())
             .stderr(Stdio::piped())
-            .output();
+            .spawn()
+        else {
+            return Ok(());
+        };
 
-        if let Ok(output) = output {
-            // ShellCheck returns exit code 0 for no errors,
-            // 1 for warnings (which we want to allow),
-            // and > 1 for errors
-            let exit_code = output.status.code().unwrap_or(0);
-            if exit_code > 1 {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(ExecutorError::SecurityViolation(format!(
-                    "ShellCheck error: {stderr}"
-                )));
-            }
-            // Exit codes 0 (no issues) and 1 (warnings only) are OK
-        } else {
-            // ShellCheck not available or failed to run, skip
+        if let Some(stdin) = child.stdin.as_mut() {
+            let _ = stdin.write_all(cmd.as_bytes());
         }
+
+        let Ok(output) = child.wait_with_output() else {
+            return Ok(());
+        };
+
+        // ShellCheck returns:
+        // - 0 for no issues
+        // - 1 for warnings (allowed)
+        // - >1 for parse/runtime errors (blocked)
+        let exit_code = output.status.code().unwrap_or(0);
+        if exit_code > 1 {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let error_message = format!("ShellCheck error: {stderr}");
+            Self::cache_shellcheck_result(cmd, ShellcheckResult::Violation(error_message.clone()));
+            return Err(ExecutorError::SecurityViolation(error_message));
+        }
+
+        Self::cache_shellcheck_result(cmd, ShellcheckResult::Pass);
         Ok(())
+    }
+
+    fn shellcheck_available() -> bool {
+        *SHELLCHECK_AVAILABLE.get_or_init(|| {
+            Command::new("shellcheck")
+                .arg("--version")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|status| status.success())
+                .unwrap_or(false)
+        })
+    }
+
+    fn shellcheck_cache() -> &'static Mutex<HashMap<String, ShellcheckResult>> {
+        SHELLCHECK_RESULT_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    fn get_cached_shellcheck_result(cmd: &str) -> Option<ShellcheckResult> {
+        let cache_guard = Self::shellcheck_cache().lock().ok()?;
+        cache_guard.get(cmd).cloned()
+    }
+
+    fn cache_shellcheck_result(cmd: &str, result: ShellcheckResult) {
+        if let Ok(mut cache_guard) = Self::shellcheck_cache().lock() {
+            if cache_guard.len() >= SHELLCHECK_CACHE_MAX_ENTRIES {
+                cache_guard.clear();
+            }
+            cache_guard.insert(cmd.to_string(), result);
+        }
     }
 
     /// Check against whitelist.
@@ -347,7 +585,7 @@ impl NuSystemBridge {
 }
 
 /// Classification of command intent.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionType {
     /// Read-only operation (ls, open, ps, cat)
     Observe,

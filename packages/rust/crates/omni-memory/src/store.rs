@@ -56,15 +56,16 @@ fn default_memory_store_path() -> String {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        .map_or_else(
+            || std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            PathBuf::from,
+        );
 
     let data_home = std::env::var("PRJ_DATA_HOME")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| root.join(".data"));
+        .map_or_else(|| root.join(".data"), PathBuf::from);
 
     data_home.join("omni-memory").to_string_lossy().to_string()
 }

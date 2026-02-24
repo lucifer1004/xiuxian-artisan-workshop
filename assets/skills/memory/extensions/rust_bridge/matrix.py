@@ -5,9 +5,10 @@ High-performance memory grid for storing and retrieving episodic/semantic memory
 Uses Rust-powered vector store for embeddings and similarity search.
 """
 
-import structlog
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from .bindings import RustBindings
 
@@ -37,17 +38,27 @@ class NeuralMatrix:
         from omni.foundation.config.database import get_memory_db_path
 
         self._db_path = get_memory_db_path()
+        self._store_cls = RustBindings.get_store_class()
 
-        # Initialize Rust vector store
-        store_cls = RustBindings.get_store_class()
-        if store_cls:
-            self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                self._store = store_cls(str(self._db_path), dimension, enable_keyword_index=True)
-                log.info("Neural Matrix initialized", db_path=str(self._db_path))
-            except Exception as e:
-                log.error("Failed to initialize Neural Matrix", error=str(e))
-                self._store = None
+    def _ensure_store(self) -> bool:
+        """Lazily initialize the Rust vector store on first real usage."""
+        if self._store is not None:
+            return True
+        if self._store_cls is None:
+            return False
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._store = self._store_cls(
+                str(self._db_path),
+                self._dimension,
+                enable_keyword_index=True,
+            )
+            log.info("Neural Matrix initialized", db_path=str(self._db_path))
+            return True
+        except Exception as e:
+            log.error("Failed to initialize Neural Matrix", error=str(e))
+            self._store = None
+            return False
 
     @property
     def is_active(self) -> bool:
@@ -57,7 +68,9 @@ class NeuralMatrix:
     @property
     def backend(self) -> str:
         """Return the backend type."""
-        return "omni-vector (Rust/LanceDB)" if self._store else "unavailable"
+        if self._store is not None or self._store_cls is not None:
+            return "omni-vector (Rust/LanceDB)"
+        return "unavailable"
 
     def remember(self, content: str, metadata: dict[str, Any] | None = None) -> str:
         """Store a memory.
@@ -69,7 +82,7 @@ class NeuralMatrix:
         Returns:
             Memory ID or status message
         """
-        if not self._store:
+        if not self._ensure_store() or not self._store:
             return "neural_matrix_offline"
 
         import uuid
@@ -113,7 +126,7 @@ class NeuralMatrix:
         Returns:
             List of recalled memories with scores
         """
-        if not self._store:
+        if not self._ensure_store() or not self._store:
             return []
 
         try:
@@ -135,7 +148,7 @@ class NeuralMatrix:
 
     def stats(self) -> dict[str, Any]:
         """Get memory statistics."""
-        if not self._store:
+        if not self._ensure_store() or not self._store:
             return {"active": False, "backend": "unavailable"}
 
         try:

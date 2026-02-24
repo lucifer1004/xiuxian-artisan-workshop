@@ -81,8 +81,7 @@ fn scope_from_recipient(recipient: &str) -> &'static str {
 
 fn render_admin_users_for_dashboard(override_admin_users: Option<&[String]>) -> String {
     match override_admin_users {
-        Some(entries) if entries.is_empty() => "(inherit)".to_string(),
+        Some([]) | None => "(inherit)".to_string(),
         Some(entries) => entries.join(","),
-        None => "(inherit)".to_string(),
     }
 }

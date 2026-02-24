@@ -69,6 +69,7 @@ impl DiscordChannel {
 }
 
 /// Split text into Discord-safe chunks using character count (UTF-8 safe).
+#[must_use]
 pub fn split_message_for_discord(message: &str, max_chars: usize) -> Vec<String> {
     if max_chars == 0 {
         return Vec::new();

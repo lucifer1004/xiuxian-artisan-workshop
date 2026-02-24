@@ -52,6 +52,8 @@ in
     nixosModules.llm
     nixosModules.rust
     nixosModules.packages
+    nixosModules.tasks
+    nixosModules.process
     #./modules/flake-parts/omnibus-hive.nix
     ({
       config = lib.mkMerge [
@@ -73,7 +75,7 @@ in
   devcontainer.enable = true;
   # https://devenv.sh/basics/
   env.GREET = "devenv";
-
+  # devenv.warnOnNewVersion = false;
   # https://devenv.sh/packages/
   packages = [
     packages.secretspec
@@ -101,11 +103,11 @@ in
   #   "devenv:enterShell".after = [ "myproj:setup" ];
   # };
 
-  # https://devenv.sh/tests/
-  enterTest = ''
-    echo "Running tests"
-    git --version | grep --color=auto "${pkgs.git.version}"
+  enterShell = ''
+    export PATH="$PATH:"$DEVENV_ROOT"/.venv/bin"
   '';
+  # https://devenv.sh/tests/
+  enterTest = "";
 
   # https://devenv.sh/pre-commit-hooks/
   # git-hooks.hooks.shellcheck.enable = true;

@@ -1,8 +1,8 @@
 //! Example: one user turn with LLM + optional MCP tools.
 //!
-//! Inference: set OPENAI_API_KEY (or use LiteLLM: `litellm --port 4000` and
-//! LITELLM_PROXY_URL=http://127.0.0.1:4000/v1/chat/completions). Optional MCP:
-//! `omni mcp --transport sse --port 3002` and OMNI_MCP_URL=http://127.0.0.1:3002/sse.
+//! Inference: set `OPENAI_API_KEY` (or use `LiteLLM`: `litellm --port 4000` and
+//! `LITELLM_PROXY_URL=http://127.0.0.1:4000/v1/chat/completions`). Optional MCP:
+//! `omni mcp --transport sse --port 3002` and `OMNI_MCP_URL=http://127.0.0.1:3002/sse`.
 //!
 //! Run: `cargo run -p omni-agent --example one_turn -- "Your message here"`
 
@@ -39,6 +39,6 @@ async fn main() -> anyhow::Result<()> {
 
     let agent = Agent::from_config(config).await?;
     let out = agent.run_turn("example-session", &message).await?;
-    println!("{}", out);
+    println!("{out}");
     Ok(())
 }

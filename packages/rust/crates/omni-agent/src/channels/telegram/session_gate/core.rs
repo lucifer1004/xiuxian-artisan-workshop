@@ -22,8 +22,12 @@ impl Default for SessionGate {
 }
 
 impl SessionGate {
+    /// Construct session gate from runtime environment/settings.
+    ///
+    /// # Errors
+    /// Returns an error when runtime configuration or backend initialization fails.
     pub fn from_env() -> Result<Self> {
-        Self::from_runtime_config(SessionGateRuntimeConfig::from_env()?)
+        Self::from_runtime_config(&SessionGateRuntimeConfig::from_env()?)
     }
 
     #[doc(hidden)]
@@ -40,9 +44,10 @@ impl SessionGate {
             lease_ttl_secs,
             acquire_timeout_secs,
         };
-        Self::from_runtime_config(config)
+        Self::from_runtime_config(&config)
     }
 
+    #[must_use]
     pub fn backend_name(&self) -> &'static str {
         match self.backend {
             SessionGateBackend::Memory => "memory",
@@ -50,6 +55,10 @@ impl SessionGate {
         }
     }
 
+    /// Acquire a session-scoped gate permit.
+    ///
+    /// # Errors
+    /// Returns an error when distributed lease acquisition fails.
     pub async fn acquire(&self, session_id: &str) -> Result<SessionGuard> {
         let entry = {
             let mut guard = self
@@ -93,7 +102,7 @@ impl SessionGate {
             .len()
     }
 
-    fn from_runtime_config(config: SessionGateRuntimeConfig) -> Result<Self> {
+    fn from_runtime_config(config: &SessionGateRuntimeConfig) -> Result<Self> {
         let mut gate = Self::default();
         let resolved_mode = if config.backend_mode == SessionGateBackendMode::Auto {
             if config.valkey_url.is_some() {
@@ -116,7 +125,7 @@ impl SessionGate {
             SessionGateBackendMode::Valkey => {
                 let valkey_url = config.valkey_url.as_deref().ok_or_else(|| {
                     anyhow::anyhow!(
-                        "telegram session gate backend=valkey requires valkey url (VALKEY_URL or session.valkey_url)"
+                        "telegram session gate backend=valkey requires valkey url (session.valkey_url or VALKEY_URL)"
                     )
                 })?;
                 let backend = ValkeySessionGateBackend::new(

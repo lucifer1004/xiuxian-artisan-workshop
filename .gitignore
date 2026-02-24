@@ -1,6 +1,4 @@
-!.zk/templates
-!.zk/config.toml
-.zk
+/target-codex
 # Devenv
 .devenv*
 devenv.local.nix

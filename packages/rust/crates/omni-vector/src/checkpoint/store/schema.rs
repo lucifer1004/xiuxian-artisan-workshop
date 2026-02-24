@@ -1,8 +1,25 @@
-use super::*;
+use super::{
+    Arc, CHECKPOINT_PARENT_ID_COLUMN, CHECKPOINT_STEP_COLUMN, CHECKPOINT_TIMESTAMP_COLUMN,
+    CONTENT_COLUMN, CheckpointStore, Dataset, ID_COLUMN, METADATA_COLUMN, RecordBatch, Result,
+    Schema, THREAD_ID_COLUMN, VECTOR_COLUMN, VectorStoreError,
+};
 
 impl CheckpointStore {
+    fn vector_dimension_or_fallback(&self) -> i32 {
+        if let Ok(value) = i32::try_from(self.dimension) {
+            value
+        } else {
+            log::warn!(
+                "checkpoint dimension {} exceeds i32 range; clamping to i32::MAX",
+                self.dimension
+            );
+            i32::MAX
+        }
+    }
+
     /// Create the schema for checkpoint storage.
     pub(super) fn create_schema(&self) -> Arc<Schema> {
+        let vector_dimension = self.vector_dimension_or_fallback();
         Arc::new(Schema::new(vec![
             lance::deps::arrow_schema::Field::new(
                 ID_COLUMN,
@@ -38,7 +55,7 @@ impl CheckpointStore {
                         lance::deps::arrow_schema::DataType::Float32,
                         true,
                     )),
-                    i32::try_from(self.dimension).unwrap_or(1536),
+                    vector_dimension,
                 ),
                 true,
             ),
@@ -60,7 +77,7 @@ impl CheckpointStore {
         &self,
         schema: &Arc<Schema>,
     ) -> Result<RecordBatch, VectorStoreError> {
-        let dimension = self.dimension;
+        let vector_dimension = self.vector_dimension_or_fallback();
         let arrays: Vec<Arc<dyn lance::deps::arrow_array::Array>> = vec![
             Arc::new(lance::deps::arrow_array::StringArray::from(
                 Vec::<String>::new(),
@@ -88,7 +105,7 @@ impl CheckpointStore {
                     lance::deps::arrow_schema::DataType::Float32,
                     true,
                 )),
-                i32::try_from(dimension).unwrap_or(1536),
+                vector_dimension,
                 0,
             )) as _,
             Arc::new(lance::deps::arrow_array::StringArray::from(
@@ -110,7 +127,7 @@ impl CheckpointStore {
         use lance::deps::arrow_schema::DataType;
 
         let schema = lance::deps::arrow_schema::Schema::from(dataset.schema());
-        let expected_dim = i32::try_from(self.dimension).unwrap_or(1536);
+        let expected_dim = self.vector_dimension_or_fallback();
 
         let check_field = |name: &str,
                            expected_type: &DataType,

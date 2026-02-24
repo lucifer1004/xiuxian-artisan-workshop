@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub struct ChatMessage {
     /// Role: "system", "user", "assistant".
     pub role: String,
-    /// Text content (none when tool_calls present).
+    /// Text content (none when `tool_calls` present).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     /// Assistant tool calls (when role is assistant).
@@ -21,7 +21,7 @@ pub struct ChatMessage {
     pub name: Option<String>,
 }
 
-/// Tool call from assistant message (OpenAI format).
+/// Tool call from assistant message (`OpenAI` format).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCallOut {
     /// Unique id for this tool call.

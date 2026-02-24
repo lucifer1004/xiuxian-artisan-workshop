@@ -18,8 +18,9 @@ from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.logging import get_logger
 from omni.foundation.config.paths import ConfigPaths
 from omni.foundation.config.skills import SKILLS_DIR
+from omni.foundation.services import vector as vector_service
 from omni.foundation.services.embedding import get_embedding_service
-from omni.foundation.services.vector import get_vector_store
+from omni.rag.retrieval import run_recall_semantic_rows
 
 logger = get_logger("skill.memory")
 
@@ -127,7 +128,7 @@ async def save_memory(
     Returns:
         Confirmation message with stored content preview
     """
-    client = get_vector_store()
+    client = vector_service.get_vector_store()
     store = client.store
     if not store:
         raise RuntimeError("VectorStore not available. Cannot store memory.")
@@ -205,24 +206,36 @@ async def search_memory(
         Relevant memories found, or "No relevant memories found"
     """
     try:
-        results = await get_vector_store().search(query, n_results=limit, collection=DEFAULT_TABLE)
+        rows = await run_recall_semantic_rows(
+            vector_store=vector_service.get_vector_store(),
+            query=query,
+            collection=DEFAULT_TABLE,
+            fetch_limit=limit,
+            use_cache=True,
+        )
 
-        if not results:
+        if not rows:
             return "No matching memories found."
 
-        output = [f"Found {len(results)} matches for '{query}':"]
-        for r in results:
-            # Format output for LLM consumption
-            output.append(f"- [Score: {r.distance:.4f}] {r.content[:100]}")
-            if r.metadata:
-                output[-1] += f" (Meta: {json.dumps(r.metadata)[:50]}...)"
+        output = [f"Found {len(rows)} matches for '{query}':"]
+        for row in rows:
+            # Format output for LLM consumption with normalized row contract.
+            score = float(row.get("score", 0.0))
+            content = str(row.get("content", ""))
+            source = str(row.get("source", "")).strip()
+            line = f"- [Score: {score:.4f}] {content[:100]}"
+            if source:
+                line += f" (Source: {source})"
+            output.append(line)
 
         return "\n".join(output)
 
     except Exception as e:
         error_msg = str(e).lower()
         if "table" in error_msg and "not found" in error_msg:
-            raise RuntimeError("No memories stored yet. Use save_memory() to store insights first.")
+            raise RuntimeError(
+                "No memories stored yet. Use save_memory() to store insights first."
+            ) from e
         logger.error("search_memory failed", error=str(e))
         raise
 
@@ -255,7 +268,7 @@ async def index_memory(
     Returns:
         Confirmation of index creation
     """
-    success = await get_vector_store().create_index(collection=DEFAULT_TABLE)
+    success = await vector_service.get_vector_store().create_index(collection=DEFAULT_TABLE)
     if success:
         return "Index creation/optimization complete. Search performance improved."
     raise RuntimeError("Failed to create index.")
@@ -284,7 +297,7 @@ async def get_memory_stats(
     Returns:
         Count of stored memories
     """
-    count = await get_vector_store().count(collection=DEFAULT_TABLE)
+    count = await vector_service.get_vector_store().count(collection=DEFAULT_TABLE)
     return f"Stored memories: {count}"
 
 
@@ -322,7 +335,7 @@ async def load_skill(
     Returns:
         Confirmation message with skill details
     """
-    client = get_vector_store()
+    client = vector_service.get_vector_store()
     store = client.store
     if not store:
         raise RuntimeError("VectorStore not available. Cannot load skill.")

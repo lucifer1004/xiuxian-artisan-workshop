@@ -1,4 +1,36 @@
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
 use std::collections::HashMap;
 
@@ -10,7 +42,7 @@ fn defaults_are_applied_when_env_missing() {
     assert_eq!(cfg.inbound_queue_capacity, 100);
     assert_eq!(cfg.foreground_queue_capacity, 256);
     assert_eq!(cfg.foreground_max_in_flight_messages, 16);
-    assert_eq!(cfg.foreground_turn_timeout_secs, 300);
+    assert_eq!(cfg.foreground_turn_timeout_secs, 80);
 }
 
 #[test]
@@ -64,7 +96,7 @@ fn invalid_values_fall_back_to_defaults() {
     assert_eq!(cfg.inbound_queue_capacity, 100);
     assert_eq!(cfg.foreground_queue_capacity, 256);
     assert_eq!(cfg.foreground_max_in_flight_messages, 16);
-    assert_eq!(cfg.foreground_turn_timeout_secs, 300);
+    assert_eq!(cfg.foreground_turn_timeout_secs, 80);
 }
 
 #[test]

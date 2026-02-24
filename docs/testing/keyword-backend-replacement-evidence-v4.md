@@ -1,3 +1,13 @@
+---
+title: "Keyword Backend Replacement Evidence (V4)"
+category: "testing"
+tags:
+  - testing
+  - keyword
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Keyword Backend Replacement Evidence (V4)
 
 - Date: `2026-02-12`

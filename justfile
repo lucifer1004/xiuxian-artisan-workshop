@@ -17,6 +17,32 @@ set positional-arguments := true
 
 # Enable JSON output mode via environment variable
 json_output := if env_var_or_default("JUST_JSON", "false") == "true" { "true" } else { "false" }
+xiuxian_wendao_gate_limit := env_var_or_default("XIUXIAN_WENDAO_GATE_LIMIT", "10")
+xiuxian_wendao_gate_min_top3_rate := env_var_or_default("XIUXIAN_WENDAO_GATE_MIN_TOP3_RATE", "1.0")
+xiuxian_wendao_gate_stem := env_var_or_default("XIUXIAN_WENDAO_GATE_STEM", "README")
+xiuxian_wendao_gate_runs := env_var_or_default("XIUXIAN_WENDAO_GATE_RUNS", "5")
+xiuxian_wendao_gate_warm_runs := env_var_or_default("XIUXIAN_WENDAO_GATE_WARM_RUNS", "1")
+xiuxian_wendao_gate_profile := env_var_or_default("XIUXIAN_WENDAO_GATE_PROFILE", "debug")
+xiuxian_wendao_gate_build_mode := env_var_or_default("XIUXIAN_WENDAO_GATE_BUILD_MODE", "no-build")
+xiuxian_wendao_gate_subgraph_mode := env_var_or_default("XIUXIAN_WENDAO_GATE_SUBGRAPH_MODE", "auto")
+xiuxian_wendao_gate_max_p95_ms := env_var_or_default("XIUXIAN_WENDAO_GATE_MAX_P95_MS", "1500")
+xiuxian_wendao_gate_max_avg_ms := env_var_or_default("XIUXIAN_WENDAO_GATE_MAX_AVG_MS", "1200")
+xiuxian_wendao_gate_expect_subgraph_count_min := env_var_or_default("XIUXIAN_WENDAO_GATE_EXPECT_SUBGRAPH_COUNT_MIN", "1")
+xiuxian_wendao_gate_output_mode := env_var_or_default("XIUXIAN_WENDAO_GATE_OUTPUT_MODE", "text")
+xiuxian_wendao_gate_report_dir := env_var_or_default("XIUXIAN_WENDAO_GATE_REPORT_DIR", ".run/reports/wendao-ppr-gate")
+xiuxian_wendao_gate_query_prefix := env_var_or_default("XIUXIAN_WENDAO_GATE_QUERY_PREFIX", "")
+xiuxian_wendao_gate_summary_strict_green := env_var_or_default("XIUXIAN_WENDAO_GATE_SUMMARY_STRICT_GREEN", "0")
+xiuxian_wendao_mixed_canary_min_top3_rate := env_var_or_default("XIUXIAN_WENDAO_MIXED_CANARY_MIN_TOP3_RATE", "0.9")
+xiuxian_wendao_mixed_canary_query_prefix := env_var_or_default("XIUXIAN_WENDAO_MIXED_CANARY_QUERY_PREFIX", "scope:mixed ")
+xiuxian_wendao_mixed_canary_report_dir := env_var_or_default("XIUXIAN_WENDAO_MIXED_CANARY_REPORT_DIR", ".run/reports/wendao-ppr-mixed-canary")
+xiuxian_wendao_rollout_required_runs := env_var_or_default("XIUXIAN_WENDAO_ROLLOUT_REQUIRED_RUNS", "7")
+xiuxian_wendao_rollout_min_mixed_top3_rate := env_var_or_default("XIUXIAN_WENDAO_ROLLOUT_MIN_MIXED_TOP3_RATE", "0.9")
+xiuxian_wendao_rollout_strict_ready := env_var_or_default("XIUXIAN_WENDAO_ROLLOUT_STRICT_READY", "0")
+xiuxian_wendao_rollout_fetch_remote_status := env_var_or_default("XIUXIAN_WENDAO_ROLLOUT_FETCH_REMOTE_STATUS", "0")
+xiuxian_wendao_rollout_remote_workflow_file := env_var_or_default("XIUXIAN_WENDAO_ROLLOUT_REMOTE_WORKFLOW_FILE", "ci.yaml")
+xiuxian_wendao_rollout_remote_artifact_name := env_var_or_default("XIUXIAN_WENDAO_ROLLOUT_REMOTE_ARTIFACT_NAME", "")
+xiuxian_wendao_rollout_remote_run_status := env_var_or_default("XIUXIAN_WENDAO_ROLLOUT_REMOTE_RUN_STATUS", "completed")
+xiuxian_wendao_runner_os := env_var_or_default("RUNNER_OS", "local")
 
 # ==============================================================================
 # Core Commands
@@ -105,7 +131,7 @@ agent-commit:
 
 # Agent-friendly validate (non-interactive)
 agent-validate:
-    @echo "Running validation..." && lefthook run pre-commit && devenv test
+    @echo "Running validation..." && lefthook run pre-commit --all-files --no-tty && devenv test
 
 # Agent-friendly validate with git status output (safe - no commit)
 # Usage: just agent-test-status
@@ -352,35 +378,30 @@ validate: check-format check-commits lint test
 [group('validate')]
 check-format:
     @echo "Checking code formatting..."
-    @lefthook run pre-commit --all-files
+    @lefthook run pre-commit --all-files --no-tty
 
 [group('validate')]
 lint:
     @echo "Linting files..."
-    @lefthook run pre-commit
+    @lefthook run pre-commit --all-files --no-tty
 
 [group('validate')]
-rust-check:
-    @echo "Running Rust compile checks..."
-    @cargo check --workspace --all-targets
+rust-check timeout_secs="1800":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target_dir="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}"
+    timeout_secs="{{timeout_secs}}"
+    echo "Running Rust compile checks (timeout=${timeout_secs}s, CARGO_TARGET_DIR=${target_dir})..."
+    CARGO_TARGET_DIR="${target_dir}" python3 scripts/rust/cargo_check_with_timeout.py "${timeout_secs}"
 
 [group('validate')]
 rust-lint-inheritance-check:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Checking Rust crate lint inheritance..."
-    missing="$(for f in packages/rust/crates/*/Cargo.toml; do if ! rg -q '^\[lints\]' "$f"; then echo "$f"; fi; done)"
-    if [ -n "$missing" ]; then
-        echo "Missing [lints] workspace = true in:"
-        echo "$missing"
-        exit 1
-    fi
-    echo "All Rust crates inherit workspace lint policy."
+    @bash scripts/rust/check_lint_inheritance.sh
 
 [group('validate')]
 rust-clippy:
-    @echo "Running Rust clippy baseline (lint-ready crate set, warnings denied)..."
-    @cargo clippy -p omni-types -p omni-events -p omni-tokenizer -p omni-window -p omni-security -p omni-io -p omni-executor -p omni-mcp-client -p omni-ast -p omni-macros -p omni-lance -p omni-scanner -- -D warnings
+    @echo "Running Rust clippy across the full workspace (warnings denied)..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" cargo clippy --workspace -- -D warnings
 
 [group('validate')]
 rust-nextest:
@@ -390,11 +411,101 @@ rust-nextest:
         echo "Install with: nix profile add nixpkgs#cargo-nextest"; \
         exit 1; \
     fi
-    @cargo nextest run --workspace --no-fail-fast
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" cargo nextest run --workspace --no-fail-fast
 
 [group('validate')]
-rust-quality-gate: rust-lint-inheritance-check rust-check rust-clippy rust-nextest
-    @echo "Rust quality gates passed (check + strict clippy baseline + nextest)."
+rust-security-audit:
+    @echo "Running Rust vulnerability audit (cargo-audit)..."
+    @if ! command -v cargo-audit >/dev/null 2>&1; then \
+        echo "cargo-audit is required but not installed."; \
+        echo "Install with: nix profile add nixpkgs#cargo-audit"; \
+        exit 1; \
+    fi
+    @bash scripts/rust/cargo_audit_gate.sh
+
+[group('validate')]
+rust-security-deny:
+    @echo "Running Rust dependency policy gate (cargo-deny)..."
+    @if ! command -v cargo-deny >/dev/null 2>&1; then \
+        echo "cargo-deny is required but not installed."; \
+        echo "Install with: nix profile add nixpkgs#cargo-deny"; \
+        exit 1; \
+    fi
+    @cargo deny check advisories bans sources
+
+[group('validate')]
+rust-security-gate: rust-security-audit rust-security-deny
+    @echo "Rust dependency security gates passed (cargo-audit + cargo-deny)."
+
+[group('validate')]
+rust-test-omni-core-rs cargo_args="--no-fail-fast":
+    @echo "Running omni-core-rs test lane (runtime-linking-safe wrapper)..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/test_omni_core_rs.sh {{cargo_args}}
+
+[group('validate')]
+rust-quality-gate: rust-lint-inheritance-check rust-check rust-clippy rust-nextest rust-test-omni-core-rs rust-security-gate
+    @echo "Rust quality gates passed (check + strict clippy + nextest + omni-core-rs runtime lane + dependency security)."
+
+[group('validate')]
+rust-quality-gate-ci timeout_secs="3600":
+    @echo "Running CI rust quality gate (timeout={{timeout_secs}}s)..."
+    @bash scripts/ci/rust_quality_gate_ci.sh "{{timeout_secs}}"
+
+[group('validate')]
+rust-omni-core-rs-lib:
+    @echo "Running omni-core-rs library lane..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/test_omni_core_rs.sh --lib --no-fail-fast
+
+[group('validate')]
+rust-omni-agent-profiles:
+    @echo "Running omni-agent profile checks..."
+    @bash scripts/rust/omni_agent_profiles_check.sh
+
+[group('validate')]
+rust-omni-agent-dependency-assertions:
+    @echo "Running omni-agent dependency assertions..."
+    @bash scripts/rust/omni_agent_dependency_assertions.sh
+
+[group('validate')]
+rust-omni-agent-mcp-facade-smoke:
+    @echo "Running omni-agent MCP facade smoke tests..."
+    @bash scripts/rust/omni_agent_mcp_facade_smoke.sh
+
+[group('validate')]
+rust-xiuxian-mcp:
+    @echo "Running xiuxian-mcp package checks..."
+    @bash scripts/rust/xiuxian_mcp_check.sh
+
+[group('validate')]
+rust-xiuxian-llm-mcp:
+    @echo "Running xiuxian-llm MCP package checks..."
+    @bash scripts/rust/xiuxian_llm_mcp_check.sh
+
+[group('validate')]
+rust-fusion-snapshots:
+    @just rust-test-snapshots
+
+[group('validate')]
+rust-search-perf-guard:
+    @echo "Running omni-vector search perf guard..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" cargo test -p omni-vector --test test_search_perf_guard
+
+[group('validate')]
+rust-retrieval-audits:
+    @echo "Running Wendao retrieval audits..."
+    @bash scripts/rust/wendao_retrieval_audits.sh
+
+[group('validate')]
+telegram-session-isolation-rust:
+    @echo "Running Telegram session isolation tests (Rust)..."
+    @bash scripts/rust/telegram_session_isolation_rust.sh
+
+[group('validate')]
+telegram-session-isolation-python:
+    @echo "Running Telegram session isolation tests (Python)..."
+    @uv run pytest -q \
+        packages/python/test-kit/tests/test_agent_channel_command_events.py \
+        packages/python/test-kit/tests/test_agent_channel_session_matrix.py
 
 [group('validate')]
 rust-test-snapshots:
@@ -433,19 +544,22 @@ keyword-backend-statistical:
 test:
     @echo "TEST PIPELINE"
     @echo "========================================"
-    @echo "[1/5] Rust compile gate"
+    @echo "[1/7] Rust compile gate"
     @just rust-check
     @echo ""
-    @echo "[2/5] Rust snapshot contract gate"
+    @echo "[2/7] Rust snapshot contract gate"
     @just rust-test-snapshots
     @echo ""
-    @echo "[3/5] Rust cache tests (kg_cache, search_cache)"
+    @echo "[3/7] Rust cache tests (kg_cache, search_cache)"
     @just rust-test-cache
     @echo ""
-    @echo "[4/5] Rust agent tests (omni-agent)"
+    @echo "[4/7] Rust agent tests (omni-agent)"
     @just rust-test-agent
     @echo ""
-    @echo "[5/5] Python test suites"
+    @echo "[5/7] Wendao PPR quality/perf gate"
+    @just gate-wendao-ppr
+    @echo ""
+    @echo "[6/7] Python test suites"
     @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ \
         -v --tb=short
     @echo ""
@@ -458,22 +572,86 @@ test:
         --ignore=tests/unit/test_types.py \
         --ignore=tests/unit/test_transport/test_sse.py
     @echo ""
+    @echo "[7/7] Channel cursor contract gate"
+    @just test-channel-cursor-contracts
+    @echo ""
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     @echo "                              COMPLETE"
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 [group('validate')]
+test-channel-cursor-contracts:
+    @echo "Running channel cursor contract regressions..."
+    @uv run pytest -q scripts/channel/test_log_io.py scripts/channel/test_memory_ci_gate.py \
+        packages/python/test-kit/tests/test_agent_channel_blackbox.py \
+        packages/python/test-kit/tests/test_agent_channel_memory_benchmark.py \
+        packages/python/test-kit/tests/test_agent_channel_concurrent_sessions.py \
+        packages/python/test-kit/tests/test_agent_channel_dedup_events.py
+
+[group('validate')]
 test-quick:
     @echo "TEST PIPELINE (QUICK)"
     @echo "========================================"
-    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/agent/tests/unit/cli/ -q --tb=short
-    @cd packages/python/mcp-server && uv run pytest tests/ -q --tb=short --ignore=tests/integration/test_sse.py \
-        --ignore=tests/unit/test_interfaces.py \
-        --ignore=tests/unit/test_types.py \
-        --ignore=tests/unit/test_transport/test_sse.py
+    @bash scripts/ci/test_quick.sh
+
+[group('validate')]
+no-inline-python-guard:
+    @uv run pytest -q scripts/test_no_inline_python_exec_patterns.py --tb=short
+
+[group('validate')]
+architecture-gate:
+    @uv run pytest -q -m architecture \
+        packages/python/foundation/tests/unit/tracer \
+        packages/python/foundation/tests/unit/rag
+
+[group('validate')]
+contract-e2e-route-test-json:
+    @uv run pytest \
+        packages/python/foundation/tests/unit/services/test_contract_consistency.py::test_route_test_cli_json_validates_against_schema \
+        -v
+
+[group('validate')]
+docs-vector-search-options-check:
+    @uv run python scripts/generate_vector_search_options_contract.py --check
+
+[group('validate')]
+ci-scripts-smoke:
+    @bash scripts/ci_scripts_smoke.sh
+
+[group('validate')]
+memory-gate-quick:
+    @python3 scripts/channel/test_omni_agent_memory_ci_gate.py --profile quick
+
+[group('validate')]
+memory-gate-nightly:
+    @scripts/channel/start-omni-agent-memory-ci-nightly.sh \
+        --foreground \
+        -- --benchmark-iterations 3 \
+           --max-mcp-call-waiting-events 0 \
+           --max-mcp-connect-waiting-events 0 \
+           --max-mcp-waiting-events-total 0
+
+[group('validate')]
+memory-gate-a7:
+    @scripts/channel/start-omni-agent-memory-ci-nightly.sh \
+        --foreground \
+        -- --skip-matrix \
+           --skip-evolution \
+           --benchmark-iterations 3 \
+           --max-mcp-call-waiting-events 0 \
+           --max-mcp-connect-waiting-events 0 \
+           --max-mcp-waiting-events-total 0
+
+[group('validate')]
+valkey-live:
+    @bash scripts/channel/valkey_live_gate.sh "6379" "redis://127.0.0.1:6379/0"
 
 [group('validate')]
 ci-local-recall-gates runs="3" warm_runs="1" query="x" limit="2" report_dir=".run/reports/knowledge-recall-perf":
+    @bash scripts/ci-local-recall-gates.sh "{{runs}}" "{{warm_runs}}" "{{query}}" "{{limit}}" "{{report_dir}}"
+
+[group('validate')]
+knowledge-recall-perf-ci runs="3" warm_runs="1" query="x" limit="2" report_dir=".run/reports/knowledge-recall-perf":
     @bash scripts/ci-local-recall-gates.sh "{{runs}}" "{{warm_runs}}" "{{query}}" "{{limit}}" "{{report_dir}}"
 
 [group('validate')]
@@ -497,13 +675,135 @@ benchmark-wendao-search-release-build query="architecture" runs="5" warm_runs="2
     @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" release build
 
 [group('validate')]
+benchmark-skills-tools-gate runs="3":
+    @bash scripts/benchmark_skills_tools_gate.sh deterministic "{{runs}}"
+
+[group('validate')]
+benchmark-skills-tools-network-observability runs="5":
+    @bash scripts/benchmark_skills_tools_gate.sh network "{{runs}}"
+
+[group('validate')]
+benchmark-skills-tools-ci report_dir=".run/reports/skills-tools-benchmark" deterministic_runs="3" network_runs="5":
+    @bash scripts/benchmark_skills_tools_ci.sh "{{report_dir}}" "{{deterministic_runs}}" "{{network_runs}}"
+
+[group('validate')]
+evaluate-wendao-retrieval limit="10" min_top3_rate="0.0":
+    @bash scripts/evaluate_wendao_retrieval.sh "docs/testing/wendao-query-regression-matrix.json" "{{limit}}" debug no-build "{{min_top3_rate}}" text
+
+[group('validate')]
+evaluate-wendao-retrieval-build limit="10" min_top3_rate="0.0":
+    @bash scripts/evaluate_wendao_retrieval.sh "docs/testing/wendao-query-regression-matrix.json" "{{limit}}" debug build "{{min_top3_rate}}" text
+
+[group('validate')]
+evaluate-wendao-retrieval-release limit="10" min_top3_rate="0.0":
+    @bash scripts/evaluate_wendao_retrieval.sh "docs/testing/wendao-query-regression-matrix.json" "{{limit}}" release no-build "{{min_top3_rate}}" text
+
+[group('validate')]
+evaluate-wendao-retrieval-release-build limit="10" min_top3_rate="0.0":
+    @bash scripts/evaluate_wendao_retrieval.sh "docs/testing/wendao-query-regression-matrix.json" "{{limit}}" release build "{{min_top3_rate}}" text
+
+[group('validate')]
+gate-wendao-ppr:
+    @XIUXIAN_WENDAO_GATE_QUERY_PREFIX="{{xiuxian_wendao_gate_query_prefix}}" \
+      bash scripts/gate_wendao_ppr.sh \
+        "docs/testing/wendao-query-regression-matrix.json" \
+        "{{xiuxian_wendao_gate_limit}}" \
+        "{{xiuxian_wendao_gate_profile}}" \
+        "{{xiuxian_wendao_gate_build_mode}}" \
+        "{{xiuxian_wendao_gate_min_top3_rate}}" \
+        "{{xiuxian_wendao_gate_stem}}" \
+        "{{xiuxian_wendao_gate_runs}}" \
+        "{{xiuxian_wendao_gate_warm_runs}}" \
+        "{{xiuxian_wendao_gate_subgraph_mode}}" \
+        "{{xiuxian_wendao_gate_max_p95_ms}}" \
+        "{{xiuxian_wendao_gate_max_avg_ms}}" \
+        "{{xiuxian_wendao_gate_expect_subgraph_count_min}}" \
+        "{{xiuxian_wendao_gate_output_mode}}"
+
+[group('validate')]
+gate-wendao-ppr-report:
+    @XIUXIAN_WENDAO_GATE_QUERY_PREFIX="{{xiuxian_wendao_gate_query_prefix}}" \
+      XIUXIAN_WENDAO_GATE_REPORT_DIR="{{xiuxian_wendao_gate_report_dir}}" \
+      bash scripts/gate_wendao_ppr.sh \
+        "docs/testing/wendao-query-regression-matrix.json" \
+        "{{xiuxian_wendao_gate_limit}}" \
+        "{{xiuxian_wendao_gate_profile}}" \
+        "{{xiuxian_wendao_gate_build_mode}}" \
+        "{{xiuxian_wendao_gate_min_top3_rate}}" \
+        "{{xiuxian_wendao_gate_stem}}" \
+        "{{xiuxian_wendao_gate_runs}}" \
+        "{{xiuxian_wendao_gate_warm_runs}}" \
+        "{{xiuxian_wendao_gate_subgraph_mode}}" \
+        "{{xiuxian_wendao_gate_max_p95_ms}}" \
+        "{{xiuxian_wendao_gate_max_avg_ms}}" \
+        "{{xiuxian_wendao_gate_expect_subgraph_count_min}}" \
+        "json" >/dev/null
+
+[group('validate')]
+gate-wendao-ppr-mixed-canary:
+    @XIUXIAN_WENDAO_GATE_QUERY_PREFIX="{{xiuxian_wendao_mixed_canary_query_prefix}}" \
+      XIUXIAN_WENDAO_GATE_REPORT_DIR="{{xiuxian_wendao_mixed_canary_report_dir}}" \
+      bash scripts/gate_wendao_ppr.sh \
+        "docs/testing/wendao-query-regression-matrix.json" \
+        "{{xiuxian_wendao_gate_limit}}" \
+        "{{xiuxian_wendao_gate_profile}}" \
+        "{{xiuxian_wendao_gate_build_mode}}" \
+        "{{xiuxian_wendao_mixed_canary_min_top3_rate}}" \
+        "{{xiuxian_wendao_gate_stem}}" \
+        "{{xiuxian_wendao_gate_runs}}" \
+        "{{xiuxian_wendao_gate_warm_runs}}" \
+        "{{xiuxian_wendao_gate_subgraph_mode}}" \
+        "{{xiuxian_wendao_gate_max_p95_ms}}" \
+        "{{xiuxian_wendao_gate_max_avg_ms}}" \
+        "{{xiuxian_wendao_gate_expect_subgraph_count_min}}" \
+        "json" >/dev/null
+
+[group('validate')]
+validate-wendao-ppr-reports:
+    @uv run python scripts/validate_wendao_gate_reports.py \
+      --root . \
+      --report-dir "{{xiuxian_wendao_gate_report_dir}}" \
+      --mixed-report-dir "{{xiuxian_wendao_mixed_canary_report_dir}}"
+
+[group('validate')]
+wendao-ppr-gate-summary:
+    @strict_flag=""; \
+      case "{{xiuxian_wendao_gate_summary_strict_green}}" in \
+        1|true|TRUE|yes|YES|on|ON) strict_flag="--strict-green" ;; \
+      esac; \
+      uv run python scripts/render_wendao_gate_status_summary.py \
+        --base-report-dir "{{xiuxian_wendao_gate_report_dir}}" \
+        --mixed-report-dir "{{xiuxian_wendao_mixed_canary_report_dir}}" \
+        --min-base-top3-rate "{{xiuxian_wendao_gate_min_top3_rate}}" \
+        --min-mixed-top3-rate "{{xiuxian_wendao_rollout_min_mixed_top3_rate}}" \
+        --runner-os "{{xiuxian_wendao_runner_os}}" \
+        --output-json "{{xiuxian_wendao_gate_report_dir}}/wendao_gate_status_summary.json" \
+        --output-markdown "{{xiuxian_wendao_gate_report_dir}}/wendao_gate_status_summary.md" \
+        ${strict_flag}
+
+[group('validate')]
+wendao-ppr-rollout-status:
+    @XIUXIAN_WENDAO_GATE_MIN_TOP3_RATE="{{xiuxian_wendao_gate_min_top3_rate}}" \
+      XIUXIAN_WENDAO_GATE_SUMMARY_STRICT_GREEN="{{xiuxian_wendao_gate_summary_strict_green}}" \
+      XIUXIAN_WENDAO_ROLLOUT_FETCH_REMOTE_STATUS="{{xiuxian_wendao_rollout_fetch_remote_status}}" \
+      XIUXIAN_WENDAO_ROLLOUT_REMOTE_WORKFLOW_FILE="{{xiuxian_wendao_rollout_remote_workflow_file}}" \
+      XIUXIAN_WENDAO_ROLLOUT_REMOTE_ARTIFACT_NAME="{{xiuxian_wendao_rollout_remote_artifact_name}}" \
+      XIUXIAN_WENDAO_ROLLOUT_REMOTE_RUN_STATUS="{{xiuxian_wendao_rollout_remote_run_status}}" \
+      bash scripts/wendao_ppr_rollout_ci.sh \
+        "{{xiuxian_wendao_gate_report_dir}}" \
+        "{{xiuxian_wendao_mixed_canary_report_dir}}" \
+        "{{xiuxian_wendao_rollout_required_runs}}" \
+        "{{xiuxian_wendao_rollout_min_mixed_top3_rate}}" \
+        "{{xiuxian_wendao_rollout_strict_ready}}"
+
+[group('validate')]
 test-skills:
     @echo "Running skill tests via omni skill test --all..."
     @uv run omni skill test --all
 
 # Run Rust MCP client integration test (requires MCP server: omni mcp --transport sse --port 3002)
 test-mcp-integration:
-    OMNI_MCP_URL=http://127.0.0.1:3002/sse cargo test -p omni-mcp-client --test streamable_http_integration -- --ignored
+    OMNI_MCP_URL=http://127.0.0.1:3002/sse cargo test -p xiuxian-mcp --test streamable_http_integration -- --ignored
 
 [group('validate')]
 test-parallel:
@@ -749,10 +1049,25 @@ fmt-py:
     @uvx ruff format packages/python/
 
 [group('dev')]
-clean:
-    @echo "Cleaning generated files..."
+clean-generated:
+    @echo "Cleaning generated changelog artifacts..."
     @rm -f CHANGELOG_*.md CHANGELOG_*.json CHANGELOG_*.txt RELEASE_NOTES_*.md
-    @echo "Cleaned"
+    @echo "Generated artifacts cleaned"
+
+[group('dev')]
+clean-rust:
+    @echo "Cleaning Rust build artifacts via cargo clean..."
+    @cargo clean
+    @echo "Rust build artifacts cleaned"
+
+[group('dev')]
+clean-all:
+    @just clean-generated
+    @just clean-rust
+
+[group('dev')]
+clean:
+    @just clean-generated
 
 [group('dev')]
 update:
@@ -1063,13 +1378,23 @@ agent-channel valkey_port="6379":
     bash scripts/channel/agent-channel-polling.sh "{{valkey_port}}"
 
 # Run Telegram channel in webhook mode via modular script entrypoint.
-# Usage: TELEGRAM_BOT_TOKEN=xxx just agent-channel-webhook [valkey_port]
+# Usage: TELEGRAM_BOT_TOKEN=xxx just agent-channel-webhook [valkey_port] [webhook_port]
 # Requires: ngrok installed, TELEGRAM_BOT_TOKEN in env, valkey-server in PATH
 # Note: defaults to verbose debug logs (`--verbose`, `RUST_LOG=omni_agent=debug` when unset).
 # Logs are mirrored to `${OMNI_CHANNEL_LOG_FILE:-.run/logs/omni-agent-webhook.log}` for black-box probes.
 [group('channel')]
-agent-channel-webhook valkey_port="6379":
-    bash scripts/channel/agent-channel-webhook.sh "{{valkey_port}}"
+agent-channel-webhook valkey_port="6379" webhook_port="":
+    if [ -n "{{webhook_port}}" ]; then \
+        WEBHOOK_PORT="{{webhook_port}}" bash scripts/channel/agent-channel-webhook.sh "{{valkey_port}}"; \
+    else \
+        bash scripts/channel/agent-channel-webhook.sh "{{valkey_port}}"; \
+    fi
+
+# Run Discord channel in ingress mode for synthetic ingress replay/ACL probes.
+# Usage: DISCORD_BOT_TOKEN=xxx just agent-channel-discord-ingress
+[group('channel')]
+agent-channel-discord-ingress:
+    cargo run -p omni-agent -- channel --provider discord --discord-runtime-mode ingress --verbose
 
 # Black-box probe: inject one synthetic Telegram update into local webhook and wait for bot reply log.
 # Usage: just agent-channel-blackbox "your prompt" [max_wait_secs]
@@ -1093,6 +1418,27 @@ agent-channel-blackbox prompt max_wait_secs="":
 [group('channel')]
 agent-channel-blackbox-commands max_wait_secs="25" max_idle_secs="25":
     bash scripts/channel/test-omni-agent-command-events.sh --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}"
+
+# Run strict Discord ingress ACL black-box probes (managed command permission-denied paths).
+# Usage:
+#   just agent-channel-discord-acl [max_wait_secs] [max_idle_secs] [channel_id] [user_id] [guild_id]
+# Optional env: OMNI_DISCORD_INGRESS_URL, OMNI_TEST_DISCORD_CHANNEL_ID, OMNI_TEST_DISCORD_USER_ID,
+#               OMNI_TEST_DISCORD_GUILD_ID, OMNI_TEST_DISCORD_INGRESS_SECRET
+[group('channel')]
+agent-channel-discord-acl max_wait_secs="25" max_idle_secs="25" channel_id="" user_id="" guild_id="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}")
+    if [ -n "{{channel_id}}" ]; then
+      args+=(--channel-id "{{channel_id}}")
+    fi
+    if [ -n "{{user_id}}" ]; then
+      args+=(--user-id "{{user_id}}")
+    fi
+    if [ -n "{{guild_id}}" ]; then
+      args+=(--guild-id "{{guild_id}}")
+    fi
+    bash scripts/channel/test-omni-agent-discord-acl-events.sh "${args[@]}"
 
 # Run dedup black-box probe by posting the same update_id twice and asserting accepted/duplicate events.
 # Usage: just agent-channel-blackbox-dedup [max_wait_secs]

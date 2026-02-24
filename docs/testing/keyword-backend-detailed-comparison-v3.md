@@ -1,3 +1,13 @@
+---
+title: "Keyword Backend Detailed Comparison (V3 Skill-Based)"
+category: "testing"
+tags:
+  - testing
+  - keyword
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Keyword Backend Detailed Comparison (V3 Skill-Based)
 
 - Generated date: 2026-02-11

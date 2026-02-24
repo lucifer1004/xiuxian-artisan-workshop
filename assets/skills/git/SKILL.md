@@ -1,6 +1,12 @@
 ---
+title: "Git Version Control Operations and Smart Commit Workflow"
+category: "workflows"
+tags:
+  - git
+  - version-control
+  - commit
 name: git
-description: Use when committing code, managing branches, pushing to remote, creating pull requests, or performing version control operations. Conforms to packages/shared/schemas/skill-routing-value-standard.md.
+description: Use when committing code, managing branches, pushing to remote, creating pull requests, or performing version control operations. Conforms to docs/reference/skill-routing-value-standard.md.
 metadata:
   author: omni-dev-fusion
   version: "2.0.0"
@@ -34,6 +40,8 @@ metadata:
     - "pr"
     - "pull request"
     - "code review"
+    - "smart commit"
+    - "smart commit workflow"
   intents:
     - "Hotfix changes"
     - "Create pull request"
@@ -46,9 +54,14 @@ metadata:
     - "Check git status"
 ---
 
-# Git Skill
+# Git Skill (Smart Commit Workflow)
 
 > **Code is Mechanism, Prompt is Policy**
+
+## Smart Commit Workflow (Primary Query Anchor)
+
+`smart commit` is the canonical query phrase for this skill.
+Use `git.smart_commit` to run the full smart commit workflow (stage -> scan -> approve -> commit).
 
 ## Architecture
 
@@ -80,6 +93,11 @@ git.smart_commit(action="approve", workflow_id="xxx", message="feat: description
 ```
 
 **Flow:** `stage_and_scan` → `route_prepare` → `format_review` → `re_stage` → `interrupt` → `commit`
+
+## Linked Notes
+
+- Related: [Smart Commit Workflow Reference](references/smart-commit-workflow.md)
+- Related: [Skill Routing Value Standard](../../../docs/reference/skill-routing-value-standard.md)
 
 ## Staged Files Feature
 

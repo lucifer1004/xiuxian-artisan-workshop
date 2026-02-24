@@ -528,32 +528,36 @@ class LinkGraphEnhancer:
     # ------------------------------------------------------------------
 
     def save_graph(self, path: str | Path) -> None:
-        """Persist the KnowledgeGraph to Lance tables."""
+        """Persist the KnowledgeGraph snapshot to Valkey."""
         if self._graph is None:
             return
         try:
-            from omni.rag.dual_core._config import _save_kg
+            from omni.rag.fusion._config import _save_kg
 
-            _save_kg(self._graph)
-            logger.info("Knowledge graph saved to Lance")
+            _save_kg(self._graph, scope_key=str(path))
+            logger.info("Knowledge graph saved to Valkey scope=%s", path)
         except ImportError:
-            logger.debug("dual_core not available, skipping graph save")
+            logger.debug("fusion module not available, skipping graph save")
+        except Exception as exc:
+            logger.debug("Knowledge graph save skipped for scope=%s: %s", path, exc)
 
     def load_graph(self, path: str | Path) -> None:
-        """Load the KnowledgeGraph from Lance tables."""
+        """Load the KnowledgeGraph snapshot from Valkey."""
         if self._graph is None:
             return
         try:
-            from omni.rag.dual_core._config import _load_kg
+            from omni.rag.fusion._config import _load_kg
 
-            loaded = _load_kg()
+            loaded = _load_kg(scope_key=str(path))
             if loaded is not None:
                 self._graph = loaded
-                logger.info("Knowledge graph loaded from Lance")
+                logger.info("Knowledge graph loaded from Valkey scope=%s", path)
                 return
         except ImportError:
             pass
-        logger.debug("No KnowledgeGraph found in Lance")
+        except Exception as exc:
+            logger.debug("Knowledge graph load skipped for scope=%s: %s", path, exc)
+        logger.debug("No KnowledgeGraph found in Valkey scope=%s", path)
 
     def get_graph_stats(self) -> dict[str, Any]:
         """Get KnowledgeGraph statistics."""

@@ -36,7 +36,7 @@ class SkillsMonitor:
         self._lock = threading.Lock()
 
     def record_phase(self, phase: str, duration_ms: float, **extra: Any) -> None:
-        """Record a phase event (embed, vector_search, dual_core, etc.)."""
+        """Record a phase event (embed, vector_search, fusion, etc.)."""
         with self._lock:
             self.phases.append(
                 PhaseEvent(

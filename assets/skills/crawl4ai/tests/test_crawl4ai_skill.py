@@ -115,8 +115,9 @@ class TestCrawl4aiCommands:
 
         captured: dict[str, object] = {}
 
-        def _fake_run_skill_command(*, skill_dir, script_name, args):
+        def _fake_run_skill_command(*, skill_dir, script_name, args, persistent=False):
             captured["args"] = args
+            captured["persistent"] = persistent
             return {"success": True, "content": "ok"}
 
         monkeypatch.setattr(crawl_module, "run_skill_command", _fake_run_skill_command)
@@ -130,6 +131,7 @@ class TestCrawl4aiCommands:
         args = captured.get("args")
         assert isinstance(args, dict)
         assert args.get("action") == "crawl"
+        assert captured.get("persistent") is True
 
 
 class TestCrawl4aiScriptLoader:

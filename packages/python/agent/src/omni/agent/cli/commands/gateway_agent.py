@@ -152,22 +152,6 @@ def register_channel_command(parent_app: typer.Typer) -> None:
                 "--bot-token", "-t", help="Telegram bot token (or TELEGRAM_BOT_TOKEN env)"
             ),
         ] = None,
-        allowed_users: Annotated[
-            str | None,
-            typer.Option(
-                "--allowed-users",
-                "-u",
-                help="Allowed usernames/user_ids (comma-separated; empty = deny all, * = allow all)",
-            ),
-        ] = None,
-        allowed_groups: Annotated[
-            str | None,
-            typer.Option(
-                "--allowed-groups",
-                "-g",
-                help="Allowed group chat_ids (comma-separated, negative IDs e.g. -200123)",
-            ),
-        ] = None,
     ):
         """Run Telegram channel via Rust `omni-agent channel`."""
         token = bot_token or os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -179,21 +163,9 @@ def register_channel_command(parent_app: typer.Typer) -> None:
                 "  • [bold]TELEGRAM_BOT_TOKEN[/bold] env"
             )
             raise typer.Exit(1)
-        setting_users = get_setting("telegram.allowed_users")
-        setting_groups = get_setting("telegram.allowed_groups")
-        users = allowed_users if allowed_users is not None else (setting_users or "")
-        groups = allowed_groups if allowed_groups is not None else (setting_groups or "")
         max_rounds = get_setting("telegram.max_tool_rounds") or 30
         os.environ["OMNI_AGENT_MAX_TOOL_ROUNDS"] = str(int(max_rounds))
-        args = [
-            "channel",
-            "--bot-token",
-            token,
-            "--allowed-users",
-            users,
-            "--allowed-groups",
-            groups,
-        ]
+        args = ["channel", "--bot-token", token]
         _exec_omni_agent(args)
 
 

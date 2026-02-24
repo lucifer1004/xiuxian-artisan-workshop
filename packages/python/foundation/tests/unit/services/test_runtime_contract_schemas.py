@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from jsonschema import Draft202012Validator
-
-
-def _schemas_dir() -> Path:
-    return Path(__file__).resolve().parents[6] / "packages" / "shared" / "schemas"
+from omni.foundation.api.schema_locator import resolve_schema_file_path
 
 
 def _load_schema(name: str) -> dict:
-    path = _schemas_dir() / name
+    path = resolve_schema_file_path(name)
     assert path.exists(), f"schema missing: {path}"
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -78,6 +74,54 @@ def test_route_trace_schema_accepts_contract_payload() -> None:
             "chars_injected": 3120,
             "dropped_by_budget": 1,
         },
+    }
+    _validate("omni.agent.route_trace.v1.schema.json", payload)
+
+
+def test_route_trace_schema_accepts_graph_step_aggregation_payload() -> None:
+    payload = {
+        "session_id": "telegram:group-1:user-9",
+        "turn_id": 44,
+        "selected_route": "graph",
+        "confidence": 0.92,
+        "risk_level": "low",
+        "tool_trust_class": "verification",
+        "fallback_applied": True,
+        "fallback_policy": "switch_to_graph",
+        "tool_chain": ["bridge.flaky"],
+        "latency_ms": 141.7,
+        "failure_taxonomy": ["transport"],
+        "plan_id": "graph-plan:omega:bridge.flaky:switch_to_graph:verification",
+        "workflow_mode": "omega",
+        "graph_steps": [
+            {
+                "index": 1,
+                "id": "prepare_injection_context",
+                "kind": "prepare_injection_context",
+                "attempt": 0,
+                "latency_ms": 0.4,
+                "status": "prepared",
+            },
+            {
+                "index": 2,
+                "id": "invoke_graph_tool",
+                "kind": "invoke_graph_tool",
+                "attempt": 1,
+                "latency_ms": 70.2,
+                "status": "tool_call_transport_failed",
+                "failure_reason": "connection refused",
+                "tool_name": "bridge.flaky",
+            },
+            {
+                "index": 3,
+                "id": "evaluate_fallback",
+                "kind": "evaluate_fallback",
+                "attempt": 2,
+                "latency_ms": 40.8,
+                "status": "retry_succeeded_without_metadata",
+                "fallback_action": "retry_bridge_without_metadata",
+            },
+        ],
     }
     _validate("omni.agent.route_trace.v1.schema.json", payload)
 

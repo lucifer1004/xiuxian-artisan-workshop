@@ -1,4 +1,4 @@
-use arrow::array::{Float32Array, Float64Array, ListBuilder, StringArray, StringBuilder};
+use arrow::array::{Array, Float32Array, Float64Array, ListBuilder, StringArray, StringBuilder};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow_ipc::writer::StreamWriter;
 use lance_index::scalar::FullTextSearchQuery;
@@ -53,6 +53,355 @@ struct FtsMetadataRow {
     intents: Vec<String>,
     #[serde(default)]
     parameters: Vec<String>,
+}
+
+type LanceArrayRef<'a> = Option<&'a std::sync::Arc<dyn lance::deps::arrow_array::Array>>;
+type LanceRecordBatch = lance::deps::arrow_array::RecordBatch;
+type LanceStringArray = lance::deps::arrow_array::StringArray;
+
+struct FtsRowColumns<'a> {
+    ids: &'a LanceStringArray,
+    contents: &'a LanceStringArray,
+    metadata: LanceArrayRef<'a>,
+    score: LanceArrayRef<'a>,
+    skill_name: LanceArrayRef<'a>,
+    category: LanceArrayRef<'a>,
+    tool_name: LanceArrayRef<'a>,
+    file_path: LanceArrayRef<'a>,
+    routing_keywords: LanceArrayRef<'a>,
+    intents: LanceArrayRef<'a>,
+}
+
+struct VectorRowColumns<'a> {
+    ids: &'a LanceStringArray,
+    contents: &'a LanceStringArray,
+    distances: &'a lance::deps::arrow_array::Float32Array,
+    metadata: LanceArrayRef<'a>,
+    tool_name: LanceArrayRef<'a>,
+    file_path: LanceArrayRef<'a>,
+    routing_keywords: LanceArrayRef<'a>,
+    intents: LanceArrayRef<'a>,
+}
+
+fn utf8_or_default_at(col: LanceArrayRef<'_>, index: usize) -> String {
+    col.map(|c| crate::ops::get_utf8_at(c.as_ref(), index))
+        .unwrap_or_default()
+}
+
+fn non_empty_utf8_at(col: LanceArrayRef<'_>, index: usize) -> Option<String> {
+    let value = utf8_or_default_at(col, index);
+    if value.is_empty() { None } else { Some(value) }
+}
+
+fn required_lance_string_column<'a>(
+    batch: &'a LanceRecordBatch,
+    column: &str,
+    context: &str,
+) -> Result<&'a LanceStringArray, VectorStoreError> {
+    let col = batch
+        .column_by_name(column)
+        .ok_or_else(|| VectorStoreError::General(format!("{column} column not found")))?;
+    col.as_any()
+        .downcast_ref::<LanceStringArray>()
+        .ok_or_else(|| {
+            VectorStoreError::General(format!("{column} column type mismatch for {context}"))
+        })
+}
+
+fn required_lance_f32_column<'a>(
+    batch: &'a LanceRecordBatch,
+    column: &str,
+    context: &str,
+) -> Result<&'a lance::deps::arrow_array::Float32Array, VectorStoreError> {
+    let col = batch
+        .column_by_name(column)
+        .ok_or_else(|| VectorStoreError::General(format!("{column} column not found")))?;
+    col.as_any()
+        .downcast_ref::<lance::deps::arrow_array::Float32Array>()
+        .ok_or_else(|| {
+            VectorStoreError::General(format!("{column} column type mismatch for {context}"))
+        })
+}
+
+fn parse_fts_metadata_row(metadata_col: LanceArrayRef<'_>, index: usize) -> FtsMetadataRow {
+    use lance::deps::arrow_array::Array as _;
+
+    let Some(col) = metadata_col else {
+        return FtsMetadataRow::default();
+    };
+    let Some(arr) = col.as_any().downcast_ref::<LanceStringArray>() else {
+        return FtsMetadataRow::default();
+    };
+    if arr.is_null(index) {
+        return FtsMetadataRow::default();
+    }
+    serde_json::from_str(arr.value(index)).unwrap_or_default()
+}
+
+fn parse_search_metadata_value(
+    metadata_col: LanceArrayRef<'_>,
+    index: usize,
+    default_object: bool,
+) -> Value {
+    use lance::deps::arrow_array::Array as _;
+
+    let default = if default_object {
+        Value::Object(serde_json::Map::new())
+    } else {
+        Value::Null
+    };
+    let Some(col) = metadata_col else {
+        return default;
+    };
+    let Some(arr) = col.as_any().downcast_ref::<LanceStringArray>() else {
+        return default;
+    };
+    if arr.is_null(index) {
+        return default;
+    }
+    parse_metadata_cell(arr.value(index))
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn parse_fts_score(score_col: LanceArrayRef<'_>, index: usize) -> f32 {
+    let Some(col) = score_col else {
+        return 0.0;
+    };
+    if let Some(arr) = col
+        .as_any()
+        .downcast_ref::<lance::deps::arrow_array::Float32Array>()
+    {
+        arr.value(index)
+    } else if let Some(arr) = col
+        .as_any()
+        .downcast_ref::<lance::deps::arrow_array::Float64Array>()
+    {
+        arr.value(index) as f32
+    } else {
+        0.0
+    }
+}
+
+fn metadata_array_to_joined(metadata: &Value, key: &str, separator: &str) -> String {
+    metadata
+        .get(key)
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .collect::<Vec<_>>()
+                .join(separator)
+        })
+        .unwrap_or_default()
+}
+
+fn resolve_vector_row_metadata(
+    index: usize,
+    metadata_col: LanceArrayRef<'_>,
+    tool_name: &str,
+    file_path: &str,
+    routing_keywords_vec: &[String],
+    intents_vec: &[String],
+) -> (Value, String, String, String, String) {
+    if tool_name.is_empty()
+        && file_path.is_empty()
+        && routing_keywords_vec.is_empty()
+        && intents_vec.is_empty()
+    {
+        let metadata = parse_search_metadata_value(metadata_col, index, false);
+        let tool_name_out = metadata
+            .get("tool_name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let file_path_out = metadata
+            .get("file_path")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let routing_keywords_out = metadata_array_to_joined(&metadata, "routing_keywords", " ");
+        let intents_out = metadata_array_to_joined(&metadata, "intents", " | ");
+        return (
+            metadata,
+            tool_name_out,
+            file_path_out,
+            routing_keywords_out,
+            intents_out,
+        );
+    }
+
+    let mut metadata = parse_search_metadata_value(metadata_col, index, true);
+    if !metadata.is_object() {
+        metadata = Value::Object(serde_json::Map::new());
+    }
+    if let Some(obj) = metadata.as_object_mut() {
+        if !tool_name.is_empty() {
+            obj.entry("tool_name".to_string())
+                .or_insert_with(|| Value::String(tool_name.to_string()));
+        }
+        if !file_path.is_empty() {
+            obj.entry("file_path".to_string())
+                .or_insert_with(|| Value::String(file_path.to_string()));
+        }
+        if !routing_keywords_vec.is_empty() {
+            obj.entry("routing_keywords".to_string())
+                .or_insert_with(|| {
+                    Value::Array(
+                        routing_keywords_vec
+                            .iter()
+                            .map(|value| Value::String(value.clone()))
+                            .collect(),
+                    )
+                });
+        }
+        if !intents_vec.is_empty() {
+            obj.entry("intents".to_string()).or_insert_with(|| {
+                Value::Array(
+                    intents_vec
+                        .iter()
+                        .map(|value| Value::String(value.clone()))
+                        .collect(),
+                )
+            });
+        }
+    }
+    (
+        metadata,
+        tool_name.to_string(),
+        file_path.to_string(),
+        routing_keywords_vec.join(" "),
+        intents_vec.join(" | "),
+    )
+}
+
+fn build_search_result_row(
+    index: usize,
+    columns: &VectorRowColumns<'_>,
+    metadata_filter: Option<&Value>,
+) -> Option<VectorSearchResult> {
+    let tool_name = utf8_or_default_at(columns.tool_name, index);
+    let file_path = utf8_or_default_at(columns.file_path, index);
+    let routing_keywords_vec = columns
+        .routing_keywords
+        .map(|c| crate::ops::get_routing_keywords_at(c.as_ref(), index))
+        .unwrap_or_default();
+    let intents_vec = columns
+        .intents
+        .map(|c| crate::ops::get_intents_at(c.as_ref(), index))
+        .unwrap_or_default();
+
+    let (metadata, tool_name_out, file_path_out, routing_keywords_out, intents_out) =
+        resolve_vector_row_metadata(
+            index,
+            columns.metadata,
+            &tool_name,
+            &file_path,
+            &routing_keywords_vec,
+            &intents_vec,
+        );
+
+    if let Some(conditions) = metadata_filter
+        && !VectorStore::matches_filter(&metadata, conditions)
+    {
+        return None;
+    }
+
+    let id_val = columns.ids.value(index).to_string();
+    let (id, tool_name) = if tool_name_out.is_empty() {
+        (id_val.clone(), id_val)
+    } else {
+        (id_val, tool_name_out)
+    };
+
+    Some(VectorSearchResult {
+        id,
+        content: columns.contents.value(index).to_string(),
+        tool_name,
+        file_path: file_path_out,
+        routing_keywords: routing_keywords_out,
+        intents: intents_out,
+        metadata,
+        distance: f64::from(columns.distances.value(index)),
+    })
+}
+
+fn extract_vector_row_columns(
+    batch: &LanceRecordBatch,
+) -> Result<VectorRowColumns<'_>, VectorStoreError> {
+    Ok(VectorRowColumns {
+        ids: required_lance_string_column(batch, ID_COLUMN, "vector search")?,
+        contents: required_lance_string_column(batch, CONTENT_COLUMN, "vector search")?,
+        distances: required_lance_f32_column(batch, "_distance", "vector search")?,
+        metadata: batch.column_by_name(METADATA_COLUMN),
+        tool_name: batch.column_by_name(crate::TOOL_NAME_COLUMN),
+        file_path: batch.column_by_name(crate::FILE_PATH_COLUMN),
+        routing_keywords: batch.column_by_name(crate::ROUTING_KEYWORDS_COLUMN),
+        intents: batch.column_by_name(crate::INTENTS_COLUMN),
+    })
+}
+
+fn build_fts_result_row(index: usize, columns: &FtsRowColumns<'_>) -> skill::ToolSearchResult {
+    let metadata = parse_fts_metadata_row(columns.metadata, index);
+    let score = parse_fts_score(columns.score, index);
+    let id_str = columns.ids.value(index).to_string();
+
+    let tool_name = non_empty_utf8_at(columns.tool_name, index)
+        .or_else(|| metadata.tool_name.clone().filter(|value| !value.is_empty()))
+        .unwrap_or_else(|| id_str.clone());
+
+    let skill_name_raw = utf8_or_default_at(columns.skill_name, index);
+    let skill_name = if skill_name_raw.is_empty() {
+        metadata
+            .skill_name
+            .clone()
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| tool_name.split('.').next().unwrap_or("").to_string())
+    } else {
+        skill_name_raw
+    };
+
+    let category_raw = utf8_or_default_at(columns.category, index);
+    let category = if category_raw.is_empty() {
+        metadata
+            .category
+            .clone()
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| skill_name.clone())
+    } else {
+        category_raw
+    };
+
+    let keywords = non_empty_utf8_at(columns.routing_keywords, index).map_or_else(
+        || normalize_string_vec(metadata.routing_keywords.clone()),
+        |value| normalize_string_vec(value.split_whitespace().map(String::from).collect()),
+    );
+    let intents = non_empty_utf8_at(columns.intents, index).map_or_else(
+        || normalize_string_vec(metadata.intents.clone()),
+        |value| normalize_string_vec(value.split(" | ").map(String::from).collect()),
+    );
+    let file_path = non_empty_utf8_at(columns.file_path, index)
+        .unwrap_or_else(|| metadata.file_path.unwrap_or_default());
+
+    let input_schema = metadata.input_schema.as_ref().map_or_else(
+        || serde_json::json!({}),
+        skill::normalize_input_schema_value,
+    );
+
+    skill::ToolSearchResult {
+        name: id_str,
+        description: columns.contents.value(index).to_string(),
+        input_schema,
+        score,
+        vector_score: Some(score),
+        keyword_score: None,
+        skill_name,
+        tool_name,
+        file_path,
+        routing_keywords: keywords,
+        intents,
+        category,
+        parameters: metadata.parameters,
+    }
 }
 
 /// Multiplier for keyword match boost
@@ -135,11 +484,12 @@ fn calibrate_confidence_with_attributes(
         final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
     }
 
-    if confidence != "high" && score >= profile.medium_threshold {
-        if kw >= MIN_KEYWORD_SCORE_ATTRIBUTE_HIGH || (kw > 0.0 && vec < 0.5 && kw > vec) {
-            confidence = "high";
-            final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
-        }
+    if confidence != "high"
+        && score >= profile.medium_threshold
+        && (kw >= MIN_KEYWORD_SCORE_ATTRIBUTE_HIGH || (kw > 0.0 && vec < 0.5 && kw > vec))
+    {
+        confidence = "high";
+        final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
     }
 
     (confidence, final_score.clamp(0.0, 1.0))
@@ -163,11 +513,7 @@ fn canonicalize_json_value(value: &Value) -> Value {
 
 fn input_schema_digest(input_schema: &Value) -> String {
     let normalized = crate::skill::normalize_input_schema_value(input_schema);
-    if normalized
-        .as_object()
-        .map(|object| object.is_empty())
-        .unwrap_or(true)
-    {
+    if normalized.as_object().is_none_or(serde_json::Map::is_empty) {
         return "sha256:empty".to_string();
     }
     let canonical = canonicalize_json_value(&normalized);
@@ -312,11 +658,164 @@ const IPC_VECTOR_COLUMNS: &[&str] = &[
     "metadata",
 ];
 
+struct VectorIpcData {
+    ids: Vec<String>,
+    contents: Vec<String>,
+    tool_names: Vec<String>,
+    file_paths: Vec<String>,
+    distances: Vec<f64>,
+    metadata_json: Vec<String>,
+    routing_keywords_array: std::sync::Arc<dyn Array>,
+    intents_array: std::sync::Arc<dyn Array>,
+}
+
+fn collect_vector_ipc_data(results: &[VectorSearchResult]) -> VectorIpcData {
+    let ids = results.iter().map(|r| r.id.clone()).collect();
+    let contents = results.iter().map(|r| r.content.clone()).collect();
+    let tool_names = results.iter().map(|r| r.tool_name.clone()).collect();
+    let file_paths = results.iter().map(|r| r.file_path.clone()).collect();
+    let distances = results.iter().map(|r| r.distance).collect();
+    let metadata_json = results
+        .iter()
+        .map(|r| serde_json::to_string(&r.metadata).unwrap_or_else(|_| "null".to_string()))
+        .collect();
+
+    let mut rk_builder = ListBuilder::new(StringBuilder::new());
+    for result in results {
+        for keyword in result
+            .routing_keywords
+            .split_whitespace()
+            .filter(|token| !token.is_empty())
+        {
+            rk_builder.values().append_value(keyword);
+        }
+        rk_builder.append(true);
+    }
+    let routing_keywords_array: std::sync::Arc<dyn Array> =
+        std::sync::Arc::new(rk_builder.finish());
+
+    let mut intents_builder = ListBuilder::new(StringBuilder::new());
+    for result in results {
+        for intent in result
+            .intents
+            .split(" | ")
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+        {
+            intents_builder.values().append_value(intent);
+        }
+        intents_builder.append(true);
+    }
+    let intents_array: std::sync::Arc<dyn Array> = std::sync::Arc::new(intents_builder.finish());
+
+    VectorIpcData {
+        ids,
+        contents,
+        tool_names,
+        file_paths,
+        distances,
+        metadata_json,
+        routing_keywords_array,
+        intents_array,
+    }
+}
+
+fn resolve_vector_ipc_projection(projection: Option<&[String]>) -> Result<Vec<&str>, String> {
+    match projection {
+        Some(columns) if !columns.is_empty() => {
+            for name in columns {
+                if !IPC_VECTOR_COLUMNS.contains(&name.as_str()) {
+                    return Err(format!("invalid ipc_projection column: {name}"));
+                }
+            }
+            Ok(columns.iter().map(String::as_str).collect())
+        }
+        _ => Ok(IPC_VECTOR_COLUMNS.to_vec()),
+    }
+}
+
+fn append_vector_ipc_column(
+    col: &str,
+    data: &VectorIpcData,
+    schema_fields: &mut Vec<Field>,
+    arrays: &mut Vec<std::sync::Arc<dyn Array>>,
+) {
+    match col {
+        "id" => {
+            schema_fields.push(Field::new("id", DataType::Utf8, true));
+            arrays.push(std::sync::Arc::new(StringArray::from(data.ids.clone())));
+        }
+        "content" => {
+            schema_fields.push(Field::new("content", DataType::Utf8, true));
+            arrays.push(std::sync::Arc::new(StringArray::from(
+                data.contents.clone(),
+            )));
+        }
+        "tool_name" => {
+            schema_fields.push(Field::new("tool_name", DataType::Utf8, true));
+            arrays.push(std::sync::Arc::new(StringArray::from(
+                data.tool_names.clone(),
+            )));
+        }
+        "file_path" => {
+            schema_fields.push(Field::new("file_path", DataType::Utf8, true));
+            arrays.push(std::sync::Arc::new(StringArray::from(
+                data.file_paths.clone(),
+            )));
+        }
+        "routing_keywords" => {
+            schema_fields.push(Field::new(
+                "routing_keywords",
+                DataType::List(std::sync::Arc::new(Field::new(
+                    "item",
+                    DataType::Utf8,
+                    true,
+                ))),
+                true,
+            ));
+            arrays.push(data.routing_keywords_array.clone());
+        }
+        "intents" => {
+            schema_fields.push(Field::new(
+                "intents",
+                DataType::List(std::sync::Arc::new(Field::new(
+                    "item",
+                    DataType::Utf8,
+                    true,
+                ))),
+                true,
+            ));
+            arrays.push(data.intents_array.clone());
+        }
+        "_distance" => {
+            schema_fields.push(Field::new("_distance", DataType::Float64, true));
+            arrays.push(std::sync::Arc::new(Float64Array::from(
+                data.distances.clone(),
+            )));
+        }
+        "metadata" => {
+            schema_fields.push(Field::new("metadata", DataType::Utf8, true));
+            arrays.push(std::sync::Arc::new(StringArray::from(
+                data.metadata_json.clone(),
+            )));
+        }
+        _ => {}
+    }
+}
+
+fn record_batch_to_ipc_bytes(batch: &arrow::record_batch::RecordBatch) -> Result<Vec<u8>, String> {
+    let mut buf = Cursor::new(Vec::new());
+    let mut writer =
+        StreamWriter::try_new(&mut buf, batch.schema().as_ref()).map_err(|e| e.to_string())?;
+    writer.write(batch).map_err(|e| e.to_string())?;
+    writer.finish().map_err(|e| e.to_string())?;
+    Ok(buf.into_inner())
+}
+
 /// Encode search results as Arrow IPC stream bytes (single `RecordBatch`).
 /// If `projection` is Some and non-empty, only those columns are included (smaller payload).
 /// Schema (full): id, content, `tool_name`, `file_path`, `routing_keywords` (List<Utf8>),
 /// intents (List<Utf8>), _distance, metadata (Utf8).
-#[allow(clippy::too_many_lines)]
 fn search_results_to_ipc(
     results: &[VectorSearchResult],
     projection: Option<&[String]>,
@@ -324,173 +823,82 @@ fn search_results_to_ipc(
     use arrow::record_batch::RecordBatch;
     use std::sync::Arc;
 
-    let ids: Vec<&str> = results.iter().map(|r| r.id.as_str()).collect();
-    let contents: Vec<&str> = results.iter().map(|r| r.content.as_str()).collect();
-    let tool_names: Vec<&str> = results.iter().map(|r| r.tool_name.as_str()).collect();
-    let file_paths: Vec<&str> = results.iter().map(|r| r.file_path.as_str()).collect();
-    let distances: Vec<f64> = results.iter().map(|r| r.distance).collect();
-    let metadata_strs: Vec<String> = results
-        .iter()
-        .map(|r| serde_json::to_string(&r.metadata).unwrap_or_else(|_| "null".to_string()))
-        .collect();
-    let metadata_refs: Vec<&str> = metadata_strs.iter().map(String::as_str).collect();
-
-    let mut rk_builder = ListBuilder::new(StringBuilder::new());
-    for r in results {
-        for s in r
-            .routing_keywords
-            .split_whitespace()
-            .filter(|s| !s.is_empty())
-        {
-            rk_builder.values().append_value(s);
-        }
-        rk_builder.append(true);
-    }
-    let rk_array = Arc::new(rk_builder.finish());
-
-    let mut intents_builder = ListBuilder::new(StringBuilder::new());
-    for r in results {
-        for s in r
-            .intents
-            .split(" | ")
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            intents_builder.values().append_value(s);
-        }
-        intents_builder.append(true);
-    }
-    let intents_array = Arc::new(intents_builder.finish());
-
-    let cols: Vec<&str> = match projection {
-        Some(p) if !p.is_empty() => {
-            for name in p {
-                if !IPC_VECTOR_COLUMNS.contains(&name.as_str()) {
-                    return Err(format!("invalid ipc_projection column: {name}"));
-                }
-            }
-            p.iter().map(String::as_str).collect()
-        }
-        _ => IPC_VECTOR_COLUMNS.to_vec(),
-    };
+    let cols = resolve_vector_ipc_projection(projection)?;
+    let data = collect_vector_ipc_data(results);
 
     let mut schema_fields = Vec::with_capacity(cols.len());
-    let mut arrays: Vec<Arc<dyn arrow::array::Array>> = Vec::with_capacity(cols.len());
+    let mut arrays: Vec<Arc<dyn Array>> = Vec::with_capacity(cols.len());
     for col in &cols {
-        match *col {
-            "id" => {
-                schema_fields.push(Field::new("id", DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(ids.clone())));
-            }
-            "content" => {
-                schema_fields.push(Field::new("content", DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(contents.clone())));
-            }
-            "tool_name" => {
-                schema_fields.push(Field::new("tool_name", DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(tool_names.clone())));
-            }
-            "file_path" => {
-                schema_fields.push(Field::new("file_path", DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(file_paths.clone())));
-            }
-            "routing_keywords" => {
-                schema_fields.push(Field::new(
-                    "routing_keywords",
-                    DataType::List(Arc::new(Field::new("item", DataType::Utf8, true))),
-                    true,
-                ));
-                arrays.push(rk_array.clone());
-            }
-            "intents" => {
-                schema_fields.push(Field::new(
-                    "intents",
-                    DataType::List(Arc::new(Field::new("item", DataType::Utf8, true))),
-                    true,
-                ));
-                arrays.push(intents_array.clone());
-            }
-            "_distance" => {
-                schema_fields.push(Field::new("_distance", DataType::Float64, true));
-                arrays.push(Arc::new(Float64Array::from(distances.clone())));
-            }
-            "metadata" => {
-                schema_fields.push(Field::new("metadata", DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(metadata_refs.clone())));
-            }
-            _ => {}
-        }
+        append_vector_ipc_column(col, &data, &mut schema_fields, &mut arrays);
     }
 
     let schema = Schema::new(schema_fields);
     let batch = RecordBatch::try_new(Arc::new(schema), arrays).map_err(|e| e.to_string())?;
-
-    let mut buf = Cursor::new(Vec::new());
-    let mut writer =
-        StreamWriter::try_new(&mut buf, batch.schema().as_ref()).map_err(|e| e.to_string())?;
-    writer.write(&batch).map_err(|e| e.to_string())?;
-    writer.finish().map_err(|e| e.to_string())?;
-    Ok(buf.into_inner())
+    record_batch_to_ipc_bytes(&batch)
 }
 
-/// Encode tool search results as Arrow IPC stream bytes (single `RecordBatch`).
-/// Schema: name, description, score, `skill_name`, `tool_name`, `file_path`,
-/// `routing_keywords` (List<Utf8>), intents (List<Utf8>), category, metadata (Utf8 JSON),
-/// `vector_score`, `keyword_score`, `final_score`, `confidence`, `ranking_reason`,
-/// `input_schema_digest`.
-/// Python `ToolSearchPayload.from_arrow_table` consumes this canonical contract directly.
-#[allow(clippy::too_many_lines)]
-pub(crate) fn tool_search_results_to_ipc(
-    results: &[crate::skill::ToolSearchResult],
-) -> Result<Vec<u8>, String> {
+struct ToolIpcData {
+    names: Vec<String>,
+    descriptions: Vec<String>,
+    scores: Vec<f32>,
+    skill_names: Vec<String>,
+    tool_names: Vec<String>,
+    file_paths: Vec<String>,
+    categories: Vec<String>,
+    metadata_json: Vec<String>,
+    vector_scores: Vec<Option<f32>>,
+    keyword_scores: Vec<Option<f32>>,
+    final_scores: Vec<f32>,
+    confidences: Vec<String>,
+    ranking_reasons: Vec<String>,
+    input_schema_digests: Vec<String>,
+    routing_keywords_array: std::sync::Arc<dyn Array>,
+    intents_array: std::sync::Arc<dyn Array>,
+}
+
+fn empty_tool_search_ipc_batch() -> Result<arrow::record_batch::RecordBatch, String> {
     use arrow::record_batch::RecordBatch;
     use std::sync::Arc;
 
-    if results.is_empty() {
-        let schema = Schema::new(vec![
-            Field::new("name", DataType::Utf8, true),
-            Field::new("description", DataType::Utf8, true),
-            Field::new("score", DataType::Float32, true),
-            Field::new("final_score", DataType::Float32, true),
-            Field::new("confidence", DataType::Utf8, true),
-            Field::new("ranking_reason", DataType::Utf8, true),
-            Field::new("input_schema_digest", DataType::Utf8, true),
-        ]);
-        let batch = RecordBatch::try_new(
-            Arc::new(schema),
-            vec![
-                Arc::new(StringArray::from(Vec::<String>::new())),
-                Arc::new(StringArray::from(Vec::<String>::new())),
-                Arc::new(Float32Array::from(Vec::<f32>::new())),
-                Arc::new(Float32Array::from(Vec::<f32>::new())),
-                Arc::new(StringArray::from(Vec::<String>::new())),
-                Arc::new(StringArray::from(Vec::<String>::new())),
-                Arc::new(StringArray::from(Vec::<String>::new())),
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-        let mut buf = Cursor::new(Vec::new());
-        let mut writer =
-            StreamWriter::try_new(&mut buf, batch.schema().as_ref()).map_err(|e| e.to_string())?;
-        writer.write(&batch).map_err(|e| e.to_string())?;
-        writer.finish().map_err(|e| e.to_string())?;
-        return Ok(buf.into_inner());
-    }
+    let schema = Schema::new(vec![
+        Field::new("name", DataType::Utf8, true),
+        Field::new("description", DataType::Utf8, true),
+        Field::new("score", DataType::Float32, true),
+        Field::new("final_score", DataType::Float32, true),
+        Field::new("confidence", DataType::Utf8, true),
+        Field::new("ranking_reason", DataType::Utf8, true),
+        Field::new("input_schema_digest", DataType::Utf8, true),
+    ]);
+    RecordBatch::try_new(
+        Arc::new(schema),
+        vec![
+            Arc::new(StringArray::from(Vec::<String>::new())),
+            Arc::new(StringArray::from(Vec::<String>::new())),
+            Arc::new(Float32Array::from(Vec::<f32>::new())),
+            Arc::new(Float32Array::from(Vec::<f32>::new())),
+            Arc::new(StringArray::from(Vec::<String>::new())),
+            Arc::new(StringArray::from(Vec::<String>::new())),
+            Arc::new(StringArray::from(Vec::<String>::new())),
+        ],
+    )
+    .map_err(|e| e.to_string())
+}
 
-    let names: Vec<&str> = results.iter().map(|r| r.name.as_str()).collect();
-    let descriptions: Vec<&str> = results.iter().map(|r| r.description.as_str()).collect();
-    let scores: Vec<f32> = results.iter().map(|r| r.score).collect();
-    let skill_names: Vec<&str> = results.iter().map(|r| r.skill_name.as_str()).collect();
-    let tool_names: Vec<&str> = results.iter().map(|r| r.tool_name.as_str()).collect();
-    let file_paths: Vec<&str> = results.iter().map(|r| r.file_path.as_str()).collect();
-    let categories: Vec<&str> = results.iter().map(|r| r.category.as_str()).collect();
-    let metadata_strs: Vec<String> = results
+fn collect_tool_ipc_data(results: &[crate::skill::ToolSearchResult]) -> ToolIpcData {
+    let names = results.iter().map(|r| r.name.clone()).collect();
+    let descriptions = results.iter().map(|r| r.description.clone()).collect();
+    let scores = results.iter().map(|r| r.score).collect();
+    let skill_names = results.iter().map(|r| r.skill_name.clone()).collect();
+    let tool_names = results.iter().map(|r| r.tool_name.clone()).collect();
+    let file_paths = results.iter().map(|r| r.file_path.clone()).collect();
+    let categories = results.iter().map(|r| r.category.clone()).collect();
+    let metadata_json = results
         .iter()
         .map(|r| serde_json::to_string(&r.input_schema).unwrap_or_else(|_| "{}".to_string()))
         .collect();
-    let metadata_refs: Vec<&str> = metadata_strs.iter().map(String::as_str).collect();
-    let vector_scores: Vec<Option<f32>> = results.iter().map(|r| r.vector_score).collect();
-    let keyword_scores: Vec<Option<f32>> = results.iter().map(|r| r.keyword_score).collect();
+    let vector_scores = results.iter().map(|r| r.vector_score).collect();
+    let keyword_scores = results.iter().map(|r| r.keyword_score).collect();
+
     let profile = ConfidenceProfile::default();
     let mut final_scores: Vec<f32> = Vec::with_capacity(results.len());
     let mut confidences: Vec<String> = Vec::with_capacity(results.len());
@@ -516,29 +924,63 @@ pub(crate) fn tool_search_results_to_ipc(
         input_schema_digests.push(input_schema_digest(&result.input_schema));
     }
 
-    let vec_score_arr = vector_scores.into_iter().collect::<Float32Array>();
-    let kw_score_arr = keyword_scores.into_iter().collect::<Float32Array>();
-    let confidence_refs: Vec<&str> = confidences.iter().map(String::as_str).collect();
-    let ranking_reason_refs: Vec<&str> = ranking_reasons.iter().map(String::as_str).collect();
-    let digest_refs: Vec<&str> = input_schema_digests.iter().map(String::as_str).collect();
-
-    let mut rk_builder = ListBuilder::new(StringBuilder::new());
-    for r in results {
-        for s in &r.routing_keywords {
-            rk_builder.values().append_value(s.as_str());
+    let mut routing_keywords_builder = ListBuilder::new(StringBuilder::new());
+    for result in results {
+        for keyword in &result.routing_keywords {
+            routing_keywords_builder
+                .values()
+                .append_value(keyword.as_str());
         }
-        rk_builder.append(true);
+        routing_keywords_builder.append(true);
     }
-    let rk_array = Arc::new(rk_builder.finish());
+    let routing_keywords_array: std::sync::Arc<dyn Array> =
+        std::sync::Arc::new(routing_keywords_builder.finish());
 
     let mut intents_builder = ListBuilder::new(StringBuilder::new());
-    for r in results {
-        for s in &r.intents {
-            intents_builder.values().append_value(s.as_str());
+    for result in results {
+        for intent in &result.intents {
+            intents_builder.values().append_value(intent.as_str());
         }
         intents_builder.append(true);
     }
-    let intents_array = Arc::new(intents_builder.finish());
+    let intents_array: std::sync::Arc<dyn Array> = std::sync::Arc::new(intents_builder.finish());
+
+    ToolIpcData {
+        names,
+        descriptions,
+        scores,
+        skill_names,
+        tool_names,
+        file_paths,
+        categories,
+        metadata_json,
+        vector_scores,
+        keyword_scores,
+        final_scores,
+        confidences,
+        ranking_reasons,
+        input_schema_digests,
+        routing_keywords_array,
+        intents_array,
+    }
+}
+
+fn build_tool_search_ipc_batch(
+    data: &ToolIpcData,
+) -> Result<arrow::record_batch::RecordBatch, String> {
+    use arrow::record_batch::RecordBatch;
+    use std::sync::Arc;
+
+    let vector_score_array = data
+        .vector_scores
+        .clone()
+        .into_iter()
+        .collect::<Float32Array>();
+    let keyword_score_array = data
+        .keyword_scores
+        .clone()
+        .into_iter()
+        .collect::<Float32Array>();
 
     let schema = Schema::new(vec![
         Field::new("name", DataType::Utf8, true),
@@ -567,35 +1009,46 @@ pub(crate) fn tool_search_results_to_ipc(
         Field::new("input_schema_digest", DataType::Utf8, true),
     ]);
 
-    let batch = RecordBatch::try_new(
+    RecordBatch::try_new(
         Arc::new(schema),
         vec![
-            Arc::new(StringArray::from(names)),
-            Arc::new(StringArray::from(descriptions)),
-            Arc::new(Float32Array::from(scores)),
-            Arc::new(StringArray::from(skill_names)),
-            Arc::new(StringArray::from(tool_names)),
-            Arc::new(StringArray::from(file_paths)),
-            rk_array,
-            intents_array,
-            Arc::new(StringArray::from(categories)),
-            Arc::new(StringArray::from(metadata_refs)),
-            Arc::new(vec_score_arr),
-            Arc::new(kw_score_arr),
-            Arc::new(Float32Array::from(final_scores)),
-            Arc::new(StringArray::from(confidence_refs)),
-            Arc::new(StringArray::from(ranking_reason_refs)),
-            Arc::new(StringArray::from(digest_refs)),
+            Arc::new(StringArray::from(data.names.clone())),
+            Arc::new(StringArray::from(data.descriptions.clone())),
+            Arc::new(Float32Array::from(data.scores.clone())),
+            Arc::new(StringArray::from(data.skill_names.clone())),
+            Arc::new(StringArray::from(data.tool_names.clone())),
+            Arc::new(StringArray::from(data.file_paths.clone())),
+            data.routing_keywords_array.clone(),
+            data.intents_array.clone(),
+            Arc::new(StringArray::from(data.categories.clone())),
+            Arc::new(StringArray::from(data.metadata_json.clone())),
+            Arc::new(vector_score_array),
+            Arc::new(keyword_score_array),
+            Arc::new(Float32Array::from(data.final_scores.clone())),
+            Arc::new(StringArray::from(data.confidences.clone())),
+            Arc::new(StringArray::from(data.ranking_reasons.clone())),
+            Arc::new(StringArray::from(data.input_schema_digests.clone())),
         ],
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())
+}
 
-    let mut buf = Cursor::new(Vec::new());
-    let mut writer =
-        StreamWriter::try_new(&mut buf, batch.schema().as_ref()).map_err(|e| e.to_string())?;
-    writer.write(&batch).map_err(|e| e.to_string())?;
-    writer.finish().map_err(|e| e.to_string())?;
-    Ok(buf.into_inner())
+/// Encode tool search results as Arrow IPC stream bytes (single `RecordBatch`).
+/// Schema: name, description, score, `skill_name`, `tool_name`, `file_path`,
+/// `routing_keywords` (List<Utf8>), intents (List<Utf8>), category, metadata (Utf8 JSON),
+/// `vector_score`, `keyword_score`, `final_score`, `confidence`, `ranking_reason`,
+/// `input_schema_digest`.
+/// Python `ToolSearchPayload.from_arrow_table` consumes this canonical contract directly.
+pub(crate) fn tool_search_results_to_ipc(
+    results: &[crate::skill::ToolSearchResult],
+) -> Result<Vec<u8>, String> {
+    if results.is_empty() {
+        let batch = empty_tool_search_ipc_batch()?;
+        return record_batch_to_ipc_bytes(&batch);
+    }
+    let data = collect_tool_ipc_data(results);
+    let batch = build_tool_search_ipc_batch(&data)?;
+    record_batch_to_ipc_bytes(&batch)
 }
 
 impl VectorStore {
@@ -620,7 +1073,6 @@ impl VectorStore {
     ///
     /// Returns an error when the table does not exist, scanner setup fails, batch decoding
     /// fails, or Lance returns a query execution error.
-    #[allow(clippy::too_many_lines)]
     pub async fn search_optimized(
         &self,
         table_name: &str,
@@ -671,200 +1123,13 @@ impl VectorStore {
         let mut results = Vec::with_capacity(limit.min(1024));
 
         while let Some(batch) = stream.try_next().await? {
-            use lance::deps::arrow_array::{Array, Float32Array, StringArray};
-            let id_col = batch
-                .column_by_name(ID_COLUMN)
-                .ok_or_else(|| VectorStoreError::General("id column not found".to_string()))?;
-            let content_col = batch
-                .column_by_name(CONTENT_COLUMN)
-                .ok_or_else(|| VectorStoreError::General("content column not found".to_string()))?;
-            let distance_col = batch.column_by_name("_distance").ok_or_else(|| {
-                VectorStoreError::General("_distance column not found".to_string())
-            })?;
-            let metadata_col = batch.column_by_name(METADATA_COLUMN);
-            let tool_name_col = batch.column_by_name(crate::TOOL_NAME_COLUMN);
-            let file_path_col = batch.column_by_name(crate::FILE_PATH_COLUMN);
-            let routing_keywords_col = batch.column_by_name(crate::ROUTING_KEYWORDS_COLUMN);
-            let intents_col = batch.column_by_name(crate::INTENTS_COLUMN);
-
-            let ids = id_col
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .ok_or_else(|| VectorStoreError::General("id column type mismatch".to_string()))?;
-            let contents = content_col
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .ok_or_else(|| {
-                    VectorStoreError::General("content column type mismatch".to_string())
-                })?;
-            let distances = distance_col
-                .as_any()
-                .downcast_ref::<Float32Array>()
-                .ok_or_else(|| {
-                    VectorStoreError::General("_distance column type mismatch".to_string())
-                })?;
-
-            let str_at = |col: Option<&std::sync::Arc<dyn Array>>, i: usize| -> String {
-                col.map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
-                    .unwrap_or_default()
-            };
-            let rk_at = |col: Option<&std::sync::Arc<dyn Array>>, i: usize| -> Vec<String> {
-                col.map(|c| crate::ops::get_routing_keywords_at(c.as_ref(), i))
-                    .unwrap_or_default()
-            };
-            let intents_at = |col: Option<&std::sync::Arc<dyn Array>>, i: usize| -> Vec<String> {
-                col.map(|c| crate::ops::get_intents_at(c.as_ref(), i))
-                    .unwrap_or_default()
-            };
-
-            for i in 0..batch.num_rows() {
-                let tool_name = str_at(tool_name_col, i);
-                let file_path = str_at(file_path_col, i);
-                let routing_keywords_vec = rk_at(routing_keywords_col, i);
-                let intents_vec = intents_at(intents_col, i);
-                let routing_keywords = routing_keywords_vec.join(" ");
-                let intents = intents_vec.join(" | ");
-
-                let (metadata, tool_name_out, file_path_out, routing_keywords_out, intents_out) =
-                    if tool_name.is_empty()
-                        && file_path.is_empty()
-                        && routing_keywords_vec.is_empty()
-                        && intents_vec.is_empty()
-                    {
-                        let metadata = if let Some(meta_col) = metadata_col {
-                            if let Some(meta_arr) = meta_col.as_any().downcast_ref::<StringArray>()
-                            {
-                                if meta_arr.is_null(i) {
-                                    serde_json::Value::Null
-                                } else {
-                                    parse_metadata_cell(meta_arr.value(i))
-                                }
-                            } else {
-                                serde_json::Value::Null
-                            }
-                        } else {
-                            serde_json::Value::Null
-                        };
-                        let tool_name_out = metadata
-                            .get("tool_name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let file_path_out = metadata
-                            .get("file_path")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let routing_keywords_out = metadata
-                            .get("routing_keywords")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| {
-                                arr.iter()
-                                    .filter_map(|v| v.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join(" ")
-                            })
-                            .unwrap_or_default();
-                        let intents_out = metadata
-                            .get("intents")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| {
-                                arr.iter()
-                                    .filter_map(|v| v.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join(" | ")
-                            })
-                            .unwrap_or_default();
-                        (
-                            metadata,
-                            tool_name_out,
-                            file_path_out,
-                            routing_keywords_out,
-                            intents_out,
-                        )
-                    } else {
-                        let mut metadata = if let Some(meta_col) = metadata_col {
-                            if let Some(meta_arr) = meta_col.as_any().downcast_ref::<StringArray>()
-                            {
-                                if meta_arr.is_null(i) {
-                                    serde_json::Value::Object(serde_json::Map::new())
-                                } else {
-                                    parse_metadata_cell(meta_arr.value(i))
-                                }
-                            } else {
-                                serde_json::Value::Object(serde_json::Map::new())
-                            }
-                        } else {
-                            serde_json::Value::Object(serde_json::Map::new())
-                        };
-
-                        if !metadata.is_object() {
-                            metadata = serde_json::Value::Object(serde_json::Map::new());
-                        }
-                        if let Some(obj) = metadata.as_object_mut() {
-                            if !tool_name.is_empty() {
-                                obj.entry("tool_name".to_string()).or_insert_with(|| {
-                                    serde_json::Value::String(tool_name.clone())
-                                });
-                            }
-                            if !file_path.is_empty() {
-                                obj.entry("file_path".to_string()).or_insert_with(|| {
-                                    serde_json::Value::String(file_path.clone())
-                                });
-                            }
-                            if !routing_keywords_vec.is_empty() {
-                                obj.entry("routing_keywords".to_string())
-                                    .or_insert_with(|| {
-                                        serde_json::Value::Array(
-                                            routing_keywords_vec
-                                                .iter()
-                                                .map(|s| serde_json::Value::String(s.clone()))
-                                                .collect(),
-                                        )
-                                    });
-                            }
-                            if !intents_vec.is_empty() {
-                                obj.entry("intents".to_string()).or_insert_with(|| {
-                                    serde_json::Value::Array(
-                                        intents_vec
-                                            .iter()
-                                            .map(|s| serde_json::Value::String(s.clone()))
-                                            .collect(),
-                                    )
-                                });
-                            }
-                        }
-                        (
-                            metadata,
-                            tool_name.clone(),
-                            file_path.clone(),
-                            routing_keywords,
-                            intents,
-                        )
-                    };
-
-                if let Some(ref conditions) = metadata_filter
-                    && !VectorStore::matches_filter(&metadata, conditions)
+            let columns = extract_vector_row_columns(&batch)?;
+            for index in 0..batch.num_rows() {
+                if let Some(result) =
+                    build_search_result_row(index, &columns, metadata_filter.as_ref())
                 {
-                    continue;
+                    results.push(result);
                 }
-
-                let id_val = ids.value(i).to_string();
-                let (id, tool_name) = if tool_name_out.is_empty() {
-                    (id_val.clone(), id_val)
-                } else {
-                    (id_val, tool_name_out)
-                };
-                results.push(VectorSearchResult {
-                    id,
-                    content: contents.value(i).to_string(),
-                    tool_name,
-                    file_path: file_path_out,
-                    routing_keywords: routing_keywords_out,
-                    intents: intents_out,
-                    metadata,
-                    distance: f64::from(distances.value(i)),
-                });
             }
         }
 
@@ -935,7 +1200,6 @@ impl VectorStore {
     /// # Errors
     ///
     /// Returns an error if the table is missing or Lance FTS query execution fails.
-    #[allow(clippy::too_many_lines)]
     #[allow(clippy::cast_possible_truncation)]
     pub async fn search_fts(
         &self,
@@ -977,128 +1241,21 @@ impl VectorStore {
         let mut results = Vec::with_capacity(limit.min(1024));
 
         while let Some(batch) = stream.try_next().await? {
-            use lance::deps::arrow_array::{Array, Float32Array, Float64Array, StringArray};
-            let id_col = batch
-                .column_by_name(ID_COLUMN)
-                .ok_or_else(|| VectorStoreError::General("id column not found".to_string()))?;
-            let content_col = batch
-                .column_by_name(CONTENT_COLUMN)
-                .ok_or_else(|| VectorStoreError::General("content column not found".to_string()))?;
-            let metadata_col = batch.column_by_name(METADATA_COLUMN);
-            let score_col = batch.column_by_name("_score");
-            let skill_name_col = batch.column_by_name(crate::SKILL_NAME_COLUMN);
-            let category_col = batch.column_by_name(crate::CATEGORY_COLUMN);
-            let tool_name_col = batch.column_by_name(crate::TOOL_NAME_COLUMN);
-            let file_path_col = batch.column_by_name(crate::FILE_PATH_COLUMN);
-            let routing_keywords_col = batch.column_by_name(crate::ROUTING_KEYWORDS_COLUMN);
-            let intents_col = batch.column_by_name(crate::INTENTS_COLUMN);
-
-            let ids = id_col
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .ok_or_else(|| {
-                    VectorStoreError::General("id column type mismatch for fts".to_string())
-                })?;
-            let contents = content_col
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .ok_or_else(|| {
-                    VectorStoreError::General("content column type mismatch for fts".to_string())
-                })?;
-
-            // Use get_utf8_at so Utf8 and Dictionary<Int32,Utf8> columns (e.g. TOOL_NAME) both work.
-            let opt_utf8 = |col: Option<&Arc<dyn Array>>, i: usize| -> Option<String> {
-                let s = col
-                    .map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
-                    .unwrap_or_default();
-                if s.is_empty() { None } else { Some(s) }
+            let columns = FtsRowColumns {
+                ids: required_lance_string_column(&batch, ID_COLUMN, "fts")?,
+                contents: required_lance_string_column(&batch, CONTENT_COLUMN, "fts")?,
+                metadata: batch.column_by_name(METADATA_COLUMN),
+                score: batch.column_by_name("_score"),
+                skill_name: batch.column_by_name(crate::SKILL_NAME_COLUMN),
+                category: batch.column_by_name(crate::CATEGORY_COLUMN),
+                tool_name: batch.column_by_name(crate::TOOL_NAME_COLUMN),
+                file_path: batch.column_by_name(crate::FILE_PATH_COLUMN),
+                routing_keywords: batch.column_by_name(crate::ROUTING_KEYWORDS_COLUMN),
+                intents: batch.column_by_name(crate::INTENTS_COLUMN),
             };
 
-            for i in 0..batch.num_rows() {
-                let meta: FtsMetadataRow = if let Some(meta_col) = metadata_col {
-                    if let Some(meta_arr) = meta_col.as_any().downcast_ref::<StringArray>() {
-                        if meta_arr.is_null(i) {
-                            FtsMetadataRow::default()
-                        } else {
-                            serde_json::from_str(meta_arr.value(i)).unwrap_or_default()
-                        }
-                    } else {
-                        FtsMetadataRow::default()
-                    }
-                } else {
-                    FtsMetadataRow::default()
-                };
-
-                let score = if let Some(col) = score_col {
-                    if let Some(arr) = col.as_any().downcast_ref::<Float32Array>() {
-                        arr.value(i)
-                    } else if let Some(arr) = col.as_any().downcast_ref::<Float64Array>() {
-                        arr.value(i) as f32
-                    } else {
-                        0.0
-                    }
-                } else {
-                    0.0
-                };
-
-                let id_str = ids.value(i).to_string();
-                let tool_name = opt_utf8(tool_name_col, i)
-                    .filter(|s| !s.is_empty())
-                    .or_else(|| meta.tool_name.filter(|s| !s.is_empty()))
-                    .unwrap_or_else(|| id_str.clone());
-                let skill_name_raw = skill_name_col
-                    .map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
-                    .unwrap_or_default();
-                let skill_name = if skill_name_raw.is_empty() {
-                    meta.skill_name
-                        .clone()
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or_else(|| tool_name.split('.').next().unwrap_or("").to_string())
-                } else {
-                    skill_name_raw
-                };
-                let category_raw = category_col
-                    .map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
-                    .unwrap_or_default();
-                let category = if category_raw.is_empty() {
-                    meta.category
-                        .clone()
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or_else(|| skill_name.clone())
-                } else {
-                    category_raw
-                };
-                let keywords = opt_utf8(routing_keywords_col, i).map_or_else(
-                    || normalize_string_vec(meta.routing_keywords),
-                    |s| normalize_string_vec(s.split_whitespace().map(String::from).collect()),
-                );
-                let intents = opt_utf8(intents_col, i).map_or_else(
-                    || normalize_string_vec(meta.intents),
-                    |s| normalize_string_vec(s.split(" | ").map(String::from).collect()),
-                );
-                let file_path = opt_utf8(file_path_col, i)
-                    .unwrap_or_else(|| meta.file_path.unwrap_or_default());
-                let input_schema = meta.input_schema.as_ref().map_or_else(
-                    || serde_json::json!({}),
-                    skill::normalize_input_schema_value,
-                );
-                let parameters = meta.parameters.clone();
-
-                results.push(skill::ToolSearchResult {
-                    name: id_str,
-                    description: contents.value(i).to_string(),
-                    input_schema,
-                    score,
-                    vector_score: Some(score),
-                    keyword_score: None,
-                    skill_name,
-                    tool_name,
-                    file_path,
-                    routing_keywords: keywords,
-                    intents,
-                    category,
-                    parameters,
-                });
+            for index in 0..batch.num_rows() {
+                results.push(build_fts_result_row(index, &columns));
             }
         }
 

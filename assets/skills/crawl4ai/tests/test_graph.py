@@ -12,9 +12,11 @@ Note: Tests are stub-based, importing the actual implementation from scripts/
 which only depends on stdlib (re, json) - NOT crawl4ai itself.
 """
 
-import pytest
+import asyncio
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add scripts directory directly (only uses stdlib, no crawl4ai dependency)
 _SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
@@ -181,6 +183,102 @@ Line 1
         assert "Line 1" in chunk
 
 
+class TestEngineResultNormalization:
+    """Test result normalization across crawler strategies."""
+
+    def test_extract_result_markdown_prefers_raw_when_available(self):
+        """When fit_markdown is False and raw_markdown exists, use raw markdown."""
+        from engine import _extract_result_markdown
+
+        class _Result:
+            markdown = "fit-markdown"
+            raw_markdown = "raw-markdown"
+
+        content = _extract_result_markdown(_Result(), fit_markdown=False)
+        assert content == "raw-markdown"
+
+    def test_extract_result_markdown_falls_back_to_markdown(self):
+        """HTTP strategy does not expose raw_markdown; fallback should stay valid."""
+        from engine import _extract_result_markdown
+
+        class _Result:
+            markdown = "fit-markdown"
+
+        content = _extract_result_markdown(_Result(), fit_markdown=False)
+        assert content == "fit-markdown"
+
+
+class TestEngineRequestExecution:
+    """Test worker/shared request execution helpers."""
+
+    def test_execute_request_rejects_missing_url(self):
+        """Worker request payload must include url."""
+        from engine import _execute_request
+
+        result = _execute_request({})
+        assert result["success"] is False
+        assert "Missing URL" in result["error"]
+
+    def test_execute_request_can_build_skeleton_payload(self, monkeypatch):
+        """Skeleton action should return parsed skeleton metadata."""
+        import engine as engine_module
+
+        async def _fake_impl(url: str, fit_markdown: bool, max_depth: int) -> dict:
+            return {
+                "success": True,
+                "url": url,
+                "content": "# Title\n\nBody\n",
+                "metadata": {"title": "Title"},
+                "error": "",
+                "crawled_urls": None,
+            }
+
+        monkeypatch.setattr(engine_module, "_crawl_url_impl", _fake_impl)
+        result = engine_module._execute_request(
+            {"url": "https://example.com", "action": "skeleton", "fit_markdown": True}
+        )
+
+        assert result["success"] is True
+        assert len(result["skeleton"]) == 1
+        assert result["skeleton"][0]["title"] == "Title"
+
+    def test_crawl_url_impl_local_file_fast_path(self, tmp_path: Path) -> None:
+        """file:// URLs should be served by local fast-path without crawl4ai runtime."""
+        import engine as engine_module
+
+        fixture = tmp_path / "fixture.html"
+        fixture.write_text(
+            "<html><head><title>Local Fixture</title></head><body>"
+            "<h1>Top</h1><p>Paragraph.</p><h2>Hard Constraints</h2><ul><li>One</li></ul>"
+            "</body></html>",
+            encoding="utf-8",
+        )
+        result = asyncio.run(
+            engine_module._crawl_url_impl(
+                fixture.resolve().as_uri(),
+                fit_markdown=True,
+                max_depth=0,
+            )
+        )
+
+        assert result["success"] is True
+        assert result["metadata"]["title"] == "Local Fixture"
+        assert "# Top" in result["content"]
+        assert "## Hard Constraints" in result["content"]
+
+    def test_local_file_fast_path_missing_file_returns_error(self) -> None:
+        """Missing file:// target should produce deterministic error payload."""
+        import engine as engine_module
+
+        result = engine_module._try_local_file_fast_path(
+            "file:///tmp/definitely-missing-crawl4ai-fixture.html",
+            fit_markdown=True,
+        )
+        assert isinstance(result, dict)
+        assert result["success"] is False
+        assert "Local file not found" in result["error"]
+
+
 class TestGraphState:
     """Test graph state creation and types."""
 
@@ -199,16 +297,14 @@ class TestGraphState:
 
     def test_crawl_chunk_state_typeddict(self):
         """Test that CrawlChunkState is a valid TypedDict."""
-        from graph import CrawlChunkState
-
         # Should be able to create partial states
-        state: CrawlChunkState = {
+        state = {
             "url": "https://test.com",
             "skeleton": [],
         }
 
         # Should be able to create full states
-        full_state: CrawlChunkState = {
+        full_state = {
             "url": "https://test.com",
             "skeleton": [{"index": 0, "level": 1, "title": "Test"}],
             "stats": {},
@@ -307,7 +403,7 @@ class TestEndToEnd:
 
     def test_chunk_extraction_plan(self):
         """Test extracting content based on skeleton indices."""
-        from engine import extract_skeleton, extract_chunk
+        from engine import extract_chunk, extract_skeleton
 
         markdown = """# Section 1
 Content of section 1.
@@ -525,7 +621,6 @@ Line 5-7
 # Header 3
 Line 9-11
 """
-        lines = markdown.split("\n")
         result = extract_skeleton(markdown)
         sections = result["skeleton"]
 
@@ -596,7 +691,7 @@ class TestWorkflowNodeHelpers:
 
     def test_initial_state_has_all_keys(self):
         """Test that initial state has all required keys."""
-        from graph import CrawlChunkState, create_initial_state
+        from graph import create_initial_state
 
         state = create_initial_state("http://test.com")
 

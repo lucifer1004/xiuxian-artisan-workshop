@@ -2,6 +2,7 @@ mod events;
 mod help;
 mod reset;
 mod resume;
+mod stop;
 
 pub(super) use events::{
     EVENT_TELEGRAM_COMMAND_CONTROL_ADMIN_REQUIRED_REPLIED,
@@ -10,8 +11,10 @@ pub(super) use events::{
     EVENT_TELEGRAM_COMMAND_SESSION_RESUME_DROP_REPLIED,
     EVENT_TELEGRAM_COMMAND_SESSION_RESUME_REPLIED,
     EVENT_TELEGRAM_COMMAND_SESSION_RESUME_STATUS_REPLIED,
+    EVENT_TELEGRAM_COMMAND_SESSION_STOP_IDLE_REPLIED, EVENT_TELEGRAM_COMMAND_SESSION_STOP_REPLIED,
     EVENT_TELEGRAM_COMMAND_SLASH_HELP_JSON_REPLIED, EVENT_TELEGRAM_COMMAND_SLASH_HELP_REPLIED,
 };
 pub(in super::super) use help::try_handle_help_command;
 pub(in super::super) use reset::try_handle_reset_context_command;
 pub(in super::super) use resume::try_handle_resume_context_command;
+pub(in super::super) use stop::try_handle_stop_command;

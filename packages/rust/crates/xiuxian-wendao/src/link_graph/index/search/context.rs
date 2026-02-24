@@ -22,7 +22,6 @@ pub(super) struct SearchExecutionContext {
 
 impl LinkGraphIndex {
     pub(super) fn prepare_execution_context(
-        &self,
         query: &str,
         limit: usize,
         options: &LinkGraphSearchOptions,

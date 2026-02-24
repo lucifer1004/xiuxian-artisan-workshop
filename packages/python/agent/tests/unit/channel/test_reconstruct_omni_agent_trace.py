@@ -66,7 +66,10 @@ def test_build_trace_summary_marks_stage_flags(tmp_path: Path) -> None:
             [
                 '2026-02-20T01:11:00Z INFO x: event="telegram.dedup.update_accepted"',
                 '2026-02-20T01:11:01Z INFO x: event="session.route.decision_selected"',
-                '2026-02-20T01:11:02Z INFO x: event="session.injection.snapshot_created"',
+                (
+                    '2026-02-20T01:11:02Z INFO x: event="session.injection.snapshot_created" '
+                    "injection_mode=hybrid role_mix_profile_id=role_mix.hybrid.v1"
+                ),
                 '2026-02-20T01:11:03Z INFO x: event="agent.reflection.lifecycle.transition"',
                 '2026-02-20T01:11:04Z INFO x: event="agent.memory.recall.planned"',
                 '2026-02-20T01:11:05Z INFO x: event="agent.memory.recall.injected"',
@@ -81,9 +84,11 @@ def test_build_trace_summary_marks_stage_flags(tmp_path: Path) -> None:
     assert flags["has_dedup"] is True
     assert flags["has_route"] is True
     assert flags["has_injection"] is True
+    assert flags["has_injection_mode"] is True
     assert flags["has_reflection"] is True
     assert flags["has_memory"] is True
     assert flags["has_suggested_link"] is True
+    assert summary["injection_modes"] == ["hybrid"]
     assert summary["quality_score"] == 100.0
 
 
@@ -107,6 +112,27 @@ def test_evaluate_trace_health_reports_missing_suggested_link(tmp_path: Path) ->
     assert "missing suggested_link evidence" in errors
 
 
+def test_build_trace_summary_warns_when_injection_mode_is_missing(tmp_path: Path) -> None:
+    mod = _load_module()
+    log_file = tmp_path / "runtime.log"
+    log_file.write_text(
+        "\n".join(
+            [
+                '2026-02-20T01:11:01Z INFO x: event="session.route.decision_selected"',
+                '2026-02-20T01:11:02Z INFO x: event="session.injection.snapshot_created"',
+                '2026-02-20T01:11:03Z INFO x: event="agent.reflection.lifecycle.transition"',
+                '2026-02-20T01:11:04Z INFO x: event="agent.memory.gate.evaluated"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    entries = mod.load_trace_entries(log_file)
+    summary = mod.build_trace_summary(entries)
+    assert summary["stage_flags"]["has_injection"] is True
+    assert summary["stage_flags"]["has_injection_mode"] is False
+    assert "injection snapshot missing injection_mode field" in summary["warnings"]
+
+
 def test_evaluate_trace_health_respects_required_stage_subset() -> None:
     mod = _load_module()
     summary = {
@@ -114,6 +140,7 @@ def test_evaluate_trace_health_respects_required_stage_subset() -> None:
             "has_dedup": True,
             "has_route": False,
             "has_injection": False,
+            "has_injection_mode": False,
             "has_reflection": False,
             "has_memory": True,
             "has_suggested_link": False,
@@ -121,3 +148,24 @@ def test_evaluate_trace_health_respects_required_stage_subset() -> None:
     }
     errors = mod.evaluate_trace_health(summary, required_stages=("memory",))
     assert errors == []
+
+
+def test_load_trace_entries_handles_large_log_prefix(tmp_path: Path) -> None:
+    mod = _load_module()
+    log_file = tmp_path / "runtime.log"
+    with log_file.open("wb") as handle:
+        handle.write(b"Z" * 350_000)
+        handle.write(b"\n")
+        handle.write(
+            b'2026-02-20T01:11:00Z INFO x: event="session.route.decision_selected" '
+            b'session_id="telegram:1:2"\n'
+        )
+        handle.write(
+            b'2026-02-20T01:11:01Z INFO x: event="session.injection.snapshot_created" '
+            b'session_id="telegram:1:2"\n'
+        )
+
+    entries = mod.load_trace_entries(log_file, session_id="telegram:1:2")
+    assert len(entries) == 2
+    assert entries[0]["event"] == "session.route.decision_selected"
+    assert entries[1]["event"] == "session.injection.snapshot_created"

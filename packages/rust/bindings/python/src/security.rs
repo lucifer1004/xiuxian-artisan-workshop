@@ -108,7 +108,7 @@ pub fn is_code_safe(code: &str) -> bool {
 ///
 /// Args:
 ///     tool_name: Full tool name (e.g., "filesystem.read_file")
-///     permissions: List of permission patterns (e.g., ["filesystem:*", "git:status"])
+///     permissions: List of permission patterns (for example: `"filesystem:*"`, `"git:status"`).
 ///
 /// Returns:
 ///     True if allowed, False otherwise.
@@ -233,15 +233,19 @@ impl PySandboxRunner {
 
     /// Run with Docker mode explicitly
     fn use_docker(&mut self) {
-        let mut config = SandboxConfig::default();
-        config.mode = SandboxMode::Docker;
+        let config = SandboxConfig {
+            mode: SandboxMode::Docker,
+            ..SandboxConfig::default()
+        };
         self.runner = SandboxRunner::with_config(config);
     }
 
     /// Run with NsJail mode explicitly (Linux only)
     fn use_nsjail(&mut self) {
-        let mut config = SandboxConfig::default();
-        config.mode = SandboxMode::NsJail;
+        let config = SandboxConfig {
+            mode: SandboxMode::NsJail,
+            ..SandboxConfig::default()
+        };
         self.runner = SandboxRunner::with_config(config);
     }
 }

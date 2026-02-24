@@ -11,15 +11,27 @@ Usage (from repo root):
     uv run python scripts/benchmark_knowledge_recall.py --runs 2 --skip-slow
     uv run python scripts/benchmark_knowledge_recall.py --tools knowledge.recall knowledge.stats
     uv run python scripts/benchmark_knowledge_recall.py --no-warm-phase   # measure cold first-call
+    uv run python scripts/benchmark_knowledge_recall.py --write-snapshot
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 import time
+from contextlib import suppress
+from pathlib import Path
 from typing import Any
+
+from omni.test_kit.knowledge_snapshot import (
+    build_knowledge_snapshot_payload,
+    default_knowledge_snapshot_path,
+    detect_knowledge_snapshot_anomalies,
+    load_knowledge_snapshot,
+    save_knowledge_snapshot,
+)
 
 # Minimal safe arguments per knowledge tool (no side effects or tiny read-only).
 # Tools not listed get args {}.
@@ -99,6 +111,43 @@ async def main() -> int:
         default=60.0,
         help="Timeout in seconds per tool call (default: 60)",
     )
+    parser.add_argument(
+        "--snapshot-file",
+        type=str,
+        default="",
+        help=(
+            "YAML snapshot path for baseline tracking. Default: "
+            "<SKILLS_DIR>/_snapshots/benchmark/knowledge_tools.yaml"
+        ),
+    )
+    parser.add_argument(
+        "--write-snapshot",
+        action="store_true",
+        help="Write/update snapshot YAML with current benchmark results.",
+    )
+    parser.add_argument(
+        "--snapshot-alpha",
+        type=float,
+        default=0.35,
+        help="Snapshot baseline smoothing alpha in [0,1] when --write-snapshot (default: 0.35).",
+    )
+    parser.add_argument(
+        "--snapshot-factor",
+        type=float,
+        default=2.0,
+        help="Default regression factor for anomaly detection (default: 2.0).",
+    )
+    parser.add_argument(
+        "--snapshot-delta-ms",
+        type=float,
+        default=40.0,
+        help="Default minimum regression delta in ms for anomaly detection (default: 40.0).",
+    )
+    parser.add_argument(
+        "--strict-snapshot",
+        action="store_true",
+        help="Return non-zero when snapshot detects anomalies.",
+    )
     args = parser.parse_args()
 
     from omni.agent.server import create_agent_handler
@@ -131,7 +180,7 @@ async def main() -> int:
             warm_ms = (time.perf_counter() - t1) * 1000
             if not args.json:
                 print(f"[1] Validation cache warm: {warm_ms:.0f} ms", file=sys.stderr)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if not args.json:
                 print(f"[1] Validation cache warm: TIMEOUT ({args.warm_timeout}s)", file=sys.stderr)
 
@@ -149,13 +198,11 @@ async def main() -> int:
     ]
     if not args.no_warm_phase:
         for tool_name, tool_args in warm_tools:
-            try:
+            with suppress(Exception):
                 await asyncio.wait_for(
                     kernel.execute_tool(tool_name, tool_args, caller=None),
                     timeout=args.tool_timeout,
                 )
-            except (asyncio.TimeoutError, Exception):
-                pass  # warm best-effort
 
     # 4. List knowledge tools to benchmark
     core = kernel.skill_context.get_core_commands()
@@ -198,7 +245,7 @@ async def main() -> int:
                     timeout=args.tool_timeout,
                 )
                 run_ms_list.append((time.perf_counter() - t2) * 1000)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = f"timeout ({args.tool_timeout}s)"
                 run_ms_list.append(args.tool_timeout * 1000)
                 break
@@ -223,18 +270,56 @@ async def main() -> int:
 
     # 5. Report: slowest first (per-tool only; init and warm phase excluded)
     results.sort(key=lambda x: -x["avg_ms"])
+    snapshot_path = (
+        Path(args.snapshot_file).expanduser().resolve()
+        if args.snapshot_file.strip()
+        else default_knowledge_snapshot_path()
+    )
+    snapshot_loaded = load_knowledge_snapshot(snapshot_path)
+    anomalies = detect_knowledge_snapshot_anomalies(
+        results=results,
+        snapshot=snapshot_loaded,
+        default_regression_factor=args.snapshot_factor,
+        default_min_regression_delta_ms=args.snapshot_delta_ms,
+    )
+    anomaly_records = [item.to_record() for item in anomalies]
+    snapshot_written = False
+    if args.write_snapshot:
+        snapshot_payload = build_knowledge_snapshot_payload(
+            results=results,
+            runs_per_tool=args.runs,
+            warm_phase=(not args.no_warm_phase),
+            previous=snapshot_loaded,
+            alpha=args.snapshot_alpha,
+            default_regression_factor=args.snapshot_factor,
+            default_min_regression_delta_ms=args.snapshot_delta_ms,
+        )
+        save_knowledge_snapshot(snapshot_path, snapshot_payload)
+        snapshot_written = True
+
+    exit_code = 0
+    if errors:
+        exit_code = 1
+    if args.strict_snapshot and anomalies:
+        exit_code = 1
 
     if args.json:
-        import json
-
         out = {
             "init_ms": round(init_ms, 1),
             "warm_phase": not args.no_warm_phase,
             "tools": results,
             "errors": [{"tool": t, "error": e} for t, e in errors],
+            "snapshot": {
+                "path": str(snapshot_path),
+                "loaded": snapshot_loaded is not None,
+                "written": snapshot_written,
+                "anomaly_count": len(anomaly_records),
+                "anomalies": anomaly_records,
+                "strict": bool(args.strict_snapshot),
+            },
         }
         print(json.dumps(out, indent=2))
-        return 0
+        return exit_code
 
     print("-" * 60, file=sys.stderr)
     print(
@@ -257,7 +342,32 @@ async def main() -> int:
         "  2) Per-tool: reduce I/O, cache hot paths, lower default limits for fast first response.",
         file=sys.stderr,
     )
-    return 0 if not errors else 1
+    print("\nSnapshot tracking:", file=sys.stderr)
+    print(f"  path: {snapshot_path}", file=sys.stderr)
+    print(
+        f"  loaded: {snapshot_loaded is not None}  written: {snapshot_written}  "
+        f"anomalies: {len(anomaly_records)}",
+        file=sys.stderr,
+    )
+    if anomaly_records:
+        print("  anomaly details (large regression only):", file=sys.stderr)
+        for item in anomaly_records:
+            print(
+                "    - {tool}: observed={observed_ms:.1f}ms baseline={baseline_ms:.1f}ms "
+                "threshold={threshold_ms:.1f}ms ratio={ratio:.2f}".format(**item),
+                file=sys.stderr,
+            )
+        if args.strict_snapshot:
+            print(
+                "  strict snapshot is enabled: anomalies mark this run as failed.", file=sys.stderr
+            )
+    elif snapshot_loaded is None:
+        print(
+            "  no snapshot found yet (run with --write-snapshot to create baseline).",
+            file=sys.stderr,
+        )
+
+    return exit_code
 
 
 if __name__ == "__main__":

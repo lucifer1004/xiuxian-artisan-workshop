@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from log_io import iter_log_lines
 
 
 def _percentile(sorted_values: list[float], p: float) -> float:
@@ -166,11 +167,23 @@ def _scan_log_file(log_file: Path) -> dict[str, Any]:
     if not log_file.exists():
         return {"exists": False}
 
-    content = log_file.read_text(encoding="utf-8", errors="replace")
-    lines = content.splitlines()
-    dynamic_loader_lines = [line for line in lines if "Dynamic Loader" in line]
-    tools_stats_lines = [line for line in lines if "[MCP] tools/list stats" in line]
-    tools_served_debug_lines = [line for line in lines if "tools/list served" in line]
+    dynamic_loader_count = 0
+    tools_list_stats_count = 0
+    tools_list_served_debug_count = 0
+    last_dynamic_loader_line: str | None = None
+    last_tools_list_stats_line: str | None = None
+    tools_stats_lines: list[str] = []
+
+    for line in iter_log_lines(log_file, errors="replace"):
+        if "Dynamic Loader" in line:
+            dynamic_loader_count += 1
+            last_dynamic_loader_line = line
+        if "[MCP] tools/list stats" in line:
+            tools_list_stats_count += 1
+            last_tools_list_stats_line = line
+            tools_stats_lines.append(line)
+        if "tools/list served" in line:
+            tools_list_served_debug_count += 1
 
     parsed_stats: dict[str, Any] | None = None
     if tools_stats_lines:
@@ -190,11 +203,11 @@ def _scan_log_file(log_file: Path) -> dict[str, Any]:
     return {
         "exists": True,
         "path": str(log_file),
-        "dynamic_loader_count": len(dynamic_loader_lines),
-        "tools_list_stats_count": len(tools_stats_lines),
-        "tools_list_served_debug_count": len(tools_served_debug_lines),
-        "last_dynamic_loader_line": dynamic_loader_lines[-1] if dynamic_loader_lines else None,
-        "last_tools_list_stats_line": tools_stats_lines[-1] if tools_stats_lines else None,
+        "dynamic_loader_count": dynamic_loader_count,
+        "tools_list_stats_count": tools_list_stats_count,
+        "tools_list_served_debug_count": tools_list_served_debug_count,
+        "last_dynamic_loader_line": last_dynamic_loader_line,
+        "last_tools_list_stats_line": last_tools_list_stats_line,
         "parsed_last_tools_list_stats": parsed_stats,
     }
 

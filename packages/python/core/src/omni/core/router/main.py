@@ -36,6 +36,16 @@ from .sniffer import IntentSniffer
 logger = get_logger("omni.core.router.main")
 
 
+def _coerce_int(value: object, *, default: int) -> int:
+    """Parse integer config with safe fallback."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _build_input_schema_digest(input_schema: Any) -> str | None:
     """Return sha256 digest for an input schema dict, if present."""
     if not isinstance(input_schema, dict) or not input_schema:
@@ -119,9 +129,9 @@ class OmniRouter:
         from omni.foundation.config.settings import get_setting
 
         if cache_size is None:
-            cache_size = int(get_setting("router.cache.max_size"))
+            cache_size = _coerce_int(get_setting("router.cache.max_size", 1000), default=1000)
         if cache_ttl is None:
-            cache_ttl = int(get_setting("router.cache.ttl"))
+            cache_ttl = _coerce_int(get_setting("router.cache.ttl", 300), default=300)
         search_config = load_router_search_config(
             semantic_weight=semantic_weight,
             keyword_weight=keyword_weight,
@@ -216,6 +226,7 @@ class OmniRouter:
         limit: int = 5,
         threshold: float = 0.4,
         use_cache: bool = True,
+        keyword_only: bool = False,
     ) -> list[RouteResult]:
         """Route using Hybrid Search with caching.
 
@@ -233,13 +244,16 @@ class OmniRouter:
             limit: Maximum number of results
             threshold: Minimum score threshold
             use_cache: Whether to use cache
+            keyword_only: If True, use BM25-first route search without embedding calls.
 
         Returns:
             List of RouteResults sorted by score
         """
+        cache_key = f"{query}|limit={limit}|threshold={threshold:.4f}|kw={int(keyword_only)}"
+
         # 1. Cache Lookup
         if use_cache:
-            cached = self._cache.get(query)
+            cached = self._cache.get(cache_key)
             if cached is not None:
                 logger.debug(f"Cache hit for: {query[:50]}...")
                 return cached
@@ -258,7 +272,15 @@ class OmniRouter:
             fetch_limit = limit * (max_attempts - fetch_attempts + 2)
             # Rust emits canonical final_score/confidence; thresholding is applied on final_score
             # below to avoid pre-filtering out semantically-relevant low-raw/high-calibrated matches.
-            matches = await self._hybrid.search(query, limit=fetch_limit, min_score=0.0)
+            if keyword_only:
+                matches = await self._hybrid.search(
+                    query,
+                    limit=fetch_limit,
+                    min_score=0.0,
+                    keyword_only=True,
+                )
+            else:
+                matches = await self._hybrid.search(query, limit=fetch_limit, min_score=0.0)
 
             # Convert matches to RouteResults
             seen_commands: set[str] = {f"{r.skill_name}.{r.command_name}" for r in results}
@@ -305,6 +327,9 @@ class OmniRouter:
                 raw_score = float(match.get("score", final_score))
                 clamped_score = max(0.0, min(1.0, raw_score))
                 clamped_final_score = max(0.0, min(1.0, final_score))
+                # For low-confidence rows, expose calibrated final_score to keep
+                # score/confidence bands coherent for downstream consumers.
+                display_score = clamped_final_score if confidence_raw == "low" else clamped_score
                 ranking_reason = str(
                     match.get("ranking_reason")
                     or _build_ranking_reason(match, raw_score=raw_score, final_score=final_score)
@@ -317,11 +342,18 @@ class OmniRouter:
                     RouteResult(
                         skill_name=skill_name,
                         command_name=command_name,
-                        score=clamped_score,
+                        score=display_score,
                         confidence=confidence_raw,  # type: ignore
                         final_score=clamped_final_score,
                         ranking_reason=ranking_reason,
                         input_schema_digest=input_schema_digest,
+                        description=str(match.get("description", "") or ""),
+                        file_path=str(match.get("file_path", "") or ""),
+                        input_schema=(
+                            dict(match.get("input_schema"))
+                            if isinstance(match.get("input_schema"), dict)
+                            else {}
+                        ),
                     )
                 )
 
@@ -331,7 +363,7 @@ class OmniRouter:
 
         # 3. Update Cache
         if use_cache:
-            self._cache.set(query, results)
+            self._cache.set(cache_key, results)
 
         logger.info(f"Hybrid route: '{query}' -> {len(results)} results")
         return results

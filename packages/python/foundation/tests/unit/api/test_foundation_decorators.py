@@ -763,10 +763,8 @@ class TestDecoratorEdgeCases:
 
 def test_mcp_tool_result_validates_against_shared_schema():
     """Normalized MCP tool results must conform to shared schema (mcp_schema API, CI drift guard)."""
-    from omni.foundation.api.mcp_schema import get_schema_path, validate
+    from omni.foundation.api.mcp_schema import validate
 
-    if not get_schema_path().exists():
-        pytest.skip("Shared schema not found (project_root may be overridden in this worker)")
     for raw in [None, "ok", {"k": "v"}, [1, 2]]:
         result = normalize_mcp_tool_result(raw)
         assert is_mcp_canonical_result(result)

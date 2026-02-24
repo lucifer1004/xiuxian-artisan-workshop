@@ -101,7 +101,7 @@ def _build_relationship_graph_after_skills_reindex(db_path: str) -> None:
         if graph:
             save_relationship_graph(graph, graph_path)
         try:
-            from omni.rag.dual_core import register_skill_entities
+            from omni.rag.fusion import register_skill_entities
 
             docs = [{"id": e.get("id"), "content": "", "metadata": e} for e in entries]
             register_skill_entities(docs)
@@ -124,6 +124,65 @@ def _embed_skill_vectors(store: Any, _skills_db_path: str, skills_path: str | No
     from omni.foundation.services.embedding import get_embedding_service
 
     log = get_logger(__name__)
+
+    def _is_empty(value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return not value.strip()
+        if isinstance(value, (list, dict, tuple, set)):
+            return len(value) == 0
+        return False
+
+    def _normalize_metadata_shape(row: dict[str, Any]) -> dict[str, Any]:
+        raw_meta = row.get("metadata")
+        meta: dict[str, Any] = {}
+        if isinstance(raw_meta, dict):
+            meta = dict(raw_meta)
+        elif isinstance(raw_meta, str):
+            try:
+                parsed = _json.loads(raw_meta)
+                if isinstance(parsed, dict):
+                    meta = parsed
+            except Exception:
+                meta = {}
+
+        if isinstance(meta.get("metadata"), dict):
+            raise ValueError(
+                "Invalid skills metadata contract: nested `metadata.metadata` is not supported. "
+                "Rebuild skills index with canonical command metadata."
+            )
+
+        for key in (
+            "type",
+            "skill_name",
+            "tool_name",
+            "command",
+            "file_path",
+            "category",
+            "routing_keywords",
+            "intents",
+            "input_schema",
+            "resource_uri",
+            "parameters",
+            "function_name",
+            "docstring",
+            "file_hash",
+            "skill_tools_refers",
+            "annotations",
+        ):
+            value = row.get(key)
+            if _is_empty(value):
+                continue
+            if _is_empty(meta.get(key)):
+                meta[key] = value
+
+        tool_name = str(meta.get("tool_name") or "")
+        if "type" not in meta and "." in tool_name:
+            meta["type"] = "command"
+
+        return meta
+
     try:
         entries = run_async_blocking(store.list_all("skills"))
         if not entries:
@@ -137,7 +196,7 @@ def _embed_skill_vectors(store: Any, _skills_db_path: str, skills_path: str | No
                 continue
             ids.append(entry_id)
             contents.append(content)
-            meta = {k: v for k, v in data.items() if k not in ("id", "content")}
+            meta = _normalize_metadata_shape(data)
             metadatas.append(_json.dumps(meta))
         if not ids:
             return 0

@@ -1,3 +1,13 @@
+---
+title: "Keyword and Retrieval Engine Usage Guide: Scenario Boundaries and Decision Indicators"
+category: "testing"
+tags:
+  - testing
+  - keyword
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Keyword and Retrieval Engine Usage Guide: Scenario Boundaries and Decision Indicators
 
 Based on the decision loop (v4_large evaluation set and statistical reports), this document defines **when to use which engine or hybrid mode** with clear boundaries and indicators. It is intended for configuration, technology selection, and troubleshooting.

@@ -22,12 +22,94 @@ def skill_run(
     json_output: bool = typer.Option(
         False, "--json", "-j", help="Output raw JSON instead of markdown content"
     ),
+    reuse_process: bool = typer.Option(
+        True,
+        "--reuse-process/--no-reuse-process",
+        help="Use persistent local runner daemon for lower repeated latency (default: enabled).",
+    ),
 ):
     """Execute a skill command."""
     commands = [command]
     if args_json:
         commands.append(args_json)
-    run_skills(commands, json_output=json_output, log_handler=cli_log_handler)
+    if json_output:
+        from omni.agent.cli.runner_json import run_skills_json
+
+        exit_code = run_skills_json(commands, reuse_process=reuse_process)
+        if exit_code != 0:
+            raise typer.Exit(exit_code)
+        return
+    run_skills(
+        commands,
+        json_output=False,
+        log_handler=cli_log_handler,
+        reuse_process=reuse_process,
+    )
+
+
+runner_app = typer.Typer(help="Manage persistent local skill runner daemon")
+skill_app.add_typer(runner_app, name="runner")
+
+
+@runner_app.command("status")
+def skill_runner_status(
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output status as JSON"),
+):
+    """Show runner daemon status."""
+    from omni.agent.cli.runner_json import get_runner_daemon_status
+    from omni.foundation.utils import json_codec as json
+
+    status = get_runner_daemon_status()
+    if json_output:
+        typer.echo(json.dumps(status, indent=2, ensure_ascii=False))
+        return
+    if status.get("running") is True:
+        pid = status.get("pid", "unknown")
+        err_console.print(Panel(f"Runner daemon is running (pid={pid}).", title="Runner Status"))
+        return
+    message = str(status.get("error") or "Runner daemon is not running.")
+    err_console.print(Panel(message, title="Runner Status", style="yellow"))
+
+
+@runner_app.command("start")
+def skill_runner_start(
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output status as JSON"),
+):
+    """Start runner daemon and wait for readiness."""
+    from omni.agent.cli.runner_json import start_runner_daemon
+    from omni.foundation.utils import json_codec as json
+
+    status = start_runner_daemon()
+    if json_output:
+        typer.echo(json.dumps(status, indent=2, ensure_ascii=False))
+        return
+    if status.get("running") is True:
+        started = bool(status.get("started", False))
+        message = "Runner daemon started." if started else "Runner daemon already running."
+        err_console.print(Panel(message, title="Runner Start", style="green"))
+        return
+    message = str(status.get("error") or "Failed to start runner daemon.")
+    err_console.print(Panel(message, title="Runner Start", style="red"))
+    raise typer.Exit(1)
+
+
+@runner_app.command("stop")
+def skill_runner_stop(
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output status as JSON"),
+):
+    """Stop runner daemon if it is running."""
+    from omni.agent.cli.runner_json import stop_runner_daemon
+    from omni.foundation.utils import json_codec as json
+
+    status = stop_runner_daemon()
+    if json_output:
+        typer.echo(json.dumps(status, indent=2, ensure_ascii=False))
+        return
+    if status.get("stopped") is True:
+        err_console.print(Panel("Runner daemon stopped.", title="Runner Stop", style="green"))
+        return
+    message = str(status.get("error") or "Runner daemon is not running.")
+    err_console.print(Panel(message, title="Runner Stop", style="yellow"))
 
 
 # Remote install/update are intentionally unavailable in thin client mode.
@@ -87,7 +169,7 @@ def skill_test(
         err_console.print(
             Panel(
                 "Specify a skill name or use --all to test all skills",
-                title="ℹ️ Usage",
+                title="Info: Usage",
                 style="blue",
             )
         )
@@ -103,7 +185,7 @@ def skill_test(
                     test_dirs.append(str(tests_dir))
 
         if not test_dirs:
-            err_console.print(Panel("No skill tests found", title="ℹ️ Info", style="blue"))
+            err_console.print(Panel("No skill tests found", title="Info", style="blue"))
             return
 
         # Run all tests together with JSON output
@@ -125,8 +207,8 @@ def skill_test(
                     "--json-report",
                     f"--json-report-file={json_output_path}",
                     "--import-mode=importlib",  # Support implicit namespace packages (no __init__.py)
-                ]
-                + test_dirs,
+                    *test_dirs,
+                ],
                 cwd=str(skills_dir),
                 stdout=None,  # Inherit parent stdout (show pytest output)
                 stderr=None,  # Inherit parent stderr

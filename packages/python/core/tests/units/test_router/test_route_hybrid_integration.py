@@ -93,14 +93,15 @@ class TestRouteHybridIntegration:
 
         for r in results:
             assert r.confidence in ("high", "medium", "low")
+            calibrated = r.final_score
 
             # Verify confidence matches calibrated final_score bands.
             if r.confidence == "high":
-                assert high_base <= r.score <= 1.0
+                assert high_base <= calibrated <= 1.0
             elif r.confidence == "medium":
-                assert medium_base <= r.score <= medium_cap
+                assert medium_base <= calibrated <= medium_cap
             else:  # low
-                assert low_floor <= r.score <= medium_base
+                assert low_floor <= calibrated <= medium_base
 
     @pytest.mark.asyncio
     async def test_route_hybrid_threshold_filtering(self, router_for_integration):
@@ -153,8 +154,9 @@ class TestRouteHybridIntegration:
         # First call
         results1 = await router_for_integration.route_hybrid(query, limit=5, threshold=0.1)
 
-        # Check cache has the query
-        assert router_for_integration._cache.get(query) is not None
+        # Check cache has the normalized key format used by route_hybrid.
+        cache_key = f"{query}|limit={5}|threshold={0.1:.4f}|kw=0"
+        assert router_for_integration._cache.get(cache_key) is not None
 
         # Second call should use cache
         results2 = await router_for_integration.route_hybrid(query, limit=5, threshold=0.1)
@@ -394,7 +396,7 @@ class TestRouteHybridPerformance:
 class TestRoutingSearchSchemaComplexScenario:
     """Complex scenario: multiple intent types and assert expected tool families in top N.
 
-    Aligns with packages/shared/schemas/skill-routing-value-standard.md and
+    Aligns with docs/reference/skill-routing-value-standard.md and
     routing-search-value-flow: run after omni sync / skill routing value changes.
     """
 

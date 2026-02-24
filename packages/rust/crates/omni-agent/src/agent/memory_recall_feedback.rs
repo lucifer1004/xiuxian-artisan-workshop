@@ -142,6 +142,7 @@ pub(super) fn update_feedback_bias(previous: f32, outcome: RecallOutcome) -> f32
     ((previous * 0.85) + (delta * 0.15)).clamp(-1.0, 1.0)
 }
 
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub(super) fn apply_feedback_to_plan(
     mut plan: MemoryRecallPlan,
     feedback_bias: f32,

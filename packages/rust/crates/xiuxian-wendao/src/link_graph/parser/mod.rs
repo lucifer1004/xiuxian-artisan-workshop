@@ -13,7 +13,7 @@ use self::content::{
     count_words, extract_lead, extract_saliency_params, extract_tags, extract_title,
     parse_frontmatter,
 };
-use self::links::extract_links;
+use self::links::extract_link_targets;
 use self::paths::{normalize_slashes, relative_doc_id};
 use self::sections::extract_sections;
 use self::time::resolve_note_timestamps;
@@ -28,6 +28,8 @@ pub struct ParsedNote {
     pub doc: LinkGraphDocument,
     /// Raw link targets extracted from content.
     pub link_targets: Vec<String>,
+    /// Raw attachment targets extracted from content.
+    pub attachment_targets: Vec<String>,
     /// Parsed markdown sections/headings for section-aware retrieval.
     pub sections: Vec<ParsedSection>,
 }
@@ -63,8 +65,8 @@ pub fn parse_note(path: &Path, root: &Path, content: &str) -> Option<ParsedNote>
     let title_lower = title.to_lowercase();
     let tags_lower: Vec<String> = tags.iter().map(|tag| tag.to_lowercase()).collect();
     let (created_ts, modified_ts) = resolve_note_timestamps(frontmatter.as_ref(), path);
-    let links = extract_links(body, path, root);
-    let sections = extract_sections(body);
+    let extracted = extract_link_targets(body, path, root);
+    let sections = extract_sections(body, path, root);
     Some(ParsedNote {
         doc: LinkGraphDocument {
             id: doc_id,
@@ -86,7 +88,8 @@ pub fn parse_note(path: &Path, root: &Path, content: &str) -> Option<ParsedNote>
             created_ts,
             modified_ts,
         },
-        link_targets: links,
+        link_targets: extracted.note_links,
+        attachment_targets: extracted.attachments,
         sections,
     })
 }

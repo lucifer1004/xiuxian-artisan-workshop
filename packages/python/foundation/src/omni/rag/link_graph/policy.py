@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from omni.foundation.api.link_graph_policy_schema import build_plan_record
+from omni.foundation.api.link_graph_policy_schema import build_plan_record, get_reason_enum
 from omni.foundation.config.link_graph_runtime import (
     get_link_graph_candidate_multiplier,
     get_link_graph_graph_rows_per_source,
@@ -38,6 +38,33 @@ if TYPE_CHECKING:
 LinkGraphRetrievalMode = Literal["graph_only", "hybrid", "vector_only"]
 LinkGraphConfidenceLevel = Literal["none", "low", "medium", "high"]
 _VALID_MODES = {"graph_only", "hybrid", "vector_only"}
+LINK_GRAPH_POLICY_REASONS = tuple(get_reason_enum())
+_VALID_REASONS = set(LINK_GRAPH_POLICY_REASONS)
+
+
+def _reason_token(value: str) -> str:
+    normalized = str(value or "").strip()
+    if normalized not in _VALID_REASONS:
+        raise RuntimeError(f"unknown link_graph policy reason: {normalized}")
+    return normalized
+
+
+LINK_GRAPH_REASON_BACKEND_UNAVAILABLE = _reason_token("backend_unavailable")
+LINK_GRAPH_REASON_VECTOR_ONLY_REQUESTED = _reason_token("vector_only_requested")
+LINK_GRAPH_REASON_GRAPH_ONLY_REQUESTED = _reason_token("graph_only_requested")
+LINK_GRAPH_REASON_GRAPH_ONLY_REQUESTED_EMPTY = _reason_token("graph_only_requested_empty")
+LINK_GRAPH_REASON_GRAPH_ONLY_SEARCH_TIMEOUT = _reason_token("graph_only_search_timeout")
+LINK_GRAPH_REASON_GRAPH_ONLY_PAYLOAD_OVERRIDDEN = _reason_token("graph_only_payload_overridden")
+LINK_GRAPH_REASON_GRAPH_ONLY_PAYLOAD_MODE_CONFLICT = _reason_token(
+    "graph_only_payload_mode_conflict"
+)
+LINK_GRAPH_REASON_GRAPH_ONLY_POLICY_MISSING = _reason_token("graph_only_policy_missing")
+LINK_GRAPH_REASON_GRAPH_SUFFICIENT = _reason_token("graph_sufficient")
+LINK_GRAPH_REASON_GRAPH_INSUFFICIENT = _reason_token("graph_insufficient")
+LINK_GRAPH_REASON_HYBRID_SELECTED = _reason_token("hybrid_selected")
+LINK_GRAPH_REASON_GRAPH_SEARCH_TIMEOUT = _reason_token("graph_search_timeout")
+LINK_GRAPH_REASON_GRAPH_POLICY_MODE_CONFLICT = _reason_token("graph_policy_mode_conflict")
+LINK_GRAPH_REASON_GRAPH_POLICY_MISSING = _reason_token("graph_policy_missing")
 _PLAN_CACHE: dict[
     tuple[str, str, int, int, int, float, int, int, str], tuple[LinkGraphRetrievalPlan, float]
 ] = {}
@@ -87,6 +114,30 @@ def _default_retrieval_budget() -> LinkGraphRetrievalBudget:
     return LinkGraphRetrievalBudget(candidate_limit=1, max_sources=1, rows_per_source=1)
 
 
+def _build_retrieval_budget(
+    *, limit: int, config: LinkGraphPolicyConfig
+) -> LinkGraphRetrievalBudget:
+    """Build an adaptive retrieval budget for graph-first recall.
+
+    We keep candidate fan-out based on ``candidate_multiplier``, but scale expensive graph row
+    fan-out (sources and rows/source) with user-facing ``limit`` to avoid over-scanning tables for
+    small requests.
+    """
+    fetch_limit = max(1, int(limit))
+    candidate_limit = fetch_limit * max(1, int(config.candidate_multiplier))
+
+    # For small result windows, broad source fan-out adds latency without improving top-k quality.
+    adaptive_cap = max(1, fetch_limit * 2)
+    max_sources = min(max(1, int(config.max_sources)), adaptive_cap)
+    rows_per_source = min(max(1, int(config.graph_rows_per_source)), adaptive_cap)
+
+    return LinkGraphRetrievalBudget(
+        candidate_limit=candidate_limit,
+        max_sources=max_sources,
+        rows_per_source=rows_per_source,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class LinkGraphRetrievalPlan:
     """Decision made by graph/vector policy router."""
@@ -130,8 +181,18 @@ def _record_phase(phase: str, duration_ms: float, **extra: Any) -> None:
 
 
 def _parse_mode(raw: Any, *, default: LinkGraphRetrievalMode) -> LinkGraphRetrievalMode:
+    parsed = _try_parse_mode(raw)
+    return parsed if parsed is not None else default
+
+
+def _try_parse_mode(raw: Any) -> LinkGraphRetrievalMode | None:
     value = str(raw or "").strip().lower()
-    return cast("LinkGraphRetrievalMode", value) if value in _VALID_MODES else default
+    return cast("LinkGraphRetrievalMode", value) if value in _VALID_MODES else None
+
+
+def _try_parse_reason(raw: Any) -> str | None:
+    value = str(raw or "").strip()
+    return value if value in _VALID_REASONS else None
 
 
 def _parse_int(raw: Any, *, default: int, minimum: int, maximum: int) -> int:
@@ -408,7 +469,7 @@ def _build_source_hints(
     max_sources: int,
 ) -> list[LinkGraphSourceHint]:
     hints: list[LinkGraphSourceHint] = []
-    seen: set[tuple[str, str]] = set()
+    seen_filters: set[str] = set()
     for hit in hits:
         stem = str(hit.stem).strip()
         if not stem:
@@ -422,17 +483,17 @@ def _build_source_hints(
                 source_candidates.append(basename)
             if path not in source_candidates:
                 source_candidates.append(path)
-        if stem not in source_candidates:
+        else:
             source_candidates.append(stem)
 
         for source_filter in source_candidates:
-            key = (source_filter, stem)
-            if key in seen:
+            normalized = str(source_filter).strip()
+            if not normalized or normalized in seen_filters:
                 continue
-            seen.add(key)
+            seen_filters.add(normalized)
             hints.append(
                 LinkGraphSourceHint(
-                    source_filter=source_filter,
+                    source_filter=normalized,
                     stem=stem,
                     graph_score=score,
                 )
@@ -440,20 +501,6 @@ def _build_source_hints(
             if len(hints) >= max_sources:
                 return hints
     return hints
-
-
-def _graph_is_sufficient(
-    hits: list[LinkGraphHit],
-    *,
-    min_hits: int,
-    min_top_score: float,
-) -> bool:
-    if not hits:
-        return False
-    if len(hits) < min_hits:
-        return False
-    top_score = max(float(h.score) for h in hits)
-    return top_score >= min_top_score
 
 
 def _confidence_level_from_score(score: float) -> LinkGraphConfidenceLevel:
@@ -522,17 +569,12 @@ async def plan_link_graph_retrieval(
     """Plan whether this query should run graph-only or vector fallback."""
     cfg = config or resolve_link_graph_policy_config(mode=mode)
     requested = cfg.mode
-    candidate_limit = max(1, int(limit)) * max(1, int(cfg.candidate_multiplier))
-    budget = LinkGraphRetrievalBudget(
-        candidate_limit=candidate_limit,
-        max_sources=max(1, int(cfg.max_sources)),
-        rows_per_source=max(1, int(cfg.graph_rows_per_source)),
-    )
+    budget = _build_retrieval_budget(limit=limit, config=cfg)
     if requested == "vector_only":
         return _build_plan(
             requested_mode=requested,
             selected_mode="vector_only",
-            reason="vector_only_requested",
+            reason=LINK_GRAPH_REASON_VECTOR_ONLY_REQUESTED,
             backend_name="policy",
             graph_hits=(),
             source_hints=(),
@@ -550,7 +592,7 @@ async def plan_link_graph_retrieval(
             return _build_plan(
                 requested_mode=requested,
                 selected_mode="vector_only" if requested == "hybrid" else requested,
-                reason="backend_unavailable",
+                reason=LINK_GRAPH_REASON_BACKEND_UNAVAILABLE,
                 backend_name="unavailable",
                 graph_hits=(),
                 source_hints=(),
@@ -565,7 +607,7 @@ async def plan_link_graph_retrieval(
     if cached_plan is not None:
         return cached_plan
 
-    search_limit = candidate_limit
+    search_limit = budget.candidate_limit
     search_timeout_s, query_bucket = _policy_search_timeout_seconds(backend_name, query)
     search_options = _policy_search_options_for_bucket(query_bucket, query)
     search_timed_out = False
@@ -597,7 +639,8 @@ async def plan_link_graph_retrieval(
         effective_search_options.get("match_strategy")
         or getattr(search_options, "match_strategy", "fts")
     )
-    parsed_query = str(search_payload.get("query") or query)
+    payload_query = search_payload.get("query")
+    parsed_query = str(payload_query) if payload_query is not None else str(query)
 
     rss_after, rss_peak_after = sample_memory()
     _record_phase(
@@ -614,55 +657,99 @@ async def plan_link_graph_retrieval(
         **build_memory_delta_fields(rss_before, rss_peak_before, rss_after, rss_peak_after),
     )
 
-    source_hints = _build_source_hints(hits, max_sources=max(1, cfg.max_sources))
+    source_hints = _build_source_hints(hits, max_sources=max(1, budget.max_sources))
+    payload_selected_mode = _try_parse_mode(search_payload.get("selected_mode"))
+    payload_requested_mode = _try_parse_mode(search_payload.get("requested_mode"))
+    payload_reason = _try_parse_reason(search_payload.get("reason"))
+    payload_graph_hit_count = _parse_int(
+        search_payload.get("graph_hit_count", len(hits)),
+        default=len(hits),
+        minimum=0,
+        maximum=100000,
+    )
+    payload_confidence_score = _parse_float(
+        search_payload.get("graph_confidence_score", -1.0),
+        default=-1.0,
+        minimum=-1.0,
+        maximum=1.0,
+    )
+    payload_confidence_level = _normalize_confidence_level(
+        search_payload.get("graph_confidence_level", "none")
+    )
+
     confidence_score, confidence_level = _compute_graph_confidence(
         hits,
         min_hits=max(1, cfg.min_graph_hits),
         min_top_score=max(0.0, cfg.min_graph_score),
     )
+    payload_mode_matches_request = (
+        payload_requested_mode is None or payload_requested_mode == requested
+    )
+    has_valid_payload_decision = payload_selected_mode is not None and payload_mode_matches_request
+    has_conflicting_payload_decision = (
+        payload_selected_mode is not None and not payload_mode_matches_request
+    )
+
+    if payload_confidence_score >= 0.0 and payload_mode_matches_request:
+        confidence_score = payload_confidence_score
+        confidence_level = payload_confidence_level
 
     if requested == "graph_only":
+        selected_mode = "graph_only"
         if search_timed_out:
-            reason = "graph_only_search_timeout"
+            reason = LINK_GRAPH_REASON_GRAPH_ONLY_SEARCH_TIMEOUT
+        elif has_valid_payload_decision:
+            if payload_selected_mode == "graph_only":
+                reason = payload_reason or LINK_GRAPH_REASON_GRAPH_ONLY_REQUESTED
+            else:
+                reason = LINK_GRAPH_REASON_GRAPH_ONLY_PAYLOAD_OVERRIDDEN
+        elif has_conflicting_payload_decision:
+            reason = LINK_GRAPH_REASON_GRAPH_ONLY_PAYLOAD_MODE_CONFLICT
         else:
-            reason = "graph_only_requested" if hits else "graph_only_requested_empty"
-        plan = _build_plan(
-            requested_mode=requested,
-            selected_mode="graph_only",
-            reason=reason,
-            backend_name=backend_name,
-            graph_hits=hits,
-            source_hints=source_hints,
-            graph_confidence_score=confidence_score,
-            graph_confidence_level=confidence_level,
-            budget=budget,
-        )
-        _cache_put(cache_key, query=query, plan=plan)
-        return plan
+            reason = LINK_GRAPH_REASON_GRAPH_ONLY_POLICY_MISSING
+    else:
+        if has_valid_payload_decision:
+            selected_mode = payload_selected_mode
+            if payload_reason:
+                reason = payload_reason
+            elif selected_mode == "graph_only":
+                reason = LINK_GRAPH_REASON_GRAPH_SUFFICIENT
+            elif selected_mode == "vector_only":
+                reason = (
+                    LINK_GRAPH_REASON_GRAPH_SEARCH_TIMEOUT
+                    if search_timed_out
+                    else LINK_GRAPH_REASON_GRAPH_INSUFFICIENT
+                )
+            else:
+                reason = LINK_GRAPH_REASON_HYBRID_SELECTED
+        elif search_timed_out:
+            selected_mode = "vector_only"
+            reason = LINK_GRAPH_REASON_GRAPH_SEARCH_TIMEOUT
+        elif has_conflicting_payload_decision:
+            selected_mode = "vector_only"
+            reason = LINK_GRAPH_REASON_GRAPH_POLICY_MODE_CONFLICT
+        else:
+            selected_mode = "vector_only"
+            reason = LINK_GRAPH_REASON_GRAPH_POLICY_MISSING
 
-    if _graph_is_sufficient(
-        hits,
-        min_hits=max(1, cfg.min_graph_hits),
-        min_top_score=max(0.0, cfg.min_graph_score),
-    ):
-        plan = _build_plan(
-            requested_mode=requested,
-            selected_mode="graph_only",
-            reason="graph_sufficient",
-            backend_name=backend_name,
-            graph_hits=hits,
-            source_hints=source_hints,
-            graph_confidence_score=confidence_score,
-            graph_confidence_level=confidence_level,
-            budget=budget,
-        )
-        _cache_put(cache_key, query=query, plan=plan)
-        return plan
+    _record_phase(
+        "link_graph.policy.decision",
+        0.0,
+        requested_mode=requested,
+        selected_mode=selected_mode,
+        reason=reason,
+        graph_hit_count=payload_graph_hit_count,
+        source_hint_count=len(source_hints),
+        graph_confidence_score=confidence_score,
+        graph_confidence_level=confidence_level,
+        payload_selected_mode=(payload_selected_mode or ""),
+        payload_requested_mode=(payload_requested_mode or ""),
+    )
 
     plan = _build_plan(
         requested_mode=requested,
-        selected_mode="vector_only",
-        reason="graph_search_timeout" if search_timed_out else "graph_insufficient",
+        selected_mode=selected_mode,
+        reason=reason,
         backend_name=backend_name,
         graph_hits=hits,
         source_hints=source_hints,
@@ -686,6 +773,16 @@ def _parse_metadata(entry: dict[str, Any]) -> dict[str, Any]:
         except json.JSONDecodeError:
             return {}
     return {}
+
+
+def _store_supports_multi_source_filter(store: Any) -> bool:
+    capability = getattr(store, "supports_multi_source_filter", False)
+    if callable(capability):
+        try:
+            return bool(capability())
+        except Exception:
+            return False
+    return bool(capability)
 
 
 async def fetch_graph_rows_by_policy(
@@ -723,20 +820,77 @@ async def fetch_graph_rows_by_policy(
     seen: set[tuple[str, int]] = set()
     fetched_total = 0
     parsed_total = 0
+    list_all_cache: dict[str, list[Any]] = {}
+    source_row_limit = max(1, int(rows_per_source)) * 2
+    supports_multi_source_filter = _store_supports_multi_source_filter(store)
+
+    if supports_multi_source_filter:
+        unique_source_filters: list[str] = []
+        seen_source_filters: set[str] = set()
+        for hint in source_hints:
+            normalized = str(hint.source_filter).strip()
+            if not normalized or normalized in seen_source_filters:
+                continue
+            seen_source_filters.add(normalized)
+            unique_source_filters.append(normalized)
+
+        if unique_source_filters:
+            combined_source_filter = "||".join(unique_source_filters)
+            combined_row_limit = source_row_limit * max(1, len(unique_source_filters))
+            phase_started = time.perf_counter()
+            combined_fetch_succeeded = False
+            combined_entries: list[Any]
+            try:
+                combined_entries = await store.list_all(
+                    collection,
+                    source_filter=combined_source_filter,
+                    row_limit=combined_row_limit,
+                )
+                combined_fetch_succeeded = True
+            except Exception:
+                combined_entries = []
+            if combined_fetch_succeeded:
+                for source_filter_key in unique_source_filters:
+                    list_all_cache[source_filter_key] = combined_entries
+                fetched_total += len(combined_entries)
+            _record_phase(
+                "link_graph.policy.list_all",
+                (time.perf_counter() - phase_started) * 1000,
+                source_filter=combined_source_filter,
+                rows=len(combined_entries),
+                cache_hit=False,
+                row_limit=combined_row_limit,
+                multi_source=True,
+                source_filter_count=len(unique_source_filters),
+                success=combined_fetch_succeeded,
+            )
 
     for hint in source_hints:
+        source_filter_key = str(hint.source_filter)
         phase_started = time.perf_counter()
-        try:
-            entries = await store.list_all(collection, source_filter=hint.source_filter)
-        except Exception:
-            entries = []
-        fetched_total += len(entries)
-        _record_phase(
-            "link_graph.policy.list_all",
-            (time.perf_counter() - phase_started) * 1000,
-            source_filter=hint.source_filter,
-            rows=len(entries),
-        )
+        cache_hit = source_filter_key in list_all_cache
+        if cache_hit:
+            entries = list_all_cache[source_filter_key]
+        else:
+            try:
+                entries = await store.list_all(
+                    collection,
+                    source_filter=hint.source_filter,
+                    row_limit=source_row_limit,
+                )
+            except Exception:
+                entries = []
+            list_all_cache[source_filter_key] = entries
+            fetched_total += len(entries)
+        if not (supports_multi_source_filter and cache_hit):
+            _record_phase(
+                "link_graph.policy.list_all",
+                (time.perf_counter() - phase_started) * 1000,
+                source_filter=hint.source_filter,
+                rows=len(entries),
+                cache_hit=cache_hit,
+                row_limit=source_row_limit,
+            )
         if not entries:
             continue
 
@@ -885,6 +1039,7 @@ def serialize_link_graph_retrieval_plan(plan: Any) -> dict[str, Any] | None:
 
 
 __all__ = [
+    "LINK_GRAPH_POLICY_REASONS",
     "LinkGraphConfidenceLevel",
     "LinkGraphPolicyConfig",
     "LinkGraphRetrievalBudget",

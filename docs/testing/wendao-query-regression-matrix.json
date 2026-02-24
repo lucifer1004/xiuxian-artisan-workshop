@@ -1,0 +1,70 @@
+{
+  "schema": "xiuxian_wendao.query_matrix.v1",
+  "description": "Wendao retrieval regression matrix on real project corpus.",
+  "cases": [
+    {
+      "id": "Q01",
+      "query": "documentation design",
+      "expected_paths": ["docs/DOCUMENTATION_DESIGN.md"]
+    },
+    {
+      "id": "Q02",
+      "query": "link graph code adaptation",
+      "expected_paths": ["docs/02_dev/standards/LINK_GRAPH_CODE_ADAPTATION.md"]
+    },
+    {
+      "id": "Q03",
+      "query": "checkpoint schema",
+      "expected_paths": ["docs/01_core/wendao/VECTOR_SUBSYSTEM.md"]
+    },
+    {
+      "id": "Q04",
+      "query": "router architecture",
+      "expected_paths": ["docs/01_core/omega/router.md"]
+    },
+    {
+      "id": "Q05",
+      "query": "link graph ppr algorithm",
+      "expected_paths": ["docs/01_core/wendao/ppr-algorithm.md"]
+    },
+    {
+      "id": "Q06",
+      "query": "knowledge ingestion template",
+      "expected_paths": [
+        "docs/02_dev/standards/KNOWLEDGE_INGESTION_TEMPLATE.md"
+      ]
+    },
+    {
+      "id": "Q07",
+      "query": "wendao note authoring standard",
+      "expected_paths": [
+        "docs/02_dev/standards/wendao-note-authoring-standard.md"
+      ]
+    },
+    {
+      "id": "Q08",
+      "query": "trinity control",
+      "expected_paths": ["docs/01_core/omega/trinity-control.md"]
+    },
+    {
+      "id": "Q09",
+      "query": "qianhuan orchestration spec",
+      "expected_paths": ["docs/01_core/qianhuan/orchestration-spec.md"]
+    },
+    {
+      "id": "Q10",
+      "query": "documentation hierarchy",
+      "expected_paths": ["docs/02_dev/standards/DOCUMENTATION_HIERARCHY.md"]
+    },
+    {
+      "id": "Q11",
+      "query": "root index",
+      "expected_paths": ["docs/00_vision/ROOT_INDEX.md"]
+    },
+    {
+      "id": "Q12",
+      "query": "graph enhancement",
+      "expected_paths": ["docs/01_core/wendao/graph-enhancement.md"]
+    }
+  ]
+}

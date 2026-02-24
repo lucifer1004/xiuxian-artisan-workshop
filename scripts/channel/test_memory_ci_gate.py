@@ -5,20 +5,33 @@ from __future__ import annotations
 import json
 import socket
 import sys
+import threading
+import time
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import pytest
+import test_omni_agent_memory_ci_gate as gate_module
 from test_omni_agent_memory_ci_gate import (
     GateConfig,
+    GateStepError,
     assert_cross_group_complex_quality,
     assert_evolution_slow_response_quality,
     assert_mcp_waiting_warning_budget,
     assert_session_matrix_quality,
     assert_trace_reconstruction_quality,
+    build_gate_failure_repro_commands,
     can_bind_tcp,
+    classify_gate_failure,
+    count_log_event,
     parse_args,
+    print_gate_failure_triage,
+    read_tail,
     resolve_runtime_ports,
+    run_trace_reconstruction_gate,
+    wait_for_log_regex,
+    write_gate_failure_triage_json_report,
+    write_gate_failure_triage_report,
 )
 
 if TYPE_CHECKING:
@@ -99,6 +112,11 @@ def build_cfg(tmp_path: Path) -> GateConfig:
         max_mcp_call_waiting_events=0,
         max_mcp_connect_waiting_events=0,
         max_mcp_waiting_events_total=0,
+        max_memory_stream_read_failed_events=0,
+        max_embedding_timeout_fallback_turns=0,
+        max_embedding_cooldown_fallback_turns=0,
+        max_embedding_unavailable_fallback_turns=0,
+        max_embedding_fallback_turns_total=0,
     )
 
 
@@ -189,6 +207,7 @@ def test_assert_trace_reconstruction_quality_accepts_valid_report(tmp_path: Path
                     "stage_flags": {
                         "has_route": True,
                         "has_injection": True,
+                        "has_injection_mode": True,
                         "has_reflection": True,
                         "has_memory": True,
                     },
@@ -214,6 +233,7 @@ def test_assert_trace_reconstruction_quality_rejects_low_quality(tmp_path: Path)
                     "stage_flags": {
                         "has_route": True,
                         "has_injection": True,
+                        "has_injection_mode": False,
                         "has_reflection": True,
                         "has_memory": False,
                     },
@@ -226,6 +246,35 @@ def test_assert_trace_reconstruction_quality_rejects_low_quality(tmp_path: Path)
         encoding="utf-8",
     )
     with pytest.raises(RuntimeError, match="trace reconstruction quality gates failed"):
+        assert_trace_reconstruction_quality(cfg)
+
+
+def test_assert_trace_reconstruction_quality_requires_injection_mode_for_nightly(
+    tmp_path: Path,
+) -> None:
+    cfg = build_cfg(tmp_path)
+    cfg.trace_report_json.write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "events_total": 6,
+                    "quality_score": 100.0,
+                    "stage_flags": {
+                        "has_route": True,
+                        "has_injection": True,
+                        "has_injection_mode": False,
+                        "has_reflection": True,
+                        "has_memory": True,
+                    },
+                },
+                "errors": [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="stage flag missing: has_injection_mode"):
         assert_trace_reconstruction_quality(cfg)
 
 
@@ -414,6 +463,248 @@ def test_assert_mcp_waiting_warning_budget_allows_configured_budget(tmp_path: Pa
         encoding="utf-8",
     )
     assert_mcp_waiting_warning_budget(cfg)
+
+
+def test_classify_gate_failure_maps_waiting_budget_error() -> None:
+    category, summary = classify_gate_failure(
+        RuntimeError("mcp waiting warning budget exceeded: mcp_waiting_events_total=4 > 0")
+    )
+    assert category == "mcp_waiting_budget"
+    assert "budget exceeded" in summary
+
+
+def test_classify_gate_failure_maps_runtime_startup_exit() -> None:
+    category, summary = classify_gate_failure(
+        RuntimeError("runtime process exited before readiness check passed.")
+    )
+    assert category == "runtime_startup_process"
+    assert "readiness" in summary
+
+
+def test_build_gate_failure_repro_commands_includes_stage_command(tmp_path: Path) -> None:
+    cfg = build_cfg(tmp_path)
+    stage_error = GateStepError(
+        title="Discover cache latency gate (A3)",
+        cmd=[
+            "cargo",
+            "test",
+            "-p",
+            "omni-agent",
+            "--test",
+            "mcp_discover_cache",
+        ],
+        returncode=101,
+    )
+    commands = build_gate_failure_repro_commands(
+        cfg, category="discover_cache_gate_subprocess", error=stage_error
+    )
+    assert any(command.startswith("tail -n 200 ") for command in commands)
+    assert any(
+        "cargo test -p omni-agent --test mcp_discover_cache" in command for command in commands
+    )
+    assert any(
+        "discover_calls_use_valkey_read_through_cache_when_configured" in command
+        for command in commands
+    )
+
+
+def test_build_gate_failure_repro_commands_trace_quality_includes_injection_mode_stage(
+    tmp_path: Path,
+) -> None:
+    cfg = build_cfg(tmp_path)
+    cfg.runtime_log_file.write_text(
+        '2026-02-20T00:00:00Z INFO x: event="session.injection.snapshot_created"\n',
+        encoding="utf-8",
+    )
+    commands = build_gate_failure_repro_commands(
+        cfg,
+        category="trace_reconstruction_quality",
+        error=RuntimeError("trace reconstruction quality gates failed"),
+    )
+    trace_commands = [
+        command for command in commands if "reconstruct_omni_agent_trace.py" in command
+    ]
+    assert trace_commands, "expected trace reconstruction repro command to be generated"
+    assert any("--required-stage injection_mode" in command for command in trace_commands)
+
+
+def test_run_trace_reconstruction_gate_nightly_requires_injection_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    cfg = build_cfg(tmp_path)
+    script = cfg.script_dir / "reconstruct_omni_agent_trace.py"
+    script.write_text("print('noop')\n", encoding="utf-8")
+
+    captured_cmds: list[list[str]] = []
+
+    def _fake_run_command(
+        cmd: list[str],
+        *,
+        title: str,
+        cwd: Path,
+        env: dict[str, str],
+        check: bool = True,
+        capture_output: bool = False,
+    ) -> None:
+        del title, cwd, env, check, capture_output
+        captured_cmds.append(cmd)
+
+    monkeypatch.setattr(gate_module, "run_command", _fake_run_command)
+    monkeypatch.setattr(gate_module, "assert_trace_reconstruction_quality", lambda _cfg: None)
+
+    run_trace_reconstruction_gate(cfg, cwd=tmp_path, env={})
+
+    assert captured_cmds, "trace reconstruction gate should invoke run_command"
+    command = captured_cmds[0]
+    stages = [
+        command[index + 1]
+        for index in range(len(command) - 1)
+        if command[index] == "--required-stage"
+    ]
+    assert stages == ["route", "injection", "injection_mode", "reflection", "memory"]
+
+
+def test_run_trace_reconstruction_gate_quick_requires_memory_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    cfg = replace(build_cfg(tmp_path), profile="quick")
+    script = cfg.script_dir / "reconstruct_omni_agent_trace.py"
+    script.write_text("print('noop')\n", encoding="utf-8")
+
+    captured_cmds: list[list[str]] = []
+
+    def _fake_run_command(
+        cmd: list[str],
+        *,
+        title: str,
+        cwd: Path,
+        env: dict[str, str],
+        check: bool = True,
+        capture_output: bool = False,
+    ) -> None:
+        del title, cwd, env, check, capture_output
+        captured_cmds.append(cmd)
+
+    monkeypatch.setattr(gate_module, "run_command", _fake_run_command)
+    monkeypatch.setattr(gate_module, "assert_trace_reconstruction_quality", lambda _cfg: None)
+
+    run_trace_reconstruction_gate(cfg, cwd=tmp_path, env={})
+
+    assert captured_cmds, "trace reconstruction gate should invoke run_command"
+    command = captured_cmds[0]
+    stages = [
+        command[index + 1]
+        for index in range(len(command) - 1)
+        if command[index] == "--required-stage"
+    ]
+    assert stages == ["memory"]
+
+
+def test_write_gate_failure_triage_report_writes_expected_sections(tmp_path: Path) -> None:
+    cfg = build_cfg(tmp_path)
+    cfg.runtime_log_file.write_text(
+        '2026-02-22T00:00:00Z WARN event="mcp.pool.call.waiting"\n',
+        encoding="utf-8",
+    )
+    report = write_gate_failure_triage_report(
+        cfg,
+        error=RuntimeError("mcp waiting warning budget exceeded"),
+        category="mcp_waiting_budget",
+        summary="mcp waiting warning budget exceeded",
+        repro_commands=["echo triage"],
+    )
+    content = report.read_text(encoding="utf-8")
+    assert "Omni Agent Memory CI Failure Triage" in content
+    assert "category: `mcp_waiting_budget`" in content
+    assert "## Repro Commands" in content
+    assert "## Runtime Log Tail" in content
+
+
+def test_write_gate_failure_triage_json_report_writes_expected_payload(tmp_path: Path) -> None:
+    cfg = build_cfg(tmp_path)
+    cfg.runtime_log_file.write_text(
+        '2026-02-22T00:00:00Z WARN event="mcp.pool.call.waiting"\n',
+        encoding="utf-8",
+    )
+    report = write_gate_failure_triage_json_report(
+        cfg,
+        error=RuntimeError("mcp waiting warning budget exceeded"),
+        category="mcp_waiting_budget",
+        summary="mcp waiting warning budget exceeded",
+        repro_commands=["echo triage-json"],
+    )
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert payload["profile"] == "nightly"
+    assert payload["category"] == "mcp_waiting_budget"
+    assert payload["summary"] == "mcp waiting warning budget exceeded"
+    assert payload["repro_commands"] == ["echo triage-json"]
+    artifacts = payload.get("artifacts")
+    assert isinstance(artifacts, list)
+    assert any(item.get("name") == "runtime_log" for item in artifacts if isinstance(item, dict))
+    assert "runtime_log_tail" in payload
+
+
+def test_print_gate_failure_triage_returns_report_path(tmp_path: Path) -> None:
+    cfg = build_cfg(tmp_path)
+    cfg.runtime_log_file.write_text(
+        '2026-02-22T00:00:00Z WARN event="agent.memory.stream_consumer.read_failed"\n',
+        encoding="utf-8",
+    )
+    report = print_gate_failure_triage(cfg, RuntimeError("memory stream warning budget exceeded"))
+    assert report.exists()
+    assert report.name.startswith("omni-agent-memory-ci-failure-nightly-")
+    report_json = report.with_suffix(".json")
+    assert report_json.exists()
+    payload = json.loads(report_json.read_text(encoding="utf-8"))
+    assert payload.get("category") == "memory_stream_budget"
+
+
+def test_read_tail_reads_last_lines_from_large_log(tmp_path: Path) -> None:
+    runtime_log = tmp_path / "runtime.log"
+    with runtime_log.open("wb") as handle:
+        handle.write(b"A" * 350_000)
+        handle.write(b"\n")
+        handle.write(b"line-1\nline-2\nline-3\n")
+
+    tail = read_tail(runtime_log, max_lines=2)
+    assert tail == "line-2\nline-3"
+
+
+def test_count_log_event_handles_large_log_streaming(tmp_path: Path) -> None:
+    runtime_log = tmp_path / "runtime.log"
+    with runtime_log.open("wb") as handle:
+        handle.write(b"B" * 320_000)
+        handle.write(b"\n")
+        handle.write(b'2026-02-20T00:00:00Z WARN event="mcp.pool.call.waiting"\n')
+        handle.write(b'2026-02-20T00:00:01Z WARN event="mcp.pool.call.waiting"\n')
+        handle.write(b'2026-02-20T00:00:02Z WARN event="mcp.pool.connect.waiting"\n')
+
+    assert count_log_event(runtime_log, "mcp.pool.call.waiting") == 2
+    assert count_log_event(runtime_log, "mcp.pool.connect.waiting") == 1
+
+
+def test_wait_for_log_regex_matches_existing_tail(tmp_path: Path) -> None:
+    runtime_log = tmp_path / "runtime.log"
+    runtime_log.write_text(
+        '2026-02-22T00:00:00Z INFO event="gateway.ready"\n',
+        encoding="utf-8",
+    )
+    wait_for_log_regex(runtime_log, r'event="gateway\.ready"', timeout_secs=1)
+
+
+def test_wait_for_log_regex_matches_appended_line(tmp_path: Path) -> None:
+    runtime_log = tmp_path / "runtime.log"
+    runtime_log.write_text("", encoding="utf-8")
+
+    def _append_ready_line() -> None:
+        time.sleep(0.2)
+        with runtime_log.open("a", encoding="utf-8") as handle:
+            handle.write('2026-02-22T00:00:01Z INFO event="gateway.ready"\n')
+
+    worker = threading.Thread(target=_append_ready_line, daemon=True)
+    worker.start()
+    wait_for_log_regex(runtime_log, r'event="gateway\.ready"', timeout_secs=3)
+    worker.join(timeout=1)
 
 
 def test_resolve_runtime_ports_reassigns_when_requested_ports_are_occupied() -> None:

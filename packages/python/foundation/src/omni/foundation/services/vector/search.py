@@ -10,9 +10,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
+import socket
 import threading
 import time
 from collections import OrderedDict
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -53,11 +56,12 @@ _DEFAULT_RESULT_PROJECTION = ("id", "content", "_distance", "metadata")
 _SCANNER_PROFILE_SMALL = {"batch_size": 256, "fragment_readahead": 2, "batch_readahead": 4}
 _SCANNER_PROFILE_MEDIUM = {"batch_size": 1024, "fragment_readahead": 4, "batch_readahead": 16}
 _SCANNER_PROFILE_LARGE = {"batch_size": 2048, "fragment_readahead": 8, "batch_readahead": 32}
-_QUERY_EMBED_PERSIST_SCHEMA = 1
+_QUERY_EMBED_PERSIST_SCHEMA = 2
 _QUERY_EMBED_PERSIST_FILENAME = "query-embed-last.json"
 _LAST_SUCCESSFUL_MCP_EMBED_ENDPOINT: tuple[int, str] | None = None
 _MCP_EMBED_ENDPOINT_LOCK = threading.Lock()
 _QUERY_EMBED_CACHE_MAX = 32
+_QUERY_EMBED_PERSIST_MAX = _QUERY_EMBED_CACHE_MAX
 _QUERY_EMBED_CACHE: OrderedDict[str, tuple[float, ...]] = OrderedDict()
 _QUERY_EMBED_CACHE_LOCK = threading.Lock()
 _QUERY_EMBED_PERSIST_LOCK = threading.Lock()
@@ -69,6 +73,10 @@ _MCP_EMBED_FAILURE_UNTIL: dict[tuple[int, str], float] = {}
 _MCP_EMBED_FAILURE_LOCK = threading.Lock()
 _HTTP_EMBED_FAILURE_UNTIL: dict[str, float] = {}
 _HTTP_EMBED_FAILURE_LOCK = threading.Lock()
+_MCP_PORT_PROBE_TIMEOUT_S = 0.05
+_MCP_PORT_PROBE_TTL_S = 3.0
+_MCP_PORT_PROBE_CACHE: dict[int, tuple[bool, float]] = {}
+_MCP_PORT_PROBE_LOCK = threading.Lock()
 
 
 def _default_mcp_embed_ports() -> tuple[int, ...]:
@@ -177,6 +185,34 @@ def _ordered_mcp_probe_targets() -> list[tuple[int, str]]:
     return [cached_target] + [target for target in default_targets if target != cached_target]
 
 
+def _is_mcp_port_reachable(port: int) -> bool:
+    """Fast TCP reachability probe for MCP embedding port with short-lived cache."""
+    resolved_port = int(port)
+    now = time.monotonic()
+    with _MCP_PORT_PROBE_LOCK:
+        cached = _MCP_PORT_PROBE_CACHE.get(resolved_port)
+        if cached is not None:
+            is_reachable, valid_until = cached
+            if valid_until > now:
+                return bool(is_reachable)
+            _MCP_PORT_PROBE_CACHE.pop(resolved_port, None)
+
+    is_reachable = False
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(_MCP_PORT_PROBE_TIMEOUT_S)
+            is_reachable = sock.connect_ex(("127.0.0.1", resolved_port)) == 0
+    except Exception:
+        is_reachable = False
+
+    with _MCP_PORT_PROBE_LOCK:
+        _MCP_PORT_PROBE_CACHE[resolved_port] = (
+            bool(is_reachable),
+            now + _MCP_PORT_PROBE_TTL_S,
+        )
+    return bool(is_reachable)
+
+
 def _query_embed_cache_size() -> int:
     with _QUERY_EMBED_CACHE_LOCK:
         return len(_QUERY_EMBED_CACHE)
@@ -188,6 +224,35 @@ def _query_embed_persist_path() -> Path:
 
     path = PRJ_CACHE("omni-vector", _QUERY_EMBED_PERSIST_FILENAME)
     return path if isinstance(path, Path) else Path(path)
+
+
+def _query_embed_persist_lock_path(path: Path) -> Path:
+    """Companion lock file for persisted query embedding cache."""
+    return path.with_name(f"{path.name}.lock")
+
+
+@contextmanager
+def _query_embed_process_lock(path: Path):
+    """Cross-process lock for persisted query embedding cache updates."""
+    lock_path = _query_embed_persist_lock_path(path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+        try:
+            import fcntl
+
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        except Exception:
+            # Best-effort: keep in-process lock semantics when flock is unavailable.
+            pass
+        try:
+            yield
+        finally:
+            try:
+                import fcntl
+
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
 
 
 def _query_embed_signature() -> str:
@@ -213,8 +278,70 @@ def _query_embed_cache_key(query: str, signature: str) -> str:
     digest = hashlib.sha256()
     digest.update(signature.encode("utf-8"))
     digest.update(b"\n")
-    digest.update(query.encode("utf-8"))
+    digest.update(str(query).strip().encode("utf-8"))
     return digest.hexdigest()
+
+
+def _coerce_query_embed_vector(raw_vector: Any) -> tuple[float, ...] | None:
+    """Best-effort coercion of persisted vector payload."""
+    if not isinstance(raw_vector, list):
+        return None
+    try:
+        return tuple(float(v) for v in raw_vector)
+    except Exception:
+        return None
+
+
+def _decode_persisted_query_embed_entries(
+    raw: Any,
+) -> tuple[str, OrderedDict[str, tuple[float, ...]]] | None:
+    """Decode persisted query embedding payload (legacy/new schema)."""
+    if not isinstance(raw, dict):
+        return None
+
+    schema = int(raw.get("schema", 0) or 0)
+    signature = str(raw.get("signature") or "")
+    entries: OrderedDict[str, tuple[float, ...]] = OrderedDict()
+
+    # Legacy single-entry payload migration (schema=1).
+    if schema == 1:
+        legacy_key = str(raw.get("key") or "")
+        legacy_vector = _coerce_query_embed_vector(raw.get("vector"))
+        if legacy_key and legacy_vector is not None:
+            entries[legacy_key] = legacy_vector
+    elif schema == _QUERY_EMBED_PERSIST_SCHEMA:
+        entries_raw = raw.get("entries")
+        if not isinstance(entries_raw, list):
+            return None
+        for item in entries_raw:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "")
+            vector = _coerce_query_embed_vector(item.get("vector"))
+            if not key or vector is None:
+                continue
+            entries[key] = vector
+    else:
+        return None
+
+    while len(entries) > _QUERY_EMBED_PERSIST_MAX:
+        entries.popitem(last=False)
+    return signature, entries
+
+
+def _encode_persisted_query_embed_entries(
+    signature: str,
+    entries: OrderedDict[str, tuple[float, ...]],
+) -> dict[str, Any]:
+    """Encode query embedding entries into persisted schema payload."""
+    return {
+        "schema": _QUERY_EMBED_PERSIST_SCHEMA,
+        "signature": signature,
+        "entries": [
+            {"key": entry_key, "vector": [float(v) for v in entry_vector]}
+            for entry_key, entry_vector in entries.items()
+        ],
+    }
 
 
 def _load_persisted_query_vector_record() -> None:
@@ -229,26 +356,20 @@ def _load_persisted_query_vector_record() -> None:
         path = _query_embed_persist_path()
         if not path.exists():
             return
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+        with _query_embed_process_lock(path):
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                return
+        decoded = _decode_persisted_query_embed_entries(raw)
+        if decoded is None:
             return
-        if not isinstance(raw, dict):
-            return
-        if int(raw.get("schema", 0) or 0) != _QUERY_EMBED_PERSIST_SCHEMA:
-            return
-        vector_raw = raw.get("vector")
-        if not isinstance(vector_raw, list):
-            return
-        try:
-            vector = [float(v) for v in vector_raw]
-        except Exception:
-            return
+        signature, entries = decoded
+
         _QUERY_EMBED_PERSIST_RECORD = {
             "schema": _QUERY_EMBED_PERSIST_SCHEMA,
-            "signature": str(raw.get("signature") or ""),
-            "key": str(raw.get("key") or ""),
-            "vector": vector,
+            "signature": signature,
+            "entries": entries,
         }
 
 
@@ -261,11 +382,15 @@ def _get_persisted_query_vector(query: str) -> list[float] | None:
         rec = _QUERY_EMBED_PERSIST_RECORD
         if not isinstance(rec, dict):
             return None
-        if rec.get("signature") != signature or rec.get("key") != key:
+        if rec.get("signature") != signature:
             return None
-        vector = rec.get("vector")
-        if not isinstance(vector, list):
+        entries = rec.get("entries")
+        if not isinstance(entries, OrderedDict):
             return None
+        vector = entries.get(key)
+        if vector is None:
+            return None
+        entries.move_to_end(key, last=True)
         try:
             return [float(v) for v in vector]
         except Exception:
@@ -278,45 +403,72 @@ def _remember_persisted_query_vector(query: str, vector: list[float]) -> None:
         return
     signature = _query_embed_signature()
     key = _query_embed_cache_key(query, signature)
-    payload = {
-        "schema": _QUERY_EMBED_PERSIST_SCHEMA,
-        "signature": signature,
-        "key": key,
-        "vector": [float(v) for v in vector],
-    }
+    path = _query_embed_persist_path()
 
     global _QUERY_EMBED_PERSIST_RECORD, _QUERY_EMBED_PERSIST_LOADED
     with _QUERY_EMBED_PERSIST_LOCK:
-        _QUERY_EMBED_PERSIST_RECORD = payload
-        _QUERY_EMBED_PERSIST_LOADED = True
-
-    path = _query_embed_persist_path()
-    try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = path.with_suffix(path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-        tmp_path.replace(path)
-    except Exception:
-        return
+        with _query_embed_process_lock(path):
+            # Merge persisted disk snapshot to avoid multi-process last-writer-wins data loss.
+            merged_entries: OrderedDict[str, tuple[float, ...]] = OrderedDict()
+            try:
+                if path.exists():
+                    disk_raw = json.loads(path.read_text(encoding="utf-8"))
+                    decoded_disk = _decode_persisted_query_embed_entries(disk_raw)
+                    if decoded_disk is not None and decoded_disk[0] == signature:
+                        merged_entries.update(decoded_disk[1])
+            except Exception:
+                pass
+
+            rec = _QUERY_EMBED_PERSIST_RECORD
+            if (
+                isinstance(rec, dict)
+                and rec.get("signature") == signature
+                and isinstance(rec.get("entries"), OrderedDict)
+            ):
+                merged_entries.update(rec["entries"])
+
+            merged_entries[key] = tuple(float(v) for v in vector)
+            merged_entries.move_to_end(key, last=True)
+            while len(merged_entries) > _QUERY_EMBED_PERSIST_MAX:
+                merged_entries.popitem(last=False)
+
+            payload = _encode_persisted_query_embed_entries(signature, merged_entries)
+            tmp_path = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+            try:
+                tmp_path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+                tmp_path.replace(path)
+            except Exception:
+                with suppress(Exception):
+                    tmp_path.unlink(missing_ok=True)
+                return
+
+            _QUERY_EMBED_PERSIST_RECORD = {
+                "schema": _QUERY_EMBED_PERSIST_SCHEMA,
+                "signature": signature,
+                "entries": merged_entries,
+            }
+            _QUERY_EMBED_PERSIST_LOADED = True
 
 
 def _get_cached_query_vector(query: str) -> tuple[list[float] | None, str]:
     """Get cached embedding for a query and refresh LRU order."""
+    normalized_query = str(query).strip()
     with _QUERY_EMBED_CACHE_LOCK:
-        cached = _QUERY_EMBED_CACHE.get(query)
+        cached = _QUERY_EMBED_CACHE.get(normalized_query)
         if cached is None:
             pass
         else:
-            _QUERY_EMBED_CACHE.move_to_end(query, last=True)
+            _QUERY_EMBED_CACHE.move_to_end(normalized_query, last=True)
             return [float(v) for v in cached], "memory"
 
-    persisted = _get_persisted_query_vector(query)
+    persisted = _get_persisted_query_vector(normalized_query)
     if persisted is None:
         return None, "none"
 
     with _QUERY_EMBED_CACHE_LOCK:
-        _QUERY_EMBED_CACHE[query] = tuple(float(v) for v in persisted)
-        _QUERY_EMBED_CACHE.move_to_end(query, last=True)
+        _QUERY_EMBED_CACHE[normalized_query] = tuple(float(v) for v in persisted)
+        _QUERY_EMBED_CACHE.move_to_end(normalized_query, last=True)
         while len(_QUERY_EMBED_CACHE) > _QUERY_EMBED_CACHE_MAX:
             _QUERY_EMBED_CACHE.popitem(last=False)
     return persisted, "persistent"
@@ -326,12 +478,13 @@ def _remember_query_vector(query: str, vector: list[float]) -> None:
     """Store query embedding in bounded LRU cache."""
     if not vector:
         return
+    normalized_query = str(query).strip()
     with _QUERY_EMBED_CACHE_LOCK:
-        _QUERY_EMBED_CACHE[query] = tuple(float(v) for v in vector)
-        _QUERY_EMBED_CACHE.move_to_end(query, last=True)
+        _QUERY_EMBED_CACHE[normalized_query] = tuple(float(v) for v in vector)
+        _QUERY_EMBED_CACHE.move_to_end(normalized_query, last=True)
         while len(_QUERY_EMBED_CACHE) > _QUERY_EMBED_CACHE_MAX:
             _QUERY_EMBED_CACHE.popitem(last=False)
-    _remember_persisted_query_vector(query, vector)
+    _remember_persisted_query_vector(normalized_query, vector)
 
 
 def _cleanup_mcp_failure_cache(now: float | None = None) -> int:
@@ -525,9 +678,18 @@ async def run_semantic_search(
         ordered_targets = _ordered_mcp_probe_targets()
         mcp_probe_targets: list[tuple[int, str]] = []
         mcp_skipped_backoff = 0
+        mcp_skipped_closed_port = 0
+        mcp_port_reachability: dict[int, bool] = {}
         for target_port, target_path in ordered_targets:
             if _is_mcp_target_in_backoff(target_port, target_path):
                 mcp_skipped_backoff += 1
+                continue
+            port_reachable = mcp_port_reachability.get(target_port)
+            if port_reachable is None:
+                port_reachable = _is_mcp_port_reachable(target_port)
+                mcp_port_reachability[target_port] = port_reachable
+            if not port_reachable:
+                mcp_skipped_closed_port += 1
                 continue
             mcp_probe_targets.append((target_port, target_path))
         mcp_cached_target = _get_cached_mcp_probe_target()
@@ -588,6 +750,7 @@ async def run_semantic_search(
             attempts=mcp_attempts,
             candidate_count=len(ordered_targets),
             skipped_backoff=mcp_skipped_backoff,
+            skipped_closed_port=mcp_skipped_closed_port,
             negative_cache_size=mcp_failure_cache_size,
             budget_ms=round(mcp_budget_s * 1000, 2),
             budget_exhausted=mcp_budget_exhausted,

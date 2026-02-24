@@ -1,0 +1,36 @@
+use serde_json::json;
+
+use crate::agent::MemoryRuntimeStatusSnapshot;
+
+use super::helpers::is_backend_ready;
+
+#[allow(clippy::needless_pass_by_value)]
+pub(in super::super) fn format_memory_runtime_status_json(
+    status: MemoryRuntimeStatusSnapshot,
+) -> serde_json::Value {
+    let backend_ready = is_backend_ready(
+        status.enabled,
+        status.active_backend.is_some(),
+        status.startup_load_status,
+    );
+    json!({
+        "memory_enabled": status.enabled,
+        "configured_backend": status.configured_backend,
+        "active_backend": status.active_backend,
+        "strict_startup": status.strict_startup,
+        "startup_load_status": status.startup_load_status,
+        "backend_ready": backend_ready,
+        "store_path": status.store_path,
+        "table_name": status.table_name,
+        "gate_promote_threshold": status.gate_promote_threshold,
+        "gate_obsolete_threshold": status.gate_obsolete_threshold,
+        "gate_promote_min_usage": status.gate_promote_min_usage,
+        "gate_obsolete_min_usage": status.gate_obsolete_min_usage,
+        "gate_promote_failure_rate_ceiling": status.gate_promote_failure_rate_ceiling,
+        "gate_obsolete_failure_rate_floor": status.gate_obsolete_failure_rate_floor,
+        "gate_promote_min_ttl_score": status.gate_promote_min_ttl_score,
+        "gate_obsolete_max_ttl_score": status.gate_obsolete_max_ttl_score,
+        "episodes_total": status.episodes_total,
+        "q_values_total": status.q_values_total,
+    })
+}

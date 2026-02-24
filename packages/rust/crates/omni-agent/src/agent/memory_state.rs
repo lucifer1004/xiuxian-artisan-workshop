@@ -60,8 +60,8 @@ pub struct MemoryRuntimeStatusSnapshot {
 impl MemoryStateBackend {
     pub(super) fn from_config(memory_cfg: &MemoryConfig) -> Result<Self> {
         let mode = resolve_mode(&memory_cfg.persistence_backend)?;
-        let redis_url = non_empty_env("VALKEY_URL")
-            .or_else(|| non_empty_string(memory_cfg.persistence_valkey_url.clone()));
+        let redis_url = non_empty_string(memory_cfg.persistence_valkey_url.clone())
+            .or_else(|| non_empty_env("VALKEY_URL"));
         let strict_startup_override =
             parse_bool_env("OMNI_AGENT_MEMORY_PERSISTENCE_STRICT_STARTUP")
                 .or(memory_cfg.persistence_strict_startup);
@@ -80,7 +80,7 @@ impl MemoryStateBackend {
             PersistenceBackendMode::Valkey => {
                 let redis_url = redis_url.ok_or_else(|| {
                     anyhow::anyhow!(
-                        "memory persistence backend=valkey requires valkey url (VALKEY_URL or session.valkey_url)"
+                        "memory persistence backend=valkey requires valkey url (session.valkey_url or VALKEY_URL)"
                     )
                 })?;
                 let key = default_valkey_state_key(&key_prefix, &store_config);
@@ -171,14 +171,11 @@ fn parse_bool_env(name: &str) -> Option<bool> {
 
 impl Agent {
     pub fn inspect_memory_runtime_status(&self) -> MemoryRuntimeStatusSnapshot {
-        let (episodes_total, q_values_total) = self
-            .memory_store
-            .as_ref()
-            .map(|store| {
+        let (episodes_total, q_values_total) =
+            self.memory_store.as_ref().map_or((None, None), |store| {
                 let stats = store.stats();
                 (Some(stats.total_episodes), Some(stats.q_table_size))
-            })
-            .unwrap_or((None, None));
+            });
 
         MemoryRuntimeStatusSnapshot {
             enabled: self.config.memory.is_some(),

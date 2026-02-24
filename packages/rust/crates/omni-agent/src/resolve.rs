@@ -1,4 +1,4 @@
-use crate::cli::{TelegramChannelMode, WebhookDedupBackendMode};
+use crate::cli::{DiscordRuntimeMode, TelegramChannelMode, WebhookDedupBackendMode};
 
 pub(crate) fn resolve_string(
     cli_value: Option<String>,
@@ -18,20 +18,6 @@ pub(crate) fn resolve_string(
         return value.to_string();
     }
     default.to_string()
-}
-
-pub(crate) fn resolve_optional_string(
-    cli_value: Option<String>,
-    env_name: &str,
-    settings_value: Option<&str>,
-) -> Option<String> {
-    if cli_value.is_some() {
-        return cli_value;
-    }
-    if let Ok(value) = std::env::var(env_name) {
-        return Some(value);
-    }
-    settings_value.map(ToString::to_string)
 }
 
 pub(crate) fn resolve_positive_u64(
@@ -134,10 +120,46 @@ pub(crate) fn resolve_dedup_backend(
     WebhookDedupBackendMode::Valkey
 }
 
+pub(crate) fn resolve_discord_runtime_mode(
+    cli_mode: Option<DiscordRuntimeMode>,
+    settings_mode: Option<&str>,
+) -> DiscordRuntimeMode {
+    if let Some(mode) = cli_mode {
+        return mode;
+    }
+    if let Ok(raw) = std::env::var("OMNI_AGENT_DISCORD_RUNTIME_MODE") {
+        if let Some(mode) = parse_discord_runtime_mode(&raw) {
+            return mode;
+        }
+        tracing::warn!(
+            value = %raw,
+            "invalid OMNI_AGENT_DISCORD_RUNTIME_MODE; using settings/default"
+        );
+    }
+    if let Some(raw) = settings_mode {
+        if let Some(mode) = parse_discord_runtime_mode(raw) {
+            return mode;
+        }
+        tracing::warn!(
+            value = %raw,
+            "invalid discord.runtime_mode in settings; using default"
+        );
+    }
+    DiscordRuntimeMode::Gateway
+}
+
 fn parse_channel_mode(raw: &str) -> Option<TelegramChannelMode> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "polling" => Some(TelegramChannelMode::Polling),
         "webhook" => Some(TelegramChannelMode::Webhook),
+        _ => None,
+    }
+}
+
+fn parse_discord_runtime_mode(raw: &str) -> Option<DiscordRuntimeMode> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "gateway" => Some(DiscordRuntimeMode::Gateway),
+        "ingress" => Some(DiscordRuntimeMode::Ingress),
         _ => None,
     }
 }

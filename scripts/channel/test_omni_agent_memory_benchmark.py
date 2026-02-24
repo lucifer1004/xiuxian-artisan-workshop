@@ -14,10 +14,9 @@ This script depends on a running local webhook runtime and the black-box probe:
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import os
-import re
 import statistics
 import subprocess
 import sys
@@ -27,36 +26,51 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-try:
-    from test_config_resolver import (
-        normalize_telegram_session_partition_mode,
-        session_partition_mode_from_runtime_log,
-        telegram_session_partition_mode,
-    )
-except ModuleNotFoundError as import_err:
-    _resolver_path = Path(__file__).resolve().with_name("test_config_resolver.py")
-    _resolver_spec = importlib.util.spec_from_file_location("test_config_resolver", _resolver_path)
-    if _resolver_spec is None or _resolver_spec.loader is None:
-        raise RuntimeError(f"failed to load resolver module from {_resolver_path}") from import_err
-    _resolver_module = importlib.util.module_from_spec(_resolver_spec)
-    sys.modules.setdefault(_resolver_spec.name, _resolver_module)
-    _resolver_spec.loader.exec_module(_resolver_module)
-    normalize_telegram_session_partition_mode = (
-        _resolver_module.normalize_telegram_session_partition_mode
-    )
-    session_partition_mode_from_runtime_log = (
-        _resolver_module.session_partition_mode_from_runtime_log
-    )
-    telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+load_sibling_module = importlib.import_module("module_loader").load_sibling_module
+
+_resolver_module = load_sibling_module(
+    module_name="config_resolver",
+    file_name="config_resolver.py",
+    caller_file=__file__,
+    error_context="resolver module",
+)
+normalize_telegram_session_partition_mode = (
+    _resolver_module.normalize_telegram_session_partition_mode
+)
+session_ids_from_runtime_log = _resolver_module.session_ids_from_runtime_log
+session_partition_mode_from_runtime_log = _resolver_module.session_partition_mode_from_runtime_log
+telegram_session_partition_mode = _resolver_module.telegram_session_partition_mode
+
+_log_io_module = load_sibling_module(
+    module_name="log_io",
+    file_name="log_io.py",
+    caller_file=__file__,
+    error_context="shared log I/O helpers",
+)
+_SharedLogCursor = _log_io_module.LogCursor
+_shared_init_log_cursor = _log_io_module.init_log_cursor
+_shared_read_new_log_lines_with_cursor = _log_io_module.read_new_log_lines_with_cursor
+
+_signals_module = load_sibling_module(
+    module_name="memory_benchmark_signals",
+    file_name="memory_benchmark_signals.py",
+    caller_file=__file__,
+    error_context="memory benchmark signal parser",
+)
+has_event = _signals_module.has_event
+strip_ansi = _signals_module.strip_ansi
+token_as_float = _signals_module.token_as_float
+token_as_int = _signals_module.token_as_int
+trim_text = _signals_module.trim_text
 
 DEFAULT_MAX_WAIT = int(os.environ.get("OMNI_BLACKBOX_MAX_WAIT_SECS", "40"))
 DEFAULT_MAX_IDLE_SECS = int(os.environ.get("OMNI_BLACKBOX_MAX_IDLE_SECS", "30"))
 DEFAULT_LOG_FILE = os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/omni-agent-webhook.log")
 FORBIDDEN_LOG_PATTERN = "tools/call: Mcp error"
-
-ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
-EVENT_TOKEN_RE = re.compile(r"\bevent\s*=\s*(?:\"|')?([A-Za-z0-9_.:-]+)")
-LOG_TOKEN_RE = re.compile(r"\b([A-Za-z0-9_.:-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s]+))")
 
 RESET_EVENT = "telegram.command.session_reset.replied"
 FEEDBACK_EVENT = "telegram.command.session_feedback_json.replied"
@@ -65,18 +79,14 @@ RECALL_PLAN_EVENT = "agent.memory.recall.planned"
 RECALL_INJECTED_EVENT = "agent.memory.recall.injected"
 RECALL_SKIPPED_EVENT = "agent.memory.recall.skipped"
 RECALL_FEEDBACK_EVENT = "agent.memory.recall.feedback_updated"
+EMBEDDING_TIMEOUT_FALLBACK_EVENT = "agent.memory.embedding.timeout_fallback_hash"
+EMBEDDING_COOLDOWN_FALLBACK_EVENT = "agent.memory.embedding.cooldown_fallback_hash"
+EMBEDDING_UNAVAILABLE_FALLBACK_EVENT = "agent.memory.embedding.unavailable_fallback_hash"
 BOT_MARKER = "→ Bot:"
 
 
 def infer_session_ids_from_runtime_log(log_file: Path) -> tuple[int | None, int | None, int | None]:
-    try:
-        from test_config_resolver import session_ids_from_runtime_log as resolver
-    except ModuleNotFoundError:
-        script_dir = Path(__file__).resolve().parent
-        if str(script_dir) not in sys.path:
-            sys.path.insert(0, str(script_dir))
-        from test_config_resolver import session_ids_from_runtime_log as resolver
-    return resolver(log_file)
+    return session_ids_from_runtime_log(log_file)
 
 
 def resolve_runtime_partition_mode(log_file: Path) -> str | None:
@@ -138,8 +148,11 @@ class TurnResult:
     feedback_direction: str | None
     feedback_bias_before: float | None
     feedback_bias_after: float | None
-    mcp_error_detected: bool
-    bot_excerpt: str | None
+    embedding_timeout_fallback_seen: bool = False
+    embedding_cooldown_fallback_seen: bool = False
+    embedding_unavailable_fallback_seen: bool = False
+    mcp_error_detected: bool = False
+    bot_excerpt: str | None = None
 
 
 @dataclass
@@ -174,6 +187,10 @@ class ModeSummary:
     feedback_down_count: int
     avg_feedback_delta: float
     mcp_error_turns: int
+    embedding_timeout_fallback_turns: int
+    embedding_cooldown_fallback_turns: int
+    embedding_unavailable_fallback_turns: int
+    embedding_fallback_turns_total: int
 
 
 @dataclass
@@ -461,72 +478,15 @@ def load_scenarios(path: Path) -> tuple[ScenarioSpec, ...]:
 
 
 def count_lines(path: Path) -> int:
-    if not path.exists():
-        return 0
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        return sum(1 for _ in handle)
+    return _shared_init_log_cursor(path, kind="offset").value
 
 
 def read_new_lines(path: Path, cursor: int) -> tuple[int, list[str]]:
-    if not path.exists():
-        return cursor, []
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        lines = handle.read().splitlines()
-    total = len(lines)
-    if total <= cursor:
-        return total, []
-    return total, lines[cursor:]
-
-
-def strip_ansi(value: str) -> str:
-    return ANSI_ESCAPE_RE.sub("", value)
-
-
-def extract_event_token(value: str) -> str | None:
-    match = EVENT_TOKEN_RE.search(value)
-    return match.group(1) if match else None
-
-
-def has_event(lines: list[str], event: str) -> bool:
-    return any(extract_event_token(line) == event for line in lines)
-
-
-def parse_log_tokens(value: str) -> dict[str, str]:
-    normalized = strip_ansi(value)
-    tokens: dict[str, str] = {}
-    for match in LOG_TOKEN_RE.finditer(normalized):
-        key = match.group(1)
-        token = match.group(2) or match.group(3) or match.group(4) or ""
-        tokens[key] = token
-    return tokens
-
-
-def token_as_int(tokens: dict[str, str], key: str) -> int | None:
-    raw = tokens.get(key)
-    if raw is None:
-        return None
-    try:
-        return int(raw)
-    except ValueError:
-        return None
-
-
-def token_as_float(tokens: dict[str, str], key: str) -> float | None:
-    raw = tokens.get(key)
-    if raw is None:
-        return None
-    try:
-        return float(raw)
-    except ValueError:
-        return None
-
-
-def trim_text(value: str | None, *, max_chars: int = 280) -> str | None:
-    if value is None:
-        return None
-    if len(value) <= max_chars:
-        return value
-    return value[: max_chars - 3] + "..."
+    next_cursor, lines = _shared_read_new_log_lines_with_cursor(
+        path,
+        _SharedLogCursor(kind="offset", value=cursor),
+    )
+    return next_cursor.value, lines
 
 
 def run_probe(
@@ -536,7 +496,7 @@ def run_probe(
     expect_event: str,
     allow_no_bot: bool = False,
 ) -> list[str]:
-    start_line = count_lines(config.log_file)
+    start_cursor = count_lines(config.log_file)
     cmd = [
         sys.executable,
         str(config.blackbox_script),
@@ -574,7 +534,7 @@ def run_probe(
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as error:
-        _, lines = read_new_lines(config.log_file, start_line)
+        _, lines = read_new_lines(config.log_file, start_cursor)
         normalized_lines = [strip_ansi(line) for line in lines]
         if prompt.startswith("/") and has_event(normalized_lines, CONTROL_ADMIN_REQUIRED_EVENT):
             raise RuntimeError(
@@ -582,39 +542,23 @@ def run_probe(
                 "set --user-id to an admin-capable Telegram user for benchmark control flows."
             ) from error
         raise
-    _, lines = read_new_lines(config.log_file, start_line)
+    _, lines = read_new_lines(config.log_file, start_cursor)
     return [strip_ansi(line) for line in lines]
 
 
 def parse_turn_signals(lines: list[str]) -> dict[str, Any]:
-    signals: dict[str, Any] = {
-        "plan": None,
-        "decision": None,
-        "feedback": None,
-        "bot_line": None,
-        "mcp_error": False,
-    }
-
-    for line in lines:
-        if FORBIDDEN_LOG_PATTERN in line:
-            signals["mcp_error"] = True
-        if BOT_MARKER in line:
-            signals["bot_line"] = line.split(BOT_MARKER, 1)[1].strip()
-
-        event = extract_event_token(line)
-        if event is None:
-            continue
-
-        tokens = parse_log_tokens(line)
-        if event == RECALL_PLAN_EVENT:
-            signals["plan"] = tokens
-        elif event in (RECALL_INJECTED_EVENT, RECALL_SKIPPED_EVENT):
-            tokens = {**tokens, "event": event}
-            signals["decision"] = tokens
-        elif event == RECALL_FEEDBACK_EVENT:
-            signals["feedback"] = tokens
-
-    return signals
+    return _signals_module.parse_turn_signals(
+        lines,
+        forbidden_log_pattern=FORBIDDEN_LOG_PATTERN,
+        bot_marker=BOT_MARKER,
+        recall_plan_event=RECALL_PLAN_EVENT,
+        recall_injected_event=RECALL_INJECTED_EVENT,
+        recall_skipped_event=RECALL_SKIPPED_EVENT,
+        recall_feedback_event=RECALL_FEEDBACK_EVENT,
+        embedding_timeout_fallback_event=EMBEDDING_TIMEOUT_FALLBACK_EVENT,
+        embedding_cooldown_fallback_event=EMBEDDING_COOLDOWN_FALLBACK_EVENT,
+        embedding_unavailable_fallback_event=EMBEDDING_UNAVAILABLE_FALLBACK_EVENT,
+    )
 
 
 def keyword_hit_ratio(bot_line: str | None, expected_keywords: tuple[str, ...]) -> float | None:
@@ -702,6 +646,9 @@ def build_turn_result(
         feedback_direction=feedback_direction,
         feedback_bias_before=feedback_before,
         feedback_bias_after=feedback_after,
+        embedding_timeout_fallback_seen=bool(signals.get("embedding_timeout_fallback")),
+        embedding_cooldown_fallback_seen=bool(signals.get("embedding_cooldown_fallback")),
+        embedding_unavailable_fallback_seen=bool(signals.get("embedding_unavailable_fallback")),
         mcp_error_detected=bool(signals.get("mcp_error")),
         bot_excerpt=trim_text(bot_line),
     )
@@ -760,6 +707,22 @@ def summarize_mode(
     feedback_up_count = sum(1 for turn in turns if turn.feedback_direction == "up")
     feedback_down_count = sum(1 for turn in turns if turn.feedback_direction == "down")
     mcp_error_turns = sum(1 for turn in turns if turn.mcp_error_detected)
+    embedding_timeout_fallback_turns = sum(
+        1 for turn in turns if turn.embedding_timeout_fallback_seen
+    )
+    embedding_cooldown_fallback_turns = sum(
+        1 for turn in turns if turn.embedding_cooldown_fallback_seen
+    )
+    embedding_unavailable_fallback_turns = sum(
+        1 for turn in turns if turn.embedding_unavailable_fallback_seen
+    )
+    embedding_fallback_turns_total = sum(
+        1
+        for turn in turns
+        if turn.embedding_timeout_fallback_seen
+        or turn.embedding_cooldown_fallback_seen
+        or turn.embedding_unavailable_fallback_seen
+    )
 
     injected_count = sum(1 for turn in turns if turn.decision == "injected")
     skipped_count = sum(1 for turn in turns if turn.decision == "skipped")
@@ -798,6 +761,10 @@ def summarize_mode(
         feedback_down_count=feedback_down_count,
         avg_feedback_delta=maybe_mean(feedback_deltas),
         mcp_error_turns=mcp_error_turns,
+        embedding_timeout_fallback_turns=embedding_timeout_fallback_turns,
+        embedding_cooldown_fallback_turns=embedding_cooldown_fallback_turns,
+        embedding_unavailable_fallback_turns=embedding_unavailable_fallback_turns,
+        embedding_fallback_turns_total=embedding_fallback_turns_total,
     )
 
 
@@ -820,6 +787,19 @@ def compare_mode_summaries(
         "avg_recall_feedback_bias_delta": adaptive.avg_recall_feedback_bias
         - baseline.avg_recall_feedback_bias,
         "mcp_error_turns_delta": float(adaptive.mcp_error_turns - baseline.mcp_error_turns),
+        "embedding_timeout_fallback_turns_delta": float(
+            adaptive.embedding_timeout_fallback_turns - baseline.embedding_timeout_fallback_turns
+        ),
+        "embedding_cooldown_fallback_turns_delta": float(
+            adaptive.embedding_cooldown_fallback_turns - baseline.embedding_cooldown_fallback_turns
+        ),
+        "embedding_unavailable_fallback_turns_delta": float(
+            adaptive.embedding_unavailable_fallback_turns
+            - baseline.embedding_unavailable_fallback_turns
+        ),
+        "embedding_fallback_turns_total_delta": float(
+            adaptive.embedding_fallback_turns_total - baseline.embedding_fallback_turns_total
+        ),
     }
 
 
@@ -965,10 +945,10 @@ def build_markdown_report(
     lines.append("## Mode Summary")
     lines.append("")
     lines.append(
-        "| Mode | Query Turns | Scored Turns | Success Rate | Avg Hit Ratio | Injected Rate | Avg Pipeline ms | Avg k1 | Avg k2 | Avg lambda | Avg Feedback Bias | MCP Error Turns |"
+        "| Mode | Query Turns | Scored Turns | Success Rate | Avg Hit Ratio | Injected Rate | Avg Pipeline ms | Avg k1 | Avg k2 | Avg lambda | Avg Feedback Bias | MCP Error Turns | Embedding Fallback Turns |"
     )
     lines.append(
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
     )
     for mode in config.modes:
         summary = mode_summaries[mode]
@@ -985,7 +965,8 @@ def build_markdown_report(
             f"{format_float(summary.avg_k2)} | "
             f"{format_float(summary.avg_lambda)} | "
             f"{format_float(summary.avg_recall_feedback_bias)} | "
-            f"{summary.mcp_error_turns} |"
+            f"{summary.mcp_error_turns} | "
+            f"{summary.embedding_fallback_turns_total} |"
         )
     lines.append("")
 
@@ -1004,6 +985,9 @@ def build_markdown_report(
     if baseline and adaptive and min(baseline.scored_turns, adaptive.scored_turns) < 5:
         confidence_note = "low"
     total_mcp_error_turns = sum(summary.mcp_error_turns for summary in mode_summaries.values())
+    total_embedding_fallback_turns = sum(
+        summary.embedding_fallback_turns_total for summary in mode_summaries.values()
+    )
 
     lines.append("## Confidence")
     lines.append("")
@@ -1018,6 +1002,10 @@ def build_markdown_report(
     if total_mcp_error_turns > 0:
         lines.append(
             f"- MCP error interference observed on `{total_mcp_error_turns}` query turn(s)."
+        )
+    if total_embedding_fallback_turns > 0:
+        lines.append(
+            f"- Embedding fallback observed on `{total_embedding_fallback_turns}` query turn(s)."
         )
     lines.append("")
 

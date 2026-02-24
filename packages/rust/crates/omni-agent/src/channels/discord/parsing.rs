@@ -1,22 +1,23 @@
 use crate::channels::traits::ChannelMessage;
 
 use super::channel::DiscordChannel;
+use super::serenity_payload::parse_discord_ingress_payload;
 
 impl DiscordChannel {
-    fn is_user_allowed(&self, identity: &str) -> bool {
+    fn is_allowed_identity(&self, identity: &str) -> bool {
         let normalized = self.normalize_identity(identity);
         self.allowed_users
             .iter()
             .any(|entry| entry == "*" || entry == &normalized)
     }
 
-    fn is_any_user_allowed<'a, I>(&self, identities: I) -> bool
+    fn is_any_identity_allowed<'a, I>(&self, identities: I) -> bool
     where
         I: IntoIterator<Item = &'a str>,
     {
         identities
             .into_iter()
-            .any(|identity| self.is_user_allowed(identity))
+            .any(|identity| self.is_allowed_identity(identity))
     }
 
     fn is_guild_allowed(&self, guild_id: &str) -> bool {
@@ -31,57 +32,87 @@ impl DiscordChannel {
             .build_session_key(scope, channel_id, user_identity)
     }
 
-    /// Parse a Discord gateway-style message payload into a channel message.
+    fn build_acl_identities(
+        &self,
+        author_id: &str,
+        username: Option<&str>,
+        author_role_ids: &[String],
+    ) -> Vec<String> {
+        let mut identities = vec![self.normalize_identity(author_id)];
+        if let Some(name) = username {
+            let normalized_name = self.normalize_identity(name);
+            if !normalized_name.is_empty() {
+                identities.push(normalized_name);
+            }
+        }
+        identities.extend(
+            author_role_ids
+                .iter()
+                .map(|role_id| self.normalize_identity(&format!("role:{role_id}"))),
+        );
+
+        let mut deduped = Vec::new();
+        for identity in identities {
+            if identity.is_empty() {
+                continue;
+            }
+            if !deduped.iter().any(|existing| existing == &identity) {
+                deduped.push(identity);
+            }
+        }
+        deduped
+    }
+
+    /// Parse a Discord ingress payload into a channel message.
     ///
-    /// Expected shape (subset):
-    /// - `id` (message id)
-    /// - `content` (text)
-    /// - `channel_id`
-    /// - optional `guild_id` (missing for DMs)
-    /// - `author.id`, optional `author.username`
+    /// Supported shapes (subset):
+    /// - gateway-style message payload (`id`, `content`, `channel_id`, optional `guild_id`,
+    ///   `author.id`)
+    /// - slash command interaction payload (`type=2`) normalized to command text (for example
+    ///   `/session memory json`).
     pub fn parse_gateway_message(&self, event: &serde_json::Value) -> Option<ChannelMessage> {
-        let message_id = event.get("id").and_then(serde_json::Value::as_str)?;
-        let text = event.get("content").and_then(serde_json::Value::as_str)?;
+        let payload = parse_discord_ingress_payload(event)?;
+        let message_id = payload.event_id;
+        let text = payload.content;
         if text.trim().is_empty() {
             return None;
         }
 
-        let channel_id = event
-            .get("channel_id")
-            .and_then(serde_json::Value::as_str)?;
-        let guild_id = event.get("guild_id").and_then(serde_json::Value::as_str);
-        let author = event.get("author")?;
-        let author_id = author.get("id").and_then(serde_json::Value::as_str)?;
-        let username = author.get("username").and_then(serde_json::Value::as_str);
+        let channel_id = payload.channel_id.to_string();
+        let guild_id = payload.guild_id.as_ref().map(ToString::to_string);
+        let author_id = payload.author_id.to_string();
+        let username = payload.author_username.as_deref();
+        let author_role_ids = payload.author_role_ids;
+        let acl_identities = self.build_acl_identities(&author_id, username, &author_role_ids);
 
-        let allowed_by_guild = guild_id.is_some_and(|id| self.is_guild_allowed(id));
-        let mut identities = vec![author_id];
-        if let Some(name) = username {
-            identities.push(name);
-        }
-        let allowed_by_user = self.is_any_user_allowed(identities);
+        let allowed_by_guild = guild_id
+            .as_deref()
+            .is_some_and(|id| self.is_guild_allowed(id));
+        let allowed_by_user =
+            self.is_any_identity_allowed(acl_identities.iter().map(String::as_str));
 
         if !allowed_by_guild && !allowed_by_user {
             tracing::warn!(
                 "Discord: ignoring message from unauthorized sender (user_id={}, username={}, guild_id={}, channel_id={})",
                 author_id,
                 username.unwrap_or("(not set)"),
-                guild_id.unwrap_or("(dm)"),
+                guild_id.as_deref().unwrap_or("(dm)"),
                 channel_id
             );
             return None;
         }
 
-        let scope = guild_id.unwrap_or("dm");
-        let sender = self.normalize_identity(author_id);
-        let session_key = self.build_session_key(scope, channel_id, &sender);
+        let scope = guild_id.as_deref().unwrap_or("dm");
+        let sender = self.normalize_identity(&author_id);
+        let session_key = self.build_session_key(scope, &channel_id, &sender);
+        self.cache_sender_acl_identities(&sender, &channel_id, acl_identities);
 
         Some(ChannelMessage {
             id: format!("discord_{channel_id}_{message_id}"),
             sender,
-            recipient: channel_id.to_string(),
+            recipient: channel_id.clone(),
             session_key,
-            content: text.to_string(),
+            content: text,
             channel: "discord".to_string(),
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

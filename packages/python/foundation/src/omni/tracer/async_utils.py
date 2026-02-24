@@ -38,7 +38,11 @@ def dispatch_coroutine(
         loop = asyncio.get_running_loop()
     except RuntimeError:
         if mode == DispatchMode.BACKGROUND:
-            thread = threading.Thread(target=run_async_blocking, args=(coro,), daemon=True)
+
+            def _run_in_thread(coro_obj: Coroutine[Any, Any, Any]) -> None:
+                asyncio.run(coro_obj)
+
+            thread = threading.Thread(target=_run_in_thread, args=(coro,), daemon=True)
             thread.start()
             return
         run_async_blocking(coro)

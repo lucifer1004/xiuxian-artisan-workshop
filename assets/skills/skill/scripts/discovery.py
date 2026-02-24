@@ -10,6 +10,7 @@ Key Features:
 - "Anti-hallucination" quick guide for LLM
 """
 
+import re
 from typing import Any
 
 from omni.foundation.api.decorators import skill_command
@@ -51,14 +52,12 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
 
     This is the "Google for Agent Tools" - always consult when unsure.
     """
-    from omni.core.kernel import get_kernel
     from omni.core.router.main import RouterRegistry
 
-    kernel = get_kernel()
     router = RouterRegistry.get()
 
     # Use the Grand Unified Router's Hybrid logic
-    results = await router.route_hybrid(query=intent, limit=limit, threshold=0.1)
+    results = await router.route_hybrid(query=intent, limit=limit, threshold=0.1, keyword_only=True)
 
     if not results:
         return {
@@ -81,25 +80,65 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
         canonical = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
+    def _map_type(type_hint: str) -> str:
+        lower = type_hint.lower()
+        if "bool" in lower:
+            return "boolean"
+        if "int" in lower:
+            return "integer"
+        if "float" in lower or "double" in lower:
+            return "number"
+        if "list" in lower or "array" in lower:
+            return "array"
+        if "dict" in lower or "object" in lower:
+            return "object"
+        return "string"
+
+    def _infer_schema_from_description(text: str) -> dict[str, Any]:
+        if not text:
+            return {}
+        props: dict[str, dict[str, str]] = {}
+        required: list[str] = []
+        in_args = False
+        for line in text.splitlines():
+            stripped = line.strip()
+            lower = stripped.lower()
+            if lower.startswith("args:"):
+                in_args = True
+                continue
+            if not in_args:
+                continue
+            if lower.startswith(("returns:", "example:", "examples:")):
+                break
+            match = re.match(r"^[\-\*]\s*`?([a-zA-Z_][\w]*)`?\s*:\s*([a-zA-Z_\[\]\|]+)", stripped)
+            if not match:
+                continue
+            name = match.group(1)
+            hint = match.group(2)
+            props[name] = {"type": _map_type(hint)}
+            is_required = "(required)" in lower
+            is_optional = "optional" in lower or "default" in lower or "=" in stripped
+            if is_required and not is_optional:
+                required.append(name)
+
+        if not props:
+            return {}
+        return {
+            "type": "object",
+            "properties": props,
+            "required": required,
+        }
+
     details = []
 
     for r in results:
         full_id = f"{r.skill_name}.{r.command_name}"
-        # Fetch actual handler to get the most accurate config
-        handler = kernel.skill_context.get_command(full_id)
-
-        description = ""
-        input_schema = {}
-        file_path = ""
-
-        if handler:
-            if hasattr(handler, "_skill_config"):
-                config = handler._skill_config
-                description = config.get("description", "")
-                input_schema = config.get("input_schema", {})
-                file_path = config.get("file_path", "")
-            else:
-                description = (handler.__doc__ or "").split("\n")[0]
+        description = str(getattr(r, "description", "") or "")
+        file_path = str(getattr(r, "file_path", "") or "")
+        raw_schema = getattr(r, "input_schema", {})
+        input_schema = dict(raw_schema) if isinstance(raw_schema, dict) else {}
+        if not input_schema and description:
+            input_schema = _infer_schema_from_description(description)
 
         # 1. Calculate direct path to SKILL.md
         from omni.foundation.config.skills import SKILLS_DIR

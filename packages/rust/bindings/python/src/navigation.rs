@@ -14,14 +14,14 @@ pub fn get_file_outline(path: String, language: Option<&str>) -> String {
     Python::attach(|py| {
         py.detach(|| {
             TagExtractor::outline_file(&path, language)
-                .unwrap_or_else(|e| format!("[Error generating outline: {}]", e))
+                .unwrap_or_else(|e| format!("[Error generating outline: {e}]"))
         })
     })
 }
 
 /// Generate outlines for multiple files in parallel using scoped threads.
 ///
-/// This is significantly faster than calling get_file_outline() for each file
+/// This is significantly faster than calling `get_file_outline()` for each file
 /// because it eliminates Python-Rust boundary crossing overhead.
 ///
 /// Args:
@@ -29,7 +29,7 @@ pub fn get_file_outline(path: String, language: Option<&str>) -> String {
 ///     language: Optional default language hint
 ///
 /// Returns:
-///     JSON string with file_path -> outline mapping
+///     JSON string with `file_path -> outline` mapping
 #[pyfunction]
 #[pyo3(signature = (paths, language = None))]
 pub fn get_files_outline(paths: Vec<String>, language: Option<&str>) -> String {
@@ -41,7 +41,7 @@ pub fn get_files_outline(paths: Vec<String>, language: Option<&str>) -> String {
         .into_par_iter()
         .map(|path| {
             let outline = TagExtractor::outline_file(&path, language)
-                .unwrap_or_else(|e| format!("[Error: {}]", e));
+                .unwrap_or_else(|e| format!("[Error: {e}]"));
             (path, outline)
         })
         .collect();
@@ -68,14 +68,14 @@ pub fn search_code(path: String, pattern: String, language: Option<&str>) -> Str
     Python::attach(|py| {
         py.detach(|| {
             TagExtractor::search_file(&path, &pattern, language)
-                .unwrap_or_else(|e| format!("[Search error: {}]", e))
+                .unwrap_or_else(|e| format!("[Search error: {e}]"))
         })
     })
 }
 
 /// Search for AST patterns using complex YAML rules.
 ///
-/// This allows for sophisticated queries with constraints like 'inside', 'has', 'not'.
+/// This allows sophisticated queries with constraints like `inside`, `has`, and `not`.
 ///
 /// Args:
 ///   path: File path to search
@@ -87,7 +87,7 @@ pub fn search_with_rules(path: String, yaml_rule: String, language: Option<&str>
     Python::attach(|py| {
         py.detach(|| {
             TagExtractor::search_with_rules(&path, &yaml_rule, language)
-                .unwrap_or_else(|e| format!("[Rule search error: {}]", e))
+                .unwrap_or_else(|e| format!("[Rule search error: {e}]"))
         })
     })
 }
@@ -107,8 +107,8 @@ pub fn search_directory(path: String, pattern: String, file_pattern: Option<&str
                 file_pattern: file_pattern.unwrap_or("**/*").to_string(),
                 ..Default::default()
             };
-            TagExtractor::search_directory(&path, &pattern, config)
-                .unwrap_or_else(|e| format!("[Search error: {}]", e))
+            TagExtractor::search_directory(&path, &pattern, &config)
+                .unwrap_or_else(|e| format!("[Search error: {e}]"))
         })
     })
 }

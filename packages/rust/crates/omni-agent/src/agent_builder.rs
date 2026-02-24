@@ -1,10 +1,11 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::{Result, anyhow};
 use omni_agent::{
-    Agent, AgentConfig, ContextBudgetStrategy, LITELLM_DEFAULT_URL, MemoryConfig, RuntimeSettings,
-    load_mcp_config,
+    Agent, AgentConfig, ContextBudgetStrategy, LITELLM_DEFAULT_URL, McpServerEntry, MemoryConfig,
+    RuntimeSettings, load_mcp_config,
 };
+use xiuxian_llm::embedding::backend::{EmbeddingBackendKind, parse_embedding_backend_kind};
 
 use crate::resolve::{
     parse_bool_from_env, parse_positive_f32_from_env, parse_positive_u32_from_env,
@@ -60,39 +61,212 @@ fn normalize_unit_f32(value: f32, source: &str) -> Option<f32> {
     None
 }
 
+fn normalize_inference_url(raw: &str) -> String {
+    let u = raw.trim_end_matches('/');
+    if u.ends_with("/v1/chat/completions") || u.ends_with("/chat/completions") {
+        u.to_string()
+    } else if u.ends_with("/v1") {
+        format!("{u}/chat/completions")
+    } else {
+        format!("{}/v1/chat/completions", u.trim_end_matches('/'))
+    }
+}
+
+fn resolve_inference_url(
+    litellm_proxy_url: Option<&str>,
+    agent_inference_url: Option<&str>,
+) -> String {
+    let raw = litellm_proxy_url
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            agent_inference_url
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        })
+        .unwrap_or(LITELLM_DEFAULT_URL);
+    normalize_inference_url(raw)
+}
+
+fn resolve_inference_url_with_settings(
+    litellm_proxy_url: Option<&str>,
+    agent_inference_url: Option<&str>,
+    runtime_settings: &RuntimeSettings,
+) -> String {
+    if litellm_proxy_url
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty())
+        || agent_inference_url
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty())
+    {
+        return resolve_inference_url(litellm_proxy_url, agent_inference_url);
+    }
+
+    if let Some(base_url) = runtime_settings
+        .inference
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return normalize_inference_url(base_url);
+    }
+
+    if runtime_settings
+        .inference
+        .provider
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|provider| provider.eq_ignore_ascii_case("minimax"))
+    {
+        return normalize_inference_url("https://api.minimax.io/v1");
+    }
+
+    resolve_inference_url(litellm_proxy_url, agent_inference_url)
+}
+
+type RuntimeEmbeddingBackendMode = EmbeddingBackendKind;
+
+fn parse_embedding_backend_mode(raw: Option<&str>) -> Option<RuntimeEmbeddingBackendMode> {
+    let trimmed = raw.map(str::trim).filter(|value| !value.is_empty());
+    let parsed = parse_embedding_backend_kind(trimmed);
+    if parsed.is_none()
+        && let Some(value) = trimmed
+    {
+        tracing::warn!(
+            invalid_value = %value,
+            "invalid embedding backend mode in runtime settings; defaulting to http"
+        );
+    }
+    parsed
+}
+
+fn resolve_runtime_embedding_backend_mode(
+    runtime_settings: &RuntimeSettings,
+) -> RuntimeEmbeddingBackendMode {
+    parse_embedding_backend_mode(non_empty_env("OMNI_AGENT_MEMORY_EMBEDDING_BACKEND").as_deref())
+        .or_else(|| {
+            parse_embedding_backend_mode(runtime_settings.memory.embedding_backend.as_deref())
+        })
+        .or_else(|| {
+            parse_embedding_backend_mode(non_empty_env("OMNI_AGENT_EMBED_BACKEND").as_deref())
+        })
+        .or_else(|| parse_embedding_backend_mode(runtime_settings.embedding.backend.as_deref()))
+        .or_else(|| {
+            parse_embedding_backend_mode(non_empty_env("OMNI_AGENT_LLM_BACKEND").as_deref())
+        })
+        .or_else(|| parse_embedding_backend_mode(runtime_settings.agent.llm_backend.as_deref()))
+        .unwrap_or(RuntimeEmbeddingBackendMode::Http)
+}
+
+fn resolve_runtime_embedding_base_url(
+    runtime_settings: &RuntimeSettings,
+    backend_mode: RuntimeEmbeddingBackendMode,
+) -> Option<String> {
+    let trim_non_empty = |value: Option<&str>| {
+        value
+            .map(str::trim)
+            .filter(|candidate| !candidate.is_empty())
+            .map(ToString::to_string)
+    };
+    match backend_mode {
+        RuntimeEmbeddingBackendMode::Http => {
+            trim_non_empty(runtime_settings.memory.embedding_base_url.as_deref())
+                .or_else(|| trim_non_empty(runtime_settings.embedding.client_url.as_deref()))
+                .or_else(|| trim_non_empty(runtime_settings.embedding.litellm_api_base.as_deref()))
+        }
+        RuntimeEmbeddingBackendMode::OpenAiHttp => {
+            trim_non_empty(runtime_settings.memory.embedding_base_url.as_deref())
+                .or_else(|| trim_non_empty(runtime_settings.embedding.litellm_api_base.as_deref()))
+                .or_else(|| trim_non_empty(runtime_settings.embedding.client_url.as_deref()))
+        }
+        RuntimeEmbeddingBackendMode::LiteLlmRs => {
+            trim_non_empty(runtime_settings.memory.embedding_base_url.as_deref())
+                .or_else(|| trim_non_empty(runtime_settings.embedding.litellm_api_base.as_deref()))
+                .or_else(|| trim_non_empty(runtime_settings.embedding.client_url.as_deref()))
+        }
+    }
+}
+
+fn endpoint_origin(url: &str) -> Option<String> {
+    let parsed = reqwest::Url::parse(url).ok()?;
+    let host = parsed.host_str()?;
+    let port = parsed.port_or_known_default()?;
+    Some(format!("{}://{}:{}", parsed.scheme(), host, port))
+}
+
+fn validate_inference_url_origin(
+    inference_url: &str,
+    mcp_servers: &[McpServerEntry],
+    allow_shared_origin: bool,
+) -> Result<()> {
+    if allow_shared_origin {
+        return Ok(());
+    }
+    let Some(inference_origin) = endpoint_origin(inference_url) else {
+        return Ok(());
+    };
+    let conflicts: Vec<String> = mcp_servers
+        .iter()
+        .filter_map(|entry| {
+            let url = entry.url.as_deref()?;
+            let origin = endpoint_origin(url)?;
+            if origin == inference_origin {
+                Some(format!("{}={}", entry.name, url))
+            } else {
+                None
+            }
+        })
+        .collect();
+    if conflicts.is_empty() {
+        return Ok(());
+    }
+    Err(anyhow!(
+        "invalid inference URL: {} shares origin {} with MCP server(s): {}. \
+Use a dedicated LLM endpoint via LITELLM_PROXY_URL or OMNI_AGENT_INFERENCE_URL \
+(for example {}). If you intentionally run MCP and inference on one origin, set \
+OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN=true.",
+        inference_url,
+        inference_origin,
+        conflicts.join(", "),
+        LITELLM_DEFAULT_URL,
+    ))
+}
+
+#[allow(clippy::too_many_lines)]
 pub(crate) async fn build_agent(
-    mcp_config_path: &PathBuf,
+    mcp_config_path: &Path,
     runtime_settings: &RuntimeSettings,
 ) -> Result<Agent> {
     let mcp_servers = load_mcp_config(mcp_config_path)?
         .into_iter()
         .filter(|e| e.url.is_some())
         .collect::<Vec<_>>();
-    let inference_url = std::env::var("LITELLM_PROXY_URL")
-        .or_else(|_| std::env::var("OMNI_AGENT_INFERENCE_URL"))
-        .unwrap_or_else(|_| {
-            mcp_servers
-                .first()
-                .and_then(|e| e.url.as_ref())
-                .map(|u| {
-                    let base = u
-                        .trim_end_matches('/')
-                        .strip_suffix("/sse")
-                        .unwrap_or_else(|| u.trim_end_matches('/'));
-                    format!("{base}/v1/chat/completions")
-                })
-                .unwrap_or_else(|| LITELLM_DEFAULT_URL.to_string())
-        });
-    let inference_url = {
-        let u = inference_url.trim_end_matches('/');
-        if u.ends_with("/v1/chat/completions") {
-            u.to_string()
-        } else {
-            format!("{}/v1/chat/completions", u.trim_end_matches('/'))
-        }
-    };
-    // When unset, use empty so MCP inference uses project default (e.g. MiniMax-M2.5 from settings).
-    let model = std::env::var("OMNI_AGENT_MODEL").unwrap_or_default();
+    let litellm_proxy_url = non_empty_env("LITELLM_PROXY_URL");
+    let agent_inference_url = non_empty_env("OMNI_AGENT_INFERENCE_URL");
+    let inference_url = resolve_inference_url_with_settings(
+        litellm_proxy_url.as_deref(),
+        agent_inference_url.as_deref(),
+        runtime_settings,
+    );
+    let allow_shared_origin =
+        parse_bool_from_env("OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN").unwrap_or(false);
+    validate_inference_url_origin(&inference_url, &mcp_servers, allow_shared_origin)?;
+    // Model precedence:
+    // 1) OMNI_AGENT_MODEL
+    // 2) inference.model from settings
+    // 3) empty (provider-side default)
+    let model = non_empty_env("OMNI_AGENT_MODEL")
+        .or_else(|| {
+            runtime_settings
+                .inference
+                .model
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+        })
+        .unwrap_or_default();
     let max_tool_rounds = parse_positive_u32_from_env("OMNI_AGENT_MAX_TOOL_ROUNDS")
         .or(runtime_settings.telegram.max_tool_rounds)
         .unwrap_or(30);
@@ -112,6 +286,9 @@ pub(crate) async fn build_agent(
             .agent_connect_retries
             .filter(|v| *v > 0))
         .unwrap_or(3);
+    let mcp_strict_startup = parse_bool_from_env("OMNI_AGENT_MCP_STRICT_STARTUP")
+        .or(runtime_settings.mcp.agent_strict_startup)
+        .unwrap_or(true);
     let mcp_connect_retry_backoff_ms =
         parse_positive_u64_from_env("OMNI_AGENT_MCP_CONNECT_RETRY_BACKOFF_MS")
             .or(runtime_settings
@@ -188,12 +365,63 @@ pub(crate) async fn build_agent(
     {
         memory.path = path.to_string();
     }
+    if let Some(backend) = non_empty_env("OMNI_AGENT_MEMORY_EMBEDDING_BACKEND")
+        .or_else(|| {
+            runtime_settings
+                .memory
+                .embedding_backend
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+        })
+        .or_else(|| non_empty_env("OMNI_AGENT_EMBED_BACKEND"))
+        .or_else(|| {
+            runtime_settings
+                .embedding
+                .backend
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+        })
+    {
+        memory.embedding_backend = Some(backend);
+    }
+    if let Some(batch_max_size) =
+        parse_positive_usize_from_env("OMNI_AGENT_MEMORY_EMBED_BATCH_MAX_SIZE")
+            .or_else(|| parse_positive_usize_from_env("OMNI_AGENT_EMBED_BATCH_MAX_SIZE"))
+            .or(runtime_settings
+                .embedding
+                .batch_max_size
+                .filter(|value| *value > 0))
+    {
+        memory.embedding_batch_max_size = Some(batch_max_size);
+    }
+    if let Some(batch_max_concurrency) =
+        parse_positive_usize_from_env("OMNI_AGENT_MEMORY_EMBED_BATCH_MAX_CONCURRENCY")
+            .or_else(|| parse_positive_usize_from_env("OMNI_AGENT_EMBED_BATCH_MAX_CONCURRENCY"))
+            .or(runtime_settings
+                .embedding
+                .batch_max_concurrency
+                .filter(|value| *value > 0))
+    {
+        memory.embedding_batch_max_concurrency = Some(batch_max_concurrency);
+    }
     if let Some(model) = runtime_settings
-        .embedding
-        .litellm_model
+        .memory
+        .embedding_model
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .or_else(|| {
+            runtime_settings
+                .embedding
+                .litellm_model
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        })
         .or_else(|| {
             runtime_settings
                 .embedding
@@ -206,20 +434,22 @@ pub(crate) async fn build_agent(
         memory.embedding_model = Some(model.to_string());
     }
     if let Some(embedding_dim) = runtime_settings
-        .embedding
-        .dimension
+        .memory
+        .embedding_dim
         .filter(|value| *value > 0)
+        .or(runtime_settings
+            .embedding
+            .dimension
+            .filter(|value| *value > 0))
     {
         memory.embedding_dim = embedding_dim;
     }
-    if let Some(base_url) = runtime_settings
-        .embedding
-        .client_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    let embedding_backend_mode = parse_embedding_backend_mode(memory.embedding_backend.as_deref())
+        .unwrap_or_else(|| resolve_runtime_embedding_backend_mode(runtime_settings));
+    if let Some(base_url) =
+        resolve_runtime_embedding_base_url(runtime_settings, embedding_backend_mode)
     {
-        memory.embedding_base_url = Some(base_url.to_string());
+        memory.embedding_base_url = Some(base_url);
     }
     if let Some(backend) = runtime_settings
         .memory
@@ -387,7 +617,9 @@ pub(crate) async fn build_agent(
     {
         memory.embedding_model = Some(model);
     }
-    if let Some(base_url) = non_empty_env("OMNI_AGENT_EMBED_BASE_URL") {
+    if let Some(base_url) = non_empty_env("OMNI_AGENT_MEMORY_EMBEDDING_BASE_URL")
+        .or_else(|| non_empty_env("OMNI_AGENT_EMBED_BASE_URL"))
+    {
         memory.embedding_base_url = Some(base_url);
     }
     if let Some(embedding_dim) = parse_positive_usize_from_env("OMNI_AGENT_MEMORY_EMBEDDING_DIM") {
@@ -396,7 +628,9 @@ pub(crate) async fn build_agent(
     if let Some(backend) = non_empty_env("OMNI_AGENT_MEMORY_PERSISTENCE_BACKEND") {
         memory.persistence_backend = backend;
     }
-    if let Some(url) = non_empty_env("VALKEY_URL") {
+    if memory.persistence_valkey_url.is_none()
+        && let Some(url) = non_empty_env("VALKEY_URL")
+    {
         memory.persistence_valkey_url = Some(url);
     }
     if let Some(prefix) = non_empty_env("OMNI_AGENT_MEMORY_VALKEY_KEY_PREFIX") {
@@ -483,6 +717,7 @@ pub(crate) async fn build_agent(
         mcp_pool_size,
         mcp_handshake_timeout_secs,
         mcp_connect_retries,
+        mcp_strict_startup,
         mcp_connect_retry_backoff_ms,
         mcp_tool_timeout_secs,
         mcp_list_tools_cache_ttl_ms,
@@ -495,6 +730,7 @@ pub(crate) async fn build_agent(
         context_budget_strategy = context_budget_strategy.as_str(),
         summary_max_segments,
         summary_max_chars,
+        memory_embedding_backend = memory.embedding_backend.as_deref().unwrap_or(embedding_backend_mode.as_str()),
         memory_embedding_model = memory.embedding_model.as_deref().unwrap_or(""),
         memory_embedding_dim = memory.embedding_dim,
         memory_embedding_base_url = memory.embedding_base_url.as_deref().unwrap_or(""),
@@ -531,6 +767,7 @@ pub(crate) async fn build_agent(
         mcp_pool_size,
         mcp_handshake_timeout_secs,
         mcp_connect_retries,
+        mcp_strict_startup,
         mcp_connect_retry_backoff_ms,
         mcp_tool_timeout_secs,
         mcp_list_tools_cache_ttl_ms,
@@ -548,3 +785,7 @@ pub(crate) async fn build_agent(
     };
     Agent::from_config(config).await
 }
+
+#[cfg(test)]
+#[path = "../tests/agent_builder/inference_url.rs"]
+mod tests;

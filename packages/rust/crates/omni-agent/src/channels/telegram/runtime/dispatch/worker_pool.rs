@@ -10,7 +10,28 @@ use crate::channels::telegram::runtime_config::TelegramRuntimeConfig;
 use crate::channels::telegram::session_gate::SessionGate;
 use crate::channels::traits::{Channel, ChannelMessage};
 
+use super::interrupt::ForegroundInterruptController;
 use super::turn::process_foreground_message;
+
+struct ActiveGenerationGuard {
+    controller: ForegroundInterruptController,
+    session_id: String,
+}
+
+impl ActiveGenerationGuard {
+    fn new(controller: ForegroundInterruptController, session_id: String) -> Self {
+        Self {
+            controller,
+            session_id,
+        }
+    }
+}
+
+impl Drop for ActiveGenerationGuard {
+    fn drop(&mut self) {
+        self.controller.end_generation(&self.session_id);
+    }
+}
 
 pub(super) fn spawn_foreground_dispatcher(
     agent: Arc<Agent>,
@@ -18,6 +39,7 @@ pub(super) fn spawn_foreground_dispatcher(
     mut rx: mpsc::Receiver<ChannelMessage>,
     runtime_config: TelegramRuntimeConfig,
     session_gate: SessionGate,
+    interrupt_controller: ForegroundInterruptController,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let semaphore = Arc::new(Semaphore::new(
@@ -26,13 +48,13 @@ pub(super) fn spawn_foreground_dispatcher(
         let mut workers = JoinSet::new();
 
         while let Some(msg) = rx.recv().await {
-            let permit = match Arc::clone(&semaphore).acquire_owned().await {
-                Ok(permit) => permit,
-                Err(_) => break,
+            let Ok(permit) = Arc::clone(&semaphore).acquire_owned().await else {
+                break;
             };
             let worker_agent = Arc::clone(&agent);
             let worker_channel = Arc::clone(&channel);
             let worker_session_gate = session_gate.clone();
+            let worker_interrupt_controller = interrupt_controller.clone();
             workers.spawn(async move {
                 let _permit = permit;
                 let session_id = build_session_id(&msg.channel, &msg.session_key);
@@ -63,11 +85,15 @@ pub(super) fn spawn_foreground_dispatcher(
                         "foreground worker waited for session lock"
                     );
                 }
+                let interrupt_rx = worker_interrupt_controller.begin_generation(&session_id);
+                let _active_generation_guard =
+                    ActiveGenerationGuard::new(worker_interrupt_controller, session_id.clone());
                 process_foreground_message(
                     worker_agent,
                     worker_channel,
                     msg,
                     runtime_config.foreground_turn_timeout_secs,
+                    interrupt_rx,
                 )
                 .await;
             });

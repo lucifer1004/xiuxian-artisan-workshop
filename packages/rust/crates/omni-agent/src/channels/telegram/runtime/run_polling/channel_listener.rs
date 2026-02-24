@@ -8,6 +8,7 @@ use crate::channels::traits::{Channel, ChannelMessage};
 
 use super::super::super::channel::TelegramChannel;
 
+#[allow(clippy::type_complexity)]
 pub(super) fn start_polling_listener(
     bot_token: String,
     allowed_users: Vec<String>,

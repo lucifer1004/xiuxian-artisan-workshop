@@ -5,9 +5,9 @@ Trinity Architecture - Core Layer
 Tests the Python wrapper for Rust OmniCell Executor.
 """
 
-import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestActionType:
@@ -140,13 +140,46 @@ class TestOmniCellRunner:
     @pytest.mark.asyncio
     async def test_run_auto_classify(self, runner_without_rust):
         """Test auto-classification when action not specified."""
-        from omni.core.skills.runtime.omni_cell import ActionType
-
         with patch.object(runner_without_rust, "_run_fallback", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = MagicMock(status="success", data=None, metadata={})
 
             # Should auto-detect observe
             await runner_without_rust.run("ls")
+
+    @pytest.mark.asyncio
+    async def test_run_via_rust_prefers_action_aware_execute(self):
+        """When available, action-aware Rust binding should be used."""
+        from omni.core.skills.runtime.omni_cell import ActionType, OmniCellRunner
+
+        runner = OmniCellRunner()
+        bridge = MagicMock()
+        bridge.execute_with_action = MagicMock(return_value='{"ok": true}')
+        bridge.execute = MagicMock(return_value='{"legacy": true}')
+        runner._rust_bridge = bridge
+
+        result = await runner._run_via_rust("ls", ActionType.OBSERVE, True)
+
+        assert result.status.value == "success"
+        bridge.execute_with_action.assert_called_once_with("ls", "observe", True)
+        bridge.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_run_via_rust_falls_back_to_legacy_execute(self):
+        """Legacy Rust binding should still work when action-aware method is missing."""
+        from omni.core.skills.runtime.omni_cell import ActionType, OmniCellRunner
+
+        class _LegacyBridge:
+            pass
+
+        runner = OmniCellRunner()
+        bridge = _LegacyBridge()
+        bridge.execute = MagicMock(return_value='{"ok": true}')
+        runner._rust_bridge = bridge
+
+        result = await runner._run_via_rust("ls", ActionType.OBSERVE, True)
+
+        assert result.status.value == "success"
+        bridge.execute.assert_called_once_with("ls", True)
 
 
 class TestMutationSafety:

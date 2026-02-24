@@ -104,7 +104,7 @@ flowchart TB
         Conf["conf/<br/>settings, references, skills"]
         Python["python/"]
         Rust["rust/"]
-        Shared["shared/schemas/"]
+        Contracts["rust/contracts/"]
     end
 
     subgraph PythonPkgs["packages/python/"]
@@ -123,7 +123,7 @@ flowchart TB
     Root --> Conf
     Root --> Python
     Root --> Rust
-    Root --> Shared
+    Root --> Contracts
     Python --> Agent
     Python --> Core
     Python --> Foundation
@@ -595,10 +595,10 @@ We don’t treat “knowledge” as one big blob. There are **three complementar
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | **LinkGraph (Zettelkasten)** | All project markdown; **link graph** and structure.                                                            | “Which notes link to this?” “Navigate by structure.” `knowledge.link_graph_search`, `knowledge.link_graph_links`.             |
 | **Librarian (vector)**       | Chunked and embedded **subset** of content (`knowledge_dirs`).                                                 | “Find by meaning.” Semantic + keyword hybrid. `knowledge.recall`, and the vector leg of `knowledge.link_graph_hybrid_search`. |
-| **Knowledge Graph**          | **Entities and relations** extracted at ingest (LLM), stored in Rust (`xiuxian-wendao`), persisted in LanceDB. | “Who uses what?” “What’s related?” Recall boost and entity rerank in **dual-core fusion** (LinkGraph + vector + KG).          |
+| **Knowledge Graph**          | **Entities and relations** extracted at ingest (LLM), stored in Rust (`xiuxian-wendao`), persisted in LanceDB. | “Who uses what?” “What’s related?” Recall boost and entity rerank in **fusion** (LinkGraph + vector + KG).                    |
 
 **Knowledge graph pipeline**  
-During ingest (`knowledge.ingest_document` with `extract_entities` / `store_in_graph`), the pipeline can run **entity extraction** (LLM) on each chunk and write **entities** (PERSON, ORGANIZATION, CONCEPT, PROJECT, TOOL, …) and **relations** (WORKS_FOR, USES, DEPENDS_ON, DOCUMENTED_IN, …) into the **Rust knowledge graph** (`PyKnowledgeGraph`). Data lives in LanceDB (`kg_entities`, `kg_relations`); a **KG cache** (`load_kg_from_lance_cached`) avoids reloading on every recall. In **recall**, the dual-core layer can **boost** chunks whose sources are connected to query entities in the graph (`apply_kg_recall_boost`), so retrieval combines semantic similarity, LinkGraph proximity, and graph-backed entity relevance. See [Dual-Core Knowledge Architecture](docs/architecture/link-graph-knowledge-enhancement.md) and [Knowledge Matrix](docs/human/architecture/knowledge-matrix.md).
+During ingest (`knowledge.ingest_document` with `extract_entities` / `store_in_graph`), the pipeline can run **entity extraction** (LLM) on each chunk and write **entities** (PERSON, ORGANIZATION, CONCEPT, PROJECT, TOOL, …) and **relations** (WORKS_FOR, USES, DEPENDS_ON, DOCUMENTED_IN, …) into the **Rust knowledge graph** (`PyKnowledgeGraph`). Data lives in LanceDB (`kg_entities`, `kg_relations`); a **KG cache** (`load_kg_from_lance_cached`) avoids reloading on every recall. In **recall**, the fusion layer can **boost** chunks whose sources are connected to query entities in the graph (`apply_kg_recall_boost`), so retrieval combines semantic similarity, LinkGraph proximity, and graph-backed entity relevance. See [Fusion Knowledge Architecture](docs/01_core/wendao/graph-enhancement.md) and [Knowledge Matrix](docs/human/architecture/knowledge-matrix.md).
 
 - **Incremental ingestion**: only changed files are re-chunked and re-embedded (hash-based manifest).
 - **Chunk modes**: AUTO (detect doc vs code), TEXT (docs), AST (code) so the right granularity is indexed.
@@ -750,21 +750,25 @@ omni run knowledge recall "How does our auth work?"
 
 ## Where to go next
 
-| You want to…                                            | Go here                                                                                                                                                                                          |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Set up step-by-step                                     | [Getting Started](docs/tutorials/getting-started.md)                                                                                                                                             |
-| See all skills and commands                             | [Skills directory](assets/skills/README.md)                                                                                                                                                      |
-| Add extensions or run scripts                           | [Extension system](docs/reference/extension-system.md)                                                                                                                                           |
-| Understand scenarios and value                          | [Why Omni-Dev Fusion](docs/explanation/why-omni-dev-fusion.md)                                                                                                                                   |
-| Nix and hermetic env                                    | [Why Nix](docs/explanation/why-nix.md)                                                                                                                                                           |
-| Nickel and typed config                                 | [Nickel–Rust responsibilities](docs/reference/nickel-rust-responsibilities.md), `packages/ncl/`                                                                                                  |
-| Rust crates and bindings                                | [Rust crates](docs/architecture/rust-crates.md)                                                                                                                                                  |
-| Self-evolution (MemRL) and Omega                        | [Omni-Memory](docs/reference/omni-memory.md), [Omega Architecture](docs/human/architecture/omega-architecture.md), [Unified Execution Engine](docs/reference/unified-execution-engine-design.md) |
-| Knowledge graph and dual-core (LinkGraph + vector + KG) | [Dual-Core Knowledge Architecture](docs/architecture/link-graph-knowledge-enhancement.md), [Knowledge Matrix](docs/human/architecture/knowledge-matrix.md)                                       |
-| Browse all docs                                         | [Documentation index](docs/index.md)                                                                                                                                                             |
+| You want to…                                         | Go here                                                                                                                                                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Set up step-by-step                                  | [Getting Started](docs/tutorials/getting-started.md)                                                                                                                                             |
+| See all skills and commands                          | [Skills directory](assets/skills/README.md)                                                                                                                                                      |
+| Add extensions or run scripts                        | [Extension system](docs/reference/extension-system.md)                                                                                                                                           |
+| Understand scenarios and value                       | [Why Omni-Dev Fusion](docs/explanation/why-omni-dev-fusion.md)                                                                                                                                   |
+| Nix and hermetic env                                 | [Why Nix](docs/explanation/why-nix.md)                                                                                                                                                           |
+| Nickel and typed config                              | [Nickel–Rust responsibilities](docs/reference/nickel-rust-responsibilities.md), `packages/ncl/`                                                                                                  |
+| Rust crates and bindings                             | [Rust crates](docs/architecture/rust-crates.md)                                                                                                                                                  |
+| Self-evolution (MemRL) and Omega                     | [Omni-Memory](docs/reference/omni-memory.md), [Omega Architecture](docs/human/architecture/omega-architecture.md), [Unified Execution Engine](docs/reference/unified-execution-engine-design.md) |
+| Knowledge graph and fusion (LinkGraph + vector + KG) | [Fusion Knowledge Architecture](docs/01_core/wendao/graph-enhancement.md), [Knowledge Matrix](docs/human/architecture/knowledge-matrix.md)                                                       |
+| Browse all docs                                      | [Documentation index](docs/index.md)                                                                                                                                                             |
 
 ---
 
 ## License
 
 See [LICENSE](LICENSE) in this repository.
+
+---
+
+This project is developed by **CyberXiuXian Artisan Studio** (赛博修仙创意工坊).

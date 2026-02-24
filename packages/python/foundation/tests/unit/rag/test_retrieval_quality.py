@@ -63,12 +63,14 @@ def _offline_embedding_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
     import omni.agent.cli.mcp_embed as mcp_embed_module
     import omni.foundation.services.embedding as embedding_module
     import omni.foundation.services.vector.crud as vector_crud_module
+    import omni.foundation.services.vector.hybrid as vector_hybrid_module
     import omni.foundation.services.vector.search as vector_search_module
 
     offline_service = _OfflineEmbeddingService()
 
     monkeypatch.setattr(embedding_module, "get_embedding_service", lambda: offline_service)
     monkeypatch.setattr(vector_crud_module, "get_embedding_service", lambda: offline_service)
+    monkeypatch.setattr(vector_hybrid_module, "get_embedding_service", lambda: offline_service)
 
     async def _embed_via_mcp(
         texts: list[str],

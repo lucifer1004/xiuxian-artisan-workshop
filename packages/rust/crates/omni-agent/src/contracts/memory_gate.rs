@@ -16,7 +16,7 @@ pub struct MemoryGateDecision {
     pub verdict: MemoryGateVerdict,
     /// Confidence for this verdict.
     pub confidence: f32,
-    /// ReAct evidence references.
+    /// `ReAct` evidence references.
     pub react_evidence_refs: Vec<String>,
     /// Graph evidence references.
     pub graph_evidence_refs: Vec<String>,

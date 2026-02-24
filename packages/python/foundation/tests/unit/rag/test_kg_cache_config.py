@@ -1,6 +1,6 @@
-"""Tests for KG cache integration: _load_kg, _save_kg via Rust load_kg_from_lance_cached.
+"""Tests for KG cache integration: _load_kg, _save_kg via Rust load_kg_from_valkey_cached.
 
-Verifies that Python dual_core._config uses the Rust-side KG cache correctly:
+Verifies that Python fusion._config uses the Rust-side KG cache correctly:
 - Repeated _load_kg returns consistent results (cache hit)
 - _save_kg invalidates cache so next _load_kg sees fresh data
 """
@@ -8,23 +8,36 @@ Verifies that Python dual_core._config uses the Rust-side KG cache correctly:
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
 pytest.importorskip("omni_core_rs")
 
 
+def _has_graph_valkey() -> bool:
+    return bool(
+        (os.getenv("XIUXIAN_WENDAO_GRAPH_VALKEY_URL") or "").strip()
+        or (os.getenv("VALKEY_URL") or "").strip()
+    )
+
+
+pytestmark = pytest.mark.skipif(
+    not _has_graph_valkey(),
+    reason="Graph Valkey backend unavailable (set XIUXIAN_WENDAO_GRAPH_VALKEY_URL or VALKEY_URL).",
+)
+
+
 class TestLoadKgRustCache:
-    """Tests for _load_kg using Rust load_kg_from_lance_cached."""
+    """Tests for _load_kg using Rust load_kg_from_valkey_cached."""
 
-    def test_load_kg_empty_dir_returns_empty_graph(self, tmp_path):
-        """Empty Lance dir returns graph with 0 entities (graceful fallback)."""
-        from omni.rag.dual_core._config import _load_kg
+    def test_load_kg_empty_scope_returns_empty_graph(self, tmp_path):
+        """Unused scope key returns an empty graph (graceful fallback)."""
+        from omni.rag.fusion._config import _load_kg
 
-        lance_dir = tmp_path / "knowledge.lance"
-        lance_dir.mkdir(parents=True)
+        scope_key = str(tmp_path / "knowledge.scope")
 
-        kg = _load_kg(lance_dir=str(lance_dir))
+        kg = _load_kg(scope_key=scope_key)
         assert kg is not None
         stats = json.loads(kg.get_stats())
         assert stats["total_entities"] == 0
@@ -34,10 +47,9 @@ class TestLoadKgRustCache:
         """Create graph, save via _save_kg, load via _load_kg returns same data."""
         from omni_core_rs import PyEntity, PyKnowledgeGraph, PyRelation
 
-        from omni.rag.dual_core._config import _load_kg, _save_kg
+        from omni.rag.fusion._config import _load_kg, _save_kg
 
-        lance_dir = tmp_path / "knowledge.lance"
-        lance_dir.mkdir(parents=True)
+        scope_key = str(tmp_path / "knowledge.scope")
 
         kg = PyKnowledgeGraph()
         e = PyEntity(
@@ -46,9 +58,9 @@ class TestLoadKgRustCache:
             description="A test tool for cache verification",
         )
         kg.add_entity(e)
-        _save_kg(kg, lance_dir=lance_dir)
+        _save_kg(kg, scope_key=scope_key)
 
-        loaded = _load_kg(lance_dir=lance_dir)
+        loaded = _load_kg(scope_key=scope_key)
         assert loaded is not None
         stats = json.loads(loaded.get_stats())
         assert stats["total_entities"] == 1
@@ -58,19 +70,18 @@ class TestLoadKgRustCache:
         """Repeated _load_kg with same path returns consistent result (Rust cache hit)."""
         from omni_core_rs import PyEntity, PyKnowledgeGraph
 
-        from omni.rag.dual_core._config import _load_kg, _save_kg
+        from omni.rag.fusion._config import _load_kg, _save_kg
 
-        lance_dir = tmp_path / "knowledge.lance"
-        lance_dir.mkdir(parents=True)
+        scope_key = str(tmp_path / "knowledge.scope")
 
         kg = PyKnowledgeGraph()
         kg.add_entity(
             PyEntity(name="CacheTest", entity_type="CONCEPT", description="For cache test")
         )
-        _save_kg(kg, lance_dir=lance_dir)
+        _save_kg(kg, scope_key=scope_key)
 
-        g1 = _load_kg(lance_dir=lance_dir)
-        g2 = _load_kg(lance_dir=lance_dir)
+        g1 = _load_kg(scope_key=scope_key)
+        g2 = _load_kg(scope_key=scope_key)
         assert g1 is not None
         assert g2 is not None
         s1 = json.loads(g1.get_stats())
@@ -81,17 +92,16 @@ class TestLoadKgRustCache:
         """_save_kg invalidates Rust cache; next _load_kg sees fresh data."""
         from omni_core_rs import PyEntity, PyKnowledgeGraph
 
-        from omni.rag.dual_core._config import _load_kg, _save_kg
+        from omni.rag.fusion._config import _load_kg, _save_kg
 
-        lance_dir = tmp_path / "knowledge.lance"
-        lance_dir.mkdir(parents=True)
+        scope_key = str(tmp_path / "knowledge.scope")
 
         # Initial: 1 entity
         kg1 = PyKnowledgeGraph()
         kg1.add_entity(PyEntity(name="First", entity_type="CONCEPT", description="First entity"))
-        _save_kg(kg1, lance_dir=lance_dir)
+        _save_kg(kg1, scope_key=scope_key)
 
-        loaded1 = _load_kg(lance_dir=lance_dir)
+        loaded1 = _load_kg(scope_key=scope_key)
         assert loaded1 is not None
         assert json.loads(loaded1.get_stats())["total_entities"] == 1
 
@@ -99,9 +109,9 @@ class TestLoadKgRustCache:
         kg2 = PyKnowledgeGraph()
         kg2.add_entity(PyEntity(name="First", entity_type="CONCEPT", description="First entity"))
         kg2.add_entity(PyEntity(name="Second", entity_type="CONCEPT", description="Second entity"))
-        _save_kg(kg2, lance_dir=lance_dir)
+        _save_kg(kg2, scope_key=scope_key)
 
         # Next load must see 2 entities (cache was invalidated)
-        loaded2 = _load_kg(lance_dir=lance_dir)
+        loaded2 = _load_kg(scope_key=scope_key)
         assert loaded2 is not None
         assert json.loads(loaded2.get_stats())["total_entities"] == 2

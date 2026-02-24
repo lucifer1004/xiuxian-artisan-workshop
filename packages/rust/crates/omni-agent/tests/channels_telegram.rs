@@ -1,4 +1,36 @@
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -7,7 +39,8 @@ use anyhow::Result;
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use omni_agent::{
     Channel, TELEGRAM_MAX_MESSAGE_LENGTH, TelegramChannel, TelegramSessionPartition,
-    decorate_chunk_for_telegram, split_message_for_telegram,
+    decorate_chunk_for_telegram, markdown_to_telegram_html, markdown_to_telegram_markdown_v2,
+    split_message_for_telegram,
 };
 use tokio::sync::Mutex;
 
@@ -931,26 +964,111 @@ async fn telegram_send_preserves_full_text_when_markdown_escaping_would_overflow
         api_base,
     );
 
-    let message = ".".repeat(9000);
+    let message = "!".repeat(9000);
     channel.send(&message, "123456").await?;
 
     let requests = state.requests.lock().await;
     let chunks = split_message_for_telegram(&message);
+    assert!(
+        chunks.iter().enumerate().any(|(index, chunk)| {
+            let plain = decorate_chunk_for_telegram(chunk, index, chunks.len());
+            markdown_to_telegram_markdown_v2(&plain).chars().count() > TELEGRAM_MAX_MESSAGE_LENGTH
+        }),
+        "test precondition failed: at least one chunk must overflow MarkdownV2 limit"
+    );
     assert_eq!(requests.len(), chunks.len());
 
     for (index, request) in requests.iter().enumerate() {
-        assert!(
-            request.get("parse_mode").is_none(),
-            "overflow-prone markdown chunks should be sent as plain text"
-        );
+        let plain_chunk = decorate_chunk_for_telegram(&chunks[index], index, chunks.len());
+        let markdown_chunk = markdown_to_telegram_markdown_v2(&plain_chunk);
+        let html_chunk = markdown_to_telegram_html(&plain_chunk);
+        let markdown_overflow = markdown_chunk.chars().count() > TELEGRAM_MAX_MESSAGE_LENGTH;
+        let html_overflow = html_chunk.chars().count() > TELEGRAM_MAX_MESSAGE_LENGTH;
+        let prefer_html = markdown_chunk
+            .chars()
+            .count()
+            .saturating_sub(html_chunk.chars().count())
+            >= 256;
+        let parse_mode = request
+            .get("parse_mode")
+            .and_then(serde_json::Value::as_str);
         let text = request
             .get("text")
             .and_then(serde_json::Value::as_str)
             .unwrap_or_default();
-        let expected = decorate_chunk_for_telegram(&chunks[index], index, chunks.len());
-        assert_eq!(text, expected);
-        assert!(text.chars().count() <= TELEGRAM_MAX_MESSAGE_LENGTH);
+
+        if markdown_overflow && !html_overflow {
+            assert_eq!(
+                parse_mode,
+                Some("HTML"),
+                "overflow-prone markdown chunks should use HTML fallback when possible"
+            );
+            assert_eq!(text, html_chunk);
+        } else if markdown_overflow && html_overflow {
+            assert!(
+                parse_mode.is_none(),
+                "chunks that overflow markdown and html should use plain text fallback"
+            );
+            assert_eq!(text, plain_chunk);
+        } else if prefer_html && !html_overflow {
+            assert_eq!(
+                parse_mode,
+                Some("HTML"),
+                "chunks with heavy markdown escaping should prefer HTML for stable rendering"
+            );
+            assert_eq!(text, html_chunk);
+        } else {
+            assert_eq!(
+                parse_mode,
+                Some("MarkdownV2"),
+                "chunks that fit markdown should keep MarkdownV2"
+            );
+            assert_eq!(text, markdown_chunk);
+        }
+
+        assert!(plain_chunk.chars().count() <= TELEGRAM_MAX_MESSAGE_LENGTH);
     }
+
+    handle.abort();
+    Ok(())
+}
+
+#[tokio::test]
+async fn telegram_send_truncates_very_large_payload_to_prevent_flood() -> Result<()> {
+    let Some((api_base, state, handle)) = spawn_mock_telegram_api(None).await? else {
+        return Ok(());
+    };
+    let channel = TelegramChannel::new_with_base_url(
+        "fake-token".to_string(),
+        vec!["*".to_string()],
+        vec![],
+        api_base,
+    );
+
+    let chunk_chars = TELEGRAM_MAX_MESSAGE_LENGTH - omni_agent::chunk_marker_reserve_chars();
+    let message = "x".repeat(chunk_chars * 40);
+    let expected_chunks = split_message_for_telegram(&message).len();
+    assert!(
+        expected_chunks > 32,
+        "precondition: payload should exceed auto-chunk guard threshold"
+    );
+
+    channel.send(&message, "123456").await?;
+
+    let requests = state.requests.lock().await;
+    assert!(
+        requests.len() < expected_chunks,
+        "output guard should reduce sent chunks"
+    );
+    let last = requests
+        .last()
+        .and_then(|request| request.get("text"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    assert!(
+        last.contains("Output truncated after"),
+        "last message should announce truncation guard"
+    );
 
     handle.abort();
     Ok(())

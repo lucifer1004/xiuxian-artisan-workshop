@@ -35,10 +35,14 @@ pub fn compute_link_graph_saliency(
     };
 
     let decay = safe_base * (-safe_decay * safe_days).exp();
-    let activation_boost = normalized.alpha * (1.0 + activation_count as f64).ln();
+    let activation_boost = normalized.alpha * (1.0 + u64_to_f64_saturating(activation_count)).ln();
     clamp_finite(
         decay + activation_boost,
         normalized.minimum,
         normalized.maximum,
     )
+}
+
+fn u64_to_f64_saturating(value: u64) -> f64 {
+    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
 }

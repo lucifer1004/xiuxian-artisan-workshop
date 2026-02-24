@@ -9,16 +9,18 @@ use super::super::runtime::{
 
 pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_found(
     runtime_status: crate::agent::MemoryRuntimeStatusSnapshot,
+    session_scope: &str,
 ) -> String {
     let mut lines = vec![
         "## Session Memory".to_string(),
         "No memory recall snapshot found for this session yet.".to_string(),
-        "".to_string(),
+        format!("- Session scope: `{session_scope}`"),
+        String::new(),
         "### Persistence".to_string(),
     ];
     lines.extend(format_memory_runtime_status_lines(runtime_status));
     lines.extend([
-        "".to_string(),
+        String::new(),
         "### Next Step".to_string(),
         "- Send at least one normal turn first (non-command message).".to_string(),
         "- Then run `/session memory` again.".to_string(),
@@ -26,14 +28,17 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_fou
     lines.join("\n")
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_found_telegram(
     runtime_status: crate::agent::MemoryRuntimeStatusSnapshot,
+    session_scope: &str,
 ) -> String {
     let backend_ready = memory_backend_ready(&runtime_status);
     [
         "## Session Memory".to_string(),
         "No memory recall snapshot found for this session yet.".to_string(),
-        "".to_string(),
+        format!("- Session scope: `{session_scope}`"),
+        String::new(),
         "### Persistence".to_string(),
         format!(
             "- `memory_enabled={}` `backend_ready={}` `startup_load_status={}`",
@@ -47,7 +52,7 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_fou
             format_optional_string(runtime_status.configured_backend.clone())
         ),
         format_memory_gate_policy_compact_line(&runtime_status),
-        "".to_string(),
+        String::new(),
         "### Next Step".to_string(),
         "- Send at least one normal turn first (non-command message).".to_string(),
         "- Then run `/session memory` again.".to_string(),
@@ -59,10 +64,12 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_fou
 pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_found_json(
     metrics: crate::agent::MemoryRecallMetricsSnapshot,
     runtime_status: crate::agent::MemoryRuntimeStatusSnapshot,
+    session_scope: &str,
 ) -> String {
     json!({
         "kind": "session_memory",
         "available": false,
+        "session_scope": session_scope,
         "status": "not_found",
         "hint": "Run at least one normal turn first (non-command message).",
         "runtime": format_memory_runtime_status_json(runtime_status),

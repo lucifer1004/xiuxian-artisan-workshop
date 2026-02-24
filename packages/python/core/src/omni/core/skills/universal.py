@@ -13,14 +13,28 @@ import inspect
 import os
 import re
 import time
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from omni.foundation.config.logging import get_logger
 from pydantic import BaseModel
 
+from omni.foundation.config.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from omni.core.skills.discovery import DiscoveredSkill
+    from omni.core.skills.extensions import SkillExtensionLoader
+    from omni.core.skills.tools_loader import ToolsLoader
+
 logger = get_logger("omni.core.universal")
+
+
+def create_tools_loader(scripts_path: str | Path, skill_name: str):
+    """Late-bound proxy to tools loader factory for patchable tests and circular safety."""
+    from .tools_loader import create_tools_loader as _create_tools_loader
+
+    return _create_tools_loader(scripts_path, skill_name)
 
 
 def _record_phase(phase: str, duration_ms: float, **extra: Any) -> None:
@@ -114,7 +128,7 @@ class UniversalScriptSkill:
         Python端只负责提供默认的 metadata 结构。
         For full metadata, use RustSkillScanner.scan_skill() or load from Index.
         """
-        # 读取 activation 配置（这是 Python 端需要的）
+        # Read activation config; Python runtime only needs this subset.
         activation: SkillActivationConfig | None = None
         activation_file = self._path / "activation.yaml"
         if activation_file.exists():
@@ -229,7 +243,9 @@ class UniversalScriptSkill:
             logger.debug(f"[{self._name}] Reusing cached modules (fast-path)")
         else:
             skill_module_prefix = f"{self._name}."
-            modules_to_remove = [k for k in sys.modules if k.startswith(skill_module_prefix)]
+            modules_to_remove = [
+                k for k in sys.modules if k == self._name or k.startswith(skill_module_prefix)
+            ]
             for mod in modules_to_remove:
                 del sys.modules[mod]
             cleared_modules = len(modules_to_remove)
@@ -377,12 +393,26 @@ class UniversalScriptSkill:
         if not self._loaded:
             raise RuntimeError(f"Skill {self._name} is not loaded")
 
-        # Get handler - try full name first, then simple name
-        handler = self._tools_loader.get_command(cmd_name)
-        if handler is None:
-            # Try extracting simple name from "git.status" -> "status"
-            simple_name = cmd_name.split(".")[-1] if "." in cmd_name else cmd_name
-            handler = self._tools_loader.get_command_simple(simple_name)
+        handler = self._resolve_handler(cmd_name)
+
+        # Auto-heal path: hot-reload may temporarily empty command cache.
+        if handler is None and self._should_self_heal_missing_command():
+            logger.warning(
+                "Command lookup failed with empty cache; attempting one-shot loader reload",
+                skill=self._name,
+                command=cmd_name,
+            )
+            try:
+                self._tools_loader.load_all()
+            except Exception as exc:  # pragma: no cover - defensive path
+                logger.warning(
+                    "One-shot loader reload failed during command lookup",
+                    skill=self._name,
+                    command=cmd_name,
+                    error=str(exc),
+                )
+            else:
+                handler = self._resolve_handler(cmd_name)
 
         if handler is None:
             available = self._tools_loader.list_commands()
@@ -396,6 +426,23 @@ class UniversalScriptSkill:
         if inspect.iscoroutinefunction(handler):
             return await handler(**kwargs)
         return handler(**kwargs)
+
+    def _resolve_handler(self, cmd_name: str) -> Callable | None:
+        """Resolve handler by full command first, then simple command name."""
+        handler = self._tools_loader.get_command(cmd_name)
+        if handler is not None:
+            return handler
+
+        simple_name = cmd_name.split(".")[-1] if "." in cmd_name else cmd_name
+        return self._tools_loader.get_command_simple(simple_name)
+
+    def _should_self_heal_missing_command(self) -> bool:
+        """Return True when command cache is unexpectedly empty and can be reloaded."""
+        if self._tools_loader is None:
+            return False
+        if self._tools_loader.commands:
+            return False
+        return (self._path / "scripts").exists()
 
     def _validate_required_args(
         self, handler: Callable, cmd_name: str, args: dict[str, Any]
@@ -540,8 +587,3 @@ def create_skill_from_assets(assets_path: str | Path, skill_name: str) -> Univer
     """Create a universal skill from assets directory."""
     skill_path = Path(assets_path) / skill_name
     return UniversalScriptSkill(skill_name=skill_name, skill_path=skill_path)
-
-
-# Import ToolsLoader and SkillExtensionLoader at module level for circular import avoidance
-from .extensions import SkillExtensionLoader
-from .tools_loader import ToolsLoader, create_tools_loader

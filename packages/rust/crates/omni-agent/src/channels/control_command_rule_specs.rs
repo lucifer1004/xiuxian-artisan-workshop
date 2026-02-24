@@ -1,10 +1,11 @@
-//! Shared parser and matcher for user-friendly control-command rules.
+//! Shared parser and matcher for structured control-command rules.
 //!
-//! Rule format: `<command-selector>=>user1,user2`
+//! Rules are parsed from explicit selector and principal lists:
+//! - selectors: `commands[]`
+//! - principals: `allow.users[]` / `allow.roles[]`
 //!
 //! Supported selectors (left-hand side):
 //! - Exact command path: `/session partition`, `session.partition`, `/resume drop`
-//! - Multiple selectors in one rule: `/reset,/clear`
 //! - Group wildcard: `session.*` (matches `session.partition`, `session.reset`, ...)
 //! - Global wildcard: `*`
 //!
@@ -39,42 +40,13 @@ impl CommandSelector {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct CommandSelectorAuthRule {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandSelectorAuthRule {
     selectors: Vec<CommandSelector>,
     allowed_identities: Vec<String>,
 }
 
 impl CommandSelectorAuthRule {
-    fn from_spec(
-        spec: &str,
-        rule_label: &str,
-        normalize_identity: fn(&str) -> String,
-    ) -> Result<Self> {
-        let (selector_raw, users_raw) = spec.split_once("=>").ok_or_else(|| {
-            anyhow::anyhow!(
-                "invalid {rule_label} `{spec}`; expected `<command-selector>=>user1,user2`"
-            )
-        })?;
-
-        let selectors = parse_selectors(selector_raw, rule_label)?;
-
-        let allowed_identities: Vec<String> = users_raw
-            .split(',')
-            .map(normalize_identity)
-            .filter(|entry| !entry.is_empty())
-            .collect();
-
-        if allowed_identities.is_empty() {
-            anyhow::bail!("invalid {rule_label} `{spec}`; allowed users cannot be empty");
-        }
-
-        Ok(Self {
-            selectors,
-            allowed_identities,
-        })
-    }
-
     pub(crate) fn matches(&self, command_text: &str) -> bool {
         let Some(command_key) = extract_command_key(command_text) else {
             return false;
@@ -101,36 +73,50 @@ impl ControlCommandAuthRule for CommandSelectorAuthRule {
     }
 }
 
-pub(crate) fn parse_control_command_rule_specs(
-    specs: Vec<String>,
+pub(crate) fn parse_control_command_rule(
+    selectors: Vec<String>,
+    allowed_identities: Vec<String>,
     rule_label: &str,
     normalize_identity: fn(&str) -> String,
-) -> Result<Vec<CommandSelectorAuthRule>> {
-    let mut rules = Vec::new();
-    for raw_spec in specs {
-        let trimmed = raw_spec.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        rules.push(CommandSelectorAuthRule::from_spec(
-            trimmed,
-            rule_label,
-            normalize_identity,
-        )?);
-    }
-    Ok(rules)
+) -> Result<CommandSelectorAuthRule> {
+    let selectors = parse_selectors_from_entries(selectors, rule_label)?;
+    let allowed_identities =
+        parse_allowed_identities_from_entries(allowed_identities, rule_label, normalize_identity)?;
+    Ok(CommandSelectorAuthRule {
+        selectors,
+        allowed_identities,
+    })
 }
 
-fn parse_selectors(selector_raw: &str, rule_label: &str) -> Result<Vec<CommandSelector>> {
-    let mut selectors = Vec::new();
-    for raw in selector_raw.split(',') {
-        let selector = parse_selector(raw, rule_label)?;
-        selectors.push(selector);
+fn parse_selectors_from_entries(
+    selectors: Vec<String>,
+    rule_label: &str,
+) -> Result<Vec<CommandSelector>> {
+    let mut parsed_selectors = Vec::new();
+    for selector in selectors {
+        let parsed = parse_selector(&selector, rule_label)?;
+        parsed_selectors.push(parsed);
     }
-    if selectors.is_empty() {
+    if parsed_selectors.is_empty() {
         anyhow::bail!("invalid {rule_label}; command selector cannot be empty");
     }
-    Ok(selectors)
+    Ok(parsed_selectors)
+}
+
+fn parse_allowed_identities_from_entries(
+    entries: Vec<String>,
+    rule_label: &str,
+    normalize_identity: fn(&str) -> String,
+) -> Result<Vec<String>> {
+    let allowed_identities: Vec<String> = entries
+        .into_iter()
+        .map(|entry| normalize_identity(&entry))
+        .filter(|entry| !entry.is_empty())
+        .collect();
+    if allowed_identities.is_empty() {
+        anyhow::bail!("invalid {rule_label}; allowed users cannot be empty");
+    }
+    Ok(allowed_identities)
 }
 
 fn parse_selector(raw_selector: &str, rule_label: &str) -> Result<CommandSelector> {

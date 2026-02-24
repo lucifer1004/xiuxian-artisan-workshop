@@ -7,10 +7,14 @@ use super::super::dispatch::start_telegram_runtime;
 use super::channel_listener;
 use super::loop_control;
 use crate::agent::Agent;
+use crate::channels::telegram::TelegramCommandAdminRule;
 use crate::channels::telegram::TelegramControlCommandPolicy;
 use crate::channels::telegram::runtime_config::TelegramRuntimeConfig;
 
 /// Run Telegram channel via long polling.
+///
+/// # Errors
+/// Returns an error when runtime initialization or channel startup fails.
 pub async fn run_telegram(
     agent: Arc<Agent>,
     bot_token: String,
@@ -18,7 +22,7 @@ pub async fn run_telegram(
     allowed_groups: Vec<String>,
     admin_users: Vec<String>,
     control_command_allow_from: Option<Vec<String>>,
-    admin_command_rule_specs: Vec<String>,
+    control_command_rules: Vec<TelegramCommandAdminRule>,
 ) -> Result<()> {
     run_telegram_with_control_command_policy(
         agent,
@@ -28,13 +32,16 @@ pub async fn run_telegram(
         TelegramControlCommandPolicy::new(
             admin_users,
             control_command_allow_from,
-            admin_command_rule_specs,
+            control_command_rules,
         ),
     )
     .await
 }
 
 /// Run Telegram channel via long polling with structured control-command policy.
+///
+/// # Errors
+/// Returns an error when runtime initialization or channel startup fails.
 pub async fn run_telegram_with_control_command_policy(
     agent: Arc<Agent>,
     bot_token: String,
@@ -55,6 +62,7 @@ pub async fn run_telegram_with_control_command_policy(
     let (
         session_gate_backend,
         foreground_tx,
+        interrupt_controller,
         foreground_dispatcher,
         job_manager,
         mut completion_rx,
@@ -65,10 +73,7 @@ pub async fn run_telegram_with_control_command_policy(
     )?;
 
     println!("Telegram channel listening... (polling, Ctrl+C to stop)");
-    println!(
-        "Session partition: {}",
-        channel.session_partition().to_string()
-    );
+    println!("Session partition: {}", channel.session_partition());
     print_foreground_config(&runtime_config, &session_gate_backend);
     print_managed_commands_help();
 
@@ -77,6 +82,7 @@ pub async fn run_telegram_with_control_command_policy(
         &mut completion_rx,
         &channel_for_send,
         &foreground_tx,
+        &interrupt_controller,
         &job_manager,
         &agent,
     )

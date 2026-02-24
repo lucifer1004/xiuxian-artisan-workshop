@@ -3,7 +3,7 @@ name = "omni-window"
 version.workspace = true
 edition.workspace = true
 description = "High-performance session window for 1k–10k turns (ring buffer)"
-authors = ["Omni-Dev-Fusion Team"]
+authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
 

@@ -59,9 +59,10 @@ fn injection_snapshot_validate_rejects_budget_violation() {
     let snapshot =
         InjectionSnapshot::from_blocks("snap-1", "telegram:100:200", 7, policy, None, vec![block]);
 
-    let error = snapshot
-        .validate()
-        .expect_err("expected max_chars validation failure");
+    let error = match snapshot.validate() {
+        Ok(()) => panic!("expected max_chars validation failure"),
+        Err(error) => error,
+    };
     assert!(error.contains("max_chars"));
 }
 
@@ -84,7 +85,9 @@ fn injection_snapshot_roundtrip_is_stable() {
         None,
         vec![block],
     );
-    snapshot.validate().expect("snapshot should be valid");
+    if let Err(error) = snapshot.validate() {
+        panic!("snapshot should be valid: {error}");
+    }
 
     let raw = serde_json::to_string(&snapshot).unwrap_or_else(|error| {
         panic!("failed to serialize snapshot: {error}");
@@ -139,12 +142,12 @@ fn injection_snapshot_content_hash_is_stable_across_turn_loop() {
     );
     let snapshot_turn_2 =
         InjectionSnapshot::from_blocks("snap-turn-2", "telegram:scope-a", 2, policy, None, blocks);
-    snapshot_turn_1
-        .validate()
-        .expect("turn 1 snapshot must be valid");
-    snapshot_turn_2
-        .validate()
-        .expect("turn 2 snapshot must be valid");
+    if let Err(error) = snapshot_turn_1.validate() {
+        panic!("turn 1 snapshot must be valid: {error}");
+    }
+    if let Err(error) = snapshot_turn_2.validate() {
+        panic!("turn 2 snapshot must be valid: {error}");
+    }
 
     let hash_1 = snapshot_content_hash(&snapshot_turn_1);
     let hash_2 = snapshot_content_hash(&snapshot_turn_2);

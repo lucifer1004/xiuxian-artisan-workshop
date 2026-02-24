@@ -60,6 +60,7 @@ pub(crate) enum ManagedControlCommand {
     ResumeStatus,
     ResumeDrop,
     SessionAdmin,
+    SessionInjection,
     SessionPartition,
 }
 
@@ -71,6 +72,7 @@ impl ManagedControlCommand {
             Self::ResumeStatus => "/resume status",
             Self::ResumeDrop => "/resume drop",
             Self::SessionAdmin => "/session admin",
+            Self::SessionInjection => "/session inject",
             Self::SessionPartition => "/session partition",
         }
     }
@@ -135,6 +137,9 @@ pub(crate) fn detect_managed_control_command(input: &str) -> Option<ManagedContr
     }
     if is_session_admin_control_command(normalized) {
         return Some(ManagedControlCommand::SessionAdmin);
+    }
+    if is_session_injection_control_command(normalized) {
+        return Some(ManagedControlCommand::SessionInjection);
     }
 
     None
@@ -223,6 +228,43 @@ fn is_session_admin_control_command(input: &str) -> bool {
                     || action.eq_ignore_ascii_case("remove")
                     || action.eq_ignore_ascii_case("rm")
                     || action.eq_ignore_ascii_case("del")) =>
+        {
+            true
+        }
+        _ => false,
+    }
+}
+
+fn is_session_injection_control_command(input: &str) -> bool {
+    let tokens: Vec<&str> = input.split_whitespace().collect();
+    match tokens.as_slice() {
+        [scope, inject]
+            if (scope.eq_ignore_ascii_case("session")
+                || scope.eq_ignore_ascii_case("window")
+                || scope.eq_ignore_ascii_case("context"))
+                && (inject.eq_ignore_ascii_case("inject")
+                    || inject.eq_ignore_ascii_case("injection")) =>
+        {
+            true
+        }
+        [scope, inject, third]
+            if (scope.eq_ignore_ascii_case("session")
+                || scope.eq_ignore_ascii_case("window")
+                || scope.eq_ignore_ascii_case("context"))
+                && (inject.eq_ignore_ascii_case("inject")
+                    || inject.eq_ignore_ascii_case("injection"))
+                && (third.eq_ignore_ascii_case("json")
+                    || third.eq_ignore_ascii_case("status")
+                    || third.eq_ignore_ascii_case("clear")) =>
+        {
+            true
+        }
+        [scope, inject, ..]
+            if (scope.eq_ignore_ascii_case("session")
+                || scope.eq_ignore_ascii_case("window")
+                || scope.eq_ignore_ascii_case("context"))
+                && (inject.eq_ignore_ascii_case("inject")
+                    || inject.eq_ignore_ascii_case("injection")) =>
         {
             true
         }

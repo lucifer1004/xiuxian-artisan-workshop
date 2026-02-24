@@ -112,6 +112,22 @@ PASSIVE_VOICE_PATTERNS = [
 ]
 
 
+def _decode_skill_json_payload(payload: str | dict[str, Any]) -> dict[str, Any]:
+    """Decode skill response payload that may be raw JSON or wrapped content envelope."""
+    if isinstance(payload, dict):
+        content = payload.get("content")
+        if isinstance(content, list) and content:
+            first = content[0]
+            if isinstance(first, dict):
+                text = first.get("text")
+                if isinstance(text, str):
+                    return json.loads(text)
+        return payload
+    if isinstance(payload, str):
+        return json.loads(payload)
+    raise TypeError(f"Unsupported skill payload type: {type(payload)!r}")
+
+
 def _check_passive_voice(line: str) -> list[str]:
     """Detect passive voice in a line."""
     violations = []
@@ -328,8 +344,8 @@ async def polish_text(text: str) -> str:
     lint_result = await lint_writing_style(text)
     structure_result = await check_markdown_structure(text)
 
-    lint_data = json.loads(lint_result)
-    structure_data = json.loads(structure_result)
+    lint_data = _decode_skill_json_payload(lint_result)
+    structure_data = _decode_skill_json_payload(structure_result)
 
     all_violations = lint_data.get("violations", []) + structure_data.get("violations", [])
 

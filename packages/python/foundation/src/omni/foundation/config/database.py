@@ -133,24 +133,18 @@ def get_memory_db_path() -> Path:
     return get_vector_db_path() / "memory.hippocampus.lance"
 
 
-def get_knowledge_graph_lance_dir() -> Path:
-    """Get the Lance directory for KnowledgeGraph entity/relation tables.
+def get_knowledge_graph_scope_key() -> str:
+    """Get the stable scope key for KnowledgeGraph snapshots.
 
-    The graph is stored as two Lance tables (``kg_entities``, ``kg_relations``)
-    inside the shared ``knowledge.lance`` database. This enables:
-    - Columnar filtering on entity_type, confidence
-    - Vector ANN search over entity embeddings
-    - Unified Arrow ecosystem alongside knowledge chunks
+    KnowledgeGraph persistence is Valkey-backed. The scope key is a stable
+    namespace identifier used to derive Valkey keys for graph snapshots and
+    cache entries.
 
     Returns:
-        Path to knowledge.lance directory (same as knowledge DB).
-        Typically: /project/.cache/omni-vector/knowledge.lance
-
-    Usage:
-        >>> from omni.foundation.config.database import get_knowledge_graph_lance_dir
-        >>> lance_dir = get_knowledge_graph_lance_dir()
+        Stable graph scope key. By default this reuses the knowledge DB path
+        identity returned by ``get_database_path("knowledge")``.
     """
-    return get_vector_db_path() / "knowledge.lance"
+    return get_database_path("knowledge")
 
 
 __all__ = [
@@ -159,6 +153,6 @@ __all__ = [
     "get_database_path",
     "get_checkpoint_db_path",
     "get_checkpoint_table_name",
-    "get_knowledge_graph_lance_dir",
+    "get_knowledge_graph_scope_key",
     "get_memory_db_path",
 ]

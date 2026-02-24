@@ -1,5 +1,6 @@
 mod assembler;
 mod builder;
+mod policy;
 mod render;
 #[cfg(test)]
 mod tests;
@@ -7,7 +8,7 @@ mod tests;
 use anyhow::{Context, Result};
 use xiuxian_qianhuan::{InjectionPolicy, InjectionSnapshot};
 
-use crate::contracts::OmegaDecision;
+use crate::contracts::{GraphExecutionPlan, OmegaDecision};
 use crate::session::ChatMessage;
 use crate::shortcuts::WorkflowBridgeMode;
 
@@ -30,7 +31,9 @@ pub(super) fn normalize_messages_with_snapshot(
         });
     }
 
-    let snapshot = assembler::assemble_snapshot(session_id, turn_id, policy, extraction.blocks);
+    let effective_policy = policy::resolve_effective_policy(policy, &extraction.blocks);
+    let snapshot =
+        assembler::assemble_snapshot(session_id, turn_id, effective_policy, extraction.blocks);
     snapshot
         .validate()
         .map_err(anyhow::Error::msg)
@@ -52,7 +55,9 @@ pub(super) fn build_snapshot_from_messages(
     policy: InjectionPolicy,
 ) -> Result<InjectionSnapshot> {
     let extraction = builder::extract_blocks(session_id, turn_id, messages);
-    let snapshot = assembler::assemble_snapshot(session_id, turn_id, policy, extraction.blocks);
+    let effective_policy = policy::resolve_effective_policy(policy, &extraction.blocks);
+    let snapshot =
+        assembler::assemble_snapshot(session_id, turn_id, effective_policy, extraction.blocks);
     snapshot
         .validate()
         .map_err(anyhow::Error::msg)
@@ -60,11 +65,13 @@ pub(super) fn build_snapshot_from_messages(
     Ok(snapshot)
 }
 
+#[allow(clippy::unnecessary_wraps)]
 pub(super) fn augment_shortcut_arguments(
     arguments: Option<serde_json::Value>,
     snapshot: Option<&InjectionSnapshot>,
     decision: &OmegaDecision,
     workflow_mode: WorkflowBridgeMode,
+    graph_plan: Option<&GraphExecutionPlan>,
 ) -> Option<serde_json::Value> {
     let mut payload = match arguments {
         Some(serde_json::Value::Object(map)) => map,
@@ -87,6 +94,10 @@ pub(super) fn augment_shortcut_arguments(
     );
     let decision_json = serde_json::to_value(decision).unwrap_or_else(|_| serde_json::json!({}));
     omni_meta.insert("omega_decision".to_string(), decision_json);
+    if let Some(graph_plan) = graph_plan {
+        let plan_json = serde_json::to_value(graph_plan).unwrap_or_else(|_| serde_json::json!({}));
+        omni_meta.insert("graph_plan".to_string(), plan_json);
+    }
 
     if let Some(snapshot) = snapshot {
         let role_mix_profile_id = snapshot
@@ -105,6 +116,11 @@ pub(super) fn augment_shortcut_arguments(
             serde_json::json!({
                 "snapshot_id": snapshot.snapshot_id.as_str(),
                 "turn_id": snapshot.turn_id,
+                "injection_mode": match snapshot.policy.mode {
+                    xiuxian_qianhuan::InjectionMode::Single => "single",
+                    xiuxian_qianhuan::InjectionMode::Classified => "classified",
+                    xiuxian_qianhuan::InjectionMode::Hybrid => "hybrid",
+                },
                 "block_count": snapshot.blocks.len(),
                 "total_chars": snapshot.total_chars,
                 "dropped_block_ids": snapshot.dropped_block_ids.clone(),

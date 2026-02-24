@@ -68,6 +68,25 @@ def test_infer_group_thread_id_from_runtime_log(monkeypatch, tmp_path: Path) -> 
     assert module.infer_group_thread_id_from_runtime_log(-5101776367) == 42
 
 
+def test_infer_group_thread_id_from_runtime_log_reads_tail_only(
+    monkeypatch, tmp_path: Path
+) -> None:
+    module = _load_command_events_module()
+    log_file = tmp_path / "agent.log"
+    with log_file.open("wb") as handle:
+        handle.write(b"A" * 300_000)
+        handle.write(b"\n")
+        handle.write(
+            b"2026-02-20 INFO Parsed message, forwarding to agent "
+            b"session_key=-5101776367:84:1304799691 "
+            b"chat_id=Some(-5101776367) message_thread_id=Some(84) "
+            b"content_preview=/session admin add\n"
+        )
+    monkeypatch.setenv("OMNI_CHANNEL_LOG_FILE", str(log_file))
+
+    assert module.infer_group_thread_id_from_runtime_log(-5101776367) == 84
+
+
 def test_resolve_admin_matrix_chat_ids_merges_and_dedups(monkeypatch, tmp_path: Path) -> None:
     module = _load_command_events_module()
     profile = tmp_path / "agent-channel-groups.env"
@@ -411,6 +430,19 @@ def test_build_cases_admin_cases_propagate_group_thread_id() -> None:
         assert case.thread_id == 42
 
 
+def test_build_cases_session_memory_json_includes_session_scope_assertion() -> None:
+    module = _load_command_events_module()
+    cases = module.build_cases(
+        admin_user_id=1304799691,
+        group_chat_id=-5101776367,
+        group_thread_id=42,
+    )
+    by_case_id = {case.case_id: case for case in cases}
+    case = by_case_id["session_memory_json"]
+    assert "json_kind=session_memory" in case.extra_args
+    assert f"json_session_scope={module.TARGET_SESSION_SCOPE_PLACEHOLDER}" in case.extra_args
+
+
 def test_build_admin_list_isolation_case_includes_thread_and_count() -> None:
     module = _load_command_events_module()
     case = module.build_admin_list_isolation_case(
@@ -563,7 +595,7 @@ def test_run_admin_isolation_assertions_emits_count_checks(monkeypatch, tmp_path
         retries=0,
         backoff_secs=0.0,
         attempt_records=[],
-        runtime_partition_mode=None,
+        runtime_partition_mode="chat_user",
     )
     assert status == 0
     isolation_cases = [case_id for case_id in attempted_case_ids if "isolation_" in case_id]
@@ -603,7 +635,7 @@ def test_run_admin_topic_isolation_assertions_emits_cross_thread_count_checks(
         retries=0,
         backoff_secs=0.0,
         attempt_records=[],
-        runtime_partition_mode=None,
+        runtime_partition_mode="chat_user",
     )
     assert status == 0
     thread_42 = [record for record in attempts if record[1] == 42]

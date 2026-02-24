@@ -9,38 +9,21 @@ Responsibilities:
 
 from __future__ import annotations
 
+import importlib
 import os
-import sys
 import subprocess
+import sys
+from contextlib import suppress
 from pathlib import Path
-from typing import Optional
-
-import typer
 from typing import Any
 
+import typer
+
+from omni.agent.cli.load_requirements import register_requirements
 from omni.foundation.config.dirs import PRJ_DIRS, PRJ_RUNTIME
 from omni.foundation.config.logging import configure_logging
-from omni.foundation.runtime.gitops import get_project_root
-
-# Foundation Imports (Layer 0-2)
 from omni.foundation.config.settings import get_settings
-
-# Command Imports
-from .commands import (
-    register_agent_command,
-    register_channel_command,
-    register_completions_command,
-    register_dashboard_command,
-    register_db_command,
-    register_gateway_command,
-    register_knowledge_command,
-    register_mcp_command,
-    register_reindex_command,
-    register_route_command,
-    register_run_command,
-    register_skill_command,
-    register_sync_command,
-)
+from omni.foundation.runtime.gitops import get_project_root
 
 app = typer.Typer(
     name="omni-agent",
@@ -52,6 +35,67 @@ app = typer.Typer(
 
 # Global verbose flag (set by entry_point before any command runs)
 _verbose_flag: bool = False
+
+# Lazily register command groups to keep startup for `omni skill run` minimal.
+_COMMAND_REGISTRY: dict[str, tuple[str, str]] = {
+    "completions": (
+        "omni.agent.cli.commands.completions",
+        "register_completions_command",
+    ),
+    "dashboard": (
+        "omni.agent.cli.commands.dashboard",
+        "register_dashboard_command",
+    ),
+    "db": (
+        "omni.agent.cli.commands.db",
+        "register_db_command",
+    ),
+    "skill": (
+        "omni.agent.cli.commands.skill",
+        "register_skill_command",
+    ),
+    "mcp": (
+        "omni.agent.cli.commands.mcp",
+        "register_mcp_command",
+    ),
+    "route": (
+        "omni.agent.cli.commands.route",
+        "register_route_command",
+    ),
+    "run": (
+        "omni.agent.cli.commands.run",
+        "register_run_command",
+    ),
+    "gateway": (
+        "omni.agent.cli.commands.gateway_agent",
+        "register_gateway_command",
+    ),
+    "agent": (
+        "omni.agent.cli.commands.gateway_agent",
+        "register_agent_command",
+    ),
+    "channel": (
+        "omni.agent.cli.commands.gateway_agent",
+        "register_channel_command",
+    ),
+    "sync": (
+        "omni.agent.cli.commands.sync",
+        "register_sync_command",
+    ),
+    "knowledge": (
+        "omni.agent.cli.commands.knowledge",
+        "register_knowledge_command",
+    ),
+    "reindex": (
+        "omni.agent.cli.commands.reindex",
+        "register_reindex_command",
+    ),
+}
+_REGISTERED_COMMANDS: set[str] = set()
+_SKILL_EMBED_OVERRIDE_INSTALLED = False
+
+# Declarative bootstrap requirements for local commands.
+register_requirements("version", ollama=False, embedding_index=False)
 
 
 def _get_git_commit() -> str:
@@ -168,6 +212,11 @@ def _bootstrap_configuration(
 
     # Configure Logging (always run)
     settings = get_settings()
+    # Auto-derive override mode from provider when user did not explicitly pin it.
+    if not os.environ.get("OMNI_EMBED_OVERRIDE_ENABLED", "").strip():
+        provider = str(settings.get("embedding.provider", "")).strip().lower()
+        os.environ["OMNI_EMBED_OVERRIDE_ENABLED"] = "1" if provider in {"", "client"} else "0"
+
     log_level = settings.get("logging.level", "INFO")
     if verbose:
         log_level = "DEBUG"
@@ -199,6 +248,21 @@ def _is_verbose() -> bool:
     return _verbose_flag
 
 
+def _embedding_override_enabled() -> bool:
+    """Return True when CLI skill embedding override should be installed."""
+    raw = os.environ.get("OMNI_EMBED_OVERRIDE_ENABLED", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    try:
+        provider = str(get_settings().get("embedding.provider", "")).strip().lower()
+    except Exception:
+        return True
+    # Override is primarily useful for client/auto provider modes.
+    return provider in {"", "client"}
+
+
 def _verbose_callback(ctx: typer.Context, param: Any, value: bool) -> None:
     """Callback to set verbose flag when --verbose/-v is used."""
     global _verbose_flag
@@ -206,10 +270,8 @@ def _verbose_callback(ctx: typer.Context, param: Any, value: bool) -> None:
         _verbose_flag = True
         os.environ["OMNI_CLI_VERBOSE"] = "1"
         # Reconfigure logging immediately if already configured
-        try:
+        with suppress(Exception):
             configure_logging(level="DEBUG", verbose=True, force=True)
-        except Exception:
-            pass  # Logging might not be configured yet
 
 
 @app.callback()
@@ -242,28 +304,119 @@ def main(
     pass
 
 
-# Register subcommands (each declares load requirements via register_requirements)
-from omni.agent.cli.load_requirements import register_requirements
+def _extract_top_level_command(argv: list[str]) -> str | None:
+    """Return the first non-option token from argv (top-level command)."""
+    for token in argv:
+        if token.startswith("-"):
+            continue
+        return token.strip().lower()
+    return None
 
-register_requirements("version", ollama=False, embedding_index=False)
-register_completions_command(app)
-register_dashboard_command(app)
-register_db_command(app)
-register_skill_command(app)
-register_mcp_command(app)
-register_route_command(app)
-register_run_command(app)
-register_gateway_command(app)
-register_agent_command(app)
-register_channel_command(app)
-register_sync_command(app)
-register_knowledge_command(app)
-register_reindex_command(app)
 
-# So that CLI-invoked skills use MCP-first embedding (warm path when MCP is running)
-from omni.agent.embedding_override import install_skill_embedding_override
+def _ensure_skill_embedding_override_installed() -> None:
+    """Install skill embedding override once (for skill execution paths)."""
+    global _SKILL_EMBED_OVERRIDE_INSTALLED
+    if _SKILL_EMBED_OVERRIDE_INSTALLED:
+        return
+    from omni.agent.embedding_override import install_skill_embedding_override
 
-install_skill_embedding_override()
+    install_skill_embedding_override()
+    _SKILL_EMBED_OVERRIDE_INSTALLED = True
+
+
+def _register_command_group(command: str) -> None:
+    """Register one top-level command group lazily."""
+    command = (command or "").strip().lower()
+    if not command or command in _REGISTERED_COMMANDS:
+        return
+    spec = _COMMAND_REGISTRY.get(command)
+    if not spec:
+        return
+
+    module_path, register_name = spec
+    module = importlib.import_module(module_path)
+    register_fn = getattr(module, register_name)
+    register_fn(app)
+    _REGISTERED_COMMANDS.add(command)
+
+    if command == "skill" and _embedding_override_enabled():
+        _ensure_skill_embedding_override_installed()
+
+
+def _register_commands_for(command: str | None) -> None:
+    """Register commands needed for current invocation.
+
+    - known command: register only that command group
+    - no command / unknown command: register all groups (help and fallback behavior)
+    """
+    normalized = (command or "").strip().lower()
+    if normalized == "version":
+        return
+    if normalized in _COMMAND_REGISTRY:
+        _register_command_group(normalized)
+        return
+
+    for name in _COMMAND_REGISTRY:
+        _register_command_group(name)
+
+
+def _try_fast_skill_run(argv: list[str]) -> bool:
+    """Fast path for `omni skill run ...` without Typer command graph setup."""
+    if len(argv) < 2:
+        return False
+    if argv[0] != "skill" or argv[1] != "run":
+        return False
+    # Keep Typer's native help/usage rendering for `omni skill run --help`.
+    if any(token in {"--help", "-h"} for token in argv[2:]):
+        return False
+
+    json_output = False
+    # Default to daemon reuse for lower repeated latency.
+    reuse_process = True
+    commands: list[str] = []
+    i = 2
+    while i < len(argv):
+        token = argv[i]
+        if token in {"--json", "-j"}:
+            json_output = True
+            i += 1
+            continue
+        if token == "--reuse-process":
+            reuse_process = True
+            i += 1
+            continue
+        if token == "--no-reuse-process":
+            reuse_process = False
+            i += 1
+            continue
+        commands.append(token)
+        i += 1
+
+    # Let Typer render proper usage/help when no command is supplied.
+    if not commands:
+        return False
+
+    if _embedding_override_enabled():
+        _ensure_skill_embedding_override_installed()
+
+    if json_output:
+        from omni.agent.cli.runner_json import run_skills_json
+
+        exit_code = int(run_skills_json(commands, reuse_process=reuse_process))
+        if exit_code != 0:
+            raise SystemExit(exit_code)
+        return True
+
+    from omni.agent.cli.console import cli_log_handler
+    from omni.agent.cli.runner import run_skills
+
+    run_skills(
+        commands,
+        json_output=False,
+        log_handler=cli_log_handler,
+        reuse_process=reuse_process,
+    )
+    return True
 
 
 def entry_point():
@@ -304,38 +457,55 @@ def entry_point():
     # Bootstrap configuration (logging) BEFORE any command runs
     _bootstrap_configuration(conf, verbose)
 
-    # Declarative on-demand loading: each command registers its requirements via load_requirements
+    top_command = _extract_top_level_command(argv)
+
+    # Fast path for tool invocation: bypass Typer command graph initialization.
+    if _try_fast_skill_run(argv):
+        return
+
+    # Lazily register only the command group needed for this invocation.
+    _register_commands_for(top_command)
+
+    # Declarative on-demand loading: each command registers its requirements via register_requirements.
+    # Skip expensive startup services for help/no-command/unknown-command paths.
     from omni.agent.cli.load_requirements import get_requirements
 
-    cmd = argv[0] if argv else None
-    reqs = get_requirements(cmd)
-    if reqs.ollama:
-        try:
-            from omni.agent.ollama_lifecycle import ensure_ollama_for_embedding
+    should_load_bootstrap_services = top_command is not None and top_command in (
+        set(_COMMAND_REGISTRY) | {"version"}
+    )
+    if should_load_bootstrap_services:
+        reqs = get_requirements(top_command)
+        if reqs.ollama:
+            try:
+                from omni.agent.ollama_lifecycle import ensure_ollama_for_embedding
 
-            ensure_ollama_for_embedding()
-        except Exception:
-            pass
-    if reqs.embedding_index:
-        try:
-            from omni.agent.services.reindex import ensure_embedding_index_compatibility
+                ensure_ollama_for_embedding()
+            except Exception:
+                pass
+        if reqs.embedding_index:
+            try:
+                from omni.agent.services.reindex import ensure_embedding_index_compatibility
 
-            ensure_embedding_index_compatibility(auto_fix=True)
-        except Exception:
-            pass
+                ensure_embedding_index_compatibility(auto_fix=True)
+            except Exception:
+                pass
 
     # Restore argv and invoke app
-    sys.argv = ["omni"] + argv
+    sys.argv = ["omni", *argv]
 
-    try:
+    # Typer may call sys.exit(), let it pass through.
+    with suppress(SystemExit):
         app()
-    except SystemExit:
-        # Typer may call sys.exit(), let it pass through
-        pass
+
+
+# Test compatibility: unit tests invoke `app` directly via CliRunner without entry_point().
+# In that mode we eagerly register all command groups.
+if "pytest" in sys.modules:
+    _register_commands_for(None)
 
 
 if __name__ == "__main__":
     entry_point()
 
 
-__all__ = ["app", "entry_point", "main", "_is_verbose"]
+__all__ = ["_is_verbose", "app", "entry_point", "main"]

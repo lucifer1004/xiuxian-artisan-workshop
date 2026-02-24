@@ -31,7 +31,7 @@ def _make_args(**overrides: object) -> argparse.Namespace:
     defaults: dict[str, object] = {
         "max_wait": 35,
         "max_idle_secs": 25,
-        "webhook_url": "http://127.0.0.1:8081/telegram/webhook",
+        "webhook_url": "http://127.0.0.1:18081/telegram/webhook",
         "log_file": ".run/logs/omni-agent-webhook.log",
         "chat_id": None,
         "chat_b": None,
@@ -57,6 +57,13 @@ def test_expected_session_key() -> None:
     module = _load_matrix_module()
     assert module.expected_session_key(100, 7, None) == "100:7"
     assert module.expected_session_key(-100228, 7, 42) == "-100228:42:7"
+
+
+def test_session_memory_result_fields_include_session_scope() -> None:
+    module = _load_matrix_module()
+    fields = module.session_memory_result_fields(100, 7, None, "chat_user")
+    assert "json_kind=session_memory" in fields
+    assert "json_session_scope=telegram:100:7" in fields
 
 
 def test_build_config_infers_chat_user_from_runtime_log(tmp_path: Path, monkeypatch) -> None:
@@ -126,7 +133,7 @@ def test_build_matrix_steps_contains_cross_reset_resume() -> None:
     cfg = module.ProbeConfig(
         max_wait=35,
         max_idle_secs=25,
-        webhook_url="http://127.0.0.1:8081/telegram/webhook",
+        webhook_url="http://127.0.0.1:18081/telegram/webhook",
         log_file=Path(".run/logs/omni-agent-webhook.log"),
         chat_id=130,
         chat_b=130,
@@ -211,7 +218,7 @@ def test_build_report_summarizes_step_results() -> None:
     cfg = module.ProbeConfig(
         max_wait=35,
         max_idle_secs=25,
-        webhook_url="http://127.0.0.1:8081/telegram/webhook",
+        webhook_url="http://127.0.0.1:18081/telegram/webhook",
         log_file=Path(".run/logs/omni-agent-webhook.log"),
         chat_id=130,
         chat_b=130,
@@ -310,7 +317,7 @@ def test_build_matrix_steps_with_thread_scope_emit_thread_partition_keys() -> No
     cfg = module.ProbeConfig(
         max_wait=35,
         max_idle_secs=25,
-        webhook_url="http://127.0.0.1:8081/telegram/webhook",
+        webhook_url="http://127.0.0.1:18081/telegram/webhook",
         log_file=Path(".run/logs/omni-agent-webhook.log"),
         chat_id=-5101776367,
         chat_b=-5101776367,
@@ -343,7 +350,7 @@ def test_build_matrix_steps_with_thread_scope_emit_thread_partition_keys() -> No
 def test_should_retry_on_restart_noise_detects_webhook_bootstrap_output() -> None:
     module = _load_matrix_module()
     stdout = (
-        "Telegram webhook listening on 0.0.0.0:8081/telegram/webhook (Ctrl+C to stop)\n"
+        "Telegram webhook listening on 0.0.0.0:18081/telegram/webhook (Ctrl+C to stop)\n"
         "Webhook dedup backend: valkey (ttl=600s)\n"
     )
     assert module.should_retry_on_restart_noise(3, stdout, "") is True
@@ -360,7 +367,7 @@ def test_run_command_with_restart_retry_retries_once_on_restart_noise(monkeypatc
             return (
                 3,
                 12,
-                "Telegram webhook listening on 0.0.0.0:8081/telegram/webhook (Ctrl+C to stop)\n",
+                "Telegram webhook listening on 0.0.0.0:18081/telegram/webhook (Ctrl+C to stop)\n",
                 "",
             )
         return (0, 8, "ok\n", "")

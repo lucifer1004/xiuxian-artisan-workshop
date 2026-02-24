@@ -14,6 +14,7 @@ mod identity;
 mod listen;
 mod markdown;
 mod media;
+mod outbound_text;
 mod parsing;
 mod policy;
 mod recipient_admin;
@@ -27,6 +28,8 @@ mod state;
 mod trait_impl;
 
 pub(in crate::channels::telegram::channel) use super::session_partition::TelegramSessionPartition;
+pub use admin_rules::TelegramCommandAdminRule;
+pub use admin_rules::build_telegram_command_admin_rule;
 pub use chunking::{
     chunk_marker_reserve_chars, decorate_chunk_for_telegram, split_message_for_telegram,
 };

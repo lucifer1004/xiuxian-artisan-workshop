@@ -1,6 +1,12 @@
 ---
+title: "Advanced Tools Skill (Batch Replace, Smart Search, Smart Find)"
+category: "workflows"
+tags:
+  - search
+  - refactor
+  - batch-replace
 name: advanced_tools
-description: Use when finding files by name, searching code content, locating patterns with regex, exploring codebase, or batch refactoring across multiple files. Conforms to packages/shared/schemas/skill-routing-value-standard.md.
+description: Use when finding files by name, searching code content, locating patterns with regex, exploring codebase, or batch refactoring across multiple files. Conforms to docs/reference/skill-routing-value-standard.md.
 metadata:
   author: omni-dev-fusion
   version: "1.2.0"
@@ -25,6 +31,8 @@ metadata:
     - "batch"
     - "refactor"
     - "replace"
+    - "batch replace"
+    - "batch_replace"
     - "directory"
     - "tree"
   intents:
@@ -33,11 +41,12 @@ metadata:
     - "Locate specific files across the entire project"
     - "Fast codebase exploration and discovery"
     - "Batch find and replace across multiple files"
+    - "Use batch replace for safe multi-file refactoring"
     - "High-performance grep replacement"
     - "Scan directory for files matching a pattern"
 ---
 
-# Advanced Tools (Find & Search) Skill
+# Advanced Tools Skill (Batch Replace, Smart Search, Smart Find)
 
 You have loaded the **Advanced Tools (Find & Search) Skill**.
 
@@ -91,6 +100,16 @@ def batch_replace(
     dry_run: bool = True     # Default is PREVIEW for safety
 ) -> dict
 ```
+
+## Batch Replace Command (Primary Query Anchor)
+
+`batch replace` is the canonical query phrase for this tool in documentation and routing.
+Use `batch_replace` when you need deterministic multi-file replacement with dry-run safety.
+
+## Linked Notes
+
+- Related: [Code Tools Skill](../../../docs/reference/code-tools.md)
+- Related: [Skill Routing Value Standard](../../../docs/reference/skill-routing-value-standard.md)
 
 ## Use Cases & Intention
 

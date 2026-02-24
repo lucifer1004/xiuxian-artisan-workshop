@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import MagicMock
+
 import pytest
 from omni.test_kit.fixtures.vector import (
     make_tool_search_payload,
@@ -69,8 +71,13 @@ class _StubInner:
         )
         return []
 
-    def list_all_tools(self, table_name: str | None = None) -> str:
-        self.calls.append(("list_all_tools", (table_name,), {}))
+    def list_all_tools(
+        self,
+        table_name: str | None = None,
+        source_filter: str | None = None,
+        row_limit: int | None = None,
+    ) -> str:
+        self.calls.append(("list_all_tools", (table_name, source_filter, row_limit), {}))
         return json.dumps([])
 
     def get_skill_index(self, base_path: str) -> str:
@@ -199,6 +206,10 @@ def store() -> RustVectorStore:
     s = RustVectorStore.__new__(RustVectorStore)
     s._inner = _StubInner()
     return s
+
+
+def test_list_all_multi_source_capability_flag(store: RustVectorStore) -> None:
+    assert store.supports_multi_source_filter() is True
 
 
 @pytest.mark.asyncio
@@ -483,6 +494,39 @@ def test_list_all_tools_arrow_returns_table(store: RustVectorStore) -> None:
     table = store.list_all_tools_arrow()
     assert isinstance(table, pa.Table)
     assert table.num_rows == 0
+
+
+def test_list_all_tools_sanitizes_triple_quoted_description() -> None:
+    """list_all_tools should clean scanner noise from triple-quoted descriptions."""
+    store = RustVectorStore.__new__(RustVectorStore)
+    store._index_path = "skills.lance"
+    store._inner = MagicMock()
+    store._inner.list_all_tools.return_value = json.dumps(
+        [
+            {
+                "id": "advanced_tools.smart_search",
+                "content": "fallback description",
+                "metadata": {
+                    "type": "command",
+                    "skill_name": "advanced_tools",
+                    "tool_name": "advanced_tools.smart_search",
+                    "description": (
+                        '"""\n'
+                        "    [SEARCH] High-performance code/text search.\n"
+                        '    ",\n'
+                        "    autowire=True,"
+                    ),
+                },
+            }
+        ]
+    )
+
+    tools = store.list_all_tools()
+    assert len(tools) == 1
+    desc = tools[0]["description"]
+    assert desc == "[SEARCH] High-performance code/text search."
+    assert '"""' not in desc
+    assert "autowire" not in desc
 
 
 def test_get_skill_index_arrow_returns_table(store: RustVectorStore) -> None:

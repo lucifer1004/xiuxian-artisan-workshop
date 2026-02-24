@@ -69,6 +69,9 @@ impl JobManager {
     }
 
     /// Submit one background job. Returns generated job id.
+    ///
+    /// # Errors
+    /// Returns an error when the background queue is closed.
     pub async fn submit(
         &self,
         session_prefix: &str,

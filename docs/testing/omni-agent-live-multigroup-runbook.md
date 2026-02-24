@@ -1,3 +1,13 @@
+---
+title: "Omni-Agent Live Multi-Group Runbook"
+category: "testing"
+tags:
+  - testing
+  - omni
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Omni-Agent Live Multi-Group Runbook
 
 This runbook standardizes live black-box validation on three real Telegram groups (`Test1`, `Test2`, `Test3`).
@@ -47,6 +57,30 @@ Pass condition:
 - `overall_passed=true`
 - all steps pass
 - three distinct group IDs are present.
+
+## 3.5 Run Live Command Event Core Suite
+
+Load group profile env first, then run core command-event probes:
+
+```bash
+set -a
+source .run/config/agent-channel-groups.env
+set +a
+
+python3 scripts/channel/test_omni_agent_command_events.py \
+  --suite core \
+  --allow-chat-id "$OMNI_TEST_CHAT_ID" \
+  --username tao3k \
+  --max-wait 35 \
+  --max-idle-secs 25 \
+  --output-json .run/reports/agent-channel-command-events-core-live.json \
+  --output-markdown .run/reports/agent-channel-command-events-core-live.md
+```
+
+Pass condition:
+
+- all selected core probes pass (`session_status_json`, `session_budget_json`, `session_memory_json`, `session_feedback_up_json`)
+- no forbidden MCP error regex is matched in runtime logs.
 
 ## 4. Run Live Memory Evolution DAG
 
@@ -101,3 +135,4 @@ Attach these files to the release/test evidence set:
 2. `.run/reports/agent-channel-session-matrix-live.json`
 3. `.run/reports/omni-agent-memory-evolution-live.json`
 4. `.run/reports/omni-agent-trace-reconstruction-live.json`
+5. `.run/reports/agent-channel-command-events-core-live.json`

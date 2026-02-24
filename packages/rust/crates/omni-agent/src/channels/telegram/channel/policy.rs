@@ -1,28 +1,32 @@
 use crate::channels::control_command_authorization::ControlCommandAuthRule;
 
+use super::admin_rules::TelegramCommandAdminRule;
+
 /// Authorization inputs for privileged Telegram control commands.
 #[derive(Debug, Clone, Default)]
 pub struct TelegramControlCommandPolicy {
     pub admin_users: Vec<String>,
     pub control_command_allow_from: Option<Vec<String>>,
-    pub admin_command_rule_specs: Vec<String>,
+    pub control_command_rules: Vec<TelegramCommandAdminRule>,
     pub slash_command_policy: TelegramSlashCommandPolicy,
 }
 
 impl TelegramControlCommandPolicy {
+    #[must_use]
     pub fn new(
         admin_users: Vec<String>,
         control_command_allow_from: Option<Vec<String>>,
-        admin_command_rule_specs: Vec<String>,
+        control_command_rules: Vec<TelegramCommandAdminRule>,
     ) -> Self {
         Self {
             admin_users,
             control_command_allow_from,
-            admin_command_rule_specs,
+            control_command_rules,
             slash_command_policy: TelegramSlashCommandPolicy::default(),
         }
     }
 
+    #[must_use]
     pub fn with_slash_command_policy(
         mut self,
         slash_command_policy: TelegramSlashCommandPolicy,
@@ -39,6 +43,7 @@ impl TelegramControlCommandPolicy {
 /// 2) command-specific allowlists (`*_allow_from`)
 /// 3) fallback `admin_users` from [`TelegramControlCommandPolicy`]
 #[derive(Debug, Clone, Default)]
+#[allow(clippy::struct_field_names)]
 pub struct TelegramSlashCommandPolicy {
     pub slash_command_allow_from: Option<Vec<String>>,
     pub session_status_allow_from: Option<Vec<String>>,

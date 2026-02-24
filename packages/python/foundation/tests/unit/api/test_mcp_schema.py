@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import pytest
 
+from omni.foundation.api.schema_provider import get_schema
 from omni.foundation.api.mcp_schema import (
     CONTENT_KEY,
     IS_ERROR_KEY,
+    SCHEMA_ID,
     build_result,
     enforce_result_shape,
     extract_text_content,
@@ -32,9 +34,9 @@ def test_enforce_result_shape_strips_extra_keys():
 
 def test_enforce_result_shape_passes_validation():
     """enforce_result_shape output validates against shared schema when present."""
-    from omni.foundation.api.mcp_schema import get_schema_path
-
-    if not get_schema_path().exists():
+    try:
+        get_schema(SCHEMA_ID)
+    except (ImportError, ValueError):
         pytest.skip("Shared schema not found")
     payload = {
         CONTENT_KEY: [{"type": "text", "text": "x"}],

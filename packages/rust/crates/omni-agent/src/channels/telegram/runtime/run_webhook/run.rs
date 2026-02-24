@@ -9,12 +9,17 @@ use super::loop_control;
 use super::secret;
 use super::server;
 use crate::agent::Agent;
+use crate::channels::telegram::TelegramCommandAdminRule;
 use crate::channels::telegram::TelegramControlCommandPolicy;
 use crate::channels::telegram::idempotency::WebhookDedupConfig;
 use crate::channels::telegram::runtime_config::TelegramRuntimeConfig;
 use crate::channels::traits::Channel;
 
 /// Run Telegram channel via webhook (recommended for multi-instance deployments).
+///
+/// # Errors
+/// Returns an error when runtime initialization or webhook server startup fails.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_telegram_webhook(
     agent: Arc<Agent>,
     bot_token: String,
@@ -22,7 +27,7 @@ pub async fn run_telegram_webhook(
     allowed_groups: Vec<String>,
     admin_users: Vec<String>,
     control_command_allow_from: Option<Vec<String>>,
-    admin_command_rule_specs: Vec<String>,
+    control_command_rules: Vec<TelegramCommandAdminRule>,
     bind_addr: &str,
     webhook_path: &str,
     secret_token: Option<String>,
@@ -36,7 +41,7 @@ pub async fn run_telegram_webhook(
         TelegramControlCommandPolicy::new(
             admin_users,
             control_command_allow_from,
-            admin_command_rule_specs,
+            control_command_rules,
         ),
         bind_addr,
         webhook_path,
@@ -47,6 +52,10 @@ pub async fn run_telegram_webhook(
 }
 
 /// Run Telegram channel via webhook with structured control-command policy.
+///
+/// # Errors
+/// Returns an error when runtime initialization or webhook server startup fails.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_telegram_webhook_with_control_command_policy(
     agent: Arc<Agent>,
     bot_token: String,
@@ -82,6 +91,7 @@ pub async fn run_telegram_webhook_with_control_command_policy(
     let (
         session_gate_backend,
         foreground_tx,
+        interrupt_controller,
         foreground_dispatcher,
         job_manager,
         mut completion_rx,
@@ -91,16 +101,11 @@ pub async fn run_telegram_webhook_with_control_command_policy(
         runtime_config,
     )?;
 
-    println!(
-        "Telegram webhook listening on {}{} (Ctrl+C to stop)",
-        bind_addr, path
-    );
-    println!(
-        "Webhook dedup backend: {} (ttl={}s)",
-        dedup_config.backend_name(),
-        dedup_config.ttl_secs
-    );
-    println!("Session partition: {}", session_partition.to_string());
+    println!("Telegram webhook listening on {bind_addr}{path} (Ctrl+C to stop)");
+    let backend_name = dedup_config.backend_name();
+    let ttl_secs = dedup_config.ttl_secs;
+    println!("Webhook dedup backend: {backend_name} (ttl={ttl_secs}s)");
+    println!("Session partition: {session_partition}");
     print_foreground_config(&runtime_config, &session_gate_backend);
     print_managed_commands_help();
 
@@ -109,6 +114,7 @@ pub async fn run_telegram_webhook_with_control_command_policy(
         &mut completion_rx,
         &channel_for_send,
         &foreground_tx,
+        &interrupt_controller,
         &job_manager,
         &agent,
         &mut webhook_server.task,

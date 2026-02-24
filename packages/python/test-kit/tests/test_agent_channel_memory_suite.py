@@ -31,6 +31,8 @@ def test_blackbox_cases_quick_mode_has_command_probes() -> None:
     assert len(cases) == 3
     assert cases[0].prompt == "/session memory json"
     assert cases[0].expected_event == "telegram.command.session_memory_json.replied"
+    assert "json_kind=session_memory" in cases[0].extra_args
+    assert f"json_session_scope={module.TARGET_SESSION_SCOPE_PLACEHOLDER}" in cases[0].extra_args
     assert cases[1].prompt == "/session feedback up json"
     assert cases[2].prompt == "/session feedback down json"
 

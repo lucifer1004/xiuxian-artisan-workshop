@@ -8,7 +8,7 @@ use std::sync::Arc;
 use lance::deps::arrow_array::{Array, FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use lance::deps::arrow_schema::{Field, Schema};
 
-use crate::{DEFAULT_DIMENSION, VectorStoreError};
+use crate::VectorStoreError;
 
 /// Build a `RecordBatch` from document components.
 ///
@@ -32,10 +32,9 @@ pub fn build_record_batch(
     contents: Vec<String>,
     metadatas: Vec<String>,
 ) -> Result<RecordBatch, VectorStoreError> {
-    let fallback_dimension = i32::try_from(DEFAULT_DIMENSION).map_err(|_| {
-        VectorStoreError::General("DEFAULT_DIMENSION exceeds i32 range".to_string())
+    let list_dimension = i32::try_from(dimension).map_err(|_| {
+        VectorStoreError::General(format!("vector dimension {dimension} exceeds i32 range"))
     })?;
-    let list_dimension = i32::try_from(dimension).unwrap_or(fallback_dimension);
 
     // Build Arrow arrays
     let id_array = StringArray::from(ids);
@@ -73,16 +72,15 @@ pub fn build_record_batch(
 ///
 /// # Errors
 ///
-/// Returns an error if `DEFAULT_DIMENSION` exceeds i32 range or
-/// if Arrow cannot build the empty batch.
+/// Returns an error if `dimension` exceeds i32 range or if Arrow cannot
+/// build the empty batch.
 pub fn create_empty_batch(
     schema: &Arc<Schema>,
     dimension: usize,
 ) -> Result<RecordBatch, VectorStoreError> {
-    let fallback_dimension = i32::try_from(DEFAULT_DIMENSION).map_err(|_| {
-        VectorStoreError::General("DEFAULT_DIMENSION exceeds i32 range".to_string())
+    let list_dimension = i32::try_from(dimension).map_err(|_| {
+        VectorStoreError::General(format!("vector dimension {dimension} exceeds i32 range"))
     })?;
-    let list_dimension = i32::try_from(dimension).unwrap_or(fallback_dimension);
 
     let arrays: Vec<Arc<dyn Array>> = vec![
         Arc::new(StringArray::from(Vec::<String>::new())) as _,

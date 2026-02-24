@@ -8,7 +8,7 @@ async fn test_keyword_index_creation() {
     let temp_dir = TempDir::new().unwrap();
     let index = KeywordIndex::new(temp_dir.path()).unwrap();
 
-    assert_eq!(index.count_documents().unwrap(), 0);
+    assert_eq!(index.count_documents(), 0);
 }
 
 #[tokio::test]
@@ -47,7 +47,7 @@ async fn test_keyword_index_bulk_upsert() {
         ])
         .unwrap();
 
-    assert_eq!(index.count_documents().unwrap(), 3);
+    assert_eq!(index.count_documents(), 3);
 }
 
 #[tokio::test]
@@ -106,11 +106,11 @@ async fn test_keyword_index_with_intents() {
             vec!["intent1".to_string(), "intent2".to_string()],
         )])
         .unwrap();
-    assert_eq!(index1.count_documents().unwrap(), 1);
+    assert_eq!(index1.count_documents(), 1);
 
     // Second open (should reuse existing with full schema)
     let index2 = KeywordIndex::new(temp_dir.path()).unwrap();
-    assert_eq!(index2.count_documents().unwrap(), 1);
+    assert_eq!(index2.count_documents(), 1);
 
     // Verify search works
     let results = index2.search("test", 10).unwrap();
@@ -134,11 +134,11 @@ async fn test_keyword_index_open_existing() {
             vec!["intent1".to_string(), "intent2".to_string()],
         )])
         .unwrap();
-    assert_eq!(index1.count_documents().unwrap(), 1);
+    assert_eq!(index1.count_documents(), 1);
 
     // Second open (should reuse existing)
     let index2 = KeywordIndex::new(temp_dir.path()).unwrap();
-    assert_eq!(index2.count_documents().unwrap(), 1);
+    assert_eq!(index2.count_documents(), 1);
 
     // Verify we can search in the re-opened index
     let results = index2.search("existing", 10).unwrap();
@@ -162,7 +162,7 @@ async fn test_keyword_index_recreate() {
             vec![],
         )])
         .unwrap();
-    assert_eq!(index1.count_documents().unwrap(), 1);
+    assert_eq!(index1.count_documents(), 1);
 
     // Delete the keyword index directory
     let index_path = temp_dir.path().join("keyword_index");
@@ -171,7 +171,7 @@ async fn test_keyword_index_recreate() {
 
     // Reopening should recreate the index
     let index2 = KeywordIndex::new(temp_dir.path()).unwrap();
-    assert_eq!(index2.count_documents().unwrap(), 0);
+    assert_eq!(index2.count_documents(), 0);
 
     // And should still be functional
     index2
@@ -184,7 +184,7 @@ async fn test_keyword_index_recreate() {
         )])
         .unwrap();
 
-    assert_eq!(index2.count_documents().unwrap(), 1);
+    assert_eq!(index2.count_documents(), 1);
 }
 
 #[tokio::test]

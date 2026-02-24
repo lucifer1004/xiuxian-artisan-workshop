@@ -19,17 +19,21 @@ UNIX Philosophy:
 
 from __future__ import annotations
 
-import json
 import socket
 import sys
 import threading
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 from rich.console import Console
 from rich.json import JSON
 from rich.panel import Panel
+
+from omni.foundation.utils import json_codec as json
+
+from .json_output import normalize_result_for_json_output
 
 # err_console: responsible for UI, panels, logs, spinners (user visible, pipe invisible)
 err_console = Console(stderr=True)
@@ -90,7 +94,7 @@ class TUIBridge:
             err_console.print(f"[green]✓[/] Connected to TUI at {self.socket_path}")
             return True
 
-        except (socket.error, FileNotFoundError) as e:
+        except OSError as e:
             err_console.print(f"[yellow]⚠[/] TUI not connected: {e}")
             self._connected = False
             return False
@@ -101,10 +105,8 @@ class TUIBridge:
 
         with self._lock:
             if self.socket:
-                try:
+                with suppress(Exception):
                     self.socket.close()
-                except Exception:
-                    pass
                 self.socket = None
             self._connected = False
 
@@ -130,7 +132,7 @@ class TUIBridge:
                     try:
                         self.socket.sendall(msg.encode())
                         return True
-                    except (socket.error, BlockingIOError):
+                    except OSError:
                         # Queue for later sending
                         self._event_queue.append(msg)
                         return True
@@ -158,7 +160,7 @@ class TUIBridge:
                     if self._connected and self.socket:
                         try:
                             self.socket.sendall(msg.encode())
-                        except (socket.error, BlockingIOError):
+                        except OSError:
                             with self._lock:
                                 self._event_queue.append(msg)
                                 break
@@ -267,12 +269,20 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
         is_tty: Whether stdout is a terminal
         json_output: If True, output raw JSON to stdout
     """
+    # JSON mode must always be machine-readable and bypass TTY decoration.
+    if json_output:
+        payload = normalize_result_for_json_output(result)
+
+        if payload:
+            sys.stdout.write(payload)
+            if not payload.endswith("\n"):
+                sys.stdout.write("\n")
+            sys.stdout.flush()
+        return
+
     # Handle ExecutionResult from SkillCommand.execute
     if hasattr(result, "model_dump"):
         # Pydantic model (ExecutionResult)
-        if json_output:
-            sys.stdout.write(result.model_dump_json(indent=2) + "\n")
-            return
         content = result.output
         metadata = {"success": result.success, "duration_ms": result.duration_ms}
         if result.error:
@@ -339,13 +349,12 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
 
 
 __all__ = [
+    "TUIBridge",
     "cli_log_handler",
     "err_console",
-    "print_metadata_box",
-    "print_result",
-    # TUI Bridge
-    "TUIBridge",
     "get_tui_bridge",
     "init_tui",
+    "print_metadata_box",
+    "print_result",
     "shutdown_tui",
 ]

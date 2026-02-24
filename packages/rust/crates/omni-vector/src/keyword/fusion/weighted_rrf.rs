@@ -3,6 +3,8 @@
 
 use std::collections::HashMap;
 
+use aho_corasick::{AhoCorasick, PatternID};
+use lance::deps::arrow_array::StringArray;
 use rayon::prelude::*;
 
 use crate::ToolSearchResult;
@@ -15,12 +17,172 @@ use super::match_util::{
 };
 use super::types::HybridSearchResult;
 
+struct EffectiveFusionWeights {
+    keyword_sparse: bool,
+    vec_weight: f32,
+    kw_weight: f32,
+}
+
+fn compute_effective_fusion_weights(
+    keyword_results_len: usize,
+    semantic_weight: f32,
+    keyword_weight: f32,
+) -> EffectiveFusionWeights {
+    let keyword_sparse = keyword_results_len < 2;
+    if keyword_sparse {
+        EffectiveFusionWeights {
+            keyword_sparse,
+            vec_weight: 2.0,
+            kw_weight: 0.1,
+        }
+    } else {
+        EffectiveFusionWeights {
+            keyword_sparse,
+            vec_weight: semantic_weight,
+            kw_weight: keyword_weight,
+        }
+    }
+}
+
+fn maybe_log_sparse_keyword_fallback(
+    weights: &EffectiveFusionWeights,
+    keyword_results_len: usize,
+    query: &str,
+) {
+    if log::log_enabled!(log::Level::Debug) && weights.keyword_sparse && keyword_results_len > 0 {
+        log::debug!(
+            "Smart RRF Fallback: Sparse keyword results ({}) for query '{}', \
+             boosting vector weight to {:.1}",
+            keyword_results_len,
+            query,
+            weights.vec_weight
+        );
+    }
+}
+
+fn seed_vector_fusion_map(
+    fusion_map: &mut HashMap<String, HybridSearchResult>,
+    vector_results: Vec<(String, f32)>,
+    k: f32,
+    weights: &EffectiveFusionWeights,
+) {
+    for (rank, (name, score)) in vector_results.into_iter().enumerate() {
+        let rrf_score = weights.vec_weight * super::kernels::rrf_term(k, rank);
+        let fallback_bonus = if weights.keyword_sparse {
+            score * 0.3
+        } else {
+            0.0
+        };
+        fusion_map.insert(
+            name.clone(),
+            HybridSearchResult {
+                tool_name: name,
+                rrf_score: rrf_score + fallback_bonus,
+                vector_score: score,
+                keyword_score: 0.0,
+            },
+        );
+    }
+}
+
+fn merge_keyword_fusion_scores(
+    fusion_map: &mut HashMap<String, HybridSearchResult>,
+    keyword_results: &[ToolSearchResult],
+    k: f32,
+    weights: &EffectiveFusionWeights,
+) {
+    if weights.kw_weight <= 0.05 {
+        return;
+    }
+    for (rank, result) in keyword_results.iter().enumerate() {
+        let rrf_score = weights.kw_weight * super::kernels::rrf_term(k, rank);
+        let tool_name = result.tool_name.as_str();
+        if let Some(entry) = fusion_map.get_mut(tool_name) {
+            entry.rrf_score += rrf_score;
+            entry.keyword_score = result.score;
+        } else {
+            fusion_map.insert(
+                result.tool_name.clone(),
+                HybridSearchResult {
+                    tool_name: result.tool_name.clone(),
+                    rrf_score,
+                    vector_score: 0.0,
+                    keyword_score: result.score,
+                },
+            );
+        }
+    }
+}
+
+fn compute_name_metadata_boost_deltas(
+    keys_ordered: &[String],
+    names_lower_array: &StringArray,
+    ac_and_exact: Option<&(AhoCorasick, Option<PatternID>)>,
+    keyword_context: &HashMap<&str, &ToolSearchResult>,
+    query_parts: &[&str],
+    file_discovery_intent: bool,
+) -> Vec<f32> {
+    (0..keys_ordered.len())
+        .into_par_iter()
+        .map(|i| {
+            let tool_name = &keys_ordered[i];
+            let name_lower = names_lower_array.value(i);
+            let NameMatchResult {
+                token_count: match_count,
+                exact_phrase,
+            } = ac_and_exact.map_or_else(NameMatchResult::default, |(ac, exact_id)| {
+                count_name_token_matches_and_exact(ac, name_lower, *exact_id)
+            });
+
+            let mut delta = 0.0;
+            if match_count > 0 {
+                delta +=
+                    f32::from(u16::try_from(match_count).unwrap_or(u16::MAX)) * NAME_TOKEN_BOOST;
+            }
+            if exact_phrase {
+                delta += EXACT_PHRASE_BOOST;
+            }
+            if let Some(meta) = keyword_context.get(tool_name.as_str()) {
+                delta += metadata_alignment_boost(meta, query_parts);
+                if file_discovery_intent && file_discovery_boost(meta) {
+                    delta += 0.25;
+                }
+            }
+            delta
+        })
+        .collect()
+}
+
+fn apply_boost_deltas(
+    fusion_map: &mut HashMap<String, HybridSearchResult>,
+    keys_ordered: &[String],
+    deltas: Vec<f32>,
+) {
+    for (i, delta) in deltas.into_iter().enumerate() {
+        if let Some(entry) = fusion_map.get_mut(&keys_ordered[i]) {
+            entry.rrf_score += delta;
+        }
+    }
+}
+
+fn sorted_fusion_results(
+    fusion_map: HashMap<String, HybridSearchResult>,
+) -> Vec<HybridSearchResult> {
+    let mut results: Vec<_> = fusion_map.into_values().collect();
+    results.sort_by(|a, b| {
+        b.rrf_score
+            .total_cmp(&a.rrf_score)
+            .then_with(|| a.tool_name.cmp(&b.tool_name))
+    });
+    results
+}
+
 /// Apply Weighted RRF with Field Boosting.
 ///
 /// Algorithm: weighted vector + keyword streams, smart fallback for sparse keyword results,
 /// dynamic field boosting (name token match, exact phrase, metadata alignment).
 #[must_use]
-#[allow(clippy::too_many_lines, clippy::needless_pass_by_value)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn apply_weighted_rrf(
     vector_results: Vec<(String, f32)>,
     keyword_results: Vec<ToolSearchResult>,
@@ -37,114 +199,22 @@ pub fn apply_weighted_rrf(
         .iter()
         .map(|r| (r.tool_name.as_str(), r))
         .collect();
-
-    let is_keyword_sparse = keyword_results.len() < 2;
-    let effective_kw_weight = if is_keyword_sparse {
-        0.1
-    } else {
-        keyword_weight
-    };
-    let effective_vec_weight = if is_keyword_sparse {
-        2.0
-    } else {
-        semantic_weight
-    };
-
-    if log::log_enabled!(log::Level::Debug) && is_keyword_sparse && !keyword_results.is_empty() {
-        log::debug!(
-            "Smart RRF Fallback: Sparse keyword results ({}) for query '{}', \
-             boosting vector weight to {:.1}",
-            keyword_results.len(),
-            query,
-            effective_vec_weight
-        );
-    }
-
-    for (rank, (name, score)) in vector_results.into_iter().enumerate() {
-        let rrf_score = effective_vec_weight * super::kernels::rrf_term(k, rank);
-        let fallback_bonus = if is_keyword_sparse { score * 0.3 } else { 0.0 };
-
-        fusion_map.insert(
-            name.clone(),
-            HybridSearchResult {
-                tool_name: name.clone(),
-                rrf_score: rrf_score + fallback_bonus,
-                vector_score: score,
-                keyword_score: 0.0,
-            },
-        );
-    }
-
-    if effective_kw_weight > 0.05 {
-        for (rank, result) in keyword_results.iter().enumerate() {
-            let rrf_score = effective_kw_weight * super::kernels::rrf_term(k, rank);
-            let tool_name = result.tool_name.as_str();
-
-            if let Some(entry) = fusion_map.get_mut(tool_name) {
-                entry.rrf_score += rrf_score;
-                entry.keyword_score = result.score;
-            } else {
-                fusion_map.insert(
-                    result.tool_name.clone(),
-                    HybridSearchResult {
-                        tool_name: result.tool_name.clone(),
-                        rrf_score,
-                        vector_score: 0.0,
-                        keyword_score: result.score,
-                    },
-                );
-            }
-        }
-    }
+    let weights =
+        compute_effective_fusion_weights(keyword_results.len(), semantic_weight, keyword_weight);
+    maybe_log_sparse_keyword_fallback(&weights, keyword_results.len(), query);
+    seed_vector_fusion_map(&mut fusion_map, vector_results, k, &weights);
+    merge_keyword_fusion_scores(&mut fusion_map, &keyword_results, k, &weights);
 
     let (keys_ordered, names_lower_array) = build_name_lower_arrow(fusion_map.keys());
-
     let ac_and_exact = build_name_token_automaton_with_phrase(&query_parts, &query_lower);
-
-    // P5: Parallel boost — compute deltas per index (read-only), then apply once.
-    let deltas: Vec<f32> = (0..keys_ordered.len())
-        .into_par_iter()
-        .map(|i| {
-            let tool_name = &keys_ordered[i];
-            let name_lower = names_lower_array.value(i);
-            let NameMatchResult {
-                token_count: match_count,
-                exact_phrase,
-            } = ac_and_exact
-                .as_ref()
-                .map_or_else(NameMatchResult::default, |(ac, exact_id)| {
-                    count_name_token_matches_and_exact(ac, name_lower, *exact_id)
-                });
-
-            let mut delta = 0.0;
-            if match_count > 0 {
-                delta +=
-                    f32::from(u16::try_from(match_count).unwrap_or(u16::MAX)) * NAME_TOKEN_BOOST;
-            }
-            if exact_phrase {
-                delta += EXACT_PHRASE_BOOST;
-            }
-            if let Some(meta) = keyword_context.get(tool_name.as_str()) {
-                delta += metadata_alignment_boost(meta, &query_parts);
-                if file_discovery_intent && file_discovery_boost(meta) {
-                    delta += 0.25;
-                }
-            }
-            delta
-        })
-        .collect();
-
-    for (i, delta) in deltas.into_iter().enumerate() {
-        if let Some(entry) = fusion_map.get_mut(&keys_ordered[i]) {
-            entry.rrf_score += delta;
-        }
-    }
-
-    let mut results: Vec<_> = fusion_map.into_values().collect();
-    results.sort_by(|a, b| {
-        b.rrf_score
-            .total_cmp(&a.rrf_score)
-            .then_with(|| a.tool_name.cmp(&b.tool_name))
-    });
-    results
+    let deltas = compute_name_metadata_boost_deltas(
+        &keys_ordered,
+        &names_lower_array,
+        ac_and_exact.as_ref(),
+        &keyword_context,
+        &query_parts,
+        file_discovery_intent,
+    );
+    apply_boost_deltas(&mut fusion_map, &keys_ordered, deltas);
+    sorted_fusion_results(fusion_map)
 }

@@ -1,3 +1,37 @@
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -18,7 +52,8 @@ use crate::channels::traits::{Channel, ChannelMessage};
 use crate::config::AgentConfig;
 use crate::jobs::{JobManager, JobManagerConfig};
 
-use super::jobs::handle_inbound_message;
+use super::dispatch::ForegroundInterruptController;
+use super::jobs::handle_inbound_message_with_interrupt;
 use super::webhook::build_telegram_webhook_app;
 
 mod jobs_logging;
@@ -32,10 +67,12 @@ mod session_injection;
 mod session_jobs;
 mod session_memory;
 mod session_partition;
+mod session_preemption;
 mod session_reset;
 mod session_resume_flow;
 mod session_slash_acl;
 mod session_status;
+mod session_stop;
 mod transport_command_flow;
 mod webhook_security;
 
@@ -264,6 +301,25 @@ async fn build_agent_with_context_budget() -> Result<Arc<Agent>> {
 fn build_job_manager(runner: Arc<dyn crate::jobs::TurnRunner>) -> Arc<JobManager> {
     let (manager, _completion_rx) = JobManager::start(runner, JobManagerConfig::default());
     manager
+}
+
+async fn handle_inbound_message(
+    msg: ChannelMessage,
+    channel: &Arc<dyn Channel>,
+    foreground_tx: &mpsc::Sender<ChannelMessage>,
+    job_manager: &Arc<JobManager>,
+    agent: &Arc<Agent>,
+) -> bool {
+    let interrupt_controller = ForegroundInterruptController::default();
+    handle_inbound_message_with_interrupt(
+        msg,
+        channel,
+        foreground_tx,
+        &interrupt_controller,
+        job_manager,
+        agent,
+    )
+    .await
 }
 
 async fn run_partition_reset_status_flow(

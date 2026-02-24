@@ -1,12 +1,46 @@
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
+use axum::{Json, Router, extract::State, routing::post};
 use omni_agent::{Agent, AgentConfig, MemoryConfig, SessionStore};
 use omni_memory::{Episode, MemoryGatePolicy, MemoryGateVerdict, MemoryUtilityLedger};
+use tokio::time::{Duration, sleep};
 
 fn base_agent_config(memory: MemoryConfig) -> AgentConfig {
     AgentConfig {
@@ -25,6 +59,54 @@ fn state_paths(memory_path: &str, table_name: &str) -> (std::path::PathBuf, std:
     )
 }
 
+async fn reserve_local_addr() -> std::net::SocketAddr {
+    let probe = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("reserve local addr");
+    let addr = probe.local_addr().expect("read reserved local addr");
+    drop(probe);
+    addr
+}
+
+async fn embed_handler(
+    State(embedding_dim): State<usize>,
+    Json(payload): Json<serde_json::Value>,
+) -> Json<serde_json::Value> {
+    let vector_count = payload
+        .get("texts")
+        .and_then(|value| value.as_array())
+        .map_or(1, |texts| texts.len());
+    tokio::time::sleep(Duration::from_millis(1)).await;
+    let vectors: Vec<Vec<f32>> = (0..vector_count)
+        .map(|_| vec![0.0_f32; embedding_dim])
+        .collect();
+    Json(serde_json::json!({ "vectors": vectors }))
+}
+
+async fn spawn_embedding_server(
+    addr: std::net::SocketAddr,
+    embedding_dim: usize,
+) -> tokio::task::JoinHandle<()> {
+    let app = Router::new()
+        .route("/embed/batch", post(embed_handler))
+        .with_state(embedding_dim);
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .expect("bind embedding listener");
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    })
+}
+
+async fn with_local_embedding_server(
+    mut memory: MemoryConfig,
+) -> (MemoryConfig, tokio::task::JoinHandle<()>) {
+    let addr = reserve_local_addr().await;
+    let handle = spawn_embedding_server(addr, memory.embedding_dim).await;
+    memory.embedding_base_url = Some(format!("http://{addr}"));
+    (memory, handle)
+}
+
 fn read_episodes(path: &Path) -> Vec<Episode> {
     let raw = std::fs::read_to_string(path).expect("episodes snapshot should exist");
     serde_json::from_str(&raw).expect("episodes snapshot should be valid json")
@@ -33,6 +115,10 @@ fn read_episodes(path: &Path) -> Vec<Episode> {
 fn read_q_table(path: &Path) -> HashMap<String, f32> {
     let raw = std::fs::read_to_string(path).expect("q-table snapshot should exist");
     serde_json::from_str(&raw).expect("q-table snapshot should be valid json")
+}
+
+fn has_metric_key_prefix(metrics: &HashMap<String, String>, prefix: &str) -> bool {
+    metrics.keys().any(|key| key.starts_with(prefix))
 }
 
 fn live_redis_url() -> Option<String> {
@@ -89,6 +175,36 @@ async fn stream_metrics(
     Ok(metrics)
 }
 
+async fn wait_for_key_xlen(redis_url: &str, key: &str, min_len: usize) -> Result<usize> {
+    let client = redis::Client::open(redis_url)?;
+    for _ in 0..40 {
+        let mut conn = client.get_multiplexed_async_connection().await?;
+        let len: usize = redis::cmd("XLEN").arg(key).query_async(&mut conn).await?;
+        if len >= min_len {
+            return Ok(len);
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+    let mut conn = client.get_multiplexed_async_connection().await?;
+    let len: usize = redis::cmd("XLEN").arg(key).query_async(&mut conn).await?;
+    Ok(len)
+}
+
+async fn wait_for_key_hlen(redis_url: &str, key: &str, min_len: usize) -> Result<usize> {
+    let client = redis::Client::open(redis_url)?;
+    for _ in 0..40 {
+        let mut conn = client.get_multiplexed_async_connection().await?;
+        let len: usize = redis::cmd("HLEN").arg(key).query_async(&mut conn).await?;
+        if len >= min_len {
+            return Ok(len);
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+    let mut conn = client.get_multiplexed_async_connection().await?;
+    let len: usize = redis::cmd("HLEN").arg(key).query_async(&mut conn).await?;
+    Ok(len)
+}
+
 #[tokio::test]
 async fn repeated_success_turns_reuse_episode_and_reach_promote_threshold() -> Result<()> {
     let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -99,6 +215,7 @@ async fn repeated_success_turns_reuse_episode_and_reach_promote_threshold() -> R
         persistence_backend: "local".to_string(),
         ..MemoryConfig::default()
     };
+    let (memory, embedding_server_handle) = with_local_embedding_server(memory).await;
     let expected_gate_promote_threshold = memory.gate_promote_threshold;
     let expected_gate_obsolete_threshold = memory.gate_obsolete_threshold;
     let expected_gate_promote_min_usage = memory.gate_promote_min_usage;
@@ -166,6 +283,8 @@ async fn repeated_success_turns_reuse_episode_and_reach_promote_threshold() -> R
 
     let q_values = read_q_table(&q_path);
     assert_eq!(q_values.len(), 1);
+    embedding_server_handle.abort();
+    let _ = embedding_server_handle.await;
     Ok(())
 }
 
@@ -179,6 +298,7 @@ async fn repeated_failure_turns_trigger_obsolete_and_purge_episode() -> Result<(
         persistence_backend: "local".to_string(),
         ..MemoryConfig::default()
     };
+    let (memory, embedding_server_handle) = with_local_embedding_server(memory).await;
     let (episodes_path, q_path) = state_paths(&memory.path, &memory.table_name);
     let agent = Agent::from_config(base_agent_config(memory))
         .await
@@ -222,6 +342,8 @@ async fn repeated_failure_turns_trigger_obsolete_and_purge_episode() -> Result<(
         q_values.is_empty(),
         "persisted q-table should be empty after purge"
     );
+    embedding_server_handle.abort();
+    let _ = embedding_server_handle.await;
     Ok(())
 }
 
@@ -239,6 +361,7 @@ async fn custom_gate_policy_can_purge_after_single_failure_turn() -> Result<()> 
         gate_obsolete_max_ttl_score: 1.0,
         ..MemoryConfig::default()
     };
+    let (memory, embedding_server_handle) = with_local_embedding_server(memory).await;
     let agent = Agent::from_config(base_agent_config(memory))
         .await
         .expect("agent should initialize");
@@ -263,6 +386,8 @@ async fn custom_gate_policy_can_purge_after_single_failure_turn() -> Result<()> 
     assert_eq!(status.gate_obsolete_min_usage, Some(1));
     assert_eq!(status.gate_obsolete_failure_rate_floor, Some(0.0));
     assert_eq!(status.gate_obsolete_max_ttl_score, Some(1.0));
+    embedding_server_handle.abort();
+    let _ = embedding_server_handle.await;
     Ok(())
 }
 
@@ -277,6 +402,7 @@ async fn custom_gate_policy_can_delay_obsolete_after_repeated_failures() -> Resu
         gate_obsolete_min_usage: 8,
         ..MemoryConfig::default()
     };
+    let (memory, embedding_server_handle) = with_local_embedding_server(memory).await;
     let agent = Agent::from_config(base_agent_config(memory))
         .await
         .expect("agent should initialize");
@@ -300,6 +426,8 @@ async fn custom_gate_policy_can_delay_obsolete_after_repeated_failures() -> Resu
         "high obsolete_min_usage should keep failing episode until enough evidence accumulates"
     );
     assert_eq!(status.q_values_total, Some(1));
+    embedding_server_handle.abort();
+    let _ = embedding_server_handle.await;
     Ok(())
 }
 
@@ -319,6 +447,7 @@ async fn memory_gate_events_are_emitted_into_valkey_stream_metrics() -> Result<(
         persistence_backend: "local".to_string(),
         ..MemoryConfig::default()
     };
+    let (memory, embedding_server_handle) = with_local_embedding_server(memory).await;
 
     let key_prefix = unique_id("memory-gate-stream");
     let session_id = unique_id("memory-gate-stream-session");
@@ -343,6 +472,18 @@ async fn memory_gate_events_are_emitted_into_valkey_stream_metrics() -> Result<(
         )
         .await?;
 
+    let promote_session_id = unique_id("memory-gate-promote-stream-session");
+    for _ in 0..4 {
+        agent
+            .append_turn_with_tool_count_for_session(
+                &promote_session_id,
+                "compare valkey and postgres tradeoffs",
+                "analysis completed successfully",
+                6,
+            )
+            .await?;
+    }
+
     let global_metrics = stream_metrics(&redis_url, &key_prefix, "memory.events", None).await?;
     assert_eq!(
         global_metrics
@@ -351,10 +492,42 @@ async fn memory_gate_events_are_emitted_into_valkey_stream_metrics() -> Result<(
         Some("2"),
         "memory gate evaluation should emit one stream event per turn"
     );
+    assert!(
+        has_metric_key_prefix(&global_metrics, "react_evidence_count:"),
+        "memory gate stream events should include react evidence counts"
+    );
+    assert!(
+        has_metric_key_prefix(&global_metrics, "graph_evidence_count:"),
+        "memory gate stream events should include graph evidence counts"
+    );
+    assert!(
+        has_metric_key_prefix(&global_metrics, "omega_factor_count:"),
+        "memory gate stream events should include omega factor counts"
+    );
+    assert!(
+        has_metric_key_prefix(&global_metrics, "react_evidence_refs:"),
+        "memory gate stream events should include react evidence references"
+    );
+    assert!(
+        has_metric_key_prefix(&global_metrics, "graph_evidence_refs:"),
+        "memory gate stream events should include graph evidence references"
+    );
+    assert!(
+        has_metric_key_prefix(&global_metrics, "omega_factors:"),
+        "memory gate stream events should include omega factors"
+    );
     assert_eq!(
         global_metrics.get("kind:turn_stored").map(String::as_str),
-        Some("2"),
+        Some("6"),
         "turn store events should remain observable for memory gate debugging"
+    );
+    let promoted_count = global_metrics
+        .get("kind:memory_promoted")
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0);
+    assert!(
+        promoted_count >= 1,
+        "promoted memory events should be emitted for durable knowledge ingestion"
     );
 
     let scoped_metrics =
@@ -369,5 +542,36 @@ async fn memory_gate_events_are_emitted_into_valkey_stream_metrics() -> Result<(
         scoped_metrics.get("kind:turn_stored").map(String::as_str),
         Some("2")
     );
+
+    let promoted_scoped_metrics = stream_metrics(
+        &redis_url,
+        &key_prefix,
+        "memory.events",
+        Some(&promote_session_id),
+    )
+    .await?;
+    let promoted_scoped_count = promoted_scoped_metrics
+        .get("kind:memory_promoted")
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0);
+    assert!(
+        promoted_scoped_count >= 1,
+        "promoted session should emit at least one memory_promoted stream record"
+    );
+
+    let ingest_stream_key = format!("{key_prefix}:stream:knowledge.ingest.candidates");
+    let ingest_ledger_key = format!("{key_prefix}:knowledge:ingest:candidates");
+    let queued_candidates = wait_for_key_xlen(&redis_url, &ingest_stream_key, 1).await?;
+    assert!(
+        queued_candidates >= 1,
+        "promoted memory should be queued into durable knowledge ingest stream"
+    );
+    let ledger_candidates = wait_for_key_hlen(&redis_url, &ingest_ledger_key, 1).await?;
+    assert!(
+        ledger_candidates >= 1,
+        "promoted memory should be deduplicated in ingest ledger"
+    );
+    embedding_server_handle.abort();
+    let _ = embedding_server_handle.await;
     Ok(())
 }

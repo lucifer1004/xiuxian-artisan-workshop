@@ -6,11 +6,12 @@ This module freezes the policy payload crossing common retrieval layers.
 
 from __future__ import annotations
 
-import json
 from functools import lru_cache
 from typing import Any, Literal
 
 from jsonschema import Draft202012Validator
+
+from .schema_provider import get_schema
 
 SCHEMA_NAME = "omni.link_graph.retrieval_plan.v1.schema.json"
 SCHEMA_VERSION = "omni.link_graph.retrieval_plan.v1"
@@ -18,44 +19,34 @@ RetrievalMode = Literal["graph_only", "hybrid", "vector_only"]
 ConfidenceLevel = Literal["none", "low", "medium", "high"]
 
 
-def get_schema_path():
-    """Path to shared LinkGraph retrieval plan schema."""
-    from omni.foundation.config.paths import get_config_paths
-
-    primary = get_config_paths().project_root / "packages" / "shared" / "schemas" / SCHEMA_NAME
-    if primary.exists():
-        return primary
-    try:
-        from omni.foundation.runtime.gitops import get_project_root
-
-        fallback = get_project_root() / "packages" / "shared" / "schemas" / SCHEMA_NAME
-        if fallback.exists():
-            return fallback
-    except Exception:
-        pass
-    return primary
-
-
 @lru_cache(maxsize=1)
 def get_validator() -> Draft202012Validator:
     """Cached validator for LinkGraph retrieval plan schema."""
-    path = get_schema_path()
-    if not path.exists():
-        raise FileNotFoundError(f"LinkGraph retrieval plan schema not found: {path}")
-    return Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
+    return Draft202012Validator(get_schema(SCHEMA_VERSION))
 
 
 @lru_cache(maxsize=1)
 def get_schema_id() -> str:
     """Return JSON schema `$id` from LinkGraph retrieval plan schema."""
-    path = get_schema_path()
-    if not path.exists():
-        raise FileNotFoundError(f"LinkGraph retrieval plan schema not found: {path}")
-    schema = json.loads(path.read_text(encoding="utf-8"))
+    schema = get_schema(SCHEMA_VERSION)
     schema_id = str(schema.get("$id", "")).strip()
     if not schema_id:
-        raise ValueError(f"LinkGraph retrieval plan schema missing $id: {path}")
+        raise ValueError("LinkGraph retrieval plan schema missing $id")
     return schema_id
+
+
+@lru_cache(maxsize=1)
+def get_reason_enum() -> tuple[str, ...]:
+    """Return canonical policy-reason enum from retrieval plan schema."""
+    schema = get_schema(SCHEMA_VERSION)
+    reason = schema.get("properties", {}).get("reason", {})
+    values = reason.get("enum") if isinstance(reason, dict) else None
+    if not isinstance(values, list) or not values:
+        raise ValueError("LinkGraph retrieval plan schema missing reason enum")
+    out = tuple(str(item).strip() for item in values if str(item).strip())
+    if not out:
+        raise ValueError("LinkGraph retrieval plan schema has empty reason enum")
+    return out
 
 
 def validate(payload: dict[str, Any]) -> None:
@@ -109,8 +100,8 @@ __all__ = [
     "ConfidenceLevel",
     "RetrievalMode",
     "build_plan_record",
+    "get_reason_enum",
     "get_schema_id",
-    "get_schema_path",
     "get_validator",
     "validate",
 ]

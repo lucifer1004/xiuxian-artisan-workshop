@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::agent::Agent;
+use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
 use crate::channels::traits::{Channel, ChannelMessage};
 
 use super::super::command_handlers::session_commands::{
@@ -11,12 +12,14 @@ use super::super::command_handlers::session_commands::{
 };
 use super::super::command_handlers::session_control::{
     try_handle_help_command, try_handle_reset_context_command, try_handle_resume_context_command,
+    try_handle_stop_command,
 };
 
 pub(super) async fn try_handle(
     msg: &ChannelMessage,
     channel: &Arc<dyn Channel>,
     agent: &Arc<Agent>,
+    interrupt_controller: &ForegroundInterruptController,
     session_id: &str,
 ) -> bool {
     if try_handle_help_command(msg, channel).await {
@@ -26,6 +29,9 @@ pub(super) async fn try_handle(
         return true;
     }
     if try_handle_resume_context_command(msg, channel, agent, session_id).await {
+        return true;
+    }
+    if try_handle_stop_command(msg, channel, agent, interrupt_controller, session_id).await {
         return true;
     }
     if try_handle_session_context_status_command(msg, channel, agent, session_id).await {

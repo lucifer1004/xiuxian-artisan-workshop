@@ -121,7 +121,7 @@ def _run_once(cmd: list[str], timeout_s: float) -> RunResult:
         payload = json.loads(proc.stdout)
         results = payload.get("results")
         count = len(results) if isinstance(results, list) else 0
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return RunResult(
             elapsed_ms=elapsed_ms,
             ok=False,
@@ -143,7 +143,7 @@ def _p95_ms(values: list[float]) -> float:
     if len(values) == 1:
         return values[0]
     sorted_values = sorted(values)
-    idx = max(0, int(round(0.95 * (len(sorted_values) - 1))))
+    idx = max(0, round(0.95 * (len(sorted_values) - 1)))
     return sorted_values[idx]
 
 
@@ -210,7 +210,7 @@ def main() -> int:
             build=not args.no_build,
             release=bool(args.release),
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
@@ -253,7 +253,7 @@ def main() -> int:
         gates_failed.append(f"run_failures={len(failures)}")
 
     payload: dict[str, Any] = {
-        "schema": "omni.wendao.search_benchmark.v1",
+        "schema": "xiuxian_wendao.search_benchmark.v1",
         "binary": str(binary),
         "profile": "release" if args.release else "debug",
         "cmd": cmd,

@@ -1,11 +1,15 @@
 pub(crate) const EMBEDDING_SOURCE_EMBEDDING: &str = "embedding";
 pub(crate) const EMBEDDING_SOURCE_EMBEDDING_REPAIRED: &str = "embedding_repaired";
-pub(crate) const EMBEDDING_SOURCE_HASH: &str = "hash";
 
 /// Resample an embedding vector to the target dimension.
 ///
 /// This keeps semantic signal when the upstream embedding model dimension drifts
 /// from configured memory dimension (for example 1024 -> 384).
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 pub(crate) fn repair_embedding_dimension(input: &[f32], target_dim: usize) -> Vec<f32> {
     if target_dim == 0 {
         return Vec::new();
@@ -49,7 +53,9 @@ fn normalize(mut values: Vec<f32>) -> Vec<f32> {
     if norm <= f32::EPSILON {
         return values;
     }
-    values.iter_mut().for_each(|value| *value /= norm);
+    for value in &mut values {
+        *value /= norm;
+    }
     values
 }
 

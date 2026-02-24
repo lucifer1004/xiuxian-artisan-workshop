@@ -27,11 +27,10 @@ pub fn is_supported_note(path: &Path) -> bool {
     // Placeholder: org-mode indexing is intentionally unsupported for now.
     path.extension()
         .and_then(|v| v.to_str())
-        .map(|ext| {
+        .is_some_and(|ext| {
             let lower = ext.to_lowercase();
             matches!(lower.as_str(), "md" | "markdown" | "mdx")
         })
-        .unwrap_or(false)
 }
 
 pub(super) fn relative_doc_id(path: &Path, root: &Path) -> Option<String> {

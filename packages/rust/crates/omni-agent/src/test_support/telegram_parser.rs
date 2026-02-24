@@ -6,14 +6,17 @@ use super::types::{
     SessionInjectionCommand, SessionPartitionCommand, SessionPartitionMode, map_output_format,
 };
 
+#[must_use]
 pub fn parse_help_command(input: &str) -> Option<super::types::OutputFormat> {
     telegram::parse_help_command(input).map(|format| map_output_format(format.is_json()))
 }
 
+#[must_use]
 pub fn parse_background_prompt(input: &str) -> Option<String> {
     telegram::parse_background_prompt(input)
 }
 
+#[must_use]
 pub fn parse_job_status_command(input: &str) -> Option<JobStatusCommand> {
     telegram::parse_job_status_command(input).map(|parsed| JobStatusCommand {
         job_id: parsed.job_id,
@@ -21,25 +24,30 @@ pub fn parse_job_status_command(input: &str) -> Option<JobStatusCommand> {
     })
 }
 
+#[must_use]
 pub fn parse_jobs_summary_command(input: &str) -> Option<super::types::OutputFormat> {
     telegram::parse_jobs_summary_command(input).map(|format| map_output_format(format.is_json()))
 }
 
+#[must_use]
 pub fn parse_session_context_status_command(input: &str) -> Option<super::types::OutputFormat> {
     telegram::parse_session_context_status_command(input)
         .map(|format| map_output_format(format.is_json()))
 }
 
+#[must_use]
 pub fn parse_session_context_budget_command(input: &str) -> Option<super::types::OutputFormat> {
     telegram::parse_session_context_budget_command(input)
         .map(|format| map_output_format(format.is_json()))
 }
 
+#[must_use]
 pub fn parse_session_context_memory_command(input: &str) -> Option<super::types::OutputFormat> {
     telegram::parse_session_context_memory_command(input)
         .map(|format| map_output_format(format.is_json()))
 }
 
+#[must_use]
 pub fn parse_session_feedback_command(input: &str) -> Option<SessionFeedbackCommand> {
     telegram::parse_session_feedback_command(input).map(|parsed| SessionFeedbackCommand {
         direction: map_feedback_direction(parsed.direction),
@@ -47,6 +55,7 @@ pub fn parse_session_feedback_command(input: &str) -> Option<SessionFeedbackComm
     })
 }
 
+#[must_use]
 pub fn parse_session_injection_command(input: &str) -> Option<SessionInjectionCommand> {
     telegram::parse_session_injection_command(input).map(|parsed| SessionInjectionCommand {
         action: match parsed.action {
@@ -58,6 +67,7 @@ pub fn parse_session_injection_command(input: &str) -> Option<SessionInjectionCo
     })
 }
 
+#[must_use]
 pub fn parse_session_admin_command(input: &str) -> Option<SessionAdminCommand> {
     telegram::parse_session_admin_command(input).map(|parsed| SessionAdminCommand {
         action: match parsed.action {
@@ -71,6 +81,7 @@ pub fn parse_session_admin_command(input: &str) -> Option<SessionAdminCommand> {
     })
 }
 
+#[must_use]
 pub fn parse_session_partition_command(input: &str) -> Option<SessionPartitionCommand> {
     telegram::parse_session_partition_command(input).map(|parsed| SessionPartitionCommand {
         mode: parsed.mode.map(map_session_partition_mode),
@@ -78,10 +89,12 @@ pub fn parse_session_partition_command(input: &str) -> Option<SessionPartitionCo
     })
 }
 
+#[must_use]
 pub fn is_reset_context_command(input: &str) -> bool {
     telegram::is_reset_context_command(input)
 }
 
+#[must_use]
 pub fn parse_resume_context_command(input: &str) -> Option<ResumeContextCommand> {
     telegram::parse_resume_context_command(input).map(map_resume_command)
 }

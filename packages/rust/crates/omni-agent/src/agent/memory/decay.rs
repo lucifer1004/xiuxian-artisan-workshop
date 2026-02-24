@@ -7,7 +7,7 @@ pub(in crate::agent) fn should_apply_decay(
         return false;
     }
     let every = decay_every_turns.max(1) as u64;
-    turn_index > 0 && turn_index % every == 0
+    turn_index > 0 && turn_index.is_multiple_of(every)
 }
 
 pub(in crate::agent) fn sanitize_decay_factor(raw: f32) -> f32 {

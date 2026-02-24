@@ -592,25 +592,33 @@ class AgentMCPHandler(MCPRequestHandler):
         if "." not in name:
             return _make_error_response(req_id, INVALID_PARAMS, "Tool name must be 'skill.command'")
 
-        skill_name, command_name = name.split(".", 1)
-
-        skill = self._kernel.skill_context.get_skill(skill_name)
-        if not skill:
-            return _make_error_response(req_id, INVALID_PARAMS, f"Skill not found: {skill_name}")
-
         try:
             from omni.agent.mcp_server.memory_monitor import amemory_monitor_scope
+            from omni.core.skills.runner import run_tool
             from omni.foundation.api.mcp_schema import (
                 build_result,
                 enforce_result_shape,
                 is_canonical,
             )
+            from omni.foundation.api.tool_context import run_with_execution_timeout
+            from omni.foundation.utils import json_codec as fast_json
 
             async with amemory_monitor_scope(name):
-                result = await skill.execute(command_name, **arguments)
+                result = await run_with_execution_timeout(
+                    run_tool(
+                        name,
+                        arguments,
+                        kernel=self._kernel,
+                    )
+                )
             if is_canonical(result):
                 return _make_success_response(req_id, enforce_result_shape(result))
-            text = "" if result is None else str(result)
+            if result is None:
+                text = ""
+            elif isinstance(result, (dict, list)):
+                text = fast_json.dumps(result)
+            else:
+                text = str(result)
             return _make_success_response(req_id, build_result(text))
         except Exception as e:
             return _make_error_response(req_id, INTERNAL_ERROR, str(e))

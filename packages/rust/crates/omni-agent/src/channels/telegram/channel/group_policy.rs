@@ -1,16 +1,11 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum TelegramGroupPolicyMode {
+    #[default]
     Open,
     Allowlist,
     Disabled,
-}
-
-impl Default for TelegramGroupPolicyMode {
-    fn default() -> Self {
-        Self::Open
-    }
 }
 
 pub(super) fn parse_group_policy_mode(raw: &str, context: &str) -> Option<TelegramGroupPolicyMode> {

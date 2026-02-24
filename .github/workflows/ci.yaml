@@ -14,6 +14,14 @@ on:
         options:
           - "false"
           - "true"
+      run_memory_ci_nightly:
+        description: "Run optional omni-agent memory nightly gate"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
   architecture-gate:
@@ -32,11 +40,7 @@ jobs:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Run architecture guardrails
-        run: |
-          secretspec run --provider env --profile default -- devenv shell -- \
-            pytest -q -m architecture \
-              packages/python/foundation/tests/unit/tracer \
-              packages/python/foundation/tests/unit/rag
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:architecture-gate
 
   lint:
     runs-on: ${{ matrix.os }}
@@ -58,7 +62,7 @@ jobs:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Run lint
-        run: secretspec run --provider env --profile default -- devenv shell -- just lint
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:lint
 
   check-format:
     runs-on: ${{ matrix.os }}
@@ -80,7 +84,7 @@ jobs:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Check format
-        run: secretspec run --provider env --profile default -- devenv shell -- just check-format
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:check-format
 
   check-commits:
     runs-on: ${{ matrix.os }}
@@ -102,7 +106,7 @@ jobs:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
       - name: Check commit messages
-        run: secretspec run --provider env --profile default -- devenv shell -- just check-commits
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:check-commits
 
   test:
     runs-on: ${{ matrix.os }}
@@ -134,6 +138,25 @@ jobs:
       OMNI_KNOWLEDGE_RECALL_GRAPH_RSS_PEAK_DELTA_MB: ${{ matrix.recall_graph_rss_peak_delta_mb }}
       OMNI_KNOWLEDGE_RECALL_MAX_FAILURES: "0"
       OMNI_KNOWLEDGE_RECALL_REPORT_DIR: ".run/reports/knowledge-recall-perf"
+      OMNI_SKILLS_TOOLS_REPORT_DIR: ".run/reports/skills-tools-benchmark"
+      OMNI_SKILLS_TOOLS_CLI_SUMMARY_PROMOTE_BASELINE: "1"
+      OMNI_SKILLS_TOOLS_FETCH_REMOTE_BASELINE: "1"
+      OMNI_SKILLS_TOOLS_REMOTE_WORKFLOW_FILE: "ci.yaml"
+      OMNI_SKILLS_TOOLS_REMOTE_ARTIFACT_NAME: skills-tools-benchmark-${{ matrix.os }}
+      OMNI_SKILLS_TOOLS_CLI_SUMMARY_DIFF_MAX_MS: "70"
+      OMNI_SKILLS_TOOLS_CLI_SUMMARY_DIFF_MAX_RATIO: "1.2"
+      OMNI_SKILLS_TOOLS_CLI_SUMMARY_DIFF_BOOTSTRAP_MAX_MS: "60"
+      OMNI_SKILLS_TOOLS_CLI_SUMMARY_DIFF_BOOTSTRAP_MAX_RATIO: "1.7"
+      OMNI_SKILLS_TOOLS_TREND_MAX_OVERALL_STREAK: "2"
+      OMNI_SKILLS_TOOLS_TREND_MAX_COMPONENT_STREAK: "2"
+      OMNI_SKILLS_TOOLS_TREND_STRICT: "1"
+      CARGO_TARGET_DIR: /tmp/workspace-strict-proof
+      XIUXIAN_WENDAO_GATE_REPORT_DIR: ".run/reports/wendao-ppr-gate"
+      XIUXIAN_WENDAO_MIXED_CANARY_REPORT_DIR: ".run/reports/wendao-ppr-mixed-canary"
+      XIUXIAN_WENDAO_GATE_SUMMARY_STRICT_GREEN: "1"
+      XIUXIAN_WENDAO_ROLLOUT_REQUIRED_RUNS: "7"
+      XIUXIAN_WENDAO_ROLLOUT_MIN_MIXED_TOP3_RATE: "0.90"
+      XIUXIAN_WENDAO_ROLLOUT_STRICT_READY: "1"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -145,61 +168,117 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
-      - name: Rust gate - quality gates (strict clippy baseline)
-        run: secretspec run --provider env --profile default -- devenv shell -- just rust-quality-gate
+      - name: Rust gate - quality gates (strict clippy + nextest + omni-core-rs runtime lane)
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-quality-gate
+
+      - name: Rust gate - dependency security (cargo-audit + cargo-deny)
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-security-gate
+
+      - name: Rust gate - omni-core-rs lib runtime lane (explicit)
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-core-rs-lib
+
+      - name: Rust gate - omni-agent profile matrix (default + no-default-features)
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-agent-profiles
+
+      - name: Rust gate - omni-agent dependency graph assertions
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-agent-dependency-assertions
 
       - name: Rust gate - snapshot contracts
-        run: secretspec run --provider env --profile default -- devenv shell -- cargo test -p omni-vector --test test_fusion_snapshots
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-fusion-snapshots
 
       - name: Rust gate - search perf guard
-        run: secretspec run --provider env --profile default -- devenv shell -- cargo test -p omni-vector --test test_search_perf_guard
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-search-perf-guard
+
+      - name: Rust gate - xiuxian-wendao retrieval audits
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-retrieval-audits
+
+      - name: Rust gate - xiuxian-wendao WG2/WG3 unified PPR gate
+        env:
+          XIUXIAN_WENDAO_GATE_BUILD_MODE: "build"
+          XIUXIAN_WENDAO_GATE_CONFIG: "packages/conf/wendao.yaml"
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-ppr-gate
+
+      - name: Rust gate - xiuxian-wendao WG2/WG3 JSON report
+        if: ${{ always() }}
+        env:
+          XIUXIAN_WENDAO_GATE_BUILD_MODE: "no-build"
+          XIUXIAN_WENDAO_GATE_CONFIG: "packages/conf/wendao.yaml"
+          XIUXIAN_WENDAO_GATE_OUTPUT_MODE: "json"
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-ppr-report
+
+      - name: Rust gate (advisory) - xiuxian-wendao mixed-scope canary
+        continue-on-error: true
+        if: ${{ always() }}
+        env:
+          XIUXIAN_WENDAO_GATE_BUILD_MODE: "no-build"
+          XIUXIAN_WENDAO_GATE_CONFIG: "packages/conf/wendao.yaml"
+          XIUXIAN_WENDAO_GATE_OUTPUT_MODE: "json"
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-ppr-mixed-canary
+
+      - name: Rust gate - xiuxian-wendao report contract validation
+        if: ${{ always() }}
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-ppr-report-validate
+
+      - name: Rust gate - xiuxian-wendao gate summary
+        if: ${{ always() }}
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-ppr-gate-summary
 
       - name: Contract E2E - route test JSON (Rust -> Python -> CLI schema)
-        run: secretspec run --provider env --profile default -- devenv shell -- uv run pytest packages/python/foundation/tests/unit/services/test_contract_consistency.py::test_route_test_cli_json_validates_against_schema -v
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:contract-e2e-route-test-json
 
       - name: Contract freeze - schemas and canonical snapshots
-        run: secretspec run --provider env --profile default -- devenv shell -- just test-contract-freeze
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:contract-freeze
+
+      - name: Guard - no inline Python execution patterns
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:no-inline-python-guard
 
       - name: Docs advisory - vector search options contract
         continue-on-error: true
-        run: secretspec run --provider env --profile default -- devenv shell -- uv run python scripts/generate_vector_search_options_contract.py --check
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:docs-vector-search-options-check
 
       - name: Run tests
-        run: secretspec run --provider env --profile default -- devenv shell -- just test-quick
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:test-quick
 
-      - name: Skill gate (advisory) - knowledge.recall perf
+      - name: Skill benchmark gate/report - unified
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:benchmark-skills-tools
+
+      - name: Skill benchmark summary (step summary)
+        if: ${{ always() }}
+        run: |
+          status_md="${OMNI_SKILLS_TOOLS_REPORT_DIR}/skills_tools_ci_status.md"
+          echo "## Skills Tools Benchmark (${RUNNER_OS})" >> "${GITHUB_STEP_SUMMARY}"
+          if [ -f "${status_md}" ]; then
+            cat "${status_md}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "- status markdown missing: \`${status_md}\`" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Rust gate - xiuxian-wendao rollout sign-off tracker
+        if: ${{ always() }}
+        env:
+          XIUXIAN_WENDAO_ROLLOUT_FETCH_REMOTE_STATUS: "1"
+          XIUXIAN_WENDAO_ROLLOUT_REMOTE_WORKFLOW_FILE: "ci.yaml"
+          XIUXIAN_WENDAO_ROLLOUT_REMOTE_ARTIFACT_NAME: "wendao-ppr-gate-${{ matrix.os }}"
+          XIUXIAN_WENDAO_ROLLOUT_REMOTE_RUN_STATUS: "completed"
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-ppr-rollout-status
+
+      - name: Wendao rollout summary (step summary)
+        if: ${{ always() }}
+        run: |
+          summary_file="${XIUXIAN_WENDAO_GATE_REPORT_DIR}/wendao_gate_rollout_status.md"
+          fallback_file="${XIUXIAN_WENDAO_GATE_REPORT_DIR}/wendao_rollout_status.md"
+          if [ -f "${summary_file}" ]; then
+            cat "${summary_file}" >> "${GITHUB_STEP_SUMMARY}"
+          elif [ -f "${fallback_file}" ]; then
+            cat "${fallback_file}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "Wendao rollout summary not found: ${summary_file} (fallback: ${fallback_file})" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Skill gate (advisory) - knowledge.recall perf (unified)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_recall_perf_gates == 'true' }}
         continue-on-error: true
-        run: |
-          mkdir -p "${OMNI_KNOWLEDGE_RECALL_REPORT_DIR}"
-          secretspec run --provider env --profile default -- devenv shell -- \
-            uv run python scripts/knowledge_recall_perf_gate.py \
-              --query x \
-              --limit 2 \
-              --runs 3 \
-              --warm-runs 1 \
-              --retrieval-mode auto \
-              --max-p95-ms "${OMNI_KNOWLEDGE_RECALL_P95_MS}" \
-              --max-rss-peak-delta-mb "${OMNI_KNOWLEDGE_RECALL_RSS_PEAK_DELTA_MB}" \
-              --max-failures "${OMNI_KNOWLEDGE_RECALL_MAX_FAILURES}" \
-              --json-output "${OMNI_KNOWLEDGE_RECALL_REPORT_DIR}/auto.json"
-
-      - name: Skill gate (advisory) - knowledge.recall perf (graph_only)
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_recall_perf_gates == 'true' }}
-        continue-on-error: true
-        run: |
-          mkdir -p "${OMNI_KNOWLEDGE_RECALL_REPORT_DIR}"
-          secretspec run --provider env --profile default -- devenv shell -- \
-            uv run python scripts/knowledge_recall_perf_gate.py \
-              --query x \
-              --limit 2 \
-              --runs 3 \
-              --warm-runs 1 \
-              --retrieval-mode graph_only \
-              --max-p95-ms "${OMNI_KNOWLEDGE_RECALL_GRAPH_P95_MS}" \
-              --max-rss-peak-delta-mb "${OMNI_KNOWLEDGE_RECALL_GRAPH_RSS_PEAK_DELTA_MB}" \
-              --max-failures "${OMNI_KNOWLEDGE_RECALL_MAX_FAILURES}" \
-              --json-output "${OMNI_KNOWLEDGE_RECALL_REPORT_DIR}/graph_only.json"
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:knowledge-recall-gates
 
       - name: Upload knowledge recall perf reports
         if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.run_recall_perf_gates == 'true' }}
@@ -207,4 +286,78 @@ jobs:
         with:
           name: knowledge-recall-perf-${{ matrix.os }}
           path: ${{ env.OMNI_KNOWLEDGE_RECALL_REPORT_DIR }}
+          if-no-files-found: warn
+
+      - name: Upload skills tools benchmark reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: skills-tools-benchmark-${{ matrix.os }}
+          path: ${{ env.OMNI_SKILLS_TOOLS_REPORT_DIR }}
+          if-no-files-found: warn
+
+      - name: Upload wendao PPR gate reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: wendao-ppr-gate-${{ matrix.os }}
+          path: ${{ env.XIUXIAN_WENDAO_GATE_REPORT_DIR }}
+          if-no-files-found: warn
+
+      - name: Upload wendao mixed-scope canary reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: wendao-ppr-mixed-canary-${{ matrix.os }}
+          path: ${{ env.XIUXIAN_WENDAO_MIXED_CANARY_REPORT_DIR }}
+          if-no-files-found: warn
+
+      - name: Upload wendao rollout status reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: wendao-rollout-status-${{ matrix.os }}
+          path: |
+            ${{ env.XIUXIAN_WENDAO_GATE_REPORT_DIR }}/report_validation.json
+            ${{ env.XIUXIAN_WENDAO_GATE_REPORT_DIR }}/wendao_gate_status_summary.json
+            ${{ env.XIUXIAN_WENDAO_GATE_REPORT_DIR }}/wendao_gate_status_summary.md
+            ${{ env.XIUXIAN_WENDAO_GATE_REPORT_DIR }}/wendao_gate_rollout_status.md
+            ${{ env.XIUXIAN_WENDAO_GATE_REPORT_DIR }}/wendao_rollout_status.json
+            ${{ env.XIUXIAN_WENDAO_GATE_REPORT_DIR }}/wendao_rollout_status.md
+            ${{ env.XIUXIAN_WENDAO_GATE_REPORT_DIR }}/wendao_rollout_status.previous.json
+            ${{ env.XIUXIAN_WENDAO_GATE_REPORT_DIR }}/wendao_rollout_status_previous_fetch.json
+          if-no-files-found: warn
+
+  memory-gate-nightly:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_memory_ci_nightly == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: ./.github/actions/common-setup
+        with:
+          SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+
+      - name: Run omni-agent memory gate (nightly via launcher)
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:memory-gate-nightly
+
+      - name: Upload omni-agent memory nightly reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: omni-agent-memory-nightly
+          path: |
+            .run/reports/omni-agent-memory-ci-latest-run.json
+            .run/reports/omni-agent-memory-ci-latest-failure.json
+            .run/reports/omni-agent-memory-ci-latest-failure.md
+            .run/logs/omni-agent-memory-ci-nightly-*.log
+            .run/logs/omni-agent-webhook-ci-nightly-*.log
+            .run/logs/omni-agent-mock-telegram-nightly-*.log
           if-no-files-found: warn

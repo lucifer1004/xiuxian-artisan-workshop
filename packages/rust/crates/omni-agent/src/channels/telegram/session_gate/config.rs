@@ -27,13 +27,15 @@ impl SessionGateRuntimeConfig {
         let telegram = &settings.telegram;
         let session = &settings.session;
 
-        let valkey_url = non_empty_env("VALKEY_URL")
-            .or_else(|| session.valkey_url.clone())
-            .and_then(non_empty_string);
+        let valkey_url = session
+            .valkey_url
+            .clone()
+            .or_else(|| non_empty_env("VALKEY_URL"))
+            .and_then(|value| non_empty_string(&value));
 
         let backend_mode = match non_empty_env("OMNI_AGENT_TELEGRAM_SESSION_GATE_BACKEND")
             .or_else(|| telegram.foreground_session_gate_backend.clone())
-            .and_then(non_empty_string)
+            .and_then(|value| non_empty_string(&value))
         {
             Some(raw) => parse_backend_mode(&raw)?,
             None => {
@@ -47,7 +49,7 @@ impl SessionGateRuntimeConfig {
 
         let key_prefix = non_empty_env("OMNI_AGENT_TELEGRAM_SESSION_GATE_KEY_PREFIX")
             .or_else(|| telegram.foreground_session_gate_key_prefix.clone())
-            .and_then(non_empty_string)
+            .and_then(|value| non_empty_string(&value))
             .unwrap_or_else(|| DEFAULT_GATE_KEY_PREFIX.to_string());
 
         let lease_ttl_secs = parse_env_or_setting_u64(
@@ -86,10 +88,12 @@ fn parse_backend_mode(raw: &str) -> Result<SessionGateBackendMode> {
 }
 
 fn non_empty_env(name: &str) -> Option<String> {
-    std::env::var(name).ok().and_then(non_empty_string)
+    std::env::var(name)
+        .ok()
+        .and_then(|value| non_empty_string(&value))
 }
 
-fn non_empty_string(value: String) -> Option<String> {
+fn non_empty_string(value: &str) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         None

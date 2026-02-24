@@ -1,3 +1,13 @@
+---
+title: "Omni-Dev-Fusion Testing Guide"
+category: "developer"
+tags:
+  - developer
+  - testing
+saliency_base: 6.3
+decay_rate: 0.04
+---
+
 # Omni-Dev-Fusion Testing Guide
 
 > Trinity Architecture Test System - Foundation, Core, MCP-Server

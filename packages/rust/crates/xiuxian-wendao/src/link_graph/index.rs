@@ -1,17 +1,24 @@
 //! Core index build + query algorithms for markdown link graph.
 
 use super::models::{
-    LinkGraphDirection, LinkGraphDocument, LinkGraphEdgeType, LinkGraphHit, LinkGraphLinkFilter,
-    LinkGraphMatchStrategy, LinkGraphMetadata, LinkGraphNeighbor, LinkGraphPprSubgraphMode,
-    LinkGraphRelatedFilter, LinkGraphRelatedPprDiagnostics, LinkGraphRelatedPprOptions,
-    LinkGraphScope, LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSortField,
-    LinkGraphSortOrder, LinkGraphSortTerm, LinkGraphStats,
+    LinkGraphAttachment, LinkGraphAttachmentHit, LinkGraphAttachmentKind, LinkGraphDirection,
+    LinkGraphDocument, LinkGraphEdgeType, LinkGraphHit, LinkGraphLinkFilter,
+    LinkGraphMatchStrategy, LinkGraphMetadata, LinkGraphNeighbor, LinkGraphPassage,
+    LinkGraphPprSubgraphMode, LinkGraphPromotedOverlayTelemetry, LinkGraphRelatedFilter,
+    LinkGraphRelatedPprDiagnostics, LinkGraphRelatedPprOptions, LinkGraphScope,
+    LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSortField, LinkGraphSortOrder,
+    LinkGraphSortTerm, LinkGraphStats,
 };
-use super::parser::{ParsedNote, ParsedSection, is_supported_note, normalize_alias, parse_note};
+use super::parser::ParsedSection;
 use super::query::{ParsedLinkGraphQuery, parse_search_query};
 use serde::{Deserialize, Serialize};
+mod agentic_expansion;
+mod agentic_overlay;
 mod build;
+mod ids;
+mod passages;
 mod ppr;
+mod rank;
 mod scoring;
 mod search;
 mod shared;
@@ -48,6 +55,8 @@ struct IndexedSection {
     heading_level: usize,
     section_text: String,
     section_text_lower: String,
+    #[serde(default)]
+    entities: Vec<String>,
 }
 
 impl IndexedSection {
@@ -58,6 +67,7 @@ impl IndexedSection {
             heading_level: value.heading_level,
             section_text: value.section_text.clone(),
             section_text_lower: value.section_text_lower.clone(),
+            entities: value.entities.clone(),
         }
     }
 }
@@ -76,7 +86,7 @@ struct SectionCandidate {
     reason: &'static str,
 }
 
-/// Cache build metadata emitted by the Valkey-backed LinkGraph bootstrap.
+/// Cache build metadata emitted by the `Valkey`-backed `LinkGraph` bootstrap.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkGraphCacheBuildMeta {
     /// Cache backend name.
@@ -98,7 +108,9 @@ pub struct LinkGraphIndex {
     include_dirs: Vec<String>,
     excluded_dirs: Vec<String>,
     docs_by_id: HashMap<String, LinkGraphDocument>,
+    passages_by_id: HashMap<String, LinkGraphPassage>,
     sections_by_doc: HashMap<String, Vec<IndexedSection>>,
+    attachments_by_doc: HashMap<String, Vec<LinkGraphAttachment>>,
     alias_to_doc_id: HashMap<String, String>,
     outgoing: HashMap<String, HashSet<String>>,
     incoming: HashMap<String, HashSet<String>>,
@@ -107,7 +119,7 @@ pub struct LinkGraphIndex {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Refresh execution mode selected by LinkGraph incremental refresh logic.
+/// Refresh execution mode selected by `LinkGraph` incremental refresh logic.
 pub enum LinkGraphRefreshMode {
     /// No-op (no changed paths provided).
     Noop,
@@ -128,62 +140,5 @@ impl LinkGraphIndex {
     #[must_use]
     pub fn root(&self) -> &Path {
         &self.root
-    }
-
-    fn resolve_doc_id(&self, stem_or_id: &str) -> Option<&str> {
-        let key = normalize_alias(stem_or_id);
-        self.alias_to_doc_id.get(&key).map(String::as_str)
-    }
-
-    fn resolve_doc_ids(&self, values: &[String]) -> HashSet<String> {
-        values
-            .iter()
-            .filter_map(|value| self.resolve_doc_id(value))
-            .map(str::to_string)
-            .collect()
-    }
-
-    fn all_doc_ids(&self) -> HashSet<String> {
-        self.docs_by_id.keys().cloned().collect()
-    }
-
-    fn compute_rank_by_id(
-        docs_by_id: &HashMap<String, LinkGraphDocument>,
-        incoming: &HashMap<String, HashSet<String>>,
-        outgoing: &HashMap<String, HashSet<String>>,
-    ) -> HashMap<String, f64> {
-        let mut raw_scores: HashMap<String, f64> = HashMap::with_capacity(docs_by_id.len());
-        let mut max_raw = 0.0_f64;
-
-        for doc_id in docs_by_id.keys() {
-            let incoming_degree = incoming.get(doc_id).map_or(0_usize, HashSet::len) as f64;
-            let outgoing_degree = outgoing.get(doc_id).map_or(0_usize, HashSet::len) as f64;
-            let raw = (incoming_degree * INCOMING_RANK_FACTOR
-                + outgoing_degree * OUTGOING_RANK_FACTOR)
-                .ln_1p();
-            max_raw = max_raw.max(raw);
-            raw_scores.insert(doc_id.clone(), raw);
-        }
-
-        if max_raw > 0.0 {
-            for value in raw_scores.values_mut() {
-                *value /= max_raw;
-            }
-        }
-
-        raw_scores
-    }
-
-    fn graph_rank(&self, doc_id: &str) -> f64 {
-        self.rank_by_id.get(doc_id).copied().unwrap_or(0.0)
-    }
-
-    fn apply_graph_rank_boost(&self, doc_id: &str, score: f64) -> f64 {
-        let rank = self.graph_rank(doc_id);
-        if rank <= 0.0 {
-            return score.clamp(0.0, 1.0);
-        }
-        let bounded = score.clamp(0.0, 1.0);
-        (bounded + (1.0 - bounded) * rank * MAX_GRAPH_RANK_BOOST).clamp(0.0, 1.0)
     }
 }

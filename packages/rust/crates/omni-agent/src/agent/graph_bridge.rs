@@ -22,6 +22,9 @@ pub struct GraphBridgeResult {
 }
 
 /// Validate graph bridge request shape before issuing MCP tool call.
+///
+/// # Errors
+/// Returns an error when request payload is malformed.
 pub fn validate_graph_bridge_request(request: &GraphBridgeRequest) -> Result<()> {
     let tool_name = request.tool_name.trim();
     if tool_name.is_empty() {
@@ -39,7 +42,10 @@ impl Agent {
     /// Execute a graph workflow via MCP bridge.
     ///
     /// Rust runtime remains orchestration-only; graph planning/execution can stay in
-    /// Python LangGraph (or any MCP-compatible backend).
+    /// `Python` `LangGraph` (or any MCP-compatible backend).
+    ///
+    /// # Errors
+    /// Returns an error when request validation fails or MCP tool invocation fails.
     pub async fn execute_graph_bridge(
         &self,
         request: GraphBridgeRequest,

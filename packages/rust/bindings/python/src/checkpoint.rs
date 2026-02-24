@@ -4,9 +4,7 @@
 
 use omni_vector::CheckpointStore;
 use pyo3::prelude::*;
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-use std::process::Command;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -14,112 +12,50 @@ use tokio::sync::Mutex as AsyncMutex;
 /// Ensures same path reuses the same store instance (connection复用)
 static STORE_CACHE: OnceLock<Mutex<HashMap<String, Arc<AsyncMutex<CheckpointStore>>>>> =
     OnceLock::new();
-const CHECKPOINT_SCHEMA_NAME: &str = "omni.checkpoint.record.v1.schema.json";
+const CHECKPOINT_SCHEMA_ID: &str = "omni.checkpoint.record.v1";
 static CHECKPOINT_SCHEMA_META: OnceLock<Result<(jsonschema::JSONSchema, String), String>> =
     OnceLock::new();
+
+struct CheckpointInputView<'a> {
+    table_name: &'a str,
+    checkpoint_id: &'a str,
+    thread_id: &'a str,
+    content: &'a str,
+    timestamp: f64,
+    parent_id: Option<&'a str>,
+    embedding: Option<&'a [f32]>,
+    metadata: Option<&'a str>,
+}
 
 /// Get or create the global runtime for Python bindings
 fn get_runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_current_thread()
+        match tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .expect("Failed to create Tokio runtime for Python bindings")
+        {
+            Ok(runtime) => runtime,
+            Err(error) => panic!("Failed to create Tokio runtime for Python bindings: {error}"),
+        }
     })
 }
 
-fn resolve_checkpoint_schema_path() -> Result<PathBuf, String> {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    let mut seen: HashSet<PathBuf> = HashSet::new();
-
-    let mut push_root_candidate = |root: PathBuf| {
-        let path = root
-            .join("packages")
-            .join("shared")
-            .join("schemas")
-            .join(CHECKPOINT_SCHEMA_NAME);
-        if seen.insert(path.clone()) {
-            candidates.push(path);
-        }
-    };
-
-    if let Ok(prj_root) = std::env::var("PRJ_ROOT") {
-        let trimmed = prj_root.trim();
-        if !trimmed.is_empty() {
-            push_root_candidate(PathBuf::from(trimmed));
-        }
-    }
-
-    push_root_candidate(omni_io::PrjDirs::project_root());
-
-    if let Ok(cwd) = std::env::current_dir() {
-        if let Some(git_root) = resolve_git_toplevel(&cwd) {
-            push_root_candidate(git_root);
-        }
-        push_root_candidate(cwd);
-    }
-
-    for path in &candidates {
-        if path.exists() {
-            return Ok(path.clone());
-        }
-    }
-
-    let attempted = candidates
-        .iter()
-        .map(|p| p.display().to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    Err(format!(
-        "Checkpoint schema '{CHECKPOINT_SCHEMA_NAME}' not found. Tried: {attempted}"
-    ))
-}
-
-fn resolve_git_toplevel(start: &std::path::Path) -> Option<PathBuf> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(start)
-        .arg("rev-parse")
-        .arg("--show-toplevel")
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let raw = String::from_utf8(output.stdout).ok()?;
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    Some(PathBuf::from(trimmed))
+fn resolve_checkpoint_schema_json() -> Result<serde_json::Value, String> {
+    let schema_raw = xiuxian_wendao::schemas::get_schema(CHECKPOINT_SCHEMA_ID)
+        .ok_or_else(|| format!("Unknown checkpoint schema identifier: {CHECKPOINT_SCHEMA_ID}"))?;
+    serde_json::from_str::<serde_json::Value>(schema_raw)
+        .map_err(|e| format!("Invalid checkpoint schema JSON for {CHECKPOINT_SCHEMA_ID}: {e}"))
 }
 
 fn checkpoint_schema_validator() -> PyResult<&'static jsonschema::JSONSchema> {
     let init = CHECKPOINT_SCHEMA_META.get_or_init(|| {
-        let schema_path = resolve_checkpoint_schema_path()?;
-        let raw = std::fs::read_to_string(&schema_path).map_err(|e| {
-            format!(
-                "Failed to read checkpoint schema at {}: {e}",
-                schema_path.display()
-            )
-        })?;
-        let schema_json = serde_json::from_str::<serde_json::Value>(&raw).map_err(|e| {
-            format!(
-                "Invalid checkpoint schema JSON at {}: {e}",
-                schema_path.display()
-            )
-        })?;
+        let schema_json = resolve_checkpoint_schema_json()?;
         let schema_id = schema_json
             .get("$id")
             .and_then(serde_json::Value::as_str)
             .map(str::to_string)
-            .ok_or_else(|| {
-                format!(
-                    "Checkpoint schema missing '$id' at {}",
-                    schema_path.display()
-                )
-            })?;
+            .ok_or_else(|| format!("Checkpoint schema missing '$id' for {CHECKPOINT_SCHEMA_ID}"))?;
         let validator = jsonschema::JSONSchema::compile(&schema_json)
             .map_err(|e| format!("Failed to compile checkpoint schema: {e}"))?;
         Ok((validator, schema_id))
@@ -142,68 +78,58 @@ fn checkpoint_schema_id() -> PyResult<&'static str> {
     }
 }
 
-fn validate_checkpoint_input(
-    table_name: &str,
-    checkpoint_id: &str,
-    thread_id: &str,
-    content: &str,
-    timestamp: f64,
-    parent_id: &Option<String>,
-    embedding: &Option<Vec<f32>>,
-    metadata: &Option<String>,
-) -> PyResult<()> {
+fn validate_checkpoint_input(input: &CheckpointInputView<'_>) -> PyResult<()> {
     let validator = checkpoint_schema_validator()?;
     let schema_instance = serde_json::json!({
-        "checkpoint_id": checkpoint_id,
-        "thread_id": thread_id,
-        "timestamp": timestamp,
-        "content": content,
-        "parent_id": parent_id,
-        "embedding": embedding,
-        "metadata": metadata,
+        "checkpoint_id": input.checkpoint_id,
+        "thread_id": input.thread_id,
+        "timestamp": input.timestamp,
+        "content": input.content,
+        "parent_id": input.parent_id,
+        "embedding": input.embedding,
+        "metadata": input.metadata,
     });
     if let Err(errors) = validator.validate(&schema_instance) {
-        let first = errors
-            .into_iter()
-            .next()
-            .map(|err| err.to_string())
-            .unwrap_or_else(|| "unknown checkpoint schema error".to_string());
+        let first = errors.into_iter().next().map_or_else(
+            || "unknown checkpoint schema error".to_string(),
+            |err| err.to_string(),
+        );
         return Err(pyo3::exceptions::PyValueError::new_err(format!(
             "checkpoint schema violation: {first}"
         )));
     }
 
-    if table_name.trim().is_empty() {
+    if input.table_name.trim().is_empty() {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "checkpoint table_name must be non-empty",
         ));
     }
-    if checkpoint_id.trim().is_empty() {
+    if input.checkpoint_id.trim().is_empty() {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "checkpoint_id must be non-empty",
         ));
     }
-    if thread_id.trim().is_empty() {
+    if input.thread_id.trim().is_empty() {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "thread_id must be non-empty",
         ));
     }
-    if !timestamp.is_finite() {
+    if !input.timestamp.is_finite() {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "timestamp must be finite",
         ));
     }
-    if let Some(parent) = parent_id
-        && parent == checkpoint_id
+    if let Some(parent) = input.parent_id
+        && parent == input.checkpoint_id
     {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "parent_id cannot equal checkpoint_id",
         ));
     }
-    serde_json::from_str::<serde_json::Value>(content).map_err(|e| {
+    serde_json::from_str::<serde_json::Value>(input.content).map_err(|e| {
         pyo3::exceptions::PyValueError::new_err(format!("content must be valid JSON text: {e}"))
     })?;
-    if let Some(meta) = metadata {
+    if let Some(meta) = input.metadata {
         let parsed = serde_json::from_str::<serde_json::Value>(meta).map_err(|e| {
             pyo3::exceptions::PyValueError::new_err(format!("metadata must be valid JSON: {e}"))
         })?;
@@ -213,7 +139,7 @@ fn validate_checkpoint_input(
             ));
         }
     }
-    if let Some(values) = embedding {
+    if let Some(values) = input.embedding {
         for value in values {
             if !value.is_finite() {
                 return Err(pyo3::exceptions::PyValueError::new_err(
@@ -223,6 +149,13 @@ fn validate_checkpoint_input(
         }
     }
     Ok(())
+}
+
+fn timeline_timestamp_to_millis(timestamp: f64) -> Option<i64> {
+    if !timestamp.is_finite() {
+        return None;
+    }
+    format!("{timestamp:.0}").parse::<i64>().ok()
 }
 
 /// Timeline event for time-travel visualization.
@@ -257,27 +190,29 @@ pub struct PyTimelineEvent {
 impl PyTimelineEvent {
     /// Format timestamp as ISO string for display
     fn iso_timestamp(&self) -> String {
-        let secs = self.timestamp as i64;
-        let nanos = ((self.timestamp - secs as f64) * 1_000_000_000.0) as i32;
-        chrono::DateTime::from_timestamp(secs, nanos as u32)
-            .map(|dt| dt.to_rfc3339())
-            .unwrap_or_else(|| format!("{}", self.timestamp))
+        let Some(millis) = timeline_timestamp_to_millis(self.timestamp) else {
+            return self.timestamp.to_string();
+        };
+        chrono::DateTime::from_timestamp_millis(millis)
+            .map_or_else(|| self.timestamp.to_string(), |dt| dt.to_rfc3339())
     }
 
     /// Get relative time string (e.g., "2 minutes ago")
     fn relative_time(&self) -> String {
-        let now = chrono::Utc::now().timestamp_millis() as f64;
-        let diff_ms = now - self.timestamp;
-        let secs = diff_ms / 1000.0;
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let event_ms = timeline_timestamp_to_millis(self.timestamp).unwrap_or(now_ms);
+        let diff_ms = now_ms.saturating_sub(event_ms);
+        let secs = diff_ms / 1_000;
 
-        if secs < 60.0 {
-            format!("{:.0}s ago", secs)
-        } else if secs < 3600.0 {
-            format!("{:.0}m ago", secs / 60.0)
-        } else if secs < 86400.0 {
-            format!("{:.0}h ago", secs / 3600.0)
+        if secs < 60 {
+            format!("{secs}s ago")
+        } else if secs < 3_600 {
+            format!("{}m ago", secs / 60)
+        } else if secs < 86_400 {
+            format!("{}h ago", secs / 3_600)
         } else {
-            format!("{:.1}d ago", secs / 86400.0)
+            let tenths = diff_ms / 8_640_000;
+            format!("{}.{}d ago", tenths / 10, tenths % 10)
         }
     }
 
@@ -330,7 +265,7 @@ impl PyCheckpointStore {
         // Get or create the global cache
         let cache_mutex = STORE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
         let mut cache = cache_mutex.lock().map_err(|e| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!("Poisoned cache lock: {}", e))
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Poisoned cache lock: {e}"))
         })?;
 
         // Check if store already exists for this path
@@ -355,6 +290,10 @@ impl PyCheckpointStore {
     }
 
     /// Save a checkpoint
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Python-facing API keeps explicit checkpoint fields for stable call sites."
+    )]
     #[pyo3(signature = (table_name, checkpoint_id, thread_id, content, timestamp, parent_id, embedding, metadata))]
     fn save_checkpoint(
         &self,
@@ -367,16 +306,17 @@ impl PyCheckpointStore {
         embedding: Option<Vec<f32>>,
         metadata: Option<String>,
     ) -> PyResult<()> {
-        validate_checkpoint_input(
-            &table_name,
-            &checkpoint_id,
-            &thread_id,
-            &content,
+        let input = CheckpointInputView {
+            table_name: &table_name,
+            checkpoint_id: &checkpoint_id,
+            thread_id: &thread_id,
+            content: &content,
             timestamp,
-            &parent_id,
-            &embedding,
-            &metadata,
-        )?;
+            parent_id: parent_id.as_deref(),
+            embedding: embedding.as_deref(),
+            metadata: metadata.as_deref(),
+        };
+        validate_checkpoint_input(&input)?;
 
         let record = omni_vector::CheckpointRecord {
             checkpoint_id,

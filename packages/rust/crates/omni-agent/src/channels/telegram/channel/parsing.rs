@@ -15,6 +15,7 @@ impl TelegramChannel {
             .any(|u| u == "*" || u == &normalized)
     }
 
+    #[allow(clippy::unused_self)]
     fn is_identity_in_allowlist(&self, identity: &str, allowlist: &[String]) -> bool {
         let normalized = normalize_user_identity(identity);
         if normalized.is_empty() {
@@ -45,6 +46,7 @@ impl TelegramChannel {
     }
 
     /// Parse a Telegram update into a channel message (returns None for unsupported updates).
+    #[allow(clippy::too_many_lines)]
     pub fn parse_update_message(&self, update: &serde_json::Value) -> Option<ChannelMessage> {
         self.ensure_acl_fresh();
 

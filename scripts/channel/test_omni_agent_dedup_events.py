@@ -10,7 +10,7 @@ Posts the same Telegram update_id twice and verifies:
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import os
 import random
@@ -22,25 +22,33 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-try:
-    from test_config_resolver import (
-        session_ids_from_runtime_log,
-        telegram_webhook_secret_token,
-        username_from_runtime_log,
-        username_from_settings,
-    )
-except ModuleNotFoundError as import_err:
-    _resolver_path = Path(__file__).resolve().with_name("test_config_resolver.py")
-    _resolver_spec = importlib.util.spec_from_file_location("test_config_resolver", _resolver_path)
-    if _resolver_spec is None or _resolver_spec.loader is None:
-        raise RuntimeError(f"failed to load resolver module from {_resolver_path}") from import_err
-    _resolver_module = importlib.util.module_from_spec(_resolver_spec)
-    sys.modules.setdefault(_resolver_spec.name, _resolver_module)
-    _resolver_spec.loader.exec_module(_resolver_module)
-    session_ids_from_runtime_log = _resolver_module.session_ids_from_runtime_log
-    telegram_webhook_secret_token = _resolver_module.telegram_webhook_secret_token
-    username_from_runtime_log = _resolver_module.username_from_runtime_log
-    username_from_settings = _resolver_module.username_from_settings
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+load_sibling_module = importlib.import_module("module_loader").load_sibling_module
+
+_resolver_module = load_sibling_module(
+    module_name="config_resolver",
+    file_name="config_resolver.py",
+    caller_file=__file__,
+    error_context="resolver module",
+)
+default_telegram_webhook_url = _resolver_module.default_telegram_webhook_url
+session_ids_from_runtime_log = _resolver_module.session_ids_from_runtime_log
+telegram_webhook_secret_token = _resolver_module.telegram_webhook_secret_token
+username_from_runtime_log = _resolver_module.username_from_runtime_log
+username_from_settings = _resolver_module.username_from_settings
+
+_log_io_module = load_sibling_module(
+    module_name="log_io",
+    file_name="log_io.py",
+    caller_file=__file__,
+    error_context="shared log I/O helpers",
+)
+_SharedLogCursor = _log_io_module.LogCursor
+_shared_init_log_cursor = _log_io_module.init_log_cursor
+_shared_read_new_log_lines_with_cursor = _log_io_module.read_new_log_lines_with_cursor
 
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -63,6 +71,7 @@ def strip_ansi(value: str) -> str:
 
 
 def parse_args() -> argparse.Namespace:
+    webhook_url_default = os.environ.get("OMNI_WEBHOOK_URL") or default_telegram_webhook_url()
     parser = argparse.ArgumentParser(
         description=(
             "Post the same Telegram update_id twice to local webhook runtime and assert "
@@ -77,10 +86,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--webhook-url",
-        default=os.environ.get(
-            "OMNI_WEBHOOK_URL",
-            f"http://127.0.0.1:{os.environ.get('WEBHOOK_PORT', '8081')}/telegram/webhook",
-        ),
+        default=webhook_url_default,
         help="Webhook URL.",
     )
     parser.add_argument(
@@ -175,18 +181,15 @@ def build_config(args: argparse.Namespace) -> ProbeConfig:
 
 
 def count_lines(path: Path) -> int:
-    if not path.exists():
-        return 0
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        return sum(1 for _ in handle)
+    return _shared_init_log_cursor(path, kind="offset").value
 
 
-def read_new_lines(path: Path, start_line: int) -> list[str]:
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        lines = handle.read().splitlines()
-    return lines[start_line:]
+def read_new_lines(path: Path, cursor: int) -> tuple[int, list[str]]:
+    next_cursor, lines = _shared_read_new_log_lines_with_cursor(
+        path,
+        _SharedLogCursor(kind="offset", value=cursor),
+    )
+    return next_cursor.value, lines
 
 
 def post_webhook_update(url: str, payload: bytes, secret_token: str | None) -> tuple[int, str]:
@@ -274,7 +277,7 @@ def main() -> int:
     if not cfg.log_file.exists():
         cfg.log_file.touch()
 
-    start_line = count_lines(cfg.log_file)
+    cursor = count_lines(cfg.log_file)
     update_id = (time.time_ns() // 1_000) + random.randint(0, 999)
     payload = build_payload(cfg, update_id)
 
@@ -303,9 +306,12 @@ def main() -> int:
         "evaluated_false": 0,
     }
     deadline = time.monotonic() + cfg.max_wait
+    observed_lines: list[str] = []
     while time.monotonic() < deadline:
-        new_lines = read_new_lines(cfg.log_file, start_line)
-        stats = collect_stats(new_lines, update_id)
+        cursor, chunk = read_new_lines(cfg.log_file, cursor)
+        if chunk:
+            observed_lines.extend(chunk)
+        stats = collect_stats(observed_lines, update_id)
         if stats["accepted_count"] >= 1 and stats["duplicate_count"] >= 1:
             break
         time.sleep(1)
@@ -321,7 +327,7 @@ def main() -> int:
             file=sys.stderr,
         )
         print(f"  update_id={update_id}", file=sys.stderr)
-        print_relevant_tail(read_new_lines(cfg.log_file, start_line), update_id)
+        print_relevant_tail(observed_lines, update_id)
         return 1
 
     if stats["accepted_line"] >= stats["duplicate_line"]:

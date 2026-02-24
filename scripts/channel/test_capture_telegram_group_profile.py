@@ -4,7 +4,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write_log(path: Path, lines: list[str]) -> None:
@@ -98,3 +101,33 @@ def test_capture_group_profile_missing_title_fails(tmp_path: Path) -> None:
     completed = _run_capture(log_file=log_file, output_json=output_json, output_env=output_env)
     assert completed.returncode != 0
     assert "missing group titles in log: Test3" in (completed.stderr + completed.stdout)
+
+
+def test_capture_group_profile_handles_large_log_prefix(tmp_path: Path) -> None:
+    log_file = tmp_path / "webhook.log"
+    output_json = tmp_path / "groups.json"
+    output_env = tmp_path / "groups.env"
+    with log_file.open("wb") as handle:
+        handle.write(b"X" * 320_000)
+        handle.write(b"\n")
+        handle.write(
+            b"2026-02-20T00:00:01Z INFO omni_agent::channels::telegram::runtime::webhook: "
+            b"Parsed message, forwarding to agent session_key=-5101776367:1304799691 "
+            b'chat_id=Some(-5101776367) chat_title=Some("Test1") chat_type=Some("group") '
+            b"message_thread_id=None content_preview=/help\n"
+        )
+        handle.write(
+            b"2026-02-20T00:00:02Z INFO omni_agent::channels::telegram::runtime::webhook: "
+            b"Parsed message, forwarding to agent session_key=-5020317863:1304799691 "
+            b'chat_id=Some(-5020317863) chat_title=Some("Test2") chat_type=Some("group") '
+            b"message_thread_id=None content_preview=/help\n"
+        )
+        handle.write(
+            b"2026-02-20T00:00:03Z INFO omni_agent::channels::telegram::runtime::webhook: "
+            b"Parsed message, forwarding to agent session_key=-5292802281:1304799691 "
+            b'chat_id=Some(-5292802281) chat_title=Some("Test3") chat_type=Some("group") '
+            b"message_thread_id=None content_preview=/help\n"
+        )
+
+    completed = _run_capture(log_file=log_file, output_json=output_json, output_env=output_env)
+    assert completed.returncode == 0, completed.stderr

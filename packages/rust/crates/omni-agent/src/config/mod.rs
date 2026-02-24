@@ -9,8 +9,11 @@ pub use agent::{
 };
 pub use mcp::{McpConfigFile, McpServerEntryFile, load_mcp_config};
 pub use settings::{
-    DiscordSettings, EmbeddingSettings, McpSettings, MemorySettings, RuntimeSettings,
-    SessionSettings, TelegramGroupSettings, TelegramSettings, TelegramTopicSettings,
-    load_runtime_settings, load_runtime_settings_from_paths, runtime_settings_paths,
-    set_config_home_override,
+    DiscordAclAllowSettings, DiscordAclControlSettings, DiscordAclPrincipalSettings,
+    DiscordAclSettings, DiscordAclSlashSettings, DiscordSettings, EmbeddingSettings,
+    InferenceSettings, McpSettings, MemorySettings, RuntimeSettings, SessionSettings,
+    TelegramAclAllowSettings, TelegramAclControlSettings, TelegramAclPrincipalSettings,
+    TelegramAclSettings, TelegramAclSlashSettings, TelegramGroupSettings, TelegramSettings,
+    TelegramTopicSettings, load_runtime_settings, load_runtime_settings_from_paths,
+    runtime_settings_paths, set_config_home_override,
 };

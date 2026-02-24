@@ -1,5 +1,6 @@
 """Unit tests for sync and reindex commands."""
 
+import json
 import pytest
 from typer.testing import CliRunner
 from unittest.mock import MagicMock, patch, AsyncMock
@@ -96,10 +97,13 @@ class TestReindexCommand:
     @patch("omni.agent.cli.commands.sync.run_async_blocking")
     def test_sync_route_command_exists(self, mock_run_async_blocking, runner):
         """`omni sync route` initializes router DB."""
-        mock_run_async_blocking.return_value = {
-            "status": "success",
-            "details": "Router DB (scores) initialized",
-        }
+        mock_run_async_blocking.side_effect = lambda coro: (
+            coro.close(),
+            {
+                "status": "success",
+                "details": "Router DB (scores) initialized",
+            },
+        )[1]
         result = runner.invoke(app, ["sync", "route"])
         assert result.exit_code == 0
         mock_run_async_blocking.assert_called_once()
@@ -279,6 +283,163 @@ class TestSyncReindexUnifiedPath:
                 await sync_skills()
 
         mock_build_graph.assert_called_once_with("/cache/omni-vector/skills.lance")
+
+    @pytest.mark.asyncio
+    async def test_sync_embed_metadata_rejects_nested_shape(self):
+        """Nested metadata shape must be rejected (contract violation)."""
+        from omni.agent.services.sync import _embed_skill_vectors
+
+        nested_row = {
+            "id": "git.commit",
+            "content": "Commit staged changes",
+            "metadata": {
+                "metadata": {
+                    "type": "command",
+                    "skill_name": "git",
+                    "tool_name": "git.commit",
+                    "command": "commit",
+                    "routing_keywords": ["git", "commit"],
+                },
+                "skill_name": "git",
+                "tool_name": "git.commit",
+            },
+        }
+
+        mock_store = MagicMock()
+        mock_store.list_all = AsyncMock(return_value=[nested_row])
+        mock_store.replace_documents = AsyncMock(return_value=None)
+
+        mock_embed_service = MagicMock()
+        mock_embed_service._client_mode = False
+        mock_embed_service.embed_batch.return_value = [[0.1, 0.2, 0.3]]
+
+        with patch(
+            "omni.foundation.services.embedding.get_embedding_service",
+            return_value=mock_embed_service,
+        ):
+            count = await _embed_skill_vectors(mock_store, "/cache/omni-vector/skills.lance")
+        assert count == 0
+        mock_store.replace_documents.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_sync_embed_metadata_keeps_canonical_shape(self):
+        """Canonical command metadata should be written unchanged (flat schema)."""
+        from omni.agent.services.sync import _embed_skill_vectors
+
+        canonical_row = {
+            "id": "git.commit",
+            "content": "Commit staged changes",
+            "metadata": {
+                "type": "command",
+                "skill_name": "git",
+                "tool_name": "git.commit",
+                "command": "commit",
+                "routing_keywords": ["git", "commit"],
+            },
+        }
+
+        mock_store = MagicMock()
+        mock_store.list_all = AsyncMock(return_value=[canonical_row])
+        mock_store.replace_documents = AsyncMock(return_value=None)
+
+        mock_embed_service = MagicMock()
+        mock_embed_service._client_mode = False
+        mock_embed_service.embed_batch.return_value = [[0.1, 0.2, 0.3]]
+
+        with patch(
+            "omni.foundation.services.embedding.get_embedding_service",
+            return_value=mock_embed_service,
+        ):
+            count = await _embed_skill_vectors(mock_store, "/cache/omni-vector/skills.lance")
+        assert count == 1
+
+        kwargs = mock_store.replace_documents.await_args.kwargs
+        metadata = json.loads(kwargs["metadatas"][0])
+        assert metadata["type"] == "command"
+        assert metadata["tool_name"] == "git.commit"
+        assert "metadata" not in metadata
+
+    def test_reindex_embed_metadata_rejects_nested_shape(self):
+        """Reindex embedding must reject nested metadata contract violations."""
+        from omni.agent.services.reindex import _embed_skill_vectors
+
+        nested_row = {
+            "id": "git.commit",
+            "content": "Commit staged changes",
+            "metadata": {
+                "metadata": {
+                    "type": "command",
+                    "skill_name": "git",
+                    "tool_name": "git.commit",
+                    "command": "commit",
+                },
+                "skill_name": "git",
+                "tool_name": "git.commit",
+            },
+        }
+
+        mock_store = MagicMock()
+        mock_store.list_all = AsyncMock(return_value=[nested_row])
+        mock_store.replace_documents = AsyncMock(return_value=None)
+        mock_store.index_skill_tools_dual = AsyncMock(return_value=(0, 0))
+
+        mock_embed_service = MagicMock()
+        mock_embed_service._client_mode = False
+        mock_embed_service.embed_batch.return_value = [[0.1, 0.2, 0.3]]
+
+        with patch(
+            "omni.foundation.services.embedding.get_embedding_service",
+            return_value=mock_embed_service,
+        ):
+            count = _embed_skill_vectors(
+                mock_store,
+                "/cache/omni-vector/skills.lance",
+                "/repo/assets/skills",
+            )
+        assert count == 0
+        mock_store.replace_documents.assert_not_awaited()
+
+    def test_reindex_embed_metadata_keeps_canonical_shape(self):
+        """Reindex embedding should preserve canonical flat command metadata."""
+        from omni.agent.services.reindex import _embed_skill_vectors
+
+        canonical_row = {
+            "id": "git.commit",
+            "content": "Commit staged changes",
+            "metadata": {
+                "type": "command",
+                "skill_name": "git",
+                "tool_name": "git.commit",
+                "command": "commit",
+                "routing_keywords": ["git", "commit"],
+            },
+        }
+
+        mock_store = MagicMock()
+        mock_store.list_all = AsyncMock(return_value=[canonical_row])
+        mock_store.replace_documents = AsyncMock(return_value=None)
+        mock_store.index_skill_tools_dual = AsyncMock(return_value=(0, 0))
+
+        mock_embed_service = MagicMock()
+        mock_embed_service._client_mode = False
+        mock_embed_service.embed_batch.return_value = [[0.1, 0.2, 0.3]]
+
+        with patch(
+            "omni.foundation.services.embedding.get_embedding_service",
+            return_value=mock_embed_service,
+        ):
+            count = _embed_skill_vectors(
+                mock_store,
+                "/cache/omni-vector/skills.lance",
+                "/repo/assets/skills",
+            )
+        assert count == 1
+
+        kwargs = mock_store.replace_documents.await_args.kwargs
+        metadata = json.loads(kwargs["metadatas"][0])
+        assert metadata["type"] == "command"
+        assert metadata["tool_name"] == "git.commit"
+        assert "metadata" not in metadata
 
     def test_reindex_skills_only_uses_get_database_path_skills(self):
         """reindex_skills_only must use get_database_path('skills') for the store path."""

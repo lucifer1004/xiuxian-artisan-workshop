@@ -37,7 +37,7 @@ fn test_skill_metadata_schema_derives() {
     assert!(schema_json.contains("SkillMetadata"));
 }
 
-/// Generate JSON Schema for SkillMetadata and write to packages/shared/schemas.
+/// Generate JSON Schema for SkillMetadata and write to crate resources.
 ///
 /// Run with: cargo test -p skills-scanner generate_skill_metadata_schema
 #[test]
@@ -68,12 +68,12 @@ fn generate_skill_metadata_schema() {
 /// Resolve output path for schema files.
 ///
 /// Uses PRJ_ROOT environment variable if set, otherwise falls back to
-/// CARGO_MANIFEST_DIR + "../../../packages/shared/schemas/"
+/// CARGO_MANIFEST_DIR + "../resources/"
 fn resolve_output_path(filename: &str) -> PathBuf {
     // Try PRJ_ROOT first
     if let Ok(prj_root) = std::env::var("PRJ_ROOT") {
         let path = PathBuf::from(prj_root)
-            .join("packages/shared/schemas")
+            .join("packages/rust/crates/omni-scanner/resources")
             .join(filename);
         if path.parent().map(|p| p.exists()).unwrap_or(false) {
             return path;
@@ -85,7 +85,5 @@ fn resolve_output_path(filename: &str) -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("."));
 
-    manifest_dir
-        .join("../../../packages/shared/schemas")
-        .join(filename)
+    manifest_dir.join("../resources").join(filename)
 }

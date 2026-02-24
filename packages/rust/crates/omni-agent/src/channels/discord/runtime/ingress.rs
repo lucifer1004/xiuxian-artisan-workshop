@@ -27,6 +27,9 @@ pub struct DiscordIngressApp {
 }
 
 /// Build a Discord ingress app.
+///
+/// # Errors
+/// Returns an error when channel/runtime initialization fails.
 pub fn build_discord_ingress_app(
     bot_token: String,
     allowed_users: Vec<String>,
@@ -48,6 +51,9 @@ pub fn build_discord_ingress_app(
 }
 
 /// Build a Discord ingress app with explicit control-command policy.
+///
+/// # Errors
+/// Returns an error when channel/runtime initialization fails.
 pub fn build_discord_ingress_app_with_control_command_policy(
     bot_token: String,
     allowed_users: Vec<String>,
@@ -71,6 +77,10 @@ pub fn build_discord_ingress_app_with_control_command_policy(
 
 /// Build a Discord ingress app with explicit session partition and control-command policy.
 #[doc(hidden)]
+///
+/// # Errors
+/// Returns an error when channel/runtime initialization fails.
+#[allow(clippy::too_many_arguments)]
 pub fn build_discord_ingress_app_with_partition_and_control_command_policy(
     bot_token: String,
     allowed_users: Vec<String>,

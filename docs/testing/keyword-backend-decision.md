@@ -1,3 +1,13 @@
+---
+title: "Tantivy vs Lance FTS: Decision (Canonical)"
+category: "testing"
+tags:
+  - testing
+  - keyword
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Tantivy vs Lance FTS: Decision (Canonical)
 
 This document is the **single source of truth** for the keyword search backend choice: default strategy, when to use the alternative, fallback conditions, and how to re-run the evaluation loop.

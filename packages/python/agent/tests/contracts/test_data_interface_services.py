@@ -1,7 +1,7 @@
 """
 Data interface contract tests for thinned CLI services.
 
-Ensures return shapes of run_skill, reindex, sync, and run_entry stay stable
+Ensures return shapes of run_tool, reindex, sync, and run_entry stay stable
 so CLI and MCP callers can rely on the data contract. Scale is our core;
 these tests guard the interface.
 """
@@ -21,19 +21,19 @@ def _noop_lock():
 
 
 class TestRunSkillContract:
-    """Contract: omni.core.skills.run_skill return shape."""
+    """Contract: omni.core.skills.runner.run_tool return shape."""
 
     @pytest.mark.asyncio
     async def test_run_skill_returns_string_or_dict(self):
-        """run_skill may return str (JSON) or dict; CLI handles both."""
-        from omni.core.skills import run_skill
+        """run_tool may return str (JSON) or dict; CLI handles both."""
+        from omni.core.skills.runner import run_tool
 
         with (
+            patch("omni.core.skills.runner._monitor_enabled", return_value=False),
             patch("omni.core.skills.runner._run_fast_path", new_callable=AsyncMock) as mock_fast,
-            patch("omni.core.skills.runner._run_via_kernel", new_callable=AsyncMock),
         ):
             mock_fast.return_value = '{"status":"success","results":[]}'
-            out = await run_skill("knowledge", "recall", {"query": "x", "limit": 1})
+            out = await run_tool("knowledge.recall", {"query": "x", "limit": 1})
         assert out is not None
         assert isinstance(out, str)
         data = json.loads(out)
@@ -43,14 +43,14 @@ class TestRunSkillContract:
     @pytest.mark.asyncio
     async def test_run_skill_dict_return_contract(self):
         """When skill returns dict, keys are preserved."""
-        from omni.core.skills import run_skill
+        from omni.core.skills.runner import run_tool
 
         with (
+            patch("omni.core.skills.runner._monitor_enabled", return_value=False),
             patch("omni.core.skills.runner._run_fast_path", new_callable=AsyncMock) as mock_fast,
-            patch("omni.core.skills.runner._run_via_kernel", new_callable=AsyncMock),
         ):
             mock_fast.return_value = {"status": "ok", "count": 0}
-            out = await run_skill("demo", "echo", {"message": "hi"})
+            out = await run_tool("demo.echo", {"message": "hi"})
         assert isinstance(out, dict)
         assert "status" in out
 
@@ -206,41 +206,20 @@ class TestRunEntryContract:
     """Contract: omni.agent.workflows.run_entry return shapes."""
 
     @pytest.mark.asyncio
-    async def test_execute_task_via_kernel_returns_session_output_steps(self):
-        """execute_task_via_kernel returns dict with session_id, output, step_count, status."""
+    async def test_execute_task_via_kernel_is_decommissioned(self):
+        """execute_task_via_kernel must be decommissioned in favor of Rust runtime."""
         from omni.agent.workflows.run_entry import execute_task_via_kernel
 
-        with (
-            patch(
-                "omni.core.kernel.engine.get_kernel",
-                return_value=MagicMock(
-                    initialize=AsyncMock(),
-                    start=AsyncMock(),
-                    shutdown=AsyncMock(),
-                    skill_context=MagicMock(_skills={}),
-                ),
-            ),
-            patch(
-                "omni.core.router.main.RouterRegistry.get",
-                return_value=MagicMock(
-                    initialize=AsyncMock(),
-                    route=AsyncMock(return_value=None),
-                ),
-            ),
-            patch(
-                "omni.agent.core.omni.OmniLoop",
-                return_value=MagicMock(
-                    run=AsyncMock(return_value="done"),
-                    session_id="s1",
-                    step_count=1,
-                    tool_calls_count=1,
-                ),
-            ),
-        ):
-            result = await execute_task_via_kernel("hello", max_steps=5, verbose=False)
-        assert isinstance(result, dict)
-        assert "session_id" in result
-        assert "output" in result
-        assert "step_count" in result
-        assert "status" in result
-        assert result["status"] == "completed"
+        with pytest.raises(RuntimeError, match="decommissioned"):
+            await execute_task_via_kernel("hello", max_steps=5, verbose=False)
+
+    @pytest.mark.asyncio
+    async def test_execute_task_with_session_is_decommissioned(self):
+        """execute_task_with_session must be decommissioned in favor of Rust runtime."""
+        from omni.agent.workflows.run_entry import execute_task_with_session
+
+        with pytest.raises(RuntimeError, match="decommissioned"):
+            await execute_task_with_session(
+                session_id="s1",
+                user_message="hello",
+            )

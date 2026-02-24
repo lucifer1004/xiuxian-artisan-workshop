@@ -5,6 +5,7 @@
 
 use omni_tags::{SearchConfig, TagExtractor};
 use pyo3::prelude::*;
+use std::fmt::Write;
 
 /// Symbol kind enumeration for Python.
 ///
@@ -171,13 +172,14 @@ pub fn py_extract_symbols(file_path: String, language: Option<String>) -> String
         if i > 0 {
             json.push(',');
         }
-        json.push_str(&format!(
+        let _ = write!(
+            json,
             r#"{{"name":"{}","kind":"{}","line":{},"signature":"{}"}}"#,
             sym.name.replace('"', r#"\""#),
             sym.kind.replace('"', r#"\""#),
             sym.line,
             sym.signature.replace('"', r#"\""#)
-        ));
+        );
     }
     json.push_str("]}");
     json
@@ -218,7 +220,7 @@ pub fn py_search_file(file_path: String, pattern: String, language: Option<Strin
 /// Returns:
 ///     String with search results.
 #[pyfunction]
-#[pyo3(signature = (dir_path, pattern, file_pattern = None, max_file_size = 1048576, max_matches = 1000))]
+#[pyo3(signature = (dir_path, pattern, file_pattern = None, max_file_size = 1_048_576, max_matches = 1000))]
 pub fn py_search_directory(
     dir_path: String,
     pattern: String,
@@ -234,7 +236,7 @@ pub fn py_search_directory(
         languages: Vec::new(),
     };
 
-    match TagExtractor::search_directory(dir_path.as_str(), &pattern, config) {
+    match TagExtractor::search_directory(dir_path.as_str(), &pattern, &config) {
         Ok(s) => s,
         Err(e) => format!("[Error: {}]", e),
     }

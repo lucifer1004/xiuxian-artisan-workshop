@@ -65,7 +65,6 @@ struct CachedEntity<'a> {
 /// Entity-aware results with boosted scores
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[allow(clippy::too_many_lines)]
 pub fn apply_entity_boost(
     results: Vec<HybridSearchResult>,
     entities: Vec<EntityMatch>,
@@ -82,95 +81,36 @@ pub fn apply_entity_boost(
         .collect();
 
     // Aho-Corasick over entity names: one automaton, O(n+m) per haystack instead of O(entities * contains)
-    let (entity_ac, pattern_to_cached_idx): (Option<AhoCorasick>, Vec<usize>) = {
-        let mut patterns: Vec<&str> = Vec::new();
-        let mut pattern_to_cached_idx: Vec<usize> = Vec::new();
-        for (i, c) in cached_entities.iter().enumerate() {
-            if !c.name_lower.is_empty() {
-                patterns.push(c.name_lower.as_str());
-                pattern_to_cached_idx.push(i);
-            }
-        }
-        if patterns.is_empty() {
-            (None, Vec::new())
-        } else {
-            match AhoCorasick::new(patterns) {
-                Ok(ac) => (Some(ac), pattern_to_cached_idx),
-                Err(_) => (None, Vec::new()),
-            }
-        }
-    };
+    let (entity_ac, pattern_to_cached_idx) = build_entity_name_automaton(&cached_entities);
 
     let mut aware_results: Vec<EntityAwareSearchResult> = Vec::new();
 
     for result in results {
         let tool_name_lower = result.tool_name.to_lowercase();
-        let mut matched_entities: Vec<EntityMatch> = Vec::new();
-        let mut matched_names: HashSet<String> = HashSet::new();
+        let mut matched_entities = Vec::new();
+        let mut matched_names = HashSet::new();
 
-        // Check 1: Direct name match in tool name via Aho-Corasick (O(n+m))
-        if let Some(ref ac) = entity_ac {
-            for mat in ac.find_iter(&tool_name_lower) {
-                let cached_idx = pattern_to_cached_idx.get(mat.pattern().as_usize()).copied();
-                if let Some(i) = cached_idx {
-                    let cached = &cached_entities[i];
-                    if matched_names.insert(cached.name_lower.clone()) {
-                        matched_entities.push(cached.original.clone());
-                    }
-                }
-            }
-        } else {
-            for cached in &cached_entities {
-                if tool_name_lower.contains(&cached.name_lower) {
-                    matched_entities.push(cached.original.clone());
-                    matched_names.insert(cached.name_lower.clone());
-                }
-            }
-        }
-
-        // Check 2: Metadata entity mentions (AC over content_lower)
+        collect_entity_matches_in_text(
+            &tool_name_lower,
+            &cached_entities,
+            entity_ac.as_ref(),
+            &pattern_to_cached_idx,
+            None,
+            &mut matched_names,
+            &mut matched_entities,
+        );
         if let Some(meta_list) = metadata {
-            for meta in meta_list {
-                if let Some(content) = meta.get("content").and_then(|c| c.as_str()) {
-                    let content_lower = content.to_lowercase();
-                    if let Some(ref ac) = entity_ac {
-                        for mat in ac.find_iter(&content_lower) {
-                            if let Some(&i) = pattern_to_cached_idx.get(mat.pattern().as_usize()) {
-                                let cached = &cached_entities[i];
-                                if matched_names.insert(cached.name_lower.clone()) {
-                                    let mut meta_match = cached.original.clone();
-                                    meta_match.match_type = EntityMatchType::MetadataMatch;
-                                    matched_entities.push(meta_match);
-                                }
-                            }
-                        }
-                    } else {
-                        for cached in &cached_entities {
-                            if !matched_names.contains(&cached.name_lower)
-                                && content_lower.contains(&cached.name_lower)
-                            {
-                                let mut meta_match = cached.original.clone();
-                                meta_match.match_type = EntityMatchType::MetadataMatch;
-                                matched_entities.push(meta_match);
-                                matched_names.insert(cached.name_lower.clone());
-                            }
-                        }
-                    }
-                }
-            }
+            collect_metadata_entity_matches(
+                meta_list,
+                &cached_entities,
+                entity_ac.as_ref(),
+                &pattern_to_cached_idx,
+                &mut matched_names,
+                &mut matched_entities,
+            );
         }
 
-        // Calculate entity boost
-        let entity_boost: f32 = if matched_entities.is_empty() {
-            0.0
-        } else {
-            let match_count_f32 =
-                u16::try_from(matched_entities.len()).map_or(f32::from(u16::MAX), f32::from);
-            let avg_confidence: f32 =
-                matched_entities.iter().map(|e| e.confidence).sum::<f32>() / match_count_f32;
-            let match_bonus = match_count_f32 * entity_weight * 0.5;
-            avg_confidence * entity_weight + match_bonus
-        };
+        let entity_boost = calculate_entity_boost(&matched_entities, entity_weight);
 
         // Apply boost to RRF score
         let boosted_score = result.rrf_score * (1.0 + entity_boost);
@@ -190,6 +130,113 @@ pub fn apply_entity_boost(
     });
 
     aware_results
+}
+
+fn build_entity_name_automaton(
+    cached_entities: &[CachedEntity<'_>],
+) -> (Option<AhoCorasick>, Vec<usize>) {
+    let mut patterns: Vec<&str> = Vec::new();
+    let mut pattern_to_cached_idx: Vec<usize> = Vec::new();
+    for (index, cached) in cached_entities.iter().enumerate() {
+        if !cached.name_lower.is_empty() {
+            patterns.push(cached.name_lower.as_str());
+            pattern_to_cached_idx.push(index);
+        }
+    }
+    if patterns.is_empty() {
+        return (None, Vec::new());
+    }
+    match AhoCorasick::new(patterns) {
+        Ok(ac) => (Some(ac), pattern_to_cached_idx),
+        Err(_) => (None, Vec::new()),
+    }
+}
+
+fn collect_metadata_entity_matches(
+    metadata: &[serde_json::Value],
+    cached_entities: &[CachedEntity<'_>],
+    entity_ac: Option<&AhoCorasick>,
+    pattern_to_cached_idx: &[usize],
+    matched_names: &mut HashSet<String>,
+    matched_entities: &mut Vec<EntityMatch>,
+) {
+    let metadata_match_type = EntityMatchType::MetadataMatch;
+    for meta in metadata {
+        let Some(content) = meta.get("content").and_then(|value| value.as_str()) else {
+            continue;
+        };
+        let content_lower = content.to_lowercase();
+        collect_entity_matches_in_text(
+            &content_lower,
+            cached_entities,
+            entity_ac,
+            pattern_to_cached_idx,
+            Some(&metadata_match_type),
+            matched_names,
+            matched_entities,
+        );
+    }
+}
+
+fn collect_entity_matches_in_text(
+    text_lower: &str,
+    cached_entities: &[CachedEntity<'_>],
+    entity_ac: Option<&AhoCorasick>,
+    pattern_to_cached_idx: &[usize],
+    match_type_override: Option<&EntityMatchType>,
+    matched_names: &mut HashSet<String>,
+    matched_entities: &mut Vec<EntityMatch>,
+) {
+    if let Some(ac) = entity_ac {
+        for mat in ac.find_iter(text_lower) {
+            let Some(&cached_index) = pattern_to_cached_idx.get(mat.pattern().as_usize()) else {
+                continue;
+            };
+            push_unique_entity_match(
+                &cached_entities[cached_index],
+                match_type_override,
+                matched_names,
+                matched_entities,
+            );
+        }
+        return;
+    }
+    for cached in cached_entities {
+        if text_lower.contains(&cached.name_lower) {
+            push_unique_entity_match(cached, match_type_override, matched_names, matched_entities);
+        }
+    }
+}
+
+fn push_unique_entity_match(
+    cached: &CachedEntity<'_>,
+    match_type_override: Option<&EntityMatchType>,
+    matched_names: &mut HashSet<String>,
+    matched_entities: &mut Vec<EntityMatch>,
+) {
+    if !matched_names.insert(cached.name_lower.clone()) {
+        return;
+    }
+    let mut matched_entity = cached.original.clone();
+    if let Some(match_type) = match_type_override {
+        matched_entity.match_type = match_type.clone();
+    }
+    matched_entities.push(matched_entity);
+}
+
+fn calculate_entity_boost(matched_entities: &[EntityMatch], entity_weight: f32) -> f32 {
+    if matched_entities.is_empty() {
+        return 0.0;
+    }
+    let match_count_f32 =
+        u16::try_from(matched_entities.len()).map_or(f32::from(u16::MAX), f32::from);
+    let avg_confidence = matched_entities
+        .iter()
+        .map(|entity| entity.confidence)
+        .sum::<f32>()
+        / match_count_f32;
+    let match_bonus = match_count_f32 * entity_weight * 0.5;
+    avg_confidence * entity_weight + match_bonus
 }
 
 /// Apply triple RRF fusion with entity awareness

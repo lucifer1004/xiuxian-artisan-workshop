@@ -1,5 +1,6 @@
 use serde_json::json;
 
+#[allow(clippy::large_types_passed_by_value)]
 pub(in super::super) fn format_context_budget_snapshot(
     snapshot: crate::agent::SessionContextBudgetSnapshot,
 ) -> String {
@@ -71,6 +72,7 @@ pub(in super::super) fn format_context_budget_snapshot(
     lines.join("\n")
 }
 
+#[allow(clippy::large_types_passed_by_value)]
 pub(in super::super) fn format_context_budget_snapshot_json(
     snapshot: crate::agent::SessionContextBudgetSnapshot,
 ) -> String {

@@ -8,6 +8,13 @@ import pytest
 from search import link_graph as link_graph_mode
 
 
+@pytest.fixture(autouse=True)
+def _clear_search_cache() -> None:
+    link_graph_mode.clear_link_graph_search_cache()
+    yield
+    link_graph_mode.clear_link_graph_search_cache()
+
+
 class _FakeBackend:
     async def search_planned(self, query: str, limit: int = 20, options=None):
         assert query == "architecture"
@@ -232,3 +239,53 @@ async def test_run_link_graph_search_rejects_legacy_flat_options(
             search_options={"sort": "score_desc"},
             paths=paths,
         )
+
+
+@pytest.mark.asyncio
+async def test_run_link_graph_search_reuses_cache_for_identical_request(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    calls = {"search_planned": 0, "stats": 0}
+
+    class _Backend:
+        async def search_planned(self, query: str, limit: int = 20, options=None):
+            calls["search_planned"] += 1
+            del query, limit, options
+            return {
+                "query": "architecture",
+                "search_options": {
+                    "match_strategy": "fts",
+                    "case_sensitive": False,
+                    "sort_terms": [{"field": "score", "order": "desc"}],
+                    "filters": {},
+                },
+                "hits": [
+                    types.SimpleNamespace(
+                        stem="n-1",
+                        title="Architecture Note",
+                        path="docs/n-1.md",
+                        score=0.88,
+                    )
+                ],
+            }
+
+        async def stats(self) -> dict[str, int]:
+            calls["stats"] += 1
+            return {"total_notes": 1, "orphans": 0, "links_in_graph": 0, "nodes_in_graph": 1}
+
+    monkeypatch.setattr(
+        link_graph_mode, "get_link_graph_backend", lambda notebook_dir=None: _Backend()
+    )
+    monkeypatch.setattr(
+        link_graph_mode,
+        "get_link_graph_stats_for_response",
+        lambda backend, **kwargs: backend.stats(),
+    )
+    paths = types.SimpleNamespace(project_root=tmp_path)
+
+    first = await link_graph_mode.run_link_graph_search("architecture", max_results=3, paths=paths)
+    second = await link_graph_mode.run_link_graph_search("architecture", max_results=3, paths=paths)
+
+    assert first == second
+    assert calls["search_planned"] == 1
+    assert calls["stats"] == 1

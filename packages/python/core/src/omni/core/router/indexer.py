@@ -27,7 +27,7 @@ from pydantic import BaseModel
 try:
     import omni_core_rs as omni_rs
 
-    _compute_hash = omni_rs.compute_hash
+    _compute_hash = getattr(omni_rs, "compute_hash", None)
 except ImportError:
     _compute_hash = None
 
@@ -37,6 +37,17 @@ from omni.foundation.services.embedding import EmbeddingUnavailableError
 from omni.foundation.services.vector_schema import parse_tool_search_payload
 
 logger = get_logger("omni.core.router.indexer")
+
+
+def _coerce_int(value: object, *, default: int) -> int:
+    """Parse integer config with safe default fallback."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
 
 # Thread pool for blocking embedding operations (prevents event loop blocking)
 _EMBEDDING_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="embedding")
@@ -150,7 +161,7 @@ class SkillIndexer:
 
         # Use dimension from settings (default to 1024 for LLM provider)
         if dimension is None:
-            dimension = int(get_setting("embedding.dimension"))
+            dimension = _coerce_int(get_setting("embedding.dimension", 1024), default=1024)
 
         self._storage_path = storage_path
         self._dimension = dimension
@@ -284,8 +295,13 @@ class SkillIndexer:
                 )
 
             # Command entries
-            for cmd in skill.get("commands", []):
-                cmd_name_raw = cmd.get("name", "")
+            # Compatibility: Rust discovery exposes tools under `tools`, while legacy
+            # router fixtures used `commands`.
+            command_entries = skill.get("commands") or skill.get("tools") or []
+            for cmd in command_entries:
+                if not isinstance(cmd, dict):
+                    continue
+                cmd_name_raw = cmd.get("name", "") or cmd.get("tool_name", "")
                 cmd_name = str(cmd_name_raw).strip()
                 if cmd_name.startswith(f"{skill_name}."):
                     cmd_name = cmd_name[len(skill_name) + 1 :]
@@ -387,7 +403,7 @@ class SkillIndexer:
 
             # Bridge 4: Register skill entities in KnowledgeGraph (Core 1 ← Core 2)
             try:
-                from omni.rag.dual_core import register_skill_entities
+                from omni.rag.fusion import register_skill_entities
 
                 register_skill_entities(docs)
             except Exception as e:

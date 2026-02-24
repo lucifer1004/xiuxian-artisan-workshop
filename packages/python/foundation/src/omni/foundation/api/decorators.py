@@ -98,7 +98,6 @@ from .mcp_schema import (
     enforce_result_shape as _mcp_enforce_result_shape,
     parse_result_payload as _mcp_parse_result_payload,
     is_canonical as is_mcp_canonical_result,
-    get_schema_path as _mcp_get_schema_path,
     validate as _mcp_validate,
 )
 
@@ -117,7 +116,7 @@ def normalize_mcp_tool_result(return_value: Any) -> dict[str, Any]:
 
     - Canonical dicts are stripped to content + isError via enforce_result_shape.
     - All other values are wrapped with build_result(text).
-    - Final result is validated against omni.mcp.tool_result.v1 when the schema exists.
+    - Final result is always validated against omni.mcp.tool_result.v1.
     """
     if hasattr(return_value, "success") and hasattr(return_value, "data"):
         if return_value.success and return_value.data is not None:
@@ -131,8 +130,7 @@ def normalize_mcp_tool_result(return_value: Any) -> dict[str, Any]:
     else:
         result = _mcp_build_result(_text_from_raw(return_value), is_error=False)
 
-    if _mcp_get_schema_path().exists():
-        _mcp_validate(result)
+    _mcp_validate(result)
     return result
 
 

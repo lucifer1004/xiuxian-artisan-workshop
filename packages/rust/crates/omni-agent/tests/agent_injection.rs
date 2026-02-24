@@ -1,11 +1,44 @@
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use axum::Router;
-use omni_agent::{Agent, AgentConfig, McpServerEntry, MemoryConfig};
+use omni_agent::{Agent, AgentConfig, McpServerEntry, MemoryConfig, SessionStore};
 use rmcp::ServerHandler;
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, Content, ErrorData, ListToolsResult,
@@ -14,6 +47,7 @@ use rmcp::model::{
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
+use tokio::time::sleep;
 
 #[derive(Clone)]
 struct MockBridgeServer {
@@ -178,6 +212,44 @@ fn base_config(mcp_url: String) -> AgentConfig {
     }
 }
 
+fn live_redis_url() -> Option<String> {
+    for key in ["VALKEY_URL"] {
+        if let Ok(url) = std::env::var(key)
+            && !url.trim().is_empty()
+        {
+            return Some(url);
+        }
+    }
+    None
+}
+
+fn unique_key_prefix(prefix: &str) -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    format!("{prefix}-{nanos}")
+}
+
+async fn latest_stream_event_fields(
+    redis_url: &str,
+    key_prefix: &str,
+    stream_name: &str,
+) -> Result<Option<std::collections::HashMap<String, String>>> {
+    let client = redis::Client::open(redis_url)?;
+    let mut conn = client.get_multiplexed_async_connection().await?;
+    let stream_key = format!("{key_prefix}:stream:{stream_name}");
+    let entries: Vec<(String, std::collections::HashMap<String, String>)> = redis::cmd("XREVRANGE")
+        .arg(&stream_key)
+        .arg("+")
+        .arg("-")
+        .arg("COUNT")
+        .arg(1)
+        .query_async(&mut conn)
+        .await?;
+    Ok(entries.into_iter().next().map(|(_, fields)| fields))
+}
+
 #[tokio::test]
 async fn graph_shortcut_includes_typed_injection_snapshot_metadata() -> Result<()> {
     let addr = reserve_local_addr().await;
@@ -238,6 +310,77 @@ async fn graph_shortcut_includes_typed_injection_snapshot_metadata() -> Result<(
             .and_then(serde_json::Value::as_str),
         Some("graph")
     );
+    let graph_plan = metadata
+        .get("graph_plan")
+        .and_then(serde_json::Value::as_object)
+        .expect("graph plan metadata should exist");
+    assert_eq!(
+        graph_plan
+            .get("plan_version")
+            .and_then(serde_json::Value::as_str),
+        Some("v1")
+    );
+    assert_eq!(
+        graph_plan
+            .get("plan_id")
+            .and_then(serde_json::Value::as_str),
+        Some("graph-plan:graph:bridge.echo:abort:evidence")
+    );
+    assert_eq!(
+        graph_plan.get("route").and_then(serde_json::Value::as_str),
+        Some("graph")
+    );
+    assert_eq!(
+        graph_plan
+            .get("workflow_mode")
+            .and_then(serde_json::Value::as_str),
+        Some("graph")
+    );
+    assert_eq!(
+        graph_plan
+            .get("tool_name")
+            .and_then(serde_json::Value::as_str),
+        Some("bridge.echo")
+    );
+    assert_eq!(
+        graph_plan
+            .get("fallback_policy")
+            .and_then(serde_json::Value::as_str),
+        Some("abort")
+    );
+    let graph_steps = graph_plan
+        .get("steps")
+        .and_then(serde_json::Value::as_array)
+        .expect("graph plan should include deterministic steps");
+    assert_eq!(
+        graph_steps.len(),
+        3,
+        "graph plan should have exactly 3 steps"
+    );
+    assert_eq!(
+        graph_steps[0]
+            .get("kind")
+            .and_then(serde_json::Value::as_str),
+        Some("prepare_injection_context")
+    );
+    assert_eq!(
+        graph_steps[1]
+            .get("kind")
+            .and_then(serde_json::Value::as_str),
+        Some("invoke_graph_tool")
+    );
+    assert_eq!(
+        graph_steps[2]
+            .get("kind")
+            .and_then(serde_json::Value::as_str),
+        Some("evaluate_fallback")
+    );
+    assert_eq!(
+        graph_steps[2]
+            .get("fallback_action")
+            .and_then(serde_json::Value::as_str),
+        Some("abort")
+    );
 
     let session_context = metadata
         .get("session_context")
@@ -249,6 +392,13 @@ async fn graph_shortcut_includes_typed_injection_snapshot_metadata() -> Result<(
             .and_then(serde_json::Value::as_str)
             .is_some(),
         "snapshot_id must exist"
+    );
+    assert_eq!(
+        session_context
+            .get("injection_mode")
+            .and_then(serde_json::Value::as_str),
+        Some("hybrid"),
+        "adaptive injection policy should select hybrid mode for multi-domain shortcut context"
     );
     assert!(
         session_context
@@ -329,6 +479,143 @@ async fn omega_shortcut_retries_without_metadata_after_bridge_error() -> Result<
         captured[1].get("_omni").is_none(),
         "fallback attempt should strip metadata for compatibility"
     );
+
+    server_handle.abort();
+    let _ = server_handle.await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn omega_shortcut_fallback_uses_real_tool_attempt_count_for_memory_gate() -> Result<()> {
+    let addr = reserve_local_addr().await;
+    let (server_handle, _recorded_arguments) = spawn_mock_bridge_server(addr).await;
+    let mcp_url = format!("http://{addr}/sse");
+
+    let temp_dir = tempfile::tempdir()?;
+    let memory = MemoryConfig {
+        path: temp_dir.path().join("memory").to_string_lossy().to_string(),
+        table_name: "omega_shortcut_fallback_attempts".to_string(),
+        persistence_backend: "local".to_string(),
+        embedding_base_url: Some("http://127.0.0.1:9".to_string()),
+        gate_obsolete_threshold: 0.71,
+        gate_obsolete_min_usage: 1,
+        gate_obsolete_failure_rate_floor: 0.0,
+        gate_obsolete_max_ttl_score: 1.0,
+        ..MemoryConfig::default()
+    };
+
+    let mut config = base_config(mcp_url);
+    config.memory = Some(memory);
+    let agent = Agent::from_config(config).await?;
+
+    let output = agent
+        .run_turn(
+            "telegram:-100300:8",
+            r#"omega bridge.flaky {"task":"fallback-memory-gate"}"#,
+        )
+        .await?;
+    assert_eq!(output, "fallback-ok");
+
+    let status = agent.inspect_memory_runtime_status();
+    assert_eq!(
+        status.episodes_total,
+        Some(1),
+        "successful fallback should keep memory episode when real tool attempts are accounted for"
+    );
+    assert_eq!(status.q_values_total, Some(1));
+
+    server_handle.abort();
+    let _ = server_handle.await;
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires live valkey server (VALKEY_URL)"]
+async fn graph_shortcut_publishes_route_trace_to_route_events_stream() -> Result<()> {
+    let Some(redis_url) = live_redis_url() else {
+        return Ok(());
+    };
+
+    let addr = reserve_local_addr().await;
+    let (server_handle, _recorded_arguments) = spawn_mock_bridge_server(addr).await;
+    let mcp_url = format!("http://{addr}/sse");
+    let key_prefix = unique_key_prefix("omni-agent-route-trace");
+
+    let config = base_config(mcp_url);
+    let session =
+        SessionStore::new_with_redis(redis_url.clone(), Some(key_prefix.clone()), Some(120))?;
+    let agent = Agent::from_config_with_session_backends_for_test(config, session, None).await?;
+    let session_id = "telegram:-100400:11";
+
+    let output = agent
+        .run_turn(
+            session_id,
+            r#"graph bridge.echo {"task":"route-trace-stream"}"#,
+        )
+        .await?;
+    let payload: serde_json::Value = serde_json::from_str(&output)?;
+    assert_eq!(payload["task"], "route-trace-stream");
+
+    let mut fields = None;
+    for _ in 0..30 {
+        fields = latest_stream_event_fields(&redis_url, &key_prefix, "route.events").await?;
+        if fields.is_some() {
+            break;
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    let fields = fields.expect("expected route trace stream event in route.events");
+    assert_eq!(
+        fields.get("kind").map(String::as_str),
+        Some("session.route.trace_emitted")
+    );
+    assert_eq!(
+        fields.get("session_id").map(String::as_str),
+        Some(session_id)
+    );
+    assert_eq!(
+        fields.get("selected_route").map(String::as_str),
+        Some("graph")
+    );
+    assert_eq!(
+        fields.get("workflow_mode").map(String::as_str),
+        Some("graph")
+    );
+    assert_eq!(
+        fields.get("graph_steps_count").map(String::as_str),
+        Some("3")
+    );
+    assert!(
+        fields
+            .get("plan_id")
+            .is_some_and(|value| !value.trim().is_empty()),
+        "plan_id should be persisted for graph route trace stream events"
+    );
+    assert!(
+        fields
+            .get("graph_steps_json")
+            .is_some_and(|value| value.contains("invoke_graph_tool")),
+        "graph_steps_json should include invoke_graph_tool step"
+    );
+
+    let trace_json = fields
+        .get("route_trace_json")
+        .expect("route_trace_json should exist");
+    let trace: serde_json::Value =
+        serde_json::from_str(trace_json).expect("route_trace_json should be valid json");
+    assert_eq!(trace["selected_route"], "graph");
+    assert_eq!(trace["workflow_mode"], "graph");
+    assert_eq!(trace["session_id"], session_id);
+    assert_eq!(trace["graph_steps"].as_array().map(Vec::len), Some(3));
+
+    let stream_key = format!("{key_prefix}:stream:route.events");
+    let client = redis::Client::open(redis_url)?;
+    let mut conn = client.get_multiplexed_async_connection().await?;
+    let _: () = redis::cmd("DEL")
+        .arg(stream_key)
+        .query_async(&mut conn)
+        .await?;
 
     server_handle.abort();
     let _ = server_handle.await;

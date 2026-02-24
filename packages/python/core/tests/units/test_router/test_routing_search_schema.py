@@ -12,17 +12,20 @@ import json
 from pathlib import Path
 
 import pytest
+from omni.foundation.api.schema_locator import resolve_schema_file_path
 
 
 def _path_to_canonical() -> Path:
-    """Path to routing_search_canonical_v1.json (packages/shared/schemas/snapshots/)."""
-    path = Path(__file__).resolve().parent
-    for _ in range(6):
-        path = path.parent
-        snap = path / "shared" / "schemas" / "snapshots"
-        if snap.exists():
-            return snap / "routing_search_canonical_v1.json"
-    return Path("packages/shared/schemas/snapshots/routing_search_canonical_v1.json")
+    """Path to routing search canonical snapshot, if present."""
+    schema_path = resolve_schema_file_path(
+        "omni.router.routing_search.v1.schema.json",
+        preferred_crates=("omni-agent",),
+    )
+    candidates = [schema_path.parent / "snapshots" / "routing_search_canonical_v1.json"]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 @pytest.fixture(scope="module")

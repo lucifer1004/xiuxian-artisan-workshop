@@ -16,6 +16,7 @@ from omni.test_kit.fixtures.vector import (
 )
 from pydantic import ValidationError
 
+from omni.foundation.api.schema_provider import get_schema
 from omni.foundation.services.vector_schema import (
     HYBRID_SCHEMA_V1,
     TOOL_SEARCH_SCHEMA_V1,
@@ -26,7 +27,6 @@ from omni.foundation.services.vector_schema import (
     VectorPayload,
     build_search_options_json,
     build_tool_router_result,
-    get_shared_schemas_dir,
     parse_hybrid_payload,
     parse_tool_router_result,
     parse_tool_search_payload,
@@ -337,6 +337,19 @@ def test_parse_tool_search_payload_accepts_canonical_shape():
     assert router["payload"]["metadata"]["routing_keywords"] == ["git", "commit"]
 
 
+def test_parse_tool_search_payload_fails_when_schema_binding_unavailable(monkeypatch):
+    """Tool payload parsing must fail fast when Rust schema binding is unavailable."""
+    from omni.foundation.services import vector_schema as vector_schema_module
+
+    def _raise_import_error():
+        raise ImportError("schema binding unavailable")
+
+    monkeypatch.setattr(vector_schema_module, "_tool_search_common_validator", _raise_import_error)
+
+    with pytest.raises(ImportError, match="schema binding unavailable"):
+        parse_tool_search_payload(make_tool_search_payload(input_schema="{}"))
+
+
 @parametrize_input_schema_variants()
 def test_parse_tool_search_payload_normalizes_input_schema_variants(
     input_schema_value: str | dict[str, Any],
@@ -461,26 +474,23 @@ def test_tool_router_result_contract_snapshot_v1():
     assert router == expected
 
 
-def test_tool_search_common_schema_file_exists():
-    root = get_shared_schemas_dir()
-    tool_search_schema = root / "omni.vector.tool_search.v1.schema.json"
-    vector_schema = root / "omni.vector.search.v1.schema.json"
-    hybrid_schema = root / "omni.vector.hybrid.v1.schema.json"
-    assert tool_search_schema.exists(), f"Missing common schema file: {tool_search_schema}"
-    assert vector_schema.exists(), f"Missing common schema file: {vector_schema}"
-    assert hybrid_schema.exists(), f"Missing common schema file: {hybrid_schema}"
+def test_tool_search_common_schema_resolves_from_rust_bindings():
+    tool_search_schema = get_schema("omni.vector.tool_search.v1")
+    vector_schema = get_schema("omni.vector.search.v1")
+    hybrid_schema = get_schema("omni.vector.hybrid.v1")
+    assert tool_search_schema.get("type") == "object"
+    assert vector_schema.get("type") == "object"
+    assert hybrid_schema.get("type") == "object"
 
 
 def test_vector_payload_snapshot_validates_against_search_schema():
     """E2E: snapshot must conform to omni.vector.search.v1 JSON schema (CI drift guard)."""
     from jsonschema import Draft202012Validator
 
-    root = get_shared_schemas_dir()
-    schema_path = root / "omni.vector.search.v1.schema.json"
     snapshot_path = (
         Path(__file__).resolve().parent / "snapshots" / "vector_payload_contract_v1.json"
     )
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema = get_schema("omni.vector.search.v1")
     data = json.loads(snapshot_path.read_text(encoding="utf-8"))
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(data))
@@ -491,12 +501,10 @@ def test_hybrid_payload_snapshot_validates_against_hybrid_schema():
     """E2E: snapshot must conform to omni.vector.hybrid.v1 JSON schema (CI drift guard)."""
     from jsonschema import Draft202012Validator
 
-    root = get_shared_schemas_dir()
-    schema_path = root / "omni.vector.hybrid.v1.schema.json"
     snapshot_path = (
         Path(__file__).resolve().parent / "snapshots" / "hybrid_payload_contract_v1.json"
     )
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema = get_schema("omni.vector.hybrid.v1")
     data = json.loads(snapshot_path.read_text(encoding="utf-8"))
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(data))
@@ -507,15 +515,13 @@ def test_tool_search_payload_snapshot_validates_against_tool_search_schema():
     """E2E: canonical tool_search payload validates against omni.vector.tool_search.v1 (CI drift guard)."""
     from jsonschema import Draft202012Validator
 
-    root = get_shared_schemas_dir()
-    schema_path = root / "omni.vector.tool_search.v1.schema.json"
     canonical = make_tool_search_payload(
         name="advanced_tools.smart_find",
         tool_name="advanced_tools.smart_find",
         description="Find files by extension",
         routing_keywords=["find", "files", "directory"],
     )
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema = get_schema("omni.vector.tool_search.v1")
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(canonical))
     assert not errors, (
@@ -542,7 +548,7 @@ def test_parse_tool_search_payload_rejects_unknown_schema():
 
 
 def test_parse_tool_search_payload_rejects_missing_confidence_fields():
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError, match="required property"):
         parse_tool_search_payload(
             with_removed_key(
                 with_removed_key(make_tool_search_payload(input_schema="{}"), "confidence"),

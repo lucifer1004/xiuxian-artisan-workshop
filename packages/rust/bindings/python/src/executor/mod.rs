@@ -27,7 +27,7 @@ pub fn build_query(
         builder = builder.where_clause(pred);
     }
     if let Some(cols) = columns {
-        builder = builder.select(&cols.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        builder = builder.select(&cols.iter().map(String::as_str).collect::<Vec<_>>());
     }
     if let Some(s) = sort {
         builder = builder.sort_by(s);
@@ -65,7 +65,7 @@ pub fn build_query_raw(
         builder = builder.where_clause(pred);
     }
     if let Some(cols) = columns {
-        builder = builder.select(&cols.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+        builder = builder.select(&cols.iter().map(String::as_str).collect::<Vec<_>>());
     }
     if let Some(s) = sort {
         builder = builder.sort_by(s);
@@ -110,6 +110,39 @@ impl PyOmniCell {
         py.detach(|| match self.bridge.execute(&cmd, ensure_structured) {
             Ok(value) => Ok(value.to_string()),
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
+        })
+    }
+
+    /// Execute a Nushell command with explicit action hint.
+    ///
+    /// Args:
+    ///     cmd: The command to execute
+    ///     action: "observe" or "mutate"
+    ///     ensure_structured: If true, forces JSON output
+    ///
+    /// Returns:
+    ///     JSON-serializable result or error string
+    #[pyo3(signature = (cmd, action="observe", ensure_structured=true))]
+    fn execute_with_action(
+        &self,
+        py: Python,
+        cmd: String,
+        action: &str,
+        ensure_structured: bool,
+    ) -> PyResult<String> {
+        let action_type = match action {
+            "mutate" | "Mutate" | "MUTATE" => ActionType::Mutate,
+            _ => ActionType::Observe,
+        };
+
+        py.detach(|| {
+            match self
+                .bridge
+                .execute_with_action(&cmd, action_type, ensure_structured)
+            {
+                Ok(value) => Ok(value.to_string()),
+                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
+            }
         })
     }
 

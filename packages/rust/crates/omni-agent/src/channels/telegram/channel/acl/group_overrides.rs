@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
-use crate::config::{TelegramGroupSettings, TelegramTopicSettings};
+use crate::config::{TelegramAclPrincipalSettings, TelegramGroupSettings, TelegramTopicSettings};
 
 use super::super::group_policy::{
     TelegramGroupOverrideConfig, TelegramTopicPolicyConfig, parse_group_policy_mode,
 };
 use super::super::identity::normalize_group_identity;
 use super::normalization::normalize_optional_allowed_user_entries_with_context;
-use super::parsing::parse_optional_comma_entries;
 
 pub(super) fn parse_group_overrides(
     groups: HashMap<String, TelegramGroupSettings>,
@@ -31,14 +30,14 @@ pub(super) fn parse_group_overrides(
         let group_policy = group_settings.group_policy.as_deref().and_then(|raw| {
             parse_group_policy_mode(raw, format!("{context_prefix}.group_policy").as_str())
         });
-        let allow_from_field = format!("{context_prefix}.allow_from");
+        let allow_from_field = format!("{context_prefix}.allow_from.users");
         let allow_from = normalize_optional_allowed_user_entries_with_context(
-            parse_optional_comma_entries(group_settings.allow_from),
+            principal_users(group_settings.allow_from.as_ref()),
             allow_from_field.as_str(),
         );
-        let admin_users_field = format!("{context_prefix}.admin_users");
+        let admin_users_field = format!("{context_prefix}.admin_users.users");
         let admin_users = normalize_optional_allowed_user_entries_with_context(
-            parse_optional_comma_entries(group_settings.admin_users),
+            principal_users(group_settings.admin_users.as_ref()),
             admin_users_field.as_str(),
         );
         let topics = parse_topic_overrides(normalized_group_id.as_str(), group_settings.topics);
@@ -81,14 +80,14 @@ fn parse_topic_overrides(
         let group_policy = topic_settings.group_policy.as_deref().and_then(|raw| {
             parse_group_policy_mode(raw, format!("{context_prefix}.group_policy").as_str())
         });
-        let allow_from_field = format!("{context_prefix}.allow_from");
+        let allow_from_field = format!("{context_prefix}.allow_from.users");
         let allow_from = normalize_optional_allowed_user_entries_with_context(
-            parse_optional_comma_entries(topic_settings.allow_from),
+            principal_users(topic_settings.allow_from.as_ref()),
             allow_from_field.as_str(),
         );
-        let admin_users_field = format!("{context_prefix}.admin_users");
+        let admin_users_field = format!("{context_prefix}.admin_users.users");
         let admin_users = normalize_optional_allowed_user_entries_with_context(
-            parse_optional_comma_entries(topic_settings.admin_users),
+            principal_users(topic_settings.admin_users.as_ref()),
             admin_users_field.as_str(),
         );
         overrides.insert(
@@ -103,4 +102,8 @@ fn parse_topic_overrides(
         );
     }
     overrides
+}
+
+fn principal_users(principal: Option<&TelegramAclPrincipalSettings>) -> Option<Vec<String>> {
+    principal.and_then(|value| value.users.clone())
 }

@@ -12,10 +12,12 @@ These tests verify:
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+import os
+from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestSkillContextAutoLoad:
@@ -104,6 +106,45 @@ class TestKernelSkillContext:
         # Verify context was created successfully
         assert ctx is not None
 
+    def test_kernel_shutdown_resets_cached_runtime_state(self, tmp_path: Path):
+        """Kernel shutdown should clear cached state to avoid cross-test contamination."""
+        from omni.core.kernel.engine import Kernel
+
+        kernel = Kernel(project_root=tmp_path)
+        kernel._skill_context = MagicMock()
+        kernel._skill_context.skills_count = 2
+        kernel._discovered_skills = ["dummy"]
+        kernel._router = object()
+        kernel._sniffer = MagicMock()
+        kernel._security = object()
+
+        with patch("omni.core.skills.runtime.reset_context") as mock_reset_context:
+            asyncio.run(kernel._on_shutdown())
+
+        mock_reset_context.assert_called_once()
+        assert kernel._skill_context is None
+        assert kernel._discovered_skills == []
+        assert kernel._router is None
+        assert kernel._sniffer is None
+        assert kernel._security is None
+
+    def test_discover_skills_includes_filesystem_fallback(self, tmp_path: Path):
+        """Kernel discovery should include skills that exist on disk but are missing in index."""
+        from omni.core.kernel.engine import Kernel
+
+        skills_dir = tmp_path / "assets" / "skills"
+        skills_dir.mkdir(parents=True)
+        (skills_dir / "code").mkdir()
+
+        kernel = Kernel(project_root=tmp_path, skills_dir=skills_dir)
+        kernel._discovery_service = MagicMock()
+        kernel._discovery_service.discover_all = AsyncMock(return_value=[])
+
+        discovered = asyncio.run(kernel.discover_skills())
+        discovered_names = {skill.name for skill in discovered}
+
+        assert "code" in discovered_names
+
 
 class TestToolSchemaExtraction:
     """Tests for extract_tool_schemas function."""
@@ -155,9 +196,6 @@ __all__ = ["process"]
     def test_extract_tool_schemas_empty_commands(self, tmp_path: Path):
         """Test extracting schemas with empty command list."""
         from omni.agent.core.omni.schemas import extract_tool_schemas
-        from omni.core.skills.runtime import SkillContext
-
-        ctx = SkillContext(tmp_path / "assets" / "skills")
 
         def get_handler(cmd):
             return None
@@ -168,12 +206,53 @@ __all__ = ["process"]
     def test_extract_tool_schemas_skips_missing_commands(self, tmp_path: Path):
         """Test that missing commands are skipped gracefully."""
         from omni.agent.core.omni.schemas import extract_tool_schemas
-        from omni.core.skills.runtime import SkillContext
-
-        ctx = SkillContext(tmp_path / "assets" / "skills")
 
         def get_handler(cmd_name):
             return None
 
         schemas = extract_tool_schemas(["nonexistent.command"], get_handler)
         assert schemas == []
+
+
+class TestSkillContextHotReloadRollback:
+    """Tests for transactional hot-reload safety in SkillContext."""
+
+    def test_hot_reload_restores_previous_commands_on_empty_reload(self, tmp_path: Path):
+        """Hot reload must rollback when a modified script yields an empty command set."""
+        from omni.core.skills.runtime import SkillContext
+        from omni.core.skills.universal import UniversalScriptSkill
+
+        skills_dir = tmp_path / "assets" / "skills"
+        skills_dir.mkdir(parents=True)
+        skill_dir = skills_dir / "reload_guard"
+        skill_dir.mkdir()
+        scripts_dir = skill_dir / "scripts"
+        scripts_dir.mkdir()
+        command_file = scripts_dir / "ping.py"
+        command_file.write_text(
+            """
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="ping", description="ping")
+def ping():
+    return "pong"
+"""
+        )
+
+        skill = UniversalScriptSkill("reload_guard", skill_dir)
+        asyncio.run(skill.load())
+
+        ctx = SkillContext(skills_dir)
+        ctx.register_skill(skill)
+        original_handler = ctx.get_command("reload_guard.ping")
+        assert original_handler is not None
+
+        # Corrupt script to force an empty reload result from tools loader.
+        command_file.write_text("def ping(:\n    return 'pong'\n")
+        bumped = command_file.stat().st_mtime + 5
+        os.utime(command_file, (bumped, bumped))
+
+        reloaded_skill = ctx.get_skill("reload_guard")
+        assert reloaded_skill is skill
+        assert ctx.get_command("reload_guard.ping") is original_handler
+        assert "reload_guard.ping" in skill.list_commands()

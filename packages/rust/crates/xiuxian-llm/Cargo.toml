@@ -1,0 +1,28 @@
+[package]
+name = "xiuxian-llm"
+version.workspace = true
+edition.workspace = true
+description = "LLM/embedding runtime primitives shared across xiuxian and omni-agent"
+authors = ["CyberXiuXian Artisan Studio"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tracing = { workspace = true }
+redis = { version = "1.0.3", default-features = false, features = ["tokio-comp"] }
+sha2 = { workspace = true }
+hex = { workspace = true }
+rmcp = { workspace = true }
+xiuxian-mcp = { path = "../xiuxian-mcp" }
+
+[dev-dependencies]
+axum = { workspace = true }
+
+[lints]
+workspace = true

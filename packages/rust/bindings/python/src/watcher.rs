@@ -115,11 +115,18 @@ impl Default for PyWatcherConfig {
 
 /// State shared between the Python handle and the watcher thread
 struct WatcherState {
-    _is_running: Arc<AtomicBool>, // Renamed to avoid conflict with PyFileWatcherHandle.is_running property
+    is_running: Arc<AtomicBool>,
     _stop_tx: Arc<mpsc::Sender<()>>, // Reserved for future use: signaling stop to watcher thread
     /// Keep the FileWatcherHandle alive in the thread
     _watcher_handle: Arc<Mutex<Option<omni_io::FileWatcherHandle>>>,
 }
+
+type WatcherCallback = fn(
+    (
+        omni_io::FileEvent,
+        std::option::Option<omni_events::OmniEvent>,
+    ),
+);
 
 /// Handle to control the file watcher
 #[pyclass]
@@ -140,12 +147,12 @@ impl PyFileWatcherHandle {
     /// Check if watcher is currently running
     #[getter]
     fn is_running(&self) -> bool {
-        self.state._is_running.load(Ordering::SeqCst)
+        self.state.is_running.load(Ordering::SeqCst)
     }
 
     /// Stop the watcher
     fn stop(&mut self) {
-        self.state._is_running.store(false, Ordering::SeqCst);
+        self.state.is_running.store(false, Ordering::SeqCst);
     }
 }
 
@@ -178,26 +185,25 @@ impl PyFileEventReceiver {
     fn try_recv(&mut self) -> Vec<(String, String)> {
         let mut events = Vec::new();
 
-        if let Ok(mut guard) = self.receiver.lock() {
-            if let Some(ref mut rx) = *guard {
-                // Try to receive up to 10 events
-                for _ in 0..10 {
-                    match rx.try_recv() {
-                        Ok(event) if event.topic.starts_with("file/") => {
-                            let payload = &event.payload;
-                            if let Some(path) = payload.get("path").and_then(|p| p.as_str()) {
-                                let event_type = event.topic.replace("file/", "");
-                                events.push((event_type, path.to_string()));
-                            }
+        if let Ok(mut guard) = self.receiver.lock()
+            && let Some(ref mut rx) = *guard
+        {
+            // Try to receive up to 10 events
+            for _ in 0..10 {
+                match rx.try_recv() {
+                    Ok(event) if event.topic.starts_with("file/") => {
+                        let payload = &event.payload;
+                        if let Some(path) = payload.get("path").and_then(|p| p.as_str()) {
+                            let event_type = event.topic.replace("file/", "");
+                            events.push((event_type, path.to_string()));
                         }
-                        Ok(_) => { /* non-file event, skip */ }
-                        Err(tokio::sync::broadcast::error::TryRecvError::Empty) => break,
-                        Err(tokio::sync::broadcast::error::TryRecvError::Closed) => {
-                            // Channel closed, break
-                            break;
-                        }
-                        Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => break,
                     }
+                    Ok(_) => { /* non-file event, skip */ }
+                    Err(
+                        tokio::sync::broadcast::error::TryRecvError::Empty
+                        | tokio::sync::broadcast::error::TryRecvError::Lagged(_)
+                        | tokio::sync::broadcast::error::TryRecvError::Closed,
+                    ) => break,
                 }
             }
         }
@@ -218,10 +224,16 @@ fn run_watcher_thread(
     watcher_handle: Arc<Mutex<Option<omni_io::FileWatcherHandle>>>,
 ) {
     // Create a new runtime for this thread
-    let rt = tokio::runtime::Builder::new_current_thread()
+    let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .unwrap();
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("Failed to create runtime for watcher thread: {error}");
+            return;
+        }
+    };
 
     rt.block_on(async {
         let omni_config = omni_io::WatcherConfig {
@@ -231,13 +243,6 @@ fn run_watcher_thread(
             patterns,
             exclude,
         };
-
-        type WatcherCallback = fn(
-            (
-                omni_io::FileEvent,
-                std::option::Option<omni_events::OmniEvent>,
-            ),
-        );
 
         // Start the watcher and store the handle
         match omni_io::start_file_watcher::<WatcherCallback>(omni_config, None).await {
@@ -256,11 +261,13 @@ fn run_watcher_thread(
         // Wait for stop signal
         let _ = stop_rx.recv().await;
 
-        // Stop the watcher when signal received
-        if let Ok(mut guard) = watcher_handle.lock() {
-            if let Some(h) = guard.take() {
-                h.stop().await;
-            }
+        // Stop the watcher when signal received.
+        let handle_to_stop = watcher_handle
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take());
+        if let Some(handle) = handle_to_stop {
+            handle.stop().await;
         }
     });
 }
@@ -282,7 +289,7 @@ pub fn py_watch_path(path: String) -> PyResult<PyFileWatcherHandle> {
 
     // Create shared state first (both state and thread use same is_running Arc)
     let state = Arc::new(WatcherState {
-        _is_running: is_running.clone(),
+        is_running: is_running.clone(),
         _stop_tx: Arc::new(stop_tx),
         _watcher_handle: watcher_handle,
     });
@@ -329,7 +336,7 @@ pub fn py_start_file_watcher(config: PyWatcherConfig) -> PyResult<PyFileWatcherH
 
     // Create shared state first (both state and thread use same is_running Arc)
     let state = Arc::new(WatcherState {
-        _is_running: is_running.clone(),
+        is_running: is_running.clone(),
         _stop_tx: Arc::new(stop_tx),
         _watcher_handle: watcher_handle,
     });
@@ -377,9 +384,11 @@ pub fn py_subscribe_file_events() -> Vec<(String, String)> {
                 }
             }
             Ok(_) => {}
-            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => break,
-            Err(tokio::sync::broadcast::error::TryRecvError::Closed) => break,
-            Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => break,
+            Err(
+                tokio::sync::broadcast::error::TryRecvError::Empty
+                | tokio::sync::broadcast::error::TryRecvError::Closed
+                | tokio::sync::broadcast::error::TryRecvError::Lagged(_),
+            ) => break,
         }
     }
 
@@ -393,11 +402,17 @@ mod tests {
 
     #[test]
     fn test_watch_path() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = match TempDir::new() {
+            Ok(dir) => dir,
+            Err(error) => panic!("failed to create temp dir: {error}"),
+        };
         let path = temp_dir.path().to_string_lossy().to_string();
 
         // Start watching
-        let mut handle = py_watch_path(path).unwrap();
+        let mut handle = match py_watch_path(path) {
+            Ok(handle) => handle,
+            Err(error) => panic!("failed to start watcher: {error}"),
+        };
 
         // Stop watching
         handle.stop();

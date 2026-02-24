@@ -29,6 +29,7 @@ fn map_managed_control_command(command: managed::ManagedControlCommand) -> Manag
         managed::ManagedControlCommand::ResumeStatus => ManagedControlCommand::ResumeStatus,
         managed::ManagedControlCommand::ResumeDrop => ManagedControlCommand::ResumeDrop,
         managed::ManagedControlCommand::SessionAdmin => ManagedControlCommand::SessionAdmin,
+        managed::ManagedControlCommand::SessionInjection => ManagedControlCommand::SessionInjection,
         managed::ManagedControlCommand::SessionPartition => ManagedControlCommand::SessionPartition,
     }
 }

@@ -127,14 +127,17 @@ def test_validate_checkpoint_write_rejects_non_finite_embedding_value() -> None:
         validate_checkpoint_write("checkpoint_test", payload)
 
 
-def test_get_validator_raises_when_schema_file_missing(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+def test_get_validator_raises_when_rust_schema_backend_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Missing shared schema file should fail fast with clear error."""
+    """Rust schema backend unavailability should fail fast."""
     checkpoint_schema.get_validator.cache_clear()
-    missing_path = tmp_path / "missing.schema.json"
-    monkeypatch.setattr(checkpoint_schema, "get_schema_path", lambda: missing_path)
-    with pytest.raises(FileNotFoundError, match="Checkpoint schema not found"):
+    monkeypatch.setattr(
+        checkpoint_schema,
+        "get_schema",
+        lambda _name: (_ for _ in ()).throw(ImportError("Rust schema backend unavailable")),
+    )
+    with pytest.raises(ImportError, match="Rust schema backend unavailable"):
         checkpoint_schema.get_validator()
     payload = {
         "checkpoint_id": "cp-1",
@@ -145,6 +148,6 @@ def test_get_validator_raises_when_schema_file_missing(
         "embedding": None,
         "metadata": None,
     }
-    with pytest.raises(FileNotFoundError, match="Checkpoint schema not found"):
+    with pytest.raises(ImportError, match="Rust schema backend unavailable"):
         validate_checkpoint_write("checkpoint_test", payload)
     checkpoint_schema.get_validator.cache_clear()

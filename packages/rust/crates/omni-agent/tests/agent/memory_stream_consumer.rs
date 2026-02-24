@@ -1,3 +1,37 @@
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
+
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -10,8 +44,9 @@ use crate::agent::logging::should_surface_repeated_failure;
 use super::{
     MemoryStreamConsumerRuntimeConfig, StreamReadErrorKind, ack_and_record_metrics,
     build_consumer_name, classify_stream_read_error, compute_retry_backoff_ms,
-    ensure_consumer_group, parse_xreadgroup_reply, read_stream_events,
-    stream_consumer_connection_config, stream_consumer_response_timeout,
+    ensure_consumer_group, is_idle_poll_timeout_error, parse_xreadgroup_reply,
+    queue_promoted_candidate, read_stream_events, stream_consumer_connection_config,
+    stream_consumer_response_timeout, summarize_redis_error,
 };
 
 fn unique_id(prefix: &str) -> String {
@@ -153,6 +188,27 @@ fn classify_stream_read_error_uses_error_chain() {
 }
 
 #[test]
+fn idle_poll_timeout_error_detects_timeout_like_io_error_text() {
+    let error = redis::RedisError::from((redis::ErrorKind::Io, "operation timed out"));
+    assert!(is_idle_poll_timeout_error(&error));
+}
+
+#[test]
+fn idle_poll_timeout_error_ignores_non_timeout_io_errors() {
+    let error = redis::RedisError::from((redis::ErrorKind::Io, "connection reset by peer"));
+    assert!(!is_idle_poll_timeout_error(&error));
+}
+
+#[test]
+fn summarize_redis_error_includes_kind_and_category() {
+    let error = redis::RedisError::from((redis::ErrorKind::Io, "operation timed out"));
+    let summary = summarize_redis_error(&error);
+    assert!(summary.contains("kind=Io"), "summary={summary}");
+    assert!(summary.contains("category=I/O error"), "summary={summary}");
+    assert!(summary.contains("timeout="), "summary={summary}");
+}
+
+#[test]
 fn stream_consumer_response_timeout_exceeds_block_timeout() {
     let timeout = stream_consumer_response_timeout(1_000);
     assert_eq!(timeout.as_millis(), 1_500);
@@ -194,6 +250,8 @@ async fn memory_stream_consumer_acks_and_tracks_metrics() -> Result<()> {
         redis_url: redis_url.clone(),
         stream_name: stream_name.clone(),
         stream_key: stream_key.clone(),
+        promotion_stream_key: format!("{key_prefix}:stream:knowledge.ingest.candidates"),
+        promotion_ledger_key: format!("{key_prefix}:knowledge:ingest:candidates"),
         stream_consumer_group: stream_consumer_group.clone(),
         stream_consumer_name: stream_consumer_name.clone(),
         stream_consumer_batch_size: 16,
@@ -306,6 +364,8 @@ async fn memory_stream_consumer_read_empty_stream_returns_empty() -> Result<()> 
         redis_url: redis_url.clone(),
         stream_name: stream_name.clone(),
         stream_key: stream_key.clone(),
+        promotion_stream_key: format!("{key_prefix}:stream:knowledge.ingest.candidates"),
+        promotion_ledger_key: format!("{key_prefix}:knowledge:ingest:candidates"),
         stream_consumer_group: stream_consumer_group.clone(),
         stream_consumer_name,
         stream_consumer_batch_size: 8,
@@ -351,6 +411,8 @@ async fn memory_stream_consumer_recovers_after_stream_key_expired() -> Result<()
         redis_url: redis_url.clone(),
         stream_name: stream_name.clone(),
         stream_key: stream_key.clone(),
+        promotion_stream_key: format!("{key_prefix}:stream:knowledge.ingest.candidates"),
+        promotion_ledger_key: format!("{key_prefix}:knowledge:ingest:candidates"),
         stream_consumer_group: stream_consumer_group.clone(),
         stream_consumer_name: stream_consumer_name.clone(),
         stream_consumer_batch_size: 16,
@@ -421,6 +483,124 @@ async fn memory_stream_consumer_recovers_after_stream_key_expired() -> Result<()
         .ignore()
         .cmd("DEL")
         .arg(&metrics_global_key)
+        .ignore()
+        .query_async(&mut connection)
+        .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "requires running Valkey/Redis on VALKEY_URL"]
+async fn memory_promoted_events_are_queued_once_for_knowledge_ingest() -> Result<()> {
+    let Some(redis_url) = live_redis_url() else {
+        return Ok(());
+    };
+
+    let key_prefix = unique_id("omni-agent-memory-promoted-queue");
+    let stream_name = "memory.events".to_string();
+    let stream_key = format!("{key_prefix}:stream:{stream_name}");
+    let stream_consumer_group = "omni-agent-memory-test".to_string();
+    let stream_consumer_name = build_consumer_name("agent-test");
+    let metrics_global_key = format!("{key_prefix}:metrics:{stream_name}:consumer");
+    let metrics_session_prefix = format!("{key_prefix}:metrics:{stream_name}:consumer:session:");
+    let promotion_stream_key = format!("{key_prefix}:stream:knowledge.ingest.candidates");
+    let promotion_ledger_key = format!("{key_prefix}:knowledge:ingest:candidates");
+    let config = MemoryStreamConsumerRuntimeConfig {
+        redis_url: redis_url.clone(),
+        stream_name: stream_name.clone(),
+        stream_key: stream_key.clone(),
+        promotion_stream_key: promotion_stream_key.clone(),
+        promotion_ledger_key: promotion_ledger_key.clone(),
+        stream_consumer_group: stream_consumer_group.clone(),
+        stream_consumer_name: stream_consumer_name.clone(),
+        stream_consumer_batch_size: 16,
+        stream_consumer_block_ms: 100,
+        metrics_global_key: metrics_global_key.clone(),
+        metrics_session_prefix: metrics_session_prefix.clone(),
+        ttl_secs: Some(120),
+    };
+
+    let client = redis::Client::open(redis_url.as_str())?;
+    let mut connection = client.get_multiplexed_async_connection().await?;
+    ensure_consumer_group(&mut connection, &config).await?;
+
+    let event_id: String = redis::cmd("XADD")
+        .arg(&stream_key)
+        .arg("*")
+        .arg("kind")
+        .arg("memory_promoted")
+        .arg("session_id")
+        .arg("telegram:test:promoted")
+        .arg("episode_id")
+        .arg("turn-telegram:test:promoted-1")
+        .arg("utility_score")
+        .arg("0.93")
+        .arg("ttl_score")
+        .arg("0.84")
+        .arg("knowledge_ingest_hint")
+        .arg("knowledge.ingest_candidate")
+        .query_async(&mut connection)
+        .await?;
+
+    let events = read_stream_events(&mut connection, &config, ">").await?;
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].id, event_id);
+
+    let inserted = queue_promoted_candidate(&mut connection, &config, &events[0]).await?;
+    assert!(inserted, "first promoted event should be inserted");
+    let inserted_again = queue_promoted_candidate(&mut connection, &config, &events[0]).await?;
+    assert!(
+        !inserted_again,
+        "duplicate promoted event should be deduplicated"
+    );
+
+    let acked = ack_and_record_metrics(
+        &mut connection,
+        &config,
+        &events[0].id,
+        events[0]
+            .fields
+            .get("kind")
+            .map(String::as_str)
+            .unwrap_or("unknown"),
+        events[0].fields.get("session_id").map(String::as_str),
+    )
+    .await?;
+    assert_eq!(acked, 1);
+
+    let queued_count: usize = redis::cmd("XLEN")
+        .arg(&promotion_stream_key)
+        .query_async(&mut connection)
+        .await?;
+    assert_eq!(queued_count, 1, "promoted event should queue exactly once");
+
+    let ledger_payload: Option<String> = redis::cmd("HGET")
+        .arg(&promotion_ledger_key)
+        .arg("turn-telegram:test:promoted-1")
+        .query_async(&mut connection)
+        .await?;
+    let ledger_payload = ledger_payload.expect("expected promotion ledger payload");
+    assert!(
+        ledger_payload.contains("\"kind\":\"memory_promoted\""),
+        "ledger payload should include source event kind"
+    );
+
+    let _: () = redis::pipe()
+        .cmd("DEL")
+        .arg(&stream_key)
+        .ignore()
+        .cmd("DEL")
+        .arg(&metrics_global_key)
+        .ignore()
+        .cmd("DEL")
+        .arg(format!("{metrics_session_prefix}telegram:test:promoted"))
+        .ignore()
+        .cmd("DEL")
+        .arg(&promotion_stream_key)
+        .ignore()
+        .cmd("DEL")
+        .arg(&promotion_ledger_key)
         .ignore()
         .query_async(&mut connection)
         .await?;

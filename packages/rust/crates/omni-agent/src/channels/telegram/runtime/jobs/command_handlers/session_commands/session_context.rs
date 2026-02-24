@@ -179,17 +179,21 @@ pub(in crate::channels::telegram::runtime::jobs) async fn try_handle_session_con
     let metrics = agent.inspect_memory_recall_metrics().await;
     let response = match agent.inspect_memory_recall_snapshot(session_id).await {
         Some(snapshot) if format.is_json() => {
-            format_memory_recall_snapshot_json(snapshot, metrics, runtime_status)
+            format_memory_recall_snapshot_json(snapshot, metrics, runtime_status, session_id)
         }
         Some(snapshot) if channel.name() == "telegram" => {
-            format_memory_recall_snapshot_telegram(snapshot, metrics, runtime_status)
+            format_memory_recall_snapshot_telegram(snapshot, metrics, runtime_status, session_id)
         }
-        Some(snapshot) => format_memory_recall_snapshot(snapshot, metrics, runtime_status),
-        None if format.is_json() => format_memory_recall_not_found_json(metrics, runtime_status),
+        Some(snapshot) => {
+            format_memory_recall_snapshot(snapshot, metrics, runtime_status, session_id)
+        }
+        None if format.is_json() => {
+            format_memory_recall_not_found_json(metrics, runtime_status, session_id)
+        }
         None if channel.name() == "telegram" => {
-            format_memory_recall_not_found_telegram(runtime_status)
+            format_memory_recall_not_found_telegram(runtime_status, session_id)
         }
-        None => format_memory_recall_not_found(runtime_status),
+        None => format_memory_recall_not_found(runtime_status, session_id),
     };
     send_with_observability(
         channel,

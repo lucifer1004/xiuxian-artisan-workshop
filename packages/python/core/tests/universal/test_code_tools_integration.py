@@ -4,11 +4,33 @@ from pathlib import Path
 from omni.core.kernel.engine import get_kernel
 
 
+async def _ensure_code_skill_ready(kernel) -> None:
+    """Ensure code skill is loaded with code_search command for integration checks."""
+    skill = kernel.skill_context.get_skill("code")
+    commands = skill.list_commands() if skill is not None else []
+    if skill is not None and "code.code_search" in commands:
+        return
+
+    from omni.core.skills.universal import UniversalScriptSkill
+
+    code_skill_path = kernel.skills_dir / "code"
+    reloaded = UniversalScriptSkill(skill_name="code", skill_path=code_skill_path)
+    await reloaded.load(context={"allow_module_reuse": False})
+    kernel.skill_context.register_skill(reloaded)
+
+    reloaded_commands = reloaded.list_commands()
+    assert "code.code_search" in reloaded_commands, (
+        "code skill loaded without code_search. "
+        f"path={code_skill_path} commands={reloaded_commands}"
+    )
+
+
 @pytest.fixture
 async def kernel():
     """Fixture to provide an initialized kernel and ensure it's shut down."""
-    k = get_kernel()
+    k = get_kernel(reset=True)
     await k.initialize()
+    await _ensure_code_skill_ready(k)
     yield k
     await k.shutdown()
 

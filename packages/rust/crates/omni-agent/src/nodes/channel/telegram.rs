@@ -1,44 +1,28 @@
 use std::sync::Arc;
 
 use omni_agent::{
-    DEFAULT_REDIS_KEY_PREFIX, RuntimeSettings, TelegramControlCommandPolicy,
-    TelegramSlashCommandPolicy, WebhookDedupBackend, WebhookDedupConfig,
+    DEFAULT_REDIS_KEY_PREFIX, RuntimeSettings, TelegramCommandAdminRule,
+    TelegramControlCommandPolicy, TelegramSlashCommandPolicy, WebhookDedupBackend,
+    WebhookDedupConfig, build_telegram_acl_overrides,
     run_telegram_webhook_with_control_command_policy, run_telegram_with_control_command_policy,
 };
 
 use crate::agent_builder::build_agent;
 use crate::cli::{TelegramChannelMode, WebhookDedupBackendMode};
 use crate::resolve::{
-    resolve_channel_mode, resolve_dedup_backend, resolve_optional_string, resolve_positive_u64,
-    resolve_string,
+    resolve_channel_mode, resolve_dedup_backend, resolve_positive_u64, resolve_string,
 };
 
 use super::ChannelCommandRequest;
-use super::common::{
-    log_control_command_allow_override, log_slash_command_allow_override,
-    parse_comma_separated_entries, parse_optional_comma_separated_entries,
-    parse_semicolon_separated_entries,
-};
+use super::common::{log_control_command_allow_override, log_slash_command_allow_override};
 
+#[allow(clippy::similar_names)]
 pub(super) async fn run_telegram_channel_command(
     req: ChannelCommandRequest,
     runtime_settings: &RuntimeSettings,
 ) -> anyhow::Result<()> {
     let ChannelCommandRequest {
         bot_token,
-        allowed_users,
-        allowed_groups,
-        admin_users,
-        control_command_allow_from,
-        admin_command_rules,
-        slash_command_allow_from,
-        slash_session_status_allow_from,
-        slash_session_budget_allow_from,
-        slash_session_memory_allow_from,
-        slash_session_feedback_allow_from,
-        slash_job_allow_from,
-        slash_jobs_allow_from,
-        slash_bg_allow_from,
         mcp_config,
         mode,
         webhook_bind,
@@ -51,94 +35,21 @@ pub(super) async fn run_telegram_channel_command(
         ..
     } = req;
 
+    let acl_overrides = build_telegram_acl_overrides(runtime_settings)?;
     let channel_mode = resolve_channel_mode(mode, runtime_settings.telegram.mode.as_deref());
-    let allowed_users = resolve_string(
-        allowed_users,
-        "OMNI_AGENT_TELEGRAM_ALLOWED_USERS",
-        runtime_settings.telegram.allowed_users.as_deref(),
-        "",
-    );
-    let allowed_groups = resolve_string(
-        allowed_groups,
-        "OMNI_AGENT_TELEGRAM_ALLOWED_GROUPS",
-        runtime_settings.telegram.allowed_groups.as_deref(),
-        "",
-    );
-    let admin_users = resolve_string(
-        admin_users,
-        "OMNI_AGENT_TELEGRAM_ADMIN_USERS",
-        runtime_settings.telegram.admin_users.as_deref(),
-        "",
-    );
-    let control_command_allow_from = resolve_optional_string(
-        control_command_allow_from,
-        "OMNI_AGENT_TELEGRAM_CONTROL_COMMAND_ALLOW_FROM",
-        runtime_settings
-            .telegram
-            .control_command_allow_from
-            .as_deref(),
-    );
-    let admin_command_rules = resolve_string(
-        admin_command_rules,
-        "OMNI_AGENT_TELEGRAM_ADMIN_COMMAND_RULES",
-        runtime_settings.telegram.admin_command_rules.as_deref(),
-        "",
-    );
-    let slash_command_allow_from = resolve_optional_string(
-        slash_command_allow_from,
-        "OMNI_AGENT_TELEGRAM_SLASH_COMMAND_ALLOW_FROM",
-        runtime_settings
-            .telegram
-            .slash_command_allow_from
-            .as_deref(),
-    );
-    let slash_session_status_allow_from = resolve_optional_string(
-        slash_session_status_allow_from,
-        "OMNI_AGENT_TELEGRAM_SLASH_SESSION_STATUS_ALLOW_FROM",
-        runtime_settings
-            .telegram
-            .slash_session_status_allow_from
-            .as_deref(),
-    );
-    let slash_session_budget_allow_from = resolve_optional_string(
-        slash_session_budget_allow_from,
-        "OMNI_AGENT_TELEGRAM_SLASH_SESSION_BUDGET_ALLOW_FROM",
-        runtime_settings
-            .telegram
-            .slash_session_budget_allow_from
-            .as_deref(),
-    );
-    let slash_session_memory_allow_from = resolve_optional_string(
-        slash_session_memory_allow_from,
-        "OMNI_AGENT_TELEGRAM_SLASH_SESSION_MEMORY_ALLOW_FROM",
-        runtime_settings
-            .telegram
-            .slash_session_memory_allow_from
-            .as_deref(),
-    );
-    let slash_session_feedback_allow_from = resolve_optional_string(
-        slash_session_feedback_allow_from,
-        "OMNI_AGENT_TELEGRAM_SLASH_SESSION_FEEDBACK_ALLOW_FROM",
-        runtime_settings
-            .telegram
-            .slash_session_feedback_allow_from
-            .as_deref(),
-    );
-    let slash_job_allow_from = resolve_optional_string(
-        slash_job_allow_from,
-        "OMNI_AGENT_TELEGRAM_SLASH_JOB_ALLOW_FROM",
-        runtime_settings.telegram.slash_job_allow_from.as_deref(),
-    );
-    let slash_jobs_allow_from = resolve_optional_string(
-        slash_jobs_allow_from,
-        "OMNI_AGENT_TELEGRAM_SLASH_JOBS_ALLOW_FROM",
-        runtime_settings.telegram.slash_jobs_allow_from.as_deref(),
-    );
-    let slash_bg_allow_from = resolve_optional_string(
-        slash_bg_allow_from,
-        "OMNI_AGENT_TELEGRAM_SLASH_BG_ALLOW_FROM",
-        runtime_settings.telegram.slash_bg_allow_from.as_deref(),
-    );
+    let allowed_users = acl_overrides.allowed_users;
+    let allowed_groups = acl_overrides.allowed_groups;
+    let admin_users = acl_overrides.admin_users;
+    let control_command_allow_from = acl_overrides.control_command_allow_from;
+    let control_command_rules = acl_overrides.control_command_rules;
+    let slash_command_allow_from = acl_overrides.slash_command_allow_from;
+    let slash_session_status_allow_from = acl_overrides.slash_session_status_allow_from;
+    let slash_session_budget_allow_from = acl_overrides.slash_session_budget_allow_from;
+    let slash_session_memory_allow_from = acl_overrides.slash_session_memory_allow_from;
+    let slash_session_feedback_allow_from = acl_overrides.slash_session_feedback_allow_from;
+    let slash_job_allow_from = acl_overrides.slash_job_allow_from;
+    let slash_jobs_allow_from = acl_overrides.slash_jobs_allow_from;
+    let slash_bg_allow_from = acl_overrides.slash_bg_allow_from;
     let webhook_bind = resolve_string(
         webhook_bind,
         "OMNI_AGENT_TELEGRAM_WEBHOOK_BIND",
@@ -188,7 +99,7 @@ pub(super) async fn run_telegram_channel_command(
         allowed_groups,
         admin_users,
         control_command_allow_from,
-        admin_command_rules,
+        control_command_rules,
         slash_command_allow_from,
         slash_session_status_allow_from,
         slash_session_budget_allow_from,
@@ -224,21 +135,22 @@ fn resolve_webhook_secret_token(
     Ok(secret)
 }
 
+#[allow(clippy::similar_names, clippy::too_many_arguments)]
 async fn run_telegram_channel_mode(
     bot_token: String,
-    allowed_users: String,
-    allowed_groups: String,
-    admin_users: String,
-    control_command_allow_from: Option<String>,
-    admin_command_rules: String,
-    slash_command_allow_from: Option<String>,
-    slash_session_status_allow_from: Option<String>,
-    slash_session_budget_allow_from: Option<String>,
-    slash_session_memory_allow_from: Option<String>,
-    slash_session_feedback_allow_from: Option<String>,
-    slash_job_allow_from: Option<String>,
-    slash_jobs_allow_from: Option<String>,
-    slash_bg_allow_from: Option<String>,
+    allowed_users: Vec<String>,
+    allowed_groups: Vec<String>,
+    admin_users: Vec<String>,
+    control_command_allow_from: Option<Vec<String>>,
+    control_command_rules: Vec<TelegramCommandAdminRule>,
+    slash_command_allow_from: Option<Vec<String>>,
+    slash_session_status_allow_from: Option<Vec<String>>,
+    slash_session_budget_allow_from: Option<Vec<String>>,
+    slash_session_memory_allow_from: Option<Vec<String>>,
+    slash_session_feedback_allow_from: Option<Vec<String>>,
+    slash_job_allow_from: Option<Vec<String>>,
+    slash_jobs_allow_from: Option<Vec<String>>,
+    slash_bg_allow_from: Option<Vec<String>>,
     mcp_config_path: std::path::PathBuf,
     mode: TelegramChannelMode,
     webhook_bind: String,
@@ -248,44 +160,33 @@ async fn run_telegram_channel_mode(
     runtime_settings: &RuntimeSettings,
 ) -> anyhow::Result<()> {
     let agent = Arc::new(build_agent(&mcp_config_path, runtime_settings).await?);
-    let users = parse_comma_separated_entries(&allowed_users);
-    let groups = parse_comma_separated_entries(&allowed_groups);
-    let admins = parse_comma_separated_entries(&admin_users);
-    let control_command_allow_from_entries =
-        parse_optional_comma_separated_entries(control_command_allow_from);
+    let users = allowed_users;
+    let groups = allowed_groups;
+    let admins = admin_users;
+    let control_command_allow_from_entries = control_command_allow_from;
     log_control_command_allow_override("telegram", &control_command_allow_from_entries);
-    let slash_command_allow_from_entries =
-        parse_optional_comma_separated_entries(slash_command_allow_from);
+    let slash_command_allow_from_entries = slash_command_allow_from;
     log_slash_command_allow_override("telegram", &slash_command_allow_from_entries);
-    let admin_command_rule_specs = parse_semicolon_separated_entries(&admin_command_rules);
     let slash_command_policy = TelegramSlashCommandPolicy {
         slash_command_allow_from: slash_command_allow_from_entries,
-        session_status_allow_from: parse_optional_comma_separated_entries(
-            slash_session_status_allow_from,
-        ),
-        session_budget_allow_from: parse_optional_comma_separated_entries(
-            slash_session_budget_allow_from,
-        ),
-        session_memory_allow_from: parse_optional_comma_separated_entries(
-            slash_session_memory_allow_from,
-        ),
-        session_feedback_allow_from: parse_optional_comma_separated_entries(
-            slash_session_feedback_allow_from,
-        ),
-        job_status_allow_from: parse_optional_comma_separated_entries(slash_job_allow_from),
-        jobs_summary_allow_from: parse_optional_comma_separated_entries(slash_jobs_allow_from),
-        background_submit_allow_from: parse_optional_comma_separated_entries(slash_bg_allow_from),
+        session_status_allow_from: slash_session_status_allow_from,
+        session_budget_allow_from: slash_session_budget_allow_from,
+        session_memory_allow_from: slash_session_memory_allow_from,
+        session_feedback_allow_from: slash_session_feedback_allow_from,
+        job_status_allow_from: slash_job_allow_from,
+        jobs_summary_allow_from: slash_jobs_allow_from,
+        background_submit_allow_from: slash_bg_allow_from,
     };
     let control_command_policy = TelegramControlCommandPolicy::new(
         admins,
         control_command_allow_from_entries,
-        admin_command_rule_specs,
+        control_command_rules,
     )
     .with_slash_command_policy(slash_command_policy);
     if users.is_empty() && groups.is_empty() {
         tracing::warn!(
-            "Telegram allowed-users and allowed-groups are empty; all inbound will be rejected. \
-             Set --allowed-users '<user_id>' or --allowed-groups '<chat_id>' or '*' to allow."
+            "Telegram ACL allowlist is empty; all inbound will be rejected. \
+             Configure `telegram.acl.allow.users` or `telegram.acl.allow.groups` to allow traffic."
         );
     }
     match mode {
@@ -327,11 +228,11 @@ fn build_webhook_dedup_config(
         WebhookDedupBackendMode::Memory => WebhookDedupBackend::Memory,
         WebhookDedupBackendMode::Valkey => {
             let url = valkey_url
-                .or_else(|| std::env::var("VALKEY_URL").ok())
                 .or_else(|| runtime_settings.session.valkey_url.clone())
+                .or_else(|| std::env::var("VALKEY_URL").ok())
                 .ok_or_else(|| {
                     anyhow::anyhow!(
-                        "valkey dedup backend requires valkey url (explicit --valkey-url, VALKEY_URL, or session.valkey_url)"
+                        "valkey dedup backend requires valkey url (explicit --valkey-url, session.valkey_url, or VALKEY_URL)"
                     )
                 })?;
             if url.trim().is_empty() {

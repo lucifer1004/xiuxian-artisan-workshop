@@ -9,12 +9,13 @@ Orchestrates parallel search execution with:
 """
 
 from datetime import datetime
-from typing import List
+from typing import Any
 
-from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 
-from .state import SearchGraphState
 from .nodes import classifier, engines, formatter
+from .state import SearchGraphState
 
 
 def create_search_graph() -> StateGraph:
@@ -41,7 +42,7 @@ def create_search_graph() -> StateGraph:
     workflow.set_entry_point("classify")
 
     # Classify -> Route to appropriate engines (parallel)
-    def route_after_classify(state: SearchGraphState) -> List[str]:
+    def route_after_classify(state: SearchGraphState) -> list[str]:
         """Route to search engines based on classification."""
         strategies = state.get("strategies", [])
         branches = []
@@ -87,8 +88,9 @@ def create_initial_state(query: str, thread_id: str = "default") -> SearchGraphS
     }
 
 
-# Global compiled graph (lazily initialized)
-_search_graph = None
+# Global search graph state (lazily initialized).
+_search_graph: StateGraph | None = None
+_compiled_search_graph: Any | None = None
 
 
 def get_search_graph() -> StateGraph:
@@ -98,6 +100,15 @@ def get_search_graph() -> StateGraph:
         workflow = create_search_graph()
         _search_graph = workflow
     return _search_graph
+
+
+def get_compiled_search_graph() -> Any:
+    """Get or create the compiled search graph with in-memory checkpointing."""
+    global _compiled_search_graph
+    if _compiled_search_graph is None:
+        graph = get_search_graph()
+        _compiled_search_graph = graph.compile(checkpointer=MemorySaver())
+    return _compiled_search_graph
 
 
 async def execute_search(query: str, thread_id: str = "default") -> dict:
@@ -110,14 +121,7 @@ async def execute_search(query: str, thread_id: str = "default") -> dict:
     Returns:
         Final state with formatted output
     """
-    from langgraph.checkpoint.memory import MemorySaver
-
-    graph = get_search_graph()
-
-    # Compile with in-memory checkpointing
-    # Note: For production, use Rust LanceDB checkpointer
-    memory = MemorySaver()
-    compiled = graph.compile(checkpointer=memory)
+    compiled = get_compiled_search_graph()
 
     # Create initial state
     state = create_initial_state(query, thread_id)

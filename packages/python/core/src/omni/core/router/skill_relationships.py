@@ -227,7 +227,7 @@ def _enrich_with_link_graph(
     is unavailable, returns the original graph unchanged.
     """
     try:
-        from omni.rag.dual_core import enrich_skill_graph_from_link_graph
+        from omni.rag.fusion import enrich_skill_graph_from_link_graph
 
         return enrich_skill_graph_from_link_graph(graph)
     except Exception as e:

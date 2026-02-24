@@ -14,6 +14,14 @@ class _Logger:
         self.messages.append(rendered)
 
 
+class _StructuredLogger:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict[str, object]]] = []
+
+    def info(self, event: str, *args: object, **kwargs: object) -> None:
+        self.events.append((event, kwargs))
+
+
 def test_observability_tracks_in_flight_and_latency_percentiles() -> None:
     logger = _Logger()
     metrics = MCPRequestObservability(
@@ -78,3 +86,21 @@ def test_observability_emits_periodic_pressure_log() -> None:
     assert logger.messages
     assert "request pressure" in logger.messages[0]
     assert "http:/embed/batch" in logger.messages[0]
+
+
+def test_observability_emits_structured_pressure_log_when_supported() -> None:
+    logger = _StructuredLogger()
+    metrics = MCPRequestObservability(
+        logger=logger,
+        log_interval_secs=1.0,
+        latency_window_size=16,
+    )
+
+    started = metrics.start("http:/embed")
+    metrics.finish("http:/embed", started, ok=True, status_code=200, elapsed_ms=10.0)
+
+    assert logger.events
+    event_name, payload = logger.events[0]
+    assert event_name == "mcp.request.pressure"
+    assert payload["total_requests"] == 1
+    assert isinstance(payload["top_endpoints"], list)

@@ -14,6 +14,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import socket
 import subprocess
 import sys
@@ -22,6 +23,15 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+
+from log_io import (
+    init_log_cursor,
+    iter_log_lines,
+    read_log_tail_text,
+    read_new_log_lines_with_cursor,
+)
+
+LOG_TAIL_SCAN_BYTES = 512 * 1024
 
 
 @dataclass(frozen=True)
@@ -92,6 +102,21 @@ class GateConfig:
     max_mcp_call_waiting_events: int
     max_mcp_connect_waiting_events: int
     max_mcp_waiting_events_total: int
+    max_memory_stream_read_failed_events: int
+    max_embedding_timeout_fallback_turns: int
+    max_embedding_cooldown_fallback_turns: int
+    max_embedding_unavailable_fallback_turns: int
+    max_embedding_fallback_turns_total: int
+
+
+class GateStepError(RuntimeError):
+    """Raised when a named gate subprocess command fails."""
+
+    def __init__(self, *, title: str, cmd: list[str], returncode: int) -> None:
+        self.title = title
+        self.cmd = list(cmd)
+        self.returncode = int(returncode)
+        super().__init__(f"{title} failed (exit={self.returncode})")
 
 
 def default_valkey_prefix(profile: str) -> str:
@@ -410,6 +435,11 @@ def parse_args(project_root: Path) -> GateConfig:
     parser.add_argument("--max-mcp-call-waiting-events", type=int, default=0)
     parser.add_argument("--max-mcp-connect-waiting-events", type=int, default=0)
     parser.add_argument("--max-mcp-waiting-events-total", type=int, default=0)
+    parser.add_argument("--max-memory-stream-read-failed-events", type=int, default=0)
+    parser.add_argument("--max-embedding-timeout-fallback-turns", type=int, default=0)
+    parser.add_argument("--max-embedding-cooldown-fallback-turns", type=int, default=0)
+    parser.add_argument("--max-embedding-unavailable-fallback-turns", type=int, default=0)
+    parser.add_argument("--max-embedding-fallback-turns-total", type=int, default=0)
     args = parser.parse_args()
 
     if args.valkey_port <= 0 or args.valkey_port > 65535:
@@ -444,6 +474,16 @@ def parse_args(project_root: Path) -> GateConfig:
         raise ValueError("--max-mcp-connect-waiting-events must be >= 0.")
     if args.max_mcp_waiting_events_total < 0:
         raise ValueError("--max-mcp-waiting-events-total must be >= 0.")
+    if args.max_memory_stream_read_failed_events < 0:
+        raise ValueError("--max-memory-stream-read-failed-events must be >= 0.")
+    if args.max_embedding_timeout_fallback_turns < 0:
+        raise ValueError("--max-embedding-timeout-fallback-turns must be >= 0.")
+    if args.max_embedding_cooldown_fallback_turns < 0:
+        raise ValueError("--max-embedding-cooldown-fallback-turns must be >= 0.")
+    if args.max_embedding_unavailable_fallback_turns < 0:
+        raise ValueError("--max-embedding-unavailable-fallback-turns must be >= 0.")
+    if args.max_embedding_fallback_turns_total < 0:
+        raise ValueError("--max-embedding-fallback-turns-total must be >= 0.")
     if args.trace_min_quality_score <= 0:
         raise ValueError("--trace-min-quality-score must be positive.")
     if args.trace_max_events <= 0:
@@ -620,6 +660,11 @@ def parse_args(project_root: Path) -> GateConfig:
         max_mcp_call_waiting_events=int(args.max_mcp_call_waiting_events),
         max_mcp_connect_waiting_events=int(args.max_mcp_connect_waiting_events),
         max_mcp_waiting_events_total=int(args.max_mcp_waiting_events_total),
+        max_memory_stream_read_failed_events=int(args.max_memory_stream_read_failed_events),
+        max_embedding_timeout_fallback_turns=int(args.max_embedding_timeout_fallback_turns),
+        max_embedding_cooldown_fallback_turns=int(args.max_embedding_cooldown_fallback_turns),
+        max_embedding_unavailable_fallback_turns=int(args.max_embedding_unavailable_fallback_turns),
+        max_embedding_fallback_turns_total=int(args.max_embedding_fallback_turns_total),
     )
 
 
@@ -633,13 +678,368 @@ def run_command(
     print()
     print(f">>> {title}", flush=True)
     print("+ " + " ".join(cmd), flush=True)
-    subprocess.run(cmd, check=True, cwd=str(cwd), env=env)
+    try:
+        subprocess.run(cmd, check=True, cwd=str(cwd), env=env)
+    except subprocess.CalledProcessError as exc:
+        raise GateStepError(title=title, cmd=cmd, returncode=int(exc.returncode)) from exc
+
+
+def shell_quote_command(cmd: list[str]) -> str:
+    return " ".join(shlex.quote(part) for part in cmd)
+
+
+def classify_gate_failure(error: Exception) -> tuple[str, str]:
+    if isinstance(error, GateStepError):
+        title = error.title.lower()
+        if "start omni-agent webhook runtime" in title:
+            return ("runtime_startup_process", "runtime startup command failed")
+        if "memory suite" in title:
+            return ("memory_suite_subprocess", "memory suite subprocess failed")
+        if "session matrix" in title:
+            return ("session_matrix_subprocess", "session matrix subprocess failed")
+        if "cross-group mixed-concurrency" in title:
+            return ("cross_group_subprocess", "cross-group mixed-concurrency subprocess failed")
+        if "memory a/b benchmark" in title:
+            return ("benchmark_subprocess", "memory benchmark subprocess failed")
+        if "reflection quality gate" in title:
+            return ("reflection_gate_subprocess", "reflection quality cargo gate failed")
+        if "discover cache latency gate" in title:
+            return ("discover_cache_gate_subprocess", "discover cache cargo gate failed")
+        if "trace reconstruction gate" in title:
+            return ("trace_reconstruction_subprocess", "trace reconstruction subprocess failed")
+
+    message = str(error).lower()
+    if (
+        "timed out waiting for log pattern" in message
+        and "telegram webhook listening on" in message
+    ):
+        return ("runtime_startup_timeout", "runtime did not become ready before timeout")
+    if "runtime process exited before readiness check passed" in message:
+        return ("runtime_startup_process", "runtime exited before readiness check passed")
+    if "evolution quality gates failed" in message:
+        return ("evolution_quality", "evolution quality thresholds failed")
+    if "slow-response resilience gate failed" in message:
+        return ("slow_response_quality", "slow-response resilience thresholds failed")
+    if "session matrix report indicates overall failure" in message:
+        return ("session_matrix_quality", "session matrix report indicates failure")
+    if "session matrix" in message and "failed" in message:
+        return ("session_matrix_quality", "session matrix quality gate failed")
+    if "cross-group complex report indicates overall failure" in message:
+        return ("cross_group_quality", "cross-group report indicates failure")
+    if "cross-group complex scenario failed" in message:
+        return ("cross_group_quality", "cross-group scenario quality gate failed")
+    if "benchmark quality gates failed" in message:
+        return ("benchmark_quality", "benchmark quality thresholds failed")
+    if "trace reconstruction quality gates failed" in message:
+        return ("trace_reconstruction_quality", "trace reconstruction quality gate failed")
+    if "mcp waiting warning budget exceeded" in message:
+        return ("mcp_waiting_budget", "mcp waiting warning budget exceeded")
+    if "memory stream warning budget exceeded" in message:
+        return ("memory_stream_budget", "memory stream warning budget exceeded")
+    return ("unknown", "unclassified gate failure")
+
+
+def _artifact_rows(cfg: GateConfig) -> list[tuple[str, Path]]:
+    return [
+        ("runtime_log", cfg.runtime_log_file),
+        ("mock_log", cfg.mock_log_file),
+        ("evolution_report_json", cfg.evolution_report_json),
+        ("benchmark_report_json", cfg.benchmark_report_json),
+        ("session_matrix_report_json", cfg.session_matrix_report_json),
+        ("session_matrix_report_markdown", cfg.session_matrix_report_markdown),
+        ("trace_report_json", cfg.trace_report_json),
+        ("trace_report_markdown", cfg.trace_report_markdown),
+        ("cross_group_report_json", cfg.cross_group_report_json),
+        ("cross_group_report_markdown", cfg.cross_group_report_markdown),
+    ]
+
+
+def _build_gate_failure_triage_payload(
+    cfg: GateConfig,
+    *,
+    error: Exception,
+    category: str,
+    summary: str,
+    repro_commands: list[str],
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "generated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "profile": cfg.profile,
+        "category": category,
+        "summary": summary,
+        "error": str(error),
+        "artifacts": [
+            {"name": name, "path": str(path), "exists": bool(path.exists())}
+            for name, path in _artifact_rows(cfg)
+        ],
+        "repro_commands": list(repro_commands),
+    }
+    runtime_tail = read_tail(cfg.runtime_log_file, max_lines=80).strip()
+    if runtime_tail:
+        payload["runtime_log_tail"] = runtime_tail
+    if isinstance(error, GateStepError):
+        payload["failed_stage"] = error.title
+        payload["failed_exit_code"] = error.returncode
+        payload["failed_command"] = shell_quote_command(error.cmd)
+    return payload
+
+
+def _default_gate_failure_report_base_path(
+    cfg: GateConfig, *, stamp_ms: int | None = None
+) -> tuple[Path, int]:
+    final_stamp = int(time.time() * 1000) if stamp_ms is None else int(stamp_ms)
+    base = (
+        cfg.project_root
+        / ".run"
+        / "reports"
+        / f"omni-agent-memory-ci-failure-{cfg.profile}-{final_stamp}"
+    )
+    return base, final_stamp
+
+
+def build_gate_failure_repro_commands(
+    cfg: GateConfig, *, category: str, error: Exception
+) -> list[str]:
+    commands: list[str] = [
+        f"tail -n 200 {shlex.quote(str(cfg.runtime_log_file))}",
+        f"tail -n 120 {shlex.quote(str(cfg.mock_log_file))}",
+    ]
+
+    if isinstance(error, GateStepError):
+        commands.append(shell_quote_command(error.cmd))
+
+    gate_script = cfg.script_dir / "test_omni_agent_memory_ci_gate.py"
+    suite_script = cfg.script_dir / "test_omni_agent_memory_suite.py"
+    trace_script = cfg.script_dir / "reconstruct_omni_agent_trace.py"
+    agent_bin = cfg.agent_bin or (cfg.project_root / "target" / "debug" / "omni-agent")
+
+    if category in {"runtime_startup_timeout", "runtime_startup_process"}:
+        commands.append(
+            shell_quote_command(
+                [
+                    "python3",
+                    str(gate_script),
+                    "--profile",
+                    cfg.profile,
+                    "--agent-bin",
+                    str(agent_bin),
+                    "--runtime-startup-timeout-secs",
+                    "180",
+                ]
+            )
+        )
+
+    if category == "memory_suite_subprocess":
+        suite_cmd = [
+            "python3",
+            str(suite_script),
+            "--suite",
+            "full",
+            "--max-wait",
+            str(cfg.quick_max_wait if cfg.profile == "quick" else cfg.full_max_wait),
+            "--max-idle-secs",
+            str(cfg.quick_max_idle if cfg.profile == "quick" else max(cfg.full_max_idle, 80)),
+            "--username",
+            cfg.username,
+        ]
+        if cfg.profile == "quick" or cfg.skip_evolution:
+            suite_cmd.append("--skip-evolution")
+        if cfg.skip_rust_regressions:
+            suite_cmd.append("--skip-rust")
+        commands.append(shell_quote_command(suite_cmd))
+
+    if category == "reflection_gate_subprocess":
+        commands.append(
+            "cargo test -p omni-agent --lib reflective_runtime_long_horizon_quality_thresholds"
+        )
+    if category == "discover_cache_gate_subprocess":
+        commands.append(
+            "cargo test -p omni-agent --test mcp_discover_cache "
+            "discover_calls_use_valkey_read_through_cache_when_configured -- --ignored --exact"
+        )
+    if category in {"trace_reconstruction_subprocess", "trace_reconstruction_quality"}:
+        required_stages = (
+            ("route", "injection", "injection_mode", "reflection", "memory")
+            if cfg.profile == "nightly"
+            else ("memory",)
+        )
+        commands.append(
+            shell_quote_command(
+                [
+                    "python3",
+                    str(trace_script),
+                    str(cfg.runtime_log_file),
+                    "--session-id",
+                    f"telegram:{cfg.chat_id}",
+                    "--max-events",
+                    str(cfg.trace_max_events),
+                    *[item for stage in required_stages for item in ("--required-stage", stage)],
+                    "--json-out",
+                    str(cfg.trace_report_json),
+                    "--markdown-out",
+                    str(cfg.trace_report_markdown),
+                ]
+            )
+        )
+    if category in {"mcp_waiting_budget", "memory_suite_subprocess"}:
+        commands.append(
+            f'rg -n "mcp\\.pool\\.(call|connect)\\.waiting" {shlex.quote(str(cfg.runtime_log_file))}'
+        )
+    if category in {"memory_stream_budget", "memory_suite_subprocess"}:
+        commands.append(
+            'rg -n "agent.memory.stream_consumer.read_failed" '
+            + shlex.quote(str(cfg.runtime_log_file))
+        )
+    if category in {"evolution_quality", "slow_response_quality"}:
+        commands.append(f"python3 -m json.tool {shlex.quote(str(cfg.evolution_report_json))}")
+    if category == "benchmark_quality":
+        commands.append(f"python3 -m json.tool {shlex.quote(str(cfg.benchmark_report_json))}")
+    if category == "session_matrix_quality":
+        commands.append(f"python3 -m json.tool {shlex.quote(str(cfg.session_matrix_report_json))}")
+    if category == "cross_group_quality":
+        commands.append(f"python3 -m json.tool {shlex.quote(str(cfg.cross_group_report_json))}")
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for command in commands:
+        if command in seen:
+            continue
+        seen.add(command)
+        deduped.append(command)
+    return deduped
+
+
+def write_gate_failure_triage_report(
+    cfg: GateConfig,
+    *,
+    error: Exception,
+    category: str,
+    summary: str,
+    repro_commands: list[str],
+    report_path: Path | None = None,
+) -> Path:
+    if report_path is None:
+        base, _ = _default_gate_failure_report_base_path(cfg)
+        report_path = base.with_suffix(".md")
+    ensure_parent_dirs(report_path)
+    payload = _build_gate_failure_triage_payload(
+        cfg,
+        error=error,
+        category=category,
+        summary=summary,
+        repro_commands=repro_commands,
+    )
+
+    lines: list[str] = [
+        "# Omni Agent Memory CI Failure Triage",
+        "",
+        f"- generated_at_utc: `{payload['generated_at_utc']}`",
+        f"- profile: `{cfg.profile}`",
+        f"- category: `{category}`",
+        f"- summary: {summary}",
+        f"- error: `{error}`",
+    ]
+    if isinstance(error, GateStepError):
+        lines.extend(
+            [
+                f"- failed_stage: `{error.title}`",
+                f"- failed_exit_code: `{error.returncode}`",
+                f"- failed_command: `{shell_quote_command(error.cmd)}`",
+            ]
+        )
+
+    lines.extend(["", "## Artifacts", ""])
+    artifacts = payload.get("artifacts", [])
+    for item in artifacts if isinstance(artifacts, list) else []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "unknown"))
+        exists = "yes" if bool(item.get("exists", False)) else "no"
+        path = str(item.get("path", ""))
+        lines.append(f"- `{name}` exists={exists} path=`{path}`")
+
+    lines.extend(["", "## Repro Commands", ""])
+    for command in repro_commands:
+        lines.append(f"1. `{command}`")
+
+    runtime_tail_obj = payload.get("runtime_log_tail")
+    runtime_tail = str(runtime_tail_obj).strip() if runtime_tail_obj is not None else ""
+    if runtime_tail:
+        lines.extend(["", "## Runtime Log Tail", "", "```text", runtime_tail, "```"])
+
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return report_path
+
+
+def write_gate_failure_triage_json_report(
+    cfg: GateConfig,
+    *,
+    error: Exception,
+    category: str,
+    summary: str,
+    repro_commands: list[str],
+    report_path: Path | None = None,
+) -> Path:
+    if report_path is None:
+        base, _ = _default_gate_failure_report_base_path(cfg)
+        report_path = base.with_suffix(".json")
+    ensure_parent_dirs(report_path)
+    payload = _build_gate_failure_triage_payload(
+        cfg,
+        error=error,
+        category=category,
+        summary=summary,
+        repro_commands=repro_commands,
+    )
+    report_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return report_path
+
+
+def print_gate_failure_triage(cfg: GateConfig, error: Exception) -> Path:
+    category, summary = classify_gate_failure(error)
+    repro_commands = build_gate_failure_repro_commands(cfg, category=category, error=error)
+    base, _ = _default_gate_failure_report_base_path(cfg)
+    markdown_path = base.with_suffix(".md")
+    json_path = base.with_suffix(".json")
+    report_path = write_gate_failure_triage_report(
+        cfg,
+        error=error,
+        category=category,
+        summary=summary,
+        repro_commands=repro_commands,
+        report_path=markdown_path,
+    )
+    json_report_path = write_gate_failure_triage_json_report(
+        cfg,
+        error=error,
+        category=category,
+        summary=summary,
+        repro_commands=repro_commands,
+        report_path=json_path,
+    )
+    print("", file=sys.stderr)
+    print("Memory CI gate failure triage:", file=sys.stderr)
+    print(f"  profile={cfg.profile}", file=sys.stderr)
+    print(f"  category={category}", file=sys.stderr)
+    print(f"  summary={summary}", file=sys.stderr)
+    print(f"  report={report_path}", file=sys.stderr)
+    print(f"  report_json={json_report_path}", file=sys.stderr)
+    print("  repro_commands:", file=sys.stderr)
+    for command in repro_commands[:8]:
+        print(f"    - {command}", file=sys.stderr)
+    return report_path
+
+
+def _read_tail_text(path: Path, tail_bytes: int = LOG_TAIL_SCAN_BYTES) -> str:
+    return read_log_tail_text(path, tail_bytes=tail_bytes)
 
 
 def read_tail(path: Path, max_lines: int = 80) -> str:
     if not path.exists():
         return ""
-    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    lines = _read_tail_text(path).splitlines()
     if len(lines) <= max_lines:
         return "\n".join(lines)
     return "\n".join(lines[-max_lines:])
@@ -648,9 +1048,8 @@ def read_tail(path: Path, max_lines: int = 80) -> str:
 def count_log_event(path: Path, event_name: str) -> int:
     if not path.exists():
         return 0
-    content = path.read_text(encoding="utf-8", errors="ignore")
     pattern = re.compile(rf'event="?{re.escape(event_name)}"?')
-    return len(pattern.findall(content))
+    return sum(1 for line in iter_log_lines(path) if pattern.search(line))
 
 
 def wait_for_log_regex(
@@ -662,6 +1061,10 @@ def wait_for_log_regex(
 ) -> None:
     regex = re.compile(pattern)
     deadline = time.monotonic() + timeout_secs
+    # Preserve historical behavior: allow immediate success on existing tail.
+    if path.exists() and regex.search(_read_tail_text(path)):
+        return
+    cursor = init_log_cursor(path, kind="offset")
     while time.monotonic() < deadline:
         if process is not None and process.poll() is not None:
             tail = read_tail(path)
@@ -669,8 +1072,8 @@ def wait_for_log_regex(
                 f"runtime process exited before readiness check passed.\ntail:\n{tail}"
             )
         if path.exists():
-            content = path.read_text(encoding="utf-8", errors="ignore")
-            if regex.search(content):
+            cursor, lines = read_new_log_lines_with_cursor(path, cursor)
+            if any(regex.search(line) for line in lines):
                 return
         time.sleep(1.0)
     tail = read_tail(path)
@@ -708,6 +1111,41 @@ def terminate_process(process: subprocess.Popen[str] | None, *, name: str) -> No
 def ensure_parent_dirs(*paths: Path) -> None:
     for path in paths:
         path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _yaml_inline_list(values: list[str]) -> str:
+    return "[" + ", ".join(json.dumps(value) for value in values) + "]"
+
+
+def write_ci_channel_acl_settings(
+    cfg: GateConfig,
+    *,
+    config_home: Path,
+) -> Path:
+    settings_path = config_home / "omni-dev-fusion" / "settings.yaml"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    users = [str(cfg.user_id), str(cfg.user_b), str(cfg.user_c)]
+    user_list = _yaml_inline_list(users)
+    settings_payload = (
+        "telegram:\n"
+        "  acl:\n"
+        "    allow:\n"
+        f"      users: {user_list}\n"
+        '      groups: ["*"]\n'
+        "    admin:\n"
+        f"      users: {user_list}\n"
+        "    control:\n"
+        "      allow_from:\n"
+        f"        users: {user_list}\n"
+        "    slash:\n"
+        "      global:\n"
+        f"        users: {user_list}\n"
+        "embedding:\n"
+        "  batch_max_size: 128\n"
+        "  batch_max_concurrency: 1\n"
+    )
+    settings_path.write_text(settings_payload, encoding="utf-8")
+    return settings_path
 
 
 def start_background_process(
@@ -787,6 +1225,7 @@ def assert_benchmark_quality(cfg: GateConfig) -> None:
         raise RuntimeError("benchmark report missing mode_summaries")
 
     failures: list[str] = []
+    mode_fallback_observations: list[str] = []
     for mode in ("baseline", "adaptive"):
         summary = mode_summaries.get(mode)
         if not isinstance(summary, dict):
@@ -794,15 +1233,48 @@ def assert_benchmark_quality(cfg: GateConfig) -> None:
             continue
         query_turns = int(summary.get("query_turns", 0))
         mcp_error_turns = int(summary.get("mcp_error_turns", 0))
+        timeout_fallback_turns = int(summary.get("embedding_timeout_fallback_turns", 0))
+        cooldown_fallback_turns = int(summary.get("embedding_cooldown_fallback_turns", 0))
+        unavailable_fallback_turns = int(summary.get("embedding_unavailable_fallback_turns", 0))
+        fallback_turns_total = int(summary.get("embedding_fallback_turns_total", 0))
         if query_turns <= 0:
             failures.append(f"{mode}.query_turns={query_turns} <= 0")
         if mcp_error_turns > 0:
             failures.append(f"{mode}.mcp_error_turns={mcp_error_turns} > 0")
+        if timeout_fallback_turns > cfg.max_embedding_timeout_fallback_turns:
+            failures.append(
+                f"{mode}.embedding_timeout_fallback_turns={timeout_fallback_turns} > "
+                f"{cfg.max_embedding_timeout_fallback_turns}"
+            )
+        if cooldown_fallback_turns > cfg.max_embedding_cooldown_fallback_turns:
+            failures.append(
+                f"{mode}.embedding_cooldown_fallback_turns={cooldown_fallback_turns} > "
+                f"{cfg.max_embedding_cooldown_fallback_turns}"
+            )
+        if unavailable_fallback_turns > cfg.max_embedding_unavailable_fallback_turns:
+            failures.append(
+                f"{mode}.embedding_unavailable_fallback_turns={unavailable_fallback_turns} > "
+                f"{cfg.max_embedding_unavailable_fallback_turns}"
+            )
+        if fallback_turns_total > cfg.max_embedding_fallback_turns_total:
+            failures.append(
+                f"{mode}.embedding_fallback_turns_total={fallback_turns_total} > "
+                f"{cfg.max_embedding_fallback_turns_total}"
+            )
+        mode_fallback_observations.append(
+            f"{mode}:timeout={timeout_fallback_turns},cooldown={cooldown_fallback_turns},"
+            f"unavailable={unavailable_fallback_turns},total={fallback_turns_total}"
+        )
 
     if failures:
         raise RuntimeError("benchmark quality gates failed: " + "; ".join(failures))
 
-    print("Benchmark quality gates passed (query_turns > 0 and mcp_error_turns == 0).", flush=True)
+    print(
+        "Benchmark quality gates passed "
+        "(query_turns > 0, mcp_error_turns == 0, embedding fallback budgets respected): "
+        + "; ".join(mode_fallback_observations),
+        flush=True,
+    )
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -1038,7 +1510,7 @@ def assert_trace_reconstruction_quality(cfg: GateConfig) -> None:
     stage_flags_obj = summary.get("stage_flags")
     stage_flags = stage_flags_obj if isinstance(stage_flags_obj, dict) else {}
     required_flags = (
-        ("has_route", "has_injection", "has_reflection", "has_memory")
+        ("has_route", "has_injection", "has_injection_mode", "has_reflection", "has_memory")
         if cfg.profile == "nightly"
         else ("has_memory",)
     )
@@ -1104,6 +1576,25 @@ def assert_mcp_waiting_warning_budget(cfg: GateConfig) -> None:
     )
 
 
+def assert_memory_stream_warning_budget(cfg: GateConfig) -> None:
+    if not cfg.runtime_log_file.exists():
+        raise RuntimeError(f"missing runtime log file: {cfg.runtime_log_file}")
+
+    read_failed = count_log_event(cfg.runtime_log_file, "agent.memory.stream_consumer.read_failed")
+    if read_failed > cfg.max_memory_stream_read_failed_events:
+        raise RuntimeError(
+            "memory stream warning budget exceeded: "
+            f"agent.memory.stream_consumer.read_failed={read_failed} > "
+            f"{cfg.max_memory_stream_read_failed_events}"
+        )
+
+    print(
+        "Memory stream warning budget passed: "
+        f"agent.memory.stream_consumer.read_failed={read_failed}",
+        flush=True,
+    )
+
+
 def run_reflection_quality_gate(cfg: GateConfig, *, cwd: Path, env: dict[str, str]) -> None:
     if cfg.skip_reflection_quality_gate:
         print("Skipping reflection quality gate (--skip-reflection-quality-gate).", flush=True)
@@ -1162,7 +1653,9 @@ def run_trace_reconstruction_gate(cfg: GateConfig, *, cwd: Path, env: dict[str, 
         raise FileNotFoundError(f"missing trace reconstruction script: {script}")
 
     required_stages = (
-        ("route", "injection", "reflection", "memory") if cfg.profile == "nightly" else ("memory",)
+        ("route", "injection", "injection_mode", "reflection", "memory")
+        if cfg.profile == "nightly"
+        else ("memory",)
     )
 
     run_command(
@@ -1303,6 +1796,9 @@ def run_gate(cfg: GateConfig) -> None:
     env["OMNI_TEST_USERNAME"] = cfg.username
     env["RUST_LOG"] = env.get("RUST_LOG", "omni_agent=debug")
     env["RUST_BACKTRACE"] = env.get("RUST_BACKTRACE", "1")
+    config_home = cfg.project_root / ".run" / "config" / "memory-ci-gate" / default_run_suffix()
+    settings_path = write_ci_channel_acl_settings(cfg, config_home=config_home)
+    env["PRJ_CONFIG_HOME"] = str(config_home)
 
     mock_process: subprocess.Popen[str] | None = None
     mock_handle: object | None = None
@@ -1316,6 +1812,7 @@ def run_gate(cfg: GateConfig) -> None:
             f"url={cfg.valkey_url} prefix={cfg.valkey_prefix} preexisting={valkey_preexisting}",
             flush=True,
         )
+        print(f"CI gate ACL settings: {settings_path}", flush=True)
         run_command(
             ["bash", str(valkey_start), str(cfg.valkey_port)],
             title="Start Valkey",
@@ -1351,10 +1848,6 @@ def run_gate(cfg: GateConfig) -> None:
                 f"127.0.0.1:{cfg.webhook_port}",
                 "--webhook-secret-token",
                 cfg.webhook_secret,
-                "--allowed-users",
-                f"{cfg.user_id},{cfg.user_b},{cfg.user_c}",
-                "--allowed-groups",
-                "*",
                 "--verbose",
             ]
         else:
@@ -1373,10 +1866,6 @@ def run_gate(cfg: GateConfig) -> None:
                 f"127.0.0.1:{cfg.webhook_port}",
                 "--webhook-secret-token",
                 cfg.webhook_secret,
-                "--allowed-users",
-                f"{cfg.user_id},{cfg.user_b},{cfg.user_c}",
-                "--allowed-groups",
-                "*",
                 "--verbose",
             ]
 
@@ -1420,6 +1909,7 @@ def run_gate(cfg: GateConfig) -> None:
             run_discover_cache_gate(cfg, cwd=cfg.project_root, env=env)
             run_trace_reconstruction_gate(cfg, cwd=cfg.project_root, env=env)
             assert_mcp_waiting_warning_budget(cfg)
+            assert_memory_stream_warning_budget(cfg)
             return
 
         # Complex evolution DAG steps can produce long, but still healthy, think/IO gaps.
@@ -1527,6 +2017,7 @@ def run_gate(cfg: GateConfig) -> None:
         run_discover_cache_gate(cfg, cwd=cfg.project_root, env=env)
         run_trace_reconstruction_gate(cfg, cwd=cfg.project_root, env=env)
         assert_mcp_waiting_warning_budget(cfg)
+        assert_memory_stream_warning_budget(cfg)
     finally:
         terminate_process(agent_process, name="omni-agent runtime")
         terminate_process(mock_process, name="mock Telegram API")
@@ -1550,6 +2041,7 @@ def run_gate(cfg: GateConfig) -> None:
 
 def main() -> int:
     project_root = Path(__file__).resolve().parents[2]
+    cfg: GateConfig | None = None
     try:
         cfg = parse_args(project_root)
         run_gate(cfg)
@@ -1557,6 +2049,11 @@ def main() -> int:
         print(f"Memory CI gate passed (profile={cfg.profile}).", flush=True)
         return 0
     except (ValueError, RuntimeError, FileNotFoundError, subprocess.CalledProcessError) as error:
+        if cfg is not None:
+            try:
+                print_gate_failure_triage(cfg, error)
+            except Exception as triage_error:  # pragma: no cover - best-effort fallback
+                print(f"Failed to generate triage report: {triage_error}", file=sys.stderr)
         print(f"Error: {error}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

@@ -1,6 +1,7 @@
 use super::shared::{
     SessionPartitionModeToken, is_reset_context_command as is_reset_context_command_shared,
-    normalize_command_input, parse_resume_context_command as parse_resume_shared,
+    is_stop_command as is_stop_command_shared, normalize_command_input,
+    parse_resume_context_command as parse_resume_shared,
     parse_session_context_budget_command as parse_session_budget_shared,
     parse_session_context_memory_command as parse_session_memory_shared,
     parse_session_context_status_command as parse_session_status_shared,
@@ -199,9 +200,7 @@ pub fn parse_session_admin_command(input: &str) -> Option<SessionAdminCommand> {
     {
         return None;
     }
-    let Some(sub) = parts.next() else {
-        return None;
-    };
+    let sub = parts.next()?;
     if !sub.eq_ignore_ascii_case("admin") {
         return None;
     }
@@ -265,6 +264,11 @@ pub fn parse_session_admin_command(input: &str) -> Option<SessionAdminCommand> {
 /// Parse `/reset`, `/clear`, `reset`, or `clear`.
 pub fn is_reset_context_command(input: &str) -> bool {
     is_reset_context_command_shared(input)
+}
+
+/// Parse `/stop`, `/cancel`, `stop`, `cancel`, or `interrupt`.
+pub fn is_stop_command(input: &str) -> bool {
+    is_stop_command_shared(input)
 }
 
 /// Parse `/resume` or `resume`, with optional `/resume status`.

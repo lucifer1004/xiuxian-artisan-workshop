@@ -86,7 +86,7 @@ pub(in crate::channels::telegram::runtime::jobs) async fn try_handle_session_par
         session_key = %msg.session_key,
         recipient = %msg.recipient,
         previous_partition_mode = %current_mode,
-        requested_partition_mode = command.mode.map(SessionPartitionMode::as_str).unwrap_or(""),
+        requested_partition_mode = command.mode.map_or("", SessionPartitionMode::as_str),
         "telegram session partition command processed"
     );
     send_with_observability(

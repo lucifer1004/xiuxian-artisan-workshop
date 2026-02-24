@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    AUTO_COMPACT_CHECK_INTERVAL, AUTO_COMPACT_FRAGMENT_THRESHOLD, AUTO_COMPACT_MAX_ROWS_PER_GROUP,
+    AUTO_COMPACT_TARGET_ROWS_PER_FRAGMENT, ArrowError, CheckpointStore, CompactionOptions, Dataset,
+    RecordBatchIterator, Result, VectorStoreError, WriteParams, compact_files,
+};
 
 impl CheckpointStore {
     /// Check if a dataset is corrupted (missing files, etc.).
@@ -255,7 +259,7 @@ impl CheckpointStore {
         if fragment_count <= AUTO_COMPACT_FRAGMENT_THRESHOLD {
             return;
         }
-        if !force && fragment_count % AUTO_COMPACT_CHECK_INTERVAL != 0 {
+        if !force && !fragment_count.is_multiple_of(AUTO_COMPACT_CHECK_INTERVAL) {
             return;
         }
 

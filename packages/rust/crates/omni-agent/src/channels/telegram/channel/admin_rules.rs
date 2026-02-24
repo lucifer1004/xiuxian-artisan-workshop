@@ -1,14 +1,24 @@
 use crate::channels::control_command_rule_specs::{
-    CommandSelectorAuthRule, parse_control_command_rule_specs,
+    CommandSelectorAuthRule, parse_control_command_rule,
 };
 use anyhow::Result;
 
 use super::identity::normalize_user_identity;
 
-pub(super) type TelegramCommandAdminRule = CommandSelectorAuthRule;
+pub type TelegramCommandAdminRule = CommandSelectorAuthRule;
 
-pub(super) fn parse_admin_command_rule_specs(
-    specs: Vec<String>,
-) -> Result<Vec<TelegramCommandAdminRule>> {
-    parse_control_command_rule_specs(specs, "admin command rule", normalize_user_identity)
+/// Build one Telegram command-admin rule from selectors and allowed users.
+///
+/// # Errors
+/// Returns an error when selectors or users are invalid.
+pub fn build_telegram_command_admin_rule(
+    selectors: Vec<String>,
+    allowed_users: Vec<String>,
+) -> Result<TelegramCommandAdminRule> {
+    parse_control_command_rule(
+        selectors,
+        allowed_users,
+        "admin command rule",
+        normalize_user_identity,
+    )
 }

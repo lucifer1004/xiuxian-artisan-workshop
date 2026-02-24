@@ -1,3 +1,13 @@
+---
+title: "Knowledge and LinkGraph Search: Why "Project Progress" Was Missing and What We Improved"
+category: "developer"
+tags:
+  - developer
+  - knowledge
+saliency_base: 6.3
+decay_rate: 0.04
+---
+
 # Knowledge and LinkGraph Search: Why "Project Progress" Was Missing and What We Improved
 
 ## What We Observed

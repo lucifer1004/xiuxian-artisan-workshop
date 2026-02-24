@@ -1,15 +1,13 @@
-"""
-MCP embedding client for CLI commands.
+"""MCP embedding client for CLI commands.
 
-When the user runs `omni mcp --port 3002` in the background, route test (and other
-CLI flows) can use the already-warm embedding in that process instead of calling
-Ollama directly, making the first embed much faster.
+When the user runs `omni mcp --port <configured-port>` in the background, route test
+and other CLI flows can use the already-warm embedding process instead of cold-starting
+local embedding in each CLI invocation.
 
-Supports:
-- SSE server: POST to /messages/ (e.g. omni mcp --transport sse --port 3002)
-- Stdio embedding HTTP server: POST to /message (legacy sidecar on 3001)
-- MCP fast path: POST to /embed/batch on MCP SSE port (3002/3000)
-- Dedicated embedding HTTP server: POST to /embed/batch on port 18501
+Supported endpoints:
+- MCP SSE server: POST to `/messages/`
+- MCP fast path: POST to `/embed` or `/embed/batch`
+- Dedicated embedding HTTP server: POST to `/embed` or `/embed/batch` (default: 18501)
 """
 
 from __future__ import annotations
@@ -19,7 +17,9 @@ import json
 import logging
 import socket
 import threading
+from contextlib import suppress
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -30,7 +30,6 @@ PROBE_TIMEOUT_S = 3.0
 REQUEST_TIMEOUT_S = 30.0
 
 EMBEDDING_HTTP_PORT = 18501
-_DEFAULT_MCP_PATHS = ("/messages/", "/message")
 _MCP_HTTP_EMBED_PATHS = ("/embed", "/embed/batch")
 _SHARED_HTTP_CLIENT = None
 _SHARED_HTTP_CLIENT_LOCK = threading.Lock()
@@ -51,43 +50,100 @@ def _get_shared_http_client():
         return _SHARED_HTTP_CLIENT
 
 
+async def close_shared_http_client() -> None:
+    """Close process-level shared HTTP client if initialized."""
+    global _SHARED_HTTP_CLIENT
+    with _SHARED_HTTP_CLIENT_LOCK:
+        client = _SHARED_HTTP_CLIENT
+        _SHARED_HTTP_CLIENT = None
+    if client is None:
+        return
+    with suppress(Exception):
+        await client.aclose()
+
+
+def _coerce_port(value: object) -> int | None:
+    """Parse a candidate port into an integer in valid TCP range."""
+    try:
+        port = int(value) if isinstance(value, (int, float)) else int(str(value).strip())
+    except Exception:
+        return None
+    if 0 < port < 65536:
+        return port
+    return None
+
+
+def _port_from_url(url: object) -> int | None:
+    """Extract TCP port from URL, handling implicit defaults."""
+    if not isinstance(url, str) or not url.strip():
+        return None
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    if parsed.port is not None:
+        return _coerce_port(parsed.port)
+    scheme = (parsed.scheme or "").lower()
+    if scheme == "http":
+        return 80
+    if scheme == "https":
+        return 443
+    return None
+
+
 def _get_candidate_ports() -> list[int]:
-    """Ports to try for MCP embedding, in order. Prefer config then common defaults."""
+    """Ports to try for MCP embedding, in order, derived strictly from config."""
     try:
         from omni.foundation.config.settings import get_setting
 
-        preferred = get_setting("mcp.preferred_embed_port")
+        candidates: list[int] = []
+        preferred = _coerce_port(get_setting("mcp.preferred_embed_port"))
         if preferred is not None:
-            p = (
-                int(preferred)
-                if isinstance(preferred, (int, float))
-                else int(str(preferred).strip())
-            )
-            if 0 < p < 65536:
-                return [p]
+            candidates.append(preferred)
+
+        client_url_port = _port_from_url(get_setting("embedding.client_url"))
+        if client_url_port is not None:
+            candidates.append(client_url_port)
+
+        # Preserve order and deduplicate.
+        deduped: list[int] = []
+        for candidate in candidates:
+            if candidate not in deduped:
+                deduped.append(candidate)
+        return deduped
     except Exception:
-        pass
-    return [3002, 3001, 3000]
+        return []
 
 
 def _mcp_paths_for_port(port: int) -> tuple[str, ...]:
-    """Return MCP JSON-RPC HTTP paths in preferred order for a given port."""
-    if int(port) == 3001:
-        return ("/message", "/messages/")
-    # Modern SSE MCP servers expose /messages/, /mcp and /.
+    """Return MCP JSON-RPC HTTP paths in preferred order for modern MCP servers."""
     return ("/messages/", "/mcp", "/")
 
 
 async def embed_via_mcp(
     texts: list[str],
     port: int,
-    path: str = "/message",
+    path: str = "/messages/",
     request_timeout_s: float = REQUEST_TIMEOUT_S,
 ) -> list[list[float]] | None:
-    """Get embeddings via MCP server (SSE uses /messages/, stdio uses /message).
+    """Get embeddings via MCP server JSON-RPC path.
 
     Returns None if the server is unavailable or the response is invalid.
     """
+    # Fast path for MCP transports: direct embedding endpoint avoids JSON-RPC tool envelope.
+    if path == "/messages/":
+        vectors = await embed_via_mcp_http(
+            texts,
+            port=port,
+            request_timeout_s=request_timeout_s,
+        )
+        if vectors is not None:
+            logger.debug(
+                "MCP direct embed fast path selected",
+                extra={"port": port, "path": path, "request_timeout_s": request_timeout_s},
+            )
+            return vectors
+
     url = f"http://127.0.0.1:{port}{path}"
     try:
         client = _get_shared_http_client()
@@ -235,8 +291,33 @@ async def detect_embedding_http_port() -> int:
     return 0
 
 
+async def _mcp_health_ok(port: int) -> bool:
+    """Return True when MCP SSE server responds healthy on /health."""
+    try:
+        client = _get_shared_http_client()
+        if client is None:
+            return False
+        response = await client.get(
+            f"http://127.0.0.1:{port}/health",
+            timeout=PROBE_TIMEOUT_S,
+        )
+        if response.status_code != 200:
+            return False
+        data = response.json()
+        return str(data.get("status", "")).lower() in {"healthy", "ok"}
+    except Exception:
+        return False
+
+
 async def probe_mcp_embed_port(port: int) -> bool:
-    """Return True if MCP on this port responds to embedding.embed_texts (tries /messages/ then /message)."""
+    """Return True if MCP is reachable on this port.
+
+    Fast path uses GET /health so probe does not consume extra embed POST calls.
+    Falls back to active embed probes for partial deployments.
+    """
+    if await _mcp_health_ok(port):
+        return True
+
     vectors = await embed_via_mcp_http(
         ["[DETECT]"],
         port=port,
@@ -260,8 +341,7 @@ async def probe_mcp_embed_port(port: int) -> bool:
 async def detect_mcp_port(candidate_ports: list[int] | None = None) -> int:
     """Detect a working MCP/embedding port.
 
-    Tries dedicated embedding HTTP server (18501) first, then each candidate port
-    (default: configured mcp.preferred_embed_port only when set, otherwise 3002/3001/3000).
+    Tries dedicated embedding HTTP server (18501) first, then each configured candidate port.
     Returns the first port that responds, or 0.
     """
     port = await detect_embedding_http_port()

@@ -1,4 +1,4 @@
-//! `PyO3` bindings for `KnowledgeStorage` (`LanceDB` operations).
+//! `PyO3` bindings for `KnowledgeStorage` (Valkey operations).
 
 use pyo3::prelude::*;
 

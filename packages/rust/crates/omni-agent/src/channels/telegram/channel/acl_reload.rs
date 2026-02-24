@@ -131,19 +131,16 @@ impl TelegramChannel {
                     control_allow_override = policy
                         .control_command_allow_from
                         .as_ref()
-                        .map(|entries| entries.len())
-                        .unwrap_or(0),
+                        .map_or(0, Vec::len),
                     slash_global_override = slash_policy
                         .control_command_allow_from
                         .as_ref()
-                        .map(|entries| entries.len())
-                        .unwrap_or(0),
+                        .map_or(0, Vec::len),
                     group_policy = ?group_policy.group_policy,
                     group_allow_override = group_policy
                         .group_allow_from
                         .as_ref()
-                        .map(|entries| entries.len())
-                        .unwrap_or(0),
+                        .map_or(0, Vec::len),
                     require_mention = group_policy.require_mention,
                     group_overrides = group_policy.groups.len(),
                     "Telegram ACL reloaded from settings"

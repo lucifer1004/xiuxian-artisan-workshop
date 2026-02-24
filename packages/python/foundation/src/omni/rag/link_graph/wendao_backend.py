@@ -161,10 +161,56 @@ class WendaoLinkGraphBackend(WendaoBackend):
                 )
             )
 
+        def _as_non_negative_int(value: Any, default: int = 0) -> int:
+            try:
+                return max(0, int(value))
+            except (TypeError, ValueError):
+                return max(0, int(default))
+
+        def _as_unit_float(value: Any, default: float = 0.0) -> float:
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                parsed = float(default)
+            return max(0.0, min(1.0, parsed))
+
+        hit_count = max(
+            len(hits),
+            _as_non_negative_int(
+                core_result.get("graph_hit_count", core_result.get("hit_count", 0))
+            ),
+        )
+        section_hit_count = _as_non_negative_int(core_result.get("section_hit_count", 0))
+        graph_hit_count = _as_non_negative_int(
+            core_result.get("graph_hit_count", len(hits)), len(hits)
+        )
+        source_hint_count = _as_non_negative_int(core_result.get("source_hint_count", 0))
+        graph_confidence_score = _as_unit_float(core_result.get("graph_confidence_score", 0.0), 0.0)
+        graph_confidence_level = (
+            str(core_result.get("graph_confidence_level") or "none").strip().lower()
+        )
+
+        core_query = core_result.get("query")
+        parsed_query = str(core_query) if core_query is not None else str(query)
+
         return {
-            "query": str(core_result.get("query") or str(query)),
+            "query": parsed_query,
             "search_options": planned_options,
             "hits": hits[: max(1, int(limit))],
+            "hit_count": hit_count,
+            "section_hit_count": section_hit_count,
+            "requested_mode": str(core_result.get("requested_mode") or "").strip().lower(),
+            "selected_mode": str(core_result.get("selected_mode") or "").strip().lower(),
+            "reason": str(core_result.get("reason") or "").strip(),
+            "graph_hit_count": graph_hit_count,
+            "source_hint_count": source_hint_count,
+            "graph_confidence_score": graph_confidence_score,
+            "graph_confidence_level": graph_confidence_level or "none",
+            "retrieval_plan": (
+                core_result.get("retrieval_plan")
+                if isinstance(core_result.get("retrieval_plan"), dict)
+                else None
+            ),
         }
 
     async def neighbors(

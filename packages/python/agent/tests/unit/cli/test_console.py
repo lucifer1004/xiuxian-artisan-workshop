@@ -267,6 +267,68 @@ class TestPrintResultFormats:
         output = stdout_capture.getvalue()
         assert "success" in output
 
+    def test_json_output_dict_bypasses_tty_panel(self):
+        """JSON mode should write dict payload to stdout even when TTY is enabled."""
+        from omni.agent.cli.console import print_result
+
+        result = {"status": "success", "value": 1}
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+
+        with patch.object(sys, "stdout", stdout_capture):
+            console = Console(file=stderr_capture, stderr=True)
+            with patch("omni.agent.cli.console.err_console", console):
+                print_result(result, is_tty=True, json_output=True)
+
+        assert '"status": "success"' in stdout_capture.getvalue()
+        assert stderr_capture.getvalue() == ""
+
+    def test_json_output_string_bypasses_tty_panel(self):
+        """JSON mode should pass through string payload to stdout in TTY mode."""
+        from omni.agent.cli.console import print_result
+
+        payload = '{"status":"success","mode":"json"}'
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+
+        with patch.object(sys, "stdout", stdout_capture):
+            console = Console(file=stderr_capture, stderr=True)
+            with patch("omni.agent.cli.console.err_console", console):
+                print_result(payload, is_tty=True, json_output=True)
+
+        output = stdout_capture.getvalue()
+        assert '"status": "success"' in output
+        assert '"mode": "json"' in output
+        assert stderr_capture.getvalue() == ""
+
+    def test_json_output_unwraps_canonical_mcp_payload(self):
+        """JSON mode should unwrap canonical MCP content envelope into inner JSON object."""
+        from omni.agent.cli.console import print_result
+
+        canonical = {
+            "content": [
+                {
+                    "type": "text",
+                    "text": '{"success": true, "query": "x", "results": []}',
+                }
+            ],
+            "isError": False,
+        }
+
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+
+        with patch.object(sys, "stdout", stdout_capture):
+            console = Console(file=stderr_capture, stderr=True)
+            with patch("omni.agent.cli.console.err_console", console):
+                print_result(canonical, is_tty=True, json_output=True)
+
+        output = stdout_capture.getvalue()
+        assert '"success": true' in output
+        assert '"query": "x"' in output
+        assert '"content"' not in output
+        assert stderr_capture.getvalue() == ""
+
     def test_discovered_capabilities_empty(self):
         """Test handling discovered_capabilities with empty array."""
         from omni.agent.cli.console import print_result

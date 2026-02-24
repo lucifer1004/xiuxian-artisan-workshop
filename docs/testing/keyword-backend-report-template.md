@@ -1,3 +1,13 @@
+---
+title: "Keyword Backend Report Template (FTS vs Tantivy)"
+category: "testing"
+tags:
+  - testing
+  - keyword
+saliency_base: 6.5
+decay_rate: 0.04
+---
+
 # Keyword Backend Report Template (FTS vs Tantivy)
 
 Use this template when generating or comparing keyword-backend evaluation reports. It ensures consistent structure across runs and documents the decision contract.

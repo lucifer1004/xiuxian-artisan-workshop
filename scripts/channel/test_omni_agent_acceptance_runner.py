@@ -2,21 +2,23 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import sys
 from pathlib import Path
 
 
 def _load_acceptance_module():
-    module_path = Path(__file__).resolve().with_name("test_omni_agent_acceptance.py")
-    spec = importlib.util.spec_from_file_location("test_omni_agent_acceptance", module_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"failed to load module: {module_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault(spec.name, module)
-    spec.loader.exec_module(module)
-    return module
+    script_dir = Path(__file__).resolve().parent
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
+    load_sibling_module = importlib.import_module("module_loader").load_sibling_module
+    return load_sibling_module(
+        module_name="test_omni_agent_acceptance",
+        file_name="test_omni_agent_acceptance.py",
+        caller_file=__file__,
+        error_context="acceptance module",
+    )
 
 
 def test_run_step_success(tmp_path: Path) -> None:

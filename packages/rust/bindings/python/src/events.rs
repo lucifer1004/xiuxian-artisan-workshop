@@ -8,6 +8,10 @@ use pyo3::prelude::*;
 use serde_json::json;
 use std::sync::Arc;
 
+fn millis_to_seconds_f64(millis: i64) -> f64 {
+    millis.to_string().parse::<f64>().unwrap_or(0.0) / 1_000.0
+}
+
 /// Python representation of an event
 #[pyclass]
 #[derive(Debug, Clone)]
@@ -36,7 +40,7 @@ impl From<OmniEvent> for PyOmniEvent {
             source: e.source,
             topic: e.topic,
             payload: e.payload.to_string(),
-            timestamp: e.timestamp.timestamp_millis() as f64 / 1000.0,
+            timestamp: millis_to_seconds_f64(e.timestamp.timestamp_millis()),
         }
     }
 }
@@ -150,7 +154,7 @@ pub fn publish_event(source: String, topic: String, payload_json: String) -> PyR
     let payload: serde_json::Value = serde_json::from_str(&payload_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid JSON: {}", e)))?;
 
-    GLOBAL_BUS.publish(OmniEvent::new(&source, &topic, payload));
+    let _ = GLOBAL_BUS.publish(OmniEvent::new(&source, &topic, payload));
     Ok(())
 }
 

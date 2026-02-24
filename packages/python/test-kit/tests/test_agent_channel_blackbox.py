@@ -33,7 +33,7 @@ def _make_args(**overrides: object) -> argparse.Namespace:
         "max_wait": None,
         "timeout": None,
         "max_idle_secs": None,
-        "webhook_url": "http://127.0.0.1:8081/telegram/webhook",
+        "webhook_url": "http://127.0.0.1:18081/telegram/webhook",
         "log_file": ".run/logs/omni-agent-webhook.log",
         "chat_id": None,
         "user_id": None,
@@ -60,7 +60,7 @@ def _make_config(module: ModuleType, log_file: Path, **overrides: object):
         "prompt": "hello",
         "max_wait_secs": 5,
         "max_idle_secs": None,
-        "webhook_url": "http://127.0.0.1:8081/telegram/webhook",
+        "webhook_url": "http://127.0.0.1:18081/telegram/webhook",
         "log_file": log_file,
         "chat_id": 1001,
         "user_id": 2002,
@@ -103,6 +103,29 @@ def _fake_clock(step: float = 0.5):
         return state["now"]
 
     return _monotonic
+
+
+def test_read_new_lines_returns_cursor_and_lines(monkeypatch) -> None:
+    module = _load_probe_module()
+
+    def _fake_read_new(_path: object, _cursor: object) -> tuple[object, list[str]]:
+        return module._SharedLogCursor(kind="offset", value=23), ["bbx-a", "bbx-b"]
+
+    monkeypatch.setattr(module, "_shared_read_new_log_lines_with_cursor", _fake_read_new)
+    cursor, lines = module.read_new_lines(get_project_root() / ".run" / "dummy.log", 5)
+    assert cursor == 23
+    assert lines == ["bbx-a", "bbx-b"]
+
+
+def test_count_lines_returns_offset_cursor(monkeypatch) -> None:
+    module = _load_probe_module()
+
+    def _fake_init_cursor(_path: object, kind: str) -> object:
+        assert kind == "offset"
+        return module._SharedLogCursor(kind="offset", value=41)
+
+    monkeypatch.setattr(module, "_shared_init_log_cursor", _fake_init_cursor)
+    assert module.count_lines(get_project_root() / ".run" / "dummy.log") == 41
 
 
 def test_build_config_defaults_to_event_driven_wait(tmp_path, monkeypatch) -> None:
@@ -188,20 +211,41 @@ def test_expected_session_keys_accept_zero_thread_alias_when_thread_is_none() ->
     )
 
 
+def test_expected_session_scope_prefixes_from_events() -> None:
+    module = _load_probe_module()
+    assert module.expected_session_scope_prefixes(
+        ("telegram.command.session_memory_json.replied",)
+    ) == ("telegram:",)
+    assert module.expected_session_scope_prefixes(
+        ("discord.command.session_memory_json.replied",)
+    ) == ("discord:",)
+    assert module.expected_session_scope_prefixes(()) == ("telegram:", "discord:")
+
+
+def test_expected_session_scope_values_support_multiple_prefixes() -> None:
+    module = _load_probe_module()
+    values = module.expected_session_scope_values(
+        1304799691,
+        1304799695,
+        None,
+        None,
+        ("telegram:", "discord:"),
+    )
+    assert "telegram:1304799691:1304799695" in values
+    assert "discord:1304799691:1304799695" in values
+
+
 def test_expected_recipient_key_formats_with_optional_thread() -> None:
     module = _load_probe_module()
     assert module.expected_recipient_key(1304799691, None) == "1304799691"
     assert module.expected_recipient_key(-1002286094098, 42) == "-1002286094098:42"
 
 
-def test_infer_username_from_log_from_allowed_users_command(tmp_path) -> None:
+def test_infer_username_from_runtime_log_username_token(tmp_path) -> None:
     module = _load_probe_module()
     log_file = tmp_path / "agent.log"
     log_file.write_text(
-        (
-            "2026-02-18 INFO Running `target/debug/omni-agent channel --mode webhook "
-            "--verbose --webhook-bind 0.0.0.0:8081 --allowed-users tao3k --allowed-groups ''`\n"
-        ),
+        "2026-02-18 INFO event=probe username=tao3k\n",
         encoding="utf-8",
     )
     assert module.infer_username_from_log(log_file) == "tao3k"
@@ -212,8 +256,7 @@ def test_build_config_infers_username_from_log_when_missing(tmp_path, monkeypatc
     log_file = tmp_path / "agent.log"
     log_file.write_text(
         (
-            "2026-02-18 INFO Running `target/debug/omni-agent channel --mode webhook "
-            "--verbose --webhook-bind 0.0.0.0:8081 --allowed-users tao3k --allowed-groups ''`\n"
+            "2026-02-18 INFO event=probe username=tao3k\n"
             "2026-02-18 INFO Parsed message, forwarding to agent session_key=-1002286094098:1304799691\n"
         ),
         encoding="utf-8",
@@ -271,20 +314,22 @@ def test_next_update_id_strong_mode_adds_pid_nonce(monkeypatch) -> None:
     module = _load_probe_module()
     monkeypatch.setattr(module.time, "time", lambda: 1_700_000_001.000)
     monkeypatch.setattr(module.os, "getpid", lambda: 4242)
+    monkeypatch.setattr(module.secrets, "randbelow", lambda _: 50)
     monkeypatch.setattr(module, "_LAST_STRONG_UPDATE_ID", 0)
 
     update_id = module.next_update_id(True)
-    assert update_id == 1_700_000_001_000 + 4242
+    assert update_id == 1_700_000_001_000_000_000 + (4242 * 100) + 50
 
 
 def test_next_update_id_strong_mode_monotonic(monkeypatch) -> None:
     module = _load_probe_module()
     monkeypatch.setattr(module.time, "time", lambda: 1_700_000_001.000)
     monkeypatch.setattr(module.os, "getpid", lambda: 42)
-    monkeypatch.setattr(module, "_LAST_STRONG_UPDATE_ID", 1_700_000_005_000)
+    monkeypatch.setattr(module.secrets, "randbelow", lambda _: 0)
+    monkeypatch.setattr(module, "_LAST_STRONG_UPDATE_ID", 1_700_000_001_000_004_300)
 
     update_id = module.next_update_id(True)
-    assert update_id == 1_700_000_005_001
+    assert update_id == 1_700_000_001_000_004_301
 
 
 def test_build_config_rejects_chat_id_outside_allowlist(tmp_path, monkeypatch) -> None:
@@ -406,13 +451,15 @@ def test_parse_command_reply_json_summary_line_extracts_fields() -> None:
         "telegram command reply json summary "
         'event="telegram.command.session_budget_json.replied" '
         'session_key="1304799691:1304799691" '
-        'recipient="1304799691" json_kind=session_budget json_available=false '
+        'recipient="1304799691" json_kind=session_budget '
+        "json_session_scope=telegram:1304799691:1304799691 json_available=false "
         "json_status=not_found json_found= json_decision= json_keys=4"
     )
     parsed = module.parse_command_reply_json_summary_line(line)
     assert parsed is not None
     assert parsed["event"] == "telegram.command.session_budget_json.replied"
     assert parsed["json_kind"] == "session_budget"
+    assert parsed["json_session_scope"] == "telegram:1304799691:1304799691"
     assert parsed["json_available"] == "false"
     assert parsed["json_status"] == "not_found"
     assert parsed["json_keys"] == "4"
@@ -828,6 +875,104 @@ def test_run_probe_fails_on_command_reply_session_key_mismatch(tmp_path, monkeyp
                     "telegram command reply sent "
                     'event="telegram.command.session_budget_json.replied" '
                     'session_key="1001:9999" recipient="1001" '
+                    "reply_chars=50 reply_bytes=50"
+                ],
+            ]
+        ),
+    )
+
+    assert module.run_probe(cfg) == 10
+
+
+def test_run_probe_allow_no_bot_matches_target_session_scope_placeholder(
+    tmp_path, monkeypatch
+) -> None:
+    module = _load_probe_module()
+    log_file = tmp_path / "agent.log"
+    log_file.write_text("", encoding="utf-8")
+    cfg = _make_config(
+        module,
+        log_file,
+        prompt="/session memory json",
+        max_wait_secs=5,
+        allow_no_bot=True,
+        expect_reply_json_fields=(
+            ("json_kind", "session_memory"),
+            ("json_session_scope", "__target_session_scope__"),
+        ),
+    )
+
+    update_id = 1_700_000_003_960
+    monkeypatch.setattr(module.time, "time", lambda: update_id / 1000)
+    monkeypatch.setattr(module.os, "getpid", lambda: 42)
+    monkeypatch.setattr(module.time, "monotonic", _fake_clock(step=0.1))
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(module, "post_webhook_update", lambda *_: (200, "ok"))
+    monkeypatch.setattr(
+        module,
+        "read_new_lines",
+        _sequence_reader(
+            [
+                [
+                    "2026-02-18 INFO Parsed message, forwarding to agent "
+                    "content_preview=/session memory json"
+                ],
+                [
+                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "telegram command reply json summary "
+                    'event="telegram.command.session_memory_json.replied" '
+                    'session_key="1001:2002" recipient="1001" '
+                    "json_kind=session_memory json_session_scope=telegram:1001:2002 "
+                    "json_available=false json_status=not_found json_keys=6"
+                ],
+            ]
+        ),
+    )
+
+    assert module.run_probe(cfg) == 0
+
+
+def test_run_probe_fails_on_json_session_scope_mismatch(tmp_path, monkeypatch) -> None:
+    module = _load_probe_module()
+    log_file = tmp_path / "agent.log"
+    log_file.write_text("", encoding="utf-8")
+    cfg = _make_config(
+        module,
+        log_file,
+        prompt="/session memory json",
+        max_wait_secs=5,
+        allow_no_bot=True,
+        expect_reply_json_fields=(("json_kind", "session_memory"),),
+    )
+
+    update_id = 1_700_000_003_965
+    monkeypatch.setattr(module.time, "time", lambda: update_id / 1000)
+    monkeypatch.setattr(module.os, "getpid", lambda: 42)
+    monkeypatch.setattr(module.time, "monotonic", _fake_clock(step=0.1))
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(module, "post_webhook_update", lambda *_: (200, "ok"))
+    monkeypatch.setattr(
+        module,
+        "read_new_lines",
+        _sequence_reader(
+            [
+                [
+                    "2026-02-18 INFO Parsed message, forwarding to agent "
+                    "content_preview=/session memory json"
+                ],
+                [
+                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "telegram command reply json summary "
+                    'event="telegram.command.session_memory_json.replied" '
+                    'session_key="1001:2002" recipient="1001" '
+                    "json_kind=session_memory json_session_scope=telegram:1001:9999 "
+                    "json_available=false json_status=not_found json_keys=6"
+                ],
+                [
+                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "telegram command reply sent "
+                    'event="telegram.command.session_memory_json.replied" '
+                    'session_key="1001:2002" recipient="1001" '
                     "reply_chars=50 reply_bytes=50"
                 ],
             ]

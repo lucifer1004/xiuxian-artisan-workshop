@@ -83,7 +83,10 @@ async fn test_list_all_tools_with_dictionary_columns() {
     assert_eq!(count, 3, "Should have 3 tools");
 
     // CRITICAL TEST: list_all_tools should correctly read dictionary-encoded columns
-    let result = store.list_all_tools("test_tools", None).await.unwrap();
+    let result = store
+        .list_all_tools("test_tools", None, None)
+        .await
+        .unwrap();
 
     // Parse the JSON result
     let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
@@ -132,7 +135,10 @@ async fn test_list_all_tools_empty_table() {
         .unwrap();
 
     // Query non-existent table - should return empty array
-    let result = store.list_all_tools("non_existent", None).await.unwrap();
+    let result = store
+        .list_all_tools("non_existent", None, None)
+        .await
+        .unwrap();
     let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
     assert!(tools_list.is_empty());
 }
@@ -168,7 +174,10 @@ async fn test_list_all_tools_content_field() {
 
     store.add("content_test", tools).await.unwrap();
 
-    let result = store.list_all_tools("content_test", None).await.unwrap();
+    let result = store
+        .list_all_tools("content_test", None, None)
+        .await
+        .unwrap();
     let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     // Content is at top level; shape is { id, content, metadata }
@@ -230,7 +239,10 @@ async fn test_list_all_tools_multiple_skills_same_tool_name() {
 
     store.add("multi_skill", tools).await.unwrap();
 
-    let result = store.list_all_tools("multi_skill", None).await.unwrap();
+    let result = store
+        .list_all_tools("multi_skill", None, None)
+        .await
+        .unwrap();
     let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     assert_eq!(tools_list.len(), 2);
@@ -248,4 +260,190 @@ async fn test_list_all_tools_multiple_skills_same_tool_name() {
         .collect();
     assert!(skill_names.contains(&"git".to_string()));
     assert!(skill_names.contains(&"database".to_string()));
+}
+
+/// Test that row_limit caps returned records for list_all_tools.
+#[tokio::test]
+async fn test_list_all_tools_row_limit_caps_results() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("test_row_limit");
+    let store = VectorStore::new(db_path.to_str().unwrap(), Some(1024))
+        .await
+        .unwrap();
+
+    let tools: Vec<ToolRecord> = (0..5)
+        .map(|idx| ToolRecord {
+            tool_name: format!("tool_{idx}"),
+            description: format!("tool {idx} description"),
+            skill_name: "limit_test".to_string(),
+            file_path: format!("limit/scripts/tool_{idx}.py"),
+            function_name: format!("tool_{idx}"),
+            execution_mode: "script".to_string(),
+            keywords: vec!["limit".to_string()],
+            intents: vec!["limit test".to_string()],
+            file_hash: format!("hash_{idx}"),
+            input_schema: r#"{"type":"object"}"#.to_string(),
+            docstring: format!("tool {idx}"),
+            category: "test".to_string(),
+            annotations: ToolAnnotations::default(),
+            parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: String::new(),
+        })
+        .collect();
+
+    store.add("row_limit", tools).await.unwrap();
+
+    let result = store
+        .list_all_tools("row_limit", None, Some(2))
+        .await
+        .unwrap();
+    let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+
+    assert_eq!(tools_list.len(), 2);
+}
+
+/// Test that source_filter supports multi-term union via `a||b`.
+#[tokio::test]
+async fn test_list_all_tools_source_filter_supports_multi_terms() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("test_source_filter_multi");
+    let store = VectorStore::new(db_path.to_str().unwrap(), Some(1024))
+        .await
+        .unwrap();
+
+    let tools = vec![
+        ToolRecord {
+            tool_name: "a".to_string(),
+            description: "tool a".to_string(),
+            skill_name: "source_filter".to_string(),
+            file_path: "docs/a.md".to_string(),
+            function_name: "a".to_string(),
+            execution_mode: "script".to_string(),
+            keywords: vec!["a".to_string()],
+            intents: vec!["a".to_string()],
+            file_hash: "hash_a".to_string(),
+            input_schema: r#"{"type":"object"}"#.to_string(),
+            docstring: "a".to_string(),
+            category: "test".to_string(),
+            annotations: ToolAnnotations::default(),
+            parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: String::new(),
+        },
+        ToolRecord {
+            tool_name: "b".to_string(),
+            description: "tool b".to_string(),
+            skill_name: "source_filter".to_string(),
+            file_path: "docs/b.md".to_string(),
+            function_name: "b".to_string(),
+            execution_mode: "script".to_string(),
+            keywords: vec!["b".to_string()],
+            intents: vec!["b".to_string()],
+            file_hash: "hash_b".to_string(),
+            input_schema: r#"{"type":"object"}"#.to_string(),
+            docstring: "b".to_string(),
+            category: "test".to_string(),
+            annotations: ToolAnnotations::default(),
+            parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: String::new(),
+        },
+        ToolRecord {
+            tool_name: "c".to_string(),
+            description: "tool c".to_string(),
+            skill_name: "source_filter".to_string(),
+            file_path: "docs/c.md".to_string(),
+            function_name: "c".to_string(),
+            execution_mode: "script".to_string(),
+            keywords: vec!["c".to_string()],
+            intents: vec!["c".to_string()],
+            file_hash: "hash_c".to_string(),
+            input_schema: r#"{"type":"object"}"#.to_string(),
+            docstring: "c".to_string(),
+            category: "test".to_string(),
+            annotations: ToolAnnotations::default(),
+            parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: String::new(),
+        },
+    ];
+
+    store.add("source_filter_multi", tools).await.unwrap();
+
+    let result = store
+        .list_all_tools("source_filter_multi", Some("a.md||c.md"), None)
+        .await
+        .unwrap();
+    let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+
+    assert_eq!(tools_list.len(), 2);
+    let mut file_paths: Vec<String> = tools_list
+        .iter()
+        .map(|t| {
+            t.get("metadata")
+                .and_then(|m| m.get("file_path"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        })
+        .collect();
+    file_paths.sort();
+    assert_eq!(
+        file_paths,
+        vec!["docs/a.md".to_string(), "docs/c.md".to_string()]
+    );
+}
+
+/// Test source_filter still matches when `file_path` column is empty but metadata contains source.
+#[tokio::test]
+async fn test_list_all_tools_source_filter_matches_metadata_when_file_path_empty() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("test_source_filter_metadata_only");
+    let store = VectorStore::new(db_path.to_str().unwrap(), Some(8))
+        .await
+        .unwrap();
+
+    let ids = vec!["doc-a".to_string(), "doc-b".to_string()];
+    let vectors = vec![vec![0.1_f32; 8], vec![0.2_f32; 8]];
+    let contents = vec!["content a".to_string(), "content b".to_string()];
+    let metadatas = vec![
+        serde_json::json!({
+            "type": "chunk",
+            "source": "docs/a.md",
+            "chunk_index": 0,
+        })
+        .to_string(),
+        serde_json::json!({
+            "type": "chunk",
+            "source": "docs/b.md",
+            "chunk_index": 0,
+        })
+        .to_string(),
+    ];
+
+    store
+        .add_documents(
+            "source_filter_metadata_only",
+            ids,
+            vectors,
+            contents,
+            metadatas,
+        )
+        .await
+        .unwrap();
+
+    let result = store
+        .list_all_tools("source_filter_metadata_only", Some("docs/a.md"), None)
+        .await
+        .unwrap();
+    let rows: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+
+    assert_eq!(rows.len(), 1);
+    let source = rows[0]
+        .get("metadata")
+        .and_then(|m| m.get("source"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert_eq!(source, "docs/a.md");
 }

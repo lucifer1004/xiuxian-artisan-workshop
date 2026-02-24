@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 import omni.rag.link_graph.policy as link_graph_policy
+from omni.foundation.api.link_graph_policy_schema import get_reason_enum
 from omni.rag.link_graph.models import LinkGraphHit
 from omni.rag.link_graph.policy import (
     LinkGraphPolicyConfig,
@@ -51,25 +52,78 @@ class _SlowBackend:
         }
 
 
+class _PayloadBackend:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self.backend_name = "wendao"
+        self.payload = payload
+        self.calls: list[tuple[str, int, str]] = []
+
+    async def search_planned(self, query: str, limit: int = 20, options=None) -> dict[str, object]:
+        strategy = str(getattr(options, "match_strategy", "none"))
+        self.calls.append((query, limit, strategy))
+        out = dict(self.payload)
+        out.setdefault("query", query)
+        out.setdefault("search_options", {"match_strategy": strategy})
+        out.setdefault("hits", [])
+        return out
+
+
 class _FakeStore:
-    def __init__(self, rows: dict[str, list[dict[str, Any]]]) -> None:
+    def __init__(
+        self,
+        rows: dict[str, list[dict[str, Any]]],
+        *,
+        supports_multi_source_filter: bool = False,
+    ) -> None:
         self._rows = rows
-        self.calls: list[tuple[str, str]] = []
+        self._supports_multi_source_filter = supports_multi_source_filter
+        self.calls: list[tuple[str, str, int | None]] = []
+
+    def supports_multi_source_filter(self) -> bool:
+        return self._supports_multi_source_filter
 
     async def list_all(
-        self, collection: str, source_filter: str | None = None
+        self,
+        collection: str,
+        source_filter: str | None = None,
+        row_limit: int | None = None,
     ) -> list[dict[str, Any]]:
-        self.calls.append((collection, str(source_filter or "")))
-        return list(self._rows.get(str(source_filter or ""), []))
+        normalized_source_filter = str(source_filter or "")
+        self.calls.append((collection, normalized_source_filter, row_limit))
+        if self._supports_multi_source_filter and "||" in normalized_source_filter:
+            rows: list[dict[str, Any]] = []
+            seen_ids: set[str] = set()
+            for part in normalized_source_filter.split("||"):
+                key = part.strip()
+                if not key:
+                    continue
+                for row in self._rows.get(key, []):
+                    row_id = str(row.get("id", ""))
+                    if row_id in seen_ids:
+                        continue
+                    seen_ids.add(row_id)
+                    rows.append(row)
+        else:
+            rows = list(self._rows.get(normalized_source_filter, []))
+        if row_limit is not None and row_limit > 0:
+            return rows[:row_limit]
+        return rows
 
 
 @pytest.mark.asyncio
 async def test_plan_link_graph_retrieval_hybrid_prefers_graph_when_sufficient() -> None:
-    backend = _FakeBackend(
-        [
-            LinkGraphHit(stem="a", score=0.9, path="docs/a.md"),
-            LinkGraphHit(stem="b", score=0.7, path="docs/b.md"),
-        ]
+    backend = _PayloadBackend(
+        {
+            "requested_mode": "hybrid",
+            "selected_mode": "graph_only",
+            "reason": "graph_sufficient",
+            "graph_confidence_score": 0.92,
+            "graph_confidence_level": "high",
+            "hits": [
+                LinkGraphHit(stem="a", score=0.9, path="docs/a.md"),
+                LinkGraphHit(stem="b", score=0.7, path="docs/b.md"),
+            ],
+        }
     )
     config = LinkGraphPolicyConfig(
         mode="hybrid",
@@ -90,18 +144,27 @@ async def test_plan_link_graph_retrieval_hybrid_prefers_graph_when_sufficient() 
     assert plan.selected_mode == "graph_only"
     assert plan.reason == "graph_sufficient"
     assert len(plan.source_hints) > 0
-    assert plan.graph_confidence_score > 0.0
-    assert plan.graph_confidence_level in {"low", "medium", "high"}
+    assert plan.graph_confidence_score == pytest.approx(0.92)
+    assert plan.graph_confidence_level == "high"
     assert plan.budget.candidate_limit == 9
     assert plan.budget.max_sources == 4
-    assert plan.budget.rows_per_source == 8
+    assert plan.budget.rows_per_source == 6
     assert plan.to_record()["schema"] == "omni.link_graph.retrieval_plan.v1"
     assert backend.calls[0] == ("retrieval policy", 9, "fts")
 
 
 @pytest.mark.asyncio
 async def test_plan_link_graph_retrieval_hybrid_falls_back_vector_when_insufficient() -> None:
-    backend = _FakeBackend([LinkGraphHit(stem="a", score=0.1, path="docs/a.md")])
+    backend = _PayloadBackend(
+        {
+            "requested_mode": "hybrid",
+            "selected_mode": "vector_only",
+            "reason": "graph_insufficient",
+            "graph_confidence_score": 0.12,
+            "graph_confidence_level": "low",
+            "hits": [LinkGraphHit(stem="a", score=0.1, path="docs/a.md")],
+        }
+    )
     config = LinkGraphPolicyConfig(
         mode="hybrid",
         candidate_multiplier=2,
@@ -114,13 +177,22 @@ async def test_plan_link_graph_retrieval_hybrid_falls_back_vector_when_insuffici
     assert plan.selected_mode == "vector_only"
     assert plan.reason == "graph_insufficient"
     assert len(plan.graph_hits) == 1
-    assert plan.graph_confidence_level in {"low", "medium"}
+    assert plan.graph_confidence_level == "low"
     assert plan.budget.candidate_limit == 10
 
 
 @pytest.mark.asyncio
 async def test_plan_link_graph_retrieval_graph_only_keeps_mode_when_empty() -> None:
-    backend = _FakeBackend([])
+    backend = _PayloadBackend(
+        {
+            "requested_mode": "graph_only",
+            "selected_mode": "graph_only",
+            "reason": "graph_only_requested_empty",
+            "graph_confidence_score": 0.0,
+            "graph_confidence_level": "none",
+            "hits": [],
+        }
+    )
     config = LinkGraphPolicyConfig(mode="graph_only", max_sources=3)
     plan = await plan_link_graph_retrieval("missing", limit=2, backend=backend, config=config)
     assert plan.requested_mode == "graph_only"
@@ -128,6 +200,59 @@ async def test_plan_link_graph_retrieval_graph_only_keeps_mode_when_empty() -> N
     assert plan.reason == "graph_only_requested_empty"
     assert plan.graph_confidence_level == "none"
     assert plan.graph_confidence_score == 0.0
+
+
+@pytest.mark.asyncio
+async def test_plan_link_graph_retrieval_graph_only_defaults_reason_when_policy_missing() -> None:
+    backend = _FakeBackend([LinkGraphHit(stem="a", score=0.95, path="docs/a.md")])
+    config = LinkGraphPolicyConfig(
+        mode="graph_only",
+        candidate_multiplier=2,
+        max_sources=4,
+        min_graph_hits=1,
+        min_graph_score=0.3,
+    )
+    link_graph_policy._PLAN_CACHE.clear()
+
+    plan = await plan_link_graph_retrieval(
+        "graph-only-missing-payload",
+        limit=3,
+        backend=backend,
+        config=config,
+    )
+
+    assert plan.selected_mode == "graph_only"
+    assert plan.reason == "graph_only_policy_missing"
+    assert backend.calls[0] == ("graph-only-missing-payload", 6, "exact")
+    link_graph_policy._PLAN_CACHE.clear()
+
+
+@pytest.mark.asyncio
+async def test_plan_link_graph_retrieval_graph_only_overrides_non_graph_payload_mode() -> None:
+    backend = _PayloadBackend(
+        {
+            "requested_mode": "graph_only",
+            "selected_mode": "vector_only",
+            "reason": "vector_only_requested",
+            "graph_confidence_score": 0.1,
+            "graph_confidence_level": "low",
+            "hits": [LinkGraphHit(stem="a", score=0.3, path="docs/a.md")],
+        }
+    )
+    config = LinkGraphPolicyConfig(mode="graph_only", max_sources=3)
+    link_graph_policy._PLAN_CACHE.clear()
+
+    plan = await plan_link_graph_retrieval(
+        "graph-only-override",
+        limit=2,
+        backend=backend,
+        config=config,
+    )
+
+    assert plan.selected_mode == "graph_only"
+    assert plan.reason == "graph_only_payload_overridden"
+    assert backend.calls[0] == ("graph-only-override", 8, "fts")
+    link_graph_policy._PLAN_CACHE.clear()
 
 
 @pytest.mark.asyncio
@@ -158,6 +283,101 @@ async def test_plan_link_graph_retrieval_hybrid_timeout_falls_back_to_vector(
     assert backend.calls == [("slow query", 4, "fts")]
     assert link_graph_policy.take_recent_graph_search_timeout("slow query") is True
     assert link_graph_policy.take_recent_graph_search_timeout("slow query") is False
+    link_graph_policy._PLAN_CACHE.clear()
+
+
+@pytest.mark.asyncio
+async def test_plan_link_graph_retrieval_prefers_backend_policy_payload_when_mode_matches() -> None:
+    backend = _PayloadBackend(
+        {
+            "requested_mode": "hybrid",
+            "selected_mode": "graph_only",
+            "reason": "graph_sufficient",
+            "graph_confidence_score": 0.92,
+            "graph_confidence_level": "high",
+            "hits": [LinkGraphHit(stem="a", score=0.1, path="docs/a.md")],
+        }
+    )
+    config = LinkGraphPolicyConfig(
+        mode="hybrid",
+        candidate_multiplier=2,
+        max_sources=4,
+        min_graph_hits=3,
+        min_graph_score=0.8,
+    )
+    link_graph_policy._PLAN_CACHE.clear()
+
+    plan = await plan_link_graph_retrieval(
+        "payload-policy", limit=3, backend=backend, config=config
+    )
+
+    assert plan.selected_mode == "graph_only"
+    assert plan.reason == "graph_sufficient"
+    assert plan.graph_confidence_score == pytest.approx(0.92)
+    assert plan.graph_confidence_level == "high"
+    assert backend.calls[0] == ("payload-policy", 6, "fts")
+    link_graph_policy._PLAN_CACHE.clear()
+
+
+@pytest.mark.asyncio
+async def test_plan_link_graph_retrieval_ignores_backend_policy_when_requested_mode_conflicts() -> (
+    None
+):
+    backend = _PayloadBackend(
+        {
+            "requested_mode": "vector_only",
+            "selected_mode": "vector_only",
+            "reason": "vector_only_requested",
+            "graph_confidence_score": 0.05,
+            "graph_confidence_level": "low",
+            "hits": [LinkGraphHit(stem="a", score=0.95, path="docs/a.md")],
+        }
+    )
+    config = LinkGraphPolicyConfig(
+        mode="hybrid",
+        candidate_multiplier=2,
+        max_sources=4,
+        min_graph_hits=1,
+        min_graph_score=0.3,
+    )
+    link_graph_policy._PLAN_CACHE.clear()
+
+    plan = await plan_link_graph_retrieval(
+        "payload-conflict",
+        limit=3,
+        backend=backend,
+        config=config,
+    )
+
+    assert plan.selected_mode == "vector_only"
+    assert plan.reason == "graph_policy_mode_conflict"
+    assert plan.graph_confidence_level in {"medium", "high"}
+    assert backend.calls[0] == ("payload-conflict", 6, "fts")
+    link_graph_policy._PLAN_CACHE.clear()
+
+
+@pytest.mark.asyncio
+async def test_plan_link_graph_retrieval_hybrid_defaults_to_vector_when_policy_missing() -> None:
+    backend = _FakeBackend([LinkGraphHit(stem="a", score=0.95, path="docs/a.md")])
+    config = LinkGraphPolicyConfig(
+        mode="hybrid",
+        candidate_multiplier=2,
+        max_sources=4,
+        min_graph_hits=1,
+        min_graph_score=0.3,
+    )
+    link_graph_policy._PLAN_CACHE.clear()
+
+    plan = await plan_link_graph_retrieval(
+        "payload-missing",
+        limit=3,
+        backend=backend,
+        config=config,
+    )
+
+    assert plan.selected_mode == "vector_only"
+    assert plan.reason == "graph_policy_missing"
+    assert backend.calls[0] == ("payload-missing", 6, "fts")
     link_graph_policy._PLAN_CACHE.clear()
 
 
@@ -290,6 +510,77 @@ async def test_fetch_graph_rows_by_policy_respects_source_hints_and_limits() -> 
     assert [row["source"] for row in rows] == ["docs/a.md", "docs/b.md"]
     assert rows[0]["score"] >= rows[1]["score"]
     assert len(store.calls) == 2
+    assert store.calls[0][2] == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_graph_rows_by_policy_reuses_list_all_for_duplicate_source_filters() -> None:
+    store = _FakeStore(
+        {
+            "router.md": [
+                {
+                    "id": "row-r-0",
+                    "content": "router",
+                    "metadata": {"source": "docs/router.md", "chunk_index": 0, "title": "R"},
+                }
+            ]
+        }
+    )
+    hints = [
+        LinkGraphSourceHint(source_filter="router.md", stem="router", graph_score=0.9),
+        LinkGraphSourceHint(source_filter="router.md", stem="router-alt", graph_score=0.8),
+    ]
+
+    rows = await fetch_graph_rows_by_policy(
+        store=store,
+        collection="knowledge_chunks",
+        source_hints=hints,
+        limit=2,
+        rows_per_source=1,
+    )
+
+    assert rows
+    assert rows[0]["source"] == "docs/router.md"
+    assert len(store.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_graph_rows_by_policy_prefetches_multi_source_filter_when_supported() -> None:
+    store = _FakeStore(
+        {
+            "a.md": [
+                {
+                    "id": "row-a-0",
+                    "content": "alpha 0",
+                    "metadata": {"source": "docs/a.md", "chunk_index": 0, "title": "A"},
+                }
+            ],
+            "b.md": [
+                {
+                    "id": "row-b-0",
+                    "content": "beta 0",
+                    "metadata": {"source": "docs/b.md", "chunk_index": 0, "title": "B"},
+                }
+            ],
+        },
+        supports_multi_source_filter=True,
+    )
+    hints = [
+        LinkGraphSourceHint(source_filter="a.md", stem="a", graph_score=0.9),
+        LinkGraphSourceHint(source_filter="b.md", stem="b", graph_score=0.8),
+    ]
+
+    rows = await fetch_graph_rows_by_policy(
+        store=store,
+        collection="knowledge_chunks",
+        source_hints=hints,
+        limit=2,
+        rows_per_source=1,
+    )
+
+    assert [row["source"] for row in rows] == ["docs/a.md", "docs/b.md"]
+    assert len(store.calls) == 1
+    assert store.calls[0] == ("knowledge_chunks", "a.md||b.md", 4)
 
 
 @pytest.mark.asyncio
@@ -378,6 +669,37 @@ async def test_fetch_graph_rows_by_policy_emits_zero_budget_when_hints_missing(
     assert event["total_cap"] == 12
 
 
+def test_build_source_hints_uses_path_candidates_without_extra_stem_filter() -> None:
+    hits = [LinkGraphHit(stem="router", score=0.91, path="docs/architecture/router.md")]
+
+    hints = link_graph_policy._build_source_hints(hits, max_sources=8)
+    filters = {item.source_filter for item in hints}
+
+    assert "router.md" in filters
+    assert "docs/architecture/router.md" in filters
+    assert "router" not in filters
+
+
+def test_build_retrieval_budget_scales_graph_fan_out_with_limit() -> None:
+    config = LinkGraphPolicyConfig(
+        mode="hybrid",
+        candidate_multiplier=3,
+        max_sources=8,
+        graph_rows_per_source=8,
+    )
+
+    small = link_graph_policy._build_retrieval_budget(limit=2, config=config)
+    large = link_graph_policy._build_retrieval_budget(limit=20, config=config)
+
+    assert small.candidate_limit == 6
+    assert small.max_sources == 4
+    assert small.rows_per_source == 4
+
+    assert large.candidate_limit == 60
+    assert large.max_sources == 8
+    assert large.rows_per_source == 8
+
+
 def test_serialize_link_graph_retrieval_plan_supports_plain_objects() -> None:
     plan = type(
         "PlanObj",
@@ -407,3 +729,7 @@ def test_serialize_link_graph_retrieval_plan_supports_plain_objects() -> None:
 def test_get_link_graph_retrieval_plan_schema_id() -> None:
     schema_id = get_link_graph_retrieval_plan_schema_id()
     assert schema_id.endswith("/omni.link_graph.retrieval_plan.v1.schema.json")
+
+
+def test_link_graph_policy_reason_vocab_matches_schema_enum() -> None:
+    assert set(get_reason_enum()) == set(link_graph_policy.LINK_GRAPH_POLICY_REASONS)

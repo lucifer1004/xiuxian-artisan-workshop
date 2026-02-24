@@ -3,13 +3,13 @@ name = "omni-vector"
 version.workspace = true
 edition.workspace = true
 description = "High-performance embedded vector database using LanceDB"
-authors = ["Omni-Dev-Fusion Team"]
+authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
 
 [dependencies]
 # LanceDB core (2.0: v2 manifest, scalar/FTS improvements)
-lance = "2.0"
+lance = { workspace = true }
 lance-arrow = "2.0"
 lance-file = "2.0"
 lance-index = "2.0"
@@ -47,8 +47,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # SIMD-accelerated JSON for hot-path metadata parsing (writer_impl)
 simd-json = "0.13"
-sha2 = "0.10"
-hex = "0.4"
+sha2 = { workspace = true }
+hex = { workspace = true }
 
 # Reuse our common types
 omni-types = { path = "../omni-types" }
@@ -58,7 +58,7 @@ omni-io = { path = "../omni-io" }
 omni-scanner = { path = "../omni-scanner" }
 
 # YAML parsing for skill manifests
-serde_yaml = "0.9"
+serde_yaml = { workspace = true }
 
 # Multi-pattern string matching (O(n+m) for name-token boost)
 aho-corasick = "1.1"
@@ -73,7 +73,7 @@ log = { workspace = true }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-lance = "2.0"
+lance = { workspace = true }
 tempfile = { workspace = true }
 rand = "0.8"
 insta = { version = "1.43.2", features = ["json"] }
