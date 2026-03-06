@@ -2,7 +2,7 @@
 name = "xiuxian-mcp"
 version.workspace = true
 edition.workspace = true
-description = "MCP transport/client runtime for xiuxian and omni-agent"
+description = "MCP transport/client runtime for xiuxian and xiuxian-daochang"
 authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
@@ -16,7 +16,7 @@ tracing = { workspace = true }
 
 rmcp = { workspace = true }
 reqwest = { workspace = true }
-schemars = "1.0"
+schemars = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

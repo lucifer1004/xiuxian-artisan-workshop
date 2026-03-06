@@ -5,27 +5,11 @@ use std::thread;
 use std::time::Duration;
 
 use clap::Parser;
-use xiuxian_tui::{AppState, TuiRenderer, init_logger};
-
-/// Simple TUI demo for testing xiuxian-tui
-#[derive(clap::Parser, Debug)]
-#[command(name = "xiuxian-tui-demo")]
-#[command(author = "Omni Dev Fusion")]
-#[command(version = "0.1.0")]
-#[command(about = "Demo TUI for testing xiuxian-tui", long_about = None)]
-struct Args {
-    /// Unix socket path for receiving events
-    #[arg(short, long, default_value = "/tmp/xiuxian-tui.sock")]
-    socket: String,
-
-    /// Run in demo mode (auto-generate events)
-    #[arg(short, long, action = clap::ArgAction::SetTrue)]
-    demo: bool,
-}
+use xiuxian_tui::{AppState, TuiRenderer, demo_cli_args::DemoArgs, init_logger};
 
 fn main() -> Result<(), Box<dyn Error>> {
     init_logger();
-    let args = Args::parse();
+    let args = DemoArgs::parse();
 
     println!("=== Omni TUI Demo ===");
     println!("Socket: {}", args.socket);
@@ -104,16 +88,4 @@ fn run_demo_mode(state: &mut AppState) {
     println!("[Demo] All demo events generated!");
     println!("[Demo] Switch to the TUI window to see the rendered UI.");
     println!();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_args_parsing() {
-        let args = Args::parse_from(["xiuxian-tui-demo", "--socket", "/test.sock"]);
-        assert_eq!(args.socket, "/test.sock");
-        assert!(!args.demo);
-    }
 }

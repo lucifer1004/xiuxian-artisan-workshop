@@ -19,7 +19,7 @@ This file is the top-level entry for major documentation tracks.
 
 - [Testing Documentation](testing/README.md)
 - [Skills Tools Benchmark CI Gate](testing/skills-tools-benchmark-ci.md)
-- [Omni-Agent Live Multi-Group Runbook](testing/omni-agent-live-multigroup-runbook.md)
+- [修仙道场 Live Multi-Group Runbook](testing/xiuxian-daochang-live-multigroup-runbook.md)
 
 ## Xiuxian-Zhixing
 

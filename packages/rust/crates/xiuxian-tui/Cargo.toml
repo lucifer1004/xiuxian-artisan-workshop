@@ -23,11 +23,11 @@ futures = "0.3"
 xiuxian-event = { path = "../xiuxian-event" }
 
 # Type definitions
-omni-types = { path = "../omni-types" }
+xiuxian-types = { path = "../xiuxian-types" }
+xiuxian-logging = { path = "../xiuxian-logging" }
 
 # Logging (workspace managed)
 log = { workspace = true }
-env_logger = "0.10"
 
 # Error handling (workspace managed)
 anyhow = { workspace = true }

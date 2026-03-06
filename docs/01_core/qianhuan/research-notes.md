@@ -86,7 +86,7 @@ Selected papers:
 - MemRL validates two-phase retrieval and runtime reinforcement on episodic memory.
 - InfiAgent shows bounded-context execution with externalized persistent state for long-horizon stability.
 
-[Inference] We should preserve bounded prompt context and externalize durable state, while keeping online memory adaptation in `omni-memory`.
+[Inference] We should preserve bounded prompt context and externalize durable state, while keeping online memory adaptation in `xiuxian-memory-engine`.
 
 ## 5. Pass 2: Deep Compare Against Current Rust Code
 
@@ -97,7 +97,7 @@ Current code evidence:
 - `packages/rust/crates/xiuxian-qianhuan/src/config.rs`
 - `packages/rust/crates/xiuxian-qianhuan/src/window.rs`
 - `packages/rust/crates/xiuxian-qianhuan/src/xml.rs`
-- `packages/rust/crates/omni-agent/src/agent/system_prompt_injection_state.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/system_prompt_injection_state.rs`
 
 Observed:
 
@@ -114,8 +114,8 @@ Optimization delta:
 
 Current code evidence:
 
-- `packages/rust/crates/omni-agent/src/agent/mod.rs`
-- `packages/rust/crates/omni-agent/src/agent/graph_bridge.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/mod.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/graph_bridge.rs`
 
 Observed:
 
@@ -131,8 +131,8 @@ Optimization delta:
 
 Current code evidence:
 
-- `packages/rust/crates/omni-agent/src/agent/reflection.rs`
-- `packages/rust/crates/omni-agent/src/agent/mod.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/reflection.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/mod.rs`
 
 Observed:
 
@@ -148,10 +148,10 @@ Optimization delta:
 
 Current code evidence:
 
-- `packages/rust/crates/omni-memory/src/two_phase.rs`
-- `packages/rust/crates/omni-memory/src/store.rs`
-- `packages/rust/crates/omni-agent/src/agent/memory_recall.rs`
-- `packages/rust/crates/omni-agent/src/agent/memory_recall_feedback.rs`
+- `packages/rust/crates/xiuxian-memory-engine/src/two_phase.rs`
+- `packages/rust/crates/xiuxian-memory-engine/src/store.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/memory_recall.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/memory_recall_feedback.rs`
 
 Observed:
 
@@ -167,9 +167,9 @@ Optimization delta:
 
 Current code evidence:
 
-- `packages/rust/crates/omni-window/src/window.rs`
-- `packages/rust/crates/omni-agent/src/session/bounded_store.rs`
-- `packages/rust/crates/omni-agent/src/agent/session_context.rs`
+- `packages/rust/crates/xiuxian-window/src/window.rs`
+- `packages/rust/crates/xiuxian-daochang/src/session/bounded_store.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/session_context.rs`
 
 Observed:
 
@@ -200,7 +200,7 @@ Optimization delta:
 
 1. Implement immutable Xiuxian-Qianhuan typed snapshot builder.
 2. Implement plan-aware context compression hook (PAACE-inspired).
-3. Implement 3-in-1 memory gate scoring in `omni-memory`.
+3. Implement 3-in-1 memory gate scoring in `xiuxian-memory-engine`.
 
 ## P2 (stability/performance)
 
@@ -250,7 +250,7 @@ This section turns research into explicit engineering decisions.
 
 Preferred baseline:
 
-- continue using current Rust-first core (`omni-agent`, `omni-memory`, `omni-window`, vector stack).
+- continue using current Rust-first core (`xiuxian-daochang`, `xiuxian-memory-engine`, `xiuxian-window`, vector stack).
 
 Conditional dependency candidates (only if benchmark-proven):
 

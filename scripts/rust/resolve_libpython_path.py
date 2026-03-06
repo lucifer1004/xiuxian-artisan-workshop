@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve active Python shared library path for omni-core-rs tests."""
+"""Resolve active Python shared library path for xiuxian-core-rs tests."""
 
 from __future__ import annotations
 

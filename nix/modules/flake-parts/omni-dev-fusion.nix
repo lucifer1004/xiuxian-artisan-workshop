@@ -38,9 +38,9 @@ in
               from = pkgs.python3Packages.torchWithoutCuda;
               prev = prev.torch;
             };
-            omni-core-rs = hacks.nixpkgsPrebuilt {
-              from = self.packages.${system}.omni-core-rs-python-bindings;
-              prev = prev.omni-core-rs;
+            xiuxian-core-rs = hacks.nixpkgsPrebuilt {
+              from = self.packages.${system}.xiuxian-core-rs-python-bindings;
+              prev = prev.xiuxian-core-rs;
             };
             # Use nixpkgs version of nvidia-cufile-cu12 instead of building from source
             # This avoids RDMA dependency issues in CI
@@ -91,9 +91,10 @@ in
     in
     {
       packages.iwe = pkgs.callPackage ../../packages/iwe.nix { };
-      packages.default = self.packages.${system}.omni-dev-fusion;
-      packages.omni-dev-fusion =
-        (pythonSets.mkVirtualEnv "omni-dev-fusion" workspace.deps.default).overrideAttrs
+      packages.default = self.packages.${system}.xiuxian-artisan-workshop;
+      packages.xiuxian-artisan-workshop =
+        (pythonSets.mkVirtualEnv "xiuxian-artisan-workshop" workspace.deps.default)
+        .overrideAttrs
           (old: {
             venvIgnoreCollisions = [ "*" ];
             # venvIgnoreCollisions = [

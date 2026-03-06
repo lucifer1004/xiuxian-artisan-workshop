@@ -23,8 +23,8 @@ def build_restart_command(cfg: Any) -> str:
     runtime_root = Path(os.environ.get("PRJ_RUNTIME_DIR", ".run"))
     if not runtime_root.is_absolute():
         runtime_root = cfg.project_root / runtime_root
-    pid_file = runtime_root / f"omni-mcp-sse-{cfg.mcp_port}.pid"
-    log_file = runtime_root / "logs" / f"omni-mcp-sse-{cfg.mcp_port}.log"
+    pid_file = runtime_root / f"xiuxian-mcp-sse-{cfg.mcp_port}.pid"
+    log_file = runtime_root / "logs" / f"xiuxian-mcp-sse-{cfg.mcp_port}.log"
     cmd = [
         "bash",
         str(cfg.restart_script),

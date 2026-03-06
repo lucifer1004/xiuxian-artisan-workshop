@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 _RUST_AVAILABLE = False
 _RUST_ENHANCER_AVAILABLE = False
 try:
-    from omni_core_rs import (
+    from xiuxian_core_rs import (
         PyEntity,
         PyKnowledgeGraph,
         PyRelation,
@@ -52,13 +52,13 @@ try:
 
     _RUST_AVAILABLE = True
 except ImportError:
-    logger.debug("omni_core_rs not available; LinkGraphEnhancer will use Python fallback")
+    logger.debug("xiuxian_core_rs not available; LinkGraphEnhancer will use Python fallback")
 
 try:
-    from omni_core_rs import (
+    from xiuxian_core_rs import (
         link_graph_enhance_note as _rust_enhance_note,
     )
-    from omni_core_rs import (
+    from xiuxian_core_rs import (
         link_graph_enhance_notes_batch as _rust_enhance_notes_batch,
     )
 
@@ -191,7 +191,7 @@ class LinkGraphEnhancer:
 
         Args:
             graph: Optional PyKnowledgeGraph instance. Created automatically
-                   if omni_core_rs is available and none provided.
+                   if xiuxian_core_rs is available and none provided.
         """
         self._graph = graph
         if self._graph is None and _RUST_AVAILABLE:

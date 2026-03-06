@@ -4,11 +4,11 @@
     "case": "writer_full",
     "expected_ok": true,
     "metadata": {
-      "authors": ["omni-dev-fusion"],
+      "authors": ["xiuxian-artisan-workshop"],
       "description": "Use when editing files or writing content.",
       "intents": ["Update documentation"],
       "permissions": [],
-      "repository": "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/writer",
+      "repository": "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/writer",
       "require_refs": [],
       "routing_keywords": ["write", "edit", "polish"],
       "skill_name": "writer",
@@ -20,7 +20,7 @@
     "case": "researcher_spaces",
     "expected_ok": true,
     "metadata": {
-      "authors": ["omni-dev-fusion"],
+      "authors": ["xiuxian-artisan-workshop"],
       "description": "Use when conducting deep research on codebases.",
       "intents": [
         "research_repository",
@@ -28,7 +28,7 @@
         "compare_architecture"
       ],
       "permissions": [],
-      "repository": "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/researcher",
+      "repository": "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/researcher",
       "require_refs": [],
       "routing_keywords": [
         "analyze repo",

@@ -34,18 +34,18 @@ fn cache_invalidation_reflects_file_changes() {
     let xiuxian_path = root.join(".config/xiuxian-artisan-workshop/xiuxian.toml");
     write_text(
         xiuxian_path.as_path(),
-        r#"
+        r"
 [skills.validation]
 strict_mode = false
-"#,
+",
     );
 
     let spec = ConfigCascadeSpec::new(
         "skills",
-        r#"
+        r"
 [validation]
 strict_mode = true
-"#,
+",
         "skills.toml",
     );
 
@@ -59,10 +59,10 @@ strict_mode = true
 
     write_text(
         xiuxian_path.as_path(),
-        r#"
+        r"
 [skills.validation]
 strict_mode = true
-"#,
+",
     );
 
     let second = resolve_and_merge_toml_with_paths(
@@ -80,18 +80,18 @@ fn cache_concurrent_reads_are_stable() {
     write_text(
         root.join(".config/xiuxian-artisan-workshop/xiuxian.toml")
             .as_path(),
-        r#"
+        r"
 [skills.validation]
 strict_mode = false
-"#,
+",
     );
 
     let spec = ConfigCascadeSpec::new(
         "skills",
-        r#"
+        r"
 [validation]
 strict_mode = true
-"#,
+",
         "skills.toml",
     );
     let config_home = root.join(".config");

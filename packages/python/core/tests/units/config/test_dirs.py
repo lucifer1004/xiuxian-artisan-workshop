@@ -30,6 +30,6 @@ class TestGetMemoryDbPath:
 
         memory_path = get_memory_db_path()
 
-        # Should be in .cache/omni-vector/, not in project root
+        # Should be in .cache/xiuxian-vector/, not in project root
         assert ".cache" in str(memory_path)
-        assert "omni-vector" in str(memory_path)
+        assert "xiuxian-vector" in str(memory_path)

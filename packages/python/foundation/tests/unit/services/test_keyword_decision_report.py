@@ -18,7 +18,7 @@ def test_generate_keyword_backend_decision_report_helpers() -> None:
     module = _load_module(script)
 
     snapshot = Path(
-        "packages/rust/crates/omni-vector/tests/snapshots/"
+        "packages/rust/crates/xiuxian-vector/tests/snapshots/"
         "test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap"
     )
     data = module._load_snapshot_json(snapshot)

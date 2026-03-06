@@ -4,9 +4,18 @@
 from __future__ import annotations
 
 import os
-import tomllib
 from pathlib import Path
 from typing import Any
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError as exc:  # pragma: no cover - environment guard
+        raise ModuleNotFoundError(
+            "No TOML parser available. Use Python 3.11+ or install tomli."
+        ) from exc
 
 
 def repo_root_from(start: Path) -> Path:
@@ -21,7 +30,16 @@ def settings_candidates(repo_root: Path) -> list[Path]:
     """Return xiuxian.toml candidates in precedence order."""
     prj_config_home = Path(os.environ.get("PRJ_CONFIG_HOME", str(repo_root / ".config")))
     user_xiuxian = prj_config_home / "xiuxian-artisan-workshop" / "xiuxian.toml"
-    system_xiuxian = repo_root / "packages" / "conf" / "xiuxian.toml"
+    system_xiuxian = (
+        repo_root
+        / "packages"
+        / "rust"
+        / "crates"
+        / "xiuxian-daochang"
+        / "resources"
+        / "config"
+        / "xiuxian.toml"
+    )
     return [user_xiuxian, system_xiuxian]
 
 

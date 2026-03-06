@@ -21,7 +21,7 @@ endpoints = importlib.import_module("channel_test_endpoints")
 
 def test_resolve_runtime_partition_mode_prefers_override() -> None:
     mode = config_module.resolve_runtime_partition_mode(
-        Path(".run/logs/omni-agent-webhook.log"),
+        Path(".run/logs/xiuxian-daochang-webhook.log"),
         override="chat-user",
         normalize_partition_mode_fn=lambda value: "chat_user" if value else None,
         session_partition_mode_from_runtime_log_fn=lambda _path: "user",
@@ -49,7 +49,7 @@ def test_build_config_rejects_identical_session_targets() -> None:
     args = argparse.Namespace(
         max_wait=30,
         webhook_url=endpoints.webhook_url(),
-        log_file=".run/logs/omni-agent-webhook.log",
+        log_file=".run/logs/xiuxian-daochang-webhook.log",
         chat_id=130,
         chat_b=130,
         user_a=1,

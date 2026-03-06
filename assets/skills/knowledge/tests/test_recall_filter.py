@@ -55,7 +55,7 @@ def test_is_toc_or_index_chunk_substantive_section():
     section = """
 ## Git commit format
 
-Use Conventional Commits. Scope examples: feat(router), fix(omni-vector).
+Use Conventional Commits. Scope examples: feat(router), fix(xiuxian-vector).
 Run `lefthook run pre-commit` before committing.
 """
     assert is_markdown_index_chunk(section) is False

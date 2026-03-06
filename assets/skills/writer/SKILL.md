@@ -3,9 +3,9 @@ type: skill
 name: writer
 description: Use when editing files, updating documentation, replacing text, polishing writing style, or performing text manipulation tasks.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.1.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/writer"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/writer"
   routing_keywords:
     - "writing"
     - "edit file"

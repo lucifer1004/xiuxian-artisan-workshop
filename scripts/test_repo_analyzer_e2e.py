@@ -13,7 +13,7 @@ async def main():
     print("Testing Repo Analyzer Start...")
 
     # We will test on a very small public repo or just the local dir
-    repo_url = "https://github.com/tao3k/omni-dev-fusion.git"
+    repo_url = "https://github.com/tao3k/xiuxian-artisan-workshop.git"
 
     start_result = await run_research_graph(
         repo_url=repo_url, request="Analyze the top-level architecture.", action="start"

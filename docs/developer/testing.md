@@ -24,7 +24,7 @@ metadata:
 
 ```
 packages/python/
-├── test-kit/                      # dedicated test SDK (omni-test-kit)
+├── test-kit/                      # dedicated test SDK (xiuxian-test-kit)
 ├── foundation/tests/              # 180+ tests - Settings, Config, GitOps
 ├── core/tests/                    # 660+ tests - Kernel, Router, Reactor
 ├── mcp-server/tests/              # 40+ tests - Transport, Types, Server
@@ -47,7 +47,7 @@ assets/skills/*/tests/             # 130+ skill tests (modular)
 
 ## Omni Test Kit (SDK)
 
-The `omni-test-kit` is a dedicated testing framework that provides specialized tools for the Omni-Dev Fusion environment. It is automatically registered as a `pytest` plugin.
+The `xiuxian-test-kit` is a dedicated testing framework that provides specialized tools for the Omni-Dev Fusion environment. It is automatically registered as a `pytest` plugin.
 
 ### Key Components
 
@@ -159,7 +159,7 @@ uv run pytest \
 For retrieval/search changes, the required order is:
 
 1. `cargo check --workspace --all-targets`
-2. Rust snapshot contract tests (`omni-vector` fusion contracts)
+2. Rust snapshot contract tests (`xiuxian-vector` fusion contracts)
 3. Python integration/contract tests
 
 Equivalent commands:
@@ -320,14 +320,14 @@ pytest -v --timeout=30 test_slow_operation.py
 
 ### Modular Skill Test Pattern
 
-Skills are tested in isolation using the `skill_tester` fixture and the `@omni_skill` marker.
+Skills are tested in isolation using the `skill_tester` fixture and the `@xiuxian_skill` marker.
 
 ```python
 import pytest
-from omni.test_kit.decorators import omni_skill
+from omni.test_kit.decorators import xiuxian_skill
 
 @pytest.mark.asyncio
-@omni_skill(name="git")
+@xiuxian_skill(name="git")
 class TestGitSkill:
     async def test_status(self, skill_tester):
         # Execute skill logic directly
@@ -339,14 +339,14 @@ class TestGitSkill:
 
 ### Data-Driven Test Pattern
 
-Use the `@omni_data_driven` marker to load test cases from a external YAML file.
+Use the `@xiuxian_data_driven` marker to load test cases from a external YAML file.
 
 ```python
 import pytest
-from omni.test_kit.decorators import omni_data_driven
+from omni.test_kit.decorators import xiuxian_data_driven
 
 @pytest.mark.asyncio
-@omni_data_driven(data_path="cases.yaml")
+@xiuxian_data_driven(data_path="cases.yaml")
 async def test_skill_cases(case, skill_tester):
     # 'case' is automatically injected from cases.yaml
     result = await skill_tester.run(case.skill, case.command, **case.args)
@@ -510,9 +510,9 @@ Located in `packages/rust/crates/omni-*/src/*.rs` with inline `#[cfg(test)]` mod
 cargo nextest run --workspace
 
 # Run specific crate tests
-cargo nextest run -p omni-vector
+cargo nextest run -p xiuxian-vector
 cargo nextest run -p xiuxian-skills
-cargo nextest run -p omni-tags
+cargo nextest run -p xiuxian-tags
 ```
 
 Prefer crate-scoped commands during development and only expand to workspace-wide runs when needed.
@@ -521,9 +521,9 @@ Prefer crate-scoped commands during development and only expand to workspace-wid
 
 | Crate          | Tests | Status  |
 | -------------- | ----- | ------- |
-| omni-vector    | 35    | PASSING |
+| xiuxian-vector | 35    | PASSING |
 | xiuxian-skills | 55    | PASSING |
-| omni-tags      | -     | TODO    |
+| xiuxian-tags   | -     | TODO    |
 
 ---
 
@@ -538,7 +538,7 @@ The Rust skills scanner now supports **virtual path scanning** - scanning Python
 3. **API Integration** - Process file content from databases or external sources
 
 ```python
-from omni_core_rs import scan_paths, parse_script_content
+from xiuxian_core_rs import scan_paths, parse_script_content
 
 # Test scanner behavior without filesystem
 files = [
@@ -577,7 +577,7 @@ assert tools[0].tool_name == "test.test_tool"
 For testing Live-Wire file watcher behavior, use the Rust scanner's virtual path capability:
 
 ```python
-from omni_core_rs import scan_paths
+from xiuxian_core_rs import scan_paths
 
 # Simulate a skill directory being created/changed/deleted
 def simulate_skill_change(skill_name: str, files: dict[str, str]) -> list:

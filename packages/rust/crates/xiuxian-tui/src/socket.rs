@@ -1,6 +1,6 @@
 //! Unix Domain Socket server for receiving events from Python Agent
 //!
-//! Listens on /tmp/omni-omega.sock for JSON events in xiuxian-event format:
+//! Listens on /tmp/xiuxian-omega.sock for JSON events in xiuxian-event format:
 //! {"source": "omega", "topic": "omega/mission/start", "payload": {...}, "timestamp": "..."}
 
 use log::{error, info, warn};

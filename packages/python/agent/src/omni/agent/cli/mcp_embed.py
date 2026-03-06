@@ -1,21 +1,18 @@
 """MCP embedding client for CLI commands.
 
 When the user runs `omni mcp --port <configured-port>` in the background, route test
-and other CLI flows can use the already-warm embedding process instead of cold-starting
-local embedding in each CLI invocation.
+and other CLI flows can reuse the already-warm Rust embedding endpoint instead of
+probing each CLI invocation from scratch.
 
 Supported endpoints:
 - MCP SSE server: POST to `/messages/`
 - MCP fast path: POST to `/embed` or `/embed/batch`
-- Dedicated embedding HTTP server: POST to `/embed` or `/embed/batch` (default: 18501)
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import socket
 import threading
 import time
 from contextlib import suppress
@@ -31,7 +28,6 @@ PROBE_TIMEOUT_S = 3.0
 REQUEST_TIMEOUT_S = 30.0
 MCP_EMBED_CLIENT_TIMEOUT_S = 5.0
 
-EMBEDDING_HTTP_PORT = 18501
 _MCP_HTTP_EMBED_PATHS = ("/embed", "/embed/batch")
 _MCP_EMBED_TERMINAL_CODES = {
     "embedding_timeout",
@@ -100,7 +96,7 @@ def _mark_mcp_embed_unavailable(port: int) -> None:
 
 
 def _get_shared_http_client():
-    """Get or create a process-level shared AsyncClient for local embedding calls."""
+    """Get or create a process-level shared AsyncClient for embedding calls."""
     global _SHARED_HTTP_CLIENT
     try:
         import httpx
@@ -377,69 +373,6 @@ async def embed_via_mcp_http(
     return None
 
 
-async def embed_via_http(
-    texts: list[str],
-    port: int = EMBEDDING_HTTP_PORT,
-    request_timeout_s: float = REQUEST_TIMEOUT_S,
-) -> list[list[float]] | None:
-    """Get embeddings via dedicated embedding HTTP server (/embed or /embed/batch)."""
-    for path in _MCP_HTTP_EMBED_PATHS:
-        url = f"http://127.0.0.1:{port}{path}"
-        try:
-            client = _get_shared_http_client()
-            if client is None:
-                return None
-            response = await client.post(
-                url,
-                json={"texts": texts},
-                timeout=request_timeout_s,
-            )
-            if response.status_code == 200:
-                data = response.json()
-                vectors = data.get("vectors")
-                if isinstance(vectors, list):
-                    logger.debug(
-                        "Embedding HTTP endpoint selected",
-                        extra={"port": port, "path": path, "status_code": response.status_code},
-                    )
-                    return vectors
-            else:
-                logger.debug(
-                    "Embedding HTTP endpoint unavailable",
-                    extra={"port": port, "path": path, "status_code": response.status_code},
-                )
-        except Exception as exc:
-            logger.debug(
-                "Embedding HTTP endpoint failed",
-                extra={"port": port, "path": path, "error": str(exc), "url": url},
-            )
-    return None
-
-
-async def detect_embedding_http_port() -> int:
-    """Return embedding HTTP server port (18501) if it is up and healthy, else 0."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(1)
-    try:
-        if sock.connect_ex(("127.0.0.1", EMBEDDING_HTTP_PORT)) != 0:
-            return 0
-    except Exception:
-        return 0
-    finally:
-        sock.close()
-
-    try:
-        client = _get_shared_http_client()
-        if client is None:
-            return 0
-        response = await client.get(f"http://127.0.0.1:{EMBEDDING_HTTP_PORT}/health", timeout=2.0)
-        if response.status_code == 200:
-            return EMBEDDING_HTTP_PORT
-    except Exception:
-        pass
-    return 0
-
-
 async def _mcp_health_ok(port: int) -> bool:
     """Return True when MCP SSE server responds healthy on /health."""
     try:
@@ -490,13 +423,9 @@ async def probe_mcp_embed_port(port: int) -> bool:
 async def detect_mcp_port(candidate_ports: list[int] | None = None) -> int:
     """Detect a working MCP/embedding port.
 
-    Tries dedicated embedding HTTP server (18501) first, then each configured candidate port.
-    Returns the first port that responds, or 0.
+    Tries configured candidate ports in order and returns the first that responds.
+    Returns 0 when none responds.
     """
-    port = await detect_embedding_http_port()
-    if port > 0:
-        return port
-
     candidates = candidate_ports if candidate_ports is not None else _get_candidate_ports()
     for p in candidates:
         if await probe_mcp_embed_port(p):
@@ -505,13 +434,13 @@ async def detect_mcp_port(candidate_ports: list[int] | None = None) -> int:
 
 
 def make_mcp_embed_func(port: int) -> Callable[[list[str]], Awaitable[list[list[float]]]]:
-    """Return an async embed function that uses MCP or embedding HTTP on the given port, with local fallback."""
+    """Return an async embed function that uses MCP endpoints on the given port."""
 
     async def _embed(texts: list[str]) -> list[list[float]]:
         from omni.foundation.services.embedding import EmbeddingUnavailableError
 
         cooldown_remaining = _mcp_embed_cooldown_remaining(port)
-        if cooldown_remaining > 0 and port != EMBEDDING_HTTP_PORT:
+        if cooldown_remaining > 0:
             raise EmbeddingUnavailableError(
                 f"MCP embedding unavailable on port {port} "
                 f"(cooldown_remaining_secs={cooldown_remaining:.1f})"
@@ -519,37 +448,30 @@ def make_mcp_embed_func(port: int) -> Callable[[list[str]], Awaitable[list[list[
 
         try:
             request_timeout_s = _mcp_embed_client_timeout_secs()
-            if port == EMBEDDING_HTTP_PORT:
-                vectors = await embed_via_http(texts, port)
-                if vectors is not None:
-                    return vectors
-            else:
-                vectors = await embed_via_mcp_http(
+            vectors = await embed_via_mcp_http(
+                texts,
+                port=port,
+                request_timeout_s=request_timeout_s,
+            )
+            if vectors is not None:
+                return vectors
+
+            for path in _mcp_paths_for_port(port):
+                vectors = await embed_via_mcp(
                     texts,
-                    port=port,
+                    port,
+                    path=path,
+                    try_http_fast_path=False,
                     request_timeout_s=request_timeout_s,
                 )
                 if vectors is not None:
                     return vectors
 
-                for path in _mcp_paths_for_port(port):
-                    vectors = await embed_via_mcp(
-                        texts,
-                        port,
-                        path=path,
-                        try_http_fast_path=False,
-                        request_timeout_s=request_timeout_s,
-                    )
-                    if vectors is not None:
-                        return vectors
         except McpEmbedUnavailable as exc:
             _mark_mcp_embed_unavailable(port)
             raise EmbeddingUnavailableError(
                 f"MCP embedding unavailable on port {port}: {exc}"
             ) from exc
-        from omni.foundation.services.embedding import get_embedding_service
-
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: get_embedding_service().embed_batch(texts))
+        raise EmbeddingUnavailableError(f"MCP embedding returned no vectors on port {port}")
 
     return _embed

@@ -5,9 +5,18 @@ from __future__ import annotations
 
 import argparse
 import os
-import tomllib
 from pathlib import Path
 from urllib.parse import urlparse
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError as exc:  # pragma: no cover - environment guard
+        raise ModuleNotFoundError(
+            "No TOML parser available. Use Python 3.11+ or install tomli."
+        ) from exc
 
 DEFAULT_SCHEME = "redis"
 DEFAULT_HOST = os.environ.get("XIUXIAN_WENDAO_LOCAL_HOST", "localhost").strip() or "localhost"
@@ -95,7 +104,14 @@ def _xiuxian_toml_candidates() -> list[Path]:
     prj_config_home = Path(os.environ.get("PRJ_CONFIG_HOME", str(repo_root / ".config")))
     return [
         prj_config_home / "xiuxian-artisan-workshop" / "xiuxian.toml",
-        repo_root / "packages" / "conf" / "xiuxian.toml",
+        repo_root
+        / "packages"
+        / "rust"
+        / "crates"
+        / "xiuxian-daochang"
+        / "resources"
+        / "config"
+        / "xiuxian.toml",
     ]
 
 

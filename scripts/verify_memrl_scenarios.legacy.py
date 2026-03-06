@@ -141,7 +141,7 @@ Scenario:
 3. Run again - state should be recovered
 """,
         "commands": [
-            "ls -la .cache/omni-vector/",
+            "ls -la .cache/xiuxian-vector/",
             "cargo test 2>&1 | tail -5",
         ],
     },

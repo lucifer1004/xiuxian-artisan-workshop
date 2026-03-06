@@ -12,7 +12,7 @@ from omni.agent.cli.commands import mcp as mcp_cmd
 @pytest.mark.asyncio
 async def test_warm_embedding_timeout_does_not_block(monkeypatch):
     class _SlowService:
-        backend = "litellm"
+        backend = "http"
 
         def __init__(self):
             self.calls = 0
@@ -55,7 +55,7 @@ async def test_warm_embedding_skips_unavailable_backend(monkeypatch):
 @pytest.mark.asyncio
 async def test_warm_embedding_retries_transient_connection_error(monkeypatch):
     class _FlakyService:
-        backend = "litellm"
+        backend = "http"
 
         def __init__(self):
             self.calls = 0
@@ -64,7 +64,7 @@ async def test_warm_embedding_retries_transient_connection_error(monkeypatch):
             self.calls += 1
             if self.calls < 3:
                 raise RuntimeError(
-                    "litellm.APIConnectionError: OllamaException - "
+                    "APIConnectionError: upstream embedding endpoint - "
                     "Server disconnected without sending a response."
                 )
             return [[0.0]]
@@ -86,7 +86,7 @@ async def test_warm_embedding_retries_transient_connection_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_warm_embedding_does_not_retry_non_transient_error(monkeypatch):
     class _BrokenService:
-        backend = "litellm"
+        backend = "http"
 
         def __init__(self):
             self.calls = 0

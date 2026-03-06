@@ -18,9 +18,9 @@ def run_discover_cache_gate(
         print("Skipping discover cache gate (--skip-discover-cache-gate).", flush=True)
         return
     gate_env = env.copy()
-    gate_env["OMNI_AGENT_DISCOVER_CACHE_HIT_P95_MS"] = f"{cfg.discover_cache_hit_p95_ms}"
-    gate_env["OMNI_AGENT_DISCOVER_CACHE_MISS_P95_MS"] = f"{cfg.discover_cache_miss_p95_ms}"
-    gate_env["OMNI_AGENT_DISCOVER_CACHE_BENCH_ITERATIONS"] = str(
+    gate_env["XIUXIAN_DAOCHANG_DISCOVER_CACHE_HIT_P95_MS"] = f"{cfg.discover_cache_hit_p95_ms}"
+    gate_env["XIUXIAN_DAOCHANG_DISCOVER_CACHE_MISS_P95_MS"] = f"{cfg.discover_cache_miss_p95_ms}"
+    gate_env["XIUXIAN_DAOCHANG_DISCOVER_CACHE_BENCH_ITERATIONS"] = str(
         cfg.discover_cache_bench_iterations
     )
     run_command_fn(
@@ -28,7 +28,7 @@ def run_discover_cache_gate(
             "cargo",
             "test",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "--test",
             "mcp_discover_cache",
             "discover_calls_use_valkey_read_through_cache_when_configured",

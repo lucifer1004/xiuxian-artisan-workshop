@@ -7,6 +7,7 @@ import os
 import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from jsonschema import Draft202012Validator
 from omni.test_kit.fixtures.vector import (
     make_router_result_payload,
@@ -31,9 +32,15 @@ def _load_route_test_schema() -> dict:
 
     path = resolve_schema_file_path(
         "omni.router.route_test.v1.schema.json",
-        preferred_crates=("omni-agent",),
+        preferred_crates=("xiuxian-daochang",),
     )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(autouse=True)
+def _disable_live_mcp_embedding(monkeypatch):
+    """Keep route tests deterministic: no live MCP probing unless explicitly patched in a test."""
+    monkeypatch.setattr(route_module, "detect_mcp_port", AsyncMock(return_value=0))
 
 
 class TestRouteSchemaCommand:
@@ -91,7 +98,7 @@ class TestRouteSchemaCommand:
             assert result.exit_code == 0
             expected = resolve_schema_file_path(
                 "omni.router.search_config.v1.schema.json",
-                preferred_crates=("omni-agent",),
+                preferred_crates=("xiuxian-daochang",),
             )
             assert expected.exists()
             assert str(expected) in result.output

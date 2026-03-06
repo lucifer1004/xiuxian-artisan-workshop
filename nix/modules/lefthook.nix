@@ -19,48 +19,51 @@ let
 
   lefthook = initConfigs.lefthook;
 
-  # Project scopes shared across conform and cog
-  # Maps to: agent/how-to/git-workflow.md
-  project-scopes = [
-    # Python packages
-    "foundation" # Foundation layer: config, logging, runtime
-    "core" # Core agent modules
-    "agent" # Agent modules
-    "mcp-server" # MCP server implementation
-    # Rust crates
-    "rust" # Rust core implementation (omni-*)
-    "rust-core" # Rust core implementation (alias for rust)
-    "omni-ast" # AST parsing and analysis
-    "omni-edit" # Code editing and batch operations
-    "omni-io" # Safe file I/O operations
-    "omni-lance" # LanceDB vector store integration
-    "omni-security" # Security and sanitization
-    "omni-sniffer" # Code structure analysis
-    "omni-tags" # Tag extraction and management
-    "omni-tokenizer" # BPE tokenization
-    "omni-types" # Type unification across languages
-    "omni-vector" # Vector store operations
-    "skills-scanner" # Skill discovery and scanning
-    "scanner" # Alias for skills-scanner
-    "rust-bindings" # Python bindings via PyO3
-    # Core infrastructure
-    "skills" # Skill definitions and scripts
+  # Dynamic scope detection for ACTIVE packages
+  listDirs =
+    path:
+    if builtins.pathExists path then
+      lib.attrNames (
+        lib.filterAttrs (name: type: type == "directory") (builtins.readDir path)
+      )
+    else
+      [ ];
+
+  python-scopes = listDirs ../../packages/python;
+  rust-scopes = listDirs ../../packages/rust/crates;
+
+  # Active infrastructure scopes
+  infra-scopes = [
     "nix" # Infrastructure: devenv.nix, modules
     "docs" # Documentation
     "cli" # Tooling: justfile, lefthook
     "deps" # Dependency management
     "ci" # GitHub Actions, DevContainer
     "data" # JSONL examples, assets
+    "version" # Version bump commits
+    "claude" # Claude configuration
+    "git-ops" # Git operations tools
+    "git-workflow" # Git workflow documentation
     "mcp" # MCP application
-    "mcp-core" # MCP core modules
     "inference" # AI inference engine
     "router" # Tool routing & intent
     "orchestrator" # Orchestrator module
-    "git-ops" # Git operations tools
-    "git-workflow" # Git workflow documentation
-    "version" # Version bump commits
-    "claude" # Claude configuration
+    "skills" # Skill definitions and scripts
   ];
+
+  # Scopes for NEW commits (Infra + Detected Packages)
+  active-scopes = lib.unique (
+    infra-scopes
+    ++ python-scopes
+    ++ rust-scopes
+    ++ [
+      "rust"
+      "core"
+      "agent"
+      "foundation"
+    ]
+  );
+
   # Define generator configurations
   generators = [
     {
@@ -95,7 +98,8 @@ let
                   run = "uv run ruff format {staged_files}";
                 };
                 cog-check = {
-                  run = "cog check";
+                  # Still useful to check if types (feat/fix) are correct since last tag
+                  run = "cog check --from-latest-tag";
                 };
                 format-rust = {
                   glob = "*.rs";
@@ -122,9 +126,10 @@ let
         (config.omnibus.ops.mkNixago initConfigs.nixago-conform)
           initConfigs.conform.default
           {
+            # Strict validation for NEW commits
             data.commit = {
               conventional = {
-                scopes = append project-scopes;
+                scopes = append active-scopes;
               };
             };
           };
@@ -135,12 +140,13 @@ let
         (config.omnibus.ops.mkNixago initConfigs.nixago-cog) initConfigs.cog.default
           {
             data = {
-              scopes = project-scopes;
+              # REMOVED scopes: cog will now allow any scope in history
+              # This solves the "legacy scopes" maintenance problem forever.
               changelog = {
                 path = "CHANGELOG.md";
                 template = "remote";
                 remote = "github.com";
-                repository = "omni-dev-fusion";
+                repository = "xiuxian-artisan-workshop";
                 owner = "tao3k";
                 authors = [
                   {

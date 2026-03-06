@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import threading
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 
@@ -82,8 +81,7 @@ def test_sync_graceful_shutdown_runs_on_server_loop() -> None:
         handler = SimpleNamespace(_kernel=_Kernel())
         mcp_cmd._handler_ref = handler
         mcp_cmd._server_loop_ref = loop
-        with patch.object(mcp_cmd, "_stop_ollama_if_started", return_value=None):
-            mcp_cmd._sync_graceful_shutdown()
+        mcp_cmd._sync_graceful_shutdown()
         assert handler._kernel.calls == 1
         assert handler._kernel.loop_seen is loop
     finally:

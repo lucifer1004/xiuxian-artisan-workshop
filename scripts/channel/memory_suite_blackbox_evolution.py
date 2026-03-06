@@ -25,7 +25,7 @@ def run_memory_evolution_scenario(
     python_executable: str = sys.executable,
 ) -> None:
     """Run complex memory self-evolution scenario."""
-    scenario_runner = script_dir / "test_omni_agent_complex_scenarios.py"
+    scenario_runner = script_dir / "test_xiuxian_daochang_complex_scenarios.py"
     if not scenario_runner.exists():
         raise FileNotFoundError(f"complex scenario runner not found: {scenario_runner}")
     if not dataset_path.exists():

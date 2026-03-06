@@ -146,9 +146,9 @@ def register_skill_entities(
     import json as _json
 
     try:
-        from omni_core_rs import PyKnowledgeGraph
+        from xiuxian_core_rs import PyKnowledgeGraph
     except ImportError:
-        logger.debug("omni_core_rs unavailable, skipping entity registration")
+        logger.debug("xiuxian_core_rs unavailable, skipping entity registration")
         return {"entities_added": 0, "relations_added": 0, "status": "skipped"}
 
     # Load existing graph or create fresh
@@ -181,7 +181,7 @@ def register_skill_entities(
 
 def _register_skill_entities_python(kg: Any, normalized: list[dict[str, Any]]) -> dict[str, Any]:
     """Pure-Python fallback for register_skill_entities."""
-    from omni_core_rs import PyEntity, PyRelation
+    from xiuxian_core_rs import PyEntity, PyRelation
 
     entities_added = 0
     relations_added = 0

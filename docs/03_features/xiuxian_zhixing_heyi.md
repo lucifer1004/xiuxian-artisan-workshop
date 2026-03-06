@@ -17,7 +17,7 @@ metadata:
 # Xiuxian-Zhixing-Heyi Feature Plan (2026)
 
 > Status: Active (core runtime online; enforcement and indexing hardening in progress)
-> Scope: `packages/rust/crates/xiuxian-zhixing` and host wiring in `packages/rust/crates/omni-agent`
+> Scope: `packages/rust/crates/xiuxian-zhixing` and host wiring in `packages/rust/crates/xiuxian-daochang`
 
 ## 1. Name and Intent
 
@@ -32,7 +32,7 @@ The naming origin is Xiuxian (修仙) and Zhixing-Heyi (知行合一), which in 
 - `xiuxian-zhixing`: domain runtime for agenda/journal/blockers/reminders and Wendao bridge.
 - `xiuxian-qianhuan`: manifestation/template assembly used by host bootstrap.
 - `xiuxian-qianji`: workflow runtime namespace used by agent workflow execution paths.
-- `omni-agent`: host runtime namespace for native tool registration and notification transport.
+- `xiuxian-daochang`: host runtime namespace for native tool registration and notification transport.
 - Engineering role mapping:
   - `Action Compiler`: isolated execution backend for deterministic action compilation.
   - `Cognitive Interface`: user-facing dialogue/persona layer for multi-turn interaction.
@@ -68,8 +68,8 @@ The host agent exposes deterministic native tools:
 
 Implementation:
 
-- `packages/rust/crates/omni-agent/src/agent/native_tools/zhixing.rs`
-- `packages/rust/crates/omni-agent/src/agent/bootstrap/zhixing.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/native_tools/zhixing.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/bootstrap/zhixing.rs`
 
 ### 3.3 Reminder and Notification Flow
 
@@ -79,9 +79,9 @@ Implementation:
 Implementation:
 
 - `packages/rust/crates/xiuxian-zhixing/src/heyi/reminders.rs`
-- `packages/rust/crates/omni-agent/src/agent/bootstrap/zhixing.rs`
-- `packages/rust/crates/omni-agent/src/agent/notification/mod.rs`
-- `packages/rust/crates/omni-agent/src/agent/notification/dispatcher.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/bootstrap/zhixing.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/notification/mod.rs`
+- `packages/rust/crates/xiuxian-daochang/src/agent/notification/dispatcher.rs`
 
 ### 3.4 Zhixing Template and Runtime Configuration
 
@@ -114,16 +114,16 @@ Runtime behavior:
 
 ## 4. Capability Status (Audit Snapshot)
 
-| Capability                                                    | Status | Evidence                                                                                                                                                                                                                |
-| ------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Heyi orchestrator construction and timezone validation        | Done   | `packages/rust/crates/xiuxian-zhixing/src/heyi/types.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_heyi.rs`                                                                                                     |
-| Native tool registration and deterministic invocation         | Done   | `packages/rust/crates/omni-agent/src/agent/bootstrap/zhixing.rs`; `packages/rust/crates/omni-agent/src/agent/native_tools/zhixing.rs`                                                                                   |
-| Reminder polling and one-shot mark (`timer:reminded`)         | Done   | `packages/rust/crates/xiuxian-zhixing/src/heyi/reminders.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_heyi.rs`                                                                                                 |
-| Strict teacher blocker computation (`journal:carryover >= 3`) | Done   | `packages/rust/crates/xiuxian-zhixing/src/heyi/blockers.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_strict_teacher.rs`                                                                                        |
-| Strict teacher enforcement in runtime tool path               | Done   | `packages/rust/crates/xiuxian-zhixing/src/heyi/tasks.rs`; `packages/rust/crates/xiuxian-zhixing/src/heyi/agenda_render.rs`                                                                                              |
-| Wendao thin bridge boundary type                              | Done   | `packages/rust/crates/xiuxian-zhixing/src/wendao/indexer/mod.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_wendao_indexer.rs`                                                                                   |
-| Markdown persistence append safety                            | Done   | `packages/rust/crates/xiuxian-zhixing/src/storage/markdown.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_storage_markdown.rs`                                                                                   |
-| Config and path compliance with PRJ directory API             | Done   | `packages/rust/crates/omni-agent/src/agent/bootstrap/zhixing.rs` and `packages/rust/crates/omni-agent/src/agent/bootstrap/tests.rs` validate `PRJ_ROOT`, `PRJ_DATA_HOME`, and `XIUXIAN_WENDAO_NOTEBOOK_PATH` resolution |
+| Capability                                                    | Status | Evidence                                                                                                                                                                                                                            |
+| ------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Heyi orchestrator construction and timezone validation        | Done   | `packages/rust/crates/xiuxian-zhixing/src/heyi/types.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_heyi.rs`                                                                                                                 |
+| Native tool registration and deterministic invocation         | Done   | `packages/rust/crates/xiuxian-daochang/src/agent/bootstrap/zhixing.rs`; `packages/rust/crates/xiuxian-daochang/src/agent/native_tools/zhixing.rs`                                                                                   |
+| Reminder polling and one-shot mark (`timer:reminded`)         | Done   | `packages/rust/crates/xiuxian-zhixing/src/heyi/reminders.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_heyi.rs`                                                                                                             |
+| Strict teacher blocker computation (`journal:carryover >= 3`) | Done   | `packages/rust/crates/xiuxian-zhixing/src/heyi/blockers.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_strict_teacher.rs`                                                                                                    |
+| Strict teacher enforcement in runtime tool path               | Done   | `packages/rust/crates/xiuxian-zhixing/src/heyi/tasks.rs`; `packages/rust/crates/xiuxian-zhixing/src/heyi/agenda_render.rs`                                                                                                          |
+| Wendao thin bridge boundary type                              | Done   | `packages/rust/crates/xiuxian-zhixing/src/wendao/indexer/mod.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_wendao_indexer.rs`                                                                                               |
+| Markdown persistence append safety                            | Done   | `packages/rust/crates/xiuxian-zhixing/src/storage/markdown.rs`; `packages/rust/crates/xiuxian-zhixing/tests/test_storage_markdown.rs`                                                                                               |
+| Config and path compliance with PRJ directory API             | Done   | `packages/rust/crates/xiuxian-daochang/src/agent/bootstrap/zhixing.rs` and `packages/rust/crates/xiuxian-daochang/src/agent/bootstrap/tests.rs` validate `PRJ_ROOT`, `PRJ_DATA_HOME`, and `XIUXIAN_WENDAO_NOTEBOOK_PATH` resolution |
 
 ## 5. Hard Constraints
 
@@ -159,20 +159,20 @@ Runtime behavior:
 5. ZH-05 End-to-End Host Verification (Done)
 
 - Add host-level tests that validate native tools + reminder dispatch + blocker behavior together.
-- Evidence: `packages/rust/crates/omni-agent/tests/agent/native_tools_zhixing.rs` and `packages/rust/crates/omni-agent/tests/agent_suite.rs`.
-- Gate: `cargo test -p omni-agent --test agent_suite`.
+- Evidence: `packages/rust/crates/xiuxian-daochang/tests/agent/native_tools_zhixing.rs` and `packages/rust/crates/xiuxian-daochang/tests/agent_suite.rs`.
+- Gate: `cargo test -p xiuxian-daochang --test agent_suite`.
 
 6. ZH-06 Graph Power Evaluation (Done)
 
 - Verify the integration between Wendao's PPR algorithm and Zhixing's domain objects (`journal`, `agenda`).
 - Prove that searching for a concept in a journal naturally surfaces related, uncompleted tasks from the agenda due to graph linkage.
-- Validate that the `omni-agent`'s LLM context window successfully incorporates these cross-domain graph references to enforce `journal:carryover` logic naturally.
+- Validate that the `xiuxian-daochang`'s LLM context window successfully incorporates these cross-domain graph references to enforce `journal:carryover` logic naturally.
 - Evidence:
   - `packages/rust/crates/xiuxian-wendao/tests/test_link_graph_seed_and_priors/link_graph_related_journal_semantic_pull_surfaces_agenda_tasks.rs`
-  - `packages/rust/crates/omni-agent/tests/agent/native_tools_zhixing_e2e.rs`
+  - `packages/rust/crates/xiuxian-daochang/tests/agent/native_tools_zhixing_e2e.rs`
 - Gate:
   - `cargo test -p xiuxian-wendao --test test_link_graph_seed_and_priors link_graph_related_journal_semantic_pull_surfaces_agenda_tasks -q`
-  - `cargo test -p omni-agent --test agent_suite native_tools_zhixing_e2e::zhixing_e2e_tool_loop_reads_metadata_and_proactively_rejects_malicious_request -q`
+  - `cargo test -p xiuxian-daochang --test agent_suite native_tools_zhixing_e2e::zhixing_e2e_tool_loop_reads_metadata_and_proactively_rejects_malicious_request -q`
 
 7. ZH-07 Zero-Hardcoding via Skill Injection (Planned)
 

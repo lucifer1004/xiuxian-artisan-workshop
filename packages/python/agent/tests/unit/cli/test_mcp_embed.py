@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from omni.agent.cli import mcp_embed as mcp_embed_module
+
+
+@pytest.fixture(autouse=True)
+def _reset_mcp_embed_state():
+    """Isolate per-test cooldown/shared client state."""
+    with patch.dict(mcp_embed_module._MCP_EMBED_UNAVAILABLE_UNTIL, {}, clear=True):
+        mcp_embed_module._SHARED_HTTP_CLIENT = None
+        yield
+        mcp_embed_module._SHARED_HTTP_CLIENT = None
 
 
 class TestGetCandidatePorts:
@@ -52,22 +61,18 @@ class TestDetectMcpPort:
     """Tests for detect_mcp_port."""
 
     @pytest.mark.asyncio
-    async def test_returns_embedding_http_port_when_up(self):
+    async def test_returns_first_reachable_configured_port(self):
         with (
             patch.object(
-                mcp_embed_module, "detect_embedding_http_port", new=AsyncMock(return_value=18501)
+                mcp_embed_module, "probe_mcp_embed_port", new=AsyncMock(side_effect=[True, False])
             ),
-            patch.object(mcp_embed_module, "probe_mcp_embed_port", new=AsyncMock()),
         ):
-            port = await mcp_embed_module.detect_mcp_port()
-        assert port == 18501
+            port = await mcp_embed_module.detect_mcp_port([3002, 3001])
+        assert port == 3002
 
     @pytest.mark.asyncio
-    async def test_tries_candidates_when_embedding_http_down(self):
+    async def test_tries_candidates_until_one_responds(self):
         with (
-            patch.object(
-                mcp_embed_module, "detect_embedding_http_port", new=AsyncMock(return_value=0)
-            ),
             patch.object(
                 mcp_embed_module,
                 "probe_mcp_embed_port",
@@ -80,9 +85,6 @@ class TestDetectMcpPort:
     @pytest.mark.asyncio
     async def test_returns_zero_when_none_respond(self):
         with (
-            patch.object(
-                mcp_embed_module, "detect_embedding_http_port", new=AsyncMock(return_value=0)
-            ),
             patch.object(
                 mcp_embed_module, "probe_mcp_embed_port", new=AsyncMock(return_value=False)
             ),
@@ -104,26 +106,20 @@ class TestMcpPathSelection:
 
 
 class TestMakeMcpEmbedFunc:
-    """Tests for make_mcp_embed_func fallback."""
+    """Tests for make_mcp_embed_func."""
 
     @pytest.mark.asyncio
-    async def test_fallback_to_local_when_mcp_returns_none(self):
+    async def test_raises_when_mcp_returns_none(self):
         with (
             patch.object(mcp_embed_module, "embed_via_mcp", new=AsyncMock(return_value=None)),
             patch.object(mcp_embed_module, "embed_via_mcp_http", new=AsyncMock(return_value=None)),
-            patch.object(mcp_embed_module, "embed_via_http", new=AsyncMock(return_value=None)),
         ):
             from omni.agent.cli.mcp_embed import make_mcp_embed_func
+            from omni.foundation.services.embedding import EmbeddingUnavailableError
 
             embed_func = make_mcp_embed_func(3002)
-            mock_svc = MagicMock()
-            mock_svc.embed_batch.return_value = [[0.1] * 8]
-            with patch(
-                "omni.foundation.services.embedding.get_embedding_service", return_value=mock_svc
-            ):
-                result = await embed_func(["hello"])
-        assert result == [[0.1] * 8]
-        mock_svc.embed_batch.assert_called_once_with(["hello"])
+            with pytest.raises(EmbeddingUnavailableError, match="returned no vectors"):
+                await embed_func(["hello"])
 
     @pytest.mark.asyncio
     async def test_uses_mcp_when_embed_via_mcp_returns_vectors(self):
@@ -176,15 +172,11 @@ class TestMakeMcpEmbedFunc:
             patch.object(mcp_embed_module, "embed_via_mcp", side_effect=_fake_embed_via_mcp),
         ):
             from omni.agent.cli.mcp_embed import make_mcp_embed_func
+            from omni.foundation.services.embedding import EmbeddingUnavailableError
 
             embed_func = make_mcp_embed_func(3302)
-            mock_svc = MagicMock()
-            mock_svc.embed_batch.return_value = [[0.3] * 8]
-            with patch(
-                "omni.foundation.services.embedding.get_embedding_service", return_value=mock_svc
-            ):
-                result = await embed_func(["hello"])
-        assert result == [[0.3] * 8]
+            with pytest.raises(EmbeddingUnavailableError, match="returned no vectors"):
+                await embed_func(["hello"])
         assert "/message" not in called_paths
 
     @pytest.mark.asyncio
@@ -202,16 +194,12 @@ class TestMakeMcpEmbedFunc:
             patch.object(mcp_embed_module, "embed_via_mcp", side_effect=_fake_embed_via_mcp),
         ):
             from omni.agent.cli.mcp_embed import make_mcp_embed_func
+            from omni.foundation.services.embedding import EmbeddingUnavailableError
 
             embed_func = make_mcp_embed_func(3002)
-            mock_svc = MagicMock()
-            mock_svc.embed_batch.return_value = [[0.5] * 8]
-            with patch(
-                "omni.foundation.services.embedding.get_embedding_service", return_value=mock_svc
-            ):
-                result = await embed_func(["hello"])
+            with pytest.raises(EmbeddingUnavailableError, match="returned no vectors"):
+                await embed_func(["hello"])
 
-        assert result == [[0.5] * 8]
         mock_http_path.assert_awaited_once()
         assert called_kwargs
         assert all(kwargs.get("try_http_fast_path") is False for kwargs in called_kwargs)

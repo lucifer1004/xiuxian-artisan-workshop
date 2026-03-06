@@ -2,7 +2,7 @@
   process.manager.implementation = "process-compose";
   processes = {
     mcp.exec = "uv run omni mcp --port 3002";
-    agent.exec = "just agent-channel-webhook";
+    agent.exec = "just agent-channel-webhook-restart";
     skill-runner.exec = "uv run omni skill runner start";
   };
 }

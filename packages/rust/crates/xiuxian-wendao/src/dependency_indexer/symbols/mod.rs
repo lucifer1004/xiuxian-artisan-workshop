@@ -1,4 +1,4 @@
-//! Extract symbols from Rust/Python source files using omni-tags.
+//! Extract symbols from Rust/Python source files using xiuxian-tags.
 
 mod extract;
 mod index;

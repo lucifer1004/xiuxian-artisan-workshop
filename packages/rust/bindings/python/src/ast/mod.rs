@@ -35,8 +35,8 @@ pub struct PyCodeChunk {
     pub docstring: Option<String>,
 }
 
-impl From<omni_ast::CodeChunk> for PyCodeChunk {
-    fn from(chunk: omni_ast::CodeChunk) -> Self {
+impl From<xiuxian_ast::CodeChunk> for PyCodeChunk {
+    fn from(chunk: xiuxian_ast::CodeChunk) -> Self {
         Self {
             id: chunk.id,
             chunk_type: chunk.chunk_type,
@@ -121,8 +121,8 @@ pub struct PyExtractResult {
     pub captures: HashMap<String, String>,
 }
 
-impl From<omni_ast::ExtractResult> for PyExtractResult {
-    fn from(result: omni_ast::ExtractResult) -> Self {
+impl From<xiuxian_ast::ExtractResult> for PyExtractResult {
+    fn from(result: xiuxian_ast::ExtractResult) -> Self {
         Self {
             text: result.text,
             start: result.start,
@@ -185,7 +185,7 @@ pub fn py_extract_items(
     language: String,
     captures: Option<Vec<String>>,
 ) -> PyResult<String> {
-    let lang: omni_ast::Lang = language
+    let lang: xiuxian_ast::Lang = language
         .as_str()
         .try_into()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid language: {}", e)))?;
@@ -194,7 +194,7 @@ pub fn py_extract_items(
         .as_ref()
         .map(|values| values.iter().map(String::as_str).collect());
 
-    let results = omni_ast::extract_items(&content, &pattern, lang, capture_opts);
+    let results = xiuxian_ast::extract_items(&content, &pattern, lang, capture_opts);
 
     let py_results: Vec<PyExtractResult> = results.into_iter().map(Into::into).collect();
 
@@ -212,7 +212,7 @@ pub fn py_extract_items(
 ///     True if language is supported, False otherwise
 #[pyfunction]
 pub fn py_is_language_supported(language: String) -> bool {
-    <&str as TryInto<omni_ast::Lang>>::try_into(language.as_str()).is_ok()
+    <&str as TryInto<xiuxian_ast::Lang>>::try_into(language.as_str()).is_ok()
 }
 
 /// Get list of supported languages.
@@ -270,14 +270,14 @@ pub fn py_chunk_code(
     min_lines: usize,
     max_lines: usize,
 ) -> PyResult<Vec<PyCodeChunk>> {
-    let lang: omni_ast::Lang = language
+    let lang: xiuxian_ast::Lang = language
         .as_str()
         .try_into()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid language: {}", e)))?;
 
     let pattern_refs: Vec<&str> = patterns.iter().map(String::as_str).collect();
 
-    let chunks = omni_ast::chunk_code(
+    let chunks = xiuxian_ast::chunk_code(
         &content,
         &file_path,
         lang,
@@ -305,12 +305,12 @@ pub fn py_chunk_code(
 #[pyfunction]
 #[pyo3(signature = (content, language))]
 pub fn py_extract_skeleton(content: String, language: String) -> PyResult<String> {
-    let lang: omni_ast::Lang = language
+    let lang: xiuxian_ast::Lang = language
         .as_str()
         .try_into()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid language: {}", e)))?;
 
-    let skeleton = omni_ast::extract_skeleton(&content, lang);
+    let skeleton = xiuxian_ast::extract_skeleton(&content, lang);
 
     // Count items (separated by double newlines)
     let items_count = skeleton.split("\n\n").filter(|s| !s.is_empty()).count();

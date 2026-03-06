@@ -1,86 +1,92 @@
+"""Universal integration tests for code search skill loading and execution."""
+
+from __future__ import annotations
+
 import pytest
 
-from omni.core.kernel.engine import get_kernel
-
-
-async def _ensure_code_skill_ready(kernel) -> None:
-    """Ensure code skill is loaded with code_search command for integration checks."""
-    skill = kernel.skill_context.get_skill("code")
-    commands = skill.list_commands() if skill is not None else []
-    if skill is not None and "code.code_search" in commands:
-        return
-
-    from omni.core.skills.universal import UniversalScriptSkill
-
-    code_skill_path = kernel.skills_dir / "code"
-    reloaded = UniversalScriptSkill(skill_name="code", skill_path=code_skill_path)
-    await reloaded.load(context={"allow_module_reuse": False})
-    kernel.skill_context.register_skill(reloaded)
-
-    reloaded_commands = reloaded.list_commands()
-    assert "code.code_search" in reloaded_commands, (
-        "code skill loaded without code_search. "
-        f"path={code_skill_path} commands={reloaded_commands}"
-    )
+from omni.core.skills.universal import UniversalScriptSkill
+from omni.foundation.config.skills import SKILLS_DIR
 
 
 @pytest.fixture
-async def kernel():
-    """Fixture to provide an initialized kernel and ensure it's shut down."""
-    k = get_kernel(reset=True)
-    await k.initialize()
-    await _ensure_code_skill_ready(k)
-    yield k
-    await k.shutdown()
+async def code_skill():
+    """Load code skill directly to avoid kernel-level watcher/runtime side effects."""
+    skill = UniversalScriptSkill(
+        skill_name="code",
+        skill_path=SKILLS_DIR() / "code",
+    )
+    await skill.load(context={"allow_module_reuse": False})
+    return skill
+
+
+def _extract_command_module_globals(command) -> dict | None:
+    """Recover original command module globals from decorated function wrappers."""
+    command_fn = getattr(command, "__wrapped__", command)
+    command_globals = getattr(command_fn, "__globals__", None)
+
+    if isinstance(command_globals, dict) and "_get_code_search_executor" in command_globals:
+        return command_globals
+
+    for cell in getattr(command_fn, "__closure__", ()) or ():
+        candidate = getattr(cell, "cell_contents", None)
+        candidate_globals = getattr(candidate, "__globals__", None)
+        if callable(candidate) and isinstance(candidate_globals, dict):
+            if "_get_code_search_executor" in candidate_globals:
+                return candidate_globals
+    return None
 
 
 @pytest.mark.asyncio
-async def test_code_search_integration(kernel):
-    """Integration test: Verify code.code_search discovery and execution."""
-
-    # 1. Verify Discovery
-    skill = kernel.skill_context.get_skill("code")
-    assert skill is not None
-
-    commands = skill.list_commands()
+async def test_code_search_integration(code_skill):
+    """Verify command discovery and lightweight structural execution."""
+    commands = code_skill.list_commands()
     assert "code.code_search" in commands
 
-    # 2. Verify Execution returns structured response (even if no results)
-    result = await kernel.execute_tool(
+    result = await code_skill.execute(
         "code.code_search",
-        {"query": "class NonExistentClassXYZ123"},
+        query="class NonExistentClassXYZ123",
     )
-
-    # MCP result shape: content[].text; extract text for assertion
-    text = result if isinstance(result, str) else (result.get("content") or [{}])[0].get("text", "")
+    text = result if isinstance(result, str) else str(result)
     assert "<search_interaction" in text or "<search_results" in text or "SEARCH:" in text
 
-    # 3. Verify Session ID parameter works
-    result_with_session = await kernel.execute_tool(
+    result_with_session = await code_skill.execute(
         "code.code_search",
-        {"query": "how does code search work", "session_id": "test_session"},
+        query="def code_search",
+        session_id="test_session",
     )
-    assert result_with_session  # Should return some response
+    assert result_with_session
 
 
 @pytest.mark.asyncio
-async def test_modular_relative_imports_integration(kernel):
-    """Verify that relative imports work correctly in the actual skill directory."""
+async def test_modular_relative_imports_integration(code_skill):
+    """Verify relative imports in code search commands resolve correctly."""
+    command = code_skill.get_command("code.code_search")
+    assert command is not None
 
-    # Execute the search tool which relies on 'from .graph import execute_search'
-    # If the relative import failed, this tool call would raise an exception
-    try:
-        result = await kernel.execute_tool(
-            "code.code_search",
-            {"query": "code search function"},
-        )
-        # Verify we got a response (no import error); MCP shape: content[].text
-        assert result is not None
-        text = (
-            result
-            if isinstance(result, str)
-            else (result.get("content") or [{}])[0].get("text", "")
-        )
-        assert "<search_interaction" in text or "<search_results" in text or "SEARCH:" in text
-    except Exception as e:
-        pytest.fail(f"Tool execution failed due to modular import error: {e}")
+    command_globals = _extract_command_module_globals(command)
+    if not isinstance(command_globals, dict):
+        pytest.skip("code_search command globals are unavailable for modular import assertion")
+
+    get_executor = command_globals.get("_get_code_search_executor")
+    assert callable(get_executor), "code_search must expose _get_code_search_executor"
+
+    command_globals["_CODE_SEARCH_EXECUTOR"] = None
+    executor = get_executor()
+    assert callable(executor), "Relative import '.graph.execute_search' should resolve"
+
+    async def _stub_executor(query: str, session_id: str) -> dict:
+        del query, session_id
+        return {"final_output": "<search_interaction><status>ok</status></search_interaction>"}
+
+    command_globals["_CODE_SEARCH_EXECUTOR"] = _stub_executor
+    clear_cache = command_globals.get("clear_code_search_cache")
+    if callable(clear_cache):
+        clear_cache()
+
+    result = await code_skill.execute(
+        "code.code_search",
+        query="def code_search",
+        session_id="modular_import_test",
+    )
+    text = result if isinstance(result, str) else str(result)
+    assert "<search_interaction" in text

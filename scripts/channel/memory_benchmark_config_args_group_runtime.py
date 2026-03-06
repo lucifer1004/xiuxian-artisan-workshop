@@ -50,12 +50,12 @@ def add_output_and_policy_args(parser: Any) -> None:
     """Add output report and policy controls."""
     parser.add_argument(
         "--output-json",
-        default=str(default_report_path("omni-agent-memory-benchmark.json")),
+        default=str(default_report_path("xiuxian-daochang-memory-benchmark.json")),
         help="Output JSON report path.",
     )
     parser.add_argument(
         "--output-markdown",
-        default=str(default_report_path("omni-agent-memory-benchmark.md")),
+        default=str(default_report_path("xiuxian-daochang-memory-benchmark.md")),
         help="Output Markdown report path.",
     )
     parser.add_argument(

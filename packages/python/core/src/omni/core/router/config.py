@@ -213,7 +213,7 @@ def resolve_router_schema_path(schema_path: str | Path | None = None) -> Path:
     Priority:
     1. Explicit `schema_path` argument
     2. `router.search.schema_file` from settings
-    3. Default: resolved schema in Rust crate resources (`omni-agent/resources`)
+    3. Default: resolved schema in Rust crate resources (`xiuxian-daochang/resources`)
 
     Paths starting with "packages/" are resolved relative to project root;
     other relative paths are resolved relative to conf_dir (--conf).
@@ -235,7 +235,7 @@ def resolve_router_schema_path(schema_path: str | Path | None = None) -> Path:
 
     resolved = resolve_schema_file_path(
         _ROUTER_SEARCH_SCHEMA_NAME,
-        preferred_crates=("omni-agent",),
+        preferred_crates=("xiuxian-daochang",),
     )
     if resolved.exists():
         return resolved

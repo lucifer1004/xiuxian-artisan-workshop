@@ -63,7 +63,7 @@ def apply_kg_recall_boost(
         if intent_keywords is not None:
             keywords = intent_keywords
         else:
-            from omni_core_rs import extract_query_intent
+            from xiuxian_core_rs import extract_query_intent
 
             intent = extract_query_intent(query)
             keywords = intent.keywords

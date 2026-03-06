@@ -108,9 +108,9 @@ class TestUniversalSolver:
         return UniversalSolver(trace_collector=mock_tracer)
 
     @pytest.mark.asyncio
-    async def test_solve_with_mocked_omni_cell(self, solver, mock_tracer):
-        """Test solve with mocked OmniCell."""
-        with patch.object(solver, "_get_omni_cell", new_callable=AsyncMock) as mock_cell:
+    async def test_solve_with_mocked_xiuxian_cell(self, solver, mock_tracer):
+        """Test solve with mocked XiuxianCell."""
+        with patch.object(solver, "_get_xiuxian_cell", new_callable=AsyncMock) as mock_cell:
             mock_omni = AsyncMock()
             mock_omni.execute = AsyncMock(return_value="test output")
             mock_cell.return_value = mock_omni
@@ -126,7 +126,7 @@ class TestUniversalSolver:
     @pytest.mark.asyncio
     async def test_solve_without_trace_recording(self, solver, mock_tracer):
         """Test solve without recording trace."""
-        with patch.object(solver, "_get_omni_cell", new_callable=AsyncMock) as mock_cell:
+        with patch.object(solver, "_get_xiuxian_cell", new_callable=AsyncMock) as mock_cell:
             mock_omni = AsyncMock()
             mock_omni.execute = AsyncMock(return_value="output")
             mock_cell.return_value = mock_omni
@@ -140,7 +140,7 @@ class TestUniversalSolver:
     @pytest.mark.asyncio
     async def test_solve_execution_failure(self, solver, mock_tracer):
         """Test solve when execution fails."""
-        with patch.object(solver, "_get_omni_cell", new_callable=AsyncMock) as mock_cell:
+        with patch.object(solver, "_get_xiuxian_cell", new_callable=AsyncMock) as mock_cell:
             mock_omni = AsyncMock()
             mock_omni.execute = AsyncMock(side_effect=Exception("Command failed"))
             mock_cell.return_value = mock_omni
@@ -244,7 +244,7 @@ class TestUniversalSolver:
         """Test that tracer is lazily initialized."""
         solver = UniversalSolver(trace_collector=None)
 
-        with patch.object(solver, "_get_omni_cell", new_callable=AsyncMock) as mock_cell:
+        with patch.object(solver, "_get_xiuxian_cell", new_callable=AsyncMock) as mock_cell:
             mock_omni = AsyncMock()
             mock_omni.execute = AsyncMock(side_effect=Exception("No omni"))
             mock_cell.return_value = mock_omni

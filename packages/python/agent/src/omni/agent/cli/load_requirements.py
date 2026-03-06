@@ -8,13 +8,13 @@ Usage (in register_*_command):
     from omni.agent.cli.load_requirements import register_requirements
 
     def register_skill_command(app_instance: typer.Typer) -> None:
-        register_requirements("skill", ollama=False, embedding_index=False)
+        register_requirements("skill", embedding_index=False)
         app_instance.add_typer(skill_app, name="skill")
 
 When adding a new command:
     1. Call register_requirements(name, ...) in your register_*_command.
-    2. Default is ollama=True, embedding_index=True (full bootstrap).
-    3. Set to False for commands that don't need that service.
+    2. Default is embedding_index=True.
+    3. Set to False for commands that don't need embedding index checks.
 """
 
 from __future__ import annotations
@@ -27,11 +27,9 @@ class LoadRequirements:
     """Declarative bootstrap requirements for a command group.
 
     Attributes:
-        ollama: If True, ensure Ollama is running for embedding (skip for route/skill/reindex).
         embedding_index: If True, run ensure_embedding_index_compatibility (skip for skill/reindex).
     """
 
-    ollama: bool = True
     embedding_index: bool = True
 
 
@@ -41,9 +39,7 @@ _DEFAULT = LoadRequirements()
 _REGISTRY: dict[str, LoadRequirements] = {}
 
 
-def register_requirements(
-    command: str, *, ollama: bool | None = None, embedding_index: bool | None = None
-) -> None:
+def register_requirements(command: str, *, embedding_index: bool | None = None) -> None:
     """Declare load requirements for a command group.
 
     Call this from register_*_command before adding the typer. Only specified
@@ -51,12 +47,10 @@ def register_requirements(
 
     Args:
         command: Top-level command name (e.g. "skill", "route", "reindex").
-        ollama: Whether to ensure Ollama for embedding. False for light commands.
         embedding_index: Whether to run embedding index compatibility check. False for light commands.
     """
     current = _REGISTRY.get(command, _DEFAULT)
     _REGISTRY[command] = LoadRequirements(
-        ollama=current.ollama if ollama is None else ollama,
         embedding_index=current.embedding_index if embedding_index is None else embedding_index,
     )
 

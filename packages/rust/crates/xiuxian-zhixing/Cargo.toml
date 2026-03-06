@@ -28,7 +28,7 @@ include_dir = { workspace = true }
 orgize = "0.9"
 
 # Local crates
-omni-types = { path = "../omni-types" }
+xiuxian-types = { path = "../xiuxian-types" }
 xiuxian-wendao = { path = "../xiuxian-wendao" }
 xiuxian-qianhuan = { path = "../xiuxian-qianhuan" }
 # xiuxian-llm = { path = "../xiuxian-llm" } # Assuming it's available

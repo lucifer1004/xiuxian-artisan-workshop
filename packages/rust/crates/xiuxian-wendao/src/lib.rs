@@ -48,6 +48,7 @@ mod entity;
 pub mod graph;
 /// HMAS blackboard protocol contracts and validators.
 pub mod hmas;
+pub mod ingress;
 pub mod kg_cache;
 pub mod link_graph;
 pub mod link_graph_py;
@@ -115,11 +116,18 @@ pub use enhancer_py::{
 pub use entity::{
     Entity, EntitySearchQuery, EntityType, GraphStats, MultiHopOptions, Relation, RelationType,
 };
+pub use fusion::{RecallResult, apply_link_graph_proximity_boost};
 pub use graph::{KnowledgeGraph, QueryIntent, SkillDoc, SkillRegistrationResult, extract_intent};
 pub use hmas::{
     HmasConclusionPayload, HmasDigitalThreadPayload, HmasEvidencePayload, HmasRecordKind,
     HmasSourceNode, HmasTaskPayload, HmasValidationIssue, HmasValidationReport,
     validate_blackboard_file, validate_blackboard_markdown,
+};
+pub use ingress::{
+    ContentHashStore, InMemoryContentHashStore, KnowledgeGraphAssimilationSink,
+    NoopPartialReindexHook, PartialReindexHook, SpiderIngressError, SpiderPagePayload,
+    SpiderWendaoBridge, WebAssimilationSink, WebIngestionSignal, canonical_web_uri,
+    web_namespace_from_url,
 };
 pub use link_graph::{
     LINK_GRAPH_RETRIEVAL_PLAN_SCHEMA_VERSION, LINK_GRAPH_SALIENCY_SCHEMA_VERSION,

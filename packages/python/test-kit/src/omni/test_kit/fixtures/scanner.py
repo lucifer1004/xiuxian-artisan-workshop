@@ -85,7 +85,7 @@ class SkillTestSuite:
 
     def scanner(self) -> Any:
         """Get a PySkillScanner for the base path."""
-        from omni_core_rs import PySkillScanner
+        from xiuxian_core_rs import PySkillScanner
 
         return PySkillScanner(str(self.base_path))
 

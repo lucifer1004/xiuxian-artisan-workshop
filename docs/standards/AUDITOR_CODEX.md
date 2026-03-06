@@ -29,13 +29,19 @@ This document defines the **Mandatory Engineering Standards** for the CyberXiuXi
 - [SKILL-ANCHOR]: `SKILL.md` is the only physical blocker for discovery.
 - [SCOPE-VIGILANCE]: Any file outside the `skills.toml` authorized set triggers a warning.
 - [ZERO-LEAKAGE]: System-level errors must be scrubbed by `ZhenfaTransmuter`.
+- [PROTOCOL-INTEGRITY]: All tool/function responses MUST be preceded by an Assistant request with a matching `tool_call_id`. The system MUST enforce a `Hygiene` layer (`enforce_tool_message_integrity`) before LLM dispatch.
 
 ## 3. Performance & Memory
 
 - [ZERO-COPY]: Mandatory `Arc<str>` for resource sharing.
 - [PARALLEL]: Mandatory `rayon` for all traversals.
 
-## 4. Operational Governance
+## 5. Operational Efficiency & Tiered Gates
 
-- [BLUEPRINT-FIRST]: Every non-trivial task requires a **Draft Blueprint** in `.data/blueprints/` before implementation.
-- [AUDIT-ONLY]: The Auditor has no write-access to source code (`.rs`, `.toml`). Action is taken only through the Sovereign's implementation.
+To preserve the Sovereign's development momentum, verification is divided into three power tiers:
+
+- **[TIER-1: PULSE]**: `fmt`. Run on every file save. Purpose: Visual consistency.
+- **[TIER-2: HEARTBEAT]**: `cargo check`. Run during active coding. Purpose: Type safety and syntax.
+- **[TIER-3: GATE]**: `cargo clippy`, `cargo test`, `too_many_lines`. Run ONLY when a sub-task is ready for promotion to [DONE]. Purpose: Architectural alignment and performance audit.
+
+**The Auditor shall only demand TIER-3 compliance at the point of Finality.**

@@ -66,11 +66,11 @@ def compute_fusion_weights(query: str) -> FusionWeights:
         return _BALANCED
 
     try:
-        from omni_core_rs import extract_query_intent
+        from xiuxian_core_rs import extract_query_intent
 
         intent = extract_query_intent(query)
     except ImportError:
-        logger.debug("omni_core_rs not available; using balanced weights")
+        logger.debug("xiuxian_core_rs not available; using balanced weights")
         return _BALANCED
     except Exception as e:
         logger.debug("Intent extraction failed: %s", e)

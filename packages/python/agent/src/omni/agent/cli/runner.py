@@ -30,8 +30,6 @@ def _setup_quiet_logging():
     logging.getLogger("omni").setLevel(logging.WARNING)
     logging.getLogger("omni.core").setLevel(logging.WARNING)
     logging.getLogger("omni.foundation").setLevel(logging.WARNING)
-    logging.getLogger("litellm").setLevel(logging.WARNING)
-    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 
 
 def _close_embedding_client_if_loaded() -> None:
@@ -61,7 +59,7 @@ def run_skills(
     log_handler: Callable[[str], None] | None = None,
     reuse_process: bool = False,
 ) -> None:
-    """Execute skill commands using omni-core Kernel.
+    """Execute skill commands using xiuxian-core Kernel.
 
     Args:
         commands: List of command arguments
@@ -200,7 +198,7 @@ def run_skills(
 
 def _show_help() -> None:
     """Show available skills and commands."""
-    # Use omni-core Kernel (from installed package)
+    # Use xiuxian-core Kernel (from installed package)
     from omni.core import get_kernel
 
     kernel = get_kernel()

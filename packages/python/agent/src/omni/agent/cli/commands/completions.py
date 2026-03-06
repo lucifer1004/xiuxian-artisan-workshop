@@ -186,8 +186,8 @@ def register_completions_command(app: Typer) -> None:
     """Register completions command with the main app."""
     from omni.agent.cli.load_requirements import register_requirements
 
-    register_requirements("completions", ollama=False, embedding_index=False)
-    register_requirements("commands", ollama=False, embedding_index=False)
+    register_requirements("completions", embedding_index=False)
+    register_requirements("commands", embedding_index=False)
 
     @app.command("completions")
     def completions(

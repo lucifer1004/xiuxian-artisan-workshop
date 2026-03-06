@@ -14,7 +14,7 @@ metadata:
 # Keyword Backend Replacement Evidence (V4)
 
 - Date: `2026-02-12`
-- Offline snapshot: `packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
+- Offline snapshot: `packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
 - Offline size: `120` queries
 - Live LLM sample: `/tmp/keyword-llm-eval-v4-q40-r1.json` (`40` queries)
 

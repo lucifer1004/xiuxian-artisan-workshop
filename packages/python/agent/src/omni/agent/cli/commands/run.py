@@ -15,13 +15,13 @@ console = Console()
 
 
 def _exec_omni_agent(args: list[str]) -> None:
-    """Replace current process with `omni-agent` from PATH."""
+    """Replace current process with `xiuxian-daochang` from PATH."""
     try:
-        os.execvp("omni-agent", ["omni-agent", *args])
+        os.execvp("xiuxian-daochang", ["xiuxian-daochang", *args])
     except FileNotFoundError as exc:
         console.print(
-            "[red]omni-agent not found in PATH.[/red] "
-            "Build/install it first (for example: [bold]cargo build -p omni-agent[/bold])."
+            "[red]xiuxian-daochang not found in PATH.[/red] "
+            "Build/install it first (for example: [bold]cargo build -p xiuxian-daochang[/bold])."
         )
         raise typer.Exit(1) from exc
 
@@ -49,7 +49,7 @@ def register_run_command(parent_app: typer.Typer):
     """Register the run command with the parent app."""
     from omni.agent.cli.load_requirements import register_requirements
 
-    register_requirements("run", ollama=True, embedding_index=True)
+    register_requirements("run", embedding_index=True)
 
     @parent_app.command()
     def run(
@@ -78,13 +78,13 @@ def register_run_command(parent_app: typer.Typer):
         tui_socket: Annotated[
             str,
             typer.Option("--socket", help="Not used in Rust-only `omni run`"),
-        ] = "/tmp/omni-omega.sock",
+        ] = "/tmp/xiuxian-omega.sock",
         verbose: Annotated[
             bool,
             typer.Option("--verbose/--quiet", "-v/-q", help="Set Rust logging verbosity"),
         ] = True,
     ):
-        """Execute a task via Rust `omni-agent` only."""
+        """Execute a task via Rust `xiuxian-daochang` only."""
         del tui_socket
 
         unsupported = _unsupported_flags(
@@ -97,12 +97,12 @@ def register_run_command(parent_app: typer.Typer):
             joined = ", ".join(unsupported)
             console.print(
                 f"[red]Unsupported flags in Rust-only `omni run`:[/red] {joined}\n"
-                "Use `omni-agent` subcommands directly for advanced runtime modes."
+                "Use `xiuxian-daochang` subcommands directly for advanced runtime modes."
             )
             raise typer.Exit(2)
 
         if steps is not None:
-            os.environ["OMNI_AGENT_MAX_TOOL_ROUNDS"] = str(max(1, int(steps)))
+            os.environ["XIUXIAN_DAOCHANG_MAX_TOOL_ROUNDS"] = str(max(1, int(steps)))
 
         if verbose and "RUST_LOG" not in os.environ:
             os.environ["RUST_LOG"] = "debug"

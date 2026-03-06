@@ -36,7 +36,7 @@ def _get_memory_dir() -> Path:
         return prj_dirs.PRJ_CACHE("memory")
     except Exception:
         # Fallback for edge cases
-        return Path(".cache/omni-dev-fusion/memory")
+        return Path(".cache/xiuxian-artisan-workshop/memory")
 
 
 MEMORY_DIR = _get_memory_dir()

@@ -127,7 +127,7 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             fn definition(&self) -> ::xiuxian_zhenfa::serde_json::Value {
                 let schema = ::xiuxian_zhenfa::schemars::schema_for!(#args_ty);
-                let parameters = ::xiuxian_zhenfa::serde_json::to_value(schema.schema)
+                let parameters = ::xiuxian_zhenfa::serde_json::to_value(schema)
                     .unwrap_or_else(|error| {
                         let _ = error;
                         ::xiuxian_zhenfa::serde_json::json!({

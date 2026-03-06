@@ -69,8 +69,8 @@ fn test_symbol_index_search() {
 
 #[test]
 fn test_dependency_config_load() {
-    let config_path =
-        workspace_root().join("packages/rust/crates/omni-agent/resources/config/xiuxian.toml");
+    let config_path = workspace_root()
+        .join("packages/rust/crates/xiuxian-daochang/resources/config/xiuxian.toml");
     let config = DependencyBuildConfig::load(config_path.to_string_lossy().as_ref());
 
     assert!(!config.manifests.is_empty());

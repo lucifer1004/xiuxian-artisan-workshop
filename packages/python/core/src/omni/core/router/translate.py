@@ -55,6 +55,56 @@ def _is_likely_english(text: str) -> bool:
     return (ascii_word / len(tokens)) >= 0.5
 
 
+def _strip_reasoning_blocks(text: str) -> str:
+    """Remove model reasoning wrappers that should never be used as routing query."""
+    # Remove common thinking wrappers from reasoning models.
+    text = re.sub(r"(?is)<think>.*?</think>", " ", text)
+    # Remove markdown code fences that sometimes wrap model output.
+    text = re.sub(r"(?m)^```[a-zA-Z0-9_-]*\s*$", "", text)
+    return text.replace("```", " ").strip()
+
+
+def _extract_translation_candidate(output: str) -> str | None:
+    """Extract the first plausible translation line from model output."""
+    if not output or not output.strip():
+        return None
+
+    cleaned = _strip_reasoning_blocks(output)
+    if not cleaned:
+        return None
+
+    for raw_line in cleaned.splitlines():
+        line = raw_line.strip().lstrip("-*#").strip()
+        if not line:
+            continue
+        if re.search(r"<\s*/?\s*think\b", line, re.IGNORECASE):
+            continue
+        if re.fullmatch(r"<[^>]+>", line):
+            continue
+
+        lower = line.lower()
+        if lower.startswith("translation:") or lower.startswith("translated:"):
+            line = line.split(":", 1)[1].strip()
+
+        if line:
+            return line
+    return None
+
+
+def _is_valid_translation_candidate(text: str) -> bool:
+    """Validate that translation output is useful for downstream routing."""
+    if not text or not text.strip():
+        return False
+    if any(ord(c) > 127 for c in text):
+        return False
+    if re.fullmatch(r"<[^>]+>", text.strip()):
+        return False
+
+    has_alpha = any(ch.isalpha() for ch in text)
+    has_url = "http://" in text or "https://" in text
+    return has_alpha or has_url
+
+
 async def translate_query_to_english(
     query: str,
     *,
@@ -106,10 +156,8 @@ async def translate_query_to_english(
             max_tokens=512,
         )
         if out and isinstance(out, str) and out.strip():
-            translated = out.strip().split("\n")[0].strip()
-            if translated.startswith("# "):
-                translated = translated[2:].strip()
-            if translated and not any(ord(c) > 127 for c in translated):
+            translated = _extract_translation_candidate(out)
+            if translated and _is_valid_translation_candidate(translated):
                 logger.debug(
                     "Query translated for routing",
                     original_preview=query[:50],
@@ -119,6 +167,11 @@ async def translate_query_to_english(
             if translated and any(ord(c) > 127 for c in translated):
                 logger.debug(
                     "Translation still non-English, using fallback",
+                    translated_preview=translated[:50],
+                )
+            elif translated:
+                logger.debug(
+                    "Translation candidate rejected, using fallback",
                     translated_preview=translated[:50],
                 )
     except Exception as e:

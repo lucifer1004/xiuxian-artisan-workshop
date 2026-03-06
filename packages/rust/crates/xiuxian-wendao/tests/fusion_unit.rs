@@ -1,11 +1,8 @@
 //! Integration tests for fusion recall boost.
 
-#[path = "../src/fusion.rs"]
-mod fusion_impl;
-
 use std::collections::{HashMap, HashSet};
 
-use fusion_impl::{RecallResult, apply_link_graph_proximity_boost};
+use xiuxian_wendao::{RecallResult, apply_link_graph_proximity_boost};
 
 #[test]
 fn test_apply_link_graph_proximity_boost_bidirectional_link() {

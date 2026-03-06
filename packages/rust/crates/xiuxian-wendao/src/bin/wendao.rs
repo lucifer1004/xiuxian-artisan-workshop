@@ -13,10 +13,12 @@ mod types;
 use execute::execute;
 use helpers::build_index;
 use types::{AgenticCommand, Cli, Command};
+use xiuxian_logging::init_from_cli;
 use xiuxian_wendao::set_link_graph_wendao_config_override;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    init_from_cli("xiuxian_wendao", &cli.logging).map_err(|err| anyhow!(err))?;
 
     if let Some(conf) = &cli.config_file {
         set_link_graph_wendao_config_override(conf.clone()).map_err(|err| anyhow!(err))?;

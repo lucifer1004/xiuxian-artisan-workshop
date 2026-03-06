@@ -201,7 +201,7 @@ impl ZhixingHeyi {
     /// Render reminder notification in Telegram `MarkdownV2` format.
     ///
     /// The returned payload includes an internal prefix marker consumed by
-    /// omni-agent notification providers to switch parse mode.
+    /// xiuxian-daochang notification providers to switch parse mode.
     ///
     /// # Errors
     /// Returns an error when template rendering fails.

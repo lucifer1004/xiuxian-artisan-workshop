@@ -63,7 +63,7 @@ def build_config(
     )
     if not executable.exists():
         raise ValueError(
-            f"executable not found: {executable}. Build first: cargo build -p omni-agent"
+            f"executable not found: {executable}. Build first: cargo build -p xiuxian-daochang"
         )
     if not mcp_config.exists():
         raise ValueError(f"mcp config not found: {mcp_config}")

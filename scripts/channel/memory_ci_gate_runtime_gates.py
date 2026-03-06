@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate-stage execution helpers for omni-agent memory CI gate runtime."""
+"""Gate-stage execution helpers for xiuxian-daochang memory CI gate runtime."""
 
 from __future__ import annotations
 

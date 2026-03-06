@@ -15,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Build base parser with shared description."""
     return argparse.ArgumentParser(
         description=(
-            "Run complex black-box workflow scenarios for omni-agent Telegram runtime "
+            "Run complex black-box workflow scenarios for xiuxian-daochang Telegram runtime "
             "and enforce structural complexity gates."
         )
     )

@@ -1,6 +1,6 @@
 """Rust Core Verification Tests
 
-These tests validate that the Rust omni-vector core is functioning correctly.
+These tests validate that the Rust xiuxian-vector core is functioning correctly.
 Run with: uv run pytest packages/python/core/tests/units/test_rust_core_verification.py -v
 
 This test module is automatically discovered by pytest and will run as part of

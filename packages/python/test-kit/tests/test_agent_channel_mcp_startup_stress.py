@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_mcp_startup_stress.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_mcp_startup_stress.py."""
 
 from __future__ import annotations
 
@@ -15,8 +15,10 @@ if TYPE_CHECKING:
 
 def _load_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_mcp_startup_stress.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_mcp_startup_stress", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_mcp_startup_stress.py"
+    spec = importlib.util.spec_from_file_location(
+        "xiuxian_daochang_mcp_startup_stress", script_path
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -31,13 +33,13 @@ def _make_args(**overrides: object) -> argparse.Namespace:
         "parallel": 3,
         "startup_timeout_secs": 45,
         "cooldown_secs": 0.2,
-        "executable": "target/debug/omni-agent",
+        "executable": "target/debug/xiuxian-daochang",
         "mcp_config": ".mcp.json",
         "project_root": ".",
         "bind_addr": "127.0.0.1:0",
-        "rust_log": "omni_agent::mcp_pool=debug",
-        "output_json": ".run/reports/omni-agent-mcp-startup-stress.json",
-        "output_markdown": ".run/reports/omni-agent-mcp-startup-stress.md",
+        "rust_log": "xiuxian_daochang::mcp_pool=debug",
+        "output_json": ".run/reports/xiuxian-daochang-mcp-startup-stress.json",
+        "output_markdown": ".run/reports/xiuxian-daochang-mcp-startup-stress.md",
         "restart_mcp_cmd": "",
         "restart_mcp_settle_secs": 2.0,
         "health_url": "http://127.0.0.1:3002/health",
@@ -191,7 +193,7 @@ def test_build_config_resolves_paths(tmp_path) -> None:
     module = _load_module()
     project_root = tmp_path / "repo"
     project_root.mkdir(parents=True)
-    executable = project_root / "target" / "debug" / "omni-agent"
+    executable = project_root / "target" / "debug" / "xiuxian-daochang"
     executable.parent.mkdir(parents=True)
     executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     executable.chmod(0o755)
@@ -200,7 +202,7 @@ def test_build_config_resolves_paths(tmp_path) -> None:
 
     args = _make_args(
         project_root=str(project_root),
-        executable="target/debug/omni-agent",
+        executable="target/debug/xiuxian-daochang",
         mcp_config=".mcp.json",
         output_json=".run/reports/a.json",
         output_markdown=".run/reports/a.md",

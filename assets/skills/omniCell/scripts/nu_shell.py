@@ -9,7 +9,7 @@ Replaces bash for agent workflows.
 import json
 from typing import Any
 
-from omni.core.skills.runtime.omni_cell import ActionType, get_runner
+from omni.core.skills.runtime.xiuxian_cell import ActionType, get_runner
 from omni.foundation.api.decorators import skill_command
 from omni.foundation.api.response_payloads import build_status_message_response
 from omni.foundation.context_delivery import ChunkedSessionStore, validate_chunked_action

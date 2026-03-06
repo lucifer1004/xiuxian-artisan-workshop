@@ -17,7 +17,7 @@ metadata:
 
 # Omni-Dev-Fusion vs. Obsidian: The Evolution from Passive Vault to Active Graph Engine
 
-This document articulates the fundamental differences between our architecture (`omni-dev-fusion` / `xiuxian-wendao`) and traditional Personal Knowledge Management (PKM) tools like **Obsidian**.
+This document articulates the fundamental differences between our architecture (`xiuxian-artisan-workshop` / `xiuxian-wendao`) and traditional Personal Knowledge Management (PKM) tools like **Obsidian**.
 
 It answers the core question: **Why build a custom Rust-based Knowledge Graph (`wendao`) instead of just writing plugins for Obsidian?**
 
@@ -91,7 +91,7 @@ Here is why `wendao` is an engine for LLMs, whereas Obsidian is a vault for huma
 
 We did not build `wendao` to replace Obsidian as a typing app. We built it because **LLMs cannot reason effectively over flat file systems.**
 
-To build an autonomous, highly reliable AI partner (the Omni-Agent), we needed:
+To build an autonomous, highly reliable AI partner (the 修仙道场), we needed:
 
 1. **Mathematical Context Retrieval** (PPR algorithms instead of grep).
 2. **First-Class Edge Types** (Semantic relations instead of string brackets).

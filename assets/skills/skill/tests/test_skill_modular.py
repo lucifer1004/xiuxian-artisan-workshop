@@ -5,11 +5,11 @@ for string assertions, so tests pass whether output is raw or MCP content envelo
 """
 
 import pytest
-from omni.test_kit.decorators import omni_skill
+from omni.test_kit.decorators import xiuxian_skill
 
 
 @pytest.mark.asyncio
-@omni_skill(name="skill")
+@xiuxian_skill(name="skill")
 class TestSkillModular:
     """Modular tests for skill management skill."""
 

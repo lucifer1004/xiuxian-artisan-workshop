@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 def test_get_git_commit_uses_project_root_for_cwd() -> None:
     from omni.agent.cli.app import _get_git_commit
 
-    fake_root = Path("/tmp/omni-project")
+    fake_root = Path("/tmp/xiuxian-project")
     fake_result = MagicMock()
     fake_result.returncode = 0
     fake_result.stdout = "12345678abcdef\n"

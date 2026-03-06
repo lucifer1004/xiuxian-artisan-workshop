@@ -92,7 +92,8 @@ impl ZhenfaTool for RewardSignalTool {
         let value = args
             .get("value")
             .and_then(serde_json::Value::as_f64)
-            .unwrap_or(0.0) as f32;
+            .and_then(|value| value.to_string().parse::<f32>().ok())
+            .unwrap_or(0.0);
 
         ctx.emit_signal(ZhenfaSignal::Reward {
             episode_id,

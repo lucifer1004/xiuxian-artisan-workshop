@@ -2,7 +2,7 @@
 omni.core.kernel.watcher - Reactive Skill Watcher (Live-Wire)
 
 Monitors skill scripts (via SKILLS_DIR()) and LinkGraph markdown roots, then
-triggers incremental index updates on changes. Uses Rust omni-io notify
+triggers incremental index updates on changes. Uses Rust xiuxian-io notify
 bindings for high-performance file watching with EventBus integration.
 
 Features:
@@ -26,7 +26,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import omni_core_rs as rs
+import xiuxian_core_rs as rs
 
 from omni.foundation.config.logging import get_logger
 from omni.foundation.config.settings import get_setting
@@ -79,7 +79,7 @@ class ReactiveSkillWatcher:
     """
     Monitors skill directories and LinkGraph markdown roots for reactive updates.
 
-    Uses Rust-based file watching (omni-io) for high-performance event capture,
+    Uses Rust-based file watching (xiuxian-io) for high-performance event capture,
     then dispatches to the SkillIndexer for knowledge updates.
 
     Features:

@@ -2,9 +2,9 @@
 system.py - Immune System Integration
 
 Orchestrates the complete immune defense pipeline:
-1. Static Analysis (Rust: omni-ast) - Level 1
-2. Dynamic Simulation (Rust: omni-security) - Level 2
-3. Permission Gatekeeping (Rust: omni-security) - Ongoing
+1. Static Analysis (Rust: xiuxian-ast) - Level 1
+2. Dynamic Simulation (Rust: xiuxian-security) - Level 2
+3. Permission Gatekeeping (Rust: xiuxian-security) - Ongoing
 
 This is the "Brain" of the immune system that coordinates all defenses.
 """
@@ -98,19 +98,19 @@ class ImmuneSystem:
              |
              v
     +--------+----------+
-    | Level 1: Static   |  <-- Rust: omni-ast (ast-grep)
+    | Level 1: Static   |  <-- Rust: xiuxian-ast (ast-grep)
     |    Analysis       |
     +--------+----------+
              |
              v (if passed)
     +--------+----------+
-    | Level 2: Dynamic  |  <-- Rust: omni-security (Docker/NsJail)
+    | Level 2: Dynamic  |  <-- Rust: xiuxian-security (Docker/NsJail)
     |    Simulation     |
     +--------+----------+
              |
              v (if passed)
     +--------+----------+
-    | Level 3: Perms    |  <-- Rust: omni-security (Zero Trust)
+    | Level 3: Perms    |  <-- Rust: xiuxian-security (Zero Trust)
     +--------+----------+
              |
              v
@@ -162,7 +162,7 @@ class ImmuneSystem:
             return report
 
         # ================================================================
-        # Level 1: Static Analysis (Rust: omni-ast)
+        # Level 1: Static Analysis (Rust: xiuxian-ast)
         # ================================================================
         logger.info("  [1/3] Running static analysis...")
         try:
@@ -184,7 +184,7 @@ class ImmuneSystem:
             return report
 
         # ================================================================
-        # Level 2: Dynamic Simulation (Rust: omni-security)
+        # Level 2: Dynamic Simulation (Rust: xiuxian-security)
         # ================================================================
         if self.require_simulation:
             logger.info("  [2/3] Running dynamic simulation...")
@@ -212,7 +212,7 @@ class ImmuneSystem:
             logger.info("  [2/3] Skipping simulation (disabled)")
 
         # ================================================================
-        # Level 3: Permission Check (Rust: omni-security)
+        # Level 3: Permission Check (Rust: xiuxian-security)
         # ================================================================
         logger.info("  [3/3] Checking permissions...")
         report.permission_check_passed = True  # Default allow if Rust available

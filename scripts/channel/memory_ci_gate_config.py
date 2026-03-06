@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Config helper facade for omni-agent memory CI gate."""
+"""Config helper facade for xiuxian-daochang memory CI gate."""
 
 from __future__ import annotations
 

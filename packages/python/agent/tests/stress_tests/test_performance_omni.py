@@ -12,6 +12,7 @@ Usage:
 
 import time
 from pathlib import Path
+import os
 
 import pytest
 
@@ -22,6 +23,8 @@ class TestOmniPerformance:
     @pytest.mark.asyncio
     async def test_git_skill_dispatch_latency(self, git_skill):
         """Measure git skill command dispatch latency."""
+        if os.environ.get("PYTEST_XDIST_WORKER"):
+            pytest.skip("Performance benchmark is unstable under xdist contention")
         iterations = 5
         latencies = []
 
@@ -44,6 +47,8 @@ class TestOmniPerformance:
     @pytest.mark.asyncio
     async def test_skill_reload_performance(self, skills_root: Path):
         """Measure skill loading/reloading performance."""
+        if os.environ.get("PYTEST_XDIST_WORKER"):
+            pytest.skip("Performance benchmark is unstable under xdist contention")
         from omni.core.skills import UniversalScriptSkill
 
         iterations = 3

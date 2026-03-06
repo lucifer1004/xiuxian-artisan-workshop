@@ -47,7 +47,7 @@ Instead of letting the LLM run wild, we introduced the `SuspendMechanism`.
 
 ### 2.4 AST-Gated Security: "Zero-Trust Execution"
 
-Before the LLM even sees the code, the Qianji `SecurityScanMechanism` utilizes `omni-ast` (AST-grep). It statically intercepts malicious patterns (`subprocess`, `os.system`, `eval`) or sensitive files (keys, tokens) in the cloned repository. If `abort_on_violation=true`, the array violently halts, guaranteeing the agent never executes or ingests poisoned repositories.
+Before the LLM even sees the code, the Qianji `SecurityScanMechanism` utilizes `xiuxian-ast` (AST-grep). It statically intercepts malicious patterns (`subprocess`, `os.system`, `eval`) or sensitive files (keys, tokens) in the cloned repository. If `abort_on_violation=true`, the array violently halts, guaranteeing the agent never executes or ingests poisoned repositories.
 
 ---
 

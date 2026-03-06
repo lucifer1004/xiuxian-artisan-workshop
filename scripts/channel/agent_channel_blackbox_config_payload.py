@@ -36,8 +36,19 @@ def build_update_payload(
     return json.dumps(payload, ensure_ascii=False)
 
 
-def build_probe_message(prompt: str, trace_id: str) -> str:
-    """Build probe text preserving slash-command exactness."""
-    if prompt.lstrip().startswith("/"):
-        return prompt
-    return f"[{trace_id}] {prompt}"
+def build_probe_message(prompt: str, trace_id: str, image_url: str | None = None) -> str:
+    """Build probe text preserving slash-command exactness and optional image marker."""
+    return build_probe_message_with_image(prompt, trace_id, image_url=image_url)
+
+
+def build_probe_message_with_image(
+    prompt: str,
+    trace_id: str,
+    image_url: str | None,
+) -> str:
+    """Build probe text and optionally append a multimodal image marker."""
+    base_message = prompt if prompt.lstrip().startswith("/") else f"[{trace_id}] {prompt}"
+
+    if not image_url:
+        return base_message
+    return f"{base_message} [IMAGE:{image_url}]"

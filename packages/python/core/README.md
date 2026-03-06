@@ -1,12 +1,12 @@
 ---
 type: knowledge
 metadata:
-  title: "omni-core"
+  title: "xiuxian-core"
 ---
 
-# omni-core
+# xiuxian-core
 
-Microkernel core for omni-dev-fusion.
+Microkernel core for xiuxian-artisan-workshop.
 
 ## Components
 
@@ -15,7 +15,7 @@ Microkernel core for omni-dev-fusion.
 
 ## Dependencies
 
-- `omni-foundation`: Foundation layer (Rust bridge, logging, config)
+- `xiuxian-foundation`: Foundation layer (Rust bridge, logging, config)
 - `mcp`: Model Context Protocol
 
 ## Usage

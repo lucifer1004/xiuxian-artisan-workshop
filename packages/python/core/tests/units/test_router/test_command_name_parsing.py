@@ -4,7 +4,7 @@ Test for command_name parsing to avoid skill prefix duplication.
 Verifies that when Rust returns tool_name in "skill.command" format,
 the command_name is correctly extracted without duplicating the skill prefix.
 
-See: https://github.com/tao3k/omni-dev-fusion/issues/xxx
+See: https://github.com/tao3k/xiuxian-artisan-workshop/issues/xxx
 """
 
 import pytest

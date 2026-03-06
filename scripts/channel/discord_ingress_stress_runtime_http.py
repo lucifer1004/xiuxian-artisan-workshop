@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-DISCORD_INGRESS_SECRET_HEADER = "x-omni-discord-ingress-token"
+DISCORD_INGRESS_SECRET_HEADER = "x-xiuxian-discord-ingress-token"
 
 
 def build_ingress_payload(cfg: Any, event_id: str, prompt: str) -> bytes:

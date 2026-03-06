@@ -37,7 +37,7 @@ def _shutdown_embedding_executor() -> None:
 atexit.register(_shutdown_embedding_executor)
 
 try:
-    import omni_core_rs as _rust
+    import xiuxian_core_rs as _rust
 
     RUST_AVAILABLE = True
 except ImportError:
@@ -440,7 +440,7 @@ class RustVectorStore:
         """Vector search; returns list of JSON strings (one per row)."""
         if not hasattr(self._inner, "search_optimized"):
             raise RuntimeError(
-                "VectorStore binding missing search_optimized (upgrade omni-core-rs)"
+                "VectorStore binding missing search_optimized (upgrade xiuxian-core-rs)"
             )
         return self._inner.search_optimized(table_name, query_vector, limit, options_json)
 
@@ -461,7 +461,7 @@ class RustVectorStore:
         """
         if not hasattr(self._inner, "search_optimized_ipc"):
             raise RuntimeError(
-                "VectorStore binding missing search_optimized_ipc (upgrade omni-core-rs)"
+                "VectorStore binding missing search_optimized_ipc (upgrade xiuxian-core-rs)"
             )
         if projection is not None:
             opts: dict[str, Any] = {}
@@ -1067,7 +1067,7 @@ class RustVectorStore:
             Number of tools indexed, or 0 on error.
         """
         try:
-            import omni_core_rs as _rust
+            import xiuxian_core_rs as _rust
 
             store = _rust.create_vector_store(self._index_path, self._dimension, True)
             count = store.index_skill_tools(base_path, table_name)

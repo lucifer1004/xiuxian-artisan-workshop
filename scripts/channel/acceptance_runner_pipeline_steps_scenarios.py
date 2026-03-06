@@ -27,7 +27,7 @@ def build_scenario_step_specs(
             title="Run complex control-plane scenario",
             cmd=(
                 "bash",
-                "scripts/channel/test-omni-agent-complex-scenarios.sh",
+                "scripts/channel/test-xiuxian-daochang-complex-scenarios.sh",
                 "--dataset",
                 default_complex_dataset,
                 "--max-wait",
@@ -68,7 +68,7 @@ def build_scenario_step_specs(
             title="Run memory evolution DAG scenario",
             cmd=(
                 "bash",
-                "scripts/channel/test-omni-agent-complex-scenarios.sh",
+                "scripts/channel/test-xiuxian-daochang-complex-scenarios.sh",
                 "--dataset",
                 default_memory_dataset,
                 "--scenario",

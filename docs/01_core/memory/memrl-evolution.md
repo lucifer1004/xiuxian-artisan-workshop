@@ -1,6 +1,6 @@
 ---
 type: knowledge
-title: "Omni-Agent Memory Self-Evolution and Self-Repair"
+title: "修仙道场 Memory Self-Evolution and Self-Repair"
 category: "references"
 tags:
   - reference
@@ -8,12 +8,12 @@ tags:
 saliency_base: 5.5
 decay_rate: 0.05
 metadata:
-  title: "Omni-Agent Memory Self-Evolution and Self-Repair"
+  title: "修仙道场 Memory Self-Evolution and Self-Repair"
 ---
 
-# Omni-Agent Memory Self-Evolution and Self-Repair
+# 修仙道场 Memory Self-Evolution and Self-Repair
 
-This document captures the current production architecture for self-evolving and self-repairing memory behavior in `omni-agent`, based on the MemRL-inspired runtime (`omni-memory`) and Valkey-backed event processing.
+This document captures the current production architecture for self-evolving and self-repairing memory behavior in `xiuxian-daochang`, based on the MemRL-inspired runtime (`xiuxian-memory-engine`) and Valkey-backed event processing.
 
 ## Goals
 
@@ -166,12 +166,12 @@ sequenceDiagram
 
 ### Environment overrides
 
-- `OMNI_AGENT_MEMORY_STREAM_CONSUMER_ENABLED`
-- `OMNI_AGENT_MEMORY_STREAM_NAME`
-- `OMNI_AGENT_MEMORY_STREAM_CONSUMER_GROUP`
-- `OMNI_AGENT_MEMORY_STREAM_CONSUMER_NAME_PREFIX`
-- `OMNI_AGENT_MEMORY_STREAM_CONSUMER_BATCH_SIZE`
-- `OMNI_AGENT_MEMORY_STREAM_CONSUMER_BLOCK_MS`
+- `XIUXIAN_DAOCHANG_MEMORY_STREAM_CONSUMER_ENABLED`
+- `XIUXIAN_DAOCHANG_MEMORY_STREAM_NAME`
+- `XIUXIAN_DAOCHANG_MEMORY_STREAM_CONSUMER_GROUP`
+- `XIUXIAN_DAOCHANG_MEMORY_STREAM_CONSUMER_NAME_PREFIX`
+- `XIUXIAN_DAOCHANG_MEMORY_STREAM_CONSUMER_BATCH_SIZE`
+- `XIUXIAN_DAOCHANG_MEMORY_STREAM_CONSUMER_BLOCK_MS`
 
 ## Observability
 
@@ -188,23 +188,23 @@ Consumer-specific observability events:
 Use these tests to verify current behavior:
 
 ```bash
-cargo test -p omni-agent --test config_settings
-cargo test -p omni-agent --test observability_session_events
-cargo test -p omni-agent --lib memory_stream_consumer::tests
+cargo test -p xiuxian-daochang --test config_settings
+cargo test -p xiuxian-daochang --test observability_session_events
+cargo test -p xiuxian-daochang --lib memory_stream_consumer::tests
 VALKEY_URL=redis://<valkey-host>:6379/0 \
-  cargo test -p omni-agent --lib \
+  cargo test -p xiuxian-daochang --lib \
   memory_stream_consumer::tests::memory_stream_consumer_acks_and_tracks_metrics -- --ignored
 ```
 
 For release gates, aggregate black-box reports into one SLO decision:
 
 ```bash
-just test-omni-agent-memory-slo-report
-just test-omni-agent-memory-slo-report \
-  .run/reports/omni-agent-memory-evolution.json \
-  .run/reports/omni-agent-memory-benchmark.json \
+just test-xiuxian-daochang-memory-slo-report
+just test-xiuxian-daochang-memory-slo-report \
+  .run/reports/xiuxian-daochang-memory-evolution.json \
+  .run/reports/xiuxian-daochang-memory-benchmark.json \
   .run/reports/agent-channel-session-matrix.json \
-  .run/logs/omni-agent-webhook.log \
+  .run/logs/xiuxian-daochang-webhook.log \
   true
 ```
 
@@ -251,5 +251,5 @@ just test-omni-agent-memory-slo-report \
 ## Scope Boundaries
 
 - This layer evolves memory policy and retrieval behavior, not base model weights.
-- Long-term memory (`omni-memory`) and skill knowledge stores remain separate concerns.
+- Long-term memory (`xiuxian-memory-engine`) and skill knowledge stores remain separate concerns.
 - Session reset/resume commands affect session context; memory durability is controlled by memory persistence and feedback policies.

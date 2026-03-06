@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_session_matrix.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_session_matrix.py."""
 
 from __future__ import annotations
 
@@ -17,8 +17,10 @@ if TYPE_CHECKING:
 
 def _load_matrix_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_session_matrix.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_session_matrix_probe", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_session_matrix.py"
+    spec = importlib.util.spec_from_file_location(
+        "xiuxian_daochang_session_matrix_probe", script_path
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -32,7 +34,7 @@ def _make_args(**overrides: object) -> argparse.Namespace:
         "max_wait": 35,
         "max_idle_secs": 25,
         "webhook_url": "http://127.0.0.1:18081/telegram/webhook",
-        "log_file": ".run/logs/omni-agent-webhook.log",
+        "log_file": ".run/logs/xiuxian-daochang-webhook.log",
         "chat_id": None,
         "chat_b": None,
         "chat_c": None,
@@ -134,7 +136,7 @@ def test_build_matrix_steps_contains_cross_reset_resume() -> None:
         max_wait=35,
         max_idle_secs=25,
         webhook_url="http://127.0.0.1:18081/telegram/webhook",
-        log_file=Path(".run/logs/omni-agent-webhook.log"),
+        log_file=Path(".run/logs/xiuxian-daochang-webhook.log"),
         chat_id=130,
         chat_b=130,
         chat_c=130,
@@ -179,7 +181,7 @@ def test_render_markdown_includes_failure_tail() -> None:
             "thread_a": None,
             "thread_b": None,
             "thread_c": None,
-            "log_file": ".run/logs/omni-agent-webhook.log",
+            "log_file": ".run/logs/xiuxian-daochang-webhook.log",
         },
         "steps": [
             {
@@ -219,7 +221,7 @@ def test_build_report_summarizes_step_results() -> None:
         max_wait=35,
         max_idle_secs=25,
         webhook_url="http://127.0.0.1:18081/telegram/webhook",
-        log_file=Path(".run/logs/omni-agent-webhook.log"),
+        log_file=Path(".run/logs/xiuxian-daochang-webhook.log"),
         chat_id=130,
         chat_b=130,
         chat_c=130,
@@ -318,7 +320,7 @@ def test_build_matrix_steps_with_thread_scope_emit_thread_partition_keys() -> No
         max_wait=35,
         max_idle_secs=25,
         webhook_url="http://127.0.0.1:18081/telegram/webhook",
-        log_file=Path(".run/logs/omni-agent-webhook.log"),
+        log_file=Path(".run/logs/xiuxian-daochang-webhook.log"),
         chat_id=-5101776367,
         chat_b=-5101776367,
         chat_c=-5292802281,

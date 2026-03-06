@@ -544,15 +544,15 @@ async def ingest_document(
             target_tokens=chunk_target,
         )
 
-        # Rust chunker is default; fallback to create_chunker when omni_core_rs unavailable
+        # Rust chunker is default; fallback to create_chunker when xiuxian_core_rs unavailable
         chunks = None
         try:
             from types import SimpleNamespace
 
-            import omni_core_rs
+            import xiuxian_core_rs
 
             def _rust_chunk() -> list:
-                raw = omni_core_rs.py_chunk_text(
+                raw = xiuxian_core_rs.py_chunk_text(
                     text_content,
                     chunk_size_tokens=chunk_target,
                     overlap_tokens=chunk_overlap,
@@ -832,7 +832,7 @@ async def ingest_document(
 
                 from omni.foundation import PRJ_CACHE
 
-                manifest_path = PRJ_CACHE("omni-vector", "image_manifests.json")
+                manifest_path = PRJ_CACHE("xiuxian-vector", "image_manifests.json")
                 manifest_path = (
                     manifest_path if isinstance(manifest_path, str) else str(manifest_path)
                 )

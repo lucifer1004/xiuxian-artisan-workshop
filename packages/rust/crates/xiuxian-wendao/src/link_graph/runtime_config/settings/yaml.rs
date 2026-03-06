@@ -28,7 +28,7 @@ fn deep_merge(base: &mut Value, overlay: Value) {
 
 pub(in crate::link_graph::runtime_config) fn merged_wendao_settings() -> Value {
     let root = resolve_project_root();
-    let system_path = root.join("packages/conf/wendao.yaml");
+    let system_path = root.join("packages/rust/crates/xiuxian-wendao/resources/config/wendao.yaml");
     let user_path = wendao_config_file_override().unwrap_or_else(|| {
         resolve_prj_config_home(&root).join("xiuxian-artisan-workshop/wendao.yaml")
     });

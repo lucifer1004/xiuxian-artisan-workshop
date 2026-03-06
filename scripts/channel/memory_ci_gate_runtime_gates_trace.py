@@ -20,7 +20,7 @@ def run_trace_reconstruction_gate(
         print("Skipping trace reconstruction gate (--skip-trace-reconstruction-gate).", flush=True)
         return
 
-    script = cfg.script_dir / "reconstruct_omni_agent_trace.py"
+    script = cfg.script_dir / "reconstruct_xiuxian_daochang_trace.py"
     if not script.exists():
         raise FileNotFoundError(f"missing trace reconstruction script: {script}")
 

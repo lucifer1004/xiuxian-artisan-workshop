@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Failure triage helpers for omni-agent memory CI gate."""
+"""Failure triage helpers for xiuxian-daochang memory CI gate."""
 
 from __future__ import annotations
 

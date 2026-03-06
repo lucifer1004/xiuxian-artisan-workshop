@@ -13,7 +13,7 @@ from typing import Any
 from omni.foundation.config.logging import get_logger
 
 try:
-    import omni_core_rs as _rust
+    import xiuxian_core_rs as _rust
 
     RUST_AVAILABLE = True
 except ImportError:

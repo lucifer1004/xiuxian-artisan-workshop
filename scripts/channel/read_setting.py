@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +13,16 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from config_resolver_core import repo_root_from, settings_candidates  # noqa: E402
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError as exc:  # pragma: no cover - environment guard
+        raise ModuleNotFoundError(
+            "No TOML parser available. Use Python 3.11+ or install tomli."
+        ) from exc
 
 
 def _dig(mapping: object, *keys: str) -> object | None:

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use omni_ast::DecoratedFunction;
+use xiuxian_ast::DecoratedFunction;
 
 pub(super) fn collect_docstrings(decorated_funcs: &[DecoratedFunction]) -> HashMap<String, String> {
     let mut docstrings = HashMap::new();

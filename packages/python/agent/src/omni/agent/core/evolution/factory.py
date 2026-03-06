@@ -40,7 +40,7 @@ from __future__ import annotations
 from typing import Any
 
 from omni.core.skills.runtime.decorators import skill_command
-from omni.core.skills.runtime.omni_cell import OmniCellRunner
+from omni.core.skills.runtime.xiuxian_cell import XiuxianCellRunner
 
 
 @skill_command(
@@ -59,7 +59,7 @@ async def {skill_name}(
     Returns:
         Dict with execution results
     """
-    runner = OmniCellRunner()
+    runner = XiuxianCellRunner()
 
     # Nushell script with parameter placeholders
     script = r"""

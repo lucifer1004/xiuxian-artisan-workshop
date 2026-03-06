@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Black-box Telegram webhook probe for local omni-agent channel runtime.
+Black-box Telegram webhook probe for local xiuxian-daochang channel runtime.
 
 This probe posts one synthetic Telegram update to local webhook endpoint, then waits for:
   - inbound log marker:  ← User: "[bbx-...] ..."

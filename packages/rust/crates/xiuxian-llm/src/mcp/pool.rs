@@ -46,6 +46,7 @@ pub struct McpClientPool {
     list_tools_cache_refreshes: AtomicU64,
     list_tools_cache_last_log_at: Mutex<Instant>,
     list_tools_cache_stats_log_interval: Duration,
+    observed_tool_list_changed_epoch: AtomicU64,
     discover_cache: Option<Arc<DiscoverReadThroughCache>>,
     discover_cache_hits: AtomicU64,
     discover_cache_misses: AtomicU64,

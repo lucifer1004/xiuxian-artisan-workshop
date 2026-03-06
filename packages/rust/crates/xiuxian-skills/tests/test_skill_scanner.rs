@@ -18,7 +18,7 @@ fn sample_metadata() -> SkillMetadata {
         version: "1.0.0".to_string(),
         description: "A test skill".to_string(),
         routing_keywords: vec!["test".to_string()],
-        authors: vec!["omni-dev-fusion".to_string()],
+        authors: vec!["xiuxian-artisan-workshop".to_string()],
         intents: vec![],
         require_refs: vec![],
         repository: String::new(),

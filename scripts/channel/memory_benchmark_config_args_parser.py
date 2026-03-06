@@ -27,7 +27,7 @@ def parse_args(
     """Parse command-line arguments for memory benchmark script."""
     parser = argparse.ArgumentParser(
         description=(
-            "Run live A/B memory benchmark against local omni-agent webhook runtime "
+            "Run live A/B memory benchmark against local xiuxian-daochang webhook runtime "
             "(baseline vs adaptive feedback mode)."
         )
     )

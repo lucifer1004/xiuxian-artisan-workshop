@@ -38,8 +38,8 @@ These fields are indexed and used in ranking:
 
 Primary code path:
 
-- Rust search path: `packages/rust/crates/omni-vector/src/skill/ops_impl.rs`
-- Fusion: `packages/rust/crates/omni-vector/src/keyword/fusion.rs`
+- Rust search path: `packages/rust/crates/xiuxian-vector/src/skill/ops_impl.rs`
+- Fusion: `packages/rust/crates/xiuxian-vector/src/keyword/fusion.rs`
 - Scanner source for decorator metadata: `packages/rust/crates/xiuxian-skills/src/skills/tools.rs`
 
 ## Ranking Pipeline (Current)
@@ -86,7 +86,7 @@ Use `code.code_search` when:
 A deterministic Rust test now enforces this behavior:
 
 - `test_search_tools_file_discovery_intent_boost_without_keyword_backend`
-- file: `packages/rust/crates/omni-vector/tests/test_rust_cortex.rs`
+- file: `packages/rust/crates/xiuxian-vector/tests/test_rust_cortex.rs`
 
 This protects the critical case where keyword backend is unavailable and file-discovery intent must still prioritize `smart_find`.
 
@@ -94,6 +94,6 @@ This protects the critical case where keyword backend is unavailable and file-di
 
 Executed validations after this change:
 
-- `cargo test -p omni-vector --test test_rust_cortex test_search_tools_file_discovery_intent_boost_without_keyword_backend -- --nocapture`
-- `cargo test -p omni-vector --test test_fusion --test test_search -- --nocapture`
-- route scenario re-run with rebuilt/reinstalled `omni-core-rs`
+- `cargo test -p xiuxian-vector --test test_rust_cortex test_search_tools_file_discovery_intent_boost_without_keyword_backend -- --nocapture`
+- `cargo test -p xiuxian-vector --test test_fusion --test test_search -- --nocapture`
+- route scenario re-run with rebuilt/reinstalled `xiuxian-core-rs`

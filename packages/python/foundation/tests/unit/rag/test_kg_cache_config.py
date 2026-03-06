@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-pytest.importorskip("omni_core_rs")
+pytest.importorskip("xiuxian_core_rs")
 
 
 def _has_graph_valkey() -> bool:
@@ -45,7 +45,7 @@ class TestLoadKgRustCache:
 
     def test_load_kg_after_save_returns_graph(self, tmp_path):
         """Create graph, save via _save_kg, load via _load_kg returns same data."""
-        from omni_core_rs import PyEntity, PyKnowledgeGraph
+        from xiuxian_core_rs import PyEntity, PyKnowledgeGraph
 
         from omni.rag.fusion._config import _load_kg, _save_kg
 
@@ -68,7 +68,7 @@ class TestLoadKgRustCache:
 
     def test_load_kg_repeated_returns_same(self, tmp_path):
         """Repeated _load_kg with same path returns consistent result (Rust cache hit)."""
-        from omni_core_rs import PyEntity, PyKnowledgeGraph
+        from xiuxian_core_rs import PyEntity, PyKnowledgeGraph
 
         from omni.rag.fusion._config import _load_kg, _save_kg
 
@@ -90,7 +90,7 @@ class TestLoadKgRustCache:
 
     def test_save_kg_invalidates_cache(self, tmp_path):
         """_save_kg invalidates Rust cache; next _load_kg sees fresh data."""
-        from omni_core_rs import PyEntity, PyKnowledgeGraph
+        from xiuxian_core_rs import PyEntity, PyKnowledgeGraph
 
         from omni.rag.fusion._config import _load_kg, _save_kg
 

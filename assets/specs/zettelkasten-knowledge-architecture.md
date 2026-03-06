@@ -33,7 +33,7 @@ Alternative: Zettelkasten methodology using mcp-obsidian + Rucola + LanceDB.
 | ---------------- | ----------------------- | -------------------------------------------------------------- |
 | **Zettelkasten** | mcp-obsidian + Rust AST | Structured knowledge, bidirectional links, relationship graph  |
 | **Rust Core**    | comrak 0.50             | High-performance AST parsing, zero-copy Arena allocation       |
-| **Python/RAG**   | omni-rag                | Flexible query engine, multi-modal processing, semantic search |
+| **Python/RAG**   | xiuxian-rag             | Flexible query engine, multi-modal processing, semantic search |
 
 ### The Synergy: 1 + 1 + 1 > 3
 
@@ -71,7 +71,7 @@ Alternative: Zettelkasten methodology using mcp-obsidian + Rucola + LanceDB.
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                   DIMENSION 3: Python/RAG (Intelligence)            │    │
 │  │                                                                     │    │
-│  │   omni-rag provides:                                                │    │
+│  │   xiuxian-rag provides:                                             │    │
 │  │   • Hybrid search (keyword + semantic)                              │    │
 │  │   • Multi-modal chunking (text + image + table)                     │    │
 │  │   • Triple integrator (graph + vector + entity)                     │    │
@@ -181,7 +181,7 @@ let extraction = zk::extract(content, true, true);
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
 │  │                     EXTERNAL (Python/RAG)                            │  │
 │  │  ┌─────────────────────────────────────────────────────────────────┐│  │
-│  │  │  omni-rag (RAG-Anything)                                        ││  │
+│  │  │  xiuxian-rag (RAG-Anything)                                     ││  │
 │  │  │  • TripleIntegrator: graph + vector + entity                    ││  │
 │  │  │  • HybridSearch: keyword + semantic                             ││  │
 │  │  │  • MultiModalChunking: text + image + table                     ││  │

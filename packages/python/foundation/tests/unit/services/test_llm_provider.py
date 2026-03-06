@@ -1,7 +1,7 @@
 """Tests for LLM Provider.
 
 Tests verify LLM provider functionality:
-- LiteLLMProvider initialization
+- RustLLMProvider initialization
 - NoOpProvider fallback
 - Provider configuration
 - Graceful degradation when API key is missing
@@ -14,7 +14,7 @@ import pytest
 
 from omni.foundation.config.settings import get_setting
 from omni.foundation.services.llm.provider import (
-    LiteLLMProvider,
+    RustLLMProvider,
     LLMConfig,
     NoOpProvider,
     _minimax_model_casing,
@@ -34,7 +34,7 @@ class TestMinimaxModelCasing:
         assert _minimax_model_casing("minimax-m2.5") == "MiniMax-M2.5"
 
     def test_highspeed_mapped_to_lightning(self):
-        # Platform docs say highspeed; v1 API expects lightning (LiteLLM Supported Models)
+        # Platform docs say highspeed; v1 API expects lightning (HTTP backend Supported Models)
         assert _minimax_model_casing("MiniMax-M2.1-highspeed") == "MiniMax-M2.1-lightning"
         assert _minimax_model_casing("minimax-m2.1-highspeed") == "MiniMax-M2.1-lightning"
 
@@ -74,11 +74,11 @@ class TestLLMConfig:
         assert config.base_url == "https://api.openai.com/v1"
 
 
-class TestLiteLLMProvider:
-    """Tests for LiteLLMProvider with MiniMax/Anthropic compatible APIs."""
+class TestRustLLMProvider:
+    """Tests for RustLLMProvider with MiniMax/Anthropic compatible APIs."""
 
     def test_provider_without_api_key(self):
-        """Test LiteLLMProvider handles missing API key gracefully."""
+        """Test RustLLMProvider handles missing API key gracefully."""
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
@@ -89,11 +89,12 @@ class TestLiteLLMProvider:
                 "inference.max_tokens": 4096,
             }.get(key, default)
 
-            provider = LiteLLMProvider()
-            assert not provider.is_available()
+            with patch.dict("os.environ", {}, clear=True):
+                provider = RustLLMProvider()
+                assert not provider.is_available()
 
     def test_provider_with_api_key(self):
-        """Test LiteLLMProvider initializes with API key."""
+        """Test RustLLMProvider initializes with API key."""
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
@@ -106,12 +107,12 @@ class TestLiteLLMProvider:
 
             # Set ANTHROPIC_API_KEY (which is_available() checks for)
             with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-api-key"}):
-                provider = LiteLLMProvider()
+                provider = RustLLMProvider()
                 assert provider.is_available()
                 assert provider.config.api_key_env == "ANTHROPIC_API_KEY"
 
     def test_provider_minimax_base_url(self):
-        """Test LiteLLMProvider uses MiniMax Anthropic-compatible base_url."""
+        """Test RustLLMProvider uses MiniMax Anthropic-compatible base_url."""
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
@@ -123,13 +124,13 @@ class TestLiteLLMProvider:
             }.get(key, default)
 
             with patch.dict("os.environ", {"MINIMAX_API_KEY": "test-key"}):
-                provider = LiteLLMProvider()
+                provider = RustLLMProvider()
                 # Verify MiniMax detection works
                 assert "minimax" in provider.config.base_url.lower()
                 assert provider.config.model == DEFAULT_MODEL
 
     def test_provider_custom_settings(self):
-        """Test LiteLLMProvider loads custom settings."""
+        """Test RustLLMProvider loads custom settings."""
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
@@ -141,13 +142,13 @@ class TestLiteLLMProvider:
             }.get(key, default)
 
             with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-                provider = LiteLLMProvider()
+                provider = RustLLMProvider()
                 assert provider.config.model == "claude-opus-4-20250514"
                 assert provider.config.timeout == 180
                 assert provider.config.max_tokens == 8192
 
-    def test_litellm_passes_api_key_to_completion(self):
-        """Test LiteLLMProvider passes API key correctly to litellm."""
+    def test_provider_passes_api_key_to_completion(self):
+        """Test RustLLMProvider passes API key correctly to backend."""
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
@@ -159,12 +160,12 @@ class TestLiteLLMProvider:
             }.get(key, default)
 
             with patch.dict("os.environ", {"MINIMAX_API_KEY": "secret-key"}):
-                provider = LiteLLMProvider()
+                provider = RustLLMProvider()
                 assert provider._get_api_key() == "secret-key"
 
     @pytest.mark.asyncio
-    async def test_minimax_passes_cased_model_to_litellm(self):
-        """MiniMax uses LiteLLM; model is normalised with _minimax_model_casing before call."""
+    async def test_minimax_passes_cased_model_to_backend(self):
+        """MiniMax model is normalised with _minimax_model_casing before call."""
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "minimax",
@@ -176,13 +177,13 @@ class TestLiteLLMProvider:
             }.get(key, default)
 
             with patch.dict("os.environ", {"MINIMAX_API_KEY": "test-key"}):
-                provider = LiteLLMProvider()
+                provider = RustLLMProvider()
                 mock_resp = type("R", (), {"choices": [], "usage": None})()
                 mock_resp.choices = [
                     type("C", (), {"message": type("M", (), {"content": "ok"})()})()
                 ]
                 mock_acompletion = AsyncMock(return_value=mock_resp)
-                provider._litellm.acompletion = mock_acompletion
+                provider._backend.acompletion = mock_acompletion
                 await provider.complete("sys", "user")
                 call_kwargs = mock_acompletion.call_args.kwargs
                 assert call_kwargs["model"] == "MiniMax-M2.1"
@@ -237,8 +238,8 @@ class TestNoOpProvider:
 class TestProviderRegistry:
     """Tests for provider singleton and caching."""
 
-    def test_get_llm_provider_returns_litellm_when_configured(self):
-        """Test get_llm_provider returns LiteLLMProvider when API key is set."""
+    def test_get_llm_provider_returns_rust_provider_when_configured(self):
+        """Test get_llm_provider returns RustLLMProvider when API key is set."""
         reset_provider()  # Clear cache
 
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
@@ -253,7 +254,7 @@ class TestProviderRegistry:
 
             with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-api-key"}):
                 provider = get_llm_provider()
-                assert isinstance(provider, LiteLLMProvider)
+                assert isinstance(provider, RustLLMProvider)
                 assert provider.is_available()
 
     def test_get_llm_provider_returns_noop_when_no_api_key(self):
@@ -270,8 +271,9 @@ class TestProviderRegistry:
                 "inference.max_tokens": 4096,
             }.get(key, default)
 
-            provider = get_llm_provider()
-            assert isinstance(provider, NoOpProvider)
+            with patch.dict("os.environ", {}, clear=True):
+                provider = get_llm_provider()
+                assert isinstance(provider, NoOpProvider)
             assert not provider.is_available()
 
     def test_provider_is_cached(self):
@@ -331,7 +333,7 @@ class TestProviderConfig:
             }.get(key, default)
 
             with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-                provider = LiteLLMProvider()
+                provider = RustLLMProvider()
                 assert provider.config.model == "claude-opus-4-20250514"
                 assert provider.config.timeout == 180
                 assert provider.config.max_tokens == 8192
@@ -347,7 +349,7 @@ class TestProviderConfig:
             mock_setting.return_value = "claude-sonnet-4-20250514"  # Different from custom
 
             with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
-                provider = LiteLLMProvider(config=custom_config)
+                provider = RustLLMProvider(config=custom_config)
                 # Custom config should override settings
                 assert provider.config.model == "claude-haiku-4-20250514"
                 assert provider.config.timeout == 30

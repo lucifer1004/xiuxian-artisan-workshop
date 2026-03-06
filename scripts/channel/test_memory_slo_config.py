@@ -58,6 +58,6 @@ def test_build_config_rejects_invalid_stream_ratio(tmp_path: Path) -> None:
 
 def test_build_config_resolves_runtime_log_when_provided(tmp_path: Path) -> None:
     args = _base_args(tmp_path)
-    args.runtime_log_file = ".run/logs/omni-agent.log"
+    args.runtime_log_file = ".run/logs/xiuxian-daochang.log"
     config = config_module.build_config(args, config_cls=models_module.SloConfig)
-    assert config.runtime_log_file == (tmp_path / ".run/logs/omni-agent.log").resolve()
+    assert config.runtime_log_file == (tmp_path / ".run/logs/xiuxian-daochang.log").resolve()

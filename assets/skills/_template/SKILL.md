@@ -3,9 +3,9 @@ type: skill
 name: _template
 description: Template skill for creating new capabilities - demonstrates Trinity Architecture v4.0 with scripts/commands.py pattern.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/_template"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/_template"
   routing_keywords:
     - "template"
     - "new skill"

@@ -26,15 +26,17 @@ redis = { workspace = true, features = ["tokio-comp"] }
 log = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
+regex = "1"
 md5 = { workspace = true }
 include_dir = { workspace = true }
 xiuxian-wendao = { path = "../xiuxian-wendao" }
 xiuxian-qianhuan = { path = "../xiuxian-qianhuan" }
-omni-ast = { path = "../omni-ast" }
+xiuxian-ast = { path = "../xiuxian-ast" }
 xiuxian-macros = { path = "../xiuxian-macros" }
 xiuxian-zhenfa = { path = "../xiuxian-zhenfa" }
+xiuxian-logging = { path = "../xiuxian-logging" }
 xiuxian-llm = { path = "../xiuxian-llm", optional = true }
-omni-window = { path = "../omni-window" }
+xiuxian-window = { path = "../xiuxian-window" }
 pyo3 = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 

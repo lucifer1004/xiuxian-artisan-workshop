@@ -43,7 +43,7 @@ class SkillCommandTester:
             if not module_path.exists():
                 raise
 
-            dynamic_name = f"_omni_skill_{skill}_{module.replace('.', '_')}"
+            dynamic_name = f"_xiuxian_skill_{skill}_{module.replace('.', '_')}"
             spec = importlib.util.spec_from_file_location(dynamic_name, module_path)
             if spec is None or spec.loader is None:
                 raise ImportError(f"Cannot load skill module from {module_path}")

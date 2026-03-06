@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from test_memory_ci_gate import build_cfg
-from test_omni_agent_memory_ci_gate import (
+from test_xiuxian_daochang_memory_ci_gate import (
     GateStepError,
     build_gate_failure_repro_commands,
     classify_gate_failure,
@@ -35,7 +35,7 @@ def test_build_gate_failure_repro_commands_includes_stage_command(tmp_path) -> N
             "cargo",
             "test",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "--test",
             "mcp_discover_cache",
         ],
@@ -46,7 +46,8 @@ def test_build_gate_failure_repro_commands_includes_stage_command(tmp_path) -> N
     )
     assert any(command.startswith("tail -n 200 ") for command in commands)
     assert any(
-        "cargo test -p omni-agent --test mcp_discover_cache" in command for command in commands
+        "cargo test -p xiuxian-daochang --test mcp_discover_cache" in command
+        for command in commands
     )
     assert any(
         "discover_calls_use_valkey_read_through_cache_when_configured" in command
@@ -68,7 +69,7 @@ def test_build_gate_failure_repro_commands_trace_quality_includes_injection_mode
         error=RuntimeError("trace reconstruction quality gates failed"),
     )
     trace_commands = [
-        command for command in commands if "reconstruct_omni_agent_trace.py" in command
+        command for command in commands if "reconstruct_xiuxian_daochang_trace.py" in command
     ]
     assert trace_commands, "expected trace reconstruction repro command to be generated"
     assert any("--required-stage injection_mode" in command for command in trace_commands)

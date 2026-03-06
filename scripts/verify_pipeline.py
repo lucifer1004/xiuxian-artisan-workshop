@@ -30,20 +30,20 @@ async def verify_pipeline() -> bool:
 
     # 1) Rust bridge surface check
     try:
-        import omni_core_rs as rust
+        import xiuxian_core_rs as rust
     except ImportError as exc:
-        print(f"[FAIL] Failed to import omni_core_rs: {exc}")
+        print(f"[FAIL] Failed to import xiuxian_core_rs: {exc}")
         return False
 
     if not hasattr(rust, "ContextAssembler"):
-        print("[FAIL] omni_core_rs.ContextAssembler is not available")
+        print("[FAIL] xiuxian_core_rs.ContextAssembler is not available")
         return False
     print("[PASS] Rust ContextAssembler is available")
 
     # 2) Build context through orchestrator
     fake_state = {
         "active_skill": "researcher",
-        "request": "Analyze the omni-io crate architecture",
+        "request": "Analyze the xiuxian-io crate architecture",
         "project_root": str(project_root),
         "messages": [],
     }

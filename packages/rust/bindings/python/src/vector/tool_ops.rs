@@ -2,8 +2,8 @@
 //!
 //! Contains: index_skill_tools, list_all_tools
 
-use omni_vector::VectorStore;
 use pyo3::prelude::*;
+use xiuxian_vector::VectorStore;
 
 pub(crate) fn index_skill_tools_async(
     path: &str,

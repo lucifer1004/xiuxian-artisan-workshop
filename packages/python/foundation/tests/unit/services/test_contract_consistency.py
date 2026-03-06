@@ -137,7 +137,7 @@ def test_route_test_canonical_snapshot_validates_against_schema():
     schema = _load_schema("omni.router.route_test.v1.schema.json")
     schema_path = resolve_schema_file_path(
         "omni.router.route_test.v1.schema.json",
-        preferred_crates=("omni-agent",),
+        preferred_crates=("xiuxian-daochang",),
     )
     canonical_path = schema_path.parent / "snapshots" / "route_test_canonical_v1.json"
     if not canonical_path.exists():

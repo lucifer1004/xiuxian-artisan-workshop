@@ -3,9 +3,9 @@ type: skill
 name: software_engineering
 description: Use when analyzing project architecture, exploring codebase structure, understanding system design, reviewing code patterns, or navigating modular components.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/software_engineering"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/software_engineering"
   routing_keywords:
     - "architecture"
     - "design"

@@ -37,7 +37,7 @@ link_graph_is_valid_ref = None
 
 if _HAS_RUST_BINDINGS:
     with suppress(ImportError):
-        from omni_core_rs import (
+        from xiuxian_core_rs import (
             link_graph_count_refs,
             link_graph_extract_entity_refs,
             link_graph_get_ref_stats,

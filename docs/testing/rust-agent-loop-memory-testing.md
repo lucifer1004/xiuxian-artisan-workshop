@@ -13,7 +13,7 @@ metadata:
 
 # Rust Agent: Loop, ReAct, and Memory Testing
 
-> How the omni-agent loop aligns with Nanobot/ZeroClaw and how we test loop, ReAct (tool roundtrip), and omni-memory in one place.
+> How the xiuxian-daochang loop aligns with Nanobot/ZeroClaw and how we test loop, ReAct (tool roundtrip), and xiuxian-memory-engine in one place.
 
 ## 1. Loop and ReAct vs Nanobot / ZeroClaw
 
@@ -22,7 +22,7 @@ metadata:
 - **Nanobot**: One `AgentLoop`; each message → session (by `channel:chat_id`) → context (history + memory window) → **LLM → tools → repeat** until done → publish. MCP tools in same registry as built-in tools.
 - **ZeroClaw**: Rust, one agent loop; gateway/daemon/service are modes of the same runtime; trait-based Provider/Channel/Memory/Tool.
 
-### Our loop (omni-agent)
+### Our loop (xiuxian-daochang)
 
 One **ReAct cycle** per user turn is implemented in `Agent::run_turn`:
 
@@ -61,36 +61,36 @@ So: **one `run_turn` = one Nanobot-style “process message”** (session + opti
 ### Unit tests (no network, no API key)
 
 ```bash
-cargo test -p omni-agent --test config_and_session
-cargo test -p omni-agent --test multiple_mcp
-cargo test -p omni-agent --test config_mcp
-cargo test -p omni-agent --test gateway_stdio
+cargo test -p xiuxian-daochang --test config_and_session
+cargo test -p xiuxian-daochang --test multiple_mcp
+cargo test -p xiuxian-daochang --test config_mcp
+cargo test -p xiuxian-daochang --test gateway_stdio
 ```
 
 ### Integration tests (real LLM and/or MCP; run with `--ignored`)
 
 Require env (and optionally a running MCP server):
 
-- `LITELLM_PROXY_URL` or `OMNI_AGENT_INFERENCE_URL` (inference endpoint)
-- `OMNI_AGENT_MODEL` (model name)
-- `OPENAI_API_KEY` or `OMNI_AGENT_INFERENCE_API_KEY` (unless inference is local)
+- `LITELLM_PROXY_URL` or `XIUXIAN_DAOCHANG_INFERENCE_URL` (inference endpoint)
+- `XIUXIAN_DAOCHANG_MODEL` (model name)
+- `OPENAI_API_KEY` or `XIUXIAN_DAOCHANG_INFERENCE_API_KEY` (unless inference is local)
 - For project MCP: `.mcp.json` in project root or `MCP_CONFIG_PATH` / `PRJ_ROOT`
 
 ```bash
 # One turn (loop; ReAct if MCP + model use a tool)
-cargo test -p omni-agent --test agent_integration test_agent_one_turn_litellm_project_mcp -- --ignored
+cargo test -p xiuxian-daochang --test agent_integration test_agent_one_turn_litellm_project_mcp -- --ignored
 
 # ReAct flow: model must use a tool (loop + tool roundtrip, like Nanobot/ZeroClaw)
-cargo test -p omni-agent --test agent_integration test_agent_react_flow_tool_used -- --ignored
+cargo test -p xiuxian-daochang --test agent_integration test_agent_react_flow_tool_used -- --ignored
 
 # Two turns with memory (loop + memory store)
-cargo test -p omni-agent --test agent_integration test_agent_two_turns_memory_stored -- --ignored
+cargo test -p xiuxian-daochang --test agent_integration test_agent_two_turns_memory_stored -- --ignored
 ```
 
 To run all integration tests:
 
 ```bash
-cargo test -p omni-agent --test agent_integration -- --ignored
+cargo test -p xiuxian-daochang --test agent_integration -- --ignored
 ```
 
 ## 4. Unified “matrix” (what to run for parity)
@@ -105,16 +105,16 @@ Together these cover: **loop**, **ReAct (tool roundtrip, same as reference proje
 
 ## 5. Session Compression Tracking (2026-02-18)
 
-This round adds rolling session compression in `omni-agent` so long-running channel sessions
+This round adds rolling session compression in `xiuxian-daochang` so long-running channel sessions
 can keep recent turns while preserving older context as compact summaries.
 
 ### Implemented
 
 - Added `SessionSummarySegment` (session summary record) and persistence path:
   - in-memory bounded store
-  - Valkey/Redis backend (`omni-agent:session:summary:<session_id>`)
+  - Valkey/Redis backend (`xiuxian-daochang:session:summary:<session_id>`)
 - Consolidation now does both:
-  - drains oldest turns and stores one episode into `omni-memory`
+  - drains oldest turns and stores one episode into `xiuxian-memory-engine`
   - stores one compact summary segment for prompt reuse
 - Prompt context for bounded sessions now includes:
   - compacted summary segments (old history)
@@ -134,11 +134,11 @@ Paths and env:
 - `session.consolidation_async`
 - `session.context_budget_tokens`
 - `session.context_budget_reserve_tokens`
-- `OMNI_AGENT_SUMMARY_MAX_SEGMENTS`
-- `OMNI_AGENT_SUMMARY_MAX_CHARS`
-- `OMNI_AGENT_CONSOLIDATION_ASYNC`
-- `OMNI_AGENT_CONTEXT_BUDGET_TOKENS`
-- `OMNI_AGENT_CONTEXT_BUDGET_RESERVE_TOKENS`
+- `XIUXIAN_DAOCHANG_SUMMARY_MAX_SEGMENTS`
+- `XIUXIAN_DAOCHANG_SUMMARY_MAX_CHARS`
+- `XIUXIAN_DAOCHANG_CONSOLIDATION_ASYNC`
+- `XIUXIAN_DAOCHANG_CONTEXT_BUDGET_TOKENS`
+- `XIUXIAN_DAOCHANG_CONTEXT_BUDGET_RESERVE_TOKENS`
 
 ### Tests added/updated
 
@@ -156,8 +156,8 @@ Paths and env:
 ### Verification
 
 - Commands:
-  - `cargo test -p omni-agent --test agent_summary --test agent_context_budget --test config_settings -q`
-  - `cargo test -p omni-agent --test session_summary -q`
+  - `cargo test -p xiuxian-daochang --test agent_summary --test agent_context_budget --test config_settings -q`
+  - `cargo test -p xiuxian-daochang --test session_summary -q`
 - Result on **2026-02-18**: pass for targeted memory/session tests
 
 ## 6. References

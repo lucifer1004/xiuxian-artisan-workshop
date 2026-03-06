@@ -1,7 +1,7 @@
 """
 Centralized Test Fixtures - Agent Layer
 
-Leverages omni-test-kit for common fixtures.
+Leverages xiuxian-test-kit for common fixtures.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 # Common fixtures like project_root, skills_root, git_test_env are
-# automatically loaded from omni-test-kit.
+# automatically loaded from xiuxian-test-kit.
 
 
 @pytest.fixture

@@ -124,28 +124,28 @@ in
       just rust-security-gate
     '';
 
-    "ci:rust-omni-core-rs-lib" = mkRustTask ''
-      just rust-omni-core-rs-lib
+    "ci:rust-xiuxian-core-rs-lib" = mkRustTask ''
+      just rust-xiuxian-core-rs-lib
     '';
 
-    "ci:rust-omni-agent-profiles" = mkRustTask ''
-      just rust-omni-agent-profiles
+    "ci:rust-xiuxian-daochang-profiles" = mkRustTask ''
+      just rust-xiuxian-daochang-profiles
     '';
 
-    "ci:rust-omni-agent-dependency-assertions" = mkRustTask ''
-      just rust-omni-agent-dependency-assertions
+    "ci:rust-xiuxian-daochang-dependency-assertions" = mkRustTask ''
+      just rust-xiuxian-daochang-dependency-assertions
     '';
 
-    "ci:rust-omni-agent-backend-role-contracts" = mkRustTask ''
-      just rust-omni-agent-backend-role-contracts
+    "ci:rust-xiuxian-daochang-backend-role-contracts" = mkRustTask ''
+      just rust-xiuxian-daochang-backend-role-contracts
     '';
 
-    "ci:rust-omni-agent-embedding-role-perf-medium-gate" = mkRustTask ''
-      just rust-omni-agent-embedding-role-perf-medium-gate
+    "ci:rust-xiuxian-daochang-embedding-role-perf-medium-gate" = mkRustTask ''
+      just rust-xiuxian-daochang-embedding-role-perf-medium-gate
     '';
 
-    "ci:rust-omni-agent-embedding-role-perf-heavy-gate" = mkRustTask ''
-      just rust-omni-agent-embedding-role-perf-heavy-gate
+    "ci:rust-xiuxian-daochang-embedding-role-perf-heavy-gate" = mkRustTask ''
+      just rust-xiuxian-daochang-embedding-role-perf-heavy-gate
     '';
 
     "ci:rust-fusion-snapshots" = mkRustTask ''

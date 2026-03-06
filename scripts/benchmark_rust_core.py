@@ -13,7 +13,7 @@ Usage:
 
 Benchmark Categories:
 1. IO Benchmark: Read 14MB file - Rust vs Python
-2. Tokenizer Benchmark: Count tokens - omni-tokenizer vs tiktoken
+2. Tokenizer Benchmark: Count tokens - xiuxian-tokenizer vs tiktoken
 3. Vector Search Benchmark: Insert/Search 10k vectors
 """
 
@@ -83,16 +83,16 @@ def format_speedup(speedup: float) -> str:
 
 
 def benchmark_file_read_rust(file_path: Path, iterations: int = 100) -> float:
-    """Read file using Rust omni-core-rs read_file_safe."""
+    """Read file using Rust xiuxian-core-rs read_file_safe."""
     try:
-        # Use omni_core_rs.read_file_safe
-        import omni_core_rs
+        # Use xiuxian_core_rs.read_file_safe
+        import xiuxian_core_rs
 
         total_time = 0.0
         for _ in range(iterations):
             start = time.perf_counter()
             # read_file_safe takes path and max_bytes (use larger limit)
-            content = omni_core_rs.read_file_safe(str(file_path), 104857600)
+            content = xiuxian_core_rs.read_file_safe(str(file_path), 104857600)
             end = time.perf_counter()
             total_time += (end - start) * 1000  # Convert to ms
 
@@ -149,18 +149,18 @@ def run_io_benchmark() -> BenchmarkResult:
 
 
 def benchmark_tokenize_rust(text: str, iterations: int = 100) -> float:
-    """Tokenize using Rust omni-core-rs count_tokens."""
+    """Tokenize using Rust xiuxian-core-rs count_tokens."""
     try:
-        # Use omni_core_rs.count_tokens
-        import omni_core_rs
+        # Use xiuxian_core_rs.count_tokens
+        import xiuxian_core_rs
 
         # Warm-up: First call initializes the BPE cache
-        _ = omni_core_rs.count_tokens(text)
+        _ = xiuxian_core_rs.count_tokens(text)
 
         total_time = 0.0
         for _ in range(iterations):
             start = time.perf_counter()
-            count = omni_core_rs.count_tokens(text)
+            count = xiuxian_core_rs.count_tokens(text)
             end = time.perf_counter()
             total_time += (end - start) * 1000
 
@@ -193,14 +193,14 @@ def benchmark_tokenize_tiktoken(text: str, iterations: int = 100) -> float:
 
 
 def run_tokenizer_benchmark() -> BenchmarkResult:
-    """Run tokenizer benchmark: omni-tokenizer vs tiktoken.
+    """Run tokenizer benchmark: xiuxian-tokenizer vs tiktoken.
 
     NOTE: This benchmark compares two Rust implementations!
     - Python tiktoken calls tiktoken-rs directly (optimized FFI)
-    - Rust omni_tokenizer calls tiktoken-rs then crosses PyO3 boundary
+    - Rust xiuxian_tokenizer calls tiktoken-rs then crosses PyO3 boundary
 
     The PyO3 boundary overhead makes Rust wrapper slower for this case.
-    omni_tokenizer's value is in providing consistent caching and error handling,
+    xiuxian_tokenizer's value is in providing consistent caching and error handling,
     not raw speed for this specific operation.
     """
     # Create test text (simulate typical code file)
@@ -244,24 +244,24 @@ def run_tokenizer_benchmark() -> BenchmarkResult:
 
 
 def benchmark_vector_search_rust(n_vectors: int = 1000, dim: int = 768) -> float:
-    """Insert and search vectors using Rust omni-vector-rs.
+    """Insert and search vectors using Rust xiuxian-vector-rs.
 
     NOTE: This tests full database operations including disk I/O.
     LanceDB persists data to disk for durability, unlike pure numpy in-memory ops.
     For production use, this is the fair comparison (database vs database).
     """
     try:
-        # Use omni_vector_rs.create_vector_store
-        # Merged into omni_core_rs
+        # Use xiuxian_vector_rs.create_vector_store
+        # Merged into xiuxian_core_rs
         # Use temp directory for test with unique name
         import tempfile
         import uuid
 
-        import omni_core_rs
+        import xiuxian_core_rs
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create store with specified dimension
-            store = omni_core_rs.create_vector_store(tmpdir, dim)
+            store = xiuxian_core_rs.create_vector_store(tmpdir, dim)
 
             # Generate test vectors
             import numpy as np
@@ -320,7 +320,7 @@ def benchmark_vector_search_python(n_vectors: int = 1000, dim: int = 768) -> flo
 
 
 def run_vector_benchmark() -> BenchmarkResult:
-    """Run vector search benchmark: omni-vector vs numpy."""
+    """Run vector search benchmark: xiuxian-vector vs numpy."""
     n_vectors = 1000
     dim = 768
 

@@ -1,6 +1,6 @@
 """Memory service using Rust-based self-evolving memory engine.
 
-This module provides the Python interface to the omni-memory Rust crate,
+This module provides the Python interface to the xiuxian-memory-engine Rust crate,
 which implements:
 - Episode storage with vector similarity
 - Q-Learning for utility-based selection
@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import omni_core_rs as omni
+import xiuxian_core_rs as omni
 
 from omni.foundation.config.prj import PRJ_DATA
 from omni.foundation.services.embedding import embed_text
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def _default_memory_path() -> str:
     """Resolve default memory path under PRJ_DATA_HOME."""
-    return str(PRJ_DATA("omni-agent", "memory"))
+    return str(PRJ_DATA("xiuxian-daochang", "memory"))
 
 
 # Workaround for lambda keyword

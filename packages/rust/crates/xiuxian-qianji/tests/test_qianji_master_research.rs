@@ -9,7 +9,7 @@ use std::collections::HashMap;
 #[cfg(feature = "llm")]
 use std::sync::Arc;
 #[cfg(feature = "llm")]
-use xiuxian_llm::llm::{ChatRequest, LlmClient};
+use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmResult};
 #[cfg(feature = "llm")]
 use xiuxian_qianhuan::{
     orchestrator::ThousandFacesOrchestrator,
@@ -26,7 +26,7 @@ struct MockLlmClient;
 #[cfg(feature = "llm")]
 #[async_trait]
 impl LlmClient for MockLlmClient {
-    async fn chat(&self, _request: ChatRequest) -> anyhow::Result<String> {
+    async fn chat(&self, _request: ChatRequest) -> LlmResult<String> {
         Ok("Research Conclusion: Logic is verified via Synapse-Audit.".to_string())
     }
 }

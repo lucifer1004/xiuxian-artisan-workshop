@@ -289,6 +289,47 @@ async fn test_add_task_normalizes_local_time_input() -> std::result::Result<(), 
     Ok(())
 }
 
+#[tokio::test]
+async fn test_add_task_rejects_invalid_time_without_persisting_state(
+) -> std::result::Result<(), Box<dyn Error>> {
+    let graph = Arc::new(KnowledgeGraph::new());
+    let tmp = tempdir()?;
+    let storage = Arc::new(MarkdownStorage::new(tmp.path().to_path_buf()));
+    let manifestation = Arc::new(EchoManifestation);
+    let heyi = ZhixingHeyi::new(
+        Arc::clone(&graph),
+        manifestation,
+        storage,
+        "test".to_string(),
+        "America/Los_Angeles",
+    )?;
+
+    let marker = "Reject invalid time marker";
+    let result = heyi
+        .add_task(marker, Some("blorp-not-a-time".to_string()), None)
+        .await;
+
+    let error = result.expect_err("invalid time should fail before persistence");
+    assert!(error.to_string().contains("unsupported scheduled time"));
+    assert!(graph.get_entities_by_type("OTHER(Task)").is_empty());
+
+    let date_str = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let journal_path = tmp.path().join("journal").join(format!("{date_str}.md"));
+    assert!(
+        !journal_path.exists(),
+        "invalid scheduled time must not create a journal note at {}",
+        journal_path.display()
+    );
+
+    let rendered = heyi.render_agenda()?;
+    assert!(
+        !rendered.contains(marker),
+        "invalid task marker must not leak into agenda rendering: {rendered}"
+    );
+
+    Ok(())
+}
+
 #[test]
 fn test_render_task_add_response_from_id_uses_task_metadata()
 -> std::result::Result<(), Box<dyn Error>> {

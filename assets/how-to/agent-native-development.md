@@ -291,13 +291,13 @@ The `knowledge` skill is the **Project Cortex** - it provides structural knowled
 
 ```python
 # Before any work - understand the rules
-@omni-orchestrator skill(skill="knowledge", call='get_development_context()')
+@xiuxian-orchestrator skill(skill="knowledge", call='get_development_context()')
 
 # When writing docs - load writing memory
-@omni-orchestrator skill(skill="knowledge", call='get_writing_memory()')
+@xiuxian-orchestrator skill(skill="knowledge", call='get_writing_memory()')
 
 # When unsure - search docs
-@omni-orchestrator skill(skill="knowledge", call='consult_architecture_doc("git workflow")')
+@xiuxian-orchestrator skill(skill="knowledge", call='consult_architecture_doc("git workflow")')
 ```
 
 **Knowledge tools never execute** - they only return structured information.
@@ -306,7 +306,7 @@ The `knowledge` skill is the **Project Cortex** - it provides structural knowled
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  MCP Server (Omni-Dev-Fusion)                               │
+│  MCP Server (Xiuxian-Artisan-Workshop)                      │
 ├─────────────────────────────────────────────────────────┤
 │  🧠 Knowledge Layer (knowledge skill)                   │
 │     - get_development_context()                         │

@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for stress probe."""
     parser = argparse.ArgumentParser(
         description=(
-            "Stress MCP startup by repeatedly spawning omni-agent gateway and "
+            "Stress MCP startup by repeatedly spawning xiuxian-daochang gateway and "
             "checking handshake logs."
         )
     )
@@ -44,8 +44,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--executable",
-        default="target/debug/omni-agent",
-        help="Path to omni-agent executable (default: target/debug/omni-agent).",
+        default="target/debug/xiuxian-daochang",
+        help="Path to xiuxian-daochang executable (default: target/debug/xiuxian-daochang).",
     )
     parser.add_argument(
         "--mcp-config",
@@ -65,9 +65,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rust-log",
         default=(
-            "omni_agent::gateway::http=info,"
-            "omni_agent::mcp_pool=debug,"
-            "omni_agent::main_agent_builder=info"
+            "xiuxian_daochang::gateway::http=info,"
+            "xiuxian_daochang::mcp_pool=debug,"
+            "xiuxian_daochang::main_agent_builder=info"
         ),
         help="RUST_LOG used by spawned probe process.",
     )
@@ -106,12 +106,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-json",
-        default=str(default_report_path("omni-agent-mcp-startup-stress.json")),
+        default=str(default_report_path("xiuxian-daochang-mcp-startup-stress.json")),
         help="Output JSON report path.",
     )
     parser.add_argument(
         "--output-markdown",
-        default=str(default_report_path("omni-agent-mcp-startup-stress.md")),
+        default=str(default_report_path("xiuxian-daochang-mcp-startup-stress.md")),
         help="Output Markdown report path.",
     )
     return parser.parse_args()

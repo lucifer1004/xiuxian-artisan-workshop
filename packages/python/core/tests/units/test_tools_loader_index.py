@@ -65,9 +65,9 @@ def recall():
         def scan_skill_with_tools(self, _target_skill: str):
             return (object(), [tool])
 
-    import omni_core_rs
+    import xiuxian_core_rs
 
-    monkeypatch.setattr(omni_core_rs, "PySkillScanner", _Scanner)
+    monkeypatch.setattr(xiuxian_core_rs, "PySkillScanner", _Scanner)
 
     idx1 = build_rust_command_index(skill_name, scripts_dir)
     idx2 = build_rust_command_index(skill_name, scripts_dir)
@@ -106,9 +106,9 @@ def recall():
         def scan_skill_with_tools(self, _target_skill: str):
             return (object(), [tool])
 
-    import omni_core_rs
+    import xiuxian_core_rs
 
-    monkeypatch.setattr(omni_core_rs, "PySkillScanner", _Scanner)
+    monkeypatch.setattr(xiuxian_core_rs, "PySkillScanner", _Scanner)
 
     idx1 = build_rust_command_index(skill_name, scripts_dir)
     recall_path.write_text(

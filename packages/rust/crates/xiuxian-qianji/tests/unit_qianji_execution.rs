@@ -13,18 +13,26 @@ async fn test_qianji_dag_parallel_execution() -> std::result::Result<(), Box<dyn
     let a_mech = Arc::new(MockMechanism {
         name: "A".to_string(),
         weight: 1.0,
+        output_key: None,
+        mock_output: None,
     });
     let b_mech = Arc::new(MockMechanism {
         name: "B".to_string(),
         weight: 1.0,
+        output_key: None,
+        mock_output: None,
     });
     let c_mech = Arc::new(MockMechanism {
         name: "C".to_string(),
         weight: 1.0,
+        output_key: None,
+        mock_output: None,
     });
     let d_mech = Arc::new(MockMechanism {
         name: "D".to_string(),
         weight: 1.0,
+        output_key: None,
+        mock_output: None,
     });
 
     let a = engine.add_mechanism("A", a_mech);

@@ -59,9 +59,9 @@ def test_load_kg_injects_graph_valkey_env_before_rust_call(monkeypatch) -> None:
     )
 
     mock_load = MagicMock(return_value=None)
-    module = types.ModuleType("omni_core_rs")
+    module = types.ModuleType("xiuxian_core_rs")
     module.load_kg_from_valkey_cached = mock_load
-    monkeypatch.setitem(sys.modules, "omni_core_rs", module)
+    monkeypatch.setitem(sys.modules, "xiuxian_core_rs", module)
 
     out = fusion_config._load_kg(scope_key="test.scope")
 

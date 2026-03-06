@@ -50,14 +50,14 @@ def test_main_module_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_omni_loop_module_is_removed(
+async def test_xiuxian_loop_module_is_removed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from omni.agent.runtime import decommission as decommission_module
 
     monkeypatch.delenv(decommission_module.TEST_OVERRIDE_ENV, raising=False)
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("omni.agent.cli.omni_loop")
+        importlib.import_module("omni.agent.cli.xiuxian_loop")
 
 
 def test_raise_python_runtime_decommissioned_allows_test_override(
@@ -66,7 +66,9 @@ def test_raise_python_runtime_decommissioned_allows_test_override(
     from omni.agent.runtime import decommission as decommission_module
 
     monkeypatch.setenv(decommission_module.TEST_OVERRIDE_ENV, "1")
-    decommission_module.raise_python_runtime_decommissioned("test.removed.entry", "omni-agent repl")
+    decommission_module.raise_python_runtime_decommissioned(
+        "test.removed.entry", "xiuxian-daochang repl"
+    )
 
 
 def test_cli_entry_point_invokes_runtime_guard(monkeypatch: pytest.MonkeyPatch) -> None:

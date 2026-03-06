@@ -17,7 +17,9 @@ from omni.foundation.runtime.gitops import get_project_root
 def _load_monitor_module() -> ModuleType:
     root = get_project_root()
     script_path = root / "scripts" / "channel" / "agent_channel_runtime_monitor.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_channel_runtime_monitor", script_path)
+    spec = importlib.util.spec_from_file_location(
+        "xiuxian_daochang_channel_runtime_monitor", script_path
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -49,7 +51,7 @@ def test_classify_exit_for_success_and_signal() -> None:
 def test_extract_event_token_parses_structured_log() -> None:
     module = _load_monitor_module()
     line = (
-        "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+        "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
         'telegram command reply sent event="telegram.command.session_reset.replied"'
     )
     assert module.extract_event_token(line) == "telegram.command.session_reset.replied"

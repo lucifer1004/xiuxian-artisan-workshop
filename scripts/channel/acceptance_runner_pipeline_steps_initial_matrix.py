@@ -18,7 +18,7 @@ def build_session_matrix_cmd(
     """Build session-matrix command line with optional thread overrides."""
     cmd = [
         "bash",
-        "scripts/channel/test-omni-agent-session-matrix.sh",
+        "scripts/channel/test-xiuxian-daochang-session-matrix.sh",
         "--max-wait",
         str(cfg.max_wait),
         "--max-idle-secs",
@@ -49,7 +49,7 @@ def build_tail_steps(
             title="Run dedup probe",
             cmd=(
                 "bash",
-                "scripts/channel/test-omni-agent-dedup-events.sh",
+                "scripts/channel/test-xiuxian-daochang-dedup-events.sh",
                 "--max-wait",
                 str(cfg.max_wait),
             ),
@@ -60,7 +60,7 @@ def build_tail_steps(
             title="Run concurrent probe",
             cmd=(
                 "bash",
-                "scripts/channel/test-omni-agent-concurrent-sessions.sh",
+                "scripts/channel/test-xiuxian-daochang-concurrent-sessions.sh",
                 "--max-wait",
                 str(cfg.max_wait),
             ),

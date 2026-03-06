@@ -280,7 +280,7 @@ class ToolCallParser:
 class OmniReplExecutor:
     """Executes Nushell commands from Omni REPL mode.
 
-    Detects tool calls in LLM responses and executes them via OmniCell.
+    Detects tool calls in LLM responses and executes them via XiuxianCell.
     Supports dual format (ZeroClaw style):
     1. OpenAI JSON: {"name": "shell", "arguments": {"command": "ls"}}
     2. XML style: <tool_call>{"name": "shell", "arguments": {"command": "ls"}}</tool_call>
@@ -290,14 +290,14 @@ class OmniReplExecutor:
         self._cell_runner = None
 
     def _get_cell_runner(self):
-        """Lazy-load OmniCell runner."""
+        """Lazy-load XiuxianCell runner."""
         if self._cell_runner is None:
             try:
-                from omni.core.skills.runtime.omni_cell import get_runner
+                from omni.core.skills.runtime.xiuxian_cell import get_runner
 
                 self._cell_runner = get_runner()
             except ImportError:
-                logger.warning("OmniCell not available for REPL execution")
+                logger.warning("XiuxianCell not available for REPL execution")
                 return None
         return self._cell_runner
 
@@ -318,7 +318,7 @@ class OmniReplExecutor:
 
         runner = self._get_cell_runner()
         if runner is None:
-            return True, "[System] OmniCell not available for command execution"
+            return True, "[System] XiuxianCell not available for command execution"
 
         results = []
         for tc in tool_calls:

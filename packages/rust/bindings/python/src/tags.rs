@@ -1,11 +1,11 @@
-//! Python bindings for omni-tags - Code Symbol Extraction
+//! Python bindings for xiuxian-tags - Code Symbol Extraction
 //!
-//! Provides AST-based symbol extraction using omni-ast (ast-grep)
+//! Provides AST-based symbol extraction using xiuxian-ast (ast-grep)
 //! for high-performance code navigation.
 
-use omni_tags::{SearchConfig, TagExtractor};
 use pyo3::prelude::*;
 use std::fmt::Write;
+use xiuxian_tags::{SearchConfig, TagExtractor};
 
 /// Symbol kind enumeration for Python.
 ///

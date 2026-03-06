@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from omni.test_kit.decorators import omni_skill
+from omni.test_kit.decorators import xiuxian_skill
 
 
 @pytest.mark.asyncio
-@omni_skill(name="omniCell")
+@xiuxian_skill(name="omniCell")
 class TestOmniCellResponseAdapter:
     async def test_nu_shell_empty_command_returns_status_error(self, skill_tester) -> None:
         result = await skill_tester.run("omniCell", "nuShell", command="")

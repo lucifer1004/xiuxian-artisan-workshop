@@ -28,7 +28,7 @@ def parse_args(*, webhook_url_default: str) -> argparse.Namespace:
     )
     parser.add_argument(
         "--log-file",
-        default=os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/omni-agent-webhook.log"),
+        default=os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/xiuxian-daochang-webhook.log"),
         help="Runtime log file path.",
     )
     parser.add_argument(

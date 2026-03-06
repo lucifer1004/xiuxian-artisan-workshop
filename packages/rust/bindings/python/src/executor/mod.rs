@@ -1,9 +1,9 @@
-//! Python bindings for omni-executor (OmniCell Nushell Bridge)
+//! Python bindings for xiuxian-executor (OmniCell Nushell Bridge)
 //!
 //! Provides structured access to Nushell execution with safety guarantees.
 
-use omni_executor::{ActionType, NuConfig, NuSystemBridge, QueryAction, QueryBuilder};
 use pyo3::prelude::*;
+use xiuxian_executor::{ActionType, NuConfig, NuSystemBridge, QueryAction, QueryBuilder};
 
 /// Helper to build query strings from Python.
 /// This function creates a query builder and returns the final command string.

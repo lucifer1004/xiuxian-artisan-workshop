@@ -47,7 +47,7 @@ def test_build_config_requires_channel_and_user_ids(tmp_path: Path) -> None:
 
 def test_default_ingress_url_from_bind_and_path(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OMNI_DISCORD_INGRESS_URL", raising=False)
-    monkeypatch.setenv("OMNI_AGENT_DISCORD_INGRESS_BIND", "0.0.0.0:19082")
-    monkeypatch.setenv("OMNI_AGENT_DISCORD_INGRESS_PATH", "/ingress/discord")
+    monkeypatch.setenv("XIUXIAN_DAOCHANG_DISCORD_INGRESS_BIND", "0.0.0.0:19082")
+    monkeypatch.setenv("XIUXIAN_DAOCHANG_DISCORD_INGRESS_PATH", "/ingress/discord")
     expected_bind = config_module.normalize_ingress_bind_for_local_url("0.0.0.0:19082")
     assert config_module.default_ingress_url() == f"http://{expected_bind}/ingress/discord"

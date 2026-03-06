@@ -2,7 +2,7 @@
 Fake VectorStore for Testing.
 
 A lightweight in-memory implementation of VectorStoreProtocol for fast testing.
-Supports filtering and search results compatible with omni-vector (LanceDB).
+Supports filtering and search results compatible with xiuxian-vector (LanceDB).
 """
 
 from typing import Any, Protocol, runtime_checkable
@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 
 class SearchResult(BaseModel):
-    """Fake search result compatible with omni-vector (LanceDB) SearchResult."""
+    """Fake search result compatible with xiuxian-vector (LanceDB) SearchResult."""
 
     id: str
     content: str

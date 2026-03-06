@@ -1,10 +1,10 @@
 # mcp_server/inference_http.py
 """
-OpenAI-compatible /v1/chat/completions over the project's LLM provider (LiteLLM).
+OpenAI-compatible /v1/chat/completions over the project's LLM provider.
 
 When `omni mcp --transport sse --port 3002` runs, the same process exposes:
 - MCP: /sse, /mcp, /messages/
-- Inference: POST /v1/chat/completions (uses settings inference.*, no separate LiteLLM proxy)
+- Inference: POST /v1/chat/completions (uses settings inference.*, no separate proxy)
 
 Clients (e.g. Rust agent) can set LITELLM_PROXY_URL=http://127.0.0.1:3002/v1/chat/completions
 and use the single MCP process for both tools and chat.
@@ -132,7 +132,7 @@ async def handle_chat_completions(request: Request) -> JSONResponse:
         choice["message"]["tool_calls"] = openai_tool_calls
 
     out = {
-        "id": "omni-chat-1",
+        "id": "xiuxian-chat-1",
         "object": "chat.completion",
         "model": response.model or model,
         "choices": [choice],

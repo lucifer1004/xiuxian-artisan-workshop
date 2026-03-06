@@ -17,12 +17,12 @@ This folder holds testing-related docs: evaluation reports, decision records, an
 
 ## Canonical references
 
-| Document                                                                     | Use                                                                                                           |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| [Keyword Backend Decision](keyword-backend-decision.md)                      | **Canonical** — Tantivy vs Lance FTS decision, when to use which, how to regenerate reports.                  |
-| [Keyword Backend Usage Guide](keyword-backend-usage-guide.md)                | How to use the keyword backend in tests and CLI.                                                              |
-| [Omni-Agent Live Multi-Group Runbook](omni-agent-live-multigroup-runbook.md) | Canonical live validation flow for `Test1/Test2/Test3` session isolation + memory evolution + trace evidence. |
-| [Skills Tools Benchmark CI Gate](skills-tools-benchmark-ci.md)               | Canonical threshold policy and execution path for `ci:benchmark-skills-tools` (deterministic + diff + trend). |
+| Document                                                                                            | Use                                                                                                           |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [Keyword Backend Decision](keyword-backend-decision.md)                                             | **Canonical** — Tantivy vs Lance FTS decision, when to use which, how to regenerate reports.                  |
+| [Keyword Backend Usage Guide](keyword-backend-usage-guide.md)                                       | How to use the keyword backend in tests and CLI.                                                              |
+| [修仙道场 (Xiuxian Daochang) Live Multi-Group Runbook](xiuxian-daochang-live-multigroup-runbook.md) | Canonical live validation flow for `Test1/Test2/Test3` session isolation + memory evolution + trace evidence. |
+| [Skills Tools Benchmark CI Gate](skills-tools-benchmark-ci.md)                                      | Canonical threshold policy and execution path for `ci:benchmark-skills-tools` (deterministic + diff + trend). |
 
 ## Reports (historical or one-off)
 
@@ -111,7 +111,7 @@ just no-inline-python-guard
 Developer-mode rule:
 
 - Only rebuild Rust Python bindings when related code changes:
-  `uv sync --reinstall-package omni-core-rs`
+  `uv sync --reinstall-package xiuxian-core-rs`
 
 ## Mixed-Scope Rollout Sign-Off
 

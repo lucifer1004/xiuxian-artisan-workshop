@@ -25,8 +25,8 @@ def test_run_dispatches_query_to_omni_agent():
 
     assert result.exit_code == 0
     m_execvp.assert_called_once_with(
-        "omni-agent",
-        ["omni-agent", "repl", "--query", "research this repo"],
+        "xiuxian-daochang",
+        ["xiuxian-daochang", "repl", "--query", "research this repo"],
     )
 
 
@@ -39,21 +39,21 @@ def test_run_dispatches_repl_when_no_task():
 
     assert result.exit_code == 0
     m_execvp.assert_called_once_with(
-        "omni-agent",
-        ["omni-agent", "repl"],
+        "xiuxian-daochang",
+        ["xiuxian-daochang", "repl"],
     )
 
 
 def test_run_sets_max_tool_rounds_when_steps_given(monkeypatch):
     app = _build_run_app()
     runner = CliRunner()
-    monkeypatch.delenv("OMNI_AGENT_MAX_TOOL_ROUNDS", raising=False)
+    monkeypatch.delenv("XIUXIAN_DAOCHANG_MAX_TOOL_ROUNDS", raising=False)
 
     with patch("os.execvp"):
         result = runner.invoke(app, ["--steps", "77", "hello"])
 
     assert result.exit_code == 0
-    assert os.environ["OMNI_AGENT_MAX_TOOL_ROUNDS"] == "77"
+    assert os.environ["XIUXIAN_DAOCHANG_MAX_TOOL_ROUNDS"] == "77"
 
 
 def test_run_rejects_python_only_flags():
@@ -73,4 +73,4 @@ def test_run_reports_missing_omni_agent():
         result = runner.invoke(app, ["hello"])
 
     assert result.exit_code == 1
-    assert "omni-agent not found in PATH" in result.output
+    assert "xiuxian-daochang not found in PATH" in result.output

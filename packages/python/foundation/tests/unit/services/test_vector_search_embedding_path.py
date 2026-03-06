@@ -14,7 +14,7 @@ import pytest
 def _reset_vector_search_caches(monkeypatch) -> None:
     from omni.foundation.services.vector import search as vector_search
 
-    isolated_path = Path(f"/tmp/omni-query-embed-test-{uuid4().hex}.json")
+    isolated_path = Path(f"/tmp/xiuxian-query-embed-test-{uuid4().hex}.json")
     monkeypatch.setattr(vector_search, "_LAST_SUCCESSFUL_MCP_EMBED_ENDPOINT", None)
     monkeypatch.setattr(vector_search, "_QUERY_EMBED_CACHE", vector_search.OrderedDict())
     monkeypatch.setattr(vector_search, "_QUERY_EMBED_PERSIST_LOADED", False)
@@ -733,7 +733,7 @@ async def test_run_semantic_search_skips_http_call_when_http_backoff_active(monk
         _fake_get_embedding_client,
     )
 
-    base_url = "http://127.0.0.1:18501"
+    base_url = "http://127.0.0.1:3002"
     vector_search._remember_http_endpoint_failure(base_url)
     for port, path in vector_search._build_default_mcp_probe_targets():
         vector_search._remember_mcp_target_failure(port, path)

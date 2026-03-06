@@ -310,7 +310,7 @@ def test_embedding_override_enabled_prefers_explicit_env(
     monkeypatch.setattr(
         app_module,
         "get_settings",
-        lambda: types.SimpleNamespace(get=lambda _key, _default=None: "ollama"),
+        lambda: types.SimpleNamespace(get=lambda _key, _default=None: "legacy-provider"),
     )
     assert app_module._embedding_override_enabled() is expected
 
@@ -320,9 +320,8 @@ def test_embedding_override_enabled_prefers_explicit_env(
     [
         ("", True),
         ("client", True),
-        ("ollama", False),
-        ("xinference", False),
-        ("litellm", False),
+        ("fallback", False),
+        ("legacy-provider", False),
     ],
 )
 def test_embedding_override_enabled_derives_from_provider(

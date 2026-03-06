@@ -75,7 +75,7 @@ class DependencyIndexer:
         """Initialize the dependency indexer.
 
         Args:
-            cache_dir: Directory to store indexed data (default: ~/.cache/omni-vector)
+            cache_dir: Directory to store indexed data (default: ~/.cache/xiuxian-vector)
         """
         from omni.foundation.config.dirs import get_cache_dir
 

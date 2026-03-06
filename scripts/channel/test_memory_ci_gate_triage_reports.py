@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 
 from test_memory_ci_gate import build_cfg
-from test_omni_agent_memory_ci_gate import (
+from test_xiuxian_daochang_memory_ci_gate import (
     print_gate_failure_triage,
     write_gate_failure_triage_json_report,
     write_gate_failure_triage_report,
@@ -65,7 +65,7 @@ def test_print_gate_failure_triage_returns_report_path(tmp_path) -> None:
     )
     report = print_gate_failure_triage(cfg, RuntimeError("memory stream warning budget exceeded"))
     assert report.exists()
-    assert report.name.startswith("omni-agent-memory-ci-failure-nightly-")
+    assert report.name.startswith("xiuxian-daochang-memory-ci-failure-nightly-")
     report_json = report.with_suffix(".json")
     assert report_json.exists()
     payload = json.loads(report_json.read_text(encoding="utf-8"))

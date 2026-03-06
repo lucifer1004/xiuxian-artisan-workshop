@@ -1,5 +1,5 @@
 [project]
-name = "omni-foundation"
+name = "xiuxian-foundation"
 version = "0.5.0"
 description = "Omni Foundation - Infrastructure Layer (AI, VCS, Text, Logging)"
 readme = "README.md"
@@ -10,11 +10,6 @@ dependencies = [
     "structlog>=24.0.0",
     "orjson>=3.10.0",
     "psutil>=5.9.0",
-    # AI & Embeddings
-    # Unified LLM Interface (100+ providers, includes OpenAI)
-    "litellm>=1.0.0",
-    # Local Embedding (Apple Silicon optimized)
-    "sentence-transformers>=2.2.0",
     # VCS
     "gitpython>=3.1.0",
     # Text & Data
@@ -50,3 +45,9 @@ typeCheckingMode = "strict"
 [tool.pytest]
 markers = ["slow", "architecture"]
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::pytest.PytestReturnNotNoneWarning",
+    "ignore::DeprecationWarning:websockets",
+    "ignore::DeprecationWarning:starlette",
+    "ignore:Module already imported so cannot be rewritten; omni\\.test_kit\\.fixtures:pytest.PytestAssertRewriteWarning",
+]

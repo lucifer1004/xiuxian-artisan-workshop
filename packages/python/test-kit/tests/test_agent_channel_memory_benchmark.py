@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_memory_benchmark.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_memory_benchmark.py."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
 def _load_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_memory_benchmark.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_memory_benchmark", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_memory_benchmark.py"
+    spec = importlib.util.spec_from_file_location("xiuxian_daochang_memory_benchmark", script_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)

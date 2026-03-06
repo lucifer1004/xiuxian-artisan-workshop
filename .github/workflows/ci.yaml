@@ -15,7 +15,7 @@ on:
           - "false"
           - "true"
       run_memory_ci_nightly:
-        description: "Run optional omni-agent memory nightly gate"
+        description: "Run optional xiuxian-daochang memory nightly gate"
         required: false
         default: "false"
         type: choice
@@ -183,14 +183,14 @@ jobs:
       - name: Rust gate - omni-core-rs lib runtime lane (explicit)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-core-rs-lib
 
-      - name: Rust gate - omni-agent profile matrix (default + no-default-features)
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-agent-profiles
+      - name: Rust gate - xiuxian-daochang profile matrix (default + no-default-features)
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-daochang-profiles
 
-      - name: Rust gate - omni-agent dependency graph assertions
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-agent-dependency-assertions
+      - name: Rust gate - xiuxian-daochang dependency graph assertions
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-daochang-dependency-assertions
 
-      - name: Rust gate - omni-agent backend role contracts
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-agent-backend-role-contracts
+      - name: Rust gate - xiuxian-daochang backend role contracts
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-daochang-backend-role-contracts
 
       - name: Runtime gate - native runtime smoke
         run: secretspec run --provider env --profile default -- devenv tasks run ci:native-runtime-smoke
@@ -207,14 +207,14 @@ jobs:
       - name: Rust gate - xiuxian-wendao WG2/WG3 unified PPR gate
         env:
           XIUXIAN_WENDAO_GATE_BUILD_MODE: "build"
-          XIUXIAN_WENDAO_GATE_CONFIG: "packages/conf/wendao.yaml"
+          XIUXIAN_WENDAO_GATE_CONFIG: "packages/rust/crates/xiuxian-wendao/resources/config/wendao.yaml"
         run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-ppr-gate
 
       - name: Rust gate - xiuxian-wendao WG2/WG3 JSON report
         if: ${{ always() }}
         env:
           XIUXIAN_WENDAO_GATE_BUILD_MODE: "no-build"
-          XIUXIAN_WENDAO_GATE_CONFIG: "packages/conf/wendao.yaml"
+          XIUXIAN_WENDAO_GATE_CONFIG: "packages/rust/crates/xiuxian-wendao/resources/config/wendao.yaml"
           XIUXIAN_WENDAO_GATE_OUTPUT_MODE: "json"
         run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-ppr-report
 
@@ -223,7 +223,7 @@ jobs:
         if: ${{ always() }}
         env:
           XIUXIAN_WENDAO_GATE_BUILD_MODE: "no-build"
-          XIUXIAN_WENDAO_GATE_CONFIG: "packages/conf/wendao.yaml"
+          XIUXIAN_WENDAO_GATE_CONFIG: "packages/rust/crates/xiuxian-wendao/resources/config/wendao.yaml"
           XIUXIAN_WENDAO_GATE_OUTPUT_MODE: "json"
         run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-ppr-mixed-canary
 
@@ -360,21 +360,21 @@ jobs:
         with:
           name: embedding-role-perf-${{ matrix.os }}
           path: |
-            .run/reports/omni-agent-embedding-role-perf-smoke.medium.json
-            .run/reports/omni-agent-embedding-role-perf-smoke.medium.md
-            .run/logs/omni-agent-embedding-role-*.log
+            .run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.json
+            .run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.md
+            .run/logs/xiuxian-daochang-embedding-role-*.log
           if-no-files-found: warn
 
       - name: Embedding role perf summary (step summary)
         if: ${{ always() }}
         run: |
-          report=".run/reports/omni-agent-embedding-role-perf-smoke.medium.json"
+          report=".run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.json"
           if [ -f "${report}" ]; then
             python3 scripts/render_embedding_role_perf_summary.py \
               --input "${report}" \
               --profile "medium" \
               --runner-os "${RUNNER_OS}" \
-              --output-markdown ".run/reports/omni-agent-embedding-role-perf-smoke.medium.md" \
+              --output-markdown ".run/reports/xiuxian-daochang-embedding-role-perf-smoke.medium.md" \
               >> "${GITHUB_STEP_SUMMARY}"
           else
             echo "## Embedding Role Perf (medium, ${RUNNER_OS})" >> "${GITHUB_STEP_SUMMARY}"
@@ -398,19 +398,19 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
-      - name: Run omni-agent memory gate (nightly via launcher)
+      - name: Run xiuxian-daochang memory gate (nightly via launcher)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:memory-gate-nightly
 
-      - name: Upload omni-agent memory nightly reports
+      - name: Upload xiuxian-daochang memory nightly reports
         if: ${{ always() }}
         uses: actions/upload-artifact@v6
         with:
-          name: omni-agent-memory-nightly
+          name: xiuxian-daochang-memory-nightly
           path: |
-            .run/reports/omni-agent-memory-ci-latest-run.json
-            .run/reports/omni-agent-memory-ci-latest-failure.json
-            .run/reports/omni-agent-memory-ci-latest-failure.md
-            .run/logs/omni-agent-memory-ci-nightly-*.log
-            .run/logs/omni-agent-webhook-ci-nightly-*.log
-            .run/logs/omni-agent-mock-telegram-nightly-*.log
+            .run/reports/xiuxian-daochang-memory-ci-latest-run.json
+            .run/reports/xiuxian-daochang-memory-ci-latest-failure.json
+            .run/reports/xiuxian-daochang-memory-ci-latest-failure.md
+            .run/logs/xiuxian-daochang-memory-ci-nightly-*.log
+            .run/logs/xiuxian-daochang-webhook-ci-nightly-*.log
+            .run/logs/xiuxian-daochang-mock-telegram-nightly-*.log
           if-no-files-found: warn

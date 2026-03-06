@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Core event-sequence validation helpers for omni-agent log checks."""
+"""Core event-sequence validation helpers for xiuxian-daochang log checks."""
 
 from __future__ import annotations
 

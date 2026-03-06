@@ -8,7 +8,7 @@ metadata:
 
 > @skill_command Pattern - No tools.py Required
 
-This directory contains **Skills** - composable, self-contained packages that provide specific capabilities to the Omni Agent.
+This directory contains **Skills** - composable, self-contained packages that provide specific capabilities to the Xiuxian Daochang.
 
 ## Quick Reference
 
@@ -43,7 +43,7 @@ Omni uses **pure `mcp.server.Server`** instead of FastMCP for better control and
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
-server = Server("omni-agent")
+server = Server("xiuxian-daochang")
 
 @server.list_tools()
 async def list_tools(): ...
@@ -147,9 +147,9 @@ Each skill has a `SKILL.md` with YAML frontmatter using Anthropic official forma
 name: git
 description: Use when working with version control, commits, branches, or Git operations.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "2.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/git"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/git"
   routing_keywords:
     - "git"
     - "commit"

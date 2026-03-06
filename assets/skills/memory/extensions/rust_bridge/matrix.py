@@ -69,7 +69,7 @@ class NeuralMatrix:
     def backend(self) -> str:
         """Return the backend type."""
         if self._store is not None or self._store_cls is not None:
-            return "omni-vector (Rust/LanceDB)"
+            return "xiuxian-vector (Rust/LanceDB)"
         return "unavailable"
 
     def remember(self, content: str, metadata: dict[str, Any] | None = None) -> str:

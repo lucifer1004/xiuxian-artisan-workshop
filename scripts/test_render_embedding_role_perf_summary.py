@@ -19,7 +19,7 @@ render_summary = _MODULE.render_summary
 
 def _sample_payload(status: str = "pass") -> dict[str, object]:
     return {
-        "schema": "omni_agent.embedding.role_perf_smoke.v1",
+        "schema": "xiuxian_daochang.embedding.role_perf_smoke.v1",
         "status": status,
         "duration_secs": 12.34,
         "upstream_base_url": "http://127.0.0.1:11434",

@@ -30,8 +30,13 @@ from urllib import request as urlrequest
 
 try:
     import tomllib
-except ModuleNotFoundError as exc:  # pragma: no cover
-    raise RuntimeError("Python 3.11+ is required for tomllib support") from exc
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError as exc:  # pragma: no cover - environment guard
+        raise ModuleNotFoundError(
+            "No TOML parser available. Use Python 3.11+ or install tomli."
+        ) from exc
 
 
 DEFAULT_TRIGGER_INTENT = (
@@ -47,7 +52,7 @@ DEFAULT_STREAM_TEST = "bootcamp_runs_embedded_agenda_flow_with_mock_llm"
 DEFAULT_HEARTBEAT_SECS = 8.0
 DEFAULT_CHANNEL_MAX_WAIT_SECS = 45.0
 DEFAULT_CHANNEL_MAX_IDLE_SECS = 12.0
-DEFAULT_CHANNEL_LOG_FILE = ".run/logs/omni-agent-webhook.log"
+DEFAULT_CHANNEL_LOG_FILE = ".run/logs/xiuxian-daochang-webhook.log"
 DEFAULT_CHANNEL_SCENARIO = "single"
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -390,7 +395,18 @@ def _config_candidates(project_root: Path) -> list[Path]:
         candidates.append(
             (project_root / ".config" / "xiuxian-artisan-workshop" / "xiuxian.toml").resolve()
         )
-    candidates.append((project_root / "packages" / "conf" / "xiuxian.toml").resolve())
+    candidates.append(
+        (
+            project_root
+            / "packages"
+            / "rust"
+            / "crates"
+            / "xiuxian-daochang"
+            / "resources"
+            / "config"
+            / "xiuxian.toml"
+        ).resolve()
+    )
     return candidates
 
 
@@ -437,7 +453,7 @@ def _resolve_runtime_config(args: argparse.Namespace) -> RuntimeConfig:
     config = _load_toml(config_path)
     gateway_url = (
         (getattr(args, "gateway_url", None) or "").strip()
-        or os.getenv("OMNI_AGENT_GATEWAY_URL", "").strip()
+        or os.getenv("XIUXIAN_DAOCHANG_GATEWAY_URL", "").strip()
         or _bind_to_http_url(str(_nested_get(config, "gateway", "bind") or "127.0.0.1:18092"))
     )
     zhenfa_url = (
@@ -456,9 +472,9 @@ def _resolve_runtime_config(args: argparse.Namespace) -> RuntimeConfig:
 
     memory_prefix = (
         (getattr(args, "memory_key_prefix", None) or "").strip()
-        or os.getenv("OMNI_AGENT_MEMORY_VALKEY_KEY_PREFIX", "").strip()
+        or os.getenv("XIUXIAN_DAOCHANG_MEMORY_VALKEY_KEY_PREFIX", "").strip()
         or str(_nested_get(config, "memory", "persistence_key_prefix") or "").strip()
-        or "omni-agent:memory"
+        or "xiuxian-daochang:memory"
     )
     memory_table = (
         (getattr(args, "memory_table", None) or "").strip()
@@ -735,7 +751,7 @@ def _run_direct_bootcamp(
             "nextest",
             "run",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "--lib",
             "-E",
             "test(memory_reward_signal_bootcamp_penalize_then_recover)",
@@ -751,7 +767,7 @@ def _run_direct_bootcamp(
                 "nextest",
                 "run",
                 "-p",
-                "omni-agent",
+                "xiuxian-daochang",
                 "--lib",
                 "-E",
                 "test(memory_reward_signal_persists_q_to_valkey_when_backend_present)",
@@ -1280,7 +1296,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--config", help="Path to xiuxian.toml")
-    parser.add_argument("--gateway-url", help="omni-agent HTTP gateway base URL")
+    parser.add_argument("--gateway-url", help="xiuxian-daochang HTTP gateway base URL")
     parser.add_argument("--zhenfa-url", help="zhenfa JSON-RPC gateway base URL")
     parser.add_argument("--valkey-url", help="Valkey URL (redis://...)")
     parser.add_argument("--memory-key-prefix", help="Valkey key prefix for memory state")
@@ -1294,7 +1310,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--trigger-intent",
         default=DEFAULT_TRIGGER_INTENT,
-        help="Adversarial scheduling prompt sent to omni-agent",
+        help="Adversarial scheduling prompt sent to xiuxian-daochang",
     )
     parser.add_argument(
         "--expected-q-ceiling",

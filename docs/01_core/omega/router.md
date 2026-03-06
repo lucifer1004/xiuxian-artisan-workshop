@@ -4,7 +4,7 @@ title: "Router Architecture - Omni-Dev-Fusion"
 category: "architecture"
 tags:
   - routing
-  - omni-router
+  - xiuxian-router
   - hybrid-search
   - rust-native
 saliency_base: 8.0
@@ -69,11 +69,11 @@ The router architecture is centered on `[[OmniRouter#CONCEPT]]` and relies on `[
 
 ### Rust-Native Hybrid Search
 
-The `HybridSearch` component is now **100% Rust-native** using `omni-vector`:
+The `HybridSearch` component is now **100% Rust-native** using `xiuxian-vector`:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Rust: omni-vector                         │
+│                    Rust: xiuxian-vector                         │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐    ┌─────────────────┐                 │
 │  │  Vector Search  │    │  Keyword Rescue │                 │
@@ -258,7 +258,7 @@ path = write_router_search_json_schema()
 2. **Vector branch**: embed effective query → search **skills** table by vector similarity (description semantics).
 3. **Keyword branch**: effective query → Tantivy BM25 on fields `tool_name`, `routing_keywords`, `intents`, `description` (boosts favor keywords/intents).
 4. **Fusion**: RRF combines vector and keyword results; confidence/rerank applied.
-5. **Table**: Routing reads from the **skills** table in `skills.lance` (`.cache/omni-vector/skills.lance`). This table **must be populated** by `omni sync` (or `omni reindex`) from `assets/skills`. If the skills table is empty or stale, skills like `researcher` will not appear in results. The separate `router.lance` store is reserved for score-only data (no tool replication); see [Skills and Router Databases](../reference/skills-and-router-databases.md).
+5. **Table**: Routing reads from the **skills** table in `skills.lance` (`.cache/xiuxian-vector/skills.lance`). This table **must be populated** by `omni sync` (or `omni reindex`) from `assets/skills`. If the skills table is empty or stale, skills like `researcher` will not appear in results. The separate `router.lance` store is reserved for score-only data (no tool replication); see [Skills and Router Databases](../reference/skills-and-router-databases.md).
 
 **Why a skill might be missing from top results**
 
@@ -270,7 +270,7 @@ path = write_router_search_json_schema()
 
 **Location**: `packages/python/core/src/omni/core/router/hybrid_search.py`
 
-The **Rust-native hybrid search engine** that delegates all heavy computation to `omni-vector`:
+The **Rust-native hybrid search engine** that delegates all heavy computation to `xiuxian-vector`:
 
 ### Architecture
 
@@ -286,7 +286,7 @@ class HybridSearch:
     """
 
     def __init__(self):
-        self._store = get_vector_store()  # Rust omni-vector
+        self._store = get_vector_store()  # Rust xiuxian-vector
 
     async def search(self, query: str, limit: int = 5, min_score: float = 0.0):
         # 1. Generate embedding (Python)
@@ -296,10 +296,10 @@ class HybridSearch:
 
 ### Rust API
 
-The actual search is performed by `omni-vector`'s `search_tools`:
+The actual search is performed by `xiuxian-vector`'s `search_tools`:
 
 ```rust
-// Rust: omni-vector/src/skill.rs
+// Rust: xiuxian-vector/src/skill.rs
 pub async fn search_tools(
     &self,
     table_name: &str,
@@ -490,8 +490,8 @@ class SemanticRouter:
     """Semantic routing using vector similarity.
 
     Uses:
-    - omni-vector (Rust) for vector storage
-    - omni-embedding (Python) for query encoding
+    - xiuxian-vector (Rust) for vector storage
+    - xiuxian-embedding (Python) for query encoding
     """
 
     def __init__(self, indexer: SkillIndexer):

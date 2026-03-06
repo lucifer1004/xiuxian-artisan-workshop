@@ -3,9 +3,9 @@ type: skill
 name: documentation
 description: Use when creating documentation, updating README files, writing guides, generating API docs, or documenting code changes.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/documentation"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/documentation"
   routing_keywords:
     - "docs"
     - "documentation"

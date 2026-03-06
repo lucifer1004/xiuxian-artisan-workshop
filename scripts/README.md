@@ -10,40 +10,40 @@ This directory contains utility scripts for the Omni-Dev Fusion project.
 
 ## Available Scripts
 
-| Script                                          | Purpose                                                                                                                                                                            |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `generate_llm_index.py`                         | Generate skill index for LLM context                                                                                                                                               |
-| `verify_skill_descriptions.py`                  | Verify skill command descriptions                                                                                                                                                  |
-| `verify_system.py`                              | End-to-end smoke test for kernel                                                                                                                                                   |
-| `benchmark_wendao_search.py`                    | Benchmark wendao search latency                                                                                                                                                    |
-| `evaluate_wendao_retrieval.py`                  | Evaluate wendao Top1/Top3/Top10 on fixed query matrix                                                                                                                              |
-| `evaluate_wendao_retrieval.sh`                  | Thin shell wrapper for `evaluate_wendao_retrieval.py`                                                                                                                              |
-| `benchmark_wendao_related.py`                   | Benchmark wendao related latency and PPR diagnostics                                                                                                                               |
-| `gate_wendao_ppr.sh`                            | Unified WG2/WG3 gate: retrieval matrix quality + related PPR latency/diagnostics                                                                                                   |
-| `benchmark_skills_tools.py`                     | Benchmark curated safe skill tools plus CLI runner cold/warm/no-reuse cases, then persist latency snapshot baselines (`crawl4ai` supports `network_http` + `local_file` scenarios) |
-| `benchmark_skills_tools_gate.sh`                | Unified wrapper for strict deterministic gate and network observability                                                                                                            |
-| `benchmark_skills_tools_ci.sh`                  | Unified CI/local runner for deterministic gate + CLI summary regression diff + optional baseline promotion + network observability + trend summary                                 |
-| `compare_cli_runner_summary.py`                 | Compare two CLI summary artifacts and detect per-case/per-phase latency regressions                                                                                                |
-| `fetch_previous_skills_benchmark_artifact.py`   | Fetch previous successful workflow artifact and extract `cli_runner_summary(.base).json` as baseline                                                                               |
-| `render_skills_tools_ci_summary.py`             | Aggregate benchmark reports into one `skills_tools_ci_status.json/.md` status summary with `improved/regressed/unchanged` trends                                                   |
-| `ci-local-recall-gates.sh`                      | Unified runner for `knowledge.recall` perf gates (`auto` + `graph_only`)                                                                                                           |
-| `channel/test_omni_agent_discord_acl_events.py` | Live Discord ingress ACL black-box probe for managed command denial events                                                                                                         |
-| `channel/start-omni-agent-memory-ci.sh`         | Unified launcher for quick/nightly memory CI gates with latest status/failure aggregation                                                                                          |
-| `channel/start-omni-agent-memory-ci-quick.sh`   | Launch quick memory CI gate in background and aggregate latest failure reports                                                                                                     |
-| `channel/start-omni-agent-memory-ci-nightly.sh` | Launch nightly memory CI gate in background and aggregate latest failure reports                                                                                                   |
-| `channel/memory_ci_finalize.py`                 | Shared artifact finalizer for memory CI launcher (`latest-run`, failure JSON/Markdown)                                                                                             |
+| Script                                                | Purpose                                                                                                                                                                            |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generate_llm_index.py`                               | Generate skill index for LLM context                                                                                                                                               |
+| `verify_skill_descriptions.py`                        | Verify skill command descriptions                                                                                                                                                  |
+| `verify_system.py`                                    | End-to-end smoke test for kernel                                                                                                                                                   |
+| `benchmark_wendao_search.py`                          | Benchmark wendao search latency                                                                                                                                                    |
+| `evaluate_wendao_retrieval.py`                        | Evaluate wendao Top1/Top3/Top10 on fixed query matrix                                                                                                                              |
+| `evaluate_wendao_retrieval.sh`                        | Thin shell wrapper for `evaluate_wendao_retrieval.py`                                                                                                                              |
+| `benchmark_wendao_related.py`                         | Benchmark wendao related latency and PPR diagnostics                                                                                                                               |
+| `gate_wendao_ppr.sh`                                  | Unified WG2/WG3 gate: retrieval matrix quality + related PPR latency/diagnostics                                                                                                   |
+| `benchmark_skills_tools.py`                           | Benchmark curated safe skill tools plus CLI runner cold/warm/no-reuse cases, then persist latency snapshot baselines (`crawl4ai` supports `network_http` + `local_file` scenarios) |
+| `benchmark_skills_tools_gate.sh`                      | Unified wrapper for strict deterministic gate and network observability                                                                                                            |
+| `benchmark_skills_tools_ci.sh`                        | Unified CI/local runner for deterministic gate + CLI summary regression diff + optional baseline promotion + network observability + trend summary                                 |
+| `compare_cli_runner_summary.py`                       | Compare two CLI summary artifacts and detect per-case/per-phase latency regressions                                                                                                |
+| `fetch_previous_skills_benchmark_artifact.py`         | Fetch previous successful workflow artifact and extract `cli_runner_summary(.base).json` as baseline                                                                               |
+| `render_skills_tools_ci_summary.py`                   | Aggregate benchmark reports into one `skills_tools_ci_status.json/.md` status summary with `improved/regressed/unchanged` trends                                                   |
+| `ci-local-recall-gates.sh`                            | Unified runner for `knowledge.recall` perf gates (`auto` + `graph_only`)                                                                                                           |
+| `channel/test_xiuxian_daochang_discord_acl_events.py` | Live Discord ingress ACL black-box probe for managed command denial events                                                                                                         |
+| `channel/start-xiuxian-daochang-memory-ci.sh`         | Unified launcher for quick/nightly memory CI gates with latest status/failure aggregation                                                                                          |
+| `channel/start-xiuxian-daochang-memory-ci-quick.sh`   | Launch quick memory CI gate in background and aggregate latest failure reports                                                                                                     |
+| `channel/start-xiuxian-daochang-memory-ci-nightly.sh` | Launch nightly memory CI gate in background and aggregate latest failure reports                                                                                                   |
+| `channel/memory_ci_finalize.py`                       | Shared artifact finalizer for memory CI launcher (`latest-run`, failure JSON/Markdown)                                                                                             |
 
 ### Memory CI launchers
 
 ```bash
 # unified launcher (direct profile selection)
-bash scripts/channel/start-omni-agent-memory-ci.sh --profile quick --foreground --ensure-mcp
+bash scripts/channel/start-xiuxian-daochang-memory-ci.sh --profile quick --foreground --ensure-mcp
 
 # quick gate (foreground) with MCP preflight
-bash scripts/channel/start-omni-agent-memory-ci-quick.sh --foreground --ensure-mcp
+bash scripts/channel/start-xiuxian-daochang-memory-ci-quick.sh --foreground --ensure-mcp
 
 # nightly gate (background) with MCP preflight
-bash scripts/channel/start-omni-agent-memory-ci-nightly.sh --ensure-mcp
+bash scripts/channel/start-xiuxian-daochang-memory-ci-nightly.sh --ensure-mcp
 ```
 
 ### `benchmark_skills_tools.py` quick patterns

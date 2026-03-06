@@ -131,7 +131,7 @@ def _get_project_name() -> str:
                 return data.get("project", {}).get("name", "unknown")
         except Exception:
             pass
-    return "omni-dev-fusion"
+    return "xiuxian-artisan-workshop"
 
 
 def _load_scopes() -> list[str]:

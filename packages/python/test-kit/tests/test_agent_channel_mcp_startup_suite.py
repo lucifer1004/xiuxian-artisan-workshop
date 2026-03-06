@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_mcp_startup_suite.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_mcp_startup_suite.py."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 
 def _load_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_mcp_startup_suite.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_mcp_startup_suite", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_mcp_startup_suite.py"
+    spec = importlib.util.spec_from_file_location("xiuxian_daochang_mcp_startup_suite", script_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -36,7 +36,7 @@ def _make_args(**overrides: object) -> argparse.Namespace:
         "cooldown_secs": 0.2,
         "mcp_host": "127.0.0.1",
         "mcp_port": 3002,
-        "mcp_config": ".mcp.json",
+        "mcp_config": ".cursor/mcp.json",
         "health_url": "",
         "strict_health_check": False,
         "no_strict_health_check": False,
@@ -59,8 +59,8 @@ def _make_args(**overrides: object) -> argparse.Namespace:
         "quality_max_hot_p95_regression_ratio": 0.5,
         "quality_max_cold_p95_regression_ratio": 0.5,
         "project_root": str(root),
-        "output_json": ".run/reports/omni-agent-mcp-startup-suite.json",
-        "output_markdown": ".run/reports/omni-agent-mcp-startup-suite.md",
+        "output_json": ".run/reports/xiuxian-daochang-mcp-startup-suite.json",
+        "output_markdown": ".run/reports/xiuxian-daochang-mcp-startup-suite.md",
     }
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -91,7 +91,7 @@ def test_build_mode_specs_includes_cold_when_restart_allowed() -> None:
     assert [spec.name for spec in specs] == ["hot", "cold"]
     cold_spec = specs[1]
     assert cold_spec.restart_mcp_cmd is not None
-    assert "restart-omni-mcp.sh" in cold_spec.restart_mcp_cmd
+    assert "restart-xiuxian-mcp.sh" in cold_spec.restart_mcp_cmd
     assert "--port 3002" in cold_spec.restart_mcp_cmd
 
 

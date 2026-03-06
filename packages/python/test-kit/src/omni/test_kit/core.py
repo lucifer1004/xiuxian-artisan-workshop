@@ -12,7 +12,7 @@ def test_root():
     Create a temporary root directory for all tests in this session.
     This ensures Rust singletons (EventBus, VectorStore) use consistent paths.
     """
-    tmp_dir = tempfile.mkdtemp(prefix="omni_test_root_")
+    tmp_dir = tempfile.mkdtemp(prefix="xiuxian_test_root_")
     yield Path(tmp_dir)
     shutil.rmtree(tmp_dir, ignore_errors=True)
 

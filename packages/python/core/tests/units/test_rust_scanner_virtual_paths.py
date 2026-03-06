@@ -6,7 +6,7 @@ without requiring actual filesystem operations.
 
 from __future__ import annotations
 
-from omni_core_rs import parse_script_content, scan_paths
+from xiuxian_core_rs import parse_script_content, scan_paths
 
 
 class TestScanPathsVirtualFiles:

@@ -7,9 +7,9 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 HOST=""
 PORT=""
 RUNTIME_DIR="${PRJ_RUNTIME_DIR:-.run}"
-PID_FILE="${RUNTIME_DIR}/omni-mcp-sse.pid"
+PID_FILE="${RUNTIME_DIR}/xiuxian-mcp-sse.pid"
 LISTENER_PID_FILE=""
-LOG_FILE="${RUNTIME_DIR}/logs/omni-mcp-sse.log"
+LOG_FILE="${RUNTIME_DIR}/logs/xiuxian-mcp-sse.log"
 HEALTH_TIMEOUT_SECS="25"
 COOLDOWN_SECS="0.1"
 STABILIZE_SECS="1"
@@ -17,16 +17,16 @@ NO_EMBEDDING="false"
 
 usage() {
   cat <<'EOF'
-Usage: restart-omni-mcp.sh [options]
+Usage: restart-xiuxian-mcp.sh [options]
 
 Restart local MCP SSE server and wait until /health is ready.
 
 Options:
   --host <host>                    Bind host (default: resolved from settings)
   --port <port>                    Bind port (default: resolved from settings)
-  --pid-file <path>                PID file path (default: $PRJ_RUNTIME_DIR/omni-mcp-sse.pid)
+  --pid-file <path>                PID file path (default: $PRJ_RUNTIME_DIR/xiuxian-mcp-sse.pid)
   --listener-pid-file <path>       Listener PID file path (default: <pid-file>.listener)
-  --log-file <path>                Log file path (default: $PRJ_RUNTIME_DIR/logs/omni-mcp-sse.log)
+  --log-file <path>                Log file path (default: $PRJ_RUNTIME_DIR/logs/xiuxian-mcp-sse.log)
   --health-timeout-secs <seconds>  Health wait timeout (default: 25)
   --cooldown-secs <seconds>        Delay after spawn before polling health (default: 0.1)
   --stabilize-secs <seconds>       Post-health stabilization window (default: 1)
@@ -36,7 +36,7 @@ EOF
 }
 
 resolve_mcp_field() {
-  python3 "${PROJECT_ROOT}/scripts/channel/resolve_mcp_endpoint.py" --field "$1"
+  uv run python "${PROJECT_ROOT}/scripts/channel/resolve_mcp_endpoint.py" --field "$1"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -139,6 +139,21 @@ list_listening_pids_for_port() {
   lsof -t -nP -iTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null | sort -u || true
 }
 
+health_check_ok() {
+  python3 - "$HEALTH_URL" <<'PY' >/dev/null 2>&1
+import sys
+import urllib.request
+
+url = sys.argv[1]
+try:
+    with urllib.request.urlopen(url, timeout=2.0) as response:
+        status = int(getattr(response, "status", 0))
+        sys.exit(0 if 200 <= status < 300 else 1)
+except Exception:
+    sys.exit(1)
+PY
+}
+
 is_descendant_of() {
   local candidate_pid="$1"
   local ancestor_pid="$2"
@@ -218,7 +233,7 @@ sleep "$COOLDOWN_SECS"
 END_TS=$((SECONDS + HEALTH_TIMEOUT_SECS))
 
 while ((SECONDS < END_TS)); do
-  if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
+  if health_check_ok; then
     LISTEN_PIDS="$(list_listening_pids_for_port)"
     if [[ -z $LISTEN_PIDS ]]; then
       abort_restart "Health is ready but no listening process found on port ${PORT}."
@@ -240,7 +255,7 @@ while ((SECONDS < END_TS)); do
         if ! kill -0 "$OWNED_LISTENER_PID" 2>/dev/null; then
           abort_restart "MCP listener exited during stabilization window (${STABILIZE_SECS}s)."
         fi
-        if ! curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
+        if ! health_check_ok; then
           abort_restart "MCP did not remain healthy during stabilization window (${STABILIZE_SECS}s)."
         fi
         sleep "$POLL_INTERVAL_SECS"

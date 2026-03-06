@@ -20,7 +20,7 @@ Extract code elements from files using AST patterns. Part of **Project Cerebellu
 ## Usage
 
 ```python
-from omni.core.skills.runtime.omni_cell import sys_query
+from omni.core.skills.runtime.xiuxian_cell import sys_query
 
 # Extract all Python function definitions
 result = await sys_query({

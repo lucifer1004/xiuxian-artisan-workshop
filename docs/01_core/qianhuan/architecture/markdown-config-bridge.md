@@ -107,7 +107,7 @@ To transition to this zero-export, AST-driven architecture, the following engine
 | | Ensure that extracted entities are stored in the graph/memory with their `id` property as the primary key. This guarantees that `Qianji` can retrieve them via an $O(1)$ index lookup rather than a slow, fuzzy semantic search. | | |
 | QH-MD-04 | **Zero-Export Load Interface** | `xiuxian-qianhuan` | ✅ Done |
 | | Refactor `ManifestationManager` to expose a clean interface that accepts template strings and Persona definitions directly from Wendao's in-memory index output, bridging the two systems without physical files. | | |
-| QH-MD-05 | **Live E2E Validation** | `omni-agent` | ✅ Done |
+| QH-MD-05 | **Live E2E Validation** | `xiuxian-daochang` | ✅ Done |
 | | Create a test Markdown file (e.g., `test_personas.md`), tag it, and verify that a Qianji workflow can successfully inject the persona and template directly from the AST-parsed memory state. | | |
 
 ### 4.1 Landed Implementation Paths (2026-02-26)
@@ -121,8 +121,8 @@ To transition to this zero-export, AST-driven architecture, the following engine
   - `packages/rust/crates/xiuxian-qianhuan/tests/test_manifestation_manager.rs`
   - `packages/rust/crates/xiuxian-qianhuan/tests/unit_persona.rs`
   - `packages/rust/crates/xiuxian-qianhuan/tests/test_markdown_config_bridge.rs`
-- `omni-agent`:
-  - `packages/rust/crates/omni-agent/tests/agent/native_tools_zhixing.rs` (`task_add_render_supports_markdown_ast_memory_bridge`)
+- `xiuxian-daochang`:
+  - `packages/rust/crates/xiuxian-daochang/tests/agent/native_tools_zhixing.rs` (`task_add_render_supports_markdown_ast_memory_bridge`)
 
 ### 4.2 Implementation Reference (`comrak` AST Traversal)
 
@@ -174,7 +174,7 @@ This ensures absolute deterministic parsing regardless of trailing whitespaces o
 
 ### 4.3 Internal Rust API Call Flow (Precise Retrieval)
 
-For internal workspace calls (e.g., during `omni-agent` bootstrap), the following Rust sequence is used to perform precise retrieval from Markdown AST without hitting the network gateway.
+For internal workspace calls (e.g., during `xiuxian-daochang` bootstrap), the following Rust sequence is used to perform precise retrieval from Markdown AST without hitting the network gateway.
 
 #### 1. Ingestion (Wendao Side)
 

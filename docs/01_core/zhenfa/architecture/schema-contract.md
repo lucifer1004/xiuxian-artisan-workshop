@@ -69,7 +69,7 @@ _Note: The HTTP envelope remains JSON to ensure the network layer can parse it e
 
 ### 2.2 Error Response (The Standard Taxonomy)
 
-When an error occurs (e.g., LLM hallucinates a parameter, or Wendao cannot find an index), the response MUST follow this structure to allow the LLM or Omni-Agent to execute a retry or fallback strategy.
+When an error occurs (e.g., LLM hallucinates a parameter, or Wendao cannot find an index), the response MUST follow this structure to allow the LLM or 修仙道场 to execute a retry or fallback strategy.
 
 ```json
 {
@@ -91,7 +91,7 @@ While `xiuxian-zhenfa` can use tools like `utoipa` to generate OpenAPI schemas f
 
 JSON Schema definitions are token-heavy and distract the model. Instead:
 
-1. **Tool Definition (`omni-agent`)**: The agent reads the strict schema to register the standard function calling interface (e.g., `wendao.search(query)`).
+1. **Tool Definition (`xiuxian-daochang`)**: The agent reads the strict schema to register the standard function calling interface (e.g., `wendao.search(query)`).
 2. **Skill Manual (The Prompt)**: The actual "instruction manual" injected into the LLM via `Qianhuan` (see `QH-08 Zero-Hardcoding`) is a lean, human-readable Markdown or XML document explaining the query syntax, not a massive JSON structure.
 
 ## 4. End-to-End Execution Flow (Dual-Mode)
@@ -100,7 +100,7 @@ To clarify how the LLM interacts with Zhenfa without being polluted by JSON wrap
 
 ### 4.1 Native Execution Path (In-Process, The "Codex" Path)
 
-This is the primary path used by `omni-agent` to achieve zero-latency execution.
+This is the primary path used by `xiuxian-daochang` to achieve zero-latency execution.
 
 1. **Session Boot (Skill Injection)**:
    - `Qianhuan` injects the Persona and the **Wendao Skill Manual** (Markdown/XML explaining how to use `wendao.search` with constraints).
@@ -108,7 +108,7 @@ This is the primary path used by `omni-agent` to achieve zero-latency execution.
    - The LLM reasons: _"I need to search the agenda for this week."_
    - It outputs a tool call: `wendao.search(query="agenda date:this_week")`.
 3. **Registry Dispatch (Native Rust Call)**:
-   - The `omni-agent` host intercepts the tool call.
+   - The `xiuxian-daochang` host intercepts the tool call.
    - Instead of making an HTTP request, it directly queries the in-memory `ZhenfaRegistry` for the `wendao.search` trait object.
    - It calls `tool.call_native(ctx, args).await`.
 4. **Execution & Stripping (Zero-Copy)**:
@@ -116,7 +116,7 @@ This is the primary path used by `omni-agent` to achieve zero-latency execution.
    - Wendao's `ZhenfaTool` implementation formats the raw hits directly into a clean, **Stripped XML-Lite string**.
 5. **Context Assimilation**:
    - The native call returns the String (no JSON parsing needed).
-   - The `omni-agent` appends the string as a `role="tool"` message to the LLM's context window.
+   - The `xiuxian-daochang` appends the string as a `role="tool"` message to the LLM's context window.
 
 ### 4.2 Matrix Execution Path (HTTP, External Integration)
 

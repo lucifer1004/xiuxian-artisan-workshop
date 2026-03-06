@@ -8,3 +8,5 @@ pub mod openai_compat;
 pub mod runtime;
 /// In-process `mistralrs` embedding runtime utilities.
 pub mod sdk;
+#[cfg(test)]
+mod tests;

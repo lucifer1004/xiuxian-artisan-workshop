@@ -14,7 +14,7 @@ metadata:
 # Keyword Backend Decision Report
 
 - Generated at: `2026-02-12 00:33:00Z`
-- Offline source: `packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
+- Offline source: `packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
 - Query count: `120`
 - Top-K: `5`
 

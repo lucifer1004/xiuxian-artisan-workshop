@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_concurrent_sessions.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_concurrent_sessions.py."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 
 def _load_probe_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_concurrent_sessions.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_concurrent_probe", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_concurrent_sessions.py"
+    spec = importlib.util.spec_from_file_location("xiuxian_daochang_concurrent_probe", script_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -31,7 +31,7 @@ def _make_args(**overrides: object) -> argparse.Namespace:
     defaults: dict[str, object] = {
         "max_wait": 30,
         "webhook_url": "http://127.0.0.1:18081/telegram/webhook",
-        "log_file": ".run/logs/omni-agent-webhook.log",
+        "log_file": ".run/logs/xiuxian-daochang-webhook.log",
         "chat_id": None,
         "chat_b": None,
         "user_a": None,

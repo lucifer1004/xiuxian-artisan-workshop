@@ -14,7 +14,7 @@ metadata:
 # Keyword Backend Statistical Report
 
 - Generated at: `2026-02-12 19:30:07Z`
-- Snapshot: `packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
+- Snapshot: `packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
 - Query count: `120`
 
 ## Global Statistics (Tantivy - Lance FTS)

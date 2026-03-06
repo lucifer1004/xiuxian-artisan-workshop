@@ -32,7 +32,7 @@ class MemoryBenchmarkModuleBindings:
 
 
 def load_module_bindings(caller_file: str) -> MemoryBenchmarkModuleBindings:
-    """Load all sibling modules required by `test_omni_agent_memory_benchmark.py`."""
+    """Load all sibling modules required by `test_xiuxian_daochang_memory_benchmark.py`."""
     load_sibling_module = importlib.import_module("module_loader").load_sibling_module
 
     def _load_sibling(module_name: str, file_name: str, error_context: str) -> Any:

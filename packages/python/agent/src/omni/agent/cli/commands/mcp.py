@@ -11,41 +11,28 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import logging
+import code
 import os
 import signal
 import sys
 import time
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from enum import Enum
+from typing import TYPE_CHECKING, Annotated, Any
 
-# CRITICAL: Python 3.13 compatibility fix - MUST be before ANY other imports
 # Python 3.13 removed code.InteractiveConsole, but torch.distributed imports pdb
-# which tries to use it at module load time. Add dummy class before any imports.
-if sys.version_info >= (3, 13):
-    import code
+# which references it during module load. Keep a minimal shim.
+if not hasattr(code, "InteractiveConsole"):
 
-    if not hasattr(code, "InteractiveConsole"):
+    class _DummyInteractiveConsole:
+        def __init__(self, *args, **kwargs):
+            pass
 
-        class _DummyInteractiveConsole:
-            def __init__(self, *args, **kwargs):
-                pass
+    code.InteractiveConsole = _DummyInteractiveConsole
 
-        code.InteractiveConsole = _DummyInteractiveConsole
-
-# Also set the env var as a belt-and-suspenders measure
-if sys.version_info >= (3, 13):
-    if "TORCH_DISTRIBUTED_DETECTION" not in os.environ:
-        os.environ["TORCH_DISTRIBUTED_DETECTION"] = "1"
-
-# =============================================================================
-# Lightweight HTTP Server for Embedding (STDIO mode only)
-# =============================================================================
-import json as _json
-from typing import Any
+os.environ.setdefault("TORCH_DISTRIBUTED_DETECTION", "1")
 
 import typer
-from aiohttp import web as _web
 from rich.panel import Panel
 
 from omni.agent.mcp_server.startup import (
@@ -57,129 +44,10 @@ from omni.agent.mcp_server.startup import (
 from omni.foundation.config.logging import configure_logging, get_logger
 from omni.foundation.utils.asyncio import run_async_blocking
 
-_embedding_http_app = None
-_embedding_http_runner = None
+from ..console import err_console
 
-
-async def _handle_embedding_request(request: _web.Request) -> _web.Response:
-    """Handle embedding requests via MCP tools/call protocol."""
-    logger = get_logger("omni.mcp.embedding.http")
-
-    try:
-        # Parse JSON-RPC request
-        body = await request.json()
-        method = body.get("method", "")
-        params = body.get("params", {})
-        req_id = body.get("id")
-
-        if method != "tools/call":
-            return _web.json_response(
-                {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "error": {"code": -32601, "message": f"Method not found: {method}"},
-                }
-            )
-
-        tool_name = params.get("name", "")
-        arguments = params.get("arguments", {})
-
-        # Handle embedding tools
-        if tool_name in ("embed_texts", "embedding.embed_texts"):
-            texts = arguments.get("texts", [])
-            if not texts:
-                return _web.json_response(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "error": {"code": -32602, "message": "'texts' parameter required"},
-                    }
-                )
-
-            from omni.foundation.services.embedding import get_embedding_service
-
-            embed_service = get_embedding_service()
-            start = time.perf_counter()
-            vectors = await asyncio.to_thread(embed_service.embed_batch, texts)
-            duration_ms = (time.perf_counter() - start) * 1000.0
-            result = {
-                "success": True,
-                "count": len(vectors),
-                "vectors": vectors,
-                "preview": [v[:10] for v in vectors] if vectors else [],
-            }
-            logger.debug(
-                "embedding_http_embed_texts_done count=%s duration_ms=%.2f",
-                len(vectors),
-                duration_ms,
-            )
-
-            return _web.json_response(
-                {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {
-                        "content": [{"type": "text", "text": _json.dumps(result)}],
-                        "isError": False,
-                    },
-                }
-            )
-
-        elif tool_name in ("embed_single", "embedding.embed_single"):
-            text = arguments.get("text", "")
-            if not text:
-                return _web.json_response(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "error": {"code": -32602, "message": "'text' parameter required"},
-                    }
-                )
-
-            from omni.foundation.services.embedding import get_embedding_service
-
-            embed_service = get_embedding_service()
-            start = time.perf_counter()
-            vectors = await asyncio.to_thread(embed_service.embed, text)
-            vector = vectors[0] if vectors else []
-            duration_ms = (time.perf_counter() - start) * 1000.0
-            result = {"success": True, "vector": vector, "preview": vector[:10] if vector else []}
-            logger.debug("embedding_http_embed_single_done duration_ms=%.2f", duration_ms)
-
-            return _web.json_response(
-                {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {
-                        "content": [{"type": "text", "text": _json.dumps(result)}],
-                        "isError": False,
-                    },
-                }
-            )
-
-        else:
-            return _web.json_response(
-                {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "error": {"code": -32601, "message": f"Unknown embedding tool: {tool_name}"},
-                }
-            )
-
-    except Exception as e:
-        logger.error(f"Embedding HTTP error: {e}")
-        return _web.json_response(
-            {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {"code": -32603, "message": str(e)},
-            }
-        )
-
-
-async def _handle_embedding_health(_request: _web.Request) -> _web.Response:
-    """Health endpoint for embedding HTTP service."""
-    return _web.json_response({"status": "ok"})
+if TYPE_CHECKING:
+    from omni.agent.server import AgentMCPHandler
 
 
 def _is_transient_embedding_warm_error(error: Exception) -> bool:
@@ -228,8 +96,7 @@ async def _warm_embedding_after_startup(
                     timeout=remaining,
                 )
                 logger.info(
-                    "Embedding model warmed (Ollama model loaded for fast first request) "
-                    "attempt=%s/%s",
+                    "Embedding backend warmed for fast first request (attempt=%s/%s)",
                     attempts,
                     max(1, max_attempts),
                 )
@@ -266,76 +133,6 @@ async def _warm_embedding_after_startup(
         logger.warning("Embedding warm timed out after %.1fs; continue startup", timeout_seconds)
     except Exception as e:
         logger.warning("Embedding warm skipped: %s", e)
-
-
-async def _check_embedding_service(host: str = "127.0.0.1", port: int = 3001) -> bool:
-    """Check if embedding HTTP service is already running on the port."""
-    import socket
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(1)
-    try:
-        result = sock.connect_ex((host, port))
-        return result == 0
-    except Exception:
-        return False
-    finally:
-        sock.close()
-
-
-async def _run_embedding_http_server(host: str = "127.0.0.1", port: int = 3001) -> bool:
-    """Run a lightweight HTTP server for embedding requests (stdio mode only).
-
-    This allows external tools like 'omni route test' to share the preloaded
-    embedding model without reloading it.
-
-    Returns:
-        True if we started a new server, False if we connected to an existing one.
-    """
-    global _embedding_http_app, _embedding_http_runner, _i_started_server
-
-    logger = get_logger("omni.mcp.embedding.http")
-
-    # Check if service already exists
-    if await _check_embedding_service(host, port):
-        logger.info(f"🔌 Using existing embedding service on http://{host}:{port}")
-        _i_started_server = False
-        return False
-
-    logger.info(f"🚀 Starting embedding HTTP server on http://{host}:{port}")
-
-    _embedding_http_app = _web.Application()
-    _embedding_http_app.router.add_post("/message", _handle_embedding_request)
-    _embedding_http_app.router.add_get("/health", _handle_embedding_health)
-
-    runner = _web.AppRunner(_embedding_http_app)
-    await runner.setup()
-    site = _web.TCPSite(runner, host, port)
-    await site.start()
-
-    logger.info(f"✅ Embedding HTTP server running on http://{host}:{port}")
-    _embedding_http_runner = runner
-    _i_started_server = True
-    return True
-
-
-async def _stop_embedding_http_server() -> None:
-    """Stop the embedding HTTP server only if we started it."""
-    global _embedding_http_runner, _i_started_server
-
-    # Only stop if we started this server (to avoid shutting down shared service)
-    if not _i_started_server or _embedding_http_runner is None:
-        return
-
-    logger = get_logger("omni.mcp.embedding.http")
-    logger.info("Stopping embedding HTTP server...")
-    await _embedding_http_runner.cleanup()
-    _embedding_http_runner = None
-    _i_started_server = False
-
-
-# Track whether we started the server (for shared instance safety)
-_i_started_server = False
 
 
 # =============================================================================
@@ -384,11 +181,6 @@ async def _run_mcp_session(
 
     # Run the message processing task
     await read_messages()
-
-
-# =============================================================================
-
-from ..console import err_console
 
 
 # Transport mode enumeration
@@ -517,18 +309,10 @@ def _stop_transport_for_shutdown(transport_ref, *, timeout_seconds: float = 10.0
         logger.warning("Transport stop failed during shutdown: %s", e)
 
 
-def _stop_ollama_if_started() -> None:
-    """Stop the Ollama subprocess if we started it (MCP exit)."""
-    from omni.agent.ollama_lifecycle import _stop_managed_ollama
-
-    _stop_managed_ollama()
-
-
 def _sync_graceful_shutdown() -> None:
     """Sync wrapper for graceful shutdown (for signal handler)."""
     global _handler_ref
     logger = get_logger("omni.mcp.shutdown")
-    _stop_ollama_if_started()
     if _handler_ref is not None:
         try:
             _run_coroutine_for_shutdown(
@@ -544,39 +328,49 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
     """Register mcp command directly with the main app."""
     from omni.agent.cli.load_requirements import register_requirements
 
-    register_requirements("mcp", ollama=True, embedding_index=True)
+    register_requirements("mcp", embedding_index=True)
 
     @app_instance.command("mcp", help="Start Omni MCP Server (Level 2 Transport)")
     def run_mcp(
-        transport: TransportMode = typer.Option(
-            TransportMode.sse,  # Default to SSE for Claude Code CLI
-            "--transport",
-            "-t",
-            help="Communication transport mode (stdio for Claude Desktop, sse for Claude Code CLI)",
-        ),
-        host: str = typer.Option(
-            "127.0.0.1",
-            "--host",
-            "-h",
-            help="Host to bind to (SSE only, 127.0.0.1 for local security)",
-        ),
-        port: int = typer.Option(
-            3000,
-            "--port",
-            "-p",
-            help="Port to listen on (only for SSE mode, use 0 for random)",
-        ),
-        verbose: bool = typer.Option(
-            False,
-            "--verbose",
-            "-v",
-            help="Enable verbose mode (hot reload, debug logging)",
-        ),
-        no_embedding: bool = typer.Option(
-            False,
-            "--no-embedding",
-            help="Skip embedding service (lightweight mode; knowledge.recall will fail)",
-        ),
+        transport: Annotated[
+            TransportMode,
+            typer.Option(
+                "--transport",
+                "-t",
+                help="Communication transport mode (stdio for Claude Desktop, sse for Claude Code CLI)",
+            ),
+        ] = TransportMode.sse,
+        host: Annotated[
+            str,
+            typer.Option(
+                "--host",
+                "-h",
+                help="Host to bind to (SSE only, 127.0.0.1 for local security)",
+            ),
+        ] = "127.0.0.1",
+        port: Annotated[
+            int,
+            typer.Option(
+                "--port",
+                "-p",
+                help="Port to listen on (only for SSE mode, use 0 for random)",
+            ),
+        ] = 3000,
+        verbose: Annotated[
+            bool,
+            typer.Option(
+                "--verbose",
+                "-v",
+                help="Enable verbose mode (hot reload, debug logging)",
+            ),
+        ] = False,
+        no_embedding: Annotated[
+            bool,
+            typer.Option(
+                "--no-embedding",
+                help="Skip embedding service (lightweight mode; knowledge.recall will fail)",
+            ),
+        ] = False,
     ):
         """
         Start Omni MCP Server with high-performance omni.mcp transport layer.
@@ -590,22 +384,15 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                 # Configure logging (stdout is used by MCP, so log to stderr)
                 log_level = "DEBUG" if verbose else "INFO"
                 configure_logging(level=log_level)
-                if not verbose:
-                    logging.getLogger("litellm").setLevel(logging.WARNING)
-                    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
                 logger = get_logger("omni.mcp.stdio")
 
                 async def run_stdio():
-                    """Run stdio mode with embedding HTTP server."""
+                    """Run stdio mode."""
                     logger.info("📡 Starting Omni MCP Server (STDIO mode)")
 
                     if not no_embedding:
-                        # If embedding.provider is ollama, ensure Ollama is running (may already be from entry_point).
-                        from omni.agent.ollama_lifecycle import ensure_ollama_for_embedding
-
-                        ensure_ollama_for_embedding()
-                        # MCP must not load the embedding model in-process (keeps memory low).
-                        # Use client-only: connect to an existing embedding service; never start local server.
+                        # MCP must not load embedding models in-process.
+                        # Use client-only: connect to an existing embedding service.
                         os.environ["OMNI_EMBEDDING_CLIENT_ONLY"] = "1"
                         from omni.foundation.services.embedding import get_embedding_service
 
@@ -613,12 +400,11 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                         embed_svc.initialize()
                         if embed_svc.backend == "http":
                             logger.info("✅ Embedding: client mode (using existing service)")
-                        elif embed_svc.backend == "litellm":
-                            logger.info("✅ Embedding: LiteLLM backend (Ollama/Xinference) ready")
                         elif embed_svc.backend == "unavailable":
                             logger.warning(
                                 "Embedding service unreachable; cortex indexing will be skipped. "
-                                "Start Ollama (or set embedding.provider=ollama and run omni mcp) or an embedding HTTP service (e.g. port 18501)."
+                                "Start the Rust embedding service "
+                                "(GET /health, POST /embed/single)."
                             )
                         else:
                             logger.info("✅ Embedding: %s mode", embed_svc.backend)
@@ -632,20 +418,12 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
 
                     await old_run_stdio(verbose=verbose)
 
-                    # Stop embedding HTTP server (only if we started it)
-                    if not no_embedding:
-                        await _stop_embedding_http_server()
-                    _stop_ollama_if_started()
-
                 run_async_blocking(run_stdio())
 
             else:  # SSE mode - uses sse.py module
                 # Configure logging
                 log_level = "DEBUG" if verbose else "INFO"
                 configure_logging(level=log_level)
-                if not verbose:
-                    logging.getLogger("litellm").setLevel(logging.WARNING)
-                    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
                 logger = get_logger("omni.mcp.sse")
 
                 err_console.print(
@@ -718,11 +496,7 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
 
                 # Initialize embedding services after MCP handler is ready.
                 if not no_embedding:
-                    # If embedding.provider is ollama, ensure Ollama is running (may already be from entry_point).
-                    from omni.agent.ollama_lifecycle import ensure_ollama_for_embedding
-
-                    ensure_ollama_for_embedding()
-                    # MCP must not load the embedding model in-process (keeps memory low).
+                    # MCP must not load embedding models in-process.
                     os.environ["OMNI_EMBEDDING_CLIENT_ONLY"] = "1"
                     from omni.foundation.services.embedding import get_embedding_service
 
@@ -730,12 +504,11 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                     embed_svc.initialize()
                     if embed_svc.backend == "http":
                         logger.info("✅ Embedding: client mode (using existing service)")
-                    elif embed_svc.backend == "litellm":
-                        logger.info("✅ Embedding: LiteLLM backend (Ollama/Xinference) ready")
                     elif embed_svc.backend == "unavailable":
                         logger.warning(
                             "Embedding service unreachable; cortex indexing will be skipped. "
-                            "Start Ollama (or set embedding.provider=ollama and run omni mcp) or an embedding HTTP service (e.g. port 18501)."
+                            "Start the Rust embedding service "
+                            "(GET /health, POST /embed/single)."
                         )
                     else:
                         logger.info("✅ Embedding: %s mode", embed_svc.backend)
@@ -763,20 +536,10 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                 _sync_graceful_shutdown()
             sys.exit(0)
         except Exception as e:
-            from omni.foundation.services.embedding import EmbeddingPortInUseError
-
-            if isinstance(e, EmbeddingPortInUseError):
-                err_console.print(
-                    Panel(
-                        f"[bold red]Embedding port conflict:[/bold red]\n\n{e}\n\n"
-                        "Edit packages/conf/settings.yaml and set embedding.http_port to a free port.",
-                        style="red",
-                    )
-                )
-            else:
-                err_console.print(Panel(f"[bold red]Server Error:[/bold red] {e}", style="red"))
+            err_console.print(Panel(f"[bold red]Server Error:[/bold red] {e}", style="red"))
             if _handler_ref is not None:
                 _sync_graceful_shutdown()
             sys.exit(1)
 
-    __all__ = ["register_mcp_command"]
+
+__all__ = ["register_mcp_command"]

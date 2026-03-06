@@ -16,7 +16,7 @@ fn test_narrate_single_hit() {
         doc_type: None,
         tags: vec!["doc".to_string()],
         score: 1.0,
-        best_section: Some("".to_string()),
+        best_section: Some(String::new()),
         match_reason: Some("graph_rank>fts".to_string()),
     };
     let output = narrate_subgraph(&[hit]);

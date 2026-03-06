@@ -1,5 +1,5 @@
 {
-  description = "Nix flake for omni-dev-fusion project";
+  description = "Nix flake for xiuxian-artisan-workshop project";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -55,8 +55,8 @@
               };
           }
           inputs.nci.flakeModule
-          ./nix/modules/flake-parts/omni-core-rs.nix
-          ./nix/modules/flake-parts/omni-dev-fusion.nix
+          ./nix/modules/flake-parts/xiuxian-core-rs.nix
+          ./nix/modules/flake-parts/xiuxian-artisan-workshop.nix
         ];
       };
 

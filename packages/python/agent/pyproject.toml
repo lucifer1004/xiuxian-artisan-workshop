@@ -1,5 +1,5 @@
 [project]
-name = "omni-agent"
+name = "xiuxian-daochang"
 version = "0.5.0-dev"
 description = "Omni Agent - Thin MCP/Web Client Interface"
 readme = "README.md"
@@ -7,8 +7,8 @@ requires-python = ">=3.12"
 
 dependencies = [
     # Core + Foundation (via transitive deps)
-    "omni-core",
-    "omni-mcp>=0.1.0",
+    "xiuxian-core",
+    "xiuxian-mcp>=0.1.0",
     # Web & CLI
     "starlette>=0.40.0",
     "uvicorn>=0.30.0",
@@ -38,13 +38,13 @@ omni = "omni.agent.cli.app:entry_point"
 
 
 [tool.uv.sources]
-omni-core = { workspace = true }
-omni-mcp = { workspace = true }
+xiuxian-core = { workspace = true }
+xiuxian-mcp = { workspace = true }
 
 
 [dependency-groups]
 dev = [
-    "omni-test-kit",
+    "xiuxian-test-kit",
     "pytest>=9.0.2",
     "pytest-asyncio>=0.25.0",
     "pytest-xdist>=3.6.0",

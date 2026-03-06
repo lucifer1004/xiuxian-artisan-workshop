@@ -3,7 +3,7 @@ type: skill
 name: crawl4ai
 description: Use when crawling web pages, extracting markdown content, or scraping website data with intelligent chunking and skeleton planning. Use when the user provides a URL or link to fetch or crawl.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "0.2.1"
   source: "https://github.com/unclecode/crawl4ai"
   routing_keywords:

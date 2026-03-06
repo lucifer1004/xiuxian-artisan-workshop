@@ -52,7 +52,7 @@ All notable changes to this project will be documented in this file. See [conven
 - Cleanup and consolidation of design history files - ([eb9091f](https://github.com/tao3k/xiuxian-artisan-workshop/commit/eb9091fed0232c30da674e0f82095701fd6661c4)) - guangtao
 - Implement PRJ_SPEC directory standard and fix hardcoded paths - ([1a3ded8](https://github.com/tao3k/xiuxian-artisan-workshop/commit/1a3ded8263059b9a82acde7cbfde327437ff833f)) - guangtao
 #### Miscellaneous Chores
-- (**ci**) add secretspec, fix omni-core-rs build, and reorganize project - ([bd1f258](https://github.com/tao3k/xiuxian-artisan-workshop/commit/bd1f2583379161f82fe460fc8150858c301a6d15)) - guangtao
+- (**ci**) add secretspec, fix xiuxian-core-rs build, and reorganize project - ([bd1f258](https://github.com/tao3k/xiuxian-artisan-workshop/commit/bd1f2583379161f82fe460fc8150858c301a6d15)) - guangtao
 - sync with release - ([d733fd3](https://github.com/tao3k/xiuxian-artisan-workshop/commit/d733fd3bf66f357c1f32f3d88143ff2ab090157d)) - guangtao
 
 - - -

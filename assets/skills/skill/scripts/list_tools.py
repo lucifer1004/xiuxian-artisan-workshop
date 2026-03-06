@@ -3,11 +3,11 @@ skill/scripts/list_tools.py - List All Registered MCP Tools (Alias-Aware)
 
 Exposed as an MCP Resource (read-only). Lists all registered MCP tools from
 loaded skills with descriptions. Applies command aliases and documentation
-overrides from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml). Uses common omni tool definition from omni.core.omni_tool.
+overrides from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml). Uses common omni tool definition from omni.core.xiuxian_tool.
 """
 
 from omni.foundation.api.decorators import skill_resource
-from omni.core.omni_tool import get_omni_tool_list_entry
+from omni.core.xiuxian_tool import get_xiuxian_tool_list_entry
 
 
 @skill_resource(
@@ -30,7 +30,7 @@ def list_tools(compact: bool = False) -> str:
     tools = []
 
     # [MASTER] Add omni - Highest Authority Universal Gateway (from common module)
-    tools.append(get_omni_tool_list_entry())
+    tools.append(get_xiuxian_tool_list_entry())
 
     for full_cmd in all_commands:
         skill_name = full_cmd.split(".", 1)[0] if "." in full_cmd else "core"

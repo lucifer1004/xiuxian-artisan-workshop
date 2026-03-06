@@ -24,25 +24,25 @@ pub struct PyFileEvent {
     pub is_directory: bool,
 }
 
-impl From<omni_io::FileEvent> for PyFileEvent {
-    fn from(e: omni_io::FileEvent) -> Self {
+impl From<xiuxian_io::FileEvent> for PyFileEvent {
+    fn from(e: xiuxian_io::FileEvent) -> Self {
         match e {
-            omni_io::FileEvent::Created { path, is_dir } => PyFileEvent {
+            xiuxian_io::FileEvent::Created { path, is_dir } => PyFileEvent {
                 event_type: "created".to_string(),
                 path,
                 is_directory: is_dir,
             },
-            omni_io::FileEvent::Modified { path } => PyFileEvent {
+            xiuxian_io::FileEvent::Modified { path } => PyFileEvent {
                 event_type: "modified".to_string(),
                 path,
                 is_directory: false,
             },
-            omni_io::FileEvent::Deleted { path, is_dir } => PyFileEvent {
+            xiuxian_io::FileEvent::Deleted { path, is_dir } => PyFileEvent {
                 event_type: "deleted".to_string(),
                 path,
                 is_directory: is_dir,
             },
-            omni_io::FileEvent::Error { path, error: _ } => PyFileEvent {
+            xiuxian_io::FileEvent::Error { path, error: _ } => PyFileEvent {
                 event_type: "error".to_string(),
                 path,
                 is_directory: false,
@@ -118,12 +118,12 @@ struct WatcherState {
     is_running: Arc<AtomicBool>,
     _stop_tx: Arc<mpsc::Sender<()>>, // Reserved for future use: signaling stop to watcher thread
     /// Keep the FileWatcherHandle alive in the thread
-    _watcher_handle: Arc<Mutex<Option<omni_io::FileWatcherHandle>>>,
+    _watcher_handle: Arc<Mutex<Option<xiuxian_io::FileWatcherHandle>>>,
 }
 
 type WatcherCallback = fn(
     (
-        omni_io::FileEvent,
+        xiuxian_io::FileEvent,
         std::option::Option<xiuxian_event::OmniEvent>,
     ),
 );
@@ -221,7 +221,7 @@ fn run_watcher_thread(
     exclude: Vec<String>,
     _is_running: Arc<AtomicBool>,
     mut stop_rx: mpsc::Receiver<()>,
-    watcher_handle: Arc<Mutex<Option<omni_io::FileWatcherHandle>>>,
+    watcher_handle: Arc<Mutex<Option<xiuxian_io::FileWatcherHandle>>>,
 ) {
     // Create a new runtime for this thread
     let rt = match tokio::runtime::Builder::new_current_thread()
@@ -236,7 +236,7 @@ fn run_watcher_thread(
     };
 
     rt.block_on(async {
-        let omni_config = omni_io::WatcherConfig {
+        let watcher_config = xiuxian_io::WatcherConfig {
             paths,
             recursive,
             debounce_ms,
@@ -245,7 +245,7 @@ fn run_watcher_thread(
         };
 
         // Start the watcher and store the handle
-        match omni_io::start_file_watcher::<WatcherCallback>(omni_config, None).await {
+        match xiuxian_io::start_file_watcher::<WatcherCallback>(watcher_config, None).await {
             Ok(handle) => {
                 // Store the handle to keep it alive
                 if let Ok(mut guard) = watcher_handle.lock() {

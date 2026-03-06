@@ -49,7 +49,7 @@ The actual project progress content exists in `docs/index.md`, `docs/milestones/
 
 ### 0. Same DB for sync and recall (path alignment)
 
-**Root cause:** `omni sync knowledge` writes to `get_database_path("knowledge")` = `.../omni-vector/knowledge.lance`. The foundation `VectorStoreClient` (used by `knowledge.recall`, `knowledge.stats`, and hybrid vector fallback) used the **base** path `.../omni-vector`, so it was reading a different Lance DB and saw 0 documents.
+**Root cause:** `omni sync knowledge` writes to `get_database_path("knowledge")` = `.../xiuxian-vector/knowledge.lance`. The foundation `VectorStoreClient` (used by `knowledge.recall`, `knowledge.stats`, and hybrid vector fallback) used the **base** path `.../xiuxian-vector`, so it was reading a different Lance DB and saw 0 documents.
 
 **Change:** In `packages/python/foundation/src/omni/foundation/services/vector.py`, `VectorStoreClient` now has a dedicated store for the knowledge DB: when the collection is `"knowledge_chunks"`, all operations (search, add, count, delete, create_index, etc.) use a store opened on `get_database_path("knowledge")`. So sync and recall/stats/ingest/clear use the same DB. No reconnect or hot reload needed beyond loading the updated code.
 

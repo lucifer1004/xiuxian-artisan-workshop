@@ -71,7 +71,7 @@ In the Qianji architecture, Python is reduced to a "thin slice" glue layer.
 
 ## 5. The "MemRL Promotion" Workflow (Implemented)
 
-To bridge the gap between `omni-memory` (short-term reflection) and `xiuxian-wendao` (long-term persistent knowledge), Qianji must implement the **"3-in-1 Revalidation Loop"** (defined in the Omega specs) as a native TOML workflow.
+To bridge the gap between `xiuxian-memory-engine` (short-term reflection) and `xiuxian-wendao` (long-term persistent knowledge), Qianji must implement the **"3-in-1 Revalidation Loop"** (defined in the Omega specs) as a native TOML workflow.
 
 ### 5.1 The Promotion DAG
 
@@ -143,7 +143,7 @@ See [[Context Window Management|docs/01_core/qianji/architecture/context-window-
 | Structured handoff via whitelisted keys                             | ✅ Implemented       | `packages/rust/crates/xiuxian-qianji/src/executors/annotation.rs`, `packages/rust/crates/xiuxian-qianji/src/engine/compiler.rs`                                                                                  |
 | Concurrent critics + terminal gather                                | ✅ Implemented       | `packages/rust/crates/xiuxian-qianji/src/scheduler/core.rs`, `packages/rust/crates/xiuxian-qianji/src/scheduler/state.rs`, `packages/rust/crates/xiuxian-qianji/tests/test_context_isolation_and_concurrency.rs` |
 | Deterministic merge-before-ready scheduling for concurrent branches | ✅ Implemented       | `packages/rust/crates/xiuxian-qianji/src/scheduler/core.rs`                                                                                                                                                      |
-| Host-provided read-only `omni-window` bridge into isolated mode     | ⚠️ Runtime-dependent | Qianji supports `history_key`; caller must provide sanitized history context                                                                                                                                     |
+| Host-provided read-only `xiuxian-window` bridge into isolated mode  | ⚠️ Runtime-dependent | Qianji supports `history_key`; caller must provide sanitized history context                                                                                                                                     |
 
 ### 6.5 Phase F Audit: LLM Client Multi-Tenancy (2026-02-26)
 

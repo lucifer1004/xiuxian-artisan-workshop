@@ -13,7 +13,7 @@ def classify_gate_failure(error: Exception) -> tuple[str, str]:
     """Classify a gate failure into category + short summary."""
     if is_gate_step_error(error):
         title = str(getattr(error, "title", "")).lower()
-        if "start omni-agent webhook runtime" in title:
+        if "start xiuxian-daochang webhook runtime" in title:
             return ("runtime_startup_process", "runtime startup command failed")
         if "memory suite" in title:
             return ("memory_suite_subprocess", "memory suite subprocess failed")

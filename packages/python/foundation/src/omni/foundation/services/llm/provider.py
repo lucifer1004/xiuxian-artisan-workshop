@@ -1,9 +1,6 @@
 # provider.py
 """
-LLM Provider API - Unified LLM Access via LiteLLM
-
-Unified interface for 100+ LLM providers (OpenAI, Anthropic, Azure, Google, etc.)
-using litellm library.
+LLM Provider API - Unified LLM Access via OpenAI-compatible HTTP backend.
 
 Usage:
     from omni.foundation.services.llm import get_llm_provider
@@ -28,9 +25,9 @@ logger = structlog.get_logger("llm.provider")
 
 
 def _minimax_model_casing(model: str) -> str:
-    """Normalise MiniMax model name to dashboard-style casing before passing to LiteLLM.
+    """Normalise MiniMax model name to dashboard-style casing before request dispatch.
 
-    MiniMax platform docs use "MiniMax-M2.1-highspeed"; LiteLLM and the v1 API support
+    MiniMax platform docs use "MiniMax-M2.1-highspeed"; the v1 API supports
     the fast variant as "MiniMax-M2.1-lightning". We map highspeed -> lightning so
     config can use either name and the API accepts it (avoids 2013 unknown model).
     """
@@ -39,7 +36,7 @@ def _minimax_model_casing(model: str) -> str:
     suffix = model[len("minimax-") :]
     if suffix.lower().startswith("m2"):
         suffix = "M2" + suffix[2:]
-    # v1 API / LiteLLM use "lightning" for the fast variant; platform docs say "highspeed"
+    # v1 API uses "lightning" for the fast variant; platform docs say "highspeed"
     if "-highspeed" in suffix.lower():
         suffix = suffix.replace("-highspeed", "-lightning").replace("-Highspeed", "-lightning")
     return "MiniMax-" + suffix
@@ -114,25 +111,14 @@ class LLMProvider(ABC):
         pass
 
 
-class LiteLLMProvider(LLMProvider):
-    """LiteLLM-based unified LLM provider.
-
-    Supports 100+ LLM providers including:
-    - OpenAI (gpt-4, gpt-4o, gpt-3.5-turbo)
-    - Anthropic (claude-3-5-sonnet, claude-3-opus, claude-3-haiku)
-    - Azure OpenAI
-    - Google Vertex AI (gemini-pro, gemini-1.5)
-    - AWS Bedrock (Claude, Llama, Titan)
-    - Groq
-    - Ollama (local models)
-    - And many more...
-    """
+class RustLLMProvider(LLMProvider):
+    """Unified LLM provider backed by OpenAI-compatible HTTP."""
 
     def __init__(self, config: LLMConfig | None = None):
-        import litellm
+        from omni.foundation.services.llm.http_backend import OpenAIHTTPBackend
 
         self.config = config or self._load_config()
-        self._litellm = litellm
+        self._backend = OpenAIHTTPBackend()
         self._available = self._check_availability()
 
     def _load_config(self) -> LLMConfig:
@@ -148,28 +134,13 @@ class LiteLLMProvider(LLMProvider):
         )
 
     def _check_availability(self) -> bool:
-        """Check if any LLM API is configured and accessible."""
+        """Check if configured LLM API key is present."""
         import os
 
-        # Check the configured api_key_env first
-        if self.config.api_key_env and os.getenv(self.config.api_key_env):
-            return True
-
-        # Check for common API keys (fallback)
-        api_keys = [
-            "ANTHROPIC_API_KEY",
-            "OPENAI_API_KEY",
-            "AZURE_API_KEY",
-            "GOOGLE_API_KEY",
-            "GROQ_API_KEY",
-        ]
-
-        for key in api_keys:
-            if os.getenv(key):
-                return True
-
-        # Check for local/ollama
-        return self.config.provider == "ollama"
+        api_key_env = (self.config.api_key_env or "").strip()
+        if not api_key_env:
+            return False
+        return bool(os.getenv(api_key_env))
 
     async def complete(
         self,
@@ -179,7 +150,7 @@ class LiteLLMProvider(LLMProvider):
         max_tokens: int | None = None,
         **kwargs,
     ) -> LLMResponse:
-        """Make a non-streaming LLM call using litellm."""
+        """Make a non-streaming LLM call using HTTP backend."""
         if not self._available:
             return LLMResponse(
                 content="",
@@ -192,25 +163,24 @@ class LiteLLMProvider(LLMProvider):
             actual_max_tokens = max_tokens or self.config.max_tokens
             actual_timeout = int(kwargs.get("timeout", self.config.timeout))
 
-            # Prepare model string for litellm.
+            # Prepare model string.
             # For MiniMax: pass model=actual_model and custom_llm_provider="minimax" so the
-            # request body keeps exact dashboard casing (e.g. MiniMax-M2.1-highspeed). Using
-            # "minimax/ActualModel" can lead LiteLLM/API to normalize to "minimax-actualmodel" (2013).
+            # request body keeps exact dashboard casing (e.g. MiniMax-M2.1-highspeed).
             api_key = self._get_api_key()
             if self.config.provider == "minimax":
                 actual_model = _minimax_model_casing(actual_model)
-                litellm_model = actual_model
-                litellm_kwargs = {
-                    "model": litellm_model,
+                request_model = actual_model
+                request_kwargs = {
+                    "model": request_model,
                     "custom_llm_provider": "minimax",
                     "max_tokens": actual_max_tokens,
                     "api_key": api_key,
                     "timeout": actual_timeout,
                 }
             else:
-                litellm_model = f"{self.config.provider}/{actual_model}"
-                litellm_kwargs = {
-                    "model": litellm_model,
+                request_model = f"{self.config.provider}/{actual_model}"
+                request_kwargs = {
+                    "model": request_model,
                     "max_tokens": actual_max_tokens,
                     "api_key": api_key,
                     "timeout": actual_timeout,
@@ -223,45 +193,45 @@ class LiteLLMProvider(LLMProvider):
             top_p = kwargs.get("top_p")
             stop = kwargs.get("stop")
 
-            # Add base_url for MiniMax (required for LiteLLM)
+            # Add base_url for MiniMax.
             if self.config.provider == "minimax":
-                litellm_kwargs["api_base"] = "https://api.minimax.io/v1"
-                litellm_kwargs["headers"] = {"Authorization": f"Bearer {api_key}"}
-                # Ensure request body uses exact model name (dashboard casing e.g. MiniMax-M2.1-highspeed);
-                # LiteLLM may lowercase the model elsewhere, causing 2013 unknown model.
-                base_extra = litellm_kwargs.get("extra_body") or kwargs.get("extra_body") or {}
-                litellm_kwargs["extra_body"] = {**base_extra, "model": actual_model}
+                request_kwargs["api_base"] = "https://api.minimax.io/v1"
+                request_kwargs["headers"] = {"Authorization": f"Bearer {api_key}"}
+                # Ensure request body uses exact model name (dashboard casing e.g.
+                # MiniMax-M2.1-highspeed).
+                base_extra = request_kwargs.get("extra_body") or kwargs.get("extra_body") or {}
+                request_kwargs["extra_body"] = {**base_extra, "model": actual_model}
                 # Optional: disable long reasoning for faster response (inference.minimax_disable_reasoning: true)
                 try:
                     from omni.foundation.config.settings import get_setting
 
                     if bool(get_setting("inference.minimax_disable_reasoning", False)):
-                        litellm_kwargs["extra_body"]["reasoning"] = False
+                        request_kwargs["extra_body"]["reasoning"] = False
                 except Exception:
                     pass
             elif self.config.base_url:
-                litellm_kwargs["api_base"] = self.config.base_url
+                request_kwargs["api_base"] = self.config.base_url
 
             # System prompt: only add to kwargs when using caller-provided messages
             # (when we build messages below we include system in the list)
             if tools:
-                litellm_kwargs["tools"] = tools
+                request_kwargs["tools"] = tools
             if tool_choice is not None:
-                litellm_kwargs["tool_choice"] = tool_choice
+                request_kwargs["tool_choice"] = tool_choice
             if response_format is not None:
-                litellm_kwargs["response_format"] = response_format
+                request_kwargs["response_format"] = response_format
             if temperature is not None:
-                litellm_kwargs["temperature"] = temperature
+                request_kwargs["temperature"] = temperature
             if top_p is not None:
-                litellm_kwargs["top_p"] = top_p
+                request_kwargs["top_p"] = top_p
             if stop is not None:
-                litellm_kwargs["stop"] = stop
+                request_kwargs["stop"] = stop
 
             # Build messages: explicit system + user for compatibility (e.g. MiniMax)
             if messages:
-                # Caller-provided messages; optional system_prompt for LiteLLM
+                # Caller-provided messages; optional system_prompt
                 if system_prompt:
-                    litellm_kwargs["system_prompt"] = system_prompt
+                    request_kwargs["system_prompt"] = system_prompt
             elif user_query:
                 if system_prompt:
                     messages = [
@@ -282,8 +252,8 @@ class LiteLLMProvider(LLMProvider):
 
             if messages:
                 start = time.perf_counter()
-                response = await self._litellm.acompletion(
-                    **litellm_kwargs,
+                response = await self._backend.acompletion(
+                    **request_kwargs,
                     messages=messages,
                 )
                 duration_sec = round(time.perf_counter() - start, 2)
@@ -293,7 +263,7 @@ class LiteLLMProvider(LLMProvider):
                     model=actual_model,
                 )
 
-            # Extract content - MiniMax via LiteLLM returns content in reasoning_content
+            # Extract content - MiniMax may return content in reasoning_content
             content = ""
             tool_calls: list[dict[str, Any]] = []
             try:
@@ -354,7 +324,7 @@ class LiteLLMProvider(LLMProvider):
             )
 
         except Exception as e:
-            logger.error("LiteLLM complete failed", error=str(e))
+            logger.error("LLM complete failed", error=str(e))
             return LLMResponse(content="", success=False, error=str(e))
 
     async def complete_async(
@@ -406,10 +376,10 @@ class LiteLLMProvider(LLMProvider):
         """Get API key from environment."""
         import os
 
-        api_key_env = self.config.api_key_env
-        return (
-            os.getenv(api_key_env) or os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY")
-        )
+        api_key_env = (self.config.api_key_env or "").strip()
+        if not api_key_env:
+            return None
+        return os.getenv(api_key_env)
 
 
 class NoOpProvider(LLMProvider):
@@ -483,17 +453,17 @@ def get_llm_provider() -> LLMProvider:
     if _PROVIDER_CACHE is not None:
         return _PROVIDER_CACHE
 
-    # Try to create LiteLLM provider
+    # Try to create configured provider
     try:
-        provider = LiteLLMProvider()
+        provider = RustLLMProvider()
         if provider.is_available():
             _PROVIDER_CACHE = provider
-            logger.info("Using LiteLLMProvider", provider=provider.config.provider)
+            logger.info("Using LLM provider", provider=provider.config.provider)
             return provider
 
         # Fall through to NoOpProvider
     except Exception as e:
-        logger.warning("Failed to create LiteLLMProvider", error=str(e))
+        logger.warning("Failed to create LLM provider", error=str(e))
 
     # Use NoOpProvider
     _PROVIDER_CACHE = NoOpProvider()
@@ -537,7 +507,7 @@ __all__ = [
     "LLMConfig",
     "LLMProvider",
     "LLMResponse",
-    "LiteLLMProvider",
+    "RustLLMProvider",
     "NoOpProvider",
     "complete",
     "get_llm_provider",

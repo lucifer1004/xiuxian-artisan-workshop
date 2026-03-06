@@ -6,7 +6,7 @@ metadata:
 
 # OmniCell System Operations (sys_ops) Reference
 
-This document details the underlying protocol for the `omni_cell` tool.
+This document details the underlying protocol for the `xiuxian_cell` tool.
 
 ## Philosophy
 
@@ -28,7 +28,7 @@ open package.json
 
 # Output (received by Agent)
 {
-  "name": "omni-dev-fusion",
+  "name": "xiuxian-artisan-workshop",
   "version": "2.0.0",
   "dependencies": { ... }
 }

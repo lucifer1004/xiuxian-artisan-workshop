@@ -1,0 +1,14 @@
+use std::path::PathBuf;
+
+use xiuxian_daochang::{RuntimeSettings, run_stdio};
+
+use xiuxian_daochang::build_agent;
+
+pub(crate) async fn run_stdio_mode(
+    session_id: String,
+    mcp_config_path: PathBuf,
+    runtime_settings: &RuntimeSettings,
+) -> anyhow::Result<()> {
+    let agent = build_agent(&mcp_config_path, runtime_settings).await?;
+    Box::pin(run_stdio(agent, session_id)).await
+}

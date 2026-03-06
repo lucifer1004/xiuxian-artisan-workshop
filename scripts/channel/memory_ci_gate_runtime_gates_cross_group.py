@@ -22,7 +22,7 @@ def run_cross_group_complex_gate(
     if not cfg.cross_group_dataset.exists():
         raise FileNotFoundError(f"cross-group dataset not found: {cfg.cross_group_dataset}")
 
-    script = cfg.script_dir / "test_omni_agent_complex_scenarios.py"
+    script = cfg.script_dir / "test_xiuxian_daochang_complex_scenarios.py"
     if not script.exists():
         raise FileNotFoundError(f"missing complex scenario script: {script}")
 

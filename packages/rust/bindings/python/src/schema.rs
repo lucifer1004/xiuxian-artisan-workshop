@@ -4,8 +4,8 @@
 //! It uses `schemars` to auto-generate JSON Schemas from Rust structs,
 //! establishing Rust as the Single Source of Truth (SSOT) for type definitions.
 
-use omni_types::SchemaError;
 use pyo3::prelude::*;
+use xiuxian_types::SchemaError;
 
 /// Get JSON Schema for a registered type.
 ///
@@ -24,13 +24,13 @@ use pyo3::prelude::*;
 #[pyfunction]
 #[pyo3(signature = (type_name))]
 pub fn py_get_schema_json(type_name: &str) -> PyResult<String> {
-    match omni_types::get_schema_json(type_name) {
+    match xiuxian_types::get_schema_json(type_name) {
         Ok(schema) => Ok(schema),
         Err(SchemaError::UnknownType(name)) => {
             Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "Unknown type: {}. Available types: {:?}",
                 name,
-                omni_types::get_registered_types()
+                xiuxian_types::get_registered_types()
             )))
         }
     }
@@ -59,5 +59,5 @@ pub fn py_get_named_schema_json(name: &str) -> PyResult<String> {
 /// List of type names that can be passed to `py_get_schema_json`.
 #[pyfunction]
 pub fn py_get_registered_types() -> Vec<&'static str> {
-    omni_types::get_registered_types()
+    xiuxian_types::get_registered_types()
 }

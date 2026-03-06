@@ -38,7 +38,7 @@ def _api_bytes(*, url: str, token: str, timeout_seconds: float = 30.0) -> bytes:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "omni-skills-tools-baseline-fetcher",
+            "User-Agent": "xiuxian-skills-tools-baseline-fetcher",
         },
     )
     with urllib.request.urlopen(request, timeout=timeout_seconds) as response:

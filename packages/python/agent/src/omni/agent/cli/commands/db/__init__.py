@@ -22,7 +22,7 @@ def register_db_command(parent_app: typer.Typer) -> None:
     """Register the db command with the parent app."""
     from omni.agent.cli.load_requirements import register_requirements
 
-    register_requirements("db", ollama=True, embedding_index=True)
+    register_requirements("db", embedding_index=True)
     parent_app.add_typer(db_app, name="db")
 
 

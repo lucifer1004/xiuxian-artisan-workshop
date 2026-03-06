@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import AsyncMock, patch
-from omni.test_kit.decorators import omni_skill
+from omni.test_kit.decorators import xiuxian_skill
 
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-@omni_skill(name="memory")
+@xiuxian_skill(name="memory")
 class TestMemoryModular:
     """Modular tests for memory skill."""
 

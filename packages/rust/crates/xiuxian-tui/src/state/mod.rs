@@ -582,7 +582,7 @@ impl AppState {
     fn reduce_system_event(&mut self, event: &SocketEvent) -> bool {
         match event.topic.as_str() {
             "system/init" => {
-                self.set_status("Connected to omni-agent");
+                self.set_status("Connected to xiuxian-daochang");
                 if let Some(version) = event.payload.get("version") {
                     log::info!("Agent version: {version}");
                 }

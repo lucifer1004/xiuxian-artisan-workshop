@@ -127,7 +127,7 @@ def create_omni_loop_context() -> ContextOrchestrator:
     """Create orchestrator for the Main ReAct Loop (Omni-Orchestrator).
 
     Uses agent-specific RoutingGuidanceProvider for meta-cognition protocol.
-    Python-side skill/memory injection is disabled because Rust omni-agent owns
+    Python-side skill/memory injection is disabled because Rust xiuxian-daochang owns
     authoritative prompt/session injection.
 
     Returns:

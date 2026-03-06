@@ -5,7 +5,7 @@ description = "Standalone Python bindings package for the xiuxian-wendao Rust en
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "omni-core-rs",
+    "xiuxian-core-rs",
 ]
 
 [dependency-groups]

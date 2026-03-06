@@ -110,11 +110,11 @@ def test_finalize_gate_run_failure_prefers_newest_generated_reports(tmp_path: Pa
     new_stamp = 450
     start_stamp = 320
 
-    ignored_json = reports_dir / "omni-agent-memory-ci-failure-quick-200.json"
-    old_json = reports_dir / f"omni-agent-memory-ci-failure-quick-{old_stamp}.json"
-    new_json = reports_dir / f"omni-agent-memory-ci-failure-quick-{new_stamp}.json"
-    old_md = reports_dir / f"omni-agent-memory-ci-failure-quick-{old_stamp}.md"
-    new_md = reports_dir / f"omni-agent-memory-ci-failure-quick-{new_stamp}.md"
+    ignored_json = reports_dir / "xiuxian-daochang-memory-ci-failure-quick-200.json"
+    old_json = reports_dir / f"xiuxian-daochang-memory-ci-failure-quick-{old_stamp}.json"
+    new_json = reports_dir / f"xiuxian-daochang-memory-ci-failure-quick-{new_stamp}.json"
+    old_md = reports_dir / f"xiuxian-daochang-memory-ci-failure-quick-{old_stamp}.md"
+    new_md = reports_dir / f"xiuxian-daochang-memory-ci-failure-quick-{new_stamp}.md"
 
     ignored_json.write_text('{"category": "too_old"}\n', encoding="utf-8")
     old_json.write_text('{"category": "old"}\n', encoding="utf-8")

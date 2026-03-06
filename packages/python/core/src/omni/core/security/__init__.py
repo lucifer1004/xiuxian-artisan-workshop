@@ -8,11 +8,11 @@ Architecture:
 - SecurityValidator: Validates tool calls against skill permissions
 - SecurityError: Custom exception for security violations
 
-The heavy lifting is done by Rust's PermissionGatekeeper via omni_core_rs.
+The heavy lifting is done by Rust's PermissionGatekeeper via xiuxian_core_rs.
 """
 
 try:
-    from omni_core_rs import check_permission as _check_permission
+    from xiuxian_core_rs import check_permission as _check_permission
 
     _RUST_AVAILABLE = True
 except ImportError:

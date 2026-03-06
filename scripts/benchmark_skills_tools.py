@@ -126,14 +126,14 @@ CLI_RUNNER_TIMING_PREFIX = "__OMNI_SKILL_TIMING__ "
 
 def _benchmark_runner_socket_path() -> Path:
     """Return isolated socket path used by CLI runner benchmark cases."""
-    return Path("/tmp").resolve() / f"omni-skill-runner-benchmark-{os.getpid()}.sock"
+    return Path("/tmp").resolve() / f"xiuxian-skill-runner-benchmark-{os.getpid()}.sock"
 
 
-def _omni_cli_base_command() -> list[str]:
+def _cli_base_command() -> list[str]:
     """Resolve CLI base command (`omni` binary or module fallback)."""
-    omni_bin = shutil.which("omni")
-    if omni_bin:
-        return [omni_bin]
+    cli_bin = shutil.which("omni")
+    if cli_bin:
+        return [cli_bin]
     return [sys.executable, "-m", "omni.agent.cli.app"]
 
 
@@ -235,7 +235,7 @@ async def _run_cli_command_once(
     timeout_s: float,
 ) -> tuple[float, str | None, dict[str, Any] | None]:
     """Run one CLI command and return elapsed time in ms."""
-    command = [*_omni_cli_base_command(), *cli_args]
+    command = [*_cli_base_command(), *cli_args]
     started = time.perf_counter()
     try:
         process = await asyncio.create_subprocess_exec(

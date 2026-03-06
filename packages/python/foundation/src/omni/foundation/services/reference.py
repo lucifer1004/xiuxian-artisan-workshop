@@ -44,7 +44,7 @@ def get_references_config_path() -> Path:
         return user_refs
 
     try:
-        return get_project_root() / "packages" / "conf" / "references.yaml"
+        return Path(get_project_root()) / "packages" / "conf" / "references.yaml"
     except Exception:
         return Path("packages/conf/references.yaml")
 
@@ -109,7 +109,7 @@ class ReferenceLibrary:
 
     def _load(self) -> None:
         """Load references: system default from packages/conf, then user override from config dir."""
-        root = get_project_root()
+        root = Path(get_project_root())
         # System-level default (lives with code under packages/conf)
         system_refs = root / "packages" / "conf" / "references.yaml"
         # User override (--conf or $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/references.yaml)

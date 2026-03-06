@@ -44,10 +44,9 @@ async def test_vector_store_concurrent_writes(temp_lancedb):
     tasks = [writer(i) for i in range(5)]
     await asyncio.gather(*tasks)
 
-    # Verify documents were written using explicit search_tools API
-    query_vec = store._embedding_service.embed("document")
-    if query_vec and isinstance(query_vec[0], list):
-        query_vec = query_vec[0]
+    # Verify documents were written using explicit search_tools API.
+    # Keep this test independent from external embedding HTTP availability.
+    query_vec = [0.0] * 384
 
     results = await store.search_tools(
         table_name="concurrent_test",

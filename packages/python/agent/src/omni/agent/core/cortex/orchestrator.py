@@ -487,10 +487,10 @@ class CortexOrchestrator:
 
         except ImportError:
             # Fallback: Direct OmniCell execution
-            from omni.core.skills.runtime.omni_cell import OmniCellRunner
+            from omni.core.skills.runtime.xiuxian_cell import XiuxianCellRunner
 
-            omni_cell = OmniCellRunner()
-            cell_result = await omni_cell.run(command)
+            xiuxian_cell = XiuxianCellRunner()
+            cell_result = await xiuxian_cell.run(command)
 
             return {
                 "output": cell_result.data,

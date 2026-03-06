@@ -32,8 +32,7 @@ class TestEmbeddingService:
         # Reset singleton
         EmbeddingService._instance = None
         service = EmbeddingService()
-        # Dimension depends on configuration or auto-detected model
-        # The dimension could be 1024 (Qwen3-Embedding-0.6B) or 2560 (fallback)
+        # Dimension depends on configuration.
         assert service.dimension >= 384  # Minimum expected dimension
 
     def test_embed_returns_list(self):
@@ -48,14 +47,14 @@ class TestEmbeddingService:
         EmbeddingService._instance = None
         with patch.object(EmbeddingService, "initialize", lambda self: None):
             service = EmbeddingService()
-            service._backend = "mock"
+            service._backend = "http"
             service._dimension = dimension
-            service._model = None
             service._initialized = True
-            service._model_loaded = True
+            service._client_mode = True
+            service._client_url = "http://127.0.0.1:3002"
 
-            # Patch fallback embedding to return known output
-            with patch.object(service, "_embed_fallback", return_value=[[0.1] * dimension]):
+            # Patch HTTP embedding to return known output
+            with patch.object(service, "_embed_http", return_value=[[0.1] * dimension]):
                 result = service.embed("test text")
                 assert isinstance(result, list)
                 assert len(result) == 1
@@ -73,16 +72,16 @@ class TestEmbeddingService:
         EmbeddingService._instance = None
         with patch.object(EmbeddingService, "initialize", lambda self: None):
             service = EmbeddingService()
-            service._backend = "mock"
+            service._backend = "http"
             service._dimension = dimension
-            service._model = None
             service._initialized = True
-            service._model_loaded = True
+            service._client_mode = True
+            service._client_url = "http://127.0.0.1:3002"
 
             # Return 3 vectors for 3 texts
             with patch.object(
                 service,
-                "_embed_fallback",
+                "_embed_http",
                 return_value=[[0.1] * dimension, [0.2] * dimension, [0.3] * dimension],
             ):
                 texts = ["text1", "text2", "text3"]
@@ -93,22 +92,42 @@ class TestEmbeddingService:
                     assert len(vec) == dimension
 
     def test_deterministic_embedding(self):
-        """Same text should produce same embedding."""
+        """Same text should hit service cache and produce stable output."""
         from omni.foundation.services.embedding import EmbeddingService
 
+        EmbeddingService._instance = None
         service = EmbeddingService()
-        result1 = service.embed("deterministic text")
-        result2 = service.embed("deterministic text")
-        assert result1 == result2
+        service._backend = "http"
+        service._dimension = 3
+        service._initialized = True
+        service._client_mode = True
+        service._client_url = "http://127.0.0.1:3002"
+        with patch.object(service, "_embed_http", return_value=[[0.1, 0.2, 0.3]]) as mock_http:
+            result1 = service.embed("deterministic text")
+            result2 = service.embed("deterministic text")
+            assert result1 == result2
+            assert mock_http.call_count == 1
 
     def test_different_texts_different_embeddings(self):
-        """Different texts should produce different embeddings."""
+        """Different texts should call backend independently."""
         from omni.foundation.services.embedding import EmbeddingService
 
+        EmbeddingService._instance = None
         service = EmbeddingService()
-        result1 = service.embed("text one")
-        result2 = service.embed("text two")
-        assert result1 != result2
+        service._backend = "http"
+        service._dimension = 3
+        service._initialized = True
+        service._client_mode = True
+        service._client_url = "http://127.0.0.1:3002"
+        with patch.object(
+            service,
+            "_embed_http",
+            side_effect=[[[0.1, 0.2, 0.3]], [[0.4, 0.5, 0.6]]],
+        ) as mock_http:
+            result1 = service.embed("text one")
+            result2 = service.embed("text two")
+            assert result1 != result2
+            assert mock_http.call_count == 2
 
     def test_get_embedding_service(self):
         """get_embedding_service() should return singleton."""

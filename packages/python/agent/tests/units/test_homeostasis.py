@@ -39,11 +39,11 @@ class TestTransaction:
         """Test Transaction creation with default values."""
         transaction = Transaction(
             task_id="test_task",
-            branch_name="omni-task/test_task",
+            branch_name="xiuxian-task/test_task",
         )
 
         assert transaction.task_id == "test_task"
-        assert transaction.branch_name == "omni-task/test_task"
+        assert transaction.branch_name == "xiuxian-task/test_task"
         assert transaction.status == TransactionStatus.IDLE
         assert transaction.base_commit == ""
         assert transaction.changes == {}
@@ -51,9 +51,9 @@ class TestTransaction:
 
     def test_transaction_hash_and_equality(self):
         """Test Transaction hash and equality."""
-        t1 = Transaction(task_id="task_123", branch_name="omni-task/task_123")
-        t2 = Transaction(task_id="task_123", branch_name="omni-task/different")
-        t3 = Transaction(task_id="task_456", branch_name="omni-task/task_456")
+        t1 = Transaction(task_id="task_123", branch_name="xiuxian-task/task_123")
+        t2 = Transaction(task_id="task_123", branch_name="xiuxian-task/different")
+        t3 = Transaction(task_id="task_456", branch_name="xiuxian-task/task_456")
 
         assert hash(t1) == hash(t2)  # Same task_id
         assert t1 == t2  # Same task_id
@@ -94,30 +94,30 @@ class TestTransactionShield:
         """Test branch name generation."""
         # Short task_id (no truncation)
         branch_name = shield._get_branch_name("test")
-        assert branch_name == "omni-task/test"
+        assert branch_name == "xiuxian-task/test"
 
         # Long task_id (use last 8 chars for uniqueness)
         # "task_update_config" = 18 chars, last 8 = "e_config"
         long_name = "task_update_config"
         branch_name = shield._get_branch_name(long_name)
-        assert branch_name == "omni-task/e_config"  # Last 8 chars
+        assert branch_name == "xiuxian-task/e_config"  # Last 8 chars
 
         # Task name with meaningful suffix
         # "task_refactor_auth" = 18 chars, last 8 = "tor_auth"
         branch_name = shield._get_branch_name("task_refactor_auth")
-        assert branch_name == "omni-task/tor_auth"  # Last 8 chars
+        assert branch_name == "xiuxian-task/tor_auth"  # Last 8 chars
 
         # Exactly 8 chars
         eight_char = "abcdefgh"
         branch_name = shield._get_branch_name(eight_char)
-        assert branch_name == "omni-task/abcdefgh"
+        assert branch_name == "xiuxian-task/abcdefgh"
 
     @pytest.mark.asyncio
     async def test_get_transaction(self, shield):
         """Test getting a transaction by ID."""
         shield._transactions["task_1"] = Transaction(
             task_id="task_1",
-            branch_name="omni-task/task_1",
+            branch_name="xiuxian-task/task_1",
         )
 
         transaction = shield.get_transaction("task_1")
@@ -145,7 +145,7 @@ class TestTransactionShield:
         """verify_transaction should fail when immune scan reports violations."""
         tx = Transaction(
             task_id="task_immune_fail",
-            branch_name="omni-task/task_immune_fail",
+            branch_name="xiuxian-task/task_immune_fail",
             status=TransactionStatus.COMMITTED,
             changes={"foo.py": {"new_hash": "abc"}},
         )
@@ -166,7 +166,7 @@ class TestTransactionShield:
         """verify_transaction should mark transaction verified when immune scan passes."""
         tx = Transaction(
             task_id="task_immune_ok",
-            branch_name="omni-task/task_immune_ok",
+            branch_name="xiuxian-task/task_immune_ok",
             status=TransactionStatus.COMMITTED,
             changes={"foo.py": {"new_hash": "abc"}},
         )
@@ -192,7 +192,7 @@ class TestTransactionShield:
 
         tx = Transaction(
             task_id="task_scan_paths",
-            branch_name="omni-task/task_scan_paths",
+            branch_name="xiuxian-task/task_scan_paths",
             changes={
                 "a.py": {"new_hash": "1"},
                 "notes.txt": {"new_hash": "2"},

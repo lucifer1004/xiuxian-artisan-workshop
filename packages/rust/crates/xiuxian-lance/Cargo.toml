@@ -1,0 +1,14 @@
+[package]
+name = "xiuxian-lance"
+version.workspace = true
+edition.workspace = true
+description = "LanceDB RecordBatch utilities"
+authors = ["CyberXiuXian Artisan Studio"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+lance = { workspace = true }
+
+[lints]
+workspace = true

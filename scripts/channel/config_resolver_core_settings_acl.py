@@ -3,10 +3,19 @@
 
 from __future__ import annotations
 
-import tomllib
 from typing import TYPE_CHECKING
 
 from config_resolver_core_scalars import parse_scalar_list
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError as exc:  # pragma: no cover - environment guard
+        raise ModuleNotFoundError(
+            "No TOML parser available. Use Python 3.11+ or install tomli."
+        ) from exc
 
 if TYPE_CHECKING:
     from pathlib import Path

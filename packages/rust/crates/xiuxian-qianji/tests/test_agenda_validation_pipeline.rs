@@ -1,7 +1,5 @@
 //! Agenda validation pipeline integration tests.
 
-#[cfg(feature = "llm")]
-use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::json;
 #[cfg(feature = "llm")]
@@ -11,7 +9,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 #[cfg(feature = "llm")]
-use xiuxian_llm::llm::{ChatRequest, LlmClient};
+use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmResult};
 #[cfg(feature = "llm")]
 use xiuxian_qianhuan::persona::PersonaProfile;
 use xiuxian_qianhuan::{orchestrator::ThousandFacesOrchestrator, persona::PersonaRegistry};
@@ -154,7 +152,7 @@ struct StaticScoreLlmClient {
 #[cfg(feature = "llm")]
 #[async_trait]
 impl LlmClient for StaticScoreLlmClient {
-    async fn chat(&self, request: ChatRequest) -> Result<String> {
+    async fn chat(&self, request: ChatRequest) -> LlmResult<String> {
         if let Ok(mut models) = self.seen_models.lock() {
             models.push(request.model);
         }

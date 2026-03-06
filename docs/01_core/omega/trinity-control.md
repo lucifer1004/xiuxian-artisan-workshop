@@ -13,7 +13,7 @@ metadata:
 
 # Omega + Graph + Loop/ReAct: Rust Unification Blueprint
 
-> Goal: converge execution into a single Rust runtime (`omni-agent`) by fusing Omega reasoning, Graph planning, ReAct tool execution, and authoritative Xiuxian-Qianhuan injection, then progressively remove Python runtime paths.
+> Goal: converge execution into a single Rust runtime (`xiuxian-daochang`) by fusing Omega reasoning, Graph planning, ReAct tool execution, and authoritative Xiuxian-Qianhuan injection, then progressively remove Python runtime paths.
 >
 > Detailed companion: [Xiuxian-Qianhuan Injection + Memory Self-Evolution + Reflection](../memory/injection-evolution.md)
 >
@@ -35,7 +35,7 @@ metadata:
 
 ```mermaid
 flowchart LR
-  U[User / Channel] --> G[omni-agent gateway/repl]
+  U[User / Channel] --> G[xiuxian-daochang gateway/repl]
   G --> R[Unified Rust Runtime Kernel]
 
   R --> O[Omega Deliberation Engine]
@@ -47,8 +47,8 @@ flowchart LR
   M --> PY[Python MCP Tool Servers (transition)]
   M --> RS[Rust-native MCP servers]
 
-  R --> W[omni-window]
-  R --> MM[omni-memory]
+  R --> W[xiuxian-window]
+  R --> MM[xiuxian-memory-engine]
   R --> KG[xiuxian-wendao / link-graph]
   R --> SPI[Session Prompt Injection XML]
 
@@ -67,15 +67,15 @@ flowchart LR
 
 1. Intake:
    - Receive request and resolve `session_id` (channel/chat/thread aware).
-   - Load bounded context from `omni-window`.
+   - Load bounded context from `xiuxian-window`.
 2. Omega deliberation:
    - Evaluate complexity and choose execution route (`react` direct vs `graph` first).
    - Produce context policy (what to inject, max size, ordering, role-mix profile, injection mode).
 3. Xiuxian-Qianhuan context assembly (knowledge inject role):
    - Assemble typed context blocks from:
      - session prompt injection XML (operator/session scoped),
-     - memory recall context (`omni-memory`, MemRL-style),
-     - bounded summaries/window state (`omni-window`),
+     - memory recall context (`xiuxian-memory-engine`, MemRL-style),
+     - bounded summaries/window state (`xiuxian-window`),
      - knowledge context (`xiuxian-wendao`, link-graph).
    - Compose scenario-specific mixed-role prompts (for example debug/recovery/architecture reflection packs).
    - Apply deterministic ordering and token budget before execution.
@@ -89,7 +89,7 @@ flowchart LR
    - Execute tool loop with budget, retries, and structured error taxonomy.
    - Call tools through MCP client pool only.
 7. Self-evolution update:
-   - Store episode outcome and feedback in `omni-memory`.
+   - Store episode outcome and feedback in `xiuxian-memory-engine`.
    - Persist session window snapshots and summary segments.
 8. Response:
    - Emit user-facing answer plus structured observability events.
@@ -120,8 +120,8 @@ Project progress must be tracked by feature name (not phase/stage labels). Recom
 | **Graph Planning Engine (Rust)**         | Graph planning API runs inside Rust runtime and produces stable, testable plan contracts. |
 | **Omega Deliberation Engine (Rust)**     | Quality gates and plan-repair logic run in Rust with structured outputs.                  |
 | **ReAct Tool Runtime (Rust)**            | Tool-call loop, retry, budget, and failure policy consolidated in Rust.                   |
-| **Session Window Compression (Rust)**    | Predictable context compression and restore strategy backed by `omni-window`.             |
-| **Memory Self-Evolution Runtime (Rust)** | Outcome feedback and recall adaptation persisted via DB-backed `omni-memory`.             |
+| **Session Window Compression (Rust)**    | Predictable context compression and restore strategy backed by `xiuxian-window`.          |
+| **Memory Self-Evolution Runtime (Rust)** | Outcome feedback and recall adaptation persisted via DB-backed `xiuxian-memory-engine`.   |
 | **Python Runtime Decommissioning**       | Python side is MCP tool service only; no duplicated runtime loop entrypoints.             |
 
 ## 5. Migration Rules
@@ -130,7 +130,7 @@ Project progress must be tracked by feature name (not phase/stage labels). Recom
   - Runtime orchestration authority is Rust.
   - Python authority is tool implementation behind MCP.
 - Thin orchestrator rule:
-  - `omni-agent` remains orchestration-only.
+  - `xiuxian-daochang` remains orchestration-only.
   - Memory lifecycle/revalidation/promotion core logic must live in Rust memory package(s), not inside agent runtime modules.
 - MCP interoperability rule:
   - Keep `skill memory` as MCP-facing tool surface for external clients.
@@ -155,7 +155,7 @@ Project progress must be tracked by feature name (not phase/stage labels). Recom
   - exposed through MCP memory skill facade for interoperability
 - `knowledge`:
   - long-term durable knowledge interface (MCP knowledge skill)
-- `omni-agent`:
+- `xiuxian-daochang`:
   - orchestration only; no embedding of memory lifecycle policy logic
 
 ## 5.2 Data Plane Standard (Valkey + LanceDB + Arrow)
@@ -206,7 +206,7 @@ Policy:
 ## 7. Python Runtime Removal End-State
 
 - End-state contract:
-  - `omni-agent` is the only runtime orchestrator.
+  - `xiuxian-daochang` is the only runtime orchestrator.
   - Python process provides MCP tools and supporting services only.
 - Cleanup targets:
   - Remove Python runtime loop command paths after Rust parity is proven.
@@ -237,13 +237,13 @@ Policy:
 
 After A0-A7 closure, the next implementation queue is feature-driven (not gate-driven):
 
-| Priority | Feature                                     | Scope                                                                                            | Exit criteria                                                                              | Primary verification                                                           |
-| -------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| P0-1     | Graph Planning Engine (Rust)                | Move planning contract and graph execution entry to Rust runtime with deterministic plan schema. | Rust graph plan contract is generated and consumed without Python runtime loop dependency. | `cargo test -p omni-agent --test contracts` + graph planning integration tests |
-| P0-2     | Omega Deliberation Engine (Rust)            | Expand policy routing into explicit plan-repair/quality-gate path in Rust.                       | Route policy can enforce repair or fallback with auditable reason fields.                  | `cargo test -p omni-agent --test agent_injection` + reflection threshold tests |
-| P0-3     | Role-Mix Injection Profiles                 | Add `single/classified/hybrid` profile selection with deterministic assembly.                    | Role-mix profile is selected by policy and recorded in injection snapshot traces.          | `cargo test -p omni-agent --lib injection::tests` + trace reconstruction gate  |
-| P0-4     | Python Runtime Decommissioning (Loop paths) | Remove duplicated Python runtime loop entrypoints while preserving MCP tool plane.               | Runtime orchestration entry remains Rust-only (`omni-agent`).                              | `python3 scripts/channel/test_omni_agent_memory_ci_gate.py --profile nightly`  |
-| P0-5     | Adversarial Sub-graph Routing               | Deprecate regex-based triggers for Qianji workflows; elevate to Omega routing policy.            | Omega natively outputs `route: graph` + `workflow_mode: agenda_validation` via LLM JSON.   | `cargo test -p omni-agent --test agent_omega_routing`                          |
+| Priority | Feature                                     | Scope                                                                                            | Exit criteria                                                                              | Primary verification                                                                 |
+| -------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| P0-1     | Graph Planning Engine (Rust)                | Move planning contract and graph execution entry to Rust runtime with deterministic plan schema. | Rust graph plan contract is generated and consumed without Python runtime loop dependency. | `cargo test -p xiuxian-daochang --test contracts` + graph planning integration tests |
+| P0-2     | Omega Deliberation Engine (Rust)            | Expand policy routing into explicit plan-repair/quality-gate path in Rust.                       | Route policy can enforce repair or fallback with auditable reason fields.                  | `cargo test -p xiuxian-daochang --test agent_injection` + reflection threshold tests |
+| P0-3     | Role-Mix Injection Profiles                 | Add `single/classified/hybrid` profile selection with deterministic assembly.                    | Role-mix profile is selected by policy and recorded in injection snapshot traces.          | `cargo test -p xiuxian-daochang --lib injection::tests` + trace reconstruction gate  |
+| P0-4     | Python Runtime Decommissioning (Loop paths) | Remove duplicated Python runtime loop entrypoints while preserving MCP tool plane.               | Runtime orchestration entry remains Rust-only (`xiuxian-daochang`).                        | `python3 scripts/channel/test_xiuxian_daochang_memory_ci_gate.py --profile nightly`  |
+| P0-5     | Adversarial Sub-graph Routing               | Deprecate regex-based triggers for Qianji workflows; elevate to Omega routing policy.            | Omega natively outputs `route: graph` + `workflow_mode: agenda_validation` via LLM JSON.   | `cargo test -p xiuxian-daochang --test agent_omega_routing`                          |
 
 ### P0-1 Status Update (2026-02-23)
 
@@ -259,8 +259,8 @@ Completed in current branch:
 
 Verification commands:
 
-- `cargo test -p omni-agent --lib graph_ -- --nocapture`
-- `cargo test -p omni-agent --test contracts graph_execution_plan_contract -- --nocapture`
+- `cargo test -p xiuxian-daochang --lib graph_ -- --nocapture`
+- `cargo test -p xiuxian-daochang --test contracts graph_execution_plan_contract -- --nocapture`
 
 ### P0-2 Status Update (2026-02-23)
 
@@ -282,8 +282,8 @@ Completed in current branch:
 
 Verification commands:
 
-- `cargo test -p omni-agent --lib apply_quality_gate_ -- --nocapture`
-- `cargo test -p omni-agent --test agent_injection omega_shortcut_ -- --nocapture`
+- `cargo test -p xiuxian-daochang --lib apply_quality_gate_ -- --nocapture`
+- `cargo test -p xiuxian-daochang --test agent_injection omega_shortcut_ -- --nocapture`
 
 ### P0-3 Status Update (2026-02-23)
 
@@ -309,8 +309,8 @@ Completed in current branch:
 
 Verification commands:
 
-- `cargo test -p omni-agent --lib injection::tests -- --nocapture`
-- `cargo test -p omni-agent --test agent_injection graph_shortcut_includes_typed_injection_snapshot_metadata -- --nocapture`
+- `cargo test -p xiuxian-daochang --lib injection::tests -- --nocapture`
+- `cargo test -p xiuxian-daochang --test agent_injection graph_shortcut_includes_typed_injection_snapshot_metadata -- --nocapture`
 
 ### P0-4 Status Update (2026-02-22)
 
@@ -322,7 +322,7 @@ Completed in current branch:
 - `omni.agent.workflows.run_entry` is removed from the package.
 - `omni.agent.core.omni` public API no longer exports Python runtime orchestrators (`OmniLoop`, `OmegaRunner`, `MissionConfig`).
 - Python modules `core/omni/loop.py` and `core/omni/omega.py` are fully removed from the package.
-- Python runtime modules `omni.agent.main` and `omni.agent.cli.omni_loop` are fully removed from the package.
+- Python runtime modules `omni.agent.main` and `omni.agent.cli.xiuxian_loop` are fully removed from the package.
 - MCP tool-plane behavior is preserved; no compatibility fallback to Python runtime loops was added.
 
 Verification evidence:
@@ -338,7 +338,7 @@ Verification evidence:
 
 **Action Plan:**
 
-1. Extend `OmegaDecision` in `packages/rust/crates/omni-agent/src/contracts/omega.rs` to support `workflow_mode = "agenda_validation"`.
+1. Extend `OmegaDecision` in `packages/rust/crates/xiuxian-daochang/src/contracts/omega.rs` to support `workflow_mode = "agenda_validation"`.
 2. Update the Omega system prompt (or tool schema) so the LLM explicitly selects this mode when asked to schedule tasks.
 3. Remove `apply_agenda_validation_if_needed` from `agent/turn_execution/react_loop/mod.rs`.
 4. Intercept the request in `agent/turn_execution/shortcut.rs`. When `route == graph` and `workflow_mode == agenda_validation`, execute the Qianji `agenda_validation_pipeline.toml`.
@@ -347,4 +347,4 @@ Verification evidence:
 Execution rule:
 
 - Land each P0 item with tests in the same change.
-- Keep `omni-agent` orchestration-only; do not move memory lifecycle policy into channel/runtime handlers.
+- Keep `xiuxian-daochang` orchestration-only; do not move memory lifecycle policy into channel/runtime handlers.

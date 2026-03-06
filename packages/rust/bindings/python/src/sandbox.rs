@@ -6,8 +6,8 @@
 //!
 //! This module bridges the NCL sandbox configuration with native sandboxing tools.
 
-use omni_sandbox as sandbox;
 use pyo3::prelude::*;
+use xiuxian_sandbox as sandbox;
 
 /// Platform detection
 #[pyfunction]
@@ -37,7 +37,7 @@ pub fn sandbox_is_seatbelt_available() -> bool {
     }
 }
 
-// Re-export types from omni_sandbox
+// Re-export types from xiuxian_sandbox
 pub use sandbox::ExecutionResult;
 pub use sandbox::MountConfig;
 pub use sandbox::NsJailExecutor;

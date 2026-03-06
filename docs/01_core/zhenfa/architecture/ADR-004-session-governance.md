@@ -17,7 +17,7 @@ metadata:
 
 ## 1. Context and Problem Statement
 
-As `omni-agent` moves into multi-user environments (Telegram/Discord groups), our current "one-size-fits-all" session model is insufficient:
+As `xiuxian-daochang` moves into multi-user environments (Telegram/Discord groups), our current "one-size-fits-all" session model is insufficient:
 
 - **Privacy Risk**: In a group, user A's private data might be recalled into user B's context.
 - **Cognitive Decay**: Infinite context windows eventually lead to model confusion and high token costs.
@@ -27,7 +27,7 @@ Inspired by the `OpenClaw` architecture, we need a robust governance model for s
 
 ## 2. Decision
 
-We will implement a tiered **Session Governance Framework** within `xiuxian-zhenfa` and `omni-agent`.
+We will implement a tiered **Session Governance Framework** within `xiuxian-zhenfa` and `xiuxian-daochang`.
 
 ### 2.1 Session Scoping (Isolation)
 
@@ -60,7 +60,7 @@ We will implement a tiered **Session Governance Framework** within `xiuxian-zhen
 
 ## 4. Implementation Status (2026-02-28)
 
-The following ADR decisions are now implemented in `omni-agent` and verified with both automated and live channel tests:
+The following ADR decisions are now implemented in `xiuxian-daochang` and verified with both automated and live channel tests:
 
 - **Session command aliasing**: `/session scope` is accepted as an alias of `/session partition`.
 - **ACL canonicalization**: authorization checks evaluate the canonical selector (`/session partition`) so alias usage remains policy-safe.
@@ -76,8 +76,8 @@ User config (`.config/xiuxian-artisan-workshop/xiuxian.toml`):
 
 Environment overrides:
 
-- `OMNI_AGENT_TELEGRAM_SESSION_PARTITION_PERSIST`
-- `OMNI_AGENT_DISCORD_SESSION_PARTITION_PERSIST`
+- `XIUXIAN_DAOCHANG_TELEGRAM_SESSION_PARTITION_PERSIST`
+- `XIUXIAN_DAOCHANG_DISCORD_SESSION_PARTITION_PERSIST`
 
 Default behavior remains non-persistent unless explicitly enabled.
 
@@ -85,13 +85,13 @@ Default behavior remains non-persistent unless explicitly enabled.
 
 Validated with `cargo nextest`:
 
-- `scripts/rust/cargo_exec.sh nextest run -p omni-agent --test config_settings`
-- `scripts/rust/cargo_exec.sh nextest run -p omni-agent --test channels_managed_commands`
-- `scripts/rust/cargo_exec.sh nextest run -p omni-agent --test test_support_parsers`
-- `scripts/rust/cargo_exec.sh nextest run -p omni-agent --lib runtime_handle_inbound_session_scope_alias_updates_mode`
-- `scripts/rust/cargo_exec.sh nextest run -p omni-agent --lib process_discord_message_handles_scope_alias_and_updates_mode`
-- `scripts/rust/cargo_exec.sh nextest run -p omni-agent --lib runtime_handle_inbound_session_partition_status_and_toggle`
-- `scripts/rust/cargo_exec.sh clippy -p omni-agent -- -W clippy::too_many_lines`
+- `scripts/rust/cargo_exec.sh nextest run -p xiuxian-daochang --test config_settings`
+- `scripts/rust/cargo_exec.sh nextest run -p xiuxian-daochang --test channels_managed_commands`
+- `scripts/rust/cargo_exec.sh nextest run -p xiuxian-daochang --test test_support_parsers`
+- `scripts/rust/cargo_exec.sh nextest run -p xiuxian-daochang --lib runtime_handle_inbound_session_scope_alias_updates_mode`
+- `scripts/rust/cargo_exec.sh nextest run -p xiuxian-daochang --lib process_discord_message_handles_scope_alias_and_updates_mode`
+- `scripts/rust/cargo_exec.sh nextest run -p xiuxian-daochang --lib runtime_handle_inbound_session_partition_status_and_toggle`
+- `scripts/rust/cargo_exec.sh clippy -p xiuxian-daochang -- -W clippy::too_many_lines`
 
 ### 4.3 Live Webhook Validation
 

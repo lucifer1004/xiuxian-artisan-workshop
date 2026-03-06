@@ -3,16 +3,14 @@
 //! This binary provides the entrypoint for compiling manifests and executing
 //! long-running agentic workflows within the Xiuxian ecosystem.
 
-use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io;
 use std::sync::Arc;
-use xiuxian_llm::llm::OpenAIClient;
-use xiuxian_qianhuan::{
-    orchestrator::ThousandFacesOrchestrator,
-    persona::{PersonaProfile, PersonaRegistry},
-};
+use xiuxian_llm::llm::{OpenAICompatibleClient, OpenAIWireApi};
+use xiuxian_logging::{init, split_logging_args};
+use xiuxian_qianhuan::{orchestrator::ThousandFacesOrchestrator, persona::PersonaRegistry};
+use xiuxian_qianji::layout::{QgsTheme, QianjiLayoutEngine, generate_bpmn_xml};
 use xiuxian_qianji::manifest_requires_llm;
 use xiuxian_qianji::runtime_config::resolve_qianji_runtime_llm_config;
 use xiuxian_qianji::{QianjiCompiler, QianjiLlmClient, QianjiScheduler};
@@ -24,9 +22,21 @@ use xiuxian_wendao::LinkGraphIndex;
 /// Returns an error if environment resolution, compilation, or execution fails.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = env::args().collect();
+    let raw_args: Vec<String> = env::args().collect();
+    let (log_settings, args) = split_logging_args(&raw_args);
+    init("xiuxian_qianji", &log_settings)?;
+
+    // Support "graph" subcommand: qianji graph <manifest_path> <output_path>
+    if args.len() >= 4 && args[1] == "graph" {
+        return handle_graph_export(&args[2], &args[3]);
+    }
+
     if args.len() < 4 {
-        eprintln!("Usage: qianji <repo_path> <manifest_path> <context_json> [session_id]");
+        eprintln!("Usage:");
+        eprintln!(
+            "  Execution: qianji [-v|--log-verbose] <repo_path> <manifest_path> <context_json> [session_id]"
+        );
+        eprintln!("  Graph:     qianji [-v|--log-verbose] graph <manifest_path> <output_path>");
         std::process::exit(1);
     }
 
@@ -73,14 +83,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Initializing Qianji Engine on: {repo_path}");
     if let Some(runtime) = llm_runtime.as_ref() {
         println!(
-            "Resolved Qianji LLM runtime config: model='{}', base_url='{}', api_key_env='{}'",
-            runtime.model, runtime.base_url, runtime.api_key_env
+            "Resolved Qianji LLM runtime config: model='{}', base_url='{}', api_key_env='{}', wire_api='{}'",
+            runtime.model, runtime.base_url, runtime.api_key_env, runtime.wire_api
         );
     } else {
         println!("Manifest has no llm nodes; skipping Qianji LLM runtime initialization.");
     }
 
-    // Some basic dummy index for workflows that don't need a real graph
     let index = Arc::new(
         match LinkGraphIndex::build(std::path::Path::new(repo_path)) {
             Ok(index) => index,
@@ -101,22 +110,11 @@ fallback temp index also failed ({fallback_error})"
     ));
 
     let registry = PersonaRegistry::with_builtins();
-    registry.register(PersonaProfile {
-        id: "artisan-engineer".to_string(),
-        name: "Artisan".to_string(),
-        background: None,
-        voice_tone: "Precise".to_string(),
-        guidelines: Vec::new(),
-        style_anchors: vec![],
-        cot_template: "1. Audit requirements -> 2. Verify constraints -> 3. Execute precision change -> 4. Trace feedback.".to_string(),
-        forbidden_words: vec!["maybe".to_string(), "ignore".to_string()],
-        metadata: HashMap::new(),
-    });
-
     let llm_client: Option<Arc<QianjiLlmClient>> = llm_runtime.as_ref().map(|runtime| {
-        Arc::new(OpenAIClient {
+        Arc::new(OpenAICompatibleClient {
             api_key: runtime.api_key.clone(),
             base_url: runtime.base_url.clone(),
+            wire_api: OpenAIWireApi::parse(Some(runtime.wire_api.as_str())),
             http: reqwest::Client::new(),
         }) as Arc<QianjiLlmClient>
     });
@@ -135,6 +133,60 @@ fallback temp index also failed ({fallback_error})"
     println!("{}", serde_json::to_string_pretty(&result)?);
 
     Ok(())
+}
+
+fn handle_graph_export(
+    manifest_path: &str,
+    output_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Generating Qianji Graph from: {manifest_path}");
+
+    let manifest_toml = fs::read_to_string(manifest_path)?;
+
+    // Using simple defaults for the compiler as we only need the topology
+    let index = Arc::new(LinkGraphIndex::build(std::env::temp_dir().as_path())?);
+    let orchestrator = Arc::new(ThousandFacesOrchestrator::new("Visualizer".into(), None));
+    let registry = Arc::new(PersonaRegistry::with_builtins());
+
+    // Provide a dummy client to satisfy compilation check for LLM nodes
+    let llm_client: Option<Arc<QianjiLlmClient>> = Some(Arc::new(NoopLlmClient));
+
+    let compiler = QianjiCompiler::new(index, orchestrator, registry, llm_client);
+    let engine = compiler.compile(&manifest_toml)?;
+
+    let layout_engine = QianjiLayoutEngine::new(QgsTheme::default());
+    let layout_result = layout_engine.compute_from_engine(&engine);
+    let bpmn_xml = generate_bpmn_xml(&layout_result);
+
+    // Export rich knowledge graph for 3D view
+    let obsidian_graph = QianjiLayoutEngine::compute_obsidian_graph(&engine);
+
+    let obsidian_path = format!(
+        "{}_obsidian.json",
+        output_path.strip_suffix(".bpmn").unwrap_or(output_path)
+    );
+    fs::write(
+        &obsidian_path,
+        serde_json::to_string_pretty(&obsidian_graph)?,
+    )?;
+
+    fs::write(output_path, bpmn_xml)?;
+    println!("Successfully exported BPMN XML to: {output_path}");
+    println!("Successfully exported Obsidian Graph to: {obsidian_path}");
+
+    Ok(())
+}
+
+struct NoopLlmClient;
+
+#[async_trait::async_trait]
+impl xiuxian_llm::llm::LlmClient for NoopLlmClient {
+    async fn chat(
+        &self,
+        _request: xiuxian_llm::llm::ChatRequest,
+    ) -> xiuxian_llm::llm::LlmResult<String> {
+        Ok("noop".into())
+    }
 }
 
 fn inject_llm_model_fallback_if_missing(context: &mut serde_json::Value, default_model: &str) {

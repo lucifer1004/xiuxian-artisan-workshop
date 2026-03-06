@@ -17,7 +17,7 @@ default = [
 strict_mode = true                  # Non-compliant skills will be rejected during indexing.
 enforce_references_folder = true    # Non-code assets MUST reside within the references/ directory.
 prohibit_logic_in_skill_md = true   # Code blocks (Jinja2/Bash) are strictly forbidden in SKILL.md.
-require_yaml_frontmatter = true     # SKILL.md must contain valid omni-scanner metadata.
+require_yaml_frontmatter = true     # SKILL.md must contain valid xiuxian-scanner metadata.
 
 [validation.semantic]
 allow_cross_skill_links = true      # Permit cross-referencing via wendao:// URIs.

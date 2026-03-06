@@ -46,8 +46,8 @@ def load_test_cases(data_path: str) -> list[SkillTestCase]:
 
 
 def data_driven(data_path: str):
-    return pytest.mark.omni_data_driven(data_path=data_path)
+    return pytest.mark.xiuxian_data_driven(data_path=data_path)
 
 
-def omni_skill(name: str):
-    return pytest.mark.omni_skill(name=name)
+def xiuxian_skill(name: str):
+    return pytest.mark.xiuxian_skill(name=name)

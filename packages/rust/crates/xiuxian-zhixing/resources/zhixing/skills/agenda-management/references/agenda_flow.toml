@@ -26,7 +26,7 @@ task_type = "formal_audit"
 weight = 1.0
 [nodes.params]
 threshold_score = 0.4
-max_retries = 2
+max_retries = 10
 output_key = "professor_conclusion"
 score_key = "governance_score"
 [nodes.qianhuan]

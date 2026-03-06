@@ -60,21 +60,21 @@ def cache_dir() -> Path:
 def mock_rust_bridge():
     """Mock the Rust bridge for tests that don't have Rust compiled."""
     try:
-        import omni_core_rs
+        import xiuxian_core_rs
 
         yield
     except ImportError:
         # Create a mock module
-        mock_module = types.ModuleType("omni_core_rs")
+        mock_module = types.ModuleType("xiuxian_core_rs")
         # Add common functions used in tests
         mock_module.get_file_hash = lambda x: "mock_hash"
         mock_module.scan_directory = lambda x: []
 
-        sys.modules["omni_core_rs"] = mock_module
+        sys.modules["xiuxian_core_rs"] = mock_module
         try:
             yield
         finally:
-            del sys.modules["omni_core_rs"]
+            del sys.modules["xiuxian_core_rs"]
 
 
 @pytest.fixture

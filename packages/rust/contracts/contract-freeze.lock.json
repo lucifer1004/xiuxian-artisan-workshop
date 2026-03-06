@@ -3,23 +3,23 @@
   "algorithm": "sha256",
   "entries": [
     {
-      "path": "packages/rust/crates/omni-agent/resources/omni.agent.route_trace.v1.schema.json",
+      "path": "packages/rust/crates/xiuxian-daochang/resources/omni.agent.route_trace.v1.schema.json",
       "sha256": "bde1d093d5bc92fd7eaa468427c6163868089dbcaa030c39fe2f3a0e4ae1c262"
     },
     {
-      "path": "packages/rust/crates/omni-agent/resources/omni.discover.match.v1.schema.json",
+      "path": "packages/rust/crates/xiuxian-daochang/resources/omni.discover.match.v1.schema.json",
       "sha256": "996bf075d412e68907a2f7534bb2c5add0796f40b7704fe6eb86914dea980a60"
     },
     {
-      "path": "packages/rust/crates/omni-agent/src/contracts/memory_gate.rs",
+      "path": "packages/rust/crates/xiuxian-daochang/src/contracts/memory_gate.rs",
       "sha256": "c977601226ad6b8ac8c4692a48cd3513debe50c37e1770a3bb804d3b448f4fc7"
     },
     {
-      "path": "packages/rust/crates/omni-agent/src/contracts/omega.rs",
+      "path": "packages/rust/crates/xiuxian-daochang/src/contracts/omega.rs",
       "sha256": "4bae537923badc069192833cc9b54c26297f7171ee5f5b64622d7bd7408d1fa8"
     },
     {
-      "path": "packages/rust/crates/omni-memory/resources/omni.memory.gate_event.v1.schema.json",
+      "path": "packages/rust/crates/xiuxian-memory-engine/resources/omni.memory.gate_event.v1.schema.json",
       "sha256": "4108955999f9e27da26a65d3918328753a34e9a2291298dba911f2cc9bb61d81"
     },
     {

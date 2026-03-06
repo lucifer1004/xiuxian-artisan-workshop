@@ -12,11 +12,11 @@ metadata:
 
 ## Quick Reference
 
-| Task                    | Tool/Command                                 |
-| ----------------------- | -------------------------------------------- |
-| Create knowledge entry  | `@omni-orchestrator create_knowledge_entry`  |
-| Rebuild knowledge index | `@omni-orchestrator rebuild_knowledge_index` |
-| Search knowledge base   | `@omni-orchestrator search_knowledge_base`   |
+| Task                    | Tool/Command                                    |
+| ----------------------- | ----------------------------------------------- |
+| Create knowledge entry  | `@xiuxian-orchestrator create_knowledge_entry`  |
+| Rebuild knowledge index | `@xiuxian-orchestrator rebuild_knowledge_index` |
+| Search knowledge base   | `@xiuxian-orchestrator search_knowledge_base`   |
 
 ---
 
@@ -56,7 +56,7 @@ metadata:
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  Step 3: Rebuild knowledge index (if creating new entry)       │
-│  @omni-orchestrator rebuild_knowledge_index()                  │
+│  @xiuxian-orchestrator rebuild_knowledge_index()               │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -72,7 +72,7 @@ metadata:
 ### Create a Knowledge Entry
 
 ```python
-@omni-orchestrator create_knowledge_entry(
+@xiuxian-orchestrator create_knowledge_entry(
     title="Fixing Deadlocks",
     category="debugging",
     content="## Problem\n... \n## Solution\n..."
@@ -90,13 +90,13 @@ Created knowledge entry: 20260103-debugging-fixing-deadlocks.md
 Call this after adding or deleting knowledge entries:
 
 ```python
-@omni-orchestrator rebuild_knowledge_index()
+@xiuxian-orchestrator rebuild_knowledge_index()
 ```
 
 ### Search Knowledge Base
 
 ```python
-@omni-orchestrator search_knowledge_base(query="deadlock")
+@xiuxian-orchestrator search_knowledge_base(query="deadlock")
 ```
 
 ---

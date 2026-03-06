@@ -167,15 +167,15 @@ mod test_project_config_paths {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(|_| panic!("failed to lock environment mutex for config path test"));
-        let _root = set_env_for_test("PRJ_ROOT", "/tmp/omni-macro-prj");
-        let _config_home = set_env_for_test("PRJ_CONFIG_HOME", "/tmp/omni-macro-conf");
+        let _root = set_env_for_test("PRJ_ROOT", "/tmp/xiuxian-macro-prj");
+        let _config_home = set_env_for_test("PRJ_CONFIG_HOME", "/tmp/xiuxian-macro-conf");
         let _explicit = set_env_for_test("QIANJI_CONFIG_PATH", "/tmp/custom/qianji.toml");
 
         let paths = project_config_paths!("qianji.toml", "QIANJI_CONFIG_PATH");
         assert_eq!(paths.len(), 2);
         assert_eq!(
             paths[0],
-            PathBuf::from("/tmp/omni-macro-conf/xiuxian-artisan-workshop/qianji.toml")
+            PathBuf::from("/tmp/xiuxian-macro-conf/xiuxian-artisan-workshop/qianji.toml")
         );
         assert_eq!(paths[1], PathBuf::from("/tmp/custom/qianji.toml"));
     }

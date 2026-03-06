@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_memory_suite.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_memory_suite.py."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 
 def _load_memory_suite_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_memory_suite.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_memory_suite", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_memory_suite.py"
+    spec = importlib.util.spec_from_file_location("xiuxian_daochang_memory_suite", script_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -52,7 +52,7 @@ def test_parse_args_accepts_skip_blackbox_flag(monkeypatch) -> None:
         sys,
         "argv",
         [
-            "test_omni_agent_memory_suite.py",
+            "test_xiuxian_daochang_memory_suite.py",
             "--suite",
             "full",
             "--skip-blackbox",

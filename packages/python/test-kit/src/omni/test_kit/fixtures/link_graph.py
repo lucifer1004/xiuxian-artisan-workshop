@@ -371,7 +371,7 @@ class LinkGraphTestHelper:
         if original is None:
             original = f"[[{name}#{entity_type}]]" if entity_type else f"[[{name}]]"
         try:
-            from omni_core_rs import PyLinkGraphEntityRef
+            from xiuxian_core_rs import PyLinkGraphEntityRef
 
             return PyLinkGraphEntityRef(name, entity_type, original)
         except Exception:

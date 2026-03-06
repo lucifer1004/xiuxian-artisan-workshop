@@ -28,7 +28,7 @@ def _unique_db_path() -> str:
     import tempfile
 
     # Create unique temp directory
-    temp_dir = tempfile.mkdtemp(prefix=f"omni_test_{uuid.uuid4().hex[:8]}_")
+    temp_dir = tempfile.mkdtemp(prefix=f"xiuxian_test_{uuid.uuid4().hex[:8]}_")
     return temp_dir
 
 
@@ -57,7 +57,7 @@ def _create_mock_embedder(dimension: int = 1024) -> MagicMock:
 @pytest_asyncio.fixture
 async def vector_store():
     """Create a unique vector store for each test."""
-    from omni_core_rs import PyVectorStore
+    from xiuxian_core_rs import PyVectorStore
 
     db_path = _unique_db_path()
     # Use fallback dimension since we're using mock embedder

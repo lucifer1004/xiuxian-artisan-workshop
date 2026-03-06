@@ -289,7 +289,7 @@ def skill_generate(
                 "description": _description,
                 "routing_keywords": routing_keywords,
                 "permissions": selected_permissions,
-                "author": "omni-rag-gen",
+                "author": "xiuxian-rag-gen",
                 "commands": [{"name": "list_tools"}, {"name": "example"}],
             }
 

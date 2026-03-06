@@ -192,7 +192,7 @@ def register_reindex_command(parent_app: typer.Typer) -> None:
     """Register the reindex command with the parent app."""
     from omni.agent.cli.load_requirements import register_requirements
 
-    register_requirements("reindex", ollama=False, embedding_index=False)
+    register_requirements("reindex", embedding_index=False)
     parent_app.add_typer(reindex_app, name="reindex")
 
 

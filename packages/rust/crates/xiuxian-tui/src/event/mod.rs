@@ -237,7 +237,7 @@ impl EventSubscriber {
         Self { rx }
     }
 
-    /// Receive the next omni-event (blocking)
+    /// Receive the next event (blocking)
     ///
     /// # Errors
     /// Returns `RecvError` when the channel is closed or lagged.

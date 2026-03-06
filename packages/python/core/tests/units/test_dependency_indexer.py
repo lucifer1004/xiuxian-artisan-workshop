@@ -30,12 +30,11 @@ mock_crate = "1.0"
 """)
 
         # Create config
-        config_path = os.path.join(temp_dir, "references.yaml")
+        config_path = os.path.join(temp_dir, "xiuxian.toml")
         with open(config_path, "w") as f:
-            f.write("""ast_symbols_external:
-  - type: rust
-    manifests:
-      - "**/Cargo.toml"
+            f.write("""[[ast_symbols_external]]
+type = "rust"
+manifests = ["**/Cargo.toml"]
 """)
 
         # Create mock crate source
@@ -61,30 +60,29 @@ pub fn create_error(msg: &str) -> Error {
 }
 """)
 
-        from omni_core_rs import PyDependencyConfig
+        from xiuxian_core_rs import PyDependencyConfig
 
         # Test that config is loaded correctly
         config = PyDependencyConfig.load(config_path)
         assert len(config.manifests) > 0, "Should load manifest config"
 
     def test_scenario_config_loading(self):
-        """Scenario: Test that references.yaml is parsed correctly."""
+        """Scenario: Test that xiuxian TOML config is parsed correctly."""
         temp_dir = tempfile.mkdtemp()
 
-        config_path = os.path.join(temp_dir, "references.yaml")
+        config_path = os.path.join(temp_dir, "xiuxian.toml")
         with open(config_path, "w") as f:
-            f.write("""ast_symbols_external:
-  - type: rust
-    manifests:
-      - "**/Cargo.toml"
-      - "**/Cargo.lock"
-  - type: python
-    registry: pip
-    manifests:
-      - "**/pyproject.toml"
+            f.write("""[[ast_symbols_external]]
+type = "rust"
+manifests = ["**/Cargo.toml", "**/Cargo.lock"]
+
+[[ast_symbols_external]]
+type = "python"
+registry = "pip"
+manifests = ["**/pyproject.toml"]
 """)
 
-        from omni_core_rs import PyDependencyConfig
+        from xiuxian_core_rs import PyDependencyConfig
 
         config = PyDependencyConfig.load(config_path)
         manifests = config.manifests
@@ -100,7 +98,7 @@ pub fn create_error(msg: &str) -> Error {
 
     def test_scenario_indexer_creation(self):
         """Scenario: Test indexer creation with different configurations."""
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         temp_dir = tempfile.mkdtemp()
 
@@ -124,7 +122,7 @@ name = "test"
 version = "0.1.0"
 """)
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         indexer = PyDependencyIndexer(temp_dir, None)
 
@@ -156,7 +154,7 @@ name = "test"
 version = "0.1.0"
 """)
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         indexer = PyDependencyIndexer(temp_dir, None)
         indexed = indexer.get_indexed()
@@ -175,7 +173,7 @@ name = "test"
 version = "0.1.0"
 """)
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         indexer = PyDependencyIndexer(temp_dir, None)
         loaded = indexer.load_index()
@@ -194,7 +192,7 @@ name = "test"
 version = "0.1.0"
 """)
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         indexer = PyDependencyIndexer(temp_dir, None)
         result = indexer.build(True)
@@ -208,7 +206,7 @@ version = "0.1.0"
 
     def test_scenario_symbol_kinds(self):
         """Scenario: Test that symbol kinds are properly defined."""
-        from omni_core_rs import PyExternalSymbol
+        from xiuxian_core_rs import PyExternalSymbol
 
         # Create symbol with different kinds
         kinds = [
@@ -248,7 +246,7 @@ name = "empty"
 version = "0.1.0"
 """)
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         indexer = PyDependencyIndexer(temp_dir, None)
         result = json.loads(indexer.build(True))
@@ -269,7 +267,7 @@ name = "test"
 version = "0.1.0"
 """)
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         indexer = PyDependencyIndexer(temp_dir, None)
 
@@ -285,7 +283,7 @@ version = "0.1.0"
         """Invalid config path should not crash."""
         temp_dir = tempfile.mkdtemp()
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         # Use non-existent config
         indexer = PyDependencyIndexer(temp_dir, "/this/path/does/not/exist.yaml")
@@ -298,7 +296,7 @@ version = "0.1.0"
         """Search patterns with special characters should not crash."""
         temp_dir = tempfile.mkdtemp()
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         indexer = PyDependencyIndexer(temp_dir, None)
 
@@ -313,7 +311,7 @@ version = "0.1.0"
         """Large search limit should not crash."""
         temp_dir = tempfile.mkdtemp()
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         indexer = PyDependencyIndexer(temp_dir, None)
 
@@ -327,7 +325,7 @@ class TestDependencyIndexerAPISurface:
 
     def test_all_classes_exported(self):
         """Verify all PyO3 classes are exported."""
-        from omni_core_rs import (
+        from xiuxian_core_rs import (
             PyDependencyConfig,
             PyDependencyIndexer,
             PyDependencyIndexResult,
@@ -349,7 +347,7 @@ class TestDependencyIndexerAPISurface:
         """Verify all required methods exist on PyDependencyIndexer."""
         temp_dir = tempfile.mkdtemp()
 
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         indexer = PyDependencyIndexer(temp_dir, None)
 
@@ -364,14 +362,14 @@ class TestDependencyIndexerAPISurface:
 
     def test_config_methods_exist(self):
         """Verify required methods exist on PyDependencyConfig."""
-        from omni_core_rs import PyDependencyConfig
+        from xiuxian_core_rs import PyDependencyConfig
 
         # Static method
         assert hasattr(PyDependencyConfig, "load")
 
     def test_symbol_methods_exist(self):
         """Verify required methods exist on PySymbolIndex."""
-        from omni_core_rs import PySymbolIndex
+        from xiuxian_core_rs import PySymbolIndex
 
         index = PySymbolIndex()
 

@@ -32,7 +32,7 @@ def dedup_ints(values: list[int]) -> tuple[int, ...]:
 
 def runtime_log_file() -> Path:
     """Resolve runtime log file path from env."""
-    return Path(os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/omni-agent-webhook.log"))
+    return Path(os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/xiuxian-daochang-webhook.log"))
 
 
 def read_log_tail_lines(

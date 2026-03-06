@@ -24,7 +24,7 @@ class DedupProbeModuleBindings:
 
 
 def load_module_bindings(caller_file: str) -> DedupProbeModuleBindings:
-    """Load all sibling modules required by `test_omni_agent_dedup_events.py`."""
+    """Load all sibling modules required by `test_xiuxian_daochang_dedup_events.py`."""
     load_sibling_module = importlib.import_module("module_loader").load_sibling_module
 
     resolver_module = load_sibling_module(

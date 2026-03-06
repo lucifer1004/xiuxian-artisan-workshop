@@ -6,16 +6,16 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-import test_omni_agent_memory_ci_gate as gate_module
+import test_xiuxian_daochang_memory_ci_gate as gate_module
 from test_memory_ci_gate import build_cfg
-from test_omni_agent_memory_ci_gate import run_trace_reconstruction_gate
+from test_xiuxian_daochang_memory_ci_gate import run_trace_reconstruction_gate
 
 
 def test_run_trace_reconstruction_gate_nightly_requires_injection_mode(
     monkeypatch: Any, tmp_path
 ) -> None:
     cfg = build_cfg(tmp_path)
-    script = cfg.script_dir / "reconstruct_omni_agent_trace.py"
+    script = cfg.script_dir / "reconstruct_xiuxian_daochang_trace.py"
     script.write_text("print('noop')\n", encoding="utf-8")
 
     captured_cmds: list[list[str]] = []
@@ -51,7 +51,7 @@ def test_run_trace_reconstruction_gate_quick_requires_memory_only(
     monkeypatch: Any, tmp_path
 ) -> None:
     cfg = replace(build_cfg(tmp_path), profile="quick")
-    script = cfg.script_dir / "reconstruct_omni_agent_trace.py"
+    script = cfg.script_dir / "reconstruct_xiuxian_daochang_trace.py"
     script.write_text("print('noop')\n", encoding="utf-8")
 
     captured_cmds: list[list[str]] = []

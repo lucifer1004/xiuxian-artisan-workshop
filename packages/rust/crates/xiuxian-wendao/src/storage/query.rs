@@ -67,7 +67,7 @@ impl KnowledgeStorage {
                 }
                 let category_bonus = if query
                     .to_ascii_lowercase()
-                    .contains(Self::category_to_str(&entry.category))
+                    .contains(Self::category_to_str(entry.category))
                 {
                     0.1
                 } else {

@@ -17,7 +17,7 @@ metadata:
 
 |                 | Core 1: LinkGraph (Wendao)                                  | Core 2: LanceDB + Arrow                       |
 | --------------- | ----------------------------------------------------------- | --------------------------------------------- |
-| **Engine**      | Common LinkGraph backend (`omni.rag.link_graph`)            | omni-vector (Rust crate)                      |
+| **Engine**      | Common LinkGraph backend (`omni.rag.link_graph`)            | xiuxian-vector (Rust crate)                   |
 | **Strength**    | Explicit link graph, structural traversal, metadata filters | Vector similarity, BM25, schema-aware queries |
 | **Data**        | Project markdown notes and link graph                       | Skill tools, knowledge chunks, embeddings     |
 | **Query**       | `knowledge.search(..., mode="link_graph")`                  | Hybrid vector + keyword search                |
@@ -228,7 +228,7 @@ eliminating redundant Rust calls and ensuring all bridges agree on query classif
 | Lightweight query intent extractor (action/target/context) | `graph/intent.rs`                                        | Done   |
 | PyO3 bindings for all above                                | `graph_py.rs`, `enhancer_py.rs`, `link_graph_refs_py.rs` | Done   |
 
-### omni-vector (Rust Crate) — Structured Search
+### xiuxian-vector (Rust Crate) — Structured Search
 
 | Capability                                                  | Module              | Status |
 | ----------------------------------------------------------- | ------------------- | ------ |

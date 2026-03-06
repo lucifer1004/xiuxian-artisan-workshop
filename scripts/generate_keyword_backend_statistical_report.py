@@ -193,7 +193,7 @@ def main() -> int:
         "--snapshot",
         type=Path,
         default=Path(
-            "packages/rust/crates/omni-vector/tests/snapshots/"
+            "packages/rust/crates/xiuxian-vector/tests/snapshots/"
             "test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap"
         ),
     )

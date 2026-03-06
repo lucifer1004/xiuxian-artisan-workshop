@@ -46,7 +46,7 @@ def test_reactor_imports() -> bool:
 
         # Check if Rust Event Bus is available
         try:
-            from omni_core_rs import PyGlobalEventBus
+            from xiuxian_core_rs import PyGlobalEventBus
 
             print("[PASS] Rust Event Bus (PyGlobalEventBus) available")
             return True
@@ -194,7 +194,7 @@ def test_checkpoint_event_publishing() -> bool:
 
     try:
         try:
-            from omni_core_rs import PyGlobalEventBus
+            from xiuxian_core_rs import PyGlobalEventBus
 
             # Test publishing
             import json

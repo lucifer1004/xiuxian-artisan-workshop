@@ -17,7 +17,7 @@ from omni.test_kit.asserts import (
     assert_response_ok,
     assert_true,
 )
-from omni.test_kit.decorators import omni_skill
+from omni.test_kit.decorators import xiuxian_skill
 from omni.test_kit.fixtures import SkillTestBuilder
 
 # Import markers and assertions from test-kit
@@ -111,7 +111,7 @@ def test_skill_builder() -> None:
 # =============================================================================
 
 
-@omni_skill("git")
+@xiuxian_skill("git")
 def test_git_specific() -> None:
     """Test specific to the git skill."""
     assert_true(True)

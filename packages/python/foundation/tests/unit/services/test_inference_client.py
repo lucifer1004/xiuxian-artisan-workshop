@@ -1,4 +1,4 @@
-"""Tests for InferenceClient with LiteLLM backend.
+"""Tests for InferenceClient with OpenAI-compatible HTTP backend.
 
 Tests verify LLM API message format compliance:
 - system_prompt is passed as separate parameter
@@ -13,11 +13,11 @@ import pytest
 from omni.foundation.services.llm.client import InferenceClient
 
 
-class TestInferenceClientLiteLLM:
-    """Tests for InferenceClient using LiteLLM backend."""
+class TestInferenceClientHTTPBackend:
+    """Tests for InferenceClient using compatibility backend."""
 
-    def test_litellm_module_loaded(self):
-        """Test that litellm module is loaded on initialization."""
+    def test_backend_module_loaded(self):
+        """Test that compatibility backend is loaded on initialization."""
         with (
             patch("omni.foundation.services.llm.client.get_setting") as mock_get,
             patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
@@ -31,8 +31,8 @@ class TestInferenceClientLiteLLM:
             mock_key.return_value = "test-api-key"
 
             client = InferenceClient()
-            assert hasattr(client, "_litellm")
-            assert client._litellm.__name__ == "litellm"
+            assert hasattr(client, "_backend")
+            assert client._backend.__name__ == "openai_http_backend"
 
     def test_minimax_uses_auth_token(self):
         """Test that MiniMax API configuration is loaded."""
@@ -54,10 +54,10 @@ class TestInferenceClientLiteLLM:
 
 
 class TestInferenceClientMessageFormat:
-    """Tests for LLM API message format via LiteLLM."""
+    """Tests for LLM API message format via HTTP backend."""
 
-    def _create_litellm_response(self, text: str, tool_calls=None) -> MagicMock:
-        """Create a mock LiteLLM response (OpenAI/Anthropic format)."""
+    def _create_backend_response(self, text: str, tool_calls=None) -> MagicMock:
+        """Create a mock backend response (OpenAI/Anthropic format)."""
         mock_choice = MagicMock()
         mock_message = MagicMock()
         mock_message.content = text
@@ -76,8 +76,8 @@ class TestInferenceClientMessageFormat:
         return mock_response
 
     @pytest.mark.asyncio
-    async def test_complete_sends_messages_via_litellm(self):
-        """Test that complete() sends messages via litellm.acompletion."""
+    async def test_complete_sends_messages_via_backend(self):
+        """Test that complete() sends messages via backend.acompletion."""
         with (
             patch("omni.foundation.services.llm.client.get_setting") as mock_get,
             patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
@@ -92,20 +92,20 @@ class TestInferenceClientMessageFormat:
             mock_key.return_value = "test-api-key"
 
             client = InferenceClient()
-            # Mock the _litellm attribute directly after construction
-            mock_response = self._create_litellm_response("Hello!")
-            mock_litellm_instance = AsyncMock()
-            mock_litellm_instance.acompletion = AsyncMock(return_value=mock_response)
-            client._litellm = mock_litellm_instance
+            # Mock the _backend attribute directly after construction
+            mock_response = self._create_backend_response("Hello!")
+            mock_backend_instance = AsyncMock()
+            mock_backend_instance.acompletion = AsyncMock(return_value=mock_response)
+            client._backend = mock_backend_instance
 
             result = await client.complete(
                 system_prompt="You are a helpful assistant.",
                 user_query="Say hello",
             )
 
-            # Verify litellm was called
-            mock_litellm_instance.acompletion.assert_called_once()
-            call_kwargs = mock_litellm_instance.acompletion.call_args[1]
+            # Verify backend was called
+            mock_backend_instance.acompletion.assert_called_once()
+            call_kwargs = mock_backend_instance.acompletion.call_args[1]
 
             # Verify message format
             assert "messages" in call_kwargs
@@ -117,11 +117,11 @@ class TestInferenceClientMessageFormat:
             assert result["content"] == "Hello!"
 
 
-class TestToolCallParsingLiteLLM:
-    """Tests for tool call extraction from text content via LiteLLM."""
+class TestToolCallParsingHTTPBackend:
+    """Tests for tool call extraction from text content via HTTP backend."""
 
-    def _create_litellm_response(self, text: str) -> MagicMock:
-        """Create a mock LiteLLM response with text content."""
+    def _create_backend_response(self, text: str) -> MagicMock:
+        """Create a mock backend response with text content."""
         mock_choice = MagicMock()
         mock_message = MagicMock()
         mock_message.content = text
@@ -154,13 +154,13 @@ class TestToolCallParsingLiteLLM:
             mock_key.return_value = "test-api-key"
 
             client = InferenceClient()
-            # Mock litellm directly on client
-            mock_response = self._create_litellm_response(
+            # Mock backend directly on client
+            mock_response = self._create_backend_response(
                 "I need to list files.\n[TOOL_CALL: filesystem.list_directory]\nLet me do that."
             )
-            mock_litellm = AsyncMock()
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-            client._litellm = mock_litellm
+            mock_backend = AsyncMock()
+            mock_backend.acompletion = AsyncMock(return_value=mock_response)
+            client._backend = mock_backend
 
             result = await client.complete(
                 system_prompt="You are a helpful assistant.",
@@ -197,10 +197,10 @@ class TestToolCallParsingLiteLLM:
             )
 
             client = InferenceClient()
-            mock_response = self._create_litellm_response(content)
-            mock_litellm = AsyncMock()
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-            client._litellm = mock_litellm
+            mock_response = self._create_backend_response(content)
+            mock_backend = AsyncMock()
+            mock_backend.acompletion = AsyncMock(return_value=mock_response)
+            client._backend = mock_backend
 
             result = await client.complete(
                 system_prompt="You are a helpful assistant.",
@@ -228,10 +228,10 @@ class TestToolCallParsingLiteLLM:
             mock_key.return_value = "test-api-key"
 
             client = InferenceClient()
-            mock_response = self._create_litellm_response("Hello! How can I help you today?")
-            mock_litellm = AsyncMock()
-            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
-            client._litellm = mock_litellm
+            mock_response = self._create_backend_response("Hello! How can I help you today?")
+            mock_backend = AsyncMock()
+            mock_backend.acompletion = AsyncMock(return_value=mock_response)
+            client._backend = mock_backend
 
             result = await client.complete(
                 system_prompt="You are a helpful assistant.",
@@ -243,8 +243,8 @@ class TestToolCallParsingLiteLLM:
             assert len(result["tool_calls"]) == 0
 
 
-class TestErrorHandlingLiteLLM:
-    """Tests for error handling with LiteLLM backend."""
+class TestErrorHandlingHTTPBackend:
+    """Tests for error handling with HTTP backend."""
 
     @pytest.mark.asyncio
     async def test_exception_returns_error(self):
@@ -263,9 +263,9 @@ class TestErrorHandlingLiteLLM:
 
             client = InferenceClient()
             # Simulate API error
-            mock_litellm = AsyncMock()
-            mock_litellm.acompletion = AsyncMock(side_effect=Exception("API rate limit exceeded"))
-            client._litellm = mock_litellm
+            mock_backend = AsyncMock()
+            mock_backend.acompletion = AsyncMock(side_effect=Exception("API rate limit exceeded"))
+            client._backend = mock_backend
 
             result = await client.complete(
                 system_prompt="You are a helpful assistant.",
@@ -293,9 +293,9 @@ class TestErrorHandlingLiteLLM:
 
             client = InferenceClient()
             # Simulate timeout
-            mock_litellm = AsyncMock()
-            mock_litellm.acompletion = AsyncMock(side_effect=TimeoutError())
-            client._litellm = mock_litellm
+            mock_backend = AsyncMock()
+            mock_backend.acompletion = AsyncMock(side_effect=TimeoutError())
+            client._backend = mock_backend
 
             result = await client.complete(
                 system_prompt="You are a helpful assistant.",
@@ -306,8 +306,8 @@ class TestErrorHandlingLiteLLM:
             assert "timed out" in result["error"].lower()
 
 
-class TestRetryLogicLiteLLM:
-    """Tests for retry logic via LiteLLM."""
+class TestRetryLogicHTTPBackend:
+    """Tests for retry logic via HTTP backend."""
 
     @pytest.mark.asyncio
     async def test_retry_on_failure(self):
@@ -340,14 +340,14 @@ class TestRetryLogicLiteLLM:
             mock_success_response.usage = mock_usage
 
             client = InferenceClient()
-            mock_litellm = AsyncMock()
-            mock_litellm.acompletion = AsyncMock(
+            mock_backend = AsyncMock()
+            mock_backend.acompletion = AsyncMock(
                 side_effect=[
                     Exception("Temporary error"),
                     mock_success_response,
                 ]
             )
-            client._litellm = mock_litellm
+            client._backend = mock_backend
 
             # Manual retry loop (simplified version)
             last_error = None
@@ -365,7 +365,7 @@ class TestRetryLogicLiteLLM:
                 result = {"success": False, "error": str(last_error)}
 
             # Verify retry behavior
-            assert mock_litellm.acompletion.call_count == 2
+            assert mock_backend.acompletion.call_count == 2
 
 
 class TestBuildSystemPrompt:

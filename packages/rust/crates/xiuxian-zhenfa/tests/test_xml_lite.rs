@@ -1,3 +1,5 @@
+//! Unit tests for `extract_tag_value` and `extract_tag_f32`.
+
 use xiuxian_zhenfa::{extract_tag_f32, extract_tag_value};
 
 #[test]

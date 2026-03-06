@@ -36,3 +36,5 @@ class ProbeConfig:
     allow_chat_ids: tuple[int, ...]
     strong_update_id: bool = False
     session_partition: str | None = None
+    native_tools_only: bool = False
+    image_url: str | None = None

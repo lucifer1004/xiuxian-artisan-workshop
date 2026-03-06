@@ -12,7 +12,7 @@ def _read(path: str) -> str:
 def test_core_modules_use_get_running_loop() -> None:
     files = [
         "packages/python/core/src/omni/core/router/indexer.py",
-        "packages/python/core/src/omni/core/skills/runtime/omni_cell.py",
+        "packages/python/core/src/omni/core/skills/runtime/xiuxian_cell.py",
     ]
 
     for file_path in files:

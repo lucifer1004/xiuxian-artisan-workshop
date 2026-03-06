@@ -116,7 +116,7 @@ async def test_ingest_document_uses_typed_runtime_setting_resolvers(
     monkeypatch.setattr("omni.foundation.get_vector_store", lambda: fake_vector)
     monkeypatch.setitem(
         sys.modules,
-        "omni_core_rs",
+        "xiuxian_core_rs",
         SimpleNamespace(py_chunk_text=_fake_chunk_text),
     )
 

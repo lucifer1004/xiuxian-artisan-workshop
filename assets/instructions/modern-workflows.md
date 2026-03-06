@@ -6,7 +6,7 @@ metadata:
 
 # Modern Engineering Workflows (SOP)
 
-This document defines the **Standard Operating Procedures (SOP)** for utilizing the Omni-Agent modern toolchain. You MUST adhere to these workflows to ensure efficiency, safety, and code quality.
+This document defines the **Standard Operating Procedures (SOP)** for utilizing the Xiuxian-Daochang modern toolchain. You MUST adhere to these workflows to ensure efficiency, safety, and code quality.
 
 ## 1. The Architect Loop (New Features & Patterns)
 

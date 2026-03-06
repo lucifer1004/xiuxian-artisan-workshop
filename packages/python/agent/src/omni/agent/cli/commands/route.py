@@ -309,7 +309,7 @@ def test_route(
         t_run0 = time.perf_counter()
         search = HybridSearch()
         t_store = time.perf_counter()
-        # Prefer MCP embedding so we use the already-warm model in the MCP process (fast); fall back to direct Ollama.
+        # Prefer MCP embedding so we use the already-warm backend in the MCP process (fast).
         mcp_port = await detect_mcp_port()
         if mcp_port > 0:
             search._embed_func = make_mcp_embed_func(mcp_port)
@@ -359,7 +359,7 @@ def test_route(
                 ("store_init", t_store - t_run0, "HybridSearch + get_vector_store"),
                 ("store_first_touch", store_touch_s, "Rust DB get_table_info"),
                 ("pre_embed", pre_embed_s, "translate, normalize, intent_text"),
-                ("embed", embed_s, "Ollama/LiteLLM query embedding"),
+                ("embed", embed_s, "embedding service query"),
                 ("intent_fusion", intent_fusion_s, "intent classification, fusion weights"),
                 ("rust", rust_s, "Rust agentic_search (vector+keyword)"),
                 ("post_rust", post_rust_s, "format, rerank, recalibrate"),
@@ -692,7 +692,7 @@ def register_route_command(parent_app: typer.Typer) -> None:
     """Register the route command with the parent app."""
     from omni.agent.cli.load_requirements import register_requirements
 
-    register_requirements("route", ollama=False)
+    register_requirements("route")
     parent_app.add_typer(route_app, name="route")
 
 

@@ -9,9 +9,9 @@ tags:
 name: git
 description: Use when committing code, managing branches, pushing to remote, creating pull requests, or performing version control operations. Conforms to docs/reference/skill-routing-value-standard.md.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "2.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/git"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/git"
   routing_keywords:
     - "git"
     - "commit"

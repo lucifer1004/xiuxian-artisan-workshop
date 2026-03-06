@@ -19,7 +19,7 @@ metadata:
 The Agent core is a stateless orchestrator. All domain-specific knowledge and internal states have been physically offloaded to specialized crates:
 
 - **LLM Infrastructure**: Cooldowns, dimension repair, and provider routing are offloaded to `xiuxian-llm`.
-- **Cognitive Memory**: Ranking, filtering, and Q-reranking reside in `omni-memory`.
+- **Cognitive Memory**: Ranking, filtering, and Q-reranking reside in `xiuxian-memory-engine`.
 - **Manifestation**: Persona registries and prompt injection management are governed by `xiuxian-qianhuan`.
 
 ## 2. The Validated Feeding Artery (ADR-011)

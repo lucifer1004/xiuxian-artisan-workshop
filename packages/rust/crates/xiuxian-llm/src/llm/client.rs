@@ -1,49 +1,42 @@
 //! LLM runtime primitives and clients.
 
+#[cfg(feature = "provider-litellm")]
+use super::error::sanitize_user_visible;
+use super::error::{LlmError, LlmResult};
 use async_trait::async_trait;
-use reqwest::header::CONTENT_TYPE;
-use serde::{Deserialize, Serialize};
-use tracing::error;
+#[cfg(feature = "provider-litellm")]
+use futures::StreamExt;
+#[cfg(feature = "provider-litellm")]
+use litellm_rs::core::traits::provider::llm_provider::trait_definition::LLMProvider;
+#[cfg(feature = "provider-litellm")]
+use litellm_rs::core::types::chat::ChatRequest as LiteChatRequest;
+#[cfg(feature = "provider-litellm")]
+use litellm_rs::core::types::content::ContentPart as LiteContentPart;
+#[cfg(feature = "provider-litellm")]
+use litellm_rs::core::types::context::RequestContext as LiteRequestContext;
+#[cfg(feature = "provider-litellm")]
+use litellm_rs::core::types::message::MessageContent as LiteMessageContent;
+#[cfg(feature = "provider-litellm")]
+use litellm_rs::core::types::responses::ChatChunk as LiteChatChunk;
+#[cfg(feature = "provider-litellm")]
+use tracing::info;
 
-/// Represents a single message in a chat conversation.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ChatMessage {
-    /// Message role, e.g. `system`, `user`, `assistant`, or `tool`.
-    pub role: String,
-    /// Message text content.
-    pub content: String,
-}
+#[cfg(feature = "provider-litellm")]
+use crate::llm::providers::{
+    build_openai_like_provider, execute_openai_responses_request,
+    is_openai_like_stream_required_error_message,
+};
 
-/// A request to the LLM for chat completion.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ChatRequest {
-    /// Target model identifier.
-    pub model: String,
-    /// Ordered chat messages sent to the model.
-    pub messages: Vec<ChatMessage>,
-    /// Sampling temperature.
-    pub temperature: f32,
-}
-
-/// A single choice returned by the LLM.
-#[derive(Debug, Deserialize)]
-pub struct ChatChoice {
-    /// Message payload for this completion choice.
-    pub message: ChatMessage,
-}
-
-/// The envelope response from the LLM.
-#[derive(Debug, Deserialize)]
-pub struct ChatResponse {
-    /// Candidate completions returned by the model.
-    pub choices: Vec<ChatChoice>,
-}
+pub use litellm_rs::core::types::chat::{ChatMessage, ChatRequest};
+pub use litellm_rs::core::types::content::{ContentPart, ImageUrl as ImageUrlContent};
+pub use litellm_rs::core::types::message::{MessageContent, MessageRole};
+pub use litellm_rs::core::types::responses::{ChatChoice, ChatResponse};
 
 /// The core trait for interacting with Large Language Models.
 #[async_trait]
 pub trait LlmClient: Send + Sync {
     /// Execute a chat-completion request and return the first text answer.
-    async fn chat(&self, request: ChatRequest) -> anyhow::Result<String>;
+    async fn chat(&self, request: ChatRequest) -> LlmResult<String>;
 }
 
 /// Standard OpenAI-compatible HTTP client.
@@ -56,93 +49,347 @@ pub struct OpenAIClient {
     pub http: reqwest::Client,
 }
 
-#[derive(Debug, Deserialize)]
-struct OpenAiErrorEnvelope {
-    error: OpenAiErrorDetail,
+/// OpenAI-compatible wire API mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenAIWireApi {
+    /// Use `/chat/completions`.
+    ChatCompletions,
+    /// Use `/responses`.
+    Responses,
 }
 
-#[derive(Debug, Deserialize)]
-struct OpenAiErrorDetail {
-    message: Option<String>,
-}
+impl OpenAIWireApi {
+    /// Parse a wire mode token.
+    #[must_use]
+    pub fn parse(raw: Option<&str>) -> Self {
+        let normalized = raw
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_ascii_lowercase);
+        match normalized.as_deref() {
+            Some("responses") => Self::Responses,
+            Some("chat_completions" | "chat-completions" | "chat" | "completions") => {
+                Self::ChatCompletions
+            }
+            _ => Self::ChatCompletions,
+        }
+    }
 
-fn body_preview(body: &str) -> String {
-    const PREVIEW_LIMIT: usize = 320;
-    let compact = body.replace(['\n', '\r'], " ").trim().to_string();
-    if compact.len() <= PREVIEW_LIMIT {
-        compact
-    } else {
-        format!("{}...", &compact[..PREVIEW_LIMIT])
+    /// Stable wire mode token.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ChatCompletions => "chat_completions",
+            Self::Responses => "responses",
+        }
     }
 }
 
-fn extract_openai_error_message(body: &str) -> Option<String> {
-    serde_json::from_str::<OpenAiErrorEnvelope>(body)
-        .ok()
-        .and_then(|payload| payload.error.message)
-        .map(|message| message.trim().to_string())
-        .filter(|message| !message.is_empty())
+/// OpenAI-compatible client supporting both `/chat/completions` and `/responses`.
+pub struct OpenAICompatibleClient {
+    /// API key used for bearer-token authorization.
+    pub api_key: String,
+    /// Base URL for the OpenAI-compatible endpoint.
+    pub base_url: String,
+    /// Selected transport wire mode.
+    pub wire_api: OpenAIWireApi,
+    /// Shared HTTP client.
+    pub http: reqwest::Client,
+}
+
+impl OpenAICompatibleClient {
+    #[cfg(feature = "provider-litellm")]
+    async fn retry_chat_with_stream_transport(
+        &self,
+        lite_request: LiteChatRequest,
+    ) -> LlmResult<String> {
+        let (primary_base, fallback_base) =
+            build_openai_like_base_candidates(self.base_url.as_str());
+        let mut output = self
+            .execute_chat_stream_once(primary_base.as_str(), lite_request.clone())
+            .await;
+        if should_retry_openai_like_v1_fallback(&output)
+            && let Some(fallback_base) = fallback_base.as_deref()
+        {
+            info!(
+                "Primary chat stream endpoint returned 404; retrying with OpenAI /v1 fallback: {}",
+                fallback_base
+            );
+            output = self
+                .execute_chat_stream_once(fallback_base, lite_request)
+                .await;
+        }
+        output
+    }
+
+    #[cfg(feature = "provider-litellm")]
+    async fn execute_chat_completion_once(
+        &self,
+        api_base: &str,
+        request: LiteChatRequest,
+    ) -> LlmResult<String> {
+        const OPENAI_LIKE_CHAT_TIMEOUT_SECS: u64 = 90;
+        let provider = build_openai_like_provider(
+            api_base.to_string(),
+            Some(self.api_key.clone()),
+            OPENAI_LIKE_CHAT_TIMEOUT_SECS,
+        )
+        .await?;
+        let response = LLMProvider::chat_completion(&provider, request, LiteRequestContext::new())
+            .await
+            .map_err(|error| map_litellm_openai_like_error("chat completion", error))?;
+        parse_litellm_chat_response_text(&response)
+    }
+
+    #[cfg(feature = "provider-litellm")]
+    async fn execute_chat_stream_once(
+        &self,
+        api_base: &str,
+        request: LiteChatRequest,
+    ) -> LlmResult<String> {
+        const OPENAI_LIKE_CHAT_TIMEOUT_SECS: u64 = 90;
+        let provider = build_openai_like_provider(
+            api_base.to_string(),
+            Some(self.api_key.clone()),
+            OPENAI_LIKE_CHAT_TIMEOUT_SECS,
+        )
+        .await?;
+        let mut stream =
+            LLMProvider::chat_completion_stream(&provider, request, LiteRequestContext::new())
+                .await
+                .map_err(|error| map_litellm_openai_like_error("stream chat completion", error))?;
+
+        let mut chunks = Vec::new();
+        while let Some(item) = stream.next().await {
+            let chunk =
+                item.map_err(|error| map_litellm_openai_like_error("stream chunk", error))?;
+            chunks.push(chunk);
+        }
+        parse_litellm_chat_stream_text(chunks)
+    }
+
+    #[cfg(feature = "provider-litellm")]
+    async fn chat_completions_with_litellm(&self, request: ChatRequest) -> LlmResult<String> {
+        let lite_request = request;
+        let (primary_base, fallback_base) =
+            build_openai_like_base_candidates(self.base_url.as_str());
+
+        let mut output = self
+            .execute_chat_completion_once(primary_base.as_str(), lite_request.clone())
+            .await;
+        if should_retry_openai_like_stream_transport(&output) {
+            info!(
+                "OpenAI-compatible /chat/completions endpoint requires stream=true; retrying with litellm-rs stream transport"
+            );
+            return self.retry_chat_with_stream_transport(lite_request).await;
+        }
+        if should_retry_openai_like_v1_fallback(&output)
+            && let Some(fallback_base) = fallback_base.as_deref()
+        {
+            info!(
+                "Primary chat completion endpoint returned 404; retrying with OpenAI /v1 fallback: {}",
+                fallback_base
+            );
+            output = self
+                .execute_chat_completion_once(fallback_base, lite_request.clone())
+                .await;
+            if should_retry_openai_like_stream_transport(&output) {
+                info!(
+                    "OpenAI-compatible /chat/completions endpoint requires stream=true after /v1 fallback; retrying with litellm-rs stream transport"
+                );
+                return self.retry_chat_with_stream_transport(lite_request).await;
+            }
+        }
+        output
+    }
+
+    #[cfg(feature = "provider-litellm")]
+    async fn chat_responses_with_litellm(&self, request: ChatRequest) -> LlmResult<String> {
+        let lite_request = request;
+        let (primary_base, fallback_base) =
+            build_openai_like_base_candidates(self.base_url.as_str());
+        let primary_endpoint = format!("{}/responses", primary_base.trim_end_matches('/'));
+
+        let mut output = execute_openai_responses_request(
+            &self.http,
+            primary_endpoint.as_str(),
+            Some(self.api_key.as_str()),
+            &lite_request,
+        )
+        .await
+        .and_then(|parsed| parsed.content.ok_or(LlmError::EmptyTextChoice));
+
+        if should_retry_openai_like_v1_fallback(&output)
+            && let Some(fallback_base) = fallback_base.as_deref()
+        {
+            let fallback_endpoint = format!("{}/responses", fallback_base.trim_end_matches('/'));
+            info!(
+                "Primary responses endpoint returned 404; retrying with OpenAI /v1 fallback: {}",
+                fallback_endpoint
+            );
+            output = execute_openai_responses_request(
+                &self.http,
+                fallback_endpoint.as_str(),
+                Some(self.api_key.as_str()),
+                &lite_request,
+            )
+            .await
+            .and_then(|parsed| parsed.content.ok_or(LlmError::EmptyTextChoice));
+        }
+
+        output
+    }
+}
+
+#[cfg(feature = "provider-litellm")]
+fn map_litellm_openai_like_error(stage: &'static str, error: impl std::fmt::Display) -> LlmError {
+    let rendered = error.to_string();
+    let reason = sanitize_user_visible(&rendered);
+    let lower = rendered.to_ascii_lowercase();
+    if lower.contains("status 404")
+        || lower.contains("resource not found")
+        || lower.contains("not found for openai_like")
+    {
+        return LlmError::RequestFailed {
+            status: reqwest::StatusCode::NOT_FOUND,
+            content_type: "application/json".to_string(),
+            reason,
+        };
+    }
+    LlmError::Internal {
+        message: sanitize_user_visible(&format!(
+            "litellm-rs openai_like {stage} failed: {rendered}"
+        )),
+    }
+}
+
+#[cfg(feature = "provider-litellm")]
+fn parse_litellm_chat_stream_text(chunks: Vec<LiteChatChunk>) -> LlmResult<String> {
+    let mut content = String::new();
+    for chunk in chunks {
+        for choice in chunk.choices {
+            if let Some(delta) = choice.delta.content {
+                content.push_str(delta.as_str());
+            }
+        }
+    }
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        Err(LlmError::EmptyTextChoice)
+    } else {
+        Ok(trimmed.to_string())
+    }
+}
+
+#[cfg(feature = "provider-litellm")]
+fn parse_litellm_chat_response_text(
+    response: &litellm_rs::core::types::responses::ChatResponse,
+) -> LlmResult<String> {
+    response
+        .choices
+        .first()
+        .and_then(|choice| litellm_message_content_to_text(choice.message.content.as_ref()))
+        .ok_or(LlmError::EmptyTextChoice)
+}
+
+#[cfg(feature = "provider-litellm")]
+fn litellm_message_content_to_text(content: Option<&LiteMessageContent>) -> Option<String> {
+    let content = content?;
+    match content {
+        LiteMessageContent::Text(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        LiteMessageContent::Parts(parts) => {
+            let text = parts
+                .iter()
+                .filter_map(|part| match part {
+                    LiteContentPart::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+    }
+}
+
+#[cfg(feature = "provider-litellm")]
+fn should_retry_openai_like_stream_transport(result: &LlmResult<String>) -> bool {
+    let Err(error) = result else {
+        return false;
+    };
+    let hint = match error {
+        LlmError::RequestFailed { reason, .. } => reason.as_str(),
+        LlmError::Internal { message } => message.as_str(),
+        _ => return false,
+    };
+    is_openai_like_stream_required_error_message(hint)
+}
+
+#[cfg(feature = "provider-litellm")]
+fn should_retry_openai_like_v1_fallback(result: &LlmResult<String>) -> bool {
+    matches!(
+        result,
+        Err(LlmError::RequestFailed { status, .. }) if *status == reqwest::StatusCode::NOT_FOUND
+    )
 }
 
 #[async_trait]
 impl LlmClient for OpenAIClient {
-    async fn chat(&self, request: ChatRequest) -> anyhow::Result<String> {
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+    async fn chat(&self, request: ChatRequest) -> LlmResult<String> {
+        let client = OpenAICompatibleClient {
+            api_key: self.api_key.clone(),
+            base_url: self.base_url.clone(),
+            wire_api: OpenAIWireApi::ChatCompletions,
+            http: self.http.clone(),
+        };
+        client.chat(request).await
+    }
+}
 
-        let res = self
-            .http
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| {
-                error!("LLM Connection failed: {}", e);
-                anyhow::anyhow!("LLM Connection failed: {e}")
-            })?;
-
-        let status = res.status();
-        let content_type = res
-            .headers()
-            .get(CONTENT_TYPE)
-            .and_then(|header| header.to_str().ok())
-            .unwrap_or("unknown")
-            .to_string();
-        let body = res.text().await.map_err(|e| {
-            error!("LLM response body read failed: {}", e);
-            anyhow::anyhow!("LLM response body read failed: {e}")
-        })?;
-
-        if !status.is_success() {
-            let provider_message = extract_openai_error_message(&body);
-            let preview = body_preview(&body);
-            let reason = provider_message.unwrap_or_else(|| preview.clone());
-            error!(
-                "LLM request failed: status={}, content_type={}, reason={}",
-                status, content_type, reason
-            );
-            return Err(anyhow::anyhow!(
-                "LLM request failed with status {status} (content-type: {content_type}): {reason}"
-            ));
+#[async_trait]
+impl LlmClient for OpenAICompatibleClient {
+    async fn chat(&self, request: ChatRequest) -> LlmResult<String> {
+        #[cfg(feature = "provider-litellm")]
+        match self.wire_api {
+            OpenAIWireApi::ChatCompletions => {
+                return self.chat_completions_with_litellm(request).await;
+            }
+            OpenAIWireApi::Responses => {
+                return self.chat_responses_with_litellm(request).await;
+            }
         }
 
-        let data_res: Result<ChatResponse, _> = serde_json::from_str(&body);
-        let data = data_res.map_err(|e| {
-            let provider_message = extract_openai_error_message(&body);
-            let preview = body_preview(&body);
-            let reason = provider_message.unwrap_or(preview);
-            error!(
-                "LLM Response Decoding failed: {} (status={}, content_type={}, body_preview={})",
-                e, status, content_type, reason
-            );
-            anyhow::anyhow!(
-                "LLM Response Decoding failed: {e} (status={status}, content-type={content_type}, body_preview={reason})"
-            )
-        })?;
+        #[cfg(not(feature = "provider-litellm"))]
+        let _ = request;
+        #[cfg(not(feature = "provider-litellm"))]
+        Err(LlmError::Internal {
+            message: "OpenAICompatibleClient requires feature `provider-litellm`".to_string(),
+        })
+    }
+}
 
-        data.choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .ok_or_else(|| anyhow::anyhow!("Empty choice in LLM response"))
+#[cfg(feature = "provider-litellm")]
+fn build_openai_like_base_candidates(base_url: &str) -> (String, Option<String>) {
+    let primary = base_url.trim_end_matches('/').to_string();
+    if primary.ends_with("/v1") {
+        return (primary, None);
+    }
+
+    let fallback = format!("{primary}/v1");
+    if fallback == primary {
+        (primary, None)
+    } else {
+        (primary, Some(fallback))
     }
 }

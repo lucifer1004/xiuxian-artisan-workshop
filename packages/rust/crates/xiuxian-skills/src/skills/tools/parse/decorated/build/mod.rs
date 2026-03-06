@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use omni_ast::DecoratedFunction;
+use xiuxian_ast::DecoratedFunction;
 
 use crate::skills::metadata::{ToolEnrichment, ToolRecord};
 use crate::skills::skill_command::annotations::build_annotations;

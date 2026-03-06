@@ -143,9 +143,6 @@ impl ZhixingHeyi {
             ));
         }
 
-        let journal = JournalEntry::new(normalized_title.to_string());
-        self.storage.record_journal(&journal).await?;
-
         let task_name = normalized_title.to_string();
         let normalized_scheduled_at = scheduled_at
             .as_deref()
@@ -153,6 +150,8 @@ impl ZhixingHeyi {
                 normalize_scheduled_time_input(value, self.time_zone).map_err(crate::Error::Config)
             })
             .transpose()?;
+        let journal = JournalEntry::new(task_name.clone());
+        self.storage.record_journal(&journal).await?;
         let task_id = format!("task:{}", journal.id);
 
         let task_entity = build_task_entity(

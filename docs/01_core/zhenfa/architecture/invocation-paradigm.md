@@ -14,15 +14,15 @@ metadata:
 
 # HTTP Client Invocation Paradigm
 
-By introducing the `xiuxian-zhenfa` matrix, we drastically alter how the LLM "Action Compiler" and the `omni-agent` host interact with domain tools.
+By introducing the `xiuxian-zhenfa` matrix, we drastically alter how the LLM "Action Compiler" and the `xiuxian-daochang` host interact with domain tools.
 
 ## The Legacy Native Paradigm
 
-Previously, tools like `wendao.search` or `agenda.view` required the `omni-agent` binary to compile against the full Rust source code of `xiuxian-wendao` and `xiuxian-zhixing`. The host had to manage massive dependency trees, and any change required a full workspace recompile.
+Previously, tools like `wendao.search` or `agenda.view` required the `xiuxian-daochang` binary to compile against the full Rust source code of `xiuxian-wendao` and `xiuxian-zhixing`. The host had to manage massive dependency trees, and any change required a full workspace recompile.
 
 ## The Zhenfa Paradigm
 
-Under the Zhenfa architecture, the `omni-agent` tool registry becomes incredibly thin.
+Under the Zhenfa architecture, the `xiuxian-daochang` tool registry becomes incredibly thin.
 
 1. **Thin Client Wrappers**: The agent's native tools are refactored to be pure HTTP clients (e.g., using `reqwest`).
 2. **Search-Driven Invocation**: When the LLM decides to invoke a tool like `wendao.search(query="...")`, the agent forwards this query via a `POST` request to the **Zhenfa** gateway.

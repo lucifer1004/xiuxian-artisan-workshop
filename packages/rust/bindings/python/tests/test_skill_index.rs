@@ -221,12 +221,15 @@ fn test_py_vector_store_get_skill_index_deduplication() -> TestResult {
 
     // Create SKILL.md with frontmatter
     let skill_md = r#"---
+type: skill
 name: "test_skill"
-version: "1.0.0"
 description: "A test skill"
-routing_keywords: ["test"]
-authors: ["test"]
-intents: []
+metadata:
+  author: "test"
+  version: "1.0.0"
+  routing_keywords:
+    - "test"
+  intents: []
 ---
 # Test Skill
 "#;

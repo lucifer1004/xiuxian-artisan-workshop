@@ -14,7 +14,7 @@ metadata:
 # Keyword Backend Detailed Comparison (V3 Skill-Based)
 
 - Generated date: 2026-02-11
-- Offline snapshot: `packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v3_skill_based.snap`
+- Offline snapshot: `packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v3_skill_based.snap`
 - Live LLM duel report: `/tmp/keyword-llm-eval-v3-r3.json`
 - Top-K: `5`
 - Scenario count: `8`

@@ -16,6 +16,7 @@ import os
 import signal as _signal
 import sys
 
+from omni.agent.protocol import MCP_PROTOCOL_VERSION
 from omni.agent.server import create_agent_handler
 from omni.foundation.config.logging import configure_logging, get_logger
 from omni.mcp.server import MCPServer
@@ -29,12 +30,12 @@ log = get_logger("omni.agent.stdio")
 def get_init_options() -> dict:
     """Get MCP server initialization options."""
     return {
-        "protocolVersion": "2024-11-05",
+        "protocolVersion": MCP_PROTOCOL_VERSION,
         "capabilities": {
             "tools": {},
         },
         "serverInfo": {
-            "name": "omni-agent",
+            "name": "xiuxian-daochang",
             "version": "2.0.0",
         },
     }
@@ -54,12 +55,12 @@ def get_server(verbose: bool = False) -> MCPServer:
 
     # MCP init options
     init_options = {
-        "protocolVersion": "2024-11-05",
+        "protocolVersion": MCP_PROTOCOL_VERSION,
         "capabilities": {
             "tools": {"listChanged": True},
         },
         "serverInfo": {
-            "name": "omni-agent",
+            "name": "xiuxian-daochang",
             "version": "2.0.0",
         },
     }

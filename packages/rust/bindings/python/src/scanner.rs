@@ -78,7 +78,7 @@ impl From<SkillMetadata> for PySkillMetadata {
 /// # Example
 ///
 /// ```python
-/// from omni_core_rs import PySkillScanner
+/// from xiuxian_core_rs import PySkillScanner
 ///
 /// scanner = PySkillScanner("assets/skills")
 /// skills = scanner.scan_all()
@@ -444,7 +444,7 @@ pub fn diff_skills(scanned_tools_json: &str, existing_tools_json: &str) -> PyRes
 /// # Example
 ///
 /// ```python
-/// from omni_core_rs import scan_paths
+/// from xiuxian_core_rs import scan_paths
 ///
 /// files = [
 ///     ("/virtual/skill/scripts/tool_a.py", '''
@@ -497,7 +497,7 @@ pub fn scan_paths(
 /// # Example
 ///
 /// ```python
-/// from omni_core_rs import parse_script_content
+/// from xiuxian_core_rs import parse_script_content
 ///
 /// content = """
 /// @skill_command(name="my_tool")

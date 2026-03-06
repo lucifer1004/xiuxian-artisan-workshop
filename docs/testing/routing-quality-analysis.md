@@ -65,8 +65,8 @@ So crawl4ai gets: research + url (keywords + name). Researcher gets: research + 
 
 Route test was using a **different store path** than reindex:
 
-- **Reindex** (and `omni sync`) writes to `get_database_path("skills")` = `.cache/omni-vector/skills.lance`. The Tantivy keyword index is at `skills.lance/keyword_index`.
-- **HybridSearch** (used by `omni route test`) was using `get_vector_db_path()` = `.cache/omni-vector` (base dir). The store then uses a **separate** keyword index at `.cache/omni-vector/keyword_index`, which sync never updates.
+- **Reindex** (and `omni sync`) writes to `get_database_path("skills")` = `.cache/xiuxian-vector/skills.lance`. The Tantivy keyword index is at `skills.lance/keyword_index`.
+- **HybridSearch** (used by `omni route test`) was using `get_vector_db_path()` = `.cache/xiuxian-vector` (base dir). The store then uses a **separate** keyword index at `.cache/xiuxian-vector/keyword_index`, which sync never updates.
 
 So the vector table (LanceDB) was the same, but the **keyword index** used at route test was stale. Fix: HybridSearch now defaults to `get_database_path("skills")` so it uses the same store and keyword index that reindex updates. After this fix, run `omni sync` once; then `omni route test "..."` will use the updated keywords/intents.
 

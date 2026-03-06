@@ -12,5 +12,5 @@ ComplexScenariosModuleBindings = _ComplexScenariosModuleBindings
 
 
 def load_module_bindings(caller_file: str) -> ComplexScenariosModuleBindings:
-    """Load all sibling modules required by `test_omni_agent_complex_scenarios.py`."""
+    """Load all sibling modules required by `test_xiuxian_daochang_complex_scenarios.py`."""
     return _load_bindings_impl(caller_file)

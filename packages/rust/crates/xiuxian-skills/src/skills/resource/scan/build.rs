@@ -1,4 +1,4 @@
-use omni_ast::{DecoratedFunction, TreeSitterPythonParser};
+use xiuxian_ast::{DecoratedFunction, TreeSitterPythonParser};
 
 use crate::skills::metadata::ResourceRecord;
 

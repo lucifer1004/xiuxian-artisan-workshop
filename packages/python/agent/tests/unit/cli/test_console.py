@@ -115,7 +115,7 @@ class TestPrintResultFormats:
         """Test handling skill.discover format with discovered_capabilities.
 
         This is the primary discovery format that was previously broken.
-        Regression test for: https://github.com/tao3k/omni-dev-fusion/issues/XXXX
+        Regression test for: https://github.com/tao3k/xiuxian-artisan-workshop/issues/XXXX
         """
         from omni.agent.cli.console import print_result
 

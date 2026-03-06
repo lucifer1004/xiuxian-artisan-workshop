@@ -7,7 +7,5 @@ mod knowledge {
 mod knowledge_scanner_module {
     pub use xiuxian_skills::KnowledgeScanner;
 
-    mod tests {
-        include!("unit/knowledge/scanner/tests.rs");
-    }
+    mod tests;
 }

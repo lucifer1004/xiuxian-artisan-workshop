@@ -381,7 +381,7 @@ pub fn temp_dir(_input: TokenStream) -> TokenStream {
     quote! {
         {
             let path = std::env::temp_dir()
-                .join(format!("omni_test_{}", uuid::Uuid::new_v4()));
+                .join(format!("xiuxian_test_{}", uuid::Uuid::new_v4()));
             std::fs::create_dir_all(&path)
                 .expect("Failed to create temp directory");
             path

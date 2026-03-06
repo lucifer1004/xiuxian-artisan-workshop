@@ -47,7 +47,7 @@ Sessions are automatically archived and reset after a configurable period of ina
 ### 3.2 Metadata UX
 
 - **Auto-Titles**: The first 60 characters of a session's first message are extracted as the display title.
-- **Persistence**: Partition modes can be persisted to the user's `xiuxian.toml` via the `OMNI_AGENT_SESSION_PERSISTENCE` toggle.
+- **Persistence**: Partition modes can be persisted to the user's `xiuxian.toml` via the `XIUXIAN_DAOCHANG_SESSION_PERSISTENCE` toggle.
 
 ## 4. Verification
 

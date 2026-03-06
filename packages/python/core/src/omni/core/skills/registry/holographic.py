@@ -89,7 +89,7 @@ class HolographicRegistry:
     ) -> list[ToolMetadata]:
         """Find tools using Rust-accelerated Hybrid Search (Vector + BM25).
 
-        This method leverages omni-vector's native RRF (Reciprocal Rank Fusion)
+        This method leverages xiuxian-vector's native RRF (Reciprocal Rank Fusion)
         to combine semantic similarity with keyword matching.
 
         Args:

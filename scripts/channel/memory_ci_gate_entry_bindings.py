@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entrypoint bindings for omni-agent memory CI gate runner."""
+"""Entrypoint bindings for xiuxian-daochang memory CI gate runner."""
 
 from __future__ import annotations
 

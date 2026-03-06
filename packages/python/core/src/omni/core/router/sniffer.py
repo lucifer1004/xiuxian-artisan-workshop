@@ -36,7 +36,7 @@ logger = get_logger("omni.core.router.sniffer")
 
 # Event-driven sniffer (Step 5)
 try:
-    from omni_core_rs import PyGlobalEventBus
+    from xiuxian_core_rs import PyGlobalEventBus
 
     EVENT_BUS_AVAILABLE = True
 except ImportError:

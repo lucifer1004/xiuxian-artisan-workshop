@@ -480,7 +480,7 @@ class KnowledgeGraphExtractor:
             return
 
         try:
-            from omni_core_rs import PyEntity, PyRelation
+            from xiuxian_core_rs import PyEntity, PyRelation
 
             for entity in entities:
                 d = entity.to_dict() if hasattr(entity, "to_dict") else entity
@@ -541,7 +541,7 @@ class KnowledgeGraphStore:
     def _init_backend(self) -> None:
         """Initialize Rust backend."""
         try:
-            from omni_core_rs import PyKnowledgeGraph
+            from xiuxian_core_rs import PyKnowledgeGraph
 
             self._backend = PyKnowledgeGraph()
             logger.info("Knowledge graph store initialized with Rust backend (PyKnowledgeGraph)")
@@ -568,7 +568,7 @@ class KnowledgeGraphStore:
                 entity_dict = entity  # type: ignore[assignment]
             # Rust PyKnowledgeGraph expects PyEntity, not dict
             try:
-                from omni_core_rs import PyEntity
+                from xiuxian_core_rs import PyEntity
 
                 name = (entity_dict.get("name") or "").strip() or "unknown"
                 etype = (entity_dict.get("entity_type") or "CONCEPT").strip() or "CONCEPT"
@@ -601,7 +601,7 @@ class KnowledgeGraphStore:
                 relation_dict = relation  # type: ignore[assignment]
             # Rust PyKnowledgeGraph expects PyRelation, not dict
             try:
-                from omni_core_rs import PyRelation
+                from xiuxian_core_rs import PyRelation
 
                 source = (relation_dict.get("source") or "").strip() or "unknown"
                 target = (relation_dict.get("target") or "").strip() or "unknown"

@@ -1,0 +1,34 @@
+[package]
+name = "xiuxian-io"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+memchr = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util"] }
+# Parallel iteration
+rayon = "1.8"
+minijinja = "1.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+xiuxian-tokenizer = { path = "../xiuxian-tokenizer" }
+# Tracing for instrumentation
+tracing = { workspace = true }
+# Event Bus for reactive file watching (optional)
+xiuxian-event = { path = "../xiuxian-event", optional = true }
+# File watching crate (optional, requires notify feature)
+notify = { version = "6.0", features = ["serde"], optional = true }
+# Glob pattern matching (optional, for notify feature)
+globset = { workspace = true, optional = true }
+
+[features]
+default = []
+assembler = []  # Enable context assembly functionality
+notify = ["xiuxian-event", "dep:notify", "dep:globset"]  # Enable file watching with event publishing
+
+[dev-dependencies]
+tempfile = { workspace = true }

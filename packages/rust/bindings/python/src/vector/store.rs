@@ -2,15 +2,15 @@
 //!
 //! Contains: new, count, drop_table, schema evolution, table info
 
-use omni_vector::{
-    MigrateResult, MigrationItem, TableColumnAlteration, TableNewColumn, VectorStore,
-    ops::DatasetCacheConfig,
-};
 use pyo3::prelude::*;
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
+use xiuxian_vector::{
+    MigrateResult, MigrationItem, TableColumnAlteration, TableNewColumn, VectorStore,
+    ops::DatasetCacheConfig,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct StoreCacheKey {

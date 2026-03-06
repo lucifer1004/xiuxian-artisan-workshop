@@ -105,7 +105,7 @@ inference:
   # Max tokens per response
   max_tokens: 4096
 
-  # Optional LLM in-flight concurrency gate for Rust omni-agent.
+  # Optional LLM in-flight concurrency gate for Rust xiuxian-daochang.
   # null/0 = no gate. Set a positive value to cap concurrent LLM calls per process.
   max_in_flight: null
 
@@ -113,13 +113,13 @@ inference:
 # Agent Runtime
 # =============================================================================
 agent:
-  # LLM backend for omni-agent runtime:
+  # LLM backend for xiuxian-daochang runtime:
   # - "litellm_rs" (default): provider routing path via Rust litellm-rs.
   #   This mode does not manage local model lifecycle.
   # - "http": direct OpenAI-compatible HTTP client.
   llm_backend: "litellm_rs"
   # Runtime orchestration authority:
-  # - "rust" (required default): `omni-agent` is the only orchestrator.
+  # - "rust" (required default): `xiuxian-daochang` is the only orchestrator.
   # Any non-rust value is rejected by Python CLI startup guardrails.
   runtime_orchestrator: "rust"
   # Test-only escape hatch for legacy Python runtime entrypoints.
@@ -161,7 +161,7 @@ mcp:
   memory_monitor_enabled: true
   memory_monitor_threshold_mb: 100 # Log tracemalloc stats when single call grows RSS by this much
 
-  # omni-agent MCP pool startup/connect policy (Rust channel/gateway client side)
+  # xiuxian-daochang MCP pool startup/connect policy (Rust channel/gateway client side)
   # - pool_size: concurrent MCP clients in pool
   # - handshake_timeout_secs: timeout per handshake attempt
   # - connect_retries: retry attempts before failing startup
@@ -179,7 +179,7 @@ mcp:
   # Distributed read-through cache for discover-like tool calls (e.g. skill.discover).
   # Valkey URL resolution: session.valkey_url first, then VALKEY_URL fallback.
   discover_cache_enabled: true
-  discover_cache_key_prefix: "omni-agent:discover"
+  discover_cache_key_prefix: "xiuxian-daochang:discover"
   discover_cache_ttl_secs: 30
 
   # Embedding HTTP endpoint guardrails (for /embed and /embed/batch):
@@ -324,7 +324,7 @@ memory:
   # URL resolution: memory.persistence_valkey_url -> session.valkey_url -> VALKEY_URL.
   # Set this when memory should use a dedicated Valkey endpoint.
   persistence_valkey_url: null
-  persistence_key_prefix: "omni-agent:memory"
+  persistence_key_prefix: "xiuxian-daochang:memory"
   # Strict startup for Valkey memory backend:
   # - true: fail startup if initial Valkey load fails
   # - false: continue startup with empty memory when Valkey is unavailable
@@ -337,7 +337,7 @@ memory:
   decay_enabled: true
   # Apply decay every N successfully stored turns.
   decay_every_turns: 24
-  # Decay factor passed to omni-memory apply_decay (0 < factor < 1 recommended).
+  # Decay factor passed to xiuxian-memory-engine apply_decay (0 < factor < 1 recommended).
   decay_factor: 0.985
   # 3-in-1 memory gate policy (retain / obsolete / promote).
   # Utility threshold for promote decision.
@@ -361,7 +361,7 @@ memory:
   # Source stream name published by memory lifecycle hooks.
   stream_name: "memory.events"
   # Consumer group name for distributed memory-event processing.
-  stream_consumer_group: "omni-agent-memory"
+  stream_consumer_group: "xiuxian-daochang-memory"
   # Consumer id prefix (runtime appends pid + timestamp suffix).
   stream_consumer_name_prefix: "agent"
   # Max events per XREADGROUP fetch.
@@ -469,7 +469,7 @@ telegram:
   # Webhook dedup backend: "valkey" or "memory"
   webhook_dedup_backend: "valkey"
   webhook_dedup_ttl_secs: 600
-  webhook_dedup_key_prefix: "omni-agent:webhook-dedup"
+  webhook_dedup_key_prefix: "xiuxian-daochang:webhook-dedup"
 
   # Session partition strategy:
   # - chat (default): one shared session per chat
@@ -489,13 +489,13 @@ telegram:
   # - valkey: distributed lease lock across instances
   foreground_session_gate_backend: "auto"
   # URL resolution: session.valkey_url first, then VALKEY_URL fallback.
-  foreground_session_gate_key_prefix: "omni-agent:session-gate"
+  foreground_session_gate_key_prefix: "xiuxian-daochang:session-gate"
   foreground_session_gate_lease_ttl_secs: 30
   foreground_session_gate_acquire_timeout_secs: 120
   # URL resolution: session.valkey_url first, then VALKEY_URL fallback.
-  send_rate_limit_gate_key_prefix: "omni-agent:telegram:send-gate"
+  send_rate_limit_gate_key_prefix: "xiuxian-daochang:telegram:send-gate"
 
-  max_tool_rounds: 30 # Max tool-call rounds per user message. Env: OMNI_AGENT_MAX_TOOL_ROUNDS.
+  max_tool_rounds: 30 # Max tool-call rounds per user message. Env: XIUXIAN_DAOCHANG_MAX_TOOL_ROUNDS.
 
 # =============================================================================
 # Gateway Sidecar (optional for local webhook workflow)
@@ -506,7 +506,7 @@ gateway:
   bind: "127.0.0.1:38082"
 
 # =============================================================================
-# Discord Channel (omni-agent channel --provider discord)
+# Discord Channel (xiuxian-daochang channel --provider discord)
 # =============================================================================
 discord:
   # Runtime transport mode:
@@ -589,7 +589,7 @@ discord:
 # =============================================================================
 # Session (agent/gateway conversation window)
 # =============================================================================
-# Session window is Rust-only (omni-window via omni_core_rs.PySessionWindow).
+# Session window is Rust-only (xiuxian-window via xiuxian_core_rs.PySessionWindow).
 session:
   window_max_turns: 2048
   consolidation_take_turns: 32
@@ -608,7 +608,7 @@ session:
   # This is the canonical URL source for Rust runtime components.
   # VALKEY_URL remains a fallback when this value is empty.
   valkey_url: null
-  redis_prefix: "omni-agent:session"
+  redis_prefix: "xiuxian-daochang:session"
   # ttl_secs: 86400
 
 # =============================================================================
@@ -622,13 +622,13 @@ session:
 # Auto-detection: if provider is empty, code will try health check on http_port
 # and use client if server is healthy; otherwise it may start a server.
 embedding:
-  # Rust embedding backend in omni-agent:
+  # Rust embedding backend in xiuxian-daochang:
   # - "http": call legacy /embed/batch endpoint.
   # - "openai_http": call generic OpenAI-compatible /v1/embeddings endpoint.
   # - "mistral_sdk": in-process `mistralrs` SDK embedding runtime.
   # - "litellm_rs": provider routing via Rust litellm-rs (API-provider path).
   #   This mode does not manage local model lifecycle.
-  backend: "http"
+  backend: "litellm_rs"
 
   # Optional embedding timeout (seconds) and in-flight concurrency gate.
   # Rust reads `timeout` via alias `timeout_secs`.
@@ -641,36 +641,20 @@ embedding:
   batch_max_size: 128
   batch_max_concurrency: 1
 
-  # All embeddings via LiteLLM (no in-process model). Local = run Ollama, then set provider=ollama.
-  # Provider: "ollama" | "xinference" | "litellm" = LiteLLM; "client" = HTTP; "" = auto; "fallback" = hash-only
-  provider: "ollama"
+  # Python-side embedding mode:
+  # keep "client" so Python only calls Rust embedding HTTP endpoints.
+  # Provider: "client" | "" (treated as client)
+  provider: "client"
 
-  # LiteLLM model and API. Qwen 0.6: ollama pull qwen3-embedding:0.6b → ollama/qwen3-embedding:0.6b, dimension 1024
-  # To store Ollama models under project: export OLLAMA_MODELS="${PRJ_DATA_HOME:-.data}/models" before ollama pull/serve
-  litellm_model: "ollama/qwen3-embedding:0.6b"
-  litellm_api_base: "http://localhost:11434"
-
-  # Fallback when provider=litellm and litellm_model not set
-  model: "ollama/qwen3-embedding:0.6b"
-
-  # Dimension: 1024 (qwen3-embedding:0.6b), 768 (nomic-embed-text)
+  # Dimension configured for vector schema and validation.
   dimension: 1024
-
-  # Request timeout (seconds) for LiteLLM embedding calls.
-  # Prevents indefinite hang when Ollama is slow or unreachable.
-  timeout: 60
-
-  # LiteLLM transient connection handling. Applies to provider=ollama/xinference/litellm.
-  # Retries are for transient network failures only (connection refused/reset/timeout).
-  litellm_connect_retries: 2
-  litellm_retry_backoff_ms: 250
-  litellm_circuit_open_secs: 5
 
   # Auto rebuild skills/router vector indexes when embedding model or dimension changes.
   auto_reindex_on_change: true
 
   # HTTP server port (for client mode: connect to existing embedding API on this port)
-  http_port: 18501
+  # Default aligns with MCP SSE runtime endpoint.
+  http_port: 3002
 
   # When MCP provides embedding (omni mcp --transport sse --port 3002), client connects here.
   # MCP exposes /embed/batch and /embed/single for embedding_client compatibility.
@@ -774,7 +758,7 @@ workflow_state:
 cache:
   # Project name for cache directory structure
   # All cache dirs will be under: {git_root}/.cache/{project_name}/
-  project_name: "omni-dev-fusion"
+  project_name: "xiuxian-artisan-workshop"
 
 # =============================================================================
 # Skill Management

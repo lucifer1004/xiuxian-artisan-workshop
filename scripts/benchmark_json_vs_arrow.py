@@ -11,7 +11,7 @@ Usage:
   # Or index into a temp dir from repo
   uv run python scripts/benchmark_json_vs_arrow.py --repo . --iters 30
 
-Requires: omni_core_rs. With --use-cache requires existing skills table (omni sync). Without: repo with assets/skills.
+Requires: xiuxian_core_rs. With --use-cache requires existing skills table (omni sync). Without: repo with assets/skills.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def main() -> int:
     parser.add_argument(
         "--use-cache",
         action="store_true",
-        help="Use project synced store (.cache/omni-vector); no indexing",
+        help="Use project synced store (.cache/xiuxian-vector); no indexing",
     )
     parser.add_argument(
         "--repo",
@@ -97,7 +97,7 @@ def main() -> int:
         return 1
 
     if not RUST_AVAILABLE:
-        print("omni_core_rs not available; skip benchmark")
+        print("xiuxian_core_rs not available; skip benchmark")
         return 0
 
     store = None
@@ -137,7 +137,7 @@ def main() -> int:
             print("Failed to use cache:", e)
             return 0
     if store is None:
-        tmp = Path("/tmp/omni-bench-json-arrow")
+        tmp = Path("/tmp/xiuxian-bench-json-arrow")
         tmp.mkdir(parents=True, exist_ok=True)
         store = RustVectorStore(str(tmp), args.dim, True)
         skills_base = args.repo / "assets" / "skills"

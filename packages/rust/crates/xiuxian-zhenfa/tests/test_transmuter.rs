@@ -52,10 +52,12 @@ fn validate_and_refine_rejects_unclosed_tag() {
 #[test]
 fn resolve_and_wash_returns_refined_payload() {
     let resolved =
-        ZhenfaTransmuter::resolve_and_wash("wendao://skills/demo/references/a.md", |_| {
+        match ZhenfaTransmuter::resolve_and_wash("wendao://skills/demo/references/a.md", |_| {
             Some("line 1 \r\n\r\n\r\nline 2".to_string())
-        })
-        .expect("semantic URI should resolve and be refined");
+        }) {
+            Ok(resolved) => resolved,
+            Err(error) => panic!("semantic URI should resolve and be refined: {error}"),
+        };
     assert_eq!(resolved, "line 1\n\n\nline 2");
 }
 

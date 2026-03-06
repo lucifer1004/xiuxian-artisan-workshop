@@ -2,10 +2,9 @@
 
 #![cfg(feature = "llm")]
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
-use xiuxian_llm::llm::{ChatRequest, LlmClient};
+use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmResult, MessageContent};
 use xiuxian_qianji::contracts::{FlowInstruction, QianjiMechanism};
 use xiuxian_qianji::executors::llm::LlmAnalyzer;
 
@@ -16,7 +15,7 @@ struct MockLlmClient {
 
 #[async_trait]
 impl LlmClient for MockLlmClient {
-    async fn chat(&self, request: ChatRequest) -> Result<String> {
+    async fn chat(&self, request: ChatRequest) -> LlmResult<String> {
         if let Ok(mut guard) = self.seen_model.lock() {
             *guard = Some(request.model);
         }
@@ -30,11 +29,14 @@ struct PromptCaptureLlmClient {
 
 #[async_trait]
 impl LlmClient for PromptCaptureLlmClient {
-    async fn chat(&self, request: ChatRequest) -> Result<String> {
+    async fn chat(&self, request: ChatRequest) -> LlmResult<String> {
         let prompt = request
             .messages
             .first()
-            .map(|message| message.content.clone())
+            .and_then(|message| match message.content.as_ref() {
+                Some(MessageContent::Text(text)) => Some(text.clone()),
+                Some(MessageContent::Parts(_)) | None => None,
+            })
             .unwrap_or_default();
         if let Ok(mut guard) = self.seen_system_prompt.lock() {
             *guard = Some(prompt);
@@ -43,7 +45,7 @@ impl LlmClient for PromptCaptureLlmClient {
     }
 }
 
-fn must_ok<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> T {
+fn must_ok<T, E: std::fmt::Display>(result: std::result::Result<T, E>, context: &str) -> T {
     result.unwrap_or_else(|error| panic!("{context}: {error}"))
 }
 

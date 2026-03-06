@@ -267,7 +267,7 @@ async def apply_link_graph_proximity_boost(
     )
 
     try:
-        from omni_core_rs import apply_link_graph_proximity_boost_py
+        from xiuxian_core_rs import apply_link_graph_proximity_boost_py
     except ImportError:
         return _apply_proximity_boost_python(
             results, stem_links, stem_tags, effective_link_boost, effective_tag_boost

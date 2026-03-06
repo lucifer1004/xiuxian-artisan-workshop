@@ -147,9 +147,9 @@ class TUIManager:
         return should_run
 
     def _is_development_mode(self) -> bool:
-        """Check if running in the omni-dev-fusion development project.
+        """Check if running in the xiuxian-artisan-workshop development project.
 
-        Returns True if pyproject.toml has project.name = "omni-dev-fusion".
+        Returns True if pyproject.toml has project.name = "xiuxian-artisan-workshop".
         """
         # Use get_project_root() to get project root directory
         project_root = get_project_root()
@@ -160,8 +160,8 @@ class TUIManager:
 
         try:
             content = pyproject.read_text()
-            # Check for project name = "omni-dev-fusion"
-            if 'name = "omni-dev-fusion"' in content:
+            # Check for project name = "xiuxian-artisan-workshop"
+            if 'name = "xiuxian-artisan-workshop"' in content:
                 return True
         except Exception:
             pass
@@ -171,7 +171,7 @@ class TUIManager:
     def _find_binary(self) -> str:
         """Find the Rust TUI binary path.
 
-        Development Mode (omni-dev-fusion project):
+        Development Mode (xiuxian-artisan-workshop project):
             1. XIUXIAN_TUI_BIN env var (highest priority)
             2. Local target/debug or target/release binary
             3. Fall back to system PATH
@@ -203,7 +203,7 @@ class TUIManager:
                     return "xiuxian-tui"
 
             logger.warning(
-                "omni-dev-fusion project detected but xiuxian-tui binary not found. "
+                "xiuxian-artisan-workshop project detected but xiuxian-tui binary not found. "
                 "Run: cd packages/rust && cargo build -p xiuxian-tui"
             )
 
@@ -341,7 +341,7 @@ class TUIManager:
             return
 
         event = {
-            "source": "omni-agent",
+            "source": "xiuxian-daochang",
             "topic": topic,
             "payload": payload,
             "timestamp": datetime.now().isoformat(),

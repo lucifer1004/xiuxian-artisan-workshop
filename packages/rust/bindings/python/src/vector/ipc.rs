@@ -11,7 +11,7 @@ use arrow_ipc::writer::StreamWriter;
 use std::io::Cursor;
 use std::sync::Arc;
 
-use omni_vector::{Recommendation, TableHealthReport};
+use xiuxian_vector::{Recommendation, TableHealthReport};
 
 fn recommendation_to_str(r: &Recommendation) -> String {
     match r {

@@ -138,7 +138,7 @@ class TransactionShield:
     def __init__(
         self,
         base_branch: str = "main",
-        workspace_prefix: str = "omni-task",
+        workspace_prefix: str = "xiuxian-task",
     ):
         """Initialize the transaction shield.
 

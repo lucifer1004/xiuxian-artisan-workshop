@@ -22,7 +22,7 @@ def parse_args(
 ) -> argparse.Namespace:
     """Parse command-line arguments for memory suite orchestration."""
     parser = argparse.ArgumentParser(
-        description="Run memory-focused omni-agent Telegram black-box + regression suite."
+        description="Run memory-focused xiuxian-daochang Telegram black-box + regression suite."
     )
     add_runtime_args(
         parser,

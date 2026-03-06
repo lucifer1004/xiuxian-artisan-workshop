@@ -24,8 +24,6 @@ target
 .data/
 .bin/
 
-# !.config/omni-dev-fusion
-
 .mcp.json
 
 .claude/settings.json

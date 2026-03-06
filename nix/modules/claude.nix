@@ -14,16 +14,15 @@ in
   ];
   claude.code.enable = true;
   claude.code.env = {
-    MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
-    ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic";
-    ANTHROPIC_AUTH_TOKEN = config.secretspec.secrets.MINIMAX_API_KEY;
+    ANTHROPIC_BASE_URL = "https://aiproxy.xin/api";
+    ANTHROPIC_AUTH_TOKEN = config.secretspec.secrets.GLM_API_KEY;
     API_TIMEOUT_MS = "2000000";
+    alwaysThinkingEnabled = "true";
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"; # Note: Convert to string
-    ANTHROPIC_MODEL = "MiniMax-M2.5";
-    ANTHROPIC_SMALL_FAST_MODEL = "MiniMax-M2.5";
-    ANTHROPIC_DEFAULT_SONNET_MODEL = "MiniMax-M2.5";
-    ANTHROPIC_DEFAULT_OPUS_MODEL = "MiniMax-M2.5";
-    ANTHROPIC_DEFAULT_HAIKU_MODEL = "MiniMax-M2.5";
+    ANTHROPIC_MODEL = "glm-5";
+    ANTHROPIC_SMALL_FAST_MODEL = "glm-4.5-air";
+    ANTHROPIC_DEFAULT_SONNET_MODEL = "glm-4.7";
+    ANTHROPIC_DEFAULT_OPUS_MODEL = "glm-5";
   };
   claude.code.hooks = {
     # PostToolUse = {
@@ -52,20 +51,20 @@ in
     #     "--"
     #   ];
     # };
-    MiniMax = {
-      type = "stdio";
-      command = "uvx";
-      args = [ "minimax-coding-plan-mcp" ];
-      env = {
-        MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
-        MINIMAX_MCP_BASE_PATH = "${config.devenv.root}/.minimax-output";
-        MINIMAX_API_HOST = "https://api.minimax.io";
-        MINIMAX_API_RESOURCE_MODE = "url";
-      };
-    };
+    # MiniMax = {
+    #   type = "stdio";
+    #   command = "uvx";
+    #   args = [ "minimax-coding-plan-mcp" ];
+    #   env = {
+    #     MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
+    #     MINIMAX_MCP_BASE_PATH = "${config.devenv.root}/.minimax-output";
+    #     MINIMAX_API_HOST = "https://api.minimax.io";
+    #     MINIMAX_API_RESOURCE_MODE = "url";
+    #   };
+    # };
     omniAgent = {
       type = "http";
-      url = "http://127.0.0.1:3002";
+      url = "http://127.0.0.1:3002/mcp";
       # command = "omni";
       # args = [
       #   "mcp"
@@ -74,10 +73,6 @@ in
       #   # "--port"
       #   # "3002"
       # ];
-      env = {
-        OMNI_UX_MODE = "headless";
-        MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
-      };
     };
   };
 }

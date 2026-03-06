@@ -152,7 +152,7 @@ def resolve_discord_probe_secret(value: str | None) -> str | None:
     if explicit:
         return explicit
     for key in (
-        "OMNI_AGENT_DISCORD_INGRESS_SECRET_TOKEN",
+        "XIUXIAN_DAOCHANG_DISCORD_INGRESS_SECRET_TOKEN",
         "DISCORD_INGRESS_SECRET_TOKEN",
         "DISCORD_INGRESS_SECRET",
     ):

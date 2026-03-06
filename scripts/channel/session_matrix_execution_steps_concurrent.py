@@ -30,7 +30,7 @@ def run_concurrent_step(
     session_b = expected_session_key_fn(chat_b, user_b, thread_b, cfg.session_partition)
     cmd = [
         sys.executable,
-        str(script_dir / "test_omni_agent_concurrent_sessions.py"),
+        str(script_dir / "test_xiuxian_daochang_concurrent_sessions.py"),
         "--max-wait",
         str(cfg.max_wait),
         "--webhook-url",

@@ -73,11 +73,11 @@ metadata:
 
 ## 3.1 Package Placement (Hard Constraint)
 
-- Memory core logic must **not** live in `omni-agent`.
-- `omni-agent` is orchestration-only and consumes memory via trait/interface.
+- Memory core logic must **not** live in `xiuxian-daochang`.
+- `xiuxian-daochang` is orchestration-only and consumes memory via trait/interface.
 - Short-term memory lifecycle, 3-in-1 revalidation, purge/promotion policy, and state transitions belong to Rust-only memory package(s):
-  - primary: `packages/rust/crates/omni-memory`
-  - optional split (if needed): `omni-memory-lifecycle`, `omni-memory-reflection`
+  - primary: `packages/rust/crates/xiuxian-memory-engine`
+  - optional split (if needed): `xiuxian-memory-engine-lifecycle`, `xiuxian-memory-engine-reflection`
 - `knowledge` skill remains MCP-facing long-term knowledge interface and is not the runtime short-term memory engine.
 
 ## 3.2 Memory Exposure Model (Core + Tool Facade)
@@ -103,7 +103,7 @@ This architecture replaces earlier ambiguous interpretations:
 - Misconception: `knowledge` and `memory` can share one policy surface.
   - Correct: `knowledge` is durable curated knowledge; `memory` is transient runtime context.
 - Misconception: memory policy can live in agent runtime modules.
-  - Correct: memory policy/state transitions live in Rust memory core package(s); `omni-agent` is orchestration-only.
+  - Correct: memory policy/state transitions live in Rust memory core package(s); `xiuxian-daochang` is orchestration-only.
 - Misconception: MCP memory tools own memory policy.
   - Correct: MCP memory tools are facade/interop surface; policy remains in Rust core.
 
@@ -132,9 +132,9 @@ Based on 2024-2025 research on LLM Self-Correction and Multi-Agent Debate (e.g.,
 
 When the runtime executes an **Adversarial Sub-graph** (e.g., the Agenda Validation Loop):
 
-1. **Isolated Q-Value Updates:** The `omni-memory` subsystem must track the success/failure (`Utility Score`) of the _Proposer_ separately from the _Critic_. If the Critic successfully prevents a bad plan, its Q-value increases, even if the overall turn took longer.
-2. **Context Quarantine:** The short-term memory (Session Window) belonging to the `Strict Teacher` must never bleed into the `Agenda Steward`. The `omni-memory` module enforces this by accepting a composite `session_id` + `persona_id` as the primary key for episodic state lookup during isolated workflows.
-3. **Commit Phase Sync:** Only when the Adversarial Sub-graph reaches a consensus (`Terminal Node`) does the resulting insight cross the Memory Boundary and get committed to the global `xiuxian-wendao` Knowledge Graph. Intermediate debate failures are stored only in short-term `omni-memory` for local Q-learning.
+1. **Isolated Q-Value Updates:** The `xiuxian-memory-engine` subsystem must track the success/failure (`Utility Score`) of the _Proposer_ separately from the _Critic_. If the Critic successfully prevents a bad plan, its Q-value increases, even if the overall turn took longer.
+2. **Context Quarantine:** The short-term memory (Session Window) belonging to the `Strict Teacher` must never bleed into the `Agenda Steward`. The `xiuxian-memory-engine` module enforces this by accepting a composite `session_id` + `persona_id` as the primary key for episodic state lookup during isolated workflows.
+3. **Commit Phase Sync:** Only when the Adversarial Sub-graph reaches a consensus (`Terminal Node`) does the resulting insight cross the Memory Boundary and get committed to the global `xiuxian-wendao` Knowledge Graph. Intermediate debate failures are stored only in short-term `xiuxian-memory-engine` for local Q-learning.
 
 ## 4. Typed Contracts
 
@@ -457,15 +457,15 @@ Closed behavior:
 Implementation evidence:
 
 - Normal path snapshot normalization + emission:
-  - `packages/rust/crates/omni-agent/src/agent/turn_execution/react_loop.rs`
+  - `packages/rust/crates/xiuxian-daochang/src/agent/turn_execution/react_loop.rs`
     (`injection::normalize_messages_with_snapshot`, `record_injection_snapshot`).
 - Shortcut path snapshot assembly + emission:
-  - `packages/rust/crates/omni-agent/src/agent/turn_execution/shortcut.rs`
+  - `packages/rust/crates/xiuxian-daochang/src/agent/turn_execution/shortcut.rs`
     (`build_shortcut_injection_snapshot`, `record_injection_snapshot`).
 
 Regression evidence:
 
-- `packages/rust/crates/omni-agent/tests/agent_injection.rs`
+- `packages/rust/crates/xiuxian-daochang/tests/agent_injection.rs`
   (`graph_shortcut_includes_typed_injection_snapshot_metadata`).
 
 ## 10. Black-Box Validation Matrix
@@ -494,8 +494,8 @@ This section defines implementation-facing contracts to keep architecture stable
 
 Implementation ownership:
 
-- `omni-memory`: owns these contracts and state transitions.
-- `omni-agent`: only calls memory interfaces and logs turn-level references.
+- `xiuxian-memory-engine`: owns these contracts and state transitions.
+- `xiuxian-daochang`: only calls memory interfaces and logs turn-level references.
 
 ### 12.1 Memory Lifecycle
 

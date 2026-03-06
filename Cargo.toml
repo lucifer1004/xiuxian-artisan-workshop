@@ -5,29 +5,29 @@ resolver = "2"
 members = [
     "packages/rust/bindings/python",
     "packages/rust/crates/xiuxian-config-core",
-    "packages/rust/crates/omni-ast",
-    "packages/rust/crates/omni-edit",
+    "packages/rust/crates/xiuxian-ast",
+    "packages/rust/crates/xiuxian-edit",
     "packages/rust/crates/xiuxian-event",
-    "packages/rust/crates/omni-executor",
-    "packages/rust/crates/omni-io",
+    "packages/rust/crates/xiuxian-executor",
+    "packages/rust/crates/xiuxian-io",
     "packages/rust/crates/xiuxian-wendao",
-    "packages/rust/crates/omni-lance",
+    "packages/rust/crates/xiuxian-lance",
     "packages/rust/crates/xiuxian-macros",
-    "packages/rust/crates/omni-memory",
+    "packages/rust/crates/xiuxian-memory-engine",
+    "packages/rust/crates/xiuxian-logging",
     "packages/rust/crates/xiuxian-skills",
-    "packages/rust/crates/omni-security",
-    "packages/rust/crates/omni-sniffer",
-    "packages/rust/crates/omni-sandbox",
-    "packages/rust/crates/omni-tags",
-    "packages/rust/crates/omni-tokenizer",
+    "packages/rust/crates/xiuxian-security",
+    "packages/rust/crates/xiuxian-sandbox",
+    "packages/rust/crates/xiuxian-tags",
+    "packages/rust/crates/xiuxian-tokenizer",
     "packages/rust/crates/xiuxian-tui",
-    "packages/rust/crates/omni-types",
-    "packages/rust/crates/omni-vector",
+    "packages/rust/crates/xiuxian-types",
+    "packages/rust/crates/xiuxian-vector",
     "packages/rust/crates/xiuxian-qianhuan",
     "packages/rust/crates/xiuxian-llm",
-    "packages/rust/crates/omni-window",
+    "packages/rust/crates/xiuxian-window",
     "packages/rust/crates/xiuxian-mcp",
-    "packages/rust/crates/omni-agent",
+    "packages/rust/crates/xiuxian-daochang",
     "packages/rust/crates/xiuxian-qianji",
     "packages/rust/crates/xiuxian-memory",
     "packages/rust/crates/xiuxian-zhixing",
@@ -58,6 +58,7 @@ uuid = { version = "1.11", features = ["v4"] }
 chrono = { version = "0.4.38", default-features = false }
 chrono-tz = "0.10.4"
 tracing = "0.1"
+tracing-log = "0.2"
 globset = "0.4"
 include_dir = "0.7.4"
 rand = "0.8"
@@ -83,9 +84,11 @@ memchr = "2.7.6"
 tempfile = "3.24"
 sha2 = "0.10"
 hex = "0.4"
+base64 = "0.22"
+tokenizers = "0.22.2"
 
 # JSON Schema generation for Schema Singularity (SSOT)
-schemars = "0.8.21"
+schemars = "1.2.0"
 jsonschema = "0.18.3"
 
 # LanceDB for vector storage (2.0: v2 manifest default, create_index returns IndexMetadata)
@@ -101,12 +104,12 @@ redis = { version = "1.0.3", default-features = false }
 
 # Logging
 log = "0.4"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # Parallel processing
 rayon = "1.11"
 
-# MCP client (omni-agent Phase A; ref: codex-rs rmcp-client)
+# MCP client (xiuxian-daochang Phase A; ref: codex-rs rmcp-client)
 # Note: rmcp 0.16 still requires "server" feature for client build (task_manager/handler refs)
 rmcp = { version = "0.16", default-features = false, features = [
     "client",
@@ -118,20 +121,25 @@ rmcp = { version = "0.16", default-features = false, features = [
     "transport-child-process",
 ] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+litellm-rs = { git = "https://github.com/majiayu000/litellm-rs", tag = "v0.4.2", default-features = false }
 
-# CLI and HTTP (omni-agent gateway)
+# CLI and HTTP (xiuxian-daochang gateway)
 clap = { version = "4.5", features = ["derive"] }
 axum = "0.8"
 
 # Performance optimization - Thin LTO for reduced memory
 [profile.release]
-opt-level = "s"      
-lto = "thin"        
+opt-level = 3
+lto = "fat"
 codegen-units = 1
-strip = true        
+strip = true
 panic = "abort"     
 
-# [ODF-REP] Global Lints Configuration (Rust 1.74+)
+[profile.dev]
+debug = 1 
+split-debuginfo = "unpacked" 
+
+
 [workspace.lints.rust]
 unsafe_code = "deny"       # Default deny unsafe unless explicitly allowed
 missing_docs = "warn"      # Public APIs must have documentation

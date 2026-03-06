@@ -52,7 +52,7 @@ impl PyDiscoverOptions {
     }
 }
 
-impl From<PyDiscoverOptions> for omni_io::DiscoverOptions {
+impl From<PyDiscoverOptions> for xiuxian_io::DiscoverOptions {
     fn from(py_opts: PyDiscoverOptions) -> Self {
         Self {
             extensions: py_opts.extensions,
@@ -75,7 +75,7 @@ impl From<PyDiscoverOptions> for omni_io::DiscoverOptions {
 #[pyo3(signature = (path, max_bytes = 1_048_576))]
 pub fn read_file_safe(path: String, max_bytes: u64) -> PyResult<String> {
     Python::attach(|py| {
-        py.detach(|| omni_io::read_text_safe(path, max_bytes).map_err(|e| anyhow::anyhow!(e)))
+        py.detach(|| xiuxian_io::read_text_safe(path, max_bytes).map_err(|e| anyhow::anyhow!(e)))
     })
     .map_err(|e| pyo3::PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))
 }
@@ -94,7 +94,7 @@ pub fn discover_files(
 ) -> Vec<String> {
     let skip_dirs =
         skip_dirs.unwrap_or_else(|| vec!["target".to_string(), "node_modules".to_string()]);
-    let options = omni_io::DiscoverOptions {
+    let options = xiuxian_io::DiscoverOptions {
         extensions,
         max_file_size,
         skip_hidden,
@@ -102,7 +102,7 @@ pub fn discover_files(
         max_files: None,
         recursive,
     };
-    omni_io::discover_files(root, &options)
+    xiuxian_io::discover_files(root, &options)
 }
 
 /// Discover files in a single directory (non-recursive).
@@ -115,14 +115,14 @@ pub fn discover_files_in_dir(
     max_file_size: u64,
     skip_hidden: bool,
 ) -> Vec<String> {
-    omni_io::discover_files_in_dir(dir, &extensions, max_file_size, skip_hidden)
+    xiuxian_io::discover_files_in_dir(dir, &extensions, max_file_size, skip_hidden)
 }
 
 /// Count files matching extensions in a directory.
 #[pyfunction]
 #[pyo3(signature = (dir, extensions, skip_hidden = true))]
 pub fn count_files_in_dir(dir: &str, extensions: Vec<String>, skip_hidden: bool) -> usize {
-    omni_io::count_files_in_dir(dir, &extensions, skip_hidden)
+    xiuxian_io::count_files_in_dir(dir, &extensions, skip_hidden)
 }
 
 /// Check if a path should be skipped.
@@ -131,14 +131,14 @@ pub fn count_files_in_dir(dir: &str, extensions: Vec<String>, skip_hidden: bool)
 pub fn should_skip_path(path: &str, skip_hidden: bool, skip_dirs: Option<Vec<String>>) -> bool {
     let skip_dirs =
         skip_dirs.unwrap_or_else(|| vec!["target".to_string(), "node_modules".to_string()]);
-    omni_io::should_skip_path(path, skip_hidden, &skip_dirs)
+    xiuxian_io::should_skip_path(path, skip_hidden, &skip_dirs)
 }
 
 /// Count tokens in text using cl100k_base (GPT-4/3.5 standard).
 /// Uses cached BPE instance for optimal performance.
 #[pyfunction]
 pub fn count_tokens(text: &str) -> usize {
-    omni_tokenizer::count_tokens(text)
+    xiuxian_tokenizer::count_tokens(text)
 }
 
 /// Truncate text to fit within a maximum token count.
@@ -146,24 +146,24 @@ pub fn count_tokens(text: &str) -> usize {
 #[pyfunction]
 #[pyo3(signature = (text, max_tokens))]
 pub fn truncate_tokens(text: &str, max_tokens: usize) -> String {
-    omni_tokenizer::truncate(text, max_tokens)
+    xiuxian_tokenizer::truncate(text, max_tokens)
 }
 
 /// Get PRJ_CONFIG_HOME from Rust side (PRJ_SPEC Compliance).
 /// This allows Python to verify that Rust reads the same env var.
 #[pyfunction]
 pub fn get_config_home() -> String {
-    omni_io::get_config_home()
+    xiuxian_io::get_config_home()
 }
 
 /// Get PRJ_DATA_HOME from Rust side.
 #[pyfunction]
 pub fn get_data_home() -> String {
-    omni_io::get_data_home()
+    xiuxian_io::get_data_home()
 }
 
 /// Get PRJ_CACHE_HOME from Rust side.
 #[pyfunction]
 pub fn get_cache_home() -> String {
-    omni_io::get_cache_home()
+    xiuxian_io::get_cache_home()
 }

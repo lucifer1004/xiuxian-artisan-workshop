@@ -1,4 +1,4 @@
-use omni_ast::{DecoratedFunction, DecoratorArguments};
+use xiuxian_ast::{DecoratedFunction, DecoratorArguments};
 
 use crate::skills::skill_command::category::infer_category_from_skill;
 

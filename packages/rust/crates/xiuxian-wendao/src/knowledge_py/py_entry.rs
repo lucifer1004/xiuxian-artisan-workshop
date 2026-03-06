@@ -16,7 +16,7 @@ pub struct PyKnowledgeEntry {
 impl PyKnowledgeEntry {
     #[new]
     #[pyo3(signature = (id, title, content, category))]
-    fn new(id: &str, title: &str, content: &str, category: PyKnowledgeCategory) -> Self {
+    fn new(id: &str, title: &str, content: &str, category: &PyKnowledgeCategory) -> Self {
         Self {
             inner: KnowledgeEntry::new(
                 id.to_string(),
@@ -45,7 +45,7 @@ impl PyKnowledgeEntry {
     #[getter]
     fn category(&self) -> PyKnowledgeCategory {
         PyKnowledgeCategory {
-            inner: self.inner.category.clone(),
+            inner: self.inner.category,
         }
     }
 

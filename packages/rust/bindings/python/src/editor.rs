@@ -3,9 +3,9 @@
 //! Provides AST-based structural search and replace capabilities.
 
 use crate::utils::run_safe;
-use omni_edit::{BatchConfig, BatchRefactorStats, StructuralEditor};
 use pyo3::prelude::*;
 use std::path::Path;
+use xiuxian_edit::{BatchConfig, BatchRefactorStats, StructuralEditor};
 
 /// Result of batch structural refactoring.
 #[pyclass]

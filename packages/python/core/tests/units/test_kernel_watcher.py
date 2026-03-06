@@ -1,4 +1,4 @@
-"""Tests for Rust-native file watcher (omni-core-rs notify bindings)."""
+"""Tests for Rust-native file watcher (xiuxian-core-rs notify bindings)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-import omni_core_rs as rs
+import xiuxian_core_rs as rs
 import pytest
 
 from omni.core.kernel.watcher import (
@@ -699,13 +699,13 @@ class TestVirtualPathScanning:
     """Test virtual path scanning - no filesystem required.
 
     Uses the new scan_paths and parse_script_content functions
-    from omni_core_rs to test skill tool discovery without
+    from xiuxian_core_rs to test skill tool discovery without
     creating temporary files or directories.
     """
 
     def test_scan_paths_discovers_tools(self) -> None:
         """Test that scan_paths discovers tools from virtual file content."""
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         files = [
             (
@@ -739,7 +739,7 @@ async def existing_tool(value: int) -> int:
 
     def test_scan_paths_with_keywords(self) -> None:
         """Test that scan_paths includes skill keywords."""
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         files = [
             (
@@ -762,7 +762,7 @@ def test_tool():
 
     def test_scan_paths_file_hash_consistency(self) -> None:
         """Test that file hash is consistent for identical content."""
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         content = '''"""A tool."""
 
@@ -782,7 +782,7 @@ def tool():
 
     def test_scan_paths_different_hash_for_different_content(self) -> None:
         """Test that different content produces different file hash."""
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         content1 = '''"""Version 1."""
 
@@ -808,7 +808,7 @@ def tool():
 
     def test_parse_script_content_single_tool(self) -> None:
         """Test parse_script_content for single tool."""
-        from omni_core_rs import parse_script_content
+        from xiuxian_core_rs import parse_script_content
 
         content = '''@skill_command(name="my_tool")
 def my_tool(param: str) -> str:
@@ -825,7 +825,7 @@ def my_tool(param: str) -> str:
 
     def test_scan_paths_empty_list(self) -> None:
         """Test that empty file list returns empty tools."""
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         tools = scan_paths([], "git", [], [])
 
@@ -833,7 +833,7 @@ def my_tool(param: str) -> str:
 
     def test_scan_paths_skips_init_and_private(self) -> None:
         """Test that __init__.py and private files are skipped."""
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         files = [
             (
@@ -875,7 +875,7 @@ def public_tool():
         2. User immediately re-creates the file
         3. Both events should be processed correctly
         """
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         # Initial state: tool exists
         initial_files = [
@@ -917,7 +917,7 @@ def test_tool():
 
     def test_scan_paths_multiple_tools_same_file(self) -> None:
         """Test scanning multiple tools in a single file."""
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         files = [
             (
@@ -952,7 +952,7 @@ def tool_c():
 
     def test_scan_paths_preserves_function_name(self) -> None:
         """Test that function name is preserved in ToolRecord."""
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         files = [
             (
@@ -979,7 +979,7 @@ def original_function_name(param: str) -> str:
         This pattern allows testing scanner behavior without
         creating temporary directories or modifying assets.
         """
-        from omni_core_rs import scan_paths
+        from xiuxian_core_rs import scan_paths
 
         def simulate_skill_change(skill_name: str, files: dict[str, str]) -> list:
             """Simulate skill file changes without filesystem."""

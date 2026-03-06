@@ -213,7 +213,7 @@ class TestLinkGraphProximityBoost:
 def _setup_mock_knowledge_graph(
     search_map: dict[str, list[str]],
 ) -> tuple[MagicMock, MagicMock]:
-    """Build mock omni_core_rs module with a configurable entity search.
+    """Build mock xiuxian_core_rs module with a configurable entity search.
 
     search_map: query_term -> list of entity names returned.
     Returns: (mock_module, mock_kg)
@@ -268,7 +268,7 @@ class TestEnrichSkillGraphFromLinkGraph:
 
         scope_key = str(tmp_path / "knowledge.scope")
 
-        with patch.dict(sys.modules, {"omni_core_rs": mock_module}):
+        with patch.dict(sys.modules, {"xiuxian_core_rs": mock_module}):
             result = enrich_skill_graph_from_link_graph(original, scope_key=scope_key)
 
         git_neighbors = dict(result.get("git.commit", []))
@@ -289,7 +289,7 @@ class TestEnrichSkillGraphFromLinkGraph:
 
         scope_key = str(tmp_path / "knowledge.scope")
 
-        with patch.dict(sys.modules, {"omni_core_rs": mock_module}):
+        with patch.dict(sys.modules, {"xiuxian_core_rs": mock_module}):
             result = enrich_skill_graph_from_link_graph(original, scope_key=scope_key)
 
         git_neighbors = dict(result.get("git.commit", []))
@@ -299,16 +299,16 @@ class TestEnrichSkillGraphFromLinkGraph:
         original = {"git.commit": [("git.status", _VERY_LOW_SCORE)]}
         scope_key = str(tmp_path / "knowledge.scope")
 
-        saved = sys.modules.get("omni_core_rs")
-        sys.modules["omni_core_rs"] = None  # type: ignore[assignment]
+        saved = sys.modules.get("xiuxian_core_rs")
+        sys.modules["xiuxian_core_rs"] = None  # type: ignore[assignment]
         try:
             result = enrich_skill_graph_from_link_graph(original, scope_key=scope_key)
             assert result == original
         finally:
             if saved is not None:
-                sys.modules["omni_core_rs"] = saved
+                sys.modules["xiuxian_core_rs"] = saved
             else:
-                sys.modules.pop("omni_core_rs", None)
+                sys.modules.pop("xiuxian_core_rs", None)
 
 
 # ---------------------------------------------------------------------------
@@ -392,16 +392,16 @@ class TestRegisterSkillEntities:
     """Tests for register_skill_entities (Bridge 3: Core 2 → Core 1)."""
 
     def test_skipped_when_rust_unavailable(self, tmp_path: Path) -> None:
-        saved = sys.modules.get("omni_core_rs")
-        sys.modules["omni_core_rs"] = None  # type: ignore[assignment]
+        saved = sys.modules.get("xiuxian_core_rs")
+        sys.modules["xiuxian_core_rs"] = None  # type: ignore[assignment]
         try:
             result = register_skill_entities([], scope_key=str(tmp_path / "knowledge.scope"))
             assert result["status"] == "skipped"
         finally:
             if saved is not None:
-                sys.modules["omni_core_rs"] = saved
+                sys.modules["xiuxian_core_rs"] = saved
             else:
-                sys.modules.pop("omni_core_rs", None)
+                sys.modules.pop("xiuxian_core_rs", None)
 
     def test_persists_valkey_snapshot(self, tmp_path: Path) -> None:
         docs = [
@@ -418,7 +418,7 @@ class TestRegisterSkillEntities:
         result = register_skill_entities(docs, scope_key=scope_key)
 
         if result["status"] == "skipped":
-            pytest.skip("omni_core_rs not available")
+            pytest.skip("xiuxian_core_rs not available")
 
         assert result["status"] == "success"
         assert result["entities_added"] > 0
@@ -446,7 +446,7 @@ class TestRegisterSkillEntities:
         result = register_skill_entities(docs, scope_key=scope_key)
 
         if result["status"] == "skipped":
-            pytest.skip("omni_core_rs not available")
+            pytest.skip("xiuxian_core_rs not available")
 
         # 1 skill + 2 tools + 3 unique keywords = 6 entities
         assert result["entities_added"] >= 6
@@ -460,7 +460,7 @@ class TestRegisterSkillEntities:
 
         r1 = register_skill_entities(docs, scope_key=scope_key)
         if r1["status"] == "skipped":
-            pytest.skip("omni_core_rs not available")
+            pytest.skip("xiuxian_core_rs not available")
 
         r2 = register_skill_entities(docs, scope_key=scope_key)
         # Second run should update, not duplicate
@@ -482,7 +482,7 @@ class TestRegisterSkillEntities:
         result = register_skill_entities([doc], scope_key=scope_key)
 
         if result["status"] == "skipped":
-            pytest.skip("omni_core_rs not available")
+            pytest.skip("xiuxian_core_rs not available")
 
         assert result["entities_added"] >= 1
 

@@ -92,7 +92,7 @@ mkNixago { data = { conform = {...}; }; }  # Full override!
 
 ```bash
 # Agent uses lang_expert
-@omni-orchestrator consult_language_expert file_path="lefthook.nix" task="add hook"
+@xiuxian-orchestrator consult_language_expert file_path="lefthook.nix" task="add hook"
 
 # Returns: "DO NOT use with pkgs; DO NOT full override dmerge"
 # Plus concrete example from tool-router

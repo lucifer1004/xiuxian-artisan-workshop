@@ -23,7 +23,7 @@ def _default_mcp_port() -> int:
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for startup suite."""
     parser = argparse.ArgumentParser(
-        description="Run hot/cold MCP startup regression suite for omni-agent gateway."
+        description="Run hot/cold MCP startup regression suite for xiuxian-daochang gateway."
     )
     parser.add_argument("--hot-rounds", type=int, default=20)
     parser.add_argument("--hot-parallel", type=int, default=8)
@@ -69,10 +69,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-json",
-        default=str(default_report_path("omni-agent-mcp-startup-suite.json")),
+        default=str(default_report_path("xiuxian-daochang-mcp-startup-suite.json")),
     )
     parser.add_argument(
         "--output-markdown",
-        default=str(default_report_path("omni-agent-mcp-startup-suite.md")),
+        default=str(default_report_path("xiuxian-daochang-mcp-startup-suite.md")),
     )
     return parser.parse_args()

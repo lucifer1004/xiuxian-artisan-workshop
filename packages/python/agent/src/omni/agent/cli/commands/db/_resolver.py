@@ -64,7 +64,7 @@ def _list_databases() -> list[dict[str, Any]]:
 def _get_table_count(db_path: str, table_name: str) -> int:
     """Get count of records in a table using Rust store."""
     try:
-        from omni_core_rs import PyVectorStore
+        from xiuxian_core_rs import PyVectorStore
 
         store = PyVectorStore(db_path, 384, False)
         return store.count(table_name)

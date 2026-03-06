@@ -173,7 +173,7 @@ class TaskDecomposer:
 
         # Use Cerebellum (sys_query) to scan for affected code elements
         try:
-            from omni.core.skills.runtime.omni_cell import sys_query
+            from omni.core.skills.runtime.xiuxian_cell import sys_query
 
             working_dir = context.get("working_dir", ".") if context else "."
 

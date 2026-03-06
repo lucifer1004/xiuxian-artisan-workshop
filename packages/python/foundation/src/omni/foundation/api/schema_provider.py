@@ -36,7 +36,7 @@ _BUILTIN_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 _OMNI_CORE_RS_SCHEMA_MAP: dict[str, str] = {
-    # Rust omni_core_rs exposes type-based schema retrieval.
+    # Rust xiuxian_core_rs exposes type-based schema retrieval.
     "omni.vector.hybrid.v1": "HybridSearchResult",
     "omni.vector.search.v1": "VectorSearchResult",
     "omni.vector.tool_search.v1": "ToolSearchResult",
@@ -77,32 +77,32 @@ def get_schema(name: str) -> dict[str, Any]:
         except Exception as e:
             last_error = RuntimeError(f"Failed to load schema '{name}' from Rust binding: {e}")
 
-    # Fallback backend: omni_core_rs named schema registry.
+    # Fallback backend: xiuxian_core_rs named schema registry.
     try:
-        import omni_core_rs
+        import xiuxian_core_rs
 
-        if hasattr(omni_core_rs, "py_get_named_schema_json"):
-            return json.loads(omni_core_rs.py_get_named_schema_json(name))
+        if hasattr(xiuxian_core_rs, "py_get_named_schema_json"):
+            return json.loads(xiuxian_core_rs.py_get_named_schema_json(name))
     except Exception as e:
         last_error = e
 
-    # Secondary backend: omni_core_rs type registry (subset mapping only)
+    # Secondary backend: xiuxian_core_rs type registry (subset mapping only)
     mapped_type = _OMNI_CORE_RS_SCHEMA_MAP.get(name)
     if mapped_type is not None:
         try:
-            import omni_core_rs
+            import xiuxian_core_rs
 
-            return json.loads(omni_core_rs.py_get_schema_json(mapped_type))
+            return json.loads(xiuxian_core_rs.py_get_schema_json(mapped_type))
         except Exception as e:
             last_error = RuntimeError(
-                f"Failed to load schema '{name}' from omni_core_rs type '{mapped_type}': {e}"
+                f"Failed to load schema '{name}' from xiuxian_core_rs type '{mapped_type}': {e}"
             )
 
     if last_error is not None:
         raise last_error
     raise ImportError(
         f"No Rust schema binding available for '{name}'. "
-        "Install `_xiuxian_wendao` or expose named-schema APIs via `omni_core_rs`."
+        "Install `_xiuxian_wendao` or expose named-schema APIs via `xiuxian_core_rs`."
     )
 
 

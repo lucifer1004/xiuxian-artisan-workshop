@@ -24,7 +24,7 @@ class _FakeHTTPResponse:
 
 
 def test_sync_embed_batch_uses_sync_http_path():
-    client = EmbeddingClient(base_url="http://127.0.0.1:18501")
+    client = EmbeddingClient(base_url="http://127.0.0.1:3002")
     with patch(
         "urllib.request.urlopen",
         return_value=_FakeHTTPResponse({"vectors": [[0.1, 0.2], [0.3, 0.4]]}),
@@ -36,7 +36,7 @@ def test_sync_embed_batch_uses_sync_http_path():
 
 
 def test_sync_embed_uses_sync_http_path():
-    client = EmbeddingClient(base_url="http://127.0.0.1:18501")
+    client = EmbeddingClient(base_url="http://127.0.0.1:3002")
     with patch(
         "urllib.request.urlopen",
         return_value=_FakeHTTPResponse({"vector": [0.9, 0.8]}),

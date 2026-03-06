@@ -85,15 +85,17 @@ fn parse_frontmatter_from_markdown_returns_none_without_frontmatter() {
 #[test]
 fn parse_and_validate_asset_requires_markers() {
     let content = "# No frontmatter";
-    let error = parse_and_validate_asset::<DemoFrontmatter>(content)
-        .expect_err("expected missing frontmatter markers error");
+    let Err(error) = parse_and_validate_asset::<DemoFrontmatter>(content) else {
+        panic!("expected missing frontmatter markers error");
+    };
     assert!(error.contains("Missing frontmatter markers"));
 }
 
 #[test]
 fn parse_and_validate_asset_enforces_schema() {
     let content = "---\nother: demo\n---\n# Body\n";
-    let error = parse_and_validate_asset::<DemoFrontmatter>(content)
-        .expect_err("expected schema violation for missing `name`");
+    let Err(error) = parse_and_validate_asset::<DemoFrontmatter>(content) else {
+        panic!("expected schema violation for missing `name`");
+    };
     assert!(error.contains("Frontmatter schema violation"));
 }

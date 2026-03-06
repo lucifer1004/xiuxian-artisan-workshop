@@ -25,9 +25,9 @@ from typing import Any
 from pydantic import BaseModel
 
 try:
-    import omni_core_rs as omni_rs
+    import xiuxian_core_rs as xiuxian_rs
 
-    _compute_hash = getattr(omni_rs, "compute_hash", None)
+    _compute_hash = getattr(xiuxian_rs, "compute_hash", None)
 except ImportError:
     _compute_hash = None
 

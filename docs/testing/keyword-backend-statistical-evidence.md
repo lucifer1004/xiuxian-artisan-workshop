@@ -15,9 +15,9 @@ metadata:
 
 - Generated at: `2026-02-12`
 - Offline datasets:
-  - `packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v1.snap`
-  - `packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap`
-  - `packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v3_skill_based.snap`
+  - `packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v1.snap`
+  - `packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap`
+  - `packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v3_skill_based.snap`
 - Live LLM dataset:
   - `/tmp/keyword-llm-eval-v3-toolcall-full-r1.json`
 

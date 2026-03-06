@@ -25,7 +25,7 @@ def test_run_quick_profile_executes_suite_and_quality_steps(tmp_path: Path) -> N
         project_root=tmp_path,
     )
     env = {"XIUXIAN_WENDAO_VALKEY_URL": endpoints.redis_url(16379, 0)}
-    memory_suite = tmp_path / "test_omni_agent_memory_suite.py"
+    memory_suite = tmp_path / "test_xiuxian_daochang_memory_suite.py"
     recorded_titles: list[str] = []
     gate_steps: list[str] = []
 
@@ -85,9 +85,9 @@ def test_run_nightly_profile_runs_matrix_and_benchmark_flows(tmp_path: Path) -> 
         project_root=tmp_path,
     )
     env = {"XIUXIAN_WENDAO_VALKEY_URL": endpoints.redis_url(16379, 0)}
-    memory_suite = tmp_path / "test_omni_agent_memory_suite.py"
-    session_matrix = tmp_path / "test_omni_agent_session_matrix.py"
-    memory_benchmark = tmp_path / "test_omni_agent_memory_benchmark.py"
+    memory_suite = tmp_path / "test_xiuxian_daochang_memory_suite.py"
+    session_matrix = tmp_path / "test_xiuxian_daochang_session_matrix.py"
+    memory_benchmark = tmp_path / "test_xiuxian_daochang_memory_benchmark.py"
     titles: list[str] = []
     gates: list[str] = []
 

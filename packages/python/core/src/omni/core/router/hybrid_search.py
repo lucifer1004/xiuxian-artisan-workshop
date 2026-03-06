@@ -1,7 +1,7 @@
 """
 hybrid_search.py - Hybrid Search Engine (Rust-Native Implementation)
 
-This module provides a thin Python shell over Rust's omni-vector search.
+This module provides a thin Python shell over Rust's xiuxian-vector search.
 All heavy lifting (vector search, keyword rescue, scoring, fusion) is done in Rust.
 
 Rust Benefits:
@@ -18,7 +18,7 @@ Architecture:
         │
         ▼
     ┌─────────────────────────────────────────┐
-    │         Rust omni-vector Search         │
+    │         Rust xiuxian-vector Search         │
     │  ┌─────────────────┬─────────────────┐  │
     │  │  LanceDB        │   Tantivy       │  │
     │  │  (Vector)       │   (Keyword)     │  │
@@ -577,7 +577,7 @@ class HybridMatch:
 class HybridSearch:
     """Rust-Native Hybrid Search Engine.
 
-    Thin Python shell over Rust omni-vector. All search logic is in Rust:
+    Thin Python shell over Rust xiuxian-vector. All search logic is in Rust:
     - Vector similarity search (LanceDB with normalized vectors)
     - Keyword rescue (Tantivy BM25 for exact/partial matches)
     - Weighted RRF fusion with field boosting
@@ -687,7 +687,7 @@ class HybridSearch:
         keyword_only: bool = False,
         record_timings: dict[str, float] | None = None,
     ) -> list[dict[str, Any]]:
-        """Perform hybrid search using Rust omni-vector engine.
+        """Perform hybrid search using Rust xiuxian-vector engine.
 
         This method orchestrates the full hybrid search pipeline:
         1. Generate query embedding (semantic search)
@@ -739,7 +739,7 @@ class HybridSearch:
             for embedding generation to preserve semantic meaning.
 
         See Also:
-            - Rust omni-vector hybrid search for underlying algorithm
+            - Rust xiuxian-vector hybrid search for underlying algorithm
         """
         _t_search_start = time.perf_counter() if record_timings is not None else None
         # Optional: translate non-English query to English (SKILL.md is English-only)
@@ -1087,7 +1087,7 @@ class HybridSearch:
     def get_weights(self) -> tuple[float, float]:
         """Get the current search weights used by Rust.
 
-        These are the fixed weights defined in Rust's omni-vector crate.
+        These are the fixed weights defined in Rust's xiuxian-vector crate.
 
         Returns:
             Tuple of (semantic_weight, keyword_weight) = (1.0, 1.5).

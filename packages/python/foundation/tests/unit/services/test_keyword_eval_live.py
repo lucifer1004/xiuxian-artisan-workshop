@@ -20,7 +20,7 @@ async def test_keyword_backend_llm_live_duel() -> None:
         pytest.skip("LLM provider is not available in current environment")
 
     snapshot = Path(
-        "packages/rust/crates/omni-vector/tests/snapshots/"
+        "packages/rust/crates/xiuxian-vector/tests/snapshots/"
         "test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap"
     )
     report = await evaluate_keyword_backends_with_llm(

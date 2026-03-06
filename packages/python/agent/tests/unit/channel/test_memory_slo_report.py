@@ -11,7 +11,10 @@ from omni.foundation.runtime.gitops import get_project_root
 
 def _load_module():
     module_path = (
-        Path(get_project_root()) / "scripts" / "channel" / "test_omni_agent_memory_slo_report.py"
+        Path(get_project_root())
+        / "scripts"
+        / "channel"
+        / "test_xiuxian_daochang_memory_slo_report.py"
     )
     spec = importlib.util.spec_from_file_location("channel_memory_slo_report", module_path)
     assert spec is not None
@@ -30,12 +33,12 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 def _build_args(tmp_path: Path, **overrides: object) -> argparse.Namespace:
     base: dict[str, object] = {
         "project_root": str(tmp_path),
-        "evolution_report_json": ".run/reports/omni-agent-memory-evolution.json",
-        "benchmark_report_json": ".run/reports/omni-agent-memory-benchmark.json",
+        "evolution_report_json": ".run/reports/xiuxian-daochang-memory-evolution.json",
+        "benchmark_report_json": ".run/reports/xiuxian-daochang-memory-benchmark.json",
         "session_matrix_report_json": ".run/reports/agent-channel-session-matrix.json",
-        "runtime_log_file": ".run/logs/omni-agent-webhook.log",
-        "output_json": ".run/reports/omni-agent-memory-slo-report.json",
-        "output_markdown": ".run/reports/omni-agent-memory-slo-report.md",
+        "runtime_log_file": ".run/logs/xiuxian-daochang-webhook.log",
+        "output_json": ".run/reports/xiuxian-daochang-memory-slo-report.json",
+        "output_markdown": ".run/reports/xiuxian-daochang-memory-slo-report.md",
         "min_planned_hits": 10,
         "min_successful_corrections": 3,
         "min_recall_credit_events": 1,
@@ -81,15 +84,15 @@ def _seed_reports(tmp_path: Path, *, benchmark_mcp_errors: int = 0) -> None:
         "overall_passed": True,
         "summary": {"total": 9, "failed": 0},
     }
-    _write_json(tmp_path / ".run/reports/omni-agent-memory-evolution.json", evolution_report)
-    _write_json(tmp_path / ".run/reports/omni-agent-memory-benchmark.json", benchmark_report)
+    _write_json(tmp_path / ".run/reports/xiuxian-daochang-memory-evolution.json", evolution_report)
+    _write_json(tmp_path / ".run/reports/xiuxian-daochang-memory-benchmark.json", benchmark_report)
     _write_json(tmp_path / ".run/reports/agent-channel-session-matrix.json", session_matrix_report)
 
 
 def test_memory_slo_report_passes_when_all_gates_pass(tmp_path: Path) -> None:
     module = _load_module()
     _seed_reports(tmp_path)
-    runtime_log = tmp_path / ".run/logs/omni-agent-webhook.log"
+    runtime_log = tmp_path / ".run/logs/xiuxian-daochang-webhook.log"
     runtime_log.parent.mkdir(parents=True, exist_ok=True)
     runtime_log.write_text(
         "\n".join(
@@ -115,7 +118,7 @@ def test_memory_slo_report_passes_when_all_gates_pass(tmp_path: Path) -> None:
 def test_memory_slo_report_fails_when_benchmark_mcp_errors_present(tmp_path: Path) -> None:
     module = _load_module()
     _seed_reports(tmp_path, benchmark_mcp_errors=1)
-    runtime_log = tmp_path / ".run/logs/omni-agent-webhook.log"
+    runtime_log = tmp_path / ".run/logs/xiuxian-daochang-webhook.log"
     runtime_log.parent.mkdir(parents=True, exist_ok=True)
     runtime_log.write_text(
         "\n".join(
@@ -139,7 +142,7 @@ def test_memory_slo_report_fails_when_benchmark_mcp_errors_present(tmp_path: Pat
 def test_memory_slo_report_fails_on_low_stream_ack_ratio(tmp_path: Path) -> None:
     module = _load_module()
     _seed_reports(tmp_path)
-    runtime_log = tmp_path / ".run/logs/omni-agent-webhook.log"
+    runtime_log = tmp_path / ".run/logs/xiuxian-daochang-webhook.log"
     runtime_log.parent.mkdir(parents=True, exist_ok=True)
     runtime_log.write_text(
         "\n".join(

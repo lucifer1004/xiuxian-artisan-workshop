@@ -32,11 +32,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--evolution-report-json",
-        default=str(default_report_path("omni-agent-memory-evolution.json")),
+        default=str(default_report_path("xiuxian-daochang-memory-evolution.json")),
     )
     parser.add_argument(
         "--benchmark-report-json",
-        default=str(default_report_path("omni-agent-memory-benchmark.json")),
+        default=str(default_report_path("xiuxian-daochang-memory-benchmark.json")),
     )
     parser.add_argument(
         "--session-matrix-report-json",
@@ -49,11 +49,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-json",
-        default=str(default_report_path("omni-agent-memory-slo-report.json")),
+        default=str(default_report_path("xiuxian-daochang-memory-slo-report.json")),
     )
     parser.add_argument(
         "--output-markdown",
-        default=str(default_report_path("omni-agent-memory-slo-report.md")),
+        default=str(default_report_path("xiuxian-daochang-memory-slo-report.md")),
     )
     parser.add_argument("--min-planned-hits", type=int, default=10)
     parser.add_argument("--min-successful-corrections", type=int, default=3)

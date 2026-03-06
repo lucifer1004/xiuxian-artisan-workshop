@@ -153,7 +153,7 @@ class _ProbeProvider:
 @pytest.mark.asyncio
 async def test_evaluate_keyword_backends_with_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     snapshot = Path(
-        "packages/rust/crates/omni-vector/tests/snapshots/"
+        "packages/rust/crates/xiuxian-vector/tests/snapshots/"
         "test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap"
     )
     monkeypatch.setattr(keyword_eval, "get_llm_provider", lambda: _FakeProvider())
@@ -191,7 +191,7 @@ async def test_evaluate_keyword_backends_with_llm_tool_call_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     snapshot = Path(
-        "packages/rust/crates/omni-vector/tests/snapshots/"
+        "packages/rust/crates/xiuxian-vector/tests/snapshots/"
         "test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap"
     )
     monkeypatch.setattr(keyword_eval, "get_llm_provider", lambda: _ToolCallProvider())
@@ -234,7 +234,7 @@ async def test_evaluate_keyword_backends_with_llm_reformat_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     snapshot = Path(
-        "packages/rust/crates/omni-vector/tests/snapshots/"
+        "packages/rust/crates/xiuxian-vector/tests/snapshots/"
         "test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap"
     )
     monkeypatch.setattr(keyword_eval, "get_llm_provider", lambda: _ReformatProvider())
@@ -255,7 +255,7 @@ async def test_evaluate_keyword_backends_with_llm_fallback_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     snapshot = Path(
-        "packages/rust/crates/omni-vector/tests/snapshots/"
+        "packages/rust/crates/xiuxian-vector/tests/snapshots/"
         "test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap"
     )
     monkeypatch.setattr(keyword_eval, "get_llm_provider", lambda: _FallbackModelProvider())
@@ -277,7 +277,7 @@ async def test_evaluate_keyword_backends_with_llm_fallback_model(
 @pytest.mark.asyncio
 async def test_evaluate_keyword_backends_multi_model(monkeypatch: pytest.MonkeyPatch) -> None:
     snapshot = Path(
-        "packages/rust/crates/omni-vector/tests/snapshots/"
+        "packages/rust/crates/xiuxian-vector/tests/snapshots/"
         "test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap"
     )
     monkeypatch.setattr(keyword_eval, "get_llm_provider", lambda: _FallbackModelProvider())
@@ -297,7 +297,7 @@ async def test_evaluate_keyword_backends_multi_model_skip_unsupported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     snapshot = Path(
-        "packages/rust/crates/omni-vector/tests/snapshots/"
+        "packages/rust/crates/xiuxian-vector/tests/snapshots/"
         "test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap"
     )
     monkeypatch.setattr(keyword_eval, "get_llm_provider", lambda: _ProbeProvider())

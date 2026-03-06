@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_discord_ingress_stress.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_discord_ingress_stress.py."""
 
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 
 def _load_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_discord_ingress_stress.py"
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_discord_ingress_stress.py"
     spec = importlib.util.spec_from_file_location(
-        "omni_agent_discord_ingress_stress",
+        "xiuxian_daochang_discord_ingress_stress",
         script_path,
     )
     assert spec is not None

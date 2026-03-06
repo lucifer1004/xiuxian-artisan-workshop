@@ -3,9 +3,9 @@ type: skill
 name: code_tools
 description: Use when searching code by structure or meaning, analyzing code patterns, finding class or function definitions, or exploring codebase architecture.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "2.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/code_tools"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/code_tools"
   routing_keywords:
     - "code"
     - "search"

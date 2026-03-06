@@ -1,10 +1,10 @@
 use super::HotReloadRuntime;
 use anyhow::{Result, anyhow};
-use omni_io::{FileEvent, FileWatcherHandle, WatcherConfig, start_file_watcher};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
+use xiuxian_io::{FileEvent, FileWatcherHandle, WatcherConfig, start_file_watcher};
 
 /// Background driver that wires local file watcher events and remote version
 /// polling into a [`HotReloadRuntime`].
@@ -51,7 +51,7 @@ impl HotReloadDriver {
 
         let watcher = start_file_watcher(
             watcher_config,
-            Some(move |(event, _omni_event)| {
+            Some(move |(event, _bus_event)| {
                 if let Some(path) = event_path(&event) {
                     let _ = callback_tx.send(path);
                 }

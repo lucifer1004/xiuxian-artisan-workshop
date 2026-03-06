@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execution runner helpers for omni-agent memory CI gate."""
+"""Execution runner helpers for xiuxian-daochang memory CI gate."""
 
 from __future__ import annotations
 

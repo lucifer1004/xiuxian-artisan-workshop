@@ -10,15 +10,15 @@ from typing import Any
 
 
 class RustWendaoUnavailableError(RuntimeError):
-    """Raised when `omni_core_rs.PyLinkGraphEngine` is unavailable."""
+    """Raised when `xiuxian_core_rs.PyLinkGraphEngine` is unavailable."""
 
 
 def _import_rust_module() -> Any:
     try:
-        return importlib.import_module("omni_core_rs")
+        return importlib.import_module("xiuxian_core_rs")
     except Exception as exc:
         raise RustWendaoUnavailableError(
-            "omni_core_rs is unavailable; install omni-core-rs before using xiuxian-wendao-py"
+            "xiuxian_core_rs is unavailable; install xiuxian-core-rs before using xiuxian-wendao-py"
         ) from exc
 
 
@@ -27,7 +27,7 @@ def _import_engine_class() -> type[Any]:
     engine_cls = getattr(module, "PyLinkGraphEngine", None)
     if engine_cls is None:
         raise RustWendaoUnavailableError(
-            "omni_core_rs.PyLinkGraphEngine is unavailable; verify omni-core-rs build"
+            "xiuxian_core_rs.PyLinkGraphEngine is unavailable; verify xiuxian-core-rs build"
         )
     return engine_cls
 
@@ -68,7 +68,7 @@ def stats_cache_get(source_key: str, ttl_sec: float) -> dict[str, Any] | None:
     fn = getattr(module, "link_graph_stats_cache_get", None)
     if not callable(fn):
         raise RustWendaoUnavailableError(
-            "omni_core_rs.link_graph_stats_cache_get is unavailable; verify omni-core-rs build"
+            "xiuxian_core_rs.link_graph_stats_cache_get is unavailable; verify xiuxian-core-rs build"
         )
     raw = fn(str(source_key), float(ttl_sec))
     if raw is None:
@@ -81,7 +81,7 @@ def stats_cache_set(source_key: str, stats_payload: dict[str, Any], ttl_sec: flo
     fn = getattr(module, "link_graph_stats_cache_set", None)
     if not callable(fn):
         raise RustWendaoUnavailableError(
-            "omni_core_rs.link_graph_stats_cache_set is unavailable; verify omni-core-rs build"
+            "xiuxian_core_rs.link_graph_stats_cache_set is unavailable; verify xiuxian-core-rs build"
         )
     stats_only = _decode_json_object(stats_payload).get("stats", stats_payload)
     fn(str(source_key), json.dumps(stats_only, sort_keys=True), float(ttl_sec))
@@ -93,7 +93,7 @@ def stats_cache_del(source_key: str) -> None:
     fn = getattr(module, "link_graph_stats_cache_del", None)
     if not callable(fn):
         raise RustWendaoUnavailableError(
-            "omni_core_rs.link_graph_stats_cache_del is unavailable; verify omni-core-rs build"
+            "xiuxian_core_rs.link_graph_stats_cache_del is unavailable; verify xiuxian-core-rs build"
         )
     fn(str(source_key))
     return None
@@ -101,7 +101,7 @@ def stats_cache_del(source_key: str) -> None:
 
 @dataclass(slots=True)
 class WendaoEngine:
-    """Thin wrapper over `omni_core_rs.PyLinkGraphEngine`."""
+    """Thin wrapper over `xiuxian_core_rs.PyLinkGraphEngine`."""
 
     _inner: Any
 

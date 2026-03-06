@@ -105,7 +105,7 @@ SKILL_CODE_GENERATION_PROMPT = textwrap.dedent("""
     <requirements>
     1. Use @skill_command decorator from omni.core.skills.runtime.decorators
     2. Create async function with parameters matching the spec
-    3. Use OmniCellRunner to execute the Nushell script
+    3. Use XiuxianCellRunner to execute the Nushell script
     4. Parameter types inferred from names (str, Path, int, bool)
     5. Add docstring with usage examples
     6. Include proper error handling

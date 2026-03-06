@@ -343,7 +343,7 @@ class TestBatchDelete:
 
     def _create_store(self, tmp_path):
         """Create a PyVectorStore with dimension from settings."""
-        from omni_core_rs import PyVectorStore
+        from xiuxian_core_rs import PyVectorStore
 
         from omni.foundation.config.settings import get_setting
 
@@ -375,7 +375,7 @@ class TestIncrementalSync:
 
     def _create_store(self, tmp_path):
         """Create a PyVectorStore with dimension from settings."""
-        from omni_core_rs import PyVectorStore
+        from xiuxian_core_rs import PyVectorStore
 
         from omni.foundation.config.settings import get_setting
 
@@ -437,7 +437,7 @@ class TestRustSyncEngine:
     def test_sync_engine_creation(self, tmp_path):
         """PySyncEngine should be creatable."""
         try:
-            from omni_core_rs import PySyncEngine
+            from xiuxian_core_rs import PySyncEngine
         except ImportError:
             pytest.skip("Rust bindings not available")
 
@@ -447,7 +447,7 @@ class TestRustSyncEngine:
     def test_sync_engine_load_manifest(self, tmp_path):
         """SyncEngine should load manifest from disk."""
         try:
-            from omni_core_rs import PySyncEngine
+            from xiuxian_core_rs import PySyncEngine
         except ImportError:
             pytest.skip("Rust bindings not available")
 
@@ -460,7 +460,7 @@ class TestRustSyncEngine:
     def test_sync_engine_save_manifest(self, tmp_path):
         """SyncEngine should save manifest to disk."""
         try:
-            from omni_core_rs import PySyncEngine
+            from xiuxian_core_rs import PySyncEngine
         except ImportError:
             pytest.skip("Rust bindings not available")
 
@@ -477,7 +477,7 @@ class TestRustSyncEngine:
     def test_sync_engine_discover_files(self, tmp_path):
         """SyncEngine should discover Python and Markdown files."""
         try:
-            from omni_core_rs import PySyncEngine
+            from xiuxian_core_rs import PySyncEngine
         except ImportError:
             pytest.skip("Rust bindings not available")
 
@@ -499,7 +499,7 @@ class TestRustSyncEngine:
     def test_sync_engine_compute_diff(self, tmp_path):
         """SyncEngine should compute diff between manifest and filesystem."""
         try:
-            from omni_core_rs import PySyncEngine
+            from xiuxian_core_rs import PySyncEngine
         except ImportError:
             pytest.skip("Rust bindings not available")
 
@@ -531,7 +531,7 @@ class TestRustSyncEngine:
     def test_sync_engine_compute_hash(self):
         """compute_hash should produce consistent xxhash output."""
         try:
-            from omni_core_rs import compute_hash
+            from xiuxian_core_rs import compute_hash
         except ImportError:
             pytest.skip("Rust bindings not available")
 
@@ -551,7 +551,7 @@ class TestRustSyncEngineDelete:
     def test_sync_engine_deleted_files_in_diff(self, tmp_path):
         """SyncEngine should detect deleted files in diff."""
         try:
-            from omni_core_rs import PySyncEngine
+            from xiuxian_core_rs import PySyncEngine
         except ImportError:
             pytest.skip("Rust bindings not available")
 
@@ -571,7 +571,7 @@ class TestRustDiscoverFunctions:
 
     def test_discover_files_finds_python_files(self, tmp_path):
         """discover_files should find Python files using Rust."""
-        from omni_core_rs import discover_files
+        from xiuxian_core_rs import discover_files
 
         # Create test files
         (tmp_path / "test.py").write_text("def hello():\n    return 'world'\n")
@@ -594,7 +594,7 @@ class TestRustDiscoverFunctions:
 
     def test_discover_files_in_dir(self, tmp_path):
         """discover_files_in_dir should find files in a single directory."""
-        from omni_core_rs import discover_files_in_dir
+        from xiuxian_core_rs import discover_files_in_dir
 
         # Create test files
         (tmp_path / "module.py").write_text("print('hello')")
@@ -615,7 +615,7 @@ class TestRustDiscoverFunctions:
 
     def test_count_files_in_dir(self, tmp_path):
         """count_files_in_dir should return correct count."""
-        from omni_core_rs import count_files_in_dir
+        from xiuxian_core_rs import count_files_in_dir
 
         # Create test files
         (tmp_path / "a.py").write_text("a")
@@ -632,7 +632,7 @@ class TestRustDiscoverFunctions:
 
     def test_should_skip_path(self):
         """should_skip_path should correctly skip paths."""
-        from omni_core_rs import should_skip_path
+        from xiuxian_core_rs import should_skip_path
 
         # Target directory should be skipped
         assert should_skip_path("/project/target/file.py", True, ["target", "node_modules"])
@@ -648,7 +648,7 @@ class TestRustDiscoverFunctions:
 
     def test_discover_files_respects_skip_dirs(self, tmp_path):
         """discover_files should skip configured directories."""
-        from omni_core_rs import discover_files
+        from xiuxian_core_rs import discover_files
 
         # Create structure
         (tmp_path / "main.py").write_text("print('main')")

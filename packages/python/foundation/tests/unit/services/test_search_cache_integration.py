@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("omni_core_rs")
+pytest.importorskip("xiuxian_core_rs")
 
 from omni.foundation.bridge.rust_vector import RUST_AVAILABLE, RustVectorStore
 

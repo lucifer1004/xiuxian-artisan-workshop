@@ -32,27 +32,27 @@ const HMAS_EVIDENCE_V1: &str =
     include_str!("../resources/xiuxian_wendao.hmas.evidence.v1.schema.json");
 const HMAS_TASK_V1: &str = include_str!("../resources/xiuxian_wendao.hmas.task.v1.schema.json");
 
-// --- omni-agent schemas ---
+// --- xiuxian-daochang schemas ---
 const AGENT_ROUTE_TRACE_V1: &str =
-    include_str!("../../omni-agent/resources/omni.agent.route_trace.v1.schema.json");
+    include_str!("../../xiuxian-daochang/resources/omni.agent.route_trace.v1.schema.json");
 const AGENT_SERVER_INFO_V1: &str =
-    include_str!("../../omni-agent/resources/omni.agent.server_info.v1.schema.json");
+    include_str!("../../xiuxian-daochang/resources/omni.agent.server_info.v1.schema.json");
 const AGENT_SESSION_CLOSED_V1: &str =
-    include_str!("../../omni-agent/resources/omni.agent.session_closed.v1.schema.json");
+    include_str!("../../xiuxian-daochang/resources/omni.agent.session_closed.v1.schema.json");
 const ROUTER_ROUTE_TEST_V1: &str =
-    include_str!("../../omni-agent/resources/omni.router.route_test.v1.schema.json");
+    include_str!("../../xiuxian-daochang/resources/omni.router.route_test.v1.schema.json");
 const ROUTER_ROUTING_SEARCH_V1: &str =
-    include_str!("../../omni-agent/resources/omni.router.routing_search.v1.schema.json");
+    include_str!("../../xiuxian-daochang/resources/omni.router.routing_search.v1.schema.json");
 const ROUTER_SEARCH_CONFIG_V1: &str =
-    include_str!("../../omni-agent/resources/omni.router.search_config.v1.schema.json");
+    include_str!("../../xiuxian-daochang/resources/omni.router.search_config.v1.schema.json");
 const DISCOVER_MATCH_V1: &str =
-    include_str!("../../omni-agent/resources/omni.discover.match.v1.schema.json");
+    include_str!("../../xiuxian-daochang/resources/omni.discover.match.v1.schema.json");
 const SKILLS_MONITOR_SIGNALS_V1: &str =
-    include_str!("../../omni-agent/resources/omni.skills_monitor.signals.v1.schema.json");
+    include_str!("../../xiuxian-daochang/resources/omni.skills_monitor.signals.v1.schema.json");
 
-// --- omni-memory schemas ---
+// --- xiuxian-memory-engine schemas ---
 const MEMORY_GATE_EVENT_V1: &str =
-    include_str!("../../omni-memory/resources/omni.memory.gate_event.v1.schema.json");
+    include_str!("../../xiuxian-memory-engine/resources/omni.memory.gate_event.v1.schema.json");
 
 // --- xiuxian-skills schemas ---
 const SKILL_METADATA_V1: &str =
@@ -60,13 +60,13 @@ const SKILL_METADATA_V1: &str =
 const SKILL_COMMAND_INDEX_V1: &str =
     include_str!("../../xiuxian-skills/resources/omni.skill.command_index.v1.schema.json");
 
-// --- omni-vector schemas ---
+// --- xiuxian-vector schemas ---
 const VECTOR_HYBRID_V1: &str =
-    include_str!("../../omni-vector/resources/omni.vector.hybrid.v1.schema.json");
+    include_str!("../../xiuxian-vector/resources/omni.vector.hybrid.v1.schema.json");
 const VECTOR_SEARCH_V1: &str =
-    include_str!("../../omni-vector/resources/omni.vector.search.v1.schema.json");
+    include_str!("../../xiuxian-vector/resources/omni.vector.search.v1.schema.json");
 const VECTOR_TOOL_SEARCH_V1: &str =
-    include_str!("../../omni-vector/resources/omni.vector.tool_search.v1.schema.json");
+    include_str!("../../xiuxian-vector/resources/omni.vector.tool_search.v1.schema.json");
 
 // --- xiuxian-mcp schemas ---
 const MCP_TOOL_RESULT_V1: &str =

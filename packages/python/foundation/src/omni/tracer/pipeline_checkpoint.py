@@ -7,13 +7,13 @@ from typing import Any
 from omni.foundation.config.logging import get_logger
 from omni.foundation.workflow_state import get_checkpointer
 
-logger = get_logger("omni.tracer.pipeline")
+logger = get_logger("xiuxian.tracer.pipeline")
 
 
 def create_in_memory_checkpointer() -> Any | None:
     """Create a native workflow-state checkpointer handle."""
     try:
-        return get_checkpointer("omni_tracer_pipeline")
+        return get_checkpointer("xiuxian_tracer_pipeline")
     except Exception as exc:  # pragma: no cover - environment dependent
         logger.warning("workflow_checkpointer_unavailable", error=str(exc))
         return None

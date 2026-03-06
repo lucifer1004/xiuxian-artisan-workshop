@@ -15,7 +15,7 @@ metadata:
 
 - Generated at: `2026-02-12 04:14:53Z`
 - Source JSON: `/tmp/keyword-llm-eval-v4-multimodel-q3-v3.json`
-- Snapshot: `packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
+- Snapshot: `packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
 - Models: `MiniMax-M2.1, MiniMax-M2.5`
 - Evaluated models: `MiniMax-M2.1`
 - Best model by reliability: `MiniMax-M2.1`

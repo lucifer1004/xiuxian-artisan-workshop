@@ -3,10 +3,10 @@
 //! Provides Python API for assembling skill context with parallel I/O,
 //! template rendering, and token counting.
 
-use omni_tokenizer::{ContextPruner, Message};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::path::PathBuf;
+use xiuxian_tokenizer::{ContextPruner, Message};
 
 /// Result of assembling skill context.
 #[pyclass(name = "AssemblyResult")]
@@ -30,7 +30,7 @@ pub struct PyAssemblyResult {
 /// # Example
 ///
 /// ```python
-/// from omni_core_rs import ContextAssembler
+/// from xiuxian_core_rs import ContextAssembler
 ///
 /// assembler = ContextAssembler()
 /// content, tokens, missing = assembler.assemble(
@@ -41,7 +41,7 @@ pub struct PyAssemblyResult {
 /// ```
 #[pyclass(name = "ContextAssembler")]
 pub struct PyContextAssembler {
-    inner: omni_io::ContextAssembler,
+    inner: xiuxian_io::ContextAssembler,
 }
 
 #[pymethods]
@@ -49,7 +49,7 @@ impl PyContextAssembler {
     #[new]
     fn new() -> Self {
         Self {
-            inner: omni_io::ContextAssembler::new(),
+            inner: xiuxian_io::ContextAssembler::new(),
         }
     }
 

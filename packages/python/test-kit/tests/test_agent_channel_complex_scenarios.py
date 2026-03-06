@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_complex_scenarios.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_complex_scenarios.py."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
 def _load_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_complex_scenarios.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_complex_scenarios", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_complex_scenarios.py"
+    spec = importlib.util.spec_from_file_location("xiuxian_daochang_complex_scenarios", script_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -240,7 +240,7 @@ def test_build_config_prefers_env_session_a_over_log_inference(monkeypatch) -> N
         sys,
         "argv",
         [
-            "test_omni_agent_complex_scenarios.py",
+            "test_xiuxian_daochang_complex_scenarios.py",
             "--dataset",
             str(fixture_path),
         ],
@@ -272,7 +272,7 @@ def test_build_config_uses_resolver_secret_when_missing(monkeypatch) -> None:
         sys,
         "argv",
         [
-            "test_omni_agent_complex_scenarios.py",
+            "test_xiuxian_daochang_complex_scenarios.py",
             "--dataset",
             str(fixture_path),
         ],
@@ -308,7 +308,7 @@ def test_build_config_prefers_allowlisted_peers_over_unlisted_plus_two(monkeypat
         sys,
         "argv",
         [
-            "test_omni_agent_complex_scenarios.py",
+            "test_xiuxian_daochang_complex_scenarios.py",
             "--dataset",
             str(fixture_path),
         ],
@@ -343,7 +343,7 @@ def test_build_config_defaults_thread_ids_for_chat_thread_user(monkeypatch) -> N
         sys,
         "argv",
         [
-            "test_omni_agent_complex_scenarios.py",
+            "test_xiuxian_daochang_complex_scenarios.py",
             "--dataset",
             str(fixture_path),
         ],

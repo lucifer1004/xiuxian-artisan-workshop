@@ -4,7 +4,7 @@ This module provides Python interfaces to the Rust-accelerated sandbox
 execution layer for nsjail (Linux) and seatbelt (macOS).
 """
 
-from omni_core_rs import (
+from xiuxian_core_rs import (
     ExecutionResult,
     MountConfig,
     NsJailExecutor,

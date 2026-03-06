@@ -419,6 +419,7 @@ async def test_tools_stats_log_is_throttled(monkeypatch: pytest.MonkeyPatch) -> 
     handler._tools_cache_ttl_secs = 60.0
     handler._tools_log_interval_secs = 10_000.0
     handler._tools_stats_log_interval_secs = 10_000.0
+    handler._tools_stats_last_log_at = -1_000_000.0
 
     info_messages: list[str] = []
 

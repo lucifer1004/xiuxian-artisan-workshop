@@ -13,7 +13,7 @@ def add_report_path_args(parser: Any) -> None:
         default="",
         help=(
             "Optional runtime log file path. "
-            "Default: .run/logs/omni-agent-webhook-ci-<profile>-<run-suffix>.log"
+            "Default: .run/logs/xiuxian-daochang-webhook-ci-<profile>-<run-suffix>.log"
         ),
     )
     parser.add_argument(
@@ -21,7 +21,7 @@ def add_report_path_args(parser: Any) -> None:
         default="",
         help=(
             "Optional mock Telegram log file path. "
-            "Default: .run/logs/omni-agent-mock-telegram-<profile>-<run-suffix>.log"
+            "Default: .run/logs/xiuxian-daochang-mock-telegram-<profile>-<run-suffix>.log"
         ),
     )
     parser.add_argument(
@@ -29,7 +29,7 @@ def add_report_path_args(parser: Any) -> None:
         default="",
         help=(
             "Optional evolution report path. "
-            "Default: .run/reports/omni-agent-memory-evolution-<profile>-<run-suffix>.json"
+            "Default: .run/reports/xiuxian-daochang-memory-evolution-<profile>-<run-suffix>.json"
         ),
     )
     parser.add_argument(
@@ -37,7 +37,7 @@ def add_report_path_args(parser: Any) -> None:
         default="",
         help=(
             "Optional benchmark report path. "
-            "Default: .run/reports/omni-agent-memory-benchmark-<profile>-<run-suffix>.json"
+            "Default: .run/reports/xiuxian-daochang-memory-benchmark-<profile>-<run-suffix>.json"
         ),
     )
     parser.add_argument(
@@ -61,7 +61,7 @@ def add_report_path_args(parser: Any) -> None:
         default="",
         help=(
             "Optional trace report JSON path. "
-            "Default: .run/reports/omni-agent-trace-reconstruction-<profile>-<run-suffix>.json"
+            "Default: .run/reports/xiuxian-daochang-trace-reconstruction-<profile>-<run-suffix>.json"
         ),
     )
     parser.add_argument(
@@ -69,7 +69,7 @@ def add_report_path_args(parser: Any) -> None:
         default="",
         help=(
             "Optional trace report Markdown path. "
-            "Default: .run/reports/omni-agent-trace-reconstruction-<profile>-<run-suffix>.md"
+            "Default: .run/reports/xiuxian-daochang-trace-reconstruction-<profile>-<run-suffix>.md"
         ),
     )
     parser.add_argument(

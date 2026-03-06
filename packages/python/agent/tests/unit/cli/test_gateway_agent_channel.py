@@ -40,7 +40,7 @@ def test_channel_uses_env_token_and_execs_binary(monkeypatch):
     app = _build_channel_app()
     runner = CliRunner()
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env-token")
-    monkeypatch.delenv("OMNI_AGENT_MAX_TOOL_ROUNDS", raising=False)
+    monkeypatch.delenv("XIUXIAN_DAOCHANG_MAX_TOOL_ROUNDS", raising=False)
 
     with (
         patch(
@@ -54,14 +54,14 @@ def test_channel_uses_env_token_and_execs_binary(monkeypatch):
     assert result.exit_code == 0
     m_execvp.assert_called_once()
     binary, argv = m_execvp.call_args.args
-    assert binary == "omni-agent"
+    assert binary == "xiuxian-daochang"
     assert argv == [
-        "omni-agent",
+        "xiuxian-daochang",
         "channel",
         "--bot-token",
         "env-token",
     ]
-    assert os.environ["OMNI_AGENT_MAX_TOOL_ROUNDS"] == "42"
+    assert os.environ["XIUXIAN_DAOCHANG_MAX_TOOL_ROUNDS"] == "42"
 
 
 def test_channel_prefers_cli_token_over_env(monkeypatch):
@@ -102,7 +102,7 @@ def test_channel_forwards_only_token_runtime_flags(monkeypatch):
     assert result.exit_code == 0
     _, argv = m_execvp.call_args.args
     assert argv == [
-        "omni-agent",
+        "xiuxian-daochang",
         "channel",
         "--bot-token",
         "env-token",

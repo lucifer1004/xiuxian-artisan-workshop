@@ -95,7 +95,7 @@ def _get_image_paths_for_source(source_suffix: str) -> list[str]:
     if not source_suffix or not source_suffix.strip():
         return []
     try:
-        manifest_path = PRJ_CACHE("omni-vector", "image_manifests.json")
+        manifest_path = PRJ_CACHE("xiuxian-vector", "image_manifests.json")
         path = Path(manifest_path) if not isinstance(manifest_path, Path) else manifest_path
         if not path.exists():
             return []

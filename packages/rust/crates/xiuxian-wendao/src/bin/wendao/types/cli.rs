@@ -2,6 +2,7 @@ use super::commands::Command;
 use super::enums::OutputFormat;
 use clap::Parser;
 use std::path::PathBuf;
+use xiuxian_logging::LogCliArgs;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -37,6 +38,10 @@ pub(crate) struct Cli {
     /// Output format.
     #[arg(long, short = 'o', value_enum, default_value_t = OutputFormat::Json, global = true)]
     pub output: OutputFormat,
+
+    /// Global structured logging controls.
+    #[command(flatten)]
+    pub logging: LogCliArgs,
 
     #[command(subcommand)]
     pub command: Command,

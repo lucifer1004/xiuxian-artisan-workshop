@@ -2,12 +2,11 @@
 
 #![cfg(feature = "llm")]
 
-use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use xiuxian_llm::llm::{ChatRequest, LlmClient};
+use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmError, LlmResult};
 use xiuxian_qianhuan::{
     orchestrator::ThousandFacesOrchestrator,
     persona::{PersonaProfile, PersonaRegistry},
@@ -34,14 +33,13 @@ impl SequencedMockLlmClient {
 
 #[async_trait]
 impl LlmClient for SequencedMockLlmClient {
-    async fn chat(&self, request: ChatRequest) -> Result<String> {
+    async fn chat(&self, request: ChatRequest) -> LlmResult<String> {
         if let Ok(mut models) = self.seen_models.lock() {
             models.push(request.model);
         }
-        let mut responses = self
-            .responses
-            .lock()
-            .map_err(|_| anyhow::anyhow!("failed to lock llm response queue"))?;
+        let mut responses = self.responses.lock().map_err(|_| LlmError::Internal {
+            message: "failed to lock llm response queue".to_string(),
+        })?;
         if responses.is_empty() {
             return Ok("<score>1.0</score>".to_string());
         }

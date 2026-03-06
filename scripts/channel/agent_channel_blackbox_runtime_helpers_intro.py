@@ -21,6 +21,14 @@ def print_probe_intro(cfg: Any, *, update_id: int, trace_id: str, message_text: 
     print(f"  session_partition={cfg.session_partition or 'auto'}")
     print(f"  log_file={cfg.log_file}")
     print(f"  trace_mode={'on' if trace_id in message_text else 'off'}")
+    image_url = getattr(cfg, "image_url", None)
+    if image_url:
+        if str(image_url).startswith("data:"):
+            print("  image_marker=data_uri(inline)")
+        else:
+            print(f"  image_marker={image_url}")
+    if getattr(cfg, "native_tools_only", False):
+        print("  native_tools_only=true")
     if cfg.allow_chat_ids:
         print(f"  allow_chat_ids={list(cfg.allow_chat_ids)}")
     else:

@@ -17,7 +17,7 @@ from config_resolver_runtime import normalize_telegram_session_partition_mode
 def telegram_session_partition_mode(repo_root: Path | None = None) -> str | None:
     """Resolve canonical telegram session partition mode from env/settings."""
     root = repo_root or repo_root_from(Path(__file__).resolve())
-    env_mode = os.environ.get("OMNI_AGENT_TELEGRAM_SESSION_PARTITION", "").strip()
+    env_mode = os.environ.get("XIUXIAN_DAOCHANG_TELEGRAM_SESSION_PARTITION", "").strip()
     normalized_env_mode = normalize_telegram_session_partition_mode(env_mode)
     if normalized_env_mode:
         return normalized_env_mode

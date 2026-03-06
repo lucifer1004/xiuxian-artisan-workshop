@@ -8,6 +8,41 @@ from typing import Any
 
 from agent_channel_blackbox_config_build_identity import resolve_session_identity, resolve_username
 from agent_channel_blackbox_config_build_values import resolve_allow_chat_ids, resolve_wait_secs
+from agent_channel_blackbox_config_media import resolve_image_url
+
+LOG_FIELD_SEPARATOR_REGEX = r"(?:=|:)\s*"
+
+NATIVE_DISPATCH_SUCCESS_REGEX = (
+    rf'event{LOG_FIELD_SEPARATOR_REGEX}"agent\.tool\.dispatch".*'
+    rf'source{LOG_FIELD_SEPARATOR_REGEX}"native".*'
+    rf'outcome{LOG_FIELD_SEPARATOR_REGEX}"success"'
+)
+MCP_DISPATCH_REGEX = (
+    rf'event{LOG_FIELD_SEPARATOR_REGEX}"agent\.tool\.dispatch".*'
+    rf'source{LOG_FIELD_SEPARATOR_REGEX}"mcp"'
+)
+ZHENFA_DISPATCH_REGEX = (
+    rf'event{LOG_FIELD_SEPARATOR_REGEX}"agent\.tool\.dispatch".*'
+    rf'source{LOG_FIELD_SEPARATOR_REGEX}"zhenfa"'
+)
+
+
+def _append_unique(values: list[str], value: str) -> None:
+    if value not in values:
+        values.append(value)
+
+
+def _apply_native_tools_only_expectations(
+    *,
+    native_tools_only: bool,
+    expect_log_regexes: list[str],
+    forbid_log_regexes: list[str],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    if native_tools_only:
+        _append_unique(expect_log_regexes, NATIVE_DISPATCH_SUCCESS_REGEX)
+        _append_unique(forbid_log_regexes, MCP_DISPATCH_REGEX)
+        _append_unique(forbid_log_regexes, ZHENFA_DISPATCH_REGEX)
+    return tuple(expect_log_regexes), tuple(forbid_log_regexes)
 
 
 def build_config(
@@ -62,6 +97,13 @@ def build_config(
             "Probe chat_id is not in allowlist. "
             f"chat_id={chat_id} allow_chat_ids={list(allow_chat_ids)}"
         )
+    native_tools_only = bool(getattr(args, "native_tools_only", False))
+    image_url = resolve_image_url(args)
+    expect_log_regexes, forbid_log_regexes = _apply_native_tools_only_expectations(
+        native_tools_only=native_tools_only,
+        expect_log_regexes=list(args.expect_log_regex),
+        forbid_log_regexes=list(args.forbid_log_regex),
+    )
     session_partition = normalize_session_partition_fn(getattr(args, "session_partition", None))
 
     return probe_config_cls(
@@ -80,11 +122,13 @@ def build_config(
         follow_logs=not args.no_follow,
         expect_events=tuple(args.expect_event),
         expect_reply_json_fields=expect_reply_json_fields,
-        expect_log_regexes=tuple(args.expect_log_regex),
+        expect_log_regexes=expect_log_regexes,
         expect_bot_regexes=tuple(args.expect_bot_regex),
-        forbid_log_regexes=tuple(args.forbid_log_regex),
+        forbid_log_regexes=forbid_log_regexes,
         fail_fast_error_logs=not args.no_fail_fast_error_log,
         allow_no_bot=bool(args.allow_no_bot),
         allow_chat_ids=allow_chat_ids,
         strong_update_id=True,
+        native_tools_only=native_tools_only,
+        image_url=image_url,
     )

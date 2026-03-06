@@ -17,8 +17,8 @@ def resolve_required_paths(args: Any) -> tuple[Path, Path, Path, Path]:
         raise ValueError(f"mcp config not found: {mcp_config}")
 
     script_dir = Path(__file__).resolve().parent
-    stress_script = script_dir / "test_omni_agent_mcp_startup_stress.py"
-    restart_script = script_dir / "restart-omni-mcp.sh"
+    stress_script = script_dir / "test_xiuxian_daochang_mcp_startup_stress.py"
+    restart_script = script_dir / "restart-xiuxian-mcp.sh"
     if not stress_script.exists():
         raise ValueError(f"stress runner not found: {stress_script}")
     if not restart_script.exists():

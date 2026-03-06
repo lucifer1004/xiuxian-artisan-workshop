@@ -3,6 +3,8 @@
 //! A high-performance, probabilistic DAG executor based on petgraph.
 //! Follows Rust 2024 Edition standards.
 
+/// Application-layer scheduler factories and built-in pipeline presets.
+pub mod app;
 /// High-level laboratory API for end-to-end workflow execution.
 pub mod bootcamp;
 /// Distributed consensus management for multi-agent synchronization.
@@ -15,9 +17,11 @@ pub mod engine;
 pub mod error;
 /// Built-in node execution mechanisms.
 pub mod executors;
+/// Graphical layout and aesthetic engine (QGS).
+pub mod layout;
 /// Manifest inspection helpers.
 pub mod manifest;
-/// Runtime configuration resolver (`packages/conf/qianji.toml` + user overrides).
+/// Runtime configuration resolver (`resources/config/qianji.toml` + user overrides).
 pub mod runtime_config;
 /// Formal logic and safety auditing.
 pub mod safety;
@@ -32,6 +36,7 @@ pub mod telemetry;
 /// Python bindings via `PyO3`.
 pub mod python_module;
 
+pub use app::{MEMORY_PROMOTION_PIPELINE_TOML, QianjiApp, RESEARCH_TRINITY_TOML};
 pub use bootcamp::{
     BootcampLlmMode, BootcampRunOptions, BootcampVfsMount, WorkflowReport, run_scenario,
     run_workflow, run_workflow_with_mounts,
@@ -64,149 +69,3 @@ pub type QianjiLlmClient = dyn xiuxian_llm::llm::LlmClient;
 #[cfg(not(feature = "llm"))]
 /// Placeholder trait object type when `llm` feature is disabled.
 pub type QianjiLlmClient = dyn std::any::Any + Send + Sync;
-
-/// Built-in research manifest for high-precision calibration.
-pub const RESEARCH_TRINITY_TOML: &str = include_str!("../resources/research_trinity.toml");
-/// Built-in `MemRL` promotion workflow manifest.
-pub const MEMORY_PROMOTION_PIPELINE_TOML: &str =
-    include_str!("../resources/memory_promotion_pipeline.toml");
-
-/// Convenient entry point for deploying standard Qianji pipelines.
-pub struct QianjiApp;
-
-impl QianjiApp {
-    /// Creates a scheduler from one TOML manifest payload.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`error::QianjiError`] when manifest compilation fails due to
-    /// invalid topology, unsupported mechanisms, or dependency checks.
-    pub fn create_pipeline_from_manifest(
-        manifest_toml: &str,
-        index: std::sync::Arc<xiuxian_wendao::LinkGraphIndex>,
-        orchestrator: std::sync::Arc<xiuxian_qianhuan::orchestrator::ThousandFacesOrchestrator>,
-        registry: std::sync::Arc<xiuxian_qianhuan::persona::PersonaRegistry>,
-        llm_client: Option<std::sync::Arc<QianjiLlmClient>>,
-    ) -> Result<QianjiScheduler, error::QianjiError> {
-        Self::create_pipeline_from_manifest_with_consensus(
-            manifest_toml,
-            index,
-            orchestrator,
-            registry,
-            llm_client,
-            None,
-        )
-    }
-
-    /// Creates a scheduler from one TOML manifest payload with optional
-    /// distributed consensus manager.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`error::QianjiError`] when manifest compilation fails due to
-    /// invalid topology, unsupported mechanisms, or dependency checks.
-    pub fn create_pipeline_from_manifest_with_consensus(
-        manifest_toml: &str,
-        index: std::sync::Arc<xiuxian_wendao::LinkGraphIndex>,
-        orchestrator: std::sync::Arc<xiuxian_qianhuan::orchestrator::ThousandFacesOrchestrator>,
-        registry: std::sync::Arc<xiuxian_qianhuan::persona::PersonaRegistry>,
-        llm_client: Option<std::sync::Arc<QianjiLlmClient>>,
-        consensus_manager: Option<std::sync::Arc<crate::consensus::ConsensusManager>>,
-    ) -> Result<QianjiScheduler, error::QianjiError> {
-        let compiler = QianjiCompiler::new(index, orchestrator, registry, llm_client);
-        let engine = compiler.compile(manifest_toml)?;
-        Ok(QianjiScheduler::with_consensus_manager(
-            engine,
-            consensus_manager,
-        ))
-    }
-
-    /// Creates a standard high-precision research scheduler.
-    ///
-    /// This pipeline integrates Wendao knowledge search, Qianhuan persona annotation,
-    /// and Synapse-Audit adversarial calibration.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`error::QianjiError`] when the manifest compilation fails due to invalid
-    /// topology, unsupported mechanism configuration, or dependency-related runtime checks.
-    pub fn create_research_pipeline(
-        index: std::sync::Arc<xiuxian_wendao::LinkGraphIndex>,
-        orchestrator: std::sync::Arc<xiuxian_qianhuan::orchestrator::ThousandFacesOrchestrator>,
-        registry: std::sync::Arc<xiuxian_qianhuan::persona::PersonaRegistry>,
-        llm_client: Option<std::sync::Arc<QianjiLlmClient>>,
-    ) -> Result<QianjiScheduler, error::QianjiError> {
-        Self::create_research_pipeline_with_consensus(
-            index,
-            orchestrator,
-            registry,
-            llm_client,
-            None,
-        )
-    }
-
-    /// Creates a standard high-precision research scheduler with optional
-    /// distributed consensus manager.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`error::QianjiError`] when the manifest compilation fails due to invalid
-    /// topology, unsupported mechanism configuration, or dependency-related runtime checks.
-    pub fn create_research_pipeline_with_consensus(
-        index: std::sync::Arc<xiuxian_wendao::LinkGraphIndex>,
-        orchestrator: std::sync::Arc<xiuxian_qianhuan::orchestrator::ThousandFacesOrchestrator>,
-        registry: std::sync::Arc<xiuxian_qianhuan::persona::PersonaRegistry>,
-        llm_client: Option<std::sync::Arc<QianjiLlmClient>>,
-        consensus_manager: Option<std::sync::Arc<crate::consensus::ConsensusManager>>,
-    ) -> Result<QianjiScheduler, error::QianjiError> {
-        let compiler = QianjiCompiler::new(index, orchestrator, registry, llm_client);
-        let engine = compiler.compile(RESEARCH_TRINITY_TOML)?;
-        Ok(QianjiScheduler::with_consensus_manager(
-            engine,
-            consensus_manager,
-        ))
-    }
-
-    /// Creates a standard `MemRL` promotion scheduler.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`error::QianjiError`] when manifest compilation fails due to
-    /// invalid topology, unsupported mechanisms, or dependency checks.
-    pub fn create_memory_promotion_pipeline(
-        index: std::sync::Arc<xiuxian_wendao::LinkGraphIndex>,
-        orchestrator: std::sync::Arc<xiuxian_qianhuan::orchestrator::ThousandFacesOrchestrator>,
-        registry: std::sync::Arc<xiuxian_qianhuan::persona::PersonaRegistry>,
-        llm_client: Option<std::sync::Arc<QianjiLlmClient>>,
-    ) -> Result<QianjiScheduler, error::QianjiError> {
-        Self::create_memory_promotion_pipeline_with_consensus(
-            index,
-            orchestrator,
-            registry,
-            llm_client,
-            None,
-        )
-    }
-
-    /// Creates a standard `MemRL` promotion scheduler with optional
-    /// distributed consensus manager.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`error::QianjiError`] when manifest compilation fails due to
-    /// invalid topology, unsupported mechanisms, or dependency checks.
-    pub fn create_memory_promotion_pipeline_with_consensus(
-        index: std::sync::Arc<xiuxian_wendao::LinkGraphIndex>,
-        orchestrator: std::sync::Arc<xiuxian_qianhuan::orchestrator::ThousandFacesOrchestrator>,
-        registry: std::sync::Arc<xiuxian_qianhuan::persona::PersonaRegistry>,
-        llm_client: Option<std::sync::Arc<QianjiLlmClient>>,
-        consensus_manager: Option<std::sync::Arc<crate::consensus::ConsensusManager>>,
-    ) -> Result<QianjiScheduler, error::QianjiError> {
-        let compiler = QianjiCompiler::new(index, orchestrator, registry, llm_client);
-        let engine = compiler.compile(MEMORY_PROMOTION_PIPELINE_TOML)?;
-        Ok(QianjiScheduler::with_consensus_manager(
-            engine,
-            consensus_manager,
-        ))
-    }
-}

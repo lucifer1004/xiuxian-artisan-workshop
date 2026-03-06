@@ -1,6 +1,6 @@
 """Memory protection fixtures - prevent test runs from exhausting machine memory.
 
-Loaded via omni-test-kit pytest plugin; applies to all tests regardless of
+Loaded via xiuxian-test-kit pytest plugin; applies to all tests regardless of
 rootdir (unlike root conftest which may not load when running from package dirs).
 
 - OMNIDEV_TEST_MEMORY_ABORT_DELTA_MB: per-test RSS delta threshold (default 500)
@@ -52,16 +52,26 @@ def _abort_on_overflow(test_id: str, after_mb: float, delta: float) -> None:
         or os.environ.get("KNOWLEDGE_TEST_MEMORY_CAP_MB")
         or "2048"
     )
+    # In xdist workers, hard-exiting the process can cascade into execnet/xdist
+    # internal errors that mask the original test result. Downgrade to warning.
+    in_xdist_worker = bool(os.environ.get("PYTEST_XDIST_WORKER"))
+
     if abort_delta > 0 and delta > abort_delta:
+        level = "WARN" if in_xdist_worker else "ABORT"
         sys.stderr.write(
-            f"[MEMORY] ABORT: {test_id} grew RSS by {delta:.1f} MiB (threshold={abort_delta})\n"
+            f"[MEMORY] {level}: {test_id} grew RSS by {delta:.1f} MiB (threshold={abort_delta})\n"
         )
         sys.stderr.flush()
-        os._exit(1)
+        if not in_xdist_worker:
+            os._exit(1)
     if cap_mb > 0 and after_mb > cap_mb:
-        sys.stderr.write(f"[MEMORY] ABORT: {test_id} RSS={after_mb:.1f} MiB exceeds cap={cap_mb}\n")
+        level = "WARN" if in_xdist_worker else "ABORT"
+        sys.stderr.write(
+            f"[MEMORY] {level}: {test_id} RSS={after_mb:.1f} MiB exceeds cap={cap_mb}\n"
+        )
         sys.stderr.flush()
-        os._exit(1)
+        if not in_xdist_worker:
+            os._exit(1)
 
 
 def _set_memory_cap() -> None:
@@ -102,8 +112,8 @@ def _release_heavy_memory_at_exit() -> None:
 # Note: Do NOT register atexit here - session fixture teardown runs it.
 # atexit runs during process exit when threads may block; session teardown runs earlier.
 
-# Seconds from session start before forcing exit when process hangs (non-daemon threads).
-# Must be longer than typical test run (62 knowledge tests ~60s); 0 = disabled.
+# Seconds to wait after pytest session teardown before forcing exit when process hangs
+# on non-daemon threads. 0 = disabled.
 _TEST_EXIT_TIMEOUT_SEC = int(os.environ.get("OMNIDEV_TEST_EXIT_TIMEOUT_SEC", "120"))
 
 
@@ -121,8 +131,14 @@ def _force_exit_after_timeout() -> None:
     os._exit(0)
 
 
-def pytest_sessionstart(session):
-    """Start forced-exit timer in both main process and xdist workers."""
+def pytest_sessionfinish(session, exitstatus):
+    """Start forced-exit timer after pytest teardown.
+
+    This watchdog is only needed once tests have finished and process shutdown is
+    expected. Starting it at session start produces noisy false positives on long
+    test runs.
+    """
+    del session, exitstatus
     if _TEST_EXIT_TIMEOUT_SEC > 0:
         t = threading.Thread(target=_force_exit_after_timeout, daemon=True)
         t.start()

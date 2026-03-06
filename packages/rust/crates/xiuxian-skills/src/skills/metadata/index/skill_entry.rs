@@ -60,7 +60,7 @@ impl SkillIndexEntry {
             tools: Vec::new(),
             routing_keywords: Vec::new(),
             intents: Vec::new(),
-            authors: vec!["omni-dev-fusion".to_string()],
+            authors: vec!["xiuxian-artisan-workshop".to_string()],
             docs_available: DocsAvailable::default(),
             oss_compliant: Vec::new(),
             compliance_details: Vec::new(),

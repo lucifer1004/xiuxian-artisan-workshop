@@ -1,4 +1,4 @@
-# Justfile for omni-dev-fusion project  
+# Justfile for xiuxian-artisan-workshop project  
 # https://github.com/casey/just
 #
 # Design principles:
@@ -48,12 +48,365 @@ xiuxian_wendao_runner_os := env_var_or_default("RUNNER_OS", "local")
 # Core Commands
 # ==============================================================================
 
+# Fetch Dots OCR vision weights and prune legacy model caches by default.
+fetch-vision-models:
+    uv run --group dev python scripts/fetch_vision_models.py --prune-legacy
+
+# Backward-compatible alias
+fetch-vision: fetch-vision-models
+
+# Run OCR timeout/busy recovery simulation without starting channel runtimes.
+test-ocr-recovery:
+    bash scripts/channel/simulate_ocr_timeout_recovery.sh
+
+# Run single-image OCR probe without starting webhook/channel runtimes.
+# Usage: just probe-ocr-image /absolute/or/relative/path/to/image.png
+probe-ocr-image image_path:
+    bash scripts/channel/probe_single_image_ocr.sh "{{image_path}}"
+
+# Run single-image OCR probe with real-time guard (memory/process spike kill).
+# Usage: just probe-ocr-image-guarded /absolute/or/relative/path/to/image.png
+# Optional env overrides:
+#   OCR_GUARD_LABEL (default ocr-probe)
+#   OCR_GUARD_MAX_RSS_GB (default 10)
+#   OCR_GUARD_MAX_GROWTH_GB_PER_MIN (default 0, disabled)
+#   OCR_GUARD_GROWTH_WINDOW_SEC (default 20)
+#   OCR_GUARD_GROWTH_WARMUP_SEC (default 5)
+#   OCR_GUARD_MAX_PIDS (default 0, disabled)
+#   OCR_GUARD_SINGLETON_SUBSTRINGS (default "", comma-separated)
+#   OCR_GUARD_KILL_SUBSTRINGS (default "", comma-separated)
+#   OCR_GUARD_PROCESS_SPIKE_RULES (default "exe=ld:2:3.5,exe=rustc:14:12,exe_prefix=llm-:1:10", comma-separated; each rule: substring:max_count:max_total_rss_gb)
+#   OCR_GUARD_POLL_MS (default 500)
+#   OCR_GUARD_GRACE_MS (default 1500)
+#   OCR_GUARD_LOG_EVERY (default 4)
+#   OCR_GUARD_TRUNCATE_SAMPLES (default 1)
+probe-ocr-image-guarded image_path:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    mkdir -p ".run/logs" ".run/reports/guarded-nextest"
+
+    guard_args=(
+      --label "${OCR_GUARD_LABEL:-ocr-probe}"
+      --max-rss-gb "${OCR_GUARD_MAX_RSS_GB:-10}"
+      --max-growth-gb-per-min "${OCR_GUARD_MAX_GROWTH_GB_PER_MIN:-0}"
+      --growth-window-sec "${OCR_GUARD_GROWTH_WINDOW_SEC:-20}"
+      --growth-warmup-sec "${OCR_GUARD_GROWTH_WARMUP_SEC:-5}"
+      --max-pids "${OCR_GUARD_MAX_PIDS:-0}"
+      --poll-ms "${OCR_GUARD_POLL_MS:-500}"
+      --grace-ms "${OCR_GUARD_GRACE_MS:-1500}"
+      --log-every "${OCR_GUARD_LOG_EVERY:-4}"
+      --log-file "${OCR_GUARD_LOG_FILE:-.run/logs/guarded-nextest.log}"
+      --report-json "${OCR_GUARD_REPORT_JSON:-.run/reports/guarded-nextest/latest.json}"
+      --samples-jsonl "${OCR_GUARD_SAMPLES_JSONL:-.run/reports/guarded-nextest/samples.jsonl}"
+      --history-jsonl "${OCR_GUARD_HISTORY_JSONL:-.run/reports/guarded-nextest/history.jsonl}"
+    )
+
+    if [ "${OCR_GUARD_TRUNCATE_SAMPLES:-1}" = "1" ]; then
+      guard_args+=(--truncate-samples)
+    fi
+
+    add_csv_flags() {
+      local csv_value="$1"
+      local flag_name="$2"
+      local item=""
+      IFS=',' read -r -a raw_items <<< "${csv_value}"
+      for item in "${raw_items[@]}"; do
+        item="${item#"${item%%[![:space:]]*}"}"
+        item="${item%"${item##*[![:space:]]}"}"
+        if [ -n "${item}" ]; then
+          guard_args+=("${flag_name}" "${item}")
+        fi
+      done
+    }
+
+    if [ -n "${OCR_GUARD_SINGLETON_SUBSTRINGS-}" ]; then
+      add_csv_flags "${OCR_GUARD_SINGLETON_SUBSTRINGS-}" "--singleton-substring"
+    fi
+    if [ -n "${OCR_GUARD_KILL_SUBSTRINGS-}" ]; then
+      add_csv_flags "${OCR_GUARD_KILL_SUBSTRINGS-}" "--kill-substring"
+    fi
+    if [ -n "${OCR_GUARD_PROCESS_SPIKE_RULES:-exe=ld:2:3.5,exe=rustc:14:12,exe_prefix=llm-:1:10}" ]; then
+      add_csv_flags "${OCR_GUARD_PROCESS_SPIKE_RULES:-exe=ld:2:3.5,exe=rustc:14:12,exe_prefix=llm-:1:10}" "--process-spike-rule"
+    fi
+
+    UV_CACHE_DIR="${UV_CACHE_DIR:-.cache/uv}" \
+      uv run python scripts/guarded_nextest.py \
+      "${guard_args[@]}" \
+      -- bash scripts/channel/probe_single_image_ocr.sh "{{image_path}}"
+
+# Run real OCR smoke against local Dots model with guarded memory limits.
+# Default acceleration:
+#   - macOS: `vision-dots-metal`, `XIUXIAN_VISION_DEVICE=metal`
+#   - Linux: `vision-dots-cuda`, `XIUXIAN_VISION_DEVICE=cuda`
+#   - others: `vision-dots`, `XIUXIAN_VISION_DEVICE=cpu`
+# Usage:
+#   just test-ocr-real-smoke
+#   just test-ocr-real-smoke ".data/models/dots-ocr"
+# Optional env:
+#   NEXTTEST_GUARD_MAX_RSS_GB (default 20)
+#   NEXTTEST_GUARD_MAX_GROWTH_GB_PER_MIN (default 0)
+#   XIUXIAN_VISION_OCR_MAX_NEW_TOKENS (default 1024)
+#   XIUXIAN_VISION_MAX_TILES (default 12)
+test-ocr-real-smoke model_root="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    resolved_model_root="{{model_root}}"
+    if [ -z "${resolved_model_root}" ]; then
+      if [ -d ".data/models/dots-ocr" ]; then
+        resolved_model_root=".data/models/dots-ocr"
+      elif [ -n "${PRJ_DATA_HOME:-}" ] && [ -d "${PRJ_DATA_HOME}/models/dots-ocr" ]; then
+        resolved_model_root="${PRJ_DATA_HOME}/models/dots-ocr"
+      else
+        echo "Error: dots-ocr model directory not found. Run: just fetch-vision-models" >&2
+        exit 1
+      fi
+    fi
+
+    feature="vision-dots"
+    default_device="cpu"
+    case "$(uname -s)" in
+      Darwin)
+        feature="vision-dots-metal"
+        default_device="metal"
+        ;;
+      Linux)
+        feature="vision-dots-cuda"
+        default_device="cuda"
+        ;;
+    esac
+
+    export XIUXIAN_VISION_MODEL_KIND="${XIUXIAN_VISION_MODEL_KIND:-dots}"
+    export XIUXIAN_VISION_MODEL_PATH="${XIUXIAN_VISION_MODEL_PATH:-${resolved_model_root}}"
+    export XIUXIAN_VISION_DEVICE="${XIUXIAN_VISION_DEVICE:-${default_device}}"
+    export XIUXIAN_VISION_REQUIRE_QUANTIZED="${XIUXIAN_VISION_REQUIRE_QUANTIZED:-0}"
+    export XIUXIAN_VISION_OCR_MAX_NEW_TOKENS="${XIUXIAN_VISION_OCR_MAX_NEW_TOKENS:-1024}"
+    export XIUXIAN_VISION_MAX_TILES="${XIUXIAN_VISION_MAX_TILES:-12}"
+
+    echo "[ocr-real-smoke] model_root=${XIUXIAN_VISION_MODEL_PATH}"
+    echo "[ocr-real-smoke] device=${XIUXIAN_VISION_DEVICE} feature=${feature}"
+
+    NEXTTEST_GUARD_LABEL="${NEXTTEST_GUARD_LABEL:-ocr-real-smoke}" \
+    NEXTTEST_GUARD_MAX_RSS_GB="${NEXTTEST_GUARD_MAX_RSS_GB:-20}" \
+    NEXTTEST_GUARD_MAX_GROWTH_GB_PER_MIN="${NEXTTEST_GUARD_MAX_GROWTH_GB_PER_MIN:-0}" \
+    NEXTTEST_GUARD_PROCESS_SPIKE_RULES="${NEXTTEST_GUARD_PROCESS_SPIKE_RULES:-}" \
+      just nextest-guarded \
+      -p xiuxian-llm \
+      --features "${feature}" \
+      --test llm_vision_deepseek_smoke \
+      deepseek_smoke_runs_real_inference_from_local_model_cache
+
+# Run cargo nextest with RSS guard; kill test tree on memory anomaly.
+# Usage:
+#   NEXTTEST_GUARD_MAX_RSS_GB=6 just nextest-guarded -p xiuxian-daochang --test llm -E 'test(litellm_ocr_)'
+# Optional env overrides:
+#   NEXTTEST_GUARD_MAX_RSS_GB (default 6)
+#   NEXTTEST_GUARD_MAX_GROWTH_GB_PER_MIN (default 0, disabled)
+#   NEXTTEST_GUARD_GROWTH_WINDOW_SEC (default 20)
+#   NEXTTEST_GUARD_GROWTH_WARMUP_SEC (default 5)
+#   NEXTTEST_GUARD_MAX_PIDS (default 0, disabled)
+#   NEXTTEST_GUARD_SINGLETON_SUBSTRINGS (default "", comma-separated)
+#   NEXTTEST_GUARD_KILL_SUBSTRINGS (default "", comma-separated)
+#   NEXTTEST_GUARD_PROCESS_SPIKE_RULES (default "", comma-separated; each rule: substring:max_count:max_total_rss_gb)
+#   NEXTTEST_GUARD_POLL_MS (default 500)
+#   NEXTTEST_GUARD_GRACE_MS (default 1500)
+#   NEXTTEST_GUARD_LOG_EVERY (default 4)
+#   NEXTTEST_GUARD_TRUNCATE_SAMPLES (default 1)
+#   NEXTTEST_GUARD_LABEL (default nextest)
+#   NEXTTEST_GUARD_LOG_FILE (default .run/logs/guarded-nextest.log)
+#   NEXTTEST_GUARD_REPORT_JSON (default .run/reports/guarded-nextest/latest.json)
+#   NEXTTEST_GUARD_SAMPLES_JSONL (default .run/reports/guarded-nextest/samples.jsonl)
+#   NEXTTEST_GUARD_HISTORY_JSONL (default .run/reports/guarded-nextest/history.jsonl)
+nextest-guarded +nextest_args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    mkdir -p ".run/logs" ".run/reports/guarded-nextest"
+
+    guard_args=(
+      --label "${NEXTTEST_GUARD_LABEL:-nextest}"
+      --max-rss-gb "${NEXTTEST_GUARD_MAX_RSS_GB:-6}"
+      --max-growth-gb-per-min "${NEXTTEST_GUARD_MAX_GROWTH_GB_PER_MIN:-0}"
+      --growth-window-sec "${NEXTTEST_GUARD_GROWTH_WINDOW_SEC:-20}"
+      --growth-warmup-sec "${NEXTTEST_GUARD_GROWTH_WARMUP_SEC:-5}"
+      --max-pids "${NEXTTEST_GUARD_MAX_PIDS:-0}"
+      --poll-ms "${NEXTTEST_GUARD_POLL_MS:-500}"
+      --grace-ms "${NEXTTEST_GUARD_GRACE_MS:-1500}"
+      --log-every "${NEXTTEST_GUARD_LOG_EVERY:-4}"
+      --log-file "${NEXTTEST_GUARD_LOG_FILE:-.run/logs/guarded-nextest.log}"
+      --report-json "${NEXTTEST_GUARD_REPORT_JSON:-.run/reports/guarded-nextest/latest.json}"
+      --samples-jsonl "${NEXTTEST_GUARD_SAMPLES_JSONL:-.run/reports/guarded-nextest/samples.jsonl}"
+      --history-jsonl "${NEXTTEST_GUARD_HISTORY_JSONL:-.run/reports/guarded-nextest/history.jsonl}"
+    )
+
+    if [ "${NEXTTEST_GUARD_TRUNCATE_SAMPLES:-1}" = "1" ]; then
+      guard_args+=(--truncate-samples)
+    fi
+
+    add_csv_flags() {
+      local csv_value="$1"
+      local flag_name="$2"
+      local item=""
+      IFS=',' read -r -a raw_items <<< "${csv_value}"
+      for item in "${raw_items[@]}"; do
+        item="${item#"${item%%[![:space:]]*}"}"
+        item="${item%"${item##*[![:space:]]}"}"
+        if [ -n "${item}" ]; then
+          guard_args+=("${flag_name}" "${item}")
+        fi
+      done
+    }
+
+    if [ -n "${NEXTTEST_GUARD_SINGLETON_SUBSTRINGS:-}" ]; then
+      add_csv_flags "${NEXTTEST_GUARD_SINGLETON_SUBSTRINGS}" "--singleton-substring"
+    fi
+    if [ -n "${NEXTTEST_GUARD_KILL_SUBSTRINGS:-}" ]; then
+      add_csv_flags "${NEXTTEST_GUARD_KILL_SUBSTRINGS}" "--kill-substring"
+    fi
+    if [ -n "${NEXTTEST_GUARD_PROCESS_SPIKE_RULES:-}" ]; then
+      add_csv_flags "${NEXTTEST_GUARD_PROCESS_SPIKE_RULES}" "--process-spike-rule"
+    fi
+
+    UV_CACHE_DIR="${UV_CACHE_DIR:-.cache/uv}" \
+      uv run python scripts/guarded_nextest.py \
+      "${guard_args[@]}" \
+      -- cargo nextest run {{nextest_args}}
+
+# Run OCR-focused nextest lanes with OCR-friendly RSS defaults.
+# Usage: just nextest-guarded-ocr -p xiuxian-daochang --test llm -E 'test(litellm_ocr_)'
+nextest-guarded-ocr +nextest_args:
+    NEXTTEST_GUARD_LABEL="${NEXTTEST_GUARD_LABEL-nextest-ocr}" \
+    NEXTTEST_GUARD_MAX_RSS_GB="${NEXTTEST_GUARD_MAX_RSS_GB-8}" \
+    NEXTTEST_GUARD_SINGLETON_SUBSTRINGS="${NEXTTEST_GUARD_SINGLETON_SUBSTRINGS-}" \
+    NEXTTEST_GUARD_KILL_SUBSTRINGS="${NEXTTEST_GUARD_KILL_SUBSTRINGS-}" \
+    NEXTTEST_GUARD_PROCESS_SPIKE_RULES="${NEXTTEST_GUARD_PROCESS_SPIKE_RULES-}" \
+    just nextest-guarded {{nextest_args}}
+
+# Tier-1 test lane: fast logic-only Rust feedback loop.
+# Excludes tests whose names contain `vision` or `ocr`.
+# Example:
+#   just test-logic
+test-logic:
+    bash scripts/rust/test_logic_lane.sh
+
+# Tier-2 test lane: vision wiring smoke lane (non-heavy, no full OCR model inference).
+# This validates vision request/response contracts and runtime config logic.
+# Example:
+#   just test-vision-smoke
+test-vision-smoke:
+    bash scripts/rust/test_vision_smoke_lane.sh
+
+# Tier-3 test lane: real OCR integration against local model (release + serialized).
+# Example:
+#   just test-vision-heavy
+#   just test-vision-heavy ".data/models/dots-ocr"
+# Optional env:
+#   VISION_HEAVY_TEST_THREADS (default 1)
+#   NEXTTEST_GUARD_MAX_RSS_GB (default 24)
+test-vision-heavy model_root="":
+    bash scripts/rust/test_vision_heavy_lane.sh "{{model_root}}"
+
+# Unified local-model safe interface (mistral-sdk + vision).
+# Profiles:
+#   - safe: embedding warmup + vision smoke (default)
+#   - full: embedding warmup + real OCR heavy lane
+#   - embed-only / vision-only / vision-heavy-only
+# Usage:
+#   just test-local-model-safe
+#   just test-local-model-safe "full" ".data/models/dots-ocr"
+test-local-model-safe profile="safe" model_root="":
+    bash scripts/rust/test_local_models_safe.sh "{{profile}}" "{{model_root}}"
+
 default:
     @just --list
 
 # Test LLM Proxy multiple providers
 test-llm-proxy:
     uv run python scripts/test_llm_proxy.py
+
+# Run custom-base multimodal regression without starting webhook/channel runtimes.
+# Verifies image URL -> base64 inlining path used by Anthropic custom-base fallbacks.
+test-llm-custom-base-image:
+    cargo nextest run -p xiuxian-llm --features provider-litellm --test llm_providers -E 'test(inline_openai_compatible_image_urls_converts_and_caches_image_urls)'
+
+# Run OpenAI `/responses` tool-schema regression for strict provider gateways.
+# Guards against: "object schema missing properties" (HTTP 400 invalid_function_parameters).
+test-llm-responses-schema:
+    cargo nextest run -p xiuxian-llm --features provider-litellm --test llm_openai_responses_payload -E 'test(responses_payload_injects_empty_properties_for_object_schema_without_properties)'
+
+# Run OpenAI `/responses` tool-call chain regressions for strict provider gateways.
+# Guards against orphaned `function_call_output` payloads and missing assistant call items.
+test-llm-responses-tool-chain:
+    cargo nextest run -p xiuxian-llm --features provider-litellm --test llm_openai_responses_payload -E 'test(responses_payload_serializes_assistant_tool_calls_before_tool_outputs) or test(responses_payload_skips_tool_output_without_call_id)'
+
+# Run Anthropic `messages` tool-use/result chain regression.
+# Guards against missing `tool_result.tool_use_id` mapping for tool responses.
+test-llm-anthropic-tool-chain:
+    cargo nextest run -p xiuxian-llm --features provider-litellm --test llm_providers -E 'test(build_anthropic_messages_body_maps_tool_call_chain_to_tool_use_and_tool_result)'
+
+# Rust LLM smoke bundle (protocol-critical lanes only).
+# Includes image custom-base path plus OpenAI/Anthropic tool-call protocol contracts.
+test-rust-llm-smoke:
+    just test-llm-custom-base-image
+    just test-llm-responses-schema
+    just test-llm-responses-tool-chain
+    just test-llm-anthropic-tool-chain
+
+# Live provider smoke test from xiuxian.toml (real LLM network calls).
+# Example:
+#   just llm-provider-smoke
+#   just llm-provider-smoke ".config/xiuxian-artisan-workshop/xiuxian.toml" "all" "" "60" "" "" ""
+#   just llm-provider-smoke ".config/xiuxian-artisan-workshop/xiuxian.toml" "all" "" "90" "https://example.com/a.png" "responses" "flower|bloom|hibiscus,red|hibiscus"
+# image:
+#   - empty string => text-only test
+#   - file path / URL / data URI => text + image test
+# wire_api:
+#   - empty string => use xiuxian.toml provider value
+#   - chat_completions | responses => force override
+# image_contains:
+#   - comma-separated semantic expectation groups; every group must match, use | for alternatives
+llm-provider-smoke config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" provider="all" model_override="" timeout_secs="60" image="" wire_api="" image_contains="":
+    uv run python scripts/llm_provider_smoke.py \
+      --config-path "{{config_path}}" \
+      --provider "{{provider}}" \
+      --model-override "{{model_override}}" \
+      --timeout-secs "{{timeout_secs}}" \
+      --image "{{image}}" \
+      --wire-api "{{wire_api}}" \
+      --image-contains "{{image_contains}}"
+
+# Live smoke test for all configured providers (text only).
+llm-provider-smoke-all config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" model_override="" timeout_secs="60" wire_api="":
+    uv run python scripts/llm_provider_smoke.py \
+      --config-path "{{config_path}}" \
+      --provider "all" \
+      --model-override "{{model_override}}" \
+      --timeout-secs "{{timeout_secs}}" \
+      --wire-api "{{wire_api}}"
+
+# Live smoke test for all configured providers (text + image).
+# image must be a file path, URL, or data URI.
+llm-provider-smoke-image config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" model_override="" timeout_secs="90" image="" wire_api="" image_contains="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{image}}" ]; then
+      echo "Error: image argument is required for llm-provider-smoke-image" >&2
+      exit 2
+    fi
+    uv run python scripts/llm_provider_smoke.py \
+      --config-path "{{config_path}}" \
+      --provider "all" \
+      --model-override "{{model_override}}" \
+      --timeout-secs "{{timeout_secs}}" \
+      --image "{{image}}" \
+      --wire-api "{{wire_api}}" \
+      --image-contains "{{image_contains}}"
+
+# Canonical semantic image smoke using a known flower JPEG.
+# Fails providers that return unrelated image descriptions.
+llm-provider-smoke-image-semantic config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" provider="all" model_override="" timeout_secs="90" image="https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg" wire_api="" image_contains="flower|bloom|hibiscus,red|hibiscus":
+    just llm-provider-smoke "{{config_path}}" "{{provider}}" "{{model_override}}" "{{timeout_secs}}" "{{image}}" "{{wire_api}}" "{{image_contains}}"
 
 # ==============================================================================
 # AGENT INTERFACE (Non-interactive, argument-based)
@@ -68,14 +421,14 @@ agent-commit:
     set -euo pipefail
 
     # Token file path (must match commit.py)
-    TOKEN_FILE="/tmp/.omni_commit_token"
+    TOKEN_FILE="/tmp/.xiuxian_commit_token"
 
     # Check if token exists and is valid (only from smart_commit workflow)
     if [ ! -f "$TOKEN_FILE" ]; then
         echo "Error: No authorization token found." >&2
         echo "" >&2
         echo "To commit, you must:" >&2
-        echo "1. Use the smart_commit MCP tool first: @omni-orchestrator smart_commit(context='...')" >&2
+        echo "1. Use the smart_commit MCP tool first: @xiuxian-orchestrator smart_commit(context='...')" >&2
         echo "2. Then run: just agent-commit" >&2
         exit 1
     fi
@@ -175,6 +528,17 @@ agent-bump type="auto":
         cog bump --$BUMP_TYPE
     fi
 
+# Live LLM pre-release gate (protocol smoke + real provider smoke).
+# Default scope is all configured providers and canonical semantic flower image.
+llm-provider-release-gate config_path=".config/xiuxian-artisan-workshop/xiuxian.toml" provider="all" model_override="" text_timeout_secs="60" image_timeout_secs="90" wire_api="" image="https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg" image_contains="flower|bloom|hibiscus,red|hibiscus":
+    just test-rust-llm-smoke
+    just llm-provider-smoke "{{config_path}}" "{{provider}}" "{{model_override}}" "{{text_timeout_secs}}" "" "{{wire_api}}" ""
+    just llm-provider-smoke-image-semantic "{{config_path}}" "{{provider}}" "{{model_override}}" "{{image_timeout_secs}}" "{{image}}" "{{wire_api}}" "{{image_contains}}"
+
+# Agent-friendly release validation (local validation + live LLM gate)
+agent-validate-release:
+    @echo "Running release validation..." && just agent-validate && just llm-provider-release-gate
+
 # Agent-friendly release publish
 agent-publish-release version="latest":
     #!/usr/bin/env bash
@@ -192,7 +556,7 @@ agent-publish-release version="latest":
 agent-release type="auto" version="latest":
     #!/usr/bin/env bash
     set -euo pipefail
-    just agent-validate
+    just agent-validate-release
     just agent-bump {{type}}
     just agent-publish-release {{version}}
 
@@ -246,7 +610,7 @@ agent-focus spec_path:
     @grep -i "$(basename {{spec_path}} .md)" Backlog.md 2>/dev/null || echo "  No matching backlog entry found"
     @echo ""
     @echo "💡 INSTRUCTION: Review the Spec above. Create a PLAN in 'SCRATCHPAD.md' before modifying any code."
-    @echo "SCRATCHPAD Location: .cache/omni-dev-fusion/.memory/active_context/SCRATCHPAD.md"
+    @echo "SCRATCHPAD Location: .cache/xiuxian-artisan-workshop/.memory/active_context/SCRATCHPAD.md"
 
 # Quick create new Spec from template
 # Usage: just spec-new "feature_name" "Feature description..."
@@ -432,7 +796,7 @@ rust-nextest:
         echo "Install with: nix profile add nixpkgs#cargo-nextest"; \
         exit 1; \
     fi
-    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh nextest run --workspace --exclude omni-core-rs --no-fail-fast
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh nextest run --workspace --exclude xiuxian-core-rs --no-fail-fast
 
 [group('validate')]
 rust-security-audit:
@@ -459,13 +823,13 @@ rust-security-gate: rust-security-audit rust-security-deny
     @echo "Rust dependency security gates passed (cargo-audit + cargo-deny)."
 
 [group('validate')]
-rust-test-omni-core-rs cargo_args="--no-fail-fast":
-    @echo "Running omni-core-rs test lane (runtime-linking-safe wrapper)..."
-    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/test_omni_core_rs.sh {{cargo_args}}
+rust-test-xiuxian-core-rs cargo_args="--no-fail-fast":
+    @echo "Running xiuxian-core-rs test lane (runtime-linking-safe wrapper)..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/test_xiuxian_core_rs.sh {{cargo_args}}
 
 [group('validate')]
-rust-quality-gate: rust-lint-inheritance-check rust-test-layout rust-check rust-clippy rust-nextest rust-test-omni-core-rs rust-security-gate
-    @echo "Rust quality gates passed (check + strict clippy + nextest + omni-core-rs runtime lane + dependency security)."
+rust-quality-gate: rust-lint-inheritance-check rust-test-layout rust-check rust-clippy rust-nextest rust-test-xiuxian-core-rs rust-security-gate
+    @echo "Rust quality gates passed (check + strict clippy + nextest + xiuxian-core-rs runtime lane + dependency security)."
 
 [group('validate')]
 rust-quality-gate-ci timeout_secs="3600":
@@ -473,32 +837,32 @@ rust-quality-gate-ci timeout_secs="3600":
     @bash scripts/ci/rust_quality_gate_ci.sh "{{timeout_secs}}"
 
 [group('validate')]
-rust-omni-core-rs-lib:
-    @echo "Running omni-core-rs library lane..."
-    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/test_omni_core_rs.sh --lib --no-fail-fast
+rust-xiuxian-core-rs-lib:
+    @echo "Running xiuxian-core-rs library lane..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/test_xiuxian_core_rs.sh --lib --no-fail-fast
 
 [group('validate')]
-rust-omni-agent-profiles:
-    @echo "Running omni-agent profile checks..."
-    @bash scripts/rust/omni_agent_profiles_check.sh
+rust-xiuxian-daochang-profiles:
+    @echo "Running xiuxian-daochang profile checks..."
+    @bash scripts/rust/xiuxian_daochang_profiles_check.sh
 
 [group('validate')]
-rust-omni-agent-dependency-assertions:
-    @echo "Running omni-agent dependency assertions..."
-    @bash scripts/rust/omni_agent_dependency_assertions.sh
+rust-xiuxian-daochang-dependency-assertions:
+    @echo "Running xiuxian-daochang dependency assertions..."
+    @bash scripts/rust/xiuxian_daochang_dependency_assertions.sh
 
 [group('validate')]
-rust-omni-agent-mcp-facade-smoke:
-    @echo "Running omni-agent MCP facade smoke tests..."
-    @bash scripts/rust/omni_agent_mcp_facade_smoke.sh
+rust-xiuxian-daochang-mcp-facade-smoke:
+    @echo "Running xiuxian-daochang MCP facade smoke tests..."
+    @bash scripts/rust/xiuxian_daochang_mcp_facade_smoke.sh
 
 [group('validate')]
-rust-omni-agent-backend-role-contracts:
-    @echo "Running omni-agent backend role contract tests..."
-    @bash scripts/rust/omni_agent_backend_role_contracts.sh
+rust-xiuxian-daochang-backend-role-contracts:
+    @echo "Running xiuxian-daochang backend role contract tests..."
+    @bash scripts/rust/xiuxian_daochang_backend_role_contracts.sh
 
 [group('validate')]
-rust-omni-agent-embedding-role-perf-smoke \
+rust-xiuxian-daochang-embedding-role-perf-smoke \
     single_runs="20" \
     batch_runs="10" \
     concurrent_total="64" \
@@ -507,7 +871,7 @@ rust-omni-agent-embedding-role-perf-smoke \
     max_batch8_p95_ms="" \
     min_concurrent_rps="" \
     report_json="":
-    @bash scripts/rust/omni_agent_embedding_role_perf_smoke.sh \
+    @bash scripts/rust/xiuxian_daochang_embedding_role_perf_smoke.sh \
       "{{single_runs}}" \
       "{{batch_runs}}" \
       "{{concurrent_total}}" \
@@ -518,12 +882,12 @@ rust-omni-agent-embedding-role-perf-smoke \
       "{{report_json}}"
 
 [group('validate')]
-rust-omni-agent-embedding-role-perf-medium-gate:
-    @bash scripts/rust/omni_agent_embedding_role_perf_medium_gate.sh
+rust-xiuxian-daochang-embedding-role-perf-medium-gate:
+    @bash scripts/rust/xiuxian_daochang_embedding_role_perf_medium_gate.sh
 
 [group('validate')]
-rust-omni-agent-embedding-role-perf-heavy-gate:
-    @bash scripts/rust/omni_agent_embedding_role_perf_heavy_gate.sh
+rust-xiuxian-daochang-embedding-role-perf-heavy-gate:
+    @bash scripts/rust/xiuxian_daochang_embedding_role_perf_heavy_gate.sh
 
 [group('validate')]
 rust-xiuxian-mcp:
@@ -541,8 +905,8 @@ rust-fusion-snapshots:
 
 [group('validate')]
 rust-search-perf-guard:
-    @echo "Running omni-vector search perf guard..."
-    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh test -p omni-vector --test test_search_perf_guard
+    @echo "Running xiuxian-vector search perf guard..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh test -p xiuxian-vector --test test_search_perf_guard
 
 [group('validate')]
 rust-retrieval-audits:
@@ -564,20 +928,20 @@ telegram-session-isolation-python:
 [group('validate')]
 rust-test-snapshots:
     @echo "Running Rust snapshot contract tests..."
-    @scripts/rust/cargo_exec.sh test -p omni-vector --test test_fusion_snapshots
+    @scripts/rust/cargo_exec.sh test -p xiuxian-vector --test test_fusion_snapshots
 
-# KG cache (xiuxian-wendao) and search cache (omni-vector) unit tests
+# KG cache (xiuxian-wendao) and search cache (xiuxian-vector) unit tests
 [group('validate')]
 rust-test-cache:
     @echo "Running Rust cache tests (test_kg_cache, test_search_cache)..."
     @scripts/rust/cargo_exec.sh test -p xiuxian-wendao --test test_kg_cache -- --test-threads=1
-    @scripts/rust/cargo_exec.sh test -p omni-vector --test test_search_cache -- --test-threads=1
+    @scripts/rust/cargo_exec.sh test -p xiuxian-vector --test test_search_cache -- --test-threads=1
 
-# omni-agent: config, session, MCP, gateway (HTTP 400/404), agent loop
+# xiuxian-daochang: config, session, MCP, gateway (HTTP 400/404), agent loop
 [group('validate')]
 rust-test-agent:
-    @echo "Running Rust agent tests (omni-agent)..."
-    @scripts/rust/cargo_exec.sh test -p omni-agent
+    @echo "Running Rust agent tests (xiuxian-daochang)..."
+    @scripts/rust/cargo_exec.sh test -p xiuxian-daochang
 
 # Regenerate Tantivy vs Lance FTS decision report from v4_large snapshot
 # See docs/testing/keyword-backend-decision.md for full loop (snapshots + report).
@@ -607,7 +971,7 @@ test:
     @echo "[3/7] Rust cache tests (kg_cache, search_cache)"
     @just rust-test-cache
     @echo ""
-    @echo "[4/7] Rust agent tests (omni-agent)"
+    @echo "[4/7] Rust agent tests (xiuxian-daochang)"
     @just rust-test-agent
     @echo ""
     @echo "[5/7] Wendao PPR quality/perf gate"
@@ -710,11 +1074,11 @@ verify-native-runtime:
 
 [group('validate')]
 memory-gate-quick:
-    @python3 scripts/channel/test_omni_agent_memory_ci_gate.py --profile quick
+    @python3 scripts/channel/test_xiuxian_daochang_memory_ci_gate.py --profile quick
 
 [group('validate')]
 memory-gate-nightly:
-    @scripts/channel/start-omni-agent-memory-ci-nightly.sh \
+    @scripts/channel/start-xiuxian-daochang-memory-ci-nightly.sh \
         --foreground \
         -- --benchmark-iterations 3 \
            --max-mcp-call-waiting-events 0 \
@@ -723,7 +1087,7 @@ memory-gate-nightly:
 
 [group('validate')]
 memory-gate-a7:
-    @scripts/channel/start-omni-agent-memory-ci-nightly.sh \
+    @scripts/channel/start-xiuxian-daochang-memory-ci-nightly.sh \
         --foreground \
         -- --skip-matrix \
            --skip-evolution \
@@ -798,7 +1162,7 @@ benchmark-mcp-tools-list-sweep base_url="" host="" port="" no_embedding="true" m
     fi
     started_mcp="false"
     mcp_pid=""
-    mcp_log=".run/logs/omni-mcp-sse.benchmark.log"
+    mcp_log=".run/logs/xiuxian-mcp-sse.benchmark.log"
     cleanup() {
       if [ "$started_mcp" = "true" ] && [ -n "$mcp_pid" ]; then
         if kill -0 "$mcp_pid" >/dev/null 2>&1; then
@@ -843,7 +1207,7 @@ benchmark-mcp-tools-list-sweep base_url="" host="" port="" no_embedding="true" m
     if [ "{{write_snapshot}}" = "true" ]; then
       args+=(--write-snapshot)
     fi
-    bash scripts/channel/test-omni-agent-mcp-tools-list-concurrency-sweep.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-mcp-tools-list-concurrency-sweep.sh "${args[@]}"
 
 [group('validate')]
 evaluate-wendao-retrieval limit="10" min_top3_rate="0.0":
@@ -995,7 +1359,7 @@ test-contracts:
 # Scale benchmarks: in test-kit (run_skill, reindex_status, sync; latency thresholds)
 [group('validate')]
 test-benchmarks:
-    @echo "Running scale benchmarks (omni-test-kit)..."
+    @echo "Running scale benchmarks (xiuxian-test-kit)..."
     @cd packages/python/test-kit && uv run pytest tests/benchmarks/ -v --tb=short
 
 # ==============================================================================
@@ -1155,7 +1519,7 @@ release-notes version="latest":
     cog changelog --at "$VERSION" | sed -n "/^## \[v${VERSION#v}\]/,/^## \[v/p" | sed '$d'
     echo ""
     echo "---"
-    echo "**Full Changelog**: https://github.com/tao3k/omni-dev-fusion/compare/$(git describe --tags --abbrev=0 $VERSION^ 2>/dev/null)...$VERSION"
+    echo "**Full Changelog**: https://github.com/tao3k/xiuxian-artisan-workshop/compare/$(git describe --tags --abbrev=0 $VERSION^ 2>/dev/null)...$VERSION"
 
 [group('version')]
 publish-release version="latest":
@@ -1504,7 +1868,7 @@ archive spec_path target_category="explanation":
     echo ""
     echo "Ask the Agent to archive:"
     echo ""
-    echo "  @omni-orchestrator archive_spec_to_doc spec_path=\"{{spec_path}}\" target_category=\"{{target_category}}\""
+    echo "  @xiuxian-orchestrator archive_spec_to_doc spec_path=\"{{spec_path}}\" target_category=\"{{target_category}}\""
     echo ""
     echo "============================================"
 
@@ -1550,8 +1914,8 @@ agent-channel valkey_port="":
 # unless `DISCORD_INGRESS_ENABLED=0` is set.
 # Usage: TELEGRAM_BOT_TOKEN=xxx just agent-channel-webhook [valkey_port] [webhook_port] [gateway_port]
 # Requires: ngrok installed, TELEGRAM_BOT_TOKEN in env, valkey-server in PATH
-# Note: defaults to verbose debug logs (`--verbose`, `RUST_LOG=omni_agent=debug` when unset).
-# Logs are mirrored to `${OMNI_CHANNEL_LOG_FILE:-.run/logs/omni-agent-webhook.log}` for black-box probes.
+# Note: defaults to verbose debug logs (`--log-verbose`, `RUST_LOG=xiuxian_daochang=debug` when unset).
+# Logs are mirrored to `${OMNI_CHANNEL_LOG_FILE:-.run/logs/xiuxian-daochang-webhook.log}` for black-box probes.
 [group('channel')]
 agent-channel-webhook valkey_port="" webhook_port="" gateway_port="":
     #!/usr/bin/env bash
@@ -1566,11 +1930,133 @@ agent-channel-webhook valkey_port="" webhook_port="" gateway_port="":
         GATEWAY_PORT="{{gateway_port}}" bash scripts/channel/agent-channel-webhook.sh "$resolved_valkey_port"; \
     fi
 
+# Run Telegram webhook with Dots OCR performance defaults.
+# Keeps existing user overrides (env takes precedence).
+# Usage:
+#   TELEGRAM_BOT_TOKEN=xxx just agent-channel-webhook-ocr-fast [valkey_port] [webhook_port] [gateway_port] [model_root]
+[group('channel')]
+agent-channel-webhook-ocr-fast valkey_port="" webhook_port="" gateway_port="" model_root="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    resolved_model_root="{{model_root}}"
+    if [ -z "${resolved_model_root}" ]; then
+      if [ -d ".data/models/dots-ocr" ]; then
+        resolved_model_root=".data/models/dots-ocr"
+      elif [ -n "${PRJ_DATA_HOME:-}" ] && [ -d "${PRJ_DATA_HOME}/models/dots-ocr" ]; then
+        resolved_model_root="${PRJ_DATA_HOME}/models/dots-ocr"
+      else
+        echo "Error: dots-ocr model directory not found. Run: just fetch-vision-models" >&2
+        exit 1
+      fi
+    fi
+
+    default_device="cpu"
+    case "$(uname -s)" in
+      Darwin) default_device="metal" ;;
+      Linux) default_device="cuda" ;;
+    esac
+
+    export XIUXIAN_VISION_MODEL_KIND="${XIUXIAN_VISION_MODEL_KIND:-dots}"
+    export XIUXIAN_VISION_MODEL_PATH="${XIUXIAN_VISION_MODEL_PATH:-${resolved_model_root}}"
+    export XIUXIAN_VISION_DEVICE="${XIUXIAN_VISION_DEVICE:-${default_device}}"
+    export XIUXIAN_VISION_REQUIRE_QUANTIZED="${XIUXIAN_VISION_REQUIRE_QUANTIZED:-0}"
+    export XIUXIAN_VISION_MAX_TILES="${XIUXIAN_VISION_MAX_TILES:-12}"
+    export XIUXIAN_VISION_OCR_MAX_NEW_TOKENS="${XIUXIAN_VISION_OCR_MAX_NEW_TOKENS:-1024}"
+    export XIUXIAN_VISION_OCR_BATCH_WINDOW_MS="${XIUXIAN_VISION_OCR_BATCH_WINDOW_MS:-50}"
+    export XIUXIAN_VISION_OCR_BATCH_MAX_SIZE="${XIUXIAN_VISION_OCR_BATCH_MAX_SIZE:-8}"
+
+    echo "[webhook-ocr-fast] model_root=${XIUXIAN_VISION_MODEL_PATH}"
+    echo "[webhook-ocr-fast] device=${XIUXIAN_VISION_DEVICE} model_kind=${XIUXIAN_VISION_MODEL_KIND}"
+
+    just agent-channel-webhook "{{valkey_port}}" "{{webhook_port}}" "{{gateway_port}}"
+
+# Stop webhook launcher and reclaim lock directory safely.
+# Usage: just agent-channel-webhook-stop
+[group('channel')]
+agent-channel-webhook-stop:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    lock_dir="${XIUXIAN_CHANNEL_WEBHOOK_LOCK_DIR:-.run/locks/xiuxian-daochang-webhook.lock}"
+    pid_file="${lock_dir}/pid"
+
+    if [ ! -f "$pid_file" ]; then
+      echo "No webhook launcher pid file found at ${pid_file}."
+      [ -d "$lock_dir" ] && rm -rf "$lock_dir"
+      exit 0
+    fi
+
+    holder_pid="$(tr -d '[:space:]' < "$pid_file")"
+    if [ -z "${holder_pid}" ] || ! ps -p "${holder_pid}" >/dev/null 2>&1; then
+      echo "Stale webhook launcher lock detected; reclaiming ${lock_dir}."
+      rm -rf "$lock_dir"
+      exit 0
+    fi
+
+    echo "Stopping webhook launcher pid=${holder_pid}..."
+    kill "${holder_pid}" >/dev/null 2>&1 || true
+
+    for _ in $(seq 1 40); do
+      if ! ps -p "${holder_pid}" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.25
+    done
+
+    if ps -p "${holder_pid}" >/dev/null 2>&1; then
+      echo "Force stopping webhook launcher pid=${holder_pid}..."
+      kill -9 "${holder_pid}" >/dev/null 2>&1 || true
+    fi
+
+    # Best-effort cleanup for orphaned webhook worker processes.
+    while read -r pid; do
+      [ -n "$pid" ] && kill "$pid" >/dev/null 2>&1 || true
+    done < <(pgrep -f 'agent_channel_runtime_monitor.py.*xiuxian-daochang-webhook|xiuxian-daochang channel --mode webhook' || true)
+
+    rm -rf "$lock_dir"
+    rm -f .run/xiuxian-daochang-webhook.pid
+    echo "Webhook launcher stopped and lock reclaimed."
+
+# Restart webhook launcher (stop first to avoid lock conflicts).
+# Usage: just agent-channel-webhook-restart [valkey_port] [webhook_port] [gateway_port]
+[group('channel')]
+agent-channel-webhook-restart valkey_port="" webhook_port="" gateway_port="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just agent-channel-webhook-stop
+    just agent-channel-webhook "{{valkey_port}}" "{{webhook_port}}" "{{gateway_port}}"
+
 # Run Discord channel in ingress mode for synthetic ingress replay/ACL probes.
 # Usage: DISCORD_BOT_TOKEN=xxx just agent-channel-discord-ingress
 [group('channel')]
 agent-channel-discord-ingress:
-    scripts/rust/cargo_exec.sh run -p omni-agent -- channel --provider discord --discord-runtime-mode ingress --verbose
+    #!/usr/bin/env bash
+    set -euo pipefail
+    resolved_features=""
+    if [ "${XIUXIAN_DAOCHANG_CARGO_FEATURES+x}" = "x" ]; then
+      resolved_features="${XIUXIAN_DAOCHANG_CARGO_FEATURES}"
+    elif [ "$(uname -s)" = "Darwin" ]; then
+      resolved_features="xiuxian-llm/vision-dots-metal,xiuxian-llm/mistral-accel-metal"
+    elif [ "$(uname -s)" = "Linux" ]; then
+      resolved_features="xiuxian-llm/vision-dots-cuda,xiuxian-llm/mistral-accel-cuda"
+    fi
+
+    runtime_target_dir="${XIUXIAN_DAOCHANG_RUNTIME_TARGET_DIR:-${CARGO_TARGET_DIR:-target}}"
+    export CARGO_TARGET_DIR="${runtime_target_dir}"
+    xiuxian_daochang_bin="${XIUXIAN_DAOCHANG_BIN:-${CARGO_TARGET_DIR}/debug/xiuxian-daochang}"
+
+    if [ -n "${resolved_features}" ]; then
+      scripts/rust/cargo_exec.sh build -p xiuxian-daochang --features "${resolved_features}" --bin xiuxian-daochang
+    else
+      scripts/rust/cargo_exec.sh build -p xiuxian-daochang --bin xiuxian-daochang
+    fi
+
+    if [ ! -x "${xiuxian_daochang_bin}" ]; then
+      echo "Error: xiuxian-daochang binary not found at ${xiuxian_daochang_bin} after build." >&2
+      exit 1
+    fi
+
+    "${xiuxian_daochang_bin}" channel --provider discord --discord-runtime-mode ingress --log-verbose
 
 # Black-box probe: inject one synthetic Telegram update into local webhook and wait for bot reply log.
 # Usage: just agent-channel-blackbox "your prompt" [max_wait_secs]
@@ -1588,12 +2074,24 @@ agent-channel-blackbox prompt max_wait_secs="":
         bash scripts/channel/agent-channel-blackbox.sh --prompt "{{prompt}}"; \
     fi
 
+# Black-box probe specialized for native tool dispatch validation.
+# This adds strict runtime assertions that native tool dispatch succeeds and
+# MCP/Zhenfa tool dispatch does not appear in the same probe.
+# Usage: just agent-channel-blackbox-native "crawl https://example.com" [max_wait_secs]
+[group('channel')]
+agent-channel-blackbox-native prompt max_wait_secs="":
+    if [ -n "{{max_wait_secs}}" ]; then \
+        bash scripts/channel/agent-channel-blackbox.sh --prompt "{{prompt}}" --max-wait "{{max_wait_secs}}" --native-tools-only; \
+    else \
+        bash scripts/channel/agent-channel-blackbox.sh --prompt "{{prompt}}" --native-tools-only; \
+    fi
+
 # Run strict black-box command matrix with command-level event assertions.
 # Usage: just agent-channel-blackbox-commands [max_wait_secs] [max_idle_secs]
 # Optional env: OMNI_TEST_USERNAME, OMNI_TEST_CHAT_ID, OMNI_TEST_USER_ID, OMNI_TEST_THREAD_ID, OMNI_WEBHOOK_URL
 [group('channel')]
 agent-channel-blackbox-commands max_wait_secs="25" max_idle_secs="25":
-    bash scripts/channel/test-omni-agent-command-events.sh --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}"
+    bash scripts/channel/test-xiuxian-daochang-command-events.sh --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}"
 
 # Run strict Discord ingress ACL black-box probes (managed command permission-denied paths).
 # Usage:
@@ -1614,17 +2112,17 @@ agent-channel-discord-acl max_wait_secs="25" max_idle_secs="25" channel_id="" us
     if [ -n "{{guild_id}}" ]; then
       args+=(--guild-id "{{guild_id}}")
     fi
-    bash scripts/channel/test-omni-agent-discord-acl-events.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-discord-acl-events.sh "${args[@]}"
 
 # Stress Discord ingress with concurrent synthetic events and queue-pressure telemetry.
 # Usage:
 #   just agent-channel-discord-ingress-stress
 #   just agent-channel-discord-ingress-stress 6 1 8 20 10 0.2 "" "2001" "1001" "3001"
 # Reports:
-#   .run/reports/omni-agent-discord-ingress-stress.json
-#   .run/reports/omni-agent-discord-ingress-stress.md
+#   .run/reports/xiuxian-daochang-discord-ingress-stress.json
+#   .run/reports/xiuxian-daochang-discord-ingress-stress.md
 [group('channel')]
-agent-channel-discord-ingress-stress rounds="6" warmup_rounds="1" parallel="8" requests_per_worker="20" timeout_secs="10" cooldown_secs="0.2" ingress_url="" channel_id="" user_id="" guild_id="" username="" secret_token="" quality_max_failure_rate="0.0" quality_max_p95_ms="0" quality_min_rps="0" output_json=".run/reports/omni-agent-discord-ingress-stress.json" output_markdown=".run/reports/omni-agent-discord-ingress-stress.md":
+agent-channel-discord-ingress-stress rounds="6" warmup_rounds="1" parallel="8" requests_per_worker="20" timeout_secs="10" cooldown_secs="0.2" ingress_url="" channel_id="" user_id="" guild_id="" username="" secret_token="" quality_max_failure_rate="0.0" quality_max_p95_ms="0" quality_min_rps="0" output_json=".run/reports/xiuxian-daochang-discord-ingress-stress.json" output_markdown=".run/reports/xiuxian-daochang-discord-ingress-stress.md":
     #!/usr/bin/env bash
     set -euo pipefail
     args=(--rounds "{{rounds}}" --warmup-rounds "{{warmup_rounds}}" --parallel "{{parallel}}" --requests-per-worker "{{requests_per_worker}}" --timeout-secs "{{timeout_secs}}" --cooldown-secs "{{cooldown_secs}}" --quality-max-failure-rate "{{quality_max_failure_rate}}" --quality-max-p95-ms "{{quality_max_p95_ms}}" --quality-min-rps "{{quality_min_rps}}" --output-json "{{output_json}}" --output-markdown "{{output_markdown}}")
@@ -1646,21 +2144,21 @@ agent-channel-discord-ingress-stress rounds="6" warmup_rounds="1" parallel="8" r
     if [ -n "{{secret_token}}" ]; then
       args+=(--secret-token "{{secret_token}}")
     fi
-    bash scripts/channel/test-omni-agent-discord-ingress-stress.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-discord-ingress-stress.sh "${args[@]}"
 
 # Run dedup black-box probe by posting the same update_id twice and asserting accepted/duplicate events.
 # Usage: just agent-channel-blackbox-dedup [max_wait_secs]
 # Optional env: OMNI_TEST_CHAT_ID, OMNI_TEST_USER_ID, OMNI_TEST_USERNAME, OMNI_WEBHOOK_URL
 [group('channel')]
 agent-channel-blackbox-dedup max_wait_secs="25":
-    bash scripts/channel/test-omni-agent-dedup-events.sh --max-wait "{{max_wait_secs}}"
+    bash scripts/channel/test-xiuxian-daochang-dedup-events.sh --max-wait "{{max_wait_secs}}"
 
 # Run concurrent dual-session black-box probe (same chat, different users).
 # Usage: just agent-channel-blackbox-concurrent [max_wait_secs]
 # Optional env: OMNI_TEST_CHAT_ID, OMNI_TEST_USER_ID, OMNI_TEST_USERNAME, OMNI_WEBHOOK_URL
 [group('channel')]
 agent-channel-blackbox-concurrent max_wait_secs="30":
-    bash scripts/channel/test-omni-agent-concurrent-sessions.sh --max-wait "{{max_wait_secs}}"
+    bash scripts/channel/test-xiuxian-daochang-concurrent-sessions.sh --max-wait "{{max_wait_secs}}"
 
 # Capture and persist Telegram test-group mappings (for Test1/Test2/Test3 workflows).
 # Usage:
@@ -1670,7 +2168,7 @@ agent-channel-blackbox-concurrent max_wait_secs="30":
 #   .run/config/agent-channel-groups.json
 #   .run/config/agent-channel-groups.env
 [group('channel')]
-agent-channel-capture-groups titles="Test1,Test2,Test3" log_file=".run/logs/omni-agent-webhook.log" output_json=".run/config/agent-channel-groups.json" output_env=".run/config/agent-channel-groups.env" user_id="":
+agent-channel-capture-groups titles="Test1,Test2,Test3" log_file=".run/logs/xiuxian-daochang-webhook.log" output_json=".run/config/agent-channel-groups.json" output_env=".run/config/agent-channel-groups.env" user_id="":
     #!/usr/bin/env bash
     set -euo pipefail
     args=(--titles "{{titles}}" --log-file "{{log_file}}" --output-json "{{output_json}}" --output-env "{{output_env}}")
@@ -1688,7 +2186,7 @@ agent-channel-capture-groups titles="Test1,Test2,Test3" log_file=".run/logs/omni
 #   .run/reports/agent-channel-acceptance.json
 #   .run/reports/agent-channel-acceptance.md
 [group('channel')]
-agent-channel-acceptance max_wait_secs="40" max_idle_secs="25" evolution_max_wait_secs="90" evolution_max_idle_secs="60" evolution_max_parallel="4" titles="Test1,Test2,Test3" log_file=".run/logs/omni-agent-webhook.log" output_json=".run/reports/agent-channel-acceptance.json" output_markdown=".run/reports/agent-channel-acceptance.md" retries="2":
+agent-channel-acceptance max_wait_secs="40" max_idle_secs="25" evolution_max_wait_secs="90" evolution_max_idle_secs="60" evolution_max_parallel="4" titles="Test1,Test2,Test3" log_file=".run/logs/xiuxian-daochang-webhook.log" output_json=".run/reports/agent-channel-acceptance.json" output_markdown=".run/reports/agent-channel-acceptance.md" retries="2":
     bash scripts/channel/agent-channel-acceptance.sh "{{max_wait_secs}}" "{{max_idle_secs}}" "{{evolution_max_wait_secs}}" "{{evolution_max_idle_secs}}" "{{evolution_max_parallel}}" "{{titles}}" "{{log_file}}" "{{output_json}}" "{{output_markdown}}" "{{retries}}"
 
 # Run session isolation matrix (concurrent baseline + cross reset/resume validation).
@@ -1724,7 +2222,7 @@ agent-channel-blackbox-matrix max_wait_secs="35" max_idle_secs="25" chat_b="" ch
     if [ -n "{{mixed_plain_prompt}}" ]; then
       args+=(--mixed-plain-prompt "{{mixed_plain_prompt}}")
     fi
-    bash scripts/channel/test-omni-agent-session-matrix.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-session-matrix.sh "${args[@]}"
 
 # Run complex workflow black-box scenarios with dependency-graph complexity gates.
 # Complexity is evaluated by workflow structure:
@@ -1749,7 +2247,7 @@ agent-channel-blackbox-complex dataset="scripts/channel/fixtures/complex_blackbo
     if [ "{{execute_wave_parallel}}" = "true" ]; then
       args+=(--execute-wave-parallel)
     fi
-    bash scripts/channel/test-omni-agent-complex-scenarios.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-complex-scenarios.sh "${args[@]}"
 
 # Run behavior-first memory evolution / self-correction black-box scenario.
 # This suite validates:
@@ -1769,14 +2267,14 @@ agent-channel-blackbox-memory-evolution scenario="memory_self_correction_high_co
     if [ "{{execute_wave_parallel}}" = "true" ]; then
       args+=(--execute-wave-parallel)
     fi
-    bash scripts/channel/test-omni-agent-complex-scenarios.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-complex-scenarios.sh "${args[@]}"
 
 # Restart local MCP SSE server and wait for /health to become ready.
 # Usage:
 #   just mcp-restart
-#   just mcp-restart "<host>" "<port>" false 25 .run/omni-mcp-sse.pid .run/logs/omni-mcp-sse.log
+#   just mcp-restart "<host>" "<port>" false 25 .run/xiuxian-mcp-sse.pid .run/logs/xiuxian-mcp-sse.log
 [group('channel')]
-mcp-restart host="" port="" no_embedding="false" health_timeout_secs="25" pid_file=".run/omni-mcp-sse.pid" log_file=".run/logs/omni-mcp-sse.log":
+mcp-restart host="" port="" no_embedding="false" health_timeout_secs="25" pid_file=".run/xiuxian-mcp-sse.pid" log_file=".run/logs/xiuxian-mcp-sse.log":
     #!/usr/bin/env bash
     set -euo pipefail
     resolved_host="{{host}}"
@@ -1791,17 +2289,17 @@ mcp-restart host="" port="" no_embedding="false" health_timeout_secs="25" pid_fi
     if [ "{{no_embedding}}" = "true" ]; then
       args+=(--no-embedding)
     fi
-    bash scripts/channel/restart-omni-mcp.sh "${args[@]}"
+    bash scripts/channel/restart-xiuxian-mcp.sh "${args[@]}"
 
-# Stress MCP startup by repeatedly launching omni-agent gateway probes.
+# Stress MCP startup by repeatedly launching xiuxian-daochang gateway probes.
 # Usage:
 #   just agent-channel-mcp-startup-stress
 #   just agent-channel-mcp-startup-stress 8 4 50 0.2 ".mcp.json" "<health_url>" "just mcp-restart" 0.2 true
 # Reports:
-#   .run/reports/omni-agent-mcp-startup-stress.json
-#   .run/reports/omni-agent-mcp-startup-stress.md
+#   .run/reports/xiuxian-daochang-mcp-startup-stress.json
+#   .run/reports/xiuxian-daochang-mcp-startup-stress.md
 [group('channel')]
-agent-channel-mcp-startup-stress rounds="6" parallel="3" startup_timeout_secs="45" cooldown_secs="0.2" mcp_config=".mcp.json" health_url="" restart_mcp_cmd="" restart_mcp_settle_secs="2.0" strict_health_check="false" health_probe_interval_secs="0.2" health_probe_timeout_secs="1.0" output_json=".run/reports/omni-agent-mcp-startup-stress.json" output_markdown=".run/reports/omni-agent-mcp-startup-stress.md":
+agent-channel-mcp-startup-stress rounds="6" parallel="3" startup_timeout_secs="45" cooldown_secs="0.2" mcp_config=".mcp.json" health_url="" restart_mcp_cmd="" restart_mcp_settle_secs="2.0" strict_health_check="false" health_probe_interval_secs="0.2" health_probe_timeout_secs="1.0" output_json=".run/reports/xiuxian-daochang-mcp-startup-stress.json" output_markdown=".run/reports/xiuxian-daochang-mcp-startup-stress.md":
     #!/usr/bin/env bash
     set -euo pipefail
     resolved_health_url="{{health_url}}"
@@ -1818,7 +2316,7 @@ agent-channel-mcp-startup-stress rounds="6" parallel="3" startup_timeout_secs="4
     if [ "{{strict_health_check}}" = "true" ]; then
       args+=(--strict-health-check)
     fi
-    bash scripts/channel/test-omni-agent-mcp-startup-stress.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-mcp-startup-stress.sh "${args[@]}"
 
 # Run MCP startup regression suite (hot + cold start).
 # Usage:
@@ -1826,8 +2324,8 @@ agent-channel-mcp-startup-stress rounds="6" parallel="3" startup_timeout_secs="4
 #   just agent-channel-mcp-startup-suite 20 8 8 4 60 0.2 "<mcp_host>" "<mcp_port>" ".mcp.json" false false
 #   just agent-channel-mcp-startup-suite 20 8 8 4 60 0.2 "<mcp_host>" "<mcp_port>" ".mcp.json" false false 0 1200 1500 "" 0.5 0.5
 # Reports:
-#   .run/reports/omni-agent-mcp-startup-suite.json
-#   .run/reports/omni-agent-mcp-startup-suite.md
+#   .run/reports/xiuxian-daochang-mcp-startup-suite.json
+#   .run/reports/xiuxian-daochang-mcp-startup-suite.md
 [group('channel')]
 agent-channel-mcp-startup-suite hot_rounds="20" hot_parallel="8" cold_rounds="8" cold_parallel="4" startup_timeout_secs="60" cooldown_secs="0.2" mcp_host="" mcp_port="" mcp_config=".mcp.json" skip_hot="false" skip_cold="false" health_probe_interval_secs="0.2" health_probe_timeout_secs="1.0" quality_max_failed_probes="0" quality_max_hot_p95_ms="1200" quality_max_cold_p95_ms="1500" quality_min_health_samples="1" quality_max_health_failure_rate="0.02" quality_max_health_p95_ms="350" quality_baseline_json="" quality_max_hot_p95_regression_ratio="0.5" quality_max_cold_p95_regression_ratio="0.5":
     #!/usr/bin/env bash
@@ -1850,14 +2348,14 @@ agent-channel-mcp-startup-suite hot_rounds="20" hot_parallel="8" cold_rounds="8"
     if [ "{{skip_cold}}" = "true" ]; then
       args+=(--skip-cold)
     fi
-    bash scripts/channel/test-omni-agent-mcp-startup-suite.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-mcp-startup-suite.sh "${args[@]}"
 
 # Run memory-focused black-box + regression suite.
 # Usage:
-#   just test-omni-agent-memory-suite
-#   just test-omni-agent-memory-suite full 30 30 tao3k true true "<valkey_url>" false false false scripts/channel/fixtures/memory_evolution_complex_scenarios.json memory_self_correction_high_complexity_dag 1 "" ""
+#   just test-xiuxian-daochang-memory-suite
+#   just test-xiuxian-daochang-memory-suite full 30 30 tao3k true true "<valkey_url>" false false false scripts/channel/fixtures/memory_evolution_complex_scenarios.json memory_self_correction_high_complexity_dag 1 "" ""
 [group('channel')]
-test-omni-agent-memory-suite suite="quick" max_wait_secs="25" max_idle_secs="25" username="" require_live_turn="false" with_valkey="false" valkey_url="" skip_blackbox="false" skip_rust="false" skip_evolution="false" evolution_dataset="scripts/channel/fixtures/memory_evolution_complex_scenarios.json" evolution_scenario="memory_self_correction_high_complexity_dag" evolution_max_parallel="1" evolution_output_json="" evolution_output_markdown="":
+test-xiuxian-daochang-memory-suite suite="quick" max_wait_secs="25" max_idle_secs="25" username="" require_live_turn="false" with_valkey="false" valkey_url="" skip_blackbox="false" skip_rust="false" skip_evolution="false" evolution_dataset="scripts/channel/fixtures/memory_evolution_complex_scenarios.json" evolution_scenario="memory_self_correction_high_complexity_dag" evolution_max_parallel="1" evolution_output_json="" evolution_output_markdown="":
     #!/usr/bin/env bash
     set -euo pipefail
     args=(--suite "{{suite}}" --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}")
@@ -1898,14 +2396,14 @@ test-omni-agent-memory-suite suite="quick" max_wait_secs="25" max_idle_secs="25"
     if [ -n "{{evolution_output_markdown}}" ]; then
       args+=(--evolution-output-markdown "{{evolution_output_markdown}}")
     fi
-    bash scripts/channel/test-omni-agent-memory-suite.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-memory-suite.sh "${args[@]}"
 
 # Run memory A/B benchmark suite (baseline vs adaptive feedback).
 # Usage:
-#   just test-omni-agent-memory-benchmark
-#   just test-omni-agent-memory-benchmark baseline 1 60 40 tao3k scripts/channel/fixtures/memory_benchmark_scenarios.json
+#   just test-xiuxian-daochang-memory-benchmark
+#   just test-xiuxian-daochang-memory-benchmark baseline 1 60 40 tao3k scripts/channel/fixtures/memory_benchmark_scenarios.json
 [group('channel')]
-test-omni-agent-memory-benchmark mode="both" iterations="1" max_wait_secs="40" max_idle_secs="30" username="" dataset="scripts/channel/fixtures/memory_benchmark_scenarios.json" output_json="" output_markdown="" skip_reset="false" fail_on_mcp_error="false" feedback_policy="deadband" feedback_down_threshold="0.34":
+test-xiuxian-daochang-memory-benchmark mode="both" iterations="1" max_wait_secs="40" max_idle_secs="30" username="" dataset="scripts/channel/fixtures/memory_benchmark_scenarios.json" output_json="" output_markdown="" skip_reset="false" fail_on_mcp_error="false" feedback_policy="deadband" feedback_down_threshold="0.34":
     #!/usr/bin/env bash
     set -euo pipefail
     args=(--iterations "{{iterations}}" --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}" --dataset "{{dataset}}" --feedback-policy "{{feedback_policy}}" --feedback-down-threshold "{{feedback_down_threshold}}")
@@ -1932,15 +2430,15 @@ test-omni-agent-memory-benchmark mode="both" iterations="1" max_wait_secs="40" m
     if [ "{{fail_on_mcp_error}}" = "true" ]; then
       args+=(--fail-on-mcp-error)
     fi
-    bash scripts/channel/test-omni-agent-memory-benchmark.sh "${args[@]}"
+    bash scripts/channel/test-xiuxian-daochang-memory-benchmark.sh "${args[@]}"
 
 # Aggregate evolution + benchmark + session matrix into one SLO gate report.
 # Usage:
-#   just test-omni-agent-memory-slo-report
-#   just test-omni-agent-memory-slo-report .run/reports/omni-agent-memory-evolution.json .run/reports/omni-agent-memory-benchmark.json .run/reports/agent-channel-session-matrix.json .run/logs/omni-agent-webhook.log true
+#   just test-xiuxian-daochang-memory-slo-report
+#   just test-xiuxian-daochang-memory-slo-report .run/reports/xiuxian-daochang-memory-evolution.json .run/reports/xiuxian-daochang-memory-benchmark.json .run/reports/agent-channel-session-matrix.json .run/logs/xiuxian-daochang-webhook.log true
 [group('channel')]
-test-omni-agent-memory-slo-report evolution_report_json=".run/reports/omni-agent-memory-evolution.json" benchmark_report_json=".run/reports/omni-agent-memory-benchmark.json" session_matrix_report_json=".run/reports/agent-channel-session-matrix.json" runtime_log_file="" enable_stream_gate="false" output_json=".run/reports/omni-agent-memory-slo-report.json" output_markdown=".run/reports/omni-agent-memory-slo-report.md":
-    bash scripts/channel/test-omni-agent-memory-slo-report.sh "{{evolution_report_json}}" "{{benchmark_report_json}}" "{{session_matrix_report_json}}" "{{runtime_log_file}}" "{{enable_stream_gate}}" "{{output_json}}" "{{output_markdown}}"
+test-xiuxian-daochang-memory-slo-report evolution_report_json=".run/reports/xiuxian-daochang-memory-evolution.json" benchmark_report_json=".run/reports/xiuxian-daochang-memory-benchmark.json" session_matrix_report_json=".run/reports/agent-channel-session-matrix.json" runtime_log_file="" enable_stream_gate="false" output_json=".run/reports/xiuxian-daochang-memory-slo-report.json" output_markdown=".run/reports/xiuxian-daochang-memory-slo-report.md":
+    bash scripts/channel/test-xiuxian-daochang-memory-slo-report.sh "{{evolution_report_json}}" "{{benchmark_report_json}}" "{{session_matrix_report_json}}" "{{runtime_log_file}}" "{{enable_stream_gate}}" "{{output_json}}" "{{output_markdown}}"
 
 # Start local Valkey daemon for webhook dedup / stress tests.
 # Usage: just valkey-start [port]
@@ -1978,85 +2476,85 @@ valkey-status port="":
     fi
     bash scripts/channel/valkey-status.sh "$resolved_valkey_port"
 
-# Run ignored omni-agent stress tests that require live Valkey.
-# Usage: just test-omni-agent-valkey-stress [valkey_url]
+# Run ignored xiuxian-daochang stress tests that require live Valkey.
+# Usage: just test-xiuxian-daochang-valkey-stress [valkey_url]
 [group('channel')]
-test-omni-agent-valkey-stress valkey_url="":
+test-xiuxian-daochang-valkey-stress valkey_url="":
     #!/usr/bin/env bash
     set -euo pipefail
     resolved_valkey_url="{{valkey_url}}"
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-omni-agent-valkey-stress.sh "${resolved_valkey_url}"
+    bash scripts/channel/test-xiuxian-daochang-valkey-stress.sh "${resolved_valkey_url}"
 
 # Run focused distributed SessionGate verification against live Valkey.
-# Usage: just test-omni-agent-valkey-session-gate [valkey_url]
+# Usage: just test-xiuxian-daochang-valkey-session-gate [valkey_url]
 [group('channel')]
-test-omni-agent-valkey-session-gate valkey_url="":
+test-xiuxian-daochang-valkey-session-gate valkey_url="":
     #!/usr/bin/env bash
     set -euo pipefail
     resolved_valkey_url="{{valkey_url}}"
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-omni-agent-valkey-session-gate.sh "${resolved_valkey_url}"
+    bash scripts/channel/test-xiuxian-daochang-valkey-session-gate.sh "${resolved_valkey_url}"
 
 # Run focused cross-instance session-context restore verification against live Valkey.
-# Usage: just test-omni-agent-valkey-session-context [valkey_url]
+# Usage: just test-xiuxian-daochang-valkey-session-context [valkey_url]
 [group('channel')]
-test-omni-agent-valkey-session-context valkey_url="":
+test-xiuxian-daochang-valkey-session-context valkey_url="":
     #!/usr/bin/env bash
     set -euo pipefail
     resolved_valkey_url="{{valkey_url}}"
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-omni-agent-valkey-session-context.sh "${resolved_valkey_url}"
+    bash scripts/channel/test-xiuxian-daochang-valkey-session-context.sh "${resolved_valkey_url}"
 
 # Run focused multi-HTTP Valkey dedup verification.
-# Usage: just test-omni-agent-valkey-multi-http [valkey_url]
+# Usage: just test-xiuxian-daochang-valkey-multi-http [valkey_url]
 [group('channel')]
-test-omni-agent-valkey-multi-http valkey_url="":
+test-xiuxian-daochang-valkey-multi-http valkey_url="":
     #!/usr/bin/env bash
     set -euo pipefail
     resolved_valkey_url="{{valkey_url}}"
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-omni-agent-valkey-multi-http.sh "${resolved_valkey_url}"
+    bash scripts/channel/test-xiuxian-daochang-valkey-multi-http.sh "${resolved_valkey_url}"
 
 # Run focused multi-process Valkey dedup verification.
-# Usage: just test-omni-agent-valkey-multi-process [valkey_url]
+# Usage: just test-xiuxian-daochang-valkey-multi-process [valkey_url]
 [group('channel')]
-test-omni-agent-valkey-multi-process valkey_url="":
+test-xiuxian-daochang-valkey-multi-process valkey_url="":
     #!/usr/bin/env bash
     set -euo pipefail
     resolved_valkey_url="{{valkey_url}}"
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-omni-agent-valkey-multi-process.sh "${resolved_valkey_url}"
+    bash scripts/channel/test-xiuxian-daochang-valkey-multi-process.sh "${resolved_valkey_url}"
 
 # Run full live Valkey webhook verification suite
 # (stress + distributed session gate + session-context + multi-http + multi-process).
-# Usage: just test-omni-agent-valkey-full [valkey_url]
+# Usage: just test-xiuxian-daochang-valkey-full [valkey_url]
 [group('channel')]
-test-omni-agent-valkey-full valkey_url="":
+test-xiuxian-daochang-valkey-full valkey_url="":
     #!/usr/bin/env bash
     set -euo pipefail
     resolved_valkey_url="{{valkey_url}}"
     if [ -z "$resolved_valkey_url" ]; then
       resolved_valkey_url="$(uv run python scripts/channel/resolve_valkey_endpoint.py --field url)"
     fi
-    bash scripts/channel/test-omni-agent-valkey-full.sh "${resolved_valkey_url}"
+    bash scripts/channel/test-xiuxian-daochang-valkey-full.sh "${resolved_valkey_url}"
 
 # Validate observability event sequence from a captured agent log file.
 # Usage:
-#   just check-omni-agent-event-sequence <log_file>
-#   just check-omni-agent-event-sequence <log_file> true true valkey
+#   just check-xiuxian-daochang-event-sequence <log_file>
+#   just check-xiuxian-daochang-event-sequence <log_file> true true valkey
 [group('channel')]
-check-omni-agent-event-sequence log_file strict="false" require_memory="false" expect_memory_backend="":
+check-xiuxian-daochang-event-sequence log_file strict="false" require_memory="false" expect_memory_backend="":
     #!/usr/bin/env bash
     set -euo pipefail
     args=()
@@ -2069,7 +2567,7 @@ check-omni-agent-event-sequence log_file strict="false" require_memory="false" e
     if [ -n "{{expect_memory_backend}}" ]; then
       args+=(--expect-memory-backend "{{expect_memory_backend}}")
     fi
-    bash scripts/channel/check-omni-agent-event-sequence.sh "{{log_file}}" "${args[@]}"
+    bash scripts/channel/check-xiuxian-daochang-event-sequence.sh "{{log_file}}" "${args[@]}"
 
 # ==============================================================================
 # RUST BUILD
@@ -2136,3 +2634,23 @@ build-rust-wheel:
         echo "❌ Error: Could not find built wheel"
         exit 1
     fi
+
+# Run Qianji JS Aesthetic Evolution Test (PaperBanana Soul)
+test-qianji-evolution:
+	@echo "🚀 Initiating Sovereign Evolution Test..."
+	@python3 scripts/research/simulate_evolution.py
+
+# ==============================================================================
+# Qianji Studio (Thousand Mechanisms Studio)
+# ==============================================================================
+
+# Launch the high-performance React + Rspack laboratory for visual evolution.
+studio:
+    @echo "🚀 Launching Qianji Sovereign Studio (Rspack + React + TS)..."
+    @cd .data/qianji-studio && npm run dev
+
+# Run REAL LLM evolution test for Qianji JS (requires OPENAI_API_KEY).
+# Usage: just test-evolution "Your visual intent"
+test-evolution intent="Forge ultimate academic topology for a multi-agent system.":
+    @echo "🌀 Initiating REAL Evolution Forge..."
+    export OPENAI_API_KEY=$OPENAI_API_KEY && cargo run -p xiuxian-qianji --bin qianji --features llm -- . packages/rust/crates/xiuxian-qianji/resources/omega_react_paper_banana.toml '{"User_Intent": "{{intent}}"}'

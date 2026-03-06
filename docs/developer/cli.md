@@ -182,7 +182,7 @@ Set `OMNI_SKILL_RUNNER_SOCKET` to isolate daemon instances in integration tests
 or parallel runs.
 
 ```bash
-OMNI_SKILL_RUNNER_SOCKET=/tmp/omni-skill-runner-test.sock omni skill runner status --json
+OMNI_SKILL_RUNNER_SOCKET=/tmp/xiuxian-skill-runner-test.sock omni skill runner status --json
 ```
 
 ---

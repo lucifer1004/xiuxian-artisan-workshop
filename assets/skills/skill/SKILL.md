@@ -3,9 +3,9 @@ type: skill
 name: skill
 description: Use when discovering skills, installing new capabilities, listing available tools, reloading skill manifests, or learning about project capabilities.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/skill"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/skill"
   routing_keywords:
     - "skill"
     - "discovery"

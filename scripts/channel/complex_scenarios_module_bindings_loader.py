@@ -10,7 +10,7 @@ from complex_scenarios_module_bindings_models import ComplexScenariosModuleBindi
 
 
 def load_module_bindings(caller_file: str) -> ComplexScenariosModuleBindings:
-    """Load all sibling modules required by `test_omni_agent_complex_scenarios.py`."""
+    """Load all sibling modules required by `test_xiuxian_daochang_complex_scenarios.py`."""
     load_sibling_module = importlib.import_module("module_loader").load_sibling_module
 
     def _load_sibling(module_name: str, file_name: str, error_context: str) -> Any:

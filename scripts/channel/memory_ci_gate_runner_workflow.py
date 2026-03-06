@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execution workflow for omni-agent memory CI gate."""
+"""Execution workflow for xiuxian-daochang memory CI gate."""
 
 from __future__ import annotations
 

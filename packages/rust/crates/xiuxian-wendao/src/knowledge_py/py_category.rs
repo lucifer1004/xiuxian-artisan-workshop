@@ -96,15 +96,6 @@ impl PyKnowledgeCategory {
 
 impl PyKnowledgeCategory {
     pub(crate) fn value_string(&self) -> String {
-        match self.inner {
-            KnowledgeCategory::Pattern => "patterns".to_string(),
-            KnowledgeCategory::Solution => "solutions".to_string(),
-            KnowledgeCategory::Error => "errors".to_string(),
-            KnowledgeCategory::Technique => "techniques".to_string(),
-            KnowledgeCategory::Note => "notes".to_string(),
-            KnowledgeCategory::Reference => "references".to_string(),
-            KnowledgeCategory::Architecture => "architecture".to_string(),
-            KnowledgeCategory::Workflow => "workflows".to_string(),
-        }
+        self.inner.as_plural_str().to_string()
     }
 }

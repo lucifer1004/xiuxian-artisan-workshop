@@ -3,7 +3,7 @@
 Index commands for skill CLI.
 
 Contains: reindex, sync, index-stats commands.
-Data is stored in LanceDB (.cache/omni-vector/).
+Data is stored in LanceDB (.cache/xiuxian-vector/).
 """
 
 from __future__ import annotations
@@ -127,7 +127,7 @@ def skill_sync(
 
         # Use Rust scanner to detect changes
         try:
-            from omni_core_rs import diff_skills, scan_skill_tools
+            from xiuxian_core_rs import diff_skills, scan_skill_tools
         except ImportError as e:
             err_console.print(
                 Panel(
@@ -323,7 +323,7 @@ def skill_index_stats(
                 Panel(
                     f"Skills: {skills_count}\n"
                     f"Tools: {len(tools)}\n"
-                    f"Storage: LanceDB (.cache/omni-vector/)",
+                    f"Storage: LanceDB (.cache/xiuxian-vector/)",
                     title="📊 Index Statistics",
                     style="blue",
                 )

@@ -19,8 +19,8 @@ metadata:
 Schemas are now moved from `shared/schemas` to their respective owner crates' `resources/` directory.
 
 - **LinkGraph Schemas:** `packages/rust/crates/xiuxian-wendao/resources/`
-- **Agent Schemas:** `packages/rust/crates/omni-agent/resources/`
-- **Memory Schemas:** `packages/rust/crates/omni-memory/resources/`
+- **Agent Schemas:** `packages/rust/crates/xiuxian-daochang/resources/`
+- **Memory Schemas:** `packages/rust/crates/xiuxian-memory-engine/resources/`
 
 ### 1.2 Rust Binding Access
 

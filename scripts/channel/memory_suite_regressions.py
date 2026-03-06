@@ -16,7 +16,7 @@ def run_rust_memory_regressions(*, run_command_fn: Any) -> None:
             "cargo",
             "test",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "--test",
             "agent_memory_persistence_backend",
             "memory_turn_store_skips_episode_when_embedding_endpoint_is_unavailable",
@@ -29,7 +29,7 @@ def run_rust_memory_regressions(*, run_command_fn: Any) -> None:
             "cargo",
             "test",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "--lib",
             "runtime_handle_inbound_session_memory_reports_latest_snapshot_json",
             "-q",
@@ -41,7 +41,7 @@ def run_rust_memory_regressions(*, run_command_fn: Any) -> None:
             "cargo",
             "test",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "--lib",
             "runtime_handle_inbound_session_feedback_json",
             "-q",
@@ -53,7 +53,7 @@ def run_rust_memory_regressions(*, run_command_fn: Any) -> None:
             "cargo",
             "test",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "--lib",
             "agent::embedding_dimension::tests",
             "-q",
@@ -65,7 +65,7 @@ def run_rust_memory_regressions(*, run_command_fn: Any) -> None:
             "cargo",
             "test",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "--lib",
             "inspect_memory_recall_snapshot_keeps_embedding_repaired_source",
             "-q",
@@ -99,15 +99,15 @@ def run_valkey_cross_instance_regression(
     check_valkey_connectivity(valkey_url)
     env = os.environ.copy()
     env["XIUXIAN_WENDAO_VALKEY_URL"] = valkey_url
-    env["OMNI_AGENT_SESSION_VALKEY_PREFIX"] = valkey_prefix
-    env["OMNI_AGENT_MEMORY_VALKEY_KEY_PREFIX"] = f"{valkey_prefix}:memory"
+    env["XIUXIAN_DAOCHANG_SESSION_VALKEY_PREFIX"] = valkey_prefix
+    env["XIUXIAN_DAOCHANG_MEMORY_VALKEY_KEY_PREFIX"] = f"{valkey_prefix}:memory"
     print(f"Valkey isolation prefix: {valkey_prefix}", flush=True)
     run_command_fn(
         [
             "cargo",
             "test",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "memory_recall_snapshot_is_shared_across_agent_instances_with_valkey",
             "--",
             "--ignored",

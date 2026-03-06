@@ -10,6 +10,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 import omni.agent.mcp_server.sse as sse_module
+from omni.agent.protocol import MCP_PROTOCOL_VERSION
 from omni.agent.mcp_server.sse import create_sse_app
 
 
@@ -34,7 +35,7 @@ class MockHandler:
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": MCP_PROTOCOL_VERSION,
                     "serverInfo": {"name": "test-server", "version": "1.0.0"},
                     "capabilities": {"tools": {}},
                 },
@@ -215,7 +216,7 @@ async def test_initialize(test_app):
                 "id": 1,
                 "method": "initialize",
                 "params": {
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": MCP_PROTOCOL_VERSION,
                     "clientInfo": {"name": "test", "version": "1.0"},
                     "capabilities": {},
                 },
@@ -224,7 +225,31 @@ async def test_initialize(test_app):
         assert response.status_code == 200
         data = response.json()
         assert "result" in data
-        assert data["result"]["protocolVersion"] == "2024-11-05"
+        assert data["result"]["protocolVersion"] == MCP_PROTOCOL_VERSION
+
+
+@pytest.mark.asyncio
+async def test_initialize_rejects_legacy_protocol_version(test_app):
+    """Initialize should reject non-current protocol versions."""
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "clientInfo": {"name": "test", "version": "1.0"},
+                    "capabilities": {},
+                },
+            },
+        )
+        assert response.status_code == 400
+        data = response.json()
+        assert data["error"]["code"] == -32602
+        assert "Unsupported protocol version" in data["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -327,6 +352,14 @@ async def test_messages_delete_endpoint(test_app):
         )
         assert response.status_code == 204
         assert response.headers.get("mcp-session-id") == "test-session"
+
+
+def test_protocol_version_support_matrix_includes_2025_06_18():
+    """SSE transport should accept only the active MCP protocol version."""
+    assert sse_module._is_supported_protocol_version(MCP_PROTOCOL_VERSION)
+    assert not sse_module._is_supported_protocol_version("2025-03-26")
+    assert not sse_module._is_supported_protocol_version("2024-11-05")
+    assert not sse_module._is_supported_protocol_version("2023-01-01")
 
 
 @pytest.mark.asyncio
@@ -531,16 +564,12 @@ async def test_embed_batch_retries_after_auto_heal_success(test_app):
     class _Svc:
         def __init__(self):
             self.calls = 0
-            self.reset_calls = 0
 
         def embed_batch(self, _texts: list[str]):
             self.calls += 1
             if self.calls == 1:
                 raise EmbeddingUnavailableError("connection refused")
             return [[0.11, 0.22, 0.33]]
-
-        def reset_litellm_circuit(self):
-            self.reset_calls += 1
 
     service = _Svc()
 

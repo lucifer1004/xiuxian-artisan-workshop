@@ -27,11 +27,11 @@ def get_vector_db_path() -> Path:
     - Knowledge: get_vector_db_path() / "knowledge.lance"
 
     Returns:
-        Path to .cache/omni-vector/
+        Path to .cache/xiuxian-vector/
     """
     from omni.foundation.config.prj import get_cache_dir
 
-    return get_cache_dir("omni-vector")
+    return get_cache_dir("xiuxian-vector")
 
 
 def get_database_paths() -> dict[str, str]:
@@ -134,7 +134,7 @@ def get_memory_db_path() -> Path:
     Usage:
         >>> from omni.foundation.config.database import get_memory_db_path
         >>> memory_path = get_memory_db_path()
-        >>> # Returns: /project/.cache/omni-vector/memory.hippocampus.lance
+        >>> # Returns: /project/.cache/xiuxian-vector/memory.hippocampus.lance
     """
     return get_vector_db_path() / "memory.hippocampus.lance"
 

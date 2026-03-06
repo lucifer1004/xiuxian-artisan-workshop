@@ -27,7 +27,7 @@ from omni.foundation.config.settings import get_settings
 from omni.foundation.runtime.gitops import get_project_root
 
 app = typer.Typer(
-    name="omni-agent",
+    name="xiuxian-daochang",
     help="Omni Dev Fusion Agent CLI - The Neural Nexus",
     no_args_is_help=True,
     add_completion=False,
@@ -96,7 +96,7 @@ _REGISTERED_COMMANDS: set[str] = set()
 _SKILL_EMBED_OVERRIDE_INSTALLED = False
 
 # Declarative bootstrap requirements for local commands.
-register_requirements("version", ollama=False, embedding_index=False)
+register_requirements("version", embedding_index=False)
 
 
 def _get_git_commit() -> str:
@@ -148,8 +148,8 @@ def version():
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
     # Key dependencies
-    omni_core_version = _get_package_version("omni-core")
-    omni_mcp_version = _get_package_version("omni-mcp")
+    xiuxian_core_version = _get_package_version("xiuxian-core")
+    xiuxian_mcp_version = _get_package_version("xiuxian-mcp")
     lance_version = _get_package_version("lance")
 
     typer.echo("=" * 60)
@@ -161,8 +161,8 @@ def version():
     typer.echo(f"  Rust:            {rust_version}")
     typer.echo("-" * 60)
     typer.echo("  Dependencies:")
-    typer.echo(f"    omni-core:     {omni_core_version}")
-    typer.echo(f"    omni-mcp:      {omni_mcp_version}")
+    typer.echo(f"    xiuxian-core:     {xiuxian_core_version}")
+    typer.echo(f"    xiuxian-mcp:      {xiuxian_mcp_version}")
     typer.echo(f"    lance:         {lance_version}")
     typer.echo("=" * 60)
 
@@ -475,13 +475,6 @@ def entry_point():
     )
     if should_load_bootstrap_services:
         reqs = get_requirements(top_command)
-        if reqs.ollama:
-            try:
-                from omni.agent.ollama_lifecycle import ensure_ollama_for_embedding
-
-                ensure_ollama_for_embedding()
-            except Exception:
-                pass
         if reqs.embedding_index:
             try:
                 from omni.agent.services.reindex import ensure_embedding_index_compatibility

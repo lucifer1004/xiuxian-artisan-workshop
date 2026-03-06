@@ -21,6 +21,7 @@ impl McpClientPool {
             return self.list_tools_uncached(params).await;
         }
 
+        self.sync_list_tools_cache_with_server_notifications().await;
         if let Some(cached) = self.get_cached_list_tools().await {
             self.record_list_tools_cache_hit();
             tracing::debug!(
@@ -32,6 +33,7 @@ impl McpClientPool {
         }
 
         let _cache_guard = self.list_tools_cache_lock.lock().await;
+        self.sync_list_tools_cache_with_server_notifications().await;
         if let Some(cached) = self.get_cached_list_tools().await {
             self.record_list_tools_cache_hit();
             tracing::debug!(

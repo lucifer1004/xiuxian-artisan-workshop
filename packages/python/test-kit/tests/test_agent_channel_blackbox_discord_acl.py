@@ -17,7 +17,7 @@ def _load_probe_module() -> ModuleType:
     root = get_project_root()
     script_path = root / "scripts" / "channel" / "agent_channel_blackbox.py"
     spec = importlib.util.spec_from_file_location(
-        "omni_agent_channel_blackbox_probe_discord_acl", script_path
+        "xiuxian_daochang_channel_blackbox_probe_discord_acl", script_path
     )
     assert spec is not None
     assert spec.loader is not None
@@ -90,7 +90,7 @@ def _patch_runtime(monkeypatch, module: ModuleType, update_id: int) -> None:
 def test_parse_command_reply_event_line_accepts_discord_log() -> None:
     module = _load_probe_module()
     line = (
-        "2026-02-21 INFO omni_agent::channels::discord::runtime::managed::handlers::send: "
+        "2026-02-21 INFO xiuxian_daochang::channels::discord::runtime::managed::handlers::send: "
         "discord command reply sent "
         'event="discord.command.session_admin_json.replied" '
         'session_key="1001:2002" recipient="1001" '
@@ -106,7 +106,7 @@ def test_parse_command_reply_event_line_accepts_discord_log() -> None:
 def test_parse_command_reply_json_summary_line_accepts_generic_phrase() -> None:
     module = _load_probe_module()
     line = (
-        "2026-02-21 INFO omni_agent::channels::discord::runtime::managed::handlers::send: "
+        "2026-02-21 INFO xiuxian_daochang::channels::discord::runtime::managed::handlers::send: "
         "discord command reply json summary "
         'event="discord.command.session_budget_json.replied" '
         'session_key="1001:2002" recipient="1001" '
@@ -145,7 +145,7 @@ def test_run_probe_allow_no_bot_matches_discord_control_admin_required_event(
                     "session_key=1001:2002 content_preview=/session admin add 1001"
                 ],
                 [
-                    "2026-02-21 INFO omni_agent::channels::discord::runtime::managed::handlers::send: "
+                    "2026-02-21 INFO xiuxian_daochang::channels::discord::runtime::managed::handlers::send: "
                     "discord command reply sent "
                     'event="discord.command.control_admin_required.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -183,7 +183,7 @@ def test_run_probe_discord_mismatched_session_key_fails_scope_validation(
                     "session_key=1001:2002 content_preview=/session admin add 1001"
                 ],
                 [
-                    "2026-02-21 INFO omni_agent::channels::discord::runtime::managed::handlers::send: "
+                    "2026-02-21 INFO xiuxian_daochang::channels::discord::runtime::managed::handlers::send: "
                     "discord command reply sent "
                     'event="discord.command.control_admin_required.replied" '
                     'session_key="1001:7777" recipient="1001" '
@@ -226,11 +226,11 @@ def test_run_probe_discord_session_scope_placeholder_fails_on_prefix_mismatch(
                     "session_key=1001:2002 content_preview=/session memory json"
                 ],
                 [
-                    "2026-02-21 INFO omni_agent::channels::discord::runtime::managed::handlers::send: "
+                    "2026-02-21 INFO xiuxian_daochang::channels::discord::runtime::managed::handlers::send: "
                     "discord command reply sent "
                     'event="discord.command.session_memory_json.replied" '
                     'session_key="1001:2002" recipient="1001" reply_chars=210 reply_bytes=210',
-                    "2026-02-21 INFO omni_agent::channels::discord::runtime::managed::handlers::send: "
+                    "2026-02-21 INFO xiuxian_daochang::channels::discord::runtime::managed::handlers::send: "
                     "discord command reply json summary "
                     'event="discord.command.session_memory_json.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -274,11 +274,11 @@ def test_run_probe_discord_session_scope_placeholder_matches_discord_scope(
                     "session_key=1001:2002 content_preview=/session memory json"
                 ],
                 [
-                    "2026-02-21 INFO omni_agent::channels::discord::runtime::managed::handlers::send: "
+                    "2026-02-21 INFO xiuxian_daochang::channels::discord::runtime::managed::handlers::send: "
                     "discord command reply sent "
                     'event="discord.command.session_memory_json.replied" '
                     'session_key="1001:2002" recipient="1001" reply_chars=210 reply_bytes=210',
-                    "2026-02-21 INFO omni_agent::channels::discord::runtime::managed::handlers::send: "
+                    "2026-02-21 INFO xiuxian_daochang::channels::discord::runtime::managed::handlers::send: "
                     "discord command reply json summary "
                     'event="discord.command.session_memory_json.replied" '
                     'session_key="1001:2002" recipient="1001" '

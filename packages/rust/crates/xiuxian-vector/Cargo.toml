@@ -1,0 +1,83 @@
+[package]
+name = "xiuxian-vector"
+version.workspace = true
+edition.workspace = true
+description = "High-performance embedded vector database using LanceDB"
+authors = ["CyberXiuXian Artisan Studio"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# LanceDB core (2.0: v2 manifest, scalar/FTS improvements)
+lance = { workspace = true }
+lance-arrow = "2.0"
+lance-file = "2.0"
+lance-index = "2.0"
+lance-linalg = "2.0"
+
+# Tantivy - Rust Lucene for BM25/Sparse Retrieval
+tantivy = "0.25"
+ordered-float = "4.2"
+num-traits = "0.2"
+
+# RecordBatch utilities (extracted to xiuxian-lance)
+xiuxian-lance = { path = "../xiuxian-lance" }
+
+# Arrow IPC for search result batch (same version as lance's arrow for IPC compatibility)
+arrow = { workspace = true }
+arrow-ipc = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
+
+# Async stream utilities
+futures = "0.3"
+
+# Async trait macros
+async-trait = "0.1"
+
+# Concurrency
+dashmap = "7.0.0-rc2"
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+# SIMD-accelerated JSON for hot-path metadata parsing (writer_impl)
+simd-json = "0.13"
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+# Reuse our common types
+xiuxian-types = { path = "../xiuxian-types" }
+xiuxian-io = { path = "../xiuxian-io" }
+
+# Omni Scanner - Skills and Knowledge scanning
+xiuxian-skills = { path = "../xiuxian-skills" }
+
+# YAML parsing for skill manifests
+serde_yaml = { workspace = true }
+
+# Multi-pattern string matching (O(n+m) for name-token boost)
+aho-corasick = "1.1"
+
+# Parallel fusion (P5: boost phase)
+rayon = { workspace = true }
+
+# Logging
+log = { workspace = true }
+
+# Time for cleanup_old_versions (Lance API)
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+lance = { workspace = true }
+tempfile = { workspace = true }
+rand = "0.8"
+insta = { version = "1.43.2", features = ["json"] }
+
+[lints]
+workspace = true

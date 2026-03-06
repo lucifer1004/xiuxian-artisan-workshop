@@ -2,8 +2,8 @@
 //!
 //! Contains: get_all_file_hashes, get_analytics_table
 
-use omni_vector::VectorStore;
 use pyo3::{prelude::*, types::PyAny};
+use xiuxian_vector::VectorStore;
 
 pub(crate) fn get_all_file_hashes_async(
     path: &str,

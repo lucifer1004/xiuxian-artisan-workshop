@@ -9,8 +9,33 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 CARGO_BIN="${CARGO_BIN:-${PROJECT_ROOT}/scripts/rust/cargo_exec.sh}"
 cd "${PROJECT_ROOT}"
 
+resolve_xiuxian_daochang_cargo_features() {
+  if [ "${XIUXIAN_DAOCHANG_CARGO_FEATURES+x}" = "x" ]; then
+    printf '%s' "${XIUXIAN_DAOCHANG_CARGO_FEATURES}"
+    return 0
+  fi
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    printf '%s' "xiuxian-llm/vision-dots-metal,xiuxian-llm/mistral-accel-metal"
+    return 0
+  fi
+
+  if [ "$(uname -s)" = "Linux" ]; then
+    printf '%s' "xiuxian-llm/vision-dots-cuda,xiuxian-llm/mistral-accel-cuda"
+    return 0
+  fi
+
+  printf ''
+}
+
+XIUXIAN_DAOCHANG_CARGO_FEATURES_RESOLVED="$(resolve_xiuxian_daochang_cargo_features)"
+XIUXIAN_DAOCHANG_CARGO_FEATURE_ARGS=()
+if [ -n "${XIUXIAN_DAOCHANG_CARGO_FEATURES_RESOLVED}" ]; then
+  XIUXIAN_DAOCHANG_CARGO_FEATURE_ARGS=(--features "${XIUXIAN_DAOCHANG_CARGO_FEATURES_RESOLVED}")
+fi
+
 resolve_valkey_field() {
-  python3 "${PROJECT_ROOT}/scripts/channel/resolve_valkey_endpoint.py" --field "$1"
+  uv run python "${PROJECT_ROOT}/scripts/channel/resolve_valkey_endpoint.py" --field "$1"
 }
 
 resolve_prj_data_home() {
@@ -53,7 +78,12 @@ echo "Starting Telegram channel (polling mode)..."
 echo "XIUXIAN_WENDAO_VALKEY_URL='${XIUXIAN_WENDAO_VALKEY_URL}'"
 echo "OLLAMA_MODELS='${OLLAMA_MODELS}' (source=${OLLAMA_MODELS_SOURCE})"
 echo "Telegram ACL source='xiuxian.toml'"
+if [ -n "${XIUXIAN_DAOCHANG_CARGO_FEATURES_RESOLVED}" ]; then
+  echo "CARGO_FEATURES='${XIUXIAN_DAOCHANG_CARGO_FEATURES_RESOLVED}'"
+else
+  echo "CARGO_FEATURES='<none>'"
+fi
 
-"${CARGO_BIN}" run -p omni-agent -- channel \
+"${CARGO_BIN}" run -p xiuxian-daochang "${XIUXIAN_DAOCHANG_CARGO_FEATURE_ARGS[@]}" -- channel \
   --mode polling \
   "$@"

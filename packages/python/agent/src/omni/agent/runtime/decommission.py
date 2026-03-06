@@ -1,7 +1,7 @@
 """Python runtime decommission guardrails.
 
 This module centralizes fail-fast checks for legacy Python orchestration
-entrypoints. Runtime orchestration authority is Rust-only (`omni-agent`).
+entrypoints. Runtime orchestration authority is Rust-only (`xiuxian-daochang`).
 """
 
 from __future__ import annotations
@@ -11,11 +11,17 @@ from typing import Any
 
 from omni.foundation.config.settings import get_setting
 
-TEST_OVERRIDE_ENV = "OMNI_AGENT_ALLOW_PYTHON_RUNTIME_FOR_TESTS"
+TEST_OVERRIDE_ENV = "XIUXIAN_DAOCHANG_ALLOW_PYTHON_RUNTIME_FOR_TESTS"
 RUNTIME_ORCHESTRATOR_KEY = "agent.runtime_orchestrator"
 ALLOW_PYTHON_FOR_TESTS_KEY = "agent.allow_python_runtime_for_tests"
 
-_RUST_ORCHESTRATOR_VALUES = {"rust", "rust-only", "rust_only", "omni-agent", "omni_agent"}
+_RUST_ORCHESTRATOR_VALUES = {
+    "rust",
+    "rust-only",
+    "rust_only",
+    "xiuxian-daochang",
+    "xiuxian_daochang",
+}
 
 
 def _parse_bool(value: Any, default: bool = False) -> bool:

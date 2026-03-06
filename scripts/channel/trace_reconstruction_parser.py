@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compatibility facade for omni-agent trace reconstruction parsing helpers."""
+"""Compatibility facade for xiuxian-daochang trace reconstruction parsing helpers."""
 
 from __future__ import annotations
 

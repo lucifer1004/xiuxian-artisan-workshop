@@ -41,7 +41,7 @@ class TestSkillManagerEmbeddingLazyLoad:
             with patch("omni.core.services.skill_manager.get_embedding_service") as mock_get_embed:
                 mock_embed = MagicMock()
                 mock_embed.dimension = 1024
-                mock_embed.backend = "fallback"
+                mock_embed.backend = "http"
                 mock_get_embed.return_value = mock_embed
 
                 manager = SkillManager(

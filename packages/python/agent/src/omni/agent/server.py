@@ -16,6 +16,7 @@ import json
 import time
 from typing import Any, TypedDict
 
+from omni.agent.protocol import MCP_PROTOCOL_VERSION
 from omni.core.kernel import get_kernel
 from omni.foundation.config.logging import get_logger
 from omni.mcp.interfaces import MCPRequestHandler
@@ -228,8 +229,8 @@ class AgentMCPHandler(MCPRequestHandler):
         return _make_success_response(
             req_id,
             {
-                "protocolVersion": "2024-11-05",
-                "serverInfo": {"name": "omni-agent", "version": "2.0.0"},
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "serverInfo": {"name": "xiuxian-daochang", "version": "2.0.0"},
                 "capabilities": {
                     "tools": {"listChanged": True},  # Kernel supports dynamic loading
                 },
@@ -641,7 +642,7 @@ class AgentMCPHandler(MCPRequestHandler):
     ) -> JSONRPCResponse:
         """Handle embed_texts tool call via preloaded embedding service.
 
-        The embedding backend is sync and can block on network IO (e.g. Ollama).
+        The embedding backend is sync and can block on network IO.
         Always offload to a worker thread so the MCP event loop stays responsive
         for tools/list, health probes, and other sessions.
         """

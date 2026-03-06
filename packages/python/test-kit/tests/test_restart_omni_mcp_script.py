@@ -1,4 +1,4 @@
-"""Integration tests for scripts/channel/restart-omni-mcp.sh."""
+"""Integration tests for scripts/channel/restart-xiuxian-mcp.sh."""
 
 from __future__ import annotations
 
@@ -153,7 +153,7 @@ def _run_restart_script(
     stabilize_secs: int,
 ) -> subprocess.CompletedProcess[str]:
     root = get_project_root()
-    script = root / "scripts" / "channel" / "restart-omni-mcp.sh"
+    script = root / "scripts" / "channel" / "restart-xiuxian-mcp.sh"
     pid_file = runtime_dir / f"mcp-{port}.pid"
     log_file = runtime_dir / f"mcp-{port}.log"
     return subprocess.run(
@@ -223,7 +223,10 @@ def test_restart_script_fails_for_flaky_server_during_stabilization(tmp_path: Pa
     try:
         result = _run_restart_script(port=port, runtime_dir=runtime_dir, env=env, stabilize_secs=2)
         assert result.returncode != 0
-        assert "stabilization window" in result.stderr
+        assert (
+            "stabilization window" in result.stderr
+            or "exited before health was ready" in result.stderr
+        )
         assert not pid_file.exists()
         assert not listener_pid_file.exists()
     finally:

@@ -19,18 +19,18 @@ def _load_resolver_module():
 def test_username_from_settings_prefers_user_override(tmp_path: Path, monkeypatch) -> None:
     resolver = _load_resolver_module()
 
-    system_settings = tmp_path / "packages" / "conf" / "settings.yaml"
+    system_settings = tmp_path / "packages" / "conf" / "xiuxian.toml"
     system_settings.parent.mkdir(parents=True)
     system_settings.write_text(
-        'telegram:\n  acl:\n    allow:\n      users: ["system_user"]\n',
+        '[telegram.acl.allow]\nusers = ["system_user"]\n',
         encoding="utf-8",
     )
 
     user_conf_home = tmp_path / "custom_conf"
-    user_settings = user_conf_home / "xiuxian-artisan-workshop" / "settings.yaml"
+    user_settings = user_conf_home / "xiuxian-artisan-workshop" / "xiuxian.toml"
     user_settings.parent.mkdir(parents=True)
     user_settings.write_text(
-        'telegram:\n  acl:\n    allow:\n      users: ["override_user", "backup_user"]\n',
+        '[telegram.acl.allow]\nusers = ["override_user", "backup_user"]\n',
         encoding="utf-8",
     )
 
@@ -41,10 +41,10 @@ def test_username_from_settings_prefers_user_override(tmp_path: Path, monkeypatc
 def test_username_from_settings_uses_system_when_user_missing(tmp_path: Path, monkeypatch) -> None:
     resolver = _load_resolver_module()
 
-    system_settings = tmp_path / "packages" / "conf" / "settings.yaml"
+    system_settings = tmp_path / "packages" / "conf" / "xiuxian.toml"
     system_settings.parent.mkdir(parents=True)
     system_settings.write_text(
-        'telegram:\n  acl:\n    allow:\n      users: ["system_user"]\n',
+        '[telegram.acl.allow]\nusers = ["system_user"]\n',
         encoding="utf-8",
     )
 
@@ -138,10 +138,10 @@ def test_telegram_webhook_secret_token_falls_back_to_settings(monkeypatch, tmp_p
 
     monkeypatch.delenv("TELEGRAM_WEBHOOK_SECRET", raising=False)
     monkeypatch.setenv("OMNI_TEST_DOTENV_FILE", str(tmp_path / "missing.env"))
-    system_settings = tmp_path / "packages" / "conf" / "settings.yaml"
+    system_settings = tmp_path / "packages" / "conf" / "xiuxian.toml"
     system_settings.parent.mkdir(parents=True)
     system_settings.write_text(
-        'telegram:\n  webhook_secret_token: "settings-secret"\n',
+        '[telegram]\nwebhook_secret_token = "settings-secret"\n',
         encoding="utf-8",
     )
 
@@ -160,9 +160,9 @@ def test_telegram_webhook_port_falls_back_to_settings_bind(monkeypatch, tmp_path
 
     monkeypatch.delenv("WEBHOOK_PORT", raising=False)
     monkeypatch.delenv("WEBHOOK_BIND", raising=False)
-    system_settings = tmp_path / "packages" / "conf" / "settings.yaml"
+    system_settings = tmp_path / "packages" / "conf" / "xiuxian.toml"
     system_settings.parent.mkdir(parents=True)
-    system_settings.write_text('telegram:\n  webhook_bind: "127.0.0.1:18081"\n', encoding="utf-8")
+    system_settings.write_text('[telegram]\nwebhook_bind = "127.0.0.1:18081"\n', encoding="utf-8")
 
     assert resolver.telegram_webhook_port(tmp_path) == 18081
 
@@ -172,7 +172,7 @@ def test_default_telegram_webhook_url_uses_resolved_port(monkeypatch, tmp_path: 
 
     monkeypatch.setenv("WEBHOOK_PORT", "19081")
     assert (
-        resolver.default_telegram_webhook_url(tmp_path) == "http://127.0.0.1:19081/telegram/webhook"
+        resolver.default_telegram_webhook_url(tmp_path) == "http://localhost:19081/telegram/webhook"
     )
 
 
@@ -189,11 +189,11 @@ def test_normalize_telegram_session_partition_mode_aliases() -> None:
 def test_telegram_session_partition_mode_prefers_env(monkeypatch, tmp_path: Path) -> None:
     resolver = _load_resolver_module()
 
-    system_settings = tmp_path / "packages" / "conf" / "settings.yaml"
+    system_settings = tmp_path / "packages" / "conf" / "xiuxian.toml"
     system_settings.parent.mkdir(parents=True)
-    system_settings.write_text('telegram:\n  session_partition: "chat_user"\n', encoding="utf-8")
+    system_settings.write_text('[telegram]\nsession_partition = "chat_user"\n', encoding="utf-8")
 
-    monkeypatch.setenv("OMNI_AGENT_TELEGRAM_SESSION_PARTITION", "chat_thread_user")
+    monkeypatch.setenv("XIUXIAN_DAOCHANG_TELEGRAM_SESSION_PARTITION", "chat_thread_user")
     assert resolver.telegram_session_partition_mode(tmp_path) == "chat_thread_user"
 
 

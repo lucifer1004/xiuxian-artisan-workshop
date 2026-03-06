@@ -1,11 +1,11 @@
 import asyncio
 
 import pytest
-from omni.test_kit.decorators import omni_skill
+from omni.test_kit.decorators import xiuxian_skill
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestLinkGraphSearchCommands:
     """Tests for LinkGraph search commands."""
 
@@ -131,7 +131,7 @@ class TestLinkGraphSearchCommands:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestKnowledgeModular:
     """Modular tests for knowledge skill."""
 
@@ -165,7 +165,7 @@ class TestKnowledgeModular:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestGraphCommands:
     """Tests for knowledge graph commands."""
 
@@ -200,7 +200,7 @@ class TestGraphCommands:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestSearchCommands:
     """Tests for search and recall commands."""
 
@@ -221,7 +221,7 @@ class TestSearchCommands:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestDependencyCommands:
     """Tests for dependency-related commands."""
 
@@ -247,7 +247,7 @@ class TestDependencyCommands:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestKnowledgeBaseCommands:
     """Tests for knowledge base management commands."""
 
@@ -265,7 +265,7 @@ class TestKnowledgeBaseCommands:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestCodeSearchCommands:
     """Tests for code search / language expert commands."""
 
@@ -302,7 +302,7 @@ class TestCodeSearchCommands:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestIngestAndClearCommands:
     """Tests for knowledge ingest, stats, and clear commands."""
 
@@ -352,7 +352,7 @@ class TestIngestAndClearCommands:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestEntityExtractionCommands:
     """Tests for entity extraction and document ingestion."""
 
@@ -381,7 +381,7 @@ class TestEntityExtractionCommands:
                 skill_tester.run(
                     "knowledge",
                     "extract_entities",
-                    source="LanceDB is a columnar store built on Arrow. Rust powers omni-vector.",
+                    source="LanceDB is a columnar store built on Arrow. Rust powers xiuxian-vector.",
                     store=False,
                 ),
                 timeout=45.0,
@@ -404,7 +404,7 @@ class TestEntityExtractionCommands:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="knowledge")
+@xiuxian_skill(name="knowledge")
 class TestDependencyBuild:
     """Test dependency_build (may be slow)."""
 

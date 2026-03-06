@@ -1,7 +1,7 @@
 """
 omni.foundation.embedding.client - Embedding HTTP Client
 
-Client for connecting to embedding HTTP server.
+Client for connecting to the Rust embedding HTTP service.
 Used by lightweight MCP processes that don't load the embedding model.
 """
 
@@ -27,9 +27,15 @@ class EmbeddingClient:
         """Initialize the client.
 
         Args:
-            base_url: Base URL of embedding HTTP server (default: from settings or localhost:18501)
+            base_url: Base URL of embedding HTTP service (default: from settings).
         """
-        self.base_url = base_url or get_setting("embedding.client_url")
+        configured_url = str(get_setting("embedding.client_url") or "").strip()
+        if configured_url:
+            default_url = configured_url
+        else:
+            http_port = int(get_setting("embedding.http_port") or 3002)
+            default_url = f"http://127.0.0.1:{http_port}"
+        self.base_url = (base_url or default_url).rstrip("/")
         self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -78,7 +84,7 @@ class EmbeddingClient:
 
         Args:
             texts: Texts to embed.
-            timeout_seconds: Request timeout in seconds (default from session; use 5–10 for recall).
+            timeout_seconds: Request timeout in seconds (default from session; use 5-10 for recall).
         """
         session = await self._get_session()
         total = float(timeout_seconds) if timeout_seconds is not None else 60
@@ -94,7 +100,7 @@ class EmbeddingClient:
                 data = await response.json()
                 return data.get("vectors", [])
         except aiohttp.ClientError as e:
-            raise RuntimeError(f"Failed to connect to embedding server: {e}")
+            raise RuntimeError(f"Failed to connect to embedding server: {e}") from e
 
     async def embed(self, text: str) -> list[list[float]]:
         """Generate embedding for single text via HTTP."""
@@ -110,7 +116,7 @@ class EmbeddingClient:
                 data = await response.json()
                 return [data.get("vector", [])]
         except aiohttp.ClientError as e:
-            raise RuntimeError(f"Failed to connect to embedding server: {e}")
+            raise RuntimeError(f"Failed to connect to embedding server: {e}") from e
 
     async def stats(self) -> dict[str, Any]:
         """Get embedding server stats."""

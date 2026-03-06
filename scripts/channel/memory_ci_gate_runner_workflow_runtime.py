@@ -15,7 +15,7 @@ def _local_host() -> str:
 
 
 def build_agent_command(cfg: Any) -> list[str]:
-    """Build omni-agent runtime command for CI gate."""
+    """Build xiuxian-daochang runtime command for CI gate."""
     if cfg.agent_bin is not None:
         return [
             str(cfg.agent_bin),
@@ -28,13 +28,13 @@ def build_agent_command(cfg: Any) -> list[str]:
             f"{_local_host()}:{cfg.webhook_port}",
             "--webhook-secret-token",
             cfg.webhook_secret,
-            "--verbose",
+            "--log-verbose",
         ]
     return [
         "cargo",
         "run",
         "-p",
-        "omni-agent",
+        "xiuxian-daochang",
         "--",
         "channel",
         "--provider",
@@ -45,7 +45,7 @@ def build_agent_command(cfg: Any) -> list[str]:
         f"{_local_host()}:{cfg.webhook_port}",
         "--webhook-secret-token",
         cfg.webhook_secret,
-        "--verbose",
+        "--log-verbose",
     ]
 
 
@@ -60,7 +60,7 @@ def start_runtime_stack(
     wait_for_mock_health_fn: Any,
     wait_for_log_regex_fn: Any,
 ) -> dict[str, Any]:
-    """Start valkey, mock telegram API, and omni-agent runtime."""
+    """Start valkey, mock telegram API, and xiuxian-daochang runtime."""
     valkey_start = script_paths["valkey_start"]
     valkey_preexisting = valkey_reachable_fn(cfg.valkey_url)
 
@@ -98,7 +98,7 @@ def start_runtime_stack(
         cwd=cfg.project_root,
         env=env,
         log_file=cfg.runtime_log_file,
-        title="Start omni-agent webhook runtime (CI gate)",
+        title="Start xiuxian-daochang webhook runtime (CI gate)",
     )
     wait_for_log_regex_fn(
         cfg.runtime_log_file,

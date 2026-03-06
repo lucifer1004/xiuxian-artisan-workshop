@@ -18,7 +18,9 @@ if TYPE_CHECKING:
 def _load_probe_module() -> ModuleType:
     root = get_project_root()
     script_path = root / "scripts" / "channel" / "agent_channel_blackbox.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_channel_blackbox_probe", script_path)
+    spec = importlib.util.spec_from_file_location(
+        "xiuxian_daochang_channel_blackbox_probe", script_path
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -34,7 +36,7 @@ def _make_args(**overrides: object) -> argparse.Namespace:
         "timeout": None,
         "max_idle_secs": None,
         "webhook_url": "http://127.0.0.1:18081/telegram/webhook",
-        "log_file": ".run/logs/omni-agent-webhook.log",
+        "log_file": ".run/logs/xiuxian-daochang-webhook.log",
         "chat_id": None,
         "user_id": None,
         "username": None,
@@ -395,7 +397,7 @@ def test_build_probe_message_prefixes_non_command_prompt() -> None:
 def test_extract_event_token_allows_spaces_around_equals() -> None:
     module = _load_probe_module()
     line = (
-        "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+        "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
         'event = "telegram.command.session_status_json.replied" '
         "telegram command reply sent"
     )
@@ -406,7 +408,7 @@ def test_extract_event_token_allows_spaces_around_equals() -> None:
 def test_parse_command_reply_event_line_extracts_core_fields() -> None:
     module = _load_probe_module()
     line = (
-        "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+        "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
         "telegram command reply sent "
         'event="telegram.command.session_budget_json.replied" '
         'session_key="1304799691:1304799691" '
@@ -423,7 +425,9 @@ def test_parse_command_reply_event_line_extracts_core_fields() -> None:
 
 def test_parse_command_reply_event_line_returns_none_for_non_reply_line() -> None:
     module = _load_probe_module()
-    line = "2026-02-18 INFO omni_agent::channels::telegram::runtime::webhook: Webhook received"
+    line = (
+        "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::webhook: Webhook received"
+    )
     assert module.parse_command_reply_event_line(line) is None
 
 
@@ -447,7 +451,7 @@ def test_parse_expected_field_rejects_invalid_value() -> None:
 def test_parse_command_reply_json_summary_line_extracts_fields() -> None:
     module = _load_probe_module()
     line = (
-        "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+        "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
         "telegram command reply json summary "
         'event="telegram.command.session_budget_json.replied" '
         'session_key="1304799691:1304799691" '
@@ -468,7 +472,7 @@ def test_parse_command_reply_json_summary_line_extracts_fields() -> None:
 def test_parse_command_reply_json_summary_line_returns_none_for_non_summary_line() -> None:
     module = _load_probe_module()
     line = (
-        "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+        "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
         "telegram command reply sent "
         'event="telegram.command.session_budget_json.replied"'
     )
@@ -478,7 +482,7 @@ def test_parse_command_reply_json_summary_line_returns_none_for_non_summary_line
 def test_telegram_send_retry_grace_seconds_prefers_delay_ms() -> None:
     module = _load_probe_module()
     line = (
-        "2026-02-20 WARN omni_agent::channels::telegram::channel::send_api: "
+        "2026-02-20 WARN xiuxian_daochang::channels::telegram::channel::send_api: "
         "Telegram API transient failure; retrying attempt=0 max_retries=2 "
         'delay_ms=36000 method="sendMessage" error=status=429 retry_after=36s'
     )
@@ -488,7 +492,7 @@ def test_telegram_send_retry_grace_seconds_prefers_delay_ms() -> None:
 def test_telegram_send_retry_grace_seconds_returns_none_for_unrelated_line() -> None:
     module = _load_probe_module()
     line = (
-        "2026-02-20 INFO omni_agent::channels::telegram::runtime::webhook: "
+        "2026-02-20 INFO xiuxian_daochang::channels::telegram::runtime::webhook: "
         "Parsed message, forwarding to agent session_key=1001:2002"
     )
     assert module.telegram_send_retry_grace_seconds(line) is None
@@ -603,7 +607,7 @@ def test_run_probe_does_not_fail_when_duplicate_is_observed_after_dispatch(
                         'session_key="1001:2002" recipient="1001" '
                         "json_kind=session_admin json_override_admin_count=0 json_keys=6"
                     ),
-                    '2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs::observability: → Bot: "ok"',
+                    '2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs::observability: → Bot: "ok"',
                 ]
             ]
         ),
@@ -820,7 +824,7 @@ def test_run_probe_allow_no_bot_with_expect_reply_json_field(tmp_path, monkeypat
                     "content_preview=/session budget json"
                 ],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply json summary "
                     'event="telegram.command.session_budget_json.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -863,7 +867,7 @@ def test_run_probe_fails_on_command_reply_session_key_mismatch(tmp_path, monkeyp
                     "content_preview=/session budget json"
                 ],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply json summary "
                     'event="telegram.command.session_budget_json.replied" '
                     'session_key="1001:9999" recipient="1001" '
@@ -871,7 +875,7 @@ def test_run_probe_fails_on_command_reply_session_key_mismatch(tmp_path, monkeyp
                     "json_status=not_found json_found= json_decision= json_keys=4"
                 ],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.session_budget_json.replied" '
                     'session_key="1001:9999" recipient="1001" '
@@ -918,7 +922,7 @@ def test_run_probe_allow_no_bot_matches_target_session_scope_placeholder(
                     "content_preview=/session memory json"
                 ],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply json summary "
                     'event="telegram.command.session_memory_json.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -961,7 +965,7 @@ def test_run_probe_fails_on_json_session_scope_mismatch(tmp_path, monkeypatch) -
                     "content_preview=/session memory json"
                 ],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply json summary "
                     'event="telegram.command.session_memory_json.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -969,7 +973,7 @@ def test_run_probe_fails_on_json_session_scope_mismatch(tmp_path, monkeypatch) -
                     "json_available=false json_status=not_found json_keys=6"
                 ],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.session_memory_json.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -1167,7 +1171,7 @@ def test_run_probe_respects_telegram_retry_grace_before_idle_timeout(tmp_path, m
                 [],
                 [
                     (
-                        "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                        "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                         "telegram command reply sent "
                         'event="telegram.command.session_status_json.replied" '
                         'session_key="1001:2002" recipient="1001" '
@@ -1208,7 +1212,7 @@ def test_run_probe_does_not_match_expect_event_from_other_recipient(tmp_path, mo
                 [f'2026-02-18 INFO ← User: "[{trace_id}] /session json"'],
                 ['2026-02-18 INFO → Bot: "done"'],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.session_status_json.replied" '
                     'session_key="9999:2002" recipient="9999" '
@@ -1251,7 +1255,7 @@ def test_run_probe_matches_expect_event_with_thread_scoped_recipient(tmp_path, m
                 ],
                 ['2026-02-18 INFO → Bot: "done"'],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.session_admin.replied" '
                     'session_key="1001:42:2002" recipient="1001:42" '
@@ -1294,7 +1298,7 @@ def test_run_probe_thread_probe_does_not_match_chat_only_recipient(tmp_path, mon
                 ],
                 ['2026-02-18 INFO → Bot: "done"'],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.session_admin.replied" '
                     'session_key="1001:42:2002" recipient="1001" '
@@ -1370,14 +1374,14 @@ def test_run_probe_does_not_match_reply_json_field_from_other_recipient(
                 [f'2026-02-18 INFO ← User: "[{trace_id}] /session json"'],
                 ['2026-02-18 INFO → Bot: "done"'],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.session_status_json.replied" '
                     'session_key="9999:2002" recipient="9999" '
                     "reply_chars=40 reply_bytes=40"
                 ],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply json summary "
                     'event="telegram.command.session_status_json.replied" '
                     'session_key="9999:2002" recipient="9999" '
@@ -1418,7 +1422,7 @@ def test_run_probe_expect_reply_json_field_scoped_to_expected_event(tmp_path, mo
                 [f'2026-02-18 INFO ← User: "[{trace_id}] /resume status"'],
                 ['2026-02-18 INFO → Bot: "No saved session context snapshot found."'],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply json summary "
                     'event="telegram.command.session_status_json.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -1426,7 +1430,7 @@ def test_run_probe_expect_reply_json_field_scoped_to_expected_event(tmp_path, mo
                     "json_found= json_decision= json_keys=7"
                 ],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.session_resume_status.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -1468,7 +1472,7 @@ def test_run_probe_expect_reply_json_field_passes_with_matching_event_summary(
                 [f'2026-02-18 INFO ← User: "[{trace_id}] /session budget json"'],
                 ['2026-02-18 INFO → Bot: "done"'],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply json summary "
                     'event="telegram.command.session_status_json.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -1476,7 +1480,7 @@ def test_run_probe_expect_reply_json_field_passes_with_matching_event_summary(
                     "json_found= json_decision= json_keys=7"
                 ],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply json summary "
                     'event="telegram.command.session_budget_json.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -1516,7 +1520,7 @@ def test_run_probe_waits_for_expect_event_after_bot_reply(tmp_path, monkeypatch)
                 [f'2026-02-18 INFO ← User: "[{trace_id}] hello"'],
                 ['2026-02-18 INFO → Bot: "done"'],
                 [
-                    "2026-02-18 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     'event = "telegram.command.session_status_json.replied" '
                     "telegram command reply sent"
                 ],

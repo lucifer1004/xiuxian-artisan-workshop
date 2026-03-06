@@ -28,7 +28,7 @@ walkdir = { workspace = true }
 globset = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time", "rt"] }
 axum = { workspace = true, optional = true }
-omni-io = { path = "../omni-io", features = ["notify"] }
+xiuxian-io = { path = "../xiuxian-io", features = ["notify"] }
 redis = { workspace = true }
 xiuxian-zhenfa = { path = "../xiuxian-zhenfa", optional = true }
 xiuxian-wendao = { path = "../xiuxian-wendao", optional = true }

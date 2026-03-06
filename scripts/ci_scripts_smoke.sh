@@ -5,10 +5,10 @@ bash -n \
   scripts/ci/rust_quality_gate_ci.sh \
   scripts/ci/test_quick.sh \
   scripts/rust/check_lint_inheritance.sh \
-  scripts/rust/omni_agent_profiles_check.sh \
-  scripts/rust/omni_agent_dependency_assertions.sh \
-  scripts/rust/omni_agent_mcp_facade_smoke.sh \
-  scripts/rust/omni_agent_backend_role_contracts.sh \
+  scripts/rust/xiuxian_daochang_profiles_check.sh \
+  scripts/rust/xiuxian_daochang_dependency_assertions.sh \
+  scripts/rust/xiuxian_daochang_mcp_facade_smoke.sh \
+  scripts/rust/xiuxian_daochang_backend_role_contracts.sh \
   scripts/rust/xiuxian_llm_mcp_check.sh \
   scripts/rust/wendao_retrieval_audits.sh \
   scripts/rust/telegram_session_isolation_rust.sh \
@@ -17,11 +17,11 @@ bash -n \
   scripts/gate_wendao_ppr.sh \
   scripts/wendao_ppr_rollout_ci.sh
 
-just --dry-run rust-omni-agent-profiles >/dev/null
-just --dry-run rust-omni-agent-dependency-assertions >/dev/null
-just --dry-run rust-omni-agent-mcp-facade-smoke >/dev/null
-just --dry-run rust-omni-agent-backend-role-contracts >/dev/null
-just --dry-run rust-omni-agent-embedding-role-perf-smoke >/dev/null
+just --dry-run rust-xiuxian-daochang-profiles >/dev/null
+just --dry-run rust-xiuxian-daochang-dependency-assertions >/dev/null
+just --dry-run rust-xiuxian-daochang-mcp-facade-smoke >/dev/null
+just --dry-run rust-xiuxian-daochang-backend-role-contracts >/dev/null
+just --dry-run rust-xiuxian-daochang-embedding-role-perf-smoke >/dev/null
 just --dry-run rust-xiuxian-llm-mcp >/dev/null
 just --dry-run rust-retrieval-audits >/dev/null
 just --dry-run gate-wendao-ppr >/dev/null

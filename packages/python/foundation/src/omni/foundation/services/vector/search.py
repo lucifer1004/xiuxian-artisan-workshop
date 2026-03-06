@@ -222,7 +222,7 @@ def _query_embed_persist_path() -> Path:
     """Path for persisted last-query embedding cache."""
     from omni.foundation.config.dirs import PRJ_CACHE
 
-    path = PRJ_CACHE("omni-vector", _QUERY_EMBED_PERSIST_FILENAME)
+    path = PRJ_CACHE("xiuxian-vector", _QUERY_EMBED_PERSIST_FILENAME)
     return path if isinstance(path, Path) else Path(path)
 
 
@@ -264,7 +264,7 @@ def _query_embed_signature() -> str:
             "provider": str(get_setting("embedding.provider") or ""),
             "client_url": str(get_setting("embedding.client_url") or ""),
             "http_port": str(get_setting("embedding.http_port") or ""),
-            "litellm_model": str(get_setting("embedding.litellm_model") or ""),
+            "model": str(get_setting("embedding.model") or ""),
             "dimension": str(get_setting("embedding.dimension") or ""),
             "truncate_dim": str(get_setting("embedding.truncate_dim") or ""),
             "preferred_mcp_port": str(get_setting("mcp.preferred_embed_port") or ""),
@@ -763,7 +763,7 @@ async def run_semantic_search(
             from omni.foundation.embedding_client import get_embedding_client
 
             base_url = get_setting("embedding.client_url") or (
-                f"http://127.0.0.1:{int(get_setting('embedding.http_port', 18501))}"
+                f"http://127.0.0.1:{int(get_setting('embedding.http_port', 3002))}"
             )
             http_started = time.perf_counter()
             http_rss_before, http_peak_before = _sample_memory()

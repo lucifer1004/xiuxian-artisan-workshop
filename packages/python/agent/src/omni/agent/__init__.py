@@ -1,4 +1,4 @@
-# Agent package for omni-dev-fusion
+# Agent package for Xiuxian Artisan Workshop
 
 # Defer expensive imports for faster module load
 # importlib.metadata.version() takes ~70ms - defer until actually needed
@@ -13,7 +13,7 @@ def _get_version() -> str:
         from importlib.metadata import PackageNotFoundError, version
 
         try:
-            _cached_version = version("omni-dev-fusion-agent")
+            _cached_version = version("xiuxian-daochang")
         except PackageNotFoundError:
             _cached_version = "0.0.0-dev"
     return _cached_version

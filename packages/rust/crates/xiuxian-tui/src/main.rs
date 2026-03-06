@@ -20,15 +20,13 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use xiuxian_logging::init_from_cli;
 use xiuxian_tui::{
     TuiRenderer,
+    cli_args::CliArgs,
     socket::{SocketClient, SocketEvent, SocketServer},
     state::{AppState, ExecutionState},
 };
-
-mod cli_args;
-
-use cli_args::Args;
 
 /// Run the event processing loop (with or without TUI)
 fn run_event_loop(state: &mut AppState, server_handle: thread::JoinHandle<()>, headless: bool) {
@@ -66,10 +64,8 @@ fn run_event_loop(state: &mut AppState, server_handle: thread::JoinHandle<()>, h
 }
 
 fn main() -> Result<()> {
-    // Initialize logging
-    xiuxian_tui::init_logger();
-
-    let args = Args::parse();
+    let args = CliArgs::parse();
+    init_from_cli("xiuxian_tui", &args.logging)?;
 
     info!("Starting xiuxian-tui renderer");
     info!("Socket path: {}", args.socket);

@@ -19,7 +19,7 @@ metadata:
 
 ## Overview
 
-This document describes the implementation of **omni-memory**, a Rust-based self-evolving memory engine inspired by the [MemRL paper](https://arxiv.org/abs/2601.03192).
+This document describes the implementation of **xiuxian-memory-engine**, a Rust-based self-evolving memory engine inspired by the [MemRL paper](https://arxiv.org/abs/2601.03192).
 
 ### Core Features
 
@@ -47,7 +47,7 @@ This document describes the implementation of **omni-memory**, a Rust-based self
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Rust Layer (omni-memory)                 │
+│                    Rust Layer (xiuxian-memory-engine)                 │
 ├─────────────────────────────────────────────────────────────┤
 │  episode.rs     - Episode data structure                    │
 │  q_table.rs     - Q-Learning core (DashMap + RwLock)       │
@@ -68,7 +68,7 @@ Persistent-memory code must follow directory-level sub-module design:
 
 ### Namespace Design
 
-Following existing patterns (`omni-vector`, `xiuxian-wendao`):
+Following existing patterns (`xiuxian-vector`, `xiuxian-wendao`):
 
 ```
 omni::memory          # Core memory module
@@ -177,7 +177,7 @@ memory.mark_failure(episode_id)  # reward = 0.0
 
 ### Rust Core
 
-**File**: `packages/rust/crates/omni-memory/src/lib.rs`
+**File**: `packages/rust/crates/xiuxian-memory-engine/src/lib.rs`
 
 ```rust
 // Create components
@@ -213,7 +213,7 @@ store.update_q(episode_id, reward);
 ## File Structure
 
 ```
-packages/rust/crates/omni-memory/
+packages/rust/crates/xiuxian-memory-engine/
 ├── Cargo.toml
 ├── src/
 │   ├── lib.rs           # Exports
@@ -237,7 +237,7 @@ packages/python/agent/src/omni/agent/services/
 ### Rust Tests
 
 ```bash
-cargo test -p omni-memory
+cargo test -p xiuxian-memory-engine
 ```
 
 ### Python Tests
@@ -265,6 +265,6 @@ uv run pytest packages/python/agent/tests/unit -k memory -v
 
 ## Related Documentation
 
-- [MemRL vs Omni-Memory Research](./research-memrl-vs-omni-memory.md)
+- [MemRL vs Omni-Memory Research](./research-memrl-vs-xiuxian-memory-engine.md)
 - [Memory Mesh](./memory-mesh.md)
 - [Hippocampus](./hippocampus.md)

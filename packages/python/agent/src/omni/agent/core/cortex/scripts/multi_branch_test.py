@@ -4,6 +4,7 @@ Multi-branch transaction test using real Git repository at /tmp/gitdir.
 """
 
 import asyncio
+import shutil
 import sys
 from pathlib import Path
 
@@ -11,6 +12,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from omni.agent.core.cortex.transaction import (
     TransactionShield,
+)
+import pytest
+
+pytestmark = pytest.mark.skipif(
+    not Path("/tmp/gitdir").exists() or shutil.which("git") is None,
+    reason="requires integration git repo at /tmp/gitdir and git in PATH",
 )
 
 
@@ -70,8 +77,8 @@ async def test_multi_branch_isolation():
 
     result = subprocess.run(["git", "branch", "-a"], cwd=repo_path, capture_output=True, text=True)
     branches = result.stdout.strip().split("\n")
-    omni_branches = [b.strip() for b in branches if "omni-task" in b]
-    print(f"   Omni branches: {len(omni_branches)}")
+    task_branches = [b.strip() for b in branches if "xiuxian-task" in b]
+    print(f"   Task branches: {len(task_branches)}")
 
     # Cleanup all transactions
     print(f"\n🧹 Cleaning up {len(transactions)} transactions...")
@@ -81,10 +88,10 @@ async def test_multi_branch_isolation():
     # Verify branches are deleted
     result = subprocess.run(["git", "branch", "-a"], cwd=repo_path, capture_output=True, text=True)
     branches = result.stdout.strip().split("\n")
-    omni_branches = [b.strip() for b in branches if "omni-task" in b]
-    print(f"   Remaining omni branches: {len(omni_branches)}")
+    task_branches = [b.strip() for b in branches if "xiuxian-task" in b]
+    print(f"   Remaining task branches: {len(task_branches)}")
 
-    success = cleaned == len(task_ids) and len(omni_branches) == 0
+    success = cleaned == len(task_ids) and len(task_branches) == 0
     print(f"\n✅ Test {'PASSED' if success else 'FAILED'}")
 
     return success

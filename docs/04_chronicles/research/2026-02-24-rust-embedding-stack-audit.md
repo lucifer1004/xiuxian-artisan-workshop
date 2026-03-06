@@ -31,8 +31,8 @@ No external decision claims are required for this report.
 
 ### 2.1 `litellm-rs` is in dependency graph; `mistralrs` crate is not
 
-- `omni-agent` depends on `litellm-rs = 0.3.1` behind feature `agent-provider-litellm`:  
-  `packages/rust/crates/omni-agent/Cargo.toml`
+- `xiuxian-daochang` depends on `litellm-rs = 0.3.1` behind feature `agent-provider-litellm`:  
+  `packages/rust/crates/xiuxian-daochang/Cargo.toml`
 - `cargo metadata` for the workspace contains `litellm-rs` package, but no `mistralrs*` crate package.
 - `xiuxian-llm` currently has no `mistralrs` crate dependency; it only contains runtime/process wrappers:  
   `packages/rust/crates/xiuxian-llm/Cargo.toml:10`
@@ -42,8 +42,8 @@ No external decision claims are required for this report.
 - The current implementation is process lifecycle and health probing for `mistralrs-server`, not in-process model inference:
   - `packages/rust/crates/xiuxian-llm/src/mistral/config.rs:3`
   - `packages/rust/crates/xiuxian-llm/src/mistral/process.rs:24`
-- `omni-agent` gateway can auto-start this external server when backend hint is mistral:
-  - `packages/rust/crates/omni-agent/src/gateway/http/runtime.rs:91`
+- `xiuxian-daochang` gateway can auto-start this external server when backend hint is mistral:
+  - `packages/rust/crates/xiuxian-daochang/src/gateway/http/runtime.rs:91`
 
 ### 2.3 Protocol compatibility clarification: why the module is named `openai_compat`
 
@@ -65,9 +65,9 @@ No external decision claims are required for this report.
 Code anchors:
 
 - `mistralrs-server` lifecycle wrapper: `packages/rust/crates/xiuxian-llm/src/mistral/mod.rs:1`
-- Mistral auto-start gate in gateway runtime: `packages/rust/crates/omni-agent/src/gateway/http/runtime.rs:195`
+- Mistral auto-start gate in gateway runtime: `packages/rust/crates/xiuxian-daochang/src/gateway/http/runtime.rs:195`
 - Embedding backend kinds (`http`/`openai_http`/`mistral_sdk`/`litellm_rs`): `packages/rust/crates/xiuxian-llm/src/embedding/backend.rs:1`
-- `litellm_rs` dispatch behavior and no-key skip logic: `packages/rust/crates/omni-agent/src/embedding/client/backend_dispatch.rs:86`
+- `litellm_rs` dispatch behavior and no-key skip logic: `packages/rust/crates/xiuxian-daochang/src/embedding/client/backend_dispatch.rs:86`
 
 ### 2.5 Selection rules: backend label vs model prefix
 
@@ -86,7 +86,7 @@ Code anchors:
 Code anchors:
 
 - Alias normalization (including `mistral*` -> `mistral_sdk`): `packages/rust/crates/xiuxian-llm/src/embedding/backend.rs:38`
-- `litellm_rs` model-specific branching: `packages/rust/crates/omni-agent/src/embedding/client/backend_dispatch.rs:104`
+- `litellm_rs` model-specific branching: `packages/rust/crates/xiuxian-daochang/src/embedding/client/backend_dispatch.rs:104`
 
 ## 3. Key Findings from `litellm-rs` Source Audit
 
@@ -149,19 +149,19 @@ This is incompatible with generic placeholder-key strategy unless caller bypasse
 
 ## 4. Omni-Side Mitigations Already Present
 
-`omni-agent` embedding path already includes pragmatic safeguards:
+`xiuxian-daochang` embedding path already includes pragmatic safeguards:
 
 - For `ollama/...`, it tries OpenAI-compatible direct path first, then `/embed/batch`, then `litellm-rs` provider (when key is present):
-  - `packages/rust/crates/omni-agent/src/embedding/client/backend_dispatch.rs:118`
+  - `packages/rust/crates/xiuxian-daochang/src/embedding/client/backend_dispatch.rs:118`
 - When no provider key is configured, provider path is skipped and runtime remains Rust-only (no Python MCP embedding fallback):
-  - `packages/rust/crates/omni-agent/src/embedding/client/backend_dispatch.rs:174`
+  - `packages/rust/crates/xiuxian-daochang/src/embedding/client/backend_dispatch.rs:174`
 - The embedding startup log now emits resolved runtime parameters (backend/source/base_url/mcp_url/default_model/api_key_source):
-  - `packages/rust/crates/omni-agent/src/embedding/client/mod.rs:194`
-  - `packages/rust/crates/omni-agent/src/embedding/client/support.rs:47`
+  - `packages/rust/crates/xiuxian-daochang/src/embedding/client/mod.rs:194`
+  - `packages/rust/crates/xiuxian-daochang/src/embedding/client/support.rs:47`
 - `transport_litellm` normalizes `ollama/...` into `openai/...` + `/v1` base normalization:
-  - `packages/rust/crates/omni-agent/src/embedding/transport_litellm.rs:27`
+  - `packages/rust/crates/xiuxian-daochang/src/embedding/transport_litellm.rs:27`
 - Gateway base URL resolution now distinguishes `mistral_sdk` and prefers `mistral.base_url` for that mode:
-  - `packages/rust/crates/omni-agent/src/gateway/http/runtime.rs:61`
+  - `packages/rust/crates/xiuxian-daochang/src/gateway/http/runtime.rs:61`
 
 ## 5. Performance Result (No-Cache Benchmark)
 
@@ -181,10 +181,10 @@ Therefore, prioritizing Rust-side embedding serving is justified by measured dat
 The following medium-term items from the initial audit are now implemented in this branch:
 
 - Startup diagnostics for embedding runtime selection and key-source visibility (without exposing secret values):
-  - `packages/rust/crates/omni-agent/src/embedding/client/mod.rs:194`
-  - `packages/rust/crates/omni-agent/src/embedding/client/support.rs:47`
+  - `packages/rust/crates/xiuxian-daochang/src/embedding/client/mod.rs:194`
+  - `packages/rust/crates/xiuxian-daochang/src/embedding/client/support.rs:47`
 - Integration tests that lock Rust-only fallback behavior for `litellm_rs` (`ollama/...` and `mistral/...`) without Python MCP embedding fallback:
-  - `packages/rust/crates/omni-agent/tests/embedding_client.rs:418`
+  - `packages/rust/crates/xiuxian-daochang/tests/embedding_client.rs:418`
 - OpenAI-compatible response parse hardening and failure observability in `xiuxian-llm`:
   - `packages/rust/crates/xiuxian-llm/src/embedding/openai_compat.rs:84`
   - `packages/rust/crates/xiuxian-llm/tests/embedding_openai_compat.rs:58`
@@ -212,7 +212,7 @@ The following medium-term items from the initial audit are now implemented in th
 ### Long-term (if we choose deep `mistralrs` integration)
 
 1. Introduce a dedicated crate boundary (for example `xiuxian-llm-runtime`) for model runtime adapters.
-2. Keep `omni-agent` as orchestration/control plane only.
+2. Keep `xiuxian-daochang` as orchestration/control plane only.
 3. Gate heavy local-runtime features behind optional Cargo features and explicit config.
 
 ## 8. Why This Direction
@@ -226,11 +226,11 @@ The following medium-term items from the initial audit are now implemented in th
 
 Script:
 
-- `scripts/rust/omni_agent_embedding_role_perf_smoke.py`
+- `scripts/rust/xiuxian_daochang_embedding_role_perf_smoke.py`
 
 Latest local report artifact:
 
-- `.run/reports/omni-agent-embedding-role-perf-smoke.json`
+- `.run/reports/xiuxian-daochang-embedding-role-perf-smoke.json`
 
 Latest run summary (`single_runs=20`, `batch_runs=10`, `concurrent_total=64`, `concurrent_width=8`):
 

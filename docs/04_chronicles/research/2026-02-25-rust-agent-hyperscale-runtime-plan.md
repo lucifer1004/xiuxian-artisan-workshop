@@ -8,7 +8,7 @@ metadata:
 
 ## Scope
 
-This document defines a practical scaling plan for Rust-first omni-agent runtime under high fan-in traffic (for example, many Discord/Telegram bots with concurrent active sessions).
+This document defines a practical scaling plan for Rust-first xiuxian-daochang runtime under high fan-in traffic (for example, many Discord/Telegram bots with concurrent active sessions).
 
 Goals:
 
@@ -147,22 +147,22 @@ Suggested initial targets:
 ## Verification Commands
 
 - Backend role contracts:
-  - `just rust-omni-agent-backend-role-contracts`
+  - `just rust-xiuxian-daochang-backend-role-contracts`
 - Embedding role perf smoke:
-  - `just rust-omni-agent-embedding-role-perf-smoke`
+  - `just rust-xiuxian-daochang-embedding-role-perf-smoke`
 - Focused channel regressions:
-  - `cargo test -p omni-agent --test channels_discord_ingress`
-  - `cargo test -p omni-agent --test channels_webhook`
+  - `cargo test -p xiuxian-daochang --test channels_discord_ingress`
+  - `cargo test -p xiuxian-daochang --test channels_webhook`
 - Discord ingress stress harness:
   - `just agent-channel-discord-ingress-stress`
   - `just agent-channel-discord-ingress-stress 6 1 8 20 10 0.2 "" "2001" "1001" "3001"`
   - Output reports:
-    - `.run/reports/omni-agent-discord-ingress-stress.json`
-    - `.run/reports/omni-agent-discord-ingress-stress.md`
+    - `.run/reports/xiuxian-daochang-discord-ingress-stress.json`
+    - `.run/reports/xiuxian-daochang-discord-ingress-stress.md`
 
 ## Next Implementation Candidates
 
 1. Add periodic runtime snapshots (queue depth, in-flight, gate wait histogram buckets) to a single structured telemetry stream.
 2. Add a discord ingress stress harness equivalent to current webhook stress script conventions.
-   - Status: implemented (`scripts/channel/test_omni_agent_discord_ingress_stress.py`).
+   - Status: implemented (`scripts/channel/test_xiuxian_daochang_discord_ingress_stress.py`).
 3. Add process-level admission control by channel/provider when downstream embedding/LLM saturation crosses thresholds.

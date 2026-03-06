@@ -2,9 +2,9 @@
 name: researcher
 description: Use when conducting deep research on codebases.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/researcher"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/researcher"
   routing_keywords:
     - "analyze repo"
     - "git clone"

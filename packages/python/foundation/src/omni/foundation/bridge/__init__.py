@@ -2,7 +2,7 @@
 Bridge Module - Rust Bindings Isolation Layer
 
 This module provides a clean interface between Python and Rust bindings.
-Only this module should contain `import omni_rust_bindings` calls.
+Only this module should contain `import xiuxian_rust_bindings` calls.
 
 Architecture:
 - types.py: Python-side data structures (dataclasses)

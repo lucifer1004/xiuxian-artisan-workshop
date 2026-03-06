@@ -108,7 +108,9 @@ in
     export OLLAMA_MODELS="''${OLLAMA_MODELS:-''${PRJ_DATA_HOME:-$DEVENV_ROOT/.data}/models}"
     ${lib.optionalString (pkgs.stdenv.hostPlatform.isDarwin) ''
       unset SDKROOT
+      export PATH="/usr/bin:/usr/sbin:$PATH"
       export SDKROOT="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+      export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
     ''}
   '';
   # https://devenv.sh/tests/

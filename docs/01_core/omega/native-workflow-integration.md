@@ -18,7 +18,7 @@ metadata:
 
 ## Overview
 
-The workflow runtime provides the deterministic control plane for Omni Agent execution.
+The workflow runtime provides the deterministic control plane for 修仙道场 execution.
 It powers ReAct-style loops, multi-step plans, and skill orchestration with native runtime
 components instead of external graph-runtime dependencies.
 

@@ -41,14 +41,14 @@ jobs:
       - name: Rust gate - omni-core-rs lib runtime lane (explicit)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-core-rs-lib
 
-      - name: Rust gate - omni-agent profile matrix (default + no-default-features)
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-agent-profiles
+      - name: Rust gate - xiuxian-daochang profile matrix (default + no-default-features)
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-daochang-profiles
 
-      - name: Rust gate - omni-agent dependency graph assertions
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-agent-dependency-assertions
+      - name: Rust gate - xiuxian-daochang dependency graph assertions
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-daochang-dependency-assertions
 
-      - name: Rust gate - omni-agent backend role contracts
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-agent-backend-role-contracts
+      - name: Rust gate - xiuxian-daochang backend role contracts
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-daochang-backend-role-contracts
 
       - name: Runtime gate - native runtime smoke
         run: secretspec run --provider env --profile default -- devenv tasks run ci:native-runtime-smoke

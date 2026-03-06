@@ -14,7 +14,7 @@ The development context provides project-specific rules, conventions, and guardr
 
 ```json
 {
-  "project": "omni-dev-fusion",
+  "project": "xiuxian-artisan-workshop",
   "git_rules": {
     "types": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore"],
     "scopes": ["mcp", "core", "foundation", ...],

@@ -30,17 +30,17 @@ fn resolver_skips_orphan_scan_when_orphan_file_is_blank() {
     write_text(
         root.join(".config/xiuxian-artisan-workshop/ignored.toml")
             .as_path(),
-        r#"
+        r"
 [validation]
 strict_mode = false
-"#,
+",
     );
     let spec = ConfigCascadeSpec::new(
         "skills",
-        r#"
+        r"
 [validation]
 strict_mode = true
-"#,
+",
         "",
     );
 
@@ -154,33 +154,34 @@ fn resolver_errors_when_global_and_orphan_configs_coexist() {
     write_text(
         root.join(".config/xiuxian-artisan-workshop/xiuxian.toml")
             .as_path(),
-        r#"
+        r"
 [skills]
 enabled = true
-"#,
+",
     );
     write_text(
         root.join(".config/xiuxian-artisan-workshop/skills.toml")
             .as_path(),
-        r#"
+        r"
 enabled = false
-"#,
+",
     );
 
     let spec = ConfigCascadeSpec::new(
         "skills",
-        r#"
+        r"
 enabled = true
-"#,
+",
         "skills.toml",
     );
 
-    let error = resolve_and_merge_toml_with_paths(
+    let Err(error) = resolve_and_merge_toml_with_paths(
         spec,
         Some(root.as_path()),
         Some(root.join(".config").as_path()),
-    )
-    .expect_err("coexisting global+orphan configs must fail");
+    ) else {
+        panic!("coexisting global+orphan configs must fail");
+    };
 
     match error {
         ConfigCoreError::RedundantOrphan { namespace, orphans } => {
@@ -198,16 +199,16 @@ fn resolver_supports_dotted_namespace_projection_from_xiuxian_toml() {
     write_text(
         root.join(".config/xiuxian-artisan-workshop/xiuxian.toml")
             .as_path(),
-        r#"
+        r"
 [skills.validation]
 strict_mode = false
-"#,
+",
     );
     let spec = ConfigCascadeSpec::new(
         "skills.validation",
-        r#"
+        r"
 strict_mode = true
-"#,
+",
         "skills.toml",
     );
 
@@ -220,4 +221,45 @@ strict_mode = true
     let strict_mode = merged.get("strict_mode").and_then(toml::Value::as_bool);
 
     assert_eq!(strict_mode, Some(false));
+}
+
+#[test]
+fn resolver_supports_empty_namespace_for_root_merge() {
+    let (_temp, root) = temp_workspace();
+
+    write_text(
+        root.join(".config/xiuxian-artisan-workshop/xiuxian.toml")
+            .as_path(),
+        r#"
+[llm]
+default_provider = "anthropic"
+"#,
+    );
+    let spec = ConfigCascadeSpec::new(
+        "",
+        r#"
+[llm]
+default_provider = "openai"
+default_model = "gpt-4o-mini"
+"#,
+        "",
+    );
+
+    let merged = resolve_and_merge_toml_with_paths(
+        spec,
+        Some(root.as_path()),
+        Some(root.join(".config").as_path()),
+    )
+    .unwrap_or_else(|error| panic!("resolve empty namespace config: {error}"));
+    let default_provider = merged
+        .get("llm")
+        .and_then(|value| value.get("default_provider"))
+        .and_then(toml::Value::as_str);
+    let default_model = merged
+        .get("llm")
+        .and_then(|value| value.get("default_model"))
+        .and_then(toml::Value::as_str);
+
+    assert_eq!(default_provider, Some("anthropic"));
+    assert_eq!(default_model, Some("gpt-4o-mini"));
 }

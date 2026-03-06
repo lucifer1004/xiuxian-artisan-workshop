@@ -102,7 +102,7 @@ class SmartAstEngine:
     ) -> str:
         """Execute AST-based search or analysis."""
         try:
-            import omni.ast as omni_ast
+            import omni.ast as xiuxian_ast
 
             if mode == "pattern":
                 return self._search_pattern(query, path, language)
@@ -121,7 +121,7 @@ class SmartAstEngine:
     def _search_pattern(self, pattern: str, target: str, language: str) -> str:
         """Search using AST pattern."""
         try:
-            import omni.ast as omni_ast
+            import omni.ast as xiuxian_ast
 
             target_path = Path(target)
             results = []
@@ -138,7 +138,7 @@ class SmartAstEngine:
                     if not lang:
                         continue
 
-                    json_results = omni_ast.py_extract_items(
+                    json_results = xiuxian_ast.py_extract_items(
                         content=content,
                         pattern=pattern,
                         language=lang,
@@ -169,7 +169,7 @@ class SmartAstEngine:
     def _analyze_code(self, target: str, language: str) -> str:
         """Analyze code for patterns and issues using YAML rules."""
         try:
-            import omni.ast as omni_ast
+            import omni.ast as xiuxian_ast
 
             target_path = Path(target)
             if target_path.is_file():
@@ -188,7 +188,7 @@ class SmartAstEngine:
 
                     for rule_name, rule_config in BUILTIN_RULES.items():
                         for pattern in rule_config["patterns"]:
-                            json_results = omni_ast.py_extract_items(
+                            json_results = xiuxian_ast.py_extract_items(
                                 content=content,
                                 pattern=pattern,
                                 language=lang,
@@ -265,9 +265,9 @@ class SmartAstEngine:
     def extract_skeleton(self, content: str, language: str) -> str:
         """Extract code skeleton (signatures only)."""
         try:
-            import omni.ast as omni_ast
+            import omni.ast as xiuxian_ast
 
-            result = omni_ast.py_extract_skeleton(content, language)
+            result = xiuxian_ast.py_extract_skeleton(content, language)
             parsed = json.loads(result)
             return parsed.get("skeleton", "")
         except Exception as e:
@@ -278,9 +278,9 @@ class SmartAstEngine:
     ) -> List[Dict[str, Any]]:
         """Chunk code into semantic units."""
         try:
-            import omni.ast as omni_ast
+            import omni.ast as xiuxian_ast
 
-            chunks = omni_ast.py_chunk_code(
+            chunks = xiuxian_ast.py_chunk_code(
                 content=content,
                 file_path=file_path,
                 language=language,

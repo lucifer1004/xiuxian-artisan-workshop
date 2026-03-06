@@ -19,9 +19,9 @@ def add_runtime_args(parser: Any) -> None:
         "--agent-bin",
         default="",
         help=(
-            "Optional path to prebuilt omni-agent binary. "
+            "Optional path to prebuilt xiuxian-daochang binary. "
             "When set, startup uses '<agent-bin> channel ...' instead of "
-            "'cargo run -p omni-agent -- channel ...'."
+            "'cargo run -p xiuxian-daochang -- channel ...'."
         ),
     )
     parser.add_argument("--webhook-port", type=int, default=18081)

@@ -1,10 +1,10 @@
 """Context Pruner - Rust-accelerated Context Window Management.
 
 This module provides high-performance token counting and context pruning
-for workflow runtimes using the Rust omni-tokenizer bindings.
+for workflow runtimes using the Rust xiuxian-tokenizer bindings.
 
 Architecture:
-    - Rust (omni-tokenizer): Token counting, truncation, message compression
+    - Rust (xiuxian-tokenizer): Token counting, truncation, message compression
     - Python: Integration with workflow runtimes
 
 Features:
@@ -15,24 +15,24 @@ Features:
 
 Example:
     >>> from omni.agent.core.context.pruner import ContextPruner
-    >>> from omni_core_rs.tokenizer import PyContextPruner
+    >>> from xiuxian_core_rs.tokenizer import PyContextPruner
     >>>
     >>> # Use Rust-accelerated pruner
     >>> pruner = ContextPruner(window_size=4, max_tool_output=500)
     >>> compressed = pruner.compress(messages)
     >>>
     >>> # Count tokens
-    >>> from omni_core_rs import py_count_tokens
+    >>> from xiuxian_core_rs import py_count_tokens
     >>> count = py_count_tokens("Hello, world!")
 """
 
 import logging
 from typing import Any
 
-from omni_core_rs import PyContextPruner as RustContextPruner
+from xiuxian_core_rs import PyContextPruner as RustContextPruner
 
-# Import from omni_core_rs directly (all exports are in main namespace)
-from omni_core_rs import py_count_tokens, py_truncate_middle
+# Import from xiuxian_core_rs directly (all exports are in main namespace)
+from xiuxian_core_rs import py_count_tokens, py_truncate_middle
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +70,8 @@ class ContextPruner:
     Manages the context window budget using high-performance Rust tokenizer.
     Implements "Cognitive Re-anchoring" for AutoFixLoop recovery.
 
-    This class REQUIRES Rust bindings (omni-core-rs) to function.
-    Use `uv sync --reinstall-package omni-core-rs` after installation.
+    This class REQUIRES Rust bindings (xiuxian-core-rs) to function.
+    Use `uv sync --reinstall-package xiuxian-core-rs` after installation.
 
     Attributes:
         config: PruningConfig instance with pruning settings.
@@ -101,8 +101,8 @@ class ContextPruner:
             _ = py_count_tokens("test")
         except ImportError as e:
             raise ImportError(
-                "Rust tokenizer bindings (omni-core-rs) are required. "
-                "Install with: uv sync --reinstall-package omni-core-rs"
+                "Rust tokenizer bindings (xiuxian-core-rs) are required. "
+                "Install with: uv sync --reinstall-package xiuxian-core-rs"
             ) from e
 
         # Create config if needed

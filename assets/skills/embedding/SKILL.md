@@ -3,9 +3,9 @@ type: skill
 name: embedding
 description: Use when generating vector embeddings for text.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/embedding"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/embedding"
   routing_keywords:
     - "embedding"
     - "vector"

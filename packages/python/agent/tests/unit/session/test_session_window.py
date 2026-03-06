@@ -2,20 +2,20 @@
 
 import pytest
 
-pytest.importorskip("omni_core_rs")
+pytest.importorskip("xiuxian_core_rs")
 
 
 class TestSessionWindow:
-    """Tests for PySessionWindow from omni_core_rs (Rust omni-window)."""
+    """Tests for PySessionWindow from xiuxian_core_rs (Rust xiuxian-window)."""
 
     def test_importable(self):
-        from omni_core_rs import PySessionWindow
+        from xiuxian_core_rs import PySessionWindow
 
         w = PySessionWindow("s1", 100)
         assert w.session_id == "s1"
 
     def test_append_and_stats(self):
-        from omni_core_rs import PySessionWindow
+        from xiuxian_core_rs import PySessionWindow
 
         w = PySessionWindow("s2", 10)
         w.append_turn("user", "hello")
@@ -26,7 +26,7 @@ class TestSessionWindow:
         assert stats["window_used"] == 2
 
     def test_get_recent_turns(self):
-        from omni_core_rs import PySessionWindow
+        from xiuxian_core_rs import PySessionWindow
 
         w = PySessionWindow("s3", 10)
         w.append_turn("user", "a")
@@ -38,7 +38,7 @@ class TestSessionWindow:
         assert recent[1]["tool_count"] == 1
 
     def test_max_turns_trim(self):
-        from omni_core_rs import PySessionWindow
+        from xiuxian_core_rs import PySessionWindow
 
         w = PySessionWindow("s4", 3)
         for i in range(5):

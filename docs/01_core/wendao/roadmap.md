@@ -161,12 +161,12 @@ Conflict policy:
 
 - Instead of `xiuxian-wendao` building its own isolated HTTP server, it will integrate with the centralized `xiuxian-zhenfa` (阵法) service.
 - **Router Registration:** Wendao will expose a standard trait (e.g., `ZhenfaRouter`) that `xiuxian-zhenfa` mounts onto its high-performance `axum` backend.
-- **Decoupling Qianhuan:** The zero-export interface (from W6) will be served over this central HTTP Matrix, allowing `omni-agent` and `xiuxian-qianhuan` to request Persona profiles, Jinja2 templates, and Skill Manuals via standard REST/JSON contracts instead of direct memory linking.
+- **Decoupling Qianhuan:** The zero-export interface (from W6) will be served over this central HTTP Matrix, allowing `xiuxian-daochang` and `xiuxian-qianhuan` to request Persona profiles, Jinja2 templates, and Skill Manuals via standard REST/JSON contracts instead of direct memory linking.
 - Evidence: `packages/rust/crates/xiuxian-zhenfa` core networking layer and contracts bootstrapped.
 
 - Instead of `xiuxian-wendao` building its own isolated HTTP server, it will integrate with the centralized `xiuxian-zhenfa` (阵法) service.
 - **Router Registration:** Wendao will expose a standard trait (e.g., `ZhenfaRouter`) that `xiuxian-zhenfa` mounts onto its high-performance `axum` backend.
-- **Decoupling Qianhuan:** The zero-export interface (from W6) will be served over this central HTTP Matrix, allowing `omni-agent` and `xiuxian-qianhuan` to request Persona profiles, Jinja2 templates, and Skill Manuals via standard REST/JSON contracts instead of direct memory linking.
+- **Decoupling Qianhuan:** The zero-export interface (from W6) will be served over this central HTTP Matrix, allowing `xiuxian-daochang` and `xiuxian-qianhuan` to request Persona profiles, Jinja2 templates, and Skill Manuals via standard REST/JSON contracts instead of direct memory linking.
 
 ## 4. Change Control Rules
 

@@ -30,12 +30,12 @@ EVOLUTION_MAX_WAIT_SECS="${3:-90}"
 EVOLUTION_MAX_IDLE_SECS="${4:-60}"
 EVOLUTION_MAX_PARALLEL="${5:-4}"
 TITLES_CSV="${6:-Test1,Test2,Test3}"
-LOG_FILE="${7:-.run/logs/omni-agent-webhook.log}"
+LOG_FILE="${7:-.run/logs/xiuxian-daochang-webhook.log}"
 OUTPUT_JSON="${8:-.run/reports/agent-channel-acceptance.json}"
 OUTPUT_MARKDOWN="${9:-.run/reports/agent-channel-acceptance.md}"
 RETRIES="${10:-2}"
 
-exec python3 "${SCRIPT_DIR}/test_omni_agent_acceptance.py" \
+exec python3 "${SCRIPT_DIR}/test_xiuxian_daochang_acceptance.py" \
   --titles "${TITLES_CSV}" \
   --log-file "${LOG_FILE}" \
   --max-wait "${MAX_WAIT_SECS}" \

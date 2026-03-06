@@ -12,12 +12,15 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
-SESSION_KEY_RE = re.compile(r"\bsession_key\s*=\s*(?:\"|')?([-\d]+(?::[-\d]+){1,2})(?:\"|')?")
+SESSION_KEY_RE = re.compile(r"\bsession_key\s*(?:=|:)\s*(?:\"|')?([-\d]+(?::[-\d]+){0,2})(?:\"|')?")
 PARTITION_MODE_RE = re.compile(
     r"\b(?:json_partition_mode|current_mode|requested_partition_mode)\s*=\s*"
     r"(?:\"|')?([A-Za-z0-9_-]+)(?:\"|')?"
 )
 USERNAME_TOKEN_RE = re.compile(r"\busername\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s]+))")
+CHAT_ID_RE = re.compile(r"\bchat_id:\s*Some\(([-\d]+)\)")
+CHAT_TYPE_RE = re.compile(r'\bchat_type:\s*Some\("([^"]+)"\)')
+THREAD_ID_RE = re.compile(r"\bmessage_thread_id:\s*Some\(([-\d]+)\)")
 
 RUNTIME_LOG_TAIL_BYTES = 256 * 1024
 
@@ -47,12 +50,21 @@ def normalize_telegram_session_partition_mode(raw: str | None) -> str | None:
 
 
 def session_ids_from_runtime_log(log_file: Path) -> tuple[int | None, int | None, int | None]:
-    """Infer `(chat_id, user_id, thread_id)` from the latest `session_key` log token."""
+    """Infer `(chat_id, user_id, thread_id)` from recent Telegram runtime logs."""
     if not log_file.exists():
         return None, None, None
 
+    lines = read_runtime_log_tail_lines(log_file)
+    for raw_line in reversed(lines):
+        line = ANSI_ESCAPE_RE.sub("", raw_line)
+        if "Parsed message, forwarding to agent" not in line:
+            continue
+        inferred = _session_ids_from_runtime_line(line)
+        if inferred != (None, None, None):
+            return inferred
+
     last_session_key: str | None = None
-    for raw_line in read_runtime_log_tail_lines(log_file):
+    for raw_line in lines:
         line = ANSI_ESCAPE_RE.sub("", raw_line)
         match = SESSION_KEY_RE.search(line)
         if match:
@@ -61,7 +73,33 @@ def session_ids_from_runtime_log(log_file: Path) -> tuple[int | None, int | None
     if not last_session_key:
         return None, None, None
 
-    parts = last_session_key.split(":")
+    return _session_ids_from_session_key(last_session_key)
+
+
+def _session_ids_from_runtime_line(line: str) -> tuple[int | None, int | None, int | None]:
+    session_key_match = SESSION_KEY_RE.search(line)
+    if not session_key_match:
+        return None, None, None
+
+    session_key = session_key_match.group(1)
+    chat_id_match = CHAT_ID_RE.search(line)
+    chat_type_match = CHAT_TYPE_RE.search(line)
+    thread_id_match = THREAD_ID_RE.search(line)
+
+    thread_id = int(thread_id_match.group(1)) if thread_id_match else None
+    parts = session_key.split(":")
+    if len(parts) == 3:
+        return int(parts[0]), int(parts[2]), int(parts[1])
+    if len(parts) == 2:
+        return int(parts[0]), int(parts[1]), thread_id
+    if len(parts) == 1 and chat_type_match and chat_type_match.group(1) == "private":
+        chat_id = int(chat_id_match.group(1)) if chat_id_match else int(parts[0])
+        return chat_id, chat_id, thread_id
+    return None, None, None
+
+
+def _session_ids_from_session_key(session_key: str) -> tuple[int | None, int | None, int | None]:
+    parts = session_key.split(":")
     if len(parts) == 2:
         return int(parts[0]), int(parts[1]), None
     if len(parts) == 3:

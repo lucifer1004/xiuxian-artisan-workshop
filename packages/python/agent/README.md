@@ -1,12 +1,12 @@
 ---
 type: knowledge
 metadata:
-  title: "omni-dev-fusion-agent"
+  title: "xiuxian-daochang"
 ---
 
-# omni-dev-fusion-agent
+# xiuxian-daochang
 
-Tri-MCP Agent Orchestrator - The Brain of omni-dev-fusion.
+Tri-MCP Agent Orchestrator - The Brain of Xiuxian Artisan Workshop.
 
 ## Overview
 
@@ -20,5 +20,5 @@ This package provides the orchestrator MCP server that handles skill routing, LL
 
 ## Dependencies
 
-- `omni-dev-fusion-common` - Shared kernel and utilities
+- Shared kernel and utilities
 - MCP and native workflow runtimes for agent orchestration

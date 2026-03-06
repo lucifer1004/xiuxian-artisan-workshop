@@ -3,12 +3,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "omni-mcp"
+name = "xiuxian-mcp"
 version = "0.4.0"
 description = "High-performance MCP transport layer using MCP SDK types"
 requires-python = ">=3.12"
 dependencies = [
-    "omni-foundation",
+    "xiuxian-foundation",
     "mcp>=1.1.0",  # MCP SDK for JSON-RPC types
     "orjson>=3.9.0",
     "starlette>=0.30.0",
@@ -33,4 +33,4 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 
 [tool.uv.sources]
-omni-foundation = { workspace = true }
+xiuxian-foundation = { workspace = true }

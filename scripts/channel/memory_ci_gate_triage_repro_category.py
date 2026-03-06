@@ -20,10 +20,10 @@ def append_category_commands(
     if is_gate_step_error_fn(error):
         commands.append(shell_quote_command_fn(error.cmd))
 
-    gate_script = cfg.script_dir / "test_omni_agent_memory_ci_gate.py"
-    suite_script = cfg.script_dir / "test_omni_agent_memory_suite.py"
-    trace_script = cfg.script_dir / "reconstruct_omni_agent_trace.py"
-    agent_bin = cfg.agent_bin or (cfg.project_root / "target" / "debug" / "omni-agent")
+    gate_script = cfg.script_dir / "test_xiuxian_daochang_memory_ci_gate.py"
+    suite_script = cfg.script_dir / "test_xiuxian_daochang_memory_suite.py"
+    trace_script = cfg.script_dir / "reconstruct_xiuxian_daochang_trace.py"
+    agent_bin = cfg.agent_bin or (cfg.project_root / "target" / "debug" / "xiuxian-daochang")
 
     if category in {"runtime_startup_timeout", "runtime_startup_process"}:
         commands.append(
@@ -62,11 +62,11 @@ def append_category_commands(
 
     if category == "reflection_gate_subprocess":
         commands.append(
-            "cargo test -p omni-agent --lib reflective_runtime_long_horizon_quality_thresholds"
+            "cargo test -p xiuxian-daochang --lib reflective_runtime_long_horizon_quality_thresholds"
         )
     if category == "discover_cache_gate_subprocess":
         commands.append(
-            "cargo test -p omni-agent --test mcp_discover_cache "
+            "cargo test -p xiuxian-daochang --test mcp_discover_cache "
             "discover_calls_use_valkey_read_through_cache_when_configured -- --ignored --exact"
         )
     if category in {"trace_reconstruction_subprocess", "trace_reconstruction_quality"}:

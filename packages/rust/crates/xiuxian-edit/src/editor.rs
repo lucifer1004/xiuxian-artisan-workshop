@@ -1,0 +1,254 @@
+//! Core structural editor implementation.
+//!
+//! Provides AST-based code modification using ast-grep patterns.
+//! Part of The Surgeon.
+
+use std::fmt::Write as _;
+use std::path::Path;
+use std::str::FromStr;
+
+// Use xiuxian-ast for unified ast-grep (re-exports Pattern, SupportLang, LanguageExt)
+use xiuxian_ast::{AstLanguage, LanguageExt, MatcherExt, Pattern, SupportLang};
+
+use crate::capture::substitute_captures;
+use crate::diff::generate_unified_diff;
+use crate::error::EditError;
+use crate::types::{EditConfig, EditLocation, EditResult};
+
+/// `StructuralEditor` - AST-based code modification engine.
+///
+/// Uses ast-grep patterns for surgical precision in code refactoring.
+/// Part of The Surgeon.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use xiuxian_edit::StructuralEditor;
+///
+/// // Rename function calls (use $$$ for variadic args)
+/// let result = StructuralEditor::replace(
+///     "x = connect(host, port)",
+///     "connect($$$)",
+///     "async_connect($$$)",
+///     "python"
+/// )?;
+/// assert!(result.modified.contains("async_connect"));
+/// ```
+pub struct StructuralEditor;
+
+impl StructuralEditor {
+    /// Perform structural replace on content.
+    ///
+    /// # Arguments
+    /// * `content` - Source code content
+    /// * `pattern` - ast-grep pattern to match (e.g., `connect($$$)`)
+    /// * `replacement` - Replacement pattern (e.g., `async_connect($$$)`)
+    /// * `language` - Programming language (python, rust, javascript, typescript)
+    ///
+    /// # Returns
+    /// `EditResult` containing original, modified content, diff, and edit locations.
+    ///
+    /// # Errors
+    /// Returns [`EditError`] when language parsing or pattern compilation fails.
+    pub fn replace(
+        content: &str,
+        pattern: &str,
+        replacement: &str,
+        language: &str,
+    ) -> Result<EditResult, EditError> {
+        let lang = SupportLang::from_str(language)
+            .map_err(|_| EditError::UnsupportedLanguage(language.to_string()))?;
+
+        let root = lang.ast_grep(content);
+        let root_node = root.root();
+
+        let search_pattern =
+            Pattern::try_new(pattern, lang).map_err(|e| EditError::Pattern(e.to_string()))?;
+
+        // Collect matches in reverse order for safe replacement
+        let mut matches: Vec<(usize, usize, String, String)> = Vec::new();
+
+        for node in root_node.dfs() {
+            if let Some(m) = search_pattern.match_node(node.clone()) {
+                let start_byte = m.range().start;
+                let end_byte = m.range().end;
+                let original_text = m.text().to_string();
+
+                let new_text = substitute_captures(replacement, m.get_env(), &original_text);
+                matches.push((start_byte, end_byte, original_text, new_text));
+            }
+        }
+
+        if matches.is_empty() {
+            return Ok(EditResult {
+                original: content.to_string(),
+                modified: content.to_string(),
+                count: 0,
+                diff: String::new(),
+                edits: Vec::new(),
+            });
+        }
+
+        // Sort by position in reverse order
+        matches.sort_by(|a, b| b.0.cmp(&a.0));
+
+        // Apply replacements
+        let mut modified = content.to_string();
+        let mut edits = Vec::new();
+
+        for (start, end, original_text, new_text) in &matches {
+            let line = content[..*start].matches('\n').count() + 1;
+            let last_newline = content[..*start].rfind('\n').map_or(0, |i| i + 1);
+            let column = start - last_newline + 1;
+
+            modified = format!("{}{}{}", &modified[..*start], new_text, &modified[*end..]);
+
+            edits.push(EditLocation {
+                line,
+                column,
+                original_text: original_text.clone(),
+                new_text: new_text.clone(),
+            });
+        }
+
+        edits.reverse();
+        let diff = generate_unified_diff(content, &modified);
+
+        Ok(EditResult {
+            original: content.to_string(),
+            modified,
+            count: edits.len(),
+            diff,
+            edits,
+        })
+    }
+
+    /// Perform structural replace on a file.
+    ///
+    /// # Arguments
+    /// * `path` - Path to the source file
+    /// * `pattern` - ast-grep pattern to match
+    /// * `replacement` - Replacement pattern
+    /// * `language` - Optional language hint (auto-detected if None)
+    /// * `config` - Edit configuration
+    ///
+    /// # Returns
+    /// `EditResult` with changes (file is modified only if `config.preview_only` is false).
+    ///
+    /// # Errors
+    /// Returns [`EditError`] when reading, parsing, editing, or writing fails.
+    pub fn replace_in_file<P: AsRef<Path>>(
+        path: P,
+        pattern: &str,
+        replacement: &str,
+        language: Option<&str>,
+        config: &EditConfig,
+    ) -> Result<EditResult, EditError> {
+        let path = path.as_ref();
+        let content = xiuxian_io::read_text_safe(path, config.max_file_size)?;
+
+        let lang_str = match language {
+            Some(l) => l.to_string(),
+            None => {
+                if let Some(lang) = SupportLang::from_path(path) {
+                    format!("{lang:?}").to_lowercase()
+                } else {
+                    let ext = path.extension().map_or_else(
+                        || "unknown".to_string(),
+                        |e| e.to_string_lossy().to_string(),
+                    );
+                    return Err(EditError::UnsupportedLanguage(ext));
+                }
+            }
+        };
+
+        let result = Self::replace(&content, pattern, replacement, &lang_str)?;
+
+        if !config.preview_only && result.count > 0 {
+            std::fs::write(path, &result.modified)
+                .map_err(|e| EditError::Replacement(format!("Failed to write file: {e}")))?;
+        }
+
+        Ok(result)
+    }
+
+    /// Preview structural replace (no file modification).
+    ///
+    /// Convenience method that always previews without modifying files.
+    ///
+    /// # Errors
+    /// Returns [`EditError`] if file reading, parsing, or replacement fails.
+    pub fn preview<P: AsRef<Path>>(
+        path: P,
+        pattern: &str,
+        replacement: &str,
+        language: Option<&str>,
+    ) -> Result<EditResult, EditError> {
+        Self::replace_in_file(
+            path,
+            pattern,
+            replacement,
+            language,
+            &EditConfig {
+                preview_only: true,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Apply structural replace (modify file).
+    ///
+    /// **Use with caution** - this modifies the file in place.
+    ///
+    /// # Errors
+    /// Returns [`EditError`] if file IO, parsing, replacement, or write fails.
+    pub fn apply<P: AsRef<Path>>(
+        path: P,
+        pattern: &str,
+        replacement: &str,
+        language: Option<&str>,
+    ) -> Result<EditResult, EditError> {
+        Self::replace_in_file(
+            path,
+            pattern,
+            replacement,
+            language,
+            &EditConfig {
+                preview_only: false,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Format edit result for display.
+    ///
+    /// Returns a human-readable summary of the changes.
+    #[must_use]
+    pub fn format_result(result: &EditResult, path: Option<&str>) -> String {
+        let count = result.count;
+        let mut output = String::new();
+
+        if let Some(p) = path {
+            let _ = writeln!(output, "// EDIT: {p}");
+        }
+        let _ = writeln!(output, "// Replacements: {count}");
+
+        if result.count == 0 {
+            output.push_str("[No matches found]\n");
+            return output;
+        }
+
+        output.push_str("\n// Changes:\n");
+        for edit in &result.edits {
+            let line = edit.line;
+            let original_text = &edit.original_text;
+            let new_text = &edit.new_text;
+            let _ = writeln!(output, "L{line}: \"{original_text}\" -> \"{new_text}\"");
+        }
+
+        output.push_str("\n// Diff:\n");
+        output.push_str(&result.diff);
+
+        output
+    }
+}

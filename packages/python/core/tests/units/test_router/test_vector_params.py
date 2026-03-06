@@ -148,22 +148,22 @@ class TestRustBindingSignature:
 
     def test_create_vector_store_signature(self):
         """Verify create_vector_store has correct defaults."""
-        import omni_core_rs
+        import xiuxian_core_rs
 
         # The function should be available
-        assert hasattr(omni_core_rs, "create_vector_store")
+        assert hasattr(xiuxian_core_rs, "create_vector_store")
 
         # Check it's callable
-        assert callable(omni_core_rs.create_vector_store)
+        assert callable(xiuxian_core_rs.create_vector_store)
 
     def test_py_vector_store_has_search_tools(self):
         """Verify PyVectorStore has search_tools method."""
-        import omni_core_rs
+        import xiuxian_core_rs
 
-        assert hasattr(omni_core_rs, "PyVectorStore")
+        assert hasattr(xiuxian_core_rs, "PyVectorStore")
 
         # Create instance
-        store = omni_core_rs.PyVectorStore(path="/tmp/test", dimension=1024)
+        store = xiuxian_core_rs.PyVectorStore(path="/tmp/test", dimension=1024)
         assert hasattr(store, "search_tools"), "PyVectorStore should have search_tools method"
 
 

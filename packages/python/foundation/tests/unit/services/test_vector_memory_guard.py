@@ -2,7 +2,7 @@
 Regression tests to prevent abnormal memory/CPU usage from vector stores.
 
 Guards:
-- Single factory: Foundation must not call omni_core_rs.create_vector_store directly.
+- Single factory: Foundation must not call xiuxian_core_rs.create_vector_store directly.
 - Bounded cache: All stores created via bridge must have non-None cache limits.
 - Defaults cap: Runtime defaults for index cache and max tables stay within safe bounds.
 
@@ -41,7 +41,7 @@ class TestSingleFactoryGuard:
         VectorStoreClient._knowledge_store = None
 
     def test_foundation_does_not_import_create_vector_store(self) -> None:
-        """Foundation vector module must not use omni_core_rs.create_vector_store."""
+        """Foundation vector module must not use xiuxian_core_rs.create_vector_store."""
         import omni.foundation.services.vector as vector_module
 
         source = getattr(vector_module, "__file__", "") or ""
@@ -56,7 +56,7 @@ class TestSingleFactoryGuard:
     def test_vector_store_client_store_uses_bridge_only(self) -> None:
         """VectorStoreClient.store must call bridge get_vector_store, not create_vector_store."""
         with patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get:
-            with patch("omni_core_rs.create_vector_store") as mock_create:
+            with patch("xiuxian_core_rs.create_vector_store") as mock_create:
                 mock_get.return_value = None
                 vm = VectorStoreClient()
                 _ = vm.store
@@ -66,7 +66,7 @@ class TestSingleFactoryGuard:
     def test_vector_store_client_knowledge_uses_bridge_only(self) -> None:
         """VectorStoreClient._get_store_for_collection('knowledge_chunks') must use bridge."""
         with patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get:
-            with patch("omni_core_rs.create_vector_store") as mock_create:
+            with patch("xiuxian_core_rs.create_vector_store") as mock_create:
                 mock_get.return_value = None
                 vm = VectorStoreClient()
                 _ = vm._get_store_for_collection("knowledge_chunks")

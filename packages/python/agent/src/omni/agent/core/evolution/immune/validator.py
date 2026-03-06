@@ -1,7 +1,7 @@
 """
 validator.py - Level 1 Immune Defense: Static Analysis
 
-Uses Rust's omni-ast (ast-grep based) for high-performance security scanning.
+Uses Rust's xiuxian-ast (ast-grep based) for high-performance security scanning.
 Delegates to Rust core via the bridge for heavy pattern matching.
 """
 
@@ -56,7 +56,7 @@ class StaticValidator:
     """
     Level 1 Defense: Rust-Powered Static Security Analysis.
 
-    This validator uses omni-ast's ast-grep engine for:
+    This validator uses xiuxian-ast's ast-grep engine for:
     - 100x faster pattern matching than Python AST
     - Detection of forbidden imports (os, subprocess, socket, etc.)
     - Detection of dangerous calls (eval, exec, compile, etc.)

@@ -138,7 +138,7 @@ Validation rules:
 The scanner is exposed to Python via PyO3 bindings:
 
 ```python
-from omni_core_rs import export_skill_index, scan_skill_tools, get_skill_index_schema
+from xiuxian_core_rs import export_skill_index, scan_skill_tools, get_skill_index_schema
 
 # Export full skill index
 index_json = export_skill_index("assets/skills", "assets/skills/skill_index.json")

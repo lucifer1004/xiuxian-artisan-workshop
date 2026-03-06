@@ -20,9 +20,9 @@ def _write_counter_script(path: Path, *, label: str) -> None:
         f"""
 import builtins
 
-builtins._omni_tools_loader_script_counter = getattr(
+builtins._xiuxian_tools_loader_script_counter = getattr(
     builtins,
-    "_omni_tools_loader_script_counter",
+    "_xiuxian_tools_loader_script_counter",
     0,
 ) + 1
 
@@ -54,8 +54,8 @@ def test_load_script_reuses_module_when_enabled(tmp_path: Path) -> None:
     script_path = scripts_path / "recall.py"
     _write_counter_script(script_path, label="v1")
     _cleanup_skill_modules(skill_name)
-    if hasattr(builtins, "_omni_tools_loader_script_counter"):
-        delattr(builtins, "_omni_tools_loader_script_counter")
+    if hasattr(builtins, "_xiuxian_tools_loader_script_counter"):
+        delattr(builtins, "_xiuxian_tools_loader_script_counter")
 
     commands: dict[str, object] = {}
     loaded_count_1, reused_1 = load_script(
@@ -83,8 +83,8 @@ def test_load_script_reuses_module_when_enabled(tmp_path: Path) -> None:
     assert loaded_count_2 == 1
     assert reused_1 is False
     assert reused_2 is True
-    assert builtins._omni_tools_loader_script_counter == 1
-    delattr(builtins, "_omni_tools_loader_script_counter")
+    assert builtins._xiuxian_tools_loader_script_counter == 1
+    delattr(builtins, "_xiuxian_tools_loader_script_counter")
 
 
 def test_load_script_reloads_when_file_changes(tmp_path: Path) -> None:
@@ -97,8 +97,8 @@ def test_load_script_reloads_when_file_changes(tmp_path: Path) -> None:
     script_path = scripts_path / "recall.py"
     _write_counter_script(script_path, label="v1")
     _cleanup_skill_modules(skill_name)
-    if hasattr(builtins, "_omni_tools_loader_script_counter"):
-        delattr(builtins, "_omni_tools_loader_script_counter")
+    if hasattr(builtins, "_xiuxian_tools_loader_script_counter"):
+        delattr(builtins, "_xiuxian_tools_loader_script_counter")
 
     commands: dict[str, object] = {}
     _ = load_script(
@@ -126,8 +126,8 @@ def test_load_script_reloads_when_file_changes(tmp_path: Path) -> None:
     )
 
     assert reused_2 is False
-    assert builtins._omni_tools_loader_script_counter == 2
-    delattr(builtins, "_omni_tools_loader_script_counter")
+    assert builtins._xiuxian_tools_loader_script_counter == 2
+    delattr(builtins, "_xiuxian_tools_loader_script_counter")
 
 
 def test_load_script_handles_non_package_root_module_collision(tmp_path: Path) -> None:

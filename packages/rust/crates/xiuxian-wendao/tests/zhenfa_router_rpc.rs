@@ -6,7 +6,7 @@ use std::fs;
 
 use serde_json::json;
 use tempfile::TempDir;
-use xiuxian_wendao::search_from_rpc_params;
+use xiuxian_wendao::zhenfa_router::search_from_rpc_params;
 use xiuxian_zhenfa::INTERNAL_ERROR_CODE;
 
 #[test]
@@ -15,8 +15,9 @@ fn search_from_rpc_params_rejects_empty_query() {
         "query": "   ",
     });
 
-    let error = search_from_rpc_params(params)
-        .expect_err("empty query should produce JSON-RPC error payload");
+    let Err(error) = search_from_rpc_params(params) else {
+        panic!("empty query should produce JSON-RPC error payload");
+    };
     assert_eq!(error.code, INTERNAL_ERROR_CODE);
     assert_eq!(error.message, "wendao search failed");
 }

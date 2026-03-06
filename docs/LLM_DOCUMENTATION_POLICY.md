@@ -52,8 +52,8 @@ LLM Agents must place new documentation in the mathematically correct directory.
 - **Wendao Graph Linking (Wikilinks):** When referencing other internal documents within this repository, you MUST use the Wendao bi-directional wikilink syntax: `[[Document Title|path/to/document.md]]`. **DO NOT** use standard markdown links like `[Document Title](path/to/document.md)` for internal references. This ensures the `xiuxian-wendao` engine can extract the links to build the knowledge graph.
 - **Precision and Brevity:** Avoid conversational filler ("I will now update...", "Here is the document..."). State the invariant, present the evidence, and outline the architecture.
 - **Traceability:** Whenever making a claim that a feature is working, the LLM MUST cite the exact test file path or script used as evidence.
-- **Rust Testing Evidence:** When citing Rust test commands in documentation, audit logs, or feature plans, **ALWAYS** use `cargo nextest run` (e.g., `cargo nextest run -p omni-agent`). DO NOT use the legacy `cargo test` command.
-- **Rust Validation Scope:** When citing executable Rust validation commands, prefer crate-scoped commands first (for example `cargo nextest run -p omni-agent`). Expand to cross-crate or workspace-wide runs only when required.
+- **Rust Testing Evidence:** When citing Rust test commands in documentation, audit logs, or feature plans, **ALWAYS** use `cargo nextest run` (e.g., `cargo nextest run -p xiuxian-daochang`). DO NOT use the legacy `cargo test` command.
+- **Rust Validation Scope:** When citing executable Rust validation commands, prefer crate-scoped commands first (for example `cargo nextest run -p xiuxian-daochang`). Expand to cross-crate or workspace-wide runs only when required.
 
 ## 4. Persona Integrity
 

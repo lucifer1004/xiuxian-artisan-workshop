@@ -3,6 +3,6 @@ revision = 3
 requires-python = ">=3.13"
 
 [[package]]
-name = "omni-core-rs"
+name = "xiuxian-core-rs"
 version = "0.1.1"
 source = { editable = "." }

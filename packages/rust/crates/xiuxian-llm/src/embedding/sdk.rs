@@ -1,9 +1,15 @@
 use std::collections::HashMap;
+use std::future::Future;
+use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
-use mistralrs::{EmbeddingModelBuilder, EmbeddingRequest, Model};
+use futures::FutureExt;
+use mistralrs::{Device, EmbeddingModelBuilder, EmbeddingRequest, Model};
 use tokio::sync::Mutex;
+use xiuxian_macros::env_non_empty;
+
+use crate::llm::acceleration::{AccelerationDevice, resolve_acceleration_device};
 
 type SharedEmbeddingModel = Arc<Model>;
 const MAX_MISTRAL_SDK_EMBED_MAX_NUM_SEQS: usize = 4_096;
@@ -22,6 +28,52 @@ static EMBEDDING_MODEL_CACHE: OnceLock<Mutex<EmbeddingModelCache>> = OnceLock::n
 
 fn embedding_model_cache() -> &'static Mutex<EmbeddingModelCache> {
     EMBEDDING_MODEL_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn panic_payload_to_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        return (*message).to_string();
+    }
+    if let Some(message) = payload.downcast_ref::<String>() {
+        return message.clone();
+    }
+    "unknown panic payload".to_string()
+}
+
+pub(super) async fn guard_mistral_future<T, Fut>(stage: &'static str, fut: Fut) -> Option<T>
+where
+    Fut: Future<Output = T>,
+{
+    match AssertUnwindSafe(fut).catch_unwind().await {
+        Ok(output) => Some(output),
+        Err(payload) => {
+            tracing::warn!(
+                event = "xiuxian.llm.embedding.mistral_sdk.panicked",
+                stage,
+                panic = panic_payload_to_message(payload.as_ref()),
+                "mistral-sdk embedding path panicked; treating request as unavailable"
+            );
+            None
+        }
+    }
+}
+
+pub(super) fn guard_mistral_call<T, F>(stage: &'static str, call: F) -> Option<T>
+where
+    F: FnOnce() -> T,
+{
+    match std::panic::catch_unwind(AssertUnwindSafe(call)) {
+        Ok(output) => Some(output),
+        Err(payload) => {
+            tracing::warn!(
+                event = "xiuxian.llm.embedding.mistral_sdk.panicked",
+                stage,
+                panic = panic_payload_to_message(payload.as_ref()),
+                "mistral-sdk sync path panicked; treating request as unavailable"
+            );
+            None
+        }
+    }
 }
 
 /// Normalize SDK model id.
@@ -90,9 +142,12 @@ async fn get_or_load_embedding_model(
         builder = builder.with_max_num_seqs(max_num_seqs);
     }
 
-    let built = match builder.build().await {
-        Ok(model) => model,
-        Err(error) => {
+    let selected_acceleration_device = resolve_mistral_embedding_acceleration_device();
+    builder = apply_mistral_embedding_acceleration(builder, selected_acceleration_device);
+
+    let built = match Box::pin(guard_mistral_future("model_build", builder.build())).await {
+        Some(Ok(model)) => model,
+        Some(Err(error)) => {
             tracing::warn!(
                 event = "xiuxian.llm.embedding.mistral_sdk.model_load_failed",
                 model = %cache_key.model_id,
@@ -101,6 +156,7 @@ async fn get_or_load_embedding_model(
             );
             return None;
         }
+        None => return None,
     };
 
     let shared = Arc::new(built);
@@ -110,6 +166,90 @@ async fn get_or_load_embedding_model(
     }
     cache.insert(cache_key.clone(), shared.clone());
     Some(shared)
+}
+
+fn resolve_mistral_embedding_acceleration_device() -> AccelerationDevice {
+    let explicit = env_non_empty!("XIUXIAN_MISTRAL_SDK_DEVICE");
+    resolve_acceleration_device(explicit.as_deref())
+}
+
+fn unsafe_metal_enabled() -> bool {
+    let raw = env_non_empty!("XIUXIAN_MISTRAL_SDK_UNSAFE_METAL")
+        .or_else(|| env_non_empty!("XIUXIAN_MISTRAL_SDK_ALLOW_UNSAFE_METAL"));
+    raw.map(|value| value.trim().to_ascii_lowercase())
+        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
+}
+
+fn should_force_cpu_for_metal() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        !unsafe_metal_enabled()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+fn apply_mistral_embedding_acceleration(
+    builder: EmbeddingModelBuilder,
+    device: AccelerationDevice,
+) -> EmbeddingModelBuilder {
+    let force_cpu_for_metal = should_force_cpu_for_metal();
+    match device {
+        AccelerationDevice::Auto => {
+            if force_cpu_for_metal {
+                tracing::warn!(
+                    event = "xiuxian.llm.embedding.mistral_sdk.acceleration_force_cpu",
+                    requested = "auto",
+                    reason = "unsafe_metal_disabled",
+                    "mistral-sdk auto acceleration forced to CPU on this host for stability"
+                );
+                return builder.with_force_cpu();
+            }
+            builder
+        }
+        AccelerationDevice::Cpu => builder.with_force_cpu(),
+        AccelerationDevice::Metal => {
+            if force_cpu_for_metal {
+                tracing::warn!(
+                    event = "xiuxian.llm.embedding.mistral_sdk.acceleration_force_cpu",
+                    requested = "metal",
+                    reason = "unsafe_metal_disabled",
+                    "mistral-sdk metal acceleration forced to CPU on this host for stability"
+                );
+                return builder.with_force_cpu();
+            }
+            match guard_mistral_call("device_new_metal", || Device::new_metal(0)) {
+                Some(Ok(device)) => builder.with_device(device),
+                Some(Err(error)) => {
+                    tracing::warn!(
+                        event = "xiuxian.llm.embedding.mistral_sdk.acceleration_unavailable",
+                        requested = "metal",
+                        error = %error,
+                        "mistralrs requested metal device unavailable; falling back to auto device selection"
+                    );
+                    builder
+                }
+                None => builder,
+            }
+        }
+        AccelerationDevice::Cuda => {
+            match guard_mistral_call("device_new_cuda", || Device::new_cuda(0)) {
+                Some(Ok(device)) => builder.with_device(device),
+                Some(Err(error)) => {
+                    tracing::warn!(
+                        event = "xiuxian.llm.embedding.mistral_sdk.acceleration_unavailable",
+                        requested = "cuda",
+                        error = %error,
+                        "mistralrs requested cuda device unavailable; falling back to auto device selection"
+                    );
+                    builder
+                }
+                None => builder,
+            }
+        }
+    }
 }
 
 /// Generate embeddings through in-process `mistralrs` SDK.
@@ -130,26 +270,36 @@ pub async fn embed_with_mistral_sdk(
         hf_revision: normalize_mistral_sdk_hf_revision(hf_revision),
         max_num_seqs: normalize_mistral_sdk_max_num_seqs(max_num_seqs),
     };
-    let model = get_or_load_embedding_model(&cache_key).await?;
+    let Some(Some(model)) = Box::pin(guard_mistral_future(
+        "model_get_or_load",
+        get_or_load_embedding_model(&cache_key),
+    ))
+    .await
+    else {
+        return None;
+    };
 
     let mut request = EmbeddingRequest::builder();
     for text in texts {
         request = request.add_prompt(text.as_str());
     }
 
-    let embeddings = match model.generate_embeddings(request).await {
-        Ok(vectors) => vectors,
-        Err(error) => {
-            tracing::warn!(
-                event = "xiuxian.llm.embedding.mistral_sdk.request_failed",
-                model = model_id,
-                batch_size = texts.len(),
-                error = %error,
-                "mistralrs embedding request failed"
-            );
-            return None;
-        }
-    };
+    let embeddings =
+        match guard_mistral_future("generate_embeddings", model.generate_embeddings(request)).await
+        {
+            Some(Ok(vectors)) => vectors,
+            Some(Err(error)) => {
+                tracing::warn!(
+                    event = "xiuxian.llm.embedding.mistral_sdk.request_failed",
+                    model = model_id,
+                    batch_size = texts.len(),
+                    error = %error,
+                    "mistralrs embedding request failed"
+                );
+                return None;
+            }
+            None => return None,
+        };
 
     if embeddings.len() != texts.len() {
         tracing::warn!(

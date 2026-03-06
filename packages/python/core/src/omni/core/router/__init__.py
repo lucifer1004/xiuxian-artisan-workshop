@@ -4,12 +4,12 @@ omni.core.router - Semantic Routing Module
 High-performance intent-to-action mapping with Rust-native hybrid search.
 
 Architecture:
-- HybridSearch: Rust-native (omni-vector) for vector + keyword search
+- HybridSearch: Rust-native (xiuxian-vector) for vector + keyword search
 - HiveRouter: Decision logic layer
 - IntentSniffer: Context-aware skill suggestions
 - OmniRouter: Unified facade
 
-Migration: Python-side hybrid search logic moved to Rust (omni-vector).
+Migration: Python-side hybrid search logic moved to Rust (xiuxian-vector).
 The Python HybridSearch is now a thin shell over Rust's search_tools.
 
 Usage:

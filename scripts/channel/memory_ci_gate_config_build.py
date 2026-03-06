@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate config parsing/building for omni-agent memory CI."""
+"""Gate config parsing/building for xiuxian-daochang memory CI."""
 
 from __future__ import annotations
 

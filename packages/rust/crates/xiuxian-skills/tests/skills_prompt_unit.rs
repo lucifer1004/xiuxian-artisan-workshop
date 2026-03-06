@@ -3,7 +3,5 @@
 mod prompt_module {
     pub use xiuxian_skills::skills::PromptScanner;
 
-    mod tests {
-        include!("unit/skills/prompt/tests.rs");
-    }
+    mod tests;
 }

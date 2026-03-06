@@ -9,7 +9,7 @@ Transforms internal tool definitions into LLM-compatible formats:
 
 Architecture (Schema Singularity):
     ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-    │ omni-types      │ ──→ │ RustSchemaRegistry│ ──→ │ LLM (OpenAI/    │
+    │ xiuxian-types   │ ──→ │ RustSchemaRegistry│ ──→ │ LLM (OpenAI/    │
     │ (SSOT for Schema)│     │ (FFI + Cache)     │     │ Anthropic)      │
     └─────────────────┘     └──────────────────┘     └─────────────────┘
 
@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
-from omni_core_rs import py_get_schema_json
+from xiuxian_core_rs import py_get_schema_json
 
 logger = structlog.get_logger(__name__)
 
@@ -408,6 +408,6 @@ def list_available_schemas() -> list[str]:
     Returns:
         List of available type names
     """
-    from omni_core_rs import py_get_registered_types
+    from xiuxian_core_rs import py_get_registered_types
 
     return py_get_registered_types()

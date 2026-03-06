@@ -79,10 +79,10 @@ class TestSkillSync:
 
     def test_sync_no_changes(self, runner, tmp_path: Path):
         """Test sync reports no changes when LanceDB is up to date."""
-        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+        with patch("xiuxian_core_rs.scan_skill_tools") as mock_scan:
             mock_scan.return_value = []
 
-            with patch("omni_core_rs.diff_skills") as mock_diff:
+            with patch("xiuxian_core_rs.diff_skills") as mock_diff:
                 mock_report = MagicMock()
                 mock_report.added = []
                 mock_report.updated = []
@@ -104,10 +104,10 @@ class TestSkillSync:
 
     def test_sync_with_json_output(self, runner, tmp_path: Path):
         """Test sync with JSON output format."""
-        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+        with patch("xiuxian_core_rs.scan_skill_tools") as mock_scan:
             mock_scan.return_value = []
 
-            with patch("omni_core_rs.diff_skills") as mock_diff:
+            with patch("xiuxian_core_rs.diff_skills") as mock_diff:
                 mock_report = MagicMock()
                 mock_report.added = []
                 mock_report.updated = []
@@ -147,10 +147,10 @@ class TestSkillSync:
         mock_tool.file_hash = "abc123"
         mock_tool.category = "version_control"
 
-        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+        with patch("xiuxian_core_rs.scan_skill_tools") as mock_scan:
             mock_scan.return_value = [mock_tool]
 
-            with patch("omni_core_rs.diff_skills") as mock_diff:
+            with patch("xiuxian_core_rs.diff_skills") as mock_diff:
                 # Report the tool as added
                 mock_report = MagicMock()
                 mock_report.added = [mock_tool]
@@ -316,10 +316,10 @@ class TestSyncStability:
         mock_report.deleted = []
         mock_report.unchanged_count = 1
 
-        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+        with patch("xiuxian_core_rs.scan_skill_tools") as mock_scan:
             mock_scan.return_value = [mock_tool]
 
-            with patch("omni_core_rs.diff_skills") as mock_diff:
+            with patch("xiuxian_core_rs.diff_skills") as mock_diff:
                 mock_diff.return_value = mock_report
 
                 with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:

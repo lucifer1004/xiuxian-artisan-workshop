@@ -106,7 +106,7 @@ The kernel is built on a robust, high-performance Rust foundation:
 - **`xiuxian-zhenfa`**: The Agent OS Kernel. Native registry and orchestrator.
 - **`xiuxian-qianji`**: The Synaptic workflow engine. Supports LLM-driven flow control.
 - **`xiuxian-wendao`**: High-performance Knowledge Graph & PPR Search engine.
-- **`omni-memory`**: MemRL-inspired self-evolving episodic memory.
+- **`xiuxian-memory-engine`**: MemRL-inspired self-evolving episodic memory.
 - **`xiuxian-macros`**: Proc-macros for zero-boilerplate tool integration (`#[zhenfa_tool]`).
 
 ---

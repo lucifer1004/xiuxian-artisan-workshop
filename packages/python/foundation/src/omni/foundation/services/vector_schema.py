@@ -722,7 +722,7 @@ This document defines the external contract for scanner tuning options passed fr
 
 - Python entrypoint: `VectorStoreClient.search(...)`
 - Rust binding: `PyVectorStore.search_optimized(table_name, query, limit, options_json)`
-- Rust runtime: `omni-vector::SearchOptions`
+- Rust runtime: `xiuxian-vector::SearchOptions`
 
 ## JSON Schema
 

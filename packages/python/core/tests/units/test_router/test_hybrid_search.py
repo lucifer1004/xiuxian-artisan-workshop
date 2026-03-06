@@ -1,7 +1,7 @@
 """Tests for omni.core.router.hybrid_search module - Rust-Native Implementation.
 
 These tests verify the Rust-native hybrid search implementation that delegates
-to omni-vector's search_tools for vector search + keyword rescue.
+to xiuxian-vector's search_tools for vector search + keyword rescue.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ class TestHybridSearchRustNative:
         with (
             patch(
                 "omni.foundation.config.dirs.get_vector_db_path",
-                return_value=Path("/cache/omni-vector"),
+                return_value=Path("/cache/xiuxian-vector"),
             ) as mock_get_path,
             patch(
                 "omni.foundation.bridge.rust_vector.get_vector_store",
@@ -51,7 +51,7 @@ class TestHybridSearchRustNative:
             search = HybridSearch()
 
         mock_get_path.assert_called_once()
-        mock_get_store.assert_called_once_with("/cache/omni-vector")
+        mock_get_store.assert_called_once_with("/cache/xiuxian-vector")
 
     def test_fixed_weights(self):
         """Test that weights are fixed (no configurable weights in Rust-native)."""

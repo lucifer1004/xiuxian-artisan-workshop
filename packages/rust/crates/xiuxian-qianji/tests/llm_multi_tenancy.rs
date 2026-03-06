@@ -2,12 +2,11 @@
 
 #![cfg(feature = "llm")]
 
-use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use xiuxian_llm::llm::{ChatRequest, LlmClient};
+use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmResult};
 use xiuxian_qianhuan::{
     orchestrator::ThousandFacesOrchestrator,
     persona::{PersonaProfile, PersonaRegistry},
@@ -22,7 +21,7 @@ struct CapturingClient {
 
 #[async_trait]
 impl LlmClient for CapturingClient {
-    async fn chat(&self, request: ChatRequest) -> Result<String> {
+    async fn chat(&self, request: ChatRequest) -> LlmResult<String> {
         if let Ok(mut guard) = self.seen_models.lock() {
             guard.push(request.model);
         }

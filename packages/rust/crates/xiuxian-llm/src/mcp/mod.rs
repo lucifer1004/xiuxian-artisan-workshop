@@ -1,7 +1,7 @@
 //! MCP runtime facade shared across xiuxian runtime crates.
 //!
 //! This module re-exports the stable client surface from `xiuxian-mcp` and
-//! hosts transport/connect helpers reused by `omni-agent`.
+//! hosts transport/connect helpers reused by `xiuxian-daochang`.
 
 pub mod config;
 pub mod connect;
@@ -39,4 +39,6 @@ pub use wait_heartbeat::{
     WaitHeartbeatState, classify_wait_heartbeat, degraded_wait_warn_after_secs,
 };
 pub use wait_logger::{spawn_inflight_wait_logger, stop_wait_logger};
-pub use xiuxian_mcp::{McpServerTransportConfig, OmniMcpClient, init_params_omni_server};
+pub use xiuxian_mcp::{
+    McpClientNotificationStats, McpServerTransportConfig, OmniMcpClient, init_params_omni_server,
+};

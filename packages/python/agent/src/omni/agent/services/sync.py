@@ -12,12 +12,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from rich.console import Console
+
 from omni.foundation.runtime.gitops import get_project_root
 from omni.foundation.utils.common import setup_import_paths
 
 setup_import_paths()
-
-from rich.console import Console
 
 console = Console()
 
@@ -96,7 +96,7 @@ async def sync_symbols(clear: bool = False, verbose: bool | None = None) -> dict
         if os.path.exists(config_path):
             sync_log.info("Syncing external dependencies...")
             try:
-                from omni_core_rs import PyDependencyIndexer
+                from xiuxian_core_rs import PyDependencyIndexer
 
                 indexer = PyDependencyIndexer(project_root, config_path)
                 result_json = indexer.build(clean=clear, verbose=verbose)
@@ -146,13 +146,17 @@ async def sync_knowledge(clear: bool = False, verbose: bool = False) -> dict[str
         # Pre-flight: ensure embedding service is initialized and HTTP client reachable
         embed_svc = get_embedding_service()
         embed_svc.initialize()
-        if getattr(embed_svc, "_client_mode", False) and getattr(embed_svc, "_client_url", None):
-            if not embed_svc._check_http_server_healthy(embed_svc._client_url, timeout=2.0):
-                sync_log.warn(
-                    "Embedding HTTP server unreachable before knowledge sync. "
-                    "Will retry on first embed; if it times out, local model will load. "
-                    "Start MCP (omni mcp) for faster sync.",
-                )
+        if (
+            getattr(embed_svc, "_client_mode", False)
+            and getattr(embed_svc, "_client_url", None)
+            and not embed_svc._check_http_server_healthy(embed_svc._client_url, timeout=2.0)
+        ):
+            sync_log.warn(
+                "Embedding HTTP server unreachable before knowledge sync. "
+                "Will retry on first embed against the Rust embedding service. "
+                "Start the Rust embedding endpoint (GET /health, POST /embed/single) "
+                "for faster sync.",
+            )
         librarian = Librarian()
         original_discover = librarian.ingestor.discover_files
 

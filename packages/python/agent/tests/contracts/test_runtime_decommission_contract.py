@@ -21,7 +21,7 @@ def test_removed_python_runtime_modules_are_not_importable() -> None:
         importlib.import_module("omni.agent.main")
 
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("omni.agent.cli.omni_loop")
+        importlib.import_module("omni.agent.cli.xiuxian_loop")
 
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("omni.agent.workflows.run_entry")
@@ -47,8 +47,8 @@ def test_cli_entrypoint_source_keeps_rust_runtime_guard_call() -> None:
     assert 'assert_rust_runtime_or_raise("omni.cli.entry_point")' in source
 
 
-def test_omni_loop_module_is_removed() -> None:
-    """Python OmniLoop module should be fully removed."""
+def test_xiuxian_loop_module_is_removed() -> None:
+    """Python XiuxianLoop module should be fully removed."""
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("omni.agent.core.omni.loop")
 
@@ -70,11 +70,11 @@ def test_system_default_settings_pin_rust_runtime_orchestrator() -> None:
     assert agent_settings.get("allow_python_runtime_for_tests") is False
 
 
-def test_core_omni_public_api_excludes_runtime_symbols() -> None:
-    """Public omni facade must not export removed Python runtime classes."""
-    omni_module = importlib.import_module("omni.agent.core.omni")
+def test_core_public_api_excludes_runtime_symbols() -> None:
+    """Public facade must not export removed Python runtime classes."""
+    core_module = importlib.import_module("omni.agent.core.omni")
 
-    assert not hasattr(omni_module, "OmniLoopConfig")
-    assert not hasattr(omni_module, "OmniLoop")
-    assert not hasattr(omni_module, "OmegaRunner")
-    assert not hasattr(omni_module, "MissionConfig")
+    assert not hasattr(core_module, "OmniLoopConfig")
+    assert not hasattr(core_module, "OmniLoop")
+    assert not hasattr(core_module, "OmegaRunner")
+    assert not hasattr(core_module, "MissionConfig")

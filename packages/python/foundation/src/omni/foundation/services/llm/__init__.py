@@ -1,5 +1,3 @@
-# inference - LLM Inference Module
-
 """
 LLM Inference Module
 
@@ -25,11 +23,11 @@ from .api import get_inference_config, load_api_key
 from .client import InferenceClient
 from .personas import PERSONAS, build_persona_prompt, get_persona, load_personas_from_file
 from .provider import (
-    LiteLLMProvider,
     LLMConfig,
     LLMProvider,
     LLMResponse,
     NoOpProvider,
+    RustLLMProvider,
     complete,
     get_llm_provider,
     reset_provider,
@@ -46,11 +44,11 @@ __all__ = [
     "build_persona_prompt",
     # API
     "load_api_key",
-    # Provider API (LiteLLM-based)
+    # Provider API
     "LLMConfig",
     "LLMResponse",
     "LLMProvider",
-    "LiteLLMProvider",
+    "RustLLMProvider",
     "NoOpProvider",
     "get_llm_provider",
     "reset_provider",

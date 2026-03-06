@@ -2,7 +2,7 @@
 rust_immune.py - Rust Core Bridge for Immune System
 
 Provides high-performance security scanning and sandbox execution
-by bridging to omni-ast and omni-security Rust crates.
+by bridging to xiuxian-ast and xiuxian-security Rust crates.
 
 Exports:
 - scan_code_security(): AST-based security analysis
@@ -20,7 +20,7 @@ logger = get_logger("omni.immune.bridge")
 
 # Try to import Rust bindings
 try:
-    import omni_core_rs
+    import xiuxian_core_rs
 
     _RUST_AVAILABLE = True
     logger.info("Rust core bindings loaded successfully")
@@ -33,8 +33,8 @@ class RustImmuneBridge:
     """
     Gateway to Rust Core Security Features.
 
-    Level 1: Static Analysis via omni-ast (ast-grep based)
-    Level 2: Dynamic Execution via omni-security (Docker/NsJail)
+    Level 1: Static Analysis via xiuxian-ast (ast-grep based)
+    Level 2: Dynamic Execution via xiuxian-security (Docker/NsJail)
     """
 
     @staticmethod
@@ -43,13 +43,13 @@ class RustImmuneBridge:
         return _RUST_AVAILABLE
 
     # =============================================================================
-    # Level 1: Static Security Analysis (omni-ast)
+    # Level 1: Static Security Analysis (xiuxian-ast)
     # =============================================================================
 
     @staticmethod
     def scan_code_security(code: str) -> tuple[bool, list[dict[str, Any]]]:
         """
-        Scan Python code for security violations using omni-ast.
+        Scan Python code for security violations using xiuxian-ast.
 
         Detects:
         - Forbidden imports: os, subprocess, socket, ctypes, etc.
@@ -66,7 +66,7 @@ class RustImmuneBridge:
             raise RuntimeError("Rust core bindings not available. Run: just build-rust-dev")
 
         # Call Rust binding: returns list of (rule_id, description, line, snippet)
-        violations = omni_core_rs.scan_code_security(code)
+        violations = xiuxian_core_rs.scan_code_security(code)
 
         if violations:
             formatted = [
@@ -92,12 +92,12 @@ class RustImmuneBridge:
             raise RuntimeError("Rust core bindings not available. Run: just build-rust-dev")
 
         try:
-            return omni_core_rs.is_code_safe(code)
+            return xiuxian_core_rs.is_code_safe(code)
         except Exception:
             return False
 
     # =============================================================================
-    # Level 2: Sandbox Execution (omni-security)
+    # Level 2: Sandbox Execution (xiuxian-security)
     # =============================================================================
 
     @staticmethod
@@ -126,7 +126,7 @@ class RustImmuneBridge:
             }
 
         try:
-            runner = omni_core_rs.PySandboxRunner()
+            runner = xiuxian_core_rs.PySandboxRunner()
 
             if not runner.is_available():
                 return {
@@ -174,7 +174,7 @@ class RustImmuneBridge:
             return len(permissions) > 0
 
         try:
-            return omni_core_rs.check_permission(tool_name, permissions)
+            return xiuxian_core_rs.check_permission(tool_name, permissions)
         except Exception:
             return False
 

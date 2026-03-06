@@ -57,12 +57,12 @@ class TUIBridge:
 
     Usage:
         bridge = TUIBridge()
-        bridge.connect("/tmp/omni-omega.sock")
+        bridge.connect("/tmp/xiuxian-omega.sock")
         bridge.send_event({"source": "omega", "topic": "omega/mission/start", ...})
         bridge.disconnect()
     """
 
-    def __init__(self, socket_path: str = "/tmp/omni-omega.sock"):
+    def __init__(self, socket_path: str = "/tmp/xiuxian-omega.sock"):
         """Initialize TUIBridge."""
         self.socket_path = Path(socket_path)
         self.socket: socket.socket | None = None
@@ -188,7 +188,7 @@ def get_tui_bridge() -> TUIBridge:
     return _tui_bridge
 
 
-def init_tui(socket_path: str = "/tmp/omni-omega.sock") -> bool:
+def init_tui(socket_path: str = "/tmp/xiuxian-omega.sock") -> bool:
     """Initialize TUI bridge and connect."""
     bridge = get_tui_bridge()
     return bridge.connect(socket_path)

@@ -38,9 +38,9 @@ def _load_channel_script(script_name: str):
     "script_name",
     [
         "agent_channel_blackbox.py",
-        "test_omni_agent_concurrent_sessions.py",
-        "test_omni_agent_dedup_events.py",
-        "test_omni_agent_memory_benchmark.py",
+        "test_xiuxian_daochang_concurrent_sessions.py",
+        "test_xiuxian_daochang_dedup_events.py",
+        "test_xiuxian_daochang_memory_benchmark.py",
     ],
 )
 def test_probe_wrappers_count_lines_use_offset_cursor(monkeypatch, script_name: str) -> None:
@@ -60,9 +60,9 @@ def test_probe_wrappers_count_lines_use_offset_cursor(monkeypatch, script_name: 
     "script_name",
     [
         "agent_channel_blackbox.py",
-        "test_omni_agent_concurrent_sessions.py",
-        "test_omni_agent_dedup_events.py",
-        "test_omni_agent_memory_benchmark.py",
+        "test_xiuxian_daochang_concurrent_sessions.py",
+        "test_xiuxian_daochang_dedup_events.py",
+        "test_xiuxian_daochang_memory_benchmark.py",
     ],
 )
 def test_probe_wrappers_read_new_lines_use_offset_cursor(monkeypatch, script_name: str) -> None:

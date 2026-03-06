@@ -3,10 +3,10 @@
 scripts/generate_llm_index.py
 Skill Index Generator for LLM Context.
 
-Scans assets/skills/ and generates .cache/omni-skills-index.json.
+Scans assets/skills/ and generates .cache/xiuxian-skills-index.json.
 This allows the Agent to "know what it knows" without reading every file.
 
-Note: The runtime system now uses LanceDB (.cache/omni-vector/).
+Note: The runtime system now uses LanceDB (.cache/xiuxian-vector/).
 This index is for LLM context purposes only.
 
 Standard Structure:
@@ -208,7 +208,7 @@ def main():
         print("No skills found.")
         return
 
-    output_file = _PRJ_ROOT / ".cache" / "omni-skills-index.json"
+    output_file = _PRJ_ROOT / ".cache" / "xiuxian-skills-index.json"
     output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text(json.dumps(index, indent=2), encoding="utf-8")
     print(f"\n💾 Generated index at {output_file}")

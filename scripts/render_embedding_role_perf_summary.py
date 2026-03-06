@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render omni-agent embedding role perf JSON report into markdown summary."""
+"""Render xiuxian-daochang embedding role perf JSON report into markdown summary."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "omni_agent.embedding.role_perf_smoke.v1"
+SCHEMA = "xiuxian_daochang.embedding.role_perf_smoke.v1"
 
 
 def _as_float(value: Any) -> float:
@@ -145,7 +145,7 @@ def _load_report(path: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Render omni-agent embedding role perf report into markdown."
+        description="Render xiuxian-daochang embedding role perf report into markdown."
     )
     parser.add_argument("--input", required=True, help="Path to embedding role perf JSON report.")
     parser.add_argument(

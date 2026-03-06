@@ -32,6 +32,34 @@ impl McpClientPool {
         *cache = None;
     }
 
+    pub(super) async fn sync_list_tools_cache_with_server_notifications(&self) {
+        let latest_epoch = {
+            let clients = self.clients.read().await;
+            clients
+                .iter()
+                .map(|client| client.tool_list_changed_epoch())
+                .max()
+                .unwrap_or(0)
+        };
+        let observed_epoch = self
+            .observed_tool_list_changed_epoch
+            .load(Ordering::Relaxed);
+        if latest_epoch <= observed_epoch {
+            return;
+        }
+
+        self.invalidate_list_tools_cache().await;
+        self.observed_tool_list_changed_epoch
+            .store(latest_epoch, Ordering::Relaxed);
+        tracing::info!(
+            event = "mcp.pool.tools_list.cache.invalidated",
+            reason = "server_tool_list_changed",
+            latest_epoch,
+            observed_epoch,
+            "mcp tools/list cache invalidated after server notification"
+        );
+    }
+
     pub(super) fn record_list_tools_cache_hit(&self) {
         self.list_tools_cache_hits.fetch_add(1, Ordering::Relaxed);
         self.maybe_log_list_tools_cache_stats();

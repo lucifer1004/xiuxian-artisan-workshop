@@ -1,9 +1,9 @@
-//! Python Bindings for omni-tokenizer
+//! Python Bindings for xiuxian-tokenizer
 //!
 //! High-performance token counting and context pruning for LangGraph.
 
-use omni_tokenizer::{ContextPruner, Message, chunk_text, count_tokens, truncate};
 use pyo3::prelude::*;
+use xiuxian_tokenizer::{ContextPruner, Message, chunk_text, count_tokens, truncate};
 
 /// Count tokens in text using Rust (20-100x faster than Python).
 ///
@@ -109,7 +109,7 @@ impl From<Message> for PyMessage {
 /// # Example
 ///
 /// ```python
-/// from omni_core_rs.tokenizer import ContextPruner
+/// from xiuxian_core_rs.tokenizer import ContextPruner
 ///
 /// pruner = ContextPruner(window_size=4, max_tool_output=500)
 /// compressed = pruner.compress(messages)

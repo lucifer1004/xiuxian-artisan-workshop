@@ -26,7 +26,7 @@ Use this template when generating or comparing keyword-backend evaluation report
 ### 1. Header (required)
 
 - **Generated at**: ISO 8601 timestamp (e.g. `2026-02-12T00:33:00Z`).
-- **Offline source**: Snapshot or dataset path (e.g. `packages/rust/crates/omni-vector/tests/snapshots/...`).
+- **Offline source**: Snapshot or dataset path (e.g. `packages/rust/crates/xiuxian-vector/tests/snapshots/...`).
 - **Query count**: Number of evaluation queries.
 - **Top-K**: Retrieval depth used for P@K / R@K / nDCG@K.
 

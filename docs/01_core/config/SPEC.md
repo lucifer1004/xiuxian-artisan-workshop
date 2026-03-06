@@ -38,7 +38,7 @@ Canonical declaration pattern:
 
 The engine resolves configuration through a strictly ordered 3-layer stack:
 
-1.  **Level 0: Embedded Base**: Default values are embedded into the binary at compile-time via `include_str!` from the crate's `resources/config/` directory (e.g., `packages/rust/crates/omni-agent/resources/config/xiuxian.toml`).
+1.  **Level 0: Embedded Base**: Default values are embedded into the binary at compile-time via `include_str!` from the crate's `resources/config/` directory (e.g., `packages/rust/crates/xiuxian-daochang/resources/config/xiuxian.toml`).
 2.  **Level 1: Unified Override**: User-defined settings are loaded from the hierarchical path: `$PRJ_CONFIG_HOME/xiuxian-artisan-workshop/xiuxian.toml`.
     - In local development, `$PRJ_CONFIG_HOME` typically defaults to the project-local `.config/` directory.
 3.  **Level 2: Environment**: Runtime overrides via environment variables (e.g., `XIUXIAN_SKILLS__VALIDATION__STRICT_MODE`).

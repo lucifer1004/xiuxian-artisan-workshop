@@ -14,7 +14,7 @@ metadata:
 # Keyword Backend LLM Reliability Batch Report
 
 - Date: `2026-02-12`
-- Snapshot: `packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
+- Snapshot: `packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap`
 - Eval config:
   - `vote_rounds=1`
   - `max_api_attempts_per_round=2`

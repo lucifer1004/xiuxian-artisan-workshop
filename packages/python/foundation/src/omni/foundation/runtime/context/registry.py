@@ -195,7 +195,7 @@ Use `omni skill list` to see available skills.
 
 ### Project Structure
 ```
-omni-dev-fusion/
+xiuxian-artisan-workshop/
 ├── assets/skills/             # Skill modules
 │   ├── researcher/
 │   ├── git/

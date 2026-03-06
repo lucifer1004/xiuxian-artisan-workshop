@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime and stage helpers for omni-agent memory CI gate."""
+"""Runtime and stage helpers for xiuxian-daochang memory CI gate."""
 
 from __future__ import annotations
 

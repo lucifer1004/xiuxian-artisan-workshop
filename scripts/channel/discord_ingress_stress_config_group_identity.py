@@ -13,7 +13,7 @@ def add_identity_args(parser: Any) -> None:
     parser.add_argument(
         "--secret-token",
         default=_env.default_secret_token(),
-        help="Optional ingress secret token for header x-omni-discord-ingress-token.",
+        help="Optional ingress secret token for header x-xiuxian-discord-ingress-token.",
     )
     parser.add_argument(
         "--channel-id",

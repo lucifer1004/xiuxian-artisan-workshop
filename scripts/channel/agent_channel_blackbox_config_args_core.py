@@ -38,7 +38,7 @@ def add_core_args(parser: argparse.ArgumentParser, *, webhook_url_default: str) 
     )
     parser.add_argument(
         "--log-file",
-        default=os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/omni-agent-webhook.log"),
+        default=os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/xiuxian-daochang-webhook.log"),
         help="Runtime log file path.",
     )
     parser.add_argument(
@@ -90,4 +90,28 @@ def add_core_args(parser: argparse.ArgumentParser, *, webhook_url_default: str) 
         "--no-follow",
         action="store_true",
         help="Disable live log streaming while waiting.",
+    )
+    parser.add_argument(
+        "--native-tools-only",
+        action="store_true",
+        help=(
+            "Enable native-tools-only assertions: require native tool dispatch success "
+            "and reject MCP/Zhenfa tool dispatch in this probe."
+        ),
+    )
+    parser.add_argument(
+        "--image-url",
+        default=os.environ.get("OMNI_TEST_IMAGE_URL"),
+        help=(
+            "Optional image URL or data URI to inject as multimodal marker "
+            "(appends [IMAGE:...] to the synthetic prompt)."
+        ),
+    )
+    parser.add_argument(
+        "--image-file",
+        default=os.environ.get("OMNI_TEST_IMAGE_FILE"),
+        help=(
+            "Optional local image file path; converted to data URI and injected "
+            "as multimodal marker. Mutually exclusive with --image-url."
+        ),
     )

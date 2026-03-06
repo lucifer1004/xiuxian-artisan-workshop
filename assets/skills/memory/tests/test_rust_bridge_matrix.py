@@ -30,7 +30,7 @@ def test_neural_matrix_construct_does_not_initialize_store(monkeypatch, tmp_path
     )
 
     matrix = matrix_module.NeuralMatrix()
-    assert matrix.backend == "omni-vector (Rust/LanceDB)"
+    assert matrix.backend == "xiuxian-vector (Rust/LanceDB)"
     assert init_calls == []
 
 

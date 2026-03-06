@@ -7,7 +7,5 @@ mod skills {
 mod tool_record_module {
     pub use xiuxian_skills::skills::metadata::{ToolEnrichment, ToolRecord};
 
-    mod tests {
-        include!("unit/skills/metadata/core/tool_record/tests.rs");
-    }
+    mod tests;
 }

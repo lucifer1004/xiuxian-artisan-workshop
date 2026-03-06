@@ -46,7 +46,7 @@ weight = 1.0
   # (Optional) Which outputs from previous nodes should be injected into the template context.
   input_keys = ["proposer_node.output_xml"]
 
-  # (Optional) Under what key the omni-window history should be injected.
+  # (Optional) Under what key the xiuxian-window history should be injected.
   history_key = "qianhuan_history"
 ```
 

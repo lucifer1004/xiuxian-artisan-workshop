@@ -2,8 +2,8 @@
 //!
 //! Contains: add_documents, merge_insert_documents, add_single, delete, delete_by_file_path
 
-use omni_vector::VectorStore;
 use pyo3::prelude::*;
+use xiuxian_vector::VectorStore;
 
 pub(crate) fn add_documents_async(
     path: &str,

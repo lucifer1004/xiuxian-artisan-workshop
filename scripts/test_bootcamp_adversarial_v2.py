@@ -31,7 +31,12 @@ def test_config_candidates_respect_prj_config_home(monkeypatch: pytest.MonkeyPat
         candidates[0]
         == (project_root / "custom-config/xiuxian-artisan-workshop/xiuxian.toml").resolve()
     )
-    assert candidates[1] == (project_root / "packages/conf/xiuxian.toml").resolve()
+    assert (
+        candidates[1]
+        == (
+            project_root / "packages/rust/crates/xiuxian-daochang/resources/config/xiuxian.toml"
+        ).resolve()
+    )
 
 
 class _FakeRedisClient:
@@ -48,7 +53,7 @@ class _FakeRedisClient:
 
 
 def test_select_q_values_key_prefers_densest_hash() -> None:
-    prefix = "omni-agent:memory"
+    prefix = "xiuxian-daochang:memory"
     table = "episodes"
     strict = f"{prefix}:*:{table}:q_values"
     client = _FakeRedisClient(
@@ -62,7 +67,7 @@ def test_select_q_values_key_prefers_densest_hash() -> None:
 
 
 def test_select_q_values_key_uses_fallback_pattern() -> None:
-    prefix = "omni-agent:memory"
+    prefix = "xiuxian-daochang:memory"
     table = "episodes"
     strict = f"{prefix}:*:{table}:q_values"
     fallback = f"{prefix}:*:q_values"
@@ -110,11 +115,11 @@ table_name = "custom-episodes"
 
     monkeypatch.setenv("PRJ_ROOT", str(project_root))
     monkeypatch.delenv("PRJ_CONFIG_HOME", raising=False)
-    monkeypatch.delenv("OMNI_AGENT_GATEWAY_URL", raising=False)
+    monkeypatch.delenv("XIUXIAN_DAOCHANG_GATEWAY_URL", raising=False)
     monkeypatch.delenv("ZHENFA_BASE_URL", raising=False)
     monkeypatch.delenv("XIUXIAN_WENDAO_VALKEY_URL", raising=False)
     monkeypatch.delenv("VALKEY_URL", raising=False)
-    monkeypatch.delenv("OMNI_AGENT_MEMORY_VALKEY_KEY_PREFIX", raising=False)
+    monkeypatch.delenv("XIUXIAN_DAOCHANG_MEMORY_VALKEY_KEY_PREFIX", raising=False)
 
     args = argparse.Namespace(
         mode="gateway",
@@ -154,11 +159,11 @@ bind = "127.0.0.1:19092"
 
     monkeypatch.setenv("PRJ_ROOT", str(project_root))
     monkeypatch.delenv("PRJ_CONFIG_HOME", raising=False)
-    monkeypatch.delenv("OMNI_AGENT_GATEWAY_URL", raising=False)
+    monkeypatch.delenv("XIUXIAN_DAOCHANG_GATEWAY_URL", raising=False)
     monkeypatch.delenv("ZHENFA_BASE_URL", raising=False)
     monkeypatch.delenv("XIUXIAN_WENDAO_VALKEY_URL", raising=False)
     monkeypatch.delenv("VALKEY_URL", raising=False)
-    monkeypatch.delenv("OMNI_AGENT_MEMORY_VALKEY_KEY_PREFIX", raising=False)
+    monkeypatch.delenv("XIUXIAN_DAOCHANG_MEMORY_VALKEY_KEY_PREFIX", raising=False)
 
     args = argparse.Namespace(
         mode="direct",
@@ -196,7 +201,7 @@ def test_classify_stream_line_summary_is_not_error() -> None:
 
 def test_channel_log_file_path_defaults_to_runtime_log(tmp_path: Path) -> None:
     log_path = _MODULE._channel_log_file_path(tmp_path, None)
-    assert log_path == (tmp_path / ".run/logs/omni-agent-webhook.log").resolve()
+    assert log_path == (tmp_path / ".run/logs/xiuxian-daochang-webhook.log").resolve()
 
 
 def test_run_telegram_bootcamp_requires_identity(
@@ -208,7 +213,7 @@ def test_run_telegram_bootcamp_requires_identity(
         gateway_url="http://127.0.0.1:18092",
         zhenfa_url=None,
         valkey_url=None,
-        memory_prefix="omni-agent:memory",
+        memory_prefix="xiuxian-daochang:memory",
         memory_table="episodes",
     )
     args = argparse.Namespace(
@@ -244,7 +249,7 @@ def test_run_telegram_bootcamp_trinity_runs_three_steps(
         gateway_url="http://127.0.0.1:18092",
         zhenfa_url=None,
         valkey_url=None,
-        memory_prefix="omni-agent:memory",
+        memory_prefix="xiuxian-daochang:memory",
         memory_table="episodes",
     )
     args = argparse.Namespace(
@@ -321,7 +326,7 @@ def test_run_telegram_bootcamp_trinity_fails_on_professor_xml_output(
         gateway_url="http://127.0.0.1:18092",
         zhenfa_url=None,
         valkey_url=None,
-        memory_prefix="omni-agent:memory",
+        memory_prefix="xiuxian-daochang:memory",
         memory_table="episodes",
     )
     args = argparse.Namespace(

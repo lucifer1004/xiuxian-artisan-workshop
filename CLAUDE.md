@@ -92,7 +92,7 @@ Build & Verify → Full integration test
 - Always add Rust tests before modifying Rust code
 - Default to direct crate-scoped Rust validation (for example `cargo nextest run -p <crate>`) and expand scope only when required.
 - **For pure Rust packages**: `cargo build` in the crate directory is sufficient
-- **For Rust + Python bindings**: Use `uv sync --reinstall-package omni-core-rs`
+- **For Rust + Python bindings**: Use `uv sync --reinstall-package xiuxian-core-rs`
 - Pure Python changes: No rebuild needed, just run pytest
 
 ---

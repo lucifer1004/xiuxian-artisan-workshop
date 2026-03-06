@@ -45,7 +45,7 @@ fn runtime_config_uses_system_file_defaults() {
     let config_home = project_root.join(".config");
 
     write_file(
-        &project_root.join("packages/conf/qianji.toml"),
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
         r#"
 [llm]
 model = "system-model"
@@ -69,6 +69,7 @@ api_key_env = "SYSTEM_API_KEY"
     assert_eq!(cfg.model, "system-model");
     assert_eq!(cfg.base_url, "http://system.local/v1");
     assert_eq!(cfg.api_key_env, "SYSTEM_API_KEY");
+    assert_eq!(cfg.wire_api, "chat_completions");
     assert_eq!(cfg.api_key, "system-secret");
 }
 
@@ -80,7 +81,7 @@ fn runtime_config_user_file_overrides_system_file() {
     let config_home = project_root.join(".config");
 
     write_file(
-        &project_root.join("packages/conf/qianji.toml"),
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
         r#"
 [llm]
 model = "system-model"
@@ -113,6 +114,7 @@ api_key_env = "USER_API_KEY"
     assert_eq!(cfg.model, "user-model");
     assert_eq!(cfg.base_url, "http://user.local/v1");
     assert_eq!(cfg.api_key_env, "USER_API_KEY");
+    assert_eq!(cfg.wire_api, "chat_completions");
     assert_eq!(cfg.api_key, "user-secret");
 }
 
@@ -125,7 +127,7 @@ fn runtime_config_explicit_path_overrides_user_and_system() {
     let explicit_path = tmp.path().join("explicit/qianji.toml");
 
     write_file(
-        &project_root.join("packages/conf/qianji.toml"),
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
         r#"
 [llm]
 model = "system-model"
@@ -171,6 +173,7 @@ api_key_env = "EXPLICIT_API_KEY"
     assert_eq!(cfg.model, "explicit-model");
     assert_eq!(cfg.base_url, "http://explicit.local/v1");
     assert_eq!(cfg.api_key_env, "EXPLICIT_API_KEY");
+    assert_eq!(cfg.wire_api, "chat_completions");
     assert_eq!(cfg.api_key, "explicit-secret");
 }
 
@@ -182,7 +185,7 @@ fn runtime_config_env_overrides_file_layers() {
     let config_home = project_root.join(".config");
 
     write_file(
-        &project_root.join("packages/conf/qianji.toml"),
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
         r#"
 [llm]
 model = "system-model"
@@ -203,6 +206,7 @@ api_key_env = "SYSTEM_API_KEY"
     assert_eq!(cfg.model, "env-model");
     assert_eq!(cfg.base_url, "http://env.local/v1");
     assert_eq!(cfg.api_key_env, "SYSTEM_API_KEY");
+    assert_eq!(cfg.wire_api, "chat_completions");
     assert_eq!(cfg.api_key, "env-openai-key");
 }
 
@@ -214,7 +218,7 @@ fn runtime_config_prefers_openai_api_key_over_named_env_key() {
     let config_home = project_root.join(".config");
 
     write_file(
-        &project_root.join("packages/conf/qianji.toml"),
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
         r#"
 [llm]
 model = "system-model"
@@ -234,6 +238,7 @@ api_key_env = "SYSTEM_API_KEY"
     });
 
     assert_eq!(cfg.api_key_env, "SYSTEM_API_KEY");
+    assert_eq!(cfg.wire_api, "chat_completions");
     assert_eq!(cfg.api_key, "openai-secret");
 }
 
@@ -244,7 +249,7 @@ fn runtime_config_parse_error_surfaces_as_invalid_data() {
     let project_root = tmp.path().join("project");
     let config_home = project_root.join(".config");
     write_file(
-        &project_root.join("packages/conf/qianji.toml"),
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
         "this is not valid toml = ]",
     );
 
@@ -268,7 +273,7 @@ fn runtime_config_missing_api_key_returns_not_found() {
     let config_home = project_root.join(".config");
 
     write_file(
-        &project_root.join("packages/conf/qianji.toml"),
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
         r#"
 [llm]
 model = "system-model"
@@ -302,7 +307,7 @@ fn runtime_wendao_config_uses_system_defaults() {
     let config_home = project_root.join(".config");
 
     write_file(
-        &project_root.join("packages/conf/qianji.toml"),
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
         r#"
 [llm]
 model = "system-model"
@@ -339,7 +344,7 @@ fn runtime_wendao_config_env_overrides_file() {
     let config_home = project_root.join(".config");
 
     write_file(
-        &project_root.join("packages/conf/qianji.toml"),
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
         r#"
 [llm]
 model = "system-model"
@@ -387,4 +392,48 @@ persist_best_effort = true
     assert_eq!(cfg.graph_dimension, 4096);
     assert!(!cfg.persist);
     assert!(!cfg.persist_best_effort);
+}
+
+#[cfg(feature = "llm")]
+#[test]
+fn runtime_config_resolves_default_provider_wire_api_from_xiuxian_toml() {
+    let tmp = TempDir::new()
+        .unwrap_or_else(|err| panic!("failed to create temp dir for runtime config test: {err}"));
+    let project_root = tmp.path().join("project");
+    let config_home = project_root.join(".config");
+
+    write_file(
+        &project_root.join("packages/rust/crates/xiuxian-qianji/resources/config/qianji.toml"),
+        r#"
+[llm]
+default_provider = "openai"
+default_model = "fallback-model"
+"#,
+    );
+    write_file(
+        &config_home.join("xiuxian-artisan-workshop/xiuxian.toml"),
+        r#"
+[llm]
+default_provider = "openai"
+
+[llm.providers.openai]
+model = "gpt-5-codex"
+base_url = "https://openai-compatible.example.com/v1"
+api_key = "OPENAI_API_KEY"
+wire_api = "responses"
+"#,
+    );
+
+    let cfg = resolve(&QianjiRuntimeEnv {
+        prj_root: Some(project_root),
+        prj_config_home: Some(config_home),
+        extra_env: vec![("OPENAI_API_KEY".to_string(), "test-openai-key".to_string())],
+        ..QianjiRuntimeEnv::default()
+    });
+
+    assert_eq!(cfg.model, "gpt-5-codex");
+    assert_eq!(cfg.base_url, "https://openai-compatible.example.com/v1");
+    assert_eq!(cfg.api_key_env, "OPENAI_API_KEY");
+    assert_eq!(cfg.wire_api, "responses");
+    assert_eq!(cfg.api_key, "test-openai-key");
 }

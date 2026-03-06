@@ -32,6 +32,13 @@ sync_app = typer.Typer(
 console = Console()
 
 
+def _resolve_references_config_path() -> str:
+    """Compatibility wrapper for legacy callers/tests."""
+    from omni.agent.services.sync import _resolve_references_config_path as _service_resolver
+
+    return _service_resolver()
+
+
 def _print_sync_report(
     title: str, stats: dict[str, Any], json_output: bool = False, elapsed: float = 0.0
 ) -> None:
@@ -157,7 +164,7 @@ def sync_symbols_cmd(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed progress"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ):
-    """Sync code symbols using Zero-Token Indexing (omni-tags)."""
+    """Sync code symbols using Zero-Token Indexing (xiuxian-tags)."""
     stats = {"symbols": run_async_blocking(sync_symbols(clear, verbose))}
     _print_sync_report("Symbol Index (Zero-Token)", stats, json_output)
 
@@ -166,8 +173,8 @@ def register_sync_command(parent_app: typer.Typer) -> None:
     """Register the sync command with the parent app."""
     from omni.agent.cli.load_requirements import register_requirements
 
-    register_requirements("sync", ollama=True, embedding_index=True)
+    register_requirements("sync", embedding_index=True)
     parent_app.add_typer(sync_app, name="sync")
 
 
-__all__ = ["register_sync_command", "sync_app"]
+__all__ = ["_resolve_references_config_path", "register_sync_command", "sync_app"]

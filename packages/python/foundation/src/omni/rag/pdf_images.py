@@ -32,7 +32,7 @@ def extract_pdf_images(
 
     Args:
         pdf_path: Path to the PDF file.
-        output_dir: Directory for saved images. Default: PRJ_CACHE(omni-vector/images/{stem}).
+        output_dir: Directory for saved images. Default: PRJ_CACHE(xiuxian-vector/images/{stem}).
         dpi: Resolution for pixmap (default 150).
         format: Output format: "png" or "jpeg".
 
@@ -55,7 +55,7 @@ def extract_pdf_images(
     if output_dir is None:
         stem = path.stem
         safe_stem = hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:12]
-        output_dir = PRJ_CACHE("omni-vector", "images", f"{stem}_{safe_stem}")
+        output_dir = PRJ_CACHE("xiuxian-vector", "images", f"{stem}_{safe_stem}")
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 

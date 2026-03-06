@@ -153,7 +153,7 @@ class TestKnowledgeGraphStore:
         from omni.rag.graph import KnowledgeGraphStore
 
         store = KnowledgeGraphStore()
-        store._backend = None  # simulate no backend (e.g. omni_core_rs not installed)
+        store._backend = None  # simulate no backend (e.g. xiuxian_core_rs not installed)
         entity = Entity(
             name="Test Entity",
             entity_type="CONCEPT",
@@ -184,7 +184,7 @@ class TestKnowledgeGraphStore:
 
     def test_add_entity_dict_succeeds_with_rust_backend(self):
         """Store must accept dict and convert to PyEntity when backend is Rust (no 'dict cannot be cast as PyEntity')."""
-        pytest.importorskip("omni_core_rs")
+        pytest.importorskip("xiuxian_core_rs")
         from omni.rag.graph import KnowledgeGraphStore
 
         store = KnowledgeGraphStore()
@@ -201,7 +201,7 @@ class TestKnowledgeGraphStore:
 
     def test_add_entity_then_relation_dict_succeeds_with_rust_backend(self):
         """Store must accept dicts and write entities before relations so relation source/target exist."""
-        pytest.importorskip("omni_core_rs")
+        pytest.importorskip("xiuxian_core_rs")
         from omni.rag.graph import KnowledgeGraphStore
 
         store = KnowledgeGraphStore()
@@ -216,7 +216,7 @@ class TestKnowledgeGraphStore:
 
     def test_add_relation_without_entities_returns_false_with_rust_backend(self):
         """Rust graph requires source/target entities to exist; add_relation without them returns False."""
-        pytest.importorskip("omni_core_rs")
+        pytest.importorskip("xiuxian_core_rs")
         from omni.rag.graph import KnowledgeGraphStore
 
         store = KnowledgeGraphStore()
@@ -509,7 +509,7 @@ class TestKnowledgeGraphPersistence:
 
     def test_save_and_load_graph(self, tmp_path):
         """Test saving and loading graph to/from JSON file."""
-        from omni_core_rs import PyEntity, PyKnowledgeGraph, PyRelation
+        from xiuxian_core_rs import PyEntity, PyKnowledgeGraph, PyRelation
 
         graph_path = str(tmp_path / "test_graph.json")
 
@@ -554,7 +554,7 @@ class TestKnowledgeGraphPersistence:
 
     def test_export_as_json(self, tmp_path):
         """Test exporting graph as JSON string."""
-        from omni_core_rs import PyEntity, PyKnowledgeGraph
+        from xiuxian_core_rs import PyEntity, PyKnowledgeGraph
 
         graph = PyKnowledgeGraph()
 
@@ -575,7 +575,7 @@ class TestKnowledgeGraphPersistence:
 
     def test_roundtrip_save_load(self, tmp_path):
         """Test save/load roundtrip preserves data."""
-        from omni_core_rs import PyEntity, PyKnowledgeGraph, PyRelation
+        from xiuxian_core_rs import PyEntity, PyKnowledgeGraph, PyRelation
 
         graph_path = str(tmp_path / "roundtrip.json")
 
@@ -623,7 +623,7 @@ class TestKnowledgeGraphPersistence:
 
     def test_get_all_entities_json(self):
         """Test getting all entities as JSON."""
-        from omni_core_rs import PyEntity, PyKnowledgeGraph
+        from xiuxian_core_rs import PyEntity, PyKnowledgeGraph
 
         graph = PyKnowledgeGraph()
 
@@ -644,7 +644,7 @@ class TestKnowledgeGraphPersistence:
 
     def test_get_all_relations_json(self):
         """Test getting all relations as JSON."""
-        from omni_core_rs import PyEntity, PyKnowledgeGraph, PyRelation
+        from xiuxian_core_rs import PyEntity, PyKnowledgeGraph, PyRelation
 
         graph = PyKnowledgeGraph()
 
@@ -670,7 +670,7 @@ class TestKnowledgeGraphPersistence:
 
     def test_load_nonexistent_file(self, tmp_path):
         """Test loading from non-existent file raises error."""
-        from omni_core_rs import PyKnowledgeGraph
+        from xiuxian_core_rs import PyKnowledgeGraph
 
         graph = PyKnowledgeGraph()
         nonexistent_path = str(tmp_path / "nonexistent.json")
@@ -684,7 +684,7 @@ class TestKnowledgeGraphPersistence:
 
     def test_save_to_new_directory(self, tmp_path):
         """Test saving to a new directory creates the directory."""
-        from omni_core_rs import PyEntity, PyKnowledgeGraph
+        from xiuxian_core_rs import PyEntity, PyKnowledgeGraph
 
         new_dir = tmp_path / "nested" / "directory"
         graph_path = str(new_dir / "graph.json")

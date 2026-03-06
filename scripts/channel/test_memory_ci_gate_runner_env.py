@@ -21,9 +21,9 @@ def test_resolve_script_paths_uses_expected_filenames(tmp_path: Path) -> None:
     assert paths["valkey_start"] == tmp_path / "valkey-start.sh"
     assert paths["valkey_stop"] == tmp_path / "valkey-stop.sh"
     assert paths["mock_server"] == tmp_path / "mock_telegram_api.py"
-    assert paths["memory_suite"] == tmp_path / "test_omni_agent_memory_suite.py"
-    assert paths["session_matrix"] == tmp_path / "test_omni_agent_session_matrix.py"
-    assert paths["memory_benchmark"] == tmp_path / "test_omni_agent_memory_benchmark.py"
+    assert paths["memory_suite"] == tmp_path / "test_xiuxian_daochang_memory_suite.py"
+    assert paths["session_matrix"] == tmp_path / "test_xiuxian_daochang_session_matrix.py"
+    assert paths["memory_benchmark"] == tmp_path / "test_xiuxian_daochang_memory_benchmark.py"
 
 
 def test_build_runtime_env_sets_ci_variables(tmp_path: Path, monkeypatch) -> None:
@@ -62,10 +62,10 @@ def test_build_runtime_env_sets_ci_variables(tmp_path: Path, monkeypatch) -> Non
     )
 
     assert env["XIUXIAN_WENDAO_VALKEY_URL"] == endpoints.redis_url(16379, 0)
-    assert env["OMNI_AGENT_SESSION_VALKEY_PREFIX"] == "xiuxian_wendao:test"
-    assert env["OMNI_AGENT_MEMORY_VALKEY_KEY_PREFIX"] == "xiuxian_wendao:test:memory"
+    assert env["XIUXIAN_DAOCHANG_SESSION_VALKEY_PREFIX"] == "xiuxian_wendao:test"
+    assert env["XIUXIAN_DAOCHANG_MEMORY_VALKEY_KEY_PREFIX"] == "xiuxian_wendao:test:memory"
     assert env["OMNI_WEBHOOK_URL"] == f"http://{resolved_host}:19192/telegram/webhook"
-    assert env["OMNI_AGENT_TELEGRAM_API_BASE_URL"] == f"http://{resolved_host}:19191"
+    assert env["XIUXIAN_DAOCHANG_TELEGRAM_API_BASE_URL"] == f"http://{resolved_host}:19191"
     assert env["OMNI_CHANNEL_LOG_FILE"] == str(tmp_path / "runtime.log")
     assert env["OMNI_TEST_USER_ID"] == "10"
     assert env["PRJ_CONFIG_HOME"] == str(tmp_path / ".run" / "config" / "memory-ci-gate" / "run-01")

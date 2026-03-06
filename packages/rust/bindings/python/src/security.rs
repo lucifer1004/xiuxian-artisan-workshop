@@ -7,11 +7,11 @@
 //! - Sandboxed execution for testing auto-generated skills
 
 use crate::utils::run_safe;
-use omni_ast::{SecurityScanner, SecurityViolation};
-use omni_security::{
+use pyo3::prelude::*;
+use xiuxian_ast::{SecurityScanner, SecurityViolation};
+use xiuxian_security::{
     PermissionGatekeeper, SandboxConfig, SandboxMode, SandboxResult, SandboxRunner, SecretScanner,
 };
-use pyo3::prelude::*;
 
 /// Scan content for secrets (AWS keys, Stripe keys, Slack tokens, etc.)
 /// Returns a violation message if secrets are found, None if clean.
@@ -42,7 +42,7 @@ pub fn contains_secrets(content: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Python wrapper for SecurityViolation from omni-ast
+/// Python wrapper for SecurityViolation from xiuxian-ast
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct PySecurityViolation {
@@ -67,7 +67,7 @@ impl From<SecurityViolation> for PySecurityViolation {
     }
 }
 
-/// Scan Python code for security violations using omni-ast.
+/// Scan Python code for security violations using xiuxian-ast.
 ///
 /// This is the Level 1 defense in the Immune System, using ast-grep
 /// for high-performance pattern matching.

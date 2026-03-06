@@ -40,7 +40,7 @@ def pytest_configure(config):
     )
 
 
-# Core specific fixtures are now loaded from omni-test-kit-core plugin
+# Core specific fixtures are now loaded from xiuxian-test-kit-core plugin
 
 
 @pytest.fixture(scope="session")

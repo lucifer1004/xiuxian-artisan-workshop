@@ -3,9 +3,6 @@
 //! Contains: search_optimized, search_hybrid, create_index,
 //!           search_tools, load_tool_registry, scan_skill_tools_raw
 
-use omni_vector::{
-    AgenticSearchConfig, QueryIntent, SearchOptions, ToolSearchOptions, ToolSearchRequest,
-};
 use pyo3::{
     prelude::*,
     types::{PyAny, PyDict, PyList},
@@ -15,6 +12,9 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
+use xiuxian_vector::{
+    AgenticSearchConfig, QueryIntent, SearchOptions, ToolSearchOptions, ToolSearchRequest,
+};
 
 fn json_value_to_py(py: pyo3::Python<'_>, value: &serde_json::Value) -> PyResult<Py<PyAny>> {
     match value {
@@ -184,7 +184,7 @@ fn canonicalize_json_value(value: &serde_json::Value) -> serde_json::Value {
 }
 
 fn build_input_schema_digest(input_schema: &serde_json::Value) -> String {
-    let normalized = omni_vector::skill::normalize_input_schema_value(input_schema);
+    let normalized = xiuxian_vector::skill::normalize_input_schema_value(input_schema);
     if normalized.as_object().is_none_or(serde_json::Map::is_empty) {
         return "sha256:empty".to_string();
     }
@@ -247,7 +247,7 @@ pub(crate) fn search_optimized_async(
     limit: usize,
     options_json: Option<String>,
 ) -> PyResult<Vec<String>> {
-    if let Some(cached) = omni_vector::search_cache::get_cached(
+    if let Some(cached) = xiuxian_vector::search_cache::get_cached(
         path,
         table_name,
         limit,
@@ -306,7 +306,7 @@ pub(crate) fn search_optimized_async(
                 .to_string()
             })
             .collect();
-        omni_vector::search_cache::set_cached(
+        xiuxian_vector::search_cache::set_cached(
             path,
             table_name,
             limit,
@@ -380,9 +380,13 @@ pub(crate) fn search_hybrid_async(
     query_text: String,
     limit: usize,
 ) -> PyResult<Vec<String>> {
-    if let Some(cached) =
-        omni_vector::search_cache::get_cached_hybrid(path, table_name, limit, &query, &query_text)
-    {
+    if let Some(cached) = xiuxian_vector::search_cache::get_cached_hybrid(
+        path,
+        table_name,
+        limit,
+        &query,
+        &query_text,
+    ) {
         return Ok(cached);
     }
 
@@ -438,7 +442,7 @@ pub(crate) fn search_hybrid_async(
                 .to_string()
             })
             .collect();
-        omni_vector::search_cache::set_cached_hybrid(
+        xiuxian_vector::search_cache::set_cached_hybrid(
             path,
             table_name,
             limit,

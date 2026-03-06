@@ -207,7 +207,7 @@ def register_knowledge_command(parent_app: typer.Typer) -> None:
     """Register the knowledge command with the parent app."""
     from omni.agent.cli.load_requirements import register_requirements
 
-    register_requirements("knowledge", ollama=True, embedding_index=True)
+    register_requirements("knowledge", embedding_index=True)
     parent_app.add_typer(knowledge_app, name="knowledge")
 
 

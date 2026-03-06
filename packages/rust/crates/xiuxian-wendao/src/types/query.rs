@@ -1,4 +1,4 @@
-use super::entry::KnowledgeCategory;
+use super::KnowledgeCategory;
 
 /// Search query for knowledge entries.
 #[derive(Debug, Clone, Default)]

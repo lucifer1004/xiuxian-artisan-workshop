@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_command_events.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_command_events.py."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
 def _load_command_events_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_command_events.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_command_events", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_command_events.py"
+    spec = importlib.util.spec_from_file_location("xiuxian_daochang_command_events", script_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -130,7 +130,7 @@ def test_main_admin_suite_uses_profile_group_by_default(monkeypatch, tmp_path: P
         sys,
         "argv",
         [
-            "test_omni_agent_command_events.py",
+            "test_xiuxian_daochang_command_events.py",
             "--suite",
             "admin",
         ],
@@ -174,7 +174,7 @@ def test_main_admin_suite_infers_group_thread_for_chat_thread_user(
         sys,
         "argv",
         [
-            "test_omni_agent_command_events.py",
+            "test_xiuxian_daochang_command_events.py",
             "--suite",
             "admin",
         ],
@@ -210,7 +210,7 @@ def test_main_admin_matrix_runs_all_profile_groups(monkeypatch, tmp_path: Path) 
         sys,
         "argv",
         [
-            "test_omni_agent_command_events.py",
+            "test_xiuxian_daochang_command_events.py",
             "--suite",
             "admin",
             "--admin-matrix",
@@ -252,7 +252,7 @@ def test_main_uses_secret_fallback_from_resolver(monkeypatch, tmp_path: Path) ->
         sys,
         "argv",
         [
-            "test_omni_agent_command_events.py",
+            "test_xiuxian_daochang_command_events.py",
             "--suite",
             "admin",
         ],
@@ -504,7 +504,7 @@ def test_main_writes_structured_reports(monkeypatch, tmp_path: Path) -> None:
         sys,
         "argv",
         [
-            "test_omni_agent_command_events.py",
+            "test_xiuxian_daochang_command_events.py",
             "--suite",
             "admin",
             "--output-json",
@@ -546,7 +546,7 @@ def test_main_admin_matrix_isolation_report_preserves_thread_scope(
         sys,
         "argv",
         [
-            "test_omni_agent_command_events.py",
+            "test_xiuxian_daochang_command_events.py",
             "--suite",
             "admin",
             "--admin-matrix",
@@ -667,7 +667,7 @@ def test_main_topic_isolation_report_uses_thread_pair(monkeypatch, tmp_path: Pat
         sys,
         "argv",
         [
-            "test_omni_agent_command_events.py",
+            "test_xiuxian_daochang_command_events.py",
             "--suite",
             "admin",
             "--assert-admin-topic-isolation",

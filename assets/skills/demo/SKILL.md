@@ -3,9 +3,9 @@ type: skill
 name: demo
 description: Demonstrates UltraRAG-style execution tracing with native workflows + YAML pipelines. Includes simple hello command, hot reload test, and comprehensive YAML pipeline tests.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.1.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/demo"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/demo"
   routing_keywords:
     - "demo"
     - "tracing"

@@ -17,7 +17,7 @@ metadata:
 
 ## 1. Context and Problem Statement
 
-The `run_react_loop` in `omni-agent` is the primary entry point for turn execution. Currently, it follows a strict sequential execution model:
+The `run_react_loop` in `xiuxian-daochang` is the primary entry point for turn execution. Currently, it follows a strict sequential execution model:
 
 1. `prepare_react_decision` (await)
 2. `prepare_react_messages` (await) - Fetches history from Redis.
@@ -70,6 +70,6 @@ The orchestrator will use `tokio::try_join!` or `tokio::join!` to resolve indepe
 
 ## 5. Implementation Status
 
-- `tokio::join!` parallel branches are active in `omni-agent` turn execution (`decision/messages`, `agenda_validation/memory_recall`).
-- Runtime switch `agent.agenda_validation_policy` (`always` / `never` / `auto`) is wired through merged `xiuxian.toml` + env override `OMNI_AGENT_AGENDA_VALIDATION_POLICY`.
+- `tokio::join!` parallel branches are active in `xiuxian-daochang` turn execution (`decision/messages`, `agenda_validation/memory_recall`).
+- Runtime switch `agent.agenda_validation_policy` (`always` / `never` / `auto`) is wired through merged `xiuxian.toml` + env override `XIUXIAN_DAOCHANG_AGENDA_VALIDATION_POLICY`.
 - `auto` mode now uses a lightweight LLM gate (`RUN`/`SKIP`) before invoking the full agenda-validation pipeline.

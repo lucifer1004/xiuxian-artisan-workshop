@@ -41,9 +41,9 @@ def test_run_gate_quick_profile_invokes_expected_steps(tmp_path: Path) -> None:
         "valkey-start.sh",
         "valkey-stop.sh",
         "mock_telegram_api.py",
-        "test_omni_agent_memory_suite.py",
-        "test_omni_agent_session_matrix.py",
-        "test_omni_agent_memory_benchmark.py",
+        "test_xiuxian_daochang_memory_suite.py",
+        "test_xiuxian_daochang_session_matrix.py",
+        "test_xiuxian_daochang_memory_benchmark.py",
     ):
         _write_script(script_dir / name)
 
@@ -52,7 +52,7 @@ def test_run_gate_quick_profile_invokes_expected_steps(tmp_path: Path) -> None:
         profile="quick",
         project_root=tmp_path,
         script_dir=script_dir,
-        agent_bin=tmp_path / "target" / "debug" / "omni-agent",
+        agent_bin=tmp_path / "target" / "debug" / "xiuxian-daochang",
         webhook_port=19090,
         telegram_api_port=19091,
         valkey_port=16379,
@@ -139,4 +139,4 @@ def test_run_gate_quick_profile_invokes_expected_steps(tmp_path: Path) -> None:
     assert "Start Valkey" in invoked_titles
     assert any("Quick gate: memory suite" in title for title in invoked_titles)
     assert invoked_gates == ["reflection", "discover", "trace", "mcp_wait", "memory_stream"]
-    assert terminated == ["omni-agent runtime", "mock Telegram API"]
+    assert terminated == ["xiuxian-daochang runtime", "mock Telegram API"]

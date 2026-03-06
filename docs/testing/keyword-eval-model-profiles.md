@@ -60,7 +60,7 @@ Single model with fallback:
 
 ```bash
 uv run python scripts/run_keyword_backend_llm_eval.py \
-  --snapshot packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap \
+  --snapshot packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap \
   --model primary-model \
   --fallback-model backup-model \
   --model-profile balanced \
@@ -72,7 +72,7 @@ Multi-model run:
 
 ```bash
 uv run python scripts/run_keyword_backend_llm_eval.py \
-  --snapshot packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap \
+  --snapshot packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap \
   --multi-model "model-a,model-b,model-c" \
   --skip-unsupported-models \
   --model-profile strict \
@@ -84,7 +84,7 @@ Batched multi-model run (recommended for stability):
 
 ```bash
 uv run python scripts/run_keyword_backend_multi_model_batches.py \
-  --snapshot packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap \
+  --snapshot packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap \
   --models "MiniMax-M2.1,MiniMax-M2.5" \
   --skip-unsupported-models \
   --model-profile balanced \

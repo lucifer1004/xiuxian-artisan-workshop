@@ -35,10 +35,10 @@ class TestSkillSync:
 
     def test_sync_handles_null_in_existing_tools(self, runner, tmp_path: Path):
         """Test sync tolerates null values in list_all_tools (coerced to empty string)."""
-        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+        with patch("xiuxian_core_rs.scan_skill_tools") as mock_scan:
             mock_scan.return_value = []
 
-            with patch("omni_core_rs.diff_skills") as mock_diff:
+            with patch("xiuxian_core_rs.diff_skills") as mock_diff:
                 mock_report = MagicMock()
                 mock_report.added = []
                 mock_report.updated = []
@@ -76,10 +76,10 @@ class TestSkillSync:
 
     def test_sync_no_changes(self, runner, tmp_path: Path):
         """Test sync reports no changes when LanceDB is up to date."""
-        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+        with patch("xiuxian_core_rs.scan_skill_tools") as mock_scan:
             mock_scan.return_value = []
 
-            with patch("omni_core_rs.diff_skills") as mock_diff:
+            with patch("xiuxian_core_rs.diff_skills") as mock_diff:
                 mock_report = MagicMock()
                 mock_report.added = []
                 mock_report.updated = []
@@ -111,10 +111,10 @@ class TestSkillSync:
         mock_tool.file_hash = "def456"
         mock_tool.category = "test"
 
-        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+        with patch("xiuxian_core_rs.scan_skill_tools") as mock_scan:
             mock_scan.return_value = [mock_tool]
 
-            with patch("omni_core_rs.diff_skills") as mock_diff:
+            with patch("xiuxian_core_rs.diff_skills") as mock_diff:
                 mock_report = MagicMock()
                 mock_report.added = [mock_tool]
                 mock_report.updated = []
@@ -153,10 +153,10 @@ class TestSkillSync:
         mock_tool.file_hash = "abc123"
         mock_tool.category = "test"
 
-        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+        with patch("xiuxian_core_rs.scan_skill_tools") as mock_scan:
             mock_scan.return_value = [mock_tool]
 
-            with patch("omni_core_rs.diff_skills") as mock_diff:
+            with patch("xiuxian_core_rs.diff_skills") as mock_diff:
                 mock_report = MagicMock()
                 mock_report.added = []
                 mock_report.updated = []
@@ -199,10 +199,10 @@ class TestSkillSync:
 
     def test_sync_json_output(self, runner, tmp_path: Path):
         """Test sync with JSON output format."""
-        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+        with patch("xiuxian_core_rs.scan_skill_tools") as mock_scan:
             mock_scan.return_value = []
 
-            with patch("omni_core_rs.diff_skills") as mock_diff:
+            with patch("xiuxian_core_rs.diff_skills") as mock_diff:
                 mock_report = MagicMock()
                 mock_report.added = []
                 mock_report.updated = []

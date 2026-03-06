@@ -66,11 +66,12 @@ async fn test_strict_teacher_agenda_flow_runs_via_qianji_scenario()
         "zhixing/skills/agenda-management/references",
         &RESOURCES,
     )];
-    let mut options = BootcampRunOptions::default();
-    options.llm_mode = BootcampLlmMode::Mock {
-        response:
-            "<agenda_critique_report><score>0.95</score><critique>Scope is executable.</critique></agenda_critique_report>"
+    let options = BootcampRunOptions {
+        llm_mode: BootcampLlmMode::Mock {
+            response: "<agenda_critique_report><score>0.95</score><critique>Scope is executable.</critique></agenda_critique_report>"
                 .to_string(),
+        },
+        ..BootcampRunOptions::default()
     };
 
     let report = run_scenario(
@@ -85,7 +86,14 @@ async fn test_strict_teacher_agenda_flow_runs_via_qianji_scenario()
     )
     .await?;
 
-    assert_eq!(report.manifest_name, "Triangular_Agenda_Governance_Flow");
+    assert!(
+        matches!(
+            report.manifest_name.as_str(),
+            "Triangular_Agenda_Governance_Flow" | "Self_Healing_Agenda_Governance_Flow"
+        ),
+        "unexpected manifest: {}",
+        report.manifest_name
+    );
     assert_eq!(report.final_context["audit_status"], "passed");
     let governance_score = report.final_context["governance_score"]
         .as_f64()

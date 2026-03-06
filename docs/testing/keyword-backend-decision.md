@@ -17,9 +17,9 @@ This document is the **single source of truth** for the keyword search backend c
 
 ## Fixed evaluation set
 
-- **Rust test**: `packages/rust/crates/omni-vector/tests/test_keyword_backend_quality.rs`
+- **Rust test**: `packages/rust/crates/xiuxian-vector/tests/test_keyword_backend_quality.rs`
 - **Scenarios**: v1 (minimal), v2, v3 (skill-based), **v4_large** (120 queries, 10 scene layers)
-- **Output**: Insta snapshots under `packages/rust/crates/omni-vector/tests/snapshots/`:
+- **Output**: Insta snapshots under `packages/rust/crates/xiuxian-vector/tests/snapshots/`:
   - `test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap` (primary for decision)
   - v1/v2/v3 snapshots used for regression and smaller runs
 
@@ -42,7 +42,7 @@ Decision label: **`TANTIVY_DEFAULT_WITH_FTS_OPTION`**. See Rollout Policy in the
 1. **Refresh snapshots** (after tokenizer, scoring, or dataset changes):
 
    ```bash
-   cargo test -p omni-vector --test test_keyword_backend_quality
+   cargo test -p xiuxian-vector --test test_keyword_backend_quality
    ```
 
    Update any intended snapshot with `cargo insta review` (or accept current output).
@@ -57,7 +57,7 @@ Decision label: **`TANTIVY_DEFAULT_WITH_FTS_OPTION`**. See Rollout Policy in the
 
    ```bash
    uv run python scripts/generate_keyword_backend_decision_report.py \
-     --snapshot packages/rust/crates/omni-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap \
+     --snapshot packages/rust/crates/xiuxian-vector/tests/snapshots/test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap \
      --output docs/testing/keyword-backend-decision-report.md
    ```
 
@@ -72,7 +72,7 @@ Decision label: **`TANTIVY_DEFAULT_WITH_FTS_OPTION`**. See Rollout Policy in the
    Output: `docs/testing/keyword-backend-statistical-report.md`.
 
 4. **When to re-run**
-   - Tokenizer or scoring changes in `omni-vector`
+   - Tokenizer or scoring changes in `xiuxian-vector`
    - Skill/tool set or relevance labels change (e.g. new scenarios or v4 query set)
    - Before switching default backend or changing rollout policy
 
@@ -91,5 +91,5 @@ The generated report includes a **Per-scene (v4) summary** table: which scene la
 
 ## Code references
 
-- Default backend: `packages/rust/crates/omni-vector/src/ops/core.rs` (`KeywordSearchBackend::Tantivy`).
+- Default backend: `packages/rust/crates/xiuxian-vector/src/ops/core.rs` (`KeywordSearchBackend::Tantivy`).
 - Report script: `scripts/generate_keyword_backend_decision_report.py` (default snapshot: v4_large; `--no-per-scene` for v1/v2).

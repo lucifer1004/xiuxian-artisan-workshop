@@ -20,7 +20,8 @@ pub struct KnowledgeEntry {
     #[serde(default)]
     pub description: String,
     /// Category for organization
-    #[serde(default)]
+    #[serde(default = "default_knowledge_category")]
+    #[schemars(with = "String")]
     pub category: KnowledgeCategory,
     /// Tags for semantic search
     #[serde(default)]
@@ -67,18 +68,7 @@ impl KnowledgeEntry {
     /// Get the category as a string.
     #[must_use]
     pub fn category_str(&self) -> &str {
-        match self.category {
-            KnowledgeCategory::Architecture => "architecture",
-            KnowledgeCategory::Debugging => "debugging",
-            KnowledgeCategory::Error => "error",
-            KnowledgeCategory::Note => "note",
-            KnowledgeCategory::Pattern => "pattern",
-            KnowledgeCategory::Reference => "reference",
-            KnowledgeCategory::Technique => "technique",
-            KnowledgeCategory::Workflow => "workflow",
-            KnowledgeCategory::Solution => "solution",
-            KnowledgeCategory::Unknown => "unknown",
-        }
+        self.category.as_str()
     }
 }
 
@@ -86,4 +76,8 @@ impl Default for KnowledgeEntry {
     fn default() -> Self {
         Self::new("", "", "")
     }
+}
+
+fn default_knowledge_category() -> KnowledgeCategory {
+    KnowledgeCategory::Unknown
 }

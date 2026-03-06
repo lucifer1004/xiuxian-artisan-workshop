@@ -3,6 +3,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
+use crate::link_graph::LinkGraphPlannedSearchPayload;
 use crate::{
     AssetRequest, LinkGraphIndex, LinkGraphSearchOptions, SkillVfsResolver, WendaoAssetHandle,
 };
@@ -104,6 +105,15 @@ pub fn wendao_search(ctx: &ZhenfaContext, args: WendaoSearchArgs) -> Result<Stri
         args.provisional_limit,
     );
     Ok(xml_lite::render_xml_lite(&payload))
+}
+
+/// Render one planned payload into XML-Lite hit rows.
+///
+/// This is a thin public adapter over native XML-Lite rendering logic, used by
+/// integration tests and tool-facing formatting call sites.
+#[must_use]
+pub fn render_xml_lite_hits(payload: &LinkGraphPlannedSearchPayload) -> String {
+    xml_lite::render_xml_lite(payload)
 }
 
 fn wendao_search_cache_key(ctx: &ZhenfaContext, args: &WendaoSearchArgs) -> Option<String> {

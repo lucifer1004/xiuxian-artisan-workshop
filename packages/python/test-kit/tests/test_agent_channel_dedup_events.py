@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_dedup_events.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_dedup_events.py."""
 
 from __future__ import annotations
 
@@ -15,8 +15,10 @@ if TYPE_CHECKING:
 
 def _load_dedup_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_dedup_events.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_channel_dedup_probe", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_dedup_events.py"
+    spec = importlib.util.spec_from_file_location(
+        "xiuxian_daochang_channel_dedup_probe", script_path
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -29,7 +31,7 @@ def _make_args(**overrides: object) -> argparse.Namespace:
     defaults: dict[str, object] = {
         "max_wait": 25,
         "webhook_url": "http://127.0.0.1:18081/telegram/webhook",
-        "log_file": ".run/logs/omni-agent-webhook.log",
+        "log_file": ".run/logs/xiuxian-daochang-webhook.log",
         "chat_id": 1001,
         "user_id": 2002,
         "username": "tao3k",

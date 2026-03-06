@@ -85,7 +85,7 @@ class KnowledgeGraphAnalyzer:
         """Load graph data from Rust PyKnowledgeGraph.
 
         Args:
-            rust_graph: PyKnowledgeGraph instance from omni_core_rs.
+            rust_graph: PyKnowledgeGraph instance from xiuxian_core_rs.
 
         Returns:
             Self for method chaining.

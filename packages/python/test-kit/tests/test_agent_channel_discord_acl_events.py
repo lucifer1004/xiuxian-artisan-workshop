@@ -1,4 +1,4 @@
-"""Tests for scripts/channel/test_omni_agent_discord_acl_events.py."""
+"""Tests for scripts/channel/test_xiuxian_daochang_discord_acl_events.py."""
 
 from __future__ import annotations
 
@@ -16,8 +16,10 @@ if TYPE_CHECKING:
 
 def _load_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_discord_acl_events.py"
-    spec = importlib.util.spec_from_file_location("omni_agent_discord_acl_events", script_path)
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_discord_acl_events.py"
+    spec = importlib.util.spec_from_file_location(
+        "xiuxian_daochang_discord_acl_events", script_path
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -329,7 +331,9 @@ def test_run_case_fails_on_json_summary_session_scope_mismatch(tmp_path, monkeyp
 
 def test_main_list_cases_does_not_require_channel_or_user_ids(monkeypatch, capsys) -> None:
     module = _load_module()
-    monkeypatch.setattr(sys, "argv", ["test_omni_agent_discord_acl_events.py", "--list-cases"])
+    monkeypatch.setattr(
+        sys, "argv", ["test_xiuxian_daochang_discord_acl_events.py", "--list-cases"]
+    )
     assert module.main() == 0
     stdout = capsys.readouterr().out
     assert "discord_control_admin_denied" in stdout
@@ -339,14 +343,15 @@ def test_main_list_cases_does_not_require_channel_or_user_ids(monkeypatch, capsy
 def test_default_ingress_url_prefers_discord_bind_and_path(monkeypatch) -> None:
     module = _load_module()
     monkeypatch.delenv("OMNI_DISCORD_INGRESS_URL", raising=False)
-    monkeypatch.setenv("OMNI_AGENT_DISCORD_INGRESS_BIND", "0.0.0.0:19082")
-    monkeypatch.setenv("OMNI_AGENT_DISCORD_INGRESS_PATH", "/ingress/discord")
-    assert module.default_ingress_url() == "http://127.0.0.1:19082/ingress/discord"
+    monkeypatch.setenv("XIUXIAN_DAOCHANG_DISCORD_INGRESS_BIND", "0.0.0.0:19082")
+    monkeypatch.setenv("XIUXIAN_DAOCHANG_DISCORD_INGRESS_PATH", "/ingress/discord")
+    expected_bind = module._normalize_ingress_bind_for_local_url("0.0.0.0:19082")
+    assert module.default_ingress_url() == f"http://{expected_bind}/ingress/discord"
 
 
 def test_default_ingress_url_prefers_explicit_url_override(monkeypatch) -> None:
     module = _load_module()
     monkeypatch.setenv("OMNI_DISCORD_INGRESS_URL", "http://127.0.0.1:29999/custom")
-    monkeypatch.setenv("OMNI_AGENT_DISCORD_INGRESS_BIND", "0.0.0.0:19082")
-    monkeypatch.setenv("OMNI_AGENT_DISCORD_INGRESS_PATH", "/ingress/discord")
+    monkeypatch.setenv("XIUXIAN_DAOCHANG_DISCORD_INGRESS_BIND", "0.0.0.0:19082")
+    monkeypatch.setenv("XIUXIAN_DAOCHANG_DISCORD_INGRESS_PATH", "/ingress/discord")
     assert module.default_ingress_url() == "http://127.0.0.1:29999/custom"

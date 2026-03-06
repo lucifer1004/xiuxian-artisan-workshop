@@ -7,7 +7,7 @@
 let
   inherit (__inputs__) nixpkgs-latest;
   # Darwin-specific build reliability note:
-  # `uv sync --reinstall-package omni-core-rs` triggers maturin -> cargo in a subprocess.
+  # `uv sync --reinstall-package xiuxian-core-rs` triggers maturin -> cargo in a subprocess.
   # With the default Nix-provided cargo script, some subprocess environments hit:
   # `dyld: Symbol not found: _libiconv` (via libidn2/libiconv lookup mismatch).
   # This shim keeps a stable `/usr/bin/env bash` entrypoint and delegates to the
@@ -69,7 +69,7 @@ in
     pkgs.cargo-nextest
     pkgs.cargo-audit
     pkgs.cargo-deny
-    pkgs.sccache
+    pkgs.cargo-sweep
   ];
   # https://devenv.sh/languages/
   languages.rust = {
@@ -88,8 +88,6 @@ in
   env = {
     PYO3_PYTHON = "${config.languages.python.package}/bin/python";
     PROTOC = "${pkgs.protobuf}/bin/protoc";
-    RUSTC_WRAPPER = "sccache";
-    SCCACHE_CACHE_SIZE = "100G";
     # Fix PyO3 extension module linking for cargo test
     # Add Python library path for macOS and Linux
     # PYTHON_LIB_PATH = "${config.languages.python.package}/lib";

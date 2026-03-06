@@ -51,17 +51,8 @@ impl KnowledgeStorage {
         &self.table_name
     }
 
-    pub(super) fn category_to_str(category: &KnowledgeCategory) -> &'static str {
-        match category {
-            KnowledgeCategory::Pattern => "patterns",
-            KnowledgeCategory::Solution => "solutions",
-            KnowledgeCategory::Error => "errors",
-            KnowledgeCategory::Technique => "techniques",
-            KnowledgeCategory::Note => "notes",
-            KnowledgeCategory::Reference => "references",
-            KnowledgeCategory::Architecture => "architecture",
-            KnowledgeCategory::Workflow => "workflows",
-        }
+    pub(super) fn category_to_str(category: KnowledgeCategory) -> &'static str {
+        category.as_plural_str()
     }
 
     pub(super) fn normalize_vector(&self, input: &[f32]) -> Vec<f32> {

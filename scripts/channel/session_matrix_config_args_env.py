@@ -25,7 +25,7 @@ def default_idle_secs() -> int:
 
 def default_log_file() -> str:
     """Default channel runtime log file path."""
-    return os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/omni-agent-webhook.log")
+    return os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/xiuxian-daochang-webhook.log")
 
 
 def default_username() -> str | None:

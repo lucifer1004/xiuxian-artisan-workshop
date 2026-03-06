@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 resolve_valkey_field() {
-  python3 "${PROJECT_ROOT}/scripts/channel/resolve_valkey_endpoint.py" --field "$1"
+  uv run python "${PROJECT_ROOT}/scripts/channel/resolve_valkey_endpoint.py" --field "$1"
 }
 
 port="${1:-$(resolve_valkey_field port)}"
@@ -17,4 +17,4 @@ cleanup() {
 trap cleanup EXIT
 
 bash scripts/channel/valkey-start.sh "${port}"
-bash scripts/channel/test-omni-agent-valkey-full.sh "${valkey_url}"
+bash scripts/channel/test-xiuxian-daochang-valkey-full.sh "${valkey_url}"

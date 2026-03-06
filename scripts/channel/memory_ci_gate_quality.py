@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quality gate assertions for omni-agent memory CI gate."""
+"""Quality gate assertions for xiuxian-daochang memory CI gate."""
 
 from __future__ import annotations
 

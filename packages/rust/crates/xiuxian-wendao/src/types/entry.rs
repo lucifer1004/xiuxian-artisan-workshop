@@ -1,37 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-/// Knowledge category enumeration.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum KnowledgeCategory {
-    #[serde(rename = "patterns")]
-    /// Reusable pattern knowledge.
-    Pattern,
-    #[serde(rename = "solutions")]
-    /// Problem-solution knowledge.
-    Solution,
-    #[serde(rename = "errors")]
-    /// Error diagnosis and fixes.
-    Error,
-    #[serde(rename = "techniques")]
-    /// Techniques and methods.
-    Technique,
-    #[serde(rename = "notes")]
-    /// Free-form note content.
-    #[default]
-    Note,
-    #[serde(rename = "references")]
-    /// Reference material.
-    Reference,
-    #[serde(rename = "architecture")]
-    /// Architecture design and decisions.
-    Architecture,
-    #[serde(rename = "workflows")]
-    /// Process and workflow guidance.
-    Workflow,
-}
+use xiuxian_types::KnowledgeCategory;
 
 /// Knowledge entry struct representing a single knowledge piece.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

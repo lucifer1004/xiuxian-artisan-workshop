@@ -21,14 +21,23 @@ async def main():
 
     env["VALKEY_URL"] = env.get("VALKEY_URL", "redis://127.0.0.1:6379/0")
 
-    print("Building omni-agent...")
-    subprocess.run(["cargo", "build", "--bin", "omni-agent"], check=True, env=env)
+    print("Building xiuxian-daochang...")
+    subprocess.run(["cargo", "build", "--bin", "xiuxian-daochang"], check=True, env=env)
 
     port = 8085
 
-    print(f"Starting omni-agent gateway on port {port}...")
+    print(f"Starting xiuxian-daochang gateway on port {port}...")
     proc = subprocess.Popen(
-        ["cargo", "run", "--bin", "omni-agent", "--", "gateway", "--bind", f"127.0.0.1:{port}"],
+        [
+            "cargo",
+            "run",
+            "--bin",
+            "xiuxian-daochang",
+            "--",
+            "gateway",
+            "--bind",
+            f"127.0.0.1:{port}",
+        ],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

@@ -3,9 +3,9 @@ type: skill
 name: omniCell
 description: Use when executing system commands, running Nushell scripts, querying system state, or performing OS interactions with structured JSON output.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.0.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/omniCell"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/omniCell"
   routing_keywords:
     - "nushell"
     - "nu"

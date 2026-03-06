@@ -2,7 +2,7 @@
 manager.py - Context Lifecycle Management
 
 Orchestrates memory retention, pruning, and state updates.
-Provides a clean API for the omni_loop to manage conversation history.
+Provides a clean API for runtime loop context management.
 """
 
 import uuid

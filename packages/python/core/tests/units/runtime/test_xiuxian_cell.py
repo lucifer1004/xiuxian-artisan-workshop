@@ -1,0 +1,264 @@
+"""Unit tests for XiuxianCellRunner.
+
+Trinity Architecture - Core Layer
+
+Tests the Python wrapper for the Rust XiuxianCell executor.
+"""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+class TestActionType:
+    """Tests for ActionType enum."""
+
+    def test_action_type_values(self):
+        """Verify action type enum values."""
+        from omni.core.skills.runtime.xiuxian_cell import ActionType
+
+        assert ActionType.OBSERVE.value == "observe"
+        assert ActionType.MUTATE.value == "mutate"
+
+    def test_action_type_from_string(self):
+        """Test creating ActionType from string."""
+        from omni.core.skills.runtime.xiuxian_cell import ActionType
+
+        assert ActionType("observe") == ActionType.OBSERVE
+        assert ActionType("mutate") == ActionType.MUTATE
+
+
+class TestToolResponse:
+    """Tests for ToolResponse model (formerly CellResult)."""
+
+    def test_tool_response_success(self):
+        """Test successful result creation."""
+        from omni.core.responses import ToolResponse
+
+        result = ToolResponse.success(
+            data={"name": "test.txt", "size": 1024},
+            metadata={"mode": "observe"},
+        )
+
+        assert result.status.value == "success"
+        assert result.data["name"] == "test.txt"
+        assert result.is_success is True
+
+    def test_tool_response_error(self):
+        """Test error result creation."""
+        from omni.core.responses import ToolResponse
+
+        result = ToolResponse.error(
+            message="Command failed",
+            code="ERROR",
+            metadata={"command": "rm -rf /"},
+        )
+
+        assert result.status.value == "error"
+        assert result.data is None
+        assert "Command failed" in result.error_message
+
+    def test_tool_response_blocked(self):
+        """Test blocked result creation."""
+        from omni.core.responses import ToolResponse
+
+        result = ToolResponse.blocked(
+            reason="Security policy violation",
+            metadata={"reason": "Security policy violation"},
+        )
+
+        assert result.status.value == "blocked"
+        assert result.is_blocked is True
+
+
+class TestXiuxianCellRunner:
+    """Tests for XiuxianCellRunner class."""
+
+    @pytest.fixture
+    def runner_without_rust(self):
+        """Create runner with mocked-out Rust bridge."""
+        from omni.core.skills.runtime.xiuxian_cell import XiuxianCellRunner
+
+        runner = XiuxianCellRunner()
+        runner._rust_bridge = None  # Force fallback mode
+        return runner
+
+    def test_runner_initialization(self, runner_without_rust):
+        """Test runner initializes without Rust bridge."""
+        assert runner_without_rust is not None
+
+    def test_classify_observe_command(self, runner_without_rust):
+        """Test classification of read-only commands."""
+        commands = ["ls -la", "cat file.txt", "pwd", "whoami", "ps aux"]
+
+        for cmd in commands:
+            result = runner_without_rust.classify(cmd)
+            assert result.value == "observe", f"'{cmd}' should be observe"
+
+    def test_classify_mutation_command(self, runner_without_rust):
+        """Test classification of side-effect commands."""
+        commands = ["rm file.txt", "cp a b", "mv old new", "mkdir -p dir"]
+
+        for cmd in commands:
+            result = runner_without_rust.classify(cmd)
+            assert result.value == "mutate", f"'{cmd}' should be mutate"
+
+    def test_classify_with_pipe(self, runner_without_rust):
+        """Test classification preserves intent with pipes."""
+        result = runner_without_rust.classify("ls | grep txt")
+        assert result.value == "observe"
+
+    @pytest.mark.asyncio
+    async def test_run_observe_success(self, runner_without_rust):
+        """Test successful observe command execution."""
+        from omni.core.skills.runtime.xiuxian_cell import ActionType
+
+        with patch.object(runner_without_rust, "_run_fallback", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = MagicMock(
+                status="success",
+                data=[{"name": "test.py"}],
+                metadata={},
+            )
+
+            result = await runner_without_rust.run("ls", ActionType.OBSERVE)
+
+            assert result.status == "success"
+            assert len(result.data) == 1
+            mock_run.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_mutation_blocked(self, runner_without_rust):
+        """Test blocking dangerous mutation commands."""
+        from omni.core.skills.runtime.xiuxian_cell import ActionType
+
+        dangerous_commands = ["rm -rf /", "mkfs.ext4 /dev/sda"]
+
+        for cmd in dangerous_commands:
+            result = await runner_without_rust.run(cmd, ActionType.MUTATE)
+            assert result.status == "blocked", f"'{cmd}' should be blocked"
+
+    @pytest.mark.asyncio
+    async def test_run_auto_classify(self, runner_without_rust):
+        """Test auto-classification when action not specified."""
+        with patch.object(runner_without_rust, "_run_fallback", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = MagicMock(status="success", data=None, metadata={})
+
+            # Should auto-detect observe
+            await runner_without_rust.run("ls")
+
+    @pytest.mark.asyncio
+    async def test_run_via_rust_prefers_action_aware_execute(self):
+        """When available, action-aware Rust binding should be used."""
+        from omni.core.skills.runtime.xiuxian_cell import ActionType, XiuxianCellRunner
+
+        runner = XiuxianCellRunner()
+        bridge = MagicMock()
+        bridge.execute_with_action = MagicMock(return_value='{"ok": true}')
+        bridge.execute = MagicMock(return_value='{"legacy": true}')
+        runner._rust_bridge = bridge
+
+        result = await runner._run_via_rust("ls", ActionType.OBSERVE, True)
+
+        assert result.status.value == "success"
+        bridge.execute_with_action.assert_called_once_with("ls", "observe", True)
+        bridge.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_run_via_rust_falls_back_to_legacy_execute(self):
+        """Legacy Rust binding should still work when action-aware method is missing."""
+        from omni.core.skills.runtime.xiuxian_cell import ActionType, XiuxianCellRunner
+
+        class _LegacyBridge:
+            pass
+
+        runner = XiuxianCellRunner()
+        bridge = _LegacyBridge()
+        bridge.execute = MagicMock(return_value='{"ok": true}')
+        runner._rust_bridge = bridge
+
+        result = await runner._run_via_rust("ls", ActionType.OBSERVE, True)
+
+        assert result.status.value == "success"
+        bridge.execute.assert_called_once_with("ls", True)
+
+
+class TestMutationSafety:
+    """Tests for mutation safety checking."""
+
+    @pytest.fixture
+    def runner(self):
+        """Create runner without Rust bridge."""
+        from omni.core.skills.runtime.xiuxian_cell import XiuxianCellRunner
+
+        runner = XiuxianCellRunner()
+        runner._rust_bridge = None
+        return runner
+
+    def test_rm_rf_blocked(self, runner):
+        """Test rm -rf / is blocked."""
+        result = runner._check_mutation_safety("rm -rf /")
+        assert result["safe"] is False
+        assert "Root deletion" in result["reason"]
+
+    def test_mkfs_blocked(self, runner):
+        """Test mkfs is blocked."""
+        result = runner._check_mutation_safety("mkfs.ext4 /dev/sda")
+        assert result["safe"] is False
+        assert "formatting" in result["reason"]
+
+    def test_fork_bomb_blocked(self, runner):
+        """Test fork bomb is blocked."""
+        result = runner._check_mutation_safety(":(){ :|:& };:")
+        assert result["safe"] is False
+
+    def test_safe_mutation_allowed(self, runner):
+        """Test safe mutations are allowed."""
+        result = runner._check_mutation_safety("mkdir -p new_dir")
+        assert result["safe"] is True
+
+        result = runner._check_mutation_safety("cp a.txt b.txt")
+        assert result["safe"] is True
+
+
+class TestGetRunner:
+    """Tests for module-level runner singleton."""
+
+    def test_get_runner_returns_instance(self):
+        """Test get_runner returns an XiuxianCellRunner."""
+        from omni.core.skills.runtime import xiuxian_cell
+
+        # Reset singleton for test
+        xiuxian_cell._default_runner = None
+
+        runner = xiuxian_cell.get_runner()
+        assert runner is not None
+
+        # Cleanup
+        xiuxian_cell._default_runner = None
+
+    @pytest.mark.asyncio
+    async def test_run_command_convenience(self):
+        """Test the convenience run_command function."""
+        from omni.core.skills.runtime import xiuxian_cell
+
+        # Reset singleton
+        original = xiuxian_cell._default_runner
+        xiuxian_cell._default_runner = None
+
+        try:
+            # Mock the runner
+            mock_result = MagicMock()
+            mock_result.status = "success"
+            mock_result.data = None
+            mock_result.metadata = {}
+
+            with patch.object(xiuxian_cell, "get_runner") as mock_get:
+                mock_runner = MagicMock()
+                mock_runner.run = AsyncMock(return_value=mock_result)
+                mock_get.return_value = mock_runner
+
+                result = await xiuxian_cell.run_command("ls")
+
+                assert result.status == "success"
+        finally:
+            xiuxian_cell._default_runner = original

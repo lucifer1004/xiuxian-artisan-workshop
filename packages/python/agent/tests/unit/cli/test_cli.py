@@ -6,7 +6,7 @@ Tests for the modular CLI structure:
 - omni/agent/cli/app.py: Typer application and configuration
 - omni/agent/cli/console.py: Console and output formatting
 - omni/agent/cli/runner.py: Skill execution logic
-- omni/agent/cli/omni_loop.py: CCA Runtime Integration
+- omni/agent/cli/xiuxian_loop.py: CCA Runtime Integration
 - omni/agent/cli/commands/: Command submodules
 
 Usage:
@@ -148,9 +148,7 @@ def test_module_structure(project_root: Path):
     from omni.foundation.services.reference import ReferenceLibrary
 
     ref = ReferenceLibrary()
-    expected_files = ref.get(
-        "cli.files", ["__init__.py", "app.py", "console.py", "runner.py", "omni_loop.py"]
-    )
+    expected_files = ref.get("cli.files", ["__init__.py", "app.py", "console.py", "runner.py"])
     expected_dirs = ref.get("cli.directories", ["commands"])
 
     for file in expected_files:
@@ -634,13 +632,13 @@ def test_pyproject_entry_point_configured():
         data = tomllib.load(f)
 
     # Check that 'omni' script points to entry_point
-    omni_script = data.get("project", {}).get("scripts", {}).get("omni", "")
-    assert "entry_point" in omni_script, (
-        f"Entry point should use 'entry_point', got: {omni_script}. "
+    cli_script = data.get("project", {}).get("scripts", {}).get("omni", "")
+    assert "entry_point" in cli_script, (
+        f"Entry point should use 'entry_point', got: {cli_script}. "
         "This is a critical bug - the entry point must call _bootstrap_configuration()"
     )
-    assert "cli.app:entry_point" in omni_script, (
-        f"Entry point should be 'cli.app:entry_point', got: {omni_script}"
+    assert "cli.app:entry_point" in cli_script, (
+        f"Entry point should be 'cli.app:entry_point', got: {cli_script}"
     )
 
     print("  pyproject.toml entry point configured correctly")

@@ -1,9 +1,9 @@
 import pytest
-from omni.test_kit.decorators import omni_skill
+from omni.test_kit.decorators import xiuxian_skill
 
 
 @pytest.mark.asyncio
-@omni_skill(name="git")
+@xiuxian_skill(name="git")
 class TestGitCommandsModular:
     """Test git skill commands using modular SDK and GitOpsVerifier."""
 

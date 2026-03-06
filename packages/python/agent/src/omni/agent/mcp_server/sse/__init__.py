@@ -27,6 +27,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from omni.agent.protocol import MCP_PROTOCOL_VERSION, is_supported_mcp_protocol_version
 from omni.agent.mcp_server.observability import MCPRequestObservability
 
 from .embedding_http import (
@@ -52,21 +53,17 @@ _embed_recovery_next_attempt_at = 0.0
 
 
 def _recover_embedding_backend_blocking() -> bool:
-    from omni.agent.ollama_lifecycle import (
-        ensure_ollama_for_embedding,
-        get_embedding_ollama_config,
-        is_ollama_backed_embedding,
-        is_ollama_listening,
-        parse_ollama_api_base,
-    )
+    from omni.foundation.services.embedding import get_embedding_service
 
-    cfg = get_embedding_ollama_config()
-    if not is_ollama_backed_embedding(cfg["provider"], cfg["litellm_model"]):
+    service = get_embedding_service()
+    try:
+        service._retry_client_once()
+        if service.backend == "http":
+            return True
+        service.initialize()
+    except Exception:
         return False
-
-    ensure_ollama_for_embedding()
-    host, port = parse_ollama_api_base(cfg["api_base"])
-    return is_ollama_listening(host, port, timeout=1.0)
+    return service.backend == "http"
 
 
 async def _attempt_embedding_backend_recovery(reason: str) -> bool:
@@ -94,14 +91,7 @@ async def _attempt_embedding_backend_recovery(reason: str) -> bool:
             )
             return False
 
-        try:
-            from omni.foundation.services.embedding import get_embedding_service
-
-            get_embedding_service().reset_litellm_circuit()
-        except Exception as exc:
-            logger.debug("Embedding circuit reset skipped: %s", exc)
-
-        logger.warning("Embedding auto-heal succeeded (upstream recovered).")
+        logger.warning("Embedding auto-heal succeeded (client endpoint recovered).")
         return True
 
 
@@ -271,7 +261,24 @@ def create_sse_app(
                 client_version = params.get("protocolVersion", "")
                 # MCP protocol version check
                 if client_version and not _is_supported_protocol_version(client_version):
-                    logger.warning(f"Unsupported protocol version: {client_version}")
+                    return _finalize(
+                        JSONResponse(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": req_id,
+                                "error": {
+                                    "code": -32602,
+                                    "message": (
+                                        "Unsupported protocol version: "
+                                        f"{client_version} (expected {MCP_PROTOCOL_VERSION})"
+                                    ),
+                                },
+                            },
+                            status_code=400,
+                            headers={"MCP-Session-Id": session_id},
+                        ),
+                        ok=False,
+                    )
 
             # Handle the request using the provided handler
             request_dict = {
@@ -363,9 +370,9 @@ def create_sse_app(
         """Handle GET requests - return server info."""
         return JSONResponse(
             {
-                "name": "omni-agent",
+                "name": "xiuxian-daochang",
                 "version": "2.0.0",
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": MCP_PROTOCOL_VERSION,
             }
         )
 
@@ -399,11 +406,11 @@ def create_sse_app(
 
     async def oauth_register(request: Request) -> JSONResponse:
         """OAuth register endpoint."""
-        return JSONResponse({"client_id": "omni-agent"})
+        return JSONResponse({"client_id": "xiuxian-daochang"})
 
     async def embed_batch(request: Request) -> JSONResponse:
         """Embedding HTTP client endpoint: POST /embed/batch for embedding_client compatibility."""
-        endpoint = f"http:{request.url.path}"
+        endpoint = f"http-path:{request.url.path}"
         started_at = request_observability.start(endpoint)
         observed_ok = False
         observed_status = 500
@@ -502,7 +509,7 @@ def create_sse_app(
 
     async def embed_single(request: Request) -> JSONResponse:
         """Embedding HTTP client endpoint: POST /embed/single for embedding_client compatibility."""
-        endpoint = f"http:{request.url.path}"
+        endpoint = f"http-path:{request.url.path}"
         started_at = request_observability.start(endpoint)
         observed_ok = False
         observed_status = 500
@@ -637,8 +644,7 @@ def create_sse_app(
 
 def _is_supported_protocol_version(version: str) -> bool:
     """Check if protocol version is supported."""
-    supported = ["2024-11-05", "2024-09-01", "2024-06-14"]
-    return version in supported
+    return is_supported_mcp_protocol_version(version)
 
 
 async def run_sse(

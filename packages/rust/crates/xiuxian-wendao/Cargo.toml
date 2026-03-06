@@ -10,7 +10,7 @@ default-run = "wendao"
 
 [features]
 default = []
-zhenfa-router = ["dep:async-trait", "dep:axum", "dep:xiuxian-zhenfa"]
+zhenfa-router = ["dep:async-trait", "dep:axum"]
 
 [[bin]]
 name = "wendao"
@@ -39,8 +39,9 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 
 # Reuse common types
-omni-types = { path = "../omni-types" }
+xiuxian-types = { path = "../xiuxian-types" }
 xiuxian-skills = { path = "../xiuxian-skills" }
+xiuxian-logging = { path = "../xiuxian-logging" }
 
 # Macro utilities
 xiuxian-macros = { path = "../xiuxian-macros" }
@@ -74,7 +75,8 @@ log = { workspace = true }
 clap = { workspace = true }
 redis = { version = "1.0.3", default-features = false, features = ["tokio-comp"] }
 axum = { workspace = true, optional = true }
-xiuxian-zhenfa = { path = "../xiuxian-zhenfa", optional = true }
+xiuxian-zhenfa = { path = "../xiuxian-zhenfa" }
+url = "2.5.7"
 
 [dev-dependencies]
 tempfile = { workspace = true }

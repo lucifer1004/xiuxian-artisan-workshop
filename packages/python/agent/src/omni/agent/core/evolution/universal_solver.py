@@ -1,10 +1,10 @@
 """
-universal_solver.py - OmniCell Integration Bridge
+universal_solver.py - XiuxianCell Integration Bridge
 
 Binds Core execution layer to Evolution system via Tracer.
-Enables trace recording of OmniCell successful executions for skill crystallization.
+Enables trace recording of XiuxianCell successful executions for skill crystallization.
 
-Integration: OmniCell → UniversalSolver → Tracer → Harvester → Factory → Immune → Skills
+Integration: XiuxianCell → UniversalSolver → Tracer → Harvester → Factory → Immune → Skills
 """
 
 from __future__ import annotations
@@ -49,10 +49,10 @@ class SolverResult:
 
 class UniversalSolver:
     """
-    Integration bridge between Core OmniCell and Evolution system.
+    Integration bridge between Core XiuxianCell and Evolution system.
 
     Responsibilities:
-    - Execute tasks via OmniCell
+    - Execute tasks via XiuxianCell
     - Record successful executions to TraceCollector
     - Recall experiences from Hippocampus for guided execution
     - Provide structured results for Harvester processing
@@ -61,7 +61,7 @@ class UniversalSolver:
     - Recall similar experiences before task execution
     - Inject successful patterns into execution context
 
-    Design: Imports OmniCell from Core at method level to avoid circular imports.
+    Design: Imports XiuxianCell from Core at method level to avoid circular imports.
     """
 
     def __init__(
@@ -77,7 +77,7 @@ class UniversalSolver:
             hippocampus: Optional Hippocampus instance for experience memory.
         """
         self._trace_collector = trace_collector
-        self._omni_cell: OmniCellRunner | None = None
+        self._xiuxian_cell: XiuxianCellRunner | None = None
         self._hippocampus = hippocampus
 
     async def _get_trace_collector(self) -> TraceCollector:
@@ -88,14 +88,14 @@ class UniversalSolver:
             self._trace_collector = TraceCollector()
         return self._trace_collector
 
-    async def _get_omni_cell(self) -> OmniCellRunner:
-        """Lazy load OmniCellRunner from Core."""
-        if self._omni_cell is None:
+    async def _get_xiuxian_cell(self) -> XiuxianCellRunner:
+        """Lazy load XiuxianCellRunner from Core."""
+        if self._xiuxian_cell is None:
             # Import from Core to avoid circular dependency at module level
-            from omni.core.skills.runtime.omni_cell import OmniCellRunner
+            from omni.core.skills.runtime.xiuxian_cell import XiuxianCellRunner
 
-            self._omni_cell = OmniCellRunner()
-        return self._omni_cell
+            self._xiuxian_cell = XiuxianCellRunner()
+        return self._xiuxian_cell
 
     async def _get_hippocampus(self):
         """Lazy load Hippocampus for experience memory."""
@@ -137,7 +137,7 @@ class UniversalSolver:
         context: dict[str, Any] | None = None,
         record_trace: bool = True,
     ) -> SolverResult:
-        """Execute task via OmniCell and optionally record trace.
+        """Execute task via XiuxianCell and optionally record trace.
 
         Args:
             task: Task description to execute
@@ -155,7 +155,7 @@ class UniversalSolver:
         trace_id: str | None = None
 
         try:
-            omni_cell = await self._get_omni_cell()
+            xiuxian_cell = await self._get_xiuxian_cell()
 
             # [HIPPOCAMPS] Recall relevant experiences before planning
             experience_context = ""
@@ -182,7 +182,7 @@ class UniversalSolver:
             for cmd in execution_plan:
                 commands.append(cmd)
                 try:
-                    output = await omni_cell.execute(cmd)
+                    output = await xiuxian_cell.execute(cmd)
                     outputs.append(output)
                 except Exception as e:
                     outputs.append(f"Error: {e}")

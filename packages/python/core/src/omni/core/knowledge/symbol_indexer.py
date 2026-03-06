@@ -2,11 +2,11 @@
 Zero-Token Indexer using Rust-native AST extraction.
 
 Replaces expensive LLM summarization for code artifacts.
-Uses omni-tags (Rust) for symbol extraction without LLM tokens.
+Uses xiuxian-tags (Rust) for symbol extraction without LLM tokens.
 
 Architecture:
     SymbolIndexer (main class)
-        ├── omni_tags: Rust bindings for AST extraction
+        ├── xiuxian_tags: Rust bindings for AST extraction
         ├── Symbol Map: {symbol_name -> [(file_path, line, kind)]}
         └── Inverted Index: {file_path -> [symbols]}
 
@@ -30,9 +30,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    import omni_core_rs as omni_rs
+    import xiuxian_core_rs as xiuxian_rs
 except ImportError:
-    omni_rs = None
+    xiuxian_rs = None
 
 from omni.foundation.runtime.path_filter import SKIP_DIRS, should_skip_path
 
@@ -131,7 +131,7 @@ class SymbolIndexer:
     Zero-Token Indexer using Rust-native AST extraction.
 
     Extracts symbols (functions, classes, etc.) from code without using LLM.
-    Uses omni-tags (Rust bindings) for high-performance AST parsing.
+    Uses xiuxian-tags (Rust bindings) for high-performance AST parsing.
 
     Features:
     - Zero LLM tokens for indexing
@@ -159,16 +159,18 @@ class SymbolIndexer:
         self.index = SymbolIndex()
         self._manifest: dict[str, str] = {}  # file_path -> content_hash
 
-        # Store manifest in .cache/omni-vector/ alongside other indexes
+        # Store manifest in .cache/xiuxian-vector/ alongside other indexes
         vector_dir = get_vector_db_path()
         self._manifest_file = vector_dir / "symbol_manifest.json"
 
-        if omni_rs is None:
-            logger.warning("omni_core_rs not available, symbol indexing disabled")
+        if xiuxian_rs is None:
+            logger.warning("xiuxian_core_rs not available, symbol indexing disabled")
 
     def _compute_hash(self, content: str) -> str:
         """Compute hash for content using Rust xxhash (5-10x faster than MD5)."""
-        rust_compute_hash = getattr(omni_rs, "compute_hash", None) if omni_rs is not None else None
+        rust_compute_hash = (
+            getattr(xiuxian_rs, "compute_hash", None) if xiuxian_rs is not None else None
+        )
         if rust_compute_hash is None:
             import hashlib
 
@@ -351,7 +353,7 @@ class SymbolIndexer:
         Returns:
             Dict mapping relative file path to list of Symbol objects.
         """
-        if omni_rs is None:
+        if xiuxian_rs is None:
             return {}
 
         if not file_paths:
@@ -361,7 +363,7 @@ class SymbolIndexer:
         abs_paths = [str(f) for f in file_paths]
 
         # Use batch API
-        result = omni_rs.get_files_outline(abs_paths)
+        result = xiuxian_rs.get_files_outline(abs_paths)
 
         # Parse JSON result
 
@@ -387,12 +389,12 @@ class SymbolIndexer:
 
     def _extract_symbols_from_file(self, file_path: Path) -> list[Symbol]:
         """
-        Extract symbols from a single file using omni-tags.
+        Extract symbols from a single file using xiuxian-tags.
 
         Returns:
             List of Symbol objects.
         """
-        if omni_rs is None:
+        if xiuxian_rs is None:
             return []
 
         symbols = []
@@ -405,7 +407,7 @@ class SymbolIndexer:
 
         try:
             # Use Rust binding to get file outline
-            result = omni_rs.get_file_outline(abs_path)
+            result = xiuxian_rs.get_file_outline(abs_path)
             symbols = self._parse_outline(result, rel_path)
         except Exception as e:
             logger.warning(f"Error extracting symbols from {abs_path}: {e}")
@@ -423,8 +425,8 @@ class SymbolIndexer:
             Dictionary with indexed_files and unique_symbols count.
         """
 
-        if omni_rs is None:
-            logger.error("omni_core_rs not available")
+        if xiuxian_rs is None:
+            logger.error("xiuxian_core_rs not available")
             return {"indexed_files": 0, "unique_symbols": 0}
 
         logger.info(f"Building symbol index for {self.root}")

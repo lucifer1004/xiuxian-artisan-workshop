@@ -6,7 +6,7 @@ metadata:
 
 # Omni Foundation
 
-Shared kernel and utilities for omni-dev-fusion MCP servers.
+Shared kernel and utilities for xiuxian-artisan-workshop MCP servers.
 
 ## Overview
 

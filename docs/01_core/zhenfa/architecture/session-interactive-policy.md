@@ -13,7 +13,7 @@ metadata:
 
 # Session Interactive Policy & Human-Centric Design
 
-This document defines the behavioral standards for `omni-agent` interaction, heavily inspired by the human-centric optimizations found in the `OpenClaw` research.
+This document defines the behavioral standards for `xiuxian-daochang` interaction, heavily inspired by the human-centric optimizations found in the `OpenClaw` research.
 
 ## 1. Interaction Modes (`QueueMode`)
 
@@ -82,8 +82,8 @@ User TOML:
 
 Environment overrides:
 
-- `OMNI_AGENT_TELEGRAM_SESSION_PARTITION_PERSIST`
-- `OMNI_AGENT_DISCORD_SESSION_PARTITION_PERSIST`
+- `XIUXIAN_DAOCHANG_TELEGRAM_SESSION_PARTITION_PERSIST`
+- `XIUXIAN_DAOCHANG_DISCORD_SESSION_PARTITION_PERSIST`
 
 ### 6.2 Live Operator Check
 

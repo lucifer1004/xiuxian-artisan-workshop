@@ -8,7 +8,7 @@ metadata:
 
 `xiuxian-wendao-py` is a standalone Python package for the `xiuxian-wendao` Rust bindings.
 
-It provides a Python API over `omni-core-rs`, so Python users can directly use the
+It provides a Python API over `xiuxian-core-rs`, so Python users can directly use the
 Rust LinkGraph engine without depending on the full Omni runtime stack.
 
 ## Quick Start

@@ -22,7 +22,7 @@ def repo_root() -> Path:
 @pytest.fixture
 def isolated_runner_socket() -> Path:
     """Return a per-test runner socket path under /tmp."""
-    return (Path("/tmp") / f"omni-skill-runner-{uuid.uuid4().hex}.sock").resolve()
+    return (Path("/tmp") / f"xiuxian-skill-runner-{uuid.uuid4().hex}.sock").resolve()
 
 
 def _ensure_omni_available() -> str:

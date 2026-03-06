@@ -2,8 +2,8 @@
 //!
 //! Provides AST-based code navigation and structural search capabilities.
 
-use omni_tags::{SearchConfig, TagExtractor};
 use pyo3::prelude::*;
+use xiuxian_tags::{SearchConfig, TagExtractor};
 
 /// Generate a symbolic outline for a file using AST patterns.
 /// Returns formatted string showing only definitions (classes, functions, etc.)

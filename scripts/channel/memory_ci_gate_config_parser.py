@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 def build_parser(project_root: Path) -> argparse.ArgumentParser:
     """Build argparse parser for memory CI gate."""
-    parser = argparse.ArgumentParser(description="Run omni-agent memory CI gate.")
+    parser = argparse.ArgumentParser(description="Run xiuxian-daochang memory CI gate.")
     add_runtime_args(parser)
     add_artifact_args(parser, project_root=project_root)
     add_quality_args(parser)

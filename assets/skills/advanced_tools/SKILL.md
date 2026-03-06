@@ -9,9 +9,9 @@ tags:
 name: advanced_tools
 description: Use when finding files by name, searching code content, locating patterns with regex, exploring codebase, or batch refactoring across multiple files. Conforms to docs/reference/skill-routing-value-standard.md.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.2.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/advanced_tools"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/advanced_tools"
   routing_keywords:
     - "find"
     - "search"

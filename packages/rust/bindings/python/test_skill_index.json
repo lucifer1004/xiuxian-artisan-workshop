@@ -38,7 +38,7 @@
       "Review code for patterns and anti-patterns",
       "Navigate and understand codebase organization"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -75,7 +75,7 @@
       "Python type checking",
       "Pytest testing"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -129,7 +129,7 @@
       "Generate API documentation",
       "Document code changes"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -219,7 +219,7 @@
       "Save learning to memory",
       "Retrieve context from memory"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -322,7 +322,7 @@
     ],
     "routingKeywords": ["template", "new skill", "create skill", "scaffold"],
     "intents": [],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -362,7 +362,7 @@
       "Find patterns in code",
       "Count matches in codebase"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -454,7 +454,7 @@
       "Run tests in terminal",
       "System administration tasks"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -519,7 +519,7 @@
       "Get file metadata",
       "Batch write multiple files"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -565,7 +565,7 @@
       "Check test coverage",
       "Fix failing tests"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -658,7 +658,7 @@
       "Find class or function definitions",
       "Count symbols and lines in codebase"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -728,7 +728,7 @@
       "Replace specific text in files",
       "Polish writing style"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -795,7 +795,7 @@
       "Check architecture decisions",
       "Review workflow guidelines"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -841,7 +841,7 @@
       "Select relevant tests for changes",
       "Plan testing approach"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -887,7 +887,7 @@
       "Save important information",
       "Recall knowledge from notes"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,
@@ -967,7 +967,7 @@
       "tag",
       "status"
     ],
-    "authors": ["omni-dev-fusion"],
+    "authors": ["xiuxian-artisan-workshop"],
     "docsAvailable": {
       "skillMd": true,
       "readme": false,

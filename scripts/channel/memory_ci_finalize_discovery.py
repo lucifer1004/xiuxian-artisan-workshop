@@ -18,10 +18,12 @@ def newest_failure(
     start_stamp: int,
 ) -> tuple[Path | None, int]:
     """Find newest failure report for profile/extension after start stamp."""
-    pattern = re.compile(rf"omni-agent-memory-ci-failure-{re.escape(profile)}-(\d+)\.{extension}$")
+    pattern = re.compile(
+        rf"xiuxian-daochang-memory-ci-failure-{re.escape(profile)}-(\d+)\.{extension}$"
+    )
     best_path: Path | None = None
     best_stamp = -1
-    for path in reports_dir.glob(f"omni-agent-memory-ci-failure-{profile}-*.{extension}"):
+    for path in reports_dir.glob(f"xiuxian-daochang-memory-ci-failure-{profile}-*.{extension}"):
         match = pattern.match(path.name)
         if match is None:
             continue

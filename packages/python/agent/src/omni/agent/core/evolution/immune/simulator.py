@@ -1,7 +1,7 @@
 """
 simulator.py - Level 2 Immune Defense: Dynamic Simulation
 
-Uses Rust's omni-security (Docker/NsJail) for isolated execution testing.
+Uses Rust's xiuxian-security (Docker/NsJail) for isolated execution testing.
 Runs LLM-generated test cases in a sandbox to verify skill functionality.
 """
 
@@ -231,9 +231,9 @@ except Exception as e:
 
         try:
             # Try to create a sandbox runner and check availability
-            import omni_core_rs
+            import xiuxian_core_rs
 
-            runner = omni_core_rs.PySandboxRunner()
+            runner = xiuxian_core_rs.PySandboxRunner()
             self._sandbox_available = runner.is_available()
             return self._sandbox_available
         except Exception:

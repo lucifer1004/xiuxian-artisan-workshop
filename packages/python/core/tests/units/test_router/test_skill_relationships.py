@@ -134,15 +134,15 @@ class TestGetRelationshipGraphPath:
         assert get_relationship_graph_path(":memory:") is None
 
     def test_lance_path_uses_parent(self):
-        p = get_relationship_graph_path("/cache/omni-vector/router.lance")
+        p = get_relationship_graph_path("/cache/xiuxian-vector/router.lance")
         assert p is not None
         assert p.name == "skill_relationships.json"
-        assert "omni-vector" in str(p)
+        assert "xiuxian-vector" in str(p)
 
     def test_dir_path_uses_same_dir(self):
-        p = get_relationship_graph_path("/cache/omni-vector")
+        p = get_relationship_graph_path("/cache/xiuxian-vector")
         assert p is not None
-        assert p == Path("/cache/omni-vector/skill_relationships.json")
+        assert p == Path("/cache/xiuxian-vector/skill_relationships.json")
 
 
 class TestApplyRelationshipRerank:

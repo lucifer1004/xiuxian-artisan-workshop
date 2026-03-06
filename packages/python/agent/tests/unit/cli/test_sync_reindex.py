@@ -186,7 +186,7 @@ class TestSyncReindexUnifiedPath:
         with (
             patch(
                 "omni.foundation.config.database.get_database_path",
-                return_value="/cache/omni-vector/skills.lance",
+                return_value="/cache/xiuxian-vector/skills.lance",
             ) as mock_get_path,
             patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get_store,
             patch("omni.foundation.config.skills.SKILLS_DIR", return_value=__file__),
@@ -211,8 +211,8 @@ class TestSyncReindexUnifiedPath:
                 await sync_skills()
 
         mock_get_path.assert_called_once_with("skills")
-        mock_get_store.assert_called_once_with("/cache/omni-vector/skills.lance")
-        mock_build_graph.assert_called_once_with("/cache/omni-vector/skills.lance")
+        mock_get_store.assert_called_once_with("/cache/xiuxian-vector/skills.lance")
+        mock_build_graph.assert_called_once_with("/cache/xiuxian-vector/skills.lance")
 
     @pytest.mark.asyncio
     async def test_sync_skills_uses_index_skill_tools_dual(self):
@@ -222,7 +222,7 @@ class TestSyncReindexUnifiedPath:
         with (
             patch(
                 "omni.foundation.config.database.get_database_path",
-                return_value="/cache/omni-vector/skills.lance",
+                return_value="/cache/xiuxian-vector/skills.lance",
             ),
             patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get_store,
             patch("omni.foundation.config.skills.SKILLS_DIR", return_value=__file__),
@@ -260,7 +260,7 @@ class TestSyncReindexUnifiedPath:
         with (
             patch(
                 "omni.foundation.config.database.get_database_path",
-                return_value="/cache/omni-vector/skills.lance",
+                return_value="/cache/xiuxian-vector/skills.lance",
             ),
             patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get_store,
             patch("omni.foundation.config.skills.SKILLS_DIR", return_value=__file__),
@@ -284,7 +284,7 @@ class TestSyncReindexUnifiedPath:
 
                 await sync_skills()
 
-        mock_build_graph.assert_called_once_with("/cache/omni-vector/skills.lance")
+        mock_build_graph.assert_called_once_with("/cache/xiuxian-vector/skills.lance")
 
     @pytest.mark.asyncio
     async def test_sync_embed_metadata_rejects_nested_shape(self):
@@ -319,7 +319,7 @@ class TestSyncReindexUnifiedPath:
             "omni.foundation.services.embedding.get_embedding_service",
             return_value=mock_embed_service,
         ):
-            count = await _embed_skill_vectors(mock_store, "/cache/omni-vector/skills.lance")
+            count = await _embed_skill_vectors(mock_store, "/cache/xiuxian-vector/skills.lance")
         assert count == 0
         mock_store.replace_documents.assert_not_awaited()
 
@@ -352,7 +352,7 @@ class TestSyncReindexUnifiedPath:
             "omni.foundation.services.embedding.get_embedding_service",
             return_value=mock_embed_service,
         ):
-            count = await _embed_skill_vectors(mock_store, "/cache/omni-vector/skills.lance")
+            count = await _embed_skill_vectors(mock_store, "/cache/xiuxian-vector/skills.lance")
         assert count == 1
 
         kwargs = mock_store.replace_documents.await_args.kwargs
@@ -395,7 +395,7 @@ class TestSyncReindexUnifiedPath:
         ):
             count = _embed_skill_vectors(
                 mock_store,
-                "/cache/omni-vector/skills.lance",
+                "/cache/xiuxian-vector/skills.lance",
                 "/repo/assets/skills",
             )
         assert count == 0
@@ -432,7 +432,7 @@ class TestSyncReindexUnifiedPath:
         ):
             count = _embed_skill_vectors(
                 mock_store,
-                "/cache/omni-vector/skills.lance",
+                "/cache/xiuxian-vector/skills.lance",
                 "/repo/assets/skills",
             )
         assert count == 1
@@ -450,7 +450,7 @@ class TestSyncReindexUnifiedPath:
         with (
             patch(
                 "omni.agent.services.reindex.get_database_path",
-                return_value="/cache/omni-vector/skills.lance",
+                return_value="/cache/xiuxian-vector/skills.lance",
             ) as mock_get_path,
             patch(
                 "omni.foundation.bridge.RustVectorStore",

@@ -20,7 +20,7 @@ def cleanup_runtime_stack(
     valkey_stop: Any,
 ) -> None:
     """Terminate processes and stop valkey when this run started it."""
-    terminate_process_fn(agent_process, name="omni-agent runtime")
+    terminate_process_fn(agent_process, name="xiuxian-daochang runtime")
     terminate_process_fn(mock_process, name="mock Telegram API")
     if agent_handle is not None:
         agent_handle.close()

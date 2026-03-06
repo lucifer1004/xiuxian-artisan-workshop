@@ -158,8 +158,7 @@ type: knowledge
 metadata:
   title: "Fixture Reference"
 ---
-{}
-"#,
-        body
+{body}
+"#
     )
 }

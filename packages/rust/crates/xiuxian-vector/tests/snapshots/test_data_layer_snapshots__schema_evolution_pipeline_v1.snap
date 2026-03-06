@@ -1,0 +1,17 @@
+---
+source: packages/rust/crates/xiuxian-vector/tests/test_data_layer_snapshots.rs
+expression: view
+---
+{
+  "checks": {
+    "added_custom_note": true,
+    "dropped_custom_label": true,
+    "renamed_custom_label": true
+  },
+  "versions": {
+    "added": 2,
+    "dropped": 4,
+    "renamed": 3,
+    "seed": 1
+  }
+}

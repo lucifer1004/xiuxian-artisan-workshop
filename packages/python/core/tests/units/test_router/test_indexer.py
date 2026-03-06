@@ -54,7 +54,7 @@ class TestSkillIndexer:
 
         # Default should use unified base path (directory; skills/router tables live under it)
         assert indexer._storage_path == str(get_vector_db_path())
-        assert "omni-vector" in indexer._storage_path
+        assert "xiuxian-vector" in indexer._storage_path
         assert indexer._dimension == expected_dimension
         assert indexer._store is None
         assert indexer._indexed_count == 0
@@ -95,7 +95,7 @@ class TestSkillIndexer:
         assert stats["entries_indexed"] == 0
         assert stats["is_ready"] is False
         # Default uses unified path
-        assert "omni-vector" in stats["storage_path"]
+        assert "xiuxian-vector" in stats["storage_path"]
 
 
 class TestIndexedSkill:

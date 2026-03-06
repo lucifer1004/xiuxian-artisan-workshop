@@ -20,7 +20,7 @@ endpoints = importlib.import_module("channel_test_endpoints")
 
 
 def test_build_config_validates_positive_rounds(tmp_path: Path) -> None:
-    executable = tmp_path / "omni-agent"
+    executable = tmp_path / "xiuxian-daochang"
     executable.write_text("", encoding="utf-8")
     mcp_config = tmp_path / ".mcp.json"
     mcp_config.write_text("{}", encoding="utf-8")
@@ -50,7 +50,7 @@ def test_build_config_validates_positive_rounds(tmp_path: Path) -> None:
 
 
 def test_build_config_resolves_paths(tmp_path: Path) -> None:
-    executable = tmp_path / "omni-agent"
+    executable = tmp_path / "xiuxian-daochang"
     executable.write_text("", encoding="utf-8")
     mcp_config = tmp_path / ".mcp.json"
     mcp_config.write_text("{}", encoding="utf-8")

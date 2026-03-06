@@ -19,7 +19,7 @@ runtime_module = importlib.import_module("concurrent_sessions_runtime")
 
 def test_read_new_lines_returns_cursor_and_lines() -> None:
     next_cursor, lines = runtime_module.read_new_lines(
-        Path(".run/logs/omni-agent-webhook.log"),
+        Path(".run/logs/xiuxian-daochang-webhook.log"),
         3,
         log_cursor_cls=SimpleNamespace,
         read_new_log_lines_with_cursor_fn=lambda _path, _cursor: (

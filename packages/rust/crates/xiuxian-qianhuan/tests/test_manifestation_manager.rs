@@ -210,19 +210,19 @@ fn manifestation_manager_tracks_session_prompt_injection_cache() -> Result<()> {
     )?;
     let session_id = "telegram:session-cache";
 
-    let xml = r#"
+    let xml = r"
 <system_prompt_injection>
   <qa><q>q1</q><a>a1</a></qa>
   <qa><q>q2</q><a>a2</a></qa>
 </system_prompt_injection>
-"#;
+";
     let snapshot = manager.upsert_session_prompt_injection_xml(session_id, xml)?;
     assert_eq!(snapshot.qa_count, 2);
     assert!(snapshot.xml.contains("<system_prompt_injection>"));
 
-    let loaded = manager
-        .inspect_session_prompt_injection(session_id)
-        .expect("snapshot should exist in cache");
+    let Some(loaded) = manager.inspect_session_prompt_injection(session_id) else {
+        panic!("snapshot should exist in cache");
+    };
     assert_eq!(loaded.qa_count, 2);
     assert!(loaded.xml.contains("<q>q1</q>"));
 
@@ -248,9 +248,9 @@ fn manifestation_manager_upserts_prevalidated_session_prompt_injection_snapshot(
     assert_eq!(snapshot.qa_count, 1);
 
     manager.upsert_session_prompt_injection_snapshot(session_id, snapshot.clone());
-    let loaded = manager
-        .inspect_session_prompt_injection(session_id)
-        .expect("snapshot should be present");
+    let Some(loaded) = manager.inspect_session_prompt_injection(session_id) else {
+        panic!("snapshot should be present");
+    };
     assert_eq!(loaded.qa_count, snapshot.qa_count);
     assert_eq!(loaded.xml, snapshot.xml);
     Ok(())

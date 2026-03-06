@@ -34,8 +34,10 @@ def default_ingress_url() -> str:
     explicit = os.environ.get("OMNI_DISCORD_INGRESS_URL", "").strip()
     if explicit:
         return explicit
-    bind_addr = os.environ.get("OMNI_AGENT_DISCORD_INGRESS_BIND", _default_ingress_bind())
-    ingress_path = os.environ.get("OMNI_AGENT_DISCORD_INGRESS_PATH", "/discord/ingress").strip()
+    bind_addr = os.environ.get("XIUXIAN_DAOCHANG_DISCORD_INGRESS_BIND", _default_ingress_bind())
+    ingress_path = os.environ.get(
+        "XIUXIAN_DAOCHANG_DISCORD_INGRESS_PATH", "/discord/ingress"
+    ).strip()
     if not ingress_path:
         ingress_path = "/discord/ingress"
     if not ingress_path.startswith("/"):

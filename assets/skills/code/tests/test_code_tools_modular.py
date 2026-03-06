@@ -8,11 +8,11 @@ Tests cover:
 """
 
 import pytest
-from omni.test_kit.decorators import omni_skill
+from omni.test_kit.decorators import xiuxian_skill
 
 
 @pytest.mark.asyncio
-@omni_skill(name="code")
+@xiuxian_skill(name="code")
 class TestCodeSearchUnified:
     """Test unified code_search command."""
 
@@ -44,7 +44,7 @@ class TestCodeSearchUnified:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="code")
+@xiuxian_skill(name="code")
 class TestSmartAstEngine:
     """Test SmartAstEngine for AST-based search."""
 
@@ -91,7 +91,7 @@ class TestSmartAstEngine:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="code")
+@xiuxian_skill(name="code")
 class TestSearchEngines:
     """Test individual search engines."""
 
@@ -129,7 +129,7 @@ class TestSearchEngines:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="code")
+@xiuxian_skill(name="code")
 class TestClassifier:
     """Test query classifier for intent recognition."""
 
@@ -169,7 +169,7 @@ class TestClassifier:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="code")
+@xiuxian_skill(name="code")
 class TestGraphWorkflow:
     """Test native workflow integration."""
 
@@ -192,7 +192,7 @@ class TestGraphWorkflow:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="code")
+@xiuxian_skill(name="code")
 class TestSearchState:
     """Test search state types."""
 
@@ -216,7 +216,7 @@ class TestSearchState:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="code")
+@xiuxian_skill(name="code")
 class TestPatternUtils:
     """Test pattern utilities."""
 

@@ -430,7 +430,7 @@ async def test_apply_link_graph_proximity_boost_boosts_linked_and_tagged(
     from omni.rag.link_graph import proximity as proximity_module
 
     backend = _FakeGraphBackend()
-    monkeypatch.setitem(sys.modules, "omni_core_rs", None)
+    monkeypatch.setitem(sys.modules, "xiuxian_core_rs", None)
     proximity_module._stem_cache.clear()
 
     rows = [

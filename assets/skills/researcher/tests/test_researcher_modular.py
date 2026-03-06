@@ -245,9 +245,11 @@ class TestResearchUtilities:
         assert repo == "claude-code"
 
     def test_parse_repo_url_git_suffix(self) -> None:
-        owner, repo = research.parse_repo_url("https://github.com/tao3k/omni-dev-fusion.git")
+        owner, repo = research.parse_repo_url(
+            "https://github.com/tao3k/xiuxian-artisan-workshop.git"
+        )
         assert owner == "tao3k"
-        assert repo == "omni-dev-fusion"
+        assert repo == "xiuxian-artisan-workshop"
 
     def test_parse_repo_url_ssh(self) -> None:
         owner, repo = research.parse_repo_url("git@github.com:antfu/skills.git")

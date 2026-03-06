@@ -177,7 +177,7 @@ Structure:
       "category": "hindsight",
       "content": "## Problem\n\n```\nwarning: use of deprecated associated function `pyo3::Python::with_gil`\n```\n\n## Root Cause\n\nPyO3 0.23+ deprecated `Python::with_gil` in favor of `Python::attach`.\n\n## Solution\n\nChanged all:\n```python\nPython::with_gil(|py| { ... })\n```\nTo:\n```python\nPython::attach(|_py| { ... })\n```\n\n## Anti-Pattern\n\n- Don't use deprecated PyO3 APIs\n- Always check `Cargo.toml` for pyo3 version constraints",
       "tags": ["rust", "pyo3", "python-bindings", "deprecation"],
-      "related_files": ["packages/rust/crates/omni-vector/src/lib.rs"]
+      "related_files": ["packages/rust/crates/xiuxian-vector/src/lib.rs"]
     }
   ]
 }
@@ -203,4 +203,4 @@ Structure:
 
 ## Final Reminder
 
-Your notes become the **collective memory** of the Omni Agent. Write them as if you're mentoring a junior engineer who will face the same problem at 3 AM on a production incident. Make them clear, actionable, and wise.
+Your notes become the **collective memory** of the Xiuxian Daochang. Write them as if you're mentoring a junior engineer who will face the same problem at 3 AM on a production incident. Make them clear, actionable, and wise.

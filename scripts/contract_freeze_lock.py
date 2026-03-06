@@ -25,14 +25,14 @@ LOCK_PATH: Final[Path] = (
 )
 
 FROZEN_FILES: Final[tuple[str, ...]] = (
-    "packages/rust/crates/omni-agent/src/contracts/omega.rs",
-    "packages/rust/crates/omni-agent/src/contracts/memory_gate.rs",
+    "packages/rust/crates/xiuxian-daochang/src/contracts/omega.rs",
+    "packages/rust/crates/xiuxian-daochang/src/contracts/memory_gate.rs",
     "packages/rust/crates/xiuxian-qianhuan/src/contracts/block.rs",
     "packages/rust/crates/xiuxian-qianhuan/src/contracts/policy.rs",
     "packages/rust/crates/xiuxian-qianhuan/src/contracts/snapshot.rs",
-    "packages/rust/crates/omni-agent/resources/omni.discover.match.v1.schema.json",
-    "packages/rust/crates/omni-memory/resources/omni.memory.gate_event.v1.schema.json",
-    "packages/rust/crates/omni-agent/resources/omni.agent.route_trace.v1.schema.json",
+    "packages/rust/crates/xiuxian-daochang/resources/omni.discover.match.v1.schema.json",
+    "packages/rust/crates/xiuxian-memory-engine/resources/omni.memory.gate_event.v1.schema.json",
+    "packages/rust/crates/xiuxian-daochang/resources/omni.agent.route_trace.v1.schema.json",
 )
 
 

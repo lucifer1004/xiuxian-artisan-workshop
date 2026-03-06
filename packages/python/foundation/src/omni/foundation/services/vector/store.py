@@ -83,7 +83,7 @@ class VectorStoreClient:
     def __new__(cls) -> VectorStoreClient:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._cache_path = Path(PRJ_CACHE("omni-vector"))
+            cls._instance._cache_path = Path(PRJ_CACHE("xiuxian-vector"))
             cls._instance._cache_path.mkdir(parents=True, exist_ok=True)
             cls._instance._search_cache = _get_search_cache()
             cls._instance._store = None
@@ -263,7 +263,7 @@ def evict_knowledge_store_after_use() -> None:
     path = get_database_path("knowledge")
     evict_vector_store_cache(path)
     try:
-        from omni_core_rs import invalidate_kg_cache
+        from xiuxian_core_rs import invalidate_kg_cache
 
         invalidate_kg_cache(path)
     except Exception:

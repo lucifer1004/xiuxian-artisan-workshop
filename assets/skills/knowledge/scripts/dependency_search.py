@@ -169,7 +169,7 @@ async def dependency_search(
         @dependency_search "Arc" {"limit": 20}
     """
     try:
-        from omni_core_rs import PyDependencyIndexer, PyUnifiedSymbolIndex
+        from xiuxian_core_rs import PyDependencyIndexer, PyUnifiedSymbolIndex
 
         project_root = _get_project_root()
         config_path = _get_config_path()
@@ -247,7 +247,7 @@ async def dependency_search(
         logger.error(f"Import error: {e}")
         return build_success_error_response(
             error="PyDependencyIndexer not available",
-            extra={"hint": "Ensure omni-core-rs is properly installed"},
+            extra={"hint": "Ensure xiuxian-core-rs is properly installed"},
         )
     except Exception as e:
         logger.error(f"Dependency search failed: {e}")
@@ -287,7 +287,7 @@ async def dependency_status() -> dict[str, Any]:
         @dependency_status
     """
     try:
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         project_root = _get_project_root()
         config_path = _get_config_path()
@@ -319,7 +319,7 @@ async def dependency_status() -> dict[str, Any]:
     Build the external dependency index.
 
     This parses Cargo.toml dependencies, fetches sources from cargo registry,
-    and extracts symbols using omni-tags.
+    and extracts symbols using xiuxian-tags.
 
     Run this after:
     - Adding new dependencies
@@ -335,7 +335,7 @@ async def dependency_build() -> dict[str, Any]:
     """Build the external dependency index.
 
     This parses Cargo.toml dependencies, fetches sources from cargo registry,
-    and extracts symbols using omni-tags.
+    and extracts symbols using xiuxian-tags.
 
     Returns:
         Dictionary with:
@@ -350,7 +350,7 @@ async def dependency_build() -> dict[str, Any]:
         @dependency_build
     """
     try:
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         project_root = _get_project_root()
         config_path = _get_config_path()
@@ -371,7 +371,7 @@ async def dependency_build() -> dict[str, Any]:
     except ImportError:
         return build_success_error_response(
             error="PyDependencyIndexer not available",
-            extra={"hint": "Ensure omni-core-rs is properly installed"},
+            extra={"hint": "Ensure xiuxian-core-rs is properly installed"},
         )
     except Exception as e:
         logger.error(f"Dependency build failed: {e}")
@@ -404,7 +404,7 @@ async def dependency_list() -> dict[str, Any]:
         @dependency_list
     """
     try:
-        from omni_core_rs import PyDependencyIndexer
+        from xiuxian_core_rs import PyDependencyIndexer
 
         project_root = _get_project_root()
         config_path = _get_config_path()

@@ -375,7 +375,7 @@ class TestWatcherEventFlow:
 
     def test_event_receiver_receives_after_watcher_start(self) -> None:
         """Test that receiver can receive events after watcher starts."""
-        import omni_core_rs as rs
+        import xiuxian_core_rs as rs
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create receiver first
@@ -403,7 +403,7 @@ class TestWatcherEventFlow:
 
     def test_multiple_watchers_same_directory(self) -> None:
         """Test multiple watchers can watch the same directory."""
-        import omni_core_rs as rs
+        import xiuxian_core_rs as rs
 
         with tempfile.TemporaryDirectory() as tmpdir:
             receiver1 = rs.PyFileEventReceiver()
@@ -434,7 +434,7 @@ class TestFileWatcherConfig:
 
     def test_watcher_config_defaults(self) -> None:
         """Test PyWatcherConfig has expected defaults."""
-        import omni_core_rs as rs
+        import xiuxian_core_rs as rs
 
         config = rs.PyWatcherConfig()
 
@@ -447,7 +447,7 @@ class TestFileWatcherConfig:
 
     def test_watcher_config_modification(self) -> None:
         """Test PyWatcherConfig can be modified."""
-        import omni_core_rs as rs
+        import xiuxian_core_rs as rs
 
         config = rs.PyWatcherConfig()
         config.debounce_ms = 100
@@ -458,7 +458,7 @@ class TestFileWatcherConfig:
 
     def test_watcher_config_add_patterns(self) -> None:
         """Test PyWatcherConfig add methods."""
-        import omni_core_rs as rs
+        import xiuxian_core_rs as rs
 
         config = rs.PyWatcherConfig()
         config.add_pattern("**/*.rs")

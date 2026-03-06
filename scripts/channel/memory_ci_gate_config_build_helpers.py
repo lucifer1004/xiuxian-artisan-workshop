@@ -6,14 +6,14 @@ from __future__ import annotations
 from typing import Any
 
 ARTIFACT_SPECS: tuple[tuple[str, str, str, str], ...] = (
-    ("runtime_log_file", "logs", "omni-agent-webhook-ci", "log"),
-    ("mock_log_file", "logs", "omni-agent-mock-telegram", "log"),
-    ("evolution_report_json", "reports", "omni-agent-memory-evolution", "json"),
-    ("benchmark_report_json", "reports", "omni-agent-memory-benchmark", "json"),
+    ("runtime_log_file", "logs", "xiuxian-daochang-webhook-ci", "log"),
+    ("mock_log_file", "logs", "xiuxian-daochang-mock-telegram", "log"),
+    ("evolution_report_json", "reports", "xiuxian-daochang-memory-evolution", "json"),
+    ("benchmark_report_json", "reports", "xiuxian-daochang-memory-benchmark", "json"),
     ("session_matrix_report_json", "reports", "agent-channel-session-matrix", "json"),
     ("session_matrix_report_markdown", "reports", "agent-channel-session-matrix", "md"),
-    ("trace_report_json", "reports", "omni-agent-trace-reconstruction", "json"),
-    ("trace_report_markdown", "reports", "omni-agent-trace-reconstruction", "md"),
+    ("trace_report_json", "reports", "xiuxian-daochang-trace-reconstruction", "json"),
+    ("trace_report_markdown", "reports", "xiuxian-daochang-trace-reconstruction", "md"),
     ("cross_group_report_json", "reports", "agent-channel-cross-group-complex", "json"),
     ("cross_group_report_markdown", "reports", "agent-channel-cross-group-complex", "md"),
 )

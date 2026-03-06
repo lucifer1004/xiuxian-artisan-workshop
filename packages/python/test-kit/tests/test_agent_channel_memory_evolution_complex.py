@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 
 def _load_module() -> ModuleType:
     root = get_project_root()
-    script_path = root / "scripts" / "channel" / "test_omni_agent_complex_scenarios.py"
+    script_path = root / "scripts" / "channel" / "test_xiuxian_daochang_complex_scenarios.py"
     spec = importlib.util.spec_from_file_location(
-        "omni_agent_complex_scenarios_memory", script_path
+        "xiuxian_daochang_complex_scenarios_memory", script_path
     )
     assert spec is not None
     assert spec.loader is not None
@@ -81,7 +81,7 @@ def test_extract_bot_excerpt_prefers_observed_outbound_line() -> None:
         [
             "Blackbox probe succeeded.",
             "Observed outbound bot log:",
-            '  2026-02-19 INFO omni_agent: → Bot: "ACK VALKEY POSTGRES"',
+            '  2026-02-19 INFO xiuxian_daochang: → Bot: "ACK VALKEY POSTGRES"',
         ]
     )
     excerpt = module.extract_bot_excerpt(stdout)

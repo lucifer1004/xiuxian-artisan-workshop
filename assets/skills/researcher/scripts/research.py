@@ -53,8 +53,8 @@ def parse_repo_url(url: str) -> tuple[str, str]:
     Examples:
         >>> parse_repo_url("https://github.com/anthropics/claude-code")
         ("anthropics", "claude-code")
-        >>> parse_repo_url("https://github.com/tao3k/omni-dev-fusion.git")
-        ("tao3k", "omni-dev-fusion")
+        >>> parse_repo_url("https://github.com/tao3k/xiuxian-artisan-workshop.git")
+        ("tao3k", "xiuxian-artisan-workshop")
     """
     # Clean URL
     url = url.strip().rstrip("/")

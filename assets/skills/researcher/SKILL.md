@@ -3,9 +3,9 @@ type: skill
 name: researcher
 description: Use when analyzing repositories, conducting deep research on codebases, performing architecture reviews, or exploring large projects from a git URL.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "2.1.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/researcher"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/researcher"
   routing_keywords:
     - "research"
     - "analyze"

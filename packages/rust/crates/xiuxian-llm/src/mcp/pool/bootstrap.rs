@@ -57,6 +57,7 @@ impl McpClientPool {
             list_tools_cache_refreshes: AtomicU64::new(0),
             list_tools_cache_last_log_at: Mutex::new(initial_cache_stats_log_at),
             list_tools_cache_stats_log_interval: cache_stats_log_interval,
+            observed_tool_list_changed_epoch: AtomicU64::new(0),
             discover_cache,
             discover_cache_hits: AtomicU64::new(0),
             discover_cache_misses: AtomicU64::new(0),

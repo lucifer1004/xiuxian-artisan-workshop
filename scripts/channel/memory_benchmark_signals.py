@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Log signal parsing helpers for omni-agent memory benchmark scripts."""
+"""Log signal parsing helpers for xiuxian-daochang memory benchmark scripts."""
 
 from __future__ import annotations
 

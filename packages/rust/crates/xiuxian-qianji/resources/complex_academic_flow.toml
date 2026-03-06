@@ -1,0 +1,108 @@
+name = "Epic_Academic_Forge"
+
+[[nodes]]
+id = "Start_Research"
+task_type = "mock"
+weight = 1.0
+params = {}
+
+[[nodes]]
+id = "Fork_Analysis"
+task_type = "router"
+weight = 1.0
+params = {}
+
+[[nodes]]
+id = "LLM_Perspective_A"
+task_type = "llm"
+weight = 1.0
+params = {}
+[nodes.llm]
+model = "gpt-4"
+
+[[nodes]]
+id = "LLM_Perspective_B"
+task_type = "llm"
+weight = 1.0
+params = {}
+[nodes.llm]
+model = "claude-3"
+
+[[nodes]]
+id = "Consensus_Join"
+task_type = "router"
+weight = 1.0
+params = {}
+
+[[nodes]]
+id = "Final_Audit"
+task_type = "formal_audit"
+weight = 1.0
+params = { max_retries = 10 }
+
+[[nodes]]
+id = "Decision_Gateway"
+task_type = "router"
+weight = 1.0
+params = {}
+
+[[nodes]]
+id = "Publication_Ready"
+task_type = "mock"
+weight = 1.0
+params = {}
+
+[[nodes]]
+id = "Rewrite_Loop"
+task_type = "mock"
+weight = 1.0
+params = {}
+
+[[edges]]
+from = "Start_Research"
+to = "Fork_Analysis"
+weight = 1.0
+
+[[edges]]
+from = "Fork_Analysis"
+to = "LLM_Perspective_A"
+label = "Dimension_X"
+weight = 0.5
+
+[[edges]]
+from = "Fork_Analysis"
+to = "LLM_Perspective_B"
+label = "Dimension_Y"
+weight = 0.5
+
+[[edges]]
+from = "LLM_Perspective_A"
+to = "Consensus_Join"
+weight = 1.0
+
+[[edges]]
+from = "LLM_Perspective_B"
+to = "Consensus_Join"
+weight = 1.0
+
+[[edges]]
+from = "Consensus_Join"
+to = "Final_Audit"
+weight = 1.0
+
+[[edges]]
+from = "Final_Audit"
+to = "Decision_Gateway"
+weight = 1.0
+
+[[edges]]
+from = "Decision_Gateway"
+to = "Publication_Ready"
+label = "Approved"
+weight = 0.9
+
+[[edges]]
+from = "Decision_Gateway"
+to = "Rewrite_Loop"
+label = "Reject"
+weight = 0.1

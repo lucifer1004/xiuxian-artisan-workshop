@@ -1,7 +1,7 @@
 """Skills ↔ Rust DB Bridge Contract Tests.
 
 CRITICAL: These tests protect the data contract between:
-  - Rust omni-vector (LanceDB) → list_all_tools returns {id, content, metadata}
+  - Rust xiuxian-vector (LanceDB) → list_all_tools returns {id, content, metadata}
   - Python RustVectorStore._flatten_list_all_entry → flattens to top-level skill_name, tool_name
   - Python SkillDiscoveryService._build_skills_from_tools → expects top-level skill_name, tool_name
 
@@ -307,32 +307,30 @@ class TestIndexListDiscoverIntegration:
         skills_dir = SKILLS_DIR()
         if not skills_dir.exists():
             pytest.skip("SKILLS_DIR not found")
-        # Use temp DB to avoid polluting project
-        with tempfile.TemporaryDirectory() as tmp:
-            path = str(Path(tmp) / "skills.lance")
-            store = RustVectorStore(
-                index_path=path,
-                dimension=8,
-                enable_keyword_index=False,
-            )
-            count = await store.index_skill_tools(str(skills_dir), "skills")
-            if count == 0:
-                pytest.skip("No tools indexed (skills dir may be empty)")
-            tools = store.list_all_tools()
-            assert len(tools) > 0
-            unique_skills = {t.get("skill_name") for t in tools}
-            unique_skills.discard("unknown")
-            assert len(unique_skills) > 1, (
-                f"Indexed {count} tools but only {len(unique_skills)} skill(s): {unique_skills}. "
-                "Bridge flatten or Rust output may be broken."
-            )
-            # Discovery path: patch module-level get_vector_store
-            from omni.core.skills.discovery import SkillDiscoveryService
+        # Use in-memory DB: avoids filesystem cleanup races from background index files.
+        store = RustVectorStore(
+            index_path=":memory:",
+            dimension=8,
+            enable_keyword_index=False,
+        )
+        count = await store.index_skill_tools(str(skills_dir), "skills")
+        if count == 0:
+            pytest.skip("No tools indexed (skills dir may be empty)")
+        tools = store.list_all_tools()
+        assert len(tools) > 0
+        unique_skills = {t.get("skill_name") for t in tools}
+        unique_skills.discard("unknown")
+        assert len(unique_skills) > 1, (
+            f"Indexed {count} tools but only {len(unique_skills)} skill(s): {unique_skills}. "
+            "Bridge flatten or Rust output may be broken."
+        )
+        # Discovery path: patch module-level get_vector_store
+        from omni.core.skills.discovery import SkillDiscoveryService
 
-            discovery = SkillDiscoveryService()
-            with patch("omni.core.skills.discovery.get_vector_store", return_value=store):
-                skills = await discovery.discover_all()
-            assert len(skills) > 1, (
-                f"discover_all returned {len(skills)} skill(s). Expected > 1. "
-                "Check list_all_tools returns flat skill_name, tool_name."
-            )
+        discovery = SkillDiscoveryService()
+        with patch("omni.core.skills.discovery.get_vector_store", return_value=store):
+            skills = await discovery.discover_all()
+        assert len(skills) > 1, (
+            f"discover_all returned {len(skills)} skill(s). Expected > 1. "
+            "Check list_all_tools returns flat skill_name, tool_name."
+        )

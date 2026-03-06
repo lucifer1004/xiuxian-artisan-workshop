@@ -27,6 +27,7 @@ import json
 import time
 from typing import Any
 
+from omni.agent.protocol import MCP_PROTOCOL_VERSION
 from mcp.server import Server
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.types import (
@@ -41,11 +42,11 @@ from pydantic.networks import AnyUrl
 
 from omni.core.config.loader import is_filtered, load_command_overrides
 from omni.core.kernel import get_kernel
-from omni.core.omni_tool import get_omni_tool_info
+from omni.core.xiuxian_tool import get_xiuxian_tool_info
 
 # [NEW] Holographic Registry for dynamic tool discovery (Stage 3.5)
 from omni.core.skills.registry.holographic import HolographicRegistry, ToolMetadata
-from omni.core.skills.runtime.omni_cell import ActionType, get_runner
+from omni.core.skills.runtime.xiuxian_cell import ActionType, get_runner
 from omni.foundation.config.logging import configure_logging, get_logger
 from omni.foundation.utils.asyncio import run_async_blocking
 
@@ -90,7 +91,7 @@ class AgentMCPServer:
                            If False, use traditional kernel-based tool listing.
         """
         self._kernel = None
-        self._app = Server("omni-agent-os-v2")
+        self._app = Server("xiuxian-daochang-os-v2")
         self._start_time = time.time()
 
         # [v2.1] Holographic Mode flag
@@ -109,12 +110,12 @@ class AgentMCPServer:
     @staticmethod
     def _base_tools() -> list[Tool]:
         """Build static MCP tools that are independent of skill registry state."""
-        omni_info = get_omni_tool_info()
+        tool_info = get_xiuxian_tool_info()
         return [
             Tool(
                 name="omni",
-                description=omni_info["description"],
-                inputSchema=omni_info["inputSchema"],
+                description=tool_info["description"],
+                inputSchema=tool_info["inputSchema"],
             ),
             Tool(
                 name="sys_query",
@@ -1101,16 +1102,6 @@ class AgentMCPServer:
         try:
             # Use stdio_server context manager for proper stream handling
             async with stdio_server() as (read_stream, write_stream):
-                # Start model loading in background AFTER connection is established
-                try:
-                    from omni.foundation.services.embedding import get_embedding_service
-
-                    embed_svc = get_embedding_service()
-                    embed_svc.start_model_loading()
-                    logger.info("Embedding: model loading started in background")
-                except Exception as e:
-                    logger.warning("Failed to start model loading", error=str(e))
-
                 await self._app.run(
                     read_stream,
                     write_stream,
@@ -1188,13 +1179,13 @@ async def run_sse_server(
     sse = SSEServer(server._app, host="0.0.0.0", port=port)
 
     init_options = {
-        "protocolVersion": "2024-11-05",
+        "protocolVersion": MCP_PROTOCOL_VERSION,
         "capabilities": {
             "tools": {"listChanged": True},
             "resources": {"subscribe": True},
             "prompts": {"listChanged": False},
         },
-        "serverInfo": {"name": "omni-agent", "version": "2.1.0"},
+        "serverInfo": {"name": "xiuxian-daochang", "version": "2.1.0"},
     }
 
     try:

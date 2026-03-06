@@ -135,7 +135,7 @@ To **research or analyze** any long ingested content (paper, manual, long doc):
 
 ---
 
-title: "Run the Rust Agent (omni-agent)"
+title: "Run the Rust Agent (修仙道场)"
 category: "how-to"
 tags:
 
@@ -146,24 +146,24 @@ tags:
 
 ---
 
-# Run the Rust Agent (omni-agent)
+# Run the Rust Agent (修仙道场)
 
-> Verification checklist for omni-agent: gateway, stdio, repl, MCP, memory, and session window. Use this to confirm feature parity with Nanobot/ZeroClaw.
+> Verification checklist for xiuxian-daochang: gateway, stdio, repl, MCP, memory, and session window. Use this to confirm feature parity with Nanobot/ZeroClaw.
 
-**Quick start**: After `cargo build -p omni-agent`, use `omni agent --rust` or `omni gateway --rust` to run the Rust agent from the main CLI.
+**Quick start**: After `cargo build -p xiuxian-daochang`, use `omni agent --rust` or `omni gateway --rust` to run the Rust agent from the main CLI.
 
 ---
 
 ## E2E Validation Checklist
 
-| Step                | Command / Action                                                                      | Status                                                 |
-| ------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| 1. Build            | `cargo build -p omni-agent`                                                           | ✅                                                     |
-| 2. Unit tests       | `cargo nextest run -p omni-agent`                                                     | ✅                                                     |
-| 3. Gateway + LLM    | Start MCP + gateway; `curl POST /message`                                             | Manual (needs `OPENAI_API_KEY` or `LITELLM_PROXY_URL`) |
-| 4. Stdio            | `echo "msg" \| cargo run -p omni-agent -- stdio`                                      | Manual                                                 |
-| 5. REPL             | `omni agent --rust` or `cargo run -p omni-agent -- repl`                              | Manual                                                 |
-| 6. Integration test | `cargo nextest run -p omni-agent --test agent_integration --run-ignored ignored-only` | Manual (needs API key + MCP)                           |
+| Step                | Command / Action                                                                            | Status                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| 1. Build            | `cargo build -p xiuxian-daochang`                                                           | ✅                                                     |
+| 2. Unit tests       | `cargo nextest run -p xiuxian-daochang`                                                     | ✅                                                     |
+| 3. Gateway + LLM    | Start MCP + gateway; `curl POST /message`                                                   | Manual (needs `OPENAI_API_KEY` or `LITELLM_PROXY_URL`) |
+| 4. Stdio            | `echo "msg" \| cargo run -p xiuxian-daochang -- stdio`                                      | Manual                                                 |
+| 5. REPL             | `omni agent --rust` or `cargo run -p xiuxian-daochang -- repl`                              | Manual                                                 |
+| 6. Integration test | `cargo nextest run -p xiuxian-daochang --test agent_integration --run-ignored ignored-only` | Manual (needs API key + MCP)                           |
 
 **Full E2E (Rust agent + Python MCP + LiteLLM)**: See §3 Gateway and §9 Integration test. Run `omni mcp --transport sse --port 3002` in one terminal, then `omni gateway --rust --webhook-port 8080`, then `curl` or run the integration test.
 
@@ -171,7 +171,7 @@ tags:
 
 ## Prerequisites
 
-- **LLM**: `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY` for Claude), or LiteLLM proxy (`LITELLM_PROXY_URL`, `OMNI_AGENT_MODEL`)
+- **LLM**: `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY` for Claude), or LiteLLM proxy (`LITELLM_PROXY_URL`, `XIUXIAN_DAOCHANG_MODEL`)
 - **MCP** (optional): `omni mcp --transport sse --port 3002` running; add to `.mcp.json` (see below)
 - **Valkey** (when `memory.persistence_backend=valkey`): configure `session.valkey_url` or set `VALKEY_URL`
 
@@ -179,14 +179,14 @@ tags:
 
 ## LLM Backend Selection
 
-`omni-agent` supports two backend modes:
+`xiuxian-daochang` supports two backend modes:
 
 - `litellm_rs` (default): Rust `litellm-rs` provider path.
 - `http`: direct OpenAI-compatible HTTP requests.
 
 Selection priority:
 
-1. `OMNI_AGENT_LLM_BACKEND` (env)
+1. `XIUXIAN_DAOCHANG_LLM_BACKEND` (env)
 2. `agent.llm_backend` (settings)
 3. default `litellm_rs`
 
@@ -194,10 +194,10 @@ Examples:
 
 ```bash
 # force HTTP mode for a single run
-OMNI_AGENT_LLM_BACKEND=http omni agent --rust
+XIUXIAN_DAOCHANG_LLM_BACKEND=http omni agent --rust
 
 # use default Rust backend
-OMNI_AGENT_LLM_BACKEND=litellm_rs omni agent --rust
+XIUXIAN_DAOCHANG_LLM_BACKEND=litellm_rs omni agent --rust
 ```
 
 Verify from logs:
@@ -238,9 +238,9 @@ Runtime override example:
 
 ```bash
 VALKEY_URL=redis://127.0.0.1:6379/0 \
-OMNI_AGENT_LLM_BACKEND=litellm_rs \
-OMNI_AGENT_LLM_PROVIDER=minimax \
-cargo run -p omni-agent -- repl --query "Only reply OK"
+XIUXIAN_DAOCHANG_LLM_BACKEND=litellm_rs \
+XIUXIAN_DAOCHANG_LLM_PROVIDER=minimax \
+cargo run -p xiuxian-daochang -- repl --query "Only reply OK"
 ```
 
 ---
@@ -248,11 +248,11 @@ cargo run -p omni-agent -- repl --query "Only reply OK"
 ## 1. Build and unit tests
 
 ```bash
-cargo build -p omni-agent
-cargo nextest run -p omni-agent
+cargo build -p xiuxian-daochang
+cargo nextest run -p xiuxian-daochang
 ```
 
-Or run the full test pipeline (includes omni-agent):
+Or run the full test pipeline (includes xiuxian-daochang):
 
 ```bash
 just test
@@ -292,11 +292,11 @@ omni mcp --transport sse --port 3002
 **Terminal 2** — start gateway:
 
 ```bash
-# Via omni CLI (after cargo build -p omni-agent)
+# Via omni CLI (after cargo build -p xiuxian-daochang)
 omni gateway --rust --webhook-port 8080 --webhook-host 0.0.0.0
 
 # Or directly
-cargo run -p omni-agent -- gateway --bind 0.0.0.0:8080
+cargo run -p xiuxian-daochang -- gateway --bind 0.0.0.0:8080
 ```
 
 **Terminal 3** — send a message:
@@ -316,7 +316,7 @@ curl -X POST http://127.0.0.1:8080/message \
 ## 4. Stdio mode
 
 ```bash
-echo "What is 2+2?" | cargo run -p omni-agent -- stdio --session-id test-session
+echo "What is 2+2?" | cargo run -p xiuxian-daochang -- stdio --session-id test-session
 ```
 
 **Expected**: One line of model output printed to stdout.
@@ -325,7 +325,7 @@ echo "What is 2+2?" | cargo run -p omni-agent -- stdio --session-id test-session
 
 ## 5. REPL (interactive or one-shot)
 
-**Via omni CLI** (after `cargo build -p omni-agent`):
+**Via omni CLI** (after `cargo build -p xiuxian-daochang`):
 
 ```bash
 omni agent --rust
@@ -334,13 +334,13 @@ omni agent --rust
 **One-shot** (direct):
 
 ```bash
-cargo run -p omni-agent -- repl --query "List three programming languages."
+cargo run -p xiuxian-daochang -- repl --query "List three programming languages."
 ```
 
 **Interactive** (read-eval-print loop):
 
 ```bash
-cargo run -p omni-agent -- repl
+cargo run -p xiuxian-daochang -- repl
 # Type a message, press Enter; repeat. Exit with Ctrl+C or EOF.
 ```
 
@@ -349,7 +349,7 @@ cargo run -p omni-agent -- repl
 Run recurring background jobs directly from CLI:
 
 ```bash
-cargo run -p omni-agent -- schedule \
+cargo run -p xiuxian-daochang -- schedule \
   --prompt "research latest Rust actor runtime benchmarks" \
   --interval-secs 300 \
   --max-runs 3 \
@@ -389,7 +389,7 @@ When `config.window_max_turns` and `config.consolidation_threshold_turns` are se
 - Session history is bounded (ring buffer)
 - When turn count ≥ threshold, oldest `consolidation_take_turns` turns are drained
 - Drained turns are stored in two forms:
-  - one `omni-memory` episode (for recall)
+  - one `xiuxian-memory-engine` episode (for recall)
   - one compact session summary segment (for prompt reuse in future turns)
 
 ### Compression settings (session)
@@ -408,14 +408,14 @@ session:
 
 Environment overrides:
 
-- `OMNI_AGENT_WINDOW_MAX_TURNS`
-- `OMNI_AGENT_CONSOLIDATION_THRESHOLD_TURNS`
-- `OMNI_AGENT_CONSOLIDATION_TAKE_TURNS`
-- `OMNI_AGENT_SUMMARY_MAX_SEGMENTS`
-- `OMNI_AGENT_SUMMARY_MAX_CHARS`
-- `OMNI_AGENT_CONSOLIDATION_ASYNC`
-- `OMNI_AGENT_CONTEXT_BUDGET_TOKENS`
-- `OMNI_AGENT_CONTEXT_BUDGET_RESERVE_TOKENS`
+- `XIUXIAN_DAOCHANG_WINDOW_MAX_TURNS`
+- `XIUXIAN_DAOCHANG_CONSOLIDATION_THRESHOLD_TURNS`
+- `XIUXIAN_DAOCHANG_CONSOLIDATION_TAKE_TURNS`
+- `XIUXIAN_DAOCHANG_SUMMARY_MAX_SEGMENTS`
+- `XIUXIAN_DAOCHANG_SUMMARY_MAX_CHARS`
+- `XIUXIAN_DAOCHANG_CONSOLIDATION_ASYNC`
+- `XIUXIAN_DAOCHANG_CONTEXT_BUDGET_TOKENS`
+- `XIUXIAN_DAOCHANG_CONTEXT_BUDGET_RESERVE_TOKENS`
 
 `context_budget_tokens` + `context_budget_reserve_tokens` enable token-budget packing before each LLM call, so the latest turn is retained while older context is trimmed/truncated to stay within budget.
 
@@ -436,14 +436,14 @@ Environment overrides:
 Requires `OPENAI_API_KEY` and optional MCP on port 3002:
 
 ```bash
-cargo nextest run -p omni-agent --test agent_integration --run-ignored ignored-only
+cargo nextest run -p xiuxian-daochang --test agent_integration --run-ignored ignored-only
 ```
 
 ---
 
 ## 11. Telegram Channel (Production-Ready)
 
-`omni-agent channel` runs a high-concurrency Telegram bot with webhook mode, Valkey dedup, and user/group allowlists. **Suitable for commercial deployment.**
+`xiuxian-daochang channel` runs a high-concurrency Telegram bot with webhook mode, Valkey dedup, and user/group allowlists. **Suitable for commercial deployment.**
 
 ### Architecture
 
@@ -544,7 +544,7 @@ Settings are read from `packages/conf/settings.yaml` when env vars are not set.
    ```bash
    TELEGRAM_BOT_TOKEN=<token> \
    VALKEY_URL=redis://127.0.0.1:6379/0 \
-   cargo run -p omni-agent -- channel \
+   cargo run -p xiuxian-daochang -- channel \
      --mode webhook \
      --webhook-bind 0.0.0.0:18081 \
      --webhook-secret-token "<secret>"
@@ -561,14 +561,14 @@ Settings are read from `packages/conf/settings.yaml` when env vars are not set.
 Run ignored stress tests that require a live Valkey backend:
 
 ```bash
-just test-omni-agent-valkey-stress
+just test-xiuxian-daochang-valkey-stress
 ```
 
 Or directly:
 
 ```bash
 VALKEY_URL=redis://127.0.0.1:6379/0 \
-cargo nextest run -p omni-agent --test channels_webhook_stress --run-ignored ignored-only
+cargo nextest run -p xiuxian-daochang --test channels_webhook_stress --run-ignored ignored-only
 ```
 
 Stop local Valkey when done:
@@ -592,19 +592,19 @@ When no logs or bot reply appear:
 Run Telegram-specific robustness tests (Unicode-safe chunking, markdown fallback including API-level `ok=false`, caption MarkdownV2 fallback for single/media-group sends, transient send retries, topic routing via `chat_id:thread_id`, URL/local attachment marker routing, short-text caption routing with long-text fallback, `sendMediaGroup` batching/split/fallback behavior, polling error handling):
 
 ```bash
-cargo nextest run -p omni-agent --test channels_telegram --test channels_telegram_chunking --test channels_telegram_markdown --test channels_telegram_media --test channels_telegram_polling
+cargo nextest run -p xiuxian-daochang --test channels_telegram --test channels_telegram_chunking --test channels_telegram_markdown --test channels_telegram_media --test channels_telegram_polling
 ```
 
 ---
 
 ## 11. Scheduled Jobs (Recurring)
 
-`omni-agent schedule` runs recurring prompts through the existing `JobManager` runtime.
+`xiuxian-daochang schedule` runs recurring prompts through the existing `JobManager` runtime.
 
 One-shot finite run (useful for verification):
 
 ```bash
-cargo run -p omni-agent -- schedule \
+cargo run -p xiuxian-daochang -- schedule \
   --prompt "research compare rust actor runtimes" \
   --interval-secs 60 \
   --max-runs 3
@@ -613,7 +613,7 @@ cargo run -p omni-agent -- schedule \
 Long-running scheduler (stop with Ctrl+C):
 
 ```bash
-cargo run -p omni-agent -- schedule \
+cargo run -p xiuxian-daochang -- schedule \
   --prompt "collect system summary" \
   --interval-secs 300
 ```
@@ -628,15 +628,15 @@ Notes:
 
 ## Env vars
 
-| Var                  | Purpose                                                                                                                                                   |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OPENAI_API_KEY`     | API key for OpenAI-compatible endpoint                                                                                                                    |
-| `ANTHROPIC_API_KEY`  | For Claude endpoints                                                                                                                                      |
-| `LITELLM_PROXY_URL`  | **Recommended.** Chat completions URL (e.g. `http://127.0.0.1:4000/v1/chat/completions`). If unset, agent may infer from MCP URL, which is usually wrong. |
-| `OMNI_AGENT_MODEL`   | Model id (e.g. `gpt-4o-mini`)                                                                                                                             |
-| `OMNI_MCP_URL`       | Override MCP URL for one_turn example (otherwise from mcp.json)                                                                                           |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot token for `omni-agent channel`                                                                                                               |
-| `VALKEY_URL`         | Fallback Valkey/Redis URL when `session.valkey_url` is not configured                                                                                     |
+| Var                      | Purpose                                                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`         | API key for OpenAI-compatible endpoint                                                                                                                    |
+| `ANTHROPIC_API_KEY`      | For Claude endpoints                                                                                                                                      |
+| `LITELLM_PROXY_URL`      | **Recommended.** Chat completions URL (e.g. `http://127.0.0.1:4000/v1/chat/completions`). If unset, agent may infer from MCP URL, which is usually wrong. |
+| `XIUXIAN_DAOCHANG_MODEL` | Model id (e.g. `gpt-4o-mini`)                                                                                                                             |
+| `OMNI_MCP_URL`           | Override MCP URL for one_turn example (otherwise from mcp.json)                                                                                           |
+| `TELEGRAM_BOT_TOKEN`     | Telegram bot token for `xiuxian-daochang channel`                                                                                                         |
+| `VALKEY_URL`             | Fallback Valkey/Redis URL when `session.valkey_url` is not configured                                                                                     |
 
 **First-time setup**: Set `LITELLM_PROXY_URL` (or run LiteLLM and point to it) and `OPENAI_API_KEY` before starting the agent. The MCP server URL in `.mcp.json` is for tools only, not chat.
 
@@ -645,11 +645,11 @@ Notes:
 ## CLI reference
 
 ```bash
-omni-agent gateway --help
-omni-agent stdio --help
-omni-agent repl --help
-omni-agent channel --help
-omni-agent schedule --help
+xiuxian-daochang gateway --help
+xiuxian-daochang stdio --help
+xiuxian-daochang repl --help
+xiuxian-daochang channel --help
+xiuxian-daochang schedule --help
 ```
 
 **Gateway options**: `--bind`, `--turn-timeout`, `--max-concurrent`, `--mcp-config`
@@ -669,7 +669,7 @@ tags:
 
 # Verify MemRL Memory (Self-Evolution) via REPL or Telegram
 
-> **Purpose**: Validate that omni-agent's memory (MemRL-inspired: two-phase recall, Q-learning, store_episode) works. The "self-evolution" effect: high-utility episodes surface in recall; low-utility ones are deprioritized.
+> **Purpose**: Validate that xiuxian-daochang's memory (MemRL-inspired: two-phase recall, Q-learning, store_episode) works. The "self-evolution" effect: high-utility episodes surface in recall; low-utility ones are deprioritized.
 
 ---
 
@@ -686,15 +686,15 @@ Memory persists to disk (`memory/`). Run two one-shot commands with the same `--
 
 ```bash
 # Turn 1: Store episode
-cargo run -p omni-agent -- repl --query "Remember: my favorite number is 42." --session-id mem-test
+cargo run -p xiuxian-daochang -- repl --query "Remember: my favorite number is 42." --session-id mem-test
 
 # Turn 2: Recall (new process loads same memory store)
-cargo run -p omni-agent -- repl --query "What's my favorite number?" --session-id mem-test
+cargo run -p xiuxian-daochang -- repl --query "What's my favorite number?" --session-id mem-test
 ```
 
 **Expected**: Turn 2 reply includes "42" (recalled from Turn 1).
 
-**Embedding**: When the embedding HTTP server is running (e.g. `omni mcp` with embedding on port 18501), omni-agent uses it for semantic encoding. Otherwise it falls back to hash-based encoder (identical wording required). Set `OMNI_EMBEDDING_URL` to override the default `http://127.0.0.1:18501`.
+**Embedding**: When the embedding HTTP server is running (e.g. `omni mcp` with embedding on port 18501), xiuxian-daochang uses it for semantic encoding. Otherwise it falls back to hash-based encoder (identical wording required). Set `OMNI_EMBEDDING_URL` to override the default `http://127.0.0.1:18501`.
 
 ### macOS Apple Silicon: `mistralrs` Metal build notes
 
@@ -728,7 +728,7 @@ xcodebuild -downloadComponent MetalToolchain
 
 ## Alternative: Telegram
 
-- `omni channel --rust` (or `cargo run -p omni-agent -- channel`) running with bot token configured
+- `omni channel --rust` (or `cargo run -p xiuxian-daochang -- channel`) running with bot token configured
 - Same Telegram chat = same session (`telegram:{chat_id}`)
 - For local testing, use `--mode polling`; for production with a public URL, use `--mode webhook` (see [Run the Rust Agent §10](../how-to/run-rust-agent.md#10-telegram-channel))
 
@@ -738,13 +738,13 @@ Use the Pythonized suite for repeatable black-box validation:
 
 ```bash
 # Quick command-path checks
-python3 scripts/channel/test_omni_agent_memory_suite.py --suite quick --max-wait 90 --max-idle-secs 40 --username tao3k
+python3 scripts/channel/test_xiuxian_daochang_memory_suite.py --suite quick --max-wait 90 --max-idle-secs 40 --username tao3k
 
 # Full live suite: includes memory self-evolution DAG validation by default
-python3 scripts/channel/test_omni_agent_memory_suite.py --suite full --max-wait 90 --max-idle-secs 40 --username tao3k
+python3 scripts/channel/test_xiuxian_daochang_memory_suite.py --suite full --max-wait 90 --max-idle-secs 40 --username tao3k
 
 # Full suite but skip DAG stage (command probes + Rust regressions only)
-python3 scripts/channel/test_omni_agent_memory_suite.py --suite full --skip-evolution
+python3 scripts/channel/test_xiuxian_daochang_memory_suite.py --suite full --skip-evolution
 ```
 
 ### CI gate runner (mock Telegram + local webhook runtime)
@@ -753,17 +753,17 @@ Use the orchestrator for repeatable CI/local gate execution:
 
 ```bash
 # PR-level quick gate (command-path + Rust regressions, no DAG)
-python3 scripts/channel/test_omni_agent_memory_ci_gate.py --profile quick
+python3 scripts/channel/test_xiuxian_daochang_memory_ci_gate.py --profile quick
 
 # Nightly gate (full suite + DAG quality + session matrix + benchmark)
-python3 scripts/channel/test_omni_agent_memory_ci_gate.py --profile nightly --max-memory-stream-read-failed-events 0
+python3 scripts/channel/test_xiuxian_daochang_memory_ci_gate.py --profile nightly --max-memory-stream-read-failed-events 0
 
 # Debug matrix/benchmark path without DAG stage
-python3 scripts/channel/test_omni_agent_memory_ci_gate.py --profile nightly --skip-evolution --skip-benchmark
+python3 scripts/channel/test_xiuxian_daochang_memory_ci_gate.py --profile nightly --skip-evolution --skip-benchmark
 ```
 
 The gate runner automatically starts/stops Valkey, a local Telegram API mock server, and the local webhook runtime.
-By default it uses an auto-generated Valkey key prefix per run (`OMNI_AGENT_SESSION_VALKEY_PREFIX`)
+By default it uses an auto-generated Valkey key prefix per run (`XIUXIAN_DAOCHANG_SESSION_VALKEY_PREFIX`)
 to isolate CI traffic from any other local runtime sharing the same `VALKEY_URL`.
 By default it also writes run-scoped log/report files (profile + run suffix), so concurrent quick/nightly runs do not overwrite each other.
 If Valkey is already running before the gate starts, the gate will not shut it down in cleanup.
@@ -824,12 +824,12 @@ The benchmark `--user-id` must map to an admin-capable Telegram identity in runt
 
 ```bash
 # With embedding server (omni mcp or embedding on 18501): semantic recall works
-cargo run -p omni-agent -- repl --query "Remember: my favorite number is 42." --session-id mem-test
-cargo run -p omni-agent -- repl --query "What's my favorite number?" --session-id mem-test
+cargo run -p xiuxian-daochang -- repl --query "Remember: my favorite number is 42." --session-id mem-test
+cargo run -p xiuxian-daochang -- repl --query "What's my favorite number?" --session-id mem-test
 
 # Without embedding server: recall/store is skipped (no hash fallback), so expect no memory hit
-cargo run -p omni-agent -- repl --query "What is my favorite number? (Answer: 42)" --session-id mem-test
-cargo run -p omni-agent -- repl --query "What's my favorite number?" --session-id mem-test
+cargo run -p xiuxian-daochang -- repl --query "What is my favorite number? (Answer: 42)" --session-id mem-test
+cargo run -p xiuxian-daochang -- repl --query "What's my favorite number?" --session-id mem-test
 ```
 
 **Expected**: Second reply includes "42".
@@ -840,16 +840,16 @@ cargo run -p omni-agent -- repl --query "What's my favorite number?" --session-i
 
 ## Troubleshooting
 
-| Issue                  | Cause                               | Fix                                                                                                |
-| ---------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Agent doesn't recall   | Memory disabled or store path wrong | Check `config.memory` in agent; default path `PRJ_CACHE_HOME/omni-memory/` (see dirs.py / omni-io) |
-| No episodes stored     | store_episode fails                 | Check disk space; ensure embedding_dim matches                                                     |
-| Recall returns nothing | No similar past episodes            | Run Scenario 1 first to create episodes                                                            |
+| Issue                  | Cause                               | Fix                                                                                                             |
+| ---------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Agent doesn't recall   | Memory disabled or store path wrong | Check `config.memory` in agent; default path `PRJ_CACHE_HOME/xiuxian-memory-engine/` (see dirs.py / xiuxian-io) |
+| No episodes stored     | store_episode fails                 | Check disk space; ensure embedding_dim matches                                                                  |
+| Recall returns nothing | No similar past episodes            | Run Scenario 1 first to create episodes                                                                         |
 
 ---
 
 ## References
 
-- [Omni-Memory](../reference/omni-memory.md) — implementation
-- [MemRL vs Omni-Memory](../workflows/research-memrl-vs-omni-memory.md) — research comparison
+- [Omni-Memory](../reference/xiuxian-memory-engine.md) — implementation
+- [MemRL vs Omni-Memory](../workflows/research-memrl-vs-xiuxian-memory-engine.md) — research comparison
 - [Unified Execution Engine](../reference/unified-execution-engine-design.md) — MemRL integration

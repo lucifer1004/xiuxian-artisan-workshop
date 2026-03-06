@@ -25,7 +25,7 @@ def _extract_query_terms(query: str) -> list[str]:
         List of significant keywords for KG search.
     """
     try:
-        from omni_core_rs import extract_query_intent
+        from xiuxian_core_rs import extract_query_intent
 
         intent = extract_query_intent(query)
         terms = intent.keywords

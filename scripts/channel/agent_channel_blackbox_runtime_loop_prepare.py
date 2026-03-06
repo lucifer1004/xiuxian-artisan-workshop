@@ -41,7 +41,12 @@ def prepare_probe(
 
     update_id = next_update_id_fn(cfg.strong_update_id)
     trace_id = f"bbx-{update_id}-{os.getpid()}"
-    message_text = build_probe_message_fn(cfg.prompt, trace_id)
+    image_url = getattr(cfg, "image_url", None)
+    try:
+        message_text = build_probe_message_fn(cfg.prompt, trace_id, image_url)
+    except TypeError:
+        # Compatibility for legacy callables in unit tests.
+        message_text = build_probe_message_fn(cfg.prompt, trace_id)
 
     post_error = http_loop_module.handle_webhook_post(
         cfg,

@@ -17,7 +17,7 @@ def _load_probe_module() -> ModuleType:
     root = get_project_root()
     script_path = root / "scripts" / "channel" / "agent_channel_blackbox.py"
     spec = importlib.util.spec_from_file_location(
-        "omni_agent_channel_blackbox_probe_acl", script_path
+        "xiuxian_daochang_channel_blackbox_probe_acl", script_path
     )
     assert spec is not None
     assert spec.loader is not None
@@ -111,7 +111,7 @@ def test_run_probe_allow_no_bot_matches_control_admin_required_event(tmp_path, m
                     "session_key=1001:2002 content_preview=/session admin add 1001"
                 ],
                 [
-                    "2026-02-20 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-20 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.control_admin_required.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -150,7 +150,7 @@ def test_run_probe_allow_no_bot_matches_slash_permission_required_event(
                     "session_key=1001:2002 content_preview=/session memory"
                 ],
                 [
-                    "2026-02-20 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-20 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.slash_permission_required.replied" '
                     'session_key="1001:2002" recipient="1001" '
@@ -189,7 +189,7 @@ def test_run_probe_acl_event_from_other_recipient_does_not_satisfy_expectation(
                 ],
                 ['2026-02-20 INFO → Bot: "permission denied"'],
                 [
-                    "2026-02-20 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-20 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.slash_permission_required.replied" '
                     'session_key="9999:2002" recipient="9999" '
@@ -228,7 +228,7 @@ def test_run_probe_acl_event_with_mismatched_session_key_fails_scope_validation(
                     "session_key=1001:2002 content_preview=/session admin add 1001"
                 ],
                 [
-                    "2026-02-20 INFO omni_agent::channels::telegram::runtime::jobs: "
+                    "2026-02-20 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
                     "telegram command reply sent "
                     'event="telegram.command.control_admin_required.replied" '
                     'session_key="1001:9999" recipient="1001" '

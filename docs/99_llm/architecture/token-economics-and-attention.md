@@ -51,6 +51,6 @@ Based on these findings, the Xiuxian architecture enforces the **Decoupled Forma
 
 1. **Network Layer (Machine-to-Machine):** MUST use JSON/JSON-RPC. It is deterministic, safe for Rust/Python parsers, and immune to whitespace corruption during HTTP transit.
 2. **Cognitive Layer (Machine-to-LLM):** MUST use Markdown or XML.
-3. **The Bridge (The Stripping Layer):** The host agent (`omni-agent`) is obligated to strip the JSON networking envelope from the RPC response and inject only the inner Markdown/XML string into the LLM's `messages` array.
+3. **The Bridge (The Stripping Layer):** The host agent (`xiuxian-daochang`) is obligated to strip the JSON networking envelope from the RPC response and inject only the inner Markdown/XML string into the LLM's `messages` array.
 
 By adhering to this, we achieve $O(1)$ network parsing reliability while simultaneously maximizing the LLM's reasoning success rate and minimizing API costs.

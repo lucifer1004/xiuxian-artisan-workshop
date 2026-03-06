@@ -20,7 +20,7 @@ def test_statistical_report_builds_for_v4_snapshot() -> None:
     mod = _load_module()
     random.seed(42)
     snapshot = Path(
-        "packages/rust/crates/omni-vector/tests/snapshots/"
+        "packages/rust/crates/xiuxian-vector/tests/snapshots/"
         "test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap"
     )
     data = mod._load_snapshot(snapshot)

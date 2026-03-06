@@ -14,7 +14,7 @@ for more dumps: KNOWLEDGE_TEST_MEMORY_THRESHOLD_MB=10 pytest ... -s
 
 Memory protection (abort on overflow) is project-wide; see root conftest.py.
 Note: test_py_chunk_text_returns_correct_structure shows ~23 MiB growth on first
-run due to omni_core_rs (Rust + tiktoken) load. This is expected one-time cost.
+run due to xiuxian_core_rs (Rust + tiktoken) load. This is expected one-time cost.
 """
 
 import os

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from memory_ci_gate_test_support import build_cfg, passing_report, write_report
-from test_omni_agent_memory_ci_gate import (
+from test_xiuxian_daochang_memory_ci_gate import (
     assert_evolution_slow_response_quality,
     assert_session_matrix_quality,
     assert_trace_reconstruction_quality,

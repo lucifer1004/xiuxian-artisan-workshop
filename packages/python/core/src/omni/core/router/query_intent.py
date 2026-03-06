@@ -3,7 +3,7 @@ query_intent.py - Rule-based and optional LLM-driven intent classification for a
 
 Aligns with:
 - docs/testing/router-file-discovery-intent-report.md
-- packages/rust/crates/omni-vector/src/keyword/fusion.rs (is_file_discovery_query)
+- packages/rust/crates/xiuxian-vector/src/keyword/fusion.rs (is_file_discovery_query)
 
 Classifies the user query into intent (exact | semantic | hybrid) and optional
 category_filter (e.g. file_discovery) so the router can call agentic_search
@@ -121,7 +121,7 @@ def classify_tool_search_intent_full(query: str) -> ToolSearchIntentResult:
 
     Uses the same file-discovery rules as:
     - docs/testing/router-file-discovery-intent-report.md
-    - packages/rust/crates/omni-vector/src/keyword/fusion.rs (is_file_discovery_query)
+    - packages/rust/crates/xiuxian-vector/src/keyword/fusion.rs (is_file_discovery_query)
 
     Intent strategy:
     - exact: Single token, skill.command pattern → keyword-only when query_text set.

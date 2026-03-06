@@ -43,7 +43,7 @@ def build_initial_step_specs(
             title="Run command event probes",
             cmd=(
                 "bash",
-                "scripts/channel/test-omni-agent-command-events.sh",
+                "scripts/channel/test-xiuxian-daochang-command-events.sh",
                 "--max-wait",
                 str(cfg.max_wait),
                 "--max-idle-secs",
@@ -60,7 +60,7 @@ def build_initial_step_specs(
                 title="Run command event topic-isolation probes",
                 cmd=(
                     "bash",
-                    "scripts/channel/test-omni-agent-command-events.sh",
+                    "scripts/channel/test-xiuxian-daochang-command-events.sh",
                     "--suite",
                     "admin",
                     "--assert-admin-topic-isolation",

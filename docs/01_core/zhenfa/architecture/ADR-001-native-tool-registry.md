@@ -17,7 +17,7 @@ metadata:
 
 ## 1. Context and Problem Statement
 
-Initially, `xiuxian-zhenfa` was envisioned as a purely HTTP-based JSON-RPC gateway. The goal was to decouple the "Brain" (`omni-agent` / LLM) from the "Limbs" (`wendao` search, `qianji` workflows) using standard web protocols.
+Initially, `xiuxian-zhenfa` was envisioned as a purely HTTP-based JSON-RPC gateway. The goal was to decouple the "Brain" (`xiuxian-daochang` / LLM) from the "Limbs" (`wendao` search, `qianji` workflows) using standard web protocols.
 
 However, as we scaled up for complex scenarios like the "Adversarial Agenda Subgraph", profiling and architectural audits revealed severe bottlenecks:
 
@@ -32,7 +32,7 @@ We are abandoning the "HTTP-only" microservices paradigm for internal tool execu
 
 Instead, we are adopting a **Microkernel & Native Plugins Architecture**, heavily inspired by the internal design of OpenAI's Codex (`ToolRegistry` and `ToolOrchestrator`).
 
-1.  **In-Process Execution**: Core domain crates (`xiuxian-wendao`, `xiuxian-qianji`) will be compiled and linked directly into the `omni-agent` / `zhenfa` host process.
+1.  **In-Process Execution**: Core domain crates (`xiuxian-wendao`, `xiuxian-qianji`) will be compiled and linked directly into the `xiuxian-daochang` / `zhenfa` host process.
 2.  **`ZhenfaRegistry` & `ZhenfaTool`**: We will introduce a centralized, memory-based registry (`HashMap<String, Arc<dyn ZhenfaTool>>`). The LLM orchestrator will invoke tools directly via Rust trait dynamic dispatch (`call_native`).
 3.  **The Orchestrator & Valkey**: Execution will be wrapped by a `ZhenfaOrchestrator`, which intercepts all calls to enforce sandbox policies, handle Valkey-based distributed locking (for mutations), and cache "stripped" results.
 4.  **The Stripping Layer**: Tools must not return raw JSON data intended for the LLM. They must return "Stripped Context" (lean XML-Lite strings) to maximize Attention Economy.
@@ -104,7 +104,7 @@ impl ZhenfaOrchestrator {
 
 ### Negative / Trade-offs
 
-- **Monolithic Binary**: The host executable (`omni-agent`) will become larger as it statically links all domain crates. (Acceptable trade-off for desktop/agent-OS scenarios).
+- **Monolithic Binary**: The host executable (`xiuxian-daochang`) will become larger as it statically links all domain crates. (Acceptable trade-off for desktop/agent-OS scenarios).
 - **Strict Trait Boundaries**: Domain teams must adapt their responses to return strings instead of complex domain structs when interfacing with Zhenfa.
 
 ## 5. Implementation Plan
@@ -112,4 +112,4 @@ impl ZhenfaOrchestrator {
 1.  Create the native core (`ZhenfaTool`, `ZhenfaRegistry`, `ZhenfaOrchestrator`) in `packages/rust/crates/xiuxian-zhenfa/src/native/`. (Completed)
 2.  Refactor `xiuxian-wendao`'s search entrypoint to implement `ZhenfaTool`, modifying its output to return lean `<hit>` XML tags.
 3.  Refactor `xiuxian-qianhuan`'s template rendering to implement `ZhenfaTool`.
-4.  Wire `omni-agent` to bypass HTTP and directly invoke `ZhenfaOrchestrator::dispatch`.
+4.  Wire `xiuxian-daochang` to bypass HTTP and directly invoke `ZhenfaOrchestrator::dispatch`.

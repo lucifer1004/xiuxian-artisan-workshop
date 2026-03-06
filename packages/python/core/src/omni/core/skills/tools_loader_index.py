@@ -13,7 +13,7 @@ from omni.foundation.bridge.tool_record_validation import (
     validate_scanned_tool_record,
 )
 
-_COMMAND_INDEX_CACHE_SCHEMA = "omni.command-index.v1"
+_COMMAND_INDEX_CACHE_SCHEMA = "xiuxian.command-index.v1"
 
 
 def _record_phase(phase: str, duration_ms: float, **extra: Any) -> None:
@@ -54,9 +54,9 @@ def _cache_file_for(skill_name: str, scripts_path: Path) -> Path:
     try:
         from omni.foundation import PRJ_CACHE
 
-        cache_dir = Path(PRJ_CACHE("omni-tools-loader", "command-index"))
+        cache_dir = Path(PRJ_CACHE("xiuxian-tools-loader", "command-index"))
     except Exception:
-        cache_dir = Path.cwd() / ".cache" / "omni-tools-loader" / "command-index"
+        cache_dir = Path.cwd() / ".cache" / "xiuxian-tools-loader" / "command-index"
     return cache_dir / filename
 
 
@@ -125,7 +125,7 @@ def build_rust_command_index(skill_name: str, scripts_path: Path) -> dict[str, l
         return cached_index
 
     scan_started = time.perf_counter()
-    from omni_core_rs import PySkillScanner
+    from xiuxian_core_rs import PySkillScanner
 
     index: dict[str, list[Path]] = {}
     skills_root = scripts_path.parent.parent

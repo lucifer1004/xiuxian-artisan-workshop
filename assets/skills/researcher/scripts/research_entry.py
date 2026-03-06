@@ -145,7 +145,7 @@ async def run_research_graph(
 
     if action == "start":
         session_id = str(uuid.uuid4())[:8]
-        repo_dir = f"/tmp/omni_research_{repo_name}_{session_id}"
+        repo_dir = f"/tmp/xiuxian_research_{repo_name}_{session_id}"
 
         context = {
             "repo_url": repo_url,

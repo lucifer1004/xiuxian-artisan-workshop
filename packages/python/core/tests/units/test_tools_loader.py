@@ -214,9 +214,9 @@ def other():
                     [_Tool("test_skill.recall", str(scripts_dir / "recall.py"))],
                 )
 
-        import omni_core_rs
+        import xiuxian_core_rs
 
-        monkeypatch.setattr(omni_core_rs, "PySkillScanner", _Scanner)
+        monkeypatch.setattr(xiuxian_core_rs, "PySkillScanner", _Scanner)
 
         loader = ToolsLoader(scripts_dir, "test_skill")
         ok = loader.load_command("recall")
@@ -249,9 +249,9 @@ def recall():
             def scan_skill_with_tools(self, _skill_name: str):
                 return (object(), [])
 
-        import omni_core_rs
+        import xiuxian_core_rs
 
-        monkeypatch.setattr(omni_core_rs, "PySkillScanner", _Scanner)
+        monkeypatch.setattr(xiuxian_core_rs, "PySkillScanner", _Scanner)
 
         loader = ToolsLoader(scripts_dir, "test_skill")
         ok = loader.load_command("recall")

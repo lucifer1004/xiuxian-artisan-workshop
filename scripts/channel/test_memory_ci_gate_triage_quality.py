@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 from test_memory_ci_gate import build_cfg
-from test_omni_agent_memory_ci_gate import (
+from test_xiuxian_daochang_memory_ci_gate import (
     assert_cross_group_complex_quality,
     assert_mcp_waiting_warning_budget,
 )

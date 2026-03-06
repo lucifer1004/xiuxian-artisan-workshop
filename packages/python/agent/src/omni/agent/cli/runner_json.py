@@ -39,8 +39,6 @@ def _setup_quiet_logging() -> None:
     logging.getLogger("omni").setLevel(logging.WARNING)
     logging.getLogger("omni.core").setLevel(logging.WARNING)
     logging.getLogger("omni.foundation").setLevel(logging.WARNING)
-    logging.getLogger("litellm").setLevel(logging.WARNING)
-    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 
 
 def _verbose_enabled() -> bool:

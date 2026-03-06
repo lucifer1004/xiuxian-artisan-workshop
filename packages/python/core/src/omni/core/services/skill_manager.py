@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from omni_core_rs import PyVectorStore
+from xiuxian_core_rs import PyVectorStore
 
 from omni.core.kernel.watcher import ReactiveSkillWatcher
 from omni.core.skills.indexer import SkillIndexer
@@ -87,7 +87,7 @@ class SkillManager:
         Args:
             project_root: Root directory of the project (auto-detected if None)
             embedding_service: EmbeddingService instance (singleton if None)
-            vector_store_path: Path for LanceDB storage (default: .cache/omni-vector/skills.lance)
+            vector_store_path: Path for LanceDB storage (default: .cache/xiuxian-vector/skills.lance)
             enable_watcher: Whether to enable Reactive Skill Watcher
             watcher_patterns: File patterns for watcher (default: ["**/*.py"])
             watcher_debounce_seconds: Debounce delay for watcher events

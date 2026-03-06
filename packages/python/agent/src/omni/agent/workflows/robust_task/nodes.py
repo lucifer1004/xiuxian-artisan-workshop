@@ -394,7 +394,7 @@ async def plan_node(state: RobustTaskState) -> dict[str, Any]:
 
 
 async def execute_node(state: RobustTaskState) -> dict[str, Any]:
-    """Execute a step with OmniCell kernel awareness."""
+    """Execute a step with XiuxianCell kernel awareness."""
     logger.info("[GRAPH] ================================================")
     goal = state.get("clarified_goal", "unknown")
     logger.info(f"[GRAPH] Executing step for goal: {str(goal)[:100]}")
@@ -411,14 +411,14 @@ async def execute_node(state: RobustTaskState) -> dict[str, Any]:
     # We use the tools discovered in the Discovery phase
     tools_str = format_tools_for_prompt(state.get("discovered_tools", []))
 
-    # Inject OmniCell awareness into execution prompt
-    omni_cell_awareness = """
-# OMNI-CELL KERNEL (ALWAYS AVAILABLE)
-You have direct OS access via OmniCell:
+    # Inject XiuxianCell awareness into execution prompt
+    xiuxian_cell_awareness = """
+# XIUXIAN-CELL KERNEL (ALWAYS AVAILABLE)
+You have direct OS access via XiuxianCell:
 - **sys_query(query)**: Read-only JSON queries. Example: "ls **/*.py | where size > 2kb"
 - **sys_exec(script)**: Write operations. Example: "echo 'data' | save report.md"
 
-If no specialized tool fits, use OmniCell directly.
+If no specialized tool fits, use XiuxianCell directly.
 
 IMPORTANT: DO NOT use $in variable. Use simple file paths instead.
 """
@@ -438,7 +438,7 @@ IMPORTANT: DO NOT use $in variable. Use simple file paths instead.
 
     # Escape goal content (from XML parsing, might contain residual XML tags)
     goal_escaped = escape_braces_for_format(str(goal))
-    context = f"Goal: {goal_escaped}\n{omni_cell_awareness}"
+    context = f"Goal: {goal_escaped}\n{xiuxian_cell_awareness}"
 
     # Escape tool descriptions (might contain JSON with braces)
     tools_str_escaped = escape_braces_for_format(tools_str)
@@ -483,14 +483,14 @@ IMPORTANT: DO NOT use $in variable. Use simple file paths instead.
                 if not kernel.is_ready:
                     await kernel.initialize()
 
-                # [KERNEL] Check for intrinsic OmniCell tools
+                # [KERNEL] Check for intrinsic XiuxianCell tools
                 if tool_name in ("sys_query", "sys_exec"):
-                    from omni.core.skills.runtime.omni_cell import ActionType, OmniCellRunner
+                    from omni.core.skills.runtime.xiuxian_cell import ActionType, XiuxianCellRunner
 
                     logger.info(f"[KERNEL] Intrinsic tool detected: {tool_name}")
                     logger.info(f"[KERNEL] {tool_name} args: {tool_args}")
 
-                    runner = OmniCellRunner()
+                    runner = XiuxianCellRunner()
                     if tool_name == "sys_query":
                         query = tool_args.get("query", "")
                         # Sanitize command to remove problematic $in patterns

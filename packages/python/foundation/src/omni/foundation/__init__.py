@@ -1,4 +1,4 @@
-# Foundation package for omni-dev-fusion - Level 1 Infrastructure Layer
+# Foundation package for xiuxian-artisan-workshop - Level 1 Infrastructure Layer
 
 # Defer expensive imports for faster module load
 # importlib.metadata.version() takes ~70ms - defer until actually needed
@@ -13,7 +13,7 @@ def _get_version() -> str:
         from importlib.metadata import PackageNotFoundError, version
 
         try:
-            _cached_version = version("omni-foundation")
+            _cached_version = version("xiuxian-foundation")
         except PackageNotFoundError:
             _cached_version = "0.0.0-dev"
     return _cached_version

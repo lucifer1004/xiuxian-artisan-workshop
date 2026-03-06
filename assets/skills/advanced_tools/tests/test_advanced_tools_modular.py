@@ -5,7 +5,7 @@ import types
 from pathlib import Path
 
 import pytest
-from omni.test_kit.decorators import omni_skill
+from omni.test_kit.decorators import xiuxian_skill
 
 from omni.foundation.api.mcp_schema import parse_result_payload
 
@@ -185,7 +185,7 @@ class TestAdvancedToolsPatternMode:
 
 
 @pytest.mark.asyncio
-@omni_skill(name="advanced_tools")
+@xiuxian_skill(name="advanced_tools")
 class TestAdvancedToolsModular:
     """Modular tests for advanced_tools skill."""
 

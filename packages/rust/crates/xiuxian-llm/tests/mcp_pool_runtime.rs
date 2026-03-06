@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use axum::Router;
 use rmcp::ServerHandler;
 use rmcp::model::{
@@ -18,16 +18,20 @@ use xiuxian_llm::mcp::{McpPoolConnectConfig, connect_pool};
 #[derive(Clone)]
 struct MockMcpServer {
     list_tools_calls: Arc<AtomicUsize>,
+    tool_version: Arc<AtomicUsize>,
 }
 
 impl MockMcpServer {
-    fn new(list_tools_calls: Arc<AtomicUsize>) -> Self {
-        Self { list_tools_calls }
+    fn new(list_tools_calls: Arc<AtomicUsize>, tool_version: Arc<AtomicUsize>) -> Self {
+        Self {
+            list_tools_calls,
+            tool_version,
+        }
     }
 
-    fn mock_tool() -> Tool {
+    fn mock_tool(version: usize) -> Tool {
         Tool {
-            name: "test.ping".into(),
+            name: format!("test.ping.v{version}").into(),
             title: Some("Ping".into()),
             description: Some("mock tool".into()),
             input_schema: Arc::new(serde_json::Map::new()),
@@ -43,7 +47,10 @@ impl MockMcpServer {
 impl ServerHandler for MockMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            capabilities: ServerCapabilities::builder()
+                .enable_tools()
+                .enable_tool_list_changed()
+                .build(),
             ..Default::default()
         }
     }
@@ -53,16 +60,28 @@ impl ServerHandler for MockMcpServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<ListToolsResult, ErrorData>> + Send + '_ {
+        let version = self.tool_version.load(Ordering::SeqCst);
         self.list_tools_calls.fetch_add(1, Ordering::SeqCst);
-        std::future::ready(Ok(ListToolsResult::with_all_items(vec![Self::mock_tool()])))
+        std::future::ready(Ok(ListToolsResult::with_all_items(vec![Self::mock_tool(
+            version,
+        )])))
     }
 
     fn call_tool(
         &self,
         _request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<CallToolResult, ErrorData>> + Send + '_ {
-        std::future::ready(Ok(CallToolResult::success(vec![])))
+        let tool_version = Arc::clone(&self.tool_version);
+        async move {
+            let next_version = tool_version
+                .fetch_add(1, Ordering::SeqCst)
+                .saturating_add(1);
+            let _ = context.peer.notify_tool_list_changed().await;
+            Ok(CallToolResult::success(vec![rmcp::model::Content::text(
+                format!("refreshed to v{next_version}"),
+            )]))
+        }
     }
 }
 
@@ -77,11 +96,18 @@ async fn spawn_mock_server(
     addr: std::net::SocketAddr,
 ) -> Result<(tokio::task::JoinHandle<()>, Arc<AtomicUsize>)> {
     let list_tools_calls = Arc::new(AtomicUsize::new(0));
+    let tool_version = Arc::new(AtomicUsize::new(1));
     let service: StreamableHttpService<MockMcpServer, LocalSessionManager> =
         StreamableHttpService::new(
             {
                 let list_tools_calls = Arc::clone(&list_tools_calls);
-                move || Ok(MockMcpServer::new(Arc::clone(&list_tools_calls)))
+                let tool_version = Arc::clone(&tool_version);
+                move || {
+                    Ok(MockMcpServer::new(
+                        Arc::clone(&list_tools_calls),
+                        Arc::clone(&tool_version),
+                    ))
+                }
             },
             Arc::new(LocalSessionManager::default()),
             StreamableHttpServerConfig {
@@ -139,7 +165,53 @@ async fn mcp_pool_list_tools_cache_serves_second_request_from_cache() -> Result<
     if let Err(error) = handle.await
         && !error.is_cancelled()
     {
-        return Err(anyhow::anyhow!("mock server task join failed: {error}"));
+        return Err(anyhow!("mock server task join failed: {error}"));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn mcp_pool_invalidates_cached_tools_after_server_tool_list_changed() -> Result<()> {
+    let addr = reserve_local_addr().await?;
+    let (handle, list_tools_calls) = spawn_mock_server(addr).await?;
+    let url = format!("http://{addr}/sse");
+    let pool = connect_pool(&url, test_connect_config(), None).await?;
+
+    let first = pool.list_tools(None).await?;
+    let first_name = first
+        .tools
+        .first()
+        .map(|tool| tool.name.to_string())
+        .ok_or_else(|| anyhow!("expected one tool in initial list"))?;
+    assert_eq!(first_name, "test.ping.v1");
+
+    let call_result = pool.call_tool("test.refresh".to_string(), None).await?;
+    assert!(!call_result.content.is_empty());
+
+    let second = pool.list_tools(None).await?;
+    let second_name = second
+        .tools
+        .first()
+        .map(|tool| tool.name.to_string())
+        .ok_or_else(|| anyhow!("expected one tool after list change"))?;
+    assert_eq!(second_name, "test.ping.v2");
+    assert_eq!(
+        list_tools_calls.load(Ordering::SeqCst),
+        2,
+        "tool-list-changed notification should invalidate the cached tools/list result"
+    );
+
+    let stats = pool.tools_list_cache_stats_snapshot();
+    assert_eq!(stats.requests_total, 2);
+    assert_eq!(stats.cache_hits, 0);
+    assert_eq!(stats.cache_misses, 2);
+    assert_eq!(stats.cache_refreshes, 2);
+
+    handle.abort();
+    if let Err(error) = handle.await
+        && !error.is_cancelled()
+    {
+        return Err(anyhow!("mock server task join failed: {error}"));
     }
     Ok(())
 }
@@ -160,7 +232,7 @@ async fn mcp_pool_discover_cache_stats_absent_when_not_configured() -> Result<()
     if let Err(error) = handle.await
         && !error.is_cancelled()
     {
-        return Err(anyhow::anyhow!("mock server task join failed: {error}"));
+        return Err(anyhow!("mock server task join failed: {error}"));
     }
     Ok(())
 }

@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from resolve_valkey_endpoint import resolve_valkey_endpoint
-from test_omni_agent_memory_ci_gate import GateConfig
+from test_xiuxian_daochang_memory_ci_gate import GateConfig
 
 if TYPE_CHECKING:
     from pathlib import Path

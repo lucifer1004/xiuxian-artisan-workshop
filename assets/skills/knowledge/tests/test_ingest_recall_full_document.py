@@ -52,10 +52,10 @@ def _import_graph():
 
 def test_py_chunk_text_returns_correct_structure():
     """py_chunk_text returns list of (text, chunk_index) with contiguous indices."""
-    omni_core_rs = pytest.importorskip("omni_core_rs")
+    xiuxian_core_rs = pytest.importorskip("xiuxian_core_rs")
 
     text = "First paragraph. Second paragraph. Third paragraph. Fourth paragraph. Fifth."
-    out = omni_core_rs.py_chunk_text(text, chunk_size_tokens=20, overlap_tokens=2)
+    out = xiuxian_core_rs.py_chunk_text(text, chunk_size_tokens=20, overlap_tokens=2)
     assert isinstance(out, list)
     assert len(out) >= 1
     for i, item in enumerate(out):
@@ -69,9 +69,9 @@ def test_py_chunk_text_returns_correct_structure():
 
 def test_py_chunk_text_empty_returns_empty():
     """py_chunk_text on empty string returns empty list."""
-    omni_core_rs = pytest.importorskip("omni_core_rs")
+    xiuxian_core_rs = pytest.importorskip("xiuxian_core_rs")
 
-    out = omni_core_rs.py_chunk_text("", 512, 50)
+    out = xiuxian_core_rs.py_chunk_text("", 512, 50)
     assert out == []
 
 

@@ -18,7 +18,7 @@ metadata:
 
 ## Overview
 
-The vector subsystem is implemented in `omni-vector` and powers semantic retrieval for:
+The vector subsystem is implemented in `xiuxian-vector` and powers semantic retrieval for:
 
 - skill/tool discovery
 - router score fusion
@@ -35,16 +35,16 @@ Primary characteristics:
 
 ```text
 Python (foundation/core/agent)
-  -> Rust bindings (omni-core-rs)
-  -> Rust core (omni-vector)
+  -> Rust bindings (xiuxian-core-rs)
+  -> Rust core (xiuxian-vector)
 ```
 
 ## Core Modules
 
-- `packages/rust/crates/omni-vector/src/ops/`
-- `packages/rust/crates/omni-vector/src/keyword/`
-- `packages/rust/crates/omni-vector/src/search.rs`
-- `packages/rust/crates/omni-vector/src/search_cache.rs`
+- `packages/rust/crates/xiuxian-vector/src/ops/`
+- `packages/rust/crates/xiuxian-vector/src/keyword/`
+- `packages/rust/crates/xiuxian-vector/src/search.rs`
+- `packages/rust/crates/xiuxian-vector/src/search_cache.rs`
 
 ## Runtime Configuration
 
@@ -70,13 +70,13 @@ vector:
 
 ## Checkpoint Note (Historical)
 
-The previous **vector checkpoint system** (LanceDB `CheckpointStore`) has been removed from `omni-vector`.
+The previous **vector checkpoint system** (LanceDB `CheckpointStore`) has been removed from `xiuxian-vector`.
 
 The phrase `checkpoint schema` is now historical context only. Current workflow checkpoint persistence is file-based and implemented under:
 
 - `packages/python/foundation/src/omni/foundation/workflow_state.py`
 
-Do not add new dependencies on the removed `omni-vector` checkpoint module.
+Do not add new dependencies on the removed `xiuxian-vector` checkpoint module.
 
 ## Related Docs
 

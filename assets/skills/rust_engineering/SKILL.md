@@ -3,9 +3,9 @@ type: skill
 name: rust_engineering
 description: Use when analyzing Rust project structure, managing Cargo dependencies, building and testing Rust projects, or generating Rust code.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "0.1.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/rust_engineering"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/rust_engineering"
   routing_keywords:
     - "rust"
     - "cargo"

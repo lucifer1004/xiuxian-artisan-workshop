@@ -1,10 +1,10 @@
 # inference/client.py
 """
-Inference Client - Unified LLM API client via LiteLLM
+Inference Client - Unified LLM API client via OpenAI-compatible HTTP backend.
 
 Modularized for testability.
-Configuration-driven from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml; inference section).
-Supports 100+ LLM providers (Anthropic, OpenAI, MiniMax, etc.) via litellm.
+Configuration-driven from settings (system: packages/conf/settings.yaml, user:
+$PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml; inference section).
 """
 
 import json
@@ -16,12 +16,13 @@ import structlog
 
 from omni.foundation.api.api_key import get_anthropic_api_key
 from omni.foundation.config.settings import get_setting
+from omni.foundation.services.llm.http_backend import OpenAIHTTPBackend
 
 log = structlog.get_logger("mcp-core.inference")
 
 
 class InferenceClient:
-    """Unified LLM inference client for MCP servers via LiteLLM."""
+    """Unified LLM inference client for MCP servers via OpenAI-compatible HTTP."""
 
     def __init__(
         self,
@@ -32,7 +33,7 @@ class InferenceClient:
         max_tokens: int = None,
         provider: str = None,
     ):
-        """Initialize InferenceClient via LiteLLM.
+        """Initialize InferenceClient via OpenAI-compatible HTTP.
 
         Configuration is read from settings (system + user layer, inference section).
 
@@ -42,11 +43,9 @@ class InferenceClient:
             model: Default model name
             timeout: Request timeout in seconds
             max_tokens: Max tokens per response
-            provider: Provider name (anthropic, openai, etc.)
+            provider: Provider name prefix used in model id (anthropic, openai, etc.)
         """
-        import litellm
-
-        self._litellm = litellm
+        self._backend = OpenAIHTTPBackend()
 
         self.api_key = api_key or get_anthropic_api_key()
         self.base_url = base_url or get_setting("inference.base_url")
@@ -79,7 +78,7 @@ class InferenceClient:
         messages: list[dict] = None,
         tools: list[dict] = None,
     ) -> dict[str, Any]:
-        """Make a non-streaming LLM call via LiteLLM."""
+        """Make a non-streaming LLM call via OpenAI-compatible HTTP backend."""
         import time
 
         _start = time.time()
@@ -104,15 +103,15 @@ class InferenceClient:
         )
 
         try:
-            # Build model string for litellm
+            # Build model string
             # MiniMax uses 'minimax/MiniMax-M2.1' format
             if self.provider == "minimax":
                 model_id = f"minimax/{actual_model}"
             else:
                 model_id = f"{self.provider}/{actual_model}"
 
-            # Prepare kwargs for litellm
-            litellm_kwargs = {
+            # Prepare request kwargs
+            request_kwargs = {
                 "model": model_id,
                 "max_tokens": actual_max_tokens,
                 "timeout": actual_timeout,
@@ -122,19 +121,16 @@ class InferenceClient:
 
             # Add API key
             if self.api_key:
-                litellm_kwargs["api_key"] = self.api_key
+                request_kwargs["api_key"] = self.api_key
 
-            # Add base_url only for non-minimax providers
-            # LiteLLM handles MiniMax internally with correct endpoint
-            if self.provider != "minimax" and self.base_url:
-                litellm_kwargs["api_base"] = self.base_url
+            if self.base_url:
+                request_kwargs["api_base"] = self.base_url
 
-            # Add tools if provided (skip for MiniMax - doesn't support tools properly)
-            if tools and self.provider != "minimax":
-                litellm_kwargs["tools"] = tools
+            if tools:
+                request_kwargs["tools"] = tools
 
-            # Make the call via litellm
-            response = await self._litellm.acompletion(**litellm_kwargs)
+            # Make the call via HTTP backend
+            response = await self._backend.acompletion(**request_kwargs)
 
             # Extract content - handle both OpenAI and Anthropic/MiniMax formats
             content = ""
@@ -244,7 +240,7 @@ class InferenceClient:
         model: str = None,
         max_tokens: int = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Make a streaming LLM call via LiteLLM."""
+        """Make a streaming LLM call via OpenAI-compatible HTTP backend."""
         actual_model = model or self.model
         actual_max_tokens = max_tokens or self.max_tokens
 
@@ -259,18 +255,18 @@ class InferenceClient:
 
         try:
             model_id = f"{self.provider}/{actual_model}"
-            litellm_kwargs = {
+            request_kwargs = {
                 "model": model_id,
                 "max_tokens": actual_max_tokens,
                 "messages": messages,
             }
 
             if self.api_key:
-                litellm_kwargs["api_key"] = self.api_key
+                request_kwargs["api_key"] = self.api_key
             if self.base_url:
-                litellm_kwargs["api_base"] = self.base_url
+                request_kwargs["api_base"] = self.base_url
 
-            async for chunk in self._litellm.acompletion_stream(**litellm_kwargs):
+            async for chunk in self._backend.acompletion_stream(**request_kwargs):
                 content = ""
                 if hasattr(chunk, "choices") and chunk.choices:
                     choice = chunk.choices[0]

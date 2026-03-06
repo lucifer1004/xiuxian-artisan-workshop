@@ -36,7 +36,7 @@ def default_username() -> str:
 
 def default_log_file() -> str:
     """Default runtime log file path."""
-    return os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/omni-agent-webhook.log")
+    return os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/xiuxian-daochang-webhook.log")
 
 
 def default_project_root() -> str:
@@ -46,9 +46,9 @@ def default_project_root() -> str:
 
 def default_output_json() -> str:
     """Default JSON report path."""
-    return str(default_report_path("omni-agent-discord-ingress-stress.json"))
+    return str(default_report_path("xiuxian-daochang-discord-ingress-stress.json"))
 
 
 def default_output_markdown() -> str:
     """Default markdown report path."""
-    return str(default_report_path("omni-agent-discord-ingress-stress.md"))
+    return str(default_report_path("xiuxian-daochang-discord-ingress-stress.md"))

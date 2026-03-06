@@ -15,6 +15,7 @@ pub struct KnowledgeMetadata {
     pub description: Option<String>,
     /// Category for organization and filtering
     #[serde(default)]
+    #[schemars(with = "Option<String>")]
     pub category: Option<KnowledgeCategory>,
     /// Tags for semantic search and discovery
     #[serde(default)]

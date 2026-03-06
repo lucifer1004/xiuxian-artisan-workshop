@@ -7,7 +7,7 @@ import socket
 import sys
 from typing import TYPE_CHECKING
 
-from test_omni_agent_memory_ci_gate import can_bind_tcp, parse_args, resolve_runtime_ports
+from test_xiuxian_daochang_memory_ci_gate import can_bind_tcp, parse_args, resolve_runtime_ports
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -67,7 +67,7 @@ def test_parse_args_uses_run_scoped_default_artifacts(monkeypatch, tmp_path: Pat
         sys,
         "argv",
         [
-            "test_omni_agent_memory_ci_gate.py",
+            "test_xiuxian_daochang_memory_ci_gate.py",
             "--profile",
             "quick",
             "--webhook-port",
@@ -82,16 +82,16 @@ def test_parse_args_uses_run_scoped_default_artifacts(monkeypatch, tmp_path: Pat
     cfg = parse_args(tmp_path)
 
     assert cfg.runtime_log_file.parent == (tmp_path / ".run" / "logs")
-    assert cfg.runtime_log_file.name.startswith("omni-agent-webhook-ci-quick-")
+    assert cfg.runtime_log_file.name.startswith("xiuxian-daochang-webhook-ci-quick-")
     assert cfg.runtime_log_file.suffix == ".log"
     assert cfg.mock_log_file.parent == (tmp_path / ".run" / "logs")
-    assert cfg.mock_log_file.name.startswith("omni-agent-mock-telegram-quick-")
+    assert cfg.mock_log_file.name.startswith("xiuxian-daochang-mock-telegram-quick-")
     assert cfg.mock_log_file.suffix == ".log"
     assert cfg.evolution_report_json.parent == (tmp_path / ".run" / "reports")
-    assert cfg.evolution_report_json.name.startswith("omni-agent-memory-evolution-quick-")
+    assert cfg.evolution_report_json.name.startswith("xiuxian-daochang-memory-evolution-quick-")
     assert cfg.evolution_report_json.suffix == ".json"
     assert cfg.trace_report_markdown.parent == (tmp_path / ".run" / "reports")
-    assert cfg.trace_report_markdown.name.startswith("omni-agent-trace-reconstruction-quick-")
+    assert cfg.trace_report_markdown.name.startswith("xiuxian-daochang-trace-reconstruction-quick-")
     assert cfg.trace_report_markdown.suffix == ".md"
     assert cfg.cross_group_report_json.parent == (tmp_path / ".run" / "reports")
     assert cfg.cross_group_report_json.name.startswith("agent-channel-cross-group-complex-quick-")
@@ -115,7 +115,7 @@ def test_parse_args_honors_explicit_artifact_paths(monkeypatch, tmp_path: Path) 
         sys,
         "argv",
         [
-            "test_omni_agent_memory_ci_gate.py",
+            "test_xiuxian_daochang_memory_ci_gate.py",
             "--profile",
             "nightly",
             "--webhook-port",
@@ -169,7 +169,7 @@ def test_parse_args_sets_skip_rust_regressions(monkeypatch, tmp_path: Path) -> N
         sys,
         "argv",
         [
-            "test_omni_agent_memory_ci_gate.py",
+            "test_xiuxian_daochang_memory_ci_gate.py",
             "--profile",
             "nightly",
             "--webhook-port",
@@ -189,13 +189,13 @@ def test_parse_args_accepts_agent_bin(monkeypatch, tmp_path: Path) -> None:
     webhook_port = pick_free_port()
     telegram_port = pick_free_port()
     valkey_port = pick_free_port()
-    agent_bin = tmp_path / "omni-agent"
+    agent_bin = tmp_path / "xiuxian-daochang"
     agent_bin.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     monkeypatch.setattr(
         sys,
         "argv",
         [
-            "test_omni_agent_memory_ci_gate.py",
+            "test_xiuxian_daochang_memory_ci_gate.py",
             "--profile",
             "quick",
             "--webhook-port",

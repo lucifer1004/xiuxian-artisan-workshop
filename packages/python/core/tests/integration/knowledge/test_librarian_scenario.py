@@ -104,7 +104,7 @@ impl Greeter {
 @pytest.fixture
 def librarian_store(tmp_path):
     """Create a temporary vector store."""
-    from omni_core_rs import PyVectorStore
+    from xiuxian_core_rs import PyVectorStore
 
     store_path = str(tmp_path / "test_librarian.lance")
     store = PyVectorStore(store_path, 384, True)

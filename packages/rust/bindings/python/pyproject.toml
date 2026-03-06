@@ -1,5 +1,5 @@
 [project]
-name = "omni-core-rs"
+name = "xiuxian-core-rs"
 version = "0.1.1"
 description = "Rust core for Omni DevEnv"
 requires-python = ">=3.13"
@@ -15,4 +15,4 @@ build-backend = "maturin"
 
 
 [tool.maturin]
-module-name = "omni_core_rs"
+module-name = "xiuxian_core_rs"

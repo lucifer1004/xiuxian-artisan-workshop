@@ -20,7 +20,7 @@ def parse_args(*, suites: tuple[str, ...], default_ingress_url_value: str) -> ar
     )
     parser.add_argument(
         "--log-file",
-        default=os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/omni-agent-webhook.log"),
+        default=os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/xiuxian-daochang-webhook.log"),
         help="Runtime log file path.",
     )
     parser.add_argument(
@@ -64,11 +64,11 @@ def parse_args(*, suites: tuple[str, ...], default_ingress_url_value: str) -> ar
     parser.add_argument(
         "--secret-token",
         default=os.environ.get("OMNI_TEST_DISCORD_INGRESS_SECRET", "").strip() or None,
-        help="Ingress secret token for header x-omni-discord-ingress-token.",
+        help="Ingress secret token for header x-xiuxian-discord-ingress-token.",
     )
     parser.add_argument(
         "--session-partition",
-        default=os.environ.get("OMNI_AGENT_DISCORD_SESSION_PARTITION", "guild_channel_user"),
+        default=os.environ.get("XIUXIAN_DAOCHANG_DISCORD_SESSION_PARTITION", "guild_channel_user"),
         help="Discord session partition mode: guild_channel_user|channel|user|guild_user.",
     )
     parser.add_argument(

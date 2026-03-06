@@ -3,9 +3,9 @@ type: skill
 name: python_engineering
 description: Use when linting Python code, formatting with ruff/black, running pytest tests, type checking with pyright, or modernizing Python 3.12+ standards.
 metadata:
-  author: omni-dev-fusion
+  author: xiuxian-artisan-workshop
   version: "1.1.0"
-  source: "https://github.com/tao3k/omni-dev-fusion/tree/main/assets/skills/python_engineering"
+  source: "https://github.com/tao3k/xiuxian-artisan-workshop/tree/main/assets/skills/python_engineering"
   routing_keywords:
     - "python"
     - "lint"

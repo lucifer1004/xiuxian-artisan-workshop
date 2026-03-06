@@ -382,9 +382,9 @@ impl<'tree, D: Doc> NodeMatch<'tree, D> {
 
 ## 8. Related Files
 
-- `packages/rust/crates/omni-tags/src/lib.rs` - Implementation example
-- `packages/rust/crates/omni-vector/src/scanner.rs` - Real-world @skill_command discovery
-- `packages/rust/crates/omni-ast/src/scan.rs` - Pattern matching utilities
-- `packages/rust/crates/omni-tags/Cargo.toml` - Dependency configuration
+- `packages/rust/crates/xiuxian-tags/src/lib.rs` - Implementation example
+- `packages/rust/crates/xiuxian-vector/src/scanner.rs` - Real-world @skill_command discovery
+- `packages/rust/crates/xiuxian-ast/src/scan.rs` - Pattern matching utilities
+- `packages/rust/crates/xiuxian-tags/Cargo.toml` - Dependency configuration
 - `assets/specs/cca_navigation.md` - Code navigation specification
 - `assets/specs/script_scanner.md` - Script Scanner specification

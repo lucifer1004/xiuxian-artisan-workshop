@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 from omni.foundation.utils.asyncio import run_async_blocking
 
 if TYPE_CHECKING:
-    from omni_core_rs import PyVectorStore
+    from xiuxian_core_rs import PyVectorStore
 
 from datetime import UTC
 
@@ -209,8 +209,8 @@ class Librarian:
         table_name: str = TABLE_NAME,
     ):
         """Initialize the Librarian."""
-        from omni_core_rs import PySyncEngine
-        from omni_core_rs import PyVectorStore as RustStore
+        from xiuxian_core_rs import PySyncEngine
+        from xiuxian_core_rs import PyVectorStore as RustStore
 
         from omni.foundation.config.database import get_database_path, get_vector_db_path
         from omni.foundation.services.embedding import get_embedding_service
@@ -272,7 +272,7 @@ class Librarian:
 
     def _compute_hash(self, content: str) -> str:
         """Compute hash using Rust xxhash-rust."""
-        from omni_core_rs import compute_hash
+        from xiuxian_core_rs import compute_hash
 
         return compute_hash(content)
 

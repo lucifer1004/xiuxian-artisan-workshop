@@ -112,7 +112,7 @@ def _load_kg(
         Loaded PyKnowledgeGraph, or None if import fails.
     """
     try:
-        from omni_core_rs import load_kg_from_valkey_cached
+        from xiuxian_core_rs import load_kg_from_valkey_cached
     except ImportError:
         return None
 

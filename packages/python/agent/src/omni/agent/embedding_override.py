@@ -4,7 +4,8 @@ Skill execution embedding override: MCP-first when running outside the MCP serve
 When skills run from CLI (omni run ...), the runner invokes skill hooks before/after
 each command. We set an embedding override so get_embedding_service().embed_batch()
 delegates to the MCP server (if available), giving a warm path without starting
-Ollama in the CLI process. When running inside the MCP server, no override is set.
+an embedding runtime in the CLI process. When running inside the MCP server, no
+override is set.
 """
 
 from __future__ import annotations

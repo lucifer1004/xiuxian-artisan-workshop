@@ -8,7 +8,7 @@ metadata:
 
 > **Status**: Draft
 > **Complexity**: L2
-> **Owner**: @omni-coder
+> **Owner**: @xiuxian-coder
 > **Reference**: Derived from `agentgateway` research (2026-01-29)
 
 ## 1. Context & Goal (Why)

@@ -32,6 +32,6 @@ def default_gate_failure_report_base_path(
         cfg.project_root
         / ".run"
         / "reports"
-        / f"omni-agent-memory-ci-failure-{cfg.profile}-{final_stamp}"
+        / f"xiuxian-daochang-memory-ci-failure-{cfg.profile}-{final_stamp}"
     )
     return base, final_stamp

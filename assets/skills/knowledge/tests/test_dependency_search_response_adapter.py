@@ -30,8 +30,8 @@ async def test_dependency_search_import_error_uses_success_error_payload(
     original_import = builtins.__import__
 
     def _mock_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "omni_core_rs":
-            raise ImportError("no module named omni_core_rs")
+        if name == "xiuxian_core_rs":
+            raise ImportError("no module named xiuxian_core_rs")
         return original_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", _mock_import)
@@ -49,8 +49,8 @@ async def test_dependency_status_import_error_uses_status_error_payload(
     original_import = builtins.__import__
 
     def _mock_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "omni_core_rs":
-            raise ImportError("no module named omni_core_rs")
+        if name == "xiuxian_core_rs":
+            raise ImportError("no module named xiuxian_core_rs")
         return original_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", _mock_import)
@@ -92,7 +92,7 @@ async def test_dependency_search_runtime_error_includes_query(
     )
     monkeypatch.setattr(dependency_search, "_get_project_root", lambda: "/tmp")
     monkeypatch.setattr(dependency_search, "_get_config_path", lambda: None)
-    monkeypatch.setitem(sys.modules, "omni_core_rs", fake_module)
+    monkeypatch.setitem(sys.modules, "xiuxian_core_rs", fake_module)
 
     out = _unwrap_skill_output(await dependency_search.dependency_search(query="x"))
     assert out == {

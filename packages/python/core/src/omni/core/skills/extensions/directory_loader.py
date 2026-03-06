@@ -21,21 +21,27 @@ logger = get_logger("omni.skills.extensions.directory")
 
 import importlib.util
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
-from .interfaces import ISkillExtension
+
+@runtime_checkable
+class SkillExtension(Protocol):
+    """Structural protocol for loaded extension instances."""
+
+    def initialize(self, context: dict[str, Any]) -> Any:
+        """Initialize extension state using runtime context."""
 
 
 class DirectoryExtensionLoader:
     """Load extensions from directory."""
 
-    def load(self, skill_path: Path, context: dict[str, Any]) -> list[ISkillExtension]:
+    def load(self, skill_path: Path, context: dict[str, Any]) -> list[SkillExtension]:
         """Load all extensions from directory."""
         ext_path = skill_path / "extensions"
         if not ext_path.exists():
             return []
 
-        extensions: list[ISkillExtension] = []
+        extensions: list[SkillExtension] = []
 
         for item in ext_path.iterdir():
             if item.name.startswith("_"):
@@ -55,7 +61,7 @@ class DirectoryExtensionLoader:
 
         return extensions
 
-    def _load_package(self, path: Path, context: dict[str, Any]) -> ISkillExtension | None:
+    def _load_package(self, path: Path, context: dict[str, Any]) -> SkillExtension | None:
         """Load a directory package."""
         try:
             init_file = path / "__init__.py"
@@ -81,7 +87,7 @@ class DirectoryExtensionLoader:
             logger.error(f"Failed to load package '{path.name}': {e}")
             return None
 
-    def _load_file(self, path: Path, context: dict[str, Any]) -> ISkillExtension | None:
+    def _load_file(self, path: Path, context: dict[str, Any]) -> SkillExtension | None:
         """Load a single-file module."""
         try:
             module_name = path.stem
@@ -104,7 +110,7 @@ class DirectoryExtensionLoader:
 
     def _instantiate_extension(
         self, module: Any, module_name: str, context: dict[str, Any]
-    ) -> ISkillExtension | None:
+    ) -> SkillExtension | None:
         """Instantiate extension object."""
         # Method 1: Factory function create()
         if hasattr(module, "create"):
@@ -122,8 +128,8 @@ class DirectoryExtensionLoader:
                 logger.error(f"Extension class failed for {module_name}: {e}")
                 return None
 
-        # Method 3: If module itself is an ISkillExtension instance
-        if isinstance(module, ISkillExtension):
+        # Method 3: If module itself matches extension protocol
+        if isinstance(module, SkillExtension):
             return module
 
         logger.debug(f"No extension found in {module_name}")

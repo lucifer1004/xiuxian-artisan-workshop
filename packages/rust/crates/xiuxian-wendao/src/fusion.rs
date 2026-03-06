@@ -14,8 +14,8 @@ use std::collections::{HashMap, HashSet};
 /// Results are re-sorted by score (descending) in place.
 pub fn apply_link_graph_proximity_boost(
     results: &mut [RecallResult],
-    stem_links: &HashMap<String, HashSet<String>>,
-    stem_tags: &HashMap<String, HashSet<String>>,
+    stem_links: &HashMap<String, HashSet<String, std::hash::RandomState>, std::hash::RandomState>,
+    stem_tags: &HashMap<String, HashSet<String, std::hash::RandomState>, std::hash::RandomState>,
     link_boost: f64,
     tag_boost: f64,
 ) {
@@ -79,13 +79,19 @@ fn stem_from_source(source: &str) -> String {
 /// Recall result for boost computation.
 #[derive(Debug, Clone)]
 pub struct RecallResult {
+    /// Original source path or identifier.
     pub source: String,
+    /// Current accumulated score.
     pub score: f64,
+    /// Raw content snippet payload.
     pub content: String,
+    /// Human-readable title.
     pub title: String,
 }
 
 impl RecallResult {
+    /// Create a new recall result entry.
+    #[must_use]
     pub fn new(source: String, score: f64, content: String, title: String) -> Self {
         Self {
             source,

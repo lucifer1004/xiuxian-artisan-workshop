@@ -6,7 +6,7 @@ import pytest
 
 # Import from the Rust bindings
 try:
-    from omni_core_rs import (
+    from xiuxian_core_rs import (
         ExecutionResult,
         MountConfig,
         NsJailExecutor,
@@ -24,7 +24,7 @@ except ImportError:
 
 # Skip all tests if bindings are not available
 pytestmark = pytest.mark.skipif(
-    not HAS_SANDBOX_BINDINGS, reason="omni_core_rs sandbox bindings not available"
+    not HAS_SANDBOX_BINDINGS, reason="xiuxian_core_rs sandbox bindings not available"
 )
 
 

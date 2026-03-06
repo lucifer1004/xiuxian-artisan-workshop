@@ -6,7 +6,7 @@ from __future__ import annotations
 import threading
 import time
 
-from test_omni_agent_memory_ci_gate import count_log_event, read_tail, wait_for_log_regex
+from test_xiuxian_daochang_memory_ci_gate import count_log_event, read_tail, wait_for_log_regex
 
 
 def test_read_tail_reads_last_lines_from_large_log(tmp_path) -> None:

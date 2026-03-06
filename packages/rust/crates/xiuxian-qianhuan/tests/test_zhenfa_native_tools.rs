@@ -100,7 +100,7 @@ async fn qianhuan_render_tool_rejects_semantic_target_without_vfs_extension() {
     let manager = Arc::new(ManifestationManager::new_empty());
     let mut ctx = ZhenfaContext::default();
     let _ = ctx.insert_shared_extension(Arc::clone(&manager));
-    let error = tool
+    let Err(error) = tool
         .call_native(
             &ctx,
             json!({
@@ -110,7 +110,9 @@ async fn qianhuan_render_tool_rejects_semantic_target_without_vfs_extension() {
             }),
         )
         .await
-        .expect_err("semantic render without SkillVfsResolver should fail");
+    else {
+        panic!("semantic render without SkillVfsResolver should fail");
+    };
 
     assert!(error.to_string().contains("missing SkillVfsResolver"));
 }

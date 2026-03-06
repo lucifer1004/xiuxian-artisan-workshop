@@ -16,10 +16,16 @@ metadata:
 
 - **Use feature name only** to determine project progress. See `docs/backlog.md` for the canonical list; status is tracked per feature (e.g. Hybrid Search Optimization, Context Optimization), not by phases or stage numbers.
 
+## ExecPlans
+
+- Use an ExecPlan for complex features, significant refactors, or tasks that span multiple crates/packages.
+- ExecPlan policy is defined in `.agent/PLANS.md`.
+- Store active plans in `.agent/execplans/*.md` and keep them updated as living documents during implementation.
+
 ## Project Structure & Module Organization
 
-- `packages/rust/crates/*`: Rust core crates (for example `omni-vector`, `xiuxian-skills`, `xiuxian-wendao`).
-- `packages/rust/bindings/python`: PyO3 bridge crate (`omni-core-rs`) used by Python services.
+- `packages/rust/crates/*`: Rust core crates (for example `xiuxian-vector`, `xiuxian-skills`, `xiuxian-wendao`, `xiuxian-daochang`).
+- `packages/rust/bindings/python`: PyO3 bridge crate (`xiuxian-core-rs`) used by Python services.
 - `packages/python/agent`, `packages/python/core`, `packages/python/foundation`, `packages/python/mcp-server`: main Python runtime and APIs.
 - `assets/skills/*`: skill implementations (`scripts/`), skill tests, and metadata-driven command surface.
 - `docs/`: architecture, testing, and reference docs.
@@ -41,7 +47,7 @@ metadata:
 **Python API** (from `omni.foundation.config.prj` or `omni.foundation.config.dirs`):
 
 - `PRJ_DATA("knowledge", "downloads")` → `$PRJ_DATA_HOME/knowledge/downloads`
-- `PRJ_CACHE("omni-vector")` → `$PRJ_CACHE_HOME/omni-vector`
+- `PRJ_CACHE("xiuxian-vector")` → `$PRJ_CACHE_HOME/xiuxian-vector`
 - `PRJ_CONFIG("xiuxian-artisan-workshop", "settings.yaml")` → `$PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml`
 - `PRJ_RUNTIME("logs")` → `$PRJ_RUNTIME_DIR/logs`
 - `PRJ_PATH()` → `$PRJ_PATH`
@@ -49,12 +55,21 @@ metadata:
 
 **Convention:** Put user-overridable config under `PRJ_CONFIG_HOME`; caches under `PRJ_CACHE_HOME`; persistent data (e.g. ingested documents) under `PRJ_DATA_HOME`.
 
+## Protocol Hygiene & Message Integrity
+
+To ensure architectural alignment and prevent protocol errors (e.g., "No tool call found") with LLM providers (OpenAI, Anthropic, Gemini), all contributors and agents must follow these standards:
+
+- **The Integrity Chain**: Every `role: "tool"` (or `function_call_output`) message MUST be preceded by an `assistant` message that explicitly declares the corresponding `tool_calls` (or `function_call`). The system uses `enforce_tool_message_integrity` as a mandatory pre-flight gate.
+- **Orphan Cleanup**: Orphaned tool results (results without a matching request in the current sliding window) are automatically purged. Do not attempt to "fake" or generate legacy IDs for native tools.
+- **Shadow Call Backfill**: When a Native Tool is triggered via intent recognition (not model output), the system must synthesize a "shadow assistant request" in the history to preserve the protocol chain.
+- **ID Normalization**: Tool IDs must be normalized to a standard format (stripping pipe-separated gateway metadata) to ensure cross-provider compatibility.
+
 ## Build, Test, and Development Commands
 
 - `just setup && omni sync`: initial bootstrap.
 - `uv sync`: install/update Python workspace dependencies.
-- `uv sync --reinstall-package omni-core-rs`: rebuild and reinstall Rust Python bindings after Rust bridge changes.
-- **Rust Testing (`cargo nextest`)**: Always use `cargo nextest run` instead of the native `cargo test` for running Rust test suites. It is significantly faster and provides better output. Example: `cargo nextest run -p omni-vector`. Use crate-specific runs during development.
+- `uv sync --reinstall-package xiuxian-core-rs`: rebuild and reinstall Rust Python bindings after Rust bridge changes.
+- **Rust Testing (`cargo nextest`)**: Always use `cargo nextest run` instead of the native `cargo test` for running Rust test suites. It is significantly faster and provides better output. Example: `cargo nextest run -p xiuxian-vector`. Use crate-specific runs during development.
 - **Regression Scope Gate (speed-first default)**: Default to direct, targeted validation for touched crates/modules only. If a task requires cross-crate or full-workspace regression (high time/cost impact), ask the user for explicit confirmation before running it.
 - `uv run pytest packages/python/core/tests/ -q`: run Python tests by package.
 - `devenv test`: repository-level validation suite.
@@ -89,7 +104,7 @@ metadata:
 - For routing/vector changes, test both data contracts and CLI behavior.
 - Use focused commands, for example:
   - `uv run pytest packages/python/agent/tests/unit/cli/test_route_command.py -q`
-  - `cargo nextest run -p omni-vector -E 'test(test_rust_cortex)'`
+  - `cargo nextest run -p xiuxian-vector -E 'test(test_rust_cortex)'`
 
 ## Rust Clippy Validation Policy
 
@@ -100,10 +115,20 @@ metadata:
 - **Exception handling**: when an allow is truly unavoidable (e.g., in a generated macro file), keep it as narrow as possible (smallest scope like a single function), add a short reason, and include a removal condition.
 - **Evidence required**: include exact clippy commands and outcomes in the corresponding progress/knowledge record (for example files under `assets/knowledge/omni-rust-engineering-quality-plan/`).
 
+## Global Tiered Verification Protocol
+
+To preserve development momentum and ensure architectural integrity, all Agents MUST adhere to these verification power tiers:
+
+- **[TIER-1: PULSE]** (`fmt`, `ruff format`): Silent background consistency. Run continuously on every save.
+- **[TIER-2: HEARTBEAT]** (`cargo check`, `pyright`): Primary coding-phase verification. Use this to ensure type-safety and syntax without the high overhead of full linting.
+- **[TIER-3: GATE]** (`clippy`, `too_many_lines`, `cargo nextest`): High-energy industrial audit. **Only demand this when a task is transitioning to [DONE].**
+
+**MANDATORY**: It is strictly forbidden to demand TIER-3 compliance during active TIER-2 development phases. Use TIER-3 as the final quality gate before promotion.
+
 ## Commit & Pull Request Guidelines
 
 - Commit messages are enforced by `conform`/`cog check`; use Conventional Commits.
-- Prefer scoped messages aligned with `cog.toml` scopes, e.g. `feat(router): ...`, `fix(omni-vector): ...`, `docs(cli): ...`.
+- Prefer scoped messages aligned with `cog.toml` scopes, e.g. `feat(router): ...`, `fix(xiuxian-vector): ...`, `docs(cli): ...`.
 - Run `lefthook run pre-commit --all-files` (or `just agent-fmt`) before committing.
 - PRs should include:
   - clear problem/solution summary,

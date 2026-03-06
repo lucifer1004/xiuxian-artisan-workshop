@@ -22,7 +22,7 @@ def run_reflection_quality_gate(
             "cargo",
             "test",
             "-p",
-            "omni-agent",
+            "xiuxian-daochang",
             "--lib",
             "reflective_runtime_long_horizon_quality_thresholds",
         ],

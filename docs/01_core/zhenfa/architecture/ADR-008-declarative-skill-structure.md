@@ -79,7 +79,7 @@ To eliminate path ambiguity and ensure portability, all system-level "Constituti
 
 - **Standard Paths**:
   - `packages/rust/crates/xiuxian-skills/resources/config/skills.toml`
-  - `packages/rust/crates/omni-agent/resources/config/xiuxian.toml`
+  - `packages/rust/crates/xiuxian-daochang/resources/config/xiuxian.toml`
 - **Mechanism**: The crate uses a direct, non-escaping `include_str!("resources/config/skills.toml")`.
 - **Portability**: This architecture makes the `xiuxian-skills` crate completely self-sufficient. It carries its own validation laws within its binary, requiring no external files to perform a baseline structural check.
 

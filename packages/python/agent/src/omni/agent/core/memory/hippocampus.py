@@ -7,11 +7,11 @@ Architecture:
 - commit_to_long_term_memory(): Store successful execution traces
 - recall_experience(): Retrieve similar successful experiences
 - _extract_nu_pattern(): Extract Nu script skeleton from trace
-- _save_trace_to_disk(): Persist to .cache/omni-dev-fusion/memory/trace/
+- _save_trace_to_disk(): Persist to .cache/xiuxian-artisan-workshop/memory/trace/
 
 Integration:
-- omni.hippocampus namespace in omni-vector
-- Trace storage: .cache/omni-dev-fusion/memory/trace/{trace_id}.json
+- omni.hippocampus namespace in xiuxian-vector
+- Trace storage: .cache/xiuxian-artisan-workshop/memory/trace/{trace_id}.json
 
 Workflow:
     User Request
@@ -52,7 +52,7 @@ logger = structlog.get_logger("memory.hippocampus")
 HIPPOCAMPUS_COLLECTION = "memory.hippocampus"
 
 # Trace storage directory (relative to PRJ_CACHE)
-TRACE_DIR = "omni-dev-fusion/memory/trace"
+TRACE_DIR = "xiuxian-artisan-workshop/memory/trace"
 
 
 class Hippocampus:
@@ -112,8 +112,8 @@ class Hippocampus:
         Process:
             1. Verify trace.success == True
             2. Extract nu_pattern (ls|where|save skeleton)
-            3. Save trace JSON to .cache/omni-dev-fusion/memory/trace/
-            4. Index to omni-vector (omni.hippocampus namespace)
+            3. Save trace JSON to .cache/xiuxian-artisan-workshop/memory/trace/
+            4. Index to xiuxian-vector (omni.hippocampus namespace)
         """
         # Step 1: Validate - only store successful traces
         if not trace.success:
@@ -188,7 +188,7 @@ class Hippocampus:
             List of ExperienceRecallResult sorted by similarity
 
         Process:
-            1. Semantic search omni-vector (omni.hippocampus namespace)
+            1. Semantic search xiuxian-vector (omni.hippocampus namespace)
             2. Filter: {"type": "experience_trace", "success": true}
             3. If domain specified, add filter: {"domain": domain}
             4. Load full trace from disk for each result

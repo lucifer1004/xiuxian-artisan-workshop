@@ -20,7 +20,7 @@ class DiscordAclEventsModuleBindings:
 
 
 def load_module_bindings(caller_file: str) -> DiscordAclEventsModuleBindings:
-    """Load all sibling modules required by `test_omni_agent_discord_acl_events.py`."""
+    """Load all sibling modules required by `test_xiuxian_daochang_discord_acl_events.py`."""
     load_sibling_module = importlib.import_module("module_loader").load_sibling_module
 
     blackbox_module = load_sibling_module(

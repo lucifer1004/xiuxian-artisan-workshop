@@ -1,4 +1,4 @@
-//! Vector Store - Python Bindings for omni-vector / LanceDB
+//! Vector Store - Python Bindings for xiuxian-vector / LanceDB
 //!
 //! ## Module Structure (by functionality)
 //!
@@ -52,7 +52,7 @@ use store::{
 // PyVectorStore - Main vector store class
 // ============================================================================
 
-/// Python wrapper for VectorStore (omni-vector / LanceDB)
+/// Python wrapper for VectorStore (xiuxian-vector / LanceDB)
 #[pyclass]
 pub struct PyVectorStore {
     path: String,

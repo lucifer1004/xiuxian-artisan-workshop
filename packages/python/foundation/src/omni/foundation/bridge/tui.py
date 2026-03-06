@@ -8,7 +8,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 try:
-    from omni_core_rs import PyFoldablePanel, PyTuiApp
+    from xiuxian_core_rs import PyFoldablePanel, PyTuiApp
 
     _RUST_TUI_AVAILABLE = True
 except ImportError:
@@ -29,7 +29,7 @@ class TuiBridge:
         if _RUST_TUI_AVAILABLE:
             self._app = PyTuiApp(title)
         else:
-            raise RuntimeError("omni-core-rs TUI bindings not available")
+            raise RuntimeError("xiuxian-core-rs TUI bindings not available")
 
     @property
     def is_available(self) -> bool:

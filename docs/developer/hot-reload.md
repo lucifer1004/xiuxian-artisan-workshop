@@ -301,7 +301,7 @@ echo "modified" >> assets/skills/git/scripts/status.py
 For testing hot reload behavior without touching the filesystem, use the virtual path scanner:
 
 ```python
-from omni_core_rs import scan_paths
+from xiuxian_core_rs import scan_paths
 
 def simulate_tool_change(skill_name: str, tool_name: str, new_content: str) -> dict:
     """Simulate a tool change and verify scanner detects it."""
@@ -348,7 +348,7 @@ assert result2["file_hash"] != old_hash  # Hash should change
 The virtual path scanner enables testing the critical delete-re-add scenario:
 
 ```python
-from omni_core_rs import scan_paths
+from xiuxian_core_rs import scan_paths
 
 def test_delete_re_add_scenario():
     """Test that deleted tools are removed and re-added correctly."""

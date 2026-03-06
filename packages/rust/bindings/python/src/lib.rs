@@ -35,10 +35,9 @@
     reason = "Some closures are kept for readability at Rust/Python boundary transforms."
 )]
 
-//! `omni-core-rs` - Python bindings for Omni `DevEnv` Rust core.
+//! `xiuxian-core-rs` - Python bindings for Omni `DevEnv` Rust core.
 //!
 //! Provides high-performance Rust implementations for:
-//! - Environment sniffing (`OmniSniffer`)
 //! - File I/O (`read_file_safe`)
 //! - Token counting (`count_tokens`)
 //! - Secret scanning (`scan_secrets`)
@@ -69,8 +68,7 @@ mod sandbox; // NCL-driven sandbox executor
 mod scanner;
 mod schema; // Schema Registry for Schema Singularity
 mod security;
-mod sniffer;
-mod tags; // Symbol extraction using omni-tags
+mod tags; // Symbol extraction using xiuxian-tags
 mod tokenizer; // Add tokenizer module
 mod tui;
 pub mod utils;
@@ -113,9 +111,6 @@ pub use security::{
     PySandboxMode, PySandboxResult, PySandboxRunner, PySecurityViolation, check_permission,
     contains_secrets, is_code_safe, scan_code_security, scan_secrets,
 };
-pub use sniffer::{
-    PyEnvironmentSnapshot, PyGlobSniffer, PyOmniSniffer, get_environment_snapshot, py_get_sniffer,
-};
 pub use utils::run_safe;
 pub use vector::{
     PyToolRecord, PyVectorStore, create_vector_store_py, evict_vector_store_cache_py,
@@ -127,7 +122,7 @@ pub use tokenizer::{PyMessage, py_chunk_text, py_count_tokens, py_truncate, py_t
 // Schema Registry exports (Schema Singularity)
 pub use schema::{py_get_named_schema_json, py_get_registered_types, py_get_schema_json};
 
-// Symbol Extraction (omni-tags)
+// Symbol Extraction (xiuxian-tags)
 pub use tags::{
     PySymbol, PySymbolKind, py_extract_symbols, py_get_file_outline, py_parse_symbols,
     py_search_directory, py_search_file, py_search_with_rules,
@@ -147,11 +142,11 @@ pub use xiuxian_wendao::{
     link_graph_stats_cache_get, link_graph_stats_cache_set, load_kg_from_valkey_cached,
 };
 
-// Session Window (omni-window, 1k–10k scale)
-pub use omni_window::PySessionWindow;
+// Session Window (xiuxian-window, 1k–10k scale)
+pub use xiuxian_window::PySessionWindow;
 
-// Self-Evolving Memory (omni-memory)
-pub use omni_memory::{
+// Self-Evolving Memory (xiuxian-memory-engine)
+pub use xiuxian_memory_engine::{
     PyEpisode, PyEpisodeStore, PyIntentEncoder, PyQTable, PyStoreConfig, PyTwoPhaseConfig,
     PyTwoPhaseSearch, create_episode, create_episode_store, create_episode_with_embedding,
     create_intent_encoder, create_q_table, create_two_phase_search, py_calculate_score,
@@ -209,14 +204,7 @@ pub use watcher::{
     clippy::too_many_lines,
     reason = "PyO3 module registration intentionally enumerates all exported bindings."
 )]
-fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    // Sniffer module
-    m.add_class::<PyOmniSniffer>()?;
-    m.add_class::<PyEnvironmentSnapshot>()?;
-    m.add_class::<PyGlobSniffer>()?;
-    m.add_function(pyo3::wrap_pyfunction!(py_get_sniffer, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(get_environment_snapshot, m)?)?;
-
+fn xiuxian_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Event Bus (Rust-Native Pub/Sub)
     m.add_class::<PyEventBus>()?;
     m.add_class::<PyGlobalEventBus>()?;
@@ -270,10 +258,10 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(batch_structural_replace, m)?)?;
     m.add_class::<PyBatchRefactorStats>()?;
 
-    // Session Window (omni-window)
+    // Session Window (xiuxian-window)
     m.add_class::<PySessionWindow>()?;
 
-    // Vector Store (omni-vector bindings)
+    // Vector Store (xiuxian-vector bindings)
     m.add_function(pyo3::wrap_pyfunction!(create_vector_store_py, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(evict_vector_store_cache_py, m)?)?;
     m.add_class::<PyVectorStore>()?;
@@ -397,7 +385,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     xiuxian_wendao::dep_indexer_py::register_dependency_indexer_module(m)?;
 
     // Unified Symbol Index (Project + External dependency search)
-    // NCL-driven Sandbox Executor (omni-sandbox)
+    // NCL-driven Sandbox Executor (xiuxian-sandbox)
     m.add_function(pyo3::wrap_pyfunction!(sandbox::sandbox_detect_platform, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(
         sandbox::sandbox_is_nsjail_available,
@@ -415,7 +403,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     xiuxian_wendao::unified_symbol_py::register_unified_symbol_module(m)?;
 
-    // Self-Evolving Memory (omni-memory)
+    // Self-Evolving Memory (xiuxian-memory-engine)
     m.add_class::<PyEpisode>()?;
     m.add_class::<PyQTable>()?;
     m.add_class::<PyIntentEncoder>()?;
