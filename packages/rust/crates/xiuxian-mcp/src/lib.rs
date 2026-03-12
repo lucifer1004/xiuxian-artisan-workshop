@@ -10,7 +10,7 @@ mod tool_call;
 mod tool_policy;
 mod tool_schema;
 
-pub use client::{McpClientNotificationStats, OmniMcpClient, init_params_omni_server};
+pub use client::{OmniMcpClient, init_params_omni_server};
 pub use config::McpServerTransportConfig;
 pub use tool_call::{
     McpToolCallExecution, McpToolCallOutput, call_tool_with_timeout, execute_call_with_timeout,

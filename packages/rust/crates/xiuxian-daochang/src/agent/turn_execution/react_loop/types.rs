@@ -1,10 +1,7 @@
-use std::time::Instant;
+#[allow(clippy::wildcard_imports)]
+use super::*;
 
-use crate::agent::memory::RecalledEpisodeCandidate;
 use crate::agent::memory_recall::MemoryRecallPlan;
-use crate::agent::memory_recall_feedback::ToolExecutionSummary;
-use crate::contracts::OmegaRoute;
-use crate::session::ChatMessage;
 
 pub(super) struct ReactPreparedMessages {
     pub(super) messages: Vec<ChatMessage>,
@@ -45,11 +42,6 @@ pub(super) struct MemoryRecallResultStats {
     pub(super) best_score: Option<f32>,
     pub(super) weakest_score: Option<f32>,
     pub(super) pipeline_duration_ms: u64,
-}
-
-pub(super) struct MemoryRecallOutcome {
-    pub(super) system_message: Option<ChatMessage>,
-    pub(super) recall_credit_candidates: Vec<RecalledEpisodeCandidate>,
 }
 
 pub(super) struct ReactConversationState {

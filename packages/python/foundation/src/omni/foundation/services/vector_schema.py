@@ -781,13 +781,13 @@ When a field is omitted (or all options are omitted), Rust applies defaults from
 
 The perf guard test (`test_search_perf_guard`) reads thresholds from environment variables:
 
-- `OMNI_VECTOR_PERF_P95_MS`
-- `OMNI_VECTOR_PERF_RATIO_MAX`
+- `XIUXIAN_VECTOR_PERF_P95_MS`
+- `XIUXIAN_VECTOR_PERF_RATIO_MAX`
 
 Current CI matrix values:
 
-- `ubuntu-latest`: `OMNI_VECTOR_PERF_P95_MS=700`, `OMNI_VECTOR_PERF_RATIO_MAX=4.0`
-- `macos-latest`: `OMNI_VECTOR_PERF_P95_MS=900`, `OMNI_VECTOR_PERF_RATIO_MAX=4.5`
+- `ubuntu-latest`: `XIUXIAN_VECTOR_PERF_P95_MS=700`, `XIUXIAN_VECTOR_PERF_RATIO_MAX=4.0`
+- `macos-latest`: `XIUXIAN_VECTOR_PERF_P95_MS=900`, `XIUXIAN_VECTOR_PERF_RATIO_MAX=4.5`
 
 Only performance guardrails differ by OS. API/schema/default behavior remains cross-platform identical.
 """

@@ -1,223 +1,91 @@
-//! Integration tests for AST-based command analyzer.
-
-use xiuxian_executor::AstCommandAnalyzer;
-
-#[test]
-fn test_analyze_safe_ls_command() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("ls -la /tmp");
-
-    assert!(result.is_safe, "ls command should be safe");
-    assert!(!result.is_mutation, "ls is an observe command");
-    assert_eq!(result.command_name, Some("ls".to_string()));
-    assert!(result.violations.is_empty(), "Should have no violations");
-}
+use super::markdown_attachments_fixture_support::{
+    AttachmentFixture, assert_markdown_attachment_fixture, attachment_hits_snapshot,
+    stats_and_neighbors_snapshot,
+};
+use serde_json::json;
+use xiuxian_wendao::link_graph::{LinkGraphAttachmentKind, LinkGraphDirection};
 
 #[test]
-fn test_analyze_safe_cat_command() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("cat config.toml");
+fn test_link_graph_extracts_markdown_links_relative_and_anchor()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = AttachmentFixture::build("relative_and_anchor")?;
+    let index = fixture.build_index()?;
 
-    assert!(result.is_safe, "cat command should be safe");
-    assert!(!result.is_mutation, "cat is an observe command");
-    assert_eq!(result.command_name, Some("cat".to_string()));
-}
-
-#[test]
-fn test_analyze_dangerous_rm_rf() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("rm -rf /");
-
-    assert!(!result.is_safe, "rm -rf / should be blocked");
-    assert!(result.is_mutation, "rm is a mutation command");
-    assert!(result.violations.iter().any(|v| v.rule == "RM_RF_ROOT"));
-    let Some(violation) = result.violations.iter().find(|v| v.rule == "RM_RF_ROOT") else {
-        panic!("missing RM_RF_ROOT violation")
-    };
-    assert_eq!(
-        violation.severity,
-        xiuxian_executor::ViolationSeverity::Blocked
+    let actual = stats_and_neighbors_snapshot(
+        index.stats(),
+        index
+            .neighbors("a", LinkGraphDirection::Both, 1, 10)
+            .as_slice(),
     );
+    assert_markdown_attachment_fixture("relative_and_anchor", "result.json", &actual);
+    Ok(())
 }
 
 #[test]
-fn test_analyze_dangerous_mkfs() {
-    let analyzer = AstCommandAnalyzer::new();
-    // mkfs is detected by text pattern, not AST node type
-    let result = analyzer.analyze("rm -rf / mkfs.ext4");
-    assert!(!result.is_safe);
+fn test_link_graph_extracts_markdown_reference_links() -> Result<(), Box<dyn std::error::Error>> {
+    let fixture = AttachmentFixture::build("reference_links")?;
+    let index = fixture.build_index()?;
+
+    let actual = stats_and_neighbors_snapshot(
+        index.stats(),
+        index
+            .neighbors("a", LinkGraphDirection::Both, 1, 10)
+            .as_slice(),
+    );
+    assert_markdown_attachment_fixture("reference_links", "result.json", &actual);
+    Ok(())
 }
 
 #[test]
-fn test_analyze_mutation_cp() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("cp source.txt dest.txt");
+fn test_link_graph_uses_comrak_for_complex_markdown_links() -> Result<(), Box<dyn std::error::Error>>
+{
+    let fixture = AttachmentFixture::build("complex_markdown_links")?;
+    let index = fixture.build_index()?;
 
-    assert!(result.is_safe, "cp should be allowed");
-    assert!(result.is_mutation, "cp is a mutation command");
-    assert_eq!(result.command_name, Some("cp".to_string()));
+    let actual = stats_and_neighbors_snapshot(
+        index.stats(),
+        index
+            .neighbors("a", LinkGraphDirection::Both, 1, 10)
+            .as_slice(),
+    );
+    assert_markdown_attachment_fixture("complex_markdown_links", "result.json", &actual);
+    Ok(())
 }
 
 #[test]
-fn test_analyze_mutation_mv() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("mv old.txt new.txt");
+fn test_link_graph_ignores_attachment_links_and_inline_embedded_wikilinks()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = AttachmentFixture::build("ignore_attachments_and_inline_embeds")?;
+    let index = fixture.build_index()?;
 
-    assert!(result.is_mutation, "mv is a mutation command");
-    assert_eq!(result.command_name, Some("mv".to_string()));
+    let actual = stats_and_neighbors_snapshot(
+        index.stats(),
+        index
+            .neighbors("a", LinkGraphDirection::Both, 1, 10)
+            .as_slice(),
+    );
+    assert_markdown_attachment_fixture(
+        "ignore_attachments_and_inline_embeds",
+        "result.json",
+        &actual,
+    );
+    Ok(())
 }
 
 #[test]
-fn test_analyze_mutation_mkdir() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("mkdir -p /tmp/new_dir");
+fn test_link_graph_attachment_search_filters_by_kind_and_extension()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = AttachmentFixture::build("attachment_search_filters")?;
+    let index = fixture.build_index()?;
 
-    assert!(result.is_mutation, "mkdir is a mutation command");
-    assert_eq!(result.command_name, Some("mkdir".to_string()));
-}
+    let image_hits =
+        index.search_attachments("", 20, &[], &[LinkGraphAttachmentKind::Image], false);
+    let pdf_hits = index.search_attachments("", 20, &["pdf".to_string()], &[], false);
 
-#[test]
-fn test_analyze_variable_extraction() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("cat $MY_FILE");
-
-    assert!(result.is_safe);
-    assert!(result.variables.iter().any(|v| v.name.contains("MY")));
-    assert!(result.variables.iter().any(|v| v.is_tainted));
-}
-
-#[test]
-fn test_analyze_variable_with_braces() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("echo ${USER_NAME}");
-
-    assert!(result.is_safe);
-    // Variables with braces may be parsed differently
-    assert!(!result.variables.is_empty() || result.command_name == Some("echo".to_string()));
-}
-
-#[test]
-fn test_analyze_command_substitution() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("echo `date`");
-
-    assert!(result.is_safe);
-    assert!(result.variables.iter().any(|v| v.name == "COMMAND_SUBS"));
-}
-
-#[test]
-fn test_analyze_fingerprint_consistency() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result1 = analyzer.analyze("ls -la");
-    let result2 = analyzer.analyze("ls -la");
-
-    assert_eq!(result1.fingerprint, result2.fingerprint);
-}
-
-#[test]
-fn test_analyze_fingerprint_differs() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result1 = analyzer.analyze("ls -la");
-    let result2 = analyzer.analyze("cat file.txt");
-
-    assert_ne!(result1.fingerprint, result2.fingerprint);
-}
-
-#[test]
-fn test_analyze_fork_bomb() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze(":(){ :|:& };:");
-
-    assert!(!result.is_safe);
-    assert!(result.violations.iter().any(|v| v.rule == "FORK_BOMB"));
-}
-
-#[test]
-fn test_analyze_dangerous_redirect() {
-    let analyzer = AstCommandAnalyzer::new();
-    // The fork bomb pattern triggers first and is unsafe
-    let result = analyzer.analyze(":(){ :|:& };: > /etc/passwd");
-    assert!(!result.is_safe);
-}
-
-#[test]
-fn test_analyze_safe_redirect() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("echo test > /tmp/output.txt");
-
-    assert!(result.is_safe);
-}
-
-#[test]
-fn test_analyze_git_command() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("git status");
-
-    assert!(result.is_safe);
-    assert_eq!(result.command_name, Some("git".to_string()));
-}
-
-#[test]
-fn test_analyze_git_push() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("git push origin main");
-
-    // git push is recognized as git command (not cp/mv/rm)
-    assert!(result.is_safe);
-    assert_eq!(result.command_name, Some("git".to_string()));
-}
-
-#[test]
-fn test_analyze_python_script() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("python script.py");
-
-    assert!(result.is_safe);
-    assert_eq!(result.command_name, Some("python".to_string()));
-}
-
-#[test]
-fn test_analyze_empty_string() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("");
-
-    assert!(result.is_safe);
-    assert!(result.command_name.is_none());
-}
-
-#[test]
-fn test_analyze_whoami() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("whoami");
-
-    assert!(result.is_safe);
-    assert!(!result.is_mutation);
-    assert_eq!(result.command_name, Some("whoami".to_string()));
-}
-
-#[test]
-fn test_analyze_ps_command() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("ps aux");
-
-    assert!(result.is_safe);
-    assert!(!result.is_mutation);
-}
-
-#[test]
-fn test_analyze_rm_specific_file() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("rm specific_file.txt");
-
-    assert!(result.is_mutation);
-    assert!(result.is_safe); // rm without -rf / is safe
-}
-
-#[test]
-fn test_analyze_nested_command() {
-    let analyzer = AstCommandAnalyzer::new();
-    let result = analyzer.analyze("ls | grep pattern");
-
-    assert!(result.is_safe);
-    assert_eq!(result.command_name, Some("ls".to_string()));
+    let actual = json!({
+        "image_hits": attachment_hits_snapshot(image_hits.as_slice()),
+        "pdf_hits": attachment_hits_snapshot(pdf_hits.as_slice()),
+    });
+    assert_markdown_attachment_fixture("attachment_search_filters", "result.json", &actual);
+    Ok(())
 }

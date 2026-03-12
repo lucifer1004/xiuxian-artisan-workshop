@@ -1,6 +1,25 @@
-//! Discord gateway message parsing tests for session extraction and ACL context.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::similar_names
+)]
 
-use xiuxian_daochang::{Channel, ChannelAttachment, DiscordChannel, DiscordSessionPartition};
+use omni_agent::{Channel, DiscordChannel, DiscordSessionPartition};
 
 macro_rules! parse_message {
     ($channel:expr, $event:expr, $context:literal) => {{
@@ -61,62 +80,44 @@ fn discord_event_with_roles(
     payload
 }
 
-fn discord_event_with_attachments(
-    message_id: &str,
-    content: &str,
+fn discord_slash_interaction_event(
+    interaction_id: &str,
+    command_name: &str,
     channel_id: &str,
     guild_id: Option<&str>,
     user_id: &str,
-    username: Option<&str>,
-    attachments: serde_json::Value,
-) -> serde_json::Value {
-    let mut payload = discord_event(message_id, content, channel_id, guild_id, user_id, username);
-    payload["attachments"] = attachments;
-    payload
-}
-
-fn discord_slash_interaction_event(
-    args: DiscordSlashInteractionEventArgs<'_>,
+    username: &str,
+    options: serde_json::Value,
+    interaction_type: u8,
 ) -> serde_json::Value {
     let mut payload = serde_json::json!({
-        "id": args.interaction_id,
+        "id": interaction_id,
         "application_id": "5001",
-        "type": args.interaction_type,
+        "type": interaction_type,
         "data": {
             "id": "6001",
-            "name": args.command_name,
+            "name": command_name,
             "type": 1
         },
-        "channel_id": args.channel_id,
+        "channel_id": channel_id,
         "token": "interaction-token",
         "version": 1,
         "locale": "en-US",
         "entitlements": [],
         "attachment_size_limit": 8_388_608,
         "user": {
-            "id": args.user_id,
-            "username": args.username
+            "id": user_id,
+            "username": username
         }
     });
-    if let Some(guild) = args.guild_id {
+    if let Some(guild) = guild_id {
         payload["guild_id"] = serde_json::Value::String(guild.to_string());
         payload["guild_locale"] = serde_json::Value::String("en-US".to_string());
     }
-    if !args.options.is_null() {
-        payload["data"]["options"] = args.options;
+    if !options.is_null() {
+        payload["data"]["options"] = options;
     }
     payload
-}
-
-struct DiscordSlashInteractionEventArgs<'a> {
-    interaction_id: &'a str,
-    command_name: &'a str,
-    channel_id: &'a str,
-    guild_id: Option<&'a str>,
-    user_id: &'a str,
-    username: &'a str,
-    options: serde_json::Value,
-    interaction_type: u8,
 }
 
 #[test]
@@ -174,60 +175,6 @@ fn discord_parse_gateway_message_rejects_unauthorized_sender() {
 fn discord_parse_gateway_message_rejects_empty_content() {
     let channel = DiscordChannel::new("fake-token".to_string(), vec!["*".to_string()], vec![]);
     let event = discord_event("1", "   ", "2001", Some("3001"), "1001", Some("alice"));
-
-    assert!(channel.parse_gateway_message(&event).is_none());
-}
-
-#[test]
-fn discord_parse_gateway_message_allows_image_attachment_only_payload() {
-    let channel = DiscordChannel::new("fake-token".to_string(), vec!["*".to_string()], vec![]);
-    let event = discord_event_with_attachments(
-        "1",
-        "   ",
-        "2001",
-        Some("3001"),
-        "1001",
-        Some("alice"),
-        serde_json::json!([
-            {
-                "url": "https://cdn.discordapp.com/attachments/2001/4001/example.png",
-                "content_type": "image/png"
-            }
-        ]),
-    );
-
-    let parsed = parse_message!(
-        channel,
-        &event,
-        "image attachment-only payload should parse"
-    );
-    assert_eq!(parsed.content, "[discord-image]");
-    assert_eq!(parsed.attachments.len(), 1);
-    assert_eq!(
-        parsed.attachments[0],
-        ChannelAttachment::ImageUrl {
-            url: "https://cdn.discordapp.com/attachments/2001/4001/example.png".to_string()
-        }
-    );
-}
-
-#[test]
-fn discord_parse_gateway_message_rejects_non_image_attachment_only_payload() {
-    let channel = DiscordChannel::new("fake-token".to_string(), vec!["*".to_string()], vec![]);
-    let event = discord_event_with_attachments(
-        "1",
-        "   ",
-        "2001",
-        Some("3001"),
-        "1001",
-        Some("alice"),
-        serde_json::json!([
-            {
-                "url": "https://cdn.discordapp.com/attachments/2001/4002/report.pdf",
-                "content_type": "application/pdf"
-            }
-        ]),
-    );
 
     assert!(channel.parse_gateway_message(&event).is_none());
 }
@@ -353,14 +300,14 @@ fn discord_session_partition_mode_rejects_invalid_value() {
 #[test]
 fn discord_parse_gateway_message_parses_slash_interaction_as_command_text() {
     let channel = DiscordChannel::new("fake-token".to_string(), vec!["alice".to_string()], vec![]);
-    let event = discord_slash_interaction_event(DiscordSlashInteractionEventArgs {
-        interaction_id: "9001",
-        command_name: "session",
-        channel_id: "2001",
-        guild_id: Some("3001"),
-        user_id: "1001",
-        username: "alice",
-        options: serde_json::json!([
+    let event = discord_slash_interaction_event(
+        "9001",
+        "session",
+        "2001",
+        Some("3001"),
+        "1001",
+        "alice",
+        serde_json::json!([
             {
                 "name": "memory",
                 "type": 1,
@@ -373,8 +320,8 @@ fn discord_parse_gateway_message_parses_slash_interaction_as_command_text() {
                 ]
             }
         ]),
-        interaction_type: 2,
-    });
+        2,
+    );
 
     let parsed = parse_message!(channel, &event, "slash interaction should parse");
     assert_eq!(parsed.sender, "1001");
@@ -385,22 +332,22 @@ fn discord_parse_gateway_message_parses_slash_interaction_as_command_text() {
 #[test]
 fn discord_parse_gateway_message_parses_slash_prompt_option_with_spaces() {
     let channel = DiscordChannel::new("fake-token".to_string(), vec!["*".to_string()], vec![]);
-    let event = discord_slash_interaction_event(DiscordSlashInteractionEventArgs {
-        interaction_id: "9002",
-        command_name: "bg",
-        channel_id: "2001",
-        guild_id: Some("3001"),
-        user_id: "1001",
-        username: "alice",
-        options: serde_json::json!([
+    let event = discord_slash_interaction_event(
+        "9002",
+        "bg",
+        "2001",
+        Some("3001"),
+        "1001",
+        "alice",
+        serde_json::json!([
             {
                 "name": "prompt",
                 "type": 3,
                 "value": "collect logs and summarize failures"
             }
         ]),
-        interaction_type: 2,
-    });
+        2,
+    );
 
     let parsed = parse_message!(channel, &event, "bg interaction should parse");
     assert_eq!(parsed.content, "/bg collect logs and summarize failures");
@@ -409,15 +356,15 @@ fn discord_parse_gateway_message_parses_slash_prompt_option_with_spaces() {
 #[test]
 fn discord_parse_gateway_message_ignores_non_command_interaction_payload() {
     let channel = DiscordChannel::new("fake-token".to_string(), vec!["*".to_string()], vec![]);
-    let event = discord_slash_interaction_event(DiscordSlashInteractionEventArgs {
-        interaction_id: "9003",
-        command_name: "session",
-        channel_id: "2001",
-        guild_id: Some("3001"),
-        user_id: "1001",
-        username: "alice",
-        options: serde_json::json!([]),
-        interaction_type: 4,
-    });
+    let event = discord_slash_interaction_event(
+        "9003",
+        "session",
+        "2001",
+        Some("3001"),
+        "1001",
+        "alice",
+        serde_json::json!([]),
+        4,
+    );
     assert!(channel.parse_gateway_message(&event).is_none());
 }

@@ -5,8 +5,6 @@ use xiuxian_memory_engine::{
     MemoryUtilityLedger,
 };
 
-type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
-
 fn episode_with_stats(
     id: &str,
     outcome: &str,
@@ -50,20 +48,6 @@ fn gate_policy_promote_decision_is_deterministic() {
     assert_eq!(decision_a.verdict, MemoryGateVerdict::Promote);
     assert_eq!(decision_a.next_action, "promote");
     assert!(decision_a.confidence >= 0.55);
-    assert_eq!(
-        decision_a.react_evidence_refs,
-        vec!["react:validation:pass".to_string()]
-    );
-    assert_eq!(
-        decision_a.graph_evidence_refs,
-        vec!["graph:path:plan->execute->verify".to_string()]
-    );
-    assert!(
-        decision_a
-            .omega_factors
-            .iter()
-            .any(|factor| factor.starts_with("utility_score="))
-    );
 }
 
 #[test]
@@ -84,7 +68,7 @@ fn gate_policy_obsolete_requires_threshold_and_min_usage() {
 }
 
 #[test]
-fn gate_event_matches_contract_shape() -> TestResult {
+fn gate_event_matches_contract_shape() {
     let episode = episode_with_stats("mem-event", "completed", 0.91, 7, 1);
     let ledger = MemoryUtilityLedger::from_episode(&episode, 0.92, 0.88, 0.90);
     let policy = MemoryGatePolicy::default();
@@ -102,7 +86,7 @@ fn gate_event_matches_contract_shape() -> TestResult {
         decision,
     );
 
-    let value = serde_json::to_value(&event)?;
+    let value = serde_json::to_value(&event).expect("serialize memory gate event");
     assert_eq!(value["session_id"], "telegram:1304799691:1304799691");
     assert_eq!(value["turn_id"], 42);
     assert_eq!(value["state_before"], "active");
@@ -113,20 +97,4 @@ fn gate_event_matches_contract_shape() -> TestResult {
             | MemoryLifecycleState::Promoted
     ));
     assert!(value["decision"]["next_action"].is_string());
-    let react_refs = value["decision"]["react_evidence_refs"]
-        .as_array()
-        .ok_or_else(|| std::io::Error::other("react evidence refs should be an array"))?;
-    let graph_refs = value["decision"]["graph_evidence_refs"]
-        .as_array()
-        .ok_or_else(|| std::io::Error::other("graph evidence refs should be an array"))?;
-    assert_eq!(react_refs.len(), 1);
-    assert_eq!(graph_refs.len(), 1);
-    let omega_factors = value["decision"]["omega_factors"]
-        .as_array()
-        .ok_or_else(|| std::io::Error::other("omega factors should be an array"))?;
-    assert!(
-        omega_factors.len() >= 4,
-        "omega factors should include baseline utility metadata"
-    );
-    Ok(())
 }

@@ -27,16 +27,16 @@ def temp_lancedb(test_root, request):
     db_path.mkdir(parents=True, exist_ok=True)
 
     # Set environment variable for Rust bindings
-    original_path = os.environ.get("OMNI_VECTOR_DB_PATH")
-    os.environ["OMNI_VECTOR_DB_PATH"] = str(db_path)
+    original_path = os.environ.get("XIUXIAN_VECTOR_DB_PATH")
+    os.environ["XIUXIAN_VECTOR_DB_PATH"] = str(db_path)
 
     yield db_path
 
     # Restore original environment
     if original_path is not None:
-        os.environ["OMNI_VECTOR_DB_PATH"] = original_path
+        os.environ["XIUXIAN_VECTOR_DB_PATH"] = original_path
     else:
-        os.environ.pop("OMNI_VECTOR_DB_PATH", None)
+        os.environ.pop("XIUXIAN_VECTOR_DB_PATH", None)
 
 
 @pytest.fixture(scope="function")

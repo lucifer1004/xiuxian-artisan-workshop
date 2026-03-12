@@ -102,18 +102,18 @@ pub(super) fn evaluate_link_graph_policy(
     let (graph_confidence_score, graph_confidence_level) =
         compute_graph_confidence(hits, runtime.hybrid_min_hits, runtime.hybrid_min_top_score);
 
-    let (selected_mode, reason) = match requested_mode {
+    let (selected_mode, reason): (LinkGraphRetrievalMode, String) = match requested_mode {
         LinkGraphRetrievalMode::VectorOnly => (
             LinkGraphRetrievalMode::VectorOnly,
             LINK_GRAPH_REASON_VECTOR_ONLY_REQUESTED.to_string(),
         ),
         LinkGraphRetrievalMode::GraphOnly => {
-            let reason = if hits.is_empty() {
+            let reason_str = if hits.is_empty() {
                 LINK_GRAPH_REASON_GRAPH_ONLY_REQUESTED_EMPTY
             } else {
                 LINK_GRAPH_REASON_GRAPH_ONLY_REQUESTED
             };
-            (LinkGraphRetrievalMode::GraphOnly, reason.to_string())
+            (LinkGraphRetrievalMode::GraphOnly, reason_str.to_string())
         }
         LinkGraphRetrievalMode::Hybrid => {
             if graph_is_sufficient(hits, runtime.hybrid_min_hits, runtime.hybrid_min_top_score) {

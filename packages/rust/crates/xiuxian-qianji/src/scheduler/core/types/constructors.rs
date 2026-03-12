@@ -2,9 +2,49 @@ use crate::consensus::ConsensusManager;
 use crate::engine::QianjiEngine;
 use crate::scheduler::identity::SchedulerAgentIdentity;
 use crate::swarm::RemotePossessionBus;
+use std::collections::HashSet;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
-use super::{QianjiScheduler, SchedulerRuntimeServices};
+pub(super) const EXTERNAL_PROGRESS_WAIT_MS: u64 = 200;
+pub(super) const EXTERNAL_PROGRESS_TIMEOUT_MS: u64 = 30_000;
+pub(super) const REMOTE_POSSESSION_REQUEST_TTL_SECONDS: u64 = 120;
+pub(super) const REMOTE_POSSESSION_MAX_WAIT_MS: u64 = 30_000;
+
+pub(super) struct ConsensusCheckpointView<'a> {
+    pub(super) session_id: Option<&'a str>,
+    pub(super) redis_url: Option<&'a str>,
+    pub(super) total_steps: u32,
+    pub(super) active_branches: &'a HashSet<String>,
+    pub(super) context: &'a serde_json::Value,
+}
+
+pub(super) enum ConsensusOutcome {
+    Proceed(serde_json::Value),
+    Suspend(serde_json::Value),
+}
+
+pub(super) enum RemoteDelegationOutcome {
+    Noop,
+    Progressed,
+    Suspend(serde_json::Value),
+}
+
+/// Drives the parallel execution of the Qianji Box mechanisms.
+pub struct QianjiScheduler {
+    /// Thread-safe access to the underlying graph.
+    pub(super) engine: Arc<RwLock<QianjiEngine>>,
+    /// Maximum total execution steps to prevent runaway loops.
+    pub(super) max_total_steps: u32,
+    /// Optional manager for distributed consensus voting.
+    pub(super) consensus_manager: Option<Arc<ConsensusManager>>,
+    /// Optional remote possession transport for cross-cluster delegation.
+    pub(super) remote_possession_bus: Option<Arc<RemotePossessionBus>>,
+    /// Local cluster id used to avoid self-delegation loops.
+    pub(super) cluster_id: String,
+    /// Runtime execution identity used by role-aware scheduling.
+    pub(super) execution_identity: SchedulerAgentIdentity,
+}
 
 impl QianjiScheduler {
     /// Creates a new scheduler for the given engine.
@@ -19,11 +59,13 @@ impl QianjiScheduler {
         engine: QianjiEngine,
         consensus_manager: Option<Arc<ConsensusManager>>,
     ) -> Self {
-        let services = SchedulerRuntimeServices {
+        Self::with_runtime_services(
+            engine,
             consensus_manager,
-            ..SchedulerRuntimeServices::default()
-        };
-        Self::with_runtime_services_config(engine, SchedulerAgentIdentity::from_env(), services)
+            None,
+            None,
+            SchedulerAgentIdentity::from_env(),
+        )
     }
 
     /// Creates a scheduler with optional distributed consensus manager and explicit
@@ -34,11 +76,7 @@ impl QianjiScheduler {
         consensus_manager: Option<Arc<ConsensusManager>>,
         execution_identity: SchedulerAgentIdentity,
     ) -> Self {
-        let services = SchedulerRuntimeServices {
-            consensus_manager,
-            ..SchedulerRuntimeServices::default()
-        };
-        Self::with_runtime_services_config(engine, execution_identity, services)
+        Self::with_runtime_services(engine, consensus_manager, None, None, execution_identity)
     }
 
     /// Creates a scheduler with full runtime services, including optional cross-cluster
@@ -51,36 +89,16 @@ impl QianjiScheduler {
         cluster_id: Option<String>,
         execution_identity: SchedulerAgentIdentity,
     ) -> Self {
-        let services = SchedulerRuntimeServices {
-            consensus_manager,
-            remote_possession_bus,
-            cluster_id,
-            ..SchedulerRuntimeServices::default()
-        };
-        Self::with_runtime_services_config(engine, execution_identity, services)
-    }
-
-    /// Creates a scheduler with an explicit runtime service bundle and policy.
-    #[must_use]
-    pub fn with_runtime_services_config(
-        engine: QianjiEngine,
-        execution_identity: SchedulerAgentIdentity,
-        services: SchedulerRuntimeServices,
-    ) -> Self {
-        let cluster_id = services
-            .cluster_id
+        let cluster_id = cluster_id
             .or_else(|| std::env::var("CLUSTER_ID").ok())
             .unwrap_or_else(|| "local_cluster".to_string());
         Self {
-            engine: Arc::new(tokio::sync::RwLock::new(engine)),
+            engine: Arc::new(RwLock::new(engine)),
             max_total_steps: 1000,
-            consensus_manager: services.consensus_manager,
-            remote_possession_bus: services.remote_possession_bus,
-            role_registry: services.role_registry,
+            consensus_manager,
+            remote_possession_bus,
             cluster_id,
             execution_identity,
-            execution_policy: services.execution_policy,
-            telemetry_emitter: services.telemetry_emitter,
         }
     }
 }

@@ -1,14 +1,19 @@
-use super::hot_reload::start_hot_reload_driver;
-use super::memory::build_memory_runtime;
+use super::super::hot_reload::start_hot_reload_driver;
+use super::super::memory::build_memory_runtime;
+use super::super::qianhuan::init_persona_registries;
+use super::super::service_mount::{ServiceMountCatalog, ServiceMountMeta};
+use super::super::zhenfa::{
+    build_global_link_graph_index, build_skill_vfs_resolver, init_zhenfa_tool_bridge,
+};
+use super::super::zhixing::{init_zhixing_runtime, mount_zhixing_services, resolve_project_root};
+use super::mcp::init_mcp_client_and_mount;
 use super::native_tools::mount_native_tool_cauldron;
-use super::qianhuan::init_persona_registries;
-use super::service_mount::{ServiceMountCatalog, ServiceMountMeta};
-use super::zhenfa::{build_global_link_graph_index, init_zhenfa_tool_bridge};
-use super::zhixing::{init_zhixing_runtime, mount_zhixing_services, resolve_project_root};
+use super::session::{build_bounded_session_store, resolve_session_reset_idle_timeout_ms};
 use crate::agent::Agent;
-use crate::config::{AgentConfig, RuntimeSettings, load_runtime_settings, load_xiuxian_config};
+use crate::agent::zhenfa::ZhenfaRuntimeDeps;
+use crate::config::{AgentConfig, load_runtime_settings, load_xiuxian_config};
 use crate::llm::LlmClient;
-use crate::session::{BoundedSessionStore, SessionStore};
+use crate::session::SessionStore;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,14 +30,7 @@ impl Agent {
         let api_key = config.resolve_api_key();
         let llm = LlmClient::new(config.inference_url.clone(), config.model.clone(), api_key);
         let session = SessionStore::new()?;
-        let bounded_session = match config.window_max_turns {
-            Some(max_turns) => Some(BoundedSessionStore::new_with_limits(
-                max_turns,
-                config.summary_max_segments,
-                config.summary_max_chars,
-            )?),
-            None => None,
-        };
+        let bounded_session = build_bounded_session_store(&config)?;
         Self::build_with_backends(config, llm, session, bounded_session).await
     }
 
@@ -40,7 +38,7 @@ impl Agent {
     pub async fn from_config_with_session_backends_for_test(
         config: AgentConfig,
         session: SessionStore,
-        bounded_session: Option<BoundedSessionStore>,
+        bounded_session: Option<crate::session::BoundedSessionStore>,
     ) -> Result<Self> {
         let api_key = config.resolve_api_key();
         let llm = LlmClient::new(config.inference_url.clone(), config.model.clone(), api_key);
@@ -51,7 +49,7 @@ impl Agent {
         config: AgentConfig,
         llm: LlmClient,
         session: SessionStore,
-        bounded_session: Option<BoundedSessionStore>,
+        bounded_session: Option<crate::session::BoundedSessionStore>,
     ) -> Result<Self> {
         let mut service_mounts = ServiceMountCatalog::new();
         let mcp_client = init_mcp_client_and_mount(&config, &mut service_mounts).await?;
@@ -66,21 +64,26 @@ impl Agent {
         let memory_runtime =
             build_memory_runtime(&config, &session, &runtime_settings, &mut service_mounts)?;
 
-        let mut native_tools = super::super::NativeToolRegistry::new();
+        let mut native_tools = super::super::super::NativeToolRegistry::new();
         let zhixing_runtime = init_zhixing_runtime(&persona_registries, &mut service_mounts);
         let global_link_graph_index = build_global_link_graph_index(
             &xiuxian_toml_cfg,
             zhixing_runtime.as_ref(),
             &mut service_mounts,
         );
-        let zhenfa_tools = init_zhenfa_tool_bridge(
-            &xiuxian_toml_cfg,
-            zhixing_runtime.as_ref(),
-            global_link_graph_index.clone(),
-            memory_runtime.memory_store.clone(),
-            memory_runtime.memory_state_backend.clone(),
-            &mut service_mounts,
-        );
+        let shared_skill_vfs_resolver = build_skill_vfs_resolver(&mut service_mounts);
+        let zhenfa_deps = ZhenfaRuntimeDeps {
+            manifestation_manager: zhixing_runtime
+                .as_ref()
+                .map(|runtime| Arc::clone(&runtime.manifestation_manager)),
+            link_graph_index: global_link_graph_index.clone(),
+            skill_vfs_resolver: shared_skill_vfs_resolver.as_ref().map(Arc::clone),
+            embedding_client: memory_runtime.embedding_client.as_ref().map(Arc::clone),
+            memory_store: memory_runtime.memory_store.clone(),
+            memory_state_backend: memory_runtime.memory_state_backend.clone(),
+        };
+        let zhenfa_tools =
+            init_zhenfa_tool_bridge(&xiuxian_toml_cfg, &zhenfa_deps, &mut service_mounts);
         let heyi = if let Some(ref runtime_bundle) = zhixing_runtime {
             mount_zhixing_services(&runtime_bundle.heyi, &mut service_mounts);
             Some(Arc::clone(&runtime_bundle.heyi))
@@ -92,7 +95,12 @@ impl Agent {
             );
             None
         };
-        mount_native_tool_cauldron(heyi.as_ref(), &mut native_tools, &mut service_mounts);
+        mount_native_tool_cauldron(
+            heyi.as_ref(),
+            shared_skill_vfs_resolver.as_ref(),
+            &mut native_tools,
+            &mut service_mounts,
+        );
         let hot_reload_driver = start_hot_reload_driver(
             zhixing_runtime.as_ref(),
             &xiuxian_toml_cfg,
@@ -115,7 +123,7 @@ impl Agent {
             embedding_runtime: memory_runtime.embedding_runtime,
             context_budget_snapshots: Arc::new(RwLock::new(HashMap::new())),
             memory_recall_metrics: Arc::new(RwLock::new(
-                super::super::memory_recall_metrics::MemoryRecallMetricsState::default(),
+                super::super::super::memory_recall_metrics::MemoryRecallMetricsState::default(),
             )),
             manifestation_manager: zhixing_runtime
                 .as_ref()
@@ -123,9 +131,9 @@ impl Agent {
             reflection_policy_hints: Arc::new(RwLock::new(HashMap::new())),
             memory_decay_turn_counter: Arc::new(AtomicU64::new(0)),
             downstream_admission_policy:
-                super::super::admission::DownstreamAdmissionPolicy::from_env(),
+                super::super::super::admission::DownstreamAdmissionPolicy::from_env(),
             downstream_admission_metrics:
-                super::super::admission::DownstreamAdmissionMetrics::default(),
+                super::super::super::admission::DownstreamAdmissionMetrics::default(),
             llm,
             mcp: mcp_client,
             heyi,
@@ -136,63 +144,4 @@ impl Agent {
             service_mount_records,
         })
     }
-}
-
-const DEFAULT_SESSION_RESET_IDLE_TIMEOUT_MINS: u64 = 60;
-
-fn resolve_session_reset_idle_timeout_ms(runtime_settings: &RuntimeSettings) -> Option<u64> {
-    let idle_timeout_mins: Option<u64> =
-        parse_positive_u64_from_env("OMNI_AGENT_SESSION_RESET_IDLE_TIMEOUT_MINS")
-            .or(runtime_settings
-                .session
-                .reset_idle_timeout_mins
-                .filter(|value| *value > 0))
-            .or(Some(DEFAULT_SESSION_RESET_IDLE_TIMEOUT_MINS));
-    idle_timeout_mins.map(|mins| mins.saturating_mul(60_000))
-}
-
-fn parse_positive_u64_from_env(name: &str) -> Option<u64> {
-    let raw = std::env::var(name).ok()?;
-    if let Some(value) = raw.trim().parse::<u64>().ok().filter(|value| *value > 0) {
-        Some(value)
-    } else {
-        tracing::warn!(
-            env_var = %name,
-            value = %raw,
-            "invalid positive integer env value; ignoring override"
-        );
-        None
-    }
-}
-
-async fn init_mcp_client_and_mount(
-    config: &AgentConfig,
-    service_mounts: &mut ServiceMountCatalog,
-) -> Result<Option<crate::mcp::McpClientPool>> {
-    let mcp_client = super::super::mcp_startup::connect_mcp_pool_if_configured(config).await?;
-    if let Some(url) = config
-        .mcp_servers
-        .iter()
-        .find(|server| server.url.is_some())
-        .and_then(|server| server.url.clone())
-    {
-        if mcp_client.is_some() {
-            service_mounts.mounted("mcp.pool", "mcp", ServiceMountMeta::default().endpoint(url));
-        } else {
-            service_mounts.skipped(
-                "mcp.pool",
-                "mcp",
-                ServiceMountMeta::default()
-                    .endpoint(url)
-                    .detail("startup skipped or unavailable"),
-            );
-        }
-    } else {
-        service_mounts.skipped(
-            "mcp.pool",
-            "mcp",
-            ServiceMountMeta::default().detail("no mcp url configured"),
-        );
-    }
-    Ok(mcp_client)
 }

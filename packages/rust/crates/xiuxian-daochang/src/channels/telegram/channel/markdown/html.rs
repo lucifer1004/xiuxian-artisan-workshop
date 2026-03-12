@@ -159,7 +159,6 @@ impl HtmlRenderer {
     }
 }
 
-/// Render Markdown as Telegram-safe HTML.
 #[must_use]
 pub fn markdown_to_telegram_html(markdown: &str) -> String {
     HtmlRenderer::default().render(markdown)

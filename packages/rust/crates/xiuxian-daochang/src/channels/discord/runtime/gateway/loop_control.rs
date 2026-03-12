@@ -38,13 +38,11 @@ pub(super) async fn drive_gateway_runtime_loop(
                 }
             }, if snapshot_tick.is_some() => {
                 let foreground_snapshot = runtime.snapshot();
-                let admission_snapshot = runtime.admission_runtime_snapshot();
                 emit_runtime_snapshot(
                     "gateway",
                     inbound_snapshot_tx,
                     inbound_queue_capacity,
                     &foreground_snapshot,
-                    admission_snapshot,
                 );
             }
             _ = tokio::signal::ctrl_c() => {
@@ -52,7 +50,7 @@ pub(super) async fn drive_gateway_runtime_loop(
                 shutdown_requested = true;
                 break;
             }
-            result = &mut *gateway_task => {
+            result = gateway_task => {
                 match result {
                     Ok(Ok(())) => tracing::warn!("discord gateway client exited"),
                     Ok(Err(error)) => tracing::error!("discord gateway client failed: {error}"),

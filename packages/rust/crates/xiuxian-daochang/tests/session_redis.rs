@@ -1,388 +1,159 @@
-//! Redis-backed session store integration tests and backup semantics.
+//! Top-level integration harness for `agent::session_context`.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+mod config {
+    pub(crate) use omni_agent::AgentConfig;
+}
 
-use anyhow::Result;
-use serde::Deserialize;
-use xiuxian_daochang::{BoundedSessionStore, ChatMessage, SessionStore};
-
-fn live_redis_url() -> Option<String> {
-    if let Ok(url) = std::env::var("VALKEY_URL")
-        && !url.trim().is_empty()
-    {
-        return Some(url);
+mod observability {
+    #[derive(Clone, Copy, Debug)]
+    pub(crate) enum SessionEvent {
+        BoundedStatsLoaded,
+        ContextBackupCaptured,
+        ContextWindowReset,
+        ContextWindowResumeMissing,
+        ContextWindowResumed,
+        ContextWindowSnapshotDropped,
+        ContextWindowSnapshotInspected,
+        SessionMessagesLoaded,
     }
-    None
+
+    impl SessionEvent {
+        pub(crate) const fn as_str(self) -> &'static str {
+            match self {
+                Self::BoundedStatsLoaded => "bounded_stats_loaded",
+                Self::ContextBackupCaptured => "context_backup_captured",
+                Self::ContextWindowReset => "context_window_reset",
+                Self::ContextWindowResumeMissing => "context_window_resume_missing",
+                Self::ContextWindowResumed => "context_window_resumed",
+                Self::ContextWindowSnapshotDropped => "context_window_snapshot_dropped",
+                Self::ContextWindowSnapshotInspected => "context_window_snapshot_inspected",
+                Self::SessionMessagesLoaded => "session_messages_loaded",
+            }
+        }
+    }
+
+    fn lint_symbol_probe() {
+        let _ = (
+            SessionEvent::BoundedStatsLoaded,
+            SessionEvent::ContextBackupCaptured,
+            SessionEvent::ContextWindowReset,
+            SessionEvent::ContextWindowResumeMissing,
+            SessionEvent::ContextWindowResumed,
+            SessionEvent::ContextWindowSnapshotDropped,
+            SessionEvent::ContextWindowSnapshotInspected,
+            SessionEvent::SessionMessagesLoaded,
+        );
+    }
+
+    const _: fn() = lint_symbol_probe;
 }
 
-fn unique_prefix() -> Result<String> {
-    let suffix = SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros();
-    Ok(format!("xiuxian-daochang:test:session:{suffix}"))
+mod session {
+    pub(crate) use omni_agent::{
+        BoundedSessionStore, ChatMessage, SessionStore, SessionSummarySegment,
+    };
 }
 
-#[derive(Debug, Deserialize)]
-struct BackupMetadataPayload {
-    messages: usize,
-    summary_segments: usize,
-    saved_at_unix_ms: u64,
-}
+mod agent {
+    use std::collections::HashMap;
+    use std::sync::Arc;
 
-fn backup_session_id(session_id: &str) -> String {
-    format!("__session_context_backup__:{session_id}")
-}
+    use anyhow::Result;
+    use tokio::sync::RwLock;
 
-fn backup_metadata_session_id(session_id: &str) -> String {
-    format!("__session_context_backup_meta__:{session_id}")
-}
+    use crate::config::AgentConfig;
+    use crate::session::{BoundedSessionStore, ChatMessage, SessionStore};
 
-fn metadata_messages_key(prefix: &str, metadata_session_id: &str) -> String {
-    format!("{prefix}:messages:{metadata_session_id}")
-}
+    pub(crate) struct Agent {
+        pub(crate) config: AgentConfig,
+        pub(crate) session: SessionStore,
+        pub(crate) session_reset_idle_timeout_ms: Option<u64>,
+        pub(crate) session_last_activity_unix_ms: Arc<RwLock<HashMap<String, u64>>>,
+        pub(crate) bounded_session: Option<BoundedSessionStore>,
+    }
 
-fn messages_key(prefix: &str, session_id: &str) -> String {
-    format!("{prefix}:messages:{session_id}")
-}
+    impl Agent {
+        pub(crate) async fn from_config(config: AgentConfig) -> Result<Self> {
+            std::future::ready(()).await;
+            let session = SessionStore::new()?;
+            let bounded_session = match config.window_max_turns {
+                Some(max_turns) => Some(BoundedSessionStore::new_with_limits(
+                    max_turns,
+                    config.summary_max_segments,
+                    config.summary_max_chars,
+                )?),
+                None => None,
+            };
+            Ok(Self {
+                config,
+                session,
+                session_reset_idle_timeout_ms: None,
+                session_last_activity_unix_ms: Arc::new(RwLock::new(HashMap::new())),
+                bounded_session,
+            })
+        }
 
-#[tokio::test]
-#[ignore = "requires live valkey server"]
-async fn redis_session_store_roundtrip_across_instances() -> Result<()> {
-    let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
-        return Ok(());
-    };
-    let prefix = unique_prefix()?;
-    let session_id = "s-live-roundtrip";
+        pub(crate) async fn clear_session(&self, session_id: &str) -> Result<()> {
+            if let Some(ref bounded_session) = self.bounded_session {
+                bounded_session.clear(session_id).await?;
+            }
+            self.session.clear(session_id).await
+        }
 
-    let store_a = SessionStore::new_with_redis(redis_url.clone(), Some(prefix.clone()), Some(120))?;
-    store_a
-        .append(
-            session_id,
-            vec![
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: Some("hello".to_string()),
-                    tool_calls: None,
-                    tool_call_id: None,
-                    name: None,
-                },
-                ChatMessage {
-                    role: "assistant".to_string(),
-                    content: Some("world".to_string()),
-                    tool_calls: None,
-                    tool_call_id: None,
-                    name: None,
-                },
-            ],
-        )
-        .await?;
+        async fn append_turn_to_session(
+            &self,
+            session_id: &str,
+            user_msg: &str,
+            assistant_msg: &str,
+            tool_count: u32,
+        ) -> Result<()> {
+            if let Some(ref bounded_session) = self.bounded_session {
+                bounded_session
+                    .append_turn(session_id, user_msg, assistant_msg, tool_count)
+                    .await?;
+                return Ok(());
+            }
 
-    let store_b = SessionStore::new_with_redis(redis_url, Some(prefix), Some(120))?;
-    let messages = store_b.get(session_id).await?;
-    assert_eq!(messages.len(), 2);
-    assert_eq!(messages[0].content.as_deref(), Some("hello"));
-    assert_eq!(messages[1].content.as_deref(), Some("world"));
-    store_b.clear(session_id).await?;
-    Ok(())
-}
+            self.session
+                .append(
+                    session_id,
+                    vec![
+                        ChatMessage {
+                            role: "user".to_string(),
+                            content: Some(user_msg.to_string()),
+                            tool_calls: None,
+                            tool_call_id: None,
+                            name: None,
+                        },
+                        ChatMessage {
+                            role: "assistant".to_string(),
+                            content: Some(assistant_msg.to_string()),
+                            tool_calls: None,
+                            tool_call_id: None,
+                            name: None,
+                        },
+                    ],
+                )
+                .await
+        }
+    }
 
-#[tokio::test]
-#[ignore = "requires live valkey server"]
-async fn redis_session_store_writes_compact_payload_and_decodes_roundtrip() -> Result<()> {
-    let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
-        return Ok(());
-    };
-    let prefix = unique_prefix()?;
-    let session_id = "s-live-compact-payload";
-    let key = messages_key(&prefix, session_id);
-    let store = SessionStore::new_with_redis(redis_url.clone(), Some(prefix), Some(120))?;
-    store
-        .append(
-            session_id,
-            vec![ChatMessage {
-                role: "user".to_string(),
-                content: Some("hello compact payload".to_string()),
-                tool_calls: None,
-                tool_call_id: None,
-                name: None,
-            }],
-        )
-        .await?;
+    pub(crate) mod session_context {
+        include!("../src/agent/session_context/mod.rs");
 
-    let client = redis::Client::open(redis_url.as_str())?;
-    let mut conn = client.get_multiplexed_async_connection().await?;
-    let raw_payloads: Vec<String> = redis::cmd("LRANGE")
-        .arg(&key)
-        .arg(0)
-        .arg(-1)
-        .query_async(&mut conn)
-        .await?;
-    assert_eq!(raw_payloads.len(), 1);
-    assert!(raw_payloads[0].contains("\"r\":\"user\""));
-    assert!(!raw_payloads[0].contains("\"role\""));
+        fn lint_symbol_probe() {
+            let _ = crate::agent::Agent::append_turn_with_tool_count_for_session;
+            let _ = crate::agent::Agent::inspect_context_window;
+            let _ = crate::agent::Agent::resume_context_window;
+            let _ = crate::agent::Agent::drop_context_window_backup;
+            let _ = crate::agent::Agent::restore_session_backup;
+            let _ = crate::agent::Agent::clear_backup_metadata;
+            let _ = std::mem::size_of::<SessionContextMode>();
+            let _ = std::mem::size_of::<SessionContextWindowInfo>();
+        }
 
-    let messages = store.get(session_id).await?;
-    assert_eq!(messages.len(), 1);
-    assert_eq!(messages[0].role, "user");
-    assert_eq!(
-        messages[0].content.as_deref(),
-        Some("hello compact payload")
-    );
-    store.clear(session_id).await?;
-    Ok(())
-}
+        const _: fn() = lint_symbol_probe;
 
-#[tokio::test]
-#[ignore = "requires live valkey server"]
-async fn redis_session_store_replace_is_atomic_across_instances() -> Result<()> {
-    let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
-        return Ok(());
-    };
-    let prefix = unique_prefix()?;
-    let session_id = "s-live-replace";
-
-    let store_a = SessionStore::new_with_redis(redis_url.clone(), Some(prefix.clone()), Some(120))?;
-    store_a
-        .append(
-            session_id,
-            vec![
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: Some("before-1".to_string()),
-                    tool_calls: None,
-                    tool_call_id: None,
-                    name: None,
-                },
-                ChatMessage {
-                    role: "assistant".to_string(),
-                    content: Some("before-2".to_string()),
-                    tool_calls: None,
-                    tool_call_id: None,
-                    name: None,
-                },
-            ],
-        )
-        .await?;
-    store_a
-        .replace(
-            session_id,
-            vec![ChatMessage {
-                role: "system".to_string(),
-                content: Some("after-replace".to_string()),
-                tool_calls: None,
-                tool_call_id: None,
-                name: Some("replace".to_string()),
-            }],
-        )
-        .await?;
-
-    let store_b = SessionStore::new_with_redis(redis_url, Some(prefix), Some(120))?;
-    let messages = store_b.get(session_id).await?;
-    assert_eq!(messages.len(), 1);
-    assert_eq!(messages[0].content.as_deref(), Some("after-replace"));
-    store_b.clear(session_id).await?;
-    Ok(())
-}
-
-#[tokio::test]
-#[ignore = "requires live valkey server"]
-async fn redis_bounded_store_roundtrip_and_drain() -> Result<()> {
-    let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
-        return Ok(());
-    };
-    let prefix = unique_prefix()?;
-    let session_id = "s-live-window";
-
-    let store_a =
-        BoundedSessionStore::new_with_redis(8, redis_url.clone(), Some(prefix.clone()), Some(120))?;
-    store_a.append_turn(session_id, "u1", "a1", 1).await?;
-    store_a.append_turn(session_id, "u2", "a2", 2).await?;
-
-    let store_b = BoundedSessionStore::new_with_redis(8, redis_url, Some(prefix), Some(120))?;
-    let recent = store_b.get_recent_messages(session_id, 8).await?;
-    assert_eq!(recent.len(), 4);
-    assert_eq!(recent[0].content.as_deref(), Some("u1"));
-    assert_eq!(recent[3].content.as_deref(), Some("a2"));
-
-    let stats_before = store_b.get_stats(session_id).await?;
-    let Some(stats_before) = stats_before else {
-        panic!("stats");
-    };
-    assert_eq!(stats_before.0, 2);
-    assert_eq!(stats_before.1, 3);
-
-    let drained = store_b.drain_oldest_turns(session_id, 2).await?;
-    assert_eq!(drained.len(), 4);
-    assert_eq!(drained[0].1, "u1");
-    assert_eq!(drained[1].1, "a1");
-
-    let stats_after = store_b.get_stats(session_id).await?;
-    let Some(stats_after) = stats_after else {
-        panic!("stats");
-    };
-    assert_eq!(stats_after.0, 0);
-    store_b.clear(session_id).await?;
-    Ok(())
-}
-
-#[tokio::test]
-#[ignore = "requires live valkey server"]
-async fn redis_bounded_snapshot_preserves_tool_call_counter() -> Result<()> {
-    let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
-        return Ok(());
-    };
-    let prefix = unique_prefix()?;
-    let session_id = "s-live-window-tool-counter";
-    let backup_session_id = backup_session_id(session_id);
-    let metadata_session_id = backup_metadata_session_id(session_id);
-    let saved_at_unix_ms = u64::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis())
-        .unwrap_or(u64::MAX);
-
-    let bounded =
-        BoundedSessionStore::new_with_redis(8, redis_url.clone(), Some(prefix.clone()), Some(120))?;
-    bounded.append_turn(session_id, "u1", "a1", 2).await?;
-    bounded.append_turn(session_id, "u2", "a2", 1).await?;
-
-    let before = bounded.get_stats(session_id).await?;
-    let Some(before) = before else {
-        panic!("expected bounded stats before snapshot reset");
-    };
-    assert_eq!(before.0, 2);
-    assert_eq!(before.1, 3);
-
-    let reset = bounded
-        .atomic_reset_snapshot(
-            session_id,
-            &backup_session_id,
-            &metadata_session_id,
-            saved_at_unix_ms,
-        )
-        .await?;
-    assert_eq!(reset, Some((4, 0)));
-
-    let active_after_reset = bounded.get_stats(session_id).await?;
-    assert!(active_after_reset.is_none());
-
-    let backup_after_reset = bounded.get_stats(&backup_session_id).await?;
-    let Some(backup_after_reset) = backup_after_reset else {
-        panic!("expected backup bounded stats after reset");
-    };
-    assert_eq!(backup_after_reset.0, 2);
-    assert_eq!(backup_after_reset.1, 3);
-
-    let resumed = bounded
-        .atomic_resume_snapshot(session_id, &backup_session_id, &metadata_session_id)
-        .await?;
-    assert_eq!(resumed, Some((4, 0)));
-
-    let after_resume = bounded.get_stats(session_id).await?;
-    let Some(after_resume) = after_resume else {
-        panic!("expected bounded stats after resume");
-    };
-    assert_eq!(after_resume.0, 2);
-    assert_eq!(after_resume.1, 3);
-
-    let backup_after_resume = bounded.get_stats(&backup_session_id).await?;
-    assert!(backup_after_resume.is_none());
-
-    let metadata_store = SessionStore::new_with_redis(redis_url, Some(prefix), Some(120))?;
-    metadata_store.clear(&metadata_session_id).await?;
-    bounded.clear(session_id).await?;
-    bounded.clear(&backup_session_id).await?;
-    Ok(())
-}
-
-#[tokio::test]
-#[ignore = "requires live valkey server"]
-async fn redis_atomic_reset_snapshot_stores_metadata_as_chat_message_payload() -> Result<()> {
-    let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
-        return Ok(());
-    };
-    let prefix = unique_prefix()?;
-    let session_id = "s-live-reset-metadata-envelope";
-    let backup_session_id = backup_session_id(session_id);
-    let metadata_session_id = backup_metadata_session_id(session_id);
-    let saved_at_unix_ms = u64::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis())
-        .unwrap_or(u64::MAX);
-
-    let bounded =
-        BoundedSessionStore::new_with_redis(8, redis_url.clone(), Some(prefix.clone()), Some(120))?;
-    bounded.append_turn(session_id, "u1", "a1", 0).await?;
-
-    let stats = bounded
-        .atomic_reset_snapshot(
-            session_id,
-            &backup_session_id,
-            &metadata_session_id,
-            saved_at_unix_ms,
-        )
-        .await?;
-    assert_eq!(stats, Some((2, 0)));
-
-    let store = SessionStore::new_with_redis(redis_url, Some(prefix), Some(120))?;
-    let metadata_messages = store.get(&metadata_session_id).await?;
-    assert_eq!(metadata_messages.len(), 1);
-    assert_eq!(metadata_messages[0].role, "system");
-
-    let metadata_json = metadata_messages[0].content.as_deref();
-    let Some(metadata_json) = metadata_json else {
-        panic!("metadata message must include JSON content");
-    };
-    let metadata: BackupMetadataPayload = serde_json::from_str(metadata_json)?;
-    assert_eq!(metadata.messages, 2);
-    assert_eq!(metadata.summary_segments, 0);
-    assert!(metadata.saved_at_unix_ms >= saved_at_unix_ms);
-
-    store.clear(&metadata_session_id).await?;
-    bounded.clear(&backup_session_id).await?;
-    bounded.clear(session_id).await?;
-    Ok(())
-}
-
-#[tokio::test]
-#[ignore = "requires live valkey server"]
-async fn redis_session_store_reads_legacy_backup_metadata_payload_without_dropping_it() -> Result<()>
-{
-    let Some(redis_url) = live_redis_url() else {
-        eprintln!("skip: set VALKEY_URL");
-        return Ok(());
-    };
-    let prefix = unique_prefix()?;
-    let session_id = "s-live-legacy-metadata-read";
-    let metadata_session_id = backup_metadata_session_id(session_id);
-    let metadata_key = metadata_messages_key(&prefix, &metadata_session_id);
-    let legacy_payload = r#"{"messages":4,"summary_segments":1,"saved_at_unix_ms":1771623456789}"#;
-
-    let client = redis::Client::open(redis_url.as_str())?;
-    let mut conn = client.get_multiplexed_async_connection().await?;
-    let _: () = redis::cmd("DEL")
-        .arg(&metadata_key)
-        .query_async(&mut conn)
-        .await?;
-    let _: () = redis::cmd("RPUSH")
-        .arg(&metadata_key)
-        .arg(legacy_payload)
-        .query_async(&mut conn)
-        .await?;
-
-    let store = SessionStore::new_with_redis(redis_url, Some(prefix), Some(120))?;
-    let metadata_messages = store.get(&metadata_session_id).await?;
-    assert_eq!(metadata_messages.len(), 1);
-    assert_eq!(metadata_messages[0].role, "system");
-
-    let metadata_json = metadata_messages[0].content.as_deref();
-    let Some(metadata_json) = metadata_json else {
-        panic!("legacy payload should be preserved as message content");
-    };
-    let metadata: BackupMetadataPayload = serde_json::from_str(metadata_json)?;
-    assert_eq!(metadata.messages, 4);
-    assert_eq!(metadata.summary_segments, 1);
-    assert_eq!(metadata.saved_at_unix_ms, 1_771_623_456_789);
-
-    store.clear(&metadata_session_id).await?;
-    Ok(())
+        mod tests;
+    }
 }

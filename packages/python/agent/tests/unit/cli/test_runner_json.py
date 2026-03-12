@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import io
-import json
 import sys
 from typing import Any
 
@@ -133,77 +132,3 @@ def test_stop_runner_daemon_returns_stopped(monkeypatch) -> None:
 
     status = runner_json_module.stop_runner_daemon()
     assert status["stopped"] is True
-
-
-def test_run_skills_json_emits_timing_to_stderr_when_enabled(monkeypatch) -> None:
-    """Timing env should emit one prefixed JSON payload on stderr."""
-    from omni.agent.cli import runner_json as runner_json_module
-
-    async def _fake_run_tool_with_monitor(
-        _tool: str,
-        _args: dict[str, Any],
-        *,
-        output_json: bool = False,
-        auto_report: bool = False,
-    ):
-        assert output_json is True
-        assert auto_report is False
-        return ({"status": "success", "found": 1}, None)
-
-    async def _fake_close_embedding_client() -> None:
-        return None
-
-    def _run_async_blocking(awaitable):
-        return asyncio.run(awaitable)
-
-    monkeypatch.setattr(runner_json_module, "run_async_blocking", _run_async_blocking)
-    monkeypatch.setattr(
-        "omni.core.skills.runner.run_tool_with_monitor",
-        _fake_run_tool_with_monitor,
-    )
-    monkeypatch.setattr(
-        "omni.foundation.api.tool_context.run_with_execution_timeout",
-        lambda coro: coro,
-    )
-    monkeypatch.setattr(
-        "omni.foundation.embedding_client.close_embedding_client",
-        _fake_close_embedding_client,
-    )
-    monkeypatch.setenv("OMNI_SKILL_RUN_TIMING", "1")
-
-    stdout_capture = io.StringIO()
-    stderr_capture = io.StringIO()
-    with monkeypatch.context() as m:
-        m.setattr(sys, "stdout", stdout_capture)
-        m.setattr(sys, "stderr", stderr_capture)
-        code = runner_json_module.run_skills_json(["knowledge.search", '{"query":"x"}'])
-
-    assert code == 0
-    stderr_lines = [line for line in stderr_capture.getvalue().splitlines() if line.strip()]
-    assert len(stderr_lines) == 1
-    assert stderr_lines[0].startswith(runner_json_module._TIMING_PREFIX)
-
-    timing_payload = json.loads(stderr_lines[0][len(runner_json_module._TIMING_PREFIX) :])
-    assert timing_payload["mode"] == "local"
-    assert isinstance(timing_payload["bootstrap_ms"], float)
-    assert isinstance(timing_payload["tool_exec_ms"], float)
-
-
-def test_get_daemon_request_timeout_seconds_prefers_env(monkeypatch) -> None:
-    """Daemon request timeout should prefer explicit env override."""
-    from omni.agent.cli import runner_json as runner_json_module
-
-    monkeypatch.setenv("OMNI_SKILL_RUNNER_REQUEST_TIMEOUT", "45")
-    assert runner_json_module.get_daemon_request_timeout_seconds() == 45.0
-
-
-def test_get_daemon_request_timeout_seconds_uses_mcp_timeout(monkeypatch) -> None:
-    """Daemon request timeout should fall back to settings mcp.timeout."""
-    from omni.agent.cli import runner_json as runner_json_module
-
-    monkeypatch.delenv("OMNI_SKILL_RUNNER_REQUEST_TIMEOUT", raising=False)
-    monkeypatch.setattr(
-        "omni.foundation.config.settings.get_setting",
-        lambda key, default=None: 120 if key == "mcp.timeout" else default,
-    )
-    assert runner_json_module.get_daemon_request_timeout_seconds() == 120.0

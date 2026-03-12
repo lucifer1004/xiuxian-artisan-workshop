@@ -1,4 +1,4 @@
-//! Test coverage for xiuxian-daochang behavior.
+#![allow(missing_docs, unused_imports, dead_code)]
 
 //! MCP health readiness gate behavior.
 
@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 
 use axum::routing::get;
 use axum::{Json, Router};
+use omni_agent::{Agent, AgentConfig, McpServerEntry};
 use serde_json::json;
-use xiuxian_daochang::{Agent, AgentConfig, McpServerEntry};
 
 fn config_for(base_url: &str, retries: u32) -> AgentConfig {
     AgentConfig {

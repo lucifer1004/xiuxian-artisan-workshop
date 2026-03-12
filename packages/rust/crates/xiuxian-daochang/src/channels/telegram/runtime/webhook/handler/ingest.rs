@@ -1,5 +1,4 @@
 use axum::http::StatusCode;
-use std::time::Instant;
 
 use super::super::state::TelegramWebhookState;
 
@@ -8,13 +7,7 @@ pub(super) async fn forward_update_to_agent(
     update: &serde_json::Value,
 ) -> Result<(), (StatusCode, String)> {
     match state.channel.parse_update_message(update) {
-        Some(mut msg) => {
-            state
-                .channel
-                .enrich_inbound_message_with_media_attachments(update, &mut msg)
-                .await;
-            let session_key = msg.session_key.clone();
-            let recipient = msg.recipient.clone();
+        Some(msg) => {
             let message = update.get("message");
             let chat = message.and_then(|m| m.get("chat"));
             let chat_id = chat
@@ -30,7 +23,7 @@ pub(super) async fn forward_update_to_agent(
                 .and_then(|m| m.get("message_thread_id"))
                 .and_then(serde_json::Value::as_i64);
             tracing::info!(
-                session_key = %session_key,
+                session_key = %msg.session_key,
                 chat_id = ?chat_id,
                 chat_title = ?chat_title,
                 chat_type = ?chat_type,
@@ -38,24 +31,12 @@ pub(super) async fn forward_update_to_agent(
                 content_preview = %msg.content.chars().take(50).collect::<String>(),
                 "Parsed message, forwarding to agent"
             );
-            let send_started = Instant::now();
             if state.tx.send(msg).await.is_err() {
                 tracing::error!("Channel inbound queue unavailable");
                 return Err((
                     StatusCode::SERVICE_UNAVAILABLE,
                     "channel inbound queue unavailable".to_string(),
                 ));
-            }
-            let send_wait_ms =
-                u64::try_from(send_started.elapsed().as_millis()).unwrap_or(u64::MAX);
-            if send_wait_ms >= 50 {
-                tracing::warn!(
-                    event = "telegram.webhook.inbound_queue_wait",
-                    wait_ms = send_wait_ms,
-                    session_key = %session_key,
-                    recipient = %recipient,
-                    "telegram webhook waited on inbound queue send"
-                );
             }
         }
         None => {

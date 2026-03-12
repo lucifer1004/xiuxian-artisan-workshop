@@ -12,7 +12,7 @@ fn test_compute_diff() -> Result<(), Box<dyn std::error::Error>> {
     fs::write(temp_dir.path().join("existing.py"), "existing")?;
 
     let manifest_path = temp_dir.path().join("manifest.json");
-    let engine = SyncEngine::new(temp_dir.path(), &manifest_path);
+    let engine = SyncEngine::new(temp_dir.path().to_path_buf(), manifest_path.clone());
 
     // Create old manifest (existing unchanged, modified changed, new missing)
     let mut old_manifest = SyncManifest::default();

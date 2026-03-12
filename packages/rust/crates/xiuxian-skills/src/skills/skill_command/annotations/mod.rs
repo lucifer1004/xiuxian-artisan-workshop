@@ -7,3 +7,6 @@ mod build;
 mod heuristics;
 
 pub use build::build_annotations;
+
+#[cfg(test)]
+mod tests;

@@ -1,9 +1,3 @@
----
-type: knowledge
-metadata:
-  title: "Omni Security"
----
-
 # Omni Security
 
 > Security scanning utilities for Omni DevEnv.
@@ -21,7 +15,7 @@ Omni Security provides secret detection and security scanning capabilities for t
 ## Usage
 
 ```rust
-use xiuxian_security::{contains_secrets, scan_secrets};
+use omni_security::{contains_secrets, scan_secrets};
 
 let has_secrets = contains_secrets(&content)?;
 let violations = scan_secrets(&content)?;

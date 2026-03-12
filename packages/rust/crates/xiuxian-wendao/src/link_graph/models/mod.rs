@@ -3,6 +3,7 @@
 mod attachments;
 mod query;
 mod records;
+mod semantic_policy;
 
 pub use attachments::{LinkGraphAttachment, LinkGraphAttachmentHit, LinkGraphAttachmentKind};
 pub use query::{
@@ -24,5 +25,8 @@ pub use records::{
     LinkGraphMetadata, LinkGraphNeighbor, LinkGraphPassage, LinkGraphPlannedSearchPayload,
     LinkGraphPromotedOverlayTelemetry, LinkGraphRelatedPprDiagnostics, LinkGraphRetrievalBudget,
     LinkGraphRetrievalMode, LinkGraphRetrievalPlanInput, LinkGraphRetrievalPlanRecord,
-    LinkGraphStats,
+    LinkGraphSemanticDocument, LinkGraphSemanticDocumentKind, LinkGraphStats, PageIndexMeta,
+    PageIndexNode, QuantumAnchorHit, QuantumContext, QuantumFusionOptions, QuantumFusionTelemetry,
+    QuantumSemanticSearchRequest,
 };
+pub use semantic_policy::{LinkGraphSemanticDocumentScope, LinkGraphSemanticSearchPolicy};

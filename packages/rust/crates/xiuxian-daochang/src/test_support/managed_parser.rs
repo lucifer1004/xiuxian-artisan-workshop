@@ -1,3 +1,5 @@
+//! Managed-command detector helpers exposed for integration tests.
+
 use crate::channels::managed_commands as managed;
 
 use super::types::{ManagedControlCommand, ManagedSlashCommand};

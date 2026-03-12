@@ -1,11 +1,13 @@
 use super::{LinkGraphDirection, LinkGraphIndex, LinkGraphPromotedOverlayTelemetry};
 
 mod attachments;
+mod intent;
 mod metadata;
 mod neighbors;
 mod related;
 mod stats;
 
+#[allow(dead_code)]
 pub(super) fn merge_direction(
     existing: LinkGraphDirection,
     new_dir: LinkGraphDirection,
@@ -18,6 +20,7 @@ pub(super) fn merge_direction(
 }
 
 impl LinkGraphIndex {
+    #[allow(dead_code)]
     pub(super) fn promoted_overlay_telemetry(
         &self,
     ) -> (Option<Self>, LinkGraphPromotedOverlayTelemetry) {

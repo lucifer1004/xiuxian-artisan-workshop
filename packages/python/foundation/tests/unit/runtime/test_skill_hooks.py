@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from omni.foundation.skill_hooks import (
     register_after_skill_execute,
     register_before_skill_execute,

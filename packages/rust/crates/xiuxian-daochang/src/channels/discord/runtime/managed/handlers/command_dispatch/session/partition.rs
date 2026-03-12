@@ -1,8 +1,5 @@
 use std::sync::Arc;
 
-use crate::channels::managed_runtime::session_partition_persistence::{
-    SessionPartitionPersistenceTarget, persist_session_partition_mode_if_enabled,
-};
 use crate::channels::traits::{Channel, ChannelMessage};
 
 use super::super::super::super::parsing::SessionPartitionCommand;
@@ -12,15 +9,13 @@ use super::super::super::super::replies::{
     format_session_partition_status_json, format_session_partition_updated,
     format_session_partition_updated_json,
 };
-use super::super::super::events::{
+use super::super::events::{
     EVENT_DISCORD_COMMAND_SESSION_PARTITION_JSON_REPLIED,
     EVENT_DISCORD_COMMAND_SESSION_PARTITION_REPLIED,
 };
-use super::super::super::send::send_response;
+use super::super::send::send_response;
 
-const PARTITION_CONTROL_COMMAND_SELECTOR: &str = "/session partition";
-
-pub(in super::super) async fn handle_session_partition(
+pub(super) async fn handle_session_partition(
     channel: &Arc<dyn Channel>,
     msg: &ChannelMessage,
     command: SessionPartitionCommand,
@@ -33,11 +28,7 @@ pub(in super::super) async fn handle_session_partition(
     let current_mode = channel
         .session_partition_mode()
         .unwrap_or_else(|| "unknown".to_string());
-    let sender_is_admin = channel.is_authorized_for_control_command_for_recipient(
-        &msg.sender,
-        PARTITION_CONTROL_COMMAND_SELECTOR,
-        &msg.recipient,
-    );
+    let sender_is_admin = channel.is_authorized_for_control_command(&msg.sender, &msg.content);
     if !sender_is_admin {
         let response = if command.format.is_json() {
             format_session_partition_admin_required_json(&msg.sender, &current_mode)
@@ -58,17 +49,6 @@ pub(in super::super) async fn handle_session_partition(
                     let updated_mode = channel
                         .session_partition_mode()
                         .unwrap_or_else(|| requested_mode.clone());
-                    if let Err(error) = persist_session_partition_mode_if_enabled(
-                        SessionPartitionPersistenceTarget::Discord,
-                        updated_mode.as_str(),
-                    ) {
-                        tracing::warn!(
-                            requested_partition_mode = %requested_mode,
-                            updated_partition_mode = %updated_mode,
-                            error = %error,
-                            "failed to persist discord session partition mode"
-                        );
-                    }
                     if command.format.is_json() {
                         format_session_partition_updated_json(&requested_mode, &updated_mode)
                     } else {

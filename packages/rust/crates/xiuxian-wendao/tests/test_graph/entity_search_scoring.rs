@@ -1,4 +1,5 @@
-use super::*;
+use xiuxian_wendao::graph::KnowledgeGraph;
+use xiuxian_wendao::{Entity, EntityType};
 
 #[test]
 fn test_search_entities_exact_name_ranks_highest() {

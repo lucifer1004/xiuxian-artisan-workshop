@@ -1,9 +1,3 @@
----
-type: knowledge
-metadata:
-  title: "Omni Tokenizer"
----
-
 # Omni Tokenizer
 
 > Token counting utilities for Omni DevEnv.

@@ -1,9 +1,3 @@
----
-type: knowledge
-metadata:
-  title: "xiuxian-qianhuan"
----
-
 # xiuxian-qianhuan
 
 Xiuxian-Qianhuan injection engine for Omni Rust runtime.
@@ -98,7 +92,7 @@ println!("{normalized}");
 
 ## Architecture Boundaries
 
-- Core memory policy/lifecycle belongs to Rust memory core (`xiuxian-memory-engine`), not this crate.
+- Core memory policy/lifecycle belongs to Rust memory core (`omni-memory`), not this crate.
 - This crate focuses on context injection assembly only.
 - External MCP clients can use memory/knowledge tool facades, while runtime policy stays in Rust core packages.
 

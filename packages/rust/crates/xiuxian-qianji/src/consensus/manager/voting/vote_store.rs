@@ -1,119 +1,92 @@
-use super::super::keys::{VoteKeys, VoteSnapshot};
-use super::super::{CONSENSUS_VOTE_TTL_SECONDS, ConsensusManager};
-use crate::consensus::models::AgentVote;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
+use tokio::time::Duration;
 
-impl ConsensusManager {
-    pub(super) async fn record_vote(
+use super::GlobalSwarmRegistry;
+use super::keys::node_key;
+use super::payload::heartbeat_payload;
+use crate::swarm::discovery::model::ClusterNodeIdentity;
+use crate::swarm::discovery::util::REGISTRY_INDEX_KEY;
+
+impl GlobalSwarmRegistry {
+    /// Writes one heartbeat lease into the global registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when input fields are invalid or any Valkey command fails.
+    pub async fn heartbeat(
         &self,
-        keys: VoteKeys,
-        vote: &AgentVote,
-    ) -> Result<VoteSnapshot> {
-        let payload = serde_json::to_string(vote)?;
-
-        let _: i64 = self
-            .run_command("consensus_store_vote_payload", || {
-                let mut command = redis::cmd("HSET");
-                command
-                    .arg(&keys.votes_hash)
-                    .arg(&vote.agent_id)
-                    .arg(&payload);
-                command
-            })
-            .await?;
-
-        let new_weight: f64 = self
-            .run_command("consensus_increment_hash_weight", || {
-                let mut command = redis::cmd("HINCRBYFLOAT");
-                command
-                    .arg(&keys.weight_counter)
-                    .arg(&vote.output_hash)
-                    .arg(vote.weight);
-                command
-            })
-            .await?;
-
-        let total_agents: usize = self
-            .run_command("consensus_read_total_agents", || {
-                let mut command = redis::cmd("HLEN");
-                command.arg(&keys.votes_hash);
-                command
-            })
-            .await?;
-
-        let vote_ts = u64::try_from(vote.timestamp_ms).unwrap_or(u64::MAX);
-        let _: i64 = self
-            .run_command("consensus_set_first_seen_if_absent", || {
-                let mut command = redis::cmd("SETNX");
-                command.arg(&keys.first_seen_marker).arg(vote_ts);
-                command
-            })
-            .await?;
-
-        self.refresh_ttls(&keys).await?;
-
-        Ok(VoteSnapshot {
-            total_agents,
-            hash_weight: new_weight,
-        })
-    }
-
-    async fn refresh_ttls(&self, keys: &VoteKeys) -> Result<()> {
-        let ttl = CONSENSUS_VOTE_TTL_SECONDS;
-        let _: bool = self
-            .run_command("consensus_expire_votes", || {
-                let mut command = redis::cmd("EXPIRE");
-                command.arg(&keys.votes_hash).arg(ttl);
-                command
-            })
-            .await?;
-        let _: bool = self
-            .run_command("consensus_expire_counts", || {
-                let mut command = redis::cmd("EXPIRE");
-                command.arg(&keys.weight_counter).arg(ttl);
-                command
-            })
-            .await?;
-        let _: bool = self
-            .run_command("consensus_expire_first_seen", || {
-                let mut command = redis::cmd("EXPIRE");
-                command.arg(&keys.first_seen_marker).arg(ttl);
-                command
-            })
-            .await?;
-        let _: bool = self
-            .run_command("consensus_expire_winner", || {
-                let mut command = redis::cmd("EXPIRE");
-                command.arg(&keys.winner_marker).arg(ttl);
-                command
-            })
-            .await?;
-        let _: bool = self
-            .run_command("consensus_expire_outputs", || {
-                let mut command = redis::cmd("EXPIRE");
-                command.arg(&keys.output_payloads).arg(ttl);
-                command
-            })
-            .await?;
-        Ok(())
-    }
-
-    pub(super) async fn store_output_payload(
-        &self,
-        keys: &VoteKeys,
-        output_hash: &str,
-        payload: &str,
+        identity: &ClusterNodeIdentity,
+        metadata: &serde_json::Value,
+        ttl_seconds: u64,
     ) -> Result<()> {
-        let _: i64 = self
-            .run_command("consensus_store_output_payload", || {
-                let mut command = redis::cmd("HSET");
+        if ttl_seconds == 0 {
+            return Err(anyhow!("ttl_seconds must be > 0"));
+        }
+        let sanitized = identity.clone().sanitize();
+        let key = node_key(&sanitized);
+        let fields = heartbeat_payload(&sanitized, metadata)?;
+
+        for (field, value) in &fields {
+            let _: i64 = self
+                .run_command("swarm_registry_hset", || {
+                    let mut command = redis::cmd("HSET");
+                    command.arg(&key).arg(field).arg(value);
+                    command
+                })
+                .await?;
+        }
+
+        let _: bool = self
+            .run_command("swarm_registry_expire", || {
+                let mut command = redis::cmd("EXPIRE");
+                command.arg(&key).arg(ttl_seconds);
                 command
-                    .arg(&keys.output_payloads)
-                    .arg(output_hash)
-                    .arg(payload);
+            })
+            .await?;
+        let _: i64 = self
+            .run_command("swarm_registry_index_add", || {
+                let mut command = redis::cmd("SADD");
+                command.arg(REGISTRY_INDEX_KEY).arg(&key);
                 command
             })
             .await?;
         Ok(())
+    }
+
+    /// Spawns a background heartbeat loop for one node identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `ttl_seconds` or `interval` is invalid.
+    pub fn spawn_heartbeat_loop(
+        self: std::sync::Arc<Self>,
+        identity: ClusterNodeIdentity,
+        metadata: serde_json::Value,
+        ttl_seconds: u64,
+        interval: Duration,
+    ) -> Result<tokio::task::JoinHandle<()>> {
+        if ttl_seconds == 0 {
+            return Err(anyhow!("ttl_seconds must be > 0"));
+        }
+        if interval.is_zero() {
+            return Err(anyhow!("heartbeat interval must be > 0"));
+        }
+        let min_ttl = interval.as_secs().saturating_mul(2);
+        if ttl_seconds <= min_ttl {
+            return Err(anyhow!(
+                "ttl_seconds must be at least 2x interval (ttl={ttl_seconds}, interval_secs={})",
+                interval.as_secs()
+            ));
+        }
+
+        let handle = tokio::spawn(async move {
+            loop {
+                if let Err(error) = self.heartbeat(&identity, &metadata, ttl_seconds).await {
+                    log::warn!("swarm heartbeat failed for {}: {error}", identity.agent_id);
+                }
+                tokio::time::sleep(interval).await;
+            }
+        });
+        Ok(handle)
     }
 }

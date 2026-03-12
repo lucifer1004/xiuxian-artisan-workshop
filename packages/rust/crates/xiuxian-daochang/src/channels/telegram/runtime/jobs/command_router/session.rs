@@ -1,63 +1,32 @@
-use std::sync::Arc;
+use tempfile::TempDir;
+use xiuxian_wendao::KnowledgeStorage;
 
-use crate::agent::Agent;
-use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
-use crate::channels::traits::{Channel, ChannelMessage};
+pub(super) type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-use super::super::command_handlers::session_commands::{
-    try_handle_session_admin_command, try_handle_session_context_budget_command,
-    try_handle_session_context_memory_command, try_handle_session_context_status_command,
-    try_handle_session_feedback_command, try_handle_session_injection_command,
-    try_handle_session_partition_command,
-};
-use super::super::command_handlers::session_control::{
-    try_handle_agenda_command, try_handle_help_command, try_handle_reset_context_command,
-    try_handle_resume_context_command, try_handle_stop_command,
-};
-
-pub(super) async fn try_handle(
-    msg: &ChannelMessage,
-    channel: &Arc<dyn Channel>,
-    agent: &Arc<Agent>,
-    interrupt_controller: &ForegroundInterruptController,
-    session_id: &str,
-) -> bool {
-    if try_handle_help_command(msg, channel).await {
+pub(super) fn has_valkey() -> bool {
+    if let Ok(url) = std::env::var("VALKEY_URL")
+        && !url.trim().is_empty()
+    {
         return true;
     }
-    if try_handle_agenda_command(msg, channel, agent).await {
-        return true;
-    }
-    if try_handle_reset_context_command(msg, channel, agent, session_id).await {
-        return true;
-    }
-    if try_handle_resume_context_command(msg, channel, agent, session_id).await {
-        return true;
-    }
-    if try_handle_stop_command(msg, channel, agent, interrupt_controller, session_id).await {
-        return true;
-    }
-    if try_handle_session_context_status_command(msg, channel, agent, session_id).await {
-        return true;
-    }
-    if try_handle_session_context_budget_command(msg, channel, agent, session_id).await {
-        return true;
-    }
-    if try_handle_session_context_memory_command(msg, channel, agent, session_id).await {
-        return true;
-    }
-    if try_handle_session_feedback_command(msg, channel, agent, session_id).await {
-        return true;
-    }
-    if try_handle_session_injection_command(msg, channel, agent, session_id).await {
-        return true;
-    }
-    if try_handle_session_admin_command(msg, channel).await {
-        return true;
-    }
-    if try_handle_session_partition_command(msg, channel).await {
-        return true;
-    }
-
     false
+}
+
+pub(super) fn create_storage(temp_dir: &TempDir) -> KnowledgeStorage {
+    KnowledgeStorage::new(temp_dir.path().to_string_lossy().as_ref(), "knowledge")
+}
+
+pub(super) fn text_to_vector(text: &str) -> Vec<f32> {
+    let mut vector = vec![0.0_f32; 128];
+    for (index, byte) in text.as_bytes().iter().enumerate() {
+        let bucket = index % 128;
+        vector[bucket] += f32::from(*byte) / 255.0;
+    }
+    let norm = vector.iter().map(|value| value * value).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for value in &mut vector {
+            *value /= norm;
+        }
+    }
+    vector
 }

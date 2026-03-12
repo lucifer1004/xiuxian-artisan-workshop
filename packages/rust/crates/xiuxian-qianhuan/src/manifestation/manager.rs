@@ -1,11 +1,10 @@
 use crate::hot_reload::HotReloadTarget;
 use crate::interface::ManifestationInterface;
 use crate::manifestation::request::{ManifestationRenderRequest, ManifestationTemplateTarget};
-use crate::{InjectionWindowConfig, SystemPromptInjectionWindow};
-use anyhow::{Context as AnyhowContext, Result, anyhow};
+use anyhow::{Result, anyhow};
 use globset::Glob;
 use serde_json::{Map, Value, json};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -35,40 +34,6 @@ impl MemoryTemplateRecord {
     }
 }
 
-/// Snapshot of one session-level system prompt injection payload.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SessionSystemPromptInjectionSnapshot {
-    /// Unix timestamp when this snapshot was updated (milliseconds).
-    pub updated_at_unix_ms: u64,
-    /// Number of retained `<qa>` entries after window normalization.
-    pub qa_count: usize,
-    /// Canonical XML payload.
-    pub xml: String,
-}
-
-fn now_unix_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
-        .unwrap_or(0)
-}
-
-/// Parse and normalize one system prompt injection XML payload.
-///
-/// # Errors
-///
-/// Returns an error when XML parsing/normalization fails.
-pub fn normalize_session_system_prompt_injection_xml(
-    raw_xml: &str,
-) -> Result<SessionSystemPromptInjectionSnapshot> {
-    let window = SystemPromptInjectionWindow::from_xml(raw_xml, InjectionWindowConfig::default())?;
-    Ok(SessionSystemPromptInjectionSnapshot {
-        updated_at_unix_ms: now_unix_ms(),
-        qa_count: window.len(),
-        xml: window.render_xml(),
-    })
-}
-
 /// Manager for the Manifestation (Qianhuan) layer.
 ///
 /// Coordinates template rendering and dynamic context injection.
@@ -79,32 +44,11 @@ pub struct ManifestationManager {
     template_globs: Vec<String>,
     /// Compiled glob matchers and scan roots used for change detection.
     compiled_globs: Vec<CompiledTemplateGlob>,
-    /// Session-scoped system prompt injection cache.
-    session_prompt_injection: RwLock<HashMap<String, SessionSystemPromptInjectionSnapshot>>,
     /// Hot-reloadable template engine state.
     state: RwLock<ManifestationRuntimeState>,
 }
 
 impl ManifestationManager {
-    /// Creates an empty `ManifestationManager` without disk or embedded templates.
-    ///
-    /// This constructor is intended for zero-export runtime loading where
-    /// templates are injected from memory records after initialization.
-    #[must_use]
-    pub fn new_empty() -> Self {
-        Self {
-            embedded_templates: Vec::new(),
-            template_globs: Vec::new(),
-            compiled_globs: Vec::new(),
-            session_prompt_injection: RwLock::new(HashMap::new()),
-            state: RwLock::new(ManifestationRuntimeState {
-                tera: Tera::default(),
-                snapshot: TemplateSnapshot { files: Vec::new() },
-                runtime_templates: BTreeMap::new(),
-            }),
-        }
-    }
-
     /// Creates a new `ManifestationManager` with templates loaded from multiple glob patterns.
     ///
     /// # Errors
@@ -147,7 +91,6 @@ impl ManifestationManager {
             embedded_templates: embedded,
             template_globs: template_patterns,
             compiled_globs,
-            session_prompt_injection: RwLock::new(HashMap::new()),
             state: RwLock::new(ManifestationRuntimeState {
                 tera,
                 snapshot,
@@ -298,68 +241,6 @@ impl ManifestationManager {
             self.template_watch_patterns(),
             Arc::new(move |_| manager.reload_templates_if_changed()),
         )
-    }
-
-    /// Upsert one session-level injection XML payload into in-memory cache.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when payload parsing fails.
-    pub fn upsert_session_prompt_injection_xml(
-        &self,
-        session_id: &str,
-        raw_xml: &str,
-    ) -> Result<SessionSystemPromptInjectionSnapshot> {
-        let snapshot = normalize_session_system_prompt_injection_xml(raw_xml)
-            .context("invalid system prompt injection xml payload")?;
-        self.upsert_session_prompt_injection_snapshot(session_id, snapshot.clone());
-        Ok(snapshot)
-    }
-
-    /// Upsert one validated session-level injection snapshot into in-memory cache.
-    pub fn upsert_session_prompt_injection_snapshot(
-        &self,
-        session_id: &str,
-        snapshot: SessionSystemPromptInjectionSnapshot,
-    ) {
-        match self.session_prompt_injection.write() {
-            Ok(mut cache) => {
-                cache.insert(session_id.to_string(), snapshot);
-            }
-            Err(_) => {
-                log::warn!(
-                    "manifestation session prompt injection cache lock poisoned on upsert; drop update"
-                );
-            }
-        }
-    }
-
-    /// Inspect one session-level injection snapshot from in-memory cache.
-    #[must_use]
-    pub fn inspect_session_prompt_injection(
-        &self,
-        session_id: &str,
-    ) -> Option<SessionSystemPromptInjectionSnapshot> {
-        let Ok(cache) = self.session_prompt_injection.read() else {
-            log::warn!(
-                "manifestation session prompt injection cache lock poisoned on inspect; return empty"
-            );
-            return None;
-        };
-        cache.get(session_id).cloned()
-    }
-
-    /// Clear one session-level injection snapshot from in-memory cache.
-    ///
-    /// Returns true when a snapshot existed and was removed.
-    pub fn clear_session_prompt_injection(&self, session_id: &str) -> bool {
-        let Ok(mut cache) = self.session_prompt_injection.write() else {
-            log::warn!(
-                "manifestation session prompt injection cache lock poisoned on clear; return false"
-            );
-            return false;
-        };
-        cache.remove(session_id).is_some()
     }
 
     fn build_injected_payload(&self, data: &Value, request: &ManifestationRenderRequest) -> Value {

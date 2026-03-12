@@ -1,11 +1,11 @@
-//! Discord channel integration.
+//! Discord channel integration (skeleton).
 
 mod acl_config;
 mod channel;
 mod client;
 mod constants;
 mod parsing;
-pub(crate) mod runtime;
+mod runtime;
 mod send;
 mod serenity_payload;
 mod session_partition;
@@ -17,8 +17,8 @@ pub use channel::{
 };
 pub use constants::DISCORD_MAX_MESSAGE_LENGTH;
 pub use runtime::{
-    DiscordIngressApp, DiscordIngressBuildRequest, DiscordIngressRunRequest, DiscordRuntimeConfig,
-    build_discord_ingress_app, build_discord_ingress_app_with_control_command_policy,
+    DiscordIngressApp, DiscordRuntimeConfig, build_discord_ingress_app,
+    build_discord_ingress_app_with_control_command_policy,
     build_discord_ingress_app_with_partition_and_control_command_policy, run_discord_gateway,
     run_discord_ingress,
 };

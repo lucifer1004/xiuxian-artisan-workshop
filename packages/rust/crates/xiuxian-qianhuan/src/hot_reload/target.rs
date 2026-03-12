@@ -3,20 +3,8 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// Invocation context passed to one hot-reload callback execution.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum HotReloadInvocation {
-    /// Triggered by a local filesystem path change.
-    LocalPathChange {
-        /// Path that matched this target.
-        path: PathBuf,
-    },
-    /// Triggered by remote version synchronization.
-    RemoteVersionSync,
-}
-
 /// Callback that reloads a target and returns whether in-memory state changed.
-pub type HotReloadCallback = Arc<dyn Fn(&HotReloadInvocation) -> Result<bool> + Send + Sync>;
+pub type HotReloadCallback = Arc<dyn Fn() -> Result<bool> + Send + Sync>;
 
 /// One hot-reload registration target.
 pub struct HotReloadTarget {
@@ -103,8 +91,8 @@ impl HotReloadTarget {
     /// # Errors
     ///
     /// Returns an error when the underlying reload callback fails.
-    pub fn reload_if_changed(&self, invocation: &HotReloadInvocation) -> Result<bool> {
-        (self.reload_if_changed)(invocation)
+    pub fn reload_if_changed(&self) -> Result<bool> {
+        (self.reload_if_changed)()
     }
 }
 

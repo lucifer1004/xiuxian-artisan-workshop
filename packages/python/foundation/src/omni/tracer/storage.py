@@ -1,330 +1,226 @@
 """
-storage.py - Trace persistence for the execution tracing system
+src/agent/core/skill_manager/loader.py
+Skill loading and command extraction.
 
-Provides storage and retrieval of execution traces.
-
-Key classes:
-- TraceStorage: Store and retrieve traces
-- InMemoryTraceStorage: In-memory storage for testing
+ Only supports scripts/*.py pattern with @skill_command decorator.
+Removes legacy tools.py + @skill_command support.
 """
 
 from __future__ import annotations
 
-import json
-from datetime import datetime
+import importlib
+import inspect
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from omni.foundation.config.logging import get_logger
-
-from .interfaces import ExecutionTrace, StepType
-
-logger = get_logger("omni.tracer.storage")
+from ...module_loader import ModuleLoader
+from ...protocols import SkillCategory
+from .models import SkillCommand
 
 
-class TraceStorage:
-    """Storage backend for execution traces.
+class SkillLoaderMixin:
+    """
+    Mixin providing skill loading and command extraction capabilities.
 
-    Stores traces as JSON files in a configurable directory.
-
-    Usage:
-        storage = TraceStorage()
-        trace_id = storage.save(trace)
-        loaded = storage.load(trace_id)
+     Only supports scripts/*.py with @skill_command decorator.
+    Legacy tools.py + @skill_command support has been removed.
     """
 
-    def __init__(self, storage_dir: Path | None = None):
-        """Initialize the storage.
+    # These should be defined in the parent class
+    _module_loader: ModuleLoader | None
+    skills_dir: Path
+
+    def _get_module_loader(self) -> ModuleLoader:
+        """Get or create the module loader."""
+        if self._module_loader is None:
+            self._module_loader = ModuleLoader(self.skills_dir)
+            self._module_loader._ensure_parent_packages()
+            self._module_loader._preload_decorators()
+        return self._module_loader
+
+    def _extract_script_commands(
+        self,
+        module: Any,
+        skill_name: str,
+    ) -> dict[str, SkillCommand]:
+        """Extract @skill_command decorated functions from a script module.
 
         Args:
-            storage_dir: Directory to store traces. Defaults to PRJ_DATA/traces
-        """
-        if storage_dir is None:
-            from omni.foundation.config.dirs import get_data_dir
+            module: The loaded Python module (from scripts/*.py)
+            skill_name: Name of the parent skill (e.g., "git")
 
-            data_dir = get_data_dir()
-            if data_dir is not None:
-                storage_dir = data_dir / "traces"
+        Returns:
+            Dict mapping command name -> SkillCommand
+        """
+        commands: dict[str, SkillCommand] = {}
+
+        for name, obj in inspect.getmembers(module):
+            if not inspect.isfunction(obj):
+                continue
+
+            # Check for @skill_command marker
+            if not hasattr(obj, "_is_skill_command"):
+                continue
+
+            # Get config from decorator
+            config = getattr(obj, "_skill_config", {})
+            cmd_name = config.get("name") or name
+            description = config.get("description", "") or self._get_docstring(obj)
+            category = config.get("category", "general")
+            input_schema = config.get("input_schema", {})
+            inject_root = config.get("inject_root", False)
+            inject_settings = config.get("inject_settings", [])
+            retry_on = config.get("retry_on", (ConnectionError, TimeoutError))
+            max_attempts = config.get("max_attempts", 3)
+            #  Caching config
+            cache_ttl = config.get("cache_ttl", 0.0)
+            pure = config.get("pure", False)
+
+            commands[cmd_name] = SkillCommand(
+                name=cmd_name,
+                func=obj,
+                description=description,
+                category=SkillCategory(category),
+                _skill_name=skill_name,
+                input_schema=input_schema,
+                _script_mode=True,
+                _inject_root=inject_root,
+                _inject_settings=inject_settings,
+                _retry_on=retry_on,
+                _max_attempts=max_attempts,
+                #  Caching fields
+                cache_ttl=cache_ttl,
+                pure=pure,
+            )
+
+        return commands
+
+    def _load_script_module(self, skill_name: str, script_file: Path, reload: bool = False) -> Any:
+        """Dynamically load a script module.
+
+        Args:
+            skill_name: Name of the skill (e.g., "git")
+            script_file: Path to the script file (e.g., commit.py)
+            reload: If True, force reload even if already loaded
+
+        Returns:
+            The loaded Python module
+        """
+        # Create module name: agent.skills.git.scripts.commit
+        module_name = f"agent.skills.{skill_name}.scripts.{script_file.stem}"
+        package_name = f"agent.skills.{skill_name}.scripts"
+        parent_package = f"agent.skills.{skill_name}"
+
+        # Check if already loaded
+        if module_name in sys.modules:
+            if reload:
+                # Remove cached module to force reload
+                del sys.modules[module_name]
             else:
-                # Fallback to current directory
-                storage_dir = Path(".prj_data/traces")
+                return sys.modules[module_name]
 
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.debug("trace_storage_initialized", storage_dir=str(self.storage_dir))
-
-    def save(self, trace: ExecutionTrace) -> str:
-        """Save a trace to storage.
-
-        Args:
-            trace: The trace to save
-
-        Returns:
-            Trace ID
-        """
-        trace_id = trace.trace_id
-        file_path = self.storage_dir / f"{trace_id}.json"
-
-        file_path.write_text(json.dumps(trace.to_dict(), indent=2, ensure_ascii=False))
-
-        logger.info(
-            "trace_saved",
-            trace_id=trace_id,
-            file_path=str(file_path),
-            step_count=trace.step_count(),
-        )
-
-        return trace_id
-
-    def load(self, trace_id: str) -> ExecutionTrace | None:
-        """Load a trace from storage.
-
-        Args:
-            trace_id: The trace ID to load
-
-        Returns:
-            The loaded trace or None if not found
-        """
-        file_path = self.storage_dir / f"{trace_id}.json"
-
-        if not file_path.exists():
-            logger.debug("trace_not_found", trace_id=trace_id)
-            return None
-
-        try:
-            data = json.loads(file_path.read_text())
-            return ExecutionTrace.from_dict(data)
-        except Exception as e:
-            logger.error(
-                "trace_load_error",
-                trace_id=trace_id,
-                error=str(e),
+        # Ensure parent package is in sys.modules for relative imports
+        if parent_package not in sys.modules:
+            parent_spec = importlib.util.spec_from_file_location(
+                parent_package,
+                self.skills_dir / skill_name / "__init__.py",
             )
-            return None
+            if parent_spec:
+                parent_module = importlib.util.module_from_spec(parent_spec)
+                sys.modules[parent_package] = parent_module
 
-    def list_traces(
+        # Also ensure scripts package is registered for .utils style imports
+        if package_name not in sys.modules:
+            scripts_init = self.skills_dir / skill_name / "scripts" / "__init__.py"
+            if scripts_init.exists():
+                package_spec = importlib.util.spec_from_file_location(
+                    package_name,
+                    scripts_init,
+                )
+                if package_spec:
+                    package_module = importlib.util.module_from_spec(package_spec)
+                    package_module.__path__ = [str(scripts_init.parent)]
+                    sys.modules[package_name] = package_module
+
+        # Use importlib to load the module
+        spec = importlib.util.spec_from_file_location(
+            module_name,
+            script_file,
+        )
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load module from {script_file}")
+
+        module = importlib.util.module_from_spec(spec)
+
+        # Set up package context for relative imports (e.g., from .utils import ...)
+        module.__package__ = package_name
+        module.__file__ = str(script_file)
+
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+
+        return module
+
+    def _extract_commands_from_scripts(
         self,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[dict[str, Any]]:
-        """List available traces.
+        skill_name: str,
+        scripts_dir: Path,
+        reload: bool = False,
+    ) -> dict[str, SkillCommand]:
+        """Extract all @skill_command commands from a skill's scripts directory.
 
         Args:
-            limit: Maximum number of traces to return
-            offset: Skip this many traces
+            skill_name: Name of the skill
+            scripts_dir: Path to the scripts directory
+            reload: If True, force reload of all script modules
 
         Returns:
-            List of trace metadata
+            Dict mapping command name -> SkillCommand
         """
-        trace_files = sorted(
-            self.storage_dir.glob("*.json"),
-            key=lambda f: f.stat().st_mtime,
-            reverse=True,
-        )
+        commands: dict[str, SkillCommand] = {}
 
-        traces = []
-        for file_path in trace_files[offset : offset + limit]:
+        if not scripts_dir.exists():
+            return commands
+
+        # Find all Python files (excluding __init__.py)
+        for script_file in scripts_dir.glob("*.py"):
+            if script_file.name.startswith("_"):
+                continue
+
             try:
-                data = json.loads(file_path.read_text())
-                traces.append(
-                    {
-                        "trace_id": data.get("trace_id"),
-                        "start_time": data.get("start_time"),
-                        "end_time": data.get("end_time"),
-                        "user_query": data.get("user_query"),
-                        "success": data.get("success", True),
-                        "step_count": len(data.get("steps", {})),
-                        "file_path": str(file_path),
-                    }
-                )
-            except Exception as e:
-                logger.warning(
-                    "trace_parse_error",
-                    file_path=str(file_path),
-                    error=str(e),
-                )
+                module = self._load_script_module(skill_name, script_file, reload=reload)
+                script_commands = self._extract_script_commands(module, skill_name)
 
-        return traces
-
-    def search(
-        self,
-        query: str | None = None,
-        step_type: StepType | None = None,
-        min_duration_ms: float | None = None,
-        max_duration_ms: float | None = None,
-        success: bool | None = None,
-        limit: int = 100,
-    ) -> list[ExecutionTrace]:
-        """Search traces by various criteria.
-
-        Args:
-            query: Search in user_query and step names
-            step_type: Filter by step type
-            min_duration_ms: Minimum duration
-            max_duration_ms: Maximum duration
-            success: Filter by success status
-            limit: Maximum results
-
-        Returns:
-            Matching traces
-        """
-        results = []
-        trace_files = sorted(
-            self.storage_dir.glob("*.json"),
-            key=lambda f: f.stat().st_mtime,
-            reverse=True,
-        )
-
-        for file_path in trace_files[: limit * 2]:  # Load more for filtering
-            try:
-                data = json.loads(file_path.read_text())
-
-                # Filter by query
-                if query:
-                    query_lower = query.lower()
-                    user_query = data.get("user_query", "")
-                    if query_lower not in user_query.lower():
-                        # Also check step names
-                        step_names = [s.get("name") for s in data.get("steps", {}).values()]
-                        if not any(query_lower in name.lower() for name in step_names if name):
-                            continue
-
-                # Filter by step type
-                if step_type:
-                    step_types = [s.get("step_type") for s in data.get("steps", {}).values()]
-                    if step_type.value not in step_types:
-                        continue
-
-                # Filter by duration
-                start_time = data.get("start_time")
-                end_time = data.get("end_time")
-                if start_time and end_time:
-                    start = datetime.fromisoformat(start_time)
-                    end = datetime.fromisoformat(end_time)
-                    duration_ms = (end - start).total_seconds() * 1000
-
-                    if min_duration_ms is not None and duration_ms < min_duration_ms:
-                        continue
-                    if max_duration_ms is not None and duration_ms > max_duration_ms:
-                        continue
-
-                # Filter by success
-                if success is not None:
-                    if data.get("success", True) != success:
-                        continue
-
-                results.append(ExecutionTrace.from_dict(data))
-
-                if len(results) >= limit:
-                    break
+                # Merge script commands (no prefix - _rebuild_command_cache handles that)
+                commands.update(script_commands)
 
             except Exception as e:
-                logger.warning(
-                    "trace_search_error",
-                    file_path=str(file_path),
-                    error=str(e),
-                )
+                # Log but continue - one broken script shouldn't fail the whole skill
+                import logging
 
-        return results
+                logging.getLogger(__name__).warning(f"Failed to load script {script_file}: {e}")
 
-    def delete(self, trace_id: str) -> bool:
-        """Delete a trace.
+        return commands
 
-        Args:
-            trace_id: Trace ID to delete
+    def _get_docstring(self, func: Callable) -> str:
+        """Extract first line of docstring."""
+        if func.__doc__:
+            first_line = func.__doc__.strip().split("\n")[0]
+            return first_line.strip()
+        return ""
 
-        Returns:
-            True if deleted, False if not found
-        """
-        file_path = self.storage_dir / f"{trace_id}.json"
+    def _rebuild_command_cache(self, skill_name: str, commands: dict[str, SkillCommand]) -> None:
+        """Rebuild command cache for a skill (O(n) but only on load)."""
+        for cmd_name, cmd in commands.items():
+            # Register both "skill.command" and "command" formats
+            full_name = f"{skill_name}.{cmd_name}"
+            self._command_cache[full_name] = cmd
 
-        if not file_path.exists():
-            return False
-
-        file_path.unlink()
-        logger.info("trace_deleted", trace_id=trace_id)
-        return True
-
-    def cleanup(self, keep_count: int = 100) -> int:
-        """Remove old traces, keeping the most recent ones.
-
-        Args:
-            keep_count: Number of traces to keep
-
-        Returns:
-            Number of traces deleted
-        """
-        trace_files = sorted(
-            self.storage_dir.glob("*.json"),
-            key=lambda f: f.stat().st_mtime,
-        )
-
-        deleted = 0
-        for file_path in trace_files[:-keep_count]:
-            file_path.unlink()
-            deleted += 1
-
-        if deleted > 0:
-            logger.info(
-                "trace_cleanup",
-                deleted=deleted,
-                kept=keep_count,
-            )
-
-        return deleted
-
-    @property
-    def trace_count(self) -> int:
-        """Get the total number of stored traces."""
-        return len(list(self.storage_dir.glob("*.json")))
-
-
-class InMemoryTraceStorage:
-    """In-memory storage for testing and development.
-
-    Does not persist traces to disk.
-    """
-
-    def __init__(self):
-        self._traces: dict[str, ExecutionTrace] = {}
-
-    def save(self, trace: ExecutionTrace) -> str:
-        """Save a trace."""
-        self._traces[trace.trace_id] = trace
-        return trace.trace_id
-
-    def load(self, trace_id: str) -> ExecutionTrace | None:
-        """Load a trace."""
-        return self._traces.get(trace_id)
-
-    def list_traces(self, limit: int = 100) -> list[dict[str, Any]]:
-        """List traces."""
-        traces = list(self._traces.values())[:limit]
-        return [
-            {
-                "trace_id": t.trace_id,
-                "start_time": t.start_time.isoformat(),
-                "user_query": t.user_query,
-                "success": t.success,
-                "step_count": t.step_count(),
-            }
-            for t in sorted(traces, key=lambda x: x.start_time, reverse=True)
-        ]
-
-    def delete(self, trace_id: str) -> bool:
-        """Delete a trace."""
-        if trace_id in self._traces:
-            del self._traces[trace_id]
-            return True
-        return False
-
-    def clear(self) -> None:
-        """Clear all traces."""
-        self._traces.clear()
+            # Also register without skill prefix (e.g., "read_file" from "file.read")
+            self._command_cache[cmd_name] = cmd
 
 
 __all__ = [
-    "InMemoryTraceStorage",
-    "TraceStorage",
+    "SkillLoaderMixin",
 ]

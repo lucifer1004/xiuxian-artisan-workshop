@@ -1,308 +1,149 @@
 """
-kernel/components/registry.py - Unified Skill Registry
+registry.py - Skill Registry
 
-Merges functionality from:
-- skill_runtime/core/registry.py: Core registry with state management
-- skill_registry/core.py: Additional discovery and metadata functionality
-
-This is the SINGLE source of truth for skill registry.
+Manages shared state for all skill services:
+- _skills: Skill registry (skill_name -> Skill)
+- _command_cache: Command lookup cache (skill.command -> SkillCommand)
+- _mtime_cache: Modification time cache (skill_name -> mtime)
 """
 
-from __future__ import annotations
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from omni.foundation.config.logging import get_logger
+if TYPE_CHECKING:
+    from ..support.models import Skill, SkillCommand
 
-logger = get_logger(__name__)
 
+class SkillRegistry:
+    """
+    Central registry for skill state.
 
-class UnifiedRegistry:
-    """Unified skill registry - single source of truth.
+    All sub-managers share state through this registry instead of
+    holding their own references.
 
-    Responsibilities:
-    - Skill discovery and listing
-    - Manifest parsing and metadata
-    - Module caching
-    - State management
-    - Remote installation
-
-    Replaces both skill_runtime.core.registry and skill_registry.core.
+    Thread-safe for read operations. Write operations should be
+    synchronized externally when needed.
     """
 
     __slots__ = (
-        "_initialized",
-        "_loaded_skills",
-        "_module_cache",
-        "_project_root",
-        "_skill_tools",
-        "_skills_dir",
+        "_skills",
+        "_command_cache",
+        "_mtime_cache",
     )
 
-    _instance: UnifiedRegistry | None = None
-
-    def __new__(cls) -> UnifiedRegistry:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
-
     def __init__(self) -> None:
-        if self._initialized:
-            return
-
-        from omni.foundation.config.skills import SKILLS_DIR
-        from omni.foundation.runtime.gitops import get_project_root
-
-        self._project_root = get_project_root()
-        self._skills_dir = SKILLS_DIR()
-        self._loaded_skills: dict[str, Any] = {}
-        self._module_cache: dict[str, Any] = {}
-        self._skill_tools: dict[str, list[str]] = {}
-        self._initialized = True
-
-        logger.debug(
-            "UnifiedRegistry initialized",
-            project_root=str(self._project_root),
-            skills_dir=str(self._skills_dir),
-        )
+        """Initialize empty registry."""
+        self._skills: dict[str, "Skill"] = {}
+        self._command_cache: dict[str, "SkillCommand"] = {}
+        self._mtime_cache: dict[str, float] = {}
 
     # =========================================================================
-    # Singleton Access
-    # =========================================================================
-
-    @classmethod
-    def get_instance(cls) -> UnifiedRegistry:
-        """Get the singleton instance."""
-        return cls()
-
-    # =========================================================================
-    # Discovery
-    # =========================================================================
-
-    def list_available_skills(self) -> list[str]:
-        """Scan the skills directory for valid skills."""
-        if not self._skills_dir.exists():
-            return []
-
-        skills = [
-            item.name
-            for item in self._skills_dir.iterdir()
-            if item.is_dir() and (item / "SKILL.md").exists()
-        ]
-        return sorted(skills)
-
-    def list_loaded_skills(self) -> list[str]:
-        """List currently loaded skills."""
-        return list(self._loaded_skills.keys())
-
-    def is_loaded(self, skill_name: str) -> bool:
-        """Check if a skill is loaded."""
-        return skill_name in self._loaded_skills
-
-    # =========================================================================
-    # Metadata
-    # =========================================================================
-
-    def get_skill_metadata(self, skill_name: str) -> dict[str, Any] | None:
-        """Get skill metadata from SKILL.md."""
-        skill_path = self._skills_dir / skill_name
-        if not skill_path.exists():
-            return None
-
-        skill_md_path = skill_path / "SKILL.md"
-        if not skill_md_path.exists():
-            return None
-
-        try:
-            import frontmatter
-
-            with open(skill_md_path, encoding="utf-8") as f:
-                post = frontmatter.load(f)
-
-            metadata = post.metadata or {}
-            return {
-                "name": skill_name,
-                "version": metadata.get("version", "0.1.0"),
-                "description": metadata.get("description", ""),
-                "author": metadata.get("authors", ["unknown"])[0]
-                if metadata.get("authors")
-                else "unknown",
-                "routing_keywords": metadata.get("routing_keywords", []),
-                "intents": metadata.get("intents", []),
-            }
-        except Exception as e:
-            logger.warning(f"Failed to parse skill metadata: {e}")
-            return None
-
-    # =========================================================================
-    # Module Management
-    # =========================================================================
-
-    def register_module(self, skill_name: str, module: Any) -> None:
-        """Register a loaded module."""
-        self._module_cache[skill_name] = module
-
-        # Extract tool names from @skill_command decorated functions
-        tools = []
-        for name in dir(module):
-            if name.startswith("_"):
-                continue
-            obj = getattr(module, name)
-            if callable(obj) and hasattr(obj, "_is_skill_command"):
-                tools.append(name)
-        self._skill_tools[skill_name] = tools
-
-    def get_module(self, skill_name: str) -> Any | None:
-        """Get a loaded module."""
-        return self._module_cache.get(skill_name)
-
-    def get_skill_tools(self, skill_name: str) -> dict[str, Any]:
-        """Get all @skill_command decorated tools from a skill."""
-        module = self.get_module(skill_name)
-        if not module:
-            return {}
-
-        tools = {}
-        for name in dir(module):
-            if name.startswith("_"):
-                continue
-            obj = getattr(module, name)
-            if callable(obj) and hasattr(obj, "_is_skill_command"):
-                tools[name] = obj
-
-        return tools
-
-    # =========================================================================
-    # Loading
-    # =========================================================================
-
-    def load_skill(self, skill_name: str, mcp: Server | None = None) -> tuple[bool, str]:
-        """Load a skill by name.
-
-        Delegates to skill_runtime.SkillContext for actual loading.
-        """
-        from agent.core.skill_runtime import get_skill_context
-
-        ctx = get_skill_context()
-        # Use the context's load method
-        # This maintains compatibility with existing loading logic
-        try:
-            # Import the loader from skill_registry
-            from agent.core.skill_registry.loader import SkillLoader
-
-            loader = SkillLoader(self)
-            return loader.load_skill(skill_name, mcp)
-        except Exception as e:
-            return False, str(e)
-
-    def preload_skills(self, mcp: Server | None = None) -> tuple[int, list[str]]:
-        """Load all preload skills from settings."""
-        from omni.foundation.config.settings import get_setting
-
-        preload_list = get_setting("skills.preload") or []
-        loaded = []
-        failed = []
-
-        for skill in preload_list:
-            if skill in self._loaded_skills:
-                continue
-            success, msg = self.load_skill(skill, mcp)
-            if success:
-                loaded.append(skill)
-            else:
-                failed.append(skill)
-                logger.warning(f"Failed to preload skill ({skill}): {msg}")
-
-        return len(loaded), loaded
-
-    # =========================================================================
-    # Version Info
-    # =========================================================================
-
-    def get_skill_version(self, skill_name: str) -> str | None:
-        """Get the version string for a skill."""
-        from agent.core.skill_registry.resolver import VersionResolver
-
-        target_dir = self._skills_dir / skill_name
-        if not target_dir.exists():
-            return None
-
-        return VersionResolver.resolve_version(target_dir)
-
-    def get_skill_revision(self, skill_name: str) -> str | None:
-        """Get the current revision of an installed skill."""
-        from agent.core.skill_registry.resolver import VersionResolver
-
-        target_dir = self._skills_dir / skill_name
-        if not target_dir.exists():
-            return None
-
-        return VersionResolver.resolve_revision(target_dir)
-
-    def get_skill_info(self, skill_name: str) -> dict[str, Any]:
-        """Get detailed information about an installed skill."""
-        from agent.core.skill_registry.resolver import VersionResolver
-
-        target_dir = self._skills_dir / skill_name
-        if not target_dir.exists():
-            return {"error": f"Skill '{skill_name}' not found"}
-
-        version = VersionResolver.resolve_version(target_dir)
-        revision = VersionResolver.resolve_revision(target_dir)
-        is_dirty = VersionResolver.is_dirty(target_dir)
-
-        return {
-            "name": skill_name,
-            "version": version,
-            "revision": revision,
-            "path": str(target_dir),
-            "is_dirty": is_dirty,
-        }
-
-    # =========================================================================
-    # Remote Installation
-    # =========================================================================
-
-    def install_remote_skill(
-        self,
-        skill_name: str,
-        repo_url: str,
-        version: str = "main",
-        install_deps: bool = True,
-    ) -> tuple[bool, str]:
-        """Install a skill from a remote Git repository."""
-        from agent.core.skill_registry.installer import RemoteInstaller
-
-        target_dir = self._skills_dir / skill_name
-        if target_dir.exists():
-            return False, f"Skill '{skill_name}' already exists locally."
-
-        installer = RemoteInstaller(self)
-
-        try:
-            success, msg = installer.install(target_dir, repo_url, version)
-            if success and install_deps:
-                installer.install_python_deps(target_dir)
-            logger.info("Installed remote skill", skill=skill_name, url=repo_url)
-            return success, msg
-        except Exception as e:
-            logger.error("Failed to install remote skill", skill=skill_name, error=str(e))
-            return False, f"Installation failed: {e}"
-
-    # =========================================================================
-    # Properties
+    # Skills Registry
     # =========================================================================
 
     @property
-    def project_root(self) -> Path:
-        """Get project root directory."""
-        return self._project_root
+    def skills(self) -> dict[str, "Skill"]:
+        """Get skills registry (read-only dict)."""
+        return self._skills
+
+    def get_skill(self, skill_name: str) -> "Skill | None":
+        """Get a skill by name."""
+        return self._skills.get(skill_name)
+
+    def register_skill(self, skill: "Skill") -> None:
+        """Register a skill."""
+        self._skills[skill.name] = skill
+
+    def unregister_skill(self, skill_name: str) -> "Skill | None":
+        """Unregister a skill."""
+        return self._skills.pop(skill_name, None)
+
+    def list_loaded(self) -> list[str]:
+        """List all loaded skill names."""
+        return list(self._skills.keys())
+
+    # =========================================================================
+    # Command Cache
+    # =========================================================================
 
     @property
-    def skills_dir(self) -> Path:
-        """Get skills directory."""
-        return self._skills_dir
+    def command_cache(self) -> dict[str, "SkillCommand"]:
+        """Get command cache (read-only dict)."""
+        return self._command_cache
+
+    def get_command(self, skill_name: str, command_name: str) -> "SkillCommand | None":
+        """Get a command by skill.command or just command name."""
+        cache_key = f"{skill_name}.{command_name}"
+        return self._command_cache.get(cache_key) or self._command_cache.get(command_name)
+
+    def register_command(self, skill_name: str, command: "SkillCommand") -> None:
+        """Register a command in cache."""
+        full_name = f"{skill_name}.{command.name}"
+        self._command_cache[full_name] = command
+        # Also register without skill prefix if not already present
+        if command.name not in self._command_cache:
+            self._command_cache[command.name] = command
+
+    def unregister_commands(self, skill_name: str) -> None:
+        """Unregister all commands for a skill."""
+        keys_to_remove = [k for k in self._command_cache if k.startswith(f"{skill_name}.")]
+        for key in keys_to_remove:
+            del self._command_cache[key]
+
+    def clear_command_cache(self, skill_name: str, command_name: str) -> None:
+        """Clear a specific command cache entry (for hot reload)."""
+        cache_key = f"{skill_name}.{command_name}"
+        if cache_key in self._command_cache:
+            del self._command_cache[cache_key]
+
+    # =========================================================================
+    # MTime Cache
+    # =========================================================================
+
+    @property
+    def mtime_cache(self) -> dict[str, float]:
+        """Get mtime cache (read-only dict)."""
+        return self._mtime_cache
+
+    def get_mtime(self, skill_name: str) -> float | None:
+        """Get mtime for a skill."""
+        return self._mtime_cache.get(skill_name)
+
+    def set_mtime(self, skill_name: str, mtime: float) -> None:
+        """Set mtime for a skill."""
+        self._mtime_cache[skill_name] = mtime
+
+    def clear_mtime(self, skill_name: str) -> None:
+        """Clear mtime for a skill."""
+        self._mtime_cache.pop(skill_name, None)
+
+    # =========================================================================
+    # Utility
+    # =========================================================================
+
+    def clear(self) -> None:
+        """Clear all state (for testing)."""
+        self._skills.clear()
+        self._command_cache.clear()
+        self._mtime_cache.clear()
 
 
-def get_unified_registry() -> UnifiedRegistry:
-    """Get the unified registry instance."""
-    return UnifiedRegistry.get_instance()
+# Global registry singleton
+_registry: SkillRegistry | None = None
+
+
+def get_registry() -> SkillRegistry:
+    """Get or create the global registry."""
+    global _registry
+    if _registry is None:
+        _registry = SkillRegistry()
+    return _registry
+
+
+def reset_registry() -> None:
+    """Reset the global registry (for testing)."""
+    global _registry
+    _registry = None
+
+
+__all__ = ["SkillRegistry", "get_registry", "reset_registry"]

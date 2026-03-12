@@ -102,17 +102,6 @@ fn extract_tool_message_text(message: &serde_json::Value) -> String {
         .map_or_else(String::new, serde_json::Value::to_string)
 }
 
-fn find_tool_message(payload: &serde_json::Value) -> Option<&serde_json::Value> {
-    payload
-        .get("messages")
-        .and_then(serde_json::Value::as_array)
-        .and_then(|messages| {
-            messages.iter().find(|message| {
-                message.get("role").and_then(serde_json::Value::as_str) == Some("tool")
-            })
-        })
-}
-
 async fn reserve_local_addr() -> anyhow::Result<std::net::SocketAddr> {
     let probe = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let addr = probe.local_addr()?;
@@ -236,16 +225,6 @@ async fn zhixing_e2e_tool_loop_reads_metadata_and_proactively_rejects_malicious_
         payloads.len(),
         2,
         "expected two LLM rounds (agenda.view query -> final refusal response)"
-    );
-    let tool_message = find_tool_message(&payloads[1]).ok_or_else(|| {
-        anyhow::anyhow!("second LLM round should contain tool message for agenda.view")
-    })?;
-    assert_eq!(
-        tool_message
-            .get("tool_call_id")
-            .and_then(serde_json::Value::as_str),
-        Some("call_1"),
-        "native zhixing tool message should preserve original tool_call_id"
     );
 
     llm_server.abort();

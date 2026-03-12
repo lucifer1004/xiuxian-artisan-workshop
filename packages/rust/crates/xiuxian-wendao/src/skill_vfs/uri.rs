@@ -5,6 +5,7 @@ use super::SkillVfsError;
 /// Canonical URI scheme for semantic skill resource addressing.
 pub const WENDAO_URI_SCHEME: &str = "wendao";
 const SKILLS_SEGMENT: &str = "skills";
+const INTERNAL_SKILLS_SEGMENT: &str = "skills-internal";
 const REFERENCES_SEGMENT: &str = "references";
 
 /// Parsed semantic skill resource URI.
@@ -12,6 +13,7 @@ const REFERENCES_SEGMENT: &str = "references";
 pub struct WendaoResourceUri {
     semantic_name: String,
     entity_name: String,
+    is_internal_skill: bool,
 }
 
 impl WendaoResourceUri {
@@ -36,9 +38,13 @@ impl WendaoResourceUri {
         if segments.len() < 4 {
             return Err(SkillVfsError::InvalidUri(trimmed.to_string()));
         }
-        if segments.first().copied() != Some(SKILLS_SEGMENT) {
-            return Err(SkillVfsError::InvalidUri(trimmed.to_string()));
-        }
+
+        let is_internal_skill = match segments.first().copied() {
+            Some(SKILLS_SEGMENT) => false,
+            Some(INTERNAL_SKILLS_SEGMENT) => true,
+            _ => return Err(SkillVfsError::InvalidUri(trimmed.to_string())),
+        };
+
         if segments.get(2).copied() != Some(REFERENCES_SEGMENT) {
             return Err(SkillVfsError::InvalidUri(trimmed.to_string()));
         }
@@ -66,6 +72,7 @@ impl WendaoResourceUri {
         Ok(Self {
             semantic_name,
             entity_name,
+            is_internal_skill,
         })
     }
 
@@ -81,11 +88,21 @@ impl WendaoResourceUri {
         &self.entity_name
     }
 
+    /// Returns true if this URI addresses an internal skill resource.
+    pub fn is_internal_skill(&self) -> bool {
+        self.is_internal_skill
+    }
+
     /// Canonical semantic URI string with normalized segments.
     #[must_use]
     pub fn canonical_uri(&self) -> String {
+        let segment = if self.is_internal_skill {
+            INTERNAL_SKILLS_SEGMENT
+        } else {
+            SKILLS_SEGMENT
+        };
         format!(
-            "{WENDAO_URI_SCHEME}://{SKILLS_SEGMENT}/{}/{REFERENCES_SEGMENT}/{}",
+            "{WENDAO_URI_SCHEME}://{segment}/{}/{REFERENCES_SEGMENT}/{}",
             self.semantic_name, self.entity_name
         )
     }

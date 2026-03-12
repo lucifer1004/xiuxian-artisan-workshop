@@ -20,8 +20,9 @@ fn read_snapshot(relative: &str) -> String {
 
 fn assert_snapshot_eq(relative: &str, actual: &str) {
     let expected = read_snapshot(relative);
-    assert!(
-        expected == actual,
-        "snapshot mismatch: {relative}\n--- expected ---\n{expected}\n--- actual ---\n{actual}"
-    );
+    if expected != actual {
+        panic!(
+            "snapshot mismatch: {relative}\n--- expected ---\n{expected}\n--- actual ---\n{actual}"
+        );
+    }
 }

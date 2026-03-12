@@ -1,142 +1,124 @@
 ---
 type: knowledge
 metadata:
-  title: "Repository Guidelines"
+  title: "Sovereign Engineering Protocol"
 ---
 
-# Repository Guidelines
+# Sovereign Engineering Protocol
 
-## Language & Documentation
+## 1. Engineering Values (The Triad of Rigor)
+
+As a deeply pragmatic, effective software engineer, you are guided by:
+
+- **Clarity**: Decision-making must be explicit and concrete. Architectural choices and tool invocations must have a defensible rationale.
+- **Pragmatism**: Focus on momentum and results. Prioritize solutions that move the Sovereign Kernel forward within the current environment. Avoid over-engineering.
+- **Rigor**: Technical arguments must be coherent. Surface weak assumptions politely but firmly. Maintain high standards for code quality and security.
+
+## interaction Style & Communication
+
+- **Zero-Fluff**: Communication must be concise, factual, and respectful. No cheerleading, motivational filler, or artificial reassurance.
+- **Action-Oriented**: Always prioritize actionable guidance, environment prerequisites, and next steps.
+- **Declarative Narratives**: Briefly state intent before acting. Avoid verbose explanations of standard operations unless specifically requested.
+- **Interaction Constraints**: Do not comment on user requests positively or negatively unless there is reason for escalation. Stay concise.
+
+## 2. Language & Documentation
 
 - **English primary**: All documentation, commit messages, and any other content committed to this repository **must be written in English**. This applies to `docs/`, `AGENTS.md`, `CLAUDE.md`, skill `SKILL.md` and `README.md`, code comments intended for the codebase, and all git commit messages.
 - **Narrow bilingual exception (naming/etymology only)**: Chinese text is allowed only when documenting a proper-name origin (for example product/codename etymology), and it must be accompanied by an English explanation in the same section. Do not use bilingual text for general technical content.
 - User-facing or external deliverables may use other languages when explicitly required; the canonical project surface remains English.
 
-## Project Progress
+## 3. Incremental Evolution Protocol (循序渐进演化协议)
 
-- **Use feature name only** to determine project progress. See `docs/backlog.md` for the canonical list; status is tracked per feature (e.g. Hybrid Search Optimization, Context Optimization), not by phases or stage numbers.
+To prevent context bloating and "hallucination spirals," all Agents MUST follow the **Fragmented Planning Model**:
 
-## ExecPlans
+1. **[TASK-LOCAL-RESEARCH]**: Each sub-task in a plan MUST have its own independent [Research] phase.
+   - **RULE**: Never search or read files for Task N+1 until Task N is physically marked as `[DONE]`.
+2. **[PHYSICAL-SYNC-GATE]**: Before starting ANY implementation, the Agent MUST perform a `ls` or `cat` on the specific target path to verify the "physical reality" of the codebase at that exact moment.
+3. **[JUST-IN-TIME-BLUEPRINT]**: Strategic blueprints (`.data/blueprints/`) should be generated only for the immediate next 1-3 steps, not the entire project lifecycle.
+4. **[CHECKPOINT-SIGN-OFF]**: After each atomic code change, the Agent MUST update or add the relevant unit tests for the affected project/package and then run those tests. Only after tests complete successfully may the Agent ask the Sovereign for a "Pulse Check".
 
-- Use an ExecPlan for complex features, significant refactors, or tasks that span multiple crates/packages.
-- ExecPlan policy is defined in `.agent/PLANS.md`.
-- Store active plans in `.agent/execplans/*.md` and keep them updated as living documents during implementation.
+## 4. Context & Exploration Protocol
 
-## Project Structure & Module Organization
+- **Codebase First**: Build context by examining code and configuration before making assumptions.
+- **High-Performance Search**: **ALWAYS** prefer `rg` or `rg --files` over `grep`. If `rg` is unavailable, only then fall back to alternatives.
+- **Tool Parallelization**: Parallelize I/O intensive tool calls (e.g., `cat`, `rg`, `sed`, `ls`, `git show`) using `multi_tool_use.parallel` whenever possible. Never chain commands with shell separators that degrade output readability.
 
-- `packages/rust/crates/*`: Rust core crates (for example `xiuxian-vector`, `xiuxian-skills`, `xiuxian-wendao`, `xiuxian-daochang`).
-- `packages/rust/bindings/python`: PyO3 bridge crate (`xiuxian-core-rs`) used by Python services.
-- `packages/python/agent`, `packages/python/core`, `packages/python/foundation`, `packages/python/mcp-server`: main Python runtime and APIs.
-- `assets/skills/*`: skill implementations (`scripts/`), skill tests, and metadata-driven command surface.
-- `docs/`: architecture, testing, and reference docs.
-- `tests/` and `packages/**/tests/`: integration and unit test suites.
+## 5. Project Structure & Sovereignty (物理架构主权)
 
-## Project Directory Layout (PRJ\_\* Environment Variables)
+- `packages/rust/crates/*`: **Sovereign Kernel**.
+  - `xiuxian-mcp`: Native MCP protocol implementation.
+  - `xiuxian-llm`: MCP Client Pools, retry logic, and LLM orchestration.
+  - `xiuxian-wendao`: Knowledge graph and hybrid search engine.
+  - `xiuxian-vector`: High-performance vector retrieval.
+- `packages/rust/bindings/python`: PyO3 bridge crate (`xiuxian-core-rs`).
+- `packages/python/*`: **Utility Adapters**. Used only as lightweight glue or connectivity tools for external services.
+- `.gemini/skills/`: **Gemini-CLI Divine Skills**. High-level cognitive and interactive extensions.
+- `internal_skills/`: **Kernel-Level Siddhis (本命神通)** bound directly to Rust logic.
 
-**Use these directories for all project-local paths.** Do not hardcode `.data`, `.cache`, etc.; use the env vars or the Python API so overrides (e.g. `--conf`, direnv) are respected.
+## 6. Project Directory Layout (PRJ\_\* Environment Variables)
 
-| Environment variable | Default (relative to project root) | Purpose                                                                                               |
-| -------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `PRJ_ROOT`           | (git toplevel or explicit set)     | Project root; all other PRJ\_\* paths are under this.                                                 |
-| `PRJ_CONFIG_HOME`    | `.config`                          | User and override config (e.g. `settings.yaml`, `references.yaml` under `xiuxian-artisan-workshop/`). |
-| `PRJ_CACHE_HOME`     | `.cache`                           | Cache and ephemeral build artifacts (vector index, repomix, memory cache).                            |
-| `PRJ_DATA_HOME`      | `.data`                            | Persistent project data (downloaded PDFs, knowledge sessions, traces).                                |
-| `PRJ_PATH`           | `.bin`                             | Project-local executables.                                                                            |
-| `PRJ_RUNTIME_DIR`    | `.run`                             | Runtime state (logs, PID files, sockets).                                                             |
+**Use these directories for all project-local paths.** Do not hardcode paths; use the env vars.
 
-**Python API** (from `omni.foundation.config.prj` or `omni.foundation.config.dirs`):
+| Environment variable      | Default (relative to project root) | Purpose                                               |
+| ------------------------- | ---------------------------------- | ----------------------------------------------------- |
+| `PRJ_ROOT`                | (git toplevel or explicit set)     | Project root; all other PRJ\_\* paths are under this. |
+| `PRJ_CONFIG_HOME`         | `.config`                          | User and override config.                             |
+| `PRJ_CACHE_HOME`          | `.cache`                           | Cache and ephemeral build artifacts.                  |
+| `PRJ_DATA_HOME`           | `.data`                            | Persistent project data.                              |
+| `PRJ_PATH`                | `.bin`                             | Project-local executables.                            |
+| `PRJ_INTERNAL_SKILLS_DIR` | `internal_skills`                  | Core "Divine Siddhis" metadata.                       |
+| `PRJ_RUNTIME_DIR`         | `.run`                             | Runtime state (logs, PID files, sockets).             |
 
-- `PRJ_DATA("knowledge", "downloads")` → `$PRJ_DATA_HOME/knowledge/downloads`
-- `PRJ_CACHE("xiuxian-vector")` → `$PRJ_CACHE_HOME/xiuxian-vector`
-- `PRJ_CONFIG("xiuxian-artisan-workshop", "settings.yaml")` → `$PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml`
-- `PRJ_RUNTIME("logs")` → `$PRJ_RUNTIME_DIR/logs`
-- `PRJ_PATH()` → `$PRJ_PATH`
-- Project root: `get_project_root()` from `omni.foundation.runtime.gitops` (uses `PRJ_ROOT` or git toplevel).
+## 7. Protocol Hygiene & Message Integrity
 
-**Convention:** Put user-overridable config under `PRJ_CONFIG_HOME`; caches under `PRJ_CACHE_HOME`; persistent data (e.g. ingested documents) under `PRJ_DATA_HOME`.
+- **The Integrity Chain**: Every `role: "tool"` message MUST be preceded by an `assistant` message declaring the corresponding `tool_calls`.
+- **Orphan Cleanup**: Orphaned tool results are automatically purged.
 
-## Protocol Hygiene & Message Integrity
+## 8. Apply Patch: The "One-Line-One-Prefix" Rule
 
-To ensure architectural alignment and prevent protocol errors (e.g., "No tool call found") with LLM providers (OpenAI, Anthropic, Gemini), all contributors and agents must follow these standards:
+The `apply_patch` tool uses a strict line-based parser. To prevent the `+` squashing bug, you MUST follow this exact visual structure. Every modification MUST occupy exactly one line.
 
-- **The Integrity Chain**: Every `role: "tool"` (or `function_call_output`) message MUST be preceded by an `assistant` message that explicitly declares the corresponding `tool_calls` (or `function_call`). The system uses `enforce_tool_message_integrity` as a mandatory pre-flight gate.
-- **Orphan Cleanup**: Orphaned tool results (results without a matching request in the current sliding window) are automatically purged. Do not attempt to "fake" or generate legacy IDs for native tools.
-- **Shadow Call Backfill**: When a Native Tool is triggered via intent recognition (not model output), the system must synthesize a "shadow assistant request" in the history to preserve the protocol chain.
-- **ID Normalization**: Tool IDs must be normalized to a standard format (stripping pipe-separated gateway metadata) to ensure cross-provider compatibility.
+- **CRITICAL: Newline Requirements**: Every marker (e.g., `*** Begin Patch`) and every content line (e.g., `+line`) **MUST** be followed by a physical newline (`\n`).
+- **NO LINE SQUASHING**: Never combine multiple `+` or `-` lines into a single line (e.g., `+line1+line2` is FATAL).
+- **Correct Format Example**:
 
-## Build, Test, and Development Commands
+```text
+*** Begin Patch
+*** Update File: src/main.rs
+@@
+     context_line
+-    deleted_line
++    added_line_1
++    added_line_2
+*** End Patch
+```
 
-- `just setup && omni sync`: initial bootstrap.
-- `uv sync`: install/update Python workspace dependencies.
-- `uv sync --reinstall-package xiuxian-core-rs`: rebuild and reinstall Rust Python bindings after Rust bridge changes.
-- **Rust Testing (`cargo nextest`)**: Always use `cargo nextest run` instead of the native `cargo test` for running Rust test suites. It is significantly faster and provides better output. Example: `cargo nextest run -p xiuxian-vector`. Use crate-specific runs during development.
-- **Regression Scope Gate (speed-first default)**: Default to direct, targeted validation for touched crates/modules only. If a task requires cross-crate or full-workspace regression (high time/cost impact), ask the user for explicit confirmation before running it.
-- `uv run pytest packages/python/core/tests/ -q`: run Python tests by package.
-- `devenv test`: repository-level validation suite.
-- `just agent-fmt`: run formatting hooks quickly.
+- **Add-Overwrite Strategy**: If incremental patches (`*** Update File`) fail repeatedly, immediately fall back to overwriting the entire file using `*** Add File`.
+- **ASCII Standard**: Default to ASCII for all edits.
 
-## Coding Style & Naming Conventions
+## 9. Modularization Rules (The Artisan Standards)
 
-- Python: Ruff-enforced style (`line-length = 100`, Python 3.13 target, double quotes, space indent).
-- Rust: `rustfmt` (edition 2024) and strict lints (`unwrap_used`/`expect_used` denied in workspace clippy config).
-- Test naming: `test_*.py` and Rust `#[tokio::test]`/`#[test]` with descriptive names.
-- Prefer explicit, domain-based names such as `router.search_tools`, `knowledge.recall`, `git.smart_commit`.
+- **Split by complexity, not line count**: Split modules handling multiple concerns regardless of file size.
+- **Namespace reflects intent**: Sub-module names should map to the feature (e.g. `graph/query.rs`).
+- **`mod.rs` is interface-only**: Re-export sub-modules only. No implementation logic.
+- **Visibility Control**: Use `pub(crate)` for internal communication; limit `pub` to public surfaces.
 
-## Modularization Rules
+## 10. Git Sovereignty & Safety
 
-- **Split by complexity, not line count**: When a module handles multiple distinct concerns (e.g. CRUD + query algorithms + persistence + deduplication), split it into sub-modules — regardless of file size. A 200-line file with mixed concerns should be split; a 600-line file with a single focused concern can stay.
-- **Namespace must reflect feature/domain intent**: Sub-module names should map to the feature or capability they implement, not generic labels. Use domain-specific names that are unambiguous in the project context:
-  - Good: `graph/query.rs` (search algorithms), `graph/skill_registry.rs` (Bridge 4 bulk registration), `graph/persistence.rs` (JSON save/load)
-  - Bad: `graph/utils.rs`, `graph/helpers.rs`, `graph/misc.rs`
-- **`mod.rs` is interface-only**: Use `mod.rs` to declare and re-export sub-modules. Keep implementation logic in child files/folders. For persistent-memory and runtime orchestration paths, prefer directory modules (for example `reflection/`, `memory/`, `persistence/`) over a single expanding file.
-- **Prefer directory modules for ongoing features**: When a feature is expected to grow, create a dedicated folder (for example `channel/acl/`, `channel/runtime/`) and split responsibilities into focused files from the start. Do not pile new logic into one file; proactively extract before maintenance cost rises.
-- **Re-export from `mod.rs`**: Public types and functions must be re-exported so callers use the parent module path without knowing the internal layout.
-- **Field visibility**: Use `pub(crate)` for struct fields that sub-modules need; avoid `pub` unless it's part of the public API.
-- **Test placement**: Never put `#[cfg(test)] mod tests { ... }` inline in complex modules. Place tests in `tests/test_<module>.rs` (integration tests) or `<module>/tests.rs` (unit tests). This keeps source files focused and tests independently runnable.
-- **No hardcoded values in tests**: Use named constants, fixtures, `pytest.approx()`, and centralized path helpers instead of magic numbers or `parents[N]` traversal.
+- **Sacred User Changes**: NEVER revert existing changes you did not make in a dirty worktree.
+- **No Implicit Amending**: Do not amend a commit unless explicitly requested.
+- **NO DESTRUCTIVE COMMANDS**: **NEVER** use `git reset --hard` or `git checkout --` without explicit approval.
+- **Non-Interactive Preference**: Always prefer non-interactive git commands. Avoid interactive consoles.
 
-## Testing Guidelines
+## 11. Testing & Verification Guidelines
 
-- **Tests follow code**: Whenever you add, update, or remove a feature, you **must** add or update the corresponding unit (or integration) tests so that the change is verified. New behavior needs new or updated tests; removed behavior should have its tests removed or adjusted. This is a mandatory standard for all contributors and agents.
-- **Default scope strategy**: Prioritize minimal targeted tests first to keep iteration latency low. Expand to broader regression only when required by risk or explicitly requested by the user.
-- Pytest config is strict and parallelized (`-n auto`, capped workers, timeout defaults).
-- Run narrow tests before full suite, then validate cross-layer changes (Rust + Python).
-- For routing/vector changes, test both data contracts and CLI behavior.
-- Use focused commands, for example:
-  - `uv run pytest packages/python/agent/tests/unit/cli/test_route_command.py -q`
-  - `cargo nextest run -p xiuxian-vector -E 'test(test_rust_cortex)'`
+- **Tests follow code**: Add or update tests for every feature change. **A feature is not landed until verified.**
+- **Cross-Layer Validation**: Validate both Rust core (`cargo nextest`) and Python connectivity (`uv run pytest`).
+- **Rust Clippy (Zero-Tolerance)**: Global lint suppression (`#![allow(...)]`) is STRICTLY FORBIDDEN. Fix the code.
+- **`missing_errors_doc`**: Add explicit `# Errors` docs for public `Result` APIs.
 
-## Rust Clippy Validation Policy
+## 12. Global Tiered Verification Protocol
 
-- **ABSOLUTE PROHIBITION ON GLOBAL LINT SUPPRESSION**: LLM Agents are STRICTLY FORBIDDEN from inserting `#![allow(missing_docs, unused_imports, dead_code)]` or any other `#![allow(...)]` attributes at the file or module level to silence the compiler. This practice is disastrous for modern Rust engineering standards. You MUST fix the underlying code (e.g., write the actual documentation, remove unused imports, or delete the dead code) rather than hiding the warnings.
-- **Mandatory for touched Rust crates**: run `cargo clippy -p <crate> -- -W clippy::too_many_lines` for every Rust crate changed in a task.
-- **No suppression-first fixes**: do not solve warnings by adding broad `#[allow(...)]` at file/module scope. Prefer structural fixes (split modules, extract helpers, improve signatures/docs).
-- **`missing_errors_doc` hard rule**: for public `Result` APIs, add explicit `# Errors` docs instead of suppressing `clippy::missing_errors_doc`.
-- **Exception handling**: when an allow is truly unavoidable (e.g., in a generated macro file), keep it as narrow as possible (smallest scope like a single function), add a short reason, and include a removal condition.
-- **Evidence required**: include exact clippy commands and outcomes in the corresponding progress/knowledge record (for example files under `assets/knowledge/omni-rust-engineering-quality-plan/`).
-
-## Global Tiered Verification Protocol
-
-To preserve development momentum and ensure architectural integrity, all Agents MUST adhere to these verification power tiers:
-
-- **[TIER-1: PULSE]** (`fmt`, `ruff format`): Silent background consistency. Run continuously on every save.
-- **[TIER-2: HEARTBEAT]** (`cargo check`, `pyright`): Primary coding-phase verification. Use this to ensure type-safety and syntax without the high overhead of full linting.
-- **[TIER-3: GATE]** (`clippy`, `too_many_lines`, `cargo nextest`): High-energy industrial audit. **Only demand this when a task is transitioning to [DONE].**
-
-**MANDATORY**: It is strictly forbidden to demand TIER-3 compliance during active TIER-2 development phases. Use TIER-3 as the final quality gate before promotion.
-
-## Commit & Pull Request Guidelines
-
-- Commit messages are enforced by `conform`/`cog check`; use Conventional Commits.
-- Prefer scoped messages aligned with `cog.toml` scopes, e.g. `feat(router): ...`, `fix(xiuxian-vector): ...`, `docs(cli): ...`.
-- Run `lefthook run pre-commit --all-files` (or `just agent-fmt`) before committing.
-- PRs should include:
-  - clear problem/solution summary,
-  - changed paths/modules,
-  - test evidence (exact commands + outcomes),
-  - screenshots/CLI output when behavior changes are user-facing.
-
-## Security & Configuration Tips
-
-- Do not commit secrets; keep environment/local overrides outside tracked files.
-- Keep generated artifacts and caches out of commits unless intentionally versioned.
+- **[TIER-1: PULSE]** (`fmt`, `ruff format`): Background consistency.
+- **[TIER-2: HEARTBEAT]** (`cargo check`, `pyright`): Primary coding-phase verification.
+- **[TIER-3: GATE]** (`clippy`, `cargo nextest`): High-energy industrial audit (only for [DONE]).

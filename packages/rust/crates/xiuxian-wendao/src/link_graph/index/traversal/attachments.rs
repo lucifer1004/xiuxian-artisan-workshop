@@ -1,4 +1,4 @@
-use super::super::{LinkGraphAttachmentHit, LinkGraphAttachmentKind, LinkGraphIndex};
+use crate::link_graph::{LinkGraphAttachmentHit, LinkGraphAttachmentKind, LinkGraphIndex};
 use std::collections::HashSet;
 
 impl LinkGraphIndex {

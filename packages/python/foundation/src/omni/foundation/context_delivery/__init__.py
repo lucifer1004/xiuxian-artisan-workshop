@@ -15,7 +15,6 @@ Usage:
         ChunkedSession,
         ChunkedSessionStore,
         WorkflowStateStore,
-        ActionWorkflowEngine,
         create_chunked_session,
     )
 
@@ -34,32 +33,13 @@ Usage:
     # Generic action-based workflow state
     workflow_store = WorkflowStateStore("smart_commit")
     workflow_store.save("wf_123", {"status": "prepared"})
-
-    # Generic action dispatch with shared validation
-    engine = ActionWorkflowEngine(
-        workflow_type="smart_commit",
-        allowed_actions={"start", "approve", "status"},
-    )
 """
 
 from omni.foundation.context_delivery.sessions import (
-    ActionWorkflowEngine,
     ChunkedSessionStore,
     WorkflowStateStore,
     normalize_chunked_action_name,
     validate_chunked_action,
-)
-from omni.foundation.context_delivery.chunked_workflows import (
-    build_chunked_action_error_payload,
-    build_chunked_dispatch_error_payload,
-    build_chunked_session_store_adapters,
-    build_chunked_unavailable_payload,
-    create_chunked_lazy_start_payload,
-    persist_chunked_lazy_start_state,
-    run_chunked_auto_complete,
-    run_chunked_full_document_action,
-    run_chunked_lazy_start_batch_dispatch,
-    run_chunked_preview_action,
 )
 from omni.foundation.context_delivery.strategies import (
     ChunkedSession,
@@ -68,22 +48,11 @@ from omni.foundation.context_delivery.strategies import (
 )
 
 __all__ = [
-    "ActionWorkflowEngine",
     "ChunkedSession",
     "ChunkedSessionStore",
     "WorkflowStateStore",
     "create_chunked_session",
-    "build_chunked_action_error_payload",
-    "build_chunked_dispatch_error_payload",
-    "build_chunked_session_store_adapters",
-    "build_chunked_unavailable_payload",
-    "create_chunked_lazy_start_payload",
     "normalize_chunked_action_name",
-    "persist_chunked_lazy_start_state",
     "prepare_for_summary",
-    "run_chunked_auto_complete",
-    "run_chunked_full_document_action",
-    "run_chunked_lazy_start_batch_dispatch",
-    "run_chunked_preview_action",
     "validate_chunked_action",
 ]

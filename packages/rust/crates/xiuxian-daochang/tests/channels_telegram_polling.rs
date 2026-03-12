@@ -1,4 +1,23 @@
-//! Telegram polling transport tests for unauthorized/conflict/rate-limit paths.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::similar_names
+)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -6,7 +25,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use axum::{Json, Router, extract::State, routing::post};
-use xiuxian_daochang::{Channel, TelegramChannel};
+use omni_agent::{Channel, TelegramChannel};
 
 #[derive(Clone, Copy)]
 enum PollScenario {

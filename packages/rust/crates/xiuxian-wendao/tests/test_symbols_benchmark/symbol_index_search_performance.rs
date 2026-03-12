@@ -1,32 +1,9 @@
-use super::*;
+use std::path::PathBuf;
 
-const BENCH_SLACK_ENV: &str = "OMNI_WENDAO_BENCH_SLACK_FACTOR";
-const DEFAULT_BENCH_SLACK_FACTOR: f64 = 2.0;
+use xiuxian_wendao::SymbolIndex;
+use xiuxian_wendao::dependency_indexer::{ExternalSymbol, SymbolKind};
 
-fn benchmark_slack_factor() -> f64 {
-    std::env::var(BENCH_SLACK_ENV)
-        .ok()
-        .and_then(|raw| raw.parse::<f64>().ok())
-        .filter(|factor| factor.is_finite() && *factor >= 1.0)
-        .unwrap_or(DEFAULT_BENCH_SLACK_FACTOR)
-}
-
-fn benchmark_runtime_multiplier() -> f64 {
-    if std::env::var_os("NEXTEST_RUN_ID").is_some() {
-        6.0
-    } else {
-        1.0
-    }
-}
-
-fn benchmark_budget(local: std::time::Duration, ci: std::time::Duration) -> std::time::Duration {
-    let baseline = if std::env::var_os("CI").is_some() {
-        ci
-    } else {
-        local
-    };
-    baseline.mul_f64(benchmark_slack_factor() * benchmark_runtime_multiplier())
-}
+use super::support::{BENCH_SLACK_ENV, benchmark_budget};
 
 #[test]
 fn test_symbol_index_search_performance() {

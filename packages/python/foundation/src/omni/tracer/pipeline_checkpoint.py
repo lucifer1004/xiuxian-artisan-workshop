@@ -1,22 +1,24 @@
-"""pipeline_checkpoint.py - Checkpointer utilities for native workflow runtime."""
+"""
+pipeline_checkpoint.py - Checkpointer utilities for pipeline runtime assembly.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
-from omni.foundation.workflow_state import get_checkpointer
 
-logger = get_logger("xiuxian.tracer.pipeline")
+logger = get_logger("omni.tracer.pipeline")
 
 
 def create_in_memory_checkpointer() -> Any | None:
-    """Create a native workflow-state checkpointer handle."""
+    """Create LangGraph MemorySaver checkpointer if available."""
     try:
-        return get_checkpointer("xiuxian_tracer_pipeline")
+        from langgraph.checkpoint.memory import MemorySaver
     except Exception as exc:  # pragma: no cover - environment dependent
-        logger.warning("workflow_checkpointer_unavailable", error=str(exc))
+        logger.warning("memory_saver_unavailable", error=str(exc))
         return None
+    return MemorySaver()
 
 
 def compile_workflow(
@@ -36,6 +38,6 @@ def compile_workflow(
 
 
 __all__ = [
-    "compile_workflow",
     "create_in_memory_checkpointer",
+    "compile_workflow",
 ]

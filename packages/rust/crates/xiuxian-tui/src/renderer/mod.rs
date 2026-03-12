@@ -10,7 +10,7 @@ use crossterm::{
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::io::stdout;
+use std::{error::Error, io::stdout};
 
 /// TUI Renderer using Crossterm backend
 pub struct TuiRenderer {
@@ -20,10 +20,7 @@ pub struct TuiRenderer {
 
 impl TuiRenderer {
     /// Create a new TUI renderer
-    ///
-    /// # Errors
-    /// Returns an error when terminal raw mode or backend initialization fails.
-    pub fn new() -> Result<Self, anyhow::Error> {
+    pub fn new() -> Result<Self, Box<dyn Error>> {
         enable_raw_mode()?;
 
         let backend = CrosstermBackend::new(stdout());
@@ -38,10 +35,7 @@ impl TuiRenderer {
     }
 
     /// Run the main event loop
-    ///
-    /// # Errors
-    /// Returns an error when frame drawing or terminal restore fails.
-    pub fn run(&mut self, state: &mut AppState) -> Result<(), anyhow::Error> {
+    pub fn run(&mut self, state: &mut AppState) -> Result<(), Box<dyn Error>> {
         loop {
             // Render current state
             self.terminal.draw(|f| {
@@ -73,16 +67,13 @@ impl TuiRenderer {
         }
 
         // Restore terminal
-        Self::restore_terminal()?;
+        self.restore_terminal()?;
 
         Ok(())
     }
 
     /// Restore terminal to normal mode
-    ///
-    /// # Errors
-    /// Returns an error if terminal cleanup fails.
-    pub fn restore_terminal() -> Result<(), anyhow::Error> {
+    pub fn restore_terminal(&mut self) -> Result<(), Box<dyn Error>> {
         disable_raw_mode()?;
         execute!(stdout(), Clear(ClearType::All))?;
         Ok(())
@@ -121,7 +112,7 @@ impl TuiRenderer {
         if let Some(app) = state.app() {
             match app.layout() {
                 crate::components::AppLayout::VerticalStack => {
-                    Self::render_panels(f, content_area, app);
+                    Self::render_panels(f, content_area, app)
                 }
                 crate::components::AppLayout::SplitView => app.render_split_view(f, content_area),
             }
@@ -137,7 +128,7 @@ impl TuiRenderer {
 
         let status_text = state
             .status_message()
-            .unwrap_or("[Ctrl-o: Toggle] [Tab: Next] [Ctrl-c: Quit]");
+            .unwrap_or_else(|| "[Ctrl-o: Toggle] [Tab: Next] [Ctrl-c: Quit]");
 
         let status = ratatui::widgets::Paragraph::new(status_text)
             .style(ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray));
@@ -162,9 +153,7 @@ impl TuiRenderer {
             .map(|p| {
                 ratatui::layout::Constraint::Length(match *p.state() {
                     PanelState::Folded => 3,
-                    PanelState::Expanded => u16::try_from(p.line_count().min(20))
-                        .unwrap_or(20)
-                        .saturating_add(2),
+                    PanelState::Expanded => (p.line_count().min(20) as u16).saturating_add(2),
                 })
             })
             .collect();
@@ -208,17 +197,17 @@ impl TuiRenderer {
                 }
             }
             crate::TuiEvent::ScrollDown => {
-                if let Some(app) = state.app_mut()
-                    && let Some(panel) = app.panels_mut().focused_panel_mut()
-                {
-                    panel.scroll_down();
+                if let Some(app) = state.app_mut() {
+                    if let Some(panel) = app.panels_mut().focused_panel_mut() {
+                        panel.scroll_down();
+                    }
                 }
             }
             crate::TuiEvent::ScrollUp => {
-                if let Some(app) = state.app_mut()
-                    && let Some(panel) = app.panels_mut().focused_panel_mut()
-                {
-                    panel.scroll_up();
+                if let Some(app) = state.app_mut() {
+                    if let Some(panel) = app.panels_mut().focused_panel_mut() {
+                        panel.scroll_up();
+                    }
                 }
             }
             crate::TuiEvent::Char(c) => {
@@ -238,7 +227,7 @@ impl TuiRenderer {
                 state.on_tick();
             }
             crate::TuiEvent::Custom(data) => {
-                state.on_custom_event(&data);
+                state.on_custom_event(data);
             }
         }
     }

@@ -1,369 +1,243 @@
-"""Context Pruner - Rust-accelerated Context Window Management.
+"""
+omni.core.skills.runtime - Skill Runtime Environment
 
-This module provides high-performance token counting and context pruning
-for workflow runtimes using the Rust xiuxian-tokenizer bindings.
+Standalone runtime implementation for Zero-Code Skill Architecture.
+Manages SkillContext and skill lifecycle.
 
-Architecture:
-    - Rust (xiuxian-tokenizer): Token counting, truncation, message compression
-    - Python: Integration with workflow runtimes
-
-Features:
-    - 20-100x faster token counting than Python tiktoken
-    - Smart message compression (keep system + recent, truncate tool outputs)
-    - Middle-out truncation for long texts
-    - AutoFix integration for memory-efficient recovery
-
-Example:
-    >>> from omni.agent.core.context.pruner import ContextPruner
-    >>> from xiuxian_core_rs.tokenizer import PyContextPruner
-    >>>
-    >>> # Use Rust-accelerated pruner
-    >>> pruner = ContextPruner(window_size=4, max_tool_output=500)
-    >>> compressed = pruner.compress(messages)
-    >>>
-    >>> # Count tokens
-    >>> from xiuxian_core_rs import py_count_tokens
-    >>> count = py_count_tokens("Hello, world!")
+Usage:
+    from omni.core.skills.runtime import get_skill_context, SkillContext
+    ctx = get_skill_context(skills_dir)
+    ctx.register_skill(universal_skill)
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any
+from pathlib import Path
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from xiuxian_core_rs import PyContextPruner as RustContextPruner
-
-# Import from xiuxian_core_rs directly (all exports are in main namespace)
-from xiuxian_core_rs import py_count_tokens, py_truncate_middle
-
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("omni.core.runtime")
 
 
-class PruningConfig:
-    """Configuration for context pruning behavior.
+class SkillContext:
+    """Runtime context for managing skills.
 
-    Attributes:
-        max_tokens: Maximum tokens for total context.
-        retained_turns: Number of message pairs to retain.
-        max_tool_output: Maximum characters for tool outputs.
+    Provides:
+    - Skill registration and retrieval
+    - Skill lifecycle management
+    - Command dispatch
     """
 
-    def __init__(
-        self,
-        max_tokens: int = 8000,
-        retained_turns: int = 4,
-        max_tool_output: int = 500,
-    ) -> None:
-        """Initialize PruningConfig.
+    def __init__(self, skills_dir: Path):
+        """Initialize skill context.
 
         Args:
-            max_tokens: Maximum tokens for total context.
-            retained_turns: Number of message pairs (user+assistant) to retain.
-            max_tool_output: Maximum characters for tool outputs in archive.
+            skills_dir: Path to assets/skills directory
         """
-        self.max_tokens = max_tokens
-        self.retained_turns = retained_turns
-        self.max_tool_output = max_tool_output
+        self.skills_dir = Path(skills_dir)
+        self._skills: Dict[str, Any] = {}
+        self._commands: Dict[str, Any] = {}
 
-
-class ContextPruner:
-    """Rust-accelerated Context Pruner.
-
-    Manages the context window budget using high-performance Rust tokenizer.
-    Implements "Cognitive Re-anchoring" for AutoFixLoop recovery.
-
-    This class REQUIRES Rust bindings (xiuxian-core-rs) to function.
-    Use `uv sync --reinstall-package xiuxian-core-rs` after installation.
-
-    Attributes:
-        config: PruningConfig instance with pruning settings.
-        rust_pruner: Rust-accelerated pruner instance.
-    """
-
-    def __init__(
-        self,
-        config: PruningConfig | None = None,
-        window_size: int | None = None,
-        max_tool_output: int | None = None,
-        max_context_tokens: int | None = None,
-    ) -> None:
-        """Initialize the ContextPruner.
+    def register_skill(self, skill: Any) -> None:
+        """Register a loaded skill (UniversalScriptSkill).
 
         Args:
-            config: Optional PruningConfig object. If provided, other args are ignored.
-            window_size: Number of message pairs (user+assistant) to keep.
-            max_tool_output: Maximum characters for tool outputs in archive.
-            max_context_tokens: Maximum tokens for total context.
-
-        Raises:
-            ImportError: If Rust bindings are not available.
+            skill: A UniversalScriptSkill instance
         """
-        # Validate Rust is available
-        try:
-            _ = py_count_tokens("test")
-        except ImportError as e:
-            raise ImportError(
-                "Rust tokenizer bindings (xiuxian-core-rs) are required. "
-                "Install with: uv sync --reinstall-package xiuxian-core-rs"
-            ) from e
+        if hasattr(skill, "name"):
+            self._skills[skill.name] = skill
 
-        # Create config if needed
-        if config is not None:
-            self.config = config
+            # Register all commands from the skill
+            if hasattr(skill, "list_commands"):
+                for cmd in skill.list_commands():
+                    self._commands[cmd] = skill
+
+            logger.debug(f"Registered skill: {skill.name} ({len(skill.list_commands())} commands)")
         else:
-            self.config = PruningConfig(
-                max_tokens=max_context_tokens if max_context_tokens is not None else 8000,
-                retained_turns=window_size if window_size is not None else 4,
-                max_tool_output=max_tool_output if max_tool_output is not None else 500,
-            )
+            logger.warning(f"Attempted to register nameless skill: {skill}")
 
-        # Use config values
-        self.window_size = self.config.retained_turns
-        self.max_tool_output = self.config.max_tool_output
-        self.max_context_tokens = self.config.max_tokens
-
-        # Initialize Rust pruner
-        self.rust_pruner = RustContextPruner(self.window_size, self.max_tool_output)
-        logger.info(
-            f"ContextPruner initialized (Rust) window={self.window_size}, "
-            f"max_tokens={self.max_context_tokens}"
-        )
-
-    def prune(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
-        """Prune messages based on token limit.
-
-        Uses the default "recent" strategy which keeps system messages
-        and the most recent N turns.
+    def get_skill(self, name: str) -> Optional[Any]:
+        """Get a registered skill by name.
 
         Args:
-            messages: List of message dicts with 'role' and 'content'.
+            name: Skill name (e.g., "git", "filesystem")
 
         Returns:
-            Pruned list of messages.
+            Skill instance or None
         """
-        # Count total tokens
-        total_tokens = self.count_messages(messages)
+        return self._skills.get(name)
 
-        if total_tokens <= self.max_context_tokens:
-            return messages
-
-        # Strategy: Keep system messages + recent turns
-        system_msgs = [m for m in messages if m.get("role") == "system"]
-        other_msgs = [m for m in messages if m.get("role") != "system"]
-
-        # Calculate how many turns to keep
-        system_token_count = sum(self.count_tokens(msg.get("content", "")) for msg in system_msgs)
-        max_other_tokens = self.max_context_tokens - system_token_count
-
-        # Estimate turns: ~1000 tokens per turn
-        target_turns = max(1, max_other_tokens // 1000)
-
-        # Keep last N turns (2 messages per turn: user + assistant)
-        keep_count = min(target_turns * 2, len(other_msgs))
-        pruned_other = other_msgs[-keep_count:]
-
-        return system_msgs + pruned_other
-
-    def get_summary_candidates(
-        self, messages: list[dict[str, str]], max_candidates: int = 5
-    ) -> list[dict[str, Any]]:
-        """Get messages that are good candidates for summarization.
+    def get_command(self, full_name: str) -> Optional[Any]:
+        """Get a command handler.
 
         Args:
-            messages: List of message dicts.
-            max_candidates: Maximum number of candidates to return.
+            full_name: Command name (e.g., "git.git_commit")
 
         Returns:
-            List of message dicts with metadata.
+            Command function or None
         """
-        # Look at older messages (not the most recent turn)
-        candidates = []
-        for i, msg in enumerate(messages[:-2]):  # Exclude last turn
-            if msg.get("role") in ("user", "assistant"):
-                content = msg.get("content", "")
-                candidates.append(
-                    {
-                        "index": i,
-                        "role": msg.get("role"),
-                        "content": content[:200],
-                        "tokens": self.count_tokens(content),
-                    }
-                )
+        return self._commands.get(full_name)
 
-        return candidates[-max_candidates:]
-
-    def count_tokens(self, text: str) -> int:
-        """Count tokens in text using Rust.
-
-        Args:
-            text: The text to tokenize.
+    def list_skills(self) -> List[str]:
+        """List registered skill names.
 
         Returns:
-            Number of tokens (cl100k_base encoding).
+            List of skill names
         """
-        return py_count_tokens(text)
+        return list(self._skills.keys())
 
-    def count_messages(self, messages: list[dict[str, str]]) -> int:
-        """Count tokens in a list of messages.
-
-        Args:
-            messages: List of message dicts with 'role' and 'content'.
+    def list_commands(self) -> List[str]:
+        """List all registered commands.
 
         Returns:
-            Total token count.
+            List of command names
         """
-        return self.rust_pruner.count_message_tokens(
-            [{"role": m.get("role", ""), "content": m.get("content", "")} for m in messages]
-        )
+        return list(self._commands.keys())
 
-    def segment(
-        self,
-        messages: list[dict[str, str]],
-        system_messages: list[dict[str, str]] | None = None,
-    ) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
-        """Split context into system, summarize-candidate, and recent buckets."""
-        system = list(system_messages or [])
-        retain = max(0, int(self.config.retained_turns)) * 2
-        if retain <= 0:
-            return system, list(messages), []
-        if len(messages) <= retain:
-            return system, [], list(messages)
-        return system, list(messages[:-retain]), list(messages[-retain:])
+    def clear(self) -> None:
+        """Clear all registered skills and commands."""
+        self._skills.clear()
+        self._commands.clear()
 
-    def compress_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
-        """Compress message history while preserving important information.
+    @property
+    def skills_count(self) -> int:
+        """Get number of registered skills."""
+        return len(self._skills)
 
-        Strategy:
-        1. Always keep system messages
-        2. Keep last N*2 messages (user+assistant pairs) as "working memory"
-        3. Truncate tool outputs in older "archive" messages
 
-        Args:
-            messages: List of message dicts.
+class SkillRegistry:
+    """Legacy skill registry (for compatibility)."""
+
+    def __init__(self):
+        self._skills: Dict[str, Any] = {}
+
+    def register(self, name: str, skill: Any) -> None:
+        self._skills[name] = skill
+
+    def get(self, name: str) -> Optional[Any]:
+        return self._skills.get(name)
+
+
+class SkillDiscovery:
+    """Skill discovery service."""
+
+    def __init__(self, skills_dir: Path):
+        self.skills_dir = Path(skills_dir)
+
+    def discover(self) -> List[str]:
+        """Discover available skills.
 
         Returns:
-            Compressed list of message dicts.
+            List of skill names
         """
-        py_messages = [
-            {"role": m.get("role", ""), "content": m.get("content", "")} for m in messages
+        if not self.skills_dir.exists():
+            return []
+
+        return [
+            d.name for d in self.skills_dir.iterdir() if d.is_dir() and not d.name.startswith("_")
         ]
-        compressed = self.rust_pruner.compress(py_messages)
-        return [{"role": m["role"], "content": m["content"]} for m in compressed]
-
-    def truncate_middle(self, text: str, max_tokens: int) -> str:
-        """Truncate text preserving head and tail.
-
-        Useful for long system prompts where you want to keep
-        the beginning (instructions) and end (recent context).
-
-        Args:
-            text: The text to truncate.
-            max_tokens: Maximum tokens allowed.
-
-        Returns:
-            Truncated text.
-        """
-        return py_truncate_middle(text, max_tokens)
-
-    def prune_for_retry(
-        self,
-        messages: list[dict[str, str]],
-        error: str,
-        max_tokens: int = 6000,
-    ) -> list[dict[str, str]]:
-        """Prune messages for AutoFix retry.
-
-        Creates a compressed context for retrying after failure.
-        Includes a "Lesson Learned" summary instead of full error trace.
-
-        Args:
-            messages: Current message history.
-            error: The error that occurred.
-            max_tokens: Maximum tokens for retry context.
-
-        Returns:
-            Pruned message list for retry.
-        """
-        # Extract system messages (always keep)
-        system_msgs = [m for m in messages if m.get("role") == "system"]
-
-        # Create "Lesson Learned" summary
-        lesson = (
-            f"[AUTO-FIX RECOVERY]\n"
-            f"Previous attempt failed: {error}\n"
-            f"We have rolled back to a previous checkpoint.\n"
-            f"Please analyze the error and try a different approach."
-        )
-
-        # Compress remaining messages
-        other_msgs = [m for m in messages if m.get("role") != "system"]
-        compressed = self.compress_messages(other_msgs)
-
-        # Add recovery message at the start of user messages
-        recovery_msg = {"role": "user", "content": lesson}
-
-        # Check token count
-        all_msgs = [*system_msgs, recovery_msg, *compressed]
-        current_tokens = self.count_messages(all_msgs)
-
-        if current_tokens > max_tokens:
-            # Need additional pruning
-            logger.info(
-                f"Context still too large ({current_tokens} tokens), applying middle truncation"
-            )
-            # Truncate the middle of the compressed messages
-            compressed_content = "\n".join(m.get("content", "") for m in compressed)
-            truncated_content = self.truncate_middle(
-                compressed_content,
-                max_tokens - self.count_messages(system_msgs) - self.count_tokens(lesson) - 500,
-            )
-            compressed = [{"role": "compressed", "content": truncated_content}]
-
-        return [*system_msgs, recovery_msg, *compressed]
-
-    def estimate_compression_ratio(self, messages: list[dict[str, str]]) -> float:
-        """Estimate the compression ratio achieved.
-
-        Args:
-            messages: List of messages.
-
-        Returns:
-            Ratio of original tokens to compressed tokens.
-        """
-        original = self.count_messages(messages)
-        if original == 0:
-            return 1.0
-
-        compressed = self.compress_messages(messages)
-        compressed_tokens = self.count_messages(compressed)
-
-        return original / compressed_tokens if compressed_tokens > 0 else 1.0
 
 
-def create_pruner_for_model(
-    model: str = "gpt-4o",
-    window_size: int | None = None,
-) -> ContextPruner:
-    """Factory function to create a pruner optimized for a specific model.
+# Global context singleton
+_context: Optional[SkillContext] = None
+
+
+def get_skill_context(skills_dir: Path) -> SkillContext:
+    """Get or create the global skill context.
 
     Args:
-        model: The model name (e.g., "gpt-4o", "gpt-3.5-turbo").
-        window_size: Override for window size.
+        skills_dir: Path to assets/skills directory
 
     Returns:
-        Configured ContextPruner.
-
-    Raises:
-        ImportError: If Rust bindings are not available.
+        SkillContext instance
     """
-    # Model-specific configurations
-    model_configs = {
-        "gpt-4o": {"window": 6, "max_tokens": 120000},
-        "gpt-4-turbo": {"window": 6, "max_tokens": 128000},
-        "gpt-4": {"window": 4, "max_tokens": 8192},
-        "gpt-3.5-turbo": {"window": 8, "max_tokens": 16384},
-    }
+    global _context
+    if _context is None:
+        _context = SkillContext(skills_dir)
+    return _context
 
-    config = model_configs.get(model, {"window": 4, "max_tokens": 8000})
-    ws = window_size or config["window"]
-    max_tokens = config["max_tokens"]
 
-    return ContextPruner(window_size=ws, max_context_tokens=max_tokens)
+def get_skill_manager(skills_dir: Path) -> SkillContext:
+    """Backward compatibility alias for get_skill_context."""
+    return get_skill_context(skills_dir)
+
+
+def reset_context() -> None:
+    """Reset the global skill context (for testing)."""
+    global _context
+    if _context is not None:
+        _context.clear()
+    _context = None
+
+
+def get_registry() -> SkillRegistry:
+    """Get the skill registry (for compatibility)."""
+    return SkillRegistry()
+
+
+async def run_command(command: str, **kwargs) -> Any:
+    """Run a skill command.
+
+    Args:
+        command: Full command name (e.g., "git.git_commit")
+        **kwargs: Command arguments
+
+    Returns:
+        Command result
+    """
+    global _context
+    if _context is None:
+        raise RuntimeError("SkillContext not initialized. Call get_skill_context() first.")
+
+    handler = _context.get_command(command)
+    if handler is None:
+        available = _context.list_commands()
+        raise ValueError(f"Command '{command}' not found. Available: {available}")
+
+    if hasattr(handler, "__call__"):
+        import inspect
+
+        if inspect.iscoroutinefunction(handler):
+            return await handler(**kwargs)
+        return handler(**kwargs)
+
+    raise TypeError(f"Command handler is not callable: {handler}")
+
+
+# Convenience type aliases
+SkillManager = SkillContext
+
+# Import stubs for backward compatibility (from agent.core.skill_runtime)
+if TYPE_CHECKING:
+    from agent.core.skill_runtime import (
+        SkillMemoryManager,
+        SkillBootManager,
+        SkillQueryManager,
+        SkillLoadManager,
+        SkillSearchManager,
+        SkillLifecycle,
+        SkillJITLoader,
+        SkillExecutor,
+        SkillCommand,
+        Skill,
+        ObserverMixin,
+        SkillLoaderMixin,
+        HotReloadMixin,
+    )
+
+
+__all__ = [
+    # Context
+    "SkillContext",
+    "SkillManager",  # Alias
+    "get_skill_context",
+    "get_skill_manager",
+    "reset_context",
+    # Registry
+    "SkillRegistry",
+    "get_registry",
+    # Discovery
+    "SkillDiscovery",
+    # Execution
+    "run_command",
+]

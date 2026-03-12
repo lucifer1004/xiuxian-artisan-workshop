@@ -1,12 +1,18 @@
-use super::super::super::orchestrator::SwarmEngine;
-use super::super::super::types::{WorkerJoinSet, WorkerRuntimeConfig};
-use super::super::super::{SwarmAgentConfig, SwarmAgentReport};
+use super::super::orchestrator::SwarmEngine;
+use super::super::types::{WorkerJoinSet, WorkerRuntimeConfig};
+use super::super::{SwarmAgentConfig, SwarmAgentReport};
 use crate::QianjiEngine;
+use crate::consensus::{AgentIdentity, ConsensusManager};
 use crate::error::QianjiError;
+use crate::scheduler::core::SchedulerRuntimeServices;
+use crate::scheduler::{
+    QianjiScheduler, RoleAvailabilityRegistry, SchedulerAgentIdentity, SchedulerExecutionPolicy,
+};
+use crate::swarm::{GlobalSwarmRegistry, RemotePossessionBus};
 use crate::telemetry::{SwarmEvent, unix_millis_now};
+use omni_window::SessionWindow;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use xiuxian_window::SessionWindow;
 
 impl SwarmEngine {
     pub(in crate::swarm::engine) fn spawn_worker_task(
@@ -82,5 +88,97 @@ impl SwarmEngine {
         Self::stop_remote_responder(stop_tx, responder_handle).await;
 
         Self::build_worker_report(identity, role, session_id.as_str(), &mut window, run_result)
+    }
+
+    fn build_worker_scheduler(
+        engine: &Arc<QianjiEngine>,
+        identity: &SwarmAgentConfig,
+        runtime: &WorkerRuntimeConfig,
+    ) -> Arc<QianjiScheduler> {
+        let redis_url = runtime.redis_url.as_deref();
+        let consensus_manager = redis_url.map(|url| {
+            Arc::new(ConsensusManager::with_agent_identity(
+                url.to_string(),
+                AgentIdentity {
+                    id: identity.agent_id.clone(),
+                    weight: identity.weight,
+                },
+            ))
+        });
+        let role_registry: Option<Arc<dyn RoleAvailabilityRegistry>> = redis_url.map(|url| {
+            Arc::new(GlobalSwarmRegistry::new(url.to_string())) as Arc<dyn RoleAvailabilityRegistry>
+        });
+        let execution_policy = SchedulerExecutionPolicy::new()
+            .with_local_proxy_delegation(runtime.allow_local_affinity_proxy);
+
+        let scheduler_identity = SchedulerAgentIdentity::new(
+            Some(identity.agent_id.clone()),
+            identity.role_class.clone(),
+        );
+        let remote_bus = if runtime.remote_enabled {
+            redis_url
+                .map(std::string::ToString::to_string)
+                .map(RemotePossessionBus::new)
+                .map(Arc::new)
+        } else {
+            None
+        };
+
+        let services = SchedulerRuntimeServices {
+            consensus_manager,
+            remote_possession_bus: remote_bus,
+            role_registry,
+            cluster_id: runtime.cluster_id.clone(),
+            execution_policy,
+            telemetry_emitter: runtime.pulse_emitter.clone(),
+        };
+        Arc::new(QianjiScheduler::with_runtime_services_config(
+            (**engine).clone(),
+            scheduler_identity,
+            services,
+        ))
+    }
+
+    fn emit_pulse_event(
+        pulse_emitter: Option<&Arc<dyn crate::telemetry::PulseEmitter>>,
+        event: SwarmEvent,
+    ) {
+        let Some(emitter) = pulse_emitter.cloned() else {
+            return;
+        };
+        std::mem::drop(tokio::spawn(async move {
+            if let Err(error) = emitter.emit_pulse(event).await {
+                log::debug!("swarm telemetry emission skipped: {error}");
+            }
+        }));
+    }
+
+    fn build_worker_report(
+        identity: SwarmAgentConfig,
+        role: Option<String>,
+        session_id: &str,
+        window: &mut SessionWindow,
+        run_result: Result<serde_json::Value, QianjiError>,
+    ) -> Result<SwarmAgentReport, QianjiError> {
+        let context = match run_result {
+            Ok(context) => {
+                window.append_turn("assistant", "swarm_worker_completed", 0, Some(session_id));
+                context
+            }
+            Err(error) => {
+                window.append_turn("assistant", "swarm_worker_failed", 0, Some(session_id));
+                return Err(error);
+            }
+        };
+        let (window_turns, window_tool_calls, _ring_len) = window.get_stats();
+        Ok(SwarmAgentReport {
+            agent_id: identity.agent_id,
+            role_class: role,
+            success: true,
+            context: Some(context),
+            error: None,
+            window_turns,
+            window_tool_calls,
+        })
     }
 }

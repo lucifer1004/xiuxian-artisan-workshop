@@ -1,4 +1,4 @@
-# packages/rust/crates/xiuxian-daochang/resources/config/xiuxian.toml
+# packages/rust/crates/omni-agent/resources/config/xiuxian.toml
 # Xiuxian Engine Configuration
 # Define LLM providers, search backends, and array configurations.
 
@@ -108,7 +108,7 @@ audit_stream = "dispatch.audit"
 webhook_bind = "127.0.0.1:18081"
 
 [discord]
-# Channel runtime mode consumed by webhook launcher and xiuxian-daochang node resolver.
+# Channel runtime mode consumed by webhook launcher and omni-agent node resolver.
 # Values: "gateway" | "ingress"
 runtime_mode = "gateway"
 

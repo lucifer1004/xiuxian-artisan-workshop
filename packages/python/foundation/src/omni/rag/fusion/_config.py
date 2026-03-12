@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
-logger = logging.getLogger("omni.rag.fusion")
+logger = logging.getLogger("omni.rag.dual_core")
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -39,8 +38,6 @@ KG_QUERY_RERANK_SCALE = 0.08
 # Max results to consider from KG relevance query
 KG_QUERY_LIMIT = 15
 
-GRAPH_VALKEY_URL_ENV = "XIUXIAN_WENDAO_GRAPH_VALKEY_URL"
-
 
 # ---------------------------------------------------------------------------
 # Graph scope resolver
@@ -55,43 +52,6 @@ def _resolve_graph_scope_key(scope_key: str | None = None) -> str:
 
     # Reuse knowledge DB identity as stable graph scope namespace.
     return get_database_path("knowledge")
-
-
-def _resolve_graph_valkey_url_from_runtime_config() -> str | None:
-    """Resolve KG Valkey URL from unified LinkGraph runtime config (config-first)."""
-    try:
-        from omni.foundation.config.link_graph_runtime import get_link_graph_cache_valkey_url
-    except Exception:
-        return None
-
-    try:
-        resolved = str(get_link_graph_cache_valkey_url()).strip()
-    except Exception as exc:
-        logger.debug("KG graph valkey url resolution skipped: %s", exc)
-        return None
-
-    return resolved or None
-
-
-def _ensure_graph_valkey_env() -> None:
-    """Ensure Rust KG backend sees a Valkey URL without requiring manual env export.
-
-    Priority:
-    1) Existing `XIUXIAN_WENDAO_GRAPH_VALKEY_URL`
-    2) Existing `VALKEY_URL` (Rust fallback)
-    3) Unified config `link_graph.cache.valkey_url`
-    """
-    if os.getenv(GRAPH_VALKEY_URL_ENV, "").strip():
-        return
-    if os.getenv("VALKEY_URL", "").strip():
-        return
-
-    resolved = _resolve_graph_valkey_url_from_runtime_config()
-    if not resolved:
-        return
-
-    os.environ[GRAPH_VALKEY_URL_ENV] = resolved
-    logger.debug("KG graph valkey url sourced from link_graph.cache.valkey_url")
 
 
 # ---------------------------------------------------------------------------
@@ -112,11 +72,10 @@ def _load_kg(
         Loaded PyKnowledgeGraph, or None if import fails.
     """
     try:
-        from xiuxian_core_rs import load_kg_from_valkey_cached
+        from omni_core_rs import load_kg_from_valkey_cached
     except ImportError:
         return None
 
-    _ensure_graph_valkey_env()
     resolved_scope = _resolve_graph_scope_key(scope_key)
     try:
         result = load_kg_from_valkey_cached(resolved_scope)
@@ -138,7 +97,6 @@ def _save_kg(
 
     Rust ``save_to_valkey`` invalidates the KG cache for this scope automatically.
     """
-    _ensure_graph_valkey_env()
     resolved_scope = _resolve_graph_scope_key(scope_key)
     kg.save_to_valkey(resolved_scope)
     logger.debug("KG saved to Valkey: %s", resolved_scope)

@@ -1,12 +1,13 @@
-//! Centralized transmutation and structural validation for LLM-bound text.
+//! Lightweight content washing for Spider ingress.
 
-use crate::xml_lite::{extract_tag_f32, extract_tag_value};
 use thiserror::Error;
 
-/// Structural validation failures detected by the Zhenfa transmuter.
+use crate::xml_lite::{extract_tag_f32, extract_tag_value};
+
+/// Structural validation failures detected during ingress washing.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum ZhenfaTransmuterError {
-    /// Input contains null bytes and is rejected before model ingestion.
+    /// Input contains null bytes and is rejected before assimilation.
     #[error("input contains null bytes")]
     NullByteDetected,
     /// Closing tag did not match the latest opening tag.
@@ -31,22 +32,8 @@ pub enum ZhenfaTransmuterError {
     },
 }
 
-/// Failures for semantic URI resolution plus transmutation.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
-pub enum ZhenfaResolveAndWashError {
-    /// Semantic URI could not be resolved to any non-empty payload.
-    #[error("semantic resource URI `{uri}` could not be resolved")]
-    ResourceNotFound {
-        /// Canonical semantic resource URI.
-        uri: String,
-    },
-    /// Structural validation failed after semantic resolution.
-    #[error(transparent)]
-    Transmuter(#[from] ZhenfaTransmuterError),
-}
-
 impl ZhenfaTransmuterError {
-    /// Returns one LLM-safe semantic summary for structural validation failures.
+    /// Returns one LLM-safe semantic summary of the error.
     #[must_use]
     pub fn llm_safe_message(&self) -> &'static str {
         match self {
@@ -62,225 +49,229 @@ impl ZhenfaTransmuterError {
     }
 }
 
-/// Unified transmutation entry point used by Agent/Qianji before model feeding.
+/// Failures for content washing plus structural validation.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum ZhenfaResolveAndWashError {
+    /// The supplied content was empty after trimming.
+    #[error("semantic resource URI `{uri}` could not be resolved")]
+    ResourceNotFound {
+        /// Canonical resource URI.
+        uri: String,
+    },
+    /// Structural validation failed after content washing.
+    #[error(transparent)]
+    Transmuter(#[from] ZhenfaTransmuterError),
+}
+
+/// Shared transmutation routines for XML-lite validation and normalization.
+#[derive(Debug, Default, Clone, Copy)]
 pub struct ZhenfaTransmuter;
 
 impl ZhenfaTransmuter {
-    /// Resolves one semantic URI with caller-provided resolver and applies
-    /// structural validation plus LLM refinement.
+    /// Validate XML-lite structure in-place.
     ///
     /// # Errors
     ///
-    /// Returns [`ZhenfaResolveAndWashError::ResourceNotFound`] when the
-    /// resolver cannot resolve a non-empty payload for `uri`.
-    /// Returns [`ZhenfaResolveAndWashError::Transmuter`] when structural
-    /// validation fails.
-    pub fn resolve_and_wash<F>(uri: &str, resolver: F) -> Result<String, ZhenfaResolveAndWashError>
-    where
-        F: Fn(&str) -> Option<String>,
-    {
-        let canonical_uri = uri.trim();
-        let raw = resolver(canonical_uri)
-            .filter(|content| !content.trim().is_empty())
-            .ok_or_else(|| ZhenfaResolveAndWashError::ResourceNotFound {
-                uri: canonical_uri.to_string(),
-            })?;
-        let refined = Self::refine_for_llm(raw.as_str());
-        if should_validate_xml_lite(canonical_uri) {
-            Self::validate_structure(refined.as_str()).map_err(ZhenfaResolveAndWashError::from)?;
-        }
-        Ok(refined)
+    /// Returns [`ZhenfaTransmuterError`] when the payload is malformed.
+    pub fn validate_structure(content: &str) -> Result<(), ZhenfaTransmuterError> {
+        validate_structure(content)
     }
 
-    /// Extracts the first XML-Lite tag payload as owned text.
-    #[must_use]
-    pub fn get_tag_value(content: &str, tag: &str) -> Option<String> {
-        extract_tag_value(content, tag).map(ToString::to_string)
-    }
-
-    /// Extracts the first XML-Lite tag payload and parses it as `f32`.
-    #[must_use]
-    pub fn get_tag_f32(content: &str, tag: &str) -> Option<f32> {
-        extract_tag_f32(content, tag)
-    }
-
-    /// Applies lightweight normalization before data is sent to the model.
-    ///
-    /// This pass normalizes line endings, strips null bytes, trims trailing
-    /// line whitespace, and collapses consecutive blank lines to at most two.
+    /// Normalize payload for LLM consumption.
     #[must_use]
     pub fn refine_for_llm(content: &str) -> String {
-        let normalized_line_endings = content.replace("\r\n", "\n").replace('\r', "\n");
-        let sanitized = normalized_line_endings.replace('\0', "");
-
-        let mut refined = String::with_capacity(sanitized.len());
-        let mut blank_run = 0usize;
-        for line in sanitized.lines() {
-            let trimmed_end = line.trim_end();
-            if trimmed_end.is_empty() {
-                blank_run += 1;
-                if blank_run > 2 {
-                    continue;
-                }
-            } else {
-                blank_run = 0;
-            }
-
-            if !refined.is_empty() {
-                refined.push('\n');
-            }
-            refined.push_str(trimmed_end);
-        }
-
-        refined.trim().to_string()
+        refine_for_llm(content)
     }
 
-    /// Validates that XML-Lite-like tags are structurally balanced.
-    ///
-    /// Non-tag usages such as `1 < 2` are ignored by design.
+    /// Validate XML-lite structure and return the refined payload.
     ///
     /// # Errors
     ///
-    /// Returns [`ZhenfaTransmuterError`] when null bytes or malformed tag
-    /// nesting is detected.
-    pub fn validate_structure(content: &str) -> Result<(), ZhenfaTransmuterError> {
-        if content.contains('\0') {
-            return Err(ZhenfaTransmuterError::NullByteDetected);
-        }
-
-        let bytes = content.as_bytes();
-        let mut cursor = 0usize;
-        let mut stack: Vec<String> = Vec::new();
-
-        while cursor < bytes.len() {
-            if bytes[cursor] != b'<' {
-                cursor += 1;
-                continue;
-            }
-
-            if cursor + 1 >= bytes.len() {
-                break;
-            }
-
-            if bytes[cursor + 1] == b'!' {
-                if content[cursor..].starts_with("<!--") {
-                    if let Some(offset) = content[cursor + 4..].find("-->") {
-                        cursor = cursor + 4 + offset + 3;
-                        continue;
-                    }
-                    return Err(ZhenfaTransmuterError::UnclosedTag {
-                        tag: "!--".to_string(),
-                    });
-                }
-                cursor += 1;
-                continue;
-            }
-
-            if bytes[cursor + 1] == b'?' {
-                if let Some(offset) = content[cursor + 2..].find("?>") {
-                    cursor = cursor + 2 + offset + 2;
-                    continue;
-                }
-                break;
-            }
-
-            let closing = bytes[cursor + 1] == b'/';
-            let tag_start = if closing { cursor + 2 } else { cursor + 1 };
-            if tag_start >= bytes.len() {
-                break;
-            }
-            if !is_tag_name_start(bytes[tag_start]) {
-                cursor += 1;
-                continue;
-            }
-
-            let mut tag_end = tag_start + 1;
-            while tag_end < bytes.len() && is_tag_name_char(bytes[tag_end]) {
-                tag_end += 1;
-            }
-            let tag_name = &content[tag_start..tag_end];
-
-            let mut angle_close = tag_end;
-            while angle_close < bytes.len() && bytes[angle_close] != b'>' {
-                angle_close += 1;
-            }
-            if angle_close >= bytes.len() {
-                return Err(ZhenfaTransmuterError::UnclosedTag {
-                    tag: tag_name.to_string(),
-                });
-            }
-
-            let self_closing = !closing && angle_close > cursor && bytes[angle_close - 1] == b'/';
-            if closing {
-                match stack.pop() {
-                    Some(expected) if expected == tag_name => {}
-                    Some(expected) => {
-                        return Err(ZhenfaTransmuterError::MismatchedClosingTag {
-                            expected,
-                            found: tag_name.to_string(),
-                        });
-                    }
-                    None => {
-                        return Err(ZhenfaTransmuterError::UnexpectedClosingTag {
-                            found: tag_name.to_string(),
-                        });
-                    }
-                }
-            } else if !self_closing {
-                stack.push(tag_name.to_string());
-            }
-
-            cursor = angle_close + 1;
-        }
-
-        if let Some(tag) = stack.pop() {
-            return Err(ZhenfaTransmuterError::UnclosedTag { tag });
-        }
-        Ok(())
-    }
-
-    /// Performs light semantic checks for markdown assets passed through Zhenfa.
-    ///
-    /// Current checks enforce balanced `WikiLink` delimiters and mandatory semantic
-    /// suffixes for `references/*` links.
-    #[must_use]
-    pub fn check_semantic_integrity(md: &str) -> bool {
-        if md.contains('\0') {
-            return false;
-        }
-        let open = md.match_indices("[[").count();
-        let close = md.match_indices("]]").count();
-        if open != close {
-            return false;
-        }
-
-        let mut cursor = 0usize;
-        while let Some(start) = md[cursor..].find("[[") {
-            let absolute_start = cursor + start + 2;
-            let Some(end_offset) = md[absolute_start..].find("]]") else {
-                return false;
-            };
-            let absolute_end = absolute_start + end_offset;
-            let body = md[absolute_start..absolute_end].trim();
-            if body.starts_with("references/") && !body.contains('#') {
-                return false;
-            }
-            cursor = absolute_end + 2;
-        }
-        true
-    }
-
-    /// Refines a payload and validates its structure before model ingestion.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ZhenfaTransmuterError`] if the refined payload fails structural
-    /// validation.
+    /// Returns [`ZhenfaTransmuterError`] when the payload is malformed.
     pub fn validate_and_refine(content: &str) -> Result<String, ZhenfaTransmuterError> {
-        let refined = Self::refine_for_llm(content);
-        Self::validate_structure(refined.as_str())?;
+        let refined = refine_for_llm(content);
+        validate_structure(&refined)?;
         Ok(refined)
     }
+
+    /// Resolve one already-loaded payload and apply lightweight washing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ZhenfaResolveAndWashError::ResourceNotFound`] when the resolver yields no text.
+    /// Returns [`ZhenfaResolveAndWashError::Transmuter`] when XML-Lite validation fails.
+    pub fn resolve_and_wash<F>(uri: &str, resolver: F) -> Result<String, ZhenfaResolveAndWashError>
+    where
+        F: FnOnce(&str) -> Option<String>,
+    {
+        let canonical_uri = uri.trim();
+        let raw_content =
+            resolver(canonical_uri).ok_or_else(|| ZhenfaResolveAndWashError::ResourceNotFound {
+                uri: canonical_uri.to_string(),
+            })?;
+        let refined = refine_for_llm(raw_content.as_str());
+        if should_validate_xml_lite(canonical_uri) {
+            validate_structure(refined.as_str())?;
+        }
+        Ok(refined)
+    }
+
+    /// Check for semantic integrity of reference anchors.
+    #[must_use]
+    pub fn check_semantic_integrity(content: &str) -> bool {
+        check_semantic_integrity(content)
+    }
+
+    /// Extract text content of the first `<tag>...</tag>` block.
+    #[must_use]
+    pub fn get_tag_value<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
+        extract_tag_value(text, tag)
+    }
+
+    /// Parse the first `<tag>...</tag>` block as `f32`.
+    #[must_use]
+    pub fn get_tag_f32(text: &str, tag: &str) -> Option<f32> {
+        extract_tag_f32(text, tag)
+    }
+}
+
+fn check_semantic_integrity(content: &str) -> bool {
+    let mut cursor = 0usize;
+    while let Some(offset) = content[cursor..].find("[[references/") {
+        let link_start = cursor + offset + 2;
+        let rest = &content[link_start..];
+        let Some(end) = rest.find("]]") else {
+            return false;
+        };
+        let link = &rest[..end];
+        if !link.contains('#') {
+            return false;
+        }
+        cursor = link_start + end + 2;
+    }
+    true
+}
+
+fn refine_for_llm(content: &str) -> String {
+    let normalized_line_endings = content.replace("\r\n", "\n").replace('\r', "\n");
+    let sanitized = normalized_line_endings.replace('\0', "");
+
+    let mut refined = String::with_capacity(sanitized.len());
+    let mut blank_run = 0usize;
+    for line in sanitized.lines() {
+        let trimmed_end = line.trim_end();
+        if trimmed_end.is_empty() {
+            blank_run += 1;
+            if blank_run > 2 {
+                continue;
+            }
+        } else {
+            blank_run = 0;
+        }
+
+        if !refined.is_empty() {
+            refined.push('\n');
+        }
+        refined.push_str(trimmed_end);
+    }
+
+    refined.trim().to_string()
+}
+
+fn validate_structure(content: &str) -> Result<(), ZhenfaTransmuterError> {
+    if content.contains('\0') {
+        return Err(ZhenfaTransmuterError::NullByteDetected);
+    }
+
+    let bytes = content.as_bytes();
+    let mut cursor = 0usize;
+    let mut stack: Vec<String> = Vec::new();
+
+    while cursor < bytes.len() {
+        if bytes[cursor] != b'<' {
+            cursor += 1;
+            continue;
+        }
+
+        if cursor + 1 >= bytes.len() {
+            break;
+        }
+
+        if bytes[cursor + 1] == b'!' {
+            if content[cursor..].starts_with("<!--") {
+                if let Some(offset) = content[cursor + 4..].find("-->") {
+                    cursor = cursor + 4 + offset + 3;
+                    continue;
+                }
+                return Err(ZhenfaTransmuterError::UnclosedTag {
+                    tag: "!--".to_string(),
+                });
+            }
+            cursor += 1;
+            continue;
+        }
+
+        if bytes[cursor + 1] == b'?' {
+            if let Some(offset) = content[cursor + 2..].find("?>") {
+                cursor = cursor + 2 + offset + 2;
+                continue;
+            }
+            break;
+        }
+
+        let closing = bytes[cursor + 1] == b'/';
+        let tag_start = if closing { cursor + 2 } else { cursor + 1 };
+        if tag_start >= bytes.len() {
+            break;
+        }
+        if !is_tag_name_start(bytes[tag_start]) {
+            cursor += 1;
+            continue;
+        }
+
+        let mut tag_end = tag_start + 1;
+        while tag_end < bytes.len() && is_tag_name_char(bytes[tag_end]) {
+            tag_end += 1;
+        }
+        let tag_name = &content[tag_start..tag_end];
+
+        let mut angle_close = tag_end;
+        while angle_close < bytes.len() && bytes[angle_close] != b'>' {
+            angle_close += 1;
+        }
+        if angle_close >= bytes.len() {
+            return Err(ZhenfaTransmuterError::UnclosedTag {
+                tag: tag_name.to_string(),
+            });
+        }
+
+        let self_closing = !closing && angle_close > cursor && bytes[angle_close - 1] == b'/';
+        if closing {
+            match stack.pop() {
+                Some(expected) if expected == tag_name => {}
+                Some(expected) => {
+                    return Err(ZhenfaTransmuterError::MismatchedClosingTag {
+                        expected,
+                        found: tag_name.to_string(),
+                    });
+                }
+                None => {
+                    return Err(ZhenfaTransmuterError::UnexpectedClosingTag {
+                        found: tag_name.to_string(),
+                    });
+                }
+            }
+        } else if !self_closing {
+            stack.push(tag_name.to_string());
+        }
+
+        cursor = angle_close + 1;
+    }
+
+    if let Some(tag) = stack.pop() {
+        return Err(ZhenfaTransmuterError::UnclosedTag { tag });
+    }
+    Ok(())
 }
 
 fn is_tag_name_start(byte: u8) -> bool {

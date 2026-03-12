@@ -5,9 +5,8 @@ This ensures deterministic test data generation by using the same seed
 that pytest-randomly sets for test order.
 """
 
-import random
-
 import pytest
+import random
 
 
 def pytest_configure(config):

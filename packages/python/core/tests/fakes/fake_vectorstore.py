@@ -2,20 +2,20 @@
 Fake VectorStore for Testing.
 
 A lightweight in-memory implementation of VectorStoreProtocol for fast testing.
-Supports filtering and search results compatible with xiuxian-vector (LanceDB).
+Supports ChromaDB-style filtering and search results.
 """
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from dataclasses import dataclass
 
-from pydantic import BaseModel
 
-
-class SearchResult(BaseModel):
-    """Fake search result compatible with xiuxian-vector (LanceDB) SearchResult."""
+@dataclass
+class SearchResult:
+    """Fake search result matching ChromaDB's SearchResult structure."""
 
     id: str
     content: str
-    metadata: dict[str, Any]
+    metadata: Dict[str, Any]
     distance: float = 0.0
 
     @property
@@ -31,9 +31,9 @@ class VectorStoreProtocol(Protocol):
     async def add_documents(
         self,
         collection: str,
-        documents: list[str],
-        ids: list[str],
-        metadata: list[dict[str, Any]] | None = None,
+        documents: List[str],
+        ids: List[str],
+        metadata: Optional[List[Dict[str, Any]]] = None,
     ) -> None: ...
 
     async def search(
@@ -41,12 +41,12 @@ class VectorStoreProtocol(Protocol):
         collection: str,
         query: str,
         n_results: int = 5,
-        where_filter: dict[str, str] | None = None,
-    ) -> list[SearchResult]: ...
+        where_filter: Optional[Dict[str, str]] = None,
+    ) -> List[SearchResult]: ...
 
     async def delete_collection(self, collection: str) -> None: ...
 
-    async def get_collection(self, collection: str) -> dict[str, Any] | None: ...
+    async def get_collection(self, collection: str) -> Optional[Dict[str, Any]]: ...
 
 
 class FakeVectorStore:
@@ -54,7 +54,7 @@ class FakeVectorStore:
     In-memory fake vector store for testing.
 
     Implements VectorStoreProtocol for seamless replacement in tests.
-    Supports filtering via where_filter for metadata filtering.
+    Supports ChromaDB-style where_filter for filtering by metadata.
 
     Usage:
         store = FakeVectorStore()
@@ -66,14 +66,14 @@ class FakeVectorStore:
     """
 
     def __init__(self):
-        self._collections: dict[str, dict[str, Any]] = {}
+        self._collections: Dict[str, Dict[str, Any]] = {}
 
     async def add_documents(
         self,
         collection: str,
-        documents: list[str],
-        ids: list[str],
-        metadata: list[dict[str, Any]] | None = None,
+        documents: List[str],
+        ids: List[str],
+        metadata: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """Add documents to a collection."""
         if collection not in self._collections:
@@ -93,12 +93,12 @@ class FakeVectorStore:
         collection: str,
         query: str,
         n_results: int = 5,
-        where_filter: dict[str, str] | None = None,
-    ) -> list[SearchResult]:
+        where_filter: Optional[Dict[str, str]] = None,
+    ) -> List[SearchResult]:
         """
         Search for documents in a collection using simple keyword matching.
 
-        Supports filtering via where_filter:
+        Supports ChromaDB-style filtering via where_filter:
             where_filter={"installed": "true"}  # Only installed skills
             where_filter={"type": "remote"}      # Only remote skills
         """
@@ -145,7 +145,7 @@ class FakeVectorStore:
         """Delete a collection."""
         self._collections.pop(collection, None)
 
-    async def get_collection(self, collection: str) -> dict[str, Any] | None:
+    async def get_collection(self, collection: str) -> Optional[Dict[str, Any]]:
         """Get collection data."""
         return self._collections.get(collection)
 
@@ -168,129 +168,3 @@ class FakeVectorStore:
         if collection not in self._collections:
             return 0
         return len(self._collections[collection]["documents"])
-
-    async def search_tools_hybrid(
-        self,
-        query: str,
-        limit: int = 5,
-        collection: str = "skill_registry",
-    ) -> list[dict[str, Any]]:
-        """
-        Hybrid search for tools/skills.
-
-        Used by SkillDiscovery for semantic skill search.
-        Returns results in format expected by SkillContext.
-
-        Args:
-            query: Search query
-            limit: Maximum results to return
-            collection: Collection to search in (default: skill_registry)
-
-        Returns:
-            List of dicts with 'id', 'content', 'metadata', 'distance' keys
-        """
-        # Reuse the regular search method
-        results = await self.search(
-            collection=collection,
-            query=query,
-            n_results=limit,
-        )
-
-        # Transform to dict format
-        return [
-            {
-                "id": r.id,
-                "content": r.content,
-                "metadata": r.metadata,
-                "distance": r.distance,
-            }
-            for r in results
-        ]
-
-    async def sync_skills(
-        self,
-        base_path: str,
-        table_name: str = "skills",
-    ) -> dict[str, Any]:
-        """
-        Sync skills from base_path to vector store.
-
-        Returns stats about added/modified/deleted skills.
-        """
-        from pathlib import Path
-
-        skills_dir = Path(base_path)
-        if not skills_dir.exists():
-            return {"total": 0, "added": 0, "modified": 0, "deleted": 0}
-
-        # Find all skill directories
-        skill_dirs = [d for d in skills_dir.iterdir() if d.is_dir()]
-        stats = {"total": len(skill_dirs), "added": 0, "modified": 0, "deleted": 0}
-
-        for skill_dir in skill_dirs:
-            skill_name = skill_dir.name
-            doc_id = f"skill_{skill_name}"
-
-            # Try to find manifest
-            skill_md = skill_dir / "SKILL.md"
-            if not skill_md.exists():
-                continue
-
-            try:
-                content = skill_md.read_text(encoding="utf-8")
-                # Extract manifest YAML frontmatter
-                if content.startswith("---"):
-                    parts = content.split("---", 3)
-                    if len(parts) >= 2:
-                        import yaml
-
-                        manifest = yaml.safe_load(parts[1])
-                    else:
-                        manifest = {}
-                else:
-                    manifest = {}
-
-                routing_kw = manifest.get("routing_keywords", [])
-                intents = manifest.get("intents", [])
-                deps = manifest.get("dependencies", [])
-
-                document = f"""# {manifest.get("name", skill_name)}
-
-{manifest.get("description", "No description.")}
-
-**Version:** {manifest.get("version", "unknown")}
-**Routing Keywords:** {", ".join(routing_kw)}
-**Intents:** {", ".join(intents)}
-**Dependencies:** {", ".join(deps) if deps else "None"}
-"""
-
-                # Check if already exists
-                existing = await self.get_collection(table_name)
-                is_new = True
-                if existing and doc_id in existing.get("ids", []):
-                    is_new = False
-
-                await self.add_documents(
-                    collection=table_name,
-                    documents=[document],
-                    ids=[doc_id],
-                    metadata=[
-                        {
-                            "type": "skill_manifest",
-                            "skill_name": skill_name,
-                            "version": manifest.get("version", "unknown"),
-                            "routing_keywords": routing_kw,
-                            "intents": intents,
-                        }
-                    ],
-                )
-
-                if is_new:
-                    stats["added"] += 1
-                else:
-                    stats["modified"] += 1
-
-            except Exception:
-                continue
-
-        return stats

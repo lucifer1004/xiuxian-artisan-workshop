@@ -15,7 +15,7 @@ fn test_batch_diff_computation() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let manifest_path = temp_dir.path().join("manifest.json");
-    let engine = SyncEngine::new(temp_dir.path(), &manifest_path);
+    let engine = SyncEngine::new(temp_dir.path().to_path_buf(), manifest_path.clone());
 
     // Empty manifest - all should be added
     let empty_manifest = SyncManifest::default();

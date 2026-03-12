@@ -1,32 +1,15 @@
-use crate::env_parse::parse_bool_from_env;
-use crate::{LITELLM_DEFAULT_URL, McpServerEntry, RuntimeSettings};
 use anyhow::{Result, anyhow};
+use omni_agent::{LITELLM_DEFAULT_URL, McpServerEntry, RuntimeSettings};
 use xiuxian_llm::embedding::backend::parse_embedding_backend_kind;
 
-use super::shared::non_empty_env;
-use super::types::RuntimeEmbeddingBackendMode;
+use crate::resolve::parse_bool_from_env;
+
+use super::{RuntimeEmbeddingBackendMode, non_empty_env};
 
 fn normalize_inference_url(raw: &str) -> String {
-    normalize_inference_url_for_provider(raw, None)
-}
-
-fn normalize_inference_url_for_provider(raw: &str, provider: Option<&str>) -> String {
-    let anthropic_mode = provider
-        .map(str::trim)
-        .is_some_and(|value| value.eq_ignore_ascii_case("anthropic"));
     let u = raw.trim_end_matches('/');
-    if u.ends_with("/v1/chat/completions")
-        || u.ends_with("/chat/completions")
-        || u.ends_with("/v1/messages")
-        || u.ends_with("/messages")
-    {
+    if u.ends_with("/v1/chat/completions") || u.ends_with("/chat/completions") {
         u.to_string()
-    } else if anthropic_mode {
-        if u.ends_with("/v1") {
-            format!("{u}/messages")
-        } else {
-            format!("{}/v1/messages", u.trim_end_matches('/'))
-        }
     } else if u.ends_with("/v1") {
         format!("{u}/chat/completions")
     } else {
@@ -34,7 +17,7 @@ fn normalize_inference_url_for_provider(raw: &str, provider: Option<&str>) -> St
     }
 }
 
-pub(crate) fn resolve_inference_url(
+pub(super) fn resolve_inference_url(
     litellm_proxy_url: Option<&str>,
     agent_inference_url: Option<&str>,
 ) -> String {
@@ -49,34 +32,11 @@ pub(crate) fn resolve_inference_url(
     normalize_inference_url(raw)
 }
 
-fn resolve_inference_url_for_provider(
-    litellm_proxy_url: Option<&str>,
-    agent_inference_url: Option<&str>,
-    provider: Option<&str>,
-) -> String {
-    let raw = litellm_proxy_url
-        .filter(|value| !value.trim().is_empty())
-        .or_else(|| {
-            agent_inference_url
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-        })
-        .unwrap_or(LITELLM_DEFAULT_URL);
-    normalize_inference_url_for_provider(raw, provider)
-}
-
 fn resolve_inference_url_with_settings(
     litellm_proxy_url: Option<&str>,
     agent_inference_url: Option<&str>,
     runtime_settings: &RuntimeSettings,
 ) -> String {
-    let configured_provider = runtime_settings
-        .inference
-        .provider
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-
     if litellm_proxy_url
         .map(str::trim)
         .is_some_and(|value| !value.is_empty())
@@ -84,11 +44,7 @@ fn resolve_inference_url_with_settings(
             .map(str::trim)
             .is_some_and(|value| !value.is_empty())
     {
-        return resolve_inference_url_for_provider(
-            litellm_proxy_url,
-            agent_inference_url,
-            configured_provider,
-        );
+        return resolve_inference_url(litellm_proxy_url, agent_inference_url);
     }
 
     if let Some(base_url) = runtime_settings
@@ -98,7 +54,7 @@ fn resolve_inference_url_with_settings(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        return normalize_inference_url_for_provider(base_url, configured_provider);
+        return normalize_inference_url(base_url);
     }
 
     if runtime_settings
@@ -108,33 +64,13 @@ fn resolve_inference_url_with_settings(
         .map(str::trim)
         .is_some_and(|provider| provider.eq_ignore_ascii_case("minimax"))
     {
-        return normalize_inference_url_for_provider(
-            "https://api.minimax.io/v1",
-            configured_provider,
-        );
+        return normalize_inference_url("https://api.minimax.io/v1");
     }
 
-    if runtime_settings
-        .inference
-        .provider
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|provider| provider.eq_ignore_ascii_case("anthropic"))
-    {
-        return normalize_inference_url_for_provider(
-            "https://api.anthropic.com/v1",
-            configured_provider,
-        );
-    }
-
-    if configured_provider.is_none() {
-        return resolve_inference_url(litellm_proxy_url, agent_inference_url);
-    }
-
-    resolve_inference_url_for_provider(litellm_proxy_url, agent_inference_url, configured_provider)
+    resolve_inference_url(litellm_proxy_url, agent_inference_url)
 }
 
-pub(crate) fn parse_embedding_backend_mode(
+pub(super) fn parse_embedding_backend_mode(
     raw: Option<&str>,
 ) -> Option<RuntimeEmbeddingBackendMode> {
     let trimmed = raw.map(str::trim).filter(|value| !value.is_empty());
@@ -150,7 +86,7 @@ pub(crate) fn parse_embedding_backend_mode(
     parsed
 }
 
-pub(crate) fn resolve_runtime_embedding_backend_mode(
+pub(super) fn resolve_runtime_embedding_backend_mode(
     runtime_settings: &RuntimeSettings,
 ) -> RuntimeEmbeddingBackendMode {
     parse_embedding_backend_mode(non_empty_env("OMNI_AGENT_MEMORY_EMBEDDING_BACKEND").as_deref())
@@ -165,21 +101,10 @@ pub(crate) fn resolve_runtime_embedding_backend_mode(
             parse_embedding_backend_mode(non_empty_env("OMNI_AGENT_LLM_BACKEND").as_deref())
         })
         .or_else(|| parse_embedding_backend_mode(runtime_settings.agent.llm_backend.as_deref()))
-        .unwrap_or(default_runtime_embedding_backend_mode())
+        .unwrap_or(RuntimeEmbeddingBackendMode::Http)
 }
 
-fn default_runtime_embedding_backend_mode() -> RuntimeEmbeddingBackendMode {
-    #[cfg(feature = "agent-provider-litellm")]
-    {
-        RuntimeEmbeddingBackendMode::LiteLlmRs
-    }
-    #[cfg(not(feature = "agent-provider-litellm"))]
-    {
-        RuntimeEmbeddingBackendMode::Http
-    }
-}
-
-pub(crate) fn resolve_runtime_embedding_base_url(
+pub(super) fn resolve_runtime_embedding_base_url(
     runtime_settings: &RuntimeSettings,
     backend_mode: RuntimeEmbeddingBackendMode,
 ) -> Option<String> {
@@ -196,7 +121,6 @@ pub(crate) fn resolve_runtime_embedding_base_url(
         RuntimeEmbeddingBackendMode::Http => memory_base_url
             .or(embedding_client_url)
             .or(litellm_api_base),
-        RuntimeEmbeddingBackendMode::MistralSdk => None,
         RuntimeEmbeddingBackendMode::OpenAiHttp | RuntimeEmbeddingBackendMode::LiteLlmRs => {
             litellm_api_base
                 .or(memory_base_url)
@@ -212,7 +136,7 @@ fn endpoint_origin(url: &str) -> Option<String> {
     Some(format!("{}://{}:{}", parsed.scheme(), host, port))
 }
 
-pub(crate) fn validate_inference_url_origin(
+pub(super) fn validate_inference_url_origin(
     inference_url: &str,
     mcp_servers: &[McpServerEntry],
     allow_shared_origin: bool,
@@ -250,7 +174,7 @@ OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN=true.",
     ))
 }
 
-pub(crate) fn resolve_runtime_inference_url(
+pub(super) fn resolve_runtime_inference_url(
     runtime_settings: &RuntimeSettings,
     mcp_servers: &[McpServerEntry],
 ) -> Result<String> {
@@ -267,7 +191,7 @@ pub(crate) fn resolve_runtime_inference_url(
     Ok(inference_url)
 }
 
-pub(crate) fn resolve_runtime_model(runtime_settings: &RuntimeSettings) -> String {
+pub(super) fn resolve_runtime_model(runtime_settings: &RuntimeSettings) -> String {
     non_empty_env("OMNI_AGENT_MODEL")
         .or_else(|| {
             runtime_settings

@@ -1,24 +1,16 @@
 use super::*;
 
+use fixture_contract_support::{
+    SearchDirectivesFixture, assert_search_directives_fixture, search_payload_snapshot,
+};
+
 #[test]
 fn test_wendao_search_semantic_filter_flags() -> Result<(), Box<dyn std::error::Error>> {
-    let tmp = TempDir::new()?;
-    write_file(
-        &tmp.path().join("docs/a.md"),
-        "---\ntags:\n  - core\n---\n# A\n\nAlpha signal appears here.\n\n[[b]]\n",
-    )?;
-    write_file(
-        &tmp.path().join("docs/b.md"),
-        "---\ntags:\n  - team\n---\n# B\n\nBeta note.\n",
-    )?;
-    write_file(
-        &tmp.path().join("docs/c.md"),
-        "# C\n\nAlpha signal appears here too.\n",
-    )?;
+    let fixture = SearchDirectivesFixture::build("semantic_filter_flags")?;
 
     let mention_output = wendao_cmd()
         .arg("--root")
-        .arg(tmp.path())
+        .arg(fixture.root())
         .arg("search")
         .arg(".md")
         .arg("--limit")
@@ -35,30 +27,9 @@ fn test_wendao_search_semantic_filter_flags() -> Result<(), Box<dyn std::error::
         String::from_utf8_lossy(&mention_output.stderr)
     );
 
-    let mention_payload: Value = serde_json::from_str(&String::from_utf8(mention_output.stdout)?)?;
-    let mention_rows = mention_payload
-        .get("results")
-        .and_then(Value::as_array)
-        .ok_or("missing mention results")?;
-    assert_eq!(mention_rows.len(), 2);
-    assert_eq!(
-        mention_rows
-            .first()
-            .and_then(|row| row.get("path"))
-            .and_then(Value::as_str),
-        Some("docs/a.md")
-    );
-    assert_eq!(
-        mention_rows
-            .get(1)
-            .and_then(|row| row.get("path"))
-            .and_then(Value::as_str),
-        Some("docs/c.md")
-    );
-
     let missing_backlink_output = wendao_cmd()
         .arg("--root")
-        .arg(tmp.path())
+        .arg(fixture.root())
         .arg("search")
         .arg(".md")
         .arg("--limit")
@@ -74,20 +45,14 @@ fn test_wendao_search_semantic_filter_flags() -> Result<(), Box<dyn std::error::
         String::from_utf8_lossy(&missing_backlink_output.stderr)
     );
 
+    let mention_payload: Value = serde_json::from_str(&String::from_utf8(mention_output.stdout)?)?;
     let missing_backlink_payload: Value =
         serde_json::from_str(&String::from_utf8(missing_backlink_output.stdout)?)?;
-    let missing_backlink_rows = missing_backlink_payload
-        .get("results")
-        .and_then(Value::as_array)
-        .ok_or("missing missing-backlink results")?;
-    assert_eq!(missing_backlink_rows.len(), 1);
-    assert_eq!(
-        missing_backlink_rows
-            .first()
-            .and_then(|row| row.get("path"))
-            .and_then(Value::as_str),
-        Some("docs/a.md")
-    );
+    let actual = serde_json::json!({
+        "mentions_of": search_payload_snapshot(&mention_payload),
+        "missing_backlink": search_payload_snapshot(&missing_backlink_payload),
+    });
+    assert_search_directives_fixture("semantic_filter_flags", "result.json", &actual);
 
     Ok(())
 }

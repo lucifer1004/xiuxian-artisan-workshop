@@ -3,51 +3,11 @@ use crate::channels::traits::ChannelMessage;
 use super::super::TelegramChannel;
 use super::types::ParsedTelegramUpdate;
 
-const PHOTO_PLACEHOLDER_TEXT: &str = "[telegram-photo]";
-const IMAGE_PLACEHOLDER_TEXT: &str = "[telegram-image]";
-const VIDEO_PLACEHOLDER_TEXT: &str = "[telegram-video]";
-const DOCUMENT_PLACEHOLDER_TEXT: &str = "[telegram-document]";
-const VOICE_PLACEHOLDER_TEXT: &str = "[telegram-voice]";
-const AUDIO_PLACEHOLDER_TEXT: &str = "[telegram-audio]";
-const STICKER_PLACEHOLDER_TEXT: &str = "[telegram-sticker]";
-
-fn extract_message_content_text(message: &serde_json::Value) -> Option<&str> {
-    message
-        .get("text")
-        .and_then(serde_json::Value::as_str)
-        .filter(|text| !text.trim().is_empty())
-        .or_else(|| {
-            message
-                .get("caption")
-                .and_then(serde_json::Value::as_str)
-                .filter(|caption| !caption.trim().is_empty())
-        })
-        .or_else(|| {
-            if message.get("photo").is_some() {
-                Some(PHOTO_PLACEHOLDER_TEXT)
-            } else if message.get("image").is_some() {
-                Some(IMAGE_PLACEHOLDER_TEXT)
-            } else if message.get("video").is_some() {
-                Some(VIDEO_PLACEHOLDER_TEXT)
-            } else if message.get("document").is_some() {
-                Some(DOCUMENT_PLACEHOLDER_TEXT)
-            } else if message.get("voice").is_some() {
-                Some(VOICE_PLACEHOLDER_TEXT)
-            } else if message.get("audio").is_some() {
-                Some(AUDIO_PLACEHOLDER_TEXT)
-            } else if message.get("sticker").is_some() {
-                Some(STICKER_PLACEHOLDER_TEXT)
-            } else {
-                None
-            }
-        })
-}
-
 pub(super) fn extract_update_message(
     update: &serde_json::Value,
 ) -> Option<ParsedTelegramUpdate<'_>> {
     let message = update.get("message")?;
-    let text = extract_message_content_text(message)?;
+    let text = message.get("text").and_then(serde_json::Value::as_str)?;
     let chat = message.get("chat")?;
     let chat_id = chat
         .get("id")
@@ -127,7 +87,6 @@ pub(super) fn build_channel_message_from_parsed(
         recipient: parsed.recipient(),
         session_key,
         content: parsed.text.to_string(),
-        attachments: Vec::new(),
         channel: "telegram".to_string(),
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

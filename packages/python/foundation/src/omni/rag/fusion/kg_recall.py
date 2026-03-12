@@ -4,15 +4,17 @@ Enriches LanceDB recall results using KnowledgeGraph entity search.
 When a query mentions entities that exist in the graph, recall results
 whose source docs are connected to those entities get a score boost.
 
-This complements the LinkGraph proximity boost (Bridge 1) by adding
+This complements the ZK link proximity boost (Bridge 1) by adding
 graph-level semantic connections on top of structural link connections.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from ._config import _load_kg, logger
+
 
 # Base boost per KG entity match in a recall result's source
 KG_RECALL_ENTITY_BOOST = 0.06
@@ -22,15 +24,14 @@ def apply_kg_recall_boost(
     results: list[dict[str, Any]],
     query: str,
     *,
-    scope_key: str | None = None,
+    lance_dir: str | Path | None = None,
     boost: float = KG_RECALL_ENTITY_BOOST,
     fusion_scale: float | None = None,
-    intent_keywords: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Boost recall results connected to query entities in KnowledgeGraph.
 
     Algorithm:
-    1. Extract keywords from query via Rust intent extractor (or use intent_keywords).
+    1. Extract keywords from query via Rust intent extractor.
     2. For each keyword, search KnowledgeGraph for matching entities.
     3. Walk entity relations to find DOCUMENT / source connections.
     4. Boost recall results whose source paths match connected entities.
@@ -38,11 +39,9 @@ def apply_kg_recall_boost(
     Args:
         results: Recall results (list of dicts with 'score', 'source').
         query: The user's query.
-        scope_key: Stable KnowledgeGraph scope key.
+        lance_dir: Path to knowledge.lance directory.
         boost: Base score boost per entity connection.
         fusion_scale: Dynamic multiplier from fusion weights.
-        intent_keywords: Optional pre-extracted keywords (e.g. from compute_fusion_weights)
-            to avoid duplicate extract_query_intent call.
 
     Returns:
         Results with boosted scores, re-sorted.
@@ -55,18 +54,15 @@ def apply_kg_recall_boost(
         effective_boost = boost * fusion_scale
 
     try:
-        kg = _load_kg(scope_key=scope_key)
+        from omni_core_rs import extract_query_intent
+
+        kg = _load_kg(lance_dir=lance_dir)
         if kg is None:
             return results
 
-        # Use pre-extracted keywords when available (avoids duplicate Rust intent call)
-        if intent_keywords is not None:
-            keywords = intent_keywords
-        else:
-            from xiuxian_core_rs import extract_query_intent
-
-            intent = extract_query_intent(query)
-            keywords = intent.keywords
+        # Extract keywords from query
+        intent = extract_query_intent(query)
+        keywords = intent.keywords
         if not keywords:
             return results
 

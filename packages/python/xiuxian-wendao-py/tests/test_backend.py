@@ -1,377 +1,324 @@
-from __future__ import annotations
+"""
+Testing Protocol Skill Tools
+Migrated from src/mcp_server/executor/tester.py
+Provides smart test runner and testing protocol tools.
+"""
 
-import asyncio
 import json
-import time
-from typing import TYPE_CHECKING
+import os
+import subprocess
+from pathlib import Path
+from typing import Dict, Any
 
-import pytest
+from mcp.server.fastmcp import FastMCP
 
-from xiuxian_wendao_py.backend import WendaoBackend
-from xiuxian_wendao_py.models import (
-    DEFAULT_EXCLUDED_ADDITIONAL_DIRS,
-    DEFAULT_EXCLUDED_HIDDEN_DIRS,
-    LINK_GRAPH_STATS_CACHE_SCHEMA_VERSION,
-    LINK_GRAPH_VALKEY_CACHE_SCHEMA_VERSION,
-    WendaoRuntimeConfig,
-)
+import structlog
 
-if TYPE_CHECKING:
-    from pathlib import Path
+logger = structlog.get_logger(__name__)
 
 
-def _runtime_config(
-    *,
-    cache_valkey_url: str = "redis://127.0.0.1:6379/0",
-    stats_ttl: float = 120.0,
-    delta_full_rebuild_threshold: int = 256,
-) -> WendaoRuntimeConfig:
-    return WendaoRuntimeConfig(
-        root_dir=None,
-        include_dirs=[],
-        include_dirs_auto=False,
-        include_dirs_auto_candidates=[],
-        exclude_dirs=[*DEFAULT_EXCLUDED_HIDDEN_DIRS, *DEFAULT_EXCLUDED_ADDITIONAL_DIRS],
-        stats_persistent_cache_ttl_sec=stats_ttl,
-        delta_full_rebuild_threshold=delta_full_rebuild_threshold,
-        cache_valkey_url=cache_valkey_url,
-        cache_key_prefix=None,
-        cache_ttl_seconds=None,
-    )
-
-
-class _FakeEngine:
-    def __init__(self) -> None:
-        self.search_calls: list[tuple[str, int, str]] = []
-        self.refresh_calls: list[tuple[str | None, bool]] = []
-        self.fail_delta = False
-
-    def search_planned(self, query: str, limit: int, options_json: str) -> str:
-        self.search_calls.append((query, limit, options_json))
-        return json.dumps(
-            {
-                "query": query,
-                "options": json.loads(options_json),
-                "results": [
-                    {"stem": "note-a", "score": 0.91, "title": "Note A", "path": "docs/note-a.md"},
-                    {"stem": "note-b", "score": 0.55, "title": "Note B", "path": "docs/note-b.md"},
-                ],
-            }
+def get_git_status() -> Dict[str, list]:
+    """Get git status for changed files."""
+    try:
+        # Get staged files
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"], capture_output=True, text=True
         )
+        staged = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
-    def neighbors(self, stem: str, direction: str, hops: int, limit: int) -> str:
-        del stem, direction, hops, limit
-        return "[]"
+        # Get unstaged files
+        result = subprocess.run(["git", "diff", "--name-only"], capture_output=True, text=True)
+        unstaged = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
-    def related(self, stem: str, max_distance: int, limit: int) -> str:
-        del stem, max_distance, limit
-        return "[]"
-
-    def metadata(self, stem: str) -> str:
-        del stem
-        return "{}"
-
-    def toc(self, limit: int) -> str:
-        del limit
-        return "[]"
-
-    def stats(self) -> str:
-        return json.dumps(
-            {
-                "total_notes": 2,
-                "orphans": 1,
-                "links_in_graph": 1,
-                "nodes_in_graph": 2,
-            }
+        # Get untracked files
+        result = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True
         )
+        untracked = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
-    def cache_schema_info(self) -> str:
-        return json.dumps(
-            {
-                "backend": "valkey",
-                "cache_status": "hit",
-                "cache_miss_reason": "",
-                "schema_version": LINK_GRAPH_VALKEY_CACHE_SCHEMA_VERSION,
-                "schema_fingerprint": "cafef00d",
-            }
-        )
-
-    def refresh_with_delta(self, payload: str | None, force_full: bool) -> None:
-        self.refresh_calls.append((payload, force_full))
-        if self.fail_delta and not force_full:
-            raise ValueError("delta failed")
-
-    def refresh_plan_apply(
-        self,
-        changed_paths_json: str | None,
-        force_full: bool,
-        full_rebuild_threshold: int | None,
-    ) -> str:
-        changed_paths = json.loads(changed_paths_json or "[]")
-        threshold = max(1, int(full_rebuild_threshold or 256))
-        changed_count = len(changed_paths)
-        strategy = "full" if force_full else ("noop" if not changed_paths else "delta")
-        reason = (
-            "force_full"
-            if force_full
-            else (
-                "threshold_exceeded_incremental"
-                if changed_count >= threshold
-                else ("noop" if not changed_paths else "delta_requested")
-            )
-        )
-        events = [
-            {
-                "phase": "link_graph.index.delta.plan",
-                "duration_ms": 0.0,
-                "extra": {
-                    "strategy": strategy,
-                    "reason": reason,
-                    "changed_count": changed_count,
-                    "force_full": bool(force_full),
-                    "threshold": threshold,
-                    "delta_supported": True,
-                    "full_refresh_supported": True,
-                },
-            }
-        ]
-        if strategy == "noop":
-            return json.dumps(
-                {
-                    "mode": "noop",
-                    "changed_count": 0,
-                    "force_full": False,
-                    "fallback": False,
-                    "events": events,
-                }
-            )
-        if strategy == "full":
-            self.refresh_calls.append((None, True))
-            events.append(
-                {
-                    "phase": "link_graph.index.rebuild.full",
-                    "duration_ms": 0.0,
-                    "extra": {
-                        "success": True,
-                        "reason": reason,
-                        "changed_count": changed_count,
-                    },
-                }
-            )
-            return json.dumps(
-                {
-                    "mode": "full",
-                    "changed_count": changed_count,
-                    "force_full": bool(force_full),
-                    "fallback": False,
-                    "events": events,
-                }
-            )
-
-        self.refresh_calls.append((changed_paths_json, False))
-        if self.fail_delta:
-            events.append(
-                {
-                    "phase": "link_graph.index.delta.apply",
-                    "duration_ms": 0.0,
-                    "extra": {
-                        "success": False,
-                        "changed_count": changed_count,
-                        "error": "delta failed",
-                    },
-                }
-            )
-            self.refresh_calls.append((None, True))
-            events.append(
-                {
-                    "phase": "link_graph.index.rebuild.full",
-                    "duration_ms": 0.0,
-                    "extra": {
-                        "success": True,
-                        "reason": "delta_failed_fallback",
-                        "changed_count": changed_count,
-                    },
-                }
-            )
-            return json.dumps(
-                {
-                    "mode": "full",
-                    "changed_count": changed_count,
-                    "force_full": False,
-                    "fallback": True,
-                    "events": events,
-                }
-            )
-
-        events.append(
-            {
-                "phase": "link_graph.index.delta.apply",
-                "duration_ms": 0.0,
-                "extra": {
-                    "success": True,
-                    "changed_count": changed_count,
-                },
-            }
-        )
-        return json.dumps(
-            {
-                "mode": "delta",
-                "changed_count": changed_count,
-                "force_full": False,
-                "fallback": False,
-                "events": events,
-            }
-        )
-
-
-def test_backend_search_planned_roundtrip(tmp_path: Path) -> None:
-    notebook = tmp_path / "notes"
-    notebook.mkdir()
-    engine = _FakeEngine()
-    backend = WendaoBackend(
-        notebook_dir=str(notebook),
-        engine=engine,
-        runtime_config=_runtime_config(),
-    )
-
-    result = asyncio.run(
-        backend.search_planned("query", limit=2, options={"match_strategy": "fts", "filters": {}})
-    )
-
-    assert result["query"] == "query"
-    assert len(result["hits"]) == 2
-    assert result["hits"][0]["stem"] == "note-a"
-    assert len(engine.search_calls) == 1
-    assert json.loads(engine.search_calls[0][2])["match_strategy"] == "fts"
-
-
-def test_backend_refresh_delta_fallback_to_full(tmp_path: Path) -> None:
-    notebook = tmp_path / "notes"
-    notebook.mkdir()
-    engine = _FakeEngine()
-    engine.fail_delta = True
-    backend = WendaoBackend(
-        notebook_dir=str(notebook),
-        engine=engine,
-        runtime_config=_runtime_config(),
-    )
-
-    result = asyncio.run(backend.refresh_with_delta(["docs/a.md"]))
-    assert result["mode"] == "full"
-    assert result["fallback"] is True
-    assert engine.refresh_calls[0][1] is False
-    assert engine.refresh_calls[1] == (None, True)
-
-
-def test_backend_refresh_threshold_exceeded_prefers_delta_without_rust_planner(
-    tmp_path: Path,
-) -> None:
-    notebook = tmp_path / "notes"
-    notebook.mkdir()
-    captured: list[tuple[str, float, dict[str, object]]] = []
-
-    class _EngineNoPlanner(_FakeEngine):
-        refresh_plan_apply = None  # type: ignore[assignment]
-
-    def _record(phase: str, duration_ms: float, **extra: object) -> None:
-        captured.append((phase, duration_ms, dict(extra)))
-
-    engine = _EngineNoPlanner()
-    backend = WendaoBackend(
-        notebook_dir=str(notebook),
-        engine=engine,
-        runtime_config=_runtime_config(delta_full_rebuild_threshold=1),
-        phase_recorder=_record,  # type: ignore[arg-type]
-    )
-
-    result = asyncio.run(backend.refresh_with_delta(["docs/a.md"]))
-
-    assert result["mode"] == "delta"
-    assert result["fallback"] is False
-    assert len(engine.refresh_calls) == 1
-    delta_payload, delta_force_full = engine.refresh_calls[0]
-    assert delta_force_full is False
-    assert isinstance(delta_payload, str)
-    assert json.loads(delta_payload) == ["docs/a.md"]
-    plan_events = [row for row in captured if row[0] == "link_graph.index.delta.plan"]
-    assert plan_events
-    assert str(plan_events[0][2].get("strategy")) == "delta"
-    assert str(plan_events[0][2].get("reason")) == "threshold_exceeded_incremental"
-
-
-def test_backend_stats_reads_persistent_cache_without_engine(tmp_path: Path) -> None:
-    notebook = tmp_path / "notes"
-    notebook.mkdir()
-
-    def _cache_get(_source_key: str, _ttl_sec: float) -> dict[str, object]:
         return {
-            "schema": LINK_GRAPH_STATS_CACHE_SCHEMA_VERSION,
-            "source_key": backend._source_key(),
-            "updated_at_unix": time.time(),
-            "stats": {
-                "total_notes": 7,
-                "orphans": 2,
-                "links_in_graph": 9,
-                "nodes_in_graph": 7,
-            },
+            "staged": [f for f in staged if f],
+            "unstaged": [f for f in unstaged if f],
+            "untracked": [f for f in untracked if f],
         }
+    except Exception as e:
+        return {"error": str(e)}
 
-    backend = WendaoBackend(
-        notebook_dir=str(notebook),
-        runtime_config=_runtime_config(stats_ttl=300.0),
-        stats_cache_getter=_cache_get,
-        stats_cache_setter=lambda _source_key, _payload, _ttl_sec: None,
-        stats_cache_deleter=lambda _source_key: None,
-    )
 
-    def _fail_init_engine():
-        raise AssertionError("engine init should not run when persistent stats cache is valid")
-
-    backend._init_engine = _fail_init_engine  # type: ignore[assignment]
-    stats = asyncio.run(backend.stats())
-    assert stats == {
-        "total_notes": 7,
-        "orphans": 2,
-        "links_in_graph": 9,
-        "nodes_in_graph": 7,
+def categorize_changes(files: list) -> Dict[str, bool]:
+    """Categorize changes by type."""
+    categories = {
+        "docs_only": True,
+        "mcp_server": False,
+        "tool_router": False,
+        "nix_config": False,
+        "code_changes": False,
     }
 
+    doc_extensions = {".md", ".txt", ".rst", ".adoc"}
+    code_extensions = {".py", ".nix", ".yaml", ".yml", ".json", ".toml"}
 
-def test_backend_requires_valkey_url() -> None:
-    with pytest.raises(RuntimeError, match="set VALKEY_URL"):
-        WendaoBackend(runtime_config=_runtime_config(cache_valkey_url=""))
+    for f in files:
+        f_lower = f.lower()
+        _, ext = os.path.splitext(f_lower)
+        ext = ext.lower()
+
+        is_doc = ext in doc_extensions
+        is_code = ext in code_extensions
+
+        if not (is_doc or is_code):
+            categories["docs_only"] = False
+
+        if is_code and not is_doc:
+            categories["docs_only"] = False
+
+        if "mcp-server/" in f or f.startswith("mcp-server/"):
+            categories["mcp_server"] = True
+            categories["code_changes"] = True
+        if "tool-router/" in f or f.startswith("tool-router/"):
+            categories["tool_router"] = True
+            categories["code_changes"] = True
+        if ".nix" in f or "devenv" in f:
+            categories["nix_config"] = True
+            categories["code_changes"] = True
+        if f.endswith(".py") and "test" not in f:
+            categories["code_changes"] = True
+
+    return categories
 
 
-def test_backend_records_cache_schema_phase_on_lazy_engine_init(tmp_path: Path) -> None:
-    notebook = tmp_path / "notes"
-    notebook.mkdir()
-    captured: list[tuple[str, float, dict[str, object]]] = []
+async def smart_test_runner(focus_file: str = None) -> str:
+    """
+    Execute tests following agent/how-to/testing-workflows.md.
 
-    def _record(phase: str, duration_ms: float, **extra: object) -> None:
-        captured.append((phase, duration_ms, dict(extra)))
+    Implements the Modified-Code Protocol:
+    1. Identify modified files
+    2. Categorize changes
+    3. Run MINIMUM necessary tests
 
-    backend = WendaoBackend(
-        notebook_dir=str(notebook),
-        runtime_config=_runtime_config(),
-        phase_recorder=_record,  # type: ignore[arg-type]
-        engine_factory=lambda _root, _include, _exclude: _FakeEngine(),
+    Args:
+        focus_file: Optional specific file to test
+
+    Returns:
+        JSON result with test strategy and execution
+    """
+    if focus_file:
+        return json.dumps(
+            {
+                "strategy": "focused",
+                "file": focus_file,
+                "command": f"pytest {focus_file}",
+                "reason": "Specific file requested",
+            },
+            indent=2,
+        )
+
+    # Step 1: Get git status
+    status = get_git_status()
+    if "error" in status:
+        return json.dumps(
+            {"status": "error", "message": f"Failed to get git status: {status['error']}"}, indent=2
+        )
+
+    all_files = status["staged"] + status["unstaged"] + status["untracked"]
+
+    if not all_files:
+        return json.dumps(
+            {
+                "status": "success",
+                "message": "No changes detected",
+                "strategy": "skip",
+                "reason": "No modified files",
+                "command": "echo 'No changes to test'",
+            },
+            indent=2,
+        )
+
+    # Step 2: Categorize changes
+    categories = categorize_changes(all_files)
+
+    # Step 3: Determine strategy (Modified-Code Protocol)
+    if categories["docs_only"]:
+        return json.dumps(
+            {
+                "status": "success",
+                "message": "Documentation changes only",
+                "strategy": "skip",
+                "reason": "agent/how-to/testing-workflows.md Rule #3: Docs only -> Skip tests",
+                "command": "echo 'Docs only - skipping tests'",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
+
+    elif categories["mcp_server"]:
+        return json.dumps(
+            {
+                "status": "ready",
+                "message": "MCP server changes detected",
+                "strategy": "mcp_only",
+                "reason": "mcp-server/ modified -> Run MCP tests (agent/how-to/testing-workflows.md)",
+                "command": "just test-mcp-only",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
+
+    elif categories["tool_router"]:
+        return json.dumps(
+            {
+                "status": "ready",
+                "message": "Tool router changes detected",
+                "strategy": "mcp_only",
+                "reason": "tool-router/ modified -> Run MCP tests",
+                "command": "just test-mcp-only",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
+
+    elif categories["nix_config"]:
+        return json.dumps(
+            {
+                "status": "ready",
+                "message": "Infrastructure changes detected",
+                "strategy": "full",
+                "reason": ".nix or devenv modified -> Run full test suite",
+                "command": "just test",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
+
+    else:
+        return json.dumps(
+            {
+                "status": "ready",
+                "message": "Code changes detected",
+                "strategy": "full",
+                "reason": "General code changes -> Run full test suite",
+                "command": "just test",
+                "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+            },
+            indent=2,
+        )
+
+
+async def run_test_command(command: str) -> str:
+    """
+    Run a test command and return results.
+
+    Args:
+        command: Test command to run
+
+    Returns:
+        JSON result with command output
+    """
+    allowed_commands = [
+        "just test",
+        "just test-unit",
+        "just test-int",
+        "just test-mcp",
+        "just test-mcp-only",
+        "pytest",
+        "devenv test",
+    ]
+
+    is_allowed = any(command.startswith(allowed) for allowed in allowed_commands)
+
+    if not is_allowed:
+        return json.dumps(
+            {
+                "status": "error",
+                "message": "Command not allowed",
+                "allowed_commands": allowed_commands,
+            },
+            indent=2,
+        )
+
+    try:
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=120)
+
+        return json.dumps(
+            {
+                "status": "success" if result.returncode == 0 else "failed",
+                "command": command,
+                "returncode": result.returncode,
+                "stdout": result.stdout[:2000] if result.stdout else "",
+                "stderr": result.stderr[:500] if result.stderr else "",
+            },
+            indent=2,
+        )
+
+    except subprocess.TimeoutExpired:
+        return json.dumps(
+            {"status": "error", "message": "Command timed out (>120s)", "command": command},
+            indent=2,
+        )
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e), "command": command}, indent=2)
+
+
+async def get_test_protocol() -> str:
+    """
+    Get the testing protocol summary.
+
+    Returns:
+        JSON summary of agent/how-to/testing-workflows.md
+    """
+    return json.dumps(
+        {
+            "doc": "agent/how-to/testing-workflows.md",
+            "rules": [
+                "Rule #1: Fast tests first. Fail fast.",
+                "Rule #2: No feature code without test code.",
+                "Rule #3: Modified docs only -> Skip tests.",
+            ],
+            "strategies": {
+                "docs_only": {"action": "skip", "command": "echo 'Docs only'"},
+                "mcp_server": {"action": "test-mcp-only", "command": "just test-mcp-only"},
+                "tool_router": {"action": "test-mcp-only", "command": "just test-mcp-only"},
+                "nix_config": {"action": "full", "command": "just test"},
+                "general": {"action": "full", "command": "just test"},
+            },
+            "test_levels": {
+                "unit": {"command": "just test-unit", "timeout": "<30s"},
+                "integration": {"command": "just test-int", "timeout": "<2m"},
+                "mcp": {"command": "just test-mcp-only", "timeout": "<60s"},
+                "full": {"command": "just test", "timeout": "varies"},
+            },
+        },
+        indent=2,
     )
 
-    asyncio.run(backend.search_planned("query", limit=1, options={"filters": {}}))
 
-    engine_phase = next((row for row in captured if row[0] == "link_graph.engine.init"), None)
-    assert engine_phase is not None
-    assert bool(engine_phase[2].get("success")) is True
-    assert (
-        str(engine_phase[2].get("cache_schema_version")) == LINK_GRAPH_VALKEY_CACHE_SCHEMA_VERSION
-    )
-    assert str(engine_phase[2].get("cache_schema_fingerprint")) == "cafef00d"
-    assert str(engine_phase[2].get("cache_status")) == "hit"
-    assert str(engine_phase[2].get("cache_miss_reason")) == ""
+def register(mcp: FastMCP):
+    """Register Testing Protocol tools using direct function binding."""
+    import sys
+    import importlib.util
 
-    schema_phase = next((row for row in captured if row[0] == "link_graph.cache.schema"), None)
-    assert schema_phase is not None
-    assert str(schema_phase[2].get("schema_version")) == LINK_GRAPH_VALKEY_CACHE_SCHEMA_VERSION
-    assert str(schema_phase[2].get("schema_fingerprint")) == "cafef00d"
-    assert str(schema_phase[2].get("cache_status")) == "hit"
-    assert str(schema_phase[2].get("cache_miss_reason")) == ""
+    # Get the current module from sys.modules
+    current_module = sys.modules.get("agent.skills.testing_protocol.tools")
+    if current_module is None:
+        spec = importlib.util.spec_from_file_location(
+            "agent.skills.testing_protocol.tools",
+            Path(__file__).resolve(),
+        )
+        current_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(current_module)
+        sys.modules["agent.skills.testing_protocol.tools"] = current_module
+
+    # Get functions from the module
+    smart_runner = getattr(current_module, "smart_test_runner", None)
+    run_cmd = getattr(current_module, "run_test_command", None)
+    get_proto = getattr(current_module, "get_test_protocol", None)
+
+    # Register tools directly
+    if smart_runner:
+        mcp.add_tool(smart_runner, "Execute tests following agent/how-to/testing-workflows.md.")
+    if run_cmd:
+        mcp.add_tool(run_cmd, "Run a test command and return results.")
+    if get_proto:
+        mcp.add_tool(get_proto, "Get the testing protocol summary.")
+
+    logger.info("Testing Protocol skill tools registered")

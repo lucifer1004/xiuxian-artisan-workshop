@@ -1,4 +1,25 @@
-//! MCP pool reconnect smoke tests for xiuxian-daochang MCP facade.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::similar_names
+)]
+
+//! MCP pool reconnect smoke tests for omni-agent MCP facade.
 //!
 //! Detailed reconnect/cache/fallback behavior is covered in
 //! `xiuxian-llm/tests/mcp_pool_reconnect.rs`.
@@ -7,6 +28,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
+use omni_agent::{McpPoolConnectConfig, connect_pool};
 use rmcp::ServerHandler;
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, Content, ErrorData, ListToolsResult,
@@ -15,7 +37,6 @@ use rmcp::model::{
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
-use xiuxian_daochang::{McpPoolConnectConfig, connect_pool};
 
 #[derive(Clone, Default)]
 struct MockMcpServer;

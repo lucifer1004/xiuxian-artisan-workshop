@@ -1,9 +1,9 @@
-//! Schema contract tests for `QianjiManifest`.
+#![allow(missing_docs)]
 
 use xiuxian_qianji::contracts::{EdgeDefinition, NodeDefinition, QianjiManifest};
 
 #[test]
-fn test_qianji_manifest_schema_contract() -> std::result::Result<(), Box<dyn std::error::Error>> {
+fn test_qianji_manifest_schema_contract() {
     let manifest = QianjiManifest {
         name: "Test_Schema".to_string(),
         nodes: vec![NodeDefinition {
@@ -11,9 +11,6 @@ fn test_qianji_manifest_schema_contract() -> std::result::Result<(), Box<dyn std
             task_type: "mock".to_string(),
             weight: 1.5,
             params: serde_json::json!({"key": "value"}),
-            qianhuan: None,
-            llm: None,
-            consensus: None,
         }],
         edges: vec![EdgeDefinition {
             from: "A".to_string(),
@@ -23,15 +20,13 @@ fn test_qianji_manifest_schema_contract() -> std::result::Result<(), Box<dyn std
         }],
     };
 
-    let raw = serde_json::to_value(&manifest)?;
+    let raw = serde_json::to_value(&manifest).expect("Failed to serialize manifest");
 
     // Validate Schema/Contract Shape
     assert_eq!(raw["name"], "Test_Schema");
 
     // Nodes
-    let nodes = raw["nodes"]
-        .as_array()
-        .ok_or_else(|| std::io::Error::other("nodes must be an array"))?;
+    let nodes = raw["nodes"].as_array().expect("nodes must be an array");
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes[0]["id"], "A");
     assert_eq!(nodes[0]["task_type"], "mock");
@@ -39,13 +34,10 @@ fn test_qianji_manifest_schema_contract() -> std::result::Result<(), Box<dyn std
     assert_eq!(nodes[0]["params"]["key"], "value");
 
     // Edges
-    let edges = raw["edges"]
-        .as_array()
-        .ok_or_else(|| std::io::Error::other("edges must be an array"))?;
+    let edges = raw["edges"].as_array().expect("edges must be an array");
     assert_eq!(edges.len(), 1);
     assert_eq!(edges[0]["from"], "A");
     assert_eq!(edges[0]["to"], "B");
     assert_eq!(edges[0]["label"], "branch_1");
     assert_eq!(edges[0]["weight"], 1.0);
-    Ok(())
 }

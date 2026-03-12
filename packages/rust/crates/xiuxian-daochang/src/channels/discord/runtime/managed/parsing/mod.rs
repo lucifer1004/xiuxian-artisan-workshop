@@ -1,55 +1,21 @@
-mod admin;
-mod injection;
-mod partition;
-
 pub(super) use crate::channels::managed_runtime::parsing::{
     FeedbackDirection, ResumeCommand, SessionFeedbackCommand,
     SessionPartitionCommand as SharedSessionPartitionCommand,
 };
 use crate::channels::managed_runtime::parsing::{
-    OutputFormat, parse_background_prompt, parse_help_command, parse_job_status_command,
-    parse_jobs_summary_command, parse_resume_context_command, parse_session_context_budget_command,
-    parse_session_context_memory_command, parse_session_context_status_command,
-    parse_session_feedback_command,
+    OutputFormat, SessionPartitionModeToken, parse_background_prompt, parse_help_command,
+    parse_job_status_command, parse_jobs_summary_command, parse_resume_context_command,
+    parse_session_context_budget_command, parse_session_context_memory_command,
+    parse_session_context_status_command, parse_session_feedback_command,
+    parse_session_partition_command as parse_session_partition_shared,
+    parse_session_partition_mode_token as parse_partition_mode_token,
 };
 
 use super::super::super::session_partition::DiscordSessionPartition;
 
-use admin::parse_session_admin_command;
-use injection::parse_session_injection_command;
-use partition::parse_session_partition_command;
-
 pub(super) type CommandOutputFormat = OutputFormat;
 type SessionPartitionMode = DiscordSessionPartition;
 pub(super) type SessionPartitionCommand = SharedSessionPartitionCommand<SessionPartitionMode>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum SessionInjectionAction {
-    Status,
-    Clear,
-    SetXml(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct SessionInjectionCommand {
-    pub(super) action: SessionInjectionAction,
-    pub(super) format: CommandOutputFormat,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum SessionAdminAction {
-    List,
-    Set(Vec<String>),
-    Add(Vec<String>),
-    Remove(Vec<String>),
-    Clear,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct SessionAdminCommand {
-    pub(super) action: SessionAdminAction,
-    pub(super) format: CommandOutputFormat,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum ManagedCommand {
@@ -61,8 +27,6 @@ pub(super) enum ManagedCommand {
     SessionMemory(CommandOutputFormat),
     SessionFeedback(SessionFeedbackCommand),
     SessionPartition(SessionPartitionCommand),
-    SessionAdmin(SessionAdminCommand),
-    SessionInjection(SessionInjectionCommand),
     JobStatus {
         job_id: String,
         format: CommandOutputFormat,
@@ -80,12 +44,6 @@ pub(super) fn parse_managed_command(input: &str) -> Option<ManagedCommand> {
     }
     if let Some(resume) = parse_resume_context_command(input) {
         return Some(ManagedCommand::Resume(resume));
-    }
-    if let Some(command) = parse_session_admin_command(input) {
-        return Some(ManagedCommand::SessionAdmin(command));
-    }
-    if let Some(command) = parse_session_injection_command(input) {
-        return Some(ManagedCommand::SessionInjection(command));
     }
     if let Some(command) = parse_session_partition_command(input) {
         return Some(ManagedCommand::SessionPartition(command));
@@ -115,4 +73,24 @@ pub(super) fn parse_managed_command(input: &str) -> Option<ManagedCommand> {
         return Some(ManagedCommand::BackgroundSubmit(prompt));
     }
     None
+}
+
+fn parse_session_partition_command(input: &str) -> Option<SessionPartitionCommand> {
+    parse_session_partition_shared(input, parse_session_partition_mode)
+}
+
+fn parse_session_partition_mode(raw: &str) -> Option<SessionPartitionMode> {
+    let token = parse_partition_mode_token(raw)?;
+    match token {
+        SessionPartitionModeToken::Chat | SessionPartitionModeToken::Channel => {
+            Some(DiscordSessionPartition::ChannelOnly)
+        }
+        SessionPartitionModeToken::ChatUser
+        | SessionPartitionModeToken::ChatThreadUser
+        | SessionPartitionModeToken::GuildChannelUser => {
+            Some(DiscordSessionPartition::GuildChannelUser)
+        }
+        SessionPartitionModeToken::User => Some(DiscordSessionPartition::UserOnly),
+        SessionPartitionModeToken::GuildUser => Some(DiscordSessionPartition::GuildUser),
+    }
 }

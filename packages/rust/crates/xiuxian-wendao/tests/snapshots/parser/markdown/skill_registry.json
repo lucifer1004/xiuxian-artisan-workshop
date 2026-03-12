@@ -4,8 +4,8 @@
     "agenda_classifier": [
       "wendao://skills/agenda-management/references/prompts/classifier.md"
     ],
-    "agenda_flow": [
-      "wendao://skills/agenda-management/references/agenda_flow.toml"
+    "agenda_validation": [
+      "wendao://skills/agenda-management/references/agenda_validation.toml"
     ],
     "agenda_validation_genesis_rules": [
       "wendao://skills/agenda-management/references/prompts/agenda_validation_genesis_rules.md"
@@ -38,6 +38,6 @@
     "wendao://skills/agenda-management/references/rules.md"
   ],
   "qianji_flows": [
-    "wendao://skills/agenda-management/references/agenda_flow.toml"
+    "wendao://skills/agenda-management/references/agenda_validation.toml"
   ]
 }

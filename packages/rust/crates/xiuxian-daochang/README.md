@@ -1,24 +1,18 @@
----
-type: knowledge
-metadata:
-  title: "xiuxian-daochang"
----
-
-# xiuxian-daochang (修仙道场)
+# omni-agent
 
 Minimal Rust agent loop (Phase B): one user turn with LLM + MCP tools.
 
 ## Features
 
 - **Config** (`AgentConfig`): inference API URL, model, API key (env or field), MCP server list, `max_tool_rounds`, optional `window_max_turns`.
-- **Session**: in-memory `SessionStore` per `session_id`; or when `window_max_turns` is set, **xiuxian-window** (ring buffer) for bounded history and scalable context (1k–10k turns).
+- **Session**: in-memory `SessionStore` per `session_id`; or when `window_max_turns` is set, **omni-window** (ring buffer) for bounded history and scalable context (1k–10k turns).
 - **LLM** (`LlmClient`): OpenAI-compatible chat completions with optional tool definitions and `tool_calls` parsing.
 - **Agent** (`Agent`): `run_turn(session_id, user_message)` — builds messages, optionally fetches tools from MCP, calls LLM, handles tool_calls via MCP `tools/call`, repeats until no tool_calls or `max_tool_rounds`.
 
 ## Usage
 
 ```rust
-use xiuxian_daochang::{Agent, AgentConfig, ContextBudgetStrategy, McpServerEntry};
+use omni_agent::{Agent, AgentConfig, McpServerEntry};
 
 let config = AgentConfig {
     inference_url: "https://api.openai.com/v1/chat/completions".to_string(),
@@ -31,8 +25,6 @@ let config = AgentConfig {
         args: None,
     }],
     max_tool_rounds: 10,
-    context_budget_strategy: ContextBudgetStrategy::RecentFirst,
-    ..AgentConfig::default()
 };
 
 let agent = Agent::from_config(config).await?;
@@ -61,13 +53,13 @@ export OPENAI_API_KEY=sk-...
 # Optional: start Python MCP and set URL
 export OMNI_MCP_URL=http://127.0.0.1:3002/sse
 
-cargo run -p xiuxian-daochang --example one_turn -- "Say hello in one sentence."
+cargo run -p omni-agent --example one_turn -- "Say hello in one sentence."
 ```
 
 ## Tests
 
-- Unit: `cargo test -p xiuxian-daochang --test config_and_session`
-- Integration (real LLM + optional MCP): `cargo test -p xiuxian-daochang --test agent_integration -- --ignored`
+- Unit: `cargo test -p omni-agent --test config_and_session`
+- Integration (real LLM + optional MCP): `cargo test -p omni-agent --test agent_integration -- --ignored`
 
 ## Plan
 

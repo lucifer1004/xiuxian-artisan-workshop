@@ -1,26 +1,23 @@
+use std::sync::Arc;
+
 use crate::agent::Agent;
 use crate::channels::managed_commands::{
     detect_managed_control_command, detect_managed_slash_command,
 };
 use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::channels::managed_runtime::parsing::is_stop_command;
-use crate::channels::managed_runtime::turn::{
-    ForegroundTurnOutcome, build_session_id, compose_turn_content,
-};
+use crate::channels::managed_runtime::turn::{build_session_id, compose_turn_content};
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::JobManager;
-use std::sync::Arc;
 
-use super::ForegroundInterruptController;
-use super::managed::handle_inbound_managed_command;
-use generation::begin_active_generation;
-use stop::try_handle_stop_command;
-use turn::{ForegroundTurnInput, render_foreground_turn_reply, run_foreground_turn_with_typing};
-
-mod generation;
-mod preview;
-mod stop;
-mod turn;
+use super::super::ForegroundInterruptController;
+use super::generation::begin_active_generation;
+use super::stop::try_handle_stop_command;
+use super::support::{log_inbound_user_message, log_preempted_turn};
+use super::turn::{
+    ForegroundTurnInput, render_foreground_turn_reply, run_foreground_turn_with_typing,
+};
+use crate::channels::discord::runtime::managed::handle_inbound_managed_command;
 
 pub(in crate::channels::discord::runtime) async fn process_discord_message_with_interrupt(
     agent: Arc<Agent>,
@@ -81,44 +78,6 @@ pub(in crate::channels::discord::runtime) async fn process_discord_message_with_
     };
     let result = run_foreground_turn_with_typing(channel.as_ref(), agent.clone(), turn_input).await;
     if let Some(reply) = render_foreground_turn_reply(result, &msg, turn_timeout_secs) {
-        turn::send_discord_reply(channel.as_ref(), &msg, &reply).await;
+        super::turn::send_discord_reply(channel.as_ref(), &msg, &reply).await;
     }
-}
-
-fn log_preempted_turn(
-    interrupt_controller: &ForegroundInterruptController,
-    session_id: &str,
-    msg: &ChannelMessage,
-) {
-    if interrupt_controller.interrupt(session_id) {
-        tracing::info!(
-            event = "discord.foreground.turn.preempted",
-            session_key = %msg.session_key,
-            channel = %msg.channel,
-            recipient = %msg.recipient,
-            sender = %msg.sender,
-            "discord active foreground turn interrupted by newer inbound message"
-        );
-    }
-}
-
-fn log_inbound_user_message(msg: &ChannelMessage) {
-    tracing::info!(
-        r#"discord ← User: "{preview}""#,
-        preview = preview::log_preview(&msg.content)
-    );
-}
-
-pub(in crate::channels::discord::runtime) fn test_interrupted_reply_is_suppressed(
-    msg: &ChannelMessage,
-    turn_timeout_secs: u64,
-) -> bool {
-    render_foreground_turn_reply(
-        ForegroundTurnOutcome::Interrupted {
-            reply: "Request interrupted by a newer instruction.".to_string(),
-        },
-        msg,
-        turn_timeout_secs,
-    )
-    .is_none()
 }

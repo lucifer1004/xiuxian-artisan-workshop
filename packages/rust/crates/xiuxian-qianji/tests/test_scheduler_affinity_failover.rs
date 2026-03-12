@@ -3,13 +3,12 @@
 use async_trait::async_trait;
 use serde_json::json;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use xiuxian_qianji::engine::NodeExecutionAffinity;
 use xiuxian_qianji::error::QianjiError;
 use xiuxian_qianji::scheduler::core::SchedulerRuntimeServices;
 use xiuxian_qianji::{
-    FlowInstruction, PulseEmitter, QianjiEngine, QianjiMechanism, QianjiOutput, QianjiScheduler,
-    RoleAvailabilityRegistry, SchedulerAgentIdentity, SchedulerExecutionPolicy, SwarmEvent,
+    FlowInstruction, QianjiEngine, QianjiMechanism, QianjiOutput, QianjiScheduler,
+    RoleAvailabilityRegistry, SchedulerAgentIdentity, SchedulerExecutionPolicy,
 };
 
 struct StaticOutputMechanism {
@@ -43,27 +42,6 @@ impl RoleAvailabilityRegistry for MockRoleRegistry {
     }
 }
 
-#[derive(Debug, Clone)]
-struct CapturingEmitter {
-    events: Arc<Mutex<Vec<SwarmEvent>>>,
-}
-
-impl CapturingEmitter {
-    fn new() -> Self {
-        Self {
-            events: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-}
-
-#[async_trait]
-impl PulseEmitter for CapturingEmitter {
-    async fn emit_pulse(&self, event: SwarmEvent) -> Result<(), String> {
-        self.events.lock().await.push(event);
-        Ok(())
-    }
-}
-
 fn build_single_role_engine(required_role: &str) -> QianjiEngine {
     let mut engine = QianjiEngine::new();
     let _idx = engine.add_mechanism_with_affinity(
@@ -85,13 +63,11 @@ fn build_single_role_engine(required_role: &str) -> QianjiEngine {
 async fn scheduler_executes_as_proxy_when_role_missing_globally()
 -> Result<(), Box<dyn std::error::Error>> {
     let engine = build_single_role_engine("teacher");
-    let emitter = Arc::new(CapturingEmitter::new());
     let services = SchedulerRuntimeServices {
         role_registry: Some(Arc::new(MockRoleRegistry {
             has_remote_candidate: false,
         })),
         execution_policy: SchedulerExecutionPolicy::new().with_local_proxy_delegation(true),
-        telemetry_emitter: Some(emitter.clone()),
         ..SchedulerRuntimeServices::default()
     };
     let scheduler = QianjiScheduler::with_runtime_services_config(
@@ -105,16 +81,6 @@ async fn scheduler_executes_as_proxy_when_role_missing_globally()
 
     let final_context = scheduler.run(json!({})).await?;
     assert_eq!(final_context["result"], "proxied");
-
-    tokio::time::sleep(std::time::Duration::from_millis(30)).await;
-    let events = emitter.events.lock().await;
-    assert!(
-        events.iter().any(|event| matches!(
-            event,
-            SwarmEvent::AffinityAlert { required_role, .. } if required_role == "teacher"
-        )),
-        "expected AffinityAlert telemetry for local proxy delegation"
-    );
     Ok(())
 }
 

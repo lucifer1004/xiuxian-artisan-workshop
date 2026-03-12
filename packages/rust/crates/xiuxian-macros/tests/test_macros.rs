@@ -1,8 +1,8 @@
-//! Tests for xiuxian-macros.
+//! Tests for omni-macros.
 
-use xiuxian_macros::{
-    assert_timing, bench_case, env_first_non_empty, env_non_empty, patterns, project_config_paths,
-    py_from, string_first_non_empty, temp_dir, topics,
+use omni_macros::{
+    assert_timing, bench_case, env_non_empty, patterns, project_config_paths, py_from,
+    string_first_non_empty, temp_dir, topics,
 };
 
 // Test patterns! macro
@@ -68,9 +68,7 @@ mod test_temp_dir {
         assert!(temp_path.is_dir());
 
         // Clean up
-        if let Err(error) = fs::remove_dir_all(&temp_path) {
-            panic!("failed to remove temporary directory {temp_path:?}: {error}");
-        }
+        fs::remove_dir_all(&temp_path).unwrap();
     }
 
     #[test]
@@ -124,9 +122,9 @@ mod test_bench_case {
 
     #[test]
     fn test_bench_case_simple() {
-        let elapsed = bench_case!(1 + 1);
-        // Verify that bench_case returns a duration value.
-        let _ = elapsed;
+        let _elapsed = bench_case!(1 + 1);
+        // Verify that bench_case returns a duration
+        assert!(true);
     }
 }
 
@@ -167,17 +165,21 @@ mod test_project_config_paths {
         let _guard = env_lock()
             .lock()
             .unwrap_or_else(|_| panic!("failed to lock environment mutex for config path test"));
-        let _root = set_env_for_test("PRJ_ROOT", "/tmp/xiuxian-macro-prj");
-        let _config_home = set_env_for_test("PRJ_CONFIG_HOME", "/tmp/xiuxian-macro-conf");
+        let _root = set_env_for_test("PRJ_ROOT", "/tmp/omni-macro-prj");
+        let _config_home = set_env_for_test("PRJ_CONFIG_HOME", "/tmp/omni-macro-conf");
         let _explicit = set_env_for_test("QIANJI_CONFIG_PATH", "/tmp/custom/qianji.toml");
 
         let paths = project_config_paths!("qianji.toml", "QIANJI_CONFIG_PATH");
-        assert_eq!(paths.len(), 2);
+        assert_eq!(paths.len(), 3);
         assert_eq!(
             paths[0],
-            PathBuf::from("/tmp/xiuxian-macro-conf/xiuxian-artisan-workshop/qianji.toml")
+            PathBuf::from("/tmp/omni-macro-prj/packages/conf/qianji.toml")
         );
-        assert_eq!(paths[1], PathBuf::from("/tmp/custom/qianji.toml"));
+        assert_eq!(
+            paths[1],
+            PathBuf::from("/tmp/omni-macro-conf/omni-dev-fusion/qianji.toml")
+        );
+        assert_eq!(paths[2], PathBuf::from("/tmp/custom/qianji.toml"));
     }
 }
 
@@ -233,30 +235,5 @@ mod test_llm_env_macros {
             Some("later")
         );
         assert_eq!(value, "winner");
-    }
-
-    #[test]
-    fn test_env_first_non_empty_prefers_first_present_key() {
-        let _guard = env_lock().lock().unwrap_or_else(|_| {
-            panic!("failed to lock environment mutex for env_first_non_empty test")
-        });
-        let _primary = set_env_for_test("OMNI_MACROS_KEY_PRIMARY", "primary-secret");
-        let _fallback = set_env_for_test("OMNI_MACROS_KEY_FALLBACK", "fallback-secret");
-
-        let value = env_first_non_empty!("OMNI_MACROS_KEY_PRIMARY", "OMNI_MACROS_KEY_FALLBACK");
-        assert_eq!(value.as_deref(), Some("primary-secret"));
-    }
-
-    #[test]
-    fn test_env_first_non_empty_skips_blank_and_uses_fallback() {
-        let _guard = env_lock().lock().unwrap_or_else(|_| {
-            panic!("failed to lock environment mutex for env_first_non_empty fallback test")
-        });
-        let _primary = set_env_for_test("OMNI_MACROS_KEY_PRIMARY", "   ");
-        let _fallback = set_env_for_test("OMNI_MACROS_KEY_FALLBACK", "fallback-secret");
-
-        let dynamic_primary = "OMNI_MACROS_KEY_PRIMARY";
-        let value = env_first_non_empty!(dynamic_primary, "OMNI_MACROS_KEY_FALLBACK");
-        assert_eq!(value.as_deref(), Some("fallback-secret"));
     }
 }

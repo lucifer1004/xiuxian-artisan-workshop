@@ -28,7 +28,7 @@ fn test_multi_hop_search() {
             RelationType::RelatedTo,
             "Related".to_string(),
         );
-        assert!(graph.add_relation(&relation).is_ok());
+        assert!(graph.add_relation(relation).is_ok());
     }
 
     let results = graph.multi_hop_search("A", 2);
@@ -56,7 +56,7 @@ fn test_multi_hop_search_bidirectional() {
     // A -> B
     assert!(
         graph
-            .add_relation(&Relation::new(
+            .add_relation(Relation::new(
                 "A".to_string(),
                 "B".to_string(),
                 RelationType::RelatedTo,
@@ -68,7 +68,7 @@ fn test_multi_hop_search_bidirectional() {
     // B -> C
     assert!(
         graph
-            .add_relation(&Relation::new(
+            .add_relation(Relation::new(
                 "B".to_string(),
                 "C".to_string(),
                 RelationType::RelatedTo,
@@ -80,7 +80,7 @@ fn test_multi_hop_search_bidirectional() {
     // D -> B (D points to B; from B's perspective this is an incoming edge)
     assert!(
         graph
-            .add_relation(&Relation::new(
+            .add_relation(Relation::new(
                 "D".to_string(),
                 "B".to_string(),
                 RelationType::DependsOn,

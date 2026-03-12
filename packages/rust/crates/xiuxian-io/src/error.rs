@@ -21,7 +21,7 @@ pub enum IoError {
     #[error("Binary file detected")]
     BinaryFile,
 
-    /// Low-level I/O error from `std::io`.
+    /// Low-level I/O error from std::io.
     #[error("IO error: {0}")]
     System(#[from] std::io::Error),
 
@@ -29,6 +29,3 @@ pub enum IoError {
     #[error("UTF-8 decoding error")]
     Encoding,
 }
-
-/// Result type for I/O operations.
-pub type Result<T> = std::result::Result<T, IoError>;

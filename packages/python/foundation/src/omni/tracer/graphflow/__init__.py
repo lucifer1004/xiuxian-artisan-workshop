@@ -1,14 +1,14 @@
-"""Graphflow: iterative native pipeline runtime with structured evaluation."""
+"""Graphflow: iterative LangGraph pipeline runtime with structured evaluation."""
 
 from .runtime import run_graphflow_pipeline
-from .tracer import GraphflowTracer
-from .types import DemoState, ExecutionStep, ExecutionTrace, StepType
+from .types import DemoState, StepType, ExecutionStep, ExecutionTrace
+from .tracer import LangGraphTracer
 
 __all__ = [
+    "run_graphflow_pipeline",
     "DemoState",
+    "StepType",
     "ExecutionStep",
     "ExecutionTrace",
-    "GraphflowTracer",
-    "StepType",
-    "run_graphflow_pipeline",
+    "LangGraphTracer",
 ]

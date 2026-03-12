@@ -1,9 +1,8 @@
-use std::path::Path;
-use xiuxian_daochang::test_support::{
-    deepseek_ocr_memory_guard_triggered, resolve_deepseek_ocr_global_lock_path,
-    resolve_deepseek_ocr_memory_limit_bytes, simulate_ocr_gate_panic_recovery,
+use omni_agent::test_support::{
+    resolve_deepseek_ocr_global_lock_path, simulate_ocr_gate_panic_recovery,
     simulate_ocr_gate_timeout_recovery,
 };
+use std::path::Path;
 
 #[test]
 fn deepseek_ocr_global_lock_path_targets_lock_file() {
@@ -75,35 +74,5 @@ async fn deepseek_ocr_gate_recovers_after_worker_panic_without_stuck_busy() {
     assert!(
         probe.recovered_after_wait,
         "panic path should already be recovered on immediate retry"
-    );
-}
-
-#[test]
-fn deepseek_ocr_memory_limit_parser_accepts_positive_gb_values() {
-    let Some(limit) = resolve_deepseek_ocr_memory_limit_bytes(Some("8")) else {
-        panic!("8 GB limit should parse into bytes");
-    };
-    assert_eq!(limit, 8 * 1024 * 1024 * 1024);
-}
-
-#[test]
-fn deepseek_ocr_memory_limit_parser_rejects_zero_or_invalid_values() {
-    assert!(resolve_deepseek_ocr_memory_limit_bytes(Some("0")).is_none());
-    assert!(resolve_deepseek_ocr_memory_limit_bytes(Some("-1")).is_none());
-    assert!(resolve_deepseek_ocr_memory_limit_bytes(Some("not-a-number")).is_none());
-}
-
-#[test]
-fn deepseek_ocr_memory_guard_trips_when_rss_exceeds_limit() {
-    let over_limit = deepseek_ocr_memory_guard_triggered(Some("0.000001"), 16 * 1024);
-    assert!(
-        over_limit,
-        "memory guard should trip when RSS is above tiny configured limit"
-    );
-
-    let within_limit = deepseek_ocr_memory_guard_triggered(Some("8"), 64 * 1024 * 1024);
-    assert!(
-        !within_limit,
-        "memory guard should not trip when RSS is below configured limit"
     );
 }

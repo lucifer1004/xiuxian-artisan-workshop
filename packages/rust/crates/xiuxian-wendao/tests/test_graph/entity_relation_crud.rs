@@ -32,8 +32,8 @@ fn test_add_relation() {
         "A company".to_string(),
     );
 
-    assert!(graph.add_entity(entity1).is_ok());
-    assert!(graph.add_entity(entity2).is_ok());
+    graph.add_entity(entity1).unwrap();
+    graph.add_entity(entity2).unwrap();
 
     let relation = Relation::new(
         "John Doe".to_string(),
@@ -42,6 +42,6 @@ fn test_add_relation() {
         "Works at the company".to_string(),
     );
 
-    assert!(graph.add_relation(&relation).is_ok());
+    assert!(graph.add_relation(relation).is_ok());
     assert_eq!(graph.get_stats().total_relations, 1);
 }

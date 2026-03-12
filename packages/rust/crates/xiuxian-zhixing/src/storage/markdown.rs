@@ -2,10 +2,8 @@ use crate::agenda::AgendaEntry;
 use crate::journal::JournalEntry;
 use crate::{Error, Result};
 use chrono::Local;
-use std::path::Path;
 use std::path::PathBuf;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 
 /// File-based storage for the Xiuxian-Zhixing system.
 pub struct MarkdownStorage {
@@ -41,10 +39,16 @@ impl MarkdownStorage {
             journal.tags
         );
 
-        let mut file = self.open_append_file(&file_path, "journal").await?;
-        file.write_all(content.as_bytes())
+        let mut options = fs::OpenOptions::new();
+        options.create(true).append(true);
+        let mut _file = options
+            .open(&file_path)
             .await
-            .map_err(|e| Error::Logic(format!("Failed to append journal: {e}")))?;
+            .map_err(|e| Error::Logic(format!("Failed to open journal file: {e}")))?;
+
+        fs::write(&file_path, content)
+            .await
+            .map_err(|e| Error::Logic(format!("Failed to write journal: {e}")))?;
 
         Ok(())
     }
@@ -67,20 +71,13 @@ impl MarkdownStorage {
             task.title, task.id, task.priority
         );
 
-        let mut file = self.open_append_file(&file_path, "agenda").await?;
-        file.write_all(content.as_bytes())
+        let mut options = fs::OpenOptions::new();
+        options.create(true).append(true);
+
+        fs::write(&file_path, content)
             .await
-            .map_err(|e| Error::Logic(format!("Failed to append task: {e}")))?;
+            .map_err(|e| Error::Logic(format!("Failed to write task: {e}")))?;
 
         Ok(())
-    }
-
-    async fn open_append_file(&self, file_path: &Path, scope: &str) -> Result<fs::File> {
-        let mut options = fs::OpenOptions::new();
-        options.create(true).append(true).write(true);
-        options
-            .open(file_path)
-            .await
-            .map_err(|e| Error::Logic(format!("Failed to open {scope} file: {e}")))
     }
 }

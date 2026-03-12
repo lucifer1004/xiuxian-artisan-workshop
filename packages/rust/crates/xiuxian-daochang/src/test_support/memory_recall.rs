@@ -1,6 +1,6 @@
 //! Memory-recall helpers exposed for integration tests.
 
-use xiuxian_memory_engine::Episode;
+use omni_memory::Episode;
 
 use crate::agent::memory_recall;
 

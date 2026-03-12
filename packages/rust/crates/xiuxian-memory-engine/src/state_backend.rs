@@ -22,7 +22,7 @@ pub trait MemoryStateStore: Send + Sync {
     /// # Errors
     ///
     /// Returns an error when backend state cannot be loaded or decoded.
-    fn load(&self, store: &EpisodeStore) -> Result<()>;
+    fn load(&self, store: &mut EpisodeStore) -> Result<()>;
 
     /// Save state from `store`.
     ///
@@ -82,7 +82,7 @@ impl MemoryStateStore for LocalMemoryStateStore {
         "local"
     }
 
-    fn load(&self, store: &EpisodeStore) -> Result<()> {
+    fn load(&self, store: &mut EpisodeStore) -> Result<()> {
         store.load_state()
     }
 
@@ -235,7 +235,7 @@ mod valkey {
             self.strict_startup
         }
 
-        fn load(&self, store: &EpisodeStore) -> Result<()> {
+        fn load(&self, store: &mut EpisodeStore) -> Result<()> {
             let mut connection = self
                 .client
                 .get_connection()

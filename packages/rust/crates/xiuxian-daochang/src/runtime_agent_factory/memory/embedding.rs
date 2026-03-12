@@ -1,8 +1,8 @@
-use crate::{MemoryConfig, RuntimeSettings};
+use omni_agent::{MemoryConfig, RuntimeSettings};
 
-use crate::env_parse::{parse_positive_u64_from_env, parse_positive_usize_from_env};
+use crate::resolve::{parse_positive_u64_from_env, parse_positive_usize_from_env};
 
-use super::super::shared::non_empty_env;
+use super::super::non_empty_env;
 
 pub(super) fn apply_memory_runtime_embedding_settings(
     memory: &mut MemoryConfig,

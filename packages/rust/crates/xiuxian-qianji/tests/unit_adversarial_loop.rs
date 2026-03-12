@@ -1,5 +1,3 @@
-//! Unit tests for adversarial retry loop convergence.
-
 use async_trait::async_trait;
 use serde_json::json;
 use std::sync::Arc;
@@ -32,8 +30,7 @@ impl QianjiMechanism for SelfResolvingProspector {
 }
 
 #[tokio::test]
-async fn test_adversarial_retry_loop_convergence()
--> std::result::Result<(), Box<dyn std::error::Error>> {
+async fn test_adversarial_retry_loop_convergence() {
     let mut engine = QianjiEngine::new();
 
     let retry_count = Arc::new(std::sync::atomic::AtomicU32::new(0));
@@ -54,9 +51,8 @@ async fn test_adversarial_retry_loop_convergence()
     let scheduler = QianjiScheduler::new(engine);
 
     // Initial run triggers fail (0.9) -> retry -> success (0.01)
-    let result = scheduler.run(json!({})).await?;
+    let result = scheduler.run(json!({})).await.expect("Execution failed");
 
     assert_eq!(result["calibration_status"], "passed");
     assert_eq!(retry_count.load(std::sync::atomic::Ordering::SeqCst), 2);
-    Ok(())
 }

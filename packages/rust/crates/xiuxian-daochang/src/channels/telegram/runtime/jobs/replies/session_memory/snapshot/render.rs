@@ -1,23 +1,24 @@
 use serde_json::json;
 
-use super::super::super::shared::{
-    format_optional_f32, format_optional_str, format_optional_string, format_optional_usize,
-    format_yes_no,
+use crate::agent::{
+    DownstreamAdmissionRuntimeSnapshot, MemoryRecallMetricsSnapshot, MemoryRuntimeStatusSnapshot,
+    SessionMemoryRecallSnapshot,
 };
+
+use super::super::super::shared::{format_optional_f32, format_optional_usize};
 use super::super::metrics::{
     format_memory_recall_metrics_json, format_memory_recall_metrics_lines,
 };
-use super::super::runtime::{
-    format_downstream_admission_compact_line, format_downstream_admission_status_json,
-    format_downstream_admission_status_lines, format_memory_gate_policy_compact_line,
-    format_memory_runtime_status_json, format_memory_runtime_status_lines, memory_backend_ready,
+use super::super::runtime_status::{
+    format_downstream_admission_status_json, format_downstream_admission_status_lines,
+    format_memory_runtime_status_json, format_memory_runtime_status_lines,
 };
 
-pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapshot(
-    snapshot: crate::agent::SessionMemoryRecallSnapshot,
-    metrics: crate::agent::MemoryRecallMetricsSnapshot,
-    runtime_status: crate::agent::MemoryRuntimeStatusSnapshot,
-    admission_status: crate::agent::DownstreamAdmissionRuntimeSnapshot,
+pub(in super::super::super::super) fn format_memory_recall_snapshot(
+    snapshot: SessionMemoryRecallSnapshot,
+    metrics: MemoryRecallMetricsSnapshot,
+    runtime_status: MemoryRuntimeStatusSnapshot,
+    admission_status: DownstreamAdmissionRuntimeSnapshot,
     session_scope: &str,
 ) -> String {
     let mut lines = vec![
@@ -90,81 +91,11 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
     lines.join("\n")
 }
 
-pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapshot_telegram(
-    snapshot: &crate::agent::SessionMemoryRecallSnapshot,
-    metrics: &crate::agent::MemoryRecallMetricsSnapshot,
-    runtime_status: &crate::agent::MemoryRuntimeStatusSnapshot,
-    admission_status: &crate::agent::DownstreamAdmissionRuntimeSnapshot,
-    session_scope: &str,
-) -> String {
-    let backend_ready = memory_backend_ready(runtime_status);
-    [
-        "## Session Memory".to_string(),
-        format!("Captured at unix ms: `{}`", snapshot.created_at_unix_ms),
-        format!("- Session scope: `{session_scope}`"),
-        String::new(),
-        "### Trigger - Decision".to_string(),
-        format!(
-            "- `decision={}` `query_tokens={}` `pipeline_ms={}`",
-            snapshot.decision.as_str(),
-            snapshot.query_tokens,
-            snapshot.pipeline_duration_ms
-        ),
-        format!(
-            "- `feedback_bias={:.3}` `embedding_source={}`",
-            snapshot.recall_feedback_bias, snapshot.embedding_source
-        ),
-        String::new(),
-        "### Recall Result".to_string(),
-        format!(
-            "- `injected={}` / `selected={}` / `total={}`",
-            snapshot.recalled_injected, snapshot.recalled_selected, snapshot.recalled_total
-        ),
-        format!(
-            "- `context_chars={}` `best_score={}` `weakest_score={}`",
-            snapshot.context_chars_injected,
-            format_optional_f32(snapshot.best_score),
-            format_optional_f32(snapshot.weakest_score)
-        ),
-        String::new(),
-        "### Persistence".to_string(),
-        format!(
-            "- `memory_enabled={}` `backend_ready={}` `startup_load_status={}`",
-            format_yes_no(runtime_status.enabled),
-            format_yes_no(backend_ready),
-            runtime_status.startup_load_status
-        ),
-        format!(
-            "- `active_backend={}` `configured_backend={}`",
-            format_optional_str(runtime_status.active_backend),
-            format_optional_string(runtime_status.configured_backend.clone())
-        ),
-        format_memory_gate_policy_compact_line(runtime_status),
-        format_downstream_admission_compact_line(admission_status),
-        String::new(),
-        "### Adaptive Metrics".to_string(),
-        format!(
-            "- `planned_total={}` `completed_total={}` `injected_total={}` `skipped_total={}`",
-            metrics.planned_total,
-            metrics.completed_total,
-            metrics.injected_total,
-            metrics.skipped_total
-        ),
-        format!(
-            "- `avg_pipeline_ms={:.2}` `injected_rate={:.3}`",
-            metrics.avg_pipeline_duration_ms, metrics.injected_rate
-        ),
-        String::new(),
-        "Tip: run `/session memory json` for full payload.".to_string(),
-    ]
-    .join("\n")
-}
-
-pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapshot_json(
-    snapshot: crate::agent::SessionMemoryRecallSnapshot,
-    metrics: crate::agent::MemoryRecallMetricsSnapshot,
-    runtime_status: &crate::agent::MemoryRuntimeStatusSnapshot,
-    admission_status: crate::agent::DownstreamAdmissionRuntimeSnapshot,
+pub(in super::super::super::super) fn format_memory_recall_snapshot_json(
+    snapshot: SessionMemoryRecallSnapshot,
+    metrics: MemoryRecallMetricsSnapshot,
+    runtime_status: MemoryRuntimeStatusSnapshot,
+    admission_status: DownstreamAdmissionRuntimeSnapshot,
     session_scope: &str,
 ) -> String {
     json!({
@@ -200,7 +131,7 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapsho
             "weakest_score": snapshot.weakest_score,
         },
         "runtime": format_memory_runtime_status_json(runtime_status),
-        "admission": format_downstream_admission_status_json(&admission_status),
+        "admission": format_downstream_admission_status_json(admission_status),
         "metrics": format_memory_recall_metrics_json(metrics),
     })
     .to_string()

@@ -1,168 +1,93 @@
-//! Managed slash and control command parser coverage tests.
+//! Test coverage for xiuxian-daochang behavior.
 
-use xiuxian_daochang::test_support::{
-    ManagedControlCommand, ManagedSlashCommand, detect_managed_control_command,
-    detect_managed_slash_command,
+use xiuxian_daochang::test_support::managed_parser::{
+    detect_managed_control_command, detect_managed_slash_command,
+};
+use xiuxian_daochang::test_support::telegram_parser::{
+    is_agenda_command, parse_help_command, parse_job_status_command, parse_resume_context_command,
+    parse_session_admin_command, parse_session_feedback_command, parse_session_injection_command,
+    parse_session_partition_command,
+};
+use xiuxian_daochang::test_support::types::{
+    ManagedControlCommand, ManagedSlashCommand, OutputFormat, ResumeContextCommand,
+    SessionAdminAction, SessionFeedbackDirection, SessionInjectionAction, SessionPartitionMode,
 };
 
 #[test]
-fn detect_managed_slash_commands_supports_session_job_and_background_shapes() {
+fn test_support_parses_help_and_job_status_output_formats() {
+    assert_eq!(parse_help_command("/help"), Some(OutputFormat::Dashboard));
+    assert_eq!(parse_help_command("/help json"), Some(OutputFormat::Json));
+    assert!(is_agenda_command("/agenda"));
+    assert!(is_agenda_command("agenda"));
+    assert!(!is_agenda_command("/agenda tomorrow"));
+
+    let Some(job) = parse_job_status_command("/job abc123 json") else {
+        panic!("expected /job json parse");
+    };
+    assert_eq!(job.job_id, "abc123");
+    assert_eq!(job.format, OutputFormat::Json);
+}
+
+#[test]
+fn test_support_maps_resume_feedback_and_partition_modes() {
     assert_eq!(
-        detect_managed_slash_command("/session"),
-        Some(ManagedSlashCommand::SessionStatus)
+        parse_resume_context_command("/resume drop"),
+        Some(ResumeContextCommand::Drop)
     );
+
+    let Some(feedback) = parse_session_feedback_command("/feedback up") else {
+        panic!("expected /feedback up parse");
+    };
+    assert_eq!(feedback.direction, SessionFeedbackDirection::Up);
+    assert_eq!(feedback.format, OutputFormat::Dashboard);
+
+    let Some(partition) = parse_session_partition_command("/session partition chat_user json")
+    else {
+        panic!("expected /session partition chat_user json parse");
+    };
+    assert_eq!(partition.mode, Some(SessionPartitionMode::ChatUser));
+    assert_eq!(partition.format, OutputFormat::Json);
     assert_eq!(
-        detect_managed_slash_command("/window status json"),
-        Some(ManagedSlashCommand::SessionStatus)
+        SessionPartitionMode::ChatThreadUser.as_str(),
+        "chat_thread_user"
     );
+    let Some(scope_alias) = parse_session_partition_command("/session scope on") else {
+        panic!("expected /session scope on parse");
+    };
+    assert_eq!(scope_alias.mode, Some(SessionPartitionMode::Chat));
+    assert_eq!(scope_alias.format, OutputFormat::Dashboard);
+
+    let Some(injection) = parse_session_injection_command("/session inject status json") else {
+        panic!("expected /session inject status json parse");
+    };
+    assert_eq!(injection.action, SessionInjectionAction::Status);
+    assert_eq!(injection.format, OutputFormat::Json);
+
+    let Some(admin) = parse_session_admin_command("/session admin add 1001,1002") else {
+        panic!("expected admin parse");
+    };
     assert_eq!(
-        detect_managed_slash_command("/session budget json"),
-        Some(ManagedSlashCommand::SessionBudget)
+        admin.action,
+        SessionAdminAction::Add(vec!["1001".to_string(), "1002".to_string()])
     );
+}
+
+#[test]
+fn test_support_managed_detectors_remain_stable() {
     assert_eq!(
-        detect_managed_slash_command("[bbx-1] /session memory json"),
-        Some(ManagedSlashCommand::SessionMemory)
-    );
-    assert_eq!(
-        detect_managed_slash_command("/feedback down json"),
-        Some(ManagedSlashCommand::SessionFeedback)
-    );
-    assert_eq!(
-        detect_managed_slash_command("/job abc123"),
-        Some(ManagedSlashCommand::JobStatus)
-    );
-    assert_eq!(
-        detect_managed_slash_command("/jobs json"),
+        detect_managed_slash_command("/jobs"),
         Some(ManagedSlashCommand::JobsSummary)
     );
     assert_eq!(
-        detect_managed_slash_command("/bg collect logs"),
-        Some(ManagedSlashCommand::BackgroundSubmit)
-    );
-    assert_eq!(
-        detect_managed_slash_command("/research compare two approaches"),
-        Some(ManagedSlashCommand::BackgroundSubmit)
-    );
-}
-
-#[test]
-fn detect_managed_slash_commands_rejects_invalid_shapes() {
-    assert_eq!(detect_managed_slash_command("/feedback"), None);
-    assert_eq!(detect_managed_slash_command("/session feedback"), None);
-    assert_eq!(detect_managed_slash_command("/session budget pretty"), None);
-    assert_eq!(detect_managed_slash_command("/jobs pretty"), None);
-    assert_eq!(detect_managed_slash_command("/bg"), None);
-}
-
-#[test]
-fn detect_managed_control_commands_supports_reset_resume_and_partition() {
-    assert_eq!(
         detect_managed_control_command("/reset"),
         Some(ManagedControlCommand::Reset)
-    );
-    assert_eq!(
-        detect_managed_control_command("/clear"),
-        Some(ManagedControlCommand::Reset)
-    );
-    assert_eq!(
-        detect_managed_control_command("/resume"),
-        Some(ManagedControlCommand::ResumeRestore)
-    );
-    assert_eq!(
-        detect_managed_control_command("/resume status"),
-        Some(ManagedControlCommand::ResumeStatus)
-    );
-    assert_eq!(
-        detect_managed_control_command("/resume drop"),
-        Some(ManagedControlCommand::ResumeDrop)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session partition"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session scope"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session partition json"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session scope json"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session partition chat_user json"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session scope chat_user json"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session partition guild_channel_user"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session partition channel"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session partition guild_user json"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session partition channel-user"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session partition topic-user json"),
-        Some(ManagedControlCommand::SessionPartition)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session admin"),
-        Some(ManagedControlCommand::SessionAdmin)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session admin json"),
-        Some(ManagedControlCommand::SessionAdmin)
     );
     assert_eq!(
         detect_managed_control_command("/session admin add 1001"),
         Some(ManagedControlCommand::SessionAdmin)
     );
     assert_eq!(
-        detect_managed_control_command("/window admin set 1001,1002 json"),
-        Some(ManagedControlCommand::SessionAdmin)
-    );
-    assert_eq!(
-        detect_managed_control_command("/session inject"),
-        Some(ManagedControlCommand::SessionInjection)
-    );
-    assert_eq!(
         detect_managed_control_command("/session inject status json"),
-        Some(ManagedControlCommand::SessionInjection)
-    );
-    assert_eq!(
-        detect_managed_control_command("/context injection clear"),
-        Some(ManagedControlCommand::SessionInjection)
-    );
-}
-
-#[test]
-fn detect_managed_control_commands_rejects_invalid_shapes() {
-    assert_eq!(detect_managed_control_command("/resume now"), None);
-    assert_eq!(
-        detect_managed_control_command("/session partition maybe"),
-        None
-    );
-    assert_eq!(
-        detect_managed_control_command("/session partition on pretty"),
-        None
-    );
-    assert_eq!(
-        detect_managed_control_command("/session injection"),
         Some(ManagedControlCommand::SessionInjection)
     );
 }

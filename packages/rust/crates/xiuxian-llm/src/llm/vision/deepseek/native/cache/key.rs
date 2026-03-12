@@ -1,7 +1,6 @@
 use sha2::{Digest, Sha256};
 
 use super::super::super::super::preprocess::PreparedVisionImage;
-use super::prepared_pixels_fingerprint;
 
 pub(in crate::llm::vision::deepseek::native) fn build_cache_key(
     model_root: &str,
@@ -19,9 +18,7 @@ pub(in crate::llm::vision::deepseek::native) fn build_cache_key(
     hasher.update(image_size.to_le_bytes());
     hasher.update([u8::from(crop_mode)]);
     hasher.update(max_new_tokens.to_le_bytes());
-    hasher.update(prepared.width.to_le_bytes());
-    hasher.update(prepared.height.to_le_bytes());
-    hasher.update(prepared.scale.to_le_bytes());
-    hasher.update(prepared_pixels_fingerprint(prepared).as_bytes());
+    hasher.update(prepared.resized_png.as_ref());
+    hasher.update(prepared.grayscale_png.as_ref());
     format!("vision:deepseek:ocr:{}", hex::encode(hasher.finalize()))
 }

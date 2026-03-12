@@ -1,13 +1,32 @@
 /// Parsed section row for section-aware retrieval and `HippoRAG 2` `Passage Nodes`.
 #[derive(Debug, Clone)]
 pub struct ParsedSection {
+    /// Leaf heading title for this section.
+    pub heading_title: String,
+    /// Slash-delimited heading ancestry for this section.
     pub heading_path: String,
+    /// Lower-cased `heading_path` for case-insensitive matching.
     pub heading_path_lower: String,
+    /// Markdown heading depth for this section.
     pub heading_level: usize,
+    /// Inclusive 1-based start line within the markdown body.
+    pub line_start: usize,
+    /// Inclusive 1-based end line within the markdown body.
+    pub line_end: usize,
+    /// Content contained by this section.
     pub section_text: String,
+    /// Lower-cased section text for case-insensitive matching.
     pub section_text_lower: String,
     /// List of entity IDs mentioned in this specific section.
     pub entities: Vec<String>,
+}
+
+#[derive(Clone, Copy)]
+struct SectionCursor<'a> {
+    heading_title: &'a str,
+    heading_path: &'a str,
+    heading_level: usize,
+    line_range: (usize, usize),
 }
 
 fn normalize_whitespace(raw: &str) -> String {
@@ -39,24 +58,27 @@ fn parse_markdown_heading(line: &str) -> Option<(usize, String)> {
 
 fn push_section(
     out: &mut Vec<ParsedSection>,
-    heading_path: &str,
-    heading_level: usize,
+    cursor: SectionCursor<'_>,
     lines: &[String],
     source_path: &std::path::Path,
     root: &std::path::Path,
 ) {
     let section_text = lines.join("\n").trim().to_string();
-    if section_text.is_empty() && heading_path.trim().is_empty() {
+    if section_text.is_empty() && cursor.heading_path.trim().is_empty() {
         return;
     }
 
-    // 2026 Refinement: Automatically identify entities within the section text (HippoRAG 2)
     let extracted = super::links::extract_link_targets(&section_text, source_path, root);
+    let line_start = cursor.line_range.0.max(1);
+    let line_end = cursor.line_range.1.max(line_start);
 
     out.push(ParsedSection {
-        heading_path: heading_path.to_string(),
-        heading_path_lower: heading_path.to_lowercase(),
-        heading_level,
+        heading_title: cursor.heading_title.to_string(),
+        heading_path: cursor.heading_path.to_string(),
+        heading_path_lower: cursor.heading_path.to_lowercase(),
+        heading_level: cursor.heading_level,
+        line_start,
+        line_end,
         section_text_lower: section_text.to_lowercase(),
         section_text,
         entities: extracted.note_links,
@@ -68,14 +90,19 @@ pub(super) fn extract_sections(
     source_path: &std::path::Path,
     root: &std::path::Path,
 ) -> Vec<ParsedSection> {
-    let mut sections: Vec<ParsedSection> = Vec::new();
+    let mut sections = Vec::new();
     let mut heading_stack: Vec<String> = Vec::new();
+    let mut current_heading_title = String::new();
     let mut current_heading_path = String::new();
     let mut current_heading_level = 0usize;
-    let mut current_lines: Vec<String> = Vec::new();
+    let mut current_start_line = 1usize;
+    let mut current_lines = Vec::new();
     let mut in_code_fence = false;
+    let mut last_seen_line = 0usize;
 
-    for line in body.lines() {
+    for (line_idx, line) in body.lines().enumerate() {
+        let line_no = line_idx + 1;
+        last_seen_line = line_no;
         let trimmed = line.trim_start();
         if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
             in_code_fence = !in_code_fence;
@@ -85,8 +112,15 @@ pub(super) fn extract_sections(
         if !in_code_fence && let Some((level, heading)) = parse_markdown_heading(trimmed) {
             push_section(
                 &mut sections,
-                &current_heading_path,
-                current_heading_level,
+                SectionCursor {
+                    heading_title: &current_heading_title,
+                    heading_path: &current_heading_path,
+                    heading_level: current_heading_level,
+                    line_range: (
+                        current_start_line,
+                        line_no.saturating_sub(1).max(current_start_line),
+                    ),
+                },
                 &current_lines,
                 source_path,
                 root,
@@ -95,9 +129,11 @@ pub(super) fn extract_sections(
             if heading_stack.len() >= level {
                 heading_stack.truncate(level.saturating_sub(1));
             }
-            heading_stack.push(heading);
+            heading_stack.push(heading.clone());
+            current_heading_title = heading;
             current_heading_path = heading_stack.join(" / ");
             current_heading_level = level;
+            current_start_line = line_no;
             continue;
         }
         current_lines.push(line.to_string());
@@ -105,20 +141,26 @@ pub(super) fn extract_sections(
 
     push_section(
         &mut sections,
-        &current_heading_path,
-        current_heading_level,
+        SectionCursor {
+            heading_title: &current_heading_title,
+            heading_path: &current_heading_path,
+            heading_level: current_heading_level,
+            line_range: (current_start_line, last_seen_line.max(current_start_line)),
+        },
         &current_lines,
         source_path,
         root,
     );
     if sections.is_empty() {
         let section_text = body.trim().to_string();
-        // Still need to scan if the full body is a single section
         let extracted = super::links::extract_link_targets(&section_text, source_path, root);
         sections.push(ParsedSection {
+            heading_title: String::new(),
             heading_path: String::new(),
             heading_path_lower: String::new(),
             heading_level: 0,
+            line_start: 1,
+            line_end: body.lines().count().max(1),
             section_text_lower: section_text.to_lowercase(),
             section_text,
             entities: extracted.note_links,

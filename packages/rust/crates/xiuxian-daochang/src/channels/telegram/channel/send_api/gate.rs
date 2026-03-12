@@ -1,185 +1,201 @@
-use std::time::{Duration, Instant};
-
-use super::super::TelegramChannel;
-use super::super::constants::{
-    TELEGRAM_SEND_RATE_LIMIT_SPREAD_MAX_MS, TELEGRAM_SEND_RATE_LIMIT_SPREAD_STEP_MS,
+use super::{
+    Array, CHECKPOINT_PARENT_ID_COLUMN, CHECKPOINT_STEP_COLUMN, CHECKPOINT_TIMESTAMP_COLUMN,
+    CONTENT_COLUMN, CheckpointStore, ID_COLUMN, METADATA_COLUMN, PREVIEW_MAX_LEN, RecordBatch,
+    Result, THREAD_ID_COLUMN, TryStreamExt, VectorStoreError,
 };
-use super::super::error::TelegramApiError;
 
-impl TelegramChannel {
-    pub(in crate::channels::telegram::channel) async fn wait_for_send_rate_limit_gate(
-        &self,
-        method: &str,
-        request_kind: &str,
+impl CheckpointStore {
+    /// Get timeline records for time-travel visualization.
+    ///
+    /// Returns structured timeline events with previews, suitable for UI display.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the checkpoint table cannot be opened or scanned.
+    pub async fn get_timeline_records(
+        &mut self,
+        table_name: &str,
+        thread_id: &str,
+        limit: usize,
+    ) -> Result<Vec<crate::checkpoint::TimelineRecord>, VectorStoreError> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let table_path = self.table_path(table_name);
+        if !table_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let dataset = self.open_or_recover(table_name, false).await?;
+
+        let mut scanner = dataset.scan();
+        scanner.project(&[
+            ID_COLUMN,
+            CONTENT_COLUMN,
+            METADATA_COLUMN,
+            CHECKPOINT_TIMESTAMP_COLUMN,
+            CHECKPOINT_PARENT_ID_COLUMN,
+            CHECKPOINT_STEP_COLUMN,
+        ])?;
+        let filter_expr = format!("{} = '{}'", THREAD_ID_COLUMN, thread_id.replace('\'', "''"));
+        scanner.filter(&filter_expr)?;
+
+        let mut stream = scanner
+            .try_into_stream()
+            .await
+            .map_err(VectorStoreError::LanceDB)?;
+        let mut checkpoints: Vec<(f64, Option<i32>, crate::checkpoint::TimelineRecord)> =
+            Vec::new();
+
+        while let Some(batch) = stream.try_next().await.map_err(VectorStoreError::LanceDB)? {
+            Self::extend_timeline_from_batch(&batch, thread_id, &mut checkpoints);
+        }
+
+        Self::sort_and_limit_timeline(&mut checkpoints, limit);
+        Ok(Self::finalize_timeline_steps(checkpoints))
+    }
+
+    fn extend_timeline_from_batch(
+        batch: &RecordBatch,
+        thread_id: &str,
+        checkpoints: &mut Vec<(f64, Option<i32>, crate::checkpoint::TimelineRecord)>,
     ) {
-        loop {
-            if let Some((delay, spread_slot, spread_delay_ms)) =
-                self.next_local_send_gate_wait().await
-            {
-                tracing::debug!(
-                    method,
-                    request_kind,
-                    gate_source = "local",
-                    gate_wait_ms = delay.as_millis(),
-                    spread_slot,
-                    spread_delay_ms,
-                    "Telegram send gate active; waiting before request"
-                );
-                tokio::time::sleep(delay).await;
+        let Some(id_col) = batch.column_by_name(ID_COLUMN) else {
+            return;
+        };
+        let Some(content_col) = batch.column_by_name(CONTENT_COLUMN) else {
+            return;
+        };
+        let Some(metadata_col) = batch.column_by_name(METADATA_COLUMN) else {
+            return;
+        };
+        let Some(ts_col) = batch.column_by_name(CHECKPOINT_TIMESTAMP_COLUMN) else {
+            return;
+        };
+        let Some(parent_col) = batch.column_by_name(CHECKPOINT_PARENT_ID_COLUMN) else {
+            return;
+        };
+        let Some(step_col) = batch.column_by_name(CHECKPOINT_STEP_COLUMN) else {
+            return;
+        };
+
+        let Some(id_strs) = id_col
+            .as_any()
+            .downcast_ref::<lance::deps::arrow_array::StringArray>()
+        else {
+            return;
+        };
+        let Some(content_strs) = content_col
+            .as_any()
+            .downcast_ref::<lance::deps::arrow_array::StringArray>()
+        else {
+            return;
+        };
+        let Some(metadata_strs) = metadata_col
+            .as_any()
+            .downcast_ref::<lance::deps::arrow_array::StringArray>()
+        else {
+            return;
+        };
+        let Some(ts_vals) = ts_col
+            .as_any()
+            .downcast_ref::<lance::deps::arrow_array::Float64Array>()
+        else {
+            return;
+        };
+        let Some(parent_vals) = parent_col
+            .as_any()
+            .downcast_ref::<lance::deps::arrow_array::StringArray>()
+        else {
+            return;
+        };
+        let Some(step_vals) = step_col
+            .as_any()
+            .downcast_ref::<lance::deps::arrow_array::Int32Array>()
+        else {
+            return;
+        };
+
+        for i in 0..batch.num_rows() {
+            if id_strs.is_null(i) || content_strs.is_null(i) || ts_vals.is_null(i) {
                 continue;
             }
 
-            let Some(backend) = self.send_rate_limit_backend.valkey() else {
-                return;
+            let id = id_strs.value(i).to_string();
+            let content = content_strs.value(i);
+            let timestamp = ts_vals.value(i);
+            let parent_checkpoint_id = if parent_vals.is_null(i) {
+                None
+            } else {
+                Some(parent_vals.value(i).to_string())
+            };
+            let explicit_step = if step_vals.is_null(i) {
+                None
+            } else {
+                Some(step_vals.value(i))
+            };
+            let reason = if metadata_strs.is_null(i) {
+                None
+            } else {
+                Self::extract_reason(metadata_strs.value(i))
             };
 
-            let distributed_window = match backend.current_window_with_spread_slot().await {
-                Ok(window) => window,
-                Err(error) => {
-                    tracing::warn!(
-                        method,
-                        request_kind,
-                        gate_source = "valkey",
-                        error = %error,
-                        "failed to query distributed telegram send gate; proceeding without remote wait"
-                    );
-                    return;
-                }
+            let record = crate::checkpoint::TimelineRecord {
+                checkpoint_id: id,
+                thread_id: thread_id.to_string(),
+                step: explicit_step.unwrap_or(0),
+                timestamp,
+                preview: Self::build_preview(content),
+                parent_checkpoint_id,
+                reason,
             };
-            let Some((window_delay, spread_slot)) = distributed_window else {
-                return;
-            };
-
-            let spread_delay_ms = TELEGRAM_SEND_RATE_LIMIT_SPREAD_STEP_MS
-                .saturating_mul(spread_slot)
-                .min(TELEGRAM_SEND_RATE_LIMIT_SPREAD_MAX_MS);
-            let total_delay = window_delay + Duration::from_millis(spread_delay_ms);
-
-            {
-                let mut gate = self.send_rate_limit_gate.lock().await;
-                gate.until = Some(Instant::now() + window_delay);
-                gate.spread_slots_issued = 0;
-            }
-
-            tracing::debug!(
-                method,
-                request_kind,
-                gate_source = "valkey",
-                gate_wait_ms = total_delay.as_millis(),
-                spread_slot,
-                spread_delay_ms,
-                "Telegram distributed send gate active; waiting before request"
-            );
-            tokio::time::sleep(total_delay).await;
+            checkpoints.push((timestamp, explicit_step, record));
         }
     }
 
-    pub(in crate::channels::telegram::channel) async fn update_send_rate_limit_gate_from_error(
-        &self,
-        error: &TelegramApiError,
-        delay: Duration,
-        method: &str,
-        request_kind: &str,
+    fn extract_reason(metadata: &str) -> Option<String> {
+        serde_json::from_str::<serde_json::Value>(metadata)
+            .ok()
+            .and_then(|meta| {
+                meta.get("reason")
+                    .and_then(serde_json::Value::as_str)
+                    .map(ToString::to_string)
+            })
+    }
+
+    fn build_preview(content: &str) -> String {
+        if content.chars().count() > PREVIEW_MAX_LEN {
+            let truncated: String = content.chars().take(PREVIEW_MAX_LEN).collect();
+            format!("{truncated}...")
+        } else {
+            content.to_string()
+        }
+    }
+
+    fn sort_and_limit_timeline(
+        checkpoints: &mut Vec<(f64, Option<i32>, crate::checkpoint::TimelineRecord)>,
+        limit: usize,
     ) {
-        if !error.is_rate_limited() || delay.is_zero() {
-            return;
-        }
-
-        self.update_local_send_rate_limit_gate(delay, method, request_kind, error)
-            .await;
-
-        let Some(backend) = self.send_rate_limit_backend.valkey() else {
-            return;
-        };
-        match backend.extend_window(delay).await {
-            Ok(Some(distributed_delay)) => {
-                self.update_local_send_rate_limit_gate(
-                    distributed_delay,
-                    method,
-                    request_kind,
-                    error,
-                )
-                .await;
-                tracing::debug!(
-                    method,
-                    request_kind,
-                    gate_source = "valkey",
-                    retry_after_ms = distributed_delay.as_millis(),
-                    "Telegram distributed send gate synchronized from rate limit response"
-                );
-            }
-            Ok(None) => {}
-            Err(distributed_error) => {
-                tracing::warn!(
-                    method,
-                    request_kind,
-                    gate_source = "valkey",
-                    error = %distributed_error,
-                    "failed to update distributed telegram send gate from rate limit response"
-                );
-            }
-        }
+        checkpoints.sort_by(|left, right| right.0.total_cmp(&left.0));
+        checkpoints.truncate(limit);
     }
 
-    async fn next_local_send_gate_wait(&self) -> Option<(Duration, u32, u64)> {
-        let mut gate = self.send_rate_limit_gate.lock().await;
-        match gate.until {
-            Some(deadline) => {
-                let now = Instant::now();
-                if deadline <= now {
-                    gate.until = None;
-                    gate.spread_slots_issued = 0;
-                    None
-                } else {
-                    let spread_slot = gate.spread_slots_issued;
-                    gate.spread_slots_issued = gate.spread_slots_issued.saturating_add(1);
-                    let spread_delay_ms = TELEGRAM_SEND_RATE_LIMIT_SPREAD_STEP_MS
-                        .saturating_mul(u64::from(spread_slot))
-                        .min(TELEGRAM_SEND_RATE_LIMIT_SPREAD_MAX_MS);
-                    let wait_duration =
-                        deadline.duration_since(now) + Duration::from_millis(spread_delay_ms);
-                    Some((wait_duration, spread_slot, spread_delay_ms))
+    fn finalize_timeline_steps(
+        checkpoints: Vec<(f64, Option<i32>, crate::checkpoint::TimelineRecord)>,
+    ) -> Vec<crate::checkpoint::TimelineRecord> {
+        checkpoints
+            .into_iter()
+            .enumerate()
+            .map(|(index, (_, explicit_step, mut record))| {
+                if explicit_step.is_none() {
+                    record.step = match i32::try_from(index) {
+                        Ok(step) => step,
+                        Err(_) => i32::MAX,
+                    };
                 }
-            }
-            None => None,
-        }
-    }
-
-    async fn update_local_send_rate_limit_gate(
-        &self,
-        delay: Duration,
-        method: &str,
-        request_kind: &str,
-        error: &TelegramApiError,
-    ) {
-        let now = Instant::now();
-        let next_deadline = now + delay;
-        let mut gate = self.send_rate_limit_gate.lock().await;
-        let previous_wait_ms = gate
-            .until
-            .as_ref()
-            .and_then(|deadline| deadline.checked_duration_since(now))
-            .map(|remaining| remaining.as_millis())
-            .unwrap_or_default();
-
-        let should_update = match gate.until {
-            Some(existing_deadline) => existing_deadline < next_deadline,
-            None => true,
-        };
-        if !should_update {
-            return;
-        }
-
-        gate.until = Some(next_deadline);
-        gate.spread_slots_issued = 0;
-        tracing::warn!(
-            method,
-            request_kind,
-            gate_source = "local",
-            retry_after_ms = delay.as_millis(),
-            previous_wait_ms,
-            error = %error,
-            "Telegram send gate updated from rate limit response"
-        );
+                record
+            })
+            .collect()
     }
 }

@@ -1,107 +1,70 @@
-use crate::agent::{DownstreamAdmissionRuntimeSnapshot, MemoryRuntimeStatusSnapshot};
+use serde_json::json;
 
-use super::super::super::shared::{
-    format_optional_f32, format_optional_u32, format_optional_usize,
-};
-use super::helpers::{
-    format_optional_bool, format_optional_str, format_optional_string, format_yes_no,
-    is_backend_ready,
-};
-
-pub(in super::super) fn format_memory_runtime_status_lines(
-    status: MemoryRuntimeStatusSnapshot,
+pub(super) fn format_memory_recall_metrics_lines(
+    metrics: crate::agent::MemoryRecallMetricsSnapshot,
 ) -> Vec<String> {
-    let backend_ready = is_backend_ready(
-        status.enabled,
-        status.active_backend.is_some(),
-        status.startup_load_status,
-    );
     vec![
-        format!("- `memory_enabled={}`", format_yes_no(status.enabled)),
+        format!("- `planned_total={}`", metrics.planned_total),
         format!(
-            "- `configured_backend={}`",
-            format_optional_string(status.configured_backend)
+            "- `completed_total={}` / `injected={}` / `skipped={}`",
+            metrics.completed_total, metrics.injected_total, metrics.skipped_total
         ),
         format!(
-            "- `active_backend={}`",
-            format_optional_str(status.active_backend)
+            "- `selected_total={}` / `injected_items_total={}`",
+            metrics.selected_total, metrics.injected_items_total
         ),
         format!(
-            "- `strict_startup={}`",
-            format_optional_bool(status.strict_startup)
-        ),
-        format!("- `startup_load_status={}`", status.startup_load_status),
-        format!("- `backend_ready={}`", format_yes_no(backend_ready)),
-        format!(
-            "- `store_path={}`",
-            format_optional_string(status.store_path)
+            "- `context_chars_injected_total={}`",
+            metrics.context_chars_injected_total
         ),
         format!(
-            "- `table_name={}`",
-            format_optional_string(status.table_name)
+            "- `avg_pipeline_duration_ms={:.2}` / `total_pipeline_duration_ms={}`",
+            metrics.avg_pipeline_duration_ms, metrics.pipeline_duration_ms_total
         ),
         format!(
-            "- `gate_promote_threshold={}`",
-            format_optional_f32(status.gate_promote_threshold)
+            "- `injected_rate={:.3}` / `avg_selected_per_completed={:.3}` / `avg_injected_per_injected={:.3}`",
+            metrics.injected_rate,
+            metrics.avg_selected_per_completed,
+            metrics.avg_injected_per_injected
         ),
         format!(
-            "- `gate_obsolete_threshold={}`",
-            format_optional_f32(status.gate_obsolete_threshold)
-        ),
-        format!(
-            "- `gate_promote_min_usage={}`",
-            format_optional_u32(status.gate_promote_min_usage)
-        ),
-        format!(
-            "- `gate_obsolete_min_usage={}`",
-            format_optional_u32(status.gate_obsolete_min_usage)
-        ),
-        format!(
-            "- `gate_promote_failure_rate_ceiling={}`",
-            format_optional_f32(status.gate_promote_failure_rate_ceiling)
-        ),
-        format!(
-            "- `gate_obsolete_failure_rate_floor={}`",
-            format_optional_f32(status.gate_obsolete_failure_rate_floor)
-        ),
-        format!(
-            "- `gate_promote_min_ttl_score={}`",
-            format_optional_f32(status.gate_promote_min_ttl_score)
-        ),
-        format!(
-            "- `gate_obsolete_max_ttl_score={}`",
-            format_optional_f32(status.gate_obsolete_max_ttl_score)
-        ),
-        format!(
-            "- `episodes_total={}`",
-            format_optional_usize(status.episodes_total)
-        ),
-        format!(
-            "- `q_values_total={}`",
-            format_optional_usize(status.q_values_total)
+            "- `latency_buckets_ms`: `<=10:{}` `<=25:{}` `<=50:{}` `<=100:{}` `<=250:{}` `<=500:{}` `>500:{}`",
+            metrics.latency_buckets.le_10ms,
+            metrics.latency_buckets.le_25ms,
+            metrics.latency_buckets.le_50ms,
+            metrics.latency_buckets.le_100ms,
+            metrics.latency_buckets.le_250ms,
+            metrics.latency_buckets.le_500ms,
+            metrics.latency_buckets.gt_500ms
         ),
     ]
 }
 
-pub(in super::super) fn format_downstream_admission_status_lines(
-    status: DownstreamAdmissionRuntimeSnapshot,
-) -> Vec<String> {
-    vec![
-        format!("- `enabled={}`", format_yes_no(status.enabled)),
-        format!(
-            "- `llm_reject_threshold_pct={}` / `embedding_reject_threshold_pct={}`",
-            status.llm_reject_threshold_pct, status.embedding_reject_threshold_pct
-        ),
-        format!(
-            "- `total={}` / `admitted={}` / `rejected={}` / `reject_rate_pct={}`",
-            status.metrics.total,
-            status.metrics.admitted,
-            status.metrics.rejected,
-            status.metrics.reject_rate_pct
-        ),
-        format!(
-            "- `rejected_llm_saturated={}` / `rejected_embedding_saturated={}`",
-            status.metrics.rejected_llm_saturated, status.metrics.rejected_embedding_saturated
-        ),
-    ]
+pub(super) fn format_memory_recall_metrics_json(
+    metrics: crate::agent::MemoryRecallMetricsSnapshot,
+) -> serde_json::Value {
+    json!({
+        "captured_at_unix_ms": metrics.captured_at_unix_ms,
+        "planned_total": metrics.planned_total,
+        "injected_total": metrics.injected_total,
+        "skipped_total": metrics.skipped_total,
+        "completed_total": metrics.completed_total,
+        "selected_total": metrics.selected_total,
+        "injected_items_total": metrics.injected_items_total,
+        "context_chars_injected_total": metrics.context_chars_injected_total,
+        "pipeline_duration_ms_total": metrics.pipeline_duration_ms_total,
+        "avg_pipeline_duration_ms": metrics.avg_pipeline_duration_ms,
+        "avg_selected_per_completed": metrics.avg_selected_per_completed,
+        "avg_injected_per_injected": metrics.avg_injected_per_injected,
+        "injected_rate": metrics.injected_rate,
+        "latency_buckets_ms": {
+            "le_10ms": metrics.latency_buckets.le_10ms,
+            "le_25ms": metrics.latency_buckets.le_25ms,
+            "le_50ms": metrics.latency_buckets.le_50ms,
+            "le_100ms": metrics.latency_buckets.le_100ms,
+            "le_250ms": metrics.latency_buckets.le_250ms,
+            "le_500ms": metrics.latency_buckets.le_500ms,
+            "gt_500ms": metrics.latency_buckets.gt_500ms,
+        },
+    })
 }

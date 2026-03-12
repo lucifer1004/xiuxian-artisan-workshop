@@ -18,7 +18,8 @@ fn test_custom_discovery_options() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
 
-    let engine = SyncEngine::new(temp_dir.path(), &manifest_path).with_options(options);
+    let engine =
+        SyncEngine::new(temp_dir.path().to_path_buf(), manifest_path.clone()).with_options(options);
     let files = engine.discover_files();
 
     // Should only find .rs file

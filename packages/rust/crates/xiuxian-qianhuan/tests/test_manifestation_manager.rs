@@ -1,41 +1,42 @@
 //! Integration tests for manifestation manager template rendering.
 
-use anyhow::Result;
 use serde_json::json;
-use std::collections::HashMap;
 use std::fs;
 use tempfile::tempdir;
 use xiuxian_qianhuan::interface::ManifestationInterface;
 use xiuxian_qianhuan::{
     ManifestationManager, ManifestationRenderRequest, ManifestationRuntimeContext,
-    ManifestationTemplateTarget, MemoryTemplateRecord, SessionSystemPromptInjectionSnapshot,
-    normalize_session_system_prompt_injection_xml,
+    ManifestationTemplateTarget,
 };
 
 #[test]
-fn manifestation_manager_renders_template() -> Result<()> {
-    let dir = tempdir()?;
+fn manifestation_manager_renders_template() {
+    let dir = tempdir().expect("create temp dir");
     let template_path = dir.path().join("test.md.j2");
-    fs::write(&template_path, "Hello {{ name }}!")?;
+    fs::write(&template_path, "Hello {{ name }}!").expect("write template");
 
     let glob = format!("{}/*.j2", dir.path().display());
-    let manager = ManifestationManager::new(&[glob.as_str()])?;
+    let manager =
+        ManifestationManager::new(&[glob.as_str()]).expect("create manifestation manager");
 
-    let rendered = manager.render_template("test.md.j2", json!({"name": "Daoist"}))?;
+    let rendered = manager
+        .render_template("test.md.j2", json!({"name": "Daoist"}))
+        .expect("render template");
     assert_eq!(rendered, "Hello Daoist!");
-    Ok(())
 }
 
 #[test]
-fn manifestation_manager_render_request_injects_runtime_context() -> Result<()> {
-    let dir = tempdir()?;
+fn manifestation_manager_render_request_injects_runtime_context() {
+    let dir = tempdir().expect("create temp dir");
     fs::write(
         dir.path().join("system_prompt_v2.xml"),
         "<root>{{ qianhuan.persona_id }}|{{ qianhuan.state_context }}|{{ qianhuan.injected_context }}</root>",
-    )?;
+    )
+    .expect("write xml template");
 
     let glob = format!("{}/*", dir.path().display());
-    let manager = ManifestationManager::new(&[glob.as_str()])?;
+    let manager =
+        ManifestationManager::new(&[glob.as_str()]).expect("create manifestation manager");
 
     let request = ManifestationRenderRequest {
         target: ManifestationTemplateTarget::SystemPromptV2Xml,
@@ -44,214 +45,72 @@ fn manifestation_manager_render_request_injects_runtime_context() -> Result<()> 
             state_context: Some("STALE_TASKS".to_string()),
             persona_id: Some("artisan-engineer".to_string()),
             domain: Some("zhixing".to_string()),
-            extra: HashMap::default(),
+            extra: Default::default(),
         },
     };
 
-    let rendered = manager.render_request(&request)?;
+    let rendered = manager.render_request(&request).expect("render request");
     assert!(rendered.contains("artisan-engineer"));
     assert!(rendered.contains("STALE_TASKS"));
     assert!(rendered.contains("Cognitive Interface Warning"));
-    Ok(())
 }
 
 #[test]
-fn manifestation_manager_supports_multiple_template_targets() -> Result<()> {
-    let dir = tempdir()?;
-    fs::write(dir.path().join("daily_agenda.md"), "Agenda: {{ title }}")?;
+fn manifestation_manager_supports_multiple_template_targets() {
+    let dir = tempdir().expect("create temp dir");
+    fs::write(dir.path().join("daily_agenda.md"), "Agenda: {{ title }}").expect("write agenda");
     fs::write(
         dir.path().join("system_prompt_v2.xml"),
         "<prompt>{{ title }}</prompt>",
-    )?;
+    )
+    .expect("write xml");
 
     let glob = format!("{}/*", dir.path().display());
-    let manager = ManifestationManager::new(&[glob.as_str()])?;
+    let manager =
+        ManifestationManager::new(&[glob.as_str()]).expect("create manifestation manager");
 
-    let agenda = manager.render_target(
-        &ManifestationTemplateTarget::DailyAgenda,
-        json!({"title": "Morning Cultivation"}),
-    )?;
+    let agenda = manager
+        .render_target(
+            &ManifestationTemplateTarget::DailyAgenda,
+            json!({"title": "Morning Cultivation"}),
+        )
+        .expect("render agenda");
     assert_eq!(agenda, "Agenda: Morning Cultivation");
 
-    let xml = manager.render_target(
-        &ManifestationTemplateTarget::SystemPromptV2Xml,
-        json!({"title": "Runtime Persona"}),
-    )?;
+    let xml = manager
+        .render_target(
+            &ManifestationTemplateTarget::SystemPromptV2Xml,
+            json!({"title": "Runtime Persona"}),
+        )
+        .expect("render system prompt");
     assert_eq!(xml, "<prompt>Runtime Persona</prompt>");
-    Ok(())
 }
 
 #[test]
-fn manifestation_manager_hot_reloads_template_without_restart() -> Result<()> {
-    let dir = tempdir()?;
+fn manifestation_manager_hot_reloads_template_without_restart() {
+    let dir = tempdir().expect("create temp dir");
     let template_path = dir.path().join("daily_agenda.md");
-    fs::write(&template_path, "Agenda v1: {{ title }}")?;
+    fs::write(&template_path, "Agenda v1: {{ title }}").expect("write v1 template");
 
     let glob = format!("{}/*", dir.path().display());
-    let manager = ManifestationManager::new(&[glob.as_str()])?;
+    let manager =
+        ManifestationManager::new(&[glob.as_str()]).expect("create manifestation manager");
 
-    let first = manager.render_target(
-        &ManifestationTemplateTarget::DailyAgenda,
-        json!({"title": "Morning"}),
-    )?;
+    let first = manager
+        .render_target(
+            &ManifestationTemplateTarget::DailyAgenda,
+            json!({"title": "Morning"}),
+        )
+        .expect("render v1");
     assert_eq!(first, "Agenda v1: Morning");
 
-    fs::write(&template_path, "Agenda v2: {{ title }}")?;
+    fs::write(&template_path, "Agenda v2: {{ title }}").expect("write v2 template");
 
-    let second = manager.render_target(
-        &ManifestationTemplateTarget::DailyAgenda,
-        json!({"title": "Morning"}),
-    )?;
+    let second = manager
+        .render_target(
+            &ManifestationTemplateTarget::DailyAgenda,
+            json!({"title": "Morning"}),
+        )
+        .expect("render v2 after hot reload");
     assert_eq!(second, "Agenda v2: Morning");
-    Ok(())
-}
-
-#[test]
-fn manifestation_manager_keeps_last_good_template_when_hot_reload_fails() -> Result<()> {
-    let dir = tempdir()?;
-    let template_path = dir.path().join("daily_agenda.md");
-    fs::write(&template_path, "Agenda stable: {{ title }}")?;
-
-    let glob = format!("{}/*", dir.path().display());
-    let manager = ManifestationManager::new(&[glob.as_str()])?;
-
-    let baseline = manager.render_target(
-        &ManifestationTemplateTarget::DailyAgenda,
-        json!({"title": "Morning"}),
-    )?;
-    assert_eq!(baseline, "Agenda stable: Morning");
-
-    fs::write(&template_path, "Agenda broken: {{ title ")?;
-
-    let still_baseline = manager.render_target(
-        &ManifestationTemplateTarget::DailyAgenda,
-        json!({"title": "Morning"}),
-    )?;
-    assert_eq!(still_baseline, "Agenda stable: Morning");
-
-    fs::write(&template_path, "Agenda recovered: {{ title }}")?;
-
-    let recovered = manager.render_target(
-        &ManifestationTemplateTarget::DailyAgenda,
-        json!({"title": "Morning"}),
-    )?;
-    assert_eq!(recovered, "Agenda recovered: Morning");
-    Ok(())
-}
-
-#[test]
-fn manifestation_manager_supports_embedded_templates_without_external_globs() -> Result<()> {
-    let manager = ManifestationManager::new_with_embedded_templates(
-        &[],
-        &[("daily_agenda.md", "Embedded Agenda: {{ title }}")],
-    )?;
-
-    let rendered = manager.render_target(
-        &ManifestationTemplateTarget::DailyAgenda,
-        json!({"title": "Morning"}),
-    )?;
-    assert_eq!(rendered, "Embedded Agenda: Morning");
-    Ok(())
-}
-
-#[test]
-fn manifestation_manager_external_templates_override_embedded_templates() -> Result<()> {
-    let dir = tempdir()?;
-    let template_path = dir.path().join("daily_agenda.md");
-    fs::write(&template_path, "External Agenda: {{ title }}")?;
-
-    let glob = format!("{}/*", dir.path().display());
-    let manager = ManifestationManager::new_with_embedded_templates(
-        &[glob.as_str()],
-        &[("daily_agenda.md", "Embedded Agenda: {{ title }}")],
-    )?;
-
-    let rendered = manager.render_target(
-        &ManifestationTemplateTarget::DailyAgenda,
-        json!({"title": "Morning"}),
-    )?;
-    assert_eq!(rendered, "External Agenda: Morning");
-    Ok(())
-}
-
-#[test]
-fn manifestation_manager_loads_templates_from_memory_records() -> Result<()> {
-    let dir = tempdir()?;
-    fs::write(
-        dir.path().join("daily_agenda.md"),
-        "Disk Agenda: {{ title }}",
-    )?;
-
-    let glob = format!("{}/*", dir.path().display());
-    let manager = ManifestationManager::new(&[glob.as_str()])?;
-
-    manager.load_templates_from_memory([MemoryTemplateRecord::new(
-        "draft_agenda.j2",
-        Some("daily_agenda.md".to_string()),
-        "Memory Agenda: {{ title }}",
-    )])?;
-
-    let rendered_target = manager.render_target(
-        &ManifestationTemplateTarget::DailyAgenda,
-        json!({"title": "Morning"}),
-    )?;
-    assert_eq!(rendered_target, "Memory Agenda: Morning");
-
-    let rendered_id = manager.render_template("draft_agenda.j2", json!({"title": "Morning"}))?;
-    assert_eq!(rendered_id, "Memory Agenda: Morning");
-    Ok(())
-}
-
-#[test]
-fn manifestation_manager_tracks_session_prompt_injection_cache() -> Result<()> {
-    let manager = ManifestationManager::new_with_embedded_templates(
-        &[],
-        &[("daily_agenda.md", "Embedded Agenda: {{ title }}")],
-    )?;
-    let session_id = "telegram:session-cache";
-
-    let xml = r"
-<system_prompt_injection>
-  <qa><q>q1</q><a>a1</a></qa>
-  <qa><q>q2</q><a>a2</a></qa>
-</system_prompt_injection>
-";
-    let snapshot = manager.upsert_session_prompt_injection_xml(session_id, xml)?;
-    assert_eq!(snapshot.qa_count, 2);
-    assert!(snapshot.xml.contains("<system_prompt_injection>"));
-
-    let Some(loaded) = manager.inspect_session_prompt_injection(session_id) else {
-        panic!("snapshot should exist in cache");
-    };
-    assert_eq!(loaded.qa_count, 2);
-    assert!(loaded.xml.contains("<q>q1</q>"));
-
-    assert!(manager.clear_session_prompt_injection(session_id));
-    assert!(!manager.clear_session_prompt_injection(session_id));
-    assert!(
-        manager
-            .inspect_session_prompt_injection(session_id)
-            .is_none()
-    );
-    Ok(())
-}
-
-#[test]
-fn manifestation_manager_upserts_prevalidated_session_prompt_injection_snapshot() -> Result<()> {
-    let manager = ManifestationManager::new_with_embedded_templates(
-        &[],
-        &[("daily_agenda.md", "Embedded Agenda: {{ title }}")],
-    )?;
-    let session_id = "telegram:session-prevalidated";
-    let snapshot: SessionSystemPromptInjectionSnapshot =
-        normalize_session_system_prompt_injection_xml("<qa><q>Q</q><a>A</a></qa>")?;
-    assert_eq!(snapshot.qa_count, 1);
-
-    manager.upsert_session_prompt_injection_snapshot(session_id, snapshot.clone());
-    let Some(loaded) = manager.inspect_session_prompt_injection(session_id) else {
-        panic!("snapshot should be present");
-    };
-    assert_eq!(loaded.qa_count, snapshot.qa_count);
-    assert_eq!(loaded.xml, snapshot.xml);
-    Ok(())
 }

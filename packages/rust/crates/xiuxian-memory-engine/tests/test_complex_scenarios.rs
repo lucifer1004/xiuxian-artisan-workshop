@@ -542,7 +542,7 @@ fn test_persistence_and_recovery() -> TestResult {
             embedding_dim: 128,
             table_name: "test".to_string(),
         };
-        let store = EpisodeStore::new(config);
+        let mut store = EpisodeStore::new(config);
 
         store.load(&store_path_str)?;
         store.load_q_table(&q_path_str)?;

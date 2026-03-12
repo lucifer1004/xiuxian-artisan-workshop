@@ -1,71 +1,16 @@
-mod consolidation;
-mod turn_store;
-
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
+
 use xiuxian_memory_engine::{EpisodeStore, MemoryGatePolicy};
 
 use crate::observability::SessionEvent;
 
-use super::Agent;
-use super::memory::{sanitize_decay_factor, should_apply_decay};
-use super::memory_state::MemoryStateBackend;
-
-fn encode_string_list_for_stream(values: &[String]) -> String {
-    serde_json::to_string(values).unwrap_or_else(|_| "[]".to_string())
-}
-
-fn stream_excerpt(value: &str, max_chars: usize) -> String {
-    if max_chars == 0 {
-        return String::new();
-    }
-    let mut out = String::new();
-    for ch in value.chars().take(max_chars) {
-        out.push(ch);
-    }
-    out
-}
-
-fn persist_memory_state(
-    backend: Option<&Arc<MemoryStateBackend>>,
-    store: &EpisodeStore,
-    session_id: &str,
-    reason: &str,
-) {
-    let Some(backend) = backend else {
-        return;
-    };
-    let started = Instant::now();
-    match backend.save(store) {
-        Ok(()) => {
-            tracing::debug!(
-                event = SessionEvent::MemoryStateSaveSucceeded.as_str(),
-                backend = backend.backend_name(),
-                session_id,
-                reason,
-                episodes = store.len(),
-                q_values = store.q_table.len(),
-                duration_ms = started.elapsed().as_millis(),
-                "memory state persisted"
-            );
-        }
-        Err(error) => {
-            tracing::warn!(
-                event = SessionEvent::MemoryStateSaveFailed.as_str(),
-                backend = backend.backend_name(),
-                session_id,
-                reason,
-                duration_ms = started.elapsed().as_millis(),
-                error = %error,
-                "failed to persist memory state"
-            );
-        }
-    }
-}
+use super::super::Agent;
+use super::super::memory::{sanitize_decay_factor, should_apply_decay};
+use super::persist_memory_state;
 
 impl Agent {
-    fn memory_gate_policy(&self) -> MemoryGatePolicy {
+    pub(in crate::agent) fn memory_gate_policy(&self) -> MemoryGatePolicy {
         let mut policy = MemoryGatePolicy::default();
         let Some(memory_cfg) = self.config.memory.as_ref() else {
             return policy;
@@ -84,7 +29,7 @@ impl Agent {
         policy
     }
 
-    pub(super) fn memory_stream_name(&self) -> &str {
+    pub(in crate::agent) fn memory_stream_name(&self) -> &str {
         self.config
             .memory
             .as_ref()
@@ -93,7 +38,10 @@ impl Agent {
             .unwrap_or("memory.events")
     }
 
-    async fn publish_memory_stream_event(&self, fields: Vec<(String, String)>) {
+    pub(in crate::agent) async fn publish_memory_stream_event(
+        &self,
+        fields: Vec<(String, String)>,
+    ) {
         if let Err(error) = self
             .session
             .publish_stream_event(self.memory_stream_name(), fields)
@@ -106,7 +54,11 @@ impl Agent {
         }
     }
 
-    fn maybe_apply_memory_decay(&self, session_id: &str, store: &EpisodeStore) {
+    pub(in crate::agent) fn maybe_apply_memory_decay(
+        &self,
+        session_id: &str,
+        store: &EpisodeStore,
+    ) {
         let Some(memory_cfg) = self.config.memory.as_ref() else {
             return;
         };

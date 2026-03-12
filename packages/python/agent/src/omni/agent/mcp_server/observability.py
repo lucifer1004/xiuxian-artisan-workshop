@@ -172,35 +172,23 @@ class MCPRequestObservability:
         self._last_log_at_monotonic = now
 
         summary = self.health_summary(top_n=4)
-        payload = {
-            "total_requests": summary["total_requests"],
-            "total_errors": summary["total_errors"],
-            "in_flight": summary["in_flight"],
-            "max_in_flight": summary["max_in_flight"],
-            "top_endpoints": summary["top_endpoints"],
-        }
-        try:
-            # Preferred path: structlog-style structured event.
-            self._logger.info("mcp.request.pressure", **payload)
-            return
-        except TypeError:
-            # Backward compatibility for plain stdlib/fake loggers used in unit tests.
-            endpoint_parts = []
-            for item in summary["top_endpoints"]:
-                endpoint_parts.append(
-                    f"{item['endpoint']} req={item['requests_total']} err={item['errors_total']} "
-                    f"in={item['in_flight']}/{item['max_in_flight']} "
-                    f"p95={item['latency_p95_ms']:.2f}ms p99={item['latency_p99_ms']:.2f}ms"
-                )
-            self._logger.info(
-                "[MCP] request pressure total_req=%d total_err=%d in_flight=%d max_in_flight=%d "
-                "endpoints=[%s]",
-                summary["total_requests"],
-                summary["total_errors"],
-                summary["in_flight"],
-                summary["max_in_flight"],
-                "; ".join(endpoint_parts) if endpoint_parts else "none",
+        endpoint_parts = []
+        for item in summary["top_endpoints"]:
+            endpoint_parts.append(
+                f"{item['endpoint']} req={item['requests_total']} err={item['errors_total']} "
+                f"in={item['in_flight']}/{item['max_in_flight']} "
+                f"p95={item['latency_p95_ms']:.2f}ms p99={item['latency_p99_ms']:.2f}ms"
             )
+
+        self._logger.info(
+            "[MCP] request pressure total_req=%d total_err=%d in_flight=%d max_in_flight=%d "
+            "endpoints=[%s]",
+            summary["total_requests"],
+            summary["total_errors"],
+            summary["in_flight"],
+            summary["max_in_flight"],
+            "; ".join(endpoint_parts) if endpoint_parts else "none",
+        )
 
 
 __all__ = ["MCPRequestObservability"]

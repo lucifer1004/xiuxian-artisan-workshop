@@ -12,7 +12,6 @@ mod shared;
 mod types;
 
 use logging::log_runtime_agent_options;
-use mcp::{resolve_runtime_mcp_options, resolve_runtime_mcp_servers};
 use session::resolve_runtime_session_options;
 
 pub(crate) use inference::{
@@ -20,6 +19,7 @@ pub(crate) use inference::{
     resolve_runtime_embedding_base_url, resolve_runtime_inference_url, resolve_runtime_model,
     validate_inference_url_origin,
 };
+pub(crate) use mcp::{resolve_runtime_mcp_options, resolve_runtime_mcp_servers};
 pub(crate) use memory::resolve_runtime_memory_options;
 
 /// Build an agent instance from runtime settings and an MCP config file.
@@ -46,13 +46,13 @@ pub async fn build_agent(
         model,
         api_key: None,
         mcp_servers,
-        mcp_pool_size: mcp.pool_size,
-        mcp_handshake_timeout_secs: mcp.handshake_timeout_secs,
-        mcp_connect_retries: mcp.connect_retries,
+        mcp_pool_size: mcp.connect_config.pool_size,
+        mcp_handshake_timeout_secs: mcp.connect_config.handshake_timeout_secs,
+        mcp_connect_retries: mcp.connect_config.connect_retries,
         mcp_strict_startup: mcp.strict_startup,
-        mcp_connect_retry_backoff_ms: mcp.connect_retry_backoff_ms,
-        mcp_tool_timeout_secs: mcp.tool_timeout_secs,
-        mcp_list_tools_cache_ttl_ms: mcp.list_tools_cache_ttl_ms,
+        mcp_connect_retry_backoff_ms: mcp.connect_config.connect_retry_backoff_ms,
+        mcp_tool_timeout_secs: mcp.connect_config.tool_timeout_secs,
+        mcp_list_tools_cache_ttl_ms: mcp.connect_config.list_tools_cache_ttl_ms,
         max_tool_rounds: session.max_tool_rounds,
         memory: Some(memory.config),
         window_max_turns: session.window_max_turns,

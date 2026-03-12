@@ -8,6 +8,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -30,6 +31,7 @@ DEFAULT_LINK_GRAPH_EXCLUDED_ADDITIONAL_DIRS: Final[tuple[str, ...]] = (
 LINK_GRAPH_CACHE_VALKEY_URL_ENV: Final[str] = "VALKEY_URL"
 LINK_GRAPH_VALKEY_KEY_PREFIX_ENV: Final[str] = "OMNI_LINK_GRAPH_VALKEY_KEY_PREFIX"
 LINK_GRAPH_VALKEY_TTL_SECONDS_ENV: Final[str] = "OMNI_LINK_GRAPH_VALKEY_TTL_SECONDS"
+LINK_GRAPH_GATEWAY_BASE_URL_ENV: Final[str] = "OMNI_LINK_GRAPH_GATEWAY_BASE_URL"
 DEFAULT_LINK_GRAPH_BACKEND: Final[str] = "wendao"
 DEFAULT_LINK_GRAPH_RETRIEVAL_MODE: Final[str] = "hybrid"
 DEFAULT_LINK_GRAPH_CANDIDATE_MULTIPLIER: Final[int] = 4
@@ -206,6 +208,43 @@ def _first_non_empty(values: list[object]) -> str | None:
     return None
 
 
+def _normalize_http_base_url(raw: object) -> str | None:
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    if "://" not in text:
+        text = f"http://{text}"
+
+    parsed = urlparse(text)
+    if not parsed.netloc:
+        return None
+    scheme = parsed.scheme or "http"
+    path = parsed.path.rstrip("/")
+    return f"{scheme}://{parsed.netloc}{path}".rstrip("/")
+
+
+def get_link_graph_gateway_base_url(
+    base_url: str | None = None,
+    *,
+    setting_reader: Callable[[str, object], object] | None = None,
+) -> str | None:
+    """Resolve LinkGraph gateway base URL from explicit value, env, or settings."""
+    reader = setting_reader or get_setting
+    candidates = [
+        base_url,
+        os.environ.get(LINK_GRAPH_GATEWAY_BASE_URL_ENV),
+        reader("link_graph.gateway_base_url", None),
+    ]
+    for value in candidates:
+        normalized = _normalize_http_base_url(value)
+        if normalized:
+            return normalized
+    gateway_bind = reader("gateway.bind", None)
+    return _normalize_http_base_url(gateway_bind)
+
+
 def _coerce_bool(value: object, *, default: bool) -> bool:
     if isinstance(value, bool):
         return value
@@ -276,7 +315,7 @@ def get_link_graph_backend_name(
     """Resolve LinkGraph backend name from explicit value or settings."""
     reader = setting_reader or get_setting
     raw = (name or str(reader("link_graph.backend", DEFAULT_LINK_GRAPH_BACKEND))).strip().lower()
-    if raw == DEFAULT_LINK_GRAPH_BACKEND:
+    if raw in {DEFAULT_LINK_GRAPH_BACKEND, "gateway"}:
         return raw
     raise ValueError(f"Unsupported link_graph backend: {raw or '<empty>'}")
 
@@ -802,6 +841,7 @@ __all__ = [
     "LINK_GRAPH_CACHE_VALKEY_URL_ENV",
     "LINK_GRAPH_VALKEY_KEY_PREFIX_ENV",
     "LINK_GRAPH_VALKEY_TTL_SECONDS_ENV",
+    "LINK_GRAPH_GATEWAY_BASE_URL_ENV",
     "LinkGraphRuntimeConfig",
     "get_link_graph_backend_name",
     "get_link_graph_cache_key_prefix",
@@ -810,6 +850,7 @@ __all__ = [
     "get_link_graph_candidate_multiplier",
     "get_link_graph_default_config_relative_path",
     "get_link_graph_excluded_dirs",
+    "get_link_graph_gateway_base_url",
     "get_link_graph_graph_rows_per_source",
     "get_link_graph_hybrid_min_hits",
     "get_link_graph_hybrid_min_top_score",

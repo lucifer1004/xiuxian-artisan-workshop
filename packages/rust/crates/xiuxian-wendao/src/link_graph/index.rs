@@ -1,28 +1,34 @@
 //! Core index build + query algorithms for markdown link graph.
 
 use super::models::{
-    LinkGraphAttachment, LinkGraphAttachmentHit, LinkGraphAttachmentKind, LinkGraphDirection,
-    LinkGraphDocument, LinkGraphEdgeType, LinkGraphHit, LinkGraphLinkFilter,
-    LinkGraphMatchStrategy, LinkGraphMetadata, LinkGraphNeighbor, LinkGraphPassage,
-    LinkGraphPprSubgraphMode, LinkGraphPromotedOverlayTelemetry, LinkGraphRelatedFilter,
-    LinkGraphRelatedPprDiagnostics, LinkGraphRelatedPprOptions, LinkGraphScope,
-    LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSortField, LinkGraphSortOrder,
-    LinkGraphSortTerm, LinkGraphStats,
+    LinkGraphAttachment, LinkGraphDirection, LinkGraphDocument, LinkGraphEdgeType, LinkGraphHit,
+    LinkGraphLinkFilter, LinkGraphMatchStrategy, LinkGraphMetadata, LinkGraphNeighbor,
+    LinkGraphPassage, LinkGraphPprSubgraphMode, LinkGraphPromotedOverlayTelemetry,
+    LinkGraphRelatedFilter, LinkGraphRelatedPprDiagnostics, LinkGraphRelatedPprOptions,
+    LinkGraphScope, LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSortField,
+    LinkGraphSortOrder, LinkGraphSortTerm, LinkGraphStats, PageIndexNode,
 };
-use super::parser::ParsedSection;
-use super::query::{ParsedLinkGraphQuery, parse_search_query};
+use super::query::parse_search_query;
 use serde::{Deserialize, Serialize};
 mod agentic_expansion;
 mod agentic_overlay;
 mod build;
 mod ids;
+mod page_indices;
 mod passages;
 mod ppr;
 mod rank;
 mod scoring;
-mod search;
+pub(crate) mod search;
+mod semantic_documents;
 mod shared;
 mod traversal;
+
+pub use search::quantum_fusion::orchestrate::QuantumContextBuildError;
+pub use search::quantum_fusion::semantic_ignition::{
+    QuantumSemanticIgnition, QuantumSemanticIgnitionError, QuantumSemanticIgnitionFuture,
+};
+
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -45,26 +51,31 @@ use scoring::{
 };
 use shared::{
     ScoredSearchRow, deterministic_random_key, doc_contains_phrase, doc_sort_key,
-    normalize_path_filter, path_matches_filter, sort_hits,
+    normalize_path_filter, path_matches_filter,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct IndexedSection {
-    heading_path: String,
-    heading_path_lower: String,
-    heading_level: usize,
-    section_text: String,
-    section_text_lower: String,
-    #[serde(default)]
-    entities: Vec<String>,
+pub(crate) struct IndexedSection {
+    pub(crate) heading_title: String,
+    pub(crate) heading_path: String,
+    pub(crate) heading_path_lower: String,
+    pub(crate) heading_level: usize,
+    pub(crate) line_start: usize,
+    pub(crate) line_end: usize,
+    pub(crate) section_text: String,
+    pub(crate) section_text_lower: String,
+    pub(crate) entities: Vec<String>,
 }
 
 impl IndexedSection {
-    fn from_parsed(value: &ParsedSection) -> Self {
+    pub(crate) fn from_parsed(value: &super::parser::ParsedSection) -> Self {
         Self {
+            heading_title: value.heading_title.clone(),
             heading_path: value.heading_path.clone(),
             heading_path_lower: value.heading_path_lower.clone(),
             heading_level: value.heading_level,
+            line_start: value.line_start,
+            line_end: value.line_end,
             section_text: value.section_text.clone(),
             section_text_lower: value.section_text_lower.clone(),
             entities: value.entities.clone(),
@@ -86,7 +97,7 @@ struct SectionCandidate {
     reason: &'static str,
 }
 
-/// Cache build metadata emitted by the `Valkey`-backed `LinkGraph` bootstrap.
+/// Cache build metadata emitted by the Valkey-backed LinkGraph bootstrap.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkGraphCacheBuildMeta {
     /// Cache backend name.
@@ -108,9 +119,12 @@ pub struct LinkGraphIndex {
     include_dirs: Vec<String>,
     excluded_dirs: Vec<String>,
     docs_by_id: HashMap<String, LinkGraphDocument>,
-    passages_by_id: HashMap<String, LinkGraphPassage>,
     sections_by_doc: HashMap<String, Vec<IndexedSection>>,
+    passages_by_id: HashMap<String, LinkGraphPassage>,
     attachments_by_doc: HashMap<String, Vec<LinkGraphAttachment>>,
+    trees_by_doc: HashMap<String, Vec<PageIndexNode>>,
+    /// Map page-index node ids to parent node ids (None for roots).
+    node_parent_map: HashMap<String, Option<String>>,
     alias_to_doc_id: HashMap<String, String>,
     outgoing: HashMap<String, HashSet<String>>,
     incoming: HashMap<String, HashSet<String>>,
@@ -119,7 +133,7 @@ pub struct LinkGraphIndex {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Refresh execution mode selected by `LinkGraph` incremental refresh logic.
+/// Refresh execution mode selected by LinkGraph incremental refresh logic.
 pub enum LinkGraphRefreshMode {
     /// No-op (no changed paths provided).
     Noop,
@@ -140,5 +154,65 @@ impl LinkGraphIndex {
     #[must_use]
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    #[allow(dead_code)]
+    pub(in crate::link_graph::index) fn execute_direct_id_lookup(
+        &self,
+        direct_id: &str,
+        _limit: usize,
+        _options: &LinkGraphSearchOptions,
+    ) -> Vec<LinkGraphHit> {
+        let mut out = Vec::new();
+        if let Some(doc_id) = self.resolve_doc_id(direct_id) {
+            if let Some(doc) = self.docs_by_id.get(doc_id) {
+                out.push(LinkGraphHit {
+                    stem: doc.stem.clone(),
+                    title: doc.title.clone(),
+                    path: doc.path.clone(),
+                    doc_type: doc.doc_type.clone(),
+                    tags: doc.tags.clone(),
+                    score: 1.0,
+                    best_section: None,
+                    match_reason: Some("direct_id".to_string()),
+                });
+            }
+        }
+        out
+    }
+
+    /// Resolve one document or anchor id into its semantic breadcrumb trail.
+    #[must_use]
+    pub fn page_index_semantic_path(&self, anchor_id: &str) -> Option<Vec<String>> {
+        self.extract_lineage(anchor_id)
+    }
+
+    pub(crate) fn has_doc(&self, doc_id: &str) -> bool {
+        self.docs_by_id.contains_key(doc_id)
+    }
+
+    pub(crate) fn get_doc(&self, doc_id: &str) -> Option<&LinkGraphDocument> {
+        self.docs_by_id.get(doc_id)
+    }
+
+    pub(crate) fn get_tree(&self, doc_id: &str) -> Option<&Vec<PageIndexNode>> {
+        self.trees_by_doc.get(doc_id)
+    }
+
+    pub(crate) fn get_node_parent_map(&self) -> &HashMap<String, Option<String>> {
+        &self.node_parent_map
+    }
+
+    pub(crate) fn resolve_doc_id_pub(&self, stem_or_id: &str) -> Option<&str> {
+        self.resolve_doc_id(stem_or_id)
+    }
+
+    /// Extract semantic intent targets for a document.
+    pub fn intent_targets(&self, doc_id: &str) -> (Vec<String>, Vec<String>) {
+        let Some(doc) = self.docs_by_id.get(doc_id) else {
+            return (Vec::new(), Vec::new());
+        };
+        // This is a simplification, actual implementation might need more parsing
+        (doc.tags.clone(), Vec::new())
     }
 }

@@ -1,43 +1,13 @@
-use crate::frontmatter::strict_parse;
+use crate::frontmatter::extract_frontmatter;
 use crate::skills::metadata::ReferenceRecord;
 
-use super::super::model::{ReferenceFrontmatter, ReferenceMetadataBlock, UnifiedMetadataType};
+use super::super::model::{ReferenceFrontmatter, ReferenceMetadataBlock};
 use super::super::values::{skills_from_tool_list, yaml_value_to_opt_string_vec};
 
-pub(super) fn parse_reference_metadata_strict(
-    content: &str,
-    file_path: &std::path::Path,
-) -> Result<ReferenceMetadataBlock, String> {
-    let parsed: ReferenceFrontmatter = strict_parse(content).map_err(|error| {
-        format!(
-            "invalid YAML frontmatter in reference markdown {}: {}",
-            file_path.display(),
-            error
-        )
-    })?;
-    validate_unified_metadata_contract(parsed.metadata_type, &parsed.metadata, file_path)?;
-    Ok(parsed.metadata)
-}
-
-fn validate_unified_metadata_contract(
-    metadata_type: UnifiedMetadataType,
-    metadata: &ReferenceMetadataBlock,
-    file_path: &std::path::Path,
-) -> Result<(), String> {
-    if matches!(metadata_type, UnifiedMetadataType::Persona)
-        && metadata
-            .role_class
-            .as_deref()
-            .map(str::trim)
-            .is_none_or(str::is_empty)
-    {
-        return Err(format!(
-            "invalid persona metadata in {}: `metadata.role_class` is required when type=persona",
-            file_path.display()
-        ));
-    }
-
-    Ok(())
+pub(super) fn parse_reference_metadata(content: &str) -> Option<ReferenceMetadataBlock> {
+    extract_frontmatter(content)
+        .and_then(|frontmatter| serde_yaml::from_str::<ReferenceFrontmatter>(&frontmatter).ok())
+        .map(|frontmatter| frontmatter.metadata)
 }
 
 pub(super) fn build_reference_record(

@@ -12,20 +12,18 @@ use crate::jobs::{JobCompletion, JobManager, JobManagerConfig, TurnRunner};
 use super::interrupt::ForegroundInterruptController;
 use super::worker_pool::spawn_foreground_dispatcher;
 
-type TelegramRuntimeStartup = (
+pub(in crate::channels::telegram::runtime) fn start_telegram_runtime(
+    agent: Arc<Agent>,
+    channel: Arc<dyn Channel>,
+    runtime_config: TelegramRuntimeConfig,
+) -> Result<(
     String,
     mpsc::Sender<ChannelMessage>,
     ForegroundInterruptController,
     tokio::task::JoinHandle<()>,
     Arc<JobManager>,
     mpsc::Receiver<JobCompletion>,
-);
-
-pub(in crate::channels::telegram::runtime) fn start_telegram_runtime(
-    agent: &Arc<Agent>,
-    channel: &Arc<dyn Channel>,
-    runtime_config: TelegramRuntimeConfig,
-) -> Result<TelegramRuntimeStartup> {
+)> {
     let (foreground_tx, foreground_rx) =
         mpsc::channel::<ChannelMessage>(runtime_config.foreground_queue_capacity);
     let session_gate = SessionGate::from_env()?;
@@ -36,15 +34,15 @@ pub(in crate::channels::telegram::runtime) fn start_telegram_runtime(
     );
     let interrupt_controller = ForegroundInterruptController::default();
     let foreground_dispatcher = spawn_foreground_dispatcher(
-        Arc::clone(agent),
-        Arc::clone(channel),
+        Arc::clone(&agent),
+        Arc::clone(&channel),
         foreground_rx,
         runtime_config,
         session_gate,
         interrupt_controller.clone(),
     );
 
-    let runner: Arc<dyn TurnRunner> = agent.clone();
+    let runner: Arc<dyn TurnRunner> = agent;
     let (job_manager, completion_rx) = JobManager::start(runner, JobManagerConfig::default());
     Ok((
         session_gate_backend,

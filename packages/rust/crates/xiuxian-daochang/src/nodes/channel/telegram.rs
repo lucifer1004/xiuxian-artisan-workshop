@@ -119,7 +119,7 @@ pub(super) async fn run_telegram_channel_command(
     )
     .with_slash_command_policy(slash_command_policy);
 
-    run_telegram_channel_mode(
+    Box::pin(run_telegram_channel_mode(
         TelegramChannelRunRequest {
             bot_token: resolved_bot_token,
             allowed_users: acl_overrides.allowed_users,
@@ -133,7 +133,7 @@ pub(super) async fn run_telegram_channel_command(
             webhook_dedup_config: dedup_config,
         },
         runtime_settings,
-    )
+    ))
     .await
 }
 

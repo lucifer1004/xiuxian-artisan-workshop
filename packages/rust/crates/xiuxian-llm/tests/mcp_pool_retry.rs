@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Result, anyhow};
 use rmcp::model::{CallToolResult, ListToolsResult};
-use xiuxian_llm::mcp::{run_tool_call_with_retry, run_tools_list_with_fallback};
+use xiuxian_mcp::{run_tool_call_with_retry, run_tools_list_with_fallback};
 
 #[tokio::test]
 async fn run_tools_list_with_fallback_uses_next_client_on_non_retryable_error() -> Result<()> {

@@ -2,7 +2,7 @@
 
 use std::sync::atomic::Ordering;
 
-use crate::mcp::{call_timeout_for_tool, call_tool_once, run_tool_call_with_retry};
+use crate::runtime::{call_timeout_for_tool, call_tool_once, run_tool_call_with_retry};
 use anyhow::Result;
 use rmcp::model::CallToolResult;
 

@@ -4,10 +4,10 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
+use super::transmuter::resolve_and_wash;
 use serde_json::Value;
 use thiserror::Error;
 use url::Url;
-use xiuxian_zhenfa::ZhenfaTransmuter;
 
 use crate::sync::SyncEngine;
 use crate::{Entity, EntityType, KnowledgeGraph, Relation, RelationType};
@@ -209,6 +209,12 @@ impl KnowledgeGraphAssimilationSink {
     pub fn new(graph: KnowledgeGraph) -> Self {
         Self { graph }
     }
+
+    /// Get a reference to the underlying knowledge graph.
+    #[must_use]
+    pub fn graph(&self) -> &KnowledgeGraph {
+        &self.graph
+    }
 }
 
 impl WebAssimilationSink for KnowledgeGraphAssimilationSink {
@@ -284,7 +290,7 @@ impl WebAssimilationSink for KnowledgeGraphAssimilationSink {
             "Web namespace contains crawled document".to_string(),
         )
         .with_source_doc(Some(canonical_uri.to_string()));
-        self.graph.add_relation(&relation).map_err(|error| {
+        self.graph.add_relation(relation).map_err(|error| {
             SpiderIngressError::AssimilationFailed {
                 uri: canonical_uri.to_string(),
                 reason: error.to_string(),
@@ -330,7 +336,9 @@ impl SpiderWendaoBridge {
     ) -> Self {
         let lock_count = lock_segments.max(1);
         let mut ingest_locks = Vec::with_capacity(lock_count);
-        ingest_locks.resize_with(lock_count, || Mutex::new(()));
+        for _ in 0..lock_count {
+            ingest_locks.push(Mutex::new(()));
+        }
         Self {
             content_hash_store,
             sink,
@@ -372,15 +380,13 @@ impl SpiderWendaoBridge {
             return Ok(None);
         }
 
-        let raw_content = payload.markdown_content.to_string();
         let washed_markdown =
-            ZhenfaTransmuter::resolve_and_wash(canonical_uri.as_str(), move |_| {
-                Some(raw_content.clone())
-            })
-            .map_err(|error| SpiderIngressError::TransmutationFailed {
-                uri: canonical_uri.clone(),
-                reason: error.to_string(),
-            })?;
+            resolve_and_wash(canonical_uri.as_str(), payload.markdown_content.as_ref()).map_err(
+                |error| SpiderIngressError::TransmutationFailed {
+                    uri: canonical_uri.clone(),
+                    reason: error.to_string(),
+                },
+            )?;
         let signal = WebIngestionSignal {
             url: payload.url.clone(),
             depth: payload.depth,

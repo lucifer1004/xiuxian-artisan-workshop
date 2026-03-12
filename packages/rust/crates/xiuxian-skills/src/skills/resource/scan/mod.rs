@@ -2,7 +2,6 @@ use super::ResourceScanner;
 
 mod build;
 mod filesystem;
-mod paths;
 
 impl Default for ResourceScanner {
     fn default() -> Self {

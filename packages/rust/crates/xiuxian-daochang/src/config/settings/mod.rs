@@ -1,9 +1,8 @@
-//! Runtime settings loader for xiuxian-daochang.
+//! Runtime settings loader for omni-agent.
 //!
 //! Loads and merges:
-//! - Embedded system defaults: `xiuxian-daochang/resources/config/xiuxian.toml`
-//! - Optional system override file: `<PRJ_ROOT>/packages/rust/crates/xiuxian-daochang/resources/config/xiuxian.toml`
-//! - User overrides: `<PRJ_CONFIG_HOME>/xiuxian-artisan-workshop/xiuxian.toml`
+//! - System defaults: `<PRJ_ROOT>/packages/conf/xiuxian.toml`
+//! - User overrides:  `<PRJ_CONFIG_HOME>/omni-dev-fusion/xiuxian.toml`
 //!
 //! Merge precedence is user over system.
 

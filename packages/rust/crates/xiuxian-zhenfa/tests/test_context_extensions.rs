@@ -2,8 +2,7 @@
 
 use std::sync::Arc;
 
-use tokio::sync::mpsc::unbounded_channel;
-use xiuxian_zhenfa::{ZhenfaContext, ZhenfaSignal};
+use xiuxian_zhenfa::ZhenfaContext;
 
 #[test]
 fn context_extensions_roundtrip_by_type() {
@@ -53,27 +52,4 @@ fn context_extensions_clone_uses_copy_on_write_registry() {
         .get_extension::<usize>()
         .unwrap_or_else(|| panic!("extension inserted into clone should be visible in clone"));
     assert_eq!(*cloned_seen, 7);
-}
-
-#[test]
-fn context_emit_signal_sends_payload_to_attached_channel() {
-    let (signal_tx, mut signal_rx) = unbounded_channel::<ZhenfaSignal>();
-    let mut ctx = ZhenfaContext::default();
-    ctx.attach_signal_sender(signal_tx);
-    ctx.set_correlation_id_if_absent("corr:ctx-test".to_string());
-
-    ctx.emit_signal(ZhenfaSignal::Trace {
-        node_id: "Agenda_Steward_Proposer".to_string(),
-        event: "generated_draft".to_string(),
-    });
-
-    let payload = signal_rx
-        .try_recv()
-        .unwrap_or_else(|error| panic!("signal payload should be emitted: {error}"));
-    let ZhenfaSignal::Trace { node_id, event } = payload else {
-        panic!("expected trace signal");
-    };
-    assert_eq!(node_id, "Agenda_Steward_Proposer");
-    assert_eq!(event, "generated_draft");
-    assert_eq!(ctx.correlation_id.as_deref(), Some("corr:ctx-test"));
 }

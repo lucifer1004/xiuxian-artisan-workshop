@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import patch
 
 import pytest
@@ -26,6 +27,7 @@ from omni.foundation.config.link_graph_runtime import (
     LINK_GRAPH_CACHE_VALKEY_URL_ENV,
     LINK_GRAPH_VALKEY_KEY_PREFIX_ENV,
     LINK_GRAPH_VALKEY_TTL_SECONDS_ENV,
+    LINK_GRAPH_GATEWAY_BASE_URL_ENV,
     get_link_graph_backend_name,
     get_link_graph_cache_key_prefix,
     get_link_graph_cache_ttl_seconds,
@@ -33,6 +35,7 @@ from omni.foundation.config.link_graph_runtime import (
     get_link_graph_candidate_multiplier,
     get_link_graph_default_config_relative_path,
     get_link_graph_excluded_dirs,
+    get_link_graph_gateway_base_url,
     get_link_graph_graph_rows_per_source,
     get_link_graph_hybrid_min_hits,
     get_link_graph_hybrid_min_top_score,
@@ -61,6 +64,12 @@ from omni.foundation.config.link_graph_runtime import (
     resolve_link_graph_excluded_dirs,
     resolve_link_graph_include_dirs,
 )
+
+
+EXPLICIT_GATEWAY_URL = "http://gateway-explicit:48080"
+ENV_GATEWAY_URL = "http://gateway-env:48081"
+SETTINGS_GATEWAY_URL = "http://gateway-settings:48082"
+GATEWAY_BIND = "127.0.0.1:48083"
 
 
 def test_get_link_graph_default_config_relative_path_defaults() -> None:
@@ -235,6 +244,51 @@ def test_get_link_graph_backend_name_reads_setting_reader() -> None:
 
     resolved = get_link_graph_backend_name(setting_reader=_reader)
     assert resolved == DEFAULT_LINK_GRAPH_BACKEND
+
+
+def test_get_link_graph_backend_name_accepts_gateway() -> None:
+    resolved = get_link_graph_backend_name("gateway")
+    assert resolved == "gateway"
+
+
+def test_get_link_graph_gateway_base_url_prefers_explicit() -> None:
+    def _reader(key: str, default: object = None) -> object:
+        if key == "link_graph.gateway_base_url":
+            return SETTINGS_GATEWAY_URL
+        if key == "gateway.bind":
+            return GATEWAY_BIND
+        return default
+
+    with patch.dict(os.environ, {LINK_GRAPH_GATEWAY_BASE_URL_ENV: ENV_GATEWAY_URL}, clear=True):
+        resolved = get_link_graph_gateway_base_url(EXPLICIT_GATEWAY_URL, setting_reader=_reader)
+
+    assert resolved == EXPLICIT_GATEWAY_URL
+
+
+def test_get_link_graph_gateway_base_url_prefers_env_over_settings() -> None:
+    def _reader(key: str, default: object = None) -> object:
+        if key == "link_graph.gateway_base_url":
+            return SETTINGS_GATEWAY_URL
+        if key == "gateway.bind":
+            return GATEWAY_BIND
+        return default
+
+    with patch.dict(os.environ, {LINK_GRAPH_GATEWAY_BASE_URL_ENV: ENV_GATEWAY_URL}, clear=True):
+        resolved = get_link_graph_gateway_base_url(setting_reader=_reader)
+
+    assert resolved == ENV_GATEWAY_URL
+
+
+def test_get_link_graph_gateway_base_url_falls_back_to_gateway_bind() -> None:
+    def _reader(key: str, default: object = None) -> object:
+        if key == "gateway.bind":
+            return GATEWAY_BIND
+        return default
+
+    with patch.dict(os.environ, {}, clear=True):
+        resolved = get_link_graph_gateway_base_url(setting_reader=_reader)
+
+    assert resolved == f"http://{GATEWAY_BIND}"
 
 
 def test_get_link_graph_root_dir_prefers_setting_reader() -> None:

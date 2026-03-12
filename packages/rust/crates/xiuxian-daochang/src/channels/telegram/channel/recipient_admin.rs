@@ -213,7 +213,7 @@ fn apply_recipient_override_admin_users(
         TelegramRecipientAdminScope::Group(chat_id) => {
             let mut remove_group = false;
             if let Some(group) = policy.groups.get_mut(chat_id) {
-                group.admin_users.clone_from(&admin_users);
+                group.admin_users = admin_users.clone();
                 remove_group = is_group_override_config_empty(group);
             } else if let Some(admin_users) = admin_users {
                 policy.groups.insert(
@@ -232,7 +232,7 @@ fn apply_recipient_override_admin_users(
             let mut remove_group = false;
             if let Some(group) = policy.groups.get_mut(chat_id) {
                 if let Some(topic) = group.topics.get_mut(thread_id) {
-                    topic.admin_users.clone_from(&admin_users);
+                    topic.admin_users = admin_users.clone();
                     if is_topic_policy_config_empty(topic) {
                         group.topics.remove(thread_id);
                     }

@@ -1,58 +1,10 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 use xiuxian_qianhuan::{
     SessionSystemPromptInjectionSnapshot, normalize_session_system_prompt_injection_xml,
 };
 
-use super::Agent;
-use crate::session::ChatMessage;
-
-const SYSTEM_PROMPT_INJECTION_SESSION_PREFIX: &str = "__session_system_prompt_injection__:";
-const SYSTEM_PROMPT_INJECTION_STORAGE_MESSAGE_NAME: &str = "agent.system_prompt.injection";
-pub(super) const SYSTEM_PROMPT_INJECTION_CONTEXT_MESSAGE_NAME: &str =
-    "agent.system_prompt.injection.context";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredSessionSystemPromptInjection {
-    updated_at_unix_ms: u64,
-    qa_count: usize,
-    xml: String,
-}
-
-fn storage_session_id(session_id: &str) -> String {
-    format!("{SYSTEM_PROMPT_INJECTION_SESSION_PREFIX}{session_id}")
-}
-
-fn snapshot_to_message(snapshot: &SessionSystemPromptInjectionSnapshot) -> Option<ChatMessage> {
-    let payload = serde_json::to_string(&StoredSessionSystemPromptInjection {
-        updated_at_unix_ms: snapshot.updated_at_unix_ms,
-        qa_count: snapshot.qa_count,
-        xml: snapshot.xml.clone(),
-    })
-    .ok()?;
-    Some(ChatMessage {
-        role: "system".to_string(),
-        content: Some(payload),
-        tool_calls: None,
-        tool_call_id: None,
-        name: Some(SYSTEM_PROMPT_INJECTION_STORAGE_MESSAGE_NAME.to_string()),
-    })
-}
-
-fn message_to_snapshot(message: &ChatMessage) -> Option<SessionSystemPromptInjectionSnapshot> {
-    if let Some(name) = message.name.as_deref()
-        && name != SYSTEM_PROMPT_INJECTION_STORAGE_MESSAGE_NAME
-    {
-        return None;
-    }
-    let payload = message.content.as_deref()?;
-    let stored: StoredSessionSystemPromptInjection = serde_json::from_str(payload).ok()?;
-    Some(SessionSystemPromptInjectionSnapshot {
-        updated_at_unix_ms: stored.updated_at_unix_ms,
-        qa_count: stored.qa_count,
-        xml: stored.xml,
-    })
-}
+use super::super::Agent;
+use super::storage::{message_to_snapshot, snapshot_to_message, storage_session_id};
 
 impl Agent {
     /// Upsert session-scoped system-prompt injection XML into persistent session storage.

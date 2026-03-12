@@ -1,4 +1,6 @@
-use super::*;
+use tempfile::TempDir;
+use xiuxian_wendao::graph::{KnowledgeGraph, entity_from_dict};
+use xiuxian_wendao::{Entity, EntityType, Relation, RelationType};
 
 #[test]
 fn test_entity_from_dict() {
@@ -50,7 +52,7 @@ fn test_save_and_load_graph() -> Result<(), Box<dyn std::error::Error>> {
             RelationType::Uses,
             "Claude Code uses Python".to_string(),
         );
-        assert!(graph.add_relation(&relation).is_ok());
+        assert!(graph.add_relation(relation).is_ok());
         graph.save_to_file(&graph_path_str)?;
     }
 
@@ -137,7 +139,7 @@ fn test_export_import_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
             rtype.clone(),
             format!("{source} -> {target}"),
         );
-        assert!(graph1.add_relation(&relation).is_ok());
+        assert!(graph1.add_relation(relation).is_ok());
     }
 
     graph1.save_to_file(&graph_path_str)?;

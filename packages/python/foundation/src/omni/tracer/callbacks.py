@@ -1,305 +1,212 @@
 """
-callbacks.py - Callback management system for tracing
+hybrid_search.py - Hybrid Search (Semantic + Keyword)
 
-UltraRAG-style callback system for handling tracing events.
-Provides a pluggable architecture for processing trace events.
+Combines semantic vector search with keyword matching for improved relevance.
 
-Key classes:
-- TracingCallback: Abstract base class for callbacks
-- CallbackManager: Manages and dispatches callbacks
+Features:
+- Dual search: Semantic + Keyword
+- Configurable weights for result fusion
+- Re-ranking of combined results
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from pydantic import BaseModel, ConfigDict
+
+from omni.foundation.bridge import SearchResult
 from omni.foundation.config.logging import get_logger
 
-if TYPE_CHECKING:
-    from .interfaces import ExecutionStep, ExecutionTrace
-
-logger = get_logger("omni.tracer.callbacks")
+logger = get_logger("omni.core.router.hybrid")
 
 
-class TracingCallback(ABC):
-    """Abstract base class for tracing callbacks.
+class HybridMatch(BaseModel):
+    """Represents a match from hybrid search."""
 
-    Implement these methods to react to tracing events.
+    model_config = ConfigDict(frozen=True)
 
-    All methods are async to support non-blocking operations.
+    id: str
+    content: str
+    semantic_score: float = 0.0
+    keyword_score: float = 0.0
+    combined_score: float = 0.0
+    metadata: dict[str, Any] = {}
+
+
+class HybridSearch:
+    """
+    [Hybrid Search Engine]
+
+    Combines semantic search (vector similarity) with keyword matching
+    for improved search relevance and recall.
+
+    Formula: combined_score = semantic_weight * semantic_score + keyword_weight * keyword_score
+
+    Usage:
+        search = HybridSearch(indexer, cache)
+        results = await search.search("git commit", limit=5)
     """
 
-    @abstractmethod
-    async def on_step_start(self, trace: ExecutionTrace, step: ExecutionStep) -> None:
-        """Called when a step starts.
-
-        Args:
-            trace: The current execution trace
-            step: The step that just started
-        """
-        pass
-
-    @abstractmethod
-    async def on_step_end(self, trace: ExecutionTrace, step: ExecutionStep) -> None:
-        """Called when a step ends.
-
-        Args:
-            trace: The current execution trace
-            step: The step that just ended
-        """
-        pass
-
-    @abstractmethod
-    async def on_thinking(self, trace: ExecutionTrace, step: ExecutionStep, content: str) -> None:
-        """Called when thinking content is recorded.
-
-        Args:
-            trace: The current execution trace
-            step: The step recording thinking
-            content: The thinking content chunk
-        """
-        pass
-
-    @abstractmethod
-    async def on_retrieval(
+    def __init__(
         self,
-        trace: ExecutionTrace,
-        step: ExecutionStep,
+        semantic_indexer,
+        keyword_indexer=None,
+        semantic_weight: float = 0.7,
+        keyword_weight: float = 0.3,
+    ) -> None:
+        """Initialize hybrid search.
+
+        Args:
+            semantic_indexer: Semantic search provider (e.g., SkillIndexer)
+            keyword_indexer: Keyword search provider (optional)
+            semantic_weight: Weight for semantic search results (0.0-1.0)
+            keyword_weight: Weight for keyword search results (0.0-1.0)
+        """
+        self._semantic_indexer = semantic_indexer
+        self._keyword_indexer = keyword_indexer
+        self._semantic_weight = semantic_weight
+        self._keyword_weight = keyword_weight
+
+    async def search(
+        self,
         query: str,
-        results: list[dict[str, Any]],
-    ) -> None:
-        """Called when a retrieval operation occurs.
+        limit: int = 5,
+        min_score: float = 0.0,
+    ) -> list[HybridMatch]:
+        """Perform hybrid search.
 
         Args:
-            trace: The current execution trace
-            step: The retrieval step
-            query: The search query
-            results: Retrieved results
-        """
-        pass
+            query: Search query
+            limit: Maximum number of results
+            min_score: Minimum combined score threshold
 
-    @abstractmethod
-    async def on_memory_save(
+        Returns:
+            List of HybridMatch objects sorted by combined score
+        """
+        # Normalize weights
+        total_weight = self._semantic_weight + self._keyword_weight
+        if total_weight == 0:
+            self._semantic_weight = 0.7
+            self._keyword_weight = 0.3
+        else:
+            self._semantic_weight /= total_weight
+            self._keyword_weight /= total_weight
+
+        # Execute searches in parallel
+        semantic_results, keyword_results = await self._execute_searches(query, limit)
+
+        # Merge and re-rank
+        matches = self._merge_results(semantic_results, keyword_results)
+
+        # Apply minimum score filter and limit
+        filtered = [m for m in matches if m.combined_score >= min_score]
+        return filtered[:limit]
+
+    async def _execute_searches(
         self,
-        trace: ExecutionTrace,
-        var_name: str,
-        value: Any,
-        source_step: str,
-    ) -> None:
-        """Called when data is saved to memory.
-
-        Args:
-            trace: The current execution trace
-            var_name: Variable name
-            value: Saved value
-            source_step: Step that saved the memory
-        """
-        pass
-
-    @abstractmethod
-    async def on_trace_end(self, trace: ExecutionTrace) -> None:
-        """Called when the trace completes.
-
-        Args:
-            trace: The completed execution trace
-        """
-        pass
-
-
-class LoggingCallback(TracingCallback):
-    """Callback that logs all tracing events for debugging.
-
-    Useful for development and troubleshooting.
-    """
-
-    async def on_step_start(self, trace: ExecutionTrace, step: ExecutionStep) -> None:
-        logger.debug(
-            "callback.step_start",
-            trace_id=trace.trace_id,
-            step_id=step.step_id,
-            step_type=step.step_type.value,
-            name=step.name,
-        )
-
-    async def on_step_end(self, trace: ExecutionTrace, step: ExecutionStep) -> None:
-        logger.debug(
-            "callback.step_end",
-            trace_id=trace.trace_id,
-            step_id=step.step_id,
-            duration_ms=step.duration_ms,
-            status=step.status,
-        )
-
-    async def on_thinking(self, trace: ExecutionTrace, step: ExecutionStep, content: str) -> None:
-        logger.debug(
-            "callback.thinking",
-            trace_id=trace.trace_id,
-            step_id=step.step_id,
-            content_preview=content[:100] if content else "",
-        )
-
-    async def on_retrieval(
-        self,
-        trace: ExecutionTrace,
-        step: ExecutionStep,
         query: str,
-        results: list[dict[str, Any]],
-    ) -> None:
-        logger.debug(
-            "callback.retrieval",
-            trace_id=trace.trace_id,
-            step_id=step.step_id,
-            query=query[:100],
-            result_count=len(results),
-        )
+        limit: int,
+    ) -> tuple[list[SearchResult], list[SearchResult]]:
+        """Execute semantic and keyword searches in parallel."""
+        import asyncio
 
-    async def on_memory_save(
+        semantic_result = self._semantic_indexer.search(query, limit=limit * 2)
+
+        if asyncio.iscoroutine(semantic_result):
+            semantic_result = await semantic_result
+
+        if self._keyword_indexer:
+            keyword_result = self._keyword_indexer.search(query, limit=limit * 2)
+            if asyncio.iscoroutine(keyword_result):
+                keyword_result = await keyword_result
+            keyword_results = keyword_result if isinstance(keyword_result, list) else []
+        else:
+            keyword_results = self._keyword_search(query, limit * 2)
+
+        semantic_results = semantic_result if isinstance(semantic_result, list) else []
+
+        return semantic_results, keyword_results
+
+    def _keyword_search(self, query: str, limit: int) -> list[SearchResult]:
+        """Perform simple keyword matching against indexed content."""
+        # Keyword search is deprecated - use semantic search only
+        logger.debug(f"Keyword search for '{query}': disabled (Rust-only mode)")
+        return []
+
+    def _merge_results(
         self,
-        trace: ExecutionTrace,
-        var_name: str,
-        value: Any,
-        source_step: str,
-    ) -> None:
-        logger.debug(
-            "callback.memory_save",
-            trace_id=trace.trace_id,
-            var_name=var_name,
-            source_step=source_step,
-        )
+        semantic_results: list[SearchResult],
+        keyword_results: list[SearchResult],
+    ) -> list[HybridMatch]:
+        """Merge semantic and keyword results with scoring."""
+        match_map: dict[str, HybridMatch] = {}
 
-    async def on_trace_end(self, trace: ExecutionTrace) -> None:
-        logger.info(
-            "callback.trace_end",
-            trace_id=trace.trace_id,
-            step_count=trace.step_count(),
-            success=trace.success,
-            duration_ms=trace.duration_ms,
-        )
+        # Process semantic results
+        for i, result in enumerate(semantic_results):
+            semantic_score = 1.0 - (i * 0.05)
+            if result.score > 0:
+                semantic_score = min(1.0, result.score)
 
+            match = HybridMatch(
+                id=result.id,
+                content=result.payload.get("content", ""),
+                semantic_score=semantic_score,
+                keyword_score=0.0,
+                combined_score=semantic_score * self._semantic_weight,
+                metadata=result.payload,
+            )
+            match_map[result.id] = match
 
-class CallbackManager:
-    """Manages and dispatches tracing callbacks.
-
-    Provides a thread-safe way to add/remove callbacks and
-    dispatch events to all registered callbacks.
-    """
-
-    def __init__(self):
-        self._callbacks: list[TracingCallback] = []
-        self._lock = __import__("threading").Lock()
-
-    def add_callback(self, callback: TracingCallback) -> None:
-        """Add a callback to the manager.
-
-        Args:
-            callback: Callback instance to add
-        """
-        with self._lock:
-            self._callbacks.append(callback)
-
-    def remove_callback(self, callback: TracingCallback) -> None:
-        """Remove a callback from the manager.
-
-        Args:
-            callback: Callback instance to remove
-        """
-        with self._lock:
-            if callback in self._callbacks:
-                self._callbacks.remove(callback)
-
-    def clear_callbacks(self) -> None:
-        """Remove all callbacks."""
-        with self._lock:
-            self._callbacks.clear()
-
-    async def emit_step_start(self, trace: ExecutionTrace, step: ExecutionStep) -> None:
-        """Emit step_start event to all callbacks."""
-        for callback in self._callbacks:
-            try:
-                await callback.on_step_start(trace, step)
-            except Exception as e:
-                logger.warning(
-                    "callback_error",
-                    event="step_start",
-                    error=str(e),
+        # Process keyword results
+        for i, result in enumerate(keyword_results):
+            if result.id in match_map:
+                match = match_map[result.id]
+                keyword_score = 1.0 - (i * 0.05)
+                if result.score > 0:
+                    keyword_score = min(1.0, result.score)
+                match.keyword_score = keyword_score
+                match.combined_score = (
+                    match.semantic_score * self._semantic_weight
+                    + keyword_score * self._keyword_weight
                 )
+            else:
+                keyword_score = 1.0 - (i * 0.05)
+                if result.score > 0:
+                    keyword_score = min(1.0, result.score)
 
-    async def emit_step_end(self, trace: ExecutionTrace, step: ExecutionStep) -> None:
-        """Emit step_end event to all callbacks."""
-        for callback in self._callbacks:
-            try:
-                await callback.on_step_end(trace, step)
-            except Exception as e:
-                logger.warning(
-                    "callback_error",
-                    event="step_end",
-                    error=str(e),
+                match = HybridMatch(
+                    id=result.id,
+                    content=result.payload.get("content", ""),
+                    semantic_score=0.0,
+                    keyword_score=keyword_score,
+                    combined_score=keyword_score * self._keyword_weight,
+                    metadata=result.payload,
                 )
+                match_map[result.id] = match
 
-    async def emit_thinking(self, trace: ExecutionTrace, step: ExecutionStep, content: str) -> None:
-        """Emit thinking event to all callbacks."""
-        for callback in self._callbacks:
-            try:
-                await callback.on_thinking(trace, step, content)
-            except Exception as e:
-                logger.warning(
-                    "callback_error",
-                    event="thinking",
-                    error=str(e),
-                )
+        matches = list(match_map.values())
+        matches.sort(key=lambda m: m.combined_score, reverse=True)
 
-    async def emit_retrieval(
-        self,
-        trace: ExecutionTrace,
-        step: ExecutionStep,
-        query: str,
-        results: list[dict[str, Any]],
-    ) -> None:
-        """Emit retrieval event to all callbacks."""
-        for callback in self._callbacks:
-            try:
-                await callback.on_retrieval(trace, step, query, results)
-            except Exception as e:
-                logger.warning(
-                    "callback_error",
-                    event="retrieval",
-                    error=str(e),
-                )
+        return matches
 
-    async def emit_memory_save(
-        self,
-        trace: ExecutionTrace,
-        var_name: str,
-        value: Any,
-        source_step: str,
-    ) -> None:
-        """Emit memory_save event to all callbacks."""
-        for callback in self._callbacks:
-            try:
-                await callback.on_memory_save(trace, var_name, value, source_step)
-            except Exception as e:
-                logger.warning(
-                    "callback_error",
-                    event="memory_save",
-                    error=str(e),
-                )
+    def set_weights(self, semantic: float, keyword: float) -> None:
+        """Set search weights dynamically."""
+        self._semantic_weight = semantic
+        self._keyword_weight = keyword
+        logger.info(f"Updated weights: semantic={semantic}, keyword={keyword}")
 
-    async def emit_trace_end(self, trace: ExecutionTrace) -> None:
-        """Emit trace_end event to all callbacks."""
-        for callback in self._callbacks:
-            try:
-                await callback.on_trace_end(trace)
-            except Exception as e:
-                logger.warning(
-                    "callback_error",
-                    event="trace_end",
-                    error=str(e),
-                )
+    def get_weights(self) -> tuple[float, float]:
+        """Get current search weights."""
+        return self._semantic_weight, self._keyword_weight
+
+    def stats(self) -> dict[str, Any]:
+        """Get hybrid search statistics."""
+        return {
+            "semantic_weight": self._semantic_weight,
+            "keyword_weight": self._keyword_weight,
+            "has_keyword_indexer": self._keyword_indexer is not None,
+        }
 
 
-__all__ = [
-    "CallbackManager",
-    "LoggingCallback",
-    "TracingCallback",
-]
+__all__ = ["HybridSearch", "HybridMatch"]

@@ -1,8 +1,9 @@
 use std::path::Path;
 
+use crate::frontmatter::strict_parse;
 use crate::skills::metadata::ReferenceRecord;
 
-use super::model::ReferenceMetadataBlock;
+use super::model::{ReferenceFrontmatter, ReferenceMetadataBlock, UnifiedMetadataType};
 
 mod build;
 mod filesystem;
@@ -32,13 +33,7 @@ fn scan_reference_file(path: &Path, skill_name: &str) -> Option<ReferenceRecord>
     let content = filesystem::read_reference_content(path)?;
     let (reference_name, file_path) = filesystem::reference_identity(path);
     let metadata: Option<ReferenceMetadataBlock> =
-        match build::parse_reference_metadata_strict(content.as_str(), path) {
-            Ok(metadata) => Some(metadata),
-            Err(error) => {
-                log::warn!("{error}");
-                return None;
-            }
-        };
+        build::parse_reference_metadata(content.as_str());
 
     Some(build::build_reference_record(
         reference_name,
@@ -50,14 +45,30 @@ fn scan_reference_file(path: &Path, skill_name: &str) -> Option<ReferenceRecord>
 
 pub(super) fn validate_references_strict(skill_path: &Path) -> Result<(), String> {
     let paths = filesystem::discover_reference_markdown_files(skill_path);
-    for path in &paths {
-        let Some(content) = filesystem::read_reference_content(path) else {
-            return Err(format!(
-                "failed to read reference markdown: {}",
+    for path in paths {
+        let content = filesystem::read_reference_content(path.as_path())
+            .ok_or_else(|| format!("Failed to read reference file: {}", path.display()))?;
+        let frontmatter = strict_parse::<ReferenceFrontmatter>(&content).map_err(|error| {
+            format!(
+                "reference metadata validation failed: invalid YAML frontmatter in reference markdown {}: {error}",
                 path.display()
-            ));
-        };
-        build::parse_reference_metadata_strict(content.as_str(), path)?;
+            )
+        })?;
+        if matches!(frontmatter.metadata_type, UnifiedMetadataType::Persona) {
+            let role_valid = frontmatter
+                .metadata
+                .role_class
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .is_some();
+            if !role_valid {
+                return Err(format!(
+                    "reference metadata validation failed: invalid persona metadata in {}: `metadata.role_class` is required when type=persona",
+                    path.display()
+                ));
+            }
+        }
     }
     Ok(())
 }

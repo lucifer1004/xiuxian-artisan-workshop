@@ -1,10 +1,8 @@
-//! Tests for cascading resolver behavior.
+//! Tests for config resolve read-through cache behavior.
 
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
-use xiuxian_config_core::{
-    ArrayMergeStrategy, ConfigCascadeSpec, ConfigCoreError, resolve_and_merge_toml_with_paths,
-};
+use xiuxian_config_core::{ConfigCascadeSpec, resolve_and_merge_toml_with_paths};
 
 fn write_text(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {
@@ -23,179 +21,62 @@ fn temp_workspace() -> (TempDir, PathBuf) {
     (temp, root)
 }
 
-#[test]
-fn resolver_skips_orphan_scan_when_orphan_file_is_blank() {
-    let (_temp, root) = temp_workspace();
+fn strict_mode_from_merged(value: &toml::Value) -> Option<bool> {
+    value
+        .get("validation")
+        .and_then(|node| node.get("strict_mode"))
+        .and_then(toml::Value::as_bool)
+}
 
+#[test]
+fn cache_invalidation_reflects_file_changes() {
+    let (_temp, root) = temp_workspace();
+    let xiuxian_path = root.join(".config/xiuxian-artisan-workshop/xiuxian.toml");
     write_text(
-        root.join(".config/xiuxian-artisan-workshop/ignored.toml")
-            .as_path(),
+        xiuxian_path.as_path(),
         r"
-[validation]
+[skills.validation]
 strict_mode = false
 ",
     );
+
     let spec = ConfigCascadeSpec::new(
         "skills",
         r"
 [validation]
 strict_mode = true
 ",
-        "",
-    );
-
-    let merged = resolve_and_merge_toml_with_paths(
-        spec,
-        Some(root.as_path()),
-        Some(root.join(".config").as_path()),
-    )
-    .unwrap_or_else(|error| {
-        panic!("resolve_and_merge_toml should ignore orphan when disabled: {error}")
-    });
-    let strict_mode = merged
-        .get("validation")
-        .and_then(|value| value.get("strict_mode"))
-        .and_then(toml::Value::as_bool);
-
-    assert_eq!(strict_mode, Some(true));
-}
-
-#[test]
-fn resolver_appends_arrays_when_strategy_is_append() {
-    let (_temp, root) = temp_workspace();
-
-    write_text(
-        root.join(".config/xiuxian-artisan-workshop/xiuxian.toml")
-            .as_path(),
-        r#"
-[skills.items]
-values = ["b"]
-"#,
-    );
-
-    let spec = ConfigCascadeSpec::new(
-        "skills",
-        r#"
-[items]
-values = ["a"]
-"#,
-        "orphan.toml",
-    )
-    .with_array_merge_strategy(ArrayMergeStrategy::Append);
-
-    let merged = resolve_and_merge_toml_with_paths(
-        spec,
-        Some(root.as_path()),
-        Some(root.join(".config").as_path()),
-    )
-    .unwrap_or_else(|error| panic!("resolve append strategy config: {error}"));
-    let values = merged
-        .get("items")
-        .and_then(|value| value.get("values"))
-        .and_then(toml::Value::as_array)
-        .map(|array| {
-            array
-                .iter()
-                .filter_map(toml::Value::as_str)
-                .map(str::to_string)
-                .collect::<Vec<_>>()
-        });
-
-    assert_eq!(values, Some(vec!["a".to_string(), "b".to_string()]));
-}
-
-#[test]
-fn resolver_overwrites_arrays_when_strategy_is_default() {
-    let (_temp, root) = temp_workspace();
-
-    write_text(
-        root.join(".config/xiuxian-artisan-workshop/xiuxian.toml")
-            .as_path(),
-        r#"
-[skills.items]
-values = ["b"]
-"#,
-    );
-
-    let spec = ConfigCascadeSpec::new(
-        "skills",
-        r#"
-[items]
-values = ["a"]
-"#,
-        "orphan.toml",
-    );
-
-    let merged = resolve_and_merge_toml_with_paths(
-        spec,
-        Some(root.as_path()),
-        Some(root.join(".config").as_path()),
-    )
-    .unwrap_or_else(|error| panic!("resolve default overwrite strategy config: {error}"));
-    let values = merged
-        .get("items")
-        .and_then(|value| value.get("values"))
-        .and_then(toml::Value::as_array)
-        .map(|array| {
-            array
-                .iter()
-                .filter_map(toml::Value::as_str)
-                .map(str::to_string)
-                .collect::<Vec<_>>()
-        });
-
-    assert_eq!(values, Some(vec!["b".to_string()]));
-}
-
-#[test]
-fn resolver_errors_when_global_and_orphan_configs_coexist() {
-    let (_temp, root) = temp_workspace();
-
-    write_text(
-        root.join(".config/xiuxian-artisan-workshop/xiuxian.toml")
-            .as_path(),
-        r"
-[skills]
-enabled = true
-",
-    );
-    write_text(
-        root.join(".config/xiuxian-artisan-workshop/skills.toml")
-            .as_path(),
-        r"
-enabled = false
-",
-    );
-
-    let spec = ConfigCascadeSpec::new(
-        "skills",
-        r"
-enabled = true
-",
         "skills.toml",
     );
 
-    let Err(error) = resolve_and_merge_toml_with_paths(
+    let first = resolve_and_merge_toml_with_paths(
         spec,
         Some(root.as_path()),
         Some(root.join(".config").as_path()),
-    ) else {
-        panic!("coexisting global+orphan configs must fail");
-    };
+    )
+    .unwrap_or_else(|error| panic!("resolve first pass: {error}"));
+    assert_eq!(strict_mode_from_merged(&first), Some(false));
 
-    match error {
-        ConfigCoreError::RedundantOrphan { namespace, orphans } => {
-            assert_eq!(namespace, "skills");
-            assert!(orphans.contains("skills.toml"), "orphans={orphans}");
-        }
-        other => panic!("expected RedundantOrphan, got {other}"),
-    }
+    write_text(
+        xiuxian_path.as_path(),
+        r"
+[skills.validation]
+strict_mode = true
+",
+    );
+
+    let second = resolve_and_merge_toml_with_paths(
+        spec,
+        Some(root.as_path()),
+        Some(root.join(".config").as_path()),
+    )
+    .unwrap_or_else(|error| panic!("resolve second pass after config update: {error}"));
+    assert_eq!(strict_mode_from_merged(&second), Some(true));
 }
 
 #[test]
-fn resolver_supports_dotted_namespace_projection_from_xiuxian_toml() {
+fn cache_concurrent_reads_are_stable() {
     let (_temp, root) = temp_workspace();
-
     write_text(
         root.join(".config/xiuxian-artisan-workshop/xiuxian.toml")
             .as_path(),
@@ -204,62 +85,37 @@ fn resolver_supports_dotted_namespace_projection_from_xiuxian_toml() {
 strict_mode = false
 ",
     );
+
     let spec = ConfigCascadeSpec::new(
-        "skills.validation",
+        "skills",
         r"
+[validation]
 strict_mode = true
 ",
         "skills.toml",
     );
+    let config_home = root.join(".config");
 
-    let merged = resolve_and_merge_toml_with_paths(
-        spec,
-        Some(root.as_path()),
-        Some(root.join(".config").as_path()),
-    )
-    .unwrap_or_else(|error| panic!("resolve dotted namespace config: {error}"));
-    let strict_mode = merged.get("strict_mode").and_then(toml::Value::as_bool);
+    let mut handles = Vec::new();
+    for _ in 0..8 {
+        let root_clone = root.clone();
+        let config_home_clone = config_home.clone();
+        handles.push(std::thread::spawn(move || {
+            for _ in 0..32 {
+                let merged = resolve_and_merge_toml_with_paths(
+                    spec,
+                    Some(root_clone.as_path()),
+                    Some(config_home_clone.as_path()),
+                )
+                .unwrap_or_else(|error| panic!("resolve in concurrent reader: {error}"));
+                assert_eq!(strict_mode_from_merged(&merged), Some(false));
+            }
+        }));
+    }
 
-    assert_eq!(strict_mode, Some(false));
-}
-
-#[test]
-fn resolver_supports_empty_namespace_for_root_merge() {
-    let (_temp, root) = temp_workspace();
-
-    write_text(
-        root.join(".config/xiuxian-artisan-workshop/xiuxian.toml")
-            .as_path(),
-        r#"
-[llm]
-default_provider = "anthropic"
-"#,
-    );
-    let spec = ConfigCascadeSpec::new(
-        "",
-        r#"
-[llm]
-default_provider = "openai"
-default_model = "gpt-4o-mini"
-"#,
-        "",
-    );
-
-    let merged = resolve_and_merge_toml_with_paths(
-        spec,
-        Some(root.as_path()),
-        Some(root.join(".config").as_path()),
-    )
-    .unwrap_or_else(|error| panic!("resolve empty namespace config: {error}"));
-    let default_provider = merged
-        .get("llm")
-        .and_then(|value| value.get("default_provider"))
-        .and_then(toml::Value::as_str);
-    let default_model = merged
-        .get("llm")
-        .and_then(|value| value.get("default_model"))
-        .and_then(toml::Value::as_str);
-
-    assert_eq!(default_provider, Some("anthropic"));
-    assert_eq!(default_model, Some("gpt-4o-mini"));
+    for handle in handles {
+        handle
+            .join()
+            .unwrap_or_else(|_| panic!("cache concurrent reader thread panicked"));
+    }
 }

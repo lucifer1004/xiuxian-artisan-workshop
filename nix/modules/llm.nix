@@ -14,6 +14,7 @@ in
     inputs.worktrunk.packages.${system}.worktrunk
     __inputs__.packages.mcp-inspector
     __inputs__.packages.backmark
+    __inputs__.packages.mpatch
     # ``__inputs__.llm-agents.packages.${system}.claudebox
     __nixpkgs__.repomix
     __nixpkgs__.ast-grep
@@ -22,7 +23,14 @@ in
     __inputs__.llm-agents.packages.${system}.claude-code
     # __inputs__.llm-agents.packages.${system}.cursor-agent
     # __nixpkgs__.playwright-driver.browsers
-    __inputs__.llm-agents.packages.${system}.codex
+    (__inputs__.llm-agents.packages.${system}.codex.overrideAttrs {
+      # src = pkgs.fetchFromGitHub {
+      #   owner = "openai";
+      #   repo = "codex";
+      #   rev = "cc417c39a00f81b9c30d26ab45b0726a4887cb5e";
+      #   sha256 = "sha256-ONSOVvDLfs8IDq4hI+XYAcMwjXSTBDIJlHB5Xwq107Q=";
+      # };
+    })
     __inputs__.llm-agents.packages.${system}.gemini-cli
   ]
   ++ lib.optionals (system != "aarch64-darwin") [

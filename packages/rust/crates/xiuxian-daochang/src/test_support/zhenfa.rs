@@ -14,6 +14,7 @@ use crate::config::XiuxianConfig;
 /// Runtime dependencies used to build the zhenfa native tool bridge.
 #[derive(Clone, Default)]
 pub struct ZhenfaRuntimeDeps {
+    pub embedding_client: Option<Arc<crate::EmbeddingClient>>,
     pub manifestation_manager: Option<Arc<ManifestationManager>>,
     pub link_graph_index: Option<Arc<LinkGraphIndex>>,
     pub skill_vfs_resolver: Option<Arc<SkillVfsResolver>>,
@@ -33,6 +34,7 @@ impl ZhenfaToolBridge {
             deps.manifestation_manager.as_ref().map(Arc::clone),
             deps.link_graph_index.as_ref().map(Arc::clone),
             deps.skill_vfs_resolver.as_ref().map(Arc::clone),
+            deps.embedding_client.as_ref().map(Arc::clone),
             deps.memory_store.as_ref().map(Arc::clone),
         );
         internal::ZhenfaToolBridge::from_xiuxian_config(config, &internal_deps)

@@ -25,6 +25,7 @@ impl LinkGraphIndex {
     pub(super) fn remove_doc_by_id(&mut self, doc_id: &str) {
         self.docs_by_id.remove(doc_id);
         self.remove_passages_for_doc(doc_id);
+        self.remove_page_index_for_doc(doc_id);
         self.sections_by_doc.remove(doc_id);
         self.attachments_by_doc.remove(doc_id);
         self.alias_to_doc_id
@@ -52,6 +53,7 @@ impl LinkGraphIndex {
                 .collect::<Vec<IndexedSection>>(),
         );
         self.rebuild_passages_for_doc(&doc.id);
+        self.rebuild_page_index_for_doc(&doc.id);
         self.attachments_by_doc
             .insert(doc.id.clone(), attachments_for_parsed_note(parsed));
         for alias in [&doc.id, &doc.path, &doc.stem] {

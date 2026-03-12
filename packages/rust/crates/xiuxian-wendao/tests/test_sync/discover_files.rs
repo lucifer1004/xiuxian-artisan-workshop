@@ -17,7 +17,7 @@ fn test_discover_files() -> Result<(), Box<dyn std::error::Error>> {
     fs::write(subdir.join("module.py"), "def foo(): pass")?;
 
     let manifest_path = temp_dir.path().join("manifest.json");
-    let engine = SyncEngine::new(temp_dir.path(), &manifest_path);
+    let engine = SyncEngine::new(temp_dir.path().to_path_buf(), manifest_path.clone());
     let files = engine.discover_files();
 
     // Should find .py and .md files, not .txt

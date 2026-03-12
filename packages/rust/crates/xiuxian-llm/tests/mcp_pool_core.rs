@@ -1,6 +1,6 @@
 //! MCP pool core helper tests.
 
-use xiuxian_llm::mcp::{McpPoolConnectConfig, connect_pool_clients_with_retry};
+use xiuxian_mcp::{McpPoolConnectConfig, connect_pool_clients_with_retry};
 
 #[tokio::test]
 async fn connect_pool_clients_with_retry_rejects_zero_pool_size() {

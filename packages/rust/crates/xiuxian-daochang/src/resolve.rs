@@ -1,8 +1,5 @@
 use crate::cli::{DiscordRuntimeMode, TelegramChannelMode, WebhookDedupBackendMode};
-use xiuxian_macros::{env_first_non_empty, env_non_empty};
-
-pub(crate) const XIUXIAN_WENDAO_VALKEY_URL_ENV: &str = "XIUXIAN_WENDAO_VALKEY_URL";
-pub(crate) const LEGACY_VALKEY_URL_ENV: &str = "VALKEY_URL";
+use omni_macros::env_non_empty;
 
 pub(crate) fn resolve_string(
     cli_value: Option<String>,
@@ -150,11 +147,6 @@ pub(crate) fn resolve_discord_runtime_mode(
     DiscordRuntimeMode::Gateway
 }
 
-#[must_use]
-pub(crate) fn resolve_valkey_url_env() -> Option<String> {
-    env_first_non_empty!(XIUXIAN_WENDAO_VALKEY_URL_ENV, LEGACY_VALKEY_URL_ENV)
-}
-
 fn parse_channel_mode(raw: &str) -> Option<TelegramChannelMode> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "polling" => Some(TelegramChannelMode::Polling),
@@ -180,6 +172,15 @@ fn parse_dedup_backend(raw: &str) -> Option<WebhookDedupBackendMode> {
 }
 
 #[must_use]
+pub(crate) fn parse_positive_u32_from_env(name: &str) -> Option<u32> {
+    parse_env_value(
+        name,
+        |raw| raw.parse::<u32>().ok().filter(|value| *value > 0),
+        "invalid positive integer env value",
+    )
+}
+
+#[must_use]
 pub(crate) fn parse_positive_usize_from_env(name: &str) -> Option<usize> {
     parse_env_value(
         name,
@@ -194,6 +195,41 @@ pub(crate) fn parse_positive_u64_from_env(name: &str) -> Option<u64> {
         name,
         |raw| raw.parse::<u64>().ok().filter(|value| *value > 0),
         "invalid positive integer env value",
+    )
+}
+
+#[must_use]
+pub(crate) fn parse_positive_f32_from_env(name: &str) -> Option<f32> {
+    parse_env_value(
+        name,
+        |raw| raw.parse::<f32>().ok().filter(|value| *value > 0.0),
+        "invalid positive float env value",
+    )
+}
+
+#[must_use]
+pub(crate) fn parse_unit_f32_from_env(name: &str) -> Option<f32> {
+    parse_env_value(
+        name,
+        |raw| {
+            raw.parse::<f32>()
+                .ok()
+                .filter(|value| (0.0..=1.0).contains(value))
+        },
+        "invalid unit float env value (expected 0.0..=1.0)",
+    )
+}
+
+#[must_use]
+pub(crate) fn parse_bool_from_env(name: &str) -> Option<bool> {
+    parse_env_value(
+        name,
+        |raw| match raw.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Some(true),
+            "0" | "false" | "no" | "off" => Some(false),
+            _ => None,
+        },
+        "invalid boolean env value",
     )
 }
 

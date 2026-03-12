@@ -1,3 +1,5 @@
+//! Recurring scheduler built on top of `JobManager`.
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -5,19 +7,61 @@ use anyhow::{Result, bail};
 use tokio::sync::mpsc;
 use tokio::time::{Instant, MissedTickBehavior};
 
-use crate::jobs::{JobCompletion, JobManager};
+use super::{JobCompletion, JobCompletionKind, JobManager};
 
-use super::helpers::{apply_completion, completion_label, normalize_or_default};
-use super::types::{RecurringScheduleConfig, RecurringScheduleOutcome};
+/// Config for recurring scheduler runs.
+#[derive(Debug, Clone)]
+pub struct RecurringScheduleConfig {
+    /// Logical schedule id for logs and session namespacing.
+    pub schedule_id: String,
+    /// Session prefix used by the queued jobs.
+    pub session_prefix: String,
+    /// Recipient identifier associated with queued jobs.
+    pub recipient: String,
+    /// Prompt executed on each schedule tick.
+    pub prompt: String,
+    /// Interval between submissions in seconds.
+    pub interval_secs: u64,
+    /// Optional run limit; `None` means run until Ctrl+C.
+    pub max_runs: Option<u64>,
+    /// Grace period to wait for in-flight completions before returning.
+    pub wait_for_completion_secs: u64,
+}
+
+impl Default for RecurringScheduleConfig {
+    fn default() -> Self {
+        Self {
+            schedule_id: "default".to_string(),
+            session_prefix: "scheduler".to_string(),
+            recipient: "scheduler".to_string(),
+            prompt: String::new(),
+            interval_secs: 300,
+            max_runs: None,
+            wait_for_completion_secs: 30,
+        }
+    }
+}
+
+/// Aggregated scheduler outcome counters.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RecurringScheduleOutcome {
+    /// Number of submissions accepted by `JobManager`.
+    pub submitted: u64,
+    /// Number of completion events observed.
+    pub completed: u64,
+    /// Number of successful completions.
+    pub succeeded: u64,
+    /// Number of failed completions.
+    pub failed: u64,
+    /// Number of timed-out completions.
+    pub timed_out: u64,
+}
 
 /// Run a recurring scheduler loop using an existing `JobManager`.
 ///
 /// The loop submits one job per tick, collects completion events, and stops when:
 /// - `max_runs` submissions are reached, or
 /// - Ctrl+C is received.
-///
-/// # Errors
-/// Returns an error when config validation fails or job submission fails.
 pub async fn run_recurring_schedule(
     manager: Arc<JobManager>,
     mut completion_rx: mpsc::Receiver<JobCompletion>,
@@ -98,7 +142,30 @@ pub async fn run_recurring_schedule(
         }
     }
 
-    drain_in_flight_completions(&mut outcome, &mut completion_rx, &config).await;
+    if outcome.completed < outcome.submitted {
+        let deadline = Instant::now() + Duration::from_secs(config.wait_for_completion_secs);
+        while outcome.completed < outcome.submitted {
+            let now = Instant::now();
+            if now >= deadline {
+                break;
+            }
+            let wait = deadline - now;
+            match tokio::time::timeout(wait, completion_rx.recv()).await {
+                Ok(Some(completion)) => {
+                    apply_completion(&mut outcome, &completion);
+                    tracing::info!(
+                        schedule_id = %config.schedule_id,
+                        job_id = %completion.job_id,
+                        state = %completion_label(&completion.kind),
+                        completed = outcome.completed,
+                        submitted = outcome.submitted,
+                        "scheduled completion observed during drain"
+                    );
+                }
+                Ok(None) | Err(_) => break,
+            }
+        }
+    }
 
     if outcome.completed < outcome.submitted {
         tracing::warn!(
@@ -113,35 +180,34 @@ pub async fn run_recurring_schedule(
     Ok(outcome)
 }
 
-async fn drain_in_flight_completions(
-    outcome: &mut RecurringScheduleOutcome,
-    completion_rx: &mut mpsc::Receiver<JobCompletion>,
-    config: &RecurringScheduleConfig,
-) {
-    if outcome.completed >= outcome.submitted {
-        return;
+fn normalize_or_default(value: &str, fallback: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        fallback.to_string()
+    } else {
+        trimmed.to_string()
     }
+}
 
-    let deadline = Instant::now() + Duration::from_secs(config.wait_for_completion_secs);
-    while outcome.completed < outcome.submitted {
-        let now = Instant::now();
-        if now >= deadline {
-            break;
+fn apply_completion(outcome: &mut RecurringScheduleOutcome, completion: &JobCompletion) {
+    outcome.completed += 1;
+    match completion.kind {
+        JobCompletionKind::Succeeded { .. } => {
+            outcome.succeeded += 1;
         }
-        let wait = deadline - now;
-        match tokio::time::timeout(wait, completion_rx.recv()).await {
-            Ok(Some(completion)) => {
-                apply_completion(outcome, &completion);
-                tracing::info!(
-                    schedule_id = %config.schedule_id,
-                    job_id = %completion.job_id,
-                    state = %completion_label(&completion.kind),
-                    completed = outcome.completed,
-                    submitted = outcome.submitted,
-                    "scheduled completion observed during drain"
-                );
-            }
-            Ok(None) | Err(_) => break,
+        JobCompletionKind::Failed { .. } => {
+            outcome.failed += 1;
         }
+        JobCompletionKind::TimedOut { .. } => {
+            outcome.timed_out += 1;
+        }
+    }
+}
+
+fn completion_label(kind: &JobCompletionKind) -> &'static str {
+    match kind {
+        JobCompletionKind::Succeeded { .. } => "succeeded",
+        JobCompletionKind::Failed { .. } => "failed",
+        JobCompletionKind::TimedOut { .. } => "timed_out",
     }
 }

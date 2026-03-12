@@ -10,12 +10,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
+from omni.foundation.utils.asyncio import run_async_blocking
 from omni.test_kit.fixtures.arrow import (
     assert_table_health_ipc_table,
     decode_table_health_ipc_bytes,
 )
-
-from omni.foundation.utils.asyncio import run_async_blocking
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def test_query_metrics_placeholder_shape(tmp_path: Path):
     from omni.foundation.bridge.rust_vector import RUST_AVAILABLE, RustVectorStore
 
     if not RUST_AVAILABLE:
-        pytest.skip("xiuxian_core_rs not available")
+        pytest.skip("omni_core_rs not available")
 
     store = RustVectorStore(str(tmp_path), 384, True)
     metrics = store.get_query_metrics("skills")
@@ -43,7 +43,7 @@ def test_db_health_compact_query_metrics_integration(tmp_path: Path, repo_root: 
     from omni.foundation.bridge.rust_vector import RUST_AVAILABLE, RustVectorStore
 
     if not RUST_AVAILABLE:
-        pytest.skip("xiuxian_core_rs not available")
+        pytest.skip("omni_core_rs not available")
 
     store = RustVectorStore(str(tmp_path), 384, True)
     # Index from repo so we have a real table

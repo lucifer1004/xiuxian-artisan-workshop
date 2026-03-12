@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 from omni.tracer import (
+    LangGraphPipelineBuilder as PackageBuilder,
+)
+from omni.tracer import (
     PipelineConfig as PackagePipelineConfig,
 )
 from omni.tracer import (
-    PipelineWorkflowBuilder as PackageBuilder,
+    create_langgraph_from_pipeline as package_create_langgraph,
 )
-from omni.tracer import (
-    create_workflow_from_pipeline as package_create_workflow,
-)
-from omni.tracer.pipeline_builder import PipelineWorkflowBuilder
-from omni.tracer.pipeline_runtime import create_workflow_from_pipeline
+from omni.tracer.pipeline_builder import LangGraphPipelineBuilder
+from omni.tracer.pipeline_runtime import create_langgraph_from_pipeline
 from omni.tracer.pipeline_schema import PipelineConfig
 
 
@@ -23,12 +23,12 @@ def test_package_reexports_schema_class_identity() -> None:
 
 def test_package_reexports_builder_identity() -> None:
     """Package should expose the exact builder class."""
-    assert PackageBuilder is PipelineWorkflowBuilder
+    assert PackageBuilder is LangGraphPipelineBuilder
 
 
 def test_package_reexports_runtime_factory_identity() -> None:
     """Package should expose the exact runtime factory function."""
-    assert package_create_workflow is create_workflow_from_pipeline
+    assert package_create_langgraph is create_langgraph_from_pipeline
 
 
 def test_modular_builder_and_package_export_produce_equivalent_graph_defs() -> None:
@@ -48,7 +48,7 @@ def test_modular_builder_and_package_export_produce_equivalent_graph_defs() -> N
         ]
     )
 
-    direct = PipelineWorkflowBuilder(config).build()
+    direct = LangGraphPipelineBuilder(config).build()
     via_package = PackageBuilder(config).build()
 
     assert direct["entry_node"] == via_package["entry_node"]

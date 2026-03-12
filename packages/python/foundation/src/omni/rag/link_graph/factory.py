@@ -7,16 +7,18 @@ from typing import TYPE_CHECKING
 
 from omni.foundation.config.link_graph_runtime import (
     get_link_graph_backend_name,
+    get_link_graph_gateway_base_url,
     get_link_graph_root_dir,
 )
 from omni.foundation.config.settings import get_setting
 
+from .gateway_backend import GatewayLinkGraphBackend
 from .wendao_backend import WendaoLinkGraphBackend
 
 if TYPE_CHECKING:
     from .backend import LinkGraphBackend
 
-_BACKEND_CACHE: dict[tuple[str, str], LinkGraphBackend] = {}
+_BACKEND_CACHE: dict[tuple[str, str, str], LinkGraphBackend] = {}
 
 
 def _resolve_backend_name(name: str | None = None) -> str:
@@ -32,34 +34,52 @@ def _resolve_notebook_dir(notebook_dir: str | Path | None = None) -> str | None:
     return None
 
 
-def _build_backend(backend_name: str, notebook_dir: str | None) -> LinkGraphBackend:
+def _resolve_gateway_base_url(base_url: str | None = None) -> str | None:
+    return get_link_graph_gateway_base_url(base_url, setting_reader=get_setting)
+
+
+def _build_backend(
+    backend_name: str,
+    notebook_dir: str | None,
+    gateway_base_url: str | None,
+) -> LinkGraphBackend:
     if backend_name == "wendao":
         return WendaoLinkGraphBackend(notebook_dir)
+    if backend_name == "gateway":
+        return GatewayLinkGraphBackend(notebook_dir=notebook_dir, base_url=gateway_base_url)
     raise ValueError(f"Unsupported link_graph backend: {backend_name}")
 
 
-def _cache_key(backend_name: str, notebook_dir: str | None) -> tuple[str, str]:
-    return backend_name, notebook_dir or ""
+def _cache_key(
+    backend_name: str,
+    notebook_dir: str | None,
+    gateway_base_url: str | None,
+) -> tuple[str, str, str]:
+    return backend_name, notebook_dir or "", gateway_base_url or ""
 
 
 def get_link_graph_backend(
     *,
     backend_name: str | None = None,
     notebook_dir: str | Path | None = None,
+    gateway_base_url: str | None = None,
     use_cache: bool = True,
 ) -> LinkGraphBackend:
     """Get backend instance by configured backend + notebook root."""
     resolved_name = _resolve_backend_name(backend_name)
     resolved_dir = _resolve_notebook_dir(notebook_dir)
+    resolved_gateway = None
+    if resolved_name == "gateway":
+        resolved_gateway = _resolve_gateway_base_url(gateway_base_url)
     if not use_cache:
-        return _build_backend(resolved_name, resolved_dir)
+        return _build_backend(resolved_name, resolved_dir, resolved_gateway)
 
-    key = _cache_key(resolved_name, resolved_dir)
+    key = _cache_key(resolved_name, resolved_dir, resolved_gateway)
     cached = _BACKEND_CACHE.get(key)
     if cached is not None:
         return cached
 
-    built = _build_backend(resolved_name, resolved_dir)
+    built = _build_backend(resolved_name, resolved_dir, resolved_gateway)
     _BACKEND_CACHE[key] = built
     return built
 

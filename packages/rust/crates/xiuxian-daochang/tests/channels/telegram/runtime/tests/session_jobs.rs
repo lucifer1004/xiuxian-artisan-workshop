@@ -1,19 +1,53 @@
-//! Telegram runtime `/job` and `/jobs` command behavior tests.
+//! Telegram runtime `/help` command behavior tests.
 
 use std::sync::Arc;
 
 use anyhow::Result;
-use tokio::sync::mpsc;
+use async_trait::async_trait;
+use tokio::sync::{Mutex, mpsc};
 
-use xiuxian_daochang::test_support::{push_telegram_background_completion, session_messages};
-use xiuxian_daochang::{
-    Channel, ChannelAttachment, ChannelMessage, JobCompletion, JobCompletionKind,
+use xiuxian_daochang::{Channel, ChannelMessage};
+
+use super::support::{
+    MockChannel, build_agent, build_job_manager, handle_inbound_message, inbound,
 };
 
-use super::{MockChannel, build_agent, build_job_manager, handle_inbound_message, inbound};
+#[derive(Default)]
+struct DenySlashMockChannel {
+    sent: Mutex<Vec<(String, String)>>,
+}
+
+impl DenySlashMockChannel {
+    async fn sent_messages(&self) -> Vec<(String, String)> {
+        self.sent.lock().await.clone()
+    }
+}
+
+#[async_trait]
+impl Channel for DenySlashMockChannel {
+    fn name(&self) -> &'static str {
+        "deny-slash-mock"
+    }
+
+    fn is_authorized_for_slash_command(&self, _identity: &str, _command_scope: &str) -> bool {
+        false
+    }
+
+    async fn send(&self, message: &str, recipient: &str) -> Result<()> {
+        self.sent
+            .lock()
+            .await
+            .push((message.to_string(), recipient.to_string()));
+        Ok(())
+    }
+
+    async fn listen(&self, _tx: mpsc::Sender<ChannelMessage>) -> Result<()> {
+        Ok(())
+    }
+}
 
 #[tokio::test]
-async fn runtime_handle_inbound_job_status_not_found_reports_dashboard() -> Result<()> {
+async fn runtime_handle_inbound_help_replies_with_command_guide() -> Result<()> {
     let agent = build_agent().await?;
     let channel = Arc::new(MockChannel::default());
     let channel_dyn: Arc<dyn Channel> = channel.clone();
@@ -22,7 +56,7 @@ async fn runtime_handle_inbound_job_status_not_found_reports_dashboard() -> Resu
 
     assert!(
         handle_inbound_message(
-            inbound("/job missing-123"),
+            inbound("/help"),
             &channel_dyn,
             &foreground_tx,
             &job_manager,
@@ -32,20 +66,25 @@ async fn runtime_handle_inbound_job_status_not_found_reports_dashboard() -> Resu
     );
     assert!(
         foreground_rx.try_recv().is_err(),
-        "job status command should not forward to foreground queue"
+        "help command should not forward to foreground queue"
     );
 
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
-    assert!(sent[0].0.contains("job-status dashboard"));
-    assert!(sent[0].0.contains("status=not_found"));
-    assert!(sent[0].0.contains("job_id=missing-123"));
-    assert!(sent[0].0.contains("jobs_dashboard=/jobs"));
+    assert!(sent[0].0.contains("## Bot Slash Help"));
+    assert!(sent[0].0.contains("- `/session memory [json]`"));
+    assert!(
+        sent[0]
+            .0
+            .contains("- `/session admin [list|set|add|remove|clear] [json]`")
+    );
+    assert!(sent[0].0.contains("- `/bg <prompt>`"));
+    assert!(sent[0].0.contains("- `/help json`"));
     Ok(())
 }
 
 #[tokio::test]
-async fn runtime_handle_inbound_job_status_not_found_reports_json() -> Result<()> {
+async fn runtime_handle_inbound_help_json_replies_with_machine_readable_catalog() -> Result<()> {
     let agent = build_agent().await?;
     let channel = Arc::new(MockChannel::default());
     let channel_dyn: Arc<dyn Channel> = channel.clone();
@@ -54,7 +93,7 @@ async fn runtime_handle_inbound_job_status_not_found_reports_json() -> Result<()
 
     assert!(
         handle_inbound_message(
-            inbound("/job missing-123 json"),
+            inbound("/slash help json"),
             &channel_dyn,
             &foreground_tx,
             &job_manager,
@@ -64,30 +103,40 @@ async fn runtime_handle_inbound_job_status_not_found_reports_json() -> Result<()
     );
     assert!(
         foreground_rx.try_recv().is_err(),
-        "job status json command should not forward to foreground queue"
+        "help json command should not forward to foreground queue"
     );
 
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
     let payload: serde_json::Value = serde_json::from_str(&sent[0].0)?;
-    assert_eq!(payload["kind"], "job_status");
-    assert_eq!(payload["found"], false);
-    assert_eq!(payload["job_id"], "missing-123");
-    assert_eq!(payload["status"], "not_found");
+    assert_eq!(payload["kind"], "slash_help");
+    assert!(payload["commands"]["general"].is_array());
+    assert!(payload["commands"]["session"].is_array());
+    assert!(
+        payload["commands"]["session"]
+            .as_array()
+            .is_some_and(|commands| commands.iter().any(|entry| {
+                entry
+                    .get("usage")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|usage| usage.starts_with("/session admin "))
+            }))
+    );
+    assert!(payload["commands"]["background"].is_array());
     Ok(())
 }
 
 #[tokio::test]
-async fn runtime_handle_inbound_jobs_summary_reports_dashboard() -> Result<()> {
+async fn runtime_handle_inbound_help_is_not_blocked_by_slash_acl() -> Result<()> {
     let agent = build_agent().await?;
-    let channel = Arc::new(MockChannel::default());
+    let channel = Arc::new(DenySlashMockChannel::default());
     let channel_dyn: Arc<dyn Channel> = channel.clone();
     let job_manager = build_job_manager(agent.clone());
     let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
 
     assert!(
         handle_inbound_message(
-            inbound("/jobs"),
+            inbound("/help"),
             &channel_dyn,
             &foreground_tx,
             &job_manager,
@@ -97,166 +146,12 @@ async fn runtime_handle_inbound_jobs_summary_reports_dashboard() -> Result<()> {
     );
     assert!(
         foreground_rx.try_recv().is_err(),
-        "jobs summary command should not forward to foreground queue"
+        "help command should not forward to foreground queue"
     );
 
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
-    assert!(sent[0].0.contains("jobs-health dashboard"));
-    assert!(sent[0].0.contains("Overview:"));
-    assert!(sent[0].0.contains("Health:"));
-    assert!(sent[0].0.contains("state=healthy"));
-    Ok(())
-}
-
-#[tokio::test]
-async fn runtime_handle_inbound_jobs_summary_reports_json() -> Result<()> {
-    let agent = build_agent().await?;
-    let channel = Arc::new(MockChannel::default());
-    let channel_dyn: Arc<dyn Channel> = channel.clone();
-    let job_manager = build_job_manager(agent.clone());
-    let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
-
-    assert!(
-        handle_inbound_message(
-            inbound("/jobs json"),
-            &channel_dyn,
-            &foreground_tx,
-            &job_manager,
-            &agent,
-        )
-        .await
-    );
-    assert!(
-        foreground_rx.try_recv().is_err(),
-        "jobs summary json command should not forward to foreground queue"
-    );
-
-    let sent = channel.sent_messages().await;
-    assert_eq!(sent.len(), 1);
-    let payload: serde_json::Value = serde_json::from_str(&sent[0].0)?;
-    assert_eq!(payload["kind"], "jobs_health");
-    assert_eq!(payload["health"], "healthy");
-    assert_eq!(payload["total"], 0);
-    assert_eq!(payload["queued"], 0);
-    assert_eq!(payload["running"], 0);
-    Ok(())
-}
-
-#[tokio::test]
-async fn runtime_handle_inbound_image_message_auto_routes_to_background() -> Result<()> {
-    let agent = build_agent().await?;
-    let channel = Arc::new(MockChannel::default());
-    let channel_dyn: Arc<dyn Channel> = channel.clone();
-    let job_manager = build_job_manager(agent.clone());
-    let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
-
-    let mut msg = inbound("extract text from image");
-    msg.attachments = vec![ChannelAttachment::ImageUrl {
-        url: "https://example.com/demo.png".to_string(),
-    }];
-
-    assert!(handle_inbound_message(msg, &channel_dyn, &foreground_tx, &job_manager, &agent).await);
-    assert!(
-        foreground_rx.try_recv().is_err(),
-        "auto-routed image message should not forward to foreground queue"
-    );
-
-    let sent = channel.sent_messages().await;
-    assert_eq!(sent.len(), 1);
-    assert!(sent[0].0.contains("Queued background job"));
-    assert!(sent[0].0.contains("Auto-routed image message"));
-
-    let job_id = sent[0]
-        .0
-        .split('`')
-        .nth(1)
-        .ok_or_else(|| anyhow::anyhow!("missing job id in ack"))?;
-    let status = job_manager
-        .get_status(job_id)
-        .await
-        .ok_or_else(|| anyhow::anyhow!("missing job status for {job_id}"))?;
-    assert!(status.prompt_preview.contains("extract text from image"));
-    assert!(
-        status
-            .prompt_preview
-            .contains("[IMAGE:https://example.com/demo.png]")
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn runtime_background_command_with_image_preserves_image_marker() -> Result<()> {
-    let agent = build_agent().await?;
-    let channel = Arc::new(MockChannel::default());
-    let channel_dyn: Arc<dyn Channel> = channel.clone();
-    let job_manager = build_job_manager(agent.clone());
-    let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
-
-    let mut msg = inbound("/bg summarize this image");
-    msg.attachments = vec![ChannelAttachment::ImageUrl {
-        url: "https://example.com/chart.png".to_string(),
-    }];
-
-    assert!(handle_inbound_message(msg, &channel_dyn, &foreground_tx, &job_manager, &agent).await);
-    assert!(
-        foreground_rx.try_recv().is_err(),
-        "/bg command should not forward to foreground queue"
-    );
-
-    let sent = channel.sent_messages().await;
-    assert_eq!(sent.len(), 1);
-    assert!(sent[0].0.contains("Queued background job"));
-    assert!(!sent[0].0.contains("Auto-routed image message"));
-
-    let job_id = sent[0]
-        .0
-        .split('`')
-        .nth(1)
-        .ok_or_else(|| anyhow::anyhow!("missing job id in ack"))?;
-    let status = job_manager
-        .get_status(job_id)
-        .await
-        .ok_or_else(|| anyhow::anyhow!("missing job status for {job_id}"))?;
-    assert!(status.prompt_preview.contains("summarize this image"));
-    assert!(
-        status
-            .prompt_preview
-            .contains("[IMAGE:https://example.com/chart.png]")
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn runtime_background_completion_persists_into_parent_session_context() -> Result<()> {
-    let agent = build_agent().await?;
-    let channel = Arc::new(MockChannel::default());
-    let channel_dyn: Arc<dyn Channel> = channel.clone();
-    let session_id = "telegram:-200:888";
-    let completion = JobCompletion {
-        job_id: "job-test-1".to_string(),
-        recipient: "-200".to_string(),
-        parent_session_id: session_id.to_string(),
-        kind: JobCompletionKind::Succeeded {
-            output: "image OCR summary".to_string(),
-        },
-    };
-
-    push_telegram_background_completion(&channel_dyn, &agent, completion).await;
-
-    let sent = channel.sent_messages().await;
-    assert_eq!(sent.len(), 1);
-    assert!(sent[0].0.contains("Background job `job-test-1` completed."));
-    assert!(sent[0].0.contains("image OCR summary"));
-
-    let messages = session_messages(&agent, session_id).await?;
-    assert_eq!(messages.len(), 2);
-    assert_eq!(
-        messages[0].content.as_deref(),
-        Some("[background] job `job-test-1` completion")
-    );
-    let assistant = messages[1].content.as_deref().unwrap_or_default();
-    assert!(assistant.contains("Background job `job-test-1` completed."));
-    assert!(assistant.contains("image OCR summary"));
+    assert!(sent[0].0.contains("## Bot Slash Help"));
+    assert!(!sent[0].0.contains("slash_permission_required"));
     Ok(())
 }

@@ -12,7 +12,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use xiuxian_skills::knowledge::KnowledgeScanner;
+//! use omni_scanner::knowledge::KnowledgeScanner;
 //!
 //! let scanner = KnowledgeScanner::new();
 //! let entries = scanner.scan_all(PathBuf::from("assets/knowledge")).unwrap();
@@ -26,6 +26,9 @@ mod document;
 mod metadata;
 mod scan;
 
+#[cfg(test)]
+mod tests;
+
 /// Knowledge Scanner - Scans and indexes knowledge documents.
 ///
 /// Scans knowledge directories to extract:
@@ -36,7 +39,7 @@ mod scan;
 /// # Usage
 ///
 /// ```ignore
-/// use xiuxian_skills::knowledge::KnowledgeScanner;
+/// use omni_scanner::knowledge::KnowledgeScanner;
 ///
 /// let scanner = KnowledgeScanner::new();
 ///

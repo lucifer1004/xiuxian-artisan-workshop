@@ -5,24 +5,26 @@ use super::super::{SkillVfsError, WendaoResourceUri};
 use super::core::SkillVfsResolver;
 
 impl SkillVfsResolver {
-    /// Resolve one semantic URI and return UTF-8 file content.
+    /// Resolve one Wendao URI and return UTF-8 file content.
     ///
     /// # Errors
     ///
     /// Returns [`SkillVfsError`] when URI resolution fails or content lookup fails.
     pub fn read_utf8(&self, uri: &str) -> Result<String, SkillVfsError> {
         self.read_semantic(uri)
-            .map(|text| text.as_ref().to_string())
+            .map(|text: Arc<str>| text.as_ref().to_string())
     }
 
-    /// Resolve one semantic URI and return shared UTF-8 content.
+    /// Resolve one Wendao URI and return shared UTF-8 content.
     ///
     /// Runtime lookup is cache-backed and performs lazy disk reads on cache miss.
     ///
-    /// Lookup order:
-    /// 1. `content_cache` (shared interned payloads)
-    /// 2. Local semantic reference path indexed by [`SkillNamespaceIndex`]
+    /// Lookup order for semantic URIs:
+    /// 1. `content_cache`
+    /// 2. Local semantic reference path indexed by [`super::super::SkillNamespaceIndex`]
     /// 3. Embedded `include_dir` resources (when enabled)
+    ///
+    /// Internal URIs resolve from mounted internal skill roots.
     ///
     /// # Errors
     ///
@@ -32,6 +34,10 @@ impl SkillVfsResolver {
         let canonical_uri = parsed.canonical_uri();
         if let Some(cached) = self.content_cache.get(canonical_uri.as_str()) {
             return Ok(Arc::clone(cached.value()));
+        }
+
+        if parsed.is_internal_skill() {
+            return self.read_internal_resource(&parsed, canonical_uri.as_str());
         }
 
         if let Some(shared) = self.read_local_semantic(&parsed, canonical_uri.as_str())? {
@@ -64,6 +70,24 @@ impl SkillVfsResolver {
     /// Returns [`SkillVfsError`] when URI resolution fails or content lookup fails.
     pub fn read_utf8_shared(&self, uri: &str) -> Result<Arc<str>, SkillVfsError> {
         self.read_semantic(uri)
+    }
+
+    fn read_internal_resource(
+        &self,
+        parsed: &WendaoResourceUri,
+        canonical_uri: &str,
+    ) -> Result<Arc<str>, SkillVfsError> {
+        let path = self.resolve_parsed_uri(parsed)?;
+        let content = std::fs::read_to_string(path.as_path()).map_err(|source| {
+            SkillVfsError::ReadResource {
+                path: path.clone(),
+                source,
+            }
+        })?;
+        let shared = Arc::<str>::from(content);
+        self.content_cache
+            .insert(canonical_uri.to_string(), Arc::clone(&shared));
+        Ok(shared)
     }
 
     fn read_mounted_semantic(

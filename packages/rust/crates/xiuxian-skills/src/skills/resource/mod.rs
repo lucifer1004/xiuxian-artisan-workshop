@@ -4,6 +4,9 @@
 
 mod scan;
 
+#[cfg(test)]
+mod tests;
+
 /// Scanner for @`skill_resource` decorated functions.
 #[derive(Debug)]
 pub struct ResourceScanner;

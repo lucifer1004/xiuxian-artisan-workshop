@@ -12,23 +12,23 @@ These components replace duplicate code in skill_registry.
 
 from __future__ import annotations
 
-# Re-export MCP tool adapter
-from .mcp_tool import MCPToolAdapter
-
 # Re-export unified registry
 from .registry import UnifiedRegistry
-
-# Re-export skill loader
-from .skill_loader import extract_tool_schema, load_skill_scripts
 
 # Re-export skill plugin interface
 from .skill_plugin import ISkillPlugin, SkillPluginWrapper
 
+# Re-export skill loader
+from .skill_loader import load_skill_scripts, extract_tool_schema
+
+# Re-export MCP tool adapter
+from .mcp_tool import MCPToolAdapter
+
 __all__ = [
-    "ISkillPlugin",
-    "MCPToolAdapter",
-    "SkillPluginWrapper",
     "UnifiedRegistry",
-    "extract_tool_schema",
+    "ISkillPlugin",
+    "SkillPluginWrapper",
     "load_skill_scripts",
+    "extract_tool_schema",
+    "MCPToolAdapter",
 ]

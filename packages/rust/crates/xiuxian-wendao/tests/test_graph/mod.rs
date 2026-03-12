@@ -1,4 +1,20 @@
-//! Integration tests for the `KnowledgeGraph` module.
+#![allow(
+    missing_docs,
+    clippy::doc_markdown,
+    clippy::implicit_clone,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::manual_string_new,
+    clippy::needless_raw_string_hashes,
+    clippy::format_push_string,
+    clippy::unnecessary_to_owned,
+    clippy::too_many_lines
+)]
+//! Integration tests for the KnowledgeGraph module.
 //!
 //! Covers: CRUD, multi-hop search, persistence, skill registration,
 //! query-time tool relevance, and export/import roundtrip.

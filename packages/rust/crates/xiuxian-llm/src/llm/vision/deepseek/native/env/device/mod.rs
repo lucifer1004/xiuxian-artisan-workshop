@@ -23,6 +23,10 @@ pub(in crate::llm::vision::deepseek::native) fn parse_device_kind() -> DeviceKin
     )
 }
 
+pub(in crate::llm::vision::deepseek) fn local_runtime_may_use_metal() -> bool {
+    matches!(parse_device_kind(), DeviceKind::Metal)
+}
+
 pub(crate) fn resolve_device_kind_label_for_tests(
     explicit_device: Option<&str>,
     fallback_mode: AccelerationDevice,

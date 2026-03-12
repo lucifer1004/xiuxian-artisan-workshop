@@ -1,33 +1,12 @@
-//! Comprehensive tests for xiuxian-tui state management
+//! Comprehensive tests for omni-tui state management
 
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 use tempfile::TempDir;
 
-use xiuxian_tui::socket::SocketEvent;
-use xiuxian_tui::state::{AppState, PanelType, ReceivedEvent};
-
-fn must_ok<T, E: std::fmt::Display>(value: Result<T, E>, context: &str) -> T {
-    match value {
-        Ok(inner) => inner,
-        Err(error) => panic!("{context}: {error}"),
-    }
-}
-
-fn must_some<T>(value: Option<T>, context: &str) -> T {
-    match value {
-        Some(inner) => inner,
-        None => panic!("{context}"),
-    }
-}
-
-fn send_socket_event(socket_path: &std::path::Path, event: &SocketEvent) {
-    let mut stream = must_ok(UnixStream::connect(socket_path), "Connect failed");
-    let json = must_ok(serde_json::to_string(event), "Serialize failed");
-    must_ok(stream.write_all(json.as_bytes()), "Write failed");
-    must_ok(stream.write_all(b"\n"), "Write newline failed");
-}
+use omni_tui::socket::SocketEvent;
+use omni_tui::state::{AppState, PanelType, ReceivedEvent};
 
 /// Test: Basic state creation
 #[test]
@@ -72,35 +51,33 @@ fn test_quit() {
 #[test]
 fn test_panel_addition() {
     let mut state = AppState::new("Test".to_string());
-    assert_eq!(must_some(state.app(), "app should exist").panels().len(), 0);
+    assert_eq!(state.app().unwrap().panels().len(), 0);
 
     state.add_result("Test Panel", "Test Content");
-    assert_eq!(must_some(state.app(), "app should exist").panels().len(), 1);
+    assert_eq!(state.app().unwrap().panels().len(), 1);
 }
 
-/// Test: App state operations (clone removed - `mpsc::Receiver` not Clone)
+/// Test: App state cloning
 #[test]
-fn test_state_operations() {
+fn test_state_clone() {
     let state = AppState::new("Test".to_string());
-    assert_eq!(state.title(), "Test");
-
-    // Verify state can be created and basic operations work
-    let mut state = AppState::new("Test2".to_string());
-    state.set_status("Status message");
-    assert_eq!(state.status_message(), Some("Status message"));
+    let cloned = state.clone();
+    assert_eq!(cloned.title(), state.title());
 }
 
 /// Test: Socket server integration
 #[test]
 fn test_socket_server_integration() {
-    let temp_dir = must_ok(TempDir::new(), "failed to create temp dir");
+    let temp_dir = TempDir::new().unwrap();
     let socket_path = temp_dir.path().join("integration.sock");
-    let socket_str = must_some(socket_path.to_str(), "socket path is not valid UTF-8");
+    let socket_str = socket_path.to_str().unwrap();
 
     let mut state = AppState::new("Test".to_string());
     assert!(!state.is_socket_running());
 
-    must_ok(state.start_socket_server(socket_str), "Failed to start");
+    state
+        .start_socket_server(socket_str)
+        .expect("Failed to start");
     assert!(state.is_socket_running());
     assert!(socket_path.exists());
 
@@ -118,12 +95,14 @@ fn test_received_events_storage() {
 /// Test: Socket event handling
 #[test]
 fn test_socket_event_handling() {
-    let temp_dir = must_ok(TempDir::new(), "failed to create temp dir");
+    let temp_dir = TempDir::new().unwrap();
     let socket_path = temp_dir.path().join("events.sock");
-    let socket_str = must_some(socket_path.to_str(), "socket path is not valid UTF-8");
+    let socket_str = socket_path.to_str().unwrap();
 
     let mut state = AppState::new("Test".to_string());
-    must_ok(state.start_socket_server(socket_str), "Failed to start");
+    state
+        .start_socket_server(socket_str)
+        .expect("Failed to start");
 
     let event = SocketEvent {
         source: "omega".to_string(),
@@ -132,25 +111,30 @@ fn test_socket_event_handling() {
         timestamp: "2026-01-31T12:00:00Z".to_string(),
     };
 
-    send_socket_event(&socket_path, &event);
+    let mut stream = UnixStream::connect(&socket_path).expect("Connect failed");
+    let json = serde_json::to_string(&event).expect("Serialize failed");
+    stream.write_all(json.as_bytes()).expect("Write failed");
+    stream.write_all(b"\n").expect("Write newline failed");
 
     std::thread::sleep(Duration::from_millis(100));
 
     state.stop_socket_server();
 
     let events = state.received_events();
-    assert!(!events.is_empty());
+    assert!(events.len() >= 1);
 }
 
 /// Test: Multiple mission events
 #[test]
 fn test_mission_events() {
-    let temp_dir = must_ok(TempDir::new(), "failed to create temp dir");
+    let temp_dir = TempDir::new().unwrap();
     let socket_path = temp_dir.path().join("missions.sock");
-    let socket_str = must_some(socket_path.to_str(), "socket path is not valid UTF-8");
+    let socket_str = socket_path.to_str().unwrap();
 
     let mut state = AppState::new("Test".to_string());
-    must_ok(state.start_socket_server(socket_str), "Failed to start");
+    state
+        .start_socket_server(socket_str)
+        .expect("Failed to start");
 
     for (i, &(source, topic, _)) in [
         ("omega", "omega/mission/start", "Mission 1"),
@@ -167,7 +151,10 @@ fn test_mission_events() {
             timestamp: "2026-01-31T12:00:00Z".to_string(),
         };
 
-        send_socket_event(&socket_path, &event);
+        let mut stream = UnixStream::connect(&socket_path).expect("Connect failed");
+        let json = serde_json::to_string(&event).expect("Serialize failed");
+        stream.write_all(json.as_bytes()).expect("Write failed");
+        stream.write_all(b"\n").expect("Write newline failed");
 
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -180,7 +167,7 @@ fn test_mission_events() {
     assert!(received.len() >= 3);
 }
 
-/// Test: `AppState` Default implementation
+/// Test: AppState Default implementation
 #[test]
 fn test_state_default() {
     let state = AppState::default();
@@ -196,7 +183,7 @@ fn test_panel_types() {
     assert_eq!(PanelType::Error, PanelType::Error);
 }
 
-/// Test: `ReceivedEvent` clone and debug
+/// Test: ReceivedEvent clone and debug
 #[test]
 fn test_received_event_traits() {
     let event = ReceivedEvent {
@@ -209,19 +196,21 @@ fn test_received_event_traits() {
     let cloned = event.clone();
     assert_eq!(cloned.source, event.source);
 
-    let debug_str = format!("{event:?}");
+    let debug_str = format!("{:?}", event);
     assert!(debug_str.contains("test"));
 }
 
 /// Test: Event processing with tick
 #[test]
 fn test_event_processing_tick() {
-    let temp_dir = must_ok(TempDir::new(), "failed to create temp dir");
+    let temp_dir = TempDir::new().unwrap();
     let socket_path = temp_dir.path().join("tick.sock");
-    let socket_str = must_some(socket_path.to_str(), "socket path is not valid UTF-8");
+    let socket_str = socket_path.to_str().unwrap();
 
     let mut state = AppState::new("Test".to_string());
-    must_ok(state.start_socket_server(socket_str), "Failed to start");
+    state
+        .start_socket_server(socket_str)
+        .expect("Failed to start");
 
     let event = SocketEvent {
         source: "test".to_string(),
@@ -230,7 +219,10 @@ fn test_event_processing_tick() {
         timestamp: "2026-01-31T12:00:00Z".to_string(),
     };
 
-    send_socket_event(&socket_path, &event);
+    let mut stream = UnixStream::connect(&socket_path).expect("Connect failed");
+    let json = serde_json::to_string(&event).expect("Serialize failed");
+    stream.write_all(json.as_bytes()).expect("Write failed");
+    stream.write_all(b"\n").expect("Write newline failed");
 
     std::thread::sleep(Duration::from_millis(100));
 
@@ -241,22 +233,27 @@ fn test_event_processing_tick() {
 /// Test: Large number of events
 #[test]
 fn test_many_events() {
-    let temp_dir = must_ok(TempDir::new(), "failed to create temp dir");
+    let temp_dir = TempDir::new().unwrap();
     let socket_path = temp_dir.path().join("many.sock");
-    let socket_str = must_some(socket_path.to_str(), "socket path is not valid UTF-8");
+    let socket_str = socket_path.to_str().unwrap();
 
     let mut state = AppState::new("Test".to_string());
-    must_ok(state.start_socket_server(socket_str), "Failed to start");
+    state
+        .start_socket_server(socket_str)
+        .expect("Failed to start");
 
     for i in 0..20 {
         let event = SocketEvent {
             source: "test".to_string(),
-            topic: format!("test/event/{i}"),
+            topic: format!("test/event/{}", i),
             payload: serde_json::json!({"index": i}),
-            timestamp: format!("2026-01-31T12:00:{i:02}Z"),
+            timestamp: format!("2026-01-31T12:00:{:02}Z", i),
         };
 
-        send_socket_event(&socket_path, &event);
+        let mut stream = UnixStream::connect(&socket_path).expect("Connect failed");
+        let json = serde_json::to_string(&event).expect("Serialize failed");
+        stream.write_all(json.as_bytes()).expect("Write failed");
+        stream.write_all(b"\n").expect("Write newline failed");
     }
 
     std::thread::sleep(Duration::from_millis(300));
@@ -282,12 +279,14 @@ fn test_stop_when_not_running() {
 /// Test: Event with special characters
 #[test]
 fn test_special_characters() {
-    let temp_dir = must_ok(TempDir::new(), "failed to create temp dir");
+    let temp_dir = TempDir::new().unwrap();
     let socket_path = temp_dir.path().join("special.sock");
-    let socket_str = must_some(socket_path.to_str(), "socket path is not valid UTF-8");
+    let socket_str = socket_path.to_str().unwrap();
 
     let mut state = AppState::new("Test".to_string());
-    must_ok(state.start_socket_server(socket_str), "Failed to start");
+    state
+        .start_socket_server(socket_str)
+        .expect("Failed to start");
 
     let event = SocketEvent {
         source: "test".to_string(),
@@ -296,7 +295,10 @@ fn test_special_characters() {
         timestamp: "2026-01-31T12:00:00Z".to_string(),
     };
 
-    send_socket_event(&socket_path, &event);
+    let mut stream = UnixStream::connect(&socket_path).expect("Connect failed");
+    let json = serde_json::to_string(&event).expect("Serialize failed");
+    stream.write_all(json.as_bytes()).expect("Write failed");
+    stream.write_all(b"\n").expect("Write newline failed");
 
     std::thread::sleep(Duration::from_millis(100));
 
@@ -304,9 +306,5 @@ fn test_special_characters() {
 
     let events = state.received_events();
     assert_eq!(events.len(), 1);
-    let text = must_some(
-        events[0].payload["text"].as_str(),
-        "payload text should exist",
-    );
-    assert!(text.contains("世界"));
+    assert!(events[0].payload["text"].as_str().unwrap().contains("世界"));
 }

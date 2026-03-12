@@ -5,7 +5,6 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
-use xiuxian_memory_engine::IntentEncoder;
 
 use super::runtime::resolve_embed_model;
 use super::types::{
@@ -122,72 +121,6 @@ fn parse_openai_embedding_input(input: &Value) -> Result<Vec<String>, GatewayJso
     }
 }
 
-fn fallback_hash_embed_single(text: &str, dimension: usize) -> Vec<f32> {
-    let encoder = IntentEncoder::new(dimension);
-    encoder.encode(text)
-}
-
-pub(super) fn fallback_hash_embed_batch(texts: &[String], dimension: usize) -> Vec<Vec<f32>> {
-    let encoder = IntentEncoder::new(dimension);
-    texts.iter().map(|text| encoder.encode(text)).collect()
-}
-
-async fn guarded_embed_batch(
-    embedding_runtime: Arc<GatewayEmbeddingRuntime>,
-    texts: &[String],
-    model: &str,
-) -> Option<Vec<Vec<f32>>> {
-    let model = model.to_string();
-    let texts = texts.to_vec();
-    let client = Arc::clone(&embedding_runtime.client);
-    match tokio::spawn(async move {
-        client
-            .embed_batch_with_model(&texts, Some(model.as_str()))
-            .await
-    })
-    .await
-    {
-        Ok(vectors) => vectors,
-        Err(error) => {
-            tracing::warn!(
-                event = "gateway.embedding.task_panicked",
-                endpoint = "/embed/batch",
-                error = %error,
-                "embedding task panicked; using deterministic hash fallback"
-            );
-            None
-        }
-    }
-}
-
-async fn guarded_embed_single(
-    embedding_runtime: Arc<GatewayEmbeddingRuntime>,
-    text: &str,
-    model: &str,
-) -> Option<Vec<f32>> {
-    let model = model.to_string();
-    let text = text.to_string();
-    let client = Arc::clone(&embedding_runtime.client);
-    match tokio::spawn(async move {
-        client
-            .embed_with_model(text.as_str(), Some(model.as_str()))
-            .await
-    })
-    .await
-    {
-        Ok(vector) => vector,
-        Err(error) => {
-            tracing::warn!(
-                event = "gateway.embedding.task_panicked",
-                endpoint = "/embed/single",
-                error = %error,
-                "embedding task panicked; using deterministic hash fallback"
-            );
-            None
-        }
-    }
-}
-
 pub(super) async fn handle_embed_batch(
     Extension(embedding_runtime): Extension<Arc<GatewayEmbeddingRuntime>>,
     Json(body): Json<EmbedBatchRequest>,
@@ -204,20 +137,14 @@ pub(super) async fn handle_embed_batch(
         embedding_runtime.default_model.as_deref(),
     )?;
 
-    let vectors = if let Some(vectors) =
-        guarded_embed_batch(Arc::clone(&embedding_runtime), &body.texts, model.as_str()).await
-    {
-        vectors
-    } else {
-        tracing::warn!(
-            event = "gateway.embedding.fallback.hash_encoder",
-            endpoint = "/embed/batch",
-            model,
-            fallback_dim = embedding_runtime.fallback_embedding_dim,
-            "embedding backend unavailable; serving deterministic hash embedding fallback"
-        );
-        fallback_hash_embed_batch(&body.texts, embedding_runtime.fallback_embedding_dim)
-    };
+    let vectors = embedding_runtime
+        .client
+        .embed_batch_with_model(&body.texts, Some(model.as_str()))
+        .await
+        .ok_or((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "embedding backend unavailable".to_string(),
+        ))?;
 
     if vectors.len() != body.texts.len() {
         return Err((
@@ -246,20 +173,14 @@ pub(super) async fn handle_embed(
         embedding_runtime.default_model.as_deref(),
     )?;
 
-    let vector = if let Some(vector) =
-        guarded_embed_single(Arc::clone(&embedding_runtime), text, model.as_str()).await
-    {
-        vector
-    } else {
-        tracing::warn!(
-            event = "gateway.embedding.fallback.hash_encoder",
-            endpoint = "/embed/single",
-            model,
-            fallback_dim = embedding_runtime.fallback_embedding_dim,
-            "embedding backend unavailable; serving deterministic hash embedding fallback"
-        );
-        fallback_hash_embed_single(text, embedding_runtime.fallback_embedding_dim)
-    };
+    let vector = embedding_runtime
+        .client
+        .embed_with_model(text, Some(model.as_str()))
+        .await
+        .ok_or((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "embedding backend unavailable".to_string(),
+        ))?;
 
     Ok(Json(EmbedResponse { vector }))
 }
@@ -274,20 +195,14 @@ pub(super) async fn handle_openai_embeddings(
         embedding_runtime.default_model.as_deref(),
     )?;
 
-    let vectors = if let Some(vectors) =
-        guarded_embed_batch(Arc::clone(&embedding_runtime), &texts, model.as_str()).await
-    {
-        vectors
-    } else {
-        tracing::warn!(
-            event = "gateway.embedding.fallback.hash_encoder",
-            endpoint = "/v1/embeddings",
-            model,
-            fallback_dim = embedding_runtime.fallback_embedding_dim,
-            "embedding backend unavailable; serving deterministic hash embedding fallback"
-        );
-        fallback_hash_embed_batch(&texts, embedding_runtime.fallback_embedding_dim)
-    };
+    let vectors = embedding_runtime
+        .client
+        .embed_batch_with_model(&texts, Some(model.as_str()))
+        .await
+        .ok_or((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "embedding backend unavailable".to_string(),
+        ))?;
 
     if vectors.len() != texts.len() {
         return Err((

@@ -1,30 +1,26 @@
 use serde_json::json;
 
-use super::super::super::shared::{format_optional_str, format_optional_string, format_yes_no};
+use crate::agent::{MemoryRecallMetricsSnapshot, MemoryRuntimeStatusSnapshot};
+
 use super::super::metrics::format_memory_recall_metrics_json;
-use super::super::runtime::{
-    format_downstream_admission_compact_line, format_downstream_admission_status_json,
-    format_downstream_admission_status_lines, format_memory_gate_policy_compact_line,
-    format_memory_runtime_status_json, format_memory_runtime_status_lines, memory_backend_ready,
+use super::super::runtime_status::{
+    format_memory_runtime_status_json, format_memory_runtime_status_lines,
 };
 
-pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_found(
-    runtime_status: crate::agent::MemoryRuntimeStatusSnapshot,
-    admission_status: crate::agent::DownstreamAdmissionRuntimeSnapshot,
+pub(in super::super::super::super) fn format_memory_recall_not_found(
+    runtime_status: MemoryRuntimeStatusSnapshot,
     session_scope: &str,
 ) -> String {
     let mut lines = vec![
         "## Session Memory".to_string(),
         "No memory recall snapshot found for this session yet.".to_string(),
         format!("- Session scope: `{session_scope}`"),
-        String::new(),
+        "".to_string(),
         "### Persistence".to_string(),
     ];
     lines.extend(format_memory_runtime_status_lines(runtime_status));
-    lines.extend([String::new(), "### Admission".to_string()]);
-    lines.extend(format_downstream_admission_status_lines(admission_status));
     lines.extend([
-        String::new(),
+        "".to_string(),
         "### Next Step".to_string(),
         "- Send at least one normal turn first (non-command message).".to_string(),
         "- Then run `/session memory` again.".to_string(),
@@ -32,44 +28,9 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_fou
     lines.join("\n")
 }
 
-pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_found_telegram(
-    runtime_status: &crate::agent::MemoryRuntimeStatusSnapshot,
-    admission_status: &crate::agent::DownstreamAdmissionRuntimeSnapshot,
-    session_scope: &str,
-) -> String {
-    let backend_ready = memory_backend_ready(runtime_status);
-    [
-        "## Session Memory".to_string(),
-        "No memory recall snapshot found for this session yet.".to_string(),
-        format!("- Session scope: `{session_scope}`"),
-        String::new(),
-        "### Persistence".to_string(),
-        format!(
-            "- `memory_enabled={}` `backend_ready={}` `startup_load_status={}`",
-            format_yes_no(runtime_status.enabled),
-            format_yes_no(backend_ready),
-            runtime_status.startup_load_status
-        ),
-        format!(
-            "- `active_backend={}` `configured_backend={}`",
-            format_optional_str(runtime_status.active_backend),
-            format_optional_string(runtime_status.configured_backend.clone())
-        ),
-        format_memory_gate_policy_compact_line(runtime_status),
-        format_downstream_admission_compact_line(admission_status),
-        String::new(),
-        "### Next Step".to_string(),
-        "- Send at least one normal turn first (non-command message).".to_string(),
-        "- Then run `/session memory` again.".to_string(),
-        "- Use `/session memory json` for full payload.".to_string(),
-    ]
-    .join("\n")
-}
-
-pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_found_json(
-    metrics: crate::agent::MemoryRecallMetricsSnapshot,
-    runtime_status: &crate::agent::MemoryRuntimeStatusSnapshot,
-    admission_status: crate::agent::DownstreamAdmissionRuntimeSnapshot,
+pub(in super::super::super::super) fn format_memory_recall_not_found_json(
+    metrics: MemoryRecallMetricsSnapshot,
+    runtime_status: MemoryRuntimeStatusSnapshot,
     session_scope: &str,
 ) -> String {
     json!({
@@ -79,7 +40,6 @@ pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_fou
         "status": "not_found",
         "hint": "Run at least one normal turn first (non-command message).",
         "runtime": format_memory_runtime_status_json(runtime_status),
-        "admission": format_downstream_admission_status_json(&admission_status),
         "metrics": format_memory_recall_metrics_json(metrics),
     })
     .to_string()

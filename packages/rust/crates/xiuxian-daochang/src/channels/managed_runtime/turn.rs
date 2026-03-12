@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use crate::agent::Agent;
-use crate::channels::traits::{ChannelAttachment, ChannelMessage};
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
@@ -26,64 +25,19 @@ pub(crate) fn build_session_id(channel: &str, session_key: &str) -> String {
     format!("{channel}:{session_key}")
 }
 
-pub(crate) fn compose_turn_content(msg: &ChannelMessage) -> String {
-    if msg.attachments.is_empty() {
-        return msg.content.clone();
-    }
-
-    let mut segments = Vec::new();
-    let text = msg.content.trim();
-    if !text.is_empty() {
-        segments.push(text.to_string());
-    }
-
-    segments.extend(
-        msg.attachments
-            .iter()
-            .filter_map(channel_attachment_to_marker),
-    );
-
-    segments.join(" ")
-}
-
-fn channel_attachment_to_marker(attachment: &ChannelAttachment) -> Option<String> {
-    match attachment {
-        ChannelAttachment::ImageUrl { url } => {
-            let trimmed = url.trim();
-            if trimmed.is_empty() || trimmed.contains('\n') {
-                None
-            } else {
-                Some(format!("[IMAGE:{trimmed}]"))
-            }
-        }
-    }
-}
-
-pub(crate) struct ForegroundTurnRequest {
-    pub(crate) agent: Arc<Agent>,
-    pub(crate) session_id: String,
-    pub(crate) content: String,
-    pub(crate) timeout_secs: u64,
-    pub(crate) timeout_reply: String,
-    pub(crate) interrupt_rx: watch::Receiver<u64>,
-    pub(crate) interrupt_generation: u64,
-    pub(crate) interrupted_reply: String,
-}
-
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_foreground_turn_with_interrupt(
-    request: ForegroundTurnRequest,
+    agent: Arc<Agent>,
+    session_id: &str,
+    content: &str,
+    timeout_secs: u64,
+    timeout_reply: String,
+    mut interrupt_rx: watch::Receiver<u64>,
+    interrupt_generation: u64,
+    interrupted_reply: String,
 ) -> ForegroundTurnOutcome {
-    let ForegroundTurnRequest {
-        agent,
-        session_id,
-        content,
-        timeout_secs,
-        timeout_reply,
-        mut interrupt_rx,
-        interrupt_generation,
-        interrupted_reply,
-    } = request;
-
+    let session_id = session_id.to_string();
+    let content = content.to_string();
     let mut turn_task = tokio::spawn(async move { agent.run_turn(&session_id, &content).await });
     let timeout = tokio::time::sleep(Duration::from_secs(timeout_secs));
     tokio::pin!(timeout);

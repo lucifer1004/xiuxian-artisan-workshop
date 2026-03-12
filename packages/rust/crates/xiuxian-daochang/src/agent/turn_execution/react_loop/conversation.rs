@@ -1,8 +1,5 @@
-use anyhow::Result;
-
-use crate::agent::{Agent, injection};
-use crate::session::ChatMessage;
-use xiuxian_qianhuan::InjectionPolicy;
+#[allow(clippy::wildcard_imports)]
+use super::*;
 
 use super::context_repair::is_context_window_exceeded_error;
 use super::types::{ReactConversationState, TurnRuntimeContext};
@@ -121,27 +118,14 @@ impl Agent {
 
         for tool_call in tool_calls {
             let name = tool_call.function.name.clone();
-            let tool_call_id = tool_call.id.clone();
             let args = parse_tool_call_arguments(&tool_call.function.arguments);
-            let output = match self
-                .call_mcp_tool_with_diagnostics(
-                    Some(turn_ctx.session_id),
-                    Some(tool_call_id.as_str()),
-                    &name,
-                    args,
-                )
-                .await
-            {
+            let output = match self.call_mcp_tool_with_diagnostics(&name, args).await {
                 Ok(output) => {
                     state.tool_summary.record_result(output.is_error);
                     output
                 }
                 Err(error) => {
-                    if let Some(soft_output) = Self::soft_fail_mcp_tool_error_output(
-                        &name,
-                        Some(tool_call_id.as_str()),
-                        &error,
-                    ) {
+                    if let Some(soft_output) = self.soft_fail_mcp_tool_error_output(&name, &error) {
                         state.tool_summary.record_result(true);
                         soft_output
                     } else {
@@ -152,15 +136,11 @@ impl Agent {
                     }
                 }
             };
-            let tool_text = injection::truncate_tool_payload_for_policy(
-                &output.text,
-                &InjectionPolicy::default(),
-            );
             state.messages.push(ChatMessage {
                 role: "tool".to_string(),
-                content: Some(tool_text),
+                content: Some(output.text),
                 tool_calls: None,
-                tool_call_id: output.tool_call_id.or(Some(tool_call_id)),
+                tool_call_id: Some(tool_call.id.clone()),
                 name: Some(name),
             });
         }
@@ -174,12 +154,14 @@ impl Agent {
         state: &mut ReactConversationState,
         output: String,
     ) -> Result<String> {
-        let outcome = self.update_recall_feedback(
-            turn_ctx.session_id,
-            turn_ctx.user_message,
-            &output,
-            Some(&state.tool_summary),
-        );
+        let outcome = self
+            .update_recall_feedback(
+                turn_ctx.session_id,
+                turn_ctx.user_message,
+                &output,
+                Some(&state.tool_summary),
+            )
+            .await;
         self.apply_memory_recall_credit(
             turn_ctx.session_id,
             turn_ctx.recall_credit_candidates,
@@ -193,15 +175,13 @@ impl Agent {
         )
         .await?;
         self.reflect_turn_and_update_policy_hint(
-            crate::agent::reflection_runtime_state::ReflectionTurnReport {
-                session_id: turn_ctx.session_id,
-                turn_id: turn_ctx.turn_id,
-                route: turn_ctx.route,
-                user_message: turn_ctx.user_message,
-                assistant_signal: &output,
-                outcome: "completed",
-                tool_calls: state.total_tool_calls_this_turn,
-            },
+            turn_ctx.session_id,
+            turn_ctx.turn_id,
+            turn_ctx.route,
+            turn_ctx.user_message,
+            &output,
+            "completed",
+            state.total_tool_calls_this_turn,
         )
         .await;
         Ok(output)
@@ -213,27 +193,27 @@ impl Agent {
         state: &ReactConversationState,
         error_text: &str,
     ) {
-        let outcome = self.update_recall_feedback(
-            turn_ctx.session_id,
-            turn_ctx.user_message,
-            error_text,
-            Some(&state.tool_summary),
-        );
+        let outcome = self
+            .update_recall_feedback(
+                turn_ctx.session_id,
+                turn_ctx.user_message,
+                error_text,
+                Some(&state.tool_summary),
+            )
+            .await;
         self.apply_memory_recall_credit(
             turn_ctx.session_id,
             turn_ctx.recall_credit_candidates,
             outcome,
         );
         self.reflect_turn_and_update_policy_hint(
-            crate::agent::reflection_runtime_state::ReflectionTurnReport {
-                session_id: turn_ctx.session_id,
-                turn_id: turn_ctx.turn_id,
-                route: turn_ctx.route,
-                user_message: turn_ctx.user_message,
-                assistant_signal: error_text,
-                outcome: "error",
-                tool_calls: state.total_tool_calls_this_turn,
-            },
+            turn_ctx.session_id,
+            turn_ctx.turn_id,
+            turn_ctx.route,
+            turn_ctx.user_message,
+            error_text,
+            "error",
+            state.total_tool_calls_this_turn,
         )
         .await;
     }

@@ -66,6 +66,7 @@ impl DeepseekEngine {
     pub(super) fn infer_markdown(
         &self,
         prepared: &PreparedVisionImage,
+        stop_signal: Option<Arc<std::sync::atomic::AtomicBool>>,
     ) -> LlmResult<Option<String>> {
         let total_started = Instant::now();
         let prompt_text = resolve_ocr_prompt_text();
@@ -133,6 +134,7 @@ impl DeepseekEngine {
                 total_started,
                 effective_vision,
                 estimated_tiles,
+                stop_signal.clone(),
             );
             permit.complete(shared_from_llm_result(&result));
             return result;
@@ -145,6 +147,7 @@ impl DeepseekEngine {
             total_started,
             effective_vision,
             estimated_tiles,
+            stop_signal,
         )
     }
 
@@ -176,6 +179,7 @@ impl DeepseekEngine {
         total_started: Instant,
         effective_vision: VisionSettings,
         estimated_tiles: usize,
+        stop_signal: Option<Arc<std::sync::atomic::AtomicBool>>,
     ) -> LlmResult<Option<String>> {
         self.log_tile_cap_override_if_applied(prepared, effective_vision, estimated_tiles);
         self.log_inference_start(prepared, effective_vision, estimated_tiles);
@@ -200,6 +204,7 @@ impl DeepseekEngine {
             &images,
             effective_vision,
             &decode,
+            stop_signal,
         )?;
 
         store_markdown_in_cache(cache_key, decoded.markdown.as_str());
@@ -290,9 +295,28 @@ impl DeepseekEngine {
         images: &[DynamicImage],
         effective_vision: VisionSettings,
         decode: &DecodeParameters,
+        stop_signal: Option<Arc<std::sync::atomic::AtomicBool>>,
     ) -> LlmResult<DecodedMarkdown> {
-        let decode_once =
-            |vision| model.decode(&self.tokenizer, prompt, images, vision, decode, None);
+        let stream = stop_signal.as_ref().map(|signal| {
+            let signal = Arc::clone(signal);
+            let callback = move |_step: usize, _tokens: &[i64]| {
+                if signal.load(std::sync::atomic::Ordering::Acquire) {
+                    panic!("deepseek_ocr_interrupted");
+                }
+            };
+            Box::new(callback) as Box<dyn Fn(usize, &[i64])>
+        });
+
+        let decode_once = |vision| {
+            model.decode(
+                &self.tokenizer,
+                prompt,
+                images,
+                vision,
+                decode,
+                stream.as_ref().map(|b| b.as_ref()),
+            )
+        };
         let model_decode_started = Instant::now();
         let outcome = match decode_once(effective_vision) {
             Ok(outcome) => outcome,

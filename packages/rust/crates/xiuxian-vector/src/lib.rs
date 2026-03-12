@@ -1,7 +1,6 @@
 //! xiuxian-vector - High-Performance Embedded Vector Database using `LanceDB`
 
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
@@ -86,7 +85,7 @@ pub struct VectorStore {
     datasets: Arc<RwLock<DatasetCache>>,
     dimension: usize,
     /// Optional keyword index used for hybrid dense+keyword retrieval.
-    pub keyword_index: Option<Rc<KeywordIndex>>,
+    pub keyword_index: Option<Arc<KeywordIndex>>,
     /// Active keyword backend strategy.
     pub keyword_backend: KeywordSearchBackend,
     /// Optional index cache size in bytes. When set, datasets are opened via `DatasetBuilder`.

@@ -1,138 +1,93 @@
-//! Integration tests for Qianhuan native zhenfa tool implementations.
-#![cfg(feature = "zhenfa-router")]
-
-use std::sync::Arc;
+use std::fs;
 
 use serde_json::json;
 use tempfile::TempDir;
-use xiuxian_qianhuan::ManifestationManager;
-use xiuxian_qianhuan::zhenfa_router::{QianhuanReloadTool, QianhuanRenderTool};
-use xiuxian_wendao::SkillVfsResolver;
-use xiuxian_zhenfa::{ZhenfaContext, ZhenfaTool};
+use xiuxian_zhenfa::ZhenfaTool;
 
-fn test_manager() -> ManifestationManager {
-    ManifestationManager::new_with_embedded_templates(
-        &[],
-        &[(
-            "daily_agenda.md",
-            "Task: {{ task }}\nState: {{ qianhuan.state_context | default(value=\"\") }}",
-        )],
-    )
-    .unwrap_or_else(|error| panic!("create manifestation manager for tests: {error}"))
-}
-
-fn semantic_skill_fixture() -> (TempDir, Arc<SkillVfsResolver>) {
-    let temp =
-        TempDir::new().unwrap_or_else(|error| panic!("create semantic fixture root: {error}"));
-    let skill_root = temp.path().join("skills").join("zhixing");
-    std::fs::create_dir_all(skill_root.join("references"))
-        .unwrap_or_else(|error| panic!("create semantic references directory: {error}"));
-    std::fs::write(
-        skill_root.join("SKILL.md"),
-        r#"---
-name: agenda-management
-description: "Agenda skill fixture"
----
-
-# Agenda Management
-"#,
-    )
-    .unwrap_or_else(|error| panic!("write semantic fixture skill descriptor: {error}"));
-    std::fs::write(
-        skill_root.join("references").join("draft_agenda.j2"),
-        "Semantic Task: {{ task }}",
-    )
-    .unwrap_or_else(|error| panic!("write semantic fixture template: {error}"));
-    let resolver = SkillVfsResolver::from_roots(&[temp.path().to_path_buf()])
-        .unwrap_or_else(|error| panic!("build semantic fixture resolver: {error}"));
-    (temp, Arc::new(resolver))
-}
+use super::support::{context_with_index, search_tool};
 
 #[tokio::test]
-async fn qianhuan_render_tool_executes_native_dispatch() {
-    let tool = QianhuanRenderTool;
-    let manager = Arc::new(test_manager());
-    let mut ctx = ZhenfaContext::default();
-    let _ = ctx.insert_shared_extension(Arc::clone(&manager));
+async fn wendao_search_tool_emits_semantic_hit_type_for_journal_paths() {
+    let notebook = TempDir::new().unwrap_or_else(|error| panic!("create temp dir: {error}"));
+    let journal_dir = notebook.path().join("journal");
+    fs::create_dir_all(&journal_dir).unwrap_or_else(|error| panic!("create journal dir: {error}"));
+    fs::write(
+        journal_dir.join("daily.md"),
+        "# Daily Journal\n\njournal semantic type marker unique-native-tool.\n",
+    )
+    .unwrap_or_else(|error| panic!("write journal note: {error}"));
+
+    let tool = search_tool();
+    let ctx = context_with_index(notebook.path());
     let output = tool
         .call_native(
             &ctx,
             json!({
-                "target": "daily_agenda",
-                "data": { "task": "refactor native bridge" },
-                "runtime": { "state_context": "SUCCESS_STREAK" }
+                "query": "unique-native-tool",
+                "limit": 5
             }),
         )
         .await
-        .unwrap_or_else(|error| panic!("qianhuan render should succeed: {error}"));
+        .unwrap_or_else(|error| panic!("native dispatch should classify journal path: {error}"));
 
-    assert!(output.contains("Task: refactor native bridge"));
-    assert!(output.contains("State: SUCCESS_STREAK"));
+    assert!(output.contains("<hit id=\"journal/daily.md\""));
+    assert!(output.contains("type=\"journal\""));
 }
 
 #[tokio::test]
-async fn qianhuan_render_tool_loads_semantic_template_from_skill_vfs() {
-    let tool = QianhuanRenderTool;
-    let manager = Arc::new(ManifestationManager::new_empty());
-    let (_fixture, resolver) = semantic_skill_fixture();
-    let mut ctx = ZhenfaContext::default();
-    let _ = ctx.insert_shared_extension(Arc::clone(&manager));
-    let _ = ctx.insert_shared_extension(Arc::clone(&resolver));
+async fn wendao_search_tool_prefers_tag_driven_hit_type_for_ambiguous_paths() {
+    let notebook = TempDir::new().unwrap_or_else(|error| panic!("create temp dir: {error}"));
+    let notes_dir = notebook.path().join("notes");
+    fs::create_dir_all(&notes_dir).unwrap_or_else(|error| panic!("create notes dir: {error}"));
+    fs::write(
+        notes_dir.join("entry.md"),
+        "---\ntags:\n  - journal\n---\n# Entry\n\ntag-driven-classification-marker.\n",
+    )
+    .unwrap_or_else(|error| panic!("write tagged note: {error}"));
 
+    let tool = search_tool();
+    let ctx = context_with_index(notebook.path());
     let output = tool
         .call_native(
             &ctx,
             json!({
-                "target": "wendao://skills/agenda-management/references/draft_agenda.j2",
-                "data": { "task": "bridge semantic resources" },
-                "runtime": {}
+                "query": "tag-driven-classification-marker",
+                "limit": 5
             }),
         )
         .await
-        .unwrap_or_else(|error| panic!("semantic qianhuan render should succeed: {error}"));
+        .unwrap_or_else(|error| panic!("native dispatch should classify from tags: {error}"));
 
-    assert!(output.contains("Semantic Task: bridge semantic resources"));
+    assert!(output.contains("<hit id=\"notes/entry.md\""));
+    assert!(output.contains("type=\"journal\""));
 }
 
 #[tokio::test]
-async fn qianhuan_render_tool_rejects_semantic_target_without_vfs_extension() {
-    let tool = QianhuanRenderTool;
-    let manager = Arc::new(ManifestationManager::new_empty());
-    let mut ctx = ZhenfaContext::default();
-    let _ = ctx.insert_shared_extension(Arc::clone(&manager));
-    let Err(error) = tool
+async fn wendao_search_tool_prefers_frontmatter_type_over_path_and_tags() {
+    let notebook = TempDir::new().unwrap_or_else(|error| panic!("create temp dir: {error}"));
+    let journal_dir = notebook.path().join("journal");
+    fs::create_dir_all(&journal_dir).unwrap_or_else(|error| panic!("create journal dir: {error}"));
+    fs::write(
+        journal_dir.join("override.md"),
+        "---\ntype: agenda\ntags:\n  - journal\n---\n# Override\n\ndoc-type-precedence-marker.\n",
+    )
+    .unwrap_or_else(|error| panic!("write typed note: {error}"));
+
+    let tool = search_tool();
+    let ctx = context_with_index(notebook.path());
+    let output = tool
         .call_native(
             &ctx,
             json!({
-                "target": "wendao://skills/agenda-management/references/draft_agenda.j2",
-                "data": { "task": "bridge semantic resources" },
-                "runtime": {}
+                "query": "doc-type-precedence-marker",
+                "limit": 5
             }),
         )
         .await
-    else {
-        panic!("semantic render without SkillVfsResolver should fail");
-    };
+        .unwrap_or_else(|error| {
+            panic!("native dispatch should classify from frontmatter type: {error}")
+        });
 
-    assert!(error.to_string().contains("missing SkillVfsResolver"));
-}
-
-#[tokio::test]
-async fn qianhuan_reload_tool_executes_native_dispatch() {
-    let tool = QianhuanReloadTool;
-    let manager = Arc::new(test_manager());
-    let mut ctx = ZhenfaContext::default();
-    let _ = ctx.insert_shared_extension(Arc::clone(&manager));
-    let output = tool
-        .call_native(&ctx, json!({}))
-        .await
-        .unwrap_or_else(|error| panic!("qianhuan reload should succeed: {error}"));
-    assert!(output.contains("<qianhuan_reload"));
-}
-
-#[test]
-fn qianhuan_reload_tool_declares_mutation_scope() {
-    let tool = QianhuanReloadTool;
-    let scope = tool.mutation_scope(&ZhenfaContext::default(), &json!({}));
-    assert_eq!(scope.as_deref(), Some("qianhuan.reload.templates"));
+    assert!(output.contains("<hit id=\"journal/override.md\""));
+    assert!(output.contains("type=\"agenda\""));
 }

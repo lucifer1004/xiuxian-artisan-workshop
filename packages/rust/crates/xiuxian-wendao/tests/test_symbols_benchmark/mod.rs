@@ -1,16 +1,8 @@
-//! Benchmark tests for symbols extraction performance.
-//!
-//! These tests measure the performance of symbol extraction from Rust and Python
-//! source files. They are designed to be run with `cargo test` and validate
-//! that symbol extraction completes within acceptable time limits.
-
+use std::collections::BTreeMap;
 use std::fmt::Write as FmtWrite;
-use std::io::Write as IoWrite;
-use std::path::PathBuf;
-use tempfile::NamedTempFile;
 
-use xiuxian_wendao::SymbolIndex;
-use xiuxian_wendao::dependency_indexer::{ExternalSymbol, SymbolKind, extract_symbols};
+use serde_json::{Value, json};
+use xiuxian_wendao::dependency_indexer::{ExternalSymbol, SymbolKind};
 
 fn append_format(content: &mut String, args: std::fmt::Arguments<'_>) {
     if content.write_fmt(args).is_err() {
@@ -18,11 +10,9 @@ fn append_format(content: &mut String, args: std::fmt::Arguments<'_>) {
     }
 }
 
-/// Generate a large Rust source file for benchmarking.
-fn generate_rust_test_file(line_count: usize) -> String {
+pub(crate) fn generate_rust_test_file(line_count: usize) -> String {
     let mut content = String::with_capacity(line_count * 50);
 
-    // Add structs
     for i in 0..(line_count / 50) {
         append_format(
             &mut content,
@@ -32,7 +22,6 @@ fn generate_rust_test_file(line_count: usize) -> String {
         );
     }
 
-    // Add enums
     for i in 0..(line_count / 100) {
         append_format(
             &mut content,
@@ -42,7 +31,6 @@ fn generate_rust_test_file(line_count: usize) -> String {
         );
     }
 
-    // Add functions
     for i in 0..(line_count / 30) {
         append_format(
             &mut content,
@@ -52,7 +40,6 @@ fn generate_rust_test_file(line_count: usize) -> String {
         );
     }
 
-    // Add traits
     for i in 0..(line_count / 80) {
         append_format(
             &mut content,
@@ -65,11 +52,9 @@ fn generate_rust_test_file(line_count: usize) -> String {
     content
 }
 
-/// Generate a large Python source file for benchmarking.
-fn generate_python_test_file(line_count: usize) -> String {
+pub(crate) fn generate_python_test_file(line_count: usize) -> String {
     let mut content = String::with_capacity(line_count * 40);
 
-    // Add classes
     for i in 0..(line_count / 50) {
         append_format(
             &mut content,
@@ -79,7 +64,6 @@ fn generate_python_test_file(line_count: usize) -> String {
         );
     }
 
-    // Add functions
     for i in 0..(line_count / 20) {
         append_format(
             &mut content,
@@ -92,8 +76,43 @@ fn generate_python_test_file(line_count: usize) -> String {
     content
 }
 
-mod mixed_symbol_extraction_performance;
-mod python_symbol_extraction_performance;
-/// Benchmark test for Rust symbol extraction.
-mod rust_symbol_extraction_performance;
-mod symbol_index_search_performance;
+pub(crate) fn symbol_kind_name(kind: &SymbolKind) -> &'static str {
+    match kind {
+        SymbolKind::Struct => "struct",
+        SymbolKind::Enum => "enum",
+        SymbolKind::Trait => "trait",
+        SymbolKind::Function => "function",
+        SymbolKind::Method => "method",
+        SymbolKind::Field => "field",
+        SymbolKind::Impl => "impl",
+        SymbolKind::Mod => "mod",
+        SymbolKind::Const => "const",
+        SymbolKind::Static => "static",
+        SymbolKind::TypeAlias => "type_alias",
+        SymbolKind::Unknown => "unknown",
+    }
+}
+
+pub(crate) fn symbol_kind_counts(symbols: &[ExternalSymbol]) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for symbol in symbols {
+        *counts
+            .entry(symbol_kind_name(&symbol.kind).to_string())
+            .or_insert(0) += 1;
+    }
+    counts
+}
+
+pub(crate) fn symbol_rows(symbols: &[ExternalSymbol], limit: usize) -> Vec<Value> {
+    symbols
+        .iter()
+        .take(limit)
+        .map(|symbol| {
+            json!({
+                "name": symbol.name,
+                "kind": symbol_kind_name(&symbol.kind),
+                "line": symbol.line,
+            })
+        })
+        .collect()
+}

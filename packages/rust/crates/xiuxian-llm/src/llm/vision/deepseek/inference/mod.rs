@@ -15,10 +15,11 @@ use self::runtime_lane::{infer_enabled_runtime, prewarm_enabled_runtime};
 pub fn infer_deepseek_ocr_truth(
     runtime: &DeepseekRuntime,
     prepared: &PreparedVisionImage,
+    stop_signal: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 ) -> LlmResult<Option<String>> {
     match runtime {
         DeepseekRuntime::Disabled { .. } => Ok(None),
-        DeepseekRuntime::Configured { .. } => infer_enabled_runtime(runtime, prepared),
+        DeepseekRuntime::Configured { .. } => infer_enabled_runtime(runtime, prepared, stop_signal),
     }
 }
 

@@ -8,7 +8,7 @@ from typing import Any
 
 @dataclass
 class PhaseEvent:
-    """A single phase/event during skill execution (embed, vector_search, fusion, etc.)."""
+    """A single phase/event during skill execution (embed, vector_search, dual_core, etc.)."""
 
     phase: str
     duration_ms: float
@@ -53,17 +53,9 @@ class MonitorReport:
     phases: list[dict[str, Any]]
     rust_db_events: list[dict[str, Any]]
     samples_count: int
-    link_graph_signals: dict[str, Any] | None = None
-    retrieval_signals: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
-        from omni.foundation.api.skills_monitor_signals_schema import validate_signals
-
-        validate_signals(
-            retrieval_signals=self.retrieval_signals,
-            link_graph_signals=self.link_graph_signals,
-        )
         return {
             "skill_command": self.skill_command,
             "elapsed_sec": round(self.elapsed_sec, 2),
@@ -81,6 +73,4 @@ class MonitorReport:
             "phases": self.phases,
             "rust_db_events": self.rust_db_events,
             "samples_count": self.samples_count,
-            "link_graph_signals": self.link_graph_signals,
-            "retrieval_signals": self.retrieval_signals,
         }

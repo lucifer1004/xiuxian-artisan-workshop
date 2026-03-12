@@ -1,163 +1,117 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Condvar, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::sync::{Arc, LazyLock, Mutex};
 
-pub(super) type SharedCoalescedResult = Result<Option<Arc<str>>, Arc<str>>;
+use super::core::DeepseekEngine;
 
-static INFLIGHT: OnceLock<Mutex<HashMap<String, Arc<InflightEntry>>>> = OnceLock::new();
+pub(in crate::llm::vision::deepseek::native) type CachedEngineEntry =
+    Result<Arc<DeepseekEngine>, Arc<str>>;
 
-pub(super) enum CoalesceAcquire {
-    Leader(CoalesceLeaderPermit),
-    Follower(CoalesceFollowerPermit),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::llm::vision::deepseek::native) enum EngineSlot {
+    Primary,
+    PrimaryCpuFallback,
+    Dots,
+    DotsCpuFallback,
 }
 
-pub(super) struct CoalesceLeaderPermit {
-    key: String,
-    entry: Arc<InflightEntry>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::llm::vision::deepseek::native) enum EngineRegistryEntryState {
+    Empty,
+    Cached,
 }
 
-pub(super) struct CoalesceFollowerPermit {
-    entry: Arc<InflightEntry>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::llm::vision::deepseek::native) struct EngineRegistrySnapshot {
+    pub(in crate::llm::vision::deepseek::native) primary: EngineRegistryEntryState,
+    pub(in crate::llm::vision::deepseek::native) primary_cpu_fallback: EngineRegistryEntryState,
+    pub(in crate::llm::vision::deepseek::native) dots: EngineRegistryEntryState,
+    pub(in crate::llm::vision::deepseek::native) dots_cpu_fallback: EngineRegistryEntryState,
 }
 
-struct InflightEntry {
-    state: Mutex<EntryState>,
-    ready: Condvar,
+#[derive(Default)]
+struct EngineRegistry {
+    primary: Option<CachedEngineEntry>,
+    primary_cpu_fallback: Option<CachedEngineEntry>,
+    dots: Option<CachedEngineEntry>,
+    dots_cpu_fallback: Option<CachedEngineEntry>,
 }
 
-struct EntryState {
-    started_at: Instant,
-    result: Option<SharedCoalescedResult>,
-    follower_count: usize,
+static ENGINE_REGISTRY: LazyLock<Mutex<EngineRegistry>> =
+    LazyLock::new(|| Mutex::new(EngineRegistry::default()));
+
+impl EngineRegistryEntryState {
+    fn from_present(present: bool) -> Self {
+        if present { Self::Cached } else { Self::Empty }
+    }
 }
 
-impl InflightEntry {
-    fn new() -> Self {
-        Self {
-            state: Mutex::new(EntryState {
-                started_at: Instant::now(),
-                result: None,
-                follower_count: 0,
-            }),
-            ready: Condvar::new(),
+impl EngineRegistry {
+    fn slot_mut(&mut self, slot: EngineSlot) -> &mut Option<CachedEngineEntry> {
+        match slot {
+            EngineSlot::Primary => &mut self.primary,
+            EngineSlot::PrimaryCpuFallback => &mut self.primary_cpu_fallback,
+            EngineSlot::Dots => &mut self.dots,
+            EngineSlot::DotsCpuFallback => &mut self.dots_cpu_fallback,
         }
     }
-
-    fn is_stale(&self, stale_after: Duration) -> bool {
-        let guard = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        guard.result.is_none() && guard.started_at.elapsed() >= stale_after
-    }
-
-    fn add_follower(&self) {
-        let mut guard = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        guard.follower_count = guard.follower_count.saturating_add(1);
-    }
-
-    fn follower_count(&self) -> usize {
-        let guard = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        guard.follower_count
-    }
-
-    fn wait_result(&self, timeout: Duration) -> Option<SharedCoalescedResult> {
-        let start = Instant::now();
-        let mut guard = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        loop {
-            if let Some(result) = guard.result.as_ref() {
-                return Some(clone_shared_result(result));
-            }
-            let elapsed = start.elapsed();
-            if elapsed >= timeout {
-                return None;
-            }
-            let remaining = timeout.saturating_sub(elapsed);
-            let (next_guard, _) = self
-                .ready
-                .wait_timeout(guard, remaining)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            guard = next_guard;
-        }
-    }
-
-    fn complete(&self, result: SharedCoalescedResult) {
-        let mut guard = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        guard.result = Some(result);
-        self.ready.notify_all();
-    }
 }
 
-pub(super) fn acquire(cache_key: &str, stale_after: Duration) -> CoalesceAcquire {
-    let map = INFLIGHT.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut guard = map
+pub(in crate::llm::vision::deepseek::native) fn get_or_init_cached_engine<F>(
+    slot: EngineSlot,
+    init: F,
+) -> CachedEngineEntry
+where
+    F: FnOnce() -> CachedEngineEntry,
+{
+    let mut guard = ENGINE_REGISTRY
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    if let Some(entry) = guard.get(cache_key).cloned() {
-        if entry.is_stale(stale_after) {
-            tracing::warn!(
-                event = "llm.vision.deepseek.infer.coalesce_stale_reap",
-                stale_after_ms = stale_after.as_millis(),
-                key_len = cache_key.len(),
-                "DeepSeek OCR coalescer reaped stale in-flight entry"
-            );
-            guard.remove(cache_key);
-        } else {
-            entry.add_follower();
-            return CoalesceAcquire::Follower(CoalesceFollowerPermit { entry });
-        }
+    let entry = guard.slot_mut(slot);
+    if let Some(cached) = entry.as_ref() {
+        return clone_cached_engine_entry(cached);
     }
 
-    let entry = Arc::new(InflightEntry::new());
-    guard.insert(cache_key.to_string(), Arc::clone(&entry));
-    CoalesceAcquire::Leader(CoalesceLeaderPermit {
-        key: cache_key.to_string(),
-        entry,
-    })
+    let loaded = init();
+    *entry = Some(clone_cached_engine_entry(&loaded));
+    loaded
 }
 
-impl CoalesceLeaderPermit {
-    pub(super) fn follower_count(&self) -> usize {
-        self.entry.follower_count()
-    }
-
-    pub(super) fn complete(self, result: SharedCoalescedResult) {
-        self.entry.complete(result);
-        let map = INFLIGHT.get_or_init(|| Mutex::new(HashMap::new()));
-        let mut guard = map
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(current) = guard.get(self.key.as_str())
-            && Arc::ptr_eq(current, &self.entry)
-        {
-            guard.remove(self.key.as_str());
-        }
+pub(in crate::llm::vision::deepseek::native) fn snapshot_registry_for_tests()
+-> EngineRegistrySnapshot {
+    let guard = ENGINE_REGISTRY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    EngineRegistrySnapshot {
+        primary: EngineRegistryEntryState::from_present(guard.primary.is_some()),
+        primary_cpu_fallback: EngineRegistryEntryState::from_present(
+            guard.primary_cpu_fallback.is_some(),
+        ),
+        dots: EngineRegistryEntryState::from_present(guard.dots.is_some()),
+        dots_cpu_fallback: EngineRegistryEntryState::from_present(
+            guard.dots_cpu_fallback.is_some(),
+        ),
     }
 }
 
-impl CoalesceFollowerPermit {
-    pub(super) fn wait(self, timeout: Duration) -> Option<SharedCoalescedResult> {
-        self.entry.wait_result(timeout)
-    }
+pub(in crate::llm::vision::deepseek::native) fn clear_registry_for_tests() {
+    let mut guard = ENGINE_REGISTRY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *guard = EngineRegistry::default();
 }
 
-fn clone_shared_result(result: &SharedCoalescedResult) -> SharedCoalescedResult {
-    match result {
-        Ok(Some(value)) => Ok(Some(Arc::clone(value))),
-        Ok(None) => Ok(None),
+pub(in crate::llm::vision::deepseek::native) fn seed_failure_for_tests(
+    slot: EngineSlot,
+    message: &str,
+) {
+    let mut guard = ENGINE_REGISTRY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *guard.slot_mut(slot) = Some(Err(Arc::from(message)));
+}
+
+fn clone_cached_engine_entry(entry: &CachedEngineEntry) -> CachedEngineEntry {
+    match entry {
+        Ok(engine) => Ok(Arc::clone(engine)),
         Err(error) => Err(Arc::clone(error)),
     }
 }

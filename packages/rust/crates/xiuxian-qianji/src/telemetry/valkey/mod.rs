@@ -3,10 +3,10 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::mpsc;
-
-mod publish;
+use tokio::time::{Duration, sleep};
 
 const DEFAULT_EVENT_QUEUE_CAPACITY: usize = 2048;
+const RECONNECT_BACKOFF_MS: u64 = 200;
 
 /// Non-blocking pulse emitter backed by Valkey Pub/Sub.
 ///
@@ -34,7 +34,7 @@ impl ValkeyPulseEmitter {
         let (queue_tx, queue_rx) = mpsc::channel(DEFAULT_EVENT_QUEUE_CAPACITY);
         let redis_url = Arc::<str>::from(redis_url);
         let channel = Arc::<str>::from(channel);
-        std::mem::drop(tokio::spawn(publish::run_publish_loop(
+        std::mem::drop(tokio::spawn(Self::run_publish_loop(
             redis_url,
             Arc::clone(&channel),
             queue_rx,
@@ -59,13 +59,36 @@ impl ValkeyPulseEmitter {
         &self.channel
     }
 
+    async fn run_publish_loop(
+        redis_url: Arc<str>,
+        channel: Arc<str>,
+        mut queue_rx: mpsc::Receiver<Arc<str>>,
+    ) {
+        let mut connection: Option<redis::aio::MultiplexedConnection> = None;
+        while let Some(payload) = queue_rx.recv().await {
+            if let Err(error) = publish_payload(
+                redis_url.as_ref(),
+                channel.as_ref(),
+                payload.as_ref(),
+                &mut connection,
+            )
+            .await
+            {
+                log::warn!(
+                    "swarm pulse publish failed on channel '{}': {error}",
+                    channel.as_ref()
+                );
+            }
+        }
+    }
+
     fn should_sample_event(&self) -> bool {
         let sample_rate = self.current_sample_rate();
         if sample_rate <= 1 {
             return false;
         }
         let slot = self.sample_counter.fetch_add(1, Ordering::Relaxed);
-        !slot.is_multiple_of(sample_rate)
+        slot % sample_rate != 0
     }
 
     fn current_sample_rate(&self) -> u64 {
@@ -100,4 +123,49 @@ impl PulseEmitter for ValkeyPulseEmitter {
             }
         }
     }
+}
+
+async fn publish_payload(
+    redis_url: &str,
+    channel: &str,
+    payload: &str,
+    connection: &mut Option<redis::aio::MultiplexedConnection>,
+) -> Result<(), String> {
+    if connection.is_none() {
+        *connection = Some(connect_valkey(redis_url).await?);
+    }
+
+    if try_publish_once(channel, payload, connection).await.is_ok() {
+        return Ok(());
+    }
+
+    *connection = None;
+    sleep(Duration::from_millis(RECONNECT_BACKOFF_MS)).await;
+    *connection = Some(connect_valkey(redis_url).await?);
+    try_publish_once(channel, payload, connection).await
+}
+
+async fn connect_valkey(redis_url: &str) -> Result<redis::aio::MultiplexedConnection, String> {
+    let client = redis::Client::open(redis_url).map_err(|error| error.to_string())?;
+    client
+        .get_multiplexed_async_connection()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+async fn try_publish_once(
+    channel: &str,
+    payload: &str,
+    connection: &mut Option<redis::aio::MultiplexedConnection>,
+) -> Result<(), String> {
+    let Some(connection) = connection.as_mut() else {
+        return Err("missing valkey connection".to_string());
+    };
+    let mut command = redis::cmd("PUBLISH");
+    command.arg(channel).arg(payload);
+    command
+        .query_async::<i64>(connection)
+        .await
+        .map(|_| ())
+        .map_err(|error| error.to_string())
 }

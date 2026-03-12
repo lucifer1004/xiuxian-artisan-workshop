@@ -1,207 +1,57 @@
-//! Telegram runtime session-partition command tests with dynamic mode changes.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
 use std::sync::Arc;
-use std::sync::{PoisonError, RwLock};
 
 use anyhow::Result;
-use async_trait::async_trait;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::mpsc;
 
-use xiuxian_daochang::{Channel, ChannelMessage};
+use crate::channels::traits::{Channel, ChannelMessage};
 
-use super::{build_agent, build_job_manager, handle_inbound_message, inbound};
-
-struct SwitchableMockChannel {
-    sent: Mutex<Vec<(String, String)>>,
-    mode: RwLock<String>,
-}
-
-impl SwitchableMockChannel {
-    fn new(initial_mode: &str) -> Self {
-        Self {
-            sent: Mutex::new(Vec::new()),
-            mode: RwLock::new(initial_mode.to_string()),
-        }
-    }
-
-    async fn sent_messages(&self) -> Vec<(String, String)> {
-        self.sent.lock().await.clone()
-    }
-
-    fn current_mode(&self) -> String {
-        self.mode
-            .read()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
-    }
-}
-
-#[async_trait]
-impl Channel for SwitchableMockChannel {
-    fn name(&self) -> &'static str {
-        "switchable-mock"
-    }
-
-    fn session_partition_mode(&self) -> Option<String> {
-        Some(self.current_mode())
-    }
-
-    fn set_session_partition_mode(&self, mode: &str) -> anyhow::Result<()> {
-        *self.mode.write().unwrap_or_else(PoisonError::into_inner) = mode.to_string();
-        Ok(())
-    }
-
-    fn is_admin_user(&self, identity: &str) -> bool {
-        identity == "888"
-    }
-
-    async fn send(&self, message: &str, recipient: &str) -> Result<()> {
-        self.sent
-            .lock()
-            .await
-            .push((message.to_string(), recipient.to_string()));
-        Ok(())
-    }
-
-    async fn listen(&self, _tx: mpsc::Sender<ChannelMessage>) -> Result<()> {
-        Ok(())
-    }
-}
-
-struct CommandScopedMockChannel {
-    sent: Mutex<Vec<(String, String)>>,
-    mode: RwLock<String>,
-}
-
-impl CommandScopedMockChannel {
-    fn new(initial_mode: &str) -> Self {
-        Self {
-            sent: Mutex::new(Vec::new()),
-            mode: RwLock::new(initial_mode.to_string()),
-        }
-    }
-
-    async fn sent_messages(&self) -> Vec<(String, String)> {
-        self.sent.lock().await.clone()
-    }
-}
-
-#[async_trait]
-impl Channel for CommandScopedMockChannel {
-    fn name(&self) -> &'static str {
-        "command-scoped-mock"
-    }
-
-    fn session_partition_mode(&self) -> Option<String> {
-        Some(
-            self.mode
-                .read()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone(),
-        )
-    }
-
-    fn set_session_partition_mode(&self, mode: &str) -> anyhow::Result<()> {
-        *self.mode.write().unwrap_or_else(PoisonError::into_inner) = mode.to_string();
-        Ok(())
-    }
-
-    fn is_admin_user(&self, _identity: &str) -> bool {
-        false
-    }
-
-    fn is_authorized_for_control_command(&self, identity: &str, command_text: &str) -> bool {
-        identity == "777" && command_text.starts_with("/session partition")
-    }
-
-    async fn send(&self, message: &str, recipient: &str) -> Result<()> {
-        self.sent
-            .lock()
-            .await
-            .push((message.to_string(), recipient.to_string()));
-        Ok(())
-    }
-
-    async fn listen(&self, _tx: mpsc::Sender<ChannelMessage>) -> Result<()> {
-        Ok(())
-    }
-}
+use super::{MockChannel, build_agent, build_job_manager, handle_inbound_message, inbound};
 
 #[tokio::test]
-async fn runtime_handle_inbound_session_partition_status_and_toggle() -> Result<()> {
+async fn runtime_handle_inbound_job_status_not_found_reports_dashboard() -> Result<()> {
     let agent = build_agent().await?;
-    let channel = Arc::new(SwitchableMockChannel::new("chat_user"));
+    let channel = Arc::new(MockChannel::default());
     let channel_dyn: Arc<dyn Channel> = channel.clone();
     let job_manager = build_job_manager(agent.clone());
     let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
 
     assert!(
         handle_inbound_message(
-            inbound("/session partition"),
-            &channel_dyn,
-            &foreground_tx,
-            &job_manager,
-            &agent,
-        )
-        .await
-    );
-    assert!(
-        handle_inbound_message(
-            inbound("/session partition on"),
-            &channel_dyn,
-            &foreground_tx,
-            &job_manager,
-            &agent,
-        )
-        .await
-    );
-    assert!(
-        handle_inbound_message(
-            inbound("/session partition json"),
-            &channel_dyn,
-            &foreground_tx,
-            &job_manager,
-            &agent,
-        )
-        .await
-    );
-
-    assert!(
-        foreground_rx.try_recv().is_err(),
-        "session partition commands should not forward to foreground queue"
-    );
-
-    let sent = channel.sent_messages().await;
-    assert_eq!(sent.len(), 3);
-    assert!(sent[0].0.contains("Session partition status."));
-    assert!(sent[0].0.contains("current_mode=chat_user"));
-    assert!(sent[1].0.contains("Session partition updated."));
-    assert!(sent[1].0.contains("requested_mode=chat"));
-    assert!(sent[1].0.contains("current_mode=chat"));
-    let status_json: serde_json::Value = serde_json::from_str(&sent[2].0)?;
-    assert_eq!(status_json["kind"], "session_partition");
-    assert_eq!(status_json["updated"], false);
-    assert_eq!(status_json["current_mode"], "chat");
-    assert_eq!(
-        status_json["supported_modes"],
-        serde_json::json!(["chat", "chat_user", "user", "chat_thread_user"])
-    );
-    assert_eq!(status_json["quick_toggle"], "/session partition on|off");
-    assert_eq!(channel.current_mode(), "chat");
-    Ok(())
-}
-
-#[tokio::test]
-async fn runtime_handle_inbound_session_scope_alias_updates_mode() -> Result<()> {
-    let agent = build_agent().await?;
-    let channel = Arc::new(SwitchableMockChannel::new("chat_user"));
-    let channel_dyn: Arc<dyn Channel> = channel.clone();
-    let job_manager = build_job_manager(agent.clone());
-    let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
-
-    assert!(
-        handle_inbound_message(
-            inbound("/session scope on"),
+            inbound("/job missing-123"),
             &channel_dyn,
             &foreground_tx,
             &job_manager,
@@ -211,92 +61,113 @@ async fn runtime_handle_inbound_session_scope_alias_updates_mode() -> Result<()>
     );
     assert!(
         foreground_rx.try_recv().is_err(),
-        "session scope command should not forward to foreground queue"
+        "job status command should not forward to foreground queue"
     );
 
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
-    assert!(sent[0].0.contains("Session partition updated."));
-    assert!(sent[0].0.contains("requested_mode=chat"));
-    assert_eq!(channel.current_mode(), "chat");
+    assert!(sent[0].0.contains("job-status dashboard"));
+    assert!(sent[0].0.contains("status=not_found"));
+    assert!(sent[0].0.contains("job_id=missing-123"));
+    assert!(sent[0].0.contains("jobs_dashboard=/jobs"));
     Ok(())
 }
 
 #[tokio::test]
-async fn runtime_handle_inbound_session_partition_requires_admin() -> Result<()> {
+async fn runtime_handle_inbound_job_status_not_found_reports_json() -> Result<()> {
     let agent = build_agent().await?;
-    let channel = Arc::new(SwitchableMockChannel::new("chat_user"));
+    let channel = Arc::new(MockChannel::default());
     let channel_dyn: Arc<dyn Channel> = channel.clone();
     let job_manager = build_job_manager(agent.clone());
     let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
 
-    let mut non_admin = inbound("/session partition on");
-    non_admin.sender = "999".to_string();
     assert!(
         handle_inbound_message(
-            non_admin,
+            inbound("/job missing-123 json"),
             &channel_dyn,
             &foreground_tx,
             &job_manager,
-            &agent
+            &agent,
         )
         .await
     );
     assert!(
         foreground_rx.try_recv().is_err(),
-        "session partition command should not forward to foreground queue"
+        "job status json command should not forward to foreground queue"
     );
 
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
-    assert!(sent[0].0.contains("## Session Partition Permission Denied"));
-    assert!(sent[0].0.contains("`reason`: `admin_required`"));
-    assert!(sent[0].0.contains("`sender`: `999`"));
-    assert_eq!(channel.current_mode(), "chat_user");
+    let payload: serde_json::Value = serde_json::from_str(&sent[0].0)?;
+    assert_eq!(payload["kind"], "job_status");
+    assert_eq!(payload["found"], false);
+    assert_eq!(payload["job_id"], "missing-123");
+    assert_eq!(payload["status"], "not_found");
     Ok(())
 }
 
 #[tokio::test]
-async fn runtime_handle_inbound_session_partition_uses_command_scoped_authorization() -> Result<()>
-{
+async fn runtime_handle_inbound_jobs_summary_reports_dashboard() -> Result<()> {
     let agent = build_agent().await?;
-    let channel = Arc::new(CommandScopedMockChannel::new("chat_user"));
+    let channel = Arc::new(MockChannel::default());
     let channel_dyn: Arc<dyn Channel> = channel.clone();
     let job_manager = build_job_manager(agent.clone());
     let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
 
-    let mut msg = inbound("/session partition on");
-    msg.sender = "777".to_string();
-    assert!(handle_inbound_message(msg, &channel_dyn, &foreground_tx, &job_manager, &agent).await);
+    assert!(
+        handle_inbound_message(
+            inbound("/jobs"),
+            &channel_dyn,
+            &foreground_tx,
+            &job_manager,
+            &agent,
+        )
+        .await
+    );
     assert!(
         foreground_rx.try_recv().is_err(),
-        "session partition command should not forward to foreground queue"
+        "jobs summary command should not forward to foreground queue"
     );
 
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
-    assert!(sent[0].0.contains("Session partition updated."));
+    assert!(sent[0].0.contains("jobs-health dashboard"));
+    assert!(sent[0].0.contains("Overview:"));
+    assert!(sent[0].0.contains("Health:"));
+    assert!(sent[0].0.contains("state=healthy"));
     Ok(())
 }
 
 #[tokio::test]
-async fn runtime_handle_inbound_session_scope_alias_uses_partition_acl_scope() -> Result<()> {
+async fn runtime_handle_inbound_jobs_summary_reports_json() -> Result<()> {
     let agent = build_agent().await?;
-    let channel = Arc::new(CommandScopedMockChannel::new("chat_user"));
+    let channel = Arc::new(MockChannel::default());
     let channel_dyn: Arc<dyn Channel> = channel.clone();
     let job_manager = build_job_manager(agent.clone());
     let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
 
-    let mut msg = inbound("/session scope on");
-    msg.sender = "777".to_string();
-    assert!(handle_inbound_message(msg, &channel_dyn, &foreground_tx, &job_manager, &agent).await);
+    assert!(
+        handle_inbound_message(
+            inbound("/jobs json"),
+            &channel_dyn,
+            &foreground_tx,
+            &job_manager,
+            &agent,
+        )
+        .await
+    );
     assert!(
         foreground_rx.try_recv().is_err(),
-        "session scope command should not forward to foreground queue"
+        "jobs summary json command should not forward to foreground queue"
     );
 
     let sent = channel.sent_messages().await;
     assert_eq!(sent.len(), 1);
-    assert!(sent[0].0.contains("Session partition updated."));
+    let payload: serde_json::Value = serde_json::from_str(&sent[0].0)?;
+    assert_eq!(payload["kind"], "jobs_health");
+    assert_eq!(payload["health"], "healthy");
+    assert_eq!(payload["total"], 0);
+    assert_eq!(payload["queued"], 0);
+    assert_eq!(payload["running"], 0);
     Ok(())
 }

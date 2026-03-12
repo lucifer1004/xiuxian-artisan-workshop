@@ -8,13 +8,11 @@ use pyo3::{
     types::{PyAny, PyDict, PyList},
 };
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
+use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::HashMap;
 use std::path::Path;
-use std::str::FromStr;
-use xiuxian_vector::{
-    AgenticSearchConfig, QueryIntent, SearchOptions, ToolSearchOptions, ToolSearchRequest,
-};
+use std::sync::OnceLock;
+use xiuxian_vector::{SearchOptions, ToolSearchOptions, VectorStore};
 
 fn json_value_to_py(py: pyo3::Python<'_>, value: &serde_json::Value) -> PyResult<Py<PyAny>> {
     match value {
@@ -94,13 +92,6 @@ impl ConfidenceProfile {
     }
 }
 
-/// Minimum score gap between top and second result to treat top as "clear winner" and promote to high.
-const CLEAR_WINNER_GAP: f32 = 0.15;
-/// Minimum keyword (BM25) score to treat match as attribute-driven and allow high confidence when score >= medium.
-const MIN_KEYWORD_SCORE_ATTRIBUTE_HIGH: f32 = 0.2;
-/// Minimum vector (similarity) score to treat as "tool description match" — primary signal for LLM tool-calling.
-const MIN_VECTOR_SCORE_TOOL_DESCRIPTION_HIGH: f32 = 0.55;
-
 fn calibrate_confidence(score: f32, profile: &ConfidenceProfile) -> (&'static str, f32) {
     if score >= profile.high_threshold {
         (
@@ -117,110 +108,166 @@ fn calibrate_confidence(score: f32, profile: &ConfidenceProfile) -> (&'static st
     }
 }
 
-/// Calibrate confidence using score, clear-winner gap, and attribute signals (vector_score, keyword_score).
-/// Aligns with route-test-schema doc: (1) tool description = vector path = primary for LLM tool-calling;
-/// (2) keyword path = routing_keywords, intents, tool_name, skill_name, command.
-fn calibrate_confidence_with_attributes(
-    score: f32,
-    second_score: Option<f32>,
-    vector_score: Option<f32>,
-    keyword_score: Option<f32>,
-    profile: &ConfidenceProfile,
-) -> (&'static str, f32) {
-    let (mut conf, mut final_score) = calibrate_confidence(score, profile);
+const TOOL_SEARCH_COMMON_SCHEMA_JSON: &str =
+    include_str!("../../../../../shared/schemas/omni.vector.tool_search.v1.schema.json");
 
-    // Clear winner: top is far ahead of second
-    if let Some(s2) = second_score
-        && score >= profile.medium_threshold
-        && (score - s2) >= CLEAR_WINNER_GAP
+#[derive(Debug, Clone)]
+struct CommonSchemaRules {
+    required: std::collections::HashSet<String>,
+    allowed: std::collections::HashSet<String>,
+}
+
+fn tool_search_common_rules() -> &'static CommonSchemaRules {
+    static RULES: OnceLock<CommonSchemaRules> = OnceLock::new();
+    RULES.get_or_init(|| {
+        let root: JsonValue = serde_json::from_str(TOOL_SEARCH_COMMON_SCHEMA_JSON)
+            .unwrap_or_else(|_| serde_json::json!({}));
+        let required = root
+            .get("required")
+            .and_then(JsonValue::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(JsonValue::as_str)
+            .map(ToString::to_string)
+            .collect::<std::collections::HashSet<_>>();
+        let allowed = root
+            .get("properties")
+            .and_then(JsonValue::as_object)
+            .map(|obj| {
+                obj.keys()
+                    .cloned()
+                    .collect::<std::collections::HashSet<_>>()
+            })
+            .unwrap_or_default();
+        CommonSchemaRules { required, allowed }
+    })
+}
+
+fn validate_type(type_name: &str, value: &JsonValue) -> bool {
+    match type_name {
+        "string" => value.is_string(),
+        "number" => value.is_number(),
+        "array" => value.is_array(),
+        "object" => value.is_object(),
+        "null" => value.is_null(),
+        _ => true,
+    }
+}
+
+fn validate_field_spec(key: &str, value: &JsonValue, spec: &JsonValue) -> Result<(), String> {
+    if let Some(enum_vals) = spec.get("enum").and_then(JsonValue::as_array)
+        && !enum_vals.iter().any(|v| v == value)
     {
-        conf = "high";
-        final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
+        return Err(format!("field '{key}' value is outside enum"));
     }
-
-    let kw = keyword_score.unwrap_or(0.0);
-    let vec = vector_score.unwrap_or(0.0);
-
-    // Tool-description match (vector path): primary signal for "model can call this tool correctly".
-    if conf != "high"
-        && score >= profile.medium_threshold
-        && vec >= MIN_VECTOR_SCORE_TOOL_DESCRIPTION_HIGH
+    if let Some(min_len) = spec.get("minLength").and_then(JsonValue::as_u64)
+        && let Some(s) = value.as_str()
+        && s.len() < min_len as usize
     {
-        conf = "high";
-        final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
+        return Err(format!("field '{key}' violates minLength={min_len}"));
     }
 
-    // Keyword path: strong match on routing_keywords / intents / tool_name / category
-    if conf != "high" && score >= profile.medium_threshold {
-        if kw >= MIN_KEYWORD_SCORE_ATTRIBUTE_HIGH {
-            conf = "high";
-            final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
-        } else if kw > 0.0 && vec < 0.5 && kw > vec {
-            // Keyword-dominated (keyword contributed more than vector)
-            conf = "high";
-            final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
+    if let Some(type_name) = spec.get("type").and_then(JsonValue::as_str)
+        && !validate_type(type_name, value)
+    {
+        return Err(format!("field '{key}' type mismatch, expected {type_name}"));
+    }
+
+    if let Some(any_of) = spec.get("anyOf").and_then(JsonValue::as_array) {
+        let any_match = any_of.iter().any(|branch| {
+            branch
+                .get("type")
+                .and_then(JsonValue::as_str)
+                .is_some_and(|t| validate_type(t, value))
+        });
+        if !any_match {
+            return Err(format!("field '{key}' type mismatch for anyOf"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_tool_search_common_schema(payload: &JsonMap<String, JsonValue>) -> Result<(), String> {
+    let rules = tool_search_common_rules();
+    for field in &rules.required {
+        if !payload.contains_key(field) {
+            return Err(format!("missing required field '{field}'"));
+        }
+    }
+    for key in payload.keys() {
+        if !rules.allowed.contains(key) {
+            return Err(format!("unknown field '{key}' (not in common schema)"));
         }
     }
 
-    (conf, final_score)
-}
+    let schema_root: JsonValue = serde_json::from_str(TOOL_SEARCH_COMMON_SCHEMA_JSON)
+        .unwrap_or_else(|_| serde_json::json!({}));
+    let properties = schema_root
+        .get("properties")
+        .and_then(JsonValue::as_object)
+        .ok_or_else(|| "invalid common schema: missing properties".to_string())?;
 
-fn canonicalize_json_value(value: &serde_json::Value) -> serde_json::Value {
-    match value {
-        serde_json::Value::Object(map) => {
-            let mut entries = map.iter().collect::<Vec<_>>();
-            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
-            let mut out = serde_json::Map::with_capacity(entries.len());
-            for (key, child) in entries {
-                out.insert(key.clone(), canonicalize_json_value(child));
-            }
-            serde_json::Value::Object(out)
+    for (key, value) in payload {
+        if let Some(spec) = properties.get(key) {
+            validate_field_spec(key, value, spec)?;
         }
-        serde_json::Value::Array(items) => {
-            serde_json::Value::Array(items.iter().map(canonicalize_json_value).collect())
-        }
-        _ => value.clone(),
     }
+    Ok(())
 }
 
-fn build_input_schema_digest(input_schema: &serde_json::Value) -> String {
-    let normalized = xiuxian_vector::skill::normalize_input_schema_value(input_schema);
-    if normalized.as_object().is_none_or(serde_json::Map::is_empty) {
-        return "sha256:empty".to_string();
-    }
-    let canonical = canonicalize_json_value(&normalized);
-    let mut hasher = Sha256::new();
-    hasher.update(canonical.to_string().as_bytes());
-    format!("sha256:{}", hex::encode(hasher.finalize()))
-}
-
-fn build_ranking_reason(
-    score: f32,
-    final_score: f32,
+fn build_tool_search_payload(
+    r: &xiuxian_vector::skill::ToolSearchResult,
     confidence: &str,
-    vector_score: Option<f32>,
-    keyword_score: Option<f32>,
-    category: &str,
-    intents: &[String],
-) -> String {
-    let mut parts = Vec::new();
-    if let Some(vector_score) = vector_score {
-        parts.push(format!("vector={vector_score:.3}"));
+    final_score: f32,
+) -> JsonMap<String, JsonValue> {
+    let mut payload = JsonMap::new();
+    payload.insert(
+        "schema".to_string(),
+        JsonValue::String("omni.vector.tool_search.v1".to_string()),
+    );
+    payload.insert("name".to_string(), JsonValue::String(r.name.clone()));
+    payload.insert(
+        "description".to_string(),
+        JsonValue::String(r.description.clone()),
+    );
+    payload.insert("input_schema".to_string(), r.input_schema.clone());
+    payload.insert("score".to_string(), JsonValue::from(r.score));
+    if let Some(v) = r.vector_score {
+        payload.insert("vector_score".to_string(), JsonValue::from(v));
     }
-    if let Some(keyword_score) = keyword_score {
-        parts.push(format!("keyword={keyword_score:.3}"));
+    if let Some(v) = r.keyword_score {
+        payload.insert("keyword_score".to_string(), JsonValue::from(v));
     }
-    if !category.is_empty() {
-        parts.push(format!("category={category}"));
-    }
-    if !intents.is_empty() {
-        let top_intents = intents.iter().take(3).cloned().collect::<Vec<_>>();
-        parts.push(format!("intents={}", top_intents.join(",")));
-    }
-    parts.push(format!("confidence={confidence}"));
-    parts.push(format!("raw={score:.3}"));
-    parts.push(format!("final={final_score:.3}"));
-    parts.join(" | ")
+    payload.insert("final_score".to_string(), JsonValue::from(final_score));
+    payload.insert(
+        "confidence".to_string(),
+        JsonValue::String(confidence.to_string()),
+    );
+    payload.insert(
+        "skill_name".to_string(),
+        JsonValue::String(r.skill_name.clone()),
+    );
+    payload.insert(
+        "tool_name".to_string(),
+        JsonValue::String(r.tool_name.clone()),
+    );
+    payload.insert(
+        "file_path".to_string(),
+        JsonValue::String(r.file_path.clone()),
+    );
+    payload.insert(
+        "routing_keywords".to_string(),
+        JsonValue::Array(r.keywords.iter().cloned().map(JsonValue::String).collect()),
+    );
+    payload.insert(
+        "intents".to_string(),
+        JsonValue::Array(r.intents.iter().cloned().map(JsonValue::String).collect()),
+    );
+    payload.insert(
+        "category".to_string(),
+        JsonValue::String(r.category.clone()),
+    );
+    payload
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -230,47 +277,26 @@ struct PySearchOptions {
     fragment_readahead: Option<usize>,
     batch_readahead: Option<usize>,
     scan_limit: Option<usize>,
-    /// Columns to include in IPC output (for example: `"id"`, `"content"`, `"_distance"`).
-    /// Reduces payload for batch search.
-    #[serde(default)]
-    projection: Option<Vec<String>>,
 }
 
 pub(crate) fn search_optimized_async(
     path: &str,
     dimension: usize,
     enable_kw: bool,
-    index_cache_size_bytes: Option<usize>,
-    max_cached_tables: Option<usize>,
     table_name: &str,
     query: Vec<f32>,
     limit: usize,
     options_json: Option<String>,
 ) -> PyResult<Vec<String>> {
-    if let Some(cached) = xiuxian_vector::search_cache::get_cached(
-        path,
-        table_name,
-        limit,
-        options_json.as_deref(),
-        &query,
-    ) {
-        return Ok(cached);
-    }
-
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = super::store::get_or_create_store(
-            path,
-            dimension,
-            enable_kw,
-            index_cache_size_bytes,
-            max_cached_tables,
-        )
-        .await?;
+        let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         let py_options = options_json
             .as_deref()
             .map(serde_json::from_str::<PySearchOptions>)
@@ -288,84 +314,24 @@ pub(crate) fn search_optimized_async(
         };
 
         let results = store
-            .search_optimized(table_name, query.clone(), limit, options)
+            .search_optimized(table_name, query, limit, options)
             .await
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        let json_results: Vec<String> = results
+        Ok(results
             .into_iter()
             .map(|r| {
-                let match_score = 1.0f64 / (1.0f64 + r.distance.max(0.0));
+                let score = 1.0f64 / (1.0f64 + r.distance.max(0.0));
                 serde_json::json!({
                     "schema": "omni.vector.search.v1",
                     "id": r.id,
                     "content": r.content,
                     "metadata": r.metadata,
                     "distance": r.distance,
-                    "score": match_score,
+                    "score": score,
                 })
                 .to_string()
             })
-            .collect();
-        xiuxian_vector::search_cache::set_cached(
-            path,
-            table_name,
-            limit,
-            options_json.as_deref(),
-            &query,
-            json_results.clone(),
-        );
-        Ok(json_results)
-    })
-}
-
-/// Run search and return Arrow IPC stream bytes (single RecordBatch) for zero-copy consumption.
-/// See docs/reference/search-result-batch-contract.md.
-pub(crate) fn search_optimized_ipc_async(
-    path: &str,
-    dimension: usize,
-    enable_kw: bool,
-    index_cache_size_bytes: Option<usize>,
-    max_cached_tables: Option<usize>,
-    table_name: &str,
-    query: Vec<f32>,
-    limit: usize,
-    options_json: Option<String>,
-) -> PyResult<Vec<u8>> {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-    rt.block_on(async {
-        let store = super::store::get_or_create_store(
-            path,
-            dimension,
-            enable_kw,
-            index_cache_size_bytes,
-            max_cached_tables,
-        )
-        .await?;
-        let py_options = options_json
-            .as_deref()
-            .map(serde_json::from_str::<PySearchOptions>)
-            .transpose()
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
-            .unwrap_or_default();
-
-        let options = SearchOptions {
-            where_filter: py_options.where_filter,
-            batch_size: py_options.batch_size,
-            fragment_readahead: py_options.fragment_readahead,
-            batch_readahead: py_options.batch_readahead,
-            scan_limit: py_options.scan_limit,
-            ipc_projection: py_options.projection,
-            ..SearchOptions::default()
-        };
-
-        store
-            .search_optimized_ipc(table_name, query, limit, options)
-            .await
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+            .collect())
     })
 }
 
@@ -373,37 +339,20 @@ pub(crate) fn search_hybrid_async(
     path: &str,
     dimension: usize,
     enable_kw: bool,
-    index_cache_size_bytes: Option<usize>,
-    max_cached_tables: Option<usize>,
     table_name: &str,
     query: Vec<f32>,
     query_text: String,
     limit: usize,
 ) -> PyResult<Vec<String>> {
-    if let Some(cached) = xiuxian_vector::search_cache::get_cached_hybrid(
-        path,
-        table_name,
-        limit,
-        &query,
-        &query_text,
-    ) {
-        return Ok(cached);
-    }
-
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = super::store::get_or_create_store(
-            path,
-            dimension,
-            enable_kw,
-            index_cache_size_bytes,
-            max_cached_tables,
-        )
-        .await?;
+        let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         let vector_rows = store
             .search_optimized(
                 table_name,
@@ -419,10 +368,10 @@ pub(crate) fn search_hybrid_async(
         }
 
         let results = store
-            .hybrid_search(table_name, &query_text, query.clone(), limit)
+            .hybrid_search(table_name, &query_text, query, limit)
             .await
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        let json_results: Vec<String> = results
+        Ok(results
             .into_iter()
             .map(|r| {
                 let (content, metadata) = by_id
@@ -441,16 +390,7 @@ pub(crate) fn search_hybrid_async(
                 })
                 .to_string()
             })
-            .collect();
-        xiuxian_vector::search_cache::set_cached_hybrid(
-            path,
-            table_name,
-            limit,
-            &query,
-            &query_text,
-            json_results.clone(),
-        );
-        Ok(json_results)
+            .collect())
     })
 }
 
@@ -458,8 +398,6 @@ pub(crate) fn create_index_async(
     path: &str,
     dimension: usize,
     enable_kw: bool,
-    index_cache_size_bytes: Option<usize>,
-    max_cached_tables: Option<usize>,
     table_name: &str,
 ) -> PyResult<()> {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -468,14 +406,9 @@ pub(crate) fn create_index_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = super::store::get_or_create_store(
-            path,
-            dimension,
-            enable_kw,
-            index_cache_size_bytes,
-            max_cached_tables,
-        )
-        .await?;
+        let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         store
             .create_index(table_name)
             .await
@@ -487,8 +420,6 @@ pub(crate) fn search_tools_async(
     path: &str,
     dimension: usize,
     enable_kw: bool,
-    index_cache_size_bytes: Option<usize>,
-    max_cached_tables: Option<usize>,
     table_name: &str,
     query_vector: Vec<f32>,
     query_text: Option<String>,
@@ -503,28 +434,19 @@ pub(crate) fn search_tools_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = super::store::get_or_create_store(
-            path,
-            dimension,
-            enable_kw,
-            index_cache_size_bytes,
-            max_cached_tables,
-        )
-        .await?;
+        let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
         let results = store
-            .search_tools_with_options(ToolSearchRequest {
+            .search_tools_with_options(
                 table_name,
-                query_vector: &query_vector,
-                query_text: query_text.as_deref(),
+                &query_vector,
+                query_text.as_deref(),
                 limit,
                 threshold,
-                options: ToolSearchOptions {
-                    rerank,
-                    semantic_weight: None,
-                    keyword_weight: None,
-                },
-                where_filter: None,
-            })
+                ToolSearchOptions { rerank },
+            )
             .await
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
@@ -536,222 +458,25 @@ pub(crate) fn search_tools_async(
             .unwrap_or_default()
             .sanitize();
 
-        pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
+        let py_results = pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
             let mut dicts = Vec::with_capacity(results.len());
-            for (idx, r) in results.iter().enumerate() {
-                let second_score = results.get(idx + 1).map(|s| s.score);
-                let (confidence, final_score) = calibrate_confidence_with_attributes(
-                    r.score,
-                    second_score,
-                    r.vector_score,
-                    r.keyword_score,
-                    &confidence_profile,
-                );
+            for r in results {
+                let (confidence, final_score) = calibrate_confidence(r.score, &confidence_profile);
+                let payload = build_tool_search_payload(&r, confidence, final_score);
+                validate_tool_search_common_schema(&payload).map_err(|e| {
+                    pyo3::exceptions::PyValueError::new_err(format!(
+                        "tool_search common schema validation failed: {e}"
+                    ))
+                })?;
                 let dict = pyo3::types::PyDict::new(py);
-                dict.set_item("schema", "omni.vector.tool_search.v1")?;
-                dict.set_item("name", r.name.clone())?;
-                dict.set_item("description", r.description.clone())?;
-                dict.set_item("input_schema", json_value_to_py(py, &r.input_schema)?)?;
-                dict.set_item("score", r.score)?;
-                if let Some(v) = r.vector_score {
-                    dict.set_item("vector_score", v)?;
+                for (k, v) in &payload {
+                    dict.set_item(k, json_value_to_py(py, v)?)?;
                 }
-                if let Some(v) = r.keyword_score {
-                    dict.set_item("keyword_score", v)?;
-                }
-                dict.set_item("final_score", final_score)?;
-                dict.set_item("confidence", confidence)?;
-                dict.set_item(
-                    "ranking_reason",
-                    build_ranking_reason(
-                        r.score,
-                        final_score,
-                        confidence,
-                        r.vector_score,
-                        r.keyword_score,
-                        &r.category,
-                        &r.intents,
-                    ),
-                )?;
-                dict.set_item(
-                    "input_schema_digest",
-                    build_input_schema_digest(&r.input_schema),
-                )?;
-                dict.set_item("skill_name", r.skill_name.clone())?;
-                dict.set_item("tool_name", r.tool_name.clone())?;
-                dict.set_item("file_path", r.file_path.clone())?;
-                dict.set_item("routing_keywords", r.routing_keywords.clone())?;
-                dict.set_item("intents", r.intents.clone())?;
-                dict.set_item("category", r.category.clone())?;
                 dicts.push(dict.into_pyobject(py)?.into());
             }
             Ok(dicts)
-        })
-    })
-}
-
-/// Tool search returning Arrow IPC stream bytes for zero-copy consumption in Python.
-pub(crate) fn search_tools_ipc_async(
-    path: &str,
-    dimension: usize,
-    enable_kw: bool,
-    index_cache_size_bytes: Option<usize>,
-    max_cached_tables: Option<usize>,
-    table_name: &str,
-    query_vector: Vec<f32>,
-    query_text: Option<String>,
-    limit: usize,
-    threshold: f32,
-    rerank: bool,
-) -> PyResult<Vec<u8>> {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-    rt.block_on(async {
-        let store = super::store::get_or_create_store(
-            path,
-            dimension,
-            enable_kw,
-            index_cache_size_bytes,
-            max_cached_tables,
-        )
-        .await?;
-        let bytes = store
-            .search_tools_ipc(ToolSearchRequest {
-                table_name,
-                query_vector: &query_vector,
-                query_text: query_text.as_deref(),
-                limit,
-                threshold,
-                options: ToolSearchOptions {
-                    rerank,
-                    semantic_weight: None,
-                    keyword_weight: None,
-                },
-                where_filter: None,
-            })
-            .await
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        Ok(bytes)
-    })
-}
-
-/// Agentic tool search with intent-based strategy (exact / semantic / hybrid).
-pub(crate) fn agentic_search_async(
-    path: &str,
-    dimension: usize,
-    enable_kw: bool,
-    index_cache_size_bytes: Option<usize>,
-    max_cached_tables: Option<usize>,
-    table_name: &str,
-    query_vector: Vec<f32>,
-    query_text: Option<String>,
-    limit: usize,
-    threshold: f32,
-    intent: Option<String>,
-    confidence_profile_json: Option<String>,
-    rerank: bool,
-    skill_name_filter: Option<String>,
-    category_filter: Option<String>,
-    semantic_weight: Option<f32>,
-    keyword_weight: Option<f32>,
-) -> PyResult<Vec<Py<PyAny>>> {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-    rt.block_on(async {
-        let store = super::store::get_or_create_store(
-            path,
-            dimension,
-            enable_kw,
-            index_cache_size_bytes,
-            max_cached_tables,
-        )
-        .await?;
-        let intent_parsed = intent
-            .as_deref()
-            .and_then(|s| QueryIntent::from_str(s).ok());
-        let config = AgenticSearchConfig {
-            limit,
-            threshold,
-            intent: intent_parsed,
-            tool_options: ToolSearchOptions {
-                rerank,
-                semantic_weight,
-                keyword_weight,
-            },
-            skill_name_filter,
-            category_filter,
-        };
-
-        let results = store
-            .agentic_search(table_name, &query_vector, query_text.as_deref(), config)
-            .await
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        let confidence_profile = confidence_profile_json
-            .as_deref()
-            .map(serde_json::from_str::<ConfidenceProfile>)
-            .transpose()
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
-            .unwrap_or_default()
-            .sanitize();
-
-        pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
-            let mut dicts = Vec::with_capacity(results.len());
-            for (idx, r) in results.iter().enumerate() {
-                let second_score = results.get(idx + 1).map(|s| s.score);
-                let (confidence, final_score) = calibrate_confidence_with_attributes(
-                    r.score,
-                    second_score,
-                    r.vector_score,
-                    r.keyword_score,
-                    &confidence_profile,
-                );
-                let dict = pyo3::types::PyDict::new(py);
-                dict.set_item("schema", "omni.vector.tool_search.v1")?;
-                dict.set_item("name", r.name.clone())?;
-                dict.set_item("description", r.description.clone())?;
-                dict.set_item("input_schema", json_value_to_py(py, &r.input_schema)?)?;
-                dict.set_item("score", r.score)?;
-                if let Some(v) = r.vector_score {
-                    dict.set_item("vector_score", v)?;
-                }
-                if let Some(v) = r.keyword_score {
-                    dict.set_item("keyword_score", v)?;
-                }
-                dict.set_item("final_score", final_score)?;
-                dict.set_item("confidence", confidence)?;
-                dict.set_item(
-                    "ranking_reason",
-                    build_ranking_reason(
-                        r.score,
-                        final_score,
-                        confidence,
-                        r.vector_score,
-                        r.keyword_score,
-                        &r.category,
-                        &r.intents,
-                    ),
-                )?;
-                dict.set_item(
-                    "input_schema_digest",
-                    build_input_schema_digest(&r.input_schema),
-                )?;
-                dict.set_item("skill_name", r.skill_name.clone())?;
-                dict.set_item("tool_name", r.tool_name.clone())?;
-                dict.set_item("file_path", r.file_path.clone())?;
-                dict.set_item("routing_keywords", r.routing_keywords.clone())?;
-                dict.set_item("intents", r.intents.clone())?;
-                dict.set_item("category", r.category.clone())?;
-                dicts.push(dict.into_pyobject(py)?.into());
-            }
-            Ok(dicts)
-        })
+        });
+        py_results
     })
 }
 
@@ -759,8 +484,6 @@ pub(crate) fn load_tool_registry_async(
     path: &str,
     dimension: usize,
     enable_kw: bool,
-    index_cache_size_bytes: Option<usize>,
-    max_cached_tables: Option<usize>,
     table_name: &str,
     confidence_profile_json: Option<String>,
 ) -> PyResult<Vec<Py<PyAny>>> {
@@ -770,14 +493,10 @@ pub(crate) fn load_tool_registry_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = super::store::get_or_create_store(
-            path,
-            dimension,
-            enable_kw,
-            index_cache_size_bytes,
-            max_cached_tables,
-        )
-        .await?;
+        let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
         let results = store
             .load_tool_registry(table_name)
             .await
@@ -791,55 +510,69 @@ pub(crate) fn load_tool_registry_async(
             .unwrap_or_default()
             .sanitize();
 
-        pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
+        let py_results = pyo3::Python::attach(|py| -> PyResult<Vec<Py<PyAny>>> {
             let mut dicts = Vec::with_capacity(results.len());
             for r in results {
                 let (confidence, final_score) = calibrate_confidence(r.score, &confidence_profile);
+                let payload = build_tool_search_payload(&r, confidence, final_score);
+                validate_tool_search_common_schema(&payload).map_err(|e| {
+                    pyo3::exceptions::PyValueError::new_err(format!(
+                        "tool_search common schema validation failed: {e}"
+                    ))
+                })?;
                 let dict = pyo3::types::PyDict::new(py);
-                dict.set_item("schema", "omni.vector.tool_search.v1")?;
-                dict.set_item("name", r.name)?;
-                dict.set_item("description", r.description)?;
-                dict.set_item("input_schema", json_value_to_py(py, &r.input_schema)?)?;
-                dict.set_item("score", r.score)?;
-                if let Some(v) = r.vector_score {
-                    dict.set_item("vector_score", v)?;
+                for (k, v) in &payload {
+                    dict.set_item(k, json_value_to_py(py, v)?)?;
                 }
-                if let Some(v) = r.keyword_score {
-                    dict.set_item("keyword_score", v)?;
-                }
-                dict.set_item("final_score", final_score)?;
-                dict.set_item("confidence", confidence)?;
-                dict.set_item(
-                    "ranking_reason",
-                    build_ranking_reason(
-                        r.score,
-                        final_score,
-                        confidence,
-                        r.vector_score,
-                        r.keyword_score,
-                        &r.category,
-                        &r.intents,
-                    ),
-                )?;
-                dict.set_item(
-                    "input_schema_digest",
-                    build_input_schema_digest(&r.input_schema),
-                )?;
-                dict.set_item("skill_name", r.skill_name)?;
-                dict.set_item("tool_name", r.tool_name)?;
-                dict.set_item("file_path", r.file_path)?;
-                dict.set_item("routing_keywords", r.routing_keywords)?;
-                dict.set_item("intents", r.intents)?;
-                dict.set_item("category", r.category)?;
                 dicts.push(dict.into_pyobject(py)?.into());
             }
             Ok(dicts)
-        })
+        });
+        py_results
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn common_schema_accepts_canonical_payload() {
+        let payload = serde_json::json!({
+            "schema": "omni.vector.tool_search.v1",
+            "name": "git.commit",
+            "tool_name": "git.commit",
+            "description": "Commit changes",
+            "input_schema": {"type": "object"},
+            "score": 0.9,
+            "final_score": 0.95,
+            "confidence": "high",
+            "skill_name": "git",
+            "file_path": "assets/skills/git/scripts/commit.py",
+            "routing_keywords": ["git", "commit"],
+            "intents": [],
+            "category": "write"
+        });
+        let map = payload.as_object().expect("payload object");
+        assert!(validate_tool_search_common_schema(map).is_ok());
+    }
+
+    #[test]
+    fn common_schema_rejects_legacy_keywords_field() {
+        let payload = serde_json::json!({
+            "schema": "omni.vector.tool_search.v1",
+            "name": "git.commit",
+            "tool_name": "git.commit",
+            "keywords": ["git", "commit"]
+        });
+        let map = payload.as_object().expect("payload object");
+        let err = validate_tool_search_common_schema(map).expect_err("should fail");
+        assert!(err.contains("unknown field 'keywords'"));
+    }
+}
+
 pub(crate) fn scan_skill_tools_raw(base_path: &str) -> PyResult<Vec<String>> {
-    use xiuxian_skills::{SkillScanner, ToolRecord, ToolsScanner};
+    use omni_scanner::{SkillScanner, ToolRecord, ToolsScanner};
 
     let skill_scanner = SkillScanner::new();
     let script_scanner = ToolsScanner::new();

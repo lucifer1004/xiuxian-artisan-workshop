@@ -86,15 +86,11 @@ fn is_message_triggered_for_group(message: &serde_json::Value, text: &str) -> bo
     {
         return true;
     }
-    contains_trigger_entity(message.get("entities"))
-        || contains_trigger_entity(message.get("caption_entities"))
-}
-
-fn contains_trigger_entity(entities: Option<&serde_json::Value>) -> bool {
-    entities
+    message
+        .get("entities")
         .and_then(serde_json::Value::as_array)
-        .is_some_and(|items| {
-            items.iter().any(|entity| {
+        .is_some_and(|entities| {
+            entities.iter().any(|entity| {
                 entity
                     .get("type")
                     .and_then(serde_json::Value::as_str)

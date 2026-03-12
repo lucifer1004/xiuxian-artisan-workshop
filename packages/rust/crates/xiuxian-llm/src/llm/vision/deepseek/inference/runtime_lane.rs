@@ -7,8 +7,9 @@ use super::super::runtime::DeepseekRuntime;
 pub(super) fn infer_enabled_runtime(
     runtime: &DeepseekRuntime,
     prepared: &PreparedVisionImage,
+    stop_signal: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 ) -> LlmResult<Option<String>> {
-    super::super::native::infer(runtime, prepared)
+    super::super::native::infer(runtime, prepared, stop_signal)
 }
 
 #[cfg(feature = "vision-dots")]
@@ -20,6 +21,7 @@ pub(super) fn prewarm_enabled_runtime(runtime: &DeepseekRuntime) -> LlmResult<()
 pub(super) fn infer_enabled_runtime(
     runtime: &DeepseekRuntime,
     prepared: &PreparedVisionImage,
+    _stop_signal: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 ) -> LlmResult<Option<String>> {
     let _ = runtime;
     let _ = prepared;

@@ -14,9 +14,8 @@ class TestArrowAnalyticsTable:
     def test_get_analytics_table_returns_pyarrow_table(self):
         """Test that get_analytics_table returns a PyArrow Table."""
         try:
-            import pyarrow as pa
-
             from omni.core.skills.discovery import SkillDiscoveryService
+            import pyarrow as pa
 
             service = SkillDiscoveryService()
             table = service.get_analytics_dataframe()
@@ -42,14 +41,7 @@ class TestArrowAnalyticsTable:
             if table is None:
                 pytest.skip("No data in database, skipping column check")
 
-            expected_columns = [
-                "id",
-                "content",
-                "skill_name",
-                "tool_name",
-                "file_path",
-                "routing_keywords",
-            ]
+            expected_columns = ["id", "content", "skill_name", "tool_name", "file_path", "keywords"]
             for col in expected_columns:
                 assert col in table.column_names, f"Missing expected column: {col}"
 
@@ -124,8 +116,7 @@ class TestSystemContext:
             context = service.generate_system_context()
 
             assert isinstance(context, str), f"Expected str, got {type(context)}"
-            # Environment may have an empty skills index; still valid as long as API is stable.
-            assert len(context) >= 0
+            assert len(context) > 0, "Context should not be empty"
 
         except ImportError as e:
             pytest.skip(f"Required module not available: {e}")
@@ -137,9 +128,6 @@ class TestSystemContext:
 
             service = SkillDiscoveryService()
             context = service.generate_system_context()
-
-            if not context:
-                pytest.skip("System context is empty (no indexed tools)")
 
             # Should contain @omni("tool.name") pattern
             assert '@omni("' in context or "@omni(" in context, (
@@ -157,9 +145,6 @@ class TestSystemContext:
             service = SkillDiscoveryService()
             context = service.generate_system_context()
 
-            if not context:
-                pytest.skip("System context is empty (no indexed tools)")
-
             # Should contain @omni("tool.name") pattern
             assert '@omni("' in context or "@omni(" in context, (
                 "Context should contain @omni tool references"
@@ -172,34 +157,38 @@ class TestSystemContext:
 class TestRustVectorStoreIntegration:
     """Tests for RustVectorStore Arrow integration."""
 
-    def test_rust_vector_store_has_get_analytics_table_sync(self):
-        """Test that RustVectorStore exposes sync analytics table API."""
+    def test_rust_vector_store_has_get_analytics_table(self):
+        """Test that RustVectorStore has get_analytics_table method."""
         try:
             from omni.foundation.bridge.rust_vector import get_vector_store
+            import asyncio
 
-            store = get_vector_store()
-            assert hasattr(store, "get_analytics_table_sync"), (
-                "RustVectorStore should have get_analytics_table_sync method"
-            )
-            assert not hasattr(store, "get_analytics_table"), (
-                "Legacy async analytics table wrapper should be removed"
-            )
+            async def check():
+                store = get_vector_store()
+                assert hasattr(store, "get_analytics_table"), (
+                    "RustVectorStore should have get_analytics_table method"
+                )
+
+            asyncio.run(check())
 
         except ImportError as e:
             pytest.skip(f"Rust bindings not available: {e}")
 
-    def test_rust_vector_store_get_analytics_table_sync_returns_table(self):
-        """Test that get_analytics_table_sync returns a valid PyArrow Table."""
+    def test_rust_vector_store_get_analytics_table_returns_table(self):
+        """Test that get_analytics_table returns a valid PyArrow Table."""
         try:
-            import pyarrow as pa
-
             from omni.foundation.bridge.rust_vector import get_vector_store
+            import pyarrow as pa
+            import asyncio
 
-            store = get_vector_store()
-            table = store.get_analytics_table_sync()
+            async def check():
+                store = get_vector_store()
+                table = await store.get_analytics_table()
 
-            if table is not None:
-                assert isinstance(table, pa.Table), f"Expected PyArrow Table, got {type(table)}"
+                if table is not None:
+                    assert isinstance(table, pa.Table), f"Expected PyArrow Table, got {type(table)}"
+
+            asyncio.run(check())
 
         except ImportError as e:
             pytest.skip(f"Rust bindings not available: {e}")

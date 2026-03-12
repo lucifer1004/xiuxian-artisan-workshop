@@ -15,7 +15,10 @@ impl KeywordIndex {
         if !crate::skill::is_routable_tool_name(name) {
             return Ok(());
         }
-        let mut cache = self.writer_cache.borrow_mut();
+        let mut cache = self
+            .writer_cache
+            .lock()
+            .map_err(|_| VectorStoreError::General("writer cache lock poisoned".to_string()))?;
         if cache.is_none() {
             *cache = Some(
                 self.index
@@ -52,7 +55,10 @@ impl KeywordIndex {
     where
         I: IntoIterator<Item = (String, String, String, Vec<String>, Vec<String>)>,
     {
-        let mut cache = self.writer_cache.borrow_mut();
+        let mut cache = self
+            .writer_cache
+            .lock()
+            .map_err(|_| VectorStoreError::General("writer cache lock poisoned".to_string()))?;
         if cache.is_none() {
             *cache = Some(
                 self.index
@@ -91,7 +97,10 @@ impl KeywordIndex {
     ///
     /// Returns an error when writer creation, document write/commit, or reader reload fails.
     pub fn index_batch(&self, tools: &[ToolSearchResult]) -> Result<(), TantivyError> {
-        let mut cache = self.writer_cache.borrow_mut();
+        let mut cache = self
+            .writer_cache
+            .lock()
+            .map_err(|e| TantivyError::InvalidArgument(e.to_string()))?;
         if cache.is_none() {
             *cache = Some(self.index.writer(100_000_000)?);
         }

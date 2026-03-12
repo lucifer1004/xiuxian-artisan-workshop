@@ -20,8 +20,6 @@ async fn test_ccs_detailed_missing_info_identification() {
         cot_template: "T".to_string(),
         forbidden_words: vec![],
         metadata: HashMap::new(),
-        background: None,
-        guidelines: vec![],
     };
 
     // Scenario: Fact only supports "traceability"

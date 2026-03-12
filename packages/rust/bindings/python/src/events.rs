@@ -3,14 +3,10 @@
 //! Provides synchronous and asynchronous interfaces for consuming events
 //! from the Rust tokio broadcast channel.
 
+use omni_events::{EventBus, GLOBAL_BUS, OmniEvent};
 use pyo3::prelude::*;
 use serde_json::json;
 use std::sync::Arc;
-use xiuxian_event::{EventBus, GLOBAL_BUS, OmniEvent};
-
-fn millis_to_seconds_f64(millis: i64) -> f64 {
-    millis.to_string().parse::<f64>().unwrap_or(0.0) / 1_000.0
-}
 
 /// Python representation of an event
 #[pyclass]
@@ -40,7 +36,7 @@ impl From<OmniEvent> for PyOmniEvent {
             source: e.source,
             topic: e.topic,
             payload: e.payload.to_string(),
-            timestamp: millis_to_seconds_f64(e.timestamp.timestamp_millis()),
+            timestamp: e.timestamp.timestamp_millis() as f64 / 1000.0,
         }
     }
 }
@@ -154,7 +150,7 @@ pub fn publish_event(source: String, topic: String, payload_json: String) -> PyR
     let payload: serde_json::Value = serde_json::from_str(&payload_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid JSON: {}", e)))?;
 
-    let _ = GLOBAL_BUS.publish(OmniEvent::new(&source, &topic, payload));
+    GLOBAL_BUS.publish(OmniEvent::new(&source, &topic, payload));
     Ok(())
 }
 
@@ -162,41 +158,41 @@ pub fn publish_event(source: String, topic: String, payload_json: String) -> PyR
 #[pyfunction]
 /// Returns "file/changed" topic string
 pub fn topic_file_changed() -> String {
-    xiuxian_event::topics::FILE_CHANGED.to_string()
+    omni_events::topics::FILE_CHANGED.to_string()
 }
 
 /// Returns "file/created" topic string
 #[pyfunction]
 pub fn topic_file_created() -> String {
-    xiuxian_event::topics::FILE_CREATED.to_string()
+    omni_events::topics::FILE_CREATED.to_string()
 }
 
 /// Returns "file/deleted" topic string
 #[pyfunction]
 pub fn topic_file_deleted() -> String {
-    xiuxian_event::topics::FILE_DELETED.to_string()
+    omni_events::topics::FILE_DELETED.to_string()
 }
 
 /// Returns "agent/think" topic string
 #[pyfunction]
 pub fn topic_agent_think() -> String {
-    xiuxian_event::topics::AGENT_THINK.to_string()
+    omni_events::topics::AGENT_THINK.to_string()
 }
 
 /// Returns "agent/action" topic string
 #[pyfunction]
 pub fn topic_agent_action() -> String {
-    xiuxian_event::topics::AGENT_ACTION.to_string()
+    omni_events::topics::AGENT_ACTION.to_string()
 }
 
 /// Returns "agent/result" topic string
 #[pyfunction]
 pub fn topic_agent_result() -> String {
-    xiuxian_event::topics::AGENT_RESULT.to_string()
+    omni_events::topics::AGENT_RESULT.to_string()
 }
 
 /// Returns "system/ready" topic string
 #[pyfunction]
 pub fn topic_system_ready() -> String {
-    xiuxian_event::topics::SYSTEM_READY.to_string()
+    omni_events::topics::SYSTEM_READY.to_string()
 }

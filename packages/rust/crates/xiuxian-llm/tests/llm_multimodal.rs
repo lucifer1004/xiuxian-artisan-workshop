@@ -62,20 +62,8 @@ async fn image_bytes_handler() -> (StatusCode, [(&'static str, &'static str); 1]
     )
 }
 
-async fn image_octet_stream_handler() -> (StatusCode, [(&'static str, &'static str); 1], Vec<u8>) {
-    (
-        StatusCode::OK,
-        [("content-type", "application/octet-stream")],
-        vec![
-            0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1_u8, 2_u8, 3_u8,
-        ],
-    )
-}
-
 async fn spawn_image_server() -> Result<(String, tokio::task::JoinHandle<()>)> {
-    let app = Router::new()
-        .route("/img.png", get(image_bytes_handler))
-        .route("/img.bin", get(image_octet_stream_handler));
+    let app = Router::new().route("/img.png", get(image_bytes_handler));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
     let handle = tokio::spawn(async move {
@@ -101,29 +89,6 @@ async fn multimodal_resolver_fetches_http_image_and_encodes_base64() -> Result<(
     let source = resolve_image_source_to_base64(&reqwest::Client::new(), url.as_str()).await?;
     assert_eq!(source.media_type, "image/png");
     assert_eq!(source.data, "AQID");
-    server_handle.abort();
-    Ok(())
-}
-
-#[tokio::test]
-async fn multimodal_resolver_normalizes_octet_stream_data_uri_to_image_mime() -> Result<()> {
-    let source = resolve_image_source_to_base64(
-        &reqwest::Client::new(),
-        "data:application/octet-stream;base64,iVBORw0KGgoBAgM=",
-    )
-    .await?;
-    assert_eq!(source.media_type, "image/png");
-    assert_eq!(source.data, "iVBORw0KGgoBAgM=");
-    Ok(())
-}
-
-#[tokio::test]
-async fn multimodal_resolver_detects_image_mime_from_octet_stream_http_body() -> Result<()> {
-    let (base, server_handle) = spawn_image_server().await?;
-    let url = format!("{base}/img.bin");
-    let source = resolve_image_source_to_base64(&reqwest::Client::new(), url.as_str()).await?;
-    assert_eq!(source.media_type, "image/png");
-    assert_eq!(source.data, "iVBORw0KGgoBAgM=");
     server_handle.abort();
     Ok(())
 }

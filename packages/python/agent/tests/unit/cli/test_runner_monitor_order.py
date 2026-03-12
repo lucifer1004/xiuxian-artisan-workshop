@@ -189,35 +189,3 @@ def test_run_skills_json_mode_skips_cli_decorations(monkeypatch) -> None:
     assert "print_result:True" in events
     assert not any(event.startswith("log:") for event in events)
     assert "err_print" not in events
-
-
-def test_run_skills_reuse_process_non_json_uses_daemon_payload(monkeypatch) -> None:
-    """Non-JSON reuse path should render daemon payload without monitor report."""
-    from omni.agent.cli.runner import run_skills
-
-    events: list[str] = []
-
-    def _fake_payload(*_args, **_kwargs):
-        return 0, '{"status":"success","source":"daemon"}'
-
-    def _fake_print_result(_result: Any, _is_tty: bool, _json_output: bool) -> None:
-        events.append(f"print_result:{_json_output}")
-        assert isinstance(_result, dict)
-        assert _result.get("source") == "daemon"
-
-    monkeypatch.setattr("omni.agent.cli.runner_json.run_skills_json_payload", _fake_payload)
-    monkeypatch.setattr("omni.agent.cli.runner.print_result", _fake_print_result)
-    monkeypatch.setattr(
-        "omni.agent.cli.runner.err_console.print",
-        lambda *args, **kwargs: events.append("err_print"),
-    )
-    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
-
-    run_skills(
-        ["knowledge.search", '{"query":"x"}'],
-        json_output=False,
-        reuse_process=True,
-    )
-
-    assert "print_result:False" in events
-    assert "err_print" not in events

@@ -25,7 +25,7 @@ fn benchmark_budget(local: Duration, ci: Duration) -> Duration {
 }
 
 fn warm_up_tokenizer() {
-    let _ = xiuxian_tokenizer::count_tokens("warmup");
+    let _ = omni_tokenizer::count_tokens("warmup");
 }
 
 /// Generate test text of a given size.
@@ -130,7 +130,7 @@ fn test_token_counting_performance() {
 
     // Count tokens multiple times
     for _ in 0..ITERATIONS {
-        let count = xiuxian_tokenizer::count_tokens(&text);
+        let count = omni_tokenizer::count_tokens(&text);
         assert!(count > 0);
     }
 
@@ -164,7 +164,7 @@ fn test_large_text_tokenization() {
 
     let start = std::time::Instant::now();
 
-    let count = xiuxian_tokenizer::count_tokens(&text);
+    let count = omni_tokenizer::count_tokens(&text);
 
     let elapsed = start.elapsed();
 
@@ -196,7 +196,7 @@ fn test_code_tokenization_performance() {
     let start = std::time::Instant::now();
 
     for _ in 0..10 {
-        let count = xiuxian_tokenizer::count_tokens(&code);
+        let count = omni_tokenizer::count_tokens(&code);
         assert!(count > 0);
     }
 
@@ -228,7 +228,7 @@ fn test_json_tokenization_performance() {
     let start = std::time::Instant::now();
 
     for _ in 0..10 {
-        let count = xiuxian_tokenizer::count_tokens(&json);
+        let count = omni_tokenizer::count_tokens(&json);
         assert!(count > 0);
     }
 
@@ -260,7 +260,7 @@ fn test_truncate_performance() {
     let start = std::time::Instant::now();
 
     for _ in 0..100 {
-        let truncated = xiuxian_tokenizer::truncate(&text, MAX_TOKENS);
+        let truncated = omni_tokenizer::truncate(&text, MAX_TOKENS);
         assert!(!truncated.is_empty());
     }
 
@@ -293,10 +293,7 @@ fn test_batch_token_counting() {
 
     let start = std::time::Instant::now();
 
-    let total_tokens: usize = texts
-        .iter()
-        .map(|t| xiuxian_tokenizer::count_tokens(t))
-        .sum();
+    let total_tokens: usize = texts.iter().map(|t| omni_tokenizer::count_tokens(t)).sum();
 
     let elapsed = start.elapsed();
 
@@ -328,7 +325,7 @@ fn test_varying_text_sizes() {
         let text = generate_test_text(size);
 
         let start = std::time::Instant::now();
-        let count = xiuxian_tokenizer::count_tokens(&text);
+        let count = omni_tokenizer::count_tokens(&text);
         let elapsed = start.elapsed();
 
         println!(
@@ -355,19 +352,19 @@ fn test_varying_text_sizes() {
 #[test]
 fn test_token_counting_correctness() {
     // Simple test cases
-    assert_eq!(xiuxian_tokenizer::count_tokens("hello world"), 2);
-    assert_eq!(xiuxian_tokenizer::count_tokens("hello"), 1);
-    assert_eq!(xiuxian_tokenizer::count_tokens(""), 0);
+    assert_eq!(omni_tokenizer::count_tokens("hello world"), 2);
+    assert_eq!(omni_tokenizer::count_tokens("hello"), 1);
+    assert_eq!(omni_tokenizer::count_tokens(""), 0);
 
     // Code-like text
     let code = generate_code_text(10);
-    let count = xiuxian_tokenizer::count_tokens(&code);
+    let count = omni_tokenizer::count_tokens(&code);
     assert!(count > 0, "Should count some tokens in code");
 
     // Verify truncate reduces token count
     let text = generate_test_text(5000);
-    let truncated = xiuxian_tokenizer::truncate(&text, 50);
-    let truncated_count = xiuxian_tokenizer::count_tokens(&truncated);
+    let truncated = omni_tokenizer::truncate(&text, 50);
+    let truncated_count = omni_tokenizer::count_tokens(&truncated);
     assert!(
         truncated_count <= 50,
         "Truncated text should have <= 50 tokens, got {truncated_count}"
@@ -382,7 +379,7 @@ fn test_token_counter_wrapper() {
     let start = std::time::Instant::now();
 
     for _ in 0..100 {
-        let count = xiuxian_tokenizer::TokenCounter::count_tokens(&text);
+        let count = omni_tokenizer::TokenCounter::count_tokens(&text);
         assert!(count > 0);
     }
 

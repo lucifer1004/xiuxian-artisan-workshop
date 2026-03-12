@@ -52,14 +52,6 @@ pub(crate) async fn handle_inbound_managed_command(
             session::handle_session_partition(channel, msg, command).await;
             true
         }
-        ManagedCommand::SessionAdmin(command) => {
-            session::handle_session_admin(channel, msg, command).await;
-            true
-        }
-        ManagedCommand::SessionInjection(command) => {
-            session::handle_session_injection(agent, channel, msg, &session_id, command).await;
-            true
-        }
         ManagedCommand::JobStatus { job_id, format } => {
             jobs::handle_job_status(channel, msg, job_manager, job_id, format).await;
             true

@@ -1,73 +1,106 @@
-//! Telegram ACL override loading and policy projection tests.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::assigning_clones
+)]
 
 use std::path::PathBuf;
 
-use tempfile::TempDir;
-use xiuxian_daochang::{
-    Channel, TelegramAclOverrides, TelegramChannel, TelegramControlCommandPolicy,
-    TelegramSessionPartition, build_telegram_acl_overrides, load_runtime_settings_from_paths,
+use omni_agent::{
+    Channel, TelegramChannel, TelegramControlCommandPolicy, TelegramSessionPartition,
+    build_telegram_acl_overrides, load_runtime_settings_from_paths,
 };
-
-const STRUCTURED_ACL_TOML: &str = r#"
-[telegram.acl.allow]
-users = ["1001", "1002"]
-groups = ["-2001", "*"]
-
-[telegram.acl.admin]
-users = ["1001"]
-
-[telegram.acl.control.allow_from]
-users = ["1001", "ops"]
-
-[[telegram.acl.control.rules]]
-commands = ["/session partition"]
-
-[telegram.acl.control.rules.allow]
-users = ["1001"]
-
-[[telegram.acl.control.rules]]
-commands = ["/reset", "/clear"]
-
-[telegram.acl.control.rules.allow]
-users = ["2001"]
-
-[telegram.acl.slash.global]
-users = ["1001", "ops"]
-
-[telegram.acl.slash.session_status]
-users = ["observer"]
-
-[telegram.acl.slash.session_budget]
-users = ["observer"]
-
-[telegram.acl.slash.session_memory]
-users = ["editor"]
-
-[telegram.acl.slash.session_feedback]
-users = ["editor"]
-
-[telegram.acl.slash.job_status]
-users = ["runner"]
-
-[telegram.acl.slash.jobs_summary]
-users = ["runner"]
-
-[telegram.acl.slash.background_submit]
-users = ["runner"]
-"#;
+use tempfile::TempDir;
 
 fn write_file(path: PathBuf, content: &str) {
-    if let Some(parent) = path.parent()
-        && let Err(error) = std::fs::create_dir_all(parent)
-    {
-        panic!("create parent dir: {error}");
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("create parent dir");
     }
-    if let Err(error) = std::fs::write(path, content) {
-        panic!("write toml: {error}");
-    }
+    std::fs::write(path, content).expect("write yaml");
 }
 
-fn assert_control_rule_projection(overrides: &TelegramAclOverrides) {
+#[test]
+fn telegram_acl_overrides_build_from_structured_acl() {
+    let tmp = TempDir::new().expect("tempdir");
+    let system = tmp.path().join("packages/conf/settings.yaml");
+    let user = tmp.path().join(".config/omni-dev-fusion/settings.yaml");
+
+    write_file(
+        system.clone(),
+        r#"
+telegram:
+  acl:
+    allow:
+      users: ["1001", "1002"]
+      groups: ["-2001", "*"]
+    admin:
+      users: ["1001"]
+    control:
+      allow_from:
+        users: ["1001", "ops"]
+      rules:
+        - commands: ["/session partition"]
+          allow:
+            users: ["1001"]
+        - commands: ["/reset", "/clear"]
+          allow:
+            users: ["2001"]
+    slash:
+      global:
+        users: ["1001", "ops"]
+      session_status:
+        users: ["observer"]
+      session_budget:
+        users: ["observer"]
+      session_memory:
+        users: ["editor"]
+      session_feedback:
+        users: ["editor"]
+      job_status:
+        users: ["runner"]
+      jobs_summary:
+        users: ["runner"]
+      background_submit:
+        users: ["runner"]
+"#,
+    );
+    write_file(user.clone(), "");
+
+    let settings = load_runtime_settings_from_paths(&system, &user);
+    let overrides = build_telegram_acl_overrides(&settings).expect("telegram acl overrides");
+
+    assert_eq!(overrides.allowed_users, vec!["1001", "1002"]);
+    assert_eq!(overrides.allowed_groups, vec!["-2001", "*"]);
+    assert_eq!(overrides.admin_users, vec!["1001"]);
+    assert_eq!(
+        overrides.control_command_allow_from,
+        Some(vec!["1001".to_string(), "ops".to_string()])
+    );
     assert_eq!(overrides.control_command_rules.len(), 2);
     let channel = TelegramChannel::new_with_partition_and_control_command_policy(
         "fake-token".to_string(),
@@ -79,16 +112,14 @@ fn assert_control_rule_projection(overrides: &TelegramAclOverrides) {
             overrides.control_command_rules.clone(),
         ),
         TelegramSessionPartition::ChatUser,
-    );
+    )
+    .expect("typed control rules should compile");
     assert!(channel.is_authorized_for_control_command("1001", "/session partition"));
     assert!(channel.is_authorized_for_control_command("2001", "/reset"));
     assert!(
         !channel.is_authorized_for_control_command("9001", "/session partition"),
         "matched command-scoped rule should override admin fallback",
     );
-}
-
-fn assert_slash_acl_projection(overrides: &TelegramAclOverrides) {
     assert_eq!(
         overrides.slash_command_allow_from,
         Some(vec!["1001".to_string(), "ops".to_string()])
@@ -124,78 +155,37 @@ fn assert_slash_acl_projection(overrides: &TelegramAclOverrides) {
 }
 
 #[test]
-fn telegram_acl_overrides_build_from_structured_acl() {
-    let tmp = match TempDir::new() {
-        Ok(tmp) => tmp,
-        Err(error) => panic!("tempdir: {error}"),
-    };
-    let system = tmp
-        .path()
-        .join("packages/rust/crates/xiuxian-daochang/resources/config/xiuxian.toml");
-    let user = tmp
-        .path()
-        .join(".config/xiuxian-artisan-workshop/xiuxian.toml");
-
-    write_file(system.clone(), STRUCTURED_ACL_TOML);
-    write_file(user.clone(), "");
-
-    let settings = load_runtime_settings_from_paths(&system, &user);
-    let overrides = match build_telegram_acl_overrides(&settings) {
-        Ok(overrides) => overrides,
-        Err(error) => panic!("telegram acl overrides: {error}"),
-    };
-
-    assert_eq!(overrides.allowed_users, vec!["1001", "1002"]);
-    assert_eq!(overrides.allowed_groups, vec!["-2001", "*"]);
-    assert_eq!(overrides.admin_users, vec!["1001"]);
-    assert_eq!(
-        overrides.control_command_allow_from,
-        Some(vec!["1001".to_string(), "ops".to_string()])
-    );
-    assert_control_rule_projection(&overrides);
-    assert_slash_acl_projection(&overrides);
-}
-
-#[test]
 fn telegram_acl_overrides_use_user_settings_for_acl_merge() {
-    let tmp = match TempDir::new() {
-        Ok(tmp) => tmp,
-        Err(error) => panic!("tempdir: {error}"),
-    };
-    let system = tmp
-        .path()
-        .join("packages/rust/crates/xiuxian-daochang/resources/config/xiuxian.toml");
-    let user = tmp
-        .path()
-        .join(".config/xiuxian-artisan-workshop/xiuxian.toml");
+    let tmp = TempDir::new().expect("tempdir");
+    let system = tmp.path().join("packages/conf/settings.yaml");
+    let user = tmp.path().join(".config/omni-dev-fusion/settings.yaml");
 
     write_file(
         system.clone(),
         r#"
-[telegram.acl.allow]
-users = ["1001"]
-groups = ["-2001"]
-
-[telegram.acl.admin]
-users = ["1001"]
+telegram:
+  acl:
+    allow:
+      users: ["1001"]
+      groups: ["-2001"]
+    admin:
+      users: ["1001"]
 "#,
     );
     write_file(
         user.clone(),
         r#"
-[telegram.acl.allow]
-users = ["2002"]
-
-[telegram.acl.admin]
-users = ["2002"]
+telegram:
+  acl:
+    allow:
+      users: ["2002"]
+    admin:
+      users: ["2002"]
 "#,
     );
 
     let settings = load_runtime_settings_from_paths(&system, &user);
-    let overrides = match build_telegram_acl_overrides(&settings) {
-        Ok(overrides) => overrides,
-        Err(error) => panic!("telegram acl overrides: {error}"),
-    };
+    let overrides = build_telegram_acl_overrides(&settings).expect("telegram acl overrides");
 
     assert_eq!(overrides.allowed_users, vec!["2002"]);
     assert_eq!(
@@ -208,37 +198,30 @@ users = ["2002"]
 
 #[test]
 fn telegram_acl_overrides_reject_invalid_control_rule_with_field_path() {
-    let tmp = match TempDir::new() {
-        Ok(tmp) => tmp,
-        Err(error) => panic!("tempdir: {error}"),
-    };
-    let system = tmp
-        .path()
-        .join("packages/rust/crates/xiuxian-daochang/resources/config/xiuxian.toml");
-    let user = tmp
-        .path()
-        .join(".config/xiuxian-artisan-workshop/xiuxian.toml");
+    let tmp = TempDir::new().expect("tempdir");
+    let system = tmp.path().join("packages/conf/settings.yaml");
+    let user = tmp.path().join(".config/omni-dev-fusion/settings.yaml");
 
     write_file(
         system.clone(),
         r#"
-[[telegram.acl.control.rules]]
-commands = ["session*"]
-
-[telegram.acl.control.rules.allow]
-users = ["1001"]
+telegram:
+  acl:
+    control:
+      rules:
+        - commands: ["session*"]
+          allow:
+            users: ["1001"]
 "#,
     );
     write_file(user, "");
 
     let settings = load_runtime_settings_from_paths(
         &system,
-        &tmp.path()
-            .join(".config/xiuxian-artisan-workshop/xiuxian.toml"),
+        &tmp.path().join(".config/omni-dev-fusion/settings.yaml"),
     );
-    let Err(error) = build_telegram_acl_overrides(&settings) else {
-        panic!("invalid command selector should fail fast");
-    };
+    let error = build_telegram_acl_overrides(&settings)
+        .expect_err("invalid command selector should fail fast");
     assert!(
         error
             .to_string()

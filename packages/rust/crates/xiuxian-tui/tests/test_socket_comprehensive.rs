@@ -1,4 +1,4 @@
-//! Comprehensive tests for xiuxian-tui socket server
+//! Comprehensive tests for omni-tui socket server
 //!
 //! Tests cover:
 //! - Server lifecycle (start/stop)
@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::TempDir;
 
-use xiuxian_tui::socket::{SocketEvent, SocketServer, send_event};
+use omni_tui::socket::{SocketEvent, SocketServer, send_event};
 
 fn must_ok<T, E: std::fmt::Display>(value: Result<T, E>, context: &str) -> T {
     match value {

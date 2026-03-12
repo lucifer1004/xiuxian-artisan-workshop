@@ -4,10 +4,10 @@ Database Path Utilities.
 
 Provides database path management for:
 - Vector databases (LanceDB)
-- Workflow state checkpoint root
+- Checkpoint database
 - Memory database (Hippocampus)
 
-Reads configuration from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml).
+Reads configuration from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml).
 
 Sync vs reindex: Both use get_database_path(name) for each DB (skills, router,
 knowledge, memory) so that "omni sync" and "omni reindex [component]" write
@@ -72,30 +72,26 @@ def get_database_path(name: str) -> str:
 
 
 def get_checkpoint_db_path() -> Path:
-    """Get the workflow-state checkpoint root path.
+    """Get the checkpoint database path from settings.
 
-    Current default backend is file-based and stores workflow snapshots under
-    ``$PRJ_RUNTIME_DIR/<root_subdir>``. The ``workflow_state.root_subdir``
-    setting controls the subdirectory and defaults to
-    ``xiuxian_qianji/workflow_state``.
+    Reads from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) -> checkpoint.db_path
+    Supports both relative (to project root) and absolute paths.
 
-    For compatibility, legacy ``checkpoint.db_path`` is still accepted when
-    present and resolved exactly as before.
+    Returns:
+        Path to the LanceDB checkpoint database
+
+    Usage:
+        >>> from omni.foundation.config.database import get_checkpoint_db_path
+        >>> checkpoint_path = get_checkpoint_db_path()
+        >>> # Returns: /project/.cache/checkpoints.lance
     """
     from omni.foundation.config.settings import get_setting
 
-    root_subdir = get_setting("workflow_state.root_subdir")
-    if root_subdir:
-        from omni.foundation.config.prj import get_runtime_dir
-
-        return get_runtime_dir(str(root_subdir))
-
-    # Legacy compatibility fallback (historical LanceDB checkpoint path).
     db_path = get_setting("checkpoint.db_path")
     if not db_path:
-        from omni.foundation.config.prj import get_runtime_dir
+        from omni.foundation.config.prj import get_cache_dir
 
-        return get_runtime_dir("xiuxian_qianji/workflow_state")
+        return get_cache_dir("checkpoints.lance")
 
     # Check if absolute path
     if Path(db_path).is_absolute():
@@ -119,9 +115,7 @@ def get_checkpoint_table_name(workflow_type: str) -> str:
     """
     from omni.foundation.config.settings import get_setting
 
-    prefix = get_setting("workflow_state.table_prefix") or get_setting("checkpoint.table_prefix")
-    if not prefix:
-        prefix = "checkpoint_"
+    prefix = get_setting("checkpoint.table_prefix")
     return f"{prefix}{workflow_type}"
 
 
@@ -154,11 +148,11 @@ def get_knowledge_graph_scope_key() -> str:
 
 
 __all__ = [
+    "get_vector_db_path",
+    "get_database_paths",
+    "get_database_path",
     "get_checkpoint_db_path",
     "get_checkpoint_table_name",
-    "get_database_path",
-    "get_database_paths",
     "get_knowledge_graph_scope_key",
     "get_memory_db_path",
-    "get_vector_db_path",
 ]

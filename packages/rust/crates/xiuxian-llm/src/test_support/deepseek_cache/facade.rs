@@ -1,5 +1,3 @@
-use crate::llm::vision::PreparedVisionImage;
-
 use super::key::DeepseekCacheKeyInput;
 use super::{key, local, text, valkey, write};
 
@@ -11,28 +9,6 @@ impl DeepseekCacheTestFacade {
     #[must_use]
     pub fn build_cache_key(input: &DeepseekCacheKeyInput<'_>) -> String {
         key::build_cache_key(input)
-    }
-
-    /// Build `DeepSeek` OCR cache key from a prepared image for test assertions.
-    #[must_use]
-    pub fn build_cache_key_from_prepared(
-        model_root: &str,
-        prepared: &PreparedVisionImage,
-        prompt: &str,
-        base_size: u32,
-        image_size: u32,
-        crop_mode: bool,
-        max_new_tokens: usize,
-    ) -> String {
-        key::build_cache_key_from_prepared(
-            model_root,
-            prepared,
-            prompt,
-            base_size,
-            image_size,
-            crop_mode,
-            max_new_tokens,
-        )
     }
 
     /// Evaluate `DeepSeek` Valkey GET path with explicit cache settings for tests.
@@ -87,27 +63,6 @@ impl DeepseekCacheTestFacade {
     /// Clear all `DeepSeek` local cache entries for deterministic tests.
     pub fn local_clear() {
         local::clear();
-    }
-
-    /// Return the number of prepared-image fingerprint cache entries.
-    #[must_use]
-    pub fn fingerprint_cache_len() -> usize {
-        #[cfg(feature = "vision-dots")]
-        {
-            crate::llm::vision::deepseek::fingerprint_cache_len_for_tests()
-        }
-        #[cfg(not(feature = "vision-dots"))]
-        {
-            0
-        }
-    }
-
-    /// Clear prepared-image fingerprint cache entries for deterministic tests.
-    pub fn fingerprint_cache_clear() {
-        #[cfg(feature = "vision-dots")]
-        {
-            crate::llm::vision::deepseek::fingerprint_cache_clear_for_tests();
-        }
     }
 
     /// Execute deepseek cache write pipeline (local + optional valkey) for tests.

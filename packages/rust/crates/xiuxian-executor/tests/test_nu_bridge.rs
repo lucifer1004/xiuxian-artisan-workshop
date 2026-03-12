@@ -1,279 +1,207 @@
-//! Integration tests for Nushell system bridge.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::manual_assert,
+    clippy::manual_string_new,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::async_yields_async,
+    clippy::assigning_clones
+)]
 
-use std::fmt::Display;
-use std::fs;
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
-use xiuxian_executor::{ActionType, NuConfig, NuSystemBridge};
+use super::*;
 
-fn must_ok<T, E: Display>(result: Result<T, E>, context: &str) -> T {
-    match result {
-        Ok(value) => value,
-        Err(error) => panic!("{context}: {error}"),
+fn mcp_server(url: &str) -> McpServerEntry {
+    McpServerEntry {
+        name: "local-mcp".to_string(),
+        url: Some(url.to_string()),
+        command: None,
+        args: None,
     }
 }
 
-fn must_some<T>(value: Option<T>, context: &str) -> T {
-    match value {
-        Some(inner) => inner,
-        None => panic!("{context}"),
-    }
-}
-
-fn create_temp_dir(prefix: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let dir = std::env::temp_dir().join(format!("{prefix}_{}_{}", std::process::id(), nanos));
-    must_ok(fs::create_dir_all(&dir), "failed to create temp dir");
-    dir
+#[test]
+fn resolve_inference_url_prefers_default_litellm_when_env_absent() {
+    let resolved = resolve_inference_url(None, None);
+    assert_eq!(resolved, LITELLM_DEFAULT_URL);
 }
 
 #[test]
-fn test_new_bridge_has_default_config() {
-    let bridge = NuSystemBridge::new();
-    assert_eq!(bridge.config.nu_path, "nu");
-    assert!(bridge.config.enable_shellcheck);
+fn resolve_inference_url_normalizes_completion_path() {
+    let resolved = resolve_inference_url(Some("http://127.0.0.1:4000"), None);
+    assert_eq!(resolved, "http://127.0.0.1:4000/v1/chat/completions");
 }
 
 #[test]
-fn test_bridge_with_custom_config() {
-    let config = NuConfig {
-        nu_path: "/usr/bin/nu".to_string(),
-        enable_shellcheck: false,
-        ..Default::default()
-    };
-    let bridge = NuSystemBridge::with_config(config);
-
-    assert_eq!(bridge.config.nu_path, "/usr/bin/nu");
-    assert!(!bridge.config.enable_shellcheck);
+fn resolve_inference_url_does_not_duplicate_v1_path() {
+    let resolved = resolve_inference_url(Some("https://api.minimax.io/v1"), None);
+    assert_eq!(resolved, "https://api.minimax.io/v1/chat/completions");
 }
 
 #[test]
-fn test_classify_action_ls() {
-    assert_eq!(NuSystemBridge::classify_action("ls"), ActionType::Observe);
+fn validate_inference_url_origin_rejects_same_origin_as_mcp_by_default() {
+    let servers = vec![mcp_server("http://127.0.0.1:3002/sse")];
+    let err =
+        validate_inference_url_origin("http://127.0.0.1:3002/v1/chat/completions", &servers, false)
+            .expect_err("shared origin should be rejected by default");
+    let message = format!("{err:#}");
+    assert!(message.contains("invalid inference URL"));
+    assert!(message.contains("OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN=true"));
+}
+
+#[test]
+fn validate_inference_url_origin_allows_distinct_origin() {
+    let servers = vec![mcp_server("http://127.0.0.1:3002/sse")];
+    validate_inference_url_origin("http://127.0.0.1:4000/v1/chat/completions", &servers, false)
+        .expect("distinct origin should be valid");
+}
+
+#[test]
+fn validate_inference_url_origin_allows_shared_origin_when_opted_in() {
+    let servers = vec![mcp_server("http://127.0.0.1:3002/sse")];
+    validate_inference_url_origin("http://127.0.0.1:3002/v1/chat/completions", &servers, true)
+        .expect("opt-in should allow shared origin");
+}
+
+#[test]
+fn parse_embedding_backend_mode_supports_litellm_aliases() {
     assert_eq!(
-        NuSystemBridge::classify_action("ls -la"),
-        ActionType::Observe
-    );
-}
-
-#[test]
-fn test_classify_action_cat() {
-    assert_eq!(
-        NuSystemBridge::classify_action("cat file.txt"),
-        ActionType::Observe
-    );
-}
-
-#[test]
-fn test_classify_action_rm() {
-    assert_eq!(
-        NuSystemBridge::classify_action("rm file.txt"),
-        ActionType::Mutate
-    );
-}
-
-#[test]
-fn test_classify_action_cp() {
-    assert_eq!(
-        NuSystemBridge::classify_action("cp a b"),
-        ActionType::Mutate
-    );
-}
-
-#[test]
-fn test_classify_action_mv() {
-    assert_eq!(
-        NuSystemBridge::classify_action("mv old new"),
-        ActionType::Mutate
-    );
-}
-
-#[test]
-fn test_classify_action_mkdir() {
-    assert_eq!(
-        NuSystemBridge::classify_action("mkdir -p dir"),
-        ActionType::Mutate
-    );
-}
-
-#[test]
-fn test_classify_action_echo() {
-    assert_eq!(
-        NuSystemBridge::classify_action("echo hello"),
-        ActionType::Mutate
-    );
-}
-
-#[test]
-fn test_classify_action_with_pipe() {
-    assert_eq!(
-        NuSystemBridge::classify_action("ls | grep txt"),
-        ActionType::Observe
+        parse_embedding_backend_mode(Some("litellm_rs")),
+        Some(RuntimeEmbeddingBackendMode::LiteLlmRs)
     );
     assert_eq!(
-        NuSystemBridge::classify_action("cat file.txt | wc -l"),
-        ActionType::Observe
+        parse_embedding_backend_mode(Some("litellm-rs")),
+        Some(RuntimeEmbeddingBackendMode::LiteLlmRs)
+    );
+    assert_eq!(
+        parse_embedding_backend_mode(Some("provider")),
+        Some(RuntimeEmbeddingBackendMode::LiteLlmRs)
     );
 }
 
 #[test]
-fn test_validate_safety_allows_safe_commands() {
-    let bridge = NuSystemBridge::new();
-
-    assert!(bridge.validate_safety("ls -la").is_ok());
-    assert!(bridge.validate_safety("cat config.toml").is_ok());
-    assert!(bridge.validate_safety("pwd").is_ok());
-    assert!(bridge.validate_safety("echo hello").is_ok());
-}
-
-#[test]
-fn test_validate_safety_blocks_dangerous() {
-    let bridge = NuSystemBridge::new();
-
-    assert!(bridge.validate_safety("rm -rf /").is_err());
-    assert!(bridge.validate_safety("mkfs.ext4 /dev/sda").is_err());
-}
-
-#[test]
-fn test_validate_safety_blocks_fork_bomb() {
-    let bridge = NuSystemBridge::new();
-
-    assert!(bridge.validate_safety(":(){ :|:& };:").is_err());
-}
-
-#[test]
-fn test_validate_safety_repeated_command_is_stable() {
-    let bridge = NuSystemBridge::new();
-    let cmd = "echo hello";
-
-    assert!(bridge.validate_safety(cmd).is_ok());
-    assert!(bridge.validate_safety(cmd).is_ok());
-}
-
-#[test]
-fn test_config_default_values() {
-    let config = NuConfig::default();
-
-    assert_eq!(config.nu_path, "nu");
-    assert!(config.no_config);
-    assert!(config.enable_shellcheck);
-    assert!(config.allowed_commands.is_empty());
-}
-
-#[test]
-fn test_config_with_whitelist() {
-    let config = NuConfig {
-        allowed_commands: vec!["ls".to_string(), "cat".to_string()],
-        ..Default::default()
-    };
-    let bridge = NuSystemBridge::with_config(config);
-
-    assert!(bridge.validate_safety("ls file.txt").is_ok());
-    assert!(bridge.validate_safety("cat file.txt").is_ok());
-    assert!(bridge.validate_safety("rm file.txt").is_err());
-}
-
-#[test]
-fn test_action_type_variants() {
-    assert_eq!(ActionType::Observe, ActionType::Observe);
-    assert_eq!(ActionType::Mutate, ActionType::Mutate);
-    assert_ne!(ActionType::Observe, ActionType::Mutate);
-}
-
-#[test]
-fn test_execute_observe_ls_fast_path_works_without_nu_binary() {
-    let bridge = NuSystemBridge::with_config(NuConfig {
-        nu_path: "/path/that/does/not/exist/nu".to_string(),
-        enable_shellcheck: false,
-        ..Default::default()
-    });
-
-    let result = bridge.execute_with_action("ls .", ActionType::Observe, true);
-    assert!(result.is_ok());
-    assert!(must_ok(result, "ls fast-path should succeed").is_array());
-}
-
-#[test]
-fn test_execute_observe_ls_fast_path_hides_dotfiles_by_default() {
-    let temp_dir = create_temp_dir("xiuxian_executor_ls_default");
-    must_ok(
-        fs::write(temp_dir.join("visible.txt"), b"visible"),
-        "failed to create visible file",
+fn parse_embedding_backend_mode_supports_mistral_aliases() {
+    assert_eq!(
+        parse_embedding_backend_mode(Some("mistral_rs")),
+        Some(RuntimeEmbeddingBackendMode::OpenAiHttp)
     );
-    must_ok(
-        fs::write(temp_dir.join(".hidden.txt"), b"hidden"),
-        "failed to create hidden file",
+    assert_eq!(
+        parse_embedding_backend_mode(Some("mistral-http")),
+        Some(RuntimeEmbeddingBackendMode::OpenAiHttp)
     );
-
-    let bridge = NuSystemBridge::with_config(NuConfig {
-        nu_path: "/path/that/does/not/exist/nu".to_string(),
-        enable_shellcheck: false,
-        ..Default::default()
-    });
-    let command = format!("ls {}", temp_dir.display());
-    let response = must_ok(
-        bridge.execute_with_action(&command, ActionType::Observe, true),
-        "ls fast-path should succeed",
+    assert_eq!(
+        parse_embedding_backend_mode(Some("openai_http")),
+        Some(RuntimeEmbeddingBackendMode::OpenAiHttp)
     );
-    let rows = must_some(
-        response.as_array().cloned(),
-        "ls fast-path should return array",
-    );
-
-    let names: Vec<String> = rows
-        .iter()
-        .filter_map(|row| {
-            row.get("name")
-                .and_then(|v| v.as_str())
-                .map(ToOwned::to_owned)
-        })
-        .collect();
-    assert!(names.iter().any(|name| name == "visible.txt"));
-    assert!(!names.iter().any(|name| name == ".hidden.txt"));
-
-    let _ = fs::remove_dir_all(&temp_dir);
 }
 
 #[test]
-fn test_execute_observe_ls_fast_path_can_include_dotfiles() {
-    let temp_dir = create_temp_dir("xiuxian_executor_ls_all");
-    must_ok(
-        fs::write(temp_dir.join("visible.txt"), b"visible"),
-        "failed to create visible file",
-    );
-    must_ok(
-        fs::write(temp_dir.join(".hidden.txt"), b"hidden"),
-        "failed to create hidden file",
-    );
+fn resolve_runtime_embedding_base_url_prefers_http_client_url_for_http_backend() {
+    let mut settings = RuntimeSettings::default();
+    settings.embedding.client_url = Some("http://127.0.0.1:3002".to_string());
+    settings.embedding.litellm_api_base = Some("http://127.0.0.1:11434".to_string());
 
-    let bridge = NuSystemBridge::with_config(NuConfig {
-        nu_path: "/path/that/does/not/exist/nu".to_string(),
-        enable_shellcheck: false,
-        ..Default::default()
-    });
-    let command = format!("ls -a {}", temp_dir.display());
-    let response = must_ok(
-        bridge.execute_with_action(&command, ActionType::Observe, true),
-        "ls fast-path should succeed",
-    );
-    let rows = must_some(
-        response.as_array().cloned(),
-        "ls fast-path should return array",
-    );
+    let resolved = resolve_runtime_embedding_base_url(&settings, RuntimeEmbeddingBackendMode::Http);
+    assert_eq!(resolved.as_deref(), Some("http://127.0.0.1:3002"));
+}
 
-    let names: Vec<String> = rows
-        .iter()
-        .filter_map(|row| {
-            row.get("name")
-                .and_then(|v| v.as_str())
-                .map(ToOwned::to_owned)
-        })
-        .collect();
-    assert!(names.iter().any(|name| name == "visible.txt"));
-    assert!(names.iter().any(|name| name == ".hidden.txt"));
+#[test]
+fn resolve_runtime_embedding_base_url_prefers_litellm_api_base_for_litellm_backend() {
+    let mut settings = RuntimeSettings::default();
+    settings.embedding.client_url = Some("http://127.0.0.1:3002".to_string());
+    settings.embedding.litellm_api_base = Some("http://127.0.0.1:11434".to_string());
 
-    let _ = fs::remove_dir_all(&temp_dir);
+    let resolved =
+        resolve_runtime_embedding_base_url(&settings, RuntimeEmbeddingBackendMode::LiteLlmRs);
+    assert_eq!(resolved.as_deref(), Some("http://127.0.0.1:11434"));
+}
+
+#[test]
+fn resolve_runtime_embedding_base_url_prefers_litellm_api_base_for_openai_backend() {
+    let mut settings = RuntimeSettings::default();
+    settings.embedding.client_url = Some("http://127.0.0.1:3002".to_string());
+    settings.embedding.litellm_api_base = Some("http://127.0.0.1:1234".to_string());
+
+    let resolved =
+        resolve_runtime_embedding_base_url(&settings, RuntimeEmbeddingBackendMode::OpenAiHttp);
+    assert_eq!(resolved.as_deref(), Some("http://127.0.0.1:1234"));
+}
+
+#[test]
+fn resolve_runtime_embedding_backend_mode_prefers_memory_override() {
+    let mut settings = RuntimeSettings::default();
+    settings.memory.embedding_backend = Some("http".to_string());
+    settings.embedding.backend = Some("litellm_rs".to_string());
+
+    let resolved = resolve_runtime_embedding_backend_mode(&settings);
+    assert_eq!(resolved, RuntimeEmbeddingBackendMode::Http);
+}
+
+#[test]
+fn resolve_runtime_embedding_base_url_prefers_memory_base_url_override() {
+    let mut settings = RuntimeSettings::default();
+    settings.memory.embedding_base_url = Some("http://127.0.0.1:3002".to_string());
+    settings.embedding.client_url = Some("http://127.0.0.1:3900".to_string());
+    settings.embedding.litellm_api_base = Some("http://127.0.0.1:11434".to_string());
+
+    let resolved = resolve_runtime_embedding_base_url(&settings, RuntimeEmbeddingBackendMode::Http);
+    assert_eq!(resolved.as_deref(), Some("http://127.0.0.1:3002"));
+}
+
+#[test]
+fn resolve_runtime_embedding_base_url_prefers_litellm_api_base_over_memory_base_for_litellm() {
+    let mut settings = RuntimeSettings::default();
+    settings.memory.embedding_base_url = Some("http://127.0.0.1:3002".to_string());
+    settings.embedding.litellm_api_base = Some("http://127.0.0.1:11434".to_string());
+    settings.embedding.client_url = Some("http://127.0.0.1:3900".to_string());
+
+    let resolved =
+        resolve_runtime_embedding_base_url(&settings, RuntimeEmbeddingBackendMode::LiteLlmRs);
+    assert_eq!(resolved.as_deref(), Some("http://127.0.0.1:11434"));
+}
+
+#[test]
+fn resolve_runtime_memory_options_uses_embedding_timeout_secs_as_memory_default() {
+    let mut settings = RuntimeSettings::default();
+    settings.embedding.timeout_secs = Some(42);
+
+    let resolved = resolve_runtime_memory_options(&settings);
+    assert_eq!(resolved.config.embedding_timeout_ms, Some(42_000));
+}
+
+#[test]
+fn resolve_runtime_memory_options_prefers_memory_timeout_over_embedding_timeout_secs() {
+    let mut settings = RuntimeSettings::default();
+    settings.embedding.timeout_secs = Some(90);
+    settings.memory.embedding_timeout_ms = Some(5_500);
+
+    let resolved = resolve_runtime_memory_options(&settings);
+    assert_eq!(resolved.config.embedding_timeout_ms, Some(5_500));
 }

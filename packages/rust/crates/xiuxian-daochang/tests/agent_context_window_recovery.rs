@@ -1,8 +1,38 @@
-//! Agent context-window recovery tests for overflow and retried completion.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::Result;
@@ -10,7 +40,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
-use xiuxian_daochang::{Agent, AgentConfig, set_config_home_override};
+use omni_agent::{Agent, AgentConfig};
 
 #[derive(Clone)]
 struct LlmRecoveryState {
@@ -123,29 +153,7 @@ async fn spawn_non_context_error_server()
     )))
 }
 
-fn ensure_http_llm_backend_for_tests() {
-    static CONFIG_HOME: OnceLock<PathBuf> = OnceLock::new();
-    let path = CONFIG_HOME.get_or_init(|| {
-        let root = std::env::temp_dir()
-            .join("xiuxian-daochang-tests")
-            .join("agent_context_window_recovery");
-        let settings_dir = root.join("xiuxian-artisan-workshop");
-        if let Err(error) = std::fs::create_dir_all(&settings_dir) {
-            panic!("create isolated config home for tests: {error}");
-        }
-        if let Err(error) = std::fs::write(
-            settings_dir.join("xiuxian.toml"),
-            "[agent]\nllm_backend = \"http\"\nagenda_validation_policy = \"never\"\n",
-        ) {
-            panic!("write isolated runtime settings for tests: {error}");
-        }
-        root
-    });
-    set_config_home_override(path.clone());
-}
-
 fn base_agent_config(inference_url: String) -> AgentConfig {
-    ensure_http_llm_backend_for_tests();
     AgentConfig {
         inference_url,
         model: "test-model".to_string(),

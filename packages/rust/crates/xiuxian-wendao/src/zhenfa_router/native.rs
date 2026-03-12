@@ -1,6 +1,5 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
-use serde_json::{Value, json};
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
 use crate::link_graph::LinkGraphPlannedSearchPayload;
@@ -80,13 +79,18 @@ impl WendaoContextExt for ZhenfaContext {
 }
 
 /// Search the Wendao graph index and return stripped XML-Lite `<hit>` records.
+/// Native tool for searching the wendao graph index.
+#[allow(missing_docs)]
 #[zhenfa_tool(
     name = "wendao.search",
     description = "Search the Wendao graph index and return stripped XML-Lite <hit> records.",
     tool_struct = "WendaoSearchTool",
-    cache_key = "wendao_search_cache_key"
+    mutation_scope = "wendao.search"
 )]
-pub fn wendao_search(ctx: &ZhenfaContext, args: WendaoSearchArgs) -> Result<String, ZhenfaError> {
+pub async fn wendao_search(
+    ctx: &ZhenfaContext,
+    args: WendaoSearchArgs,
+) -> Result<String, ZhenfaError> {
     let query = args.query.trim();
     if query.is_empty() {
         return Err(ZhenfaError::invalid_arguments(
@@ -116,27 +120,6 @@ pub fn render_xml_lite_hits(payload: &LinkGraphPlannedSearchPayload) -> String {
     xml_lite::render_xml_lite(payload)
 }
 
-fn wendao_search_cache_key(ctx: &ZhenfaContext, args: &WendaoSearchArgs) -> Option<String> {
-    let index = ctx.link_graph_index().ok()?;
-    let query = args.query.trim();
-    if query.is_empty() {
-        return None;
-    }
-    let options = args.options.clone().unwrap_or_default();
-    let canonical_payload = json!({
-        "root": index.root().to_string_lossy(),
-        "query": query,
-        "limit": normalize_limit(args.limit),
-        "include_provisional": args.include_provisional,
-        "provisional_limit": args.provisional_limit,
-        "options": options
-    });
-    Some(format!(
-        "wendao.search::{}",
-        canonical_json_string(canonical_payload)
-    ))
-}
-
 fn normalize_limit(raw: Option<usize>) -> usize {
     raw.unwrap_or(DEFAULT_SEARCH_LIMIT)
         .clamp(1, MAX_SEARCH_LIMIT)
@@ -152,27 +135,4 @@ fn validate_root_dir_argument(root_dir: Option<&str>) -> Result<(), ZhenfaError>
         }
     }
     Ok(())
-}
-
-fn canonical_json_string(value: Value) -> String {
-    match serde_json::to_string(&canonicalize_json(value)) {
-        Ok(serialized) => serialized,
-        Err(_error) => "{}".to_string(),
-    }
-}
-
-fn canonicalize_json(value: Value) -> Value {
-    match value {
-        Value::Object(map) => {
-            let mut entries: Vec<(String, Value)> = map.into_iter().collect();
-            entries.sort_by(|left, right| left.0.cmp(&right.0));
-            let mut canonical = serde_json::Map::new();
-            for (key, nested) in entries {
-                canonical.insert(key, canonicalize_json(nested));
-            }
-            Value::Object(canonical)
-        }
-        Value::Array(items) => Value::Array(items.into_iter().map(canonicalize_json).collect()),
-        other => other,
-    }
 }

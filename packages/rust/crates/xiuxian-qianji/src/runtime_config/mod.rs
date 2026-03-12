@@ -6,8 +6,6 @@
 //! 3. Explicit config path: `$QIANJI_CONFIG_PATH`
 //! 4. Environment overrides:
 //!    - `QIANJI_LLM_MODEL`
-//!    - `QIANJI_LLM_PROVIDER`
-//!    - `QIANJI_LLM_WIRE_API`
 //!    - `OPENAI_API_BASE`
 //!    - `OPENAI_API_KEY`
 //!    - `QIANJI_MEMORY_PROMOTION_GRAPH_SCOPE`

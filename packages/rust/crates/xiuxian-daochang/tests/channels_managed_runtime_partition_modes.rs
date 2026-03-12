@@ -1,4 +1,4 @@
-//! Test coverage for xiuxian-daochang behavior.
+#![allow(missing_docs)]
 
 mod managed_runtime {
     pub mod parsing {

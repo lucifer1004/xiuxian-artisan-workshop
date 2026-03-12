@@ -48,9 +48,10 @@ def get_skill_registry() -> SkillRegistry:
 # Import from holographic module for re-export
 from .holographic import (
     HolographicRegistry,
-    LazyTool,
     ToolMetadata,
+    LazyTool,
 )
+
 
 __all__ = [
     # Core

@@ -3,7 +3,7 @@ use crate::executors::annotation::ContextAnnotator;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use std::sync::Arc;
-use xiuxian_llm::llm::{ChatMessage, ChatRequest, LlmClient, MessageRole};
+use xiuxian_llm::llm::{ChatMessage, ChatRequest, LlmClient};
 use xiuxian_zhenfa::ZhenfaTransmuter;
 
 fn context_non_empty_string(context: &Value, key: &str) -> Option<String> {
@@ -89,18 +89,15 @@ impl QianjiMechanism for LlmAugmentedAuditMechanism {
             model: resolve_model_for_request(context, &self.model),
             messages: vec![
                 ChatMessage {
-                    role: MessageRole::System,
-                    content: Some(prompt.to_string().into()),
-                    ..ChatMessage::default()
+                    role: "system".to_string(),
+                    content: prompt.to_string().into(),
                 },
                 ChatMessage {
-                    role: MessageRole::User,
-                    content: Some(user_query.to_string().into()),
-                    ..ChatMessage::default()
+                    role: "user".to_string(),
+                    content: user_query.to_string().into(),
                 },
             ],
-            temperature: Some(0.1),
-            ..ChatRequest::default()
+            temperature: 0.1,
         };
 
         let critique = self

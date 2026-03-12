@@ -16,95 +16,13 @@ import os
 import signal as _signal
 import sys
 
-from omni.agent.protocol import MCP_PROTOCOL_VERSION
-from omni.agent.server import create_agent_handler
-from omni.foundation.config.logging import configure_logging, get_logger
-from omni.mcp.server import MCPServer
-from omni.mcp.transport.stdio import StdioTransport
+import structlog
+from omni.mcp.transport.stdio import stdio_server
 
 from .lifespan import server_lifespan
+from .server import get_init_options, get_server
 
-log = get_logger("omni.agent.stdio")
-
-
-def get_init_options() -> dict:
-    """Get MCP server initialization options."""
-    return {
-        "protocolVersion": MCP_PROTOCOL_VERSION,
-        "capabilities": {
-            "tools": {},
-        },
-        "serverInfo": {
-            "name": "xiuxian-daochang",
-            "version": "2.0.0",
-        },
-    }
-
-
-def get_server(verbose: bool = False) -> MCPServer:
-    """Create and return the MCP server instance with handlers registered.
-
-    Args:
-        verbose: If True, enable DEBUG logging; otherwise INFO level.
-    """
-    log_level = "DEBUG" if verbose else "INFO"
-    configure_logging(level=log_level)
-    handler = create_agent_handler()
-    transport = StdioTransport()
-    server = MCPServer(handler, transport)
-
-    # MCP init options
-    init_options = {
-        "protocolVersion": MCP_PROTOCOL_VERSION,
-        "capabilities": {
-            "tools": {"listChanged": True},
-        },
-        "serverInfo": {
-            "name": "xiuxian-daochang",
-            "version": "2.0.0",
-        },
-    }
-
-    # Register MCP protocol handlers
-    @server.request("initialize")
-    async def handle_initialize(**params) -> dict:
-        """Handle MCP initialize request."""
-        log.info("[MCP] Responding to initialize request")
-        return init_options
-
-    @server.request("tools/list")
-    async def handle_list_tools(**params) -> dict:
-        """Handle MCP tools/list request."""
-        result = await handler.handle_request(
-            {"method": "tools/list", "params": params, "id": None}
-        )
-        if result.get("error") is not None:
-            err = result["error"]
-            raise ValueError(err.get("message", "tools/list failed"))
-        log.debug(
-            f"[MCP] tools/list returned {len(result.get('result', {}).get('tools', []))} tools"
-        )
-        return result.get("result", {})
-
-    @server.request("tools/call")
-    async def handle_call_tool(name: str = "", arguments: dict | None = None, **params) -> dict:
-        """Handle MCP tools/call request. Ensures client always receives valid result or error."""
-        request = {
-            "method": "tools/call",
-            "params": {"name": name, "arguments": arguments or {}},
-            "id": None,
-        }
-        response = await handler.handle_request(request)
-        if response.get("error") is not None:
-            err = response["error"]
-            raise ValueError(err.get("message", "Tool call failed"))
-        payload = response.get("result")
-        if payload is None or not isinstance(payload, dict):
-            payload = {"content": [{"type": "text", "text": ""}], "isError": False}
-        return payload
-
-    return server
-
+log = structlog.get_logger(__name__)
 
 _shutdown_count = 0
 
@@ -127,14 +45,11 @@ def _setup_signal_handler() -> None:
     _signal.signal(_signal.SIGTERM, signal_handler)
 
 
-async def run_stdio(verbose: bool = False) -> None:
+async def run_stdio() -> None:
     """Run server in stdio mode for Claude Desktop.
 
     This runs directly without multiprocessing - the process itself
     communicates via stdin/stdout with the MCP client.
-
-    Args:
-        verbose: If True, enable DEBUG logging; otherwise INFO level.
 
     Performance:
     - Zero-copy reading from stdin.buffer
@@ -142,33 +57,40 @@ async def run_stdio(verbose: bool = False) -> None:
     - orjson.dumps() with OPT_APPEND_NEWLINE
     - Binary output to stdout.buffer
     """
-    log_level = "DEBUG" if verbose else "INFO"
-    log.info(f"📡 Starting Omni MCP Server (STDIO - {log_level} mode)")
+    log.info("📡 Starting Omni MCP Server (STDIO - High Performance)")
 
     # Set up signal handlers
     _setup_signal_handler()
 
-    server = get_server(verbose=verbose)
-
-    # [FIX] Register MCP server BEFORE starting kernel to ensure Live-Wire
-    # callbacks can access _mcp_server when file changes are detected
-    from .lifespan import set_mcp_server
-
-    set_mcp_server(server)
-    log.debug("MCP server registered for Live-Wire notifications")
+    server = get_server()
 
     # Lifespan: Run once at startup (load skills)
     # Enable watcher for hot-reload support
-    # Callback registration is now done in lifespan.py after kernel starts
     async with server_lifespan(enable_watcher=True):
-        try:
-            await server.start()
-            await server.run_forever()
-        except asyncio.CancelledError:
-            log.info("Server cancelled")
-        except Exception as e:
-            log.error(f"Server error: {e}")
-            raise
+        # Server run loop: wait for client connection, reconnect on EOF
+        while True:
+            try:
+                # omni.mcp.transport.stdio.stdio_server uses orjson internally
+                async with stdio_server() as (read_stream, write_stream):
+                    await server.run(
+                        read_stream,
+                        write_stream,
+                        get_init_options(),
+                    )
+            except asyncio.CancelledError:
+                raise
+            except BrokenPipeError:
+                log.warning("Client disconnected, waiting for new connection...")
+                await asyncio.sleep(0.5)
+            except ValueError as e:
+                if "I/O operation on closed file" in str(e):
+                    log.debug("Stdin closed, waiting for client connection...")
+                    await asyncio.sleep(0.5)
+                else:
+                    raise
+            except Exception as e:
+                log.warning(f"Server run error: {e}, reconnecting...")
+                await asyncio.sleep(0.5)
 
 
 def request_shutdown() -> None:

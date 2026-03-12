@@ -52,9 +52,8 @@ impl AdversarialOrchestrator {
 
     /// Evaluates the alignment between an agent's claim and the provided evidence.
     /// Returns a drift score based on semantic overlap and anchor binding.
-    #[must_use]
     pub fn evaluate_alignment(&self, _claim: &str, evidence: &[String]) -> AuditVerdict {
-        let mut matches: usize = 0;
+        let mut matches = 0;
         let mut missing = Vec::new();
 
         // This simulates the 'Skeptic' checking for counter-evidence.
@@ -71,14 +70,7 @@ impl AdversarialOrchestrator {
             }
         }
 
-        let anchor_count_u16 = u16::try_from(anchors.len()).unwrap_or(u16::MAX);
-        let matches_u16 = u16::try_from(matches).unwrap_or(anchor_count_u16);
-        let ratio = if anchor_count_u16 == 0 {
-            1.0_f32
-        } else {
-            f32::from(matches_u16) / f32::from(anchor_count_u16)
-        };
-        let drift = 1.0_f32 - ratio.max(0.0);
+        let drift = 1.0 - (matches as f32 / anchors.len() as f32).max(0.0);
 
         AuditVerdict {
             drift_score: drift,

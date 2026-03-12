@@ -7,14 +7,13 @@ store so no real LanceDB table is required.
 
 from __future__ import annotations
 
+from omni.foundation.bridge.rust_vector import RustVectorStore
 from omni.test_kit.fixtures.arrow import (
     TABLE_HEALTH_IPC_COLUMNS,
     assert_table_health_ipc_table,
     decode_table_health_ipc_bytes,
     make_table_health_ipc_bytes,
 )
-
-from omni.foundation.bridge.rust_vector import RustVectorStore
 
 
 def test_analyze_table_health_ipc_returns_bytes_and_decodes() -> None:
@@ -35,7 +34,7 @@ def test_analyze_table_health_ipc_api_with_mock_store() -> None:
     """RustVectorStore.analyze_table_health_ipc delegates to inner and returns bytes."""
     ipc_bytes = make_table_health_ipc_bytes()
     mock_inner = type("MockInner", (), {})()
-    mock_inner.analyze_table_health_ipc = lambda table_name: ipc_bytes
+    mock_inner.analyze_table_health_ipc = lambda table_name: ipc_bytes  # noqa: ARG005
 
     store = RustVectorStore.__new__(RustVectorStore)
     store._inner = mock_inner

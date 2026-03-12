@@ -1,4 +1,4 @@
-//! xiuxian-executor - Nushell Native Bridge for Agentic OS
+//! omni-executor - Nushell Native Bridge for Agentic OS
 //!
 //! Provides secure, structured execution of Nushell commands:
 //! - Security layer for mutation commands

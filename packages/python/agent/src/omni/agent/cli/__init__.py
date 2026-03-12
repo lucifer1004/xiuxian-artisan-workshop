@@ -5,7 +5,7 @@ Modular CLI structure:
 - app.py: Typer application and configuration
 - console.py: Console and output formatting
 - runner.py: Skill execution logic
-- xiuxian_loop.py: Legacy decommissioned compatibility shim
+- omni_loop.py: CCA Runtime Integration
 - commands/: Command submodules
 
 Usage:
@@ -16,20 +16,8 @@ Usage:
 
 from __future__ import annotations
 
-from importlib import import_module
-from typing import Any
-
 from .app import app, main
+from .console import err_console
+from .runner import run_skills
 
-__all__ = ["app", "err_console", "main", "run_skills"]
-
-
-def __getattr__(name: str) -> Any:
-    """Lazy attribute loading to keep CLI package import overhead low."""
-    if name == "err_console":
-        mod = import_module(".console", __name__)
-        return getattr(mod, name)
-    if name == "run_skills":
-        mod = import_module(".runner", __name__)
-        return getattr(mod, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+__all__ = ["app", "main", "err_console", "run_skills"]

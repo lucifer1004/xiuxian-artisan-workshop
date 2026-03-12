@@ -9,10 +9,6 @@ use std::collections::HashMap;
 
 /// Code chunk for semantic partitioning (Python binding)
 #[pyclass]
-#[allow(
-    clippy::unsafe_derive_deserialize,
-    reason = "PyO3-bound DTO type does not deserialize untrusted data in unsafe contexts."
-)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PyCodeChunk {
     /// Chunk identifier
@@ -35,8 +31,8 @@ pub struct PyCodeChunk {
     pub docstring: Option<String>,
 }
 
-impl From<xiuxian_ast::CodeChunk> for PyCodeChunk {
-    fn from(chunk: xiuxian_ast::CodeChunk) -> Self {
+impl From<omni_ast::CodeChunk> for PyCodeChunk {
+    fn from(chunk: omni_ast::CodeChunk) -> Self {
         Self {
             id: chunk.id,
             chunk_type: chunk.chunk_type,
@@ -101,10 +97,6 @@ impl PyCodeChunk {
 
 /// Extract result struct for Python
 #[pyclass]
-#[allow(
-    clippy::unsafe_derive_deserialize,
-    reason = "PyO3-bound DTO type does not deserialize untrusted data in unsafe contexts."
-)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PyExtractResult {
     /// Matched code text
@@ -121,8 +113,8 @@ pub struct PyExtractResult {
     pub captures: HashMap<String, String>,
 }
 
-impl From<xiuxian_ast::ExtractResult> for PyExtractResult {
-    fn from(result: xiuxian_ast::ExtractResult) -> Self {
+impl From<omni_ast::ExtractResult> for PyExtractResult {
+    fn from(result: omni_ast::ExtractResult) -> Self {
         Self {
             text: result.text,
             start: result.start,
@@ -185,16 +177,16 @@ pub fn py_extract_items(
     language: String,
     captures: Option<Vec<String>>,
 ) -> PyResult<String> {
-    let lang: xiuxian_ast::Lang = language
+    let lang: omni_ast::Lang = language
         .as_str()
         .try_into()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid language: {}", e)))?;
 
     let capture_opts: Option<Vec<&str>> = captures
         .as_ref()
-        .map(|values| values.iter().map(String::as_str).collect());
+        .map(|v| v.iter().map(|s| s.as_str()).collect());
 
-    let results = xiuxian_ast::extract_items(&content, &pattern, lang, capture_opts);
+    let results = omni_ast::extract_items(&content, &pattern, lang, capture_opts);
 
     let py_results: Vec<PyExtractResult> = results.into_iter().map(Into::into).collect();
 
@@ -212,7 +204,7 @@ pub fn py_extract_items(
 ///     True if language is supported, False otherwise
 #[pyfunction]
 pub fn py_is_language_supported(language: String) -> bool {
-    <&str as TryInto<xiuxian_ast::Lang>>::try_into(language.as_str()).is_ok()
+    <&str as TryInto<omni_ast::Lang>>::try_into(language.as_str()).is_ok()
 }
 
 /// Get list of supported languages.
@@ -254,7 +246,7 @@ pub fn py_get_supported_languages() -> Vec<String> {
 ///     content: Source code content
 ///     file_path: Path to the file (for ID generation)
 ///     language: Programming language (e.g., "python", "rust")
-///     patterns: AST patterns to match (for example: `"def $NAME"`, `"class $NAME"`)
+///     patterns: AST patterns to match (e.g., ["def $NAME", "class $NAME"])
 ///     min_lines: Minimum lines for a chunk to be included (default: 1)
 ///     max_lines: Maximum lines for a chunk (0 = no limit, default: 0)
 ///
@@ -270,14 +262,14 @@ pub fn py_chunk_code(
     min_lines: usize,
     max_lines: usize,
 ) -> PyResult<Vec<PyCodeChunk>> {
-    let lang: xiuxian_ast::Lang = language
+    let lang: omni_ast::Lang = language
         .as_str()
         .try_into()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid language: {}", e)))?;
 
-    let pattern_refs: Vec<&str> = patterns.iter().map(String::as_str).collect();
+    let pattern_refs: Vec<&str> = patterns.iter().map(|s| s.as_str()).collect();
 
-    let chunks = xiuxian_ast::chunk_code(
+    let chunks = omni_ast::chunk_code(
         &content,
         &file_path,
         lang,
@@ -290,47 +282,13 @@ pub fn py_chunk_code(
     Ok(chunks.into_iter().map(Into::into).collect())
 }
 
-/// Extract skeleton (signatures + docstrings) from source code.
-///
-/// This function extracts only structural definitions (function signatures,
-/// class definitions) along with their docstrings, removing implementation bodies.
-/// Ideal for lightweight semantic indexing where full code content is not needed.
-///
-/// Args:
-///     content: Source code content
-///     language: Programming language (e.g., "python", "rust")
-///
-/// Returns:
-///     JSON string containing {"skeleton": "...", "items_count": N}
-#[pyfunction]
-#[pyo3(signature = (content, language))]
-pub fn py_extract_skeleton(content: String, language: String) -> PyResult<String> {
-    let lang: xiuxian_ast::Lang = language
-        .as_str()
-        .try_into()
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid language: {}", e)))?;
-
-    let skeleton = xiuxian_ast::extract_skeleton(&content, lang);
-
-    // Count items (separated by double newlines)
-    let items_count = skeleton.split("\n\n").filter(|s| !s.is_empty()).count();
-
-    let result = serde_json::json!({
-        "skeleton": skeleton,
-        "items_count": items_count,
-    });
-
-    serde_json::to_string(&result).map_err(|e| {
-        pyo3::exceptions::PyRuntimeError::new_err(format!("JSON serialization failed: {}", e))
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pyo3::types::PyList;
 
     #[test]
-    fn test_extract_items_python() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_extract_items_python() {
         let content = r#"
 def hello(name: str) -> str:
     return f"Hello, {name}!"
@@ -345,10 +303,9 @@ def goodbye():
             "python".to_string(),
             None,
         )
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
+        .unwrap();
 
-        let results: Vec<PyExtractResult> = serde_json::from_str(&json)?;
+        let results: Vec<PyExtractResult> = serde_json::from_str(&json).unwrap();
         assert_eq!(results.len(), 2);
-        Ok(())
     }
 }

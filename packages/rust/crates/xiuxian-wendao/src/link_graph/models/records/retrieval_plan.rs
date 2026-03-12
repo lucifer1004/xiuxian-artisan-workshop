@@ -137,7 +137,7 @@ pub struct LinkGraphRetrievalPlanRecord {
 }
 
 /// Construction payload for [`LinkGraphRetrievalPlanRecord`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkGraphRetrievalPlanInput {
     /// Retrieval mode requested by caller/runtime policy.
     pub requested_mode: LinkGraphRetrievalMode,

@@ -47,15 +47,14 @@ macro_rules! define_native_tool {
     };
 }
 
-pub(crate) use define_native_tool;
-
-/// Register multiple native tools into one registry in declaration order.
+/// Helper to register multiple native tools into a registry.
 macro_rules! register_native_tools {
-    ($registry:expr, $($tool:expr),+ $(,)?) => {{
+    ($registry:expr, $($tool:expr),+ $(,)?) => {
         $(
-            $registry.register(::std::sync::Arc::new($tool));
+            $registry.register(std::sync::Arc::new($tool));
         )+
-    }};
+    };
 }
 
+pub(crate) use define_native_tool;
 pub(crate) use register_native_tools;

@@ -1,11 +1,14 @@
 """
-omni.core - Microkernel Core
+agent/core/kernel/ - Kernel Abstraction Layer (Backward Compatibility Wrapper)
+
+DEPRECATED: This module is kept for backward compatibility.
+Please migrate to `omni.core.kernel` for new code.
 
 Microkernel architecture for agent core:
 
-kernel/        - Core Kernel class, single entry point (includes lifecycle)
-components/    - Unified components (registry, orchestrator, loader)
-skills/        - Skills system (loader, registry, runtime)
+kernel.py           - Core Kernel class, single entry point
+lifecycle.py        - State machine (init -> ready -> running -> shutdown)
+components/         - Unified components (registry, orchestrator, loader)
 
 This layer provides:
 - Single entry point for agent initialization
@@ -13,59 +16,14 @@ This layer provides:
 - Component isolation for clean architecture
 """
 
-from .errors import (
-    CoreErrorCode,
-    ErrorCategory,
-    OmniCellError,
-    OmniError,
-    SecurityError,
-    ToolExecutionError,
-    ToolNotFoundError,
-    ValidationError,
-)
-from .executor import CommandExecutor
-from .kernel import Kernel, LifecycleManager, LifecycleState, get_kernel
-from .responses import ResponseStatus, ToolResponse
-from .testing import (
-    benchmark,
-    cloud,
-    e2e,
-    get_test_layer,
-    integration,
-    only_cloud,
-    skip_if_cloud,
-    stress,
-    unit,
-)
+from __future__ import annotations
+
+# Re-export from omni.core for backward compatibility
+from omni.core.kernel import Kernel, get_kernel, LifecycleState, LifecycleManager
 
 __all__ = [
-    # Error handling
-    "CoreErrorCode",
-    "ErrorCategory",
-    "OmniError",
-    "OmniCellError",
-    "SecurityError",
-    "ToolExecutionError",
-    "ToolNotFoundError",
-    "ValidationError",
-    # Response format
-    "ResponseStatus",
-    "ToolResponse",
-    # Execution
-    "CommandExecutor",
-    # Kernel
     "Kernel",
-    "LifecycleManager",
-    "LifecycleState",
     "get_kernel",
-    # Testing layers
-    "unit",
-    "integration",
-    "cloud",
-    "benchmark",
-    "stress",
-    "e2e",
-    "skip_if_cloud",
-    "only_cloud",
-    "get_test_layer",
+    "LifecycleState",
+    "LifecycleManager",
 ]

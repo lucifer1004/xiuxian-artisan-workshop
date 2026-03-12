@@ -1,83 +1,110 @@
-//! Core agent logic and loop implementation.
+//! One-turn agent loop: user message -> LLM (+ optional tools) -> `tool_calls` -> MCP tools/call -> repeat.
 
-pub(crate) mod admission;
-pub(crate) mod bootstrap;
+mod bootstrap;
 mod consolidation;
 mod context_budget;
 mod context_budget_state;
+mod embedding_dimension;
 mod embedding_runtime;
 mod feedback;
+mod graph;
+mod graph_bridge;
 mod injection;
 pub(crate) mod logging;
 mod mcp;
 mod mcp_pool_state;
-pub(crate) mod mcp_startup;
+mod mcp_startup;
 mod memory;
-pub(crate) mod memory_recall;
-pub(crate) mod memory_recall_feedback;
-pub(crate) mod memory_recall_metrics;
-pub(crate) mod memory_recall_state;
+mod memory_recall;
+mod memory_recall_feedback;
+mod memory_recall_feedback_state;
+mod memory_recall_metrics;
+mod memory_recall_state;
 mod memory_state;
-pub(crate) mod memory_stream_consumer;
-pub mod native_tools;
-pub mod notification;
+mod memory_stream_consumer;
+pub(crate) mod native_tools;
 mod omega;
 mod persistence;
-pub(crate) mod reflection;
+mod reflection;
 mod reflection_runtime_state;
-pub(crate) mod session_context;
+mod session_context;
 mod system_prompt_injection_state;
 mod turn_execution;
 mod turn_support;
-pub(crate) mod zhenfa;
 
+use anyhow::{Context, Result};
+use omni_tokenizer::count_tokens;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 
-use xiuxian_llm::embedding::runtime::EmbeddingRuntime;
-use xiuxian_memory_engine::EpisodeStore;
-use xiuxian_qianhuan::{HotReloadDriver, ManifestationManager};
-pub use xiuxian_zhixing::ZhixingHeyi;
+use omni_memory::EpisodeStore;
+use xiuxian_qianhuan::{InjectionPolicy, InjectionSnapshot};
 
 use crate::config::AgentConfig;
+use crate::contracts::{
+    GraphExecutionPlan, OmegaDecision, OmegaFallbackPolicy, OmegaRoute, RouteTrace,
+    RouteTraceInjection,
+};
 use crate::embedding::EmbeddingClient;
 use crate::llm::LlmClient;
-use crate::session::{BoundedSessionStore, SessionStore};
+use crate::observability::SessionEvent;
+use crate::session::{BoundedSessionStore, ChatMessage, SessionStore, SessionSummarySegment};
+use crate::shortcuts::{
+    CRAWL_TOOL_NAME, WorkflowBridgeMode, parse_crawl_shortcut, parse_react_shortcut,
+    parse_workflow_bridge_shortcut,
+};
+use embedding_dimension::{
+    EMBEDDING_SOURCE_EMBEDDING, EMBEDDING_SOURCE_EMBEDDING_REPAIRED, repair_embedding_dimension,
+};
+use embedding_runtime::EMBEDDING_SOURCE_UNAVAILABLE;
+use memory::{RecalledEpisodeCandidate, apply_recall_credit, select_recall_credit_candidates};
+use memory_recall::{
+    MEMORY_RECALL_MESSAGE_NAME, MemoryRecallInput, build_memory_context_message,
+    estimate_messages_tokens, filter_recalled_episodes, plan_memory_recall,
+};
+use memory_recall_feedback::{
+    RECALL_FEEDBACK_SOURCE_COMMAND, RecallOutcome, ToolExecutionSummary, apply_feedback_to_plan,
+    resolve_feedback_outcome, update_feedback_bias,
+};
 use memory_state::{MemoryStateBackend, MemoryStateLoadStatus};
-pub use native_tools::NativeToolRegistry;
+use omega::ShortcutFallbackAction;
 use reflection::PolicyHintDirective;
+use system_prompt_injection_state::SYSTEM_PROMPT_INJECTION_CONTEXT_MESSAGE_NAME;
 
-pub(crate) use admission::DownstreamAdmissionRuntimeSnapshot;
-pub use bootstrap::ServiceMountRecord;
+const DEFAULT_MEMORY_EMBED_TIMEOUT: Duration = Duration::from_secs(3);
+const DEFAULT_MEMORY_EMBED_TIMEOUT_COOLDOWN: Duration = Duration::from_secs(20);
+const MIN_MEMORY_EMBED_TIMEOUT_MS: u64 = 100;
+const MAX_MEMORY_EMBED_TIMEOUT_MS: u64 = 60_000;
+const MAX_MEMORY_EMBED_COOLDOWN_MS: u64 = 300_000;
+
 pub use consolidation::summarise_drained_turns;
 pub use context_budget::prune_messages_for_token_budget;
 pub use context_budget_state::{SessionContextBudgetClassSnapshot, SessionContextBudgetSnapshot};
+pub use graph_bridge::{GraphBridgeRequest, GraphBridgeResult, validate_graph_bridge_request};
+pub use native_tools::registry::NativeToolRegistry;
 pub use memory_recall_metrics::{MemoryRecallLatencyBucketsSnapshot, MemoryRecallMetricsSnapshot};
 pub use memory_recall_state::{SessionMemoryRecallDecision, SessionMemoryRecallSnapshot};
 pub use memory_state::MemoryRuntimeStatusSnapshot;
 pub use session_context::{
     SessionContextMode, SessionContextSnapshotInfo, SessionContextStats, SessionContextWindowInfo,
 };
+pub use system_prompt_injection_state::SessionSystemPromptInjectionSnapshot;
 
 /// Explicit session-level recall feedback direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionRecallFeedbackDirection {
-    /// Feedback direction up.
     Up,
-    /// Feedback direction down.
     Down,
 }
 
 /// Result of applying explicit session-level recall feedback.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SessionRecallFeedbackUpdate {
-    /// Bias before the update.
     pub previous_bias: f32,
-    /// Bias after the update.
     pub updated_bias: f32,
-    /// Direction applied.
     pub direction: SessionRecallFeedbackDirection,
 }
 
@@ -85,13 +112,9 @@ pub struct SessionRecallFeedbackUpdate {
 pub struct Agent {
     config: AgentConfig,
     session: SessionStore,
-    /// Idle-time threshold for auto reset policy (milliseconds). None disables idle reset.
-    session_reset_idle_timeout_ms: Option<u64>,
-    /// Last observed activity timestamp by session scope.
-    session_last_activity_unix_ms: Arc<RwLock<HashMap<String, u64>>>,
     /// When set, session history is bounded; context built from recent turns.
     bounded_session: Option<BoundedSessionStore>,
-    /// When set (and window enabled), consolidation stores episodes into xiuxian-memory-engine.
+    /// When set (and window enabled), consolidation stores episodes into omni-memory.
     memory_store: Option<Arc<EpisodeStore>>,
     /// Memory persistence backend for episode/Q state snapshots.
     memory_state_backend: Option<Arc<MemoryStateBackend>>,
@@ -99,122 +122,27 @@ pub struct Agent {
     memory_state_load_status: MemoryStateLoadStatus,
     /// Embedding client for semantic memory recall/store.
     embedding_client: Option<EmbeddingClient>,
-    /// Embedding runtime policy guard (timeout/cooldown/repair).
-    embedding_runtime: Option<Arc<EmbeddingRuntime>>,
     /// Most recent context-budget report by logical session id.
     context_budget_snapshots: Arc<RwLock<HashMap<String, SessionContextBudgetSnapshot>>>,
     /// Process-level memory recall metrics snapshot (for diagnostics dashboards).
     memory_recall_metrics: Arc<RwLock<memory_recall_metrics::MemoryRecallMetricsState>>,
-    /// Runtime manifestation manager (owns prompt injection cache/state).
-    manifestation_manager: Option<Arc<ManifestationManager>>,
+    /// Session-level recall feedback bias (-1: broaden recall, +1: tighten recall).
+    memory_recall_feedback: Arc<RwLock<HashMap<String, f32>>>,
+    /// Session-level injected system prompt window (XML Q&A).
+    system_prompt_injection: Arc<RwLock<HashMap<String, SessionSystemPromptInjectionSnapshot>>>,
     /// One-shot next-turn policy hints derived from reflection lifecycle.
     reflection_policy_hints: Arc<RwLock<HashMap<String, PolicyHintDirective>>>,
     /// Counter used by periodic memory decay policy.
     memory_decay_turn_counter: Arc<AtomicU64>,
-    downstream_admission_policy: admission::DownstreamAdmissionPolicy,
-    downstream_admission_metrics: admission::DownstreamAdmissionMetrics,
+    /// Per-attempt timeout for memory embedding requests.
+    memory_embed_timeout: Duration,
+    /// Cooldown window after an embedding timeout to avoid repeated long waits.
+    memory_embed_timeout_cooldown: Duration,
+    /// Unix timestamp millis until which embedding calls are rejected by cooldown policy.
+    memory_embed_timeout_cooldown_until_ms: AtomicU64,
     llm: LlmClient,
-    mcp: Option<crate::mcp::McpClientPool>,
-    heyi: Option<Arc<ZhixingHeyi>>,
-    native_tools: Arc<NativeToolRegistry>,
-    zhenfa_tools: Option<Arc<zhenfa::ZhenfaToolBridge>>,
+    mcp: Option<crate::mcp_pool::McpClientPool>,
     memory_stream_consumer_task: Option<tokio::task::JoinHandle<()>>,
-    _hot_reload_driver: Option<HotReloadDriver>,
-    /// Bootstrap-time service mount records for runtime diagnostics and reporting.
-    service_mount_records: Arc<RwLock<Vec<ServiceMountRecord>>>,
-}
-
-/// Test-facing recall outcome bridge for memory credit routines.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TestRecallOutcome {
-    /// Recall feedback indicates success.
-    Success,
-    /// Recall feedback indicates failure.
-    Failure,
-}
-
-/// Test-facing recall credit candidate record.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct TestRecalledEpisodeCandidate {
-    /// Episode identifier.
-    pub episode_id: String,
-    /// Recall score.
-    pub score: f32,
-}
-
-/// Test-facing recall credit update record.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct TestRecallCreditUpdate {
-    /// Episode identifier.
-    pub episode_id: String,
-    /// Recall score.
-    pub score: f32,
-    /// Credit weight.
-    pub weight: f32,
-    /// Previous Q value.
-    pub previous_q: f32,
-    /// Effective reward used for update.
-    pub effective_reward: f32,
-    /// Updated Q value.
-    pub updated_q: f32,
-}
-
-#[must_use]
-pub(crate) fn test_should_apply_decay(
-    decay_enabled: bool,
-    decay_every_turns: usize,
-    turn_index: u64,
-) -> bool {
-    memory::should_apply_decay(decay_enabled, decay_every_turns, turn_index)
-}
-
-#[must_use]
-pub(crate) fn test_sanitize_decay_factor(raw: f32) -> f32 {
-    memory::sanitize_decay_factor(raw)
-}
-
-#[must_use]
-pub(crate) fn test_select_recall_credit_candidates(
-    recalled: &[(xiuxian_memory_engine::Episode, f32)],
-    max_candidates: usize,
-) -> Vec<TestRecalledEpisodeCandidate> {
-    memory::select_recall_credit_candidates(recalled, max_candidates)
-        .into_iter()
-        .map(|candidate| TestRecalledEpisodeCandidate {
-            episode_id: candidate.episode_id,
-            score: candidate.score,
-        })
-        .collect()
-}
-
-#[must_use]
-pub(crate) fn test_apply_recall_credit(
-    store: &EpisodeStore,
-    candidates: &[TestRecalledEpisodeCandidate],
-    outcome: TestRecallOutcome,
-) -> Vec<TestRecallCreditUpdate> {
-    let internal_candidates = candidates
-        .iter()
-        .map(|candidate| memory::RecalledEpisodeCandidate {
-            episode_id: candidate.episode_id.clone(),
-            score: candidate.score,
-        })
-        .collect::<Vec<_>>();
-    let internal_outcome = match outcome {
-        TestRecallOutcome::Success => memory_recall_feedback::RecallOutcome::Success,
-        TestRecallOutcome::Failure => memory_recall_feedback::RecallOutcome::Failure,
-    };
-    memory::apply_recall_credit(store, &internal_candidates, internal_outcome)
-        .into_iter()
-        .map(|update| TestRecallCreditUpdate {
-            episode_id: update.episode_id,
-            score: update.score,
-            weight: update.weight,
-            previous_q: update.previous_q,
-            effective_reward: update.effective_reward,
-            updated_q: update.updated_q,
-        })
-        .collect()
 }
 
 impl Drop for Agent {
@@ -222,18 +150,5 @@ impl Drop for Agent {
         if let Some(task) = self.memory_stream_consumer_task.take() {
             task.abort();
         }
-    }
-}
-
-impl Agent {
-    /// Returns bootstrap-time mount records for all service wiring.
-    pub async fn service_mount_records(&self) -> Vec<ServiceMountRecord> {
-        self.service_mount_records.read().await.clone()
-    }
-
-    /// Returns the internal `ZhixingHeyi` orchestrator if initialized.
-    #[must_use]
-    pub fn get_heyi(&self) -> Option<Arc<ZhixingHeyi>> {
-        self.heyi.clone()
     }
 }

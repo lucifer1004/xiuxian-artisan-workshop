@@ -294,3 +294,114 @@ fn normalize_extension(ext: &str) -> String {
     }
     ext
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_discover_files_in_dir() {
+        let temp = TempDir::new().unwrap();
+        let dir = temp.path().to_str().unwrap();
+        let dir_path = std::path::Path::new(dir);
+
+        // Create test files
+        File::create(dir_path.join("test.py")).unwrap();
+        File::create(dir_path.join("readme.md")).unwrap();
+        File::create(dir_path.join("data.txt")).unwrap();
+
+        let extensions = vec!["py".to_string(), "md".to_string()];
+        let files = discover_files_in_dir(dir, &extensions, 1024 * 1024, true);
+
+        // Debug: print what we got
+        if files.is_empty() {
+            let entries: Vec<_> = std::fs::read_dir(dir_path).unwrap().collect();
+            println!("Directory entries: {:?}", entries);
+        }
+
+        assert_eq!(files.len(), 2, "Expected 2 files, got: {:?}", files);
+        assert!(
+            files.iter().any(|f| f.ends_with("test.py")),
+            "Missing test.py in {:?}",
+            files
+        );
+        assert!(
+            files.iter().any(|f| f.ends_with("readme.md")),
+            "Missing readme.md in {:?}",
+            files
+        );
+    }
+
+    #[test]
+    fn test_discover_files_recursive() {
+        let temp = TempDir::new().unwrap();
+        let dir = temp.path().to_str().unwrap();
+        let dir_path = std::path::Path::new(dir);
+
+        // Create test structure
+        File::create(dir_path.join("root.py")).unwrap();
+        std::fs::create_dir(dir_path.join("src")).unwrap();
+        File::create(dir_path.join("src").join("module.py")).unwrap();
+        std::fs::create_dir(dir_path.join("src").join("nested")).unwrap();
+        File::create(dir_path.join("src").join("nested").join("deep.py")).unwrap();
+
+        let extensions = vec!["py".to_string()];
+        let options = DiscoverOptions {
+            extensions,
+            recursive: true,
+            ..Default::default()
+        };
+
+        let files = discover_files(dir, &options);
+
+        // Debug: print what we got
+        if files.len() < 3 {
+            println!("Expected >=3 files, got: {:?}", files);
+        }
+
+        assert!(files.len() >= 3, "Expected >=3 files, got: {:?}", files);
+        assert!(
+            files.iter().any(|f| f.ends_with("root.py")),
+            "Missing root.py in {:?}",
+            files
+        );
+        assert!(
+            files.iter().any(|f| f.ends_with("module.py")),
+            "Missing module.py in {:?}",
+            files
+        );
+        assert!(
+            files.iter().any(|f| f.ends_with("deep.py")),
+            "Missing deep.py in {:?}",
+            files
+        );
+    }
+
+    #[test]
+    fn test_should_skip_path() {
+        let skip_dirs = vec!["target".to_string(), "node_modules".to_string()];
+
+        assert!(should_skip_path(
+            "/project/target/file.py",
+            true,
+            &skip_dirs
+        ));
+        assert!(should_skip_path(
+            "/project/node_modules/pkg",
+            true,
+            &skip_dirs
+        ));
+        assert!(!should_skip_path("/project/src/main.py", true, &skip_dirs));
+        assert!(!should_skip_path("/project/.config.yml", false, &skip_dirs));
+        assert!(should_skip_path("/project/.env", true, &skip_dirs));
+    }
+
+    #[test]
+    fn test_normalize_extension() {
+        assert_eq!(normalize_extension("py"), ".py");
+        assert_eq!(normalize_extension(".py"), ".py");
+        assert_eq!(normalize_extension("PY"), ".py");
+    }
+}

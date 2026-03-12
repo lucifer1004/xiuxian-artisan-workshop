@@ -75,10 +75,13 @@ impl Agent {
         );
     }
 
+    /// Load the latest persisted memory-recall snapshot for the given session.
+    ///
+    /// Returns `None` when the session has no snapshot or deserialization fails.
     /// Load the latest persisted memory-recall snapshot for a session.
     ///
     /// Returns `None` when no snapshot exists or when persisted payloads cannot
-    /// be loaded or parsed.
+    /// be loaded/parsing fails.
     pub async fn inspect_memory_recall_snapshot(
         &self,
         session_id: &str,

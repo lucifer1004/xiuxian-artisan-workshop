@@ -1,79 +1,61 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::Path;
 
-use rayon::prelude::*;
+use walkdir::WalkDir;
 
 use crate::skills::metadata::{SkillMetadata, SkillStructure};
 
 use super::super::SkillScanner;
+use super::single::scan_single_skill_with_structure;
 
 impl SkillScanner {
-    /// Scan all skills in a base directory with parallel processing.
-    ///
-    /// Returns a vector of skill metadata for all skills with valid SKILL.md.
-    /// Skills without SKILL.md are silently skipped.
-    ///
-    /// # Arguments
-    ///
-    /// * `base_path` - Path to the skills directory (e.g., "assets/skills")
-    /// * `structure` - Optional skill structure for validation (uses default if None)
+    /// Scan a directory for all valid skills.
     ///
     /// # Errors
-    ///
-    /// Returns an error if the skills directory cannot be read.
+    /// Returns an error if directory traversal or parsing fails.
     pub fn scan_all(
         &self,
-        base_path: &Path,
-        structure: Option<&SkillStructure>,
+        root: &Path,
+        validate_struct: Option<&SkillStructure>,
     ) -> Result<Vec<SkillMetadata>, Box<dyn std::error::Error>> {
-        if !base_path.exists() {
-            log::warn!("Skills base directory not found: {}", base_path.display());
-            return Ok(Vec::new());
+        if !root.is_dir() {
+            return Err(anyhow::anyhow!("Root path is not a directory: {}", root.display()).into());
         }
 
-        let skill_dirs: Vec<PathBuf> = fs::read_dir(base_path)?
-            .filter_map(std::result::Result::ok)
-            .filter(|entry| entry.path().is_dir())
-            .map(|entry| entry.path())
-            .collect();
+        let mut skills = Vec::new();
+        for entry in WalkDir::new(root)
+            .min_depth(1)
+            .max_depth(2)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            if !entry.file_type().is_dir() {
+                continue;
+            }
 
-        let effective_structure = Arc::new(
-            structure
-                .cloned()
-                .unwrap_or_else(SkillScanner::default_structure),
-        );
-        let scan_results: Vec<Result<Option<SkillMetadata>, String>> = skill_dirs
-            .par_iter()
-            .map(|skill_path| {
-                self.scan_skill(skill_path, Some(effective_structure.as_ref()))
-                    .map_err(|error| format!("{}: {error}", skill_path.display()))
-            })
-            .collect();
-        let mut metadatas = Vec::new();
-        let mut errors = Vec::new();
-        for result in scan_results {
-            match result {
-                Ok(Some(metadata)) => metadatas.push(metadata),
-                Ok(None) => {}
-                Err(error) => errors.push(error),
+            let skill_path = entry.path();
+            if !skill_path.join("SKILL.md").exists() {
+                continue;
+            }
+
+            if let Some(metadata) =
+                scan_single_skill_with_structure(self, skill_path, validate_struct)?
+            {
+                skills.push(metadata);
             }
         }
-        if !errors.is_empty() {
-            return Err(anyhow::anyhow!(
-                "skill scanning failed with {} error(s): {}",
-                errors.len(),
-                errors.join(" | ")
-            )
-            .into());
-        }
 
-        log::info!(
-            "Scanned {} skills from {}",
-            metadatas.len(),
-            base_path.display()
-        );
+        Ok(skills)
+    }
 
-        Ok(metadatas)
+    /// Scan a single skill directory and extract metadata.
+    ///
+    /// # Errors
+    /// Returns an error if parsing or I/O fails.
+    pub fn scan_skill(
+        &self,
+        skill_path: &Path,
+        validate_struct: Option<&SkillStructure>,
+    ) -> Result<Option<SkillMetadata>, Box<dyn std::error::Error>> {
+        scan_single_skill_with_structure(self, skill_path, validate_struct)
     }
 }

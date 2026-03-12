@@ -13,7 +13,7 @@ use rmcp::model::{
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
-use xiuxian_llm::mcp::{McpPoolConnectConfig, connect_pool};
+use xiuxian_mcp::{McpPoolConnectConfig, connect_pool};
 
 #[derive(Clone)]
 struct MockMcpServer {
@@ -30,29 +30,23 @@ impl MockMcpServer {
     }
 
     fn mock_tool(version: usize) -> Tool {
-        Tool {
-            name: format!("test.ping.v{version}").into(),
-            title: Some("Ping".into()),
-            description: Some("mock tool".into()),
-            input_schema: Arc::new(serde_json::Map::new()),
-            output_schema: None,
-            annotations: None,
-            execution: None,
-            icons: None,
-            meta: None,
-        }
+        Tool::new(
+            format!("test.ping.v{version}"),
+            "mock tool",
+            Arc::new(serde_json::Map::new()),
+        )
+        .with_title("Ping")
     }
 }
 
 impl ServerHandler for MockMcpServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            capabilities: ServerCapabilities::builder()
+        ServerInfo::new(
+            ServerCapabilities::builder()
                 .enable_tools()
                 .enable_tool_list_changed()
                 .build(),
-            ..Default::default()
-        }
+        )
     }
 
     fn list_tools(

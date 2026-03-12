@@ -1,9 +1,8 @@
-//! Test coverage for xiuxian-daochang behavior.
+#![allow(missing_docs)]
 
 use std::time::Duration;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use xiuxian_daochang::{DEFAULT_REDIS_KEY_PREFIX, WebhookDedupBackend, WebhookDedupConfig};
+use omni_agent::{DEFAULT_REDIS_KEY_PREFIX, WebhookDedupBackend, WebhookDedupConfig};
 
 #[tokio::test]
 async fn memory_store_marks_duplicate_ids() -> anyhow::Result<()> {
@@ -32,10 +31,9 @@ async fn memory_store_expires_ids_after_ttl() -> anyhow::Result<()> {
             break;
         }
 
-        assert!(
-            wait_started.elapsed() < Duration::from_secs(MAX_WAIT_SECS),
-            "memory dedup entry did not expire within {MAX_WAIT_SECS}s"
-        );
+        if wait_started.elapsed() >= Duration::from_secs(MAX_WAIT_SECS) {
+            panic!("memory dedup entry did not expire within {MAX_WAIT_SECS}s");
+        }
 
         tokio::time::sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
     }
@@ -47,8 +45,8 @@ async fn memory_store_expires_ids_after_ttl() -> anyhow::Result<()> {
 fn redis_config_normalizes_empty_prefix() {
     let config = WebhookDedupConfig {
         backend: WebhookDedupBackend::Redis {
-            url: "redis://valkey.local:6379/0".to_string(),
-            key_prefix: String::new(),
+            url: "redis://127.0.0.1:6379/0".to_string(),
+            key_prefix: "".to_string(),
         },
         ttl_secs: 0,
     }
@@ -60,24 +58,4 @@ fn redis_config_normalizes_empty_prefix() {
         }
         WebhookDedupBackend::Memory => panic!("unexpected memory backend"),
     }
-}
-
-#[tokio::test]
-#[ignore = "requires live valkey server and network access"]
-async fn redis_store_marks_duplicate_ids() -> anyhow::Result<()> {
-    let url = std::env::var("VALKEY_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| anyhow::anyhow!("skip: set VALKEY_URL for live dedup test"))?;
-    let run_id = SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros();
-    let key_prefix = format!("xiuxian-daochang:test:dedup:{run_id}");
-
-    let store = WebhookDedupConfig {
-        backend: WebhookDedupBackend::Redis { url, key_prefix },
-        ttl_secs: 600,
-    }
-    .build_store()?;
-    assert!(!store.is_duplicate(42).await?);
-    assert!(store.is_duplicate(42).await?);
-    Ok(())
 }

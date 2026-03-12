@@ -1,8 +1,10 @@
+use std::io::Cursor;
 use std::sync::Arc;
 
-use fast_image_resize as fir;
-use image::DynamicImage;
 use image::GenericImageView;
+use image::ImageFormat;
+use image::imageops::FilterType;
+use imageproc::contrast::equalize_histogram;
 
 use crate::llm::error::{LlmError, LlmResult};
 
@@ -14,8 +16,10 @@ pub const DEFAULT_VISION_MAX_DIMENSION: u32 = 2_048;
 pub struct PreparedVisionImage {
     /// Original input bytes.
     pub original: Arc<[u8]>,
-    /// Decoded RGB image used by OCR inference (zero-copy handoff).
-    pub decoded: Arc<DynamicImage>,
+    /// Resized RGB payload encoded as PNG.
+    pub resized_png: Arc<[u8]>,
+    /// Equalized grayscale payload encoded as PNG.
+    pub grayscale_png: Arc<[u8]>,
     /// Final image width after preprocessing.
     pub width: u32,
     /// Final image height after preprocessing.
@@ -28,7 +32,7 @@ pub struct PreparedVisionImage {
 ///
 /// # Errors
 ///
-/// Returns an error when decoding or resize fails.
+/// Returns an error when decoding or PNG encoding fails.
 pub fn preprocess_image(image_bytes: Arc<[u8]>) -> LlmResult<PreparedVisionImage> {
     preprocess_image_with_max_dimension(image_bytes, DEFAULT_VISION_MAX_DIMENSION)
 }
@@ -38,11 +42,11 @@ pub fn preprocess_image(image_bytes: Arc<[u8]>) -> LlmResult<PreparedVisionImage
 /// Steps:
 /// 1. Decode image bytes.
 /// 2. Resize to fit within `max_dimension` while preserving aspect ratio.
-/// 3. Produce a grayscale variant for OCR preprocessing.
+/// 3. Produce an equalized grayscale variant for OCR-friendly contrast.
 ///
 /// # Errors
 ///
-/// Returns an error when decoding or resize fails.
+/// Returns an error when decoding or PNG encoding fails.
 pub fn preprocess_image_with_max_dimension(
     image_bytes: Arc<[u8]>,
     max_dimension: u32,
@@ -55,51 +59,21 @@ pub fn preprocess_image_with_max_dimension(
     let resized = if width == original_width && height == original_height {
         decoded
     } else {
-        resize_with_fast_image_resize(&decoded, width, height)?
+        decoded.resize_exact(width, height, FilterType::Lanczos3)
     };
 
-    let decoded = Arc::new(resized);
+    let resized_png = encode_png(&resized)?;
+    let grayscale = equalize_histogram(&resized.to_luma8());
+    let grayscale_png = encode_png(&image::DynamicImage::ImageLuma8(grayscale))?;
 
     Ok(PreparedVisionImage {
         original: image_bytes,
-        decoded,
+        resized_png,
+        grayscale_png,
         width,
         height,
         scale,
     })
-}
-
-fn resize_with_fast_image_resize(
-    source: &DynamicImage,
-    width: u32,
-    height: u32,
-) -> LlmResult<DynamicImage> {
-    let source_rgba = DynamicImage::ImageRgba8(source.to_rgba8());
-    let mut target_rgba = DynamicImage::new_rgba8(width, height);
-    let options = fir::ResizeOptions::new()
-        .resize_alg(fir::ResizeAlg::Convolution(fir::FilterType::Lanczos3));
-    let mut resizer = fir::Resizer::new();
-    resizer
-        .resize(&source_rgba, &mut target_rgba, Some(&options))
-        .map_err(|error| internal_error(format!("vision image resize failed: {error}")))?;
-    Ok(target_rgba)
-}
-
-impl PreparedVisionImage {
-    /// Create a tiny in-memory image used for runtime warmup.
-    #[must_use]
-    pub fn create_dummy(width: u32, height: u32) -> Self {
-        let width = width.max(1);
-        let height = height.max(1);
-        let decoded = DynamicImage::new_rgba8(width, height);
-        Self {
-            original: Arc::from(Vec::<u8>::new().into_boxed_slice()),
-            decoded: Arc::new(decoded),
-            width,
-            height,
-            scale: 1.0,
-        }
-    }
 }
 
 /// Computes resized dimensions that fit within `max_dimension` while preserving
@@ -132,6 +106,14 @@ fn fit_edge_with_rounding(edge: u32, long_edge: u32, max_dimension: u32) -> u32 
     let rounded = (numerator + (denominator / 2)) / denominator;
     let bounded = rounded.max(1).min(u64::from(u32::MAX));
     u32::try_from(bounded).unwrap_or(u32::MAX)
+}
+
+fn encode_png(image: &image::DynamicImage) -> LlmResult<Arc<[u8]>> {
+    let mut writer = Cursor::new(Vec::new());
+    image
+        .write_to(&mut writer, ImageFormat::Png)
+        .map_err(|error| internal_error(format!("vision png encode failed: {error}")))?;
+    Ok(Arc::from(writer.into_inner()))
 }
 
 fn internal_error(message: String) -> LlmError {

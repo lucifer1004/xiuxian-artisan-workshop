@@ -1,136 +1,74 @@
-use crate::channels::telegram::commands as telegram;
+use std::sync::Arc;
 
-use super::types::{
-    JobStatusCommand, ResumeContextCommand, SessionAdminAction, SessionAdminCommand,
-    SessionFeedbackCommand, SessionFeedbackDirection, SessionInjectionAction,
-    SessionInjectionCommand, SessionPartitionCommand, SessionPartitionMode, map_output_format,
-};
+use super::types::{OcrGateTimeoutRecoveryProbe, OcrProbeFirstOutcome};
 
-#[must_use]
-pub fn parse_help_command(input: &str) -> Option<super::types::OutputFormat> {
-    telegram::parse_help_command(input).map(|format| map_output_format(format.is_json()))
-}
-
-#[must_use]
-pub fn is_agenda_command(input: &str) -> bool {
-    telegram::is_agenda_command(input)
-}
-
-#[must_use]
-pub fn parse_background_prompt(input: &str) -> Option<String> {
-    telegram::parse_background_prompt(input)
-}
-
-#[must_use]
-pub fn parse_job_status_command(input: &str) -> Option<JobStatusCommand> {
-    telegram::parse_job_status_command(input).map(|parsed| JobStatusCommand {
-        job_id: parsed.job_id,
-        format: map_output_format(parsed.format.is_json()),
-    })
-}
-
-#[must_use]
-pub fn parse_jobs_summary_command(input: &str) -> Option<super::types::OutputFormat> {
-    telegram::parse_jobs_summary_command(input).map(|format| map_output_format(format.is_json()))
-}
-
-#[must_use]
-pub fn parse_session_context_status_command(input: &str) -> Option<super::types::OutputFormat> {
-    telegram::parse_session_context_status_command(input)
-        .map(|format| map_output_format(format.is_json()))
-}
-
-#[must_use]
-pub fn parse_session_context_budget_command(input: &str) -> Option<super::types::OutputFormat> {
-    telegram::parse_session_context_budget_command(input)
-        .map(|format| map_output_format(format.is_json()))
-}
-
-#[must_use]
-pub fn parse_session_context_memory_command(input: &str) -> Option<super::types::OutputFormat> {
-    telegram::parse_session_context_memory_command(input)
-        .map(|format| map_output_format(format.is_json()))
-}
-
-#[must_use]
-pub fn parse_session_feedback_command(input: &str) -> Option<SessionFeedbackCommand> {
-    telegram::parse_session_feedback_command(input).map(|parsed| SessionFeedbackCommand {
-        direction: map_feedback_direction(parsed.direction),
-        format: map_output_format(parsed.format.is_json()),
-    })
-}
-
-#[must_use]
-pub fn parse_session_injection_command(input: &str) -> Option<SessionInjectionCommand> {
-    telegram::parse_session_injection_command(input).map(|parsed| SessionInjectionCommand {
-        action: match parsed.action {
-            telegram::SessionInjectionAction::Status => SessionInjectionAction::Status,
-            telegram::SessionInjectionAction::Clear => SessionInjectionAction::Clear,
-            telegram::SessionInjectionAction::SetXml(xml) => SessionInjectionAction::SetXml(xml),
-        },
-        format: map_output_format(parsed.format.is_json()),
-    })
-}
-
-#[must_use]
-pub fn parse_session_admin_command(input: &str) -> Option<SessionAdminCommand> {
-    telegram::parse_session_admin_command(input).map(|parsed| SessionAdminCommand {
-        action: match parsed.action {
-            telegram::SessionAdminAction::List => SessionAdminAction::List,
-            telegram::SessionAdminAction::Set(entries) => SessionAdminAction::Set(entries),
-            telegram::SessionAdminAction::Add(entries) => SessionAdminAction::Add(entries),
-            telegram::SessionAdminAction::Remove(entries) => SessionAdminAction::Remove(entries),
-            telegram::SessionAdminAction::Clear => SessionAdminAction::Clear,
-        },
-        format: map_output_format(parsed.format.is_json()),
-    })
-}
-
-#[must_use]
-pub fn parse_session_partition_command(input: &str) -> Option<SessionPartitionCommand> {
-    telegram::parse_session_partition_command(input).map(|parsed| SessionPartitionCommand {
-        mode: parsed.mode.map(map_session_partition_mode),
-        format: map_output_format(parsed.format.is_json()),
-    })
-}
-
-#[must_use]
-pub fn is_reset_context_command(input: &str) -> bool {
-    telegram::is_reset_context_command(input)
-}
-
-#[must_use]
-pub fn is_stop_command(input: &str) -> bool {
-    telegram::is_stop_command(input)
-}
-
-#[must_use]
-pub fn parse_resume_context_command(input: &str) -> Option<ResumeContextCommand> {
-    telegram::parse_resume_context_command(input).map(map_resume_command)
-}
-
-fn map_feedback_direction(
-    direction: telegram::SessionFeedbackDirection,
-) -> SessionFeedbackDirection {
-    match direction {
-        telegram::SessionFeedbackDirection::Up => SessionFeedbackDirection::Up,
-        telegram::SessionFeedbackDirection::Down => SessionFeedbackDirection::Down,
+/// Simulate OCR timeout/busy recovery without starting channel runtimes.
+pub async fn simulate_ocr_gate_timeout_recovery(
+    blocking_sleep_ms: u64,
+    timeout_ms: u64,
+) -> OcrGateTimeoutRecoveryProbe {
+    let probe = crate::model_host::ocr::simulate_ocr_gate_timeout_recovery_for_tests(
+        blocking_sleep_ms,
+        timeout_ms,
+    )
+    .await;
+    OcrGateTimeoutRecoveryProbe {
+        first_outcome: map_probe_first_outcome(probe.first_outcome),
+        second_was_busy: probe.second_was_busy,
+        second_completed: probe.second_completed,
+        recovered_after_wait: probe.recovered_after_wait,
     }
 }
 
-fn map_session_partition_mode(mode: telegram::SessionPartitionMode) -> SessionPartitionMode {
-    match mode {
-        telegram::SessionPartitionMode::Chat => SessionPartitionMode::Chat,
-        telegram::SessionPartitionMode::ChatUser => SessionPartitionMode::ChatUser,
-        telegram::SessionPartitionMode::User => SessionPartitionMode::User,
-        telegram::SessionPartitionMode::ChatThreadUser => SessionPartitionMode::ChatThreadUser,
+/// Simulate OCR panic/busy recovery without starting channel runtimes.
+pub async fn simulate_ocr_gate_panic_recovery() -> OcrGateTimeoutRecoveryProbe {
+    let probe = crate::model_host::ocr::simulate_ocr_gate_panic_recovery_for_tests().await;
+    OcrGateTimeoutRecoveryProbe {
+        first_outcome: map_probe_first_outcome(probe.first_outcome),
+        second_was_busy: probe.second_was_busy,
+        second_completed: probe.second_completed,
+        recovered_after_wait: probe.recovered_after_wait,
     }
 }
 
-fn map_resume_command(command: telegram::ResumeContextCommand) -> ResumeContextCommand {
-    match command {
-        telegram::ResumeContextCommand::Restore => ResumeContextCommand::Restore,
-        telegram::ResumeContextCommand::Status => ResumeContextCommand::Status,
-        telegram::ResumeContextCommand::Drop => ResumeContextCommand::Drop,
+/// Probe `DeepSeek` OCR truth extraction from raw image bytes.
+pub async fn infer_deepseek_ocr_truth_from_image_bytes(
+    image_bytes: Vec<u8>,
+    media_type: &str,
+) -> Option<String> {
+    crate::model_host::ocr::infer_deepseek_ocr_truth_from_bytes_for_tests(
+        Arc::from(image_bytes.into_boxed_slice()),
+        media_type,
+    )
+    .await
+}
+
+/// Resolve effective global OCR process-lock file path.
+#[must_use]
+pub fn resolve_deepseek_ocr_global_lock_path() -> String {
+    crate::model_host::ocr::deepseek_ocr_global_lock_path()
+        .display()
+        .to_string()
+}
+
+/// Resolve OCR RSS guard threshold bytes from a raw GB string.
+#[must_use]
+pub fn resolve_deepseek_ocr_memory_limit_bytes(raw_limit_gb: Option<&str>) -> Option<u64> {
+    crate::model_host::ocr::resolve_deepseek_ocr_memory_limit_bytes(raw_limit_gb)
+}
+
+/// Evaluate whether OCR memory guard should trigger for a given RSS usage.
+#[must_use]
+pub fn deepseek_ocr_memory_guard_triggered(raw_limit_gb: Option<&str>, rss_bytes: u64) -> bool {
+    crate::model_host::ocr::deepseek_ocr_memory_guard_triggered(raw_limit_gb, rss_bytes)
+}
+
+fn map_probe_first_outcome(
+    outcome: crate::model_host::ocr::OcrProbeFirstOutcome,
+) -> OcrProbeFirstOutcome {
+    match outcome {
+        crate::model_host::ocr::OcrProbeFirstOutcome::TimedOut => OcrProbeFirstOutcome::TimedOut,
+        crate::model_host::ocr::OcrProbeFirstOutcome::Panicked => OcrProbeFirstOutcome::Panicked,
+        crate::model_host::ocr::OcrProbeFirstOutcome::Other => OcrProbeFirstOutcome::Other,
     }
 }

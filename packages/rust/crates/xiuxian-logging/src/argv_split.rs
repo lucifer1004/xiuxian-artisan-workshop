@@ -1,23 +1,38 @@
 use crate::types::{LogColor, LogFormat, LogLevel, LogSettings};
 
-/// Split logging flags from raw argv while keeping remaining positional args.
-///
-/// This helper is for non-`clap` binaries that still want to share the same
-/// logging surface.
-#[must_use]
-pub fn split_logging_args(raw_args: &[String]) -> (LogSettings, Vec<String>) {
-    let mut settings = LogSettings::default();
-    let mut remaining = Vec::with_capacity(raw_args.len());
-
-    if let Some(program) = raw_args.first() {
-        remaining.push(program.clone());
+fn parse_verbose_flag(arg: &str) -> Option<u8> {
+    if !arg.starts_with('-') || arg.starts_with("--") {
+        return None;
     }
+    let trimmed = arg.trim_start_matches('-');
+    if trimmed.is_empty() || !trimmed.chars().all(|ch| ch == 'v') {
+        return None;
+    }
+    Some(trimmed.len().min(u8::MAX as usize) as u8)
+}
 
-    let mut index = 1;
-    while index < raw_args.len() {
-        let arg = &raw_args[index];
+fn take_value<'a>(args: &'a [String], index: usize, flag: &str) -> Option<(&'a str, usize)> {
+    let arg = args.get(index)?.as_str();
+    if arg == flag {
+        return args.get(index + 1).map(|value| (value.as_str(), 2));
+    }
+    let value = arg
+        .strip_prefix(flag)
+        .and_then(|rest| rest.strip_prefix('='));
+    value.map(|value| (value, 1))
+}
 
-        if let Some(count) = parse_short_verbose(arg) {
+/// Split logging args from an argument vector, returning settings and remaining args.
+#[must_use]
+pub fn split_logging_args(raw: &[String]) -> (LogSettings, Vec<String>) {
+    let mut settings = LogSettings::default();
+    let mut remaining = Vec::with_capacity(raw.len());
+    let mut index = 0;
+
+    while index < raw.len() {
+        let arg = raw[index].as_str();
+
+        if let Some(count) = parse_verbose_flag(arg) {
             settings.verbose = settings.verbose.saturating_add(count);
             index += 1;
             continue;
@@ -29,99 +44,47 @@ pub fn split_logging_args(raw_args: &[String]) -> (LogSettings, Vec<String>) {
             continue;
         }
 
-        if let Some(value) = arg.strip_prefix("--log-format=") {
-            if let Ok(parsed) = value.parse::<LogFormat>() {
-                settings.format = parsed;
-            }
-            index += 1;
-            continue;
-        }
-
-        if arg == "--log-format" {
-            if let Some(next) = raw_args.get(index + 1)
-                && let Ok(parsed) = next.parse::<LogFormat>()
-            {
-                settings.format = parsed;
-                index += 2;
+        if let Some(value) = arg.strip_prefix("--log-verbose=") {
+            if let Ok(count) = value.parse::<u8>() {
+                settings.verbose = settings.verbose.saturating_add(count);
+                index += 1;
                 continue;
             }
-            index += 1;
-            continue;
         }
 
-        if let Some(value) = arg.strip_prefix("--log-color=") {
-            if let Ok(parsed) = value.parse::<LogColor>() {
-                settings.color = parsed;
-            }
-            index += 1;
-            continue;
-        }
-
-        if arg == "--log-color" {
-            if let Some(next) = raw_args.get(index + 1)
-                && let Ok(parsed) = next.parse::<LogColor>()
-            {
-                settings.color = parsed;
-                index += 2;
+        if let Some((value, consumed)) = take_value(raw, index, "--log-format") {
+            if let Ok(format) = value.parse::<LogFormat>() {
+                settings.format = format;
+                index += consumed;
                 continue;
             }
-            index += 1;
-            continue;
         }
 
-        if let Some(value) = arg.strip_prefix("--log-level=") {
-            if let Ok(parsed) = value.parse::<LogLevel>() {
-                settings.level = Some(parsed);
-            }
-            index += 1;
-            continue;
-        }
-
-        if arg == "--log-level" {
-            if let Some(next) = raw_args.get(index + 1)
-                && let Ok(parsed) = next.parse::<LogLevel>()
-            {
-                settings.level = Some(parsed);
-                index += 2;
+        if let Some((value, consumed)) = take_value(raw, index, "--log-color") {
+            if let Ok(color) = value.parse::<LogColor>() {
+                settings.color = color;
+                index += consumed;
                 continue;
             }
-            index += 1;
-            continue;
         }
 
-        if let Some(value) = arg.strip_prefix("--log-filter=") {
+        if let Some((value, consumed)) = take_value(raw, index, "--log-level") {
+            if let Ok(level) = value.parse::<LogLevel>() {
+                settings.level = Some(level);
+                index += consumed;
+                continue;
+            }
+        }
+
+        if let Some((value, consumed)) = take_value(raw, index, "--log-filter") {
             settings.filter = Some(value.to_string());
-            index += 1;
+            index += consumed;
             continue;
         }
 
-        if arg == "--log-filter" {
-            if let Some(next) = raw_args.get(index + 1) {
-                settings.filter = Some(next.clone());
-                index += 2;
-                continue;
-            }
-            index += 1;
-            continue;
-        }
-
-        remaining.push(arg.clone());
+        remaining.push(raw[index].clone());
         index += 1;
     }
 
     (settings, remaining)
-}
-
-fn parse_short_verbose(arg: &str) -> Option<u8> {
-    if !arg.starts_with('-') || arg.starts_with("--") {
-        return None;
-    }
-
-    let payload = arg.strip_prefix('-')?;
-    if payload.is_empty() || !payload.chars().all(|ch| ch == 'v') {
-        return None;
-    }
-
-    let count = u8::try_from(payload.len()).ok()?;
-    Some(count)
 }

@@ -6,7 +6,7 @@ fn test_manifest_load_save() -> Result<(), Box<dyn std::error::Error>> {
 
     let temp_dir = TempDir::new()?;
     let manifest_path = temp_dir.path().join("manifest.json");
-    let engine = SyncEngine::new(temp_dir.path(), &manifest_path);
+    let engine = SyncEngine::new(temp_dir.path().to_path_buf(), manifest_path.clone());
 
     // Create initial manifest
     let mut manifest = xiuxian_wendao::SyncManifest::default();

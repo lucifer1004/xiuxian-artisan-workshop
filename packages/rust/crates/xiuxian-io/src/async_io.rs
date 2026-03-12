@@ -26,7 +26,7 @@ use crate::error::IoError;
 /// # Example
 ///
 /// ```rust,ignore
-/// use xiuxian_io::read_text_safe_async;
+/// use omni_io::read_text_safe_async;
 ///
 /// let content = read_text_safe_async("README.md", 1024 * 1024).await?;
 /// ```

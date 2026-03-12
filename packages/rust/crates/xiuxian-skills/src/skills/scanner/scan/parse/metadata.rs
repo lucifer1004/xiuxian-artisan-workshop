@@ -13,7 +13,7 @@ struct ParsedMetadataFields {
     permissions: Vec<String>,
 }
 
-pub(super) fn build_skill_metadata(
+pub fn build_skill_metadata(
     skill_name: String,
     frontmatter_data: Option<SkillFrontmatter>,
 ) -> SkillMetadata {

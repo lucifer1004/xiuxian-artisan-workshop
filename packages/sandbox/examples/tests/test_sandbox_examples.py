@@ -1,302 +1,308 @@
-# test_sandbox_examples.py - Tests for Sandbox NCL Configurations
-#
-# These tests verify that the NCL sandbox configurations work correctly.
-# Since we're on macOS, we test NCL export and validation without nsjail.
-#
-# Requirements:
-#   - nickel CLI must be installed: cargo install nickel-lang
+# mcp-server/tester.py
+"""
+Smart Test Runner - Enforcing docs/how-to/testing-workflows.md
 
-"""Tests for NCL sandbox configurations."""
+Implements "Modified-Code Protocol" for intelligent test selection:
+- Docs only changes → Skip tests
+- MCP server changes → Run MCP tests only
+- Infrastructure changes → Run full test suite
+
+Usage:
+    @omni-orchestrator smart_test_runner
+"""
 
 import json
 import subprocess
-from pathlib import Path
-
-import pytest
+from typing import Dict, Any, Optional
 
 
-# Paths - use absolute paths
-REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent
-NCL_SANDBOX_DIR = REPO_ROOT / "packages" / "ncl" / "sandbox"
-NCL_EXAMPLES_DIR = NCL_SANDBOX_DIR / "examples"
-
-
-class NickelAvailability:
-    """Check if nickel CLI is available."""
-
-    @staticmethod
-    def is_available() -> bool:
-        """Check if nickel CLI is installed."""
+def get_git_status() -> Dict[str, list]:
+    """Get git status for changed files."""
+    try:
+        # Get staged files
         result = subprocess.run(
-            ["which", "nickel"],
-            capture_output=True,
-            text=True,
+            ["git", "diff", "--cached", "--name-only"], capture_output=True, text=True
         )
-        return result.returncode == 0
+        staged = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
+        # Get unstaged files
+        result = subprocess.run(["git", "diff", "--name-only"], capture_output=True, text=True)
+        unstaged = result.stdout.strip().split("\n") if result.stdout.strip() else []
 
-@pytest.fixture
-def nickel_check():
-    """Fixture that skips tests if nickel is not installed."""
-    if not NickelAvailability.is_available():
-        pytest.skip("nickel CLI not installed. Run: cargo install nickel-lang")
-
-
-@pytest.fixture
-def sandbox_main() -> Path:
-    """Path to the sandbox main.ncl file."""
-    return NCL_SANDBOX_DIR / "main.ncl"
-
-
-@pytest.fixture
-def examples_dir() -> Path:
-    """Path to the examples directory."""
-    return NCL_EXAMPLES_DIR
-
-
-class TestNickelInstallation:
-    """Test that nickel CLI is available."""
-
-    def test_nickel_is_installed(self):
-        """Verify nickel CLI is installed."""
+        # Get untracked files
         result = subprocess.run(
-            ["which", "nickel"],
-            capture_output=True,
-            text=True,
+            ["git", "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True
         )
-        assert result.returncode == 0, (
-            "nickel CLI not found. Install with: cargo install nickel-lang"
+        untracked = result.stdout.strip().split("\n") if result.stdout.strip() else []
+
+        return {
+            "staged": [f for f in staged if f],
+            "unstaged": [f for f in unstaged if f],
+            "untracked": [f for f in untracked if f],
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def categorize_changes(files: list) -> Dict[str, bool]:
+    """Categorize changes by type."""
+    categories = {
+        "docs_only": True,  # Assume docs only until proven otherwise
+        "mcp_server": False,
+        "tool_router": False,
+        "nix_config": False,
+        "code_changes": False,
+    }
+
+    all_files = files
+    for f in all_files:
+        f_lower = f.lower()
+        # Docs check (must be only docs to be docs_only)
+        if not any(
+            ext in f_lower
+            for extensions in [
+                [".md", ".txt", ".rst", ".adoc"],
+                [".py", ".nix", ".yaml", ".yml", ".json", ".toml"],
+            ]
+        ):
+            pass  # Unknown extension, ignore
+
+        # If any non-docs file, docs_only becomes False
+        if not (f_lower.endswith(".md") or "docs/" in f or "doc/" in f):
+            categories["docs_only"] = False
+
+        # Check specific categories
+        if "mcp-server/" in f or f.startswith("mcp-server/"):
+            categories["mcp_server"] = True
+            categories["code_changes"] = True
+        if "tool-router/" in f or f.startswith("tool-router/"):
+            categories["tool_router"] = True
+            categories["code_changes"] = True
+        if ".nix" in f or "devenv" in f:
+            categories["nix_config"] = True
+            categories["code_changes"] = True
+        if f.endswith(".py") and "test" not in f:
+            categories["code_changes"] = True
+
+    return categories
+
+
+def register_tester_tools(mcp: Any) -> None:
+    """Register all testing tools with the MCP server."""
+
+    @mcp.tool()
+    async def smart_test_runner(focus_file: str = None) -> str:
+        """
+        Execute tests following docs/how-to/testing-workflows.md.
+
+        Implements the Modified-Code Protocol:
+        1. Identify modified files
+        2. Categorize changes
+        3. Run MINIMUM necessary tests
+
+        Args:
+            focus_file: Optional specific file to test
+
+        Returns:
+            JSON result with test strategy and execution
+        """
+        if focus_file:
+            return json.dumps(
+                {
+                    "strategy": "focused",
+                    "file": focus_file,
+                    "command": f"pytest {focus_file}",
+                    "reason": "Specific file requested",
+                },
+                indent=2,
+            )
+
+        # Step 1: Get git status
+        status = get_git_status()
+        if "error" in status:
+            return json.dumps(
+                {"status": "error", "message": f"Failed to get git status: {status['error']}"},
+                indent=2,
+            )
+
+        all_files = status["staged"] + status["unstaged"] + status["untracked"]
+
+        if not all_files:
+            return json.dumps(
+                {
+                    "status": "success",
+                    "message": "No changes detected",
+                    "strategy": "skip",
+                    "reason": "No modified files",
+                    "command": "echo 'No changes to test'",
+                },
+                indent=2,
+            )
+
+        # Step 2: Categorize changes
+        categories = categorize_changes(all_files)
+
+        # Step 3: Determine strategy (Modified-Code Protocol)
+        if categories["docs_only"]:
+            return json.dumps(
+                {
+                    "status": "success",
+                    "message": "Documentation changes only",
+                    "strategy": "skip",
+                    "reason": "docs/how-to/testing-workflows.md Rule #3: Docs only → Skip tests",
+                    "command": "echo 'Docs only - skipping tests'",
+                    "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+                },
+                indent=2,
+            )
+
+        elif categories["mcp_server"]:
+            return json.dumps(
+                {
+                    "status": "ready",
+                    "message": "MCP server changes detected",
+                    "strategy": "mcp_only",
+                    "reason": "mcp-server/ modified → Run MCP tests (docs/how-to/testing-workflows.md)",
+                    "command": "just test-mcp-only",
+                    "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+                },
+                indent=2,
+            )
+
+        elif categories["tool_router"]:
+            return json.dumps(
+                {
+                    "status": "ready",
+                    "message": "Tool router changes detected",
+                    "strategy": "mcp_only",
+                    "reason": "tool-router/ modified → Run MCP tests",
+                    "command": "just test-mcp-only",
+                    "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+                },
+                indent=2,
+            )
+
+        elif categories["nix_config"]:
+            return json.dumps(
+                {
+                    "status": "ready",
+                    "message": "Infrastructure changes detected",
+                    "strategy": "full",
+                    "reason": ".nix or devenv modified → Run full test suite",
+                    "command": "just test",
+                    "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+                },
+                indent=2,
+            )
+
+        else:
+            return json.dumps(
+                {
+                    "status": "ready",
+                    "message": "Code changes detected",
+                    "strategy": "full",
+                    "reason": "General code changes → Run full test suite",
+                    "command": "just test",
+                    "files": all_files[:5] + ["..."] if len(all_files) > 5 else all_files,
+                },
+                indent=2,
+            )
+
+    @mcp.tool()
+    async def run_test_command(command: str) -> str:
+        """
+        Run a test command and return results.
+
+        Args:
+            command: Test command to run
+
+        Returns:
+            JSON result with command output
+        """
+        # Security: Only allow specific test commands
+        allowed_commands = [
+            "just test",
+            "just test-unit",
+            "just test-int",
+            "just test-mcp",
+            "just test-mcp-only",
+            "pytest",
+            "devenv test",
+        ]
+
+        # Check if command is allowed (simple check)
+        is_allowed = any(command.startswith(allowed) for allowed in allowed_commands)
+
+        if not is_allowed:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": "Command not allowed",
+                    "allowed_commands": allowed_commands,
+                },
+                indent=2,
+            )
+
+        try:
+            result = subprocess.run(
+                command, shell=True, capture_output=True, text=True, timeout=120
+            )
+
+            return json.dumps(
+                {
+                    "status": "success" if result.returncode == 0 else "failed",
+                    "command": command,
+                    "returncode": result.returncode,
+                    "stdout": result.stdout[:2000] if result.stdout else "",
+                    "stderr": result.stderr[:500] if result.stderr else "",
+                },
+                indent=2,
+            )
+
+        except subprocess.TimeoutExpired:
+            return json.dumps(
+                {"status": "error", "message": "Command timed out (>120s)", "command": command},
+                indent=2,
+            )
+        except Exception as e:
+            return json.dumps({"status": "error", "message": str(e), "command": command}, indent=2)
+
+    @mcp.tool()
+    async def get_test_protocol() -> str:
+        """
+        Get the testing protocol summary.
+
+        Returns:
+            JSON summary of docs/how-to/testing-workflows.md
+        """
+        return json.dumps(
+            {
+                "doc": "docs/how-to/testing-workflows.md",
+                "rules": [
+                    "Rule #1: Fast tests first. Fail fast.",
+                    "Rule #2: No feature code without test code.",
+                    "Rule #3: Modified docs only → Skip tests.",
+                ],
+                "strategies": {
+                    "docs_only": {"action": "skip", "command": "echo 'Docs only'"},
+                    "mcp_server": {"action": "test-mcp-only", "command": "just test-mcp-only"},
+                    "tool_router": {"action": "test-mcp-only", "command": "just test-mcp-only"},
+                    "nix_config": {"action": "full", "command": "just test"},
+                    "general": {"action": "full", "command": "just test"},
+                },
+                "test_levels": {
+                    "unit": {"command": "just test-unit", "timeout": "<30s"},
+                    "integration": {"command": "just test-int", "timeout": "<2m"},
+                    "mcp": {"command": "just test-mcp-only", "timeout": "<60s"},
+                    "full": {"command": "just test", "timeout": "varies"},
+                },
+            },
+            indent=2,
         )
 
 
-class TestSandboxImports:
-    """Test that NCL sandbox modules can be imported."""
+# =============================================================================
+# Export
+# =============================================================================
 
-    def test_main_module_imports(self, nickel_check, sandbox_main: Path):
-        """Test that main sandbox module can be imported and exported."""
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(sandbox_main)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0, f"NCL export failed: {result.stderr}"
-
-        # Parse exported JSON
-        data = json.loads(result.stdout)
-        assert "version" in data
-        assert data["version"] == "1.0.0"
-
-    def test_seatbelt_module_imports(self, nickel_check):
-        """Test that seatbelt module can be imported."""
-        seatbelt_path = NCL_SANDBOX_DIR / "seatbelt" / "main.ncl"
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(seatbelt_path)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0, f"Seatbelt NCL export failed: {result.stderr}"
-
-    def test_skill_module_imports(self, nickel_check):
-        """Test that skill module can be imported."""
-        skill_path = NCL_SANDBOX_DIR / "skill" / "main.ncl"
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(skill_path)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0, f"Skill NCL export failed: {result.stderr}"
-
-
-class TestSandboxStructure:
-    """Test that exported sandbox configurations have correct structure."""
-
-    def test_main_module_structure(self, nickel_check, sandbox_main: Path):
-        """Verify main module exports expected keys."""
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(sandbox_main)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0
-
-        data = json.loads(result.stdout)
-
-        # Check namespace exports
-        assert "lib" in data
-        assert "nsjail" in data
-        assert "seatbelt" in data
-        assert "skill" in data
-
-        # Check lib submodules
-        assert "rlimits" in data.get("lib", {})
-        assert "mounts" in data.get("lib", {})
-        assert "network" in data.get("lib", {})
-
-    def test_seatbelt_profile_structure(self, nickel_check):
-        """Verify seatbelt profile has required fields."""
-        seatbelt_path = NCL_SANDBOX_DIR / "seatbelt" / "main.ncl"
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(seatbelt_path)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0
-
-        data = json.loads(result.stdout)
-
-        # Check pre-built profiles exist
-        assert "minimal" in data
-        assert "standard" in data
-        assert "development" in data
-
-        # Verify profiles are strings (SBPL content)
-        assert isinstance(data["minimal"], str)
-        assert "(version 1)" in data["minimal"]
-        assert "(deny default)" in data["minimal"]
-
-    def test_skill_profile_structure(self, nickel_check):
-        """Verify skill profile has required fields."""
-        skill_path = NCL_SANDBOX_DIR / "skill" / "main.ncl"
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(skill_path)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0
-
-        data = json.loads(result.stdout)
-
-        # Check lib exports (functions are not exported to JSON)
-        assert "lib" in data
-
-
-class TestExampleConfigurations:
-    """Test example sandbox configurations."""
-
-    def test_data_processor_example(self, nickel_check, examples_dir: Path):
-        """Test data-processor example configuration."""
-        example_path = examples_dir / "data-processor.ncl"
-        if not example_path.exists():
-            pytest.skip(f"Example not found: {example_path}")
-
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(example_path)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0, f"Data processor NCL export failed: {result.stderr}"
-
-        data = json.loads(result.stdout)
-
-        # Verify required fields
-        assert data.get("skill_id") == "data-processor"
-        assert data.get("platform") == "linux"
-        assert "cmd" in data
-        assert "resources" in data
-
-    def test_web_scraper_example(self, nickel_check, examples_dir: Path):
-        """Test web-scraper example configuration."""
-        example_path = examples_dir / "web-scraper.ncl"
-        if not example_path.exists():
-            pytest.skip(f"Example not found: {example_path}")
-
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(example_path)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0, f"Web scraper NCL export failed: {result.stderr}"
-
-        data = json.loads(result.stdout)
-
-        # Verify required fields
-        assert data.get("skill_id") == "web-scraper"
-        assert data.get("platform") == "linux"
-        assert "cmd" in data
-
-    def test_example_imports_sandbox_main(self, nickel_check, examples_dir: Path):
-        """Test that examples can import sandbox main module."""
-        example_path = examples_dir / "data-processor.ncl"
-        if not example_path.exists():
-            pytest.skip(f"Example not found: {example_path}")
-
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(example_path)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0, f"Example import failed: {result.stderr}"
-
-
-class TestResourceLimits:
-    """Test resource limit configurations."""
-
-    def test_resource_presets_exist(self, nickel_check, sandbox_main: Path):
-        """Verify resource presets are defined."""
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(sandbox_main)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0
-
-        data = json.loads(result.stdout)
-        rlimits = data.get("lib", {}).get("rlimits", {})
-
-        assert "minimal" in rlimits
-        assert "small" in rlimits
-        assert "medium" in rlimits
-        assert "large" in rlimits
-
-
-class TestMountConfigurations:
-    """Test mount point configurations."""
-
-    def test_mount_presets_exist(self, nickel_check, sandbox_main: Path):
-        """Verify mount presets are defined."""
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(sandbox_main)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0
-
-        data = json.loads(result.stdout)
-        mounts = data.get("lib", {}).get("mounts", {})
-
-        assert "essential" in mounts
-        assert "standard" in mounts
-        assert "development" in mounts
-
-
-class TestNetworkPolicies:
-    """Test network policy configurations."""
-
-    def test_network_presets_exist(self, nickel_check, sandbox_main: Path):
-        """Verify network presets are defined."""
-        result = subprocess.run(
-            ["nickel", "export", "--format", "json", str(sandbox_main)],
-            capture_output=True,
-            text=True,
-            cwd=str(NCL_SANDBOX_DIR),
-        )
-        assert result.returncode == 0
-
-        data = json.loads(result.stdout)
-        network = data.get("lib", {}).get("network", {})
-
-        assert "deny" in network
-        assert "localhost" in network
-        assert "container" in network
-        assert "allow" in network
+__all__ = ["register_tester_tools", "get_git_status", "categorize_changes"]

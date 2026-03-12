@@ -1,9 +1,11 @@
-//! Formal adversarial audit convergence tests.
-
 use async_trait::async_trait;
 use serde_json::json;
 use std::sync::Arc;
-use xiuxian_qianji::{FlowInstruction, QianjiMechanism, QianjiOutput, QianjiScheduler};
+use xiuxian_qianhuan::{PersonaRegistry, ThousandFacesOrchestrator};
+use xiuxian_qianji::{
+    FlowInstruction, QianjiCompiler, QianjiMechanism, QianjiOutput, QianjiScheduler,
+};
+use xiuxian_wendao::LinkGraphIndex;
 
 // A slightly smarter Mock that "learns" from audit failures
 struct SelfHealingMock;
@@ -31,8 +33,12 @@ impl QianjiMechanism for SelfHealingMock {
 }
 
 #[tokio::test]
-async fn test_formal_adversarial_audit_convergence()
--> std::result::Result<(), Box<dyn std::error::Error>> {
+async fn test_formal_adversarial_audit_convergence() {
+    let temp = tempfile::tempdir().unwrap();
+    let index = Arc::new(LinkGraphIndex::build(temp.path()).unwrap());
+    let orchestrator = Arc::new(ThousandFacesOrchestrator::new("Rules".to_string(), None));
+    let registry = Arc::new(PersonaRegistry::with_builtins());
+
     let mut engine = xiuxian_qianji::QianjiEngine::new();
     let analyzer = Arc::new(SelfHealingMock);
     let skeptic = Arc::new(
@@ -47,16 +53,10 @@ async fn test_formal_adversarial_audit_convergence()
     engine.add_link(a, s, None, 1.0);
 
     let scheduler = QianjiScheduler::new(engine);
-    let result = scheduler
-        .run(json!({}))
-        .await
-        .map_err(std::io::Error::other)?;
+    let result = scheduler.run(json!({})).await.expect("Execution failed");
 
     // Final state should be 'passed' after one retry
     assert_eq!(result["audit_status"], "passed");
-    let trace = result["analysis_trace"]
-        .as_array()
-        .ok_or_else(|| std::io::Error::other("analysis_trace should be an array"))?;
+    let trace = result["analysis_trace"].as_array().unwrap();
     assert_eq!(trace[0]["predicate"], "Fixed");
-    Ok(())
 }

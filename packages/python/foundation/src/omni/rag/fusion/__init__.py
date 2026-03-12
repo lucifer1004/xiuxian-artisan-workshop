@@ -1,7 +1,7 @@
 """
-Knowledge Fusion Engine.
+Dual-Core Knowledge Fusion Engine.
 
-Bridges LinkGraph and LanceDB vector signals into unified search.
+Bridges Core 1 (LinkGraph) and Core 2 (LanceDB vector) into unified search.
 
 Sub-modules by bridge:
 - link_graph_proximity: Bridge 1 — LinkGraph proximity boost for recall

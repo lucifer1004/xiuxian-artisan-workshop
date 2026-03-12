@@ -7,7 +7,6 @@ use super::foreground;
 use super::preempt;
 use super::session;
 use crate::agent::Agent;
-use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::channels::managed_runtime::turn::build_session_id;
 use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
 use crate::channels::traits::{Channel, ChannelMessage};
@@ -20,7 +19,6 @@ pub(in crate::channels::telegram::runtime::jobs) async fn handle_inbound_message
     interrupt_controller: &ForegroundInterruptController,
     job_manager: &Arc<JobManager>,
     agent: &Arc<Agent>,
-    queue_mode: ForegroundQueueMode,
 ) -> bool {
     let session_id = build_session_id(&msg.channel, &msg.session_key);
 
@@ -31,8 +29,6 @@ pub(in crate::channels::telegram::runtime::jobs) async fn handle_inbound_message
         return true;
     }
 
-    if queue_mode.should_interrupt_on_new_message() {
-        preempt::interrupt_active_turn_for_new_message(interrupt_controller, &session_id, &msg);
-    }
+    preempt::interrupt_active_turn_for_new_message(interrupt_controller, &session_id, &msg);
     foreground::forward(msg, channel, agent, foreground_tx).await
 }

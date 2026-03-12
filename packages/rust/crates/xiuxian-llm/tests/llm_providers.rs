@@ -1,1023 +1,534 @@
-//! Integration tests for `xiuxian_llm::llm::providers`.
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
-use serde_json::json;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
+use xiuxian_llm::llm::vision::DeepseekRuntime;
 
-#[cfg(feature = "provider-litellm")]
-use xiuxian_llm::llm::providers::execute_anthropic_messages_from_litellm_request_with_image_hook;
-use xiuxian_llm::llm::providers::{
-    AnthropicCustomBaseTransport, anthropic_custom_base_transport_label,
-    anthropic_custom_base_transport_order, anthropic_messages_endpoint_from_base,
-    execute_anthropic_custom_base_fallback, is_anthropic_protocol_mismatch,
-    is_official_anthropic_base, normalize_anthropic_image_media_type,
-    normalize_optional_base_override, parse_anthropic_messages_response, parse_positive_usize,
-    resolve_api_key_with_env, resolve_custom_base_transport_api_key_from_values,
-    resolve_positive_usize_env, resolve_required_api_key_with_env,
-    should_bypass_anthropic_model_validation, should_use_openai_like_for_base,
-    summarize_anthropic_custom_base_failures,
+use crate::config::RuntimeSettings;
+use crate::embedding::EmbeddingClient;
+
+use super::embedding::{
+    SharedEmbeddingRuntime, resolve_forced_http_model_host_upstream_base_url_for_tests,
+    resolve_shared_embedding_backend_override,
 };
-#[cfg(feature = "provider-litellm")]
-use xiuxian_llm::llm::providers::{
-    build_openai_like_provider, build_openai_provider, inline_openai_compatible_image_urls,
+use super::ocr::{
+    OcrBlockingExecution, OcrHostAdmissionDecision, OcrProcessGuardDecision, OcrRequestAdmission,
+    admit_deepseek_ocr_request_or_log, compute_deepseek_ocr_failure_circuit_open_until_for_tests,
+    deepseek_ocr_global_lock_path_with_inputs, deepseek_ocr_memory_guard_triggered,
+    deepseek_startup_prewarm_enabled_with_input, note_deepseek_ocr_cross_process_wait_acquired,
+    note_deepseek_ocr_cross_process_wait_timed_out, prewarm_ocr_runtime,
+    resolve_deepseek_ocr_host_admission, resolve_deepseek_ocr_max_dimension_with_inputs,
+    resolve_deepseek_ocr_max_in_flight_with_inputs, resolve_deepseek_ocr_memory_limit_bytes,
+    resolve_deepseek_ocr_process_guard_decision,
+    resolve_deepseek_ocr_stuck_recovery_enabled_with_input,
+    resolve_deepseek_ocr_stuck_recovery_exit_code_with_input,
+    resolve_deepseek_ocr_timeout_with_inputs,
+    resolve_gateway_ocr_max_concurrent_requests_with_inputs,
+    simulate_ocr_gate_timeout_interrupt_recovery_for_tests,
+    simulate_ocr_runtime_gate_bypass_for_tests, snapshot_deepseek_ocr_worker_telemetry,
+    wait_for_deepseek_ocr_watchdog_deadline_for_tests,
 };
+use super::summary::build_model_host_summary;
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+fn make_embedding_runtime(host_mode: &'static str, pid: Option<u32>) -> SharedEmbeddingRuntime {
+    SharedEmbeddingRuntime {
+        client: Arc::new(EmbeddingClient::new("http://127.0.0.1:11434", 3)),
+        default_model: Some("Qwen/Qwen3-Embedding-0.6B".to_string()),
+        fallback_embedding_dim: 1024,
+        backend: "mistral_sdk".to_string(),
+        base_url: "inproc://mistral-sdk".to_string(),
+        host_mode,
+        hosted_process_pid: pid,
+    }
+}
 
 #[test]
-fn anthropic_endpoint_builder_handles_common_shapes() {
+fn gateway_model_host_summary_reports_embedding_and_configured_ocr() {
+    let embedding_runtime = make_embedding_runtime("managed_mistral_server", Some(4242));
+    let ocr_runtime = DeepseekRuntime::Configured {
+        model_root: Arc::from(".data/models/dots-ocr"),
+    };
+
+    let summary = build_model_host_summary(&embedding_runtime, &ocr_runtime);
+
+    assert_eq!(summary.services.len(), 3);
+    assert_eq!(summary.hosted_process_pids(), vec![4242]);
+
+    let embedding = &summary.services[0];
+    assert_eq!(embedding.service, "embedding");
+    assert_eq!(embedding.backend, "mistral_sdk");
+    assert_eq!(embedding.host_mode, "managed_mistral_server");
+    assert_eq!(embedding.endpoint, "inproc://mistral-sdk");
+    assert_eq!(embedding.hosted_process_pid, Some(4242));
     assert_eq!(
-        anthropic_messages_endpoint_from_base("https://proxy.example.com/api"),
-        "https://proxy.example.com/api/v1/messages"
+        embedding.detail.as_deref(),
+        Some("Qwen/Qwen3-Embedding-0.6B")
     );
+
+    let llm_host = &summary.services[1];
+    assert_eq!(llm_host.service, "llm_host");
+    assert_eq!(llm_host.backend, "mistralrs");
+    assert_eq!(llm_host.host_mode, "managed_mistral_server");
+    assert_eq!(llm_host.endpoint, "inproc://mistral-sdk");
+    assert_eq!(llm_host.hosted_process_pid, Some(4242));
+    assert_eq!(llm_host.detail.as_deref(), Some("openai_compatible_server"));
+
+    let ocr = &summary.services[2];
+    assert_eq!(ocr.service, "ocr");
+    assert_eq!(ocr.backend, "deepseek_ocr");
+    assert_eq!(ocr.host_mode, "local_native_runtime");
+    assert_eq!(ocr.endpoint, "inproc://deepseek-ocr");
+    assert_eq!(ocr.detail.as_deref(), Some(".data/models/dots-ocr"));
+}
+
+#[test]
+fn gateway_model_host_summary_reports_remote_http_ocr() {
+    let embedding_runtime = make_embedding_runtime("inproc_mistral_sdk", None);
+    let ocr_runtime = DeepseekRuntime::RemoteHttp {
+        base_url: Arc::from("http://127.0.0.1:18193"),
+    };
+
+    let summary = build_model_host_summary(&embedding_runtime, &ocr_runtime);
+
+    assert_eq!(summary.services.len(), 2);
+
+    let ocr = &summary.services[1];
+    assert_eq!(ocr.service, "ocr");
+    assert_eq!(ocr.backend, "deepseek_ocr");
+    assert_eq!(ocr.host_mode, "remote_http_runtime");
+    assert_eq!(ocr.endpoint, "http://127.0.0.1:18193");
+    assert_eq!(ocr.detail, None);
+}
+
+#[test]
+fn gateway_model_host_summary_reports_disabled_ocr_reason() {
+    let embedding_runtime = make_embedding_runtime("inproc_mistral_sdk", None);
+    let ocr_runtime = DeepseekRuntime::Disabled {
+        reason: Arc::from("shared OCR client override disabled in gateway"),
+    };
+
+    let summary = build_model_host_summary(&embedding_runtime, &ocr_runtime);
+
+    assert_eq!(summary.services.len(), 2);
+    assert!(summary.hosted_process_pids().is_empty());
+
+    let embedding = &summary.services[0];
+    assert_eq!(embedding.service, "embedding");
+    assert_eq!(embedding.host_mode, "inproc_mistral_sdk");
+
+    let ocr = &summary.services[1];
+    assert_eq!(ocr.host_mode, "disabled_runtime");
+    assert_eq!(ocr.endpoint, "disabled://deepseek-ocr");
     assert_eq!(
-        anthropic_messages_endpoint_from_base("https://proxy.example.com/api/v1"),
-        "https://proxy.example.com/api/v1/messages"
-    );
-    assert_eq!(
-        anthropic_messages_endpoint_from_base("https://proxy.example.com/api/v1/messages"),
-        "https://proxy.example.com/api/v1/messages"
+        ocr.detail.as_deref(),
+        Some("shared OCR client override disabled in gateway")
     );
 }
 
 #[test]
-fn official_anthropic_base_is_not_bypassed() {
-    assert!(is_official_anthropic_base("https://api.anthropic.com"));
-    assert!(is_official_anthropic_base("https://api.anthropic.com/v1"));
-    assert!(!should_bypass_anthropic_model_validation(
-        "https://api.anthropic.com/v1"
-    ));
+fn shared_embedding_backend_override_prefers_env_backend() {
+    let mut settings = RuntimeSettings::default();
+    settings.memory.embedding_backend = Some("mistral_sdk".to_string());
+
+    let resolved =
+        resolve_shared_embedding_backend_override(&settings, Some("openai_http"), None, false);
+
+    assert_eq!(resolved.as_deref(), Some("openai_http"));
 }
 
 #[test]
-fn custom_anthropic_base_is_bypassed() {
-    assert!(!is_official_anthropic_base("https://proxy.example.com/api"));
-    assert!(should_bypass_anthropic_model_validation(
-        "https://proxy.example.com/api"
-    ));
+fn shared_embedding_backend_override_forces_http_for_mistral_sdk() {
+    let mut settings = RuntimeSettings::default();
+    settings.embedding.backend = Some("mistral_sdk".to_string());
+
+    let resolved = resolve_shared_embedding_backend_override(&settings, None, None, false);
+
+    assert_eq!(resolved.as_deref(), Some("http"));
 }
 
 #[test]
-fn openai_base_selection_uses_official_transport_for_openai_host_only() {
-    assert!(!should_use_openai_like_for_base(
-        "https://api.openai.com/v1"
-    ));
-    assert!(should_use_openai_like_for_base(
-        "https://proxy.example.com/openai"
-    ));
-    assert!(should_use_openai_like_for_base("http://127.0.0.1:4000/v1"));
-    assert!(should_use_openai_like_for_base("not-a-url"));
+fn forced_http_model_host_upstream_ignores_memory_gateway_base_url() {
+    let mut settings = RuntimeSettings::default();
+    settings.memory.embedding_backend = Some("mistral_sdk".to_string());
+    settings.memory.embedding_base_url = Some("http://127.0.0.1:18092".to_string());
+
+    let resolved =
+        resolve_forced_http_model_host_upstream_base_url_for_tests(&settings, None, None);
+
+    assert_eq!(resolved, "http://localhost:11434");
 }
 
 #[test]
-fn parse_anthropic_messages_response_extracts_text_and_tool_use() -> TestResult {
-    let payload = json!({
-        "content": [
-            { "type": "text", "text": "hello " },
-            { "type": "text", "text": "world" },
-            { "type": "tool_use", "id": "call_1", "name": "search", "input": { "q": "rust" } }
-        ]
-    });
+fn forced_http_model_host_upstream_ignores_embed_base_url_when_it_matches_gateway() {
+    let mut settings = RuntimeSettings::default();
+    settings.memory.embedding_backend = Some("mistral_sdk".to_string());
+    settings.memory.embedding_base_url = Some("http://127.0.0.1:18092".to_string());
 
-    let parsed = parse_anthropic_messages_response(&payload)?;
-    assert_eq!(parsed.text.as_deref(), Some("hello world"));
-    assert_eq!(parsed.tool_uses.len(), 1);
-    assert_eq!(parsed.tool_uses[0].id, "call_1");
-    assert_eq!(parsed.tool_uses[0].name, "search");
-    assert_eq!(parsed.tool_uses[0].input, json!({ "q": "rust" }));
-    Ok(())
-}
-
-#[test]
-fn normalize_anthropic_image_media_type_accepts_supported_types() {
-    assert_eq!(
-        normalize_anthropic_image_media_type("image/png", "iVBORw0KGgo="),
-        "image/png"
+    let resolved = resolve_forced_http_model_host_upstream_base_url_for_tests(
+        &settings,
+        Some("http://127.0.0.1:18092"),
+        Some("http://127.0.0.1:18092"),
     );
-    assert_eq!(
-        normalize_anthropic_image_media_type("image/jpg", "/9j/2w=="),
-        "image/jpeg"
-    );
+
+    assert_eq!(resolved, "http://localhost:11434");
 }
 
 #[test]
-fn normalize_anthropic_image_media_type_recovers_from_octet_stream() {
-    assert_eq!(
-        normalize_anthropic_image_media_type("application/octet-stream", "/9j/2w=="),
-        "image/jpeg"
-    );
-    assert_eq!(
-        normalize_anthropic_image_media_type("application/octet-stream", "iVBORw0KGgo="),
-        "image/png"
-    );
-}
+fn forced_http_model_host_upstream_prefers_explicit_embed_upstream() {
+    let mut settings = RuntimeSettings::default();
+    settings.memory.embedding_backend = Some("mistral_sdk".to_string());
+    settings.memory.embedding_base_url = Some("http://127.0.0.1:18092".to_string());
+    settings.embedding.client_url = Some("http://127.0.0.1:3002".to_string());
 
-#[test]
-fn normalize_anthropic_image_media_type_recovers_from_data_url_payload() {
-    assert_eq!(
-        normalize_anthropic_image_media_type(
-            "application/octet-stream",
-            "data:image/png;base64,iVBORw0KGgo="
-        ),
-        "image/png"
-    );
-    assert_eq!(
-        normalize_anthropic_image_media_type(
-            "application/octet-stream",
-            "data:image/jpeg;base64,/9j/2w=="
-        ),
-        "image/jpeg"
-    );
-}
-
-#[test]
-fn anthropic_protocol_mismatch_detector_matches_400_message_errors() {
-    assert!(is_anthropic_protocol_mismatch(
-        "litellm-rs anthropic chat completion failed (custom-base bypass): HTTP 400 Bad Request: {\"error\":{\"message\":\"messages 参数非法。请检查文档。\"}}"
-    ));
-    assert!(!is_anthropic_protocol_mismatch(
-        "litellm-rs anthropic chat completion failed (custom-base bypass): HTTP 429 Too Many Requests"
-    ));
-}
-
-#[test]
-fn custom_base_transport_order_prefers_minimax_for_glm_family() {
-    assert_eq!(
-        anthropic_custom_base_transport_order("glm-5"),
-        [
-            AnthropicCustomBaseTransport::Minimax,
-            AnthropicCustomBaseTransport::OpenAi,
-            AnthropicCustomBaseTransport::AnthropicMessagesBypass
-        ]
-    );
-    assert_eq!(
-        anthropic_custom_base_transport_order("claude-3-5-sonnet-20241022"),
-        [
-            AnthropicCustomBaseTransport::OpenAi,
-            AnthropicCustomBaseTransport::Minimax,
-            AnthropicCustomBaseTransport::AnthropicMessagesBypass
-        ]
-    );
-}
-
-#[test]
-fn custom_base_transport_api_key_precedence_is_stable() {
-    let openai = resolve_custom_base_transport_api_key_from_values(
-        AnthropicCustomBaseTransport::OpenAi,
+    let resolved = resolve_forced_http_model_host_upstream_base_url_for_tests(
+        &settings,
         None,
-        Some("configured"),
-        Some("openai"),
-        Some("minimax"),
-        Some("anthropic"),
+        Some("http://127.0.0.1:11434"),
     );
-    assert_eq!(openai.as_deref(), Some("openai"));
 
-    let bypass = resolve_custom_base_transport_api_key_from_values(
-        AnthropicCustomBaseTransport::AnthropicMessagesBypass,
-        None,
-        Some("configured"),
-        Some("openai"),
-        Some("minimax"),
-        Some("anthropic"),
-    );
-    assert_eq!(bypass.as_deref(), Some("configured"));
-
-    let explicit = resolve_custom_base_transport_api_key_from_values(
-        AnthropicCustomBaseTransport::Minimax,
-        Some("explicit"),
-        Some("configured"),
-        Some("openai"),
-        Some("minimax"),
-        Some("anthropic"),
-    );
-    assert_eq!(explicit.as_deref(), Some("explicit"));
+    assert_eq!(resolved, "http://127.0.0.1:11434");
 }
 
 #[test]
-fn summarize_custom_base_failures_renders_transport_labels() {
-    let attempts = vec![
-        (AnthropicCustomBaseTransport::OpenAi, "openai failed"),
-        (AnthropicCustomBaseTransport::Minimax, "minimax failed"),
-        (
-            AnthropicCustomBaseTransport::AnthropicMessagesBypass,
-            "bypass failed",
-        ),
-    ];
-    let summary = summarize_anthropic_custom_base_failures(&attempts);
-    assert_eq!(
-        summary,
-        "openai: openai failed | minimax: minimax failed | anthropic_messages_bypass: bypass failed"
-    );
+fn deepseek_startup_prewarm_defaults_to_enabled() {
+    assert!(deepseek_startup_prewarm_enabled_with_input(None));
+    assert!(deepseek_startup_prewarm_enabled_with_input(Some("1")));
+    assert!(deepseek_startup_prewarm_enabled_with_input(Some("true")));
+}
+
+#[test]
+fn deepseek_startup_prewarm_honors_false_like_values() {
+    assert!(!deepseek_startup_prewarm_enabled_with_input(Some("0")));
+    assert!(!deepseek_startup_prewarm_enabled_with_input(Some("false")));
+    assert!(!deepseek_startup_prewarm_enabled_with_input(Some(" no ")));
+    assert!(!deepseek_startup_prewarm_enabled_with_input(Some("Off")));
 }
 
 #[tokio::test]
-async fn execute_custom_base_fallback_stops_on_first_success() -> TestResult {
-    let mut seen = Vec::new();
-    let value = match execute_anthropic_custom_base_fallback("glm-5", |transport| {
-        seen.push(transport);
-        async move {
-            if matches!(transport, AnthropicCustomBaseTransport::OpenAi) {
-                Ok::<_, &'static str>("ok")
-            } else {
-                Err("failed")
-            }
-        }
-    })
-    .await
-    {
-        Ok(value) => value,
-        Err(error) => panic!("fallback should succeed on second transport: {error:?}"),
-    };
-
-    assert_eq!(value, "ok");
-    assert_eq!(
-        seen,
-        vec![
-            AnthropicCustomBaseTransport::Minimax,
-            AnthropicCustomBaseTransport::OpenAi
-        ]
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn execute_custom_base_fallback_returns_attempt_trace_when_exhausted() -> TestResult {
-    let Err(failure) = execute_anthropic_custom_base_fallback(
-        "claude-3-5-sonnet-20241022",
-        |transport| async move {
-            Err::<(), _>(anthropic_custom_base_transport_label(transport).to_string())
-        },
-    )
-    .await
-    else {
-        panic!("fallback should fail when all transports fail");
-    };
-
-    assert_eq!(failure.attempts().len(), 3);
-    assert_eq!(
-        failure.last_error().map(String::as_str),
-        Some("anthropic_messages_bypass")
-    );
-    Ok(())
-}
-
-#[test]
-fn resolve_api_key_with_env_prefers_explicit_non_empty_value() {
-    let resolved = resolve_api_key_with_env(
-        Some("sk-explicit"),
-        "XIUXIAN_TEST_PRIMARY_MISSING",
-        "XIUXIAN_TEST_FALLBACK_MISSING",
-    );
-    assert_eq!(resolved.as_deref(), Some("sk-explicit"));
-}
-
-#[test]
-fn resolve_api_key_with_env_returns_none_when_all_sources_absent_or_empty() {
-    let resolved = resolve_api_key_with_env(
-        Some("   "),
-        "XIUXIAN_TEST_PRIMARY_MISSING",
-        "XIUXIAN_TEST_FALLBACK_MISSING",
-    );
-    assert!(resolved.is_none());
-}
-
-#[test]
-fn parse_positive_usize_accepts_positive_values() {
-    assert_eq!(parse_positive_usize(Some("7"), 3), 7);
-    assert_eq!(parse_positive_usize(Some(" 12 "), 3), 12);
-}
-
-#[test]
-fn parse_positive_usize_falls_back_for_invalid_or_non_positive_values() {
-    assert_eq!(parse_positive_usize(None, 3), 3);
-    assert_eq!(parse_positive_usize(Some(""), 3), 3);
-    assert_eq!(parse_positive_usize(Some("abc"), 3), 3);
-    assert_eq!(parse_positive_usize(Some("0"), 3), 3);
-    assert_eq!(parse_positive_usize(Some("-1"), 3), 3);
-}
-
-#[test]
-fn resolve_positive_usize_env_uses_default_for_missing_env() {
-    assert_eq!(
-        resolve_positive_usize_env("XIUXIAN_TEST_POSITIVE_USIZE_ENV_MISSING", 5),
-        5
-    );
-}
-
-#[test]
-fn resolve_required_api_key_with_env_returns_error_when_absent() {
-    let Err(error) = resolve_required_api_key_with_env(
-        None,
-        "XIUXIAN_TEST_REQUIRED_PRIMARY_MISSING",
-        "XIUXIAN_TEST_REQUIRED_FALLBACK_MISSING",
-        "minimax",
-    ) else {
-        panic!("missing key should return error");
-    };
-    let rendered = error.to_string();
-    assert!(rendered.contains("missing minimax api key"));
-}
-
-#[test]
-fn resolve_required_api_key_with_env_prefers_explicit_value() {
-    let result = resolve_required_api_key_with_env(
-        Some("sk-required"),
-        "XIUXIAN_TEST_REQUIRED_PRIMARY_MISSING",
-        "XIUXIAN_TEST_REQUIRED_FALLBACK_MISSING",
-        "anthropic",
-    );
-    assert_eq!(result.ok().as_deref(), Some("sk-required"));
-}
-
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn openai_provider_rejects_non_openai_key_prefix() -> TestResult {
-    let result = build_openai_provider(
-        "https://api.openai.com/v1".to_string(),
-        Some("not-openai-prefixed-key".to_string()),
-        30,
-    )
-    .await;
-    assert!(
-        result.is_err(),
-        "strict OpenAI provider should reject non-sk key"
-    );
-    let rendered = match result {
-        Ok(_) => String::new(),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        rendered.contains("OpenAI API key should start"),
-        "error should expose key prefix validation, got: {rendered}"
-    );
-    Ok(())
-}
-
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn openai_like_provider_accepts_non_openai_key_prefix_for_custom_base() -> TestResult {
-    let result = build_openai_like_provider(
-        "https://proxy.example.com/api".to_string(),
-        Some("not-openai-prefixed-key".to_string()),
-        30,
-    )
-    .await;
-    assert!(
-        result.is_ok(),
-        "openai-like provider should allow non-sk key for custom base: {result:?}"
-    );
-    Ok(())
-}
-
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn inline_openai_compatible_image_urls_converts_and_caches_image_urls() -> TestResult {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    use axum::Router;
-    use axum::body::Bytes;
-    use axum::http::StatusCode;
-    use axum::routing::get;
-    use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
-    use litellm_rs::core::types::content::{ContentPart, ImageUrl};
-    use litellm_rs::core::types::message::{MessageContent, MessageRole};
-    use tokio::net::TcpListener;
-
-    let fetch_count = Arc::new(AtomicUsize::new(0));
-    let fetch_count_for_handler = Arc::clone(&fetch_count);
-    let app = Router::new().route(
-        "/img.png",
-        get(move || {
-            let fetch_count = Arc::clone(&fetch_count_for_handler);
-            async move {
-                fetch_count.fetch_add(1, Ordering::SeqCst);
-                (
-                    StatusCode::OK,
-                    [("content-type", "image/png")],
-                    Bytes::from_static(b"\x89PNG\r\n\x1a\nmock"),
-                )
-            }
-        }),
-    );
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let addr = listener.local_addr()?;
+async fn remote_http_ocr_prewarm_stays_safe_inside_async_runtime() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
-        let _ = axum::serve(listener, app).await;
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut request = [0_u8; 2048];
+        let bytes_read = stream.read(&mut request).await.unwrap();
+        let request_text = String::from_utf8_lossy(&request[..bytes_read]);
+        assert!(request_text.starts_with("POST /v1/vision/ocr/prewarm "));
+        let body = r#"{"ready":true}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK
+content-type: application/json
+content-length: {}
+connection: close
+
+{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).await.unwrap();
     });
 
-    let image_url = format!("http://{addr}/img.png");
-    let request = LiteChatRequest {
-        model: "glm-5".to_string(),
-        messages: vec![ChatMessage {
-            role: MessageRole::User,
-            content: Some(MessageContent::Parts(vec![
-                ContentPart::ImageUrl {
-                    image_url: ImageUrl {
-                        url: image_url.clone(),
-                        detail: Some("high".to_string()),
-                    },
-                },
-                ContentPart::ImageUrl {
-                    image_url: ImageUrl {
-                        url: image_url.clone(),
-                        detail: Some("high".to_string()),
-                    },
-                },
-            ])),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-    let client = reqwest::Client::new();
-    let normalized = inline_openai_compatible_image_urls(&client, &request).await?;
-
-    server.abort();
-
-    let Some(MessageContent::Parts(parts)) = normalized
-        .messages
-        .first()
-        .and_then(|message| message.content.clone())
-    else {
-        panic!("normalized request should keep multimodal parts");
-    };
-    assert_eq!(parts.len(), 2);
-    for part in parts {
-        match part {
-            ContentPart::Image {
-                source,
-                detail,
-                image_url,
-            } => {
-                assert_eq!(source.media_type, "image/png");
-                assert!(!source.data.trim().is_empty());
-                assert_eq!(detail.as_deref(), Some("high"));
-                assert!(image_url.is_none());
-            }
-            other => panic!("expected inline image part, got {other:?}"),
-        }
-    }
-    assert_eq!(
-        fetch_count.load(Ordering::SeqCst),
-        1,
-        "same image URL should be fetched once then served from cache"
-    );
-    Ok(())
-}
-
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn inline_openai_compatible_image_urls_normalizes_octet_stream_data_uri() -> TestResult {
-    use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
-    use litellm_rs::core::types::content::{ContentPart, ImageUrl};
-    use litellm_rs::core::types::message::{MessageContent, MessageRole};
-
-    let request = LiteChatRequest {
-        model: "gpt-5-codex".to_string(),
-        messages: vec![ChatMessage {
-            role: MessageRole::User,
-            content: Some(MessageContent::Parts(vec![ContentPart::ImageUrl {
-                image_url: ImageUrl {
-                    url: "data:application/octet-stream;base64,iVBORw0KGgoBAgM=".to_string(),
-                    detail: Some("auto".to_string()),
-                },
-            }])),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-
-    let normalized = inline_openai_compatible_image_urls(&reqwest::Client::new(), &request).await?;
-    let Some(MessageContent::Parts(parts)) = normalized
-        .messages
-        .first()
-        .and_then(|message| message.content.clone())
-    else {
-        panic!("normalized request should keep multimodal parts");
-    };
-
-    assert_eq!(parts.len(), 1);
-    match &parts[0] {
-        ContentPart::Image {
-            source,
-            detail,
-            image_url,
-        } => {
-            assert_eq!(source.media_type, "image/png");
-            assert_eq!(source.data, "iVBORw0KGgoBAgM=");
-            assert_eq!(detail.as_deref(), Some("auto"));
-            assert!(image_url.is_none());
-        }
-        other => panic!("expected inline image part, got {other:?}"),
-    }
-    Ok(())
-}
-
-#[test]
-fn normalize_optional_base_override_trims_and_drops_empty_values() {
-    assert_eq!(
-        normalize_optional_base_override(Some(" https://api.example.com/v1 ")).as_deref(),
-        Some("https://api.example.com/v1")
-    );
-    assert_eq!(
-        normalize_optional_base_override(Some(" https://api.example.com/api ")).as_deref(),
-        Some("https://api.example.com/api/v1")
-    );
-    assert_eq!(
-        normalize_optional_base_override(Some("https://api.example.com/v1/chat/completions"))
-            .as_deref(),
-        Some("https://api.example.com/v1")
-    );
-    assert!(normalize_optional_base_override(Some("   ")).is_none());
-    assert!(normalize_optional_base_override(None).is_none());
-}
-
-#[cfg(feature = "provider-litellm")]
-#[test]
-fn build_anthropic_messages_body_from_request_preserves_core_fields() {
-    use litellm_rs::core::types::chat::ChatRequest as LiteChatRequest;
-
-    use xiuxian_llm::llm::providers::build_anthropic_messages_body_from_request;
-
-    let request = LiteChatRequest {
-        model: "claude-3-7-sonnet".to_string(),
-        max_tokens: Some(1024),
-        temperature: Some(0.2),
-        top_p: Some(0.95),
-        stop: Some(vec!["</done>".to_string()]),
-        ..Default::default()
-    };
-    let messages = vec![json!({"role":"user","content":"hello"})];
-    let body = build_anthropic_messages_body_from_request(
-        &request,
-        messages.as_slice(),
-        Some("system prompt".to_string()),
-    );
-
-    assert_eq!(body["model"], json!("claude-3-7-sonnet"));
-    assert_eq!(body["max_tokens"], json!(1024));
-    assert_eq!(body["system"], json!("system prompt"));
-    let Some(temperature) = body["temperature"].as_f64() else {
-        panic!("temperature should serialize as number");
-    };
-    let Some(top_p) = body["top_p"].as_f64() else {
-        panic!("top_p should serialize as number");
-    };
-    assert!((temperature - 0.2).abs() < 1e-5);
-    assert!((top_p - 0.95).abs() < 1e-5);
-    assert_eq!(body["stop_sequences"], json!(["</done>"]));
-}
-
-#[cfg(feature = "provider-litellm")]
-#[test]
-fn split_anthropic_system_messages_extracts_system_prompt() {
-    use litellm_rs::core::types::chat::ChatMessage;
-    use litellm_rs::core::types::message::{MessageContent, MessageRole};
-
-    use xiuxian_llm::llm::providers::split_anthropic_system_messages;
-
-    let messages = vec![
-        ChatMessage {
-            role: MessageRole::System,
-            content: Some(MessageContent::Text("policy".to_string())),
-            ..Default::default()
-        },
-        ChatMessage {
-            role: MessageRole::User,
-            content: Some(MessageContent::Text("hello".to_string())),
-            ..Default::default()
-        },
-    ];
-
-    let (system, others) = split_anthropic_system_messages(messages.as_slice());
-    assert_eq!(system.as_deref(), Some("policy"));
-    assert_eq!(others.len(), 1);
-    assert_eq!(others[0].role, MessageRole::User);
-}
-
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn build_anthropic_messages_body_from_litellm_request_with_image_hook_injects_overlay()
--> TestResult {
-    use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
-    use litellm_rs::core::types::content::{ContentPart, ImageSource};
-    use litellm_rs::core::types::message::{MessageContent, MessageRole};
-
-    use xiuxian_llm::llm::providers::build_anthropic_messages_body_from_litellm_request_with_image_hook;
-
-    let request = LiteChatRequest {
-        model: "claude-3-7-sonnet".to_string(),
-        messages: vec![ChatMessage {
-            role: MessageRole::User,
-            content: Some(MessageContent::Parts(vec![ContentPart::Image {
-                source: ImageSource {
-                    media_type: "image/png".to_string(),
-                    data: "iVBORw0KGgo=".to_string(),
-                },
-                detail: None,
-                image_url: None,
-            }])),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-    let client = reqwest::Client::new();
-    let body = build_anthropic_messages_body_from_litellm_request_with_image_hook(
-        &client,
-        &request,
-        |source| async move { Some(format!("ocr:{}", source.media_type)) },
-    )
-    .await?;
-
-    assert_eq!(body["messages"][0]["content"][0]["type"], json!("text"));
-    assert_eq!(
-        body["messages"][0]["content"][0]["text"],
-        json!("ocr:image/png")
-    );
-    assert_eq!(body["messages"][0]["content"][1]["type"], json!("image"));
-    assert_eq!(
-        body["messages"][0]["content"][1]["source"]["media_type"],
-        json!("image/png")
-    );
-    Ok(())
-}
-
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn build_anthropic_messages_body_maps_tool_call_chain_to_tool_use_and_tool_result()
--> TestResult {
-    use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
-    use litellm_rs::core::types::message::{MessageContent, MessageRole};
-    use litellm_rs::core::types::tools::{FunctionCall, ToolCall};
-
-    use xiuxian_llm::llm::providers::build_anthropic_messages_body_from_litellm_request_with_image_hook;
-
-    let request = LiteChatRequest {
-        model: "claude-3-7-sonnet".to_string(),
-        messages: vec![
-            ChatMessage {
-                role: MessageRole::User,
-                content: Some(MessageContent::Text("hello".to_string())),
-                ..Default::default()
-            },
-            ChatMessage {
-                role: MessageRole::Assistant,
-                tool_calls: Some(vec![ToolCall {
-                    id: "call_1".to_string(),
-                    tool_type: "function".to_string(),
-                    function: FunctionCall {
-                        name: "search".to_string(),
-                        arguments: r#"{"q":"rust"}"#.to_string(),
-                    },
-                }]),
-                ..Default::default()
-            },
-            ChatMessage {
-                role: MessageRole::Tool,
-                tool_call_id: Some("call_1".to_string()),
-                content: Some(MessageContent::Text("tool-result".to_string())),
-                ..Default::default()
-            },
-        ],
-        ..Default::default()
-    };
-    let client = reqwest::Client::new();
-    let body = build_anthropic_messages_body_from_litellm_request_with_image_hook(
-        &client,
-        &request,
-        |_source| async move { None::<String> },
-    )
-    .await?;
-
-    assert_eq!(body["messages"][1]["role"], json!("assistant"));
-    assert_eq!(body["messages"][1]["content"][0]["type"], json!("tool_use"));
-    assert_eq!(body["messages"][1]["content"][0]["id"], json!("call_1"));
-    assert_eq!(body["messages"][1]["content"][0]["name"], json!("search"));
-    assert_eq!(body["messages"][2]["role"], json!("user"));
-    assert_eq!(
-        body["messages"][2]["content"][0]["type"],
-        json!("tool_result")
-    );
-    assert_eq!(
-        body["messages"][2]["content"][0]["tool_use_id"],
-        json!("call_1")
-    );
-    assert_eq!(
-        body["messages"][2]["content"][0]["content"],
-        json!("tool-result")
-    );
-    Ok(())
-}
-
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn execute_anthropic_messages_with_image_hook_round_trips_response_and_request_shape()
--> TestResult {
-    use std::sync::Arc;
-
-    use axum::Router;
-    use axum::extract::{Json, State};
-    use axum::routing::post;
-    use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
-    use litellm_rs::core::types::content::{ContentPart, ImageSource};
-    use litellm_rs::core::types::message::{MessageContent, MessageRole};
-    use tokio::net::TcpListener;
-    use tokio::sync::Mutex;
-
-    type CapturedRequest = Arc<Mutex<Option<serde_json::Value>>>;
-
-    async fn handler(
-        State(captured): State<CapturedRequest>,
-        Json(payload): Json<serde_json::Value>,
-    ) -> Json<serde_json::Value> {
-        *captured.lock().await = Some(payload);
-        Json(json!({
-            "content": [
-                {"type": "text", "text": "ack"},
-                {"type": "tool_use", "id": "call_1", "name": "search", "input": {"q": "rust"}}
-            ]
-        }))
-    }
-
-    let captured: CapturedRequest = Arc::new(Mutex::new(None));
-    let app = Router::new()
-        .route("/v1/messages", post(handler))
-        .with_state(Arc::clone(&captured));
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let addr = listener.local_addr()?;
-    tokio::spawn(async move {
-        let _ = axum::serve(listener, app).await;
+    let runtime = Arc::new(DeepseekRuntime::RemoteHttp {
+        base_url: Arc::from(format!("http://{address}")),
     });
 
-    let request = LiteChatRequest {
-        model: "claude-3-7-sonnet".to_string(),
-        messages: vec![ChatMessage {
-            role: MessageRole::User,
-            content: Some(MessageContent::Parts(vec![
-                ContentPart::Text {
-                    text: "hello".to_string(),
-                },
-                ContentPart::Image {
-                    source: ImageSource {
-                        media_type: "image/png".to_string(),
-                        data: "iVBORw0KGgo=".to_string(),
-                    },
-                    detail: None,
-                    image_url: None,
-                },
-            ])),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-    let endpoint = format!("http://{addr}/v1/messages");
-    let client = reqwest::Client::new();
-    let parsed = execute_anthropic_messages_from_litellm_request_with_image_hook(
-        &client,
-        endpoint.as_str(),
-        "sk-test",
-        &request,
-        1,
-        |_source| async move { Some("ocr-overlay".to_string()) },
-    )
-    .await?;
-
-    assert_eq!(parsed.text.as_deref(), Some("ack"));
-    assert_eq!(parsed.tool_uses.len(), 1);
-    assert_eq!(parsed.tool_uses[0].name, "search");
-    let Some(captured_request) = captured.lock().await.clone() else {
-        panic!("server should capture request");
-    };
-    assert_eq!(
-        captured_request["messages"][0]["content"][0]["text"],
-        json!("hello")
-    );
-    assert_eq!(
-        captured_request["messages"][0]["content"][1]["text"],
-        json!("ocr-overlay")
-    );
-    assert_eq!(
-        captured_request["messages"][0]["content"][2]["type"],
-        json!("image")
-    );
-    Ok(())
+    prewarm_ocr_runtime(runtime).await.unwrap();
+    server.await.unwrap();
 }
 
-#[cfg(feature = "provider-litellm")]
+#[tokio::test]
+async fn remote_http_ocr_prewarm_is_best_effort_when_upstream_is_unavailable() {
+    let runtime = Arc::new(DeepseekRuntime::RemoteHttp {
+        base_url: Arc::from("http://127.0.0.1:9"),
+    });
+
+    prewarm_ocr_runtime(runtime).await.unwrap();
+}
+
 #[test]
-fn build_anthropic_messages_body_normalizes_image_media_type() {
-    use litellm_rs::core::types::chat::ChatRequest as LiteChatRequest;
-
-    use xiuxian_llm::llm::providers::build_anthropic_messages_body_from_request;
-
-    let request = LiteChatRequest {
-        model: "claude-3-7-sonnet".to_string(),
-        max_tokens: Some(256),
-        ..Default::default()
-    };
-    let messages = vec![json!({
-        "role": "user",
-        "content": [{
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "application/octet-stream",
-                "data": "/9j/2w=="
-            }
-        }]
-    })];
-    let body = build_anthropic_messages_body_from_request(&request, messages.as_slice(), None);
+fn deepseek_ocr_max_in_flight_prefers_env_then_config_then_default() {
     assert_eq!(
-        body["messages"][0]["content"][0]["source"]["media_type"],
-        json!("image/jpeg")
+        resolve_deepseek_ocr_max_in_flight_with_inputs(Some("8"), Some(4)),
+        8
+    );
+    assert_eq!(
+        resolve_deepseek_ocr_max_in_flight_with_inputs(None, Some(4)),
+        4
+    );
+    assert_eq!(
+        resolve_deepseek_ocr_max_in_flight_with_inputs(Some("0"), Some(4)),
+        4
+    );
+    assert_eq!(
+        resolve_deepseek_ocr_max_in_flight_with_inputs(None, None),
+        1
     );
 }
 
-#[cfg(feature = "provider-litellm")]
 #[test]
-fn build_anthropic_messages_body_maps_tool_choice_required_to_any() {
-    use litellm_rs::core::types::chat::ChatRequest as LiteChatRequest;
-    use litellm_rs::core::types::tools::{FunctionDefinition, Tool, ToolChoice, ToolType};
-
-    use xiuxian_llm::llm::providers::build_anthropic_messages_body_from_request;
-
-    let request = LiteChatRequest {
-        model: "claude-3-7-sonnet".to_string(),
-        tools: Some(vec![Tool {
-            tool_type: ToolType::Function,
-            function: FunctionDefinition {
-                name: "search".to_string(),
-                description: Some("search docs".to_string()),
-                parameters: Some(json!({
-                    "type": "object",
-                    "properties": { "q": { "type": "string" } },
-                    "required": ["q"]
-                })),
-            },
-        }]),
-        tool_choice: Some(ToolChoice::String("required".to_string())),
-        ..Default::default()
-    };
-    let messages = vec![json!({"role":"user","content":"hello"})];
-    let body = build_anthropic_messages_body_from_request(&request, messages.as_slice(), None);
-    assert_eq!(body["tool_choice"], json!({"type":"any"}));
-    assert_eq!(body["tools"][0]["name"], json!("search"));
-}
-
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn openai_transform_request_preserves_multimodal_tools_and_response_format() -> TestResult {
-    use litellm_rs::core::traits::provider::llm_provider::trait_definition::LLMProvider;
-    use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
-    use litellm_rs::core::types::content::{ContentPart, ImageSource, ImageUrl};
-    use litellm_rs::core::types::context::RequestContext as LiteRequestContext;
-    use litellm_rs::core::types::message::{MessageContent, MessageRole};
-    use litellm_rs::core::types::tools::{
-        FunctionChoice, FunctionDefinition, ResponseFormat, Tool, ToolChoice, ToolType,
-    };
-
-    use xiuxian_llm::llm::providers::build_openai_provider;
-
-    let provider = build_openai_provider(
-        "https://api.openai.com/v1".to_string(),
-        Some("sk-test".to_string()),
-        30,
-    )
-    .await?;
-
-    let request = LiteChatRequest {
-        model: "gpt-4o".to_string(),
-        messages: vec![ChatMessage {
-            role: MessageRole::User,
-            content: Some(MessageContent::Parts(vec![
-                ContentPart::Text {
-                    text: "read this image".to_string(),
-                },
-                ContentPart::Image {
-                    source: ImageSource {
-                        media_type: "image/png".to_string(),
-                        data: "iVBORw0KGgo=".to_string(),
-                    },
-                    detail: Some("high".to_string()),
-                    image_url: Some(ImageUrl {
-                        url: "data:image/png;base64,iVBORw0KGgo=".to_string(),
-                        detail: Some("high".to_string()),
-                    }),
-                },
-            ])),
-            ..Default::default()
-        }],
-        tools: Some(vec![Tool {
-            tool_type: ToolType::Function,
-            function: FunctionDefinition {
-                name: "search".to_string(),
-                description: Some("search docs".to_string()),
-                parameters: Some(json!({
-                    "type": "object",
-                    "properties": { "q": { "type": "string" } }
-                })),
-            },
-        }]),
-        tool_choice: Some(ToolChoice::Specific {
-            choice_type: "function".to_string(),
-            function: Some(FunctionChoice {
-                name: "search".to_string(),
-            }),
-        }),
-        response_format: Some(ResponseFormat {
-            format_type: "json_object".to_string(),
-            json_schema: None,
-            response_type: None,
-        }),
-        max_tokens: Some(256),
-        temperature: Some(0.2),
-        user: Some("user-1".to_string()),
-        ..Default::default()
-    };
-
-    let payload =
-        LLMProvider::transform_request(&provider, request, LiteRequestContext::new()).await?;
-
-    assert_eq!(payload["model"], json!("gpt-4o"));
-    assert_eq!(payload["messages"][0]["role"], json!("user"));
-    assert_eq!(payload["messages"][0]["content"][1]["type"], json!("image"));
+fn deepseek_ocr_max_dimension_prefers_env_then_config_then_default() {
     assert_eq!(
-        payload["messages"][0]["content"][1]["source"]["media_type"],
-        json!("image/png")
+        resolve_deepseek_ocr_max_dimension_with_inputs(Some("640"), Some(768)),
+        640
     );
-    assert_eq!(payload["tools"][0]["type"], json!("function"));
-    assert_eq!(payload["tool_choice"]["type"], json!("function"));
-    assert_eq!(payload["tool_choice"]["function"]["name"], json!("search"));
-    assert_eq!(payload["response_format"]["type"], json!("json_object"));
-    Ok(())
+    assert_eq!(
+        resolve_deepseek_ocr_max_dimension_with_inputs(None, Some(768)),
+        768
+    );
+    assert_eq!(
+        resolve_deepseek_ocr_max_dimension_with_inputs(Some("0"), Some(768)),
+        768
+    );
+    assert_eq!(
+        resolve_deepseek_ocr_max_dimension_with_inputs(None, None),
+        1024
+    );
 }
 
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn openai_transform_request_keeps_proxy_model_id_without_registry_validation() -> TestResult {
-    use litellm_rs::core::traits::provider::llm_provider::trait_definition::LLMProvider;
-    use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
-    use litellm_rs::core::types::context::RequestContext as LiteRequestContext;
-    use litellm_rs::core::types::message::{MessageContent, MessageRole};
-
-    use xiuxian_llm::llm::providers::build_openai_provider;
-
-    let provider = build_openai_provider(
-        "https://api.openai.com/v1".to_string(),
-        Some("sk-test".to_string()),
-        30,
-    )
-    .await?;
-    let request = LiteChatRequest {
-        model: "glm-5".to_string(),
-        messages: vec![ChatMessage {
-            role: MessageRole::User,
-            content: Some(MessageContent::Text("hello".to_string())),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-
-    let payload =
-        LLMProvider::transform_request(&provider, request, LiteRequestContext::new()).await?;
-    assert_eq!(payload["model"], json!("glm-5"));
-    Ok(())
+#[test]
+fn gateway_ocr_max_concurrent_requests_prefers_explicit_gateway_then_worker_limit() {
+    assert_eq!(
+        resolve_gateway_ocr_max_concurrent_requests_with_inputs(Some("9"), Some(6), Some(4)),
+        9
+    );
+    assert_eq!(
+        resolve_gateway_ocr_max_concurrent_requests_with_inputs(None, Some(6), Some(4)),
+        6
+    );
+    assert_eq!(
+        resolve_gateway_ocr_max_concurrent_requests_with_inputs(None, None, Some(4)),
+        4
+    );
+    assert_eq!(
+        resolve_gateway_ocr_max_concurrent_requests_with_inputs(Some("0"), None, None),
+        1
+    );
 }
 
-#[cfg(feature = "provider-litellm")]
-#[tokio::test]
-async fn anthropic_transform_request_rejects_unknown_model_before_transport() -> TestResult {
-    use litellm_rs::core::traits::provider::llm_provider::trait_definition::LLMProvider;
-    use litellm_rs::core::types::chat::{ChatMessage, ChatRequest as LiteChatRequest};
-    use litellm_rs::core::types::context::RequestContext as LiteRequestContext;
-    use litellm_rs::core::types::message::{MessageContent, MessageRole};
-
-    use xiuxian_llm::llm::providers::build_anthropic_provider;
-
-    let provider = build_anthropic_provider(
-        "https://proxy.example.com/api".to_string(),
-        "sk-test".to_string(),
-        30,
-    )
-    .await?;
-
-    let request = LiteChatRequest {
-        model: "glm-5".to_string(),
-        messages: vec![ChatMessage {
-            role: MessageRole::User,
-            content: Some(MessageContent::Text("hello".to_string())),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-
-    let Err(error) =
-        LLMProvider::transform_request(&provider, request, LiteRequestContext::new()).await
-    else {
-        panic!("unknown anthropic model should fail fast");
-    };
-    let error_text = error.to_string();
-    assert!(
-        error_text.contains("Unsupported model: glm-5"),
-        "unexpected error: {error_text}"
+#[test]
+fn deepseek_ocr_global_lock_path_defaults_to_project_runtime_dir() {
+    let path = deepseek_ocr_global_lock_path_with_inputs(Path::new("/tmp/project"), None, None);
+    assert_eq!(
+        path,
+        PathBuf::from("/tmp/project/.run/locks/deepseek-ocr.lock")
     );
-    Ok(())
+}
+
+#[test]
+fn deepseek_ocr_global_lock_path_prefers_custom_override() {
+    let path = deepseek_ocr_global_lock_path_with_inputs(
+        Path::new("/tmp/project"),
+        Some(Path::new(".runtime")),
+        Some(Path::new("locks/custom-ocr.lock")),
+    );
+    assert_eq!(path, PathBuf::from("/tmp/project/locks/custom-ocr.lock"));
+}
+
+#[test]
+fn deepseek_ocr_failure_circuit_open_until_uses_latest_deadline() {
+    let open_until = compute_deepseek_ocr_failure_circuit_open_until_for_tests(2_000, 1_000, 250)
+        .expect("cooldown should open circuit");
+    assert_eq!(open_until, 2_000);
+
+    let later_open_until =
+        compute_deepseek_ocr_failure_circuit_open_until_for_tests(500, 1_000, 250)
+            .expect("cooldown should open circuit");
+    assert_eq!(later_open_until, 1_250);
+}
+
+#[test]
+fn deepseek_ocr_worker_telemetry_tracks_cross_process_wait_counters() {
+    let before = snapshot_deepseek_ocr_worker_telemetry(0);
+
+    note_deepseek_ocr_cross_process_wait_acquired();
+    note_deepseek_ocr_cross_process_wait_timed_out();
+
+    let after = snapshot_deepseek_ocr_worker_telemetry(0);
+    assert_eq!(
+        after.total_cross_process_wait_acquired,
+        before.total_cross_process_wait_acquired.saturating_add(1)
+    );
+    assert_eq!(
+        after.total_cross_process_wait_timed_out,
+        before.total_cross_process_wait_timed_out.saturating_add(1)
+    );
+}
+
+#[test]
+fn deepseek_ocr_watchdog_wait_returns_early_when_worker_finishes() {
+    let worker_done = Arc::new(AtomicBool::new(false));
+    let done_for_thread = Arc::clone(&worker_done);
+    let setter = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(20));
+        done_for_thread.store(true, Ordering::Relaxed);
+    });
+
+    let started = Instant::now();
+    let reached_deadline = wait_for_deepseek_ocr_watchdog_deadline_for_tests(
+        worker_done.as_ref(),
+        Duration::from_millis(500),
+        Duration::from_millis(5),
+    );
+    setter.join().expect("setter thread should finish cleanly");
+
+    assert!(!reached_deadline);
+    assert!(started.elapsed() < Duration::from_millis(200));
+}
+
+#[test]
+fn deepseek_ocr_watchdog_wait_reaches_deadline_when_worker_stays_busy() {
+    let worker_done = AtomicBool::new(false);
+    let started = Instant::now();
+
+    let reached_deadline = wait_for_deepseek_ocr_watchdog_deadline_for_tests(
+        &worker_done,
+        Duration::from_millis(30),
+        Duration::from_millis(5),
+    );
+
+    assert!(reached_deadline);
+    assert!(started.elapsed() >= Duration::from_millis(25));
+    assert!(started.elapsed() < Duration::from_millis(200));
+}
+
+#[test]
+fn deepseek_ocr_stuck_recovery_exit_flag_recognizes_truthy_values() {
+    assert!(resolve_deepseek_ocr_stuck_recovery_enabled_with_input(
+        Some("true")
+    ));
+    assert!(resolve_deepseek_ocr_stuck_recovery_enabled_with_input(
+        Some("1")
+    ));
+    assert!(!resolve_deepseek_ocr_stuck_recovery_enabled_with_input(
+        Some("false")
+    ));
+    assert!(!resolve_deepseek_ocr_stuck_recovery_enabled_with_input(
+        None
+    ));
+}
+
+#[test]
+fn deepseek_ocr_stuck_recovery_exit_code_uses_positive_override_or_default() {
+    assert_eq!(
+        resolve_deepseek_ocr_stuck_recovery_exit_code_with_input(Some("91")),
+        91
+    );
+    assert_eq!(
+        resolve_deepseek_ocr_stuck_recovery_exit_code_with_input(Some("0")),
+        75
+    );
+    assert_eq!(
+        resolve_deepseek_ocr_stuck_recovery_exit_code_with_input(None),
+        75
+    );
+}
+
+#[test]
+fn deepseek_ocr_timeout_uses_cold_stage_and_clamps_cold_budget_to_warm_floor() {
+    let timeout = resolve_deepseek_ocr_timeout_with_inputs(true, Some(60_000), Some(1_000));
+    assert_eq!(timeout.stage, "cold_start");
+    assert_eq!(timeout.duration, std::time::Duration::from_millis(60_000));
+}
+
+#[test]
+fn deepseek_ocr_timeout_uses_warm_budget_in_steady_state() {
+    let timeout = resolve_deepseek_ocr_timeout_with_inputs(false, Some(45_000), Some(90_000));
+    assert_eq!(timeout.stage, "steady_state");
+    assert_eq!(timeout.duration, std::time::Duration::from_millis(45_000));
+}
+
+#[test]
+fn deepseek_ocr_memory_limit_bytes_parse_fractional_gib() {
+    let limit_bytes =
+        resolve_deepseek_ocr_memory_limit_bytes(Some("1.5")).expect("fractional GiB should parse");
+    assert_eq!(limit_bytes, 1_610_612_736);
+}
+
+#[test]
+fn deepseek_ocr_memory_limit_bytes_reject_invalid_values() {
+    assert_eq!(resolve_deepseek_ocr_memory_limit_bytes(Some("0")), None);
+    assert_eq!(resolve_deepseek_ocr_memory_limit_bytes(Some("-1")), None);
+    assert_eq!(resolve_deepseek_ocr_memory_limit_bytes(Some("abc")), None);
+}
+
+#[test]
+fn deepseek_ocr_memory_guard_triggered_when_rss_exceeds_limit() {
+    assert!(deepseek_ocr_memory_guard_triggered(
+        Some("1.0"),
+        1_073_741_825
+    ));
+    assert!(!deepseek_ocr_memory_guard_triggered(
+        Some("1.0"),
+        1_073_741_824
+    ));
+}
+
+#[tokio::test]
+async fn deepseek_ocr_process_guard_decision_skips_remote_runtime() {
+    let runtime = DeepseekRuntime::RemoteHttp {
+        base_url: Arc::from("http://127.0.0.1:9999"),
+    };
+
+    let decision = resolve_deepseek_ocr_process_guard_decision(&runtime).await;
+
+    assert!(matches!(decision, OcrProcessGuardDecision::NotRequired));
+}
+
+#[tokio::test]
+async fn deepseek_ocr_host_admission_allows_remote_runtime_without_guard() {
+    let runtime = DeepseekRuntime::RemoteHttp {
+        base_url: Arc::from("http://127.0.0.1:9999"),
+    };
+
+    let decision = resolve_deepseek_ocr_host_admission(&runtime).await;
+
+    assert!(matches!(
+        decision,
+        OcrHostAdmissionDecision::Allowed { guard: None }
+    ));
+}
+
+#[tokio::test]
+async fn deepseek_ocr_request_admission_keeps_remote_runtime_allowed() {
+    let runtime = DeepseekRuntime::RemoteHttp {
+        base_url: Arc::from("http://127.0.0.1:9999"),
+    };
+
+    let admission = admit_deepseek_ocr_request_or_log(&runtime).await;
+
+    assert!(matches!(
+        admission,
+        OcrRequestAdmission::Allowed { guard: None }
+    ));
+}
+#[tokio::test]
+async fn remote_ocr_runtime_bypasses_saturated_local_gate() {
+    let outcome = simulate_ocr_runtime_gate_bypass_for_tests(true).await;
+
+    assert!(matches!(outcome, OcrBlockingExecution::Completed(())));
+}
+
+#[tokio::test]
+async fn local_ocr_runtime_respects_saturated_local_gate() {
+    let outcome = simulate_ocr_runtime_gate_bypass_for_tests(false).await;
+
+    assert!(matches!(
+        outcome,
+        OcrBlockingExecution::Busy | OcrBlockingExecution::BusyBackpressure
+    ));
+}
+
+#[tokio::test]
+async fn timed_out_ocr_worker_sets_interrupt_signal_and_recovers_gate() {
+    let probe = simulate_ocr_gate_timeout_interrupt_recovery_for_tests(25).await;
+
+    assert_eq!(
+        probe.first_outcome,
+        super::ocr::OcrProbeFirstOutcome::TimedOut
+    );
+    assert!(probe.second_was_busy || probe.second_completed);
+    assert!(probe.recovered_after_wait);
 }

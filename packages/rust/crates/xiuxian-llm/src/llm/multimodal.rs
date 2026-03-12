@@ -99,10 +99,9 @@ pub fn parse_multimodal_text_content(content: &str) -> Option<Vec<MultimodalCont
 pub fn parse_data_uri_image_source(uri: &str) -> Option<Base64ImageSource> {
     let stripped = uri.strip_prefix("data:")?;
     let (meta, data) = stripped.split_once(',')?;
-    let media_type =
-        normalize_image_media_type(meta.split(';').next().unwrap_or("image/jpeg"), data);
+    let media_type = meta.split(';').next().unwrap_or("image/jpeg");
     Some(Base64ImageSource {
-        media_type,
+        media_type: media_type.to_string(),
         data: data.to_string(),
     })
 }
@@ -160,7 +159,6 @@ pub async fn resolve_image_source_to_base64(
     }
 
     let data = base64::engine::general_purpose::STANDARD.encode(bytes.as_ref());
-    let media_type = normalize_image_media_type(media_type.as_str(), data.as_str());
     Ok(Base64ImageSource { media_type, data })
 }
 
@@ -181,57 +179,6 @@ fn infer_media_type_from_url(image_url: &str) -> Option<&'static str> {
     }
     if extension.eq_ignore_ascii_case("jpg") || extension.eq_ignore_ascii_case("jpeg") {
         return Some("image/jpeg");
-    }
-    None
-}
-
-fn normalize_image_media_type(media_type: &str, base64_data: &str) -> String {
-    let normalized = media_type.trim().to_ascii_lowercase();
-    if normalized.starts_with("image/") {
-        return normalized;
-    }
-    if let Some(detected) = detect_image_media_type_from_base64(base64_data) {
-        return detected.to_string();
-    }
-    if normalized.is_empty() || normalized == "application/octet-stream" {
-        return "image/jpeg".to_string();
-    }
-    normalized
-}
-
-fn detect_image_media_type_from_base64(base64_data: &str) -> Option<&'static str> {
-    let payload = extract_base64_payload(base64_data);
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(payload.as_bytes())
-        .ok()?;
-    detect_image_media_type_from_bytes(bytes.as_slice())
-}
-
-fn extract_base64_payload(raw: &str) -> &str {
-    if let Some((prefix, payload)) = raw.split_once(',')
-        && prefix.starts_with("data:")
-        && prefix.to_ascii_lowercase().contains("base64")
-    {
-        return payload;
-    }
-    raw
-}
-
-fn detect_image_media_type_from_bytes(bytes: &[u8]) -> Option<&'static str> {
-    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
-        return Some("image/png");
-    }
-    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-        return Some("image/jpeg");
-    }
-    if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
-        return Some("image/gif");
-    }
-    if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
-        return Some("image/webp");
-    }
-    if bytes.starts_with(b"BM") {
-        return Some("image/bmp");
     }
     None
 }

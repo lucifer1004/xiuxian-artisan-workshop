@@ -68,7 +68,8 @@ pub(in super::super) fn format_session_admin_updated_json(
 
 fn render_admin_users_for_dashboard(override_admin_users: Option<&[String]>) -> String {
     match override_admin_users {
-        Some([]) | None => "(inherit)".to_string(),
+        Some(entries) if entries.is_empty() => "(inherit)".to_string(),
         Some(entries) => entries.join(","),
+        None => "(inherit)".to_string(),
     }
 }

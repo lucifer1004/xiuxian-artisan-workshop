@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::Span;
 use quote::quote;
 use syn::parse::Parser;
-use syn::{Attribute, FnArg, Ident, ItemFn, LitStr, Meta, PatType, Path, ReturnType};
+use syn::{Attribute, FnArg, Ident, ItemFn, LitStr, Meta, PatType, ReturnType};
 
 #[derive(Default)]
 struct ZhenfaToolAttr {
@@ -10,7 +10,6 @@ struct ZhenfaToolAttr {
     description: Option<LitStr>,
     tool_struct: Option<Ident>,
     mutation_scope: Option<LitStr>,
-    cache_key: Option<Path>,
 }
 
 impl ZhenfaToolAttr {
@@ -50,19 +49,8 @@ impl ZhenfaToolAttr {
                 return Ok(());
             }
 
-            if meta.path.is_ident("cache_key") {
-                if parsed.cache_key.is_some() {
-                    return Err(meta.error("duplicate `cache_key`"));
-                }
-                let lit: LitStr = meta.value()?.parse()?;
-                let parsed_path = syn::parse_str::<Path>(&lit.value())
-                    .map_err(|_| meta.error("`cache_key` must be a valid Rust path string"))?;
-                parsed.cache_key = Some(parsed_path);
-                return Ok(());
-            }
-
             Err(meta.error(
-                "unsupported key; expected `name`, `description`, `tool_struct`, `mutation_scope`, or `cache_key`",
+                "unsupported key; expected `name`, `description`, `tool_struct`, or `mutation_scope`",
             ))
         });
         parser.parse2(attr.into())?;
@@ -82,40 +70,92 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(error) => return error.to_compile_error().into(),
     };
 
-    let function: ItemFn = match parse_and_validate_function(item) {
+    let function: ItemFn = match syn::parse(item) {
         Ok(function) => function,
         Err(error) => return error.to_compile_error().into(),
     };
-    let args_ty = match extract_args_type(&function) {
-        Ok(args_ty) => args_ty,
-        Err(error) => return error.to_compile_error().into(),
+
+    if function.sig.asyncness.is_none() {
+        return syn::Error::new_spanned(
+            &function.sig.fn_token,
+            "`zhenfa_tool` requires an `async fn`",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    if !function.sig.generics.params.is_empty() {
+        return syn::Error::new_spanned(
+            &function.sig.generics,
+            "`zhenfa_tool` does not support generic functions",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    if !matches!(&function.sig.output, ReturnType::Type(_, _)) {
+        return syn::Error::new_spanned(
+            &function.sig.output,
+            "`zhenfa_tool` function must return `Result<String, ZhenfaError>`",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let inputs: Vec<&FnArg> = function.sig.inputs.iter().collect();
+    if inputs.len() != 2 {
+        return syn::Error::new_spanned(
+            &function.sig.inputs,
+            "`zhenfa_tool` function must accept exactly two arguments: `(&ZhenfaContext, Args)`",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let args_ty = match inputs[1] {
+        FnArg::Typed(PatType { ty, .. }) => ty.as_ref(),
+        arg => {
+            return syn::Error::new_spanned(
+                arg,
+                "`zhenfa_tool` second argument must be a typed args struct",
+            )
+            .to_compile_error()
+            .into();
+        }
     };
 
     let fn_ident = &function.sig.ident;
     let vis = &function.vis;
-    let call_impl = if function.sig.asyncness.is_some() {
-        quote! { #fn_ident(ctx, parsed_args).await }
-    } else {
-        quote! { #fn_ident(ctx, parsed_args) }
-    };
     let tool_name = config
         .name
         .unwrap_or_else(|| LitStr::new("missing.name", Span::call_site()));
-    let description = resolve_description(config.description, &function);
+    let description = config.description.unwrap_or_else(|| {
+        let fallback = extract_doc_summary(&function.attrs).unwrap_or_else(|| {
+            format!(
+                "Native zhenfa tool generated from `{}`.",
+                function.sig.ident
+            )
+        });
+        LitStr::new(&fallback, function.sig.ident.span())
+    });
     let struct_ident = config
         .tool_struct
         .unwrap_or_else(|| default_tool_struct_ident(&function.sig.ident));
-    let mutation_scope_impl = build_mutation_scope_impl(config.mutation_scope);
-    let cache_key_impl = build_cache_key_impl(config.cache_key, args_ty);
+    let mutation_scope_impl = config.mutation_scope.map(|scope| {
+        quote! {
+            fn mutation_scope(
+                &self,
+                _ctx: &::xiuxian_zhenfa::ZhenfaContext,
+                _args: &::xiuxian_zhenfa::serde_json::Value,
+            ) -> ::core::option::Option<::std::string::String> {
+                ::core::option::Option::Some(#scope.to_string())
+            }
+        }
+    });
 
     quote! {
         #function
 
-        #[doc = concat!(
-            "Generated zhenfa tool wrapper for `",
-            stringify!(#fn_ident),
-            "`."
-        )]
         #[derive(Clone, Copy, Debug, Default)]
         #vis struct #struct_ident;
 
@@ -127,7 +167,7 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             fn definition(&self) -> ::xiuxian_zhenfa::serde_json::Value {
                 let schema = ::xiuxian_zhenfa::schemars::schema_for!(#args_ty);
-                let parameters = ::xiuxian_zhenfa::serde_json::to_value(schema)
+                let parameters = ::xiuxian_zhenfa::serde_json::to_value(&schema)
                     .unwrap_or_else(|error| {
                         let _ = error;
                         ::xiuxian_zhenfa::serde_json::json!({
@@ -155,93 +195,13 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
                             error
                         ))
                     })?;
-                #call_impl
+                #fn_ident(ctx, parsed_args).await
             }
 
-            #cache_key_impl
             #mutation_scope_impl
         }
     }
     .into()
-}
-
-fn parse_and_validate_function(item: TokenStream) -> syn::Result<ItemFn> {
-    let function: ItemFn = syn::parse(item)?;
-
-    if !function.sig.generics.params.is_empty() {
-        return Err(syn::Error::new_spanned(
-            &function.sig.generics,
-            "`zhenfa_tool` does not support generic functions",
-        ));
-    }
-
-    if !matches!(&function.sig.output, ReturnType::Type(_, _)) {
-        return Err(syn::Error::new_spanned(
-            &function.sig.output,
-            "`zhenfa_tool` function must return `Result<String, ZhenfaError>`",
-        ));
-    }
-
-    Ok(function)
-}
-
-fn extract_args_type(function: &ItemFn) -> syn::Result<&syn::Type> {
-    let inputs: Vec<&FnArg> = function.sig.inputs.iter().collect();
-    if inputs.len() != 2 {
-        return Err(syn::Error::new_spanned(
-            &function.sig.inputs,
-            "`zhenfa_tool` function must accept exactly two arguments: `(&ZhenfaContext, Args)`",
-        ));
-    }
-
-    match inputs[1] {
-        FnArg::Typed(PatType { ty, .. }) => Ok(ty.as_ref()),
-        arg @ FnArg::Receiver(_) => Err(syn::Error::new_spanned(
-            arg,
-            "`zhenfa_tool` second argument must be a typed args struct",
-        )),
-    }
-}
-
-fn resolve_description(config_description: Option<LitStr>, function: &ItemFn) -> LitStr {
-    config_description.unwrap_or_else(|| {
-        let fallback = extract_doc_summary(&function.attrs).unwrap_or_else(|| {
-            format!(
-                "Native zhenfa tool generated from `{}`.",
-                function.sig.ident
-            )
-        });
-        LitStr::new(&fallback, function.sig.ident.span())
-    })
-}
-
-fn build_mutation_scope_impl(mutation_scope: Option<LitStr>) -> Option<TokenStream2> {
-    mutation_scope.map(|scope| {
-        quote! {
-            fn mutation_scope(
-                &self,
-                _ctx: &::xiuxian_zhenfa::ZhenfaContext,
-                _args: &::xiuxian_zhenfa::serde_json::Value,
-            ) -> ::core::option::Option<::std::string::String> {
-                ::core::option::Option::Some(#scope.to_string())
-            }
-        }
-    })
-}
-
-fn build_cache_key_impl(cache_key: Option<Path>, args_ty: &syn::Type) -> Option<TokenStream2> {
-    cache_key.map(|cache_key_path| {
-        quote! {
-            fn cache_key(
-                &self,
-                ctx: &::xiuxian_zhenfa::ZhenfaContext,
-                args: &::xiuxian_zhenfa::serde_json::Value,
-            ) -> ::core::option::Option<::std::string::String> {
-                let parsed_args: #args_ty = ::xiuxian_zhenfa::serde_json::from_value(args.clone()).ok()?;
-                #cache_key_path(ctx, &parsed_args)
-            }
-        }
-    })
 }
 
 fn extract_doc_summary(attrs: &[Attribute]) -> Option<String> {

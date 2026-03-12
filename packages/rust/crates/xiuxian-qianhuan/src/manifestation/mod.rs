@@ -5,10 +5,7 @@ pub mod request;
 /// Template helper logic.
 pub mod templates;
 
-pub use manager::{
-    ManifestationManager, MemoryTemplateRecord, SessionSystemPromptInjectionSnapshot,
-    normalize_session_system_prompt_injection_xml,
-};
+pub use manager::ManifestationManager;
 pub use request::{
     ManifestationRenderRequest, ManifestationRuntimeContext, ManifestationTemplateTarget,
 };

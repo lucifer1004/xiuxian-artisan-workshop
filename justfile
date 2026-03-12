@@ -1580,6 +1580,13 @@ clean-generated:
     @rm -f CHANGELOG_*.md CHANGELOG_*.json CHANGELOG_*.txt RELEASE_NOTES_*.md
     @echo "Generated artifacts cleaned"
 
+# Generate TypeScript bindings from Rust Specta types for Qianji Studio
+[group('dev')]
+generate-bindings:
+    @echo "Generating TypeScript bindings from Rust Specta types..."
+    cargo run --bin export_types --features zhenfa-router
+    @echo "Bindings written to .data/qianji-studio/src/api/bindings.ts"
+
 [group('dev')]
 clean-rust:
     @echo "Cleaning Rust build artifacts via cargo clean..."

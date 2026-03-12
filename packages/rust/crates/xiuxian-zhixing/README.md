@@ -1,36 +1,42 @@
+# xiuxian-zhixing (知行)
+
+> **Naming origin**: "Xiuxian" (修仙) and "Zhixing-Heyi" (知行合一), used in this project to represent a knowledge-to-action execution loop.
+
+**"Unity of Knowledge and Action" — The Sovereign Manifestation Engine.**
+
+`xiuxian-zhixing` is the core execution and manifestation layer of the CyberXiuXian ecosystem. Inspired by the philosophy of _Zhixing-Heyi_ (知行合一), it bridges the gap between semantic intent and real-world outcomes, ensuring that "Knowing" (知) and "Doing" (行) are unified into a single synaptic loop.
+
 ---
-type: knowledge
-metadata:
-  title: "xiuxian-zhixing"
+
+## 🏛️ Architectural Mandate
+
+In the Trinity of Agent OS, **Zhixing** serves as the "Physical Hand":
+
+- **Wendao (Memory)**: Provides the _Knowledge_ (知).
+- **Qianji (Workflow)**: Provides the _Logic_.
+- **Zhixing (Action)**: Provides the _Action_ (行).
+
+## 🧠 Core Features
+
+### 1. Manifestation of Intent (显化)
+
+Beyond simple task tracking, `xiuxian-zhixing` ensures that if an intent is accepted into the **Sovereign Agenda**, it becomes a physically indexable and executable artifact. Action is the ultimate validation of Knowledge.
+
+### 2. Markdown-First Persistence
+
+All states—agendas, journals, and reminders—are persisted as human-readable, machine-indexable Markdown artifacts. This ensures **Total Data Sovereignty** and seamless integration with the **Wendao VFS**.
+
+### 3. Reflective Feedback Loops
+
+Execution results are fed back into the **Wendao** knowledge graph as "Episodic Memories," allowing future "Knowledge" cycles to be refined by past "Action."
+
+## 🛠️ Domain Layers
+
+- **Agenda**: Management of high-priority research intents and timelines.
+- **Journal**: Immutable record of synaptic execution and manifestation.
+- **Reminders**: Time-aware semantic triggers for agentic re-activation.
+- **Blockers**: Formal detection and handling of physical obstacles to the "Unity of Action."
+
 ---
 
-# xiuxian-zhixing
-
-> Naming origin: "Xiuxian" (修仙) and "Zhixing-Heyi" (知行合一), used in this project to represent a knowledge-to-action execution loop.
-
-`xiuxian-zhixing` is the execution and manifestation engine in the Xiuxian ecosystem. It bridges structured knowledge and real-world action.
-
-## Philosophy
-
-Inspired by Wang Yangming's "unity of knowledge and action", this package focuses on turning intent into verifiable outcomes:
-
-- knowledge is represented in graph and notebook artifacts,
-- action is represented in executable tasks, reminders, and review loops,
-- reflection feeds back into the next execution cycle.
-
-## Core Objectives
-
-1. Manifestation over planning: if a task is accepted into agenda state, it should become actionable and observable.
-2. Markdown-first integration: agenda/journal persistence uses markdown artifacts while remaining graph-indexable.
-3. Feedback loop: reflections can influence future scheduling and execution decisions.
-
-## Architecture Role
-
-- `xiuxian-wendao`: retrieval, indexing, and graph representation layer.
-- `xiuxian-zhixing`: agenda/journal/reminder/blocker domain layer.
-- `xiuxian-qianhuan`: rendering/injection layer for human-readable output.
-
-## Related Documentation
-
-- `docs/03_features/xiuxian_zhixing_heyi.md`
-- `docs/99_llm/xiuxian_zhixing_theory.md`
+**CyberXiuXian Artisan Workshop** - _Unifying Knowledge and Action in the Neural Backbone._

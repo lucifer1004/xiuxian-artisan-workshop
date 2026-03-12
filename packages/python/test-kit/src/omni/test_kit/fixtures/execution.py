@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json as _json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -13,7 +12,6 @@ import pytest
 
 from omni.core.kernel.components.skill_loader import load_skill_scripts
 from omni.foundation.config.skills import SKILLS_DIR
-from omni.foundation.runtime.gitops import get_git_toplevel
 
 
 @dataclass
@@ -68,25 +66,13 @@ class SkillTester:
         self.request = request
         self.context = MagicMock()
         self.config = {}
-        self.skills_root = self._resolve_skills_root()
+        self.skills_root = SKILLS_DIR()
 
-    @staticmethod
-    def _resolve_skills_root() -> Path:
-        """Resolve repository skills root independent from test cwd/project_root cache."""
-        try:
-            repo_root = get_git_toplevel(Path(__file__).resolve())
-            candidate = repo_root / "assets" / "skills"
-            if candidate.exists():
-                return candidate
-        except RuntimeError:
-            pass
-        return SKILLS_DIR()
-
-    def with_config(self, config: dict[str, Any]) -> SkillTester:
+    def with_config(self, config: dict[str, Any]) -> "SkillTester":
         self.config.update(config)
         return self
 
-    def with_context(self, **kwargs) -> SkillTester:
+    def with_context(self, **kwargs) -> "SkillTester":
         for key, value in kwargs.items():
             setattr(self.context, key, value)
         return self

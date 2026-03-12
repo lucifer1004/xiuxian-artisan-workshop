@@ -1,14 +1,14 @@
-//! Top-level integration tests for `gateway::http::runtime`.
+//! HTTP gateway runtime helper and endpoint behavior tests.
 
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{Value, json};
 use std::net::TcpListener;
-use xiuxian_daochang::RuntimeSettings;
-use xiuxian_daochang::test_support::{
-    build_embedding_runtime_for_settings, resolve_embed_base_url, resolve_embed_model,
-    resolve_runtime_embed_base_url,
+
+use crate::config::RuntimeSettings;
+use crate::gateway::http::runtime::{
+    resolve_embed_base_url, resolve_embed_model, resolve_runtime_embed_base_url,
 };
 
 #[test]
@@ -167,11 +167,7 @@ async fn build_embedding_runtime_for_settings_embeds_with_openai_http_backend() 
     runtime_settings.memory.embedding_base_url = Some(format!("http://127.0.0.1:{port}"));
     runtime_settings.embedding.timeout_secs = Some(3);
 
-    let runtime = build_embedding_runtime_for_settings(&runtime_settings);
-    assert_eq!(
-        runtime.default_model.as_deref(),
-        Some("qwen3-embedding:0.6b")
-    );
+    let runtime = super::build_embedding_runtime_for_settings(&runtime_settings);
 
     let texts = vec!["gateway openai-http endpoint test".to_string()];
     let vectors = runtime

@@ -25,7 +25,7 @@ use crate::error::IoError;
 /// # Example
 ///
 /// ```rust,ignore
-/// use xiuxian_io::read_text_safe;
+/// use omni_io::read_text_safe;
 ///
 /// let content = read_text_safe("README.md", 1024 * 1024)?;
 /// ```

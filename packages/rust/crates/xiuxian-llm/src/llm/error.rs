@@ -136,10 +136,10 @@ fn redact_token(token: &str) -> String {
         return String::new();
     }
     if looks_like_url(trimmed) {
-        return "<redacted-url>".to_string();
+        return "[redacted-url]".to_string();
     }
     if looks_like_secret(trimmed) {
-        return "<redacted-secret>".to_string();
+        return "[redacted-secret]".to_string();
     }
     trimmed.to_string()
 }

@@ -267,7 +267,7 @@ impl VectorStore {
                 "Cannot enable keyword index in memory mode".to_string(),
             ));
         }
-        self.keyword_index = Some(Rc::new(KeywordIndex::new(&self.base_path)?));
+        self.keyword_index = Some(Arc::new(KeywordIndex::new(&self.base_path)?));
         Ok(())
     }
 

@@ -1,182 +1,207 @@
-use serde_json::json;
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
-use crate::agent::DownstreamAdmissionRuntimeSnapshot;
+use anyhow::{Context, Result, anyhow};
+use serde::{Deserialize, Serialize};
 
-use super::super::shared::{
-    format_optional_bool, format_optional_f32, format_optional_str, format_optional_string,
-    format_optional_u32, format_optional_usize, format_yes_no,
-};
+use crate::jobs::manager::types::{JobRecord, JobState, QueuedJob, epoch_millis};
 
-pub(super) fn format_memory_runtime_status_lines(
-    status: crate::agent::MemoryRuntimeStatusSnapshot,
-) -> Vec<String> {
-    let backend_ready = memory_backend_ready(&status);
-    vec![
-        format!("- `memory_enabled={}`", format_yes_no(status.enabled)),
-        format!(
-            "- `configured_backend={}`",
-            format_optional_string(status.configured_backend)
-        ),
-        format!(
-            "- `active_backend={}`",
-            format_optional_str(status.active_backend)
-        ),
-        format!(
-            "- `strict_startup={}`",
-            format_optional_bool(status.strict_startup)
-        ),
-        format!("- `startup_load_status={}`", status.startup_load_status),
-        format!("- `backend_ready={}`", format_yes_no(backend_ready)),
-        format!(
-            "- `store_path={}`",
-            format_optional_string(status.store_path)
-        ),
-        format!(
-            "- `table_name={}`",
-            format_optional_string(status.table_name)
-        ),
-        format!(
-            "- `gate_promote_threshold={}`",
-            format_optional_f32(status.gate_promote_threshold)
-        ),
-        format!(
-            "- `gate_obsolete_threshold={}`",
-            format_optional_f32(status.gate_obsolete_threshold)
-        ),
-        format!(
-            "- `gate_promote_min_usage={}`",
-            format_optional_u32(status.gate_promote_min_usage)
-        ),
-        format!(
-            "- `gate_obsolete_min_usage={}`",
-            format_optional_u32(status.gate_obsolete_min_usage)
-        ),
-        format!(
-            "- `gate_promote_failure_rate_ceiling={}`",
-            format_optional_f32(status.gate_promote_failure_rate_ceiling)
-        ),
-        format!(
-            "- `gate_obsolete_failure_rate_floor={}`",
-            format_optional_f32(status.gate_obsolete_failure_rate_floor)
-        ),
-        format!(
-            "- `gate_promote_min_ttl_score={}`",
-            format_optional_f32(status.gate_promote_min_ttl_score)
-        ),
-        format!(
-            "- `gate_obsolete_max_ttl_score={}`",
-            format_optional_f32(status.gate_obsolete_max_ttl_score)
-        ),
-        format!(
-            "- `episodes_total={}`",
-            format_optional_usize(status.episodes_total)
-        ),
-        format!(
-            "- `q_values_total={}`",
-            format_optional_usize(status.q_values_total)
-        ),
-    ]
+const JOB_MANAGER_STATE_VERSION: u32 = 1;
+
+#[derive(Debug, Default)]
+pub(super) struct JobRecoverySnapshot {
+    pub(super) records: HashMap<String, JobRecord>,
+    pub(super) queued_jobs: Vec<QueuedJob>,
+    pub(super) recovered_queued: usize,
+    pub(super) recovered_running: usize,
 }
 
-pub(super) fn format_memory_runtime_status_json(
-    status: &crate::agent::MemoryRuntimeStatusSnapshot,
-) -> serde_json::Value {
-    let backend_ready = memory_backend_ready(status);
-    json!({
-        "memory_enabled": status.enabled,
-        "configured_backend": status.configured_backend,
-        "active_backend": status.active_backend,
-        "strict_startup": status.strict_startup,
-        "startup_load_status": status.startup_load_status,
-        "backend_ready": backend_ready,
-        "store_path": status.store_path,
-        "table_name": status.table_name,
-        "gate_promote_threshold": status.gate_promote_threshold,
-        "gate_obsolete_threshold": status.gate_obsolete_threshold,
-        "gate_promote_min_usage": status.gate_promote_min_usage,
-        "gate_obsolete_min_usage": status.gate_obsolete_min_usage,
-        "gate_promote_failure_rate_ceiling": status.gate_promote_failure_rate_ceiling,
-        "gate_obsolete_failure_rate_floor": status.gate_obsolete_failure_rate_floor,
-        "gate_promote_min_ttl_score": status.gate_promote_min_ttl_score,
-        "gate_obsolete_max_ttl_score": status.gate_obsolete_max_ttl_score,
-        "episodes_total": status.episodes_total,
-        "q_values_total": status.q_values_total,
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedJobManagerState {
+    version: u32,
+    jobs: BTreeMap<String, PersistedJobRecord>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PersistedJobRecord {
+    session_id: String,
+    recipient: String,
+    parent_session_id: String,
+    prompt: String,
+    state: JobState,
+    submitted_at_epoch_ms: u128,
+    started_at_epoch_ms: Option<u128>,
+    finished_at_epoch_ms: Option<u128>,
+    output_preview: Option<String>,
+    error: Option<String>,
+}
+
+pub(super) fn load_recovery_snapshot(path: &Path) -> Result<JobRecoverySnapshot> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(JobRecoverySnapshot::default());
+        }
+        Err(error) => {
+            return Err(error).with_context(|| {
+                format!(
+                    "failed to read background job state file {}",
+                    path.display()
+                )
+            });
+        }
+    };
+
+    if String::from_utf8_lossy(&bytes).trim().is_empty() {
+        return Ok(JobRecoverySnapshot::default());
+    }
+
+    let persisted: PersistedJobManagerState =
+        serde_json::from_slice(&bytes).with_context(|| {
+            format!(
+                "failed to parse background job state file {}",
+                path.display()
+            )
+        })?;
+    if persisted.version != JOB_MANAGER_STATE_VERSION {
+        return Err(anyhow!(
+            "unsupported background job state version {} in {}",
+            persisted.version,
+            path.display()
+        ));
+    }
+
+    let now_instant = Instant::now();
+    let now_epoch_ms = epoch_millis();
+    let mut snapshot = JobRecoverySnapshot::default();
+
+    for (job_id, record) in persisted.jobs {
+        let mut runtime_record = JobRecord {
+            session_id: record.session_id.clone(),
+            recipient: record.recipient.clone(),
+            parent_session_id: record.parent_session_id.clone(),
+            prompt: record.prompt.clone(),
+            state: record.state,
+            submitted_at: restore_instant(record.submitted_at_epoch_ms, now_instant, now_epoch_ms),
+            started_at: record
+                .started_at_epoch_ms
+                .map(|epoch_ms| restore_instant(epoch_ms, now_instant, now_epoch_ms)),
+            finished_at: record
+                .finished_at_epoch_ms
+                .map(|epoch_ms| restore_instant(epoch_ms, now_instant, now_epoch_ms)),
+            output_preview: record.output_preview,
+            error: record.error,
+        };
+
+        if matches!(runtime_record.state, JobState::Queued | JobState::Running) {
+            if runtime_record.state == JobState::Queued {
+                snapshot.recovered_queued = snapshot.recovered_queued.saturating_add(1);
+            } else {
+                snapshot.recovered_running = snapshot.recovered_running.saturating_add(1);
+            }
+            snapshot.queued_jobs.push(QueuedJob {
+                job_id: job_id.clone(),
+                recipient: runtime_record.recipient.clone(),
+                parent_session_id: runtime_record.parent_session_id.clone(),
+                session_id: runtime_record.session_id.clone(),
+                prompt: runtime_record.prompt.clone(),
+            });
+            runtime_record.state = JobState::Queued;
+            runtime_record.started_at = None;
+            runtime_record.finished_at = None;
+            runtime_record.output_preview = None;
+            runtime_record.error = None;
+        }
+
+        snapshot.records.insert(job_id, runtime_record);
+    }
+
+    Ok(snapshot)
+}
+
+pub(super) fn persist_records(path: &Path, records: &HashMap<String, JobRecord>) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "failed to create background job state directory {}",
+                parent.display()
+            )
+        })?;
+    }
+
+    let now_instant = Instant::now();
+    let now_epoch_ms = epoch_millis();
+    let jobs = records
+        .iter()
+        .map(|(job_id, record)| {
+            (
+                job_id.clone(),
+                PersistedJobRecord {
+                    session_id: record.session_id.clone(),
+                    recipient: record.recipient.clone(),
+                    parent_session_id: record.parent_session_id.clone(),
+                    prompt: record.prompt.clone(),
+                    state: record.state,
+                    submitted_at_epoch_ms: instant_to_epoch_ms(
+                        record.submitted_at,
+                        now_instant,
+                        now_epoch_ms,
+                    ),
+                    started_at_epoch_ms: record.started_at.map(|started_at| {
+                        instant_to_epoch_ms(started_at, now_instant, now_epoch_ms)
+                    }),
+                    finished_at_epoch_ms: record.finished_at.map(|finished_at| {
+                        instant_to_epoch_ms(finished_at, now_instant, now_epoch_ms)
+                    }),
+                    output_preview: record.output_preview.clone(),
+                    error: record.error.clone(),
+                },
+            )
+        })
+        .collect();
+
+    let payload = serde_json::to_vec_pretty(&PersistedJobManagerState {
+        version: JOB_MANAGER_STATE_VERSION,
+        jobs,
     })
-}
+    .context("failed to serialize background job state")?;
 
-pub(super) fn format_memory_gate_policy_compact_line(
-    status: &crate::agent::MemoryRuntimeStatusSnapshot,
-) -> String {
-    format!(
-        "- `promote(threshold={},min_usage={},max_failure_rate={},min_ttl={})` `obsolete(threshold={},min_usage={},min_failure_rate={},max_ttl={})`",
-        format_optional_f32(status.gate_promote_threshold),
-        format_optional_u32(status.gate_promote_min_usage),
-        format_optional_f32(status.gate_promote_failure_rate_ceiling),
-        format_optional_f32(status.gate_promote_min_ttl_score),
-        format_optional_f32(status.gate_obsolete_threshold),
-        format_optional_u32(status.gate_obsolete_min_usage),
-        format_optional_f32(status.gate_obsolete_failure_rate_floor),
-        format_optional_f32(status.gate_obsolete_max_ttl_score),
-    )
-}
-
-pub(super) fn memory_backend_ready(status: &crate::agent::MemoryRuntimeStatusSnapshot) -> bool {
-    status.enabled && status.active_backend.is_some() && status.startup_load_status == "loaded"
-}
-
-pub(super) fn format_downstream_admission_status_lines(
-    status: DownstreamAdmissionRuntimeSnapshot,
-) -> Vec<String> {
-    vec![
-        format!("- `enabled={}`", format_yes_no(status.enabled)),
+    let temp_path = temporary_persistence_path(path);
+    std::fs::write(&temp_path, payload).with_context(|| {
         format!(
-            "- `llm_reject_threshold_pct={}` / `embedding_reject_threshold_pct={}`",
-            status.llm_reject_threshold_pct, status.embedding_reject_threshold_pct
-        ),
+            "failed to write temporary background job state file {}",
+            temp_path.display()
+        )
+    })?;
+    std::fs::rename(&temp_path, path).with_context(|| {
         format!(
-            "- `total={}` / `admitted={}` / `rejected={}` / `reject_rate_pct={}`",
-            status.metrics.total,
-            status.metrics.admitted,
-            status.metrics.rejected,
-            status.metrics.reject_rate_pct
-        ),
-        format!(
-            "- `rejected_llm_saturated={}` / `rejected_embedding_saturated={}`",
-            status.metrics.rejected_llm_saturated, status.metrics.rejected_embedding_saturated
-        ),
-    ]
+            "failed to move temporary background job state into place {}",
+            path.display()
+        )
+    })?;
+    Ok(())
 }
 
-pub(super) fn format_downstream_admission_status_json(
-    status: &DownstreamAdmissionRuntimeSnapshot,
-) -> serde_json::Value {
-    json!({
-        "enabled": status.enabled,
-        "llm_reject_threshold_pct": status.llm_reject_threshold_pct,
-        "embedding_reject_threshold_pct": status.embedding_reject_threshold_pct,
-        "metrics": {
-            "total": status.metrics.total,
-            "admitted": status.metrics.admitted,
-            "rejected": status.metrics.rejected,
-            "rejected_llm_saturated": status.metrics.rejected_llm_saturated,
-            "rejected_embedding_saturated": status.metrics.rejected_embedding_saturated,
-            "reject_rate_pct": status.metrics.reject_rate_pct,
-        },
-    })
+fn restore_instant(epoch_ms: u128, now_instant: Instant, now_epoch_ms: u128) -> Instant {
+    let age_ms = now_epoch_ms.saturating_sub(epoch_ms);
+    let age_ms = u64::try_from(age_ms).unwrap_or(u64::MAX);
+    now_instant
+        .checked_sub(Duration::from_millis(age_ms))
+        .unwrap_or(now_instant)
 }
 
-pub(super) fn format_downstream_admission_compact_line(
-    status: &DownstreamAdmissionRuntimeSnapshot,
-) -> String {
-    format!(
-        "- `admission(enabled={},llm_threshold_pct={},embedding_threshold_pct={},total={},rejected={},reject_rate_pct={},reject_llm={},reject_embedding={})`",
-        format_yes_no(status.enabled),
-        status.llm_reject_threshold_pct,
-        status.embedding_reject_threshold_pct,
-        status.metrics.total,
-        status.metrics.rejected,
-        status.metrics.reject_rate_pct,
-        status.metrics.rejected_llm_saturated,
-        status.metrics.rejected_embedding_saturated
-    )
+fn instant_to_epoch_ms(instant: Instant, now_instant: Instant, now_epoch_ms: u128) -> u128 {
+    let age_ms = now_instant
+        .checked_duration_since(instant)
+        .map_or(0, |duration| duration.as_millis());
+    now_epoch_ms.saturating_sub(age_ms)
+}
+
+fn temporary_persistence_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("background-jobs.json");
+    path.with_file_name(format!("{file_name}.tmp"))
 }

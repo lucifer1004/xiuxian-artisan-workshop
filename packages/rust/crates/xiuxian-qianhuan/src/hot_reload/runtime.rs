@@ -1,4 +1,4 @@
-use super::{HotReloadInvocation, HotReloadTarget, HotReloadVersionBackend};
+use super::{HotReloadTarget, HotReloadVersionBackend};
 use anyhow::{Result, anyhow};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -117,10 +117,7 @@ impl HotReloadRuntime {
             let trigger = HotReloadTrigger::LocalPathChange {
                 path: path.to_path_buf(),
             };
-            let invocation = HotReloadInvocation::LocalPathChange {
-                path: path.to_path_buf(),
-            };
-            let callback_result = target.reload_if_changed(&invocation);
+            let callback_result = target.reload_if_changed();
             let (status, error) = match callback_result {
                 Ok(true) => (HotReloadStatus::Reloaded, None),
                 Ok(false) => (HotReloadStatus::NoChange, None),
@@ -177,7 +174,7 @@ impl HotReloadRuntime {
             if remote_version <= local_version {
                 continue;
             }
-            let callback_result = target.reload_if_changed(&HotReloadInvocation::RemoteVersionSync);
+            let callback_result = target.reload_if_changed();
             let (status, error) = match callback_result {
                 Ok(true) => (HotReloadStatus::Reloaded, None),
                 Ok(false) => (HotReloadStatus::NoChange, None),

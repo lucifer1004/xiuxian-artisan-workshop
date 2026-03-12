@@ -1,4 +1,4 @@
-//! Python bindings for xiuxian-window.
+//! Python bindings for omni-window.
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;

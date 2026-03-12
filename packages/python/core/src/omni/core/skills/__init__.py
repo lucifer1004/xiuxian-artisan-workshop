@@ -1,105 +1,117 @@
 """
-omni.core.skills - Skills System (lazy exports).
+omni.core.skills - Skills System
 
-Avoid eager package imports so fast CLI paths can import ``omni.core.skills.runner``
-without loading the full skills subsystem.
+Provides skill management:
+- registry: Skill discovery and metadata
+- runtime: Skill execution context
+- discovery: Skill finder
+- memory: Skill memory management
+- extensions: Extension loading system
+- script_loader: Script loading with auto-wiring
+- universal: Zero-Code Skill container
+
+Usage:
+    from omni.core.skills.runtime import get_skill_context
+    from omni.core.skills.registry import SkillRegistry
+    from omni.core.skills.discovery import SkillDiscovery
+    from omni.core.skills.memory import SkillMemory
+    from omni.core.skills.universal import UniversalScriptSkill
 """
 
-from __future__ import annotations
+# Registry module (thin client - simplified)
+# Discovery module
+from .discovery import (
+    DiscoveredSkill,
+    SkillDiscoveryService,
+    is_rust_available,
+)
 
-import importlib
-from typing import Any
+# Extensions module
+from .extensions import (
+    ExtensionWrapper,
+    SkillExtensionLoader,
+    get_extension_loader,
+)
 
-_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    # Discovery
-    "DiscoveredSkill": (".discovery", "DiscoveredSkill"),
-    "SkillDiscoveryService": (".discovery", "SkillDiscoveryService"),
-    "is_rust_available": (".discovery", "is_rust_available"),
-    # Extensions
-    "ExtensionWrapper": (".extensions", "ExtensionWrapper"),
-    "SkillExtensionLoader": (".extensions", "SkillExtensionLoader"),
-    "get_extension_loader": (".extensions", "get_extension_loader"),
-    # Memory
-    "SkillMemory": (".memory", "SkillMemory"),
-    "get_skill_memory": (".memory", "get_skill_memory"),
-    # Context Hydration
-    "SkillIndexLoader": (".index_loader", "SkillIndexLoader"),
-    "FileCache": (".file_cache", "FileCache"),
-    "RefParser": (".ref_parser", "RefParser"),
-    "ContextHydrator": (".hydrator", "ContextHydrator"),
-    # Registry
-    "SkillRegistry": (".registry", "SkillRegistry"),
-    "get_skill_registry": (".registry", "get_skill_registry"),
-    "HolographicRegistry": (".registry", "HolographicRegistry"),
-    "ToolMetadata": (".registry", "ToolMetadata"),
-    "LazyTool": (".registry", "LazyTool"),
-    # Runtime
-    "SkillContext": (".runtime", "SkillContext"),
-    "SkillManager": (".runtime", "SkillManager"),
-    "get_skill_context": (".runtime", "get_skill_context"),
-    "reset_context": (".runtime", "reset_context"),
-    "run_command": (".runtime", "run_command"),
-    # Tools loader
-    "ToolsLoader": (".tools_loader", "ToolsLoader"),
-    "create_tools_loader": (".tools_loader", "create_tools_loader"),
-    "_skill_command_registry": (".tools_loader", "_skill_command_registry"),
-    # Universal skill
-    "UniversalScriptSkill": (".universal", "UniversalScriptSkill"),
-    "UniversalSkillFactory": (".universal", "UniversalSkillFactory"),
-    "create_skill_from_assets": (".universal", "create_skill_from_assets"),
-    "create_universal_skill": (".universal", "create_universal_skill"),
-    # Runner
-    "FastPathUnavailable": (".runner", "FastPathUnavailable"),
-    "run_skill": (".runner", "run_skill"),
-    "run_skill_with_monitor": (".runner", "run_skill_with_monitor"),
-    # Indexer
-    "SkillIndexer": (".indexer", "SkillIndexer"),
-}
+# Memory module
+from .memory import SkillMemory, get_skill_memory
+from .registry import (
+    SkillRegistry,
+    discover_skills,
+    get_skill_registry,
+    get_skill_tools,
+    install_remote_skill,
+    jit_install_skill,
+    list_installed_skills,
+    security_scan_skill,
+    suggest_skills_for_task,
+    update_remote_skill,
+)
 
+# Runtime module
+from .runtime import (
+    SkillContext,
+    SkillManager,
+    get_skill_context,
+    get_skill_manager,
+    reset_context,
+    run_command,
+)
 
-def __getattr__(name: str) -> Any:
-    export = _LAZY_EXPORTS.get(name)
-    if export is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    module_name, attr_name = export
-    module = importlib.import_module(module_name, package=__name__)
-    value = getattr(module, attr_name)
-    globals()[name] = value
-    return value
+# Script loader module
+from .script_loader import (
+    ScriptLoader,
+    SkillScriptLoader,
+    create_script_loader,
+    skill_command,
+)
 
+# Universal skill module
+from .universal import (
+    UniversalScriptSkill,
+    UniversalSkillFactory,
+    create_skill_from_assets,
+    create_universal_skill,
+)
 
 __all__ = [
-    "ContextHydrator",
-    "DiscoveredSkill",
-    "ExtensionWrapper",
-    "FastPathUnavailable",
-    "FileCache",
-    "HolographicRegistry",
-    "LazyTool",
-    "RefParser",
-    "SkillContext",
-    "SkillDiscoveryService",
-    "SkillExtensionLoader",
-    "SkillIndexLoader",
-    "SkillIndexer",
-    "SkillManager",
-    "SkillMemory",
+    # Registry
     "SkillRegistry",
-    "ToolMetadata",
-    "ToolsLoader",
-    "UniversalScriptSkill",
-    "UniversalSkillFactory",
-    "_skill_command_registry",
-    "create_skill_from_assets",
-    "create_tools_loader",
-    "create_universal_skill",
-    "get_extension_loader",
-    "get_skill_context",
-    "get_skill_memory",
     "get_skill_registry",
-    "is_rust_available",
+    "install_remote_skill",
+    "update_remote_skill",
+    "jit_install_skill",
+    "security_scan_skill",
+    "discover_skills",
+    "suggest_skills_for_task",
+    "list_installed_skills",
+    "get_skill_tools",
+    # Runtime
+    "SkillContext",
+    "SkillManager",
+    "get_skill_context",
+    "get_skill_manager",
     "reset_context",
     "run_command",
-    "run_skill",
-    "run_skill_with_monitor",
+    # Discovery
+    "SkillDiscoveryService",
+    "DiscoveredSkill",
+    "is_rust_available",
+    # Memory
+    "SkillMemory",
+    "get_skill_memory",
+    # Extensions
+    "SkillExtensionLoader",
+    "ExtensionWrapper",
+    "get_extension_loader",
+    # Script Loader
+    "ScriptLoader",
+    "SkillScriptLoader",
+    "create_script_loader",
+    "skill_command",
+    # Universal
+    "UniversalScriptSkill",
+    "UniversalSkillFactory",
+    "create_universal_skill",
+    "create_skill_from_assets",
 ]

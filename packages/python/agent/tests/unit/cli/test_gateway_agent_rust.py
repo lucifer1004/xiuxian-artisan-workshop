@@ -33,8 +33,8 @@ def test_gateway_dispatches_to_rust_stdio_by_default():
 
     assert result.exit_code == 0
     m_execvp.assert_called_once_with(
-        "xiuxian-daochang",
-        ["xiuxian-daochang", "stdio", "--session-id", "s-1"],
+        "omni-agent",
+        ["omni-agent", "stdio", "--session-id", "s-1"],
     )
 
 
@@ -47,8 +47,8 @@ def test_gateway_dispatches_to_rust_webhook_mode():
 
     assert result.exit_code == 0
     m_execvp.assert_called_once_with(
-        "xiuxian-daochang",
-        ["xiuxian-daochang", "gateway", "--bind", "0.0.0.0:8080"],
+        "omni-agent",
+        ["omni-agent", "gateway", "--bind", "0.0.0.0:8080"],
     )
 
 
@@ -61,8 +61,8 @@ def test_agent_dispatches_to_rust_repl_by_default():
 
     assert result.exit_code == 0
     m_execvp.assert_called_once_with(
-        "xiuxian-daochang",
-        ["xiuxian-daochang", "repl", "--session-id", "s-2"],
+        "omni-agent",
+        ["omni-agent", "repl", "--session-id", "s-2"],
     )
 
 
@@ -74,4 +74,4 @@ def test_gateway_reports_missing_omni_agent():
         result = runner.invoke(app, ["--session", "s-1"])
 
     assert result.exit_code == 1
-    assert "xiuxian-daochang not found in PATH" in result.output
+    assert "omni-agent not found in PATH" in result.output

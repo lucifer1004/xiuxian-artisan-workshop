@@ -1,9 +1,9 @@
 //! Rust agent: one-turn loop with LLM + MCP tools; HTTP gateway.
 //!
-//! - **B.1**: Session store (in-memory or xiuxian-window), LLM client (OpenAI-compatible chat API).
+//! - **B.1**: Session store (in-memory or omni-window), LLM client (OpenAI-compatible chat API).
 //! - **B.2**: One turn: user message → prompt + tools/list → LLM → `tool_calls` → MCP tools/call → repeat until done.
 
-/// Compile-time embedded resource tree rooted at `xiuxian-daochang/resources`.
+/// Compile-time embedded resource tree rooted at `omni-agent/resources`.
 pub static RESOURCES: ::include_dir::Dir<'_> =
     ::include_dir::include_dir!("$CARGO_MANIFEST_DIR/resources");
 
@@ -87,7 +87,6 @@ pub use jobs::{
     RecurringScheduleOutcome, TurnRunner, classify_heartbeat_probe_result, classify_job_health,
     run_recurring_schedule,
 };
-pub use llm::run_deepseek_vision_startup_probe_once;
 pub use mcp::{
     McpClientPool, McpDiscoverCacheStatsSnapshot, McpPoolConnectConfig,
     McpToolsListCacheStatsSnapshot, connect_pool,

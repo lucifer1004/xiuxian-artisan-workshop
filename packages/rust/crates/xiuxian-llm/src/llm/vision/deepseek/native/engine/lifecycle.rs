@@ -37,6 +37,7 @@ enum RouteSelection {
 pub(crate) fn infer(
     runtime: &DeepseekRuntime,
     prepared: &PreparedVisionImage,
+    stop_signal: Option<Arc<AtomicBool>>,
 ) -> LlmResult<Option<String>> {
     let preferred_route = select_route(prepared);
     let mut effective_route = preferred_route;
@@ -48,12 +49,12 @@ pub(crate) fn infer(
             "DeepSeek OCR forcing CPU engine due to prior Metal resource failure"
         );
         let (_, fallback) = get_cpu_engine_for_route_or_fallback(runtime, effective_route)?;
-        return infer_with_batch_lane(fallback, prepared);
+        return infer_with_batch_lane(fallback, prepared, stop_signal);
     }
 
     let (resolved_route, engine) = get_engine_for_route_or_fallback(runtime, preferred_route)?;
     effective_route = resolved_route;
-    match infer_with_batch_lane(engine, prepared) {
+    match infer_with_batch_lane(engine, prepared, stop_signal.clone()) {
         Ok(markdown) => Ok(markdown),
         Err(error) => {
             let error_text = error.to_string();
@@ -66,7 +67,7 @@ pub(crate) fn infer(
                     "DeepSeek OCR decode hit a Metal resource error; retrying once on CPU engine"
                 );
                 let (_, fallback) = get_cpu_engine_for_route_or_fallback(runtime, effective_route)?;
-                return infer_with_batch_lane(fallback, prepared);
+                return infer_with_batch_lane(fallback, prepared, stop_signal);
             }
             Err(error)
         }

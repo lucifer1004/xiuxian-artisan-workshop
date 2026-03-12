@@ -1,7 +1,7 @@
 // `KeywordIndex` - Tantivy wrapper for keyword search with `BM25`.
 
-use std::cell::RefCell;
 use std::path::Path;
+use std::sync::Mutex;
 
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
@@ -13,8 +13,8 @@ use tantivy::{
     Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument, TantivyError, Term, doc,
 };
 
-use crate::ToolSearchResult;
 use crate::error::VectorStoreError;
+use crate::skill::ToolSearchResult;
 
 /// `KeywordIndex` - Tantivy wrapper for keyword search with `BM25`.
 /// Caches a single `IndexWriter` and reuses it across
@@ -26,7 +26,7 @@ pub struct KeywordIndex {
     /// Index reader for search operations
     reader: IndexReader,
     /// Cached writer reused across writes; one writer per index (Tantivy allows only one).
-    writer_cache: RefCell<Option<IndexWriter>>,
+    writer_cache: Mutex<Option<IndexWriter>>,
     /// Field handle for tool name (used for exact matching and boosting)
     pub tool_name: Field,
     /// Field handle for tool description (used for relevance scoring)

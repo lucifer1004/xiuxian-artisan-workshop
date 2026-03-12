@@ -1,8 +1,7 @@
 //! Telegram foreground runtime configuration (queueing, concurrency, timeout).
 
-use xiuxian_macros::env_non_empty;
+use omni_macros::env_non_empty;
 
-use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::config::{TelegramSettings, load_runtime_settings};
 
 const DEFAULT_INBOUND_QUEUE_CAPACITY: usize = 100;
@@ -21,8 +20,6 @@ pub struct TelegramRuntimeConfig {
     pub foreground_max_in_flight_messages: usize,
     /// Foreground turn timeout in seconds.
     pub foreground_turn_timeout_secs: u64,
-    /// Foreground queue mode for same-session inbound messages.
-    pub foreground_queue_mode: ForegroundQueueMode,
 }
 
 impl Default for TelegramRuntimeConfig {
@@ -32,7 +29,6 @@ impl Default for TelegramRuntimeConfig {
             foreground_queue_capacity: DEFAULT_FOREGROUND_QUEUE_CAPACITY,
             foreground_max_in_flight_messages: DEFAULT_FOREGROUND_MAX_IN_FLIGHT_MESSAGES,
             foreground_turn_timeout_secs: DEFAULT_FOREGROUND_TURN_TIMEOUT_SECS,
-            foreground_queue_mode: ForegroundQueueMode::Queue,
         }
     }
 }
@@ -82,12 +78,6 @@ impl TelegramRuntimeConfig {
                 "OMNI_AGENT_TELEGRAM_FOREGROUND_TURN_TIMEOUT_SECS",
                 settings.and_then(|s| s.foreground_turn_timeout_secs),
                 defaults.foreground_turn_timeout_secs,
-            ),
-            foreground_queue_mode: resolve_foreground_queue_mode(
-                &lookup,
-                "OMNI_AGENT_TELEGRAM_FOREGROUND_QUEUE_MODE",
-                settings.and_then(|s| s.foreground_queue_mode.as_deref()),
-                defaults.foreground_queue_mode,
             ),
         }
     }
@@ -149,36 +139,4 @@ where
         }
         None => default,
     }
-}
-
-fn resolve_foreground_queue_mode<F>(
-    lookup: &F,
-    env_name: &str,
-    setting_value: Option<&str>,
-    default: ForegroundQueueMode,
-) -> ForegroundQueueMode
-where
-    F: Fn(&str) -> Option<String>,
-{
-    if let Some(raw) = lookup(env_name) {
-        if let Some(mode) = ForegroundQueueMode::parse(raw.as_str()) {
-            return mode;
-        }
-        tracing::warn!(
-            env_var = %env_name,
-            value = %raw,
-            "invalid queue mode env value; using settings/default"
-        );
-    }
-    if let Some(raw) = setting_value {
-        if let Some(mode) = ForegroundQueueMode::parse(raw) {
-            return mode;
-        }
-        tracing::warn!(
-            setting = %env_name,
-            value = %raw,
-            "invalid queue mode settings value; using default"
-        );
-    }
-    default
 }

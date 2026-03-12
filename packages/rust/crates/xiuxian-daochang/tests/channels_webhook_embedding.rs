@@ -1,13 +1,42 @@
-//! Test coverage for xiuxian-daochang behavior.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::assigning_clones
+)]
 
 use anyhow::Result;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use omni_agent::{WebhookDedupBackend, WebhookDedupConfig, build_telegram_webhook_app};
 use tokio::sync::mpsc;
 use tower::util::ServiceExt;
-use xiuxian_daochang::{WebhookDedupBackend, WebhookDedupConfig, build_telegram_webhook_app};
 
 #[tokio::test]
 async fn webhook_router_exposes_embedding_endpoints() -> Result<()> {

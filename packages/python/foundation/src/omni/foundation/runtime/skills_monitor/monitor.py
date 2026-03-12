@@ -10,7 +10,6 @@ from typing import Any
 
 from .metrics import get_rss_mb, get_rss_peak_mb, take_sample
 from .reporters import JsonReporter, SummaryReporter
-from .signals import build_link_graph_signals, build_retrieval_signals
 from .types import MonitorReport, PhaseEvent, RustDbEvent
 
 
@@ -36,7 +35,7 @@ class SkillsMonitor:
         self._lock = threading.Lock()
 
     def record_phase(self, phase: str, duration_ms: float, **extra: Any) -> None:
-        """Record a phase event (embed, vector_search, fusion, etc.)."""
+        """Record a phase event (embed, vector_search, dual_core, etc.)."""
         with self._lock:
             self.phases.append(
                 PhaseEvent(
@@ -66,22 +65,6 @@ class SkillsMonitor:
                 "budget_exhausted",
                 "collection",
                 "n_results",
-                "fetch_limit",
-                "rows_fetched",
-                "rows_parsed",
-                "rows_input",
-                "rows_returned",
-                "rows_capped",
-                "rows_parse_dropped",
-                "rss_before_mb",
-                "rss_after_mb",
-                "rss_delta_mb",
-                "rss_peak_before_mb",
-                "rss_peak_after_mb",
-                "rss_peak_delta_mb",
-                "source_hint_count",
-                "rows_per_source",
-                "total_cap",
                 "command_count",
                 "module",
                 "reused",
@@ -99,20 +82,6 @@ class SkillsMonitor:
                 "step_index",
                 "batch_index",
                 "batch_count",
-                "graph_stats_source",
-                "graph_stats_cache_hit",
-                "graph_stats_fresh",
-                "graph_stats_age_ms",
-                "graph_stats_refresh_scheduled",
-                "graph_stats_total_notes",
-                "cache_schema_version",
-                "cache_schema_fingerprint",
-                "cache_schema_source",
-                "cache_status",
-                "cache_miss_reason",
-                "schema_version",
-                "schema_fingerprint",
-                "schema_source",
             )
             details: list[str] = []
             for key in key_order:
@@ -227,8 +196,6 @@ class SkillsMonitor:
             }
             for e in self.rust_db_events
         ]
-        link_graph_signals = self._build_link_graph_signals(phases_dict)
-        retrieval_signals = self._build_retrieval_signals(phases_dict)
 
         return MonitorReport(
             skill_command=self.skill_command,
@@ -243,8 +210,6 @@ class SkillsMonitor:
             phases=phases_dict,
             rust_db_events=rust_dict,
             samples_count=len(self.samples),
-            link_graph_signals=link_graph_signals,
-            retrieval_signals=retrieval_signals,
         )
 
     def report(self, output_json: bool = False) -> MonitorReport:
@@ -255,13 +220,3 @@ class SkillsMonitor:
         else:
             SummaryReporter().emit(report)
         return report
-
-    @staticmethod
-    def _build_link_graph_signals(phases: list[dict[str, Any]]) -> dict[str, Any] | None:
-        """Build machine-readable LinkGraph signal summary from phase events."""
-        return build_link_graph_signals(phases)
-
-    @staticmethod
-    def _build_retrieval_signals(phases: list[dict[str, Any]]) -> dict[str, Any] | None:
-        """Build machine-readable retrieval row-budget summary from phase events."""
-        return build_retrieval_signals(phases)

@@ -1,286 +1,141 @@
 """
-Vector store CRUD and table operations.
-
-Add, delete, count, index creation, table/schema operations.
+src/agent/core/bootstrap.py
+System boot sequence and background task initialization.
+Phase 35.3: Config-driven skill preloading for pure MCP Server.
 """
 
-from __future__ import annotations
-
-import json
-import uuid
-from typing import TYPE_CHECKING, Any
-
+import sys
+import asyncio
+import threading
 import structlog
-
-from omni.foundation.services.embedding import get_embedding_service
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .store import VectorStoreClient
+    from mcp.server import Server
 
 logger = structlog.get_logger(__name__)
 
 
-async def add(
-    client: VectorStoreClient,
-    content: str,
-    metadata: dict[str, Any] | None,
-    collection: str,
-) -> bool:
-    """Add one document to the vector store."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return False
-    try:
-        service = get_embedding_service()
-        vector = service.embed(content)[0]
-        doc_id = str(uuid.uuid4())
-        ids = [doc_id]
-        vectors = [vector]
-        contents = [content]
-        metadatas = [json.dumps(metadata or {})]
-        await store.add_documents(collection, ids, vectors, contents, metadatas)
-        client.invalidate_cache(collection)
-        return True
-    except Exception as e:
-        if client._is_table_not_found(e):
-            logger.debug("VectorStore: Collection %r not found for add operation", collection)
-            return False
-        logger.error("Add failed", error=str(e))
-        return False
-
-
-async def add_batch(
-    client: VectorStoreClient,
-    chunks: list[str],
-    metadata: list[dict[str, Any]],
-    collection: str,
-    batch_size: int,
-    max_concurrent_embed_batches: int,
-) -> int:
-    """Batch add documents. Returns number of stored chunks."""
-    import asyncio
-
-    store = client._get_store_for_collection(collection)
-    if not store or not chunks:
-        return 0
-    service = get_embedding_service()
-    batches = [
-        (i, chunks[i : i + batch_size], metadata[i : i + batch_size])
-        for i in range(0, len(chunks), batch_size)
-    ]
-
-    async def _embed_one(
-        batch_idx: int, batch_chunks: list[str], batch_meta: list[dict]
-    ) -> tuple[int, list[list[float]], list[str], list[dict]]:
-        embeddings = await asyncio.to_thread(service.embed_batch, batch_chunks)
-        return (batch_idx, embeddings, batch_chunks, batch_meta)
-
-    try:
-        if max_concurrent_embed_batches <= 1:
-            results = []
-            for batch_idx, batch_chunks, batch_meta in batches:
-                _, embeddings, bc, bm = await _embed_one(batch_idx, batch_chunks, batch_meta)
-                results.append((batch_idx, embeddings, bc, bm))
-        else:
-            sem = asyncio.Semaphore(max_concurrent_embed_batches)
-
-            async def _embed_with_sem(
-                batch_idx: int, batch_chunks: list[str], batch_meta: list[dict]
-            ):
-                async with sem:
-                    return await _embed_one(batch_idx, batch_chunks, batch_meta)
-
-            tasks = [_embed_with_sem(batch_idx, bc, bm) for batch_idx, bc, bm in batches]
-            results = await asyncio.gather(*tasks)
-            results = [(r[0], r[1], r[2], r[3]) for r in results]
-            results.sort(key=lambda r: r[0])
-
-        chunks_stored = 0
-        for batch_num, (_, embeddings, batch_chunks, batch_meta) in enumerate(results, 1):
-            ids = [str(uuid.uuid4()) for _ in batch_chunks]
-            metadatas = [json.dumps(m or {}) for m in batch_meta]
-            await store.add_documents(collection, ids, embeddings, batch_chunks, metadatas)
-            chunks_stored += len(batch_chunks)
-            logger.info("Batch stored", batch=batch_num, stored=chunks_stored, total=len(chunks))
-        client.invalidate_cache(collection)
-        return chunks_stored
-    except Exception as e:
-        if client._is_table_not_found(e):
-            logger.debug("VectorStore: Collection %r not found for batch add", collection)
-            return 0
-        logger.error("Batch add failed", error=str(e))
-        return 0
-
-
-async def delete(client: VectorStoreClient, id: str, collection: str) -> bool:
-    """Delete one document by id."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return False
-    try:
-        store.delete_by_ids(collection, [id])
-        client.invalidate_cache(collection)
-        return True
-    except Exception as e:
-        if client._is_table_not_found(e):
-            logger.debug("VectorStore: Collection %r not found for delete operation", collection)
-            return False
-        logger.error("Delete failed", error=str(e))
-        return False
-
-
-async def delete_by_metadata_source(client: VectorStoreClient, collection: str, source: str) -> int:
-    """Delete rows whose metadata.source equals or ends with source.
-
-    Used for idempotent ingest: delete existing chunks before re-ingesting.
-    Returns number of rows deleted.
+def boot_core_skills(mcp: "Server" = None):
     """
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return 0
-    if not hasattr(store, "delete_by_metadata_source"):
-        logger.debug("Store does not support delete_by_metadata_source")
-        return 0
-    try:
-        deleted = store.delete_by_metadata_source(collection, source)
-        if deleted > 0:
-            client.invalidate_cache(collection)
-        return deleted
-    except Exception as e:
-        if client._is_table_not_found(e):
-            logger.debug("VectorStore: Collection %r not found for delete by source", collection)
-            return 0
-        logger.error("Delete by metadata source failed", error=str(e))
-        return 0
+    [Kernel Boot] Auto-load skills from settings.yaml.
+    Fixes the 'Lobotomized Agent' issue by ensuring tools are ready.
+
+    Note: With pure MCP Server, tools are listed dynamically via handle_list_tools.
+    This function pre-loads skills into SkillManager for faster first-run.
+
+    Loading mode is controlled by settings.yaml:
+    - skills.preload: Skills loaded at startup
+    - skills.on_demand: Skills available but not loaded until requested
+    """
+    # Lazy imports to avoid import-time overhead
+    from agent.core.registry import get_skill_registry
+    from common.mcp_core import log_decision
+
+    registry = get_skill_registry()
+
+    logger.info("Booting Omni-DevEnv Kernel...")
+
+    # Use config-driven preloading
+    preload_skills = registry.get_preload_skills()
+
+    if not preload_skills:
+        logger.warning("No preload skills configured in settings.yaml")
+        return
+
+    loaded_count = 0
+    for skill in preload_skills:
+        try:
+            # Check if skill exists before trying to load
+            if registry.get_skill_manifest(skill):
+                # Load skill (mcp parameter is ignored in pure MCP mode,
+                # but kept for API compatibility)
+                success, msg = registry.load_skill(skill, mcp)
+                if success:
+                    logger.info("Preloaded skill", skill=skill)
+                    log_decision(f"boot.skill_preloaded", {"skill": skill}, logger)
+                    loaded_count += 1
+                else:
+                    logger.warning("Skipped skill", skill=skill, reason=msg)
+                    log_decision(f"boot.skill_skipped", {"skill": skill, "reason": msg}, logger)
+            else:
+                logger.warning("Skill not found", skill=skill)
+        except Exception as e:
+            # Don't crash main process if a skill is malformed
+            logger.warning(f"Skill boot error ({skill}): {e}")
+
+    logger.info("Skills preloaded", loaded=loaded_count, total=len(preload_skills))
 
 
-async def count(client: VectorStoreClient, collection: str) -> int:
-    """Return number of rows in collection."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return 0
-    try:
-        return store.count(collection)
-    except Exception as e:
-        if client._is_table_not_found(e):
-            return 0
-        logger.error("Count failed", error=str(e))
-        return 0
+def start_background_tasks() -> threading.Thread | None:
+    """
+    [Background] Initialize Knowledge Base ingestion in a separate thread.
+    Does not block server startup.
+
+    Returns the thread reference so it can be joined on graceful shutdown.
+    """
+    global _background_thread
+
+    def _run_ingest():
+        try:
+            from agent.capabilities.knowledge_ingestor import ingest_all_knowledge
+            from agent.capabilities.librarian import bootstrap_knowledge
+
+            # Create new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+
+                async def _async_task():
+                    try:
+                        await ingest_all_knowledge()
+                        await bootstrap_knowledge()
+                        logger.info("Knowledge base bootstrap completed")
+                    except Exception as e:
+                        logger.error(f"Knowledge base bootstrap failed: {e}")
+
+                loop.run_until_complete(_async_task())
+            finally:
+                # Ensure loop is properly closed even on exception
+                try:
+                    loop.close()
+                except Exception:
+                    pass  # Ignore close errors
+        except Exception as e:
+            logger.error(f"Background thread error: {e}")
+
+    _background_thread = threading.Thread(target=_run_ingest, daemon=False)
+    _background_thread.start()
+    logger.info("Background tasks started")
+
+    return _background_thread
 
 
-async def create_index(client: VectorStoreClient, collection: str) -> bool:
-    """Create IVF-FLAT index for collection."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return False
-    try:
-        await store.create_index_for_table(collection)
+# Global reference for shutdown handling
+_background_thread: threading.Thread | None = None
+
+
+def shutdown_background_tasks(timeout: float = 30.0) -> bool:
+    """
+    Gracefully shutdown background tasks by waiting for thread completion.
+
+    Args:
+        timeout: Maximum seconds to wait for thread to finish
+
+    Returns:
+        True if thread completed within timeout, False otherwise
+    """
+    global _background_thread
+    if _background_thread and _background_thread.is_alive():
+        logger.info("Waiting for background tasks to complete...")
+        _background_thread.join(timeout=timeout)
+        if _background_thread.is_alive():
+            logger.warning("Background tasks did not complete within timeout")
+            return False
+        logger.info("Background tasks completed")
         return True
-    except Exception as e:
-        logger.error("Create index failed", error=str(e))
-        return False
+    return True
 
 
-async def get_table_info(client: VectorStoreClient, collection: str) -> dict[str, Any] | None:
-    """Get table metadata."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return None
-    try:
-        raw = store.get_table_info(collection)
-        return json.loads(raw) if raw else None
-    except Exception as e:
-        if client._is_table_not_found(e):
-            return None
-        logger.error("Get table info failed", error=str(e))
-        return None
-
-
-async def list_versions(client: VectorStoreClient, collection: str) -> list[dict[str, Any]]:
-    """List historical versions for collection."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return []
-    try:
-        raw = store.list_versions(collection)
-        return json.loads(raw) if raw else []
-    except Exception as e:
-        if client._is_table_not_found(e):
-            return []
-        logger.error("List versions failed", error=str(e))
-        return []
-
-
-async def get_fragment_stats(client: VectorStoreClient, collection: str) -> list[dict[str, Any]]:
-    """Get fragment-level stats."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return []
-    try:
-        raw = store.get_fragment_stats(collection)
-        return json.loads(raw) if raw else []
-    except Exception as e:
-        if client._is_table_not_found(e):
-            return []
-        logger.error("Get fragment stats failed", error=str(e))
-        return []
-
-
-async def add_columns(
-    client: VectorStoreClient,
-    collection: str,
-    columns: list[dict[str, Any]],
-    invalidate_cache: bool,
-) -> bool:
-    """Add columns (schema evolution)."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return False
-    try:
-        await store.add_columns(collection, columns)
-        if invalidate_cache:
-            client.invalidate_cache(collection)
-        return True
-    except Exception as e:
-        logger.error("Add columns failed", error=str(e))
-        return False
-
-
-async def alter_columns(
-    client: VectorStoreClient,
-    collection: str,
-    alterations: list[dict[str, Any]],
-    invalidate_cache: bool,
-) -> bool:
-    """Alter columns (schema evolution)."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return False
-    try:
-        await store.alter_columns(collection, alterations)
-        if invalidate_cache:
-            client.invalidate_cache(collection)
-        return True
-    except Exception as e:
-        logger.error("Alter columns failed", error=str(e))
-        return False
-
-
-async def drop_columns(
-    client: VectorStoreClient,
-    collection: str,
-    columns: list[str],
-    invalidate_cache: bool,
-) -> bool:
-    """Drop columns (schema evolution)."""
-    store = client._get_store_for_collection(collection)
-    if not store:
-        return False
-    try:
-        await store.drop_columns(collection, columns)
-        if invalidate_cache:
-            client.invalidate_cache(collection)
-        return True
-    except Exception as e:
-        logger.error("Drop columns failed", error=str(e))
-        return False
+__all__ = ["boot_core_skills", "start_background_tasks", "shutdown_background_tasks", "CORE_SKILLS"]

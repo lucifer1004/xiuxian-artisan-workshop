@@ -1,10 +1,29 @@
-//! Embedding client cache behavior tests with a mock HTTP embedding endpoint.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::similar_names
+)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use axum::{Json, Router, extract::State, routing::post};
-use xiuxian_daochang::EmbeddingClient;
+use omni_agent::EmbeddingClient;
 
 #[derive(Clone)]
 struct EmbedState {
@@ -36,15 +55,9 @@ async fn embed_batch_handler(
     let model_bias = payload
         .get("model")
         .and_then(|value| value.as_str())
-        .map_or(0.0, |value| {
-            let model_len = u16::try_from(value.len()).unwrap_or(u16::MAX);
-            f32::from(model_len)
-        });
+        .map_or(0.0, |value| value.len() as f32);
     let vectors = (0..text_count)
-        .map(|index| {
-            let index_f32 = f32::from(u16::try_from(index).unwrap_or(u16::MAX));
-            vec![index_f32 + model_bias, 1.0 + model_bias]
-        })
+        .map(|index| vec![index as f32 + model_bias, 1.0 + model_bias])
         .collect::<Vec<Vec<f32>>>();
     Json(serde_json::json!({ "vectors": vectors }))
 }

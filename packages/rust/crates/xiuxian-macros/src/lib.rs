@@ -1,6 +1,6 @@
-//! # xiuxian-macros
+//! # omni-macros
 //!
-//! Common procedural macros for xiuxian Rust crates.
+//! Common procedural macros for omni Rust crates.
 //!
 //! ## Macros
 //!
@@ -9,12 +9,8 @@
 //! - [`topics!`] - Generate topic/event constants
 //! - [`py_from!`] - Generate `PyO3` From implementations
 //! - [`env_non_empty!`] - Read a trimmed non-empty environment variable as `Option<String>`
-//! - [`env_first_non_empty!`] - Resolve the first present non-empty env var from candidates
 //! - [`string_first_non_empty!`] - Resolve the first non-empty string candidate
 //! - [`project_config_paths!`] - Build system/user/env layered config candidate paths
-//! - [`embed_utf8_dir!`] - Embed UTF-8 files from a directory as `(path, content)` pairs
-//! - [`zhenfa_tool`] - Generate `ZhenfaTool` boilerplate from one typed async function
-//! - [`xiuxian_config`] - Generate unified cascading config loaders with conflict enforcement
 //!
 //! ### Testing Utilities
 //! - [`temp_dir!`] - Create a temporary directory for tests
@@ -25,9 +21,21 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Expr, parse_macro_input};
 
-mod embed_utf8_dir;
-mod xiuxian_config;
 mod zhenfa_tool;
+
+mod xiuxian_config;
+
+/// Attribute macro for defining native zhenfa tools.
+#[proc_macro_attribute]
+pub fn zhenfa_tool(attr: TokenStream, item: TokenStream) -> TokenStream {
+    zhenfa_tool::expand(attr, item)
+}
+
+/// Attribute macro for loading cascading config into a struct.
+#[proc_macro_attribute]
+pub fn xiuxian_config(attr: TokenStream, item: TokenStream) -> TokenStream {
+    xiuxian_config::expand(attr, item)
+}
 
 /// Generate pattern constants for symbol extraction.
 #[proc_macro]
@@ -144,14 +152,6 @@ pub fn py_from(input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Embed UTF-8 files from a directory and return sorted `(path, content)` pairs.
-///
-/// Input: `embed_utf8_dir!("$CARGO_MANIFEST_DIR/resources/zhixing/templates")`
-#[proc_macro]
-pub fn embed_utf8_dir(input: TokenStream) -> TokenStream {
-    embed_utf8_dir::expand(input)
-}
-
 /// Read an environment variable and return `Option<String>` when non-empty after trim.
 ///
 /// Input: `env_non_empty!("OPENAI_API_KEY")` or `env_non_empty!(dynamic_key_expr)`
@@ -178,45 +178,6 @@ pub fn env_non_empty(input: TokenStream) -> TokenStream {
             .ok()
             .map(|raw| raw.trim().to_string())
             .filter(|raw| !raw.is_empty())
-    }
-    .into()
-}
-
-/// Resolve the first present non-empty environment variable from ordered candidates.
-///
-/// Input: `env_first_non_empty!("OPENAI_API_KEY", "MINIMAX_API_KEY")`
-/// or `env_first_non_empty!(primary_env_expr, fallback_env_expr)`
-#[proc_macro]
-pub fn env_first_non_empty(input: TokenStream) -> TokenStream {
-    let candidates: Vec<Expr> = parse_macro_input!(
-        input with syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated
-    )
-    .into_iter()
-    .collect();
-
-    if candidates.is_empty() {
-        return syn::Error::new(
-            proc_macro2::Span::call_site(),
-            "env_first_non_empty! requires at least one env var candidate",
-        )
-        .to_compile_error()
-        .into();
-    }
-
-    quote! {
-        {
-            let mut resolved: Option<String> = None;
-            for env_name in [#(#candidates),*] {
-                if let Ok(raw) = std::env::var(env_name) {
-                    let trimmed = raw.trim();
-                    if !trimmed.is_empty() {
-                        resolved = Some(trimmed.to_string());
-                        break;
-                    }
-                }
-            }
-            resolved
-        }
     }
     .into()
 }
@@ -264,8 +225,9 @@ pub fn string_first_non_empty(input: TokenStream) -> TokenStream {
 /// Input: `project_config_paths!("qianji.toml", "QIANJI_CONFIG_PATH")`
 ///
 /// Expansion order:
-/// 1. `<PRJ_CONFIG_HOME>/xiuxian-artisan-workshop/<file>` (`.config` when unset)
-/// 2. `$<explicit_env>` when set and non-empty
+/// 1. `<PRJ_ROOT>/packages/conf/<file>`
+/// 2. `<PRJ_CONFIG_HOME>/omni-dev-fusion/<file>` (`.config` when unset)
+/// 3. `$<explicit_env>` when set and non-empty
 #[proc_macro]
 pub fn project_config_paths(input: TokenStream) -> TokenStream {
     let args: Vec<Expr> = parse_macro_input!(
@@ -346,7 +308,8 @@ pub fn project_config_paths(input: TokenStream) -> TokenStream {
             };
 
             let mut candidates = vec![
-                config_home.join(concat!("xiuxian-artisan-workshop/", #file_name)),
+                project_root.join(concat!("packages/conf/", #file_name)),
+                config_home.join(concat!("omni-dev-fusion/", #file_name)),
             ];
 
             if let Ok(raw) = std::env::var(#explicit_env_var) {
@@ -371,7 +334,7 @@ pub fn project_config_paths(input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// let temp_path = xiuxian_macros::temp_dir!();
+/// let temp_path = omni_macros::temp_dir!();
 /// std::fs::write(temp_path.join("test.txt"), "hello")
 ///     .expect("temporary write should succeed");
 /// assert!(temp_path.exists());
@@ -381,7 +344,7 @@ pub fn temp_dir(_input: TokenStream) -> TokenStream {
     quote! {
         {
             let path = std::env::temp_dir()
-                .join(format!("xiuxian_test_{}", uuid::Uuid::new_v4()));
+                .join(format!("omni_test_{}", uuid::Uuid::new_v4()));
             std::fs::create_dir_all(&path)
                 .expect("Failed to create temp directory");
             path
@@ -395,7 +358,7 @@ pub fn temp_dir(_input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// let _elapsed = xiuxian_macros::assert_timing!(100.0, {
+/// let _elapsed = omni_macros::assert_timing!(100.0, {
 ///     std::thread::sleep(std::time::Duration::from_millis(1));
 /// });
 /// ```
@@ -442,7 +405,7 @@ pub fn assert_timing(input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// let elapsed = xiuxian_macros::bench_case!(|| {
+/// let elapsed = omni_macros::bench_case!(|| {
 ///     let value = 1 + 1;
 ///     assert_eq!(value, 2);
 /// });
@@ -460,54 +423,4 @@ pub fn bench_case(input: TokenStream) -> TokenStream {
         }
     }
     .into()
-}
-
-/// Generate one `ZhenfaTool` implementation from a typed async function.
-///
-/// # Example
-///
-/// ```ignore
-/// #[derive(serde::Deserialize, schemars::JsonSchema)]
-/// struct EchoArgs {
-///     value: String,
-/// }
-///
-/// #[xiuxian_macros::zhenfa_tool(name = "echo.tool", description = "Echo test payload")]
-/// async fn echo_tool(
-///     _ctx: &xiuxian_zhenfa::ZhenfaContext,
-///     args: EchoArgs,
-/// ) -> Result<String, xiuxian_zhenfa::ZhenfaError> {
-///     Ok(args.value)
-/// }
-///
-/// // Optional:
-/// // - `mutation_scope = "scope.string"`
-/// // - `cache_key = "my_cache_key_fn"`
-/// ```
-#[proc_macro_attribute]
-pub fn zhenfa_tool(attr: TokenStream, item: TokenStream) -> TokenStream {
-    zhenfa_tool::expand(attr, item)
-}
-
-/// Generate unified cascading config loader helpers for one config struct.
-///
-/// This is the canonical attribute for the xiuxian config bus.
-///
-/// # Example
-///
-/// ```ignore
-/// #[xiuxian_macros::xiuxian_config(
-///     namespace = "skills",
-///     internal_path = "resources/config/skills.toml",
-///     orphan_file = "",
-///     array_merge = "append"
-/// )]
-/// #[derive(serde::Deserialize, serde::Serialize)]
-/// struct SkillStructureConfig {
-///     // ...
-/// }
-/// ```
-#[proc_macro_attribute]
-pub fn xiuxian_config(attr: TokenStream, item: TokenStream) -> TokenStream {
-    xiuxian_config::expand(attr, item)
 }

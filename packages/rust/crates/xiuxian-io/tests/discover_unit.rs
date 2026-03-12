@@ -1,9 +1,9 @@
-//! Integration tests for `xiuxian-io` discovery helpers.
+//! Integration tests for `omni-io` discovery helpers.
 
 use std::fs::File;
 
+use omni_io::{DiscoverOptions, discover_files, discover_files_in_dir, should_skip_path};
 use tempfile::TempDir;
-use xiuxian_io::{DiscoverOptions, discover_files, discover_files_in_dir, should_skip_path};
 
 #[test]
 fn test_discover_files_in_dir() -> std::io::Result<()> {

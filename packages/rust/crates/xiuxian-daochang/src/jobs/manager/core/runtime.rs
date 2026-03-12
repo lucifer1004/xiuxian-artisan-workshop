@@ -24,8 +24,9 @@ impl JobManager {
             let mut workers = JoinSet::new();
 
             while let Some(job) = queue_rx.recv().await {
-                let Ok(permit) = Arc::clone(&semaphore).acquire_owned().await else {
-                    break;
+                let permit = match Arc::clone(&semaphore).acquire_owned().await {
+                    Ok(permit) => permit,
+                    Err(_) => break,
                 };
                 let worker_manager = Arc::clone(&manager);
                 let worker_completion_tx = completion_tx.clone();
@@ -67,8 +68,9 @@ impl JobManager {
                     continue;
                 }
 
-                let Ok(metrics) = probe else {
-                    continue;
+                let metrics = match probe {
+                    Ok(metrics) => metrics,
+                    Err(_) => continue,
                 };
                 match metrics.health_state {
                     JobHealthState::Healthy => {
@@ -120,7 +122,6 @@ impl JobManager {
                     .send(JobCompletion {
                         job_id: job.job_id,
                         recipient: job.recipient,
-                        parent_session_id: job.parent_session_id,
                         kind: JobCompletionKind::Succeeded { output },
                     })
                     .await;
@@ -133,7 +134,6 @@ impl JobManager {
                     .send(JobCompletion {
                         job_id: job.job_id,
                         recipient: job.recipient,
-                        parent_session_id: job.parent_session_id,
                         kind: JobCompletionKind::Failed { error: err },
                     })
                     .await;
@@ -147,7 +147,6 @@ impl JobManager {
                     .send(JobCompletion {
                         job_id: job.job_id,
                         recipient: job.recipient,
-                        parent_session_id: job.parent_session_id,
                         kind: JobCompletionKind::TimedOut { timeout_secs },
                     })
                     .await;

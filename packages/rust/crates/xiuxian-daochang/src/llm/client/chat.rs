@@ -1,104 +1,84 @@
-use std::time::{Duration, Instant};
+use anyhow::{Context, Result};
+use litellm_rs::core::providers::base::BaseConfig;
+use litellm_rs::core::providers::openai::{
+    OpenAIProvider as LiteLlmOpenAIProvider, config::OpenAIConfig,
+};
+use litellm_rs::core::traits::provider::llm_provider::trait_definition::LLMProvider;
+use litellm_rs::core::types::{
+    ChatRequest as LiteChatRequest, RequestContext as LiteRequestContext,
+    ToolChoice as LiteToolChoice,
+};
+use tokio::sync::OnceCell;
 
-use anyhow::Result;
-
-use super::super::backend::LlmBackendMode;
-#[cfg(feature = "agent-provider-litellm")]
-use super::super::compat::litellm::LiteLlmDispatchConfig;
-use super::super::tools::{PreparedTool, parse_tools_json};
-use super::super::types::{AssistantMessage, ChatCompletionRequest, ChatCompletionResponse};
-use super::LlmClient;
-use crate::llm::protocol::{HygienePolicy, OpenAiHygienePolicy};
+use super::backend::{LlmBackendMode, extract_api_base_from_inference_url, parse_backend_mode};
+use super::converters::{
+    chat_message_to_litellm_message, content_from_litellm, tool_call_from_litellm,
+};
+use super::tools::{PreparedTool, parse_tools_json};
+use super::types::{AssistantMessage, ChatCompletionRequest, ChatCompletionResponse};
+use crate::config::load_runtime_settings;
 use crate::session::ChatMessage;
 
+/// LLM client for chat completions.
+pub struct LlmClient {
+    client: reqwest::Client,
+    inference_url: String,
+    inference_api_base: String,
+    model: String,
+    api_key: Option<String>,
+    backend_mode: LlmBackendMode,
+    litellm_provider: OnceCell<LiteLlmOpenAIProvider>,
+}
+
 impl LlmClient {
-    /// Send messages and optionally tool definitions; returns content and/or `tool_calls`.
+    pub fn new(inference_url: String, model: String, api_key: Option<String>) -> Self {
+        let env_backend = std::env::var("OMNI_AGENT_LLM_BACKEND")
+            .ok()
+            .map(|raw| raw.trim().to_string())
+            .filter(|raw| !raw.is_empty());
+        let (backend_mode, backend_source) = if let Some(raw) = env_backend.as_deref() {
+            (parse_backend_mode(Some(raw)), "env")
+        } else {
+            let settings_backend = load_runtime_settings()
+                .agent
+                .llm_backend
+                .map(|raw| raw.trim().to_string())
+                .filter(|raw| !raw.is_empty());
+            if let Some(raw) = settings_backend.as_deref() {
+                (parse_backend_mode(Some(raw)), "settings")
+            } else {
+                (parse_backend_mode(None), "default")
+            }
+        };
+        let inference_api_base = extract_api_base_from_inference_url(&inference_url);
+        tracing::info!(
+            llm_backend = backend_mode.as_str(),
+            llm_backend_source = backend_source,
+            inference_api_base = %inference_api_base,
+            "llm backend selected"
+        );
+        Self {
+            client: reqwest::Client::new(),
+            inference_url,
+            inference_api_base,
+            model,
+            api_key,
+            backend_mode,
+            litellm_provider: OnceCell::const_new(),
+        }
+    }
+
+    /// Send messages and optionally tool definitions; returns content and/or tool_calls.
     pub async fn chat(
         &self,
         messages: Vec<ChatMessage>,
         tools_json: Option<Vec<serde_json::Value>>,
     ) -> Result<AssistantMessage> {
         let tools = parse_tools_json(tools_json);
-        let (messages, integrity_report) = OpenAiHygienePolicy.sanitize_messages(messages);
-        let started_at = Instant::now();
-        let gate_wait_started = Instant::now();
-        let _in_flight_permit = if let Some(gate) = self.in_flight_gate.as_ref() {
-            Some(
-                gate.clone()
-                    .acquire_owned()
-                    .await
-                    .map_err(|_| anyhow::anyhow!("llm in-flight gate closed unexpectedly"))?,
-            )
-        } else {
-            None
-        };
-        let gate_wait_ms =
-            u64::try_from(gate_wait_started.elapsed().as_millis()).unwrap_or(u64::MAX);
-        if integrity_report.dropped_total() > 0 {
-            tracing::warn!(
-                event = "agent.llm.chat.message_integrity_repaired",
-                dropped_incomplete_assistant_messages = integrity_report.incomplete_assistants,
-                dropped_linked_tool_messages = integrity_report.linked_tools,
-                dropped_orphan_tool_messages = integrity_report.orphan_tools,
-                dropped_empty_tool_call_messages = integrity_report.empty_tool_call_assistants,
-                dropped_total = integrity_report.dropped_total(),
-                "repaired inconsistent tool-call message chain before llm dispatch"
-            );
-        }
-        tracing::debug!(
-            event = "agent.llm.chat.dispatch",
-            llm_backend = self.backend_mode(),
-            llm_backend_source = self.backend_source(),
-            litellm_provider = self.litellm_provider_mode(),
-            litellm_wire_api = self.litellm_wire_api(),
-            litellm_provider_source = self.litellm_provider_source(),
-            inference_max_in_flight = self.inference_max_in_flight,
-            gate_wait_ms = gate_wait_ms,
-            message_count = messages.len(),
-            tools_count = tools.len(),
-            "dispatching llm chat request"
-        );
-        let result = match self.backend_mode {
+        match self.backend_mode {
             LlmBackendMode::OpenAiCompatibleHttp => self.chat_via_http(messages, tools).await,
-            LlmBackendMode::LiteLlmRs => {
-                #[cfg(feature = "agent-provider-litellm")]
-                {
-                    self.chat_via_litellm_rs(messages, tools).await
-                }
-                #[cfg(not(feature = "agent-provider-litellm"))]
-                {
-                    let _ = (messages, tools);
-                    Err(anyhow::anyhow!(
-                        "litellm-rs backend is disabled at compile time (feature agent-provider-litellm)"
-                    ))
-                }
-            }
-        };
-        let elapsed_ms = u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
-        match &result {
-            Ok(message) => {
-                let tool_call_count = message.tool_calls.as_ref().map_or(0, std::vec::Vec::len);
-                tracing::debug!(
-                    event = "agent.llm.chat.completed",
-                    llm_backend = self.backend_mode(),
-                    litellm_provider = self.litellm_provider_mode(),
-                    elapsed_ms = elapsed_ms,
-                    tool_call_count = tool_call_count,
-                    "llm chat request completed"
-                );
-            }
-            Err(error) => {
-                tracing::warn!(
-                    event = "agent.llm.chat.failed",
-                    llm_backend = self.backend_mode(),
-                    litellm_provider = self.litellm_provider_mode(),
-                    elapsed_ms = elapsed_ms,
-                    error = %error,
-                    "llm chat request failed"
-                );
-            }
+            LlmBackendMode::LiteLlmRs => self.chat_via_litellm_rs(messages, tools).await,
         }
-        result
     }
 
     async fn chat_via_http(
@@ -116,25 +96,23 @@ impl LlmClient {
             messages,
             tool_choice: tools.as_ref().map(|_| "auto".to_string()),
             tools,
-            max_tokens: self.inference_max_tokens,
         };
-        let mut request = self
+        let mut req = self
             .client
             .post(&self.inference_url)
             .json(&body)
             .header("Content-Type", "application/json");
-        request = request.timeout(Duration::from_secs(self.inference_timeout_secs));
         if let Some(ref key) = self.api_key {
-            request = request.header("Authorization", format!("Bearer {key}"));
+            req = req.header("Authorization", format!("Bearer {}", key));
         }
-        let response = request.send().await?;
-        let status = response.status();
-        let text = response.text().await?;
+        let res = req.send().await?;
+        let status = res.status();
+        let text = res.text().await?;
         if !status.is_success() {
-            return Err(anyhow::anyhow!("LLM API error {status}: {text}"));
+            return Err(anyhow::anyhow!("LLM API error {}: {}", status, text));
         }
         let parsed: ChatCompletionResponse = serde_json::from_str(&text)
-            .map_err(|error| anyhow::anyhow!("LLM response parse error: {error}; body: {text}"))?;
+            .map_err(|e| anyhow::anyhow!("LLM response parse error: {}; body: {}", e, text))?;
         let choice = parsed
             .choices
             .into_iter()
@@ -143,28 +121,71 @@ impl LlmClient {
         Ok(choice.message)
     }
 
-    #[cfg(feature = "agent-provider-litellm")]
     async fn chat_via_litellm_rs(
         &self,
         messages: Vec<ChatMessage>,
         tools: Vec<PreparedTool>,
     ) -> Result<AssistantMessage> {
-        self.litellm_runtime
-            .chat(
-                LiteLlmDispatchConfig {
-                    provider_mode: self.litellm_provider_mode,
-                    wire_api: self.litellm_wire_api,
-                    model: &self.model,
-                    max_tokens: self.inference_max_tokens,
-                    api_key: self.api_key.as_deref(),
-                    litellm_api_key_env: &self.litellm_api_key_env,
-                    inference_api_base: &self.inference_api_base,
-                    minimax_api_base: &self.minimax_api_base,
-                    timeout_secs: self.inference_timeout_secs,
-                },
-                messages,
-                tools,
-            )
+        let provider = self
+            .litellm_provider
+            .get_or_try_init(|| async {
+                let api_key = self
+                    .api_key
+                    .clone()
+                    .unwrap_or_else(|| "dummy-key-for-local".to_string());
+                let config = OpenAIConfig {
+                    base: BaseConfig {
+                        api_key: Some(api_key),
+                        api_base: Some(self.inference_api_base.clone()),
+                        timeout: 60,
+                        max_retries: 3,
+                        headers: Default::default(),
+                        organization: None,
+                        api_version: None,
+                    },
+                    organization: None,
+                    project: None,
+                    model_mappings: Default::default(),
+                    features: Default::default(),
+                };
+                LiteLlmOpenAIProvider::new(config)
+                    .await
+                    .context("failed to initialize litellm-rs openai provider")
+            })
+            .await?;
+
+        let tools = if tools.is_empty() {
+            None
+        } else {
+            Some(tools.iter().map(PreparedTool::to_litellm_tool).collect())
+        };
+        let request = LiteChatRequest {
+            model: self.model.clone(),
+            messages: messages
+                .into_iter()
+                .map(chat_message_to_litellm_message)
+                .collect::<Result<Vec<_>>>()?,
+            tools: tools.clone(),
+            tool_choice: tools
+                .as_ref()
+                .map(|_| LiteToolChoice::String("auto".to_string())),
+            ..Default::default()
+        };
+
+        let response = LLMProvider::chat_completion(provider, request, LiteRequestContext::new())
             .await
+            .map_err(|e| anyhow::anyhow!("litellm-rs chat completion failed: {e}"))?;
+        let choice = response
+            .choices
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("litellm-rs response has no choices"))?;
+        Ok(AssistantMessage {
+            content: content_from_litellm(choice.message.content),
+            tool_calls: choice
+                .message
+                .tool_calls
+                .map(|calls| calls.into_iter().map(tool_call_from_litellm).collect()),
+        })
     }
 }

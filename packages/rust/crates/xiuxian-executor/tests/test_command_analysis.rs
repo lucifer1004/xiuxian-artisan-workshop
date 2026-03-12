@@ -1,9 +1,9 @@
 //! Tests for command analysis serialization and types.
 
-use std::path::PathBuf;
-use xiuxian_executor::{
+use omni_executor::{
     AstCommandAnalyzer, CommandAnalysis, SecurityViolation, VariableInfo, ViolationSeverity,
 };
+use std::path::PathBuf;
 
 #[test]
 fn test_command_analysis_serialization() {
@@ -27,8 +27,7 @@ fn test_command_analysis_serialization() {
     };
 
     // Test that the analysis can be serialized to JSON
-    let json = serde_json::to_string(&analysis)
-        .unwrap_or_else(|error| panic!("failed to serialize CommandAnalysis: {error}"));
+    let json = serde_json::to_string(&analysis).expect("Should serialize to JSON");
     assert!(json.contains("is_safe"));
     assert!(json.contains("TEST"));
     assert!(json.contains("/tmp/test"));
@@ -58,12 +57,9 @@ fn test_violation_severity_levels() {
     };
 
     // Test serialization
-    let blocked_json = serde_json::to_string(&blocked)
-        .unwrap_or_else(|error| panic!("failed to serialize blocked violation: {error}"));
-    let warning_json = serde_json::to_string(&warning)
-        .unwrap_or_else(|error| panic!("failed to serialize warning violation: {error}"));
-    let info_json = serde_json::to_string(&info)
-        .unwrap_or_else(|error| panic!("failed to serialize info violation: {error}"));
+    let blocked_json = serde_json::to_string(&blocked).expect("Serialize blocked");
+    let warning_json = serde_json::to_string(&warning).expect("Serialize warning");
+    let info_json = serde_json::to_string(&info).expect("Serialize info");
 
     assert!(blocked_json.contains("Blocked"));
     assert!(warning_json.contains("Warning"));

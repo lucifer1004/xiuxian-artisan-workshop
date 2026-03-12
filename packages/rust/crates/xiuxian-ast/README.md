@@ -1,9 +1,3 @@
----
-type: knowledge
-metadata:
-  title: "Omni AST"
----
-
 # Omni AST
 
 > Unified AST Utilities using ast-grep.
@@ -22,7 +16,7 @@ This crate provides a unified interface for AST-based code analysis across the O
 ## Usage
 
 ```rust
-use xiuxian_ast::AstAnalyzer;
+use omni_ast::AstAnalyzer;
 
 let analyzer = AstAnalyzer::new();
 let ast = analyzer.parse("src/main.py")?;

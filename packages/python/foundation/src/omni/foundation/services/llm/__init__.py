@@ -1,8 +1,10 @@
+# inference - LLM Inference Module
+
 """
 LLM Inference Module
 
 Modularized for testability.
-Configuration-driven from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml).
+Configuration-driven from settings.yaml.
 
 Modules:
 - client.py: InferenceClient class
@@ -24,13 +26,13 @@ from .client import InferenceClient
 from .personas import PERSONAS, build_persona_prompt, get_persona, load_personas_from_file
 from .provider import (
     LLMConfig,
-    LLMProvider,
     LLMResponse,
+    LLMProvider,
+    LiteLLMProvider,
     NoOpProvider,
-    RustLLMProvider,
-    complete,
     get_llm_provider,
     reset_provider,
+    complete,
 )
 
 __all__ = [
@@ -44,11 +46,11 @@ __all__ = [
     "build_persona_prompt",
     # API
     "load_api_key",
-    # Provider API
+    # Provider API (LiteLLM-based)
     "LLMConfig",
     "LLMResponse",
     "LLMProvider",
-    "RustLLMProvider",
+    "LiteLLMProvider",
     "NoOpProvider",
     "get_llm_provider",
     "reset_provider",

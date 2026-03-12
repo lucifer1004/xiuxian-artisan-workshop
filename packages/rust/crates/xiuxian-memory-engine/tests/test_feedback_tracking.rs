@@ -1,13 +1,7 @@
-//! Feedback tracking integration tests for `xiuxian-memory-engine`.
+#![allow(missing_docs)]
 
 use anyhow::Result;
-use xiuxian_memory_engine::{Episode, EpisodeStore, RecallFeedbackOutcome, StoreConfig};
-
-const FLOAT_EPSILON: f32 = 1.0e-6;
-
-fn assert_f32_eq(left: f32, right: f32) {
-    assert!((left - right).abs() <= FLOAT_EPSILON);
-}
+use xiuxian_memory_engine::{Episode, EpisodeStore, StoreConfig};
 
 fn new_store() -> Result<EpisodeStore> {
     let tmp = tempfile::tempdir()?;
@@ -48,29 +42,5 @@ fn record_feedback_updates_success_and_failure_counts() -> Result<()> {
 fn record_feedback_returns_false_for_missing_episode() -> Result<()> {
     let store = new_store()?;
     assert!(!store.record_feedback("missing", true));
-    Ok(())
-}
-
-#[test]
-fn scope_feedback_bias_update_and_clear_roundtrip() -> Result<()> {
-    let store = new_store()?;
-    let scope = "session-feedback-1";
-
-    assert_f32_eq(store.recall_feedback_bias_for_scope(scope), 0.0);
-
-    let (previous, updated) =
-        store.apply_recall_feedback_for_scope(scope, RecallFeedbackOutcome::Failure);
-    assert_f32_eq(previous, 0.0);
-    assert!(updated < 0.0);
-    assert_f32_eq(store.recall_feedback_bias_for_scope(scope), updated);
-
-    let before_success = store.recall_feedback_bias_for_scope(scope);
-    let (previous, updated) =
-        store.apply_recall_feedback_for_scope(scope, RecallFeedbackOutcome::Success);
-    assert_f32_eq(previous, before_success);
-    assert!(updated > previous);
-
-    assert!(store.clear_recall_feedback_bias_for_scope(scope));
-    assert_f32_eq(store.recall_feedback_bias_for_scope(scope), 0.0);
     Ok(())
 }

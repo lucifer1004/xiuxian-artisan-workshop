@@ -1,325 +1,156 @@
+# cache_path.py
 """
-Common Path Utilities - Simplified path handling for skills.
+Common Cache Path Utilities - Centralized cache directory handling.
 
 Provides:
-- SKILLS_DIR: Callable to get skill paths (e.g., SKILLS_DIR("git") -> Path)
-- load_skill_module(): Load skill modules with simplified API
-- SkillPathBuilder: Builder for skill-related paths
+- CACHE_DIR: Callable to get cache paths (e.g., CACHE_DIR("memory") -> Path)
+- get_cache_dir(): Function form for getting cache paths
 
 Usage:
-    from omni.foundation.config.skills import SKILLS_DIR, load_skill_module
-    from omni.foundation.runtime.gitops import get_project_root
+    from common.cache_path import CACHE_DIR
 
-    # Get skill directory path from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml) -> assets.skills_dir
-    git_path = SKILLS_DIR("git")                   # -> /project/root/assets/skills/git
-    git_commands = SKILLS_DIR("git", "scripts/commands.py")  # -> /project/root/assets/skills/git/scripts/commands.py
-
-    # Load skill module
-    git_commands = load_skill_module("git")
-
-    # Project root (uses git rev-parse --show-toplevel)
-    root = get_project_root()
+    # Get cache directory from settings.yaml -> assets.cache_dir
+    cache_base = CACHE_DIR()                    # -> /project/root/.cache
+    memory_dir = CACHE_DIR("memory")            # -> /project/root/.cache/memory
+    feedback_file = CACHE_DIR("memory", "routing_feedback.json")  # -> /project/root/.cache/memory/routing_feedback.json
 
 Settings:
-    Reads from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml):
+    Reads from settings.yaml:
         assets:
-          skills_dir: "assets/skills"        # Skills base directory
-          definition_file: "SKILL.md"         # Skill definition file (default: SKILL.md)
+          cache_dir: ".cache"        # Cache base directory
 """
 
-import importlib.util
-import sys
 from pathlib import Path
+from typing import Optional
 
 
-class _SkillDirCallable:
-    """Callable that returns skill paths based on settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml) config.
+class _CacheDirCallable:
+    """Callable that returns cache paths based on settings.yaml config.
 
     Usage:
-        SKILLS_DIR("git")                           # -> Path("assets/skills/git")
-        SKILLS_DIR("git", "scripts/commands.py")    # -> Path("assets/skills/git/scripts/commands.py")
-        SKILLS_DIR()                                # -> Path("assets/skills") (base path)
-        SKILLS_DIR.definition_file("git")           # -> Path("assets/skills/git/SKILL.md")
+        CACHE_DIR()                              # -> Path(".cache") (base path)
+        CACHE_DIR("memory")                      # -> Path(".cache/memory")
+        CACHE_DIR("memory", "routing_feedback.json")  # -> Path(".cache/memory/routing_feedback.json")
     """
 
-    _cached_base_path: Path | None = None
-    _cached_definition_file: str | None = None
+    _cached_base_path: Optional[Path] = None
 
     def _get_base_path(self) -> Path:
-        """Get the base skills path from settings (assets.skills_dir)."""
+        """Get the base cache path from settings.yaml (assets.cache_dir)."""
         if self._cached_base_path is not None:
             return self._cached_base_path
 
         try:
-            from omni.foundation.config.settings import get_setting
+            from common.config.settings import Settings
 
-            # Read from settings -> assets.skills_dir
-            skills_path_str = get_setting("assets.skills_dir")
-            if skills_path_str:
-                self._cached_base_path = Path(skills_path_str)
+            # Use Settings directly to avoid path auto-resolution
+            settings = Settings()
+            cache_path_str = settings.get("assets.cache_dir")
+            if cache_path_str:
+                self._cached_base_path = Path(cache_path_str)
                 return self._cached_base_path
         except Exception:
             pass
 
-        # Fallback: use default "assets/skills"
-        self._cached_base_path = Path("assets/skills")
+        # Fallback: use default ".cache"
+        self._cached_base_path = Path(".cache")
         return self._cached_base_path
-
-    def _get_definition_file(self) -> str:
-        """Get the definition file name from settings (assets.definition_file)."""
-        if self._cached_definition_file is not None:
-            return self._cached_definition_file
-
-        try:
-            from omni.foundation.config.settings import get_setting
-
-            # Read from settings -> assets.definition_file
-            definition_file = get_setting("assets.definition_file")
-            if definition_file:
-                self._cached_definition_file = definition_file
-                return self._cached_definition_file
-        except Exception:
-            pass
-
-        # Fallback: use default "SKILL.md"
-        self._cached_definition_file = "SKILL.md"
-        return self._cached_definition_file
 
     def _resolve_with_root(self, path: Path) -> Path:
         """Resolve path relative to project root using git toplevel."""
         if path.is_absolute():
             return path
 
-        # Use gitops to get project root (most reliable)
-        from omni.foundation.runtime.gitops import get_project_root
+        from common.gitops import get_project_root
 
         project_root = get_project_root()
         return project_root / path
 
-    def __call__(
-        self,
-        skill: str | None = None,
-        *,
-        filename: str | None = None,
-        path: str | None = None,
-    ) -> Path:
-        """Get path for a skill or skill file.
+    def __call__(self, *parts: str) -> Path:
+        """Get path for cache subdirectory or file.
 
         Args:
-            skill: Name of the skill (e.g., "git", "filesystem")
-            filename: Optional filename within the skill directory
-            path: Optional nested path within the skill directory
+            *parts: Path components to join after cache base
 
         Returns:
-            Path to the skill directory or specific file
+            Absolute path to cache directory or file
 
         Usage:
-            SKILLS_DIR()                                  # -> assets/skills (base)
-            SKILLS_DIR(skill="git")                       # -> assets/skills/git
-            SKILLS_DIR(skill="git", filename="scripts/commands.py")  # -> assets/skills/git/scripts/commands.py
-            SKILLS_DIR(skill="skill", path="data/known_skills.json")  # -> assets/skills/skill/data/known_skills.json
+            CACHE_DIR()                                  # -> /project/.cache
+            CACHE_DIR("memory")                          # -> /project/.cache/memory
+            CACHE_DIR("memory", "routing_feedback.json") # -> /project/.cache/memory/routing_feedback.json
         """
         base = self._get_base_path()
         base = self._resolve_with_root(base)
 
-        if skill is None:
+        if not parts:
             return base
 
-        result = base / skill
+        return base.joinpath(*parts)
 
-        if path:
-            result = result / path
-        elif filename:
-            result = result / filename
-
-        return result
-
-    def definition_file(self, skill: str | None = None) -> Path:
-        """Get the definition file path for a skill (from settings assets.definition_file).
-
-        Args:
-            skill: Optional skill name. If None, returns just the definition filename.
-
-        Returns:
-            Path to the definition file, or just the filename if skill is None
+    def __truediv__(self, other: str) -> Path:
+        """Support / operator for path joining.
 
         Usage:
-            SKILLS_DIR.definition_file()           # -> "SKILL.md"
-            SKILLS_DIR.definition_file("git")      # -> Path("assets/skills/git/SKILL.md")
+            CACHE_DIR / "memory" / "file.json"
         """
-        definition = self._get_definition_file()
+        return self() / other
 
-        if skill is None:
-            return Path(definition)
+    def ensure_dir(self, *parts: str) -> Path:
+        """Get path and ensure directory exists.
 
-        base = self._get_base_path()
-        base = self._resolve_with_root(base)
-        return base / skill / definition
+        Args:
+            *parts: Path components (last one can be a file)
+
+        Returns:
+            Path to the directory (creates if not exists)
+
+        Usage:
+            CACHE_DIR.ensure_dir("memory")  # Creates and returns .cache/memory/
+        """
+        path = self(*parts)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def ensure_parent(self, *parts: str) -> Path:
+        """Get path and ensure parent directory exists.
+
+        Args:
+            *parts: Path components (last one is typically a file)
+
+        Returns:
+            Full path (parent directory created if not exists)
+
+        Usage:
+            path = CACHE_DIR.ensure_parent("memory", "data.json")
+            # Creates .cache/memory/, returns .cache/memory/data.json
+        """
+        path = self(*parts)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def clear_cache(self) -> None:
+        """Clear cached base path (useful for testing or reconfiguration)."""
+        self._cached_base_path = None
 
 
 # Global instance
-SKILLS_DIR: _SkillDirCallable = _SkillDirCallable()
+CACHE_DIR: _CacheDirCallable = _CacheDirCallable()
 
 
-def get_all_skill_paths(skills_path: Path | None = None, skip: set | None = None) -> list[Path]:
-    """Get all valid skill directories.
-
-    Args:
-        skills_path: Base skills path (defaults to SKILLS_DIR())
-        skip: Set of skill names to skip (defaults to common internal skills)
-
-    Returns:
-        List of valid skill directory paths
-    """
-    if skills_path is None:
-        skills_path = SKILLS_DIR()
-
-    skip = skip or {"stress_test_skill", "skill", "test-skill", "_template"}
-    return [
-        p
-        for p in skills_path.iterdir()
-        if p.is_dir() and p.name not in skip and not p.name.startswith(".")
-    ]
-
-
-def load_skill_module(
-    skill_name: str,
-    project_root: Path | None = None,
-    module_name: str | None = None,
-) -> object:
-    """
-    Load a skill module.
-
-    Supports scripts/__init__.py pattern.
-
-    Replaces the verbose pattern:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "assets/skills/git"))
-        from tools import _get_cog_scopes
-
-    With the simple pattern:
-        from omni.foundation.config.skills import load_skill_module
-        git_commands = load_skill_module("git")
-        scopes = git_commands._get_cog_scopes()
+def get_cache_dir(*parts: str) -> Path:
+    """Function form of CACHE_DIR for those who prefer functions over callables.
 
     Args:
-        skill_name: Name of the skill (e.g., "git", "filesystem")
-        project_root: Project root path (auto-detected via git toplevel if None)
-        module_name: Optional custom module name
+        *parts: Path components to join after cache base
 
     Returns:
-        The loaded module object
-
-    Raises:
-        FileNotFoundError: If scripts/__init__.py not found
+        Absolute path to cache directory or file
     """
-    if project_root is None:
-        from omni.foundation.runtime.gitops import get_project_root
-
-        project_root = get_project_root()
-
-    # Use SKILLS_DIR to get the path (already resolved with project_root)
-    skills_dir = SKILLS_DIR()
-    scripts_init = skills_dir / skill_name / "scripts" / "__init__.py"
-
-    # Use scripts/__init__.py (new standard)
-    if scripts_init.exists():
-        source_path = scripts_init
-    else:
-        raise FileNotFoundError(
-            f"Skill module not found for '{skill_name}': no scripts/__init__.py"
-        )
-
-    if module_name is None:
-        module_name = f"_test_skill_{skill_name}"
-
-    # Clean up existing module if present
-    if module_name in sys.modules:
-        del sys.modules[module_name]
-
-    # Load the module from file
-    spec = importlib.util.spec_from_file_location(module_name, source_path)
-    if spec is None:
-        raise ImportError(f"Cannot load spec for {source_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-
-    return module
+    return CACHE_DIR(*parts)
 
 
-def load_skill_function(
-    skill_name: str,
-    function_name: str,
-    project_root: Path | None = None,
-) -> object:
-    """
-    Load a specific function from a skill module.
-
-    Args:
-        skill_name: Name of the skill
-        function_name: Name of the function to extract
-        project_root: Project root path (auto-detected if None)
-
-    Returns:
-        The function object
-
-    Usage:
-        get_scopes = load_skill_function("git", "_get_cog_scopes")
-        scopes = get_scopes(root)
-    """
-    module = load_skill_module(skill_name, project_root)
-
-    if not hasattr(module, function_name):
-        raise AttributeError(f"Function '{function_name}' not found in skill '{skill_name}'")
-
-    return getattr(module, function_name)
-
-
-class SkillPathBuilder:
-    """Builder pattern for constructing skill-related paths.
-
-    Usage:
-        builder = SkillPathBuilder()
-        builder.git / "scripts/commands.py"
-        builder.definition("git")  # Uses settings definition_file
-    """
-
-    def __init__(self, project_root: Path | None = None):
-        from omni.foundation.runtime.gitops import get_project_root
-
-        self._project_root = project_root or get_project_root()
-        self._skills_base = SKILLS_DIR()  # Already resolved with project_root
-
-    @property
-    def project_root(self) -> Path:
-        return self._project_root
-
-    @property
-    def skills(self) -> Path:
-        return self._skills_base
-
-    def __getattr__(self, name: str) -> Path:
-        """Access skill directories via attributes."""
-        return self._skills_base / name
-
-    def skill(self, name: str) -> Path:
-        """Get path for a specific skill."""
-        return self._skills_base / name
-
-    def skill_file(self, skill_name: str, filename: str) -> Path:
-        """Get a specific file within a skill directory."""
-        return self._skills_base / skill_name / filename
-
-    def definition(self, skill_name: str) -> Path:
-        """Get the definition file for a skill (uses settings definition_file)."""
-        return self._skills_base / skill_name / SKILLS_DIR.definition_file()
-
-    def scripts_commands(self, skill_name: str) -> Path:
-        """Get the scripts/commands.py for a skill (new standard)."""
-        return self._skills_base / skill_name / "scripts" / "commands.py"
-
-
-# =============================================================================
-# Export
-# =============================================================================
+__all__ = [
+    "CACHE_DIR",
+    "get_cache_dir",
+]

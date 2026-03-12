@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use xiuxian_daochang::{RuntimeSettings, build_agent, run_stdio};
+use omni_agent::{RuntimeSettings, run_stdio};
+
+use crate::agent_builder::build_agent;
 
 pub(crate) async fn run_repl_mode(
     query: Option<String>,
@@ -14,6 +16,6 @@ pub(crate) async fn run_repl_mode(
         println!("{out}");
         Ok(())
     } else {
-        Box::pin(run_stdio(agent, session_id)).await
+        run_stdio(agent, session_id).await
     }
 }

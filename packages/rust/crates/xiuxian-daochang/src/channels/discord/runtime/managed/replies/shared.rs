@@ -3,8 +3,8 @@ use crate::channels::managed_runtime::replies as shared_replies;
 
 const PERMISSION_HINTS: shared_replies::PermissionHints<'static> =
     shared_replies::PermissionHints {
-        control_command_hint: "Ask an identity allowed by `discord.acl.control.allow_from` (or matching `discord.acl.control.rules` / `discord.acl.admin`) to run this command.",
-        slash_command_hint: "Ask an admin to grant this command via `discord.acl.slash` settings.",
+        control_command_hint: "Ask an identity allowed by `discord.control_command_allow_from` (or matching `discord.admin_command_rules` / `discord.admin_users`) to run this command.",
+        slash_command_hint: "Ask an admin to grant this command via `discord.slash_*_allow_from` settings.",
     };
 
 pub(in super::super) fn format_session_feedback(

@@ -19,10 +19,11 @@ from typing import Any, cast
 
 import orjson
 
+from mcp.server.stdio import stdio_server as mcp_stdio_server
 from mcp.types import JSONRPCMessage
-from omni.foundation.config.logging import get_logger
 
 from ..interfaces import MCPRequestHandler, MCPTransport
+from omni.foundation.config.logging import get_logger
 
 logger = get_logger("omni.mcp.transport.stdio")
 
@@ -101,7 +102,7 @@ class StdioTransport(MCPTransport):
                 await self._send_invalid_request("Message must be a JSON object")
                 return
 
-            response = await server.process_message(cast("JSONRPCMessage", data))
+            response = await server.process_message(cast(JSONRPCMessage, data))
 
             if response:
                 self._write_response(response)
@@ -145,12 +146,7 @@ class StdioTransport(MCPTransport):
                 # Handle list[TextContent] responses from call_tool
                 response_dict = {"result": response}
             else:
-                response_dict = cast("dict[str, Any]", response)
-
-            # Normalize list result to canonical tools/call shape (content + isError) for MCP clients
-            if isinstance(response_dict.get("result"), list):
-                response_dict = dict(response_dict)
-                response_dict["result"] = {"content": response_dict["result"], "isError": False}
+                response_dict = cast(dict[str, Any], response)
 
             # Debug log response structure (truncated for safety)
             logger.debug(
@@ -179,21 +175,19 @@ class StdioTransport(MCPTransport):
                 # This is correct JSON-RPC 2.0 behavior - notifications don't get responses
                 return
 
-            # Build JSON-RPC 2.0 compliant response: only "result" OR "error", never both (Cursor/Zod strict)
+            # Build JSON-RPC 2.0 compliant response
+            # Start with response_dict to preserve all original fields
+            payload: dict[str, Any] = dict(response_dict)
+
+            # JSON-RPC 2.0: response MUST contain either "result" OR "error", never both
             if response_dict.get("error") is not None:
-                payload = {
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "error": response_dict["error"],
-                }
+                # Remove result if present (shouldn't happen, but be defensive)
+                payload.pop("result", None)
             elif "result" in response_dict:
-                payload = {
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "result": response_dict["result"],
-                }
+                payload["result"] = response_dict["result"]  # Copy explicitly
             else:
-                payload = {"jsonrpc": "2.0", "id": msg_id, "result": None}
+                # Neither result nor error - add result as null (valid JSON-RPC)
+                payload["result"] = None
 
             # orjson.dumps returns bytes
             json_bytes = orjson.dumps(payload, option=orjson.OPT_APPEND_NEWLINE)

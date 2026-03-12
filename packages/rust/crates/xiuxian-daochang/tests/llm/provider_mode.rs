@@ -1,14 +1,47 @@
-//! Provider mode resolution tests for inference runtime settings.
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::map_unwrap_or,
+    clippy::option_as_ref_deref,
+    clippy::unreadable_literal,
+    clippy::useless_conversion,
+    clippy::match_wildcard_for_single_variants,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_raw_string_hashes,
+    clippy::manual_async_fn,
+    clippy::manual_let_else,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::single_match_else,
+    clippy::similar_names,
+    clippy::format_collect,
+    clippy::assigning_clones
+)]
 
-use xiuxian_daochang::RuntimeSettings;
-use xiuxian_daochang::test_support::{
-    DEFAULT_ANTHROPIC_KEY_ENV, DEFAULT_MINIMAX_KEY_ENV, DEFAULT_OPENAI_KEY_ENV,
-    LiteLlmProviderMode, LiteLlmWireApi, resolve_provider_settings_with_env,
+use crate::config::RuntimeSettings;
+
+use super::providers::{
+    DEFAULT_MINIMAX_KEY_ENV, DEFAULT_OPENAI_KEY_ENV, LiteLlmProviderMode,
+    resolve_provider_settings_with_env,
 };
 
 fn settings_with_inference(
     provider: Option<&str>,
-    api_key: Option<&str>,
+    api_key_env: Option<&str>,
     base_url: Option<&str>,
     model: Option<&str>,
     timeout: Option<u64>,
@@ -17,7 +50,7 @@ fn settings_with_inference(
 ) -> RuntimeSettings {
     let mut settings = RuntimeSettings::default();
     settings.inference.provider = provider.map(ToString::to_string);
-    settings.inference.api_key = api_key.map(ToString::to_string);
+    settings.inference.api_key_env = api_key_env.map(ToString::to_string);
     settings.inference.base_url = base_url.map(ToString::to_string);
     settings.inference.model = model.map(ToString::to_string);
     settings.inference.timeout = timeout;
@@ -31,11 +64,10 @@ fn provider_settings_default_to_openai_when_unspecified() {
     let settings = RuntimeSettings::default();
     let resolved = resolve_provider_settings_with_env(&settings, String::new(), None, None);
     assert_eq!(resolved.mode, LiteLlmProviderMode::OpenAi);
-    assert_eq!(resolved.wire_api, LiteLlmWireApi::ChatCompletions);
     assert_eq!(resolved.source, "default");
     assert_eq!(resolved.api_key_env, DEFAULT_OPENAI_KEY_ENV);
     assert_eq!(resolved.model, "");
-    assert_eq!(resolved.minimax_api_base, "");
+    assert_eq!(resolved.minimax_api_base, "https://api.minimax.io/v1");
     assert_eq!(resolved.timeout_secs, 60);
     assert_eq!(resolved.max_tokens, None);
     assert_eq!(resolved.max_in_flight, None);
@@ -54,36 +86,13 @@ fn provider_settings_honor_settings_for_minimax() {
     );
     let resolved = resolve_provider_settings_with_env(&settings, String::new(), None, None);
     assert_eq!(resolved.mode, LiteLlmProviderMode::Minimax);
-    assert_eq!(resolved.wire_api, LiteLlmWireApi::ChatCompletions);
-    assert_eq!(resolved.source, "runtime_settings");
+    assert_eq!(resolved.source, "settings");
     assert_eq!(resolved.api_key_env, "MINIMAX_CUSTOM_KEY");
-    assert_eq!(resolved.model, "minimax/MiniMax-M2.5");
+    assert_eq!(resolved.model, "MiniMax-M2.5");
     assert_eq!(resolved.minimax_api_base, "https://settings.minimax/v1");
     assert_eq!(resolved.timeout_secs, 90);
     assert_eq!(resolved.max_tokens, Some(4096));
     assert_eq!(resolved.max_in_flight, Some(32));
-}
-
-#[test]
-fn provider_settings_honor_settings_for_anthropic() {
-    let settings = settings_with_inference(
-        Some("anthropic"),
-        None,
-        Some("https://aiproxy.xin/api"),
-        Some("glm-5"),
-        Some(75),
-        Some(3072),
-        Some(16),
-    );
-    let resolved = resolve_provider_settings_with_env(&settings, String::new(), None, None);
-    assert_eq!(resolved.mode, LiteLlmProviderMode::Anthropic);
-    assert_eq!(resolved.wire_api, LiteLlmWireApi::ChatCompletions);
-    assert_eq!(resolved.source, "runtime_settings");
-    assert_eq!(resolved.api_key_env, DEFAULT_ANTHROPIC_KEY_ENV);
-    assert_eq!(resolved.model, "glm-5");
-    assert_eq!(resolved.timeout_secs, 75);
-    assert_eq!(resolved.max_tokens, Some(3072));
-    assert_eq!(resolved.max_in_flight, Some(16));
 }
 
 #[test]
@@ -92,14 +101,13 @@ fn provider_settings_env_provider_overrides_settings_provider() {
     let resolved =
         resolve_provider_settings_with_env(&settings, String::new(), Some("minimax"), None);
     assert_eq!(resolved.mode, LiteLlmProviderMode::Minimax);
-    assert_eq!(resolved.wire_api, LiteLlmWireApi::ChatCompletions);
     assert_eq!(resolved.source, "env");
     assert_eq!(resolved.api_key_env, DEFAULT_MINIMAX_KEY_ENV);
-    assert_eq!(resolved.model, "");
+    assert_eq!(resolved.model, "MiniMax-M2.5");
 }
 
 #[test]
-fn provider_settings_requested_model_takes_precedence() {
+fn provider_settings_requested_model_takes_precedence_and_is_normalized() {
     let settings = settings_with_inference(
         Some("minimax"),
         None,
@@ -116,7 +124,7 @@ fn provider_settings_requested_model_takes_precedence() {
         None,
     );
     assert_eq!(resolved.mode, LiteLlmProviderMode::Minimax);
-    assert_eq!(resolved.model, "minimax:MiniMax-M2.5-highspeed");
+    assert_eq!(resolved.model, "MiniMax-M2.5-lightning");
 }
 
 #[test]
@@ -164,39 +172,4 @@ fn provider_settings_max_tokens_are_clamped_to_u32() {
     assert_eq!(resolved.timeout_secs, 120);
     assert_eq!(resolved.max_tokens, Some(u32::MAX));
     assert_eq!(resolved.max_in_flight, Some(64));
-}
-
-#[test]
-fn provider_settings_support_literal_api_key_value() {
-    let settings = settings_with_inference(
-        Some("anthropic"),
-        Some("sk-ant-example-literal"),
-        None,
-        Some("claude-3-5-sonnet-20241022"),
-        None,
-        None,
-        None,
-    );
-    let resolved = resolve_provider_settings_with_env(&settings, String::new(), None, None);
-    assert_eq!(resolved.mode, LiteLlmProviderMode::Anthropic);
-    assert_eq!(resolved.wire_api, LiteLlmWireApi::ChatCompletions);
-    assert_eq!(resolved.api_key.as_deref(), Some("sk-ant-example-literal"));
-    assert_eq!(resolved.api_key_env, DEFAULT_ANTHROPIC_KEY_ENV);
-}
-
-#[test]
-fn provider_settings_honor_inference_wire_api_responses() {
-    let mut settings = settings_with_inference(
-        Some("openai"),
-        Some("OPENAI_API_KEY"),
-        Some("https://aiproxy.xin/openai"),
-        Some("gpt-5-codex"),
-        Some(60),
-        Some(1024),
-        Some(16),
-    );
-    settings.inference.wire_api = Some("responses".to_string());
-    let resolved = resolve_provider_settings_with_env(&settings, String::new(), None, None);
-    assert_eq!(resolved.mode, LiteLlmProviderMode::OpenAi);
-    assert_eq!(resolved.wire_api, LiteLlmWireApi::Responses);
 }

@@ -7,7 +7,7 @@ use xiuxian_llm::mcp::{DiscoverCacheConfig, DiscoverReadThroughCache};
 fn discover_cache_build_key_rejects_non_discover_tools() -> Result<()> {
     let cache = DiscoverReadThroughCache::from_config(DiscoverCacheConfig {
         valkey_url: "redis://127.0.0.1:6379/".to_string(),
-        key_prefix: "xiuxian-daochang:discover".to_string(),
+        key_prefix: "omni-agent:discover".to_string(),
         ttl_secs: 30,
     })?;
 
@@ -20,7 +20,7 @@ fn discover_cache_build_key_rejects_non_discover_tools() -> Result<()> {
 fn discover_cache_build_key_is_canonical_for_argument_order() -> Result<()> {
     let cache = DiscoverReadThroughCache::from_config(DiscoverCacheConfig {
         valkey_url: "redis://127.0.0.1:6379/".to_string(),
-        key_prefix: "xiuxian-daochang:discover".to_string(),
+        key_prefix: "omni-agent:discover".to_string(),
         ttl_secs: 30,
     })?;
 

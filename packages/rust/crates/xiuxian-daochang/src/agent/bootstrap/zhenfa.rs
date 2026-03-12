@@ -128,14 +128,16 @@ fn build_skill_vfs_resolver(
     let mut roots = resolve_skill_vfs_roots();
     roots.retain(|path| path.exists() && path.is_dir());
     dedup_paths(&mut roots);
-    build_skill_vfs_resolver_from_roots(roots.as_slice(), service_mounts)
+    let internal_roots = SkillVfsResolver::discover_runtime_internal_roots();
+    build_skill_vfs_resolver_from_roots(roots.as_slice(), internal_roots.as_slice(), service_mounts)
 }
 
 pub(crate) fn build_skill_vfs_resolver_from_roots(
     roots: &[PathBuf],
+    internal_roots: &[PathBuf],
     service_mounts: &mut ServiceMountCatalog,
 ) -> Option<Arc<SkillVfsResolver>> {
-    match SkillVfsResolver::from_roots_with_embedded(roots) {
+    match SkillVfsResolver::from_roots_with_embedded_and_internal(roots, internal_roots) {
         Ok(resolver) => {
             let namespaces = resolver.index().namespace_count();
             let roots_detail = if roots.is_empty() {
@@ -147,11 +149,20 @@ pub(crate) fn build_skill_vfs_resolver_from_roots(
                     .collect::<Vec<_>>()
                     .join(",")
             };
+            let internal_detail = if internal_roots.is_empty() {
+                "none".to_string()
+            } else {
+                internal_roots
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            };
             service_mounts.mounted(
                 "zhenfa.skill_vfs",
                 "storage",
                 ServiceMountMeta::default().detail(format!(
-                    "namespaces={namespaces},roots={roots_detail},embedded=true"
+                    "namespaces={namespaces},roots={roots_detail},internal_roots={internal_detail},embedded=true"
                 )),
             );
             Some(Arc::new(resolver))
@@ -162,11 +173,20 @@ pub(crate) fn build_skill_vfs_resolver_from_roots(
                 .map(|path| path.display().to_string())
                 .collect::<Vec<_>>()
                 .join(",");
+            let internal_detail = if internal_roots.is_empty() {
+                "none".to_string()
+            } else {
+                internal_roots
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            };
             service_mounts.skipped(
                 "zhenfa.skill_vfs",
                 "storage",
                 ServiceMountMeta::default().detail(format!(
-                    "skill_vfs_build_failed: {error};roots={roots_detail}"
+                    "skill_vfs_build_failed: {error};roots={roots_detail};internal_roots={internal_detail}"
                 )),
             );
             None

@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use super::anchor::{TextAnchor, VisualAnchor};
 use super::cot::{VisualCotInput, VisualCotMode, build_visual_cot_prompt};
-use super::deepseek::{
-    DeepseekRuntime, get_deepseek_runtime, infer_deepseek_ocr_truth, preprocess_image_for_ocr,
+use super::deepseek::{DeepseekRuntime, get_deepseek_runtime, infer_deepseek_ocr_truth};
+use super::preprocess::{
+    DEFAULT_VISION_MAX_DIMENSION, PreparedVisionImage, preprocess_image_with_max_dimension,
 };
-use super::preprocess::{DEFAULT_VISION_MAX_DIMENSION, PreparedVisionImage};
 use crate::llm::error::LlmResult;
 
 /// Result container returned by [`VisualRefiner::refine`].
@@ -75,7 +75,7 @@ impl VisualRefiner {
     ///
     /// Returns an error when preprocessing or OCR truth extraction fails.
     pub fn refine(&self, image_bytes: Arc<[u8]>) -> LlmResult<VisualRefinement> {
-        let prepared = preprocess_image_for_ocr(image_bytes, self.max_dimension)?;
+        let prepared = preprocess_image_with_max_dimension(image_bytes, self.max_dimension)?;
         let runtime = get_deepseek_runtime();
         let ocr_truth_markdown = infer_deepseek_ocr_truth(runtime.as_ref(), &prepared)?;
         let anchors =

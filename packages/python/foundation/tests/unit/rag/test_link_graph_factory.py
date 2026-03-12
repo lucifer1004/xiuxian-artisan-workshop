@@ -11,6 +11,9 @@ from omni.rag.link_graph.factory import get_link_graph_backend, reset_link_graph
 if TYPE_CHECKING:
     from pathlib import Path
 
+GATEWAY_URL_A = "http://gateway-a"
+GATEWAY_URL_B = "http://gateway-b"
+
 
 @pytest.fixture(autouse=True)
 def _reset_cache() -> None:
@@ -36,7 +39,7 @@ def test_get_link_graph_backend_reuses_cached_instance(
     class _FakeBackend:
         backend_name = "wendao"
 
-    def _fake_build(_backend_name: str, _notebook_dir: str | None):
+    def _fake_build(_backend_name: str, _notebook_dir: str | None, _gateway_base_url: str | None):
         build_calls["count"] += 1
         return _FakeBackend()
 
@@ -63,7 +66,7 @@ def test_get_link_graph_backend_cache_key_includes_notebook_dir(
     class _FakeBackend:
         backend_name = "wendao"
 
-    def _fake_build(_backend_name: str, _notebook_dir: str | None):
+    def _fake_build(_backend_name: str, _notebook_dir: str | None, _gateway_base_url: str | None):
         calls["count"] += 1
         return _FakeBackend()
 
@@ -73,6 +76,37 @@ def test_get_link_graph_backend_cache_key_includes_notebook_dir(
     b = get_link_graph_backend(notebook_dir=tmp_path / "b")
 
     assert a is not b
+    assert calls["count"] == 2
+
+
+def test_get_link_graph_backend_cache_key_includes_gateway_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import omni.rag.link_graph.factory as factory_module
+
+    monkeypatch.setattr(factory_module, "get_setting", lambda _k, default=None: default)
+    monkeypatch.setattr(factory_module, "_resolve_backend_name", lambda name=None: "gateway")
+    monkeypatch.setattr(factory_module, "_resolve_notebook_dir", lambda notebook_dir=None: None)
+    monkeypatch.setattr(factory_module, "_resolve_gateway_base_url", lambda base_url=None: base_url)
+
+    calls = {"count": 0}
+
+    class _FakeBackend:
+        backend_name = "gateway"
+
+        def __init__(self, base_url: str | None) -> None:
+            self.base_url = base_url
+
+    def _fake_build(_backend_name: str, _notebook_dir: str | None, _gateway_base_url: str | None):
+        calls["count"] += 1
+        return _FakeBackend(_gateway_base_url)
+
+    monkeypatch.setattr(factory_module, "_build_backend", _fake_build)
+
+    first = get_link_graph_backend(gateway_base_url=GATEWAY_URL_A)
+    second = get_link_graph_backend(gateway_base_url=GATEWAY_URL_B)
+
+    assert first is not second
     assert calls["count"] == 2
 
 
@@ -93,7 +127,7 @@ def test_get_link_graph_backend_can_bypass_cache(
     class _FakeBackend:
         backend_name = "wendao"
 
-    def _fake_build(_backend_name: str, _notebook_dir: str | None):
+    def _fake_build(_backend_name: str, _notebook_dir: str | None, _gateway_base_url: str | None):
         calls["count"] += 1
         return _FakeBackend()
 
@@ -123,7 +157,7 @@ def test_reset_link_graph_backend_cache_forces_rebuild(
     class _FakeBackend:
         backend_name = "wendao"
 
-    def _fake_build(_backend_name: str, _notebook_dir: str | None):
+    def _fake_build(_backend_name: str, _notebook_dir: str | None, _gateway_base_url: str | None):
         calls["count"] += 1
         return _FakeBackend()
 

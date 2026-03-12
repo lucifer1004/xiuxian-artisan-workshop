@@ -1,93 +1,102 @@
-use super::*;
+use crate::fixture_json_assertions::assert_json_fixture_eq;
+use crate::wendao_cli_search_gateway_contract_support::agentic_gateway_snapshot;
+use serde_json::{Value, json};
+use std::path::{Path, PathBuf};
+use tempfile::TempDir;
 
-#[test]
-fn test_wendao_search_returns_matches() -> Result<(), Box<dyn std::error::Error>> {
-    let tmp = TempDir::new()?;
-    write_file(
-        &tmp.path().join("notes/alpha.md"),
-        "# Alpha Note\n\nReference [[beta]].\n",
-    )?;
-    write_file(
-        &tmp.path().join("notes/beta.md"),
-        "---\ntitle: Beta Knowledge\ntags:\n  - rust\n---\n\nReference [[alpha]].\n",
-    )?;
+pub(crate) struct SearchDirectivesFixture {
+    _temp_dir: TempDir,
+    root: PathBuf,
+}
 
-    let output = wendao_cmd()
-        .arg("--root")
-        .arg(tmp.path())
-        .arg("search")
-        .arg("beta")
-        .arg("--limit")
-        .arg("5")
-        .output()?;
+impl SearchDirectivesFixture {
+    pub(crate) fn build(scenario: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let (temp_dir, root) =
+            crate::wendao_cli_fixture_tree_support::materialize_wendao_cli_fixture(&format!(
+                "search/directives/{scenario}"
+            ))?;
+        Ok(Self {
+            _temp_dir: temp_dir,
+            root,
+        })
+    }
 
-    assert!(
-        output.status.success(),
-        "wendao search failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    pub(crate) fn root(&self) -> &Path {
+        self.root.as_path()
+    }
+}
 
-    let stdout = String::from_utf8(output.stdout)?;
-    let payload: Value = serde_json::from_str(&stdout)?;
-    assert_eq!(payload.get("query").and_then(Value::as_str), Some("beta"));
-    assert_eq!(payload.get("limit").and_then(Value::as_u64), Some(5));
-    assert_eq!(
-        payload.get("match_strategy").and_then(Value::as_str),
-        Some("fts")
+pub(crate) fn assert_search_directives_fixture(scenario: &str, relative: &str, actual: &Value) {
+    assert_json_fixture_eq(
+        &format!("wendao_cli/search/directives/{scenario}/expected"),
+        relative,
+        actual,
     );
-    let sort_terms = payload
-        .get("sort_terms")
-        .and_then(Value::as_array)
-        .ok_or("missing sort_terms")?;
-    assert_eq!(sort_terms.len(), 1);
-    assert_eq!(
-        sort_terms[0].get("field").and_then(Value::as_str),
-        Some("score")
-    );
-    assert_eq!(
-        sort_terms[0].get("order").and_then(Value::as_str),
-        Some("desc")
-    );
-    assert_eq!(
-        payload.get("case_sensitive").and_then(Value::as_bool),
-        Some(false)
-    );
-    let filters = payload.get("filters").ok_or("missing filters payload")?;
-    assert_eq!(
-        filters
-            .get("link_to")
+}
+
+pub(crate) fn search_payload_snapshot(payload: &Value) -> Value {
+    json!({
+        "query": payload.get("query").and_then(Value::as_str),
+        "limit": payload.get("limit").and_then(Value::as_u64),
+        "match_strategy": payload.get("match_strategy").and_then(Value::as_str),
+        "case_sensitive": payload.get("case_sensitive").and_then(Value::as_bool),
+        "created_after": payload.get("created_after").and_then(Value::as_i64),
+        "created_before": payload.get("created_before").and_then(Value::as_i64),
+        "sort_terms": payload
+            .get("sort_terms")
+            .and_then(Value::as_array)
+            .map(|rows| rows.iter().map(sort_term_snapshot).collect::<Vec<_>>()),
+        "filters": filter_seed_snapshot(payload.get("filters")),
+        "results": payload
+            .get("results")
+            .and_then(Value::as_array)
+            .map(|rows| rows.iter().map(result_row_snapshot).collect::<Vec<_>>()),
+        "agentic_gateway": agentic_gateway_snapshot(payload.get("agentic_gateway")),
+    })
+}
+
+pub(crate) fn legacy_sort_error_snapshot(output: &std::process::Output) -> Value {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    json!({
+        "status_success": output.status.success(),
+        "mentions_unexpected_sort_flag": stderr.contains("unexpected argument '--sort'"),
+        "mentions_sort_term_hint": stderr.contains("--sort-term"),
+    })
+}
+
+fn filter_seed_snapshot(filters: Option<&Value>) -> Value {
+    json!({
+        "link_to_seed_count": filters
+            .and_then(|row| row.get("link_to"))
             .and_then(|row| row.get("seeds"))
             .and_then(Value::as_array)
             .map(std::vec::Vec::len),
-        None
-    );
-    assert_eq!(
-        filters
-            .get("linked_by")
+        "linked_by_seed_count": filters
+            .and_then(|row| row.get("linked_by"))
             .and_then(|row| row.get("seeds"))
             .and_then(Value::as_array)
             .map(std::vec::Vec::len),
-        None
-    );
-    assert_eq!(
-        filters
-            .get("related")
+        "related_seed_count": filters
+            .and_then(|row| row.get("related"))
             .and_then(|row| row.get("seeds"))
             .and_then(Value::as_array)
             .map(std::vec::Vec::len),
-        None
-    );
+    })
+}
 
-    let Some(results) = payload.get("results").and_then(Value::as_array) else {
-        return Err("missing search results array".into());
-    };
-    assert!(!results.is_empty());
-    assert!(
-        results
-            .iter()
-            .any(|row| row.get("stem").and_then(Value::as_str) == Some("beta")),
-        "expected search results to include stem=beta; payload={payload}"
-    );
+fn sort_term_snapshot(sort_term: &Value) -> Value {
+    json!({
+        "field": sort_term.get("field").and_then(Value::as_str),
+        "order": sort_term.get("order").and_then(Value::as_str),
+    })
+}
 
-    Ok(())
+fn result_row_snapshot(row: &Value) -> Value {
+    json!({
+        "stem": row.get("stem").and_then(Value::as_str),
+        "title": row.get("title").and_then(Value::as_str),
+        "path": row.get("path").and_then(Value::as_str),
+        "best_section": row.get("best_section").and_then(Value::as_str),
+        "match_reason": row.get("match_reason").and_then(Value::as_str),
+    })
 }

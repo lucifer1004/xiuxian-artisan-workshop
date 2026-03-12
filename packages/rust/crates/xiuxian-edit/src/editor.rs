@@ -3,19 +3,18 @@
 //! Provides AST-based code modification using ast-grep patterns.
 //! Part of The Surgeon.
 
-use std::fmt::Write as _;
 use std::path::Path;
 use std::str::FromStr;
 
-// Use xiuxian-ast for unified ast-grep (re-exports Pattern, SupportLang, LanguageExt)
-use xiuxian_ast::{AstLanguage, LanguageExt, MatcherExt, Pattern, SupportLang};
+// Use omni-ast for unified ast-grep (re-exports Pattern, SupportLang, LanguageExt)
+use omni_ast::{AstLanguage, LanguageExt, MatcherExt, Pattern, SupportLang};
 
 use crate::capture::substitute_captures;
 use crate::diff::generate_unified_diff;
 use crate::error::EditError;
 use crate::types::{EditConfig, EditLocation, EditResult};
 
-/// `StructuralEditor` - AST-based code modification engine.
+/// StructuralEditor - AST-based code modification engine.
 ///
 /// Uses ast-grep patterns for surgical precision in code refactoring.
 /// Part of The Surgeon.
@@ -23,7 +22,7 @@ use crate::types::{EditConfig, EditLocation, EditResult};
 /// # Example
 ///
 /// ```rust,ignore
-/// use xiuxian_edit::StructuralEditor;
+/// use omni_edit::StructuralEditor;
 ///
 /// // Rename function calls (use $$$ for variadic args)
 /// let result = StructuralEditor::replace(
@@ -47,9 +46,6 @@ impl StructuralEditor {
     ///
     /// # Returns
     /// `EditResult` containing original, modified content, diff, and edit locations.
-    ///
-    /// # Errors
-    /// Returns [`EditError`] when language parsing or pattern compilation fails.
     pub fn replace(
         content: &str,
         pattern: &str,
@@ -134,18 +130,15 @@ impl StructuralEditor {
     ///
     /// # Returns
     /// `EditResult` with changes (file is modified only if `config.preview_only` is false).
-    ///
-    /// # Errors
-    /// Returns [`EditError`] when reading, parsing, editing, or writing fails.
     pub fn replace_in_file<P: AsRef<Path>>(
         path: P,
         pattern: &str,
         replacement: &str,
         language: Option<&str>,
-        config: &EditConfig,
+        config: EditConfig,
     ) -> Result<EditResult, EditError> {
         let path = path.as_ref();
-        let content = xiuxian_io::read_text_safe(path, config.max_file_size)?;
+        let content = omni_io::read_text_safe(path, config.max_file_size)?;
 
         let lang_str = match language {
             Some(l) => l.to_string(),
@@ -153,10 +146,10 @@ impl StructuralEditor {
                 if let Some(lang) = SupportLang::from_path(path) {
                     format!("{lang:?}").to_lowercase()
                 } else {
-                    let ext = path.extension().map_or_else(
-                        || "unknown".to_string(),
-                        |e| e.to_string_lossy().to_string(),
-                    );
+                    let ext = path
+                        .extension()
+                        .map(|e| e.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
                     return Err(EditError::UnsupportedLanguage(ext));
                 }
             }
@@ -166,7 +159,7 @@ impl StructuralEditor {
 
         if !config.preview_only && result.count > 0 {
             std::fs::write(path, &result.modified)
-                .map_err(|e| EditError::Replacement(format!("Failed to write file: {e}")))?;
+                .map_err(|e| EditError::Replacement(format!("Failed to write file: {}", e)))?;
         }
 
         Ok(result)
@@ -175,9 +168,6 @@ impl StructuralEditor {
     /// Preview structural replace (no file modification).
     ///
     /// Convenience method that always previews without modifying files.
-    ///
-    /// # Errors
-    /// Returns [`EditError`] if file reading, parsing, or replacement fails.
     pub fn preview<P: AsRef<Path>>(
         path: P,
         pattern: &str,
@@ -189,7 +179,7 @@ impl StructuralEditor {
             pattern,
             replacement,
             language,
-            &EditConfig {
+            EditConfig {
                 preview_only: true,
                 ..Default::default()
             },
@@ -199,9 +189,6 @@ impl StructuralEditor {
     /// Apply structural replace (modify file).
     ///
     /// **Use with caution** - this modifies the file in place.
-    ///
-    /// # Errors
-    /// Returns [`EditError`] if file IO, parsing, replacement, or write fails.
     pub fn apply<P: AsRef<Path>>(
         path: P,
         pattern: &str,
@@ -213,7 +200,7 @@ impl StructuralEditor {
             pattern,
             replacement,
             language,
-            &EditConfig {
+            EditConfig {
                 preview_only: false,
                 ..Default::default()
             },
@@ -223,15 +210,13 @@ impl StructuralEditor {
     /// Format edit result for display.
     ///
     /// Returns a human-readable summary of the changes.
-    #[must_use]
     pub fn format_result(result: &EditResult, path: Option<&str>) -> String {
-        let count = result.count;
         let mut output = String::new();
 
         if let Some(p) = path {
-            let _ = writeln!(output, "// EDIT: {p}");
+            output.push_str(&format!("// EDIT: {}\n", p));
         }
-        let _ = writeln!(output, "// Replacements: {count}");
+        output.push_str(&format!("// Replacements: {}\n", result.count));
 
         if result.count == 0 {
             output.push_str("[No matches found]\n");
@@ -240,10 +225,10 @@ impl StructuralEditor {
 
         output.push_str("\n// Changes:\n");
         for edit in &result.edits {
-            let line = edit.line;
-            let original_text = &edit.original_text;
-            let new_text = &edit.new_text;
-            let _ = writeln!(output, "L{line}: \"{original_text}\" -> \"{new_text}\"");
+            output.push_str(&format!(
+                "L{}: \"{}\" -> \"{}\"\n",
+                edit.line, edit.original_text, edit.new_text
+            ));
         }
 
         output.push_str("\n// Diff:\n");

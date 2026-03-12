@@ -1,6 +1,6 @@
 //! Memory decay and recall-credit helpers exposed for integration tests.
 
-use xiuxian_memory_engine::{Episode, EpisodeStore};
+use omni_memory::{Episode, EpisodeStore};
 
 use crate::agent::{
     TestRecallCreditUpdate, TestRecallOutcome, TestRecalledEpisodeCandidate,

@@ -51,13 +51,12 @@ define_native_tool! {
         pub heyi: Arc<ZhixingHeyi>,
     }
     name: "task.add",
-    description: "Add a new task or 'Vow' to your cultivation agenda. If the user provides a time, pass it as plain local time in `time` (for example `2026-02-25 10:09 PM`, `2026-02-25 22:09`, `22:09`, `in 30 minutes`). The backend normalizes timezone/RFC3339 internally.",
+    description: "Add a new task or 'Vow' to your cultivation agenda. If the user specifies a time (e.g. 'Watch movie at 7pm'), you MUST parse it into the user's local timezone as an RFC3339 string and populate 'scheduled_at'.",
     parameters: json!({
             "type": "object",
             "properties": {
                 "title": { "type": "string", "description": "The title or description of the task" },
-                "time": { "type": "string", "description": "Optional: User-facing local scheduled time. Preferred field." },
-                "scheduled_at": { "type": "string", "description": "Optional legacy alias. Accepted for compatibility; backend still normalizes." }
+                "scheduled_at": { "type": "string", "description": "Optional: The scheduled time for the task in RFC3339 format (e.g., '2026-02-25T19:00:00-08:00')." }
             },
             "required": ["title"]
         }),
@@ -67,14 +66,10 @@ define_native_tool! {
             .and_then(|a| a["title"].as_str().map(ToString::to_string))
             .ok_or_else(|| anyhow::anyhow!("Missing 'title' argument"))?;
 
-        let scheduled_at = arguments.as_ref().and_then(|args| {
-            args.get("time")
-                .or_else(|| args.get("scheduled_at"))
-                .and_then(|value| value.as_str())
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToString::to_string)
-        });
+        let scheduled_at = arguments
+            .as_ref()
+            .and_then(|a| a.get("scheduled_at"))
+            .and_then(|v| v.as_str().map(ToString::to_string));
         let reminder_recipient =
             reminder_recipient_from_session_id(context.session_id.as_deref());
 

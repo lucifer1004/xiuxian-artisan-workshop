@@ -1,17 +1,7 @@
-mod discover;
-mod io;
-mod merge;
-mod namespace;
-
 use crate::cache::{build_file_stamps, cache_key, store_cached_merged, try_get_cached_merged};
-use crate::paths::{normalize_config_home, resolve_config_home, resolve_project_root};
-use crate::{ConfigCascadeSpec, ConfigCoreError};
-use discover::{existing_config_files, global_candidates, orphan_candidates, tracked_files};
-use io::read_toml;
-use merge::merge_values;
-use namespace::extract_namespace_value;
+use crate::{ArrayMergeStrategy, ConfigCascadeSpec, ConfigCoreError};
 use serde::de::DeserializeOwned;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Resolve layered files and return merged TOML value.
 ///
@@ -90,7 +80,11 @@ pub fn resolve_and_merge_toml_with_paths(
     } else {
         for path in global_paths {
             let global_root = read_toml(path.as_path())?;
-            if let Some(namespace_value) = extract_namespace_value(&global_root, spec.namespace) {
+            if let Some(namespace_value) = global_root
+                .as_table()
+                .and_then(|table| table.get(spec.namespace))
+                .cloned()
+            {
                 merge_values(&mut merged, namespace_value, spec.array_merge_strategy);
             }
         }
@@ -110,7 +104,12 @@ where
     T: DeserializeOwned,
 {
     let merged = resolve_and_merge_toml(spec)?;
-    deserialize_merged(merged, spec.namespace)
+    merged
+        .try_into()
+        .map_err(|source| ConfigCoreError::DeserializeMerged {
+            namespace: spec.namespace.to_string(),
+            source,
+        })
 }
 
 /// Resolve layered files and deserialize merged config using explicit paths.
@@ -127,17 +126,131 @@ where
     T: DeserializeOwned,
 {
     let merged = resolve_and_merge_toml_with_paths(spec, project_root, config_home)?;
-    deserialize_merged(merged, spec.namespace)
-}
-
-fn deserialize_merged<T>(merged: toml::Value, namespace: &str) -> Result<T, ConfigCoreError>
-where
-    T: DeserializeOwned,
-{
     merged
         .try_into()
         .map_err(|source| ConfigCoreError::DeserializeMerged {
-            namespace: namespace.to_string(),
+            namespace: spec.namespace.to_string(),
             source,
         })
+}
+
+fn read_toml(path: &Path) -> Result<toml::Value, ConfigCoreError> {
+    let content = std::fs::read_to_string(path).map_err(|source| ConfigCoreError::ReadFile {
+        path: path.display().to_string(),
+        source,
+    })?;
+    toml::from_str::<toml::Value>(&content).map_err(|source| ConfigCoreError::ParseFile {
+        path: path.display().to_string(),
+        source,
+    })
+}
+
+fn merge_values(dst: &mut toml::Value, src: toml::Value, array_strategy: ArrayMergeStrategy) {
+    match (dst, src) {
+        (toml::Value::Table(dst_table), toml::Value::Table(src_table)) => {
+            for (key, src_value) in src_table {
+                if let Some(dst_value) = dst_table.get_mut(&key) {
+                    merge_values(dst_value, src_value, array_strategy);
+                } else {
+                    dst_table.insert(key, src_value);
+                }
+            }
+        }
+        (toml::Value::Array(dst_array), toml::Value::Array(src_array))
+            if matches!(array_strategy, ArrayMergeStrategy::Append) =>
+        {
+            dst_array.extend(src_array);
+        }
+        (dst_value, src_value) => {
+            *dst_value = src_value;
+        }
+    }
+}
+
+fn resolve_project_root() -> Option<PathBuf> {
+    if let Some(path) = std::env::var("PRJ_ROOT")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        let candidate = PathBuf::from(path);
+        if candidate.is_absolute() {
+            return Some(candidate);
+        }
+        if let Ok(current_dir) = std::env::current_dir() {
+            return Some(current_dir.join(candidate));
+        }
+        return None;
+    }
+
+    let mut cursor = std::env::current_dir().ok()?;
+    loop {
+        if cursor.join(".git").exists() {
+            return Some(cursor);
+        }
+        if !cursor.pop() {
+            break;
+        }
+    }
+    None
+}
+
+fn resolve_config_home(project_root: Option<&Path>) -> Option<PathBuf> {
+    std::env::var("PRJ_CONFIG_HOME")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else if let Some(root) = project_root {
+                root.join(path)
+            } else {
+                path
+            }
+        })
+        .or_else(|| project_root.map(|root| root.join(".config")))
+}
+
+fn normalize_config_home(
+    project_root: Option<&Path>,
+    config_home: Option<&Path>,
+) -> Option<PathBuf> {
+    match config_home {
+        Some(path) if path.is_absolute() => Some(path.to_path_buf()),
+        Some(path) => project_root.map(|root| root.join(path)),
+        None => project_root.map(|root| root.join(".config")),
+    }
+}
+
+fn global_candidates(config_home: Option<&Path>) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(config_home) = config_home {
+        candidates.push(config_home.join("omni-dev-fusion").join("xiuxian.toml"));
+    }
+    candidates
+}
+
+fn orphan_candidates(config_home: Option<&Path>, orphan_file: &str) -> Vec<PathBuf> {
+    if orphan_file.trim().is_empty() {
+        return Vec::new();
+    }
+
+    let mut candidates = Vec::new();
+    if let Some(config_home) = config_home {
+        candidates.push(config_home.join("omni-dev-fusion").join(orphan_file));
+    }
+    candidates
+}
+
+fn existing_config_files(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    paths.into_iter().filter(|path| path.is_file()).collect()
+}
+
+fn tracked_files(global_paths: &[PathBuf], orphan_paths: &[PathBuf]) -> Vec<PathBuf> {
+    let mut files = Vec::with_capacity(global_paths.len() + orphan_paths.len());
+    files.extend(global_paths.iter().cloned());
+    files.extend(orphan_paths.iter().cloned());
+    files
 }

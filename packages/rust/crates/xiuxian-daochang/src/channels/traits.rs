@@ -2,44 +2,28 @@
 
 use async_trait::async_trait;
 
-/// Structured inbound attachment transported by channel adapters.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ChannelAttachment {
-    /// Image attachment represented as a remote URL.
-    ImageUrl {
-        /// Remote image URL or gateway-accessible file URL.
-        url: String,
-    },
-}
-
-/// Mutation operation for recipient-scoped delegated command-admin identities.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecipientCommandAdminUsersMutation {
-    /// Replace override list with the provided identities.
     Set(Vec<String>),
-    /// Add identities to current override list.
     Add(Vec<String>),
-    /// Remove identities from current override list.
     Remove(Vec<String>),
-    /// Clear recipient-scoped override list.
     Clear,
 }
 
 /// A message received from or sent to a channel.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ChannelMessage {
     /// Unique message ID (e.g. `telegram_{chat_id}_{message_id}` to prevent duplicate memories).
     pub id: String,
-    /// Sender identifier (username or `user_id` string) for logs and diagnostics.
+    /// Sender identifier (username or user_id string) for logs and diagnostics.
     pub sender: String,
-    /// Reply target for channel send operations (for Telegram, this is `chat_id`).
+    /// Reply target for channel send operations (for Telegram, this is chat_id).
     pub recipient: String,
     /// Session partition key (Telegram default: `chat_id:user_id`; configurable by channel strategy).
     pub session_key: String,
     /// Message text content.
     pub content: String,
-    /// Structured media attachments extracted from platform payload.
-    pub attachments: Vec<ChannelAttachment>,
     /// Channel name (e.g. `telegram`).
     pub channel: String,
     /// Unix timestamp.
@@ -47,6 +31,7 @@ pub struct ChannelMessage {
 }
 
 /// Core channel trait — implement for any messaging platform.
+#[allow(dead_code)]
 #[async_trait]
 pub trait Channel: Send + Sync {
     /// Human-readable channel name.
@@ -58,9 +43,6 @@ pub trait Channel: Send + Sync {
     }
 
     /// Optional runtime session partition mode update (`chat`, `chat_user`, ...).
-    ///
-    /// # Errors
-    /// Returns an error when the channel implementation does not support runtime partition updates.
     fn set_session_partition_mode(&self, _mode: &str) -> anyhow::Result<()> {
         Err(anyhow::anyhow!(
             "runtime session partition update is not supported for this channel"
@@ -117,9 +99,6 @@ pub trait Channel: Send + Sync {
     /// Returns recipient-scoped delegated command admins override.
     ///
     /// `Ok(None)` means no recipient override (fallback to global ACL chain).
-    ///
-    /// # Errors
-    /// Returns an error when recipient-scoped override lookup is unsupported.
     fn recipient_command_admin_users(
         &self,
         _recipient: &str,
@@ -132,9 +111,6 @@ pub trait Channel: Send + Sync {
     /// Mutates recipient-scoped delegated command admins override.
     ///
     /// Returns the updated override list; `None` means override cleared.
-    ///
-    /// # Errors
-    /// Returns an error when recipient-scoped override mutation is unsupported.
     fn mutate_recipient_command_admin_users(
         &self,
         _recipient: &str,
@@ -146,36 +122,22 @@ pub trait Channel: Send + Sync {
     }
 
     /// Send a message through this channel.
-    ///
-    /// # Errors
-    /// Returns an error when channel send fails.
     async fn send(&self, message: &str, recipient: &str) -> anyhow::Result<()>;
 
     /// Start listening for incoming messages (long-running).
-    ///
-    /// # Errors
-    /// Returns an error when channel listen loop setup or polling fails.
     async fn listen(&self, tx: tokio::sync::mpsc::Sender<ChannelMessage>) -> anyhow::Result<()>;
 
     /// Check if channel is healthy.
-    ///
-    /// Returns `true` when channel transport is currently healthy.
     async fn health_check(&self) -> bool {
         true
     }
 
     /// Signal that the bot is processing a response (e.g. "typing" indicator).
-    ///
-    /// # Errors
-    /// Returns an error when typing-indicator transport fails.
     async fn start_typing(&self, _recipient: &str) -> anyhow::Result<()> {
         Ok(())
     }
 
     /// Stop any active typing indicator.
-    ///
-    /// # Errors
-    /// Returns an error when typing-indicator stop transport fails.
     async fn stop_typing(&self, _recipient: &str) -> anyhow::Result<()> {
         Ok(())
     }

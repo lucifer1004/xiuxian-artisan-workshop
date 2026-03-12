@@ -78,7 +78,7 @@ impl KeywordIndex {
         Ok(Self {
             index,
             reader,
-            writer_cache: RefCell::new(None),
+            writer_cache: Mutex::new(None),
             tool_name,
             description,
             category,
@@ -152,7 +152,7 @@ impl KeywordIndex {
         Ok(Self {
             index,
             reader,
-            writer_cache: RefCell::new(None),
+            writer_cache: Mutex::new(None),
             tool_name,
             description,
             category,

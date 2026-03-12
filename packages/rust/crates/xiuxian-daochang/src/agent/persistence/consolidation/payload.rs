@@ -1,5 +1,5 @@
 use anyhow::Result;
-use xiuxian_memory_engine::{Episode, EpisodeStore};
+use omni_memory::{Episode, EpisodeStore};
 
 use crate::observability::SessionEvent;
 use crate::session::SessionSummarySegment;

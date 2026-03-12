@@ -1,7 +1,7 @@
 use super::super::session_partition::DiscordSessionPartition;
 use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::config::{DiscordSettings, load_runtime_settings};
-use xiuxian_macros::env_non_empty;
+use omni_macros::env_non_empty;
 
 const DISCORD_DEFAULT_INBOUND_QUEUE_CAPACITY: usize = 512;
 const DISCORD_DEFAULT_TURN_TIMEOUT_SECS: u64 = 120;
@@ -72,7 +72,7 @@ impl Default for DiscordRuntimeConfig {
             inbound_queue_capacity: DISCORD_DEFAULT_INBOUND_QUEUE_CAPACITY,
             turn_timeout_secs: DISCORD_DEFAULT_TURN_TIMEOUT_SECS,
             foreground_max_in_flight_messages: DISCORD_DEFAULT_FOREGROUND_MAX_IN_FLIGHT_MESSAGES,
-            foreground_queue_mode: ForegroundQueueMode::Queue,
+            foreground_queue_mode: ForegroundQueueMode::Interrupt,
         }
     }
 }

@@ -1,6 +1,7 @@
 //! Ingress pipeline adapters for bringing external content into Wendao.
 
 mod spider;
+mod transmuter;
 
 pub use spider::{
     ContentHashStore, InMemoryContentHashStore, KnowledgeGraphAssimilationSink,

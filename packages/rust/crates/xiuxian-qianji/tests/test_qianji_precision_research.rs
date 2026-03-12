@@ -1,4 +1,4 @@
-//! High-precision research loop tests for Qianji workflows.
+#![allow(missing_docs, unused_imports, clippy::doc_markdown)]
 
 use serde_json::json;
 use std::collections::HashMap;
@@ -7,7 +7,7 @@ use xiuxian_qianhuan::{
     orchestrator::ThousandFacesOrchestrator,
     persona::{PersonaProfile, PersonaRegistry},
 };
-use xiuxian_qianji::{QianjiCompiler, QianjiScheduler};
+use xiuxian_qianji::{QianjiCompiler, QianjiEngine, QianjiScheduler};
 use xiuxian_wendao::LinkGraphIndex;
 
 const PRECISION_RESEARCH_TOML: &str = include_str!("../resources/tests/precision_research.toml");
@@ -19,7 +19,7 @@ async fn test_qianji_high_precision_research_loop()
     let index = Arc::new(LinkGraphIndex::build(temp.path())?);
     let orchestrator = Arc::new(ThousandFacesOrchestrator::new("Rules".to_string(), None));
 
-    let registry = PersonaRegistry::with_builtins();
+    let mut registry = PersonaRegistry::with_builtins();
     registry.register(PersonaProfile {
         id: "artisan-engineer".to_string(),
         name: "Artisan".to_string(),

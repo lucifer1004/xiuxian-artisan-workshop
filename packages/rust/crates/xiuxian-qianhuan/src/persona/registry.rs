@@ -3,7 +3,6 @@ use super::profile::PersonaProfile;
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// In-memory persona payload resolved from runtime indexes (for example Wendao).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,35 +24,10 @@ impl MemoryPersonaRecord {
     }
 }
 
-/// Read-through provider for persona profiles on cache misses.
-pub trait PersonaProvider: Send + Sync {
-    /// Fetches one persona profile by exact identifier.
-    fn fetch_persona(&self, id: &str) -> Option<PersonaProfile>;
-}
-
 /// Registry managing the collection of available personas.
+#[derive(Debug, Default)]
 pub struct PersonaRegistry {
-    personas: RwLock<HashMap<String, PersonaProfile>>,
-    provider: Option<Arc<dyn PersonaProvider>>,
-}
-
-impl std::fmt::Debug for PersonaRegistry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let personas_len = self.read_personas().len();
-        f.debug_struct("PersonaRegistry")
-            .field("personas_len", &personas_len)
-            .field("provider_enabled", &self.provider.is_some())
-            .finish_non_exhaustive()
-    }
-}
-
-impl Default for PersonaRegistry {
-    fn default() -> Self {
-        Self {
-            personas: RwLock::new(HashMap::new()),
-            provider: None,
-        }
-    }
+    personas: HashMap<String, PersonaProfile>,
 }
 
 impl PersonaRegistry {
@@ -61,20 +35,6 @@ impl PersonaRegistry {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Creates an empty registry with a cache-miss provider.
-    #[must_use]
-    pub fn with_provider(provider: Arc<dyn PersonaProvider>) -> Self {
-        Self {
-            personas: RwLock::new(HashMap::new()),
-            provider: Some(provider),
-        }
-    }
-
-    /// Sets or replaces the cache-miss provider.
-    pub fn set_provider(&mut self, provider: Arc<dyn PersonaProvider>) {
-        self.provider = Some(provider);
     }
 
     /// Creates a new registry with built-in personas loaded from runtime directories.
@@ -119,7 +79,7 @@ impl PersonaRegistry {
     /// Returns an error when the directory exists but cannot be traversed,
     /// or when any discovered profile file fails to parse.
     pub fn load_from_dir(path: &Path) -> Result<Self> {
-        let registry = Self::new();
+        let mut registry = Self::new();
         for file_path in collect_persona_files(path)? {
             let profile = parse_profile_from_file(&file_path)?;
             registry.register(profile);
@@ -135,10 +95,10 @@ impl PersonaRegistry {
     ///
     /// Returns an error when any directory traversal or file parsing fails.
     pub fn load_from_dirs(paths: &[PathBuf]) -> Result<Self> {
-        let registry = Self::new();
+        let mut registry = Self::new();
         for path in paths {
-            for file_path in collect_persona_files(path)? {
-                let profile = parse_profile_from_file(&file_path)?;
+            let partial = Self::load_from_dir(path)?;
+            for profile in partial.personas.into_values() {
                 registry.register(profile);
             }
         }
@@ -147,35 +107,25 @@ impl PersonaRegistry {
 
     /// Fetches a persona profile by its unique ID.
     #[must_use]
-    pub fn get(&self, id: &str) -> Option<PersonaProfile> {
-        if let Some(profile) = self.read_personas().get(id).cloned() {
-            return Some(profile);
-        }
-        let provider = self.provider.as_ref()?;
-        let mut profile = provider.fetch_persona(id)?;
-        if profile.id.trim() != id {
-            profile.id = id.to_string();
-        }
-        self.write_personas()
-            .insert(id.to_string(), profile.clone());
-        Some(profile)
+    pub fn get(&self, id: &str) -> Option<&PersonaProfile> {
+        self.personas.get(id)
     }
 
     /// Returns the total number of registered personas.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.read_personas().len()
+        self.personas.len()
     }
 
     /// Returns `true` when no persona profiles are registered.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.read_personas().is_empty()
+        self.personas.is_empty()
     }
 
     /// Registers a custom persona into the registry.
-    pub fn register(&self, profile: PersonaProfile) {
-        self.write_personas().insert(profile.id.clone(), profile);
+    pub fn register(&mut self, profile: PersonaProfile) {
+        self.personas.insert(profile.id.clone(), profile);
     }
 
     /// Registers one persona profile from runtime TOML payload.
@@ -186,7 +136,7 @@ impl PersonaRegistry {
     /// # Errors
     ///
     /// Returns an error when TOML parsing fails or required fields are missing.
-    pub fn register_from_memory_toml(&self, id: &str, persona_toml: &str) -> Result<()> {
+    pub fn register_from_memory_toml(&mut self, id: &str, persona_toml: &str) -> Result<()> {
         let mut payload: toml::Value = toml::from_str(persona_toml)
             .map_err(|error| anyhow!("failed to parse persona TOML for '{id}': {error}"))?;
         let table = payload
@@ -217,29 +167,5 @@ impl PersonaRegistry {
             loaded += 1;
         }
         Ok(loaded)
-    }
-
-    fn read_personas(&self) -> RwLockReadGuard<'_, HashMap<String, PersonaProfile>> {
-        match self.personas.read() {
-            Ok(guard) => guard,
-            Err(error) => {
-                log::warn!(
-                    "persona registry read lock poisoned; recovering poisoned state: {error}"
-                );
-                error.into_inner()
-            }
-        }
-    }
-
-    fn write_personas(&self) -> RwLockWriteGuard<'_, HashMap<String, PersonaProfile>> {
-        match self.personas.write() {
-            Ok(guard) => guard,
-            Err(error) => {
-                log::warn!(
-                    "persona registry write lock poisoned; recovering poisoned state: {error}"
-                );
-                error.into_inner()
-            }
-        }
     }
 }

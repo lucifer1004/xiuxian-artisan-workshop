@@ -1,6 +1,6 @@
 //! Discord channel behavior and command-admin rule tests.
 
-use xiuxian_daochang::{
+use omni_agent::{
     Channel, DiscordChannel, DiscordCommandAdminRule, DiscordControlCommandPolicy,
     build_discord_command_admin_rule,
 };

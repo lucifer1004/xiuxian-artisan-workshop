@@ -1,252 +1,144 @@
 """
-Benchmark tests for omni.rag.entities module.
+Performance benchmarks for Skills Architecture.
 
-These tests measure the performance of entity dataclass operations.
+These tests measure the performance characteristics of skill loading,
+execution, and management. They are intentionally slower than unit tests
+and should be run separately with: just test-stress
+
+Usage:
+    just test-stress  # Runs all stress tests
+    uv run pytest stress_tests/test_performance_skills.py -v
 """
 
-import time
-
 import pytest
+import time
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch, AsyncMock
+
+# Import omni helper (Phase 35.3)
+# Add the skills test directory to path for imports
+skills_test_dir = Path(__file__).parent.parent / "integration" / "skills"
+if str(skills_test_dir) not in sys.path:
+    sys.path.insert(0, str(skills_test_dir))
+from test_skills import omni
 
 
-class TestEntityDataclassPerformance:
-    """Performance tests for Entity dataclass."""
+class TestSkillPerformance:
+    """Performance and stress tests for skill loading."""
 
-    @pytest.fixture
-    def sample_entities(self):
-        """Create sample entities for benchmarking."""
-        from omni.rag.entities import Entity
+    def test_rapid_load_unload(self, isolated_registry, mock_mcp_server):
+        """Test rapid loading and reloading of skills."""
+        skills_to_test = ["filesystem", "git"]
 
-        return [
-            Entity(
-                name=f"Entity_{i}",
-                entity_type=["PERSON", "ORG", "CONCEPT", "TOOL"][i % 4],
-                description=f"Description for entity {i}",
-                source=f"doc_{i % 10}.md",
-                confidence=0.8 + (i % 20) / 100.0,
-                aliases=[f"alias_{i}", f"alt_{i}"],
-                metadata={"key": f"value_{i}"},
-            )
-            for i in range(100)
-        ]
+        start = time.time()
+        for _ in range(3):
+            for skill in skills_to_test:
+                isolated_registry.loaded_skills.pop(skill, None)
+                isolated_registry.module_cache.pop(skill, None)
+                isolated_registry.load_skill(skill, mock_mcp_server)
+        elapsed = time.time() - start
 
-    def test_entity_creation_performance(self):
-        """Test entity creation performance."""
-        from omni.rag.entities import Entity
+        # Should complete within reasonable time (< 5 seconds for 6 loads)
+        assert elapsed < 5.0
 
+    def test_concurrent_load_same_skill(self, isolated_registry, mock_mcp_server):
+        """Loading same skill concurrently should not cause errors."""
+        skills_to_test = ["filesystem"] * 3
+
+        results = []
+        for skill in skills_to_test:
+            isolated_registry.loaded_skills.pop(skill, None)
+            isolated_registry.module_cache.pop(skill, None)
+            success, msg = isolated_registry.load_skill(skill, mock_mcp_server)
+            results.append((success, msg))
+
+        # All should succeed
+        for success, msg in results:
+            assert success is True
+
+
+class TestAsyncPerformance:
+    """Performance benchmarks for async architecture."""
+
+    @pytest.mark.asyncio
+    async def test_skill_manager_run_performance(self, skill_manager_fixture):
+        """Benchmark SkillContext.run() execution time."""
+        # Warm up
+        await skill_manager_fixture.run("git", "git_status", {})
+
+        # Benchmark
+        iterations = 10
         start = time.perf_counter()
-        for i in range(1000):
-            entity = Entity(
-                name=f"Entity_{i}",
-                entity_type="PERSON",
-                description=f"Description {i}",
-                source="test.md",
-            )
+        for _ in range(iterations):
+            await skill_manager_fixture.run("git", "git_status", {})
         elapsed = time.perf_counter() - start
 
-        # Should create 1000 entities in under 50ms
-        assert elapsed < 0.05, f"Entity creation took {elapsed:.3f}s"
+        avg_time = elapsed / iterations
+        print(f"\n[Performance] SkillContext.run() avg: {avg_time * 1000:.2f}ms")
 
-        print(f"Entity creation: 1000 entities in {elapsed * 1000:.2f}ms")
+        # Should complete within 100ms per call (generous threshold)
+        assert avg_time < 0.1, f"Run too slow: {avg_time * 1000:.2f}ms"
 
-    def test_entity_hash_performance(self, sample_entities):
-        """Test entity hashing performance."""
+    @pytest.mark.asyncio
+    async def test_omni_dispatch_performance(self, skill_manager_fixture):
+        """Benchmark omni tool dispatch overhead."""
+        # Warm up
+        await omni("git.status")
 
+        # Benchmark
+        iterations = 10
         start = time.perf_counter()
-        for _ in range(100):
-            hashes = [hash(entity) for entity in sample_entities]
+        for _ in range(iterations):
+            await omni("git.status")
         elapsed = time.perf_counter() - start
 
-        # Should hash 100 entities 100 times in under 50ms
-        assert elapsed < 0.05, f"Entity hashing took {elapsed:.3f}s"
+        avg_time = elapsed / iterations
+        print(f"\n[Performance] omni dispatch avg: {avg_time * 1000:.2f}ms")
 
-        print(f"Entity hashing: 100x100 in {elapsed * 1000:.2f}ms")
+        # Dispatch overhead should be minimal
+        assert avg_time < 0.15, f"Dispatch too slow: {avg_time * 1000:.2f}ms"
 
-    def test_entity_equality_performance(self, sample_entities):
-        """Test entity equality performance."""
-        from omni.rag.entities import Entity
+    @pytest.mark.asyncio
+    async def test_concurrent_command_execution(self, skill_manager_fixture):
+        """Test executing multiple commands concurrently."""
+        import asyncio
 
-        entities_copy = [
-            Entity(
-                name=f"Entity_{i}",
-                entity_type=["PERSON", "ORG", "CONCEPT", "TOOL"][i % 4],
-                description=f"Description for entity {i}",
-                source=f"doc_{i % 10}.md",
-                confidence=0.8 + (i % 20) / 100.0,
-            )
-            for i in range(100)
-        ]
+        # Warm up
+        await skill_manager_fixture.run("git", "git_status", {})
+
+        # Execute multiple commands concurrently
+        async def run_command():
+            return await skill_manager_fixture.run("git", "git_status", {})
 
         start = time.perf_counter()
-        for _ in range(100):
-            for i in range(len(sample_entities)):
-                _ = sample_entities[i] == entities_copy[i]
+        results = await asyncio.gather(*[run_command() for _ in range(5)])
         elapsed = time.perf_counter() - start
 
-        # Should compare 100 entities 100 times in under 50ms
-        assert elapsed < 0.05, f"Entity equality took {elapsed:.3f}s"
+        print(f"\n[Performance] 5 concurrent commands: {elapsed * 1000:.2f}ms")
 
-        print(f"Entity equality: 100x100 comparisons in {elapsed * 1000:.2f}ms")
+        # All should succeed
+        for result in results:
+            assert isinstance(result, str)
 
-    def test_entity_to_dict_performance(self, sample_entities):
-        """Test entity to_dict performance."""
+        # Concurrent should be faster than sequential
+        assert elapsed < 0.5, f"Concurrent execution too slow: {elapsed * 1000:.2f}ms"
+
+    @pytest.mark.asyncio
+    async def test_skill_loading_performance(self):
+        """Benchmark skill loading from cold start."""
+        from agent.core.skill_runtime.context import reset_context, get_skill_context
+
+        # Reset context for cold start
+        reset_context()
 
         start = time.perf_counter()
-        for _ in range(100):
-            dicts = [entity.to_dict() for entity in sample_entities]
+        manager = get_skill_context()
+        manager.load_all()
         elapsed = time.perf_counter() - start
 
-        # Should convert 100 entities 100 times in under 100ms
-        assert elapsed < 0.1, f"Entity to_dict took {elapsed:.3f}s"
+        print(f"\n[Performance] Skill loading: {elapsed * 1000:.2f}ms")
 
-        print(f"Entity to_dict: 100x100 in {elapsed * 1000:.2f}ms")
-
-    def test_entity_from_dict_performance(self, sample_entities):
-        """Test entity from_dict performance."""
-        from omni.rag.entities import Entity
-
-        dicts = [entity.to_dict() for entity in sample_entities]
-
-        start = time.perf_counter()
-        for _ in range(100):
-            entities = [Entity.from_dict(d) for d in dicts]
-        elapsed = time.perf_counter() - start
-
-        # Should create 100 entities from dicts 100 times in under 100ms
-        assert elapsed < 0.1, f"Entity from_dict took {elapsed:.3f}s"
-
-        print(f"Entity from_dict: 100x100 in {elapsed * 1000:.2f}ms")
-
-    def test_entity_id_performance(self, sample_entities):
-        """Test entity ID generation performance."""
-
-        start = time.perf_counter()
-        for _ in range(100):
-            ids = [entity.id for entity in sample_entities]
-        elapsed = time.perf_counter() - start
-
-        # Should generate 100 IDs 100 times in under 50ms
-        assert elapsed < 0.05, f"Entity ID generation took {elapsed:.3f}s"
-
-        print(f"Entity ID: 100x100 in {elapsed * 1000:.2f}ms")
-
-
-class TestEntitySetOperationsPerformance:
-    """Performance tests for entity set operations."""
-
-    @pytest.fixture
-    def entity_set(self):
-        """Create a set of entities for testing."""
-        from omni.rag.entities import Entity
-
-        return {
-            Entity(
-                name=f"Entity_{i}", entity_type="PERSON", description=f"Desc {i}", source="test.md"
-            )
-            for i in range(100)
-        }
-
-    def test_entity_set_lookup_performance(self, entity_set):
-        """Test entity lookup in set performance."""
-        from omni.rag.entities import Entity
-
-        lookup_entities = [
-            Entity(
-                name=f"Entity_{i}", entity_type="PERSON", description=f"Desc {i}", source="test.md"
-            )
-            for i in range(100)
-        ]
-
-        start = time.perf_counter()
-        for _ in range(100):
-            for entity in lookup_entities:
-                _ = entity in entity_set
-        elapsed = time.perf_counter() - start
-
-        # Should do 10000 lookups in under 50ms
-        assert elapsed < 0.05, f"Entity set lookup took {elapsed:.3f}s"
-
-        print(f"Entity set lookup: 10000 in {elapsed * 1000:.2f}ms")
-
-    def test_entity_set_add_performance(self):
-        """Test entity add to set performance."""
-        from omni.rag.entities import Entity
-
-        start = time.perf_counter()
-        entity_set = set()
-        for i in range(1000):
-            entity_set.add(
-                Entity(
-                    name=f"Entity_{i}",
-                    entity_type="PERSON",
-                    description=f"Desc {i}",
-                    source="test.md",
-                )
-            )
-        elapsed = time.perf_counter() - start
-
-        # Should add 1000 entities in under 50ms
-        assert elapsed < 0.05, f"Entity set add took {elapsed:.3f}s"
-
-        print(f"Entity set add: 1000 in {elapsed * 1000:.2f}ms")
-
-
-class TestRelationDataclassPerformance:
-    """Performance tests for Relation dataclass."""
-
-    def test_relation_creation_performance(self):
-        """Test relation creation performance."""
-        from omni.rag.entities import Entity, Relation
-
-        entity_a = Entity(
-            name="Python", entity_type="LANGUAGE", description="Lang", source="test.md"
-        )
-        entity_b = Entity(
-            name="Guido van Rossum", entity_type="PERSON", description="Creator", source="test.md"
-        )
-
-        start = time.perf_counter()
-        for i in range(1000):
-            relation = Relation(
-                source=entity_a,
-                target=entity_b,
-                relation_type="CREATED_BY",
-                description=f"Relation {i}",
-            )
-        elapsed = time.perf_counter() - start
-
-        # Should create 1000 relations in under 50ms
-        assert elapsed < 0.05, f"Relation creation took {elapsed:.3f}s"
-
-        print(f"Relation creation: 1000 in {elapsed * 1000:.2f}ms")
-
-    def test_relation_to_dict_performance(self):
-        """Test relation to_dict performance."""
-        from omni.rag.entities import Entity, Relation
-
-        entity_a = Entity(
-            name="Python", entity_type="LANGUAGE", description="Lang", source="test.md"
-        )
-        entity_b = Entity(
-            name="Guido van Rossum", entity_type="PERSON", description="Creator", source="test.md"
-        )
-
-        relations = [
-            Relation(
-                source=entity_a,
-                target=entity_b,
-                relation_type="CREATED_BY",
-                description=f"Relation {i}",
-            )
-            for i in range(100)
-        ]
-
-        start = time.perf_counter()
-        for _ in range(100):
-            dicts = [r.to_dict() for r in relations]
-        elapsed = time.perf_counter() - start
-
-        # Should convert 100 relations 100 times in under 100ms
-        assert elapsed < 0.1, f"Relation to_dict took {elapsed:.3f}s"
-
-        print(f"Relation to_dict: 100x100 in {elapsed * 1000:.2f}ms")
+        # Should load all skills within reasonable time
+        assert elapsed < 2.0, f"Skill loading too slow: {elapsed * 1000:.2f}ms"
+        assert len(manager.skills) >= 1

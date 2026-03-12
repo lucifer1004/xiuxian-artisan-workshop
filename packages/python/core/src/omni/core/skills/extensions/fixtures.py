@@ -22,20 +22,18 @@ Usage:
 
 from __future__ import annotations
 
-import importlib
-from collections.abc import Callable
+import importlib.util
+import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Dict, Optional, Type
 
-from omni.foundation.config.logging import get_logger
-
-logger = get_logger("omni.skills.fixtures")
+logger = logging.getLogger("omni.skills.fixtures")
 
 
 class FixtureRegistry:
     """Global extension fixture registry."""
 
-    _registry: dict[str, dict[str, Callable]] = {}
+    _registry: Dict[str, Dict[str, Callable]] = {}
 
     @classmethod
     def register(cls, ext_name: str, func_name: str, impl: Callable) -> None:
@@ -46,7 +44,7 @@ class FixtureRegistry:
         logger.debug(f"Registered fixture: {ext_name}.{func_name}")
 
     @classmethod
-    def get(cls, ext_name: str, func_name: str) -> Callable | None:
+    def get(cls, ext_name: str, func_name: str) -> Optional[Callable]:
         """Get fixture implementation."""
         return cls._registry.get(ext_name, {}).get(func_name)
 
@@ -59,7 +57,7 @@ class FixtureRegistry:
             cls._registry.clear()
 
     @classmethod
-    def list_registered(cls) -> dict[str, list[str]]:
+    def list_registered(cls) -> Dict[str, list[str]]:
         """List all registered fixtures."""
         return {k: list(v.keys()) for k, v in cls._registry.items()}
 
@@ -71,9 +69,9 @@ class FixtureManager:
         self.skill_path = skill_path
         self.ext_path = skill_path / "extensions"
 
-    def discover_and_register(self) -> dict[str, list[str]]:
+    def discover_and_register(self) -> Dict[str, list[str]]:
         """Discover all extensions and register their fixtures."""
-        fixtures_found: dict[str, list[str]] = {}
+        fixtures_found: Dict[str, list[str]] = {}
 
         if not self.ext_path.exists():
             logger.debug(f"No extensions directory: {self.ext_path}")
@@ -173,8 +171,8 @@ def apply_fixtures(skill_path: Path, module: Any) -> None:
 
 
 __all__ = [
-    "FixtureManager",
     "FixtureRegistry",
-    "apply_fixtures",
+    "FixtureManager",
     "fixture",
+    "apply_fixtures",
 ]

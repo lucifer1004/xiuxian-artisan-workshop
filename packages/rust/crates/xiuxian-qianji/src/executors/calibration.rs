@@ -1,21 +1,21 @@
-//! Adversarial calibration mechanism (Synapse-Audit).
-
 use crate::contracts::{FlowInstruction, QianjiMechanism, QianjiOutput};
 use async_trait::async_trait;
 use serde_json::json;
 
-/// Mechanism responsible for auditing conclusions against evidence.
 pub struct SynapseCalibrator {
-    /// ID of the node to be reset if calibration fails.
     pub target_node_id: String,
-    /// Maximum allowed drift score before triggering a retry.
     pub drift_threshold: f32,
 }
 
 #[async_trait]
 impl QianjiMechanism for SynapseCalibrator {
     async fn execute(&self, context: &serde_json::Value) -> Result<QianjiOutput, String> {
-        let drift_score = context_f32(context, "drift_score", 0.0);
+        // Logic: Extract evidence and claims from context
+        // This is a simplified version of the Drift Calculation
+        let drift_score = context
+            .get("drift_score")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
 
         if drift_score > self.drift_threshold {
             Ok(QianjiOutput {
@@ -31,14 +31,6 @@ impl QianjiMechanism for SynapseCalibrator {
     }
 
     fn weight(&self) -> f32 {
-        10.0
+        10.0 // Calibration nodes usually have high priority
     }
-}
-
-fn context_f32(context: &serde_json::Value, key: &str, default: f32) -> f32 {
-    context
-        .get(key)
-        .cloned()
-        .and_then(|value| serde_json::from_value::<f32>(value).ok())
-        .unwrap_or(default)
 }

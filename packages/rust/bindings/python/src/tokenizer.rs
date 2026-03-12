@@ -1,9 +1,9 @@
-//! Python Bindings for xiuxian-tokenizer
+//! Python Bindings for omni-tokenizer
 //!
 //! High-performance token counting and context pruning for LangGraph.
 
+use omni_tokenizer::{ContextPruner, Message, chunk_text, count_tokens, truncate};
 use pyo3::prelude::*;
-use xiuxian_tokenizer::{ContextPruner, Message, chunk_text, count_tokens, truncate};
 
 /// Count tokens in text using Rust (20-100x faster than Python).
 ///
@@ -109,7 +109,7 @@ impl From<Message> for PyMessage {
 /// # Example
 ///
 /// ```python
-/// from xiuxian_core_rs.tokenizer import ContextPruner
+/// from omni_core_rs.tokenizer import ContextPruner
 ///
 /// pruner = ContextPruner(window_size=4, max_tool_output=500)
 /// compressed = pruner.compress(messages)
@@ -149,14 +149,8 @@ impl PyContextPruner {
 
         for msg in messages {
             let dict = msg.cast_bound::<pyo3::types::PyDict>(py)?;
-            let role_any = dict.get_item("role")?.ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("missing key `role` in message dict")
-            })?;
-            let content_any = dict.get_item("content")?.ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("missing key `content` in message dict")
-            })?;
-            let role: String = role_any.extract()?;
-            let content: String = content_any.extract()?;
+            let role: String = dict.get_item("role")?.unwrap().extract()?;
+            let content: String = dict.get_item("content")?.unwrap().extract()?;
             rust_messages.push(Message { role, content });
         }
 
@@ -164,15 +158,17 @@ impl PyContextPruner {
         let compressed = self.inner.compress(rust_messages);
 
         // Convert back to Python dicts
-        compressed
+        let result: Vec<Py<PyAny>> = compressed
             .into_iter()
             .map(|msg| {
                 let dict = pyo3::types::PyDict::new(py);
-                dict.set_item("role", &msg.role)?;
-                dict.set_item("content", &msg.content)?;
-                Ok(dict.into())
+                dict.set_item("role", &msg.role).unwrap();
+                dict.set_item("content", &msg.content).unwrap();
+                dict.into()
             })
-            .collect()
+            .collect();
+
+        Ok(result)
     }
 
     /// Count tokens in a text string using Rust.
@@ -185,10 +181,7 @@ impl PyContextPruner {
         let mut total = 0;
         for msg in messages {
             let dict = msg.cast_bound::<pyo3::types::PyDict>(py)?;
-            let content_any = dict.get_item("content")?.ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("missing key `content` in message dict")
-            })?;
-            let content: String = content_any.extract()?;
+            let content: String = dict.get_item("content")?.unwrap().extract()?;
             total += ContextPruner::count_tokens(&content);
         }
         Ok(total)
@@ -209,22 +202,21 @@ pub fn py_truncate_middle(text: &str, max_tokens: usize) -> String {
     // Simple middle truncation: keep first 40% and last 60%
     // This preserves recent context while dropping older content
     let keep_first = (max_tokens * 40) / 100;
-    let keep_last = max_tokens.saturating_sub(keep_first);
+    let _keep_last = max_tokens - keep_first;
 
     // For text messages, this is a simplified approach
     // A full implementation would tokenize, split, and recombine
     let chars = text.chars().collect::<Vec<_>>();
     let total_chars = chars.len();
-    let first_end = ((total_chars * keep_first) / tokens).min(total_chars);
-    let tail_len = ((total_chars * keep_last) / tokens).min(total_chars.saturating_sub(first_end));
-    let last_start = total_chars.saturating_sub(tail_len);
+    let split_point = (total_chars * keep_first) / tokens;
 
-    let first_part: String = chars[..first_end].iter().collect();
-    let last_part: String = chars[last_start..].iter().collect();
-    let truncated_chars = last_start.saturating_sub(first_end);
+    let first_part: String = chars[..split_point.min(total_chars)].iter().collect();
+    let last_part: String = chars[split_point..].iter().collect();
 
     format!(
         "{}\n\n[... {} chars truncated ...]\n\n{}",
-        first_part, truncated_chars, last_part
+        first_part,
+        total_chars - split_point - (total_chars - split_point),
+        last_part
     )
 }

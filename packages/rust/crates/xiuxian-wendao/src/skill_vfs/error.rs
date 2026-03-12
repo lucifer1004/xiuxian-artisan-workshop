@@ -13,7 +13,7 @@ pub enum SkillVfsError {
         /// Parsed unsupported scheme.
         scheme: String,
     },
-    /// URI payload does not follow `skills/<name>/references/<entity>`.
+    /// URI payload does not follow a supported Wendao shape.
     #[error("invalid wendao resource URI `{0}`")]
     InvalidUri(String),
     /// One required segment is absent or empty.
@@ -70,13 +70,27 @@ pub enum SkillVfsError {
         /// Semantic namespace from URI.
         semantic_name: String,
     },
-    /// References entity not found under known mounts.
+    /// Internal skill directory not found in mounted roots.
+    #[error("internal skill namespace `{skill_name}` not found")]
+    UnknownInternalSkill {
+        /// Internal skill directory from URI.
+        skill_name: String,
+    },
+    /// References entity not found under known semantic mounts.
     #[error("resource `{entity_name}` not found under semantic skill namespace `{semantic_name}`")]
     ResourceNotFound {
         /// Semantic namespace from URI.
         semantic_name: String,
         /// Entity name from URI.
         entity_name: String,
+    },
+    /// Internal resource not found under one mounted internal skill.
+    #[error("resource `{resource_path}` not found under internal skill namespace `{skill_name}`")]
+    InternalResourceNotFound {
+        /// Internal skill directory from URI.
+        skill_name: String,
+        /// Relative resource path from URI.
+        resource_path: String,
     },
     /// Reading a resolved resource file failed.
     #[error("failed to read resource `{path}`: {source}")]

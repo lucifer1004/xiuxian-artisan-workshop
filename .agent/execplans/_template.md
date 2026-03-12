@@ -1,63 +1,49 @@
-# <Plan Title>
+# Title
 
 ## Purpose / Big Picture
 
-Describe the user-visible outcome and why this work matters.
+## Scope and Boundaries
 
-## Progress
+Files or dirs to read:
+Commands or tools to run:
+Expected outputs:
+Stop conditions:
 
-- [ ] Step 1
-- [ ] Step 2
-- [ ] Step 3
+## Plan Self Check
 
-## Surprises & Discoveries
-
-- None yet.
-
-## Decision Log
-
-- Decision: pending.
-  - Rationale: pending.
-  - Date: YYYY-MM-DD.
-
-## Outcomes & Retrospective
-
-Record final outcomes and follow-up items after completion.
+1. Scope matches the request and risk level.
+2. Files or dirs to read are complete and minimal.
+3. Commands or tools to run are complete and safe.
+4. Expected outputs are concrete and testable.
+5. Stop conditions are clear.
+6. Dependencies and constraints are recorded.
+7. Validation plan is adequate for risk.
+8. Plan type is correct.
 
 ## Context and Orientation
 
-List the key files/modules and execution paths involved.
-
 ## Plan of Work
-
-1. Implementation track A.
-2. Implementation track B.
-3. Validation and cleanup.
 
 ## Concrete Steps
 
-1. Exact change 1.
-2. Exact change 2.
-3. Exact change 3.
-
 ## Validation and Acceptance
 
-1. `cargo check -p <crate>`
-2. `cargo clippy -p <crate> -- -W clippy::too_many_lines`
-3. `cargo nextest run -p <crate> <test-filter>`
+## Reflection and Quality Audit
+
+## Final Validation Gate
 
 ## Idempotence and Recovery
 
-Describe safe re-runs, rollback points, and failure recovery strategy.
+## Interfaces and Dependencies
+
+## Progress
+
+## Decision Log
+
+## Surprises & Discoveries
 
 ## Artifacts and Notes
 
-List produced files, logs, dashboards, or migration artifacts.
-
-## Interfaces and Dependencies
-
-Document touched APIs, config contracts, and external dependencies.
+## Outcomes & Retrospective
 
 ## Change Log
-
-- YYYY-MM-DD: plan created.

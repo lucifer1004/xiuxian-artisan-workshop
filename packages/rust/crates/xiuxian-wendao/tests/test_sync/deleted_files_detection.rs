@@ -6,7 +6,7 @@ fn test_deleted_files_detection() -> Result<(), Box<dyn std::error::Error>> {
 
     let temp_dir = TempDir::new()?;
     let manifest_path = temp_dir.path().join("manifest.json");
-    let engine = SyncEngine::new(temp_dir.path(), &manifest_path);
+    let engine = SyncEngine::new(temp_dir.path().to_path_buf(), manifest_path.clone());
 
     // Create old manifest with files that don't exist on disk
     let mut old_manifest = SyncManifest::default();

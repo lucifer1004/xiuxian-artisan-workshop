@@ -15,7 +15,7 @@ fn test_skip_hidden_and_directories() -> Result<(), Box<dyn std::error::Error>> 
     fs::write(temp_dir.path().join("visible.py"), "visible")?;
 
     let manifest_path = temp_dir.path().join("manifest.json");
-    let engine = SyncEngine::new(temp_dir.path(), &manifest_path);
+    let engine = SyncEngine::new(temp_dir.path().to_path_buf(), manifest_path.clone());
     let files = engine.discover_files();
 
     // Should not include hidden files (file name starts with .)

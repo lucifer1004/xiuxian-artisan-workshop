@@ -1,190 +1,91 @@
-//! Telegram runtime session reset and resume command flow tests.
-
 use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::mpsc;
 
-use xiuxian_daochang::{Channel, ChannelMessage};
+use xiuxian_daochang::{Channel, ChannelMessage, TelegramSessionPartition};
 
-use super::{MockChannel, build_agent, build_job_manager, handle_inbound_message, inbound};
+use super::MockChannel;
+use super::SessionIdentity;
+use super::build_agent;
+use super::build_job_manager;
+use super::handle_inbound_message;
+use super::partitioned_inbound_message;
 
-#[tokio::test]
-async fn runtime_handle_inbound_session_reset_resume_flow() -> Result<()> {
+pub(crate) async fn run_partition_reset_status_flow(
+    partition: TelegramSessionPartition,
+    reset_identity: SessionIdentity,
+    status_identity: SessionIdentity,
+    expect_shared_snapshot: bool,
+) -> Result<()> {
+    let reset_message = partitioned_inbound_message(partition, reset_identity, "/reset")?;
+    let status_message = partitioned_inbound_message(partition, status_identity, "/resume status")?;
+
+    let reset_session_id = format!("{}:{}", reset_message.channel, reset_message.session_key);
+    let status_session_id = format!("{}:{}", status_message.channel, status_message.session_key);
+    if expect_shared_snapshot {
+        assert_eq!(
+            reset_session_id, status_session_id,
+            "expected shared partition to map into same logical session key"
+        );
+    } else {
+        assert_ne!(
+            reset_session_id, status_session_id,
+            "expected isolated partition to map into different logical session keys"
+        );
+    }
+
     let agent = build_agent().await?;
     let channel = Arc::new(MockChannel::default());
     let channel_dyn: Arc<dyn Channel> = channel.clone();
     let job_manager = build_job_manager(agent.clone());
     let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
-    let session_id = "telegram:-200:888";
 
     agent
-        .append_turn_for_session(session_id, "u1", "a1")
+        .append_turn_for_session(&reset_session_id, "u1", "a1")
         .await?;
     agent
-        .append_turn_for_session(session_id, "u2", "a2")
+        .append_turn_for_session(&reset_session_id, "u2", "a2")
         .await?;
 
-    let reset_handled = handle_inbound_message(
-        inbound("/reset"),
-        &channel_dyn,
-        &foreground_tx,
-        &job_manager,
-        &agent,
-    )
-    .await;
-    assert!(reset_handled, "reset command should be handled by runtime");
+    assert!(
+        handle_inbound_message(
+            reset_message,
+            &channel_dyn,
+            &foreground_tx,
+            &job_manager,
+            &agent,
+        )
+        .await
+    );
+    assert!(
+        handle_inbound_message(
+            status_message,
+            &channel_dyn,
+            &foreground_tx,
+            &job_manager,
+            &agent,
+        )
+        .await
+    );
+
     assert!(
         foreground_rx.try_recv().is_err(),
-        "session commands should not forward to foreground queue"
+        "session commands should not enter foreground queue"
     );
-
-    let status_handled = handle_inbound_message(
-        inbound("/resume status"),
-        &channel_dyn,
-        &foreground_tx,
-        &job_manager,
-        &agent,
-    )
-    .await;
-    assert!(status_handled, "resume status should be handled by runtime");
-
-    let resume_handled = handle_inbound_message(
-        inbound("/resume"),
-        &channel_dyn,
-        &foreground_tx,
-        &job_manager,
-        &agent,
-    )
-    .await;
-    assert!(resume_handled, "resume should be handled by runtime");
-
-    let status_after_resume_handled = handle_inbound_message(
-        inbound("/resume status"),
-        &channel_dyn,
-        &foreground_tx,
-        &job_manager,
-        &agent,
-    )
-    .await;
-    assert!(
-        status_after_resume_handled,
-        "resume status should still be handled after restore"
-    );
-
     let sent = channel.sent_messages().await;
-    assert_eq!(sent.len(), 4);
+    assert_eq!(sent.len(), 2);
     assert!(sent[0].0.contains("Session context reset."));
     assert!(sent[0].0.contains("messages_cleared=4"));
-    assert!(sent[1].0.contains("Saved session context snapshot:"));
-    assert!(sent[1].0.contains("messages=4"));
-    assert!(sent[1].0.contains("saved_age_secs="));
-    assert!(sent[2].0.contains("Session context restored."));
-    assert!(sent[2].0.contains("messages_restored=4"));
-    assert!(
-        sent[3]
-            .0
-            .contains("No saved session context snapshot found.")
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn runtime_handle_inbound_resume_status_without_snapshot() -> Result<()> {
-    let agent = build_agent().await?;
-    let channel = Arc::new(MockChannel::default());
-    let channel_dyn: Arc<dyn Channel> = channel.clone();
-    let job_manager = build_job_manager(agent.clone());
-    let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
-
-    let handled = handle_inbound_message(
-        inbound("/resume status"),
-        &channel_dyn,
-        &foreground_tx,
-        &job_manager,
-        &agent,
-    )
-    .await;
-
-    assert!(handled);
-    assert!(
-        foreground_rx.try_recv().is_err(),
-        "resume status should not forward to foreground queue"
-    );
-    let sent = channel.sent_messages().await;
-    assert_eq!(sent.len(), 1);
-    assert!(
-        sent[0]
-            .0
-            .contains("No saved session context snapshot found.")
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn runtime_handle_inbound_resume_drop_clears_snapshot() -> Result<()> {
-    let agent = build_agent().await?;
-    let channel = Arc::new(MockChannel::default());
-    let channel_dyn: Arc<dyn Channel> = channel.clone();
-    let job_manager = build_job_manager(agent.clone());
-    let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
-    let session_id = "telegram:-200:888";
-
-    agent
-        .append_turn_for_session(session_id, "u1", "a1")
-        .await?;
-    agent
-        .append_turn_for_session(session_id, "u2", "a2")
-        .await?;
-
-    assert!(
-        handle_inbound_message(
-            inbound("/reset"),
-            &channel_dyn,
-            &foreground_tx,
-            &job_manager,
-            &agent,
-        )
-        .await
-    );
-    assert!(
-        handle_inbound_message(
-            inbound("/resume drop"),
-            &channel_dyn,
-            &foreground_tx,
-            &job_manager,
-            &agent,
-        )
-        .await
-    );
-    assert!(
-        handle_inbound_message(
-            inbound("/resume status"),
-            &channel_dyn,
-            &foreground_tx,
-            &job_manager,
-            &agent,
-        )
-        .await
-    );
-
-    assert!(
-        foreground_rx.try_recv().is_err(),
-        "session commands should not forward to foreground queue"
-    );
-
-    let sent = channel.sent_messages().await;
-    assert_eq!(sent.len(), 3);
-    assert!(sent[0].0.contains("Session context reset."));
-    assert!(
-        sent[1]
-            .0
-            .contains("Saved session context snapshot dropped.")
-    );
-    assert!(
-        sent[2]
-            .0
-            .contains("No saved session context snapshot found.")
-    );
+    if expect_shared_snapshot {
+        assert!(sent[1].0.contains("Saved session context snapshot:"));
+        assert!(sent[1].0.contains("messages=4"));
+    } else {
+        assert!(
+            sent[1]
+                .0
+                .contains("No saved session context snapshot found.")
+        );
+    }
     Ok(())
 }

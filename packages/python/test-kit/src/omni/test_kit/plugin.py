@@ -35,7 +35,7 @@ def pytest_generate_tests(metafunc):
 
     Handles @data_driven marker by loading files relative to the test module.
     """
-    marker = metafunc.definition.get_closest_marker("xiuxian_data_driven")
+    marker = metafunc.definition.get_closest_marker("omni_data_driven")
     if marker:
         data_path = marker.kwargs.get("data_path")
         if data_path:
@@ -51,9 +51,9 @@ def pytest_configure(config):
     """Register markers and make assertions available."""
     # Register custom markers
     config.addinivalue_line(
-        "markers", "xiuxian_data_driven: mark tests for data-driven execution with Omni test-kit"
+        "markers", "omni_data_driven: mark tests for data-driven execution with Omni test-kit"
     )
-    config.addinivalue_line("markers", "xiuxian_skill: mark tests for a specific Omni skill")
+    config.addinivalue_line("markers", "omni_skill: mark tests for a specific Omni skill")
 
     # Register testing layer markers
     config.addinivalue_line("markers", "unit: Fast, isolated tests with mocked dependencies")

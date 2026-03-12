@@ -12,7 +12,7 @@ fn embedded_skill_markdown_is_available() {
     let Some(markdown) = embedded_skill_markdown() else {
         panic!("expected embedded zhixing skill markdown at {ZHIXING_SKILL_DOC_PATH}");
     };
-    assert!(markdown.contains("Skill Manifest: Agenda Management"));
+    assert!(markdown.contains("Agenda Management Skill"));
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn embedded_skill_links_for_qianji_flow_reference_type_returns_semantic_uri()
     let links = embedded_skill_links_for_reference_type("qianji-flow")?;
     assert_eq!(
         links,
-        vec!["wendao://skills/agenda-management/references/agenda_flow.toml".to_string()]
+        vec!["wendao://skills/agenda-management/references/agenda_validation.toml".to_string()]
     );
     Ok(())
 }
@@ -114,8 +114,10 @@ fn embedded_registry_tracks_wendao_uri_links_for_skill_bus()
         )
     );
     assert_eq!(
-        skill_file.links_for_id("agenda_flow"),
-        Some(&["wendao://skills/agenda-management/references/agenda_flow.toml".to_string()][..])
+        skill_file.links_for_id("agenda_validation"),
+        Some(
+            &["wendao://skills/agenda-management/references/agenda_validation.toml".to_string()][..]
+        )
     );
     Ok(())
 }
@@ -137,18 +139,18 @@ fn embedded_resource_text_from_wendao_uri_resolves_persona_payload() {
     ) else {
         panic!("expected semantic URI to resolve embedded steward persona");
     };
-    assert!(content.contains("Pragmatic Agenda Steward"));
+    assert!(content.contains("Agenda Steward Persona"));
 }
 
 #[test]
 fn embedded_resource_text_from_wendao_uri_resolves_qianji_flow_payload() {
     let Some(content) = embedded_resource_text_from_wendao_uri(
-        "wendao://skills/agenda-management/references/agenda_flow.toml",
+        "wendao://skills/agenda-management/references/agenda_validation.toml",
     ) else {
         panic!("expected semantic URI to resolve embedded agenda validation flow");
     };
-    assert!(content.contains("Triangular_Agenda_Governance_Flow"));
-    assert!(content.contains("Professor_Audit"));
+    assert!(content.contains("Agenda_Validation_Pipeline"));
+    assert!(content.contains("Strict_Teacher_Critic"));
 }
 
 #[test]
@@ -159,7 +161,9 @@ fn embedded_resource_text_from_wendao_uri_resolves_teacher_output_protocol() {
         panic!("expected semantic URI to resolve embedded teacher persona");
     };
     assert!(
-        content.contains("<professor_audit>") && content.contains("score (0.0-1.0)"),
-        "teacher persona should define the professor audit output protocol and score assignment rule"
+        content.contains("<agenda_critique_report>")
+            && content.contains("<score>")
+            && content.contains("<critique>"),
+        "teacher persona should require XML critique output with score and critique tags"
     );
 }

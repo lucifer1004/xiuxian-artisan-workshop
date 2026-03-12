@@ -1,7 +1,7 @@
-// Test coverage for xiuxian-daochang behavior.
+//! Test coverage for omni-agent behavior.
 
-use xiuxian_daochang::SessionMemoryRecallDecision;
-use xiuxian_daochang::test_support::{MemoryRecallMetricsState, ratio_as_f32};
+use super::{MemoryRecallMetricsState, ratio_as_f32};
+use crate::agent::SessionMemoryRecallDecision;
 
 fn assert_f32_near(actual: f32, expected: f32, epsilon: f32) {
     assert!(

@@ -1,30 +1,24 @@
-//! Memory-recall metrics helpers exposed for integration tests.
+use super::super::Agent;
+use crate::SessionMemoryRecallDecision;
 
-use crate::agent::memory_recall_metrics as internal;
-use crate::{MemoryRecallMetricsSnapshot, SessionMemoryRecallDecision};
+use super::types::MemoryRecallMetricsSnapshot;
 
-/// Test-facing mutable memory-recall metrics state.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct MemoryRecallMetricsState {
-    inner: internal::MemoryRecallMetricsState,
-}
-
-impl MemoryRecallMetricsState {
-    /// Observe one recall planning attempt.
-    pub fn observe_plan(&mut self) {
-        self.inner.observe_plan();
+impl Agent {
+    pub(crate) async fn record_memory_recall_plan_metrics(&self) {
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_plan();
     }
 
-    /// Observe one recall execution result.
-    pub fn observe_result(
-        &mut self,
+    pub(crate) async fn record_memory_recall_result_metrics(
+        &self,
         decision: SessionMemoryRecallDecision,
         recalled_selected: usize,
         recalled_injected: usize,
         context_chars_injected: usize,
         pipeline_duration_ms: u64,
     ) {
-        self.inner.observe_result(
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_result(
             decision,
             recalled_selected,
             recalled_injected,
@@ -33,35 +27,29 @@ impl MemoryRecallMetricsState {
         );
     }
 
-    /// Observe one successful embedding call.
-    pub fn observe_embedding_success(&mut self) {
-        self.inner.observe_embedding_success();
+    pub(crate) async fn record_memory_embedding_success_metric(&self) {
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_embedding_success();
     }
 
-    /// Observe one embedding timeout event.
-    pub fn observe_embedding_timeout(&mut self) {
-        self.inner.observe_embedding_timeout();
+    pub(crate) async fn record_memory_embedding_timeout_metric(&self) {
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_embedding_timeout();
     }
 
-    /// Observe one embedding cooldown reject event.
-    pub fn observe_embedding_cooldown_reject(&mut self) {
-        self.inner.observe_embedding_cooldown_reject();
+    pub(crate) async fn record_memory_embedding_cooldown_reject_metric(&self) {
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_embedding_cooldown_reject();
     }
 
-    /// Observe one embedding unavailable event.
-    pub fn observe_embedding_unavailable(&mut self) {
-        self.inner.observe_embedding_unavailable();
+    pub(crate) async fn record_memory_embedding_unavailable_metric(&self) {
+        let mut guard = self.memory_recall_metrics.write().await;
+        guard.observe_embedding_unavailable();
     }
 
-    /// Materialize a metrics snapshot from current counters.
-    #[must_use]
-    pub fn snapshot(self) -> MemoryRecallMetricsSnapshot {
-        self.inner.snapshot()
+    /// Return current memory-recall metrics snapshot.
+    pub async fn inspect_memory_recall_metrics(&self) -> MemoryRecallMetricsSnapshot {
+        let guard = self.memory_recall_metrics.read().await;
+        (*guard).snapshot()
     }
-}
-
-/// Safe division helper used by metrics ratios.
-#[must_use]
-pub fn ratio_as_f32(numerator: u64, denominator: u64) -> f32 {
-    internal::ratio_as_f32(numerator, denominator)
 }

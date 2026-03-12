@@ -7,7 +7,7 @@ use super::TelegramChannel;
 
 #[async_trait]
 impl Channel for TelegramChannel {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "telegram"
     }
 

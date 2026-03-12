@@ -1,336 +1,215 @@
+# common/mcp_core/gitops.py
 """
-schema_gen.py - Tool Schema Generator
+GitOps - Single Source of Truth for Project Path Management
 
-Generates machine-readable schemas for all registered MCP Tools.
-Uses Rust resource schemas for cross-language consistency.
+This module provides GitOps-based utilities for project path detection
+and management. All path detection in the project should use these functions.
+
+Core Principles:
+1. Git is the single source of truth for project structure
+2. Deterministic, reproducible paths across environments
+3. Fallback mechanisms for non-git environments (testing)
+
+Reference: numtide/prj-spec conventions
 
 Usage:
-    from omni.core.skills.schema_gen import generate_tool_schemas, export_openapi
+    from common.mcp_core.gitops import get_project_root, get_spec_dir
 
-    # Generate all tool schemas
-    schemas = generate_tool_schemas()
+    root = get_project_root()
+    spec_dir = get_spec_dir()
 
-    # Export as OpenAPI-compatible format
-    openapi = export_openapi()
+GitOps Utilities:
+    - get_project_root(): Get project root from git toplevel
+    - get_git_toplevel(): Direct git toplevel (legacy compatibility)
+    - is_git_repo(): Check if path is a git repository
+    - get_spec_dir(): Get agent/specs directory
+    - get_instructions_dir(): Get agent/instructions directory
+    - get_docs_dir(): Get docs directory
+    - get_agent_dir(): Get agent directory
+    - get_src_dir(): Get src directory
 """
 
-from __future__ import annotations
-
-import json
-from datetime import UTC, datetime
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Optional
 
-# Import registry from tools_loader (populated by @skill_command decorator)
-from omni.core.skills.tools_loader import _skill_command_registry
-from omni.core.skills.variants import get_variant_registry
+# Cache for project root (singleton pattern)
+_project_root: Optional[Path] = None
 
 
-# Optional base tool schema path.
-def _get_tool_schema_path() -> Path:
-    """Resolve optional tool schema path from Rust resource layout."""
-    from omni.foundation.api.schema_locator import resolve_schema_file_path
+def get_project_root() -> Path:
+    """
+    Get the project root directory using GitOps.
 
-    return resolve_schema_file_path(
-        "tool.schema.yaml",
-        preferred_crates=("xiuxian-skills",),
+    This is THE single source of truth for project root detection.
+
+    Priority:
+    1. Git toplevel (git rev-parse --show-toplevel)
+    2. Fallback: Module-based detection (for testing/non-git environments)
+
+    Returns:
+        Path to project root
+
+    Raises:
+        RuntimeError: If no valid project root can be determined
+    """
+    global _project_root
+
+    if _project_root is not None:
+        return _project_root
+
+    # Method 1: Git toplevel (Primary - GitOps)
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            _project_root = Path(result.stdout.strip())
+            return _project_root
+    except Exception:
+        pass
+
+    # Method 2: Current working directory as fallback
+    cwd = Path.cwd()
+    if (cwd / ".git").exists() or (cwd / "justfile").exists():
+        _project_root = cwd
+        return _project_root
+
+    # Should never reach here in production
+    raise RuntimeError(
+        "CRITICAL: Cannot determine project root. "
+        "Not in a git repository and no fallback available. "
+        f"Current working directory: {Path.cwd()}"
     )
 
 
-TOOL_SCHEMA_PATH = _get_tool_schema_path()
-
-
-def get_tool_schemas() -> dict[str, Any]:
-    """Get schemas for all registered tools from decorator metadata.
+def get_spec_dir() -> Path:
+    """
+    Get the directory containing feature specs.
 
     Returns:
-        Dictionary mapping tool names to their schemas.
+        Path to agent/specs/
     """
-    schemas = {}
-
-    # Get commands from registry populated by @skill_command decorator
-    for full_name, func in _skill_command_registry.items():
-        config = getattr(func, "_skill_config", None)
-        if config:
-            schemas[full_name] = _build_tool_schema(full_name, config)
-
-    return schemas
+    return get_project_root() / "agent" / "specs"
 
 
-def _build_tool_schema(name: str, config: dict) -> dict[str, Any]:
-    """Build a tool schema from its config.
+def get_instructions_dir() -> Path:
+    """
+    Get the directory containing LLM instructions.
+
+    Returns:
+        Path to agent/instructions/
+    """
+    return get_project_root() / "agent" / "instructions"
+
+
+def get_docs_dir() -> Path:
+    """
+    Get the directory containing documentation.
+
+    Returns:
+        Path to docs/
+    """
+    return get_project_root() / "docs"
+
+
+def get_agent_dir() -> Path:
+    """
+    Get the agent directory.
+
+    Returns:
+        Path to agent/
+    """
+    return get_project_root() / "agent"
+
+
+def get_src_dir() -> Path:
+    """
+    Get the source directory.
+
+    Returns:
+        Path to src/
+    """
+    return get_project_root() / "src"
+
+
+def is_git_repo(path: Optional[Path] = None) -> bool:
+    """
+    Check if a path is a git repository.
 
     Args:
-        name: Full tool name (e.g., "git.commit")
-        config: Tool configuration from @skill_command decorator
+        path: Path to check (defaults to get_project_root())
 
     Returns:
-        Tool schema dictionary
+        True if the path contains a .git directory
     """
-    # Get variants from registry
-    registry = get_variant_registry()
-    command_name = name.split(".")[-1] if "." in name else name
-    variants = []
-    variant_names = registry.list_variants(command_name)
-
-    for var_name in variant_names:
-        info = registry.get_info(command_name, var_name)
-        if info:
-            variants.append(
-                {
-                    "name": var_name,
-                    "description": info.variant_description,
-                    "priority": info.variant_priority,
-                    "status": info.variant_status.value,
-                }
-            )
-
-    return {
-        "name": config.get("name", name),
-        "description": config.get("description", ""),
-        "category": config.get("category", "general"),
-        "annotations": config.get("annotations", {}),
-        "parameters": config.get("input_schema", {}),
-        "variants": variants,
-        "default_variant": config.get("default_variant"),
-        "execution": config.get("execution", {}),
-    }
+    check_path = path or get_project_root()
+    return (check_path / ".git").exists()
 
 
-def generate_tool_schemas() -> dict[str, Any]:
-    """Generate complete tool schemas document.
-
-    Returns:
-        Complete schema document with metadata and all tools.
+def reset_project_root():
     """
-    tools = []
-    schemas = get_tool_schemas()
+    Reset the cached project root (for testing purposes only).
 
-    for name, schema in schemas.items():
-        tool = schema.copy()
-        tool["name"] = name
-        tools.append(tool)
-
-    return {
-        "$schema": "https://omni.dev/schema/tool/v1",
-        "info": {
-            "name": "Omni-Dev-Fusion MCP Tools",
-            "version": "1.0.0",
-            "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        },
-        "tools": tools,
-    }
-
-
-def export_openapi() -> dict[str, Any]:
-    """Export tool schemas in OpenAPI-compatible format.
-
-    Returns:
-        OpenAPI-compatible specification.
+    WARNING: Do not use this in production code.
     """
-    schemas = generate_tool_schemas()
-
-    # Convert to OpenAPI format
-    openapi = {
-        "openapi": "3.1.0",
-        "info": schemas["info"],
-        "paths": {},
-    }
-
-    for tool in schemas["tools"]:
-        tool_name = tool["name"]
-        parameters = []
-
-        # Convert JSON Schema parameters to OpenAPI
-        input_schema = tool.get("parameters", {})
-        props = input_schema.get("properties", {})
-        required = input_schema.get("required", [])
-
-        openapi_props = {}
-        for prop_name, prop_def in props.items():
-            openapi_prop = {
-                "type": prop_def.get("type", "string"),
-                "description": prop_def.get("description", ""),
-            }
-            if prop_name in required:
-                openapi_prop["required"] = True
-            if "enum" in prop_def:
-                openapi_prop["enum"] = prop_def["enum"]
-            if "default" in prop_def:
-                openapi_prop["default"] = prop_def["default"]
-            openapi_props[prop_name] = openapi_prop
-
-        openapi["paths"][f"/tools/{tool_name}"] = {
-            "post": {
-                "operationId": tool_name.replace(".", "_"),
-                "summary": tool.get("description", ""),
-                "description": tool.get("description", ""),
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": openapi_props,
-                                "required": required,
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Successful response",
-                        "content": {
-                            "application/json": {
-                                "schema": {"$ref": "#/components/schemas/ToolResponse"}
-                            }
-                        },
-                    }
-                },
-            }
-        }
-
-    # Add ToolResponse schema
-    openapi["components"] = {
-        "schemas": {
-            "ToolResponse": {
-                "type": "object",
-                "properties": {
-                    "status": {
-                        "type": "string",
-                        "enum": ["success", "error", "blocked", "partial"],
-                    },
-                    "data": {},
-                    "error_message": {"type": "string"},
-                    "error_code": {"type": "string"},
-                    "metadata": {"type": "object"},
-                    "timestamp": {"type": "string", "format": "date-time"},
-                },
-            }
-        }
-    }
-
-    return openapi
+    global _project_root
+    _project_root = None
 
 
-def export_json_schema() -> dict[str, Any]:
-    """Export tool schemas as JSON Schema.
-
-    Returns:
-        JSON Schema document.
+def is_project_root(path: Path) -> bool:
     """
-    schemas = generate_tool_schemas()
-
-    # Load the base tool schema (YAML file)
-    base_schema: dict[str, Any] = {}
-    if TOOL_SCHEMA_PATH.exists():
-        try:
-            import yaml
-
-            with open(TOOL_SCHEMA_PATH) as f:
-                base_schema = yaml.safe_load(f) or {}
-        except ImportError:
-            # Fallback if PyYAML not available
-            pass
-
-    # Combine with generated schemas
-    return {
-        "$schema": base_schema.get("$schema", "http://json-schema.org/draft-07/schema#"),
-        "$id": base_schema.get("$id", "https://omni.dev/schema/tool/v1"),
-        "info": schemas["info"],
-        "tools": schemas["tools"],
-    }
-
-
-def save_schemas(output_path: str | Path | None = None) -> Path:
-    """Save generated schemas to file.
+    Check if a path is the project root.
 
     Args:
-        output_path: Output file path (optional)
+        path: Path to check
 
     Returns:
-        Path to saved file.
+        True if this appears to be the project root
     """
-    schemas = generate_tool_schemas()
-
-    if output_path is None:
-        try:
-            from omni.foundation.runtime.gitops import get_project_root
-
-            output_path = get_project_root() / "tool_schemas.json"
-        except Exception:
-            output_path = Path.cwd() / "tool_schemas.json"
-
-    def _json_default(value: Any) -> Any:
-        # Decorator metadata may include Python types/classes; encode safely.
-        if isinstance(value, type):
-            return value.__name__
-        return str(value)
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(schemas, f, indent=2, ensure_ascii=False, default=_json_default)
-
-    return Path(output_path)
+    return (
+        (path / ".git").exists() or (path / "justfile").exists() or (path / "devenv.nix").exists()
+    )
 
 
-def load_schemas(path: str | Path) -> dict[str, Any]:
-    """Load tool schemas from file.
-
-    Args:
-        path: Path to schema file
+# For backwards compatibility, also expose the git toplevel function
+def get_git_toplevel() -> Optional[Path]:
+    """
+    Get git toplevel directory (legacy function, use get_project_root()).
 
     Returns:
-        Loaded schema document.
+        Path to git repository root or None
     """
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except Exception:
+        pass
+    return None
 
 
-def get_tool_schema(tool_name: str) -> dict[str, Any] | None:
-    """Get schema for a specific tool.
-
-    Args:
-        tool_name: Full tool name (e.g., "git.commit")
-
-    Returns:
-        Tool schema or None if not found.
-    """
-    schemas = get_tool_schemas()
-    return schemas.get(tool_name)
-
-
-def validate_tool_call(tool_name: str, arguments: dict) -> tuple[bool, list[str]]:
-    """Validate arguments against tool schema.
-
-    Args:
-        tool_name: Full tool name
-        arguments: Provided arguments
-
-    Returns:
-        Tuple of (is_valid, error_messages)
-    """
-    schema = get_tool_schema(tool_name)
-    if schema is None:
-        return False, [f"Tool not found: {tool_name}"]
-
-    errors = []
-    params = schema.get("parameters", {})
-    props = params.get("properties", {})
-    required = params.get("required", [])
-
-    # Check required fields
-    for field in required:
-        if field not in arguments or arguments.get(field) is None:
-            errors.append(f"Missing required field: {field}")
-
-    # Validate types
-    for field, value in arguments.items():
-        if field in props:
-            expected_type = props[field].get("type", "string")
-            actual_type = type(value).__name__
-
-            if (expected_type == "array" and not isinstance(value, list)) or (
-                expected_type == "object" and not isinstance(value, dict)
-            ):
-                errors.append(f"Field '{field}': expected {expected_type}, got {actual_type}")
-
-    return len(errors) == 0, errors
+__all__ = [
+    "get_project_root",
+    "get_spec_dir",
+    "get_instructions_dir",
+    "get_docs_dir",
+    "get_agent_dir",
+    "get_src_dir",
+    "reset_project_root",
+    "is_project_root",
+    "is_git_repo",
+    "get_git_toplevel",  # Legacy compatibility
+]

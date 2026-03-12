@@ -7,7 +7,6 @@ mod scheduler;
 pub use heartbeat::{
     HeartbeatProbeState, JobHealthState, classify_heartbeat_probe_result, classify_job_health,
 };
-pub(crate) use manager::append_completion_to_parent_session;
 pub use manager::{
     JobCompletion, JobCompletionKind, JobManager, JobManagerConfig, JobMetricsSnapshot, JobState,
     JobStatusSnapshot, TurnRunner,

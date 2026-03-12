@@ -146,7 +146,7 @@ impl LinkGraphIndexSnapshot {
             .into_iter()
             .map(|(k, v)| (k, v.into_document()))
             .collect();
-        LinkGraphIndex {
+        let mut index = LinkGraphIndex {
             root: self.root,
             include_dirs: self.include_dirs,
             excluded_dirs: self.excluded_dirs,
@@ -154,12 +154,16 @@ impl LinkGraphIndexSnapshot {
             passages_by_id: self.passages_by_id,
             sections_by_doc: self.sections_by_doc,
             attachments_by_doc: self.attachments_by_doc,
+            trees_by_doc: HashMap::new(),
+            node_parent_map: HashMap::new(),
             alias_to_doc_id: self.alias_to_doc_id,
             outgoing: self.outgoing,
             incoming: self.incoming,
             rank_by_id: self.rank_by_id,
             edge_count: self.edge_count,
-        }
+        };
+        index.rebuild_all_page_indices();
+        index
     }
 
     pub(super) fn root(&self) -> &PathBuf {

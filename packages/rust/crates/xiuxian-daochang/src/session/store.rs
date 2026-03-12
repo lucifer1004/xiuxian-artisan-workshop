@@ -1,259 +1,198 @@
-//! In-memory session store: `session_id` -> chat messages.
+use super::*;
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-
-use anyhow::{Context, Result};
-
-use crate::observability::SessionEvent;
-
-use super::message::ChatMessage;
-use super::redis_backend::{RedisSessionBackend, RedisSessionRuntimeSnapshot};
-
-/// In-memory store: `session_id` -> list of messages.
-pub struct SessionStore {
-    inner: Arc<RwLock<HashMap<String, Vec<ChatMessage>>>>,
-    redis: Option<Arc<RedisSessionBackend>>,
-}
-
-impl SessionStore {
-    fn from_redis_backend(redis: Option<Arc<RedisSessionBackend>>) -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(HashMap::new())),
-            redis,
-        }
-    }
-
-    /// Create a new empty session store.
-    ///
-    /// # Errors
-    /// Returns an error when Valkey-backed runtime initialization fails.
-    pub fn new() -> Result<Self> {
-        let redis = match RedisSessionBackend::from_env() {
-            Some(Ok(backend)) => {
-                tracing::info!(
-                    event = SessionEvent::SessionBackendEnabled.as_str(),
-                    key_prefix = %backend.key_prefix(),
-                    ttl_secs = ?backend.ttl_secs(),
-                    message_content_max_chars = ?backend.runtime_snapshot().message_content_max_chars,
-                    "session store backend enabled: valkey"
-                );
-                Some(Arc::new(backend))
-            }
-            Some(Err(error)) => {
-                return Err(error).context("failed to initialize valkey session store");
-            }
-            None => None,
-        };
-        Ok(Self::from_redis_backend(redis))
-    }
-
-    /// Create a store with explicit Valkey backend parameters.
-    ///
-    /// # Errors
-    /// Returns an error when Valkey backend creation fails.
-    pub fn new_with_redis(
-        redis_url: impl Into<String>,
-        key_prefix: Option<String>,
-        ttl_secs: Option<u64>,
-    ) -> Result<Self> {
-        let backend = RedisSessionBackend::new_from_parts(redis_url.into(), key_prefix, ttl_secs)?;
-        Ok(Self::from_redis_backend(Some(Arc::new(backend))))
-    }
-
-    /// Append messages for a session.
-    ///
-    /// # Errors
-    /// Returns an error when persisting to Valkey fails.
-    pub async fn append(&self, session_id: &str, messages: Vec<ChatMessage>) -> Result<()> {
-        if messages.is_empty() {
-            return Ok(());
-        }
-        if let Some(ref redis) = self.redis {
-            redis
-                .append_messages(session_id, &messages)
-                .await
-                .with_context(|| {
-                    format!("valkey session append failed for session_id={session_id}")
-                })?;
-            tracing::debug!(
-                event = SessionEvent::SessionMessagesAppended.as_str(),
-                session_id,
-                appended_messages = messages.len(),
-                backend = "valkey",
-                "session messages appended"
-            );
-            return Ok(());
-        }
-        let mut g = self.inner.write().await;
-        let entry = g.entry(session_id.to_string()).or_default();
-        entry.extend(messages);
-        tracing::debug!(
-            event = SessionEvent::SessionMessagesAppended.as_str(),
-            session_id,
-            total_messages = entry.len(),
-            backend = "memory",
-            "session messages appended"
-        );
-        Ok(())
-    }
-
-    /// Get a copy of the message history for a session.
-    ///
-    /// # Errors
-    /// Returns an error when reading session history from Valkey fails.
-    pub async fn get(&self, session_id: &str) -> Result<Vec<ChatMessage>> {
-        if let Some(ref redis) = self.redis {
-            let messages = redis.get_messages(session_id).await.with_context(|| {
-                format!("valkey session read failed for session_id={session_id}")
-            })?;
-            tracing::debug!(
-                event = SessionEvent::SessionMessagesLoaded.as_str(),
-                session_id,
-                loaded_messages = messages.len(),
-                backend = "valkey",
-                "session messages loaded"
-            );
-            return Ok(messages);
-        }
-        let g = self.inner.read().await;
-        let messages = g.get(session_id).cloned().unwrap_or_default();
-        tracing::debug!(
-            event = SessionEvent::SessionMessagesLoaded.as_str(),
-            session_id,
-            loaded_messages = messages.len(),
-            backend = "memory",
-            "session messages loaded"
-        );
-        Ok(messages)
-    }
-
-    /// Replace full history for a session atomically.
-    ///
-    /// # Errors
-    /// Returns an error when replacing session history in Valkey fails.
-    pub async fn replace(&self, session_id: &str, messages: Vec<ChatMessage>) -> Result<()> {
-        if let Some(ref redis) = self.redis {
-            let replaced_count = redis
-                .replace_messages(session_id, &messages)
-                .await
-                .with_context(|| {
-                    format!("valkey session replace failed for session_id={session_id}")
-                })?;
-            tracing::debug!(
-                event = SessionEvent::SessionMessagesReplaced.as_str(),
-                session_id,
-                replaced_messages = replaced_count,
-                backend = "valkey",
-                "session messages replaced"
-            );
-            return Ok(());
-        }
-        let mut g = self.inner.write().await;
-        if messages.is_empty() {
-            g.remove(session_id);
-        } else {
-            g.insert(session_id.to_string(), messages);
-        }
-        let replaced_messages = g.get(session_id).map_or(0, Vec::len);
-        tracing::debug!(
-            event = SessionEvent::SessionMessagesReplaced.as_str(),
-            session_id,
-            replaced_messages,
-            backend = "memory",
-            "session messages replaced"
-        );
-        Ok(())
-    }
-
-    /// Get message count for a session without loading the full payload.
-    ///
-    /// # Errors
-    /// Returns an error when reading message count from Valkey fails.
-    pub async fn len(&self, session_id: &str) -> Result<usize> {
-        if let Some(ref redis) = self.redis {
-            let message_count = redis.get_messages_len(session_id).await.with_context(|| {
-                format!("valkey session length read failed for session_id={session_id}")
-            })?;
-            tracing::debug!(
-                event = SessionEvent::SessionMessagesLoaded.as_str(),
-                session_id,
-                loaded_messages = message_count,
-                backend = "valkey",
-                count_only = true,
-                "session message count loaded"
-            );
-            return Ok(message_count);
-        }
-
-        let g = self.inner.read().await;
-        let message_count = g.get(session_id).map_or(0, Vec::len);
-        tracing::debug!(
-            event = SessionEvent::SessionMessagesLoaded.as_str(),
-            session_id,
-            loaded_messages = message_count,
-            backend = "memory",
-            count_only = true,
-            "session message count loaded"
-        );
-        Ok(message_count)
-    }
-
-    /// Clear history for a session.
-    ///
-    /// # Errors
-    /// Returns an error when clearing Valkey session state fails.
-    pub async fn clear(&self, session_id: &str) -> Result<()> {
-        if let Some(ref redis) = self.redis {
-            redis.clear_messages(session_id).await.with_context(|| {
-                format!("valkey session clear failed for session_id={session_id}")
-            })?;
-            tracing::debug!(
-                event = SessionEvent::SessionMessagesCleared.as_str(),
-                session_id,
-                backend = "valkey",
-                "session messages cleared"
-            );
-            return Ok(());
-        }
-        let mut g = self.inner.write().await;
-        g.remove(session_id);
-        tracing::debug!(
-            event = SessionEvent::SessionMessagesCleared.as_str(),
-            session_id,
-            backend = "memory",
-            "session messages cleared"
-        );
-        Ok(())
-    }
-
-    /// Publish a structured event into Valkey stream backend.
-    ///
-    /// Returns `Ok(None)` when Valkey backend is disabled.
-    ///
-    /// # Errors
-    /// Returns an error when publishing the event into Valkey stream fails.
-    pub(crate) async fn publish_stream_event(
+impl Agent {
+    pub(in crate::agent) async fn handle_shortcuts(
         &self,
-        stream_name: &str,
-        fields: Vec<(String, String)>,
+        session_id: &str,
+        user_message_owned: &mut String,
+        force_react: &mut bool,
+        turn_id: u64,
     ) -> Result<Option<String>> {
-        if let Some(ref redis) = self.redis {
-            let event_id = redis
-                .publish_stream_event(stream_name, &fields)
-                .await
-                .with_context(|| {
-                    format!("valkey stream publish failed for stream_name={stream_name}")
-                })?;
-            return Ok(Some(event_id));
-        }
-        Ok(None)
-    }
+        if !*force_react
+            && let Some(shortcut) = parse_workflow_bridge_shortcut(user_message_owned.as_str())
+        {
+            let decision = omega::decide_for_shortcut(
+                shortcut.mode,
+                user_message_owned.as_str(),
+                &shortcut.tool_name,
+            );
+            self.record_omega_decision(
+                session_id,
+                &decision,
+                Some(shortcut.mode),
+                Some(shortcut.tool_name.as_str()),
+            );
 
-    pub(crate) fn redis_runtime_snapshot(&self) -> Option<RedisSessionRuntimeSnapshot> {
-        self.redis
-            .as_ref()
-            .map(|backend| backend.runtime_snapshot())
+            if decision.route == OmegaRoute::Graph {
+                let shortcut_snapshot = self
+                    .build_shortcut_injection_snapshot(
+                        session_id,
+                        turn_id,
+                        user_message_owned.as_str(),
+                    )
+                    .await?;
+                if let Some(snapshot) = &shortcut_snapshot {
+                    self.record_injection_snapshot(session_id, snapshot);
+                }
+                let graph_plan =
+                    graph::build_shortcut_plan(shortcut.mode, &decision, &shortcut.tool_name);
+                self.record_graph_plan(session_id, &graph_plan);
+                let arguments = injection::augment_shortcut_arguments(
+                    shortcut.arguments.clone(),
+                    shortcut_snapshot.as_ref(),
+                    &decision,
+                    shortcut.mode,
+                    Some(&graph_plan),
+                );
+
+                let execution = self
+                    .execute_graph_shortcut_plan(
+                        session_id,
+                        &decision,
+                        &graph_plan,
+                        graph::GraphPlanExecutionInput {
+                            workflow_mode: shortcut.mode,
+                            turn_id,
+                            shortcut_user_message: user_message_owned.clone(),
+                            bridge_arguments_with_metadata: arguments,
+                            bridge_arguments_without_metadata: shortcut.arguments.clone(),
+                            injection: shortcut_snapshot.as_ref().map(|snapshot| {
+                                RouteTraceInjection {
+                                    blocks_used: snapshot.blocks.len() as u64,
+                                    chars_injected: snapshot.total_chars as u64,
+                                    dropped_by_budget: snapshot.dropped_block_ids.len() as u64,
+                                }
+                            }),
+                        },
+                    )
+                    .await;
+
+                let completed = match execution {
+                    Ok(graph::GraphPlanExecutionOutcome::Completed {
+                        output,
+                        tool_summary,
+                    }) => Some((output, tool_summary)),
+                    Ok(graph::GraphPlanExecutionOutcome::RouteToReact {
+                        rewritten_user_message,
+                        tool_summary: _tool_summary,
+                    }) => {
+                        *force_react = true;
+                        *user_message_owned = rewritten_user_message;
+                        None
+                    }
+                    Err(graph::GraphPlanExecutionError {
+                        error,
+                        tool_summary,
+                    }) => {
+                        let error_text = error.to_string();
+                        let _ = self
+                            .update_recall_feedback(
+                                session_id,
+                                user_message_owned.as_str(),
+                                &error_text,
+                                Some(&tool_summary),
+                            )
+                            .await;
+                        self.reflect_turn_and_update_policy_hint(
+                            session_id,
+                            turn_id,
+                            decision.route,
+                            user_message_owned.as_str(),
+                            &error_text,
+                            "error",
+                            tool_summary.attempted,
+                        )
+                        .await;
+                        return Err(error);
+                    }
+                };
+                if let Some((out, tool_summary)) = completed {
+                    let _ = self
+                        .update_recall_feedback(
+                            session_id,
+                            user_message_owned.as_str(),
+                            &out,
+                            Some(&tool_summary),
+                        )
+                        .await;
+                    let effective_tool_count = tool_summary.attempted.max(1);
+                    self.append_turn_to_session(
+                        session_id,
+                        user_message_owned.as_str(),
+                        &out,
+                        effective_tool_count,
+                    )
+                    .await?;
+                    self.reflect_turn_and_update_policy_hint(
+                        session_id,
+                        turn_id,
+                        decision.route,
+                        user_message_owned.as_str(),
+                        &out,
+                        "completed",
+                        tool_summary.attempted,
+                    )
+                    .await;
+                    return Ok(Some(out));
+                }
+            } else {
+                *force_react = true;
+            }
+        }
+
+        let user_message = user_message_owned.as_str();
+        if !*force_react && let Some(shortcut) = parse_crawl_shortcut(user_message) {
+            let mut tool_summary = ToolExecutionSummary::default();
+            let out = match self
+                .call_mcp_tool_with_diagnostics(CRAWL_TOOL_NAME, Some(shortcut.to_arguments()))
+                .await
+            {
+                Ok(output) => {
+                    tool_summary.record_result(output.is_error);
+                    output.text
+                }
+                Err(error) => {
+                    tool_summary.record_transport_failure();
+                    let error_text = error.to_string();
+                    let _ = self
+                        .update_recall_feedback(
+                            session_id,
+                            user_message,
+                            &error_text,
+                            Some(&tool_summary),
+                        )
+                        .await;
+                    self.reflect_turn_and_update_policy_hint(
+                        session_id,
+                        turn_id,
+                        OmegaRoute::React,
+                        user_message,
+                        &error_text,
+                        "error",
+                        tool_summary.attempted,
+                    )
+                    .await;
+                    return Err(error);
+                }
+            };
+            let _ = self
+                .update_recall_feedback(session_id, user_message, &out, Some(&tool_summary))
+                .await;
+            self.append_turn_to_session(session_id, user_message, &out, 1)
+                .await?;
+            self.reflect_turn_and_update_policy_hint(
+                session_id,
+                turn_id,
+                OmegaRoute::React,
+                user_message,
+                &out,
+                "completed",
+                tool_summary.attempted,
+            )
+            .await;
+            return Ok(Some(out));
+        }
+
+        Ok(None)
     }
 }

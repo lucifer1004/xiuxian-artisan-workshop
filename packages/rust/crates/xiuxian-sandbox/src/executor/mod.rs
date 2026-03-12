@@ -1,294 +1,237 @@
-//! Sandbox executor implementations
+//! Script Scanner - Direct Python Bindings
 //!
-//! Executes pre-generated sandbox configurations.
-//! This module does NOT parse NCL - it reads exported JSON.
+//! Provides direct Python bindings for scanning skill tools.
+//! Scans all directories defined in settings.yaml's skills.architecture.
+//!
+//! Added scan_skill() and scan_skill_from_content() for parsing
+//! SKILL.md frontmatter (replaces python-frontmatter dependency).
 
+use crate::vector::PyToolRecord;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTuple};
+use skills_scanner::SkillMetadata;
 use std::path::Path;
-use std::time::Instant;
-use tokio::process::Command;
+use xiuxian_vector::{SkillScanner, ToolsScanner};
 
-/// Unified sandbox configuration (from NCL-exported JSON)
+/// Python wrapper for SkillMetadata
 #[pyclass]
 #[derive(Debug, Clone)]
-pub struct SandboxConfig {
-    /// Unique skill identifier
+pub struct PySkillMetadata {
+    /// Skill name (typically derived from directory name)
     #[pyo3(get)]
-    pub skill_id: String,
-
-    /// Execution mode: "EXEC" or "ONCE"
+    pub skill_name: String,
+    /// Version from frontmatter (e.g., "1.0.0")
     #[pyo3(get)]
-    pub mode: String,
-
-    /// Container hostname
+    pub version: String,
+    /// Human-readable description of the skill
     #[pyo3(get)]
-    pub hostname: String,
-
-    /// Command to execute
+    pub description: String,
+    /// Skill authors
     #[pyo3(get)]
-    pub cmd: Vec<String>,
-
-    /// Environment variables
+    pub authors: Vec<String>,
+    /// Keywords for semantic routing and hybrid search
     #[pyo3(get)]
-    pub env: Vec<String>,
-
-    /// Mount configurations
+    pub routing_keywords: Vec<String>,
+    /// Supported intents/actions
     #[pyo3(get)]
-    pub mounts: Vec<MountConfig>,
-
-    /// Max memory in bytes
+    pub intents: Vec<String>,
+    /// External documentation references
     #[pyo3(get)]
-    pub rlimit_as: u64,
-
-    /// Max CPU seconds
+    pub require_refs: Vec<String>,
+    /// Repository URL for trusted source verification
     #[pyo3(get)]
-    pub rlimit_cpu: u64,
-
-    /// Max file size in bytes
-    #[pyo3(get)]
-    pub rlimit_fsize: u64,
-
-    /// Seccomp mode (0=disabled, 2=enabled)
-    #[pyo3(get)]
-    pub seccomp_mode: u32,
-
-    /// Log level
-    #[pyo3(get)]
-    pub log_level: String,
+    pub repository: String,
 }
 
-#[pymethods]
-impl SandboxConfig {
-    #[new]
-    #[pyo3(signature = (*args, **kwargs))]
-    fn new(args: &Bound<'_, PyTuple>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
-        if !args.is_empty() {
-            if let Some(dict) = kwargs
-                && !dict.is_empty()
-            {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
-                    "SandboxConfig accepts either positional arguments or keyword arguments, not both.",
-                ));
+impl From<SkillMetadata> for PySkillMetadata {
+    fn from(m: SkillMetadata) -> Self {
+        Self {
+            skill_name: m.skill_name,
+            version: m.version,
+            description: m.description,
+            authors: m.authors,
+            routing_keywords: m.routing_keywords,
+            intents: m.intents,
+            require_refs: m.require_refs.into_iter().map(|r| r.to_string()).collect(),
+            repository: m.repository,
+        }
+    }
+}
+
+/// Scan a skills directory and return discovered tools.
+///
+/// This function uses the Rust ast-grep scanner to find all Python functions
+/// decorated with @skill_command in the scripts/ directory of each skill.
+///
+/// Args:
+///   base_path: Base directory containing skills (e.g., "assets/skills")
+///
+/// Returns:
+///   List of PyToolRecord objects with discovered tools
+#[pyfunction]
+#[pyo3(signature = (base_path))]
+pub fn scan_skill_tools(base_path: String) -> Vec<PyToolRecord> {
+    let skill_scanner = SkillScanner::new();
+    let script_scanner = ToolsScanner::new();
+    let skills_path = Path::new(&base_path);
+
+    if !skills_path.exists() {
+        return Vec::new();
+    }
+
+    // Step 1: Scan SKILL.md files to get routing_keywords
+    match skill_scanner.scan_all(skills_path, None) {
+        Ok(metadatas) => {
+            // Step 2: For each skill, scan ONLY the scripts/ directory
+            // (consistent with export behavior in scan_all_full_to_index)
+            let mut tools_map: std::collections::HashMap<String, xiuxian_vector::ToolRecord> =
+                std::collections::HashMap::new();
+
+            for metadata in &metadatas {
+                let skill_path = skills_path.join(&metadata.skill_name);
+                let scripts_path = skill_path.join("scripts");
+
+                if scripts_path.exists() {
+                    if let Ok(tools) = script_scanner.scan_scripts(
+                        &scripts_path,
+                        &metadata.skill_name,
+                        &metadata.routing_keywords,
+                        &[], // Pass empty intents
+                    ) {
+                        // Deduplicate by tool_name (keep first occurrence)
+                        for tool in tools {
+                            let tool_key = format!("{}.{}", tool.skill_name, tool.tool_name);
+                            if !tools_map.contains_key(&tool_key) {
+                                tools_map.insert(tool_key, tool);
+                            }
+                        }
+                    }
+                }
             }
-            return Self::from_positional_args(args);
-        }
 
-        if let Some(dict) = kwargs
-            && !dict.is_empty()
-        {
-            return Self::from_keyword_args(dict);
+            tools_map.into_iter().map(|(_, t)| t.into()).collect()
         }
-
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            "SandboxConfig requires 11 positional arguments or named keyword arguments.",
-        ))
+        Err(_) => Vec::new(),
     }
 }
 
-impl SandboxConfig {
-    fn from_positional_args(args: &Bound<'_, PyTuple>) -> PyResult<Self> {
-        if args.len() != 11 {
-            return Err(pyo3::exceptions::PyTypeError::new_err(format!(
-                "SandboxConfig expected 11 positional arguments, got {}.",
-                args.len()
-            )));
-        }
+/// Scan a single skill directory and return its metadata (SKILL.md frontmatter).
+///
+/// This function parses the SKILL.md file in a skill directory and returns
+/// the metadata as a PySkillMetadata object.
+///
+/// Args:
+///   skill_path: Path to the skill directory (e.g., "assets/skills/git")
+///
+/// Returns:
+///   PySkillMetadata if successful, None if skill not found or invalid
+#[pyfunction]
+#[pyo3(signature = (skill_path))]
+pub fn scan_skill(skill_path: String) -> Option<PySkillMetadata> {
+    let scanner = SkillScanner::new();
+    let path = std::path::Path::new(&skill_path);
 
-        Ok(Self {
-            skill_id: args.get_item(0)?.extract()?,
-            mode: args.get_item(1)?.extract()?,
-            hostname: args.get_item(2)?.extract()?,
-            cmd: args.get_item(3)?.extract()?,
-            env: args.get_item(4)?.extract()?,
-            mounts: args.get_item(5)?.extract()?,
-            rlimit_as: args.get_item(6)?.extract()?,
-            rlimit_cpu: args.get_item(7)?.extract()?,
-            rlimit_fsize: args.get_item(8)?.extract()?,
-            seccomp_mode: args.get_item(9)?.extract()?,
-            log_level: args.get_item(10)?.extract()?,
-        })
+    if !path.exists() || !path.is_dir() {
+        return None;
     }
 
-    fn from_keyword_args(kwargs: &Bound<'_, PyDict>) -> PyResult<Self> {
-        fn required<'py>(kwargs: &Bound<'py, PyDict>, key: &str) -> PyResult<Bound<'py, PyAny>> {
-            kwargs.get_item(key)?.ok_or_else(|| {
-                pyo3::exceptions::PyTypeError::new_err(format!(
-                    "SandboxConfig missing required argument: {key}."
-                ))
-            })
-        }
-
-        Ok(Self {
-            skill_id: required(kwargs, "skill_id")?.extract()?,
-            mode: required(kwargs, "mode")?.extract()?,
-            hostname: required(kwargs, "hostname")?.extract()?,
-            cmd: required(kwargs, "cmd")?.extract()?,
-            env: required(kwargs, "env")?.extract()?,
-            mounts: required(kwargs, "mounts")?.extract()?,
-            rlimit_as: required(kwargs, "rlimit_as")?.extract()?,
-            rlimit_cpu: required(kwargs, "rlimit_cpu")?.extract()?,
-            rlimit_fsize: required(kwargs, "rlimit_fsize")?.extract()?,
-            seccomp_mode: required(kwargs, "seccomp_mode")?.extract()?,
-            log_level: required(kwargs, "log_level")?.extract()?,
-        })
+    match scanner.scan_skill(path, None) {
+        Ok(Some(metadata)) => Some(metadata.into()),
+        Ok(None) | Err(_) => None,
     }
 }
 
-/// Mount configuration
-#[pyclass]
-#[derive(Debug, Clone)]
-pub struct MountConfig {
-    /// Source path
-    #[pyo3(get)]
-    pub src: String,
+/// Parse SKILL.md content string and return metadata.
+///
+/// This function is useful for testing or when the content is already
+/// available as a string (e.g., from a database or API).
+///
+/// Args:
+///   content: The raw SKILL.md content including frontmatter
+///   skill_name: Name of the skill (used for temporary file creation)
+///
+/// Returns:
+///   PySkillMetadata with default values if parsing fails
+#[pyfunction]
+#[pyo3(signature = (content, skill_name))]
+pub fn scan_skill_from_content(content: &str, skill_name: String) -> PySkillMetadata {
+    let scanner = SkillScanner::new();
+    let temp_path = std::path::Path::new("/tmp").join(&skill_name);
 
-    /// Destination path
-    #[pyo3(get)]
-    pub dst: String,
-
-    /// Filesystem type
-    #[pyo3(get)]
-    pub fstype: String,
-
-    /// Read-write access
-    #[pyo3(get)]
-    pub rw: bool,
-}
-
-#[pymethods]
-impl MountConfig {
-    #[new]
-    fn new(src: String, dst: String, fstype: String, rw: bool) -> Self {
-        MountConfig {
-            src,
-            dst,
-            fstype,
-            rw,
-        }
-    }
-}
-
-/// Execution result returned to Python
-#[pyclass]
-#[derive(Debug, Clone)]
-pub struct ExecutionResult {
-    /// Whether execution succeeded
-    #[pyo3(get)]
-    pub success: bool,
-
-    /// Process exit code
-    #[pyo3(get)]
-    pub exit_code: Option<i32>,
-
-    /// Standard output
-    #[pyo3(get)]
-    pub stdout: String,
-
-    /// Standard error
-    #[pyo3(get)]
-    pub stderr: String,
-
-    /// Execution time in milliseconds
-    #[pyo3(get)]
-    pub execution_time_ms: u64,
-
-    /// Memory used in bytes
-    #[pyo3(get)]
-    pub memory_used_bytes: Option<u64>,
-
-    /// Error message if failed
-    #[pyo3(get)]
-    pub error: Option<String>,
-}
-
-#[pymethods]
-impl ExecutionResult {
-    #[new]
-    fn new(
-        success: bool,
-        exit_code: Option<i32>,
-        stdout: String,
-        stderr: String,
-        execution_time_ms: u64,
-        memory_used_bytes: Option<u64>,
-        error: Option<String>,
-    ) -> Self {
-        ExecutionResult {
-            success,
-            exit_code,
-            stdout,
-            stderr,
-            execution_time_ms,
-            memory_used_bytes,
-            error,
-        }
-    }
-}
-
-/// Sandbox executor trait - unified interface for all sandbox backends
-#[async_trait::async_trait]
-pub trait SandboxExecutor: Send + Sync {
-    /// Execute a skill in the sandbox
-    async fn execute(&self, config_path: &Path, input: &str) -> Result<ExecutionResult, String>;
-
-    /// Get the executor name (e.g., "nsjail", "seatbelt")
-    fn name(&self) -> &'static str;
-}
-
-fn millis_to_u64(ms: u128) -> u64 {
-    u64::try_from(ms).unwrap_or(u64::MAX)
-}
-
-/// Execute a command with resource limits
-async fn execute_with_limits(
-    mut cmd: Command,
-    timeout_secs: u64,
-    _max_memory_bytes: u64,
-) -> Result<ExecutionResult, String> {
-    use tokio::time::timeout;
-
-    let start_time = Instant::now();
-
-    // Execute with timeout
-    match timeout(std::time::Duration::from_secs(timeout_secs), cmd.output()).await {
-        Ok(output) => match output {
-            Ok(o) => {
-                let elapsed = start_time.elapsed();
-                Ok(ExecutionResult {
-                    success: o.status.success(),
-                    exit_code: o.status.code(),
-                    stdout: String::from_utf8_lossy(&o.stdout).to_string(),
-                    stderr: String::from_utf8_lossy(&o.stderr).to_string(),
-                    execution_time_ms: millis_to_u64(elapsed.as_millis()),
-                    memory_used_bytes: None,
-                    error: None,
-                })
-            }
-            Err(e) => Ok(ExecutionResult {
-                success: false,
-                exit_code: None,
-                stdout: String::new(),
-                stderr: String::new(),
-                execution_time_ms: millis_to_u64(start_time.elapsed().as_millis()),
-                memory_used_bytes: None,
-                error: Some(format!("Failed to execute: {e}")),
-            }),
+    match scanner.parse_skill_md(content, &temp_path) {
+        Ok(metadata) => metadata.into(),
+        Err(_) => PySkillMetadata {
+            skill_name,
+            version: "0.0.0".to_string(),
+            description: String::new(),
+            authors: Vec::new(),
+            routing_keywords: Vec::new(),
+            intents: Vec::new(),
+            require_refs: Vec::new(),
+            repository: String::new(),
         },
-        Err(_) => Ok(ExecutionResult {
-            success: false,
-            exit_code: Some(-1),
-            stdout: String::new(),
-            stderr: String::from("Timeout: execution exceeded limit"),
-            execution_time_ms: millis_to_u64(start_time.elapsed().as_millis()),
-            memory_used_bytes: None,
-            error: Some(String::from("Timeout")),
-        }),
     }
 }
 
-mod nsjail;
-mod seatbelt;
+/// Python wrapper for SyncReport
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct PySyncReport {
+    /// Tools that are new and need to be added
+    #[pyo3(get)]
+    pub added: Vec<PyToolRecord>,
+    /// Tools that have changed and need to be updated
+    #[pyo3(get)]
+    pub updated: Vec<PyToolRecord>,
+    /// Tool names that were deleted
+    #[pyo3(get)]
+    pub deleted: Vec<String>,
+    /// Count of unchanged tools (fast path hit)
+    #[pyo3(get)]
+    pub unchanged_count: usize,
+}
 
-pub use nsjail::NsJailExecutor;
-pub use seatbelt::SeatbeltExecutor;
+impl From<skills_scanner::SyncReport> for PySyncReport {
+    fn from(report: skills_scanner::SyncReport) -> Self {
+        Self {
+            added: report.added.into_iter().map(|t| t.into()).collect(),
+            updated: report.updated.into_iter().map(|t| t.into()).collect(),
+            deleted: report.deleted,
+            unchanged_count: report.unchanged_count,
+        }
+    }
+}
+
+/// Calculate sync operations between scanned tools and existing index.
+///
+/// Uses file_hash for fast-path comparison to skip unchanged tools.
+/// Returns a report with lists of added, updated, deleted, and unchanged tools.
+///
+/// Args:
+///   scanned_tools_json: JSON array of scanned ToolRecord objects
+///   existing_tools_json: JSON array of existing IndexToolEntry objects
+///
+/// Returns:
+///   PySyncReport with sync operation details
+#[pyfunction]
+#[pyo3(signature = (scanned_tools_json, existing_tools_json))]
+pub fn diff_skills(scanned_tools_json: &str, existing_tools_json: &str) -> PyResult<PySyncReport> {
+    let scanned: Vec<xiuxian_vector::ToolRecord> = serde_json::from_str(scanned_tools_json)
+        .map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "Failed to parse scanned tools JSON: {}",
+                e
+            ))
+        })?;
+
+    let existing: Vec<skills_scanner::IndexToolEntry> = serde_json::from_str(existing_tools_json)
+        .map_err(|e| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "Failed to parse existing tools JSON: {}",
+            e
+        ))
+    })?;
+
+    let report = skills_scanner::calculate_sync_ops(scanned, existing);
+
+    Ok(report.into())
+}

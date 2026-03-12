@@ -101,3 +101,24 @@ fn test_q_update() -> TestResult {
     assert!(q_new > 0.5);
     Ok(())
 }
+
+#[test]
+fn test_recall_feedback_snapshot_roundtrip() {
+    let store = EpisodeStore::default();
+    store.set_recall_feedback_bias("session-1", 0.7);
+    store.set_recall_feedback_bias("session-2", -0.4);
+
+    let snapshot = store.snapshot();
+    assert_eq!(
+        snapshot
+            .recall_feedback_bias_by_scope
+            .get("session-1")
+            .copied(),
+        Some(0.7)
+    );
+
+    let mut restored = EpisodeStore::default();
+    restored.restore_snapshot(snapshot);
+
+    assert_eq!(restored.recall_feedback_bias("session-2"), Some(-0.4));
+}

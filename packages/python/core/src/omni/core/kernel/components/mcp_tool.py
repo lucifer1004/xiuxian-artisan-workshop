@@ -14,11 +14,13 @@ Usage:
 
 from __future__ import annotations
 
-from omni.core.errors import CoreErrorCode, OmniError
-from omni.core.responses import ToolResponse
-from omni.foundation.config.logging import get_logger
+import logging
+from typing import Any, Callable
 
-logger = get_logger(__name__)
+from mcp.server import Server
+from mcp.types import Tool
+
+logger = logging.getLogger(__name__)
 
 
 class MCPToolAdapter:
@@ -195,45 +197,11 @@ class MCPToolAdapter:
         """
         tool_data = self.get_tool(name)
         if tool_data is None:
-            logger.error(f"Tool not found: {name}")
-            response = ToolResponse.error(
-                message=f"Tool not found: {name}",
-                code=CoreErrorCode.TOOL_NOT_FOUND.value,
-                metadata={"tool": name},
-            )
-            return response.to_mcp()
+            error_msg = f"Tool not found: {name}"
+            logger.error(error_msg)
+            return [{"type": "text", "text": f"Error: {error_msg}"}]
 
         skill_name, command_name, func = tool_data
-
-        # Validate required arguments before execution
-        config = getattr(func, "_skill_config", {})
-        input_schema = config.get("input_schema", {})
-        required_fields = input_schema.get("required", [])
-
-        missing_fields = [f for f in required_fields if f not in args or args.get(f) is None]
-        if missing_fields:
-            # Provide helpful error with expected format
-            properties = input_schema.get("properties", {})
-            format_hint = ""
-            for field in required_fields:
-                field_type = properties.get(field, {}).get("type", "any")
-                format_hint += f'  "{field}": <{field_type}>, '
-
-            error_msg = (
-                f"Missing required arguments: {', '.join(missing_fields)}\n"
-                f"Expected format:\n"
-                f"[TOOL_CALL: {name}]({{{format_hint.rstrip(', ')}}})"
-            )
-            logger.warning(f"Tool call validation failed for {name}: {missing_fields}")
-            response = ToolResponse.error(
-                message=error_msg,
-                code=CoreErrorCode.MISSING_REQUIRED.value,
-                metadata={
-                    "tool": name,
-                    "missing_fields": missing_fields,
-                },
-            )
-            return response.to_mcp()
 
         try:
             # Check if function is async
@@ -244,37 +212,36 @@ class MCPToolAdapter:
             else:
                 result = func(**args)
 
-            # Result should be ToolResponse
-            if isinstance(result, ToolResponse):
-                return result.to_mcp()
-
-            # Legacy support: wrap raw result
-            return ToolResponse.success(data=result).to_mcp()
-
-        except OmniError as e:
-            logger.error(f"Tool execution error: {e}")
-            response = ToolResponse.error(
-                message=e.message,
-                code=e.code.value if e.code else None,
-                metadata={
-                    "tool": name,
-                    **e.details,
-                },
-            )
-            return response.to_mcp()
+            # Format result for MCP
+            result_text = self._format_result(result)
+            return [{"type": "text", "text": result_text}]
 
         except Exception as e:
             error_msg = f"Error executing {name}: {e}"
             logger.error(error_msg, exc_info=True)
-            response = ToolResponse.error(
-                message=str(e),
-                code=CoreErrorCode.TOOL_EXECUTION_FAILED.value,
-                metadata={
-                    "tool": name,
-                    "error_type": type(e).__name__,
-                },
-            )
-            return response.to_mcp()
+            return [{"type": "text", "text": f"Error: {error_msg}"}]
+
+    def _format_result(self, result: Any) -> str:
+        """Format a result for MCP text output.
+
+        Args:
+            result: The result to format
+
+        Returns:
+            String representation suitable for MCP
+        """
+        if isinstance(result, str):
+            return result
+        elif isinstance(result, dict):
+            import json
+
+            return json.dumps(result, indent=2, ensure_ascii=False)
+        elif isinstance(result, list):
+            import json
+
+            return json.dumps(result, indent=2, ensure_ascii=False)
+        else:
+            return str(result)
 
     # =============================================================================
     # Properties

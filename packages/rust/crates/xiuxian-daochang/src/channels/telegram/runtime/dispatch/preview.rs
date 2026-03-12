@@ -27,7 +27,7 @@ fn strip_think_sections(input: &str) -> String {
     }
 }
 
-pub(super) fn log_preview(s: &str) -> String {
+pub(in crate::channels::telegram::runtime) fn log_preview(s: &str) -> String {
     let sanitized = strip_think_sections(s);
     let one_line: String = sanitized
         .chars()
@@ -65,15 +65,5 @@ pub(super) fn log_preview(s: &str) -> String {
         } else {
             format!("{head}...{anchors}...{tail}")
         }
-    }
-}
-
-pub(super) fn sanitize_reply_for_send(s: &str) -> String {
-    let sanitized = strip_think_sections(s);
-    let trimmed = sanitized.trim();
-    if trimmed.is_empty() {
-        s.trim().to_string()
-    } else {
-        trimmed.to_string()
     }
 }

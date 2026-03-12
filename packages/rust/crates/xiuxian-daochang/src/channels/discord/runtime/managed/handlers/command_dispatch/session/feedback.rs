@@ -41,7 +41,10 @@ pub(in super::super) async fn handle_session_feedback(
         FeedbackDirection::Up => SessionRecallFeedbackDirection::Up,
         FeedbackDirection::Down => SessionRecallFeedbackDirection::Down,
     };
-    let response = match agent.apply_session_recall_feedback(session_id, direction) {
+    let response = match agent
+        .apply_session_recall_feedback(session_id, direction)
+        .await
+    {
         Some(update) if command.format.is_json() => {
             format_session_feedback_json(direction, update.previous_bias, update.updated_bias)
         }

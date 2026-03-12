@@ -14,12 +14,10 @@ Usage:
     from omni.foundation.runtime.skills_monitor import skills_monitor_scope
 """
 
-from .cargo_subprocess_env import prepare_cargo_subprocess_env
 from .gitops import (
     PROJECT,
     get_agent_dir,
     get_docs_dir,
-    get_git_toplevel,
     get_instructions_dir,
     get_project_root,
     get_spec_dir,
@@ -77,7 +75,6 @@ __all__ = [
     "get_chunk_window_profile",
     "get_current_monitor",
     "get_docs_dir",
-    "get_git_toplevel",
     "get_instructions_dir",
     "get_project_root",
     "get_spec_dir",
@@ -93,7 +90,6 @@ __all__ = [
     "parse_float",
     "parse_int",
     "parse_optional_int",
-    "prepare_cargo_subprocess_env",
     "record_phase",
     "record_rust_db",
     "resolve_bool_from_setting",

@@ -2,12 +2,15 @@ use std::path::Path;
 
 use crate::skills::metadata::SkillMetadata;
 
-use self::extract::{parse_skill_frontmatter, skill_name_from_path};
-use self::metadata::build_skill_metadata;
 use super::super::SkillScanner;
 
 mod extract;
 mod metadata;
+
+pub(super) use extract::{
+    parse_skill_frontmatter, parse_skill_frontmatter_strict, skill_name_from_path,
+};
+pub(super) use metadata::build_skill_metadata;
 
 impl SkillScanner {
     /// Parse YAML frontmatter from SKILL.md content.

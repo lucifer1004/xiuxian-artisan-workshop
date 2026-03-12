@@ -1,425 +1,116 @@
+use crate::fixture_json_assertions::assert_json_fixture_eq;
+use crate::wendao_cli_search_gateway_contract_support::agentic_gateway_snapshot;
+use serde_json::{Value, json};
 use std::fs;
+use std::path::{Path, PathBuf};
+use tempfile::TempDir;
 
-use xiuxian_daochang::load_xiuxian_config_from_paths;
-
-type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-#[test]
-fn load_xiuxian_config_from_paths_user_overrides_system_defaults() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
-
-    fs::write(
-        &system_path,
-        r#"
-[llm]
-default_provider = "openai"
-default_model = "gpt-4o-mini"
-
-[llm.providers.openai]
-base_url = "https://api.openai.com/v1"
-api_key = "OPENAI_API_KEY"
-"#,
-    )?;
-
-    fs::write(
-        &user_path,
-        r#"
-[llm]
-default_provider = "minimax"
-
-[llm.providers.minimax]
-base_url = "https://api.minimax.io/v1"
-api_key = "MINIMAX_API_KEY"
-"#,
-    )?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-
-    assert_eq!(merged.llm.default_provider.as_deref(), Some("minimax"));
-    assert_eq!(merged.llm.default_model.as_deref(), Some("gpt-4o-mini"));
-    assert!(merged.llm.providers.contains_key("openai"));
-    assert!(merged.llm.providers.contains_key("minimax"));
-    Ok(())
+pub(crate) struct SearchProvisionalFixture {
+    _temp_dir: TempDir,
+    root: PathBuf,
 }
 
-#[test]
-fn load_xiuxian_config_from_paths_user_provider_overrides_system_provider() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
+impl SearchProvisionalFixture {
+    pub(crate) fn build(scenario: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let (temp_dir, root) =
+            crate::wendao_cli_fixture_tree_support::materialize_wendao_cli_fixture(&format!(
+                "search/provisional_overlay/{scenario}"
+            ))?;
+        Ok(Self {
+            _temp_dir: temp_dir,
+            root,
+        })
+    }
 
-    fs::write(
-        &system_path,
-        r#"
-[llm.providers.openai]
-base_url = "https://api.openai.com/v1"
-api_key = "OPENAI_API_KEY"
-"#,
-    )?;
+    pub(crate) fn root(&self) -> &Path {
+        self.root.as_path()
+    }
 
-    fs::write(
-        &user_path,
-        r#"
-[llm.providers.openai]
-base_url = "https://openai.example.internal/v1"
-api_key = "OPENAI_API_KEY_ALT"
-"#,
-    )?;
+    pub(crate) fn config_path(&self) -> PathBuf {
+        self.root.join("wendao.yaml")
+    }
+}
 
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    let Some(openai) = merged.llm.providers.get("openai") else {
-        panic!("openai provider should exist");
+pub(crate) fn assert_search_provisional_fixture(scenario: &str, actual: &Value) {
+    assert_json_fixture_eq(
+        &format!("wendao_cli/search/provisional_overlay/{scenario}/expected"),
+        "result.json",
+        actual,
+    );
+}
+
+pub(crate) fn write_config(
+    path: &Path,
+    prefix: &str,
+    include_default: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let search_block = if include_default {
+        "    search:\n      include_provisional_default: true\n      provisional_limit: 10\n"
+    } else {
+        ""
     };
-    assert_eq!(
-        openai.base_url.as_deref(),
-        Some("https://openai.example.internal/v1")
-    );
-    assert_eq!(openai.api_key.as_deref(), Some("OPENAI_API_KEY_ALT"));
+    fs::write(
+        path,
+        format!(
+            "link_graph:\n  cache:\n    valkey_url: \"redis://127.0.0.1:6379/0\"\n    key_prefix: \"{prefix}\"\n  agentic:\n    suggested_link:\n      max_entries: 64\n      ttl_seconds: null\n{search_block}"
+        ),
+    )?;
     Ok(())
 }
 
-#[test]
-fn load_xiuxian_config_from_paths_user_provider_model_overrides_system_model() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
+pub(crate) fn payload_snapshot(payload: &Value) -> Value {
+    let results = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .map(|rows| rows.iter().map(result_row_snapshot).collect::<Vec<_>>());
+    let provisional = payload
+        .get("provisional_suggestions")
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .map(provisional_row_snapshot)
+                .collect::<Vec<_>>()
+        });
+    let injected_paths = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter(|row| {
+                    row.get("match_reason")
+                        .and_then(Value::as_str)
+                        .is_some_and(|reason| reason.contains("agentic_provisional"))
+                })
+                .filter_map(|row| row.get("path").and_then(Value::as_str).map(str::to_string))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
-    fs::write(
-        &system_path,
-        r#"
-[llm.providers.anthropic]
-model = "claude-3-5-haiku-20241022"
-"#,
-    )?;
-
-    fs::write(
-        &user_path,
-        r#"
-[llm.providers.anthropic]
-model = "claude-3-5-sonnet-20241022"
-"#,
-    )?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    let Some(anthropic) = merged.llm.providers.get("anthropic") else {
-        panic!("anthropic provider should exist");
-    };
-    assert_eq!(
-        anthropic.model.as_deref(),
-        Some("claude-3-5-sonnet-20241022")
-    );
-    Ok(())
+    json!({
+        "provisional_error": payload.get("provisional_error").and_then(Value::as_str),
+        "results": results,
+        "provisional_suggestions": provisional,
+        "injected_paths": injected_paths,
+        "agentic_gateway": agentic_gateway_snapshot(payload.get("agentic_gateway")),
+    })
 }
 
-#[test]
-fn load_xiuxian_config_from_paths_invalid_overlay_keeps_system_config() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
-
-    fs::write(
-        &system_path,
-        r#"
-[llm]
-default_provider = "openai"
-"#,
-    )?;
-
-    fs::write(&user_path, "not a valid toml")?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    assert_eq!(merged.llm.default_provider.as_deref(), Some("openai"));
-    Ok(())
+fn result_row_snapshot(row: &Value) -> Value {
+    json!({
+        "stem": row.get("stem").and_then(Value::as_str),
+        "title": row.get("title").and_then(Value::as_str),
+        "path": row.get("path").and_then(Value::as_str),
+        "best_section": row.get("best_section").and_then(Value::as_str),
+        "match_reason": row.get("match_reason").and_then(Value::as_str),
+    })
 }
 
-#[test]
-fn load_xiuxian_config_merges_reminder_queue_and_link_graph_cache() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
-
-    fs::write(
-        &system_path,
-        r#"
-[wendao.zhixing.reminder_queue]
-valkey_url = "redis://127.0.0.1:6379/0"
-key_prefix = "xiuxian_zhixing:heyi:reminder"
-poll_interval_seconds = 5
-poll_batch_size = 128
-
-[wendao.link_graph.cache]
-valkey_url = "redis://127.0.0.1:6379/1"
-key_prefix = "xiuxian_wendao:link_graph:index"
-ttl_seconds = 300
-"#,
-    )?;
-
-    fs::write(
-        &user_path,
-        r"
-[wendao.zhixing.reminder_queue]
-poll_interval_seconds = 3
-",
-    )?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    assert_eq!(
-        merged.wendao.zhixing.reminder_queue.valkey_url.as_deref(),
-        Some("redis://127.0.0.1:6379/0")
-    );
-    assert_eq!(
-        merged.wendao.zhixing.reminder_queue.key_prefix.as_deref(),
-        Some("xiuxian_zhixing:heyi:reminder")
-    );
-    assert_eq!(
-        merged.wendao.zhixing.reminder_queue.poll_interval_seconds,
-        Some(3)
-    );
-    assert_eq!(
-        merged.wendao.zhixing.reminder_queue.poll_batch_size,
-        Some(128)
-    );
-    assert_eq!(
-        merged.wendao.link_graph.cache.valkey_url.as_deref(),
-        Some("redis://127.0.0.1:6379/1")
-    );
-    Ok(())
-}
-
-#[test]
-fn load_xiuxian_config_merges_link_graph_watch_extensions() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
-
-    fs::write(
-        &system_path,
-        r#"
-[wendao.link_graph]
-watch_patterns = ["**/*"]
-watch_extensions = ["md", "markdown", "org"]
-"#,
-    )?;
-
-    fs::write(
-        &user_path,
-        r#"
-[wendao.link_graph]
-watch_extensions = ["orgm", "j2", "toml"]
-"#,
-    )?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    assert_eq!(
-        merged.wendao.link_graph.watch_extensions,
-        Some(vec![
-            "orgm".to_string(),
-            "j2".to_string(),
-            "toml".to_string()
-        ])
-    );
-    Ok(())
-}
-
-#[test]
-fn load_xiuxian_config_from_paths_user_overrides_template_paths() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
-
-    fs::write(
-        &system_path,
-        r#"
-[wendao.zhixing]
-persona_id = "agenda_steward"
-template_paths = ["assets/templates", ".omni/templates"]
-"#,
-    )?;
-
-    fs::write(
-        &user_path,
-        r#"
-[wendao.zhixing]
-persona_id = "planner_master"
-template_paths = ["custom/templates"]
-"#,
-    )?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    assert_eq!(
-        merged.wendao.zhixing.persona_id.as_deref(),
-        Some("planner_master")
-    );
-    assert_eq!(
-        merged.wendao.zhixing.template_paths,
-        Some(vec!["custom/templates".to_string()])
-    );
-    Ok(())
-}
-
-#[test]
-fn load_xiuxian_config_from_paths_user_overrides_notification_recipient() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
-
-    fs::write(
-        &system_path,
-        r#"
-[wendao.zhixing]
-notification_recipient = "telegram:-1001111111111"
-"#,
-    )?;
-
-    fs::write(
-        &user_path,
-        r#"
-[wendao.zhixing]
-notification_recipient = "discord:123456789012345678"
-"#,
-    )?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    assert_eq!(
-        merged.wendao.zhixing.notification_recipient.as_deref(),
-        Some("discord:123456789012345678")
-    );
-    Ok(())
-}
-
-#[test]
-fn load_xiuxian_config_from_paths_user_overrides_qianhuan_persona_dirs() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
-
-    fs::write(
-        &system_path,
-        r#"
-[qianhuan.persona]
-persona_dir = "~/.config/xiuxian-artisan-workshop/personas"
-persona_dirs = ["assets/personas"]
-"#,
-    )?;
-
-    fs::write(
-        &user_path,
-        r#"
-[qianhuan.persona]
-persona_dirs = ["./custom/personas", "./shared/personas"]
-"#,
-    )?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    assert_eq!(
-        merged.qianhuan.persona.persona_dir.as_deref(),
-        Some("~/.config/xiuxian-artisan-workshop/personas")
-    );
-    assert_eq!(
-        merged.qianhuan.persona.persona_dirs,
-        Some(vec![
-            "./custom/personas".to_string(),
-            "./shared/personas".to_string()
-        ])
-    );
-    Ok(())
-}
-
-#[test]
-fn load_xiuxian_config_from_paths_user_overrides_qianhuan_template_dirs() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
-
-    fs::write(
-        &system_path,
-        r#"
-[qianhuan.template]
-template_dir = "~/.config/xiuxian-artisan-workshop/qianhuan/templates"
-template_dirs = ["packages/rust/crates/xiuxian-qianhuan/resources/qianhuan/templates"]
-"#,
-    )?;
-
-    fs::write(
-        &user_path,
-        r#"
-[qianhuan.template]
-template_dirs = ["./custom/qianhuan/templates", "./team/qianhuan/templates"]
-"#,
-    )?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    assert_eq!(
-        merged.qianhuan.template.template_dir.as_deref(),
-        Some("~/.config/xiuxian-artisan-workshop/qianhuan/templates")
-    );
-    assert_eq!(
-        merged.qianhuan.template.template_dirs,
-        Some(vec![
-            "./custom/qianhuan/templates".to_string(),
-            "./team/qianhuan/templates".to_string()
-        ])
-    );
-    Ok(())
-}
-
-#[test]
-fn load_xiuxian_config_from_paths_user_overrides_zhenfa_bridge_config() -> TestResult {
-    let temp_dir = tempfile::tempdir()?;
-    let system_path = temp_dir.path().join("system.xiuxian.toml");
-    let user_path = temp_dir.path().join("user.xiuxian.toml");
-
-    fs::write(
-        &system_path,
-        r#"
-[zhenfa]
-base_url = "http://127.0.0.1:18093"
-enabled_tools = ["wendao.search", "qianhuan.reload"]
-
-[zhenfa.valkey]
-url = "redis://127.0.0.1:6379/0"
-key_prefix = "omni:zhenfa"
-cache_ttl_seconds = 120
-lock_ttl_seconds = 15
-audit_stream = "dispatch.audit"
-"#,
-    )?;
-
-    fs::write(
-        &user_path,
-        r#"
-[zhenfa]
-enabled_tools = ["wendao.search"]
-
-[zhenfa.valkey]
-key_prefix = "user:omni:zhenfa"
-"#,
-    )?;
-
-    let merged = load_xiuxian_config_from_paths(&system_path, &user_path);
-    assert_eq!(
-        merged.zhenfa.base_url.as_deref(),
-        Some("http://127.0.0.1:18093")
-    );
-    assert_eq!(
-        merged.zhenfa.enabled_tools,
-        Some(vec!["wendao.search".to_string()])
-    );
-    assert_eq!(
-        merged.zhenfa.valkey.url.as_deref(),
-        Some("redis://127.0.0.1:6379/0")
-    );
-    assert_eq!(
-        merged.zhenfa.valkey.key_prefix.as_deref(),
-        Some("user:omni:zhenfa")
-    );
-    assert_eq!(merged.zhenfa.valkey.cache_ttl_seconds, Some(120));
-    assert_eq!(merged.zhenfa.valkey.lock_ttl_seconds, Some(15));
-    assert_eq!(
-        merged.zhenfa.valkey.audit_stream.as_deref(),
-        Some("dispatch.audit")
-    );
-    Ok(())
+fn provisional_row_snapshot(row: &Value) -> Value {
+    json!({
+        "source_id": row.get("source_id").and_then(Value::as_str),
+        "target_id": row.get("target_id").and_then(Value::as_str),
+        "relation": row.get("relation").and_then(Value::as_str),
+        "state": row.get("state").and_then(Value::as_str),
+        "agent_id": row.get("agent_id").and_then(Value::as_str),
+    })
 }

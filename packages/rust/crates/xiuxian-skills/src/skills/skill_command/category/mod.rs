@@ -7,3 +7,6 @@ mod infer;
 mod rules;
 
 pub use infer::infer_category_from_skill;
+
+#[cfg(test)]
+mod tests;

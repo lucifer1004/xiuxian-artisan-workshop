@@ -1,4 +1,4 @@
-use crate::llm::client::{ChatMessage, ContentPart, ImageUrlContent, MessageContent, MessageRole};
+use crate::llm::client::{ChatMessage, ContentPart, ImageUrlContent, MessageContent};
 use crate::llm::error::{LlmError, LlmResult};
 
 use super::anchor::TextAnchor;
@@ -42,23 +42,18 @@ pub fn build_visual_user_message_with_ocr_truth(
         compose_grounded_user_text(user_message, anchors, mode, ocr_truth_markdown);
 
     Ok(ChatMessage {
-        role: MessageRole::User,
-        content: Some(MessageContent::Parts(vec![
+        role: "user".to_string(),
+        content: MessageContent::Parts(vec![
             ContentPart::Text {
                 text: grounded_user_message,
             },
             ContentPart::ImageUrl {
                 image_url: ImageUrlContent {
                     url: normalized_image_url.to_string(),
-                    detail: Some("high".to_string()),
+                    detail: "high".to_string(),
                 },
             },
-        ])),
-        thinking: None,
-        name: None,
-        tool_calls: None,
-        tool_call_id: None,
-        function_call: None,
+        ]),
     })
 }
 

@@ -4,9 +4,9 @@ Safely imports Rust bindings from omni.foundation.
 Handles ImportError gracefully without crashing Skills.
 """
 
-from omni.foundation.config.logging import get_logger
+import logging
 
-logger = get_logger("omni.core.ext.rust.bindings")
+logger = logging.getLogger("omni.core.ext.rust.bindings")
 
 
 class RustBindings:

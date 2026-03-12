@@ -23,6 +23,7 @@ struct BatchLaneState {
 struct BatchTask {
     engine: Arc<DeepseekEngine>,
     prepared: PreparedVisionImage,
+    stop_signal: Option<Arc<std::sync::atomic::AtomicBool>>,
     result_tx: mpsc::Sender<LlmResult<Option<String>>>,
 }
 
@@ -38,12 +39,14 @@ impl BatchLaneState {
 pub(super) fn infer_with_batch_lane(
     engine: Arc<DeepseekEngine>,
     prepared: &PreparedVisionImage,
+    stop_signal: Option<Arc<std::sync::atomic::AtomicBool>>,
 ) -> LlmResult<Option<String>> {
     let wait_timeout = lane_wait_timeout();
     let (result_tx, result_rx) = mpsc::channel();
     let task = BatchTask {
         engine,
         prepared: prepared.clone(),
+        stop_signal,
         result_tx,
     };
 
@@ -92,7 +95,7 @@ fn drain_lane() {
             return;
         }
         for task in batch {
-            let result = task.engine.infer_markdown(&task.prepared);
+            let result = task.engine.infer_markdown(&task.prepared, task.stop_signal);
             let _ = task.result_tx.send(result);
         }
     }
@@ -139,4 +142,29 @@ fn lane_wait_timeout() -> Duration {
             .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS)
             .max(1),
     )
+}
+
+pub(in crate::llm::vision::deepseek::native) fn snapshot_for_tests() -> (usize, bool) {
+    let lane = BATCH_LANE.get_or_init(|| Mutex::new(BatchLaneState::new()));
+    let guard = lane
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    (guard.queue.len(), guard.draining)
+}
+
+pub(in crate::llm::vision::deepseek::native) fn force_draining_for_tests() {
+    let lane = BATCH_LANE.get_or_init(|| Mutex::new(BatchLaneState::new()));
+    let mut guard = lane
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    guard.draining = true;
+}
+
+pub(in crate::llm::vision::deepseek::native) fn clear_for_tests() {
+    let lane = BATCH_LANE.get_or_init(|| Mutex::new(BatchLaneState::new()));
+    let mut guard = lane
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    guard.queue.clear();
+    guard.draining = false;
 }

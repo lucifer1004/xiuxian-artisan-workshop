@@ -3,7 +3,7 @@
 //! This module provides:
 //! - configuration parsing and defaults,
 //! - lightweight readiness probes for `/v1/models`,
-//! - process lifecycle management for `mistralrs-server`.
+//! - process lifecycle management for local `mistralrs` server processes.
 
 pub mod config;
 pub mod health;

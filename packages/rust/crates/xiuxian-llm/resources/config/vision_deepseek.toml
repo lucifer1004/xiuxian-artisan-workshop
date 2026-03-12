@@ -1,24 +1,11 @@
-model_kind = "dots"
-device = "auto"
-base_size = 448
-image_size = 448
+model_root = ".data/models/deepseek-ocr-2"
+base_size = 1024
+image_size = 768
 crop_mode = true
-max_tiles = 12
-max_new_tokens = 1024
-decode_temperature = 0.0
-decode_top_p = 1.0
-decode_repetition_penalty = 1.0
-decode_use_cache = true
-ocr_batch_window_ms = 50
-ocr_batch_max_size = 8
-auto_route_complex_min_tiles = 8
-auto_route_complex_min_pixels = 2500000
-ocr_inflight_wait_timeout_ms = 30000
-ocr_inflight_stale_ms = 120000
+max_new_tokens = 512
 
 [cache]
 local_max_entries = 1024
-preprocess_local_max_entries = 128
 key_prefix = "xiuxian:vision:ocr:v1"
 ttl_seconds = 3600
 timeout_ms = 200

@@ -1,16 +1,10 @@
----
-type: knowledge
-metadata:
-  title: "Omni Tags"
----
-
 # Omni Tags
 
 > High-Performance Code Symbol Extraction for Omni DevEnv.
 
 ## Overview
 
-Omni Tags provides AST-based symbol extraction using xiuxian-ast (ast-grep). It enables fast code analysis for tags, symbols, and structural patterns.
+Omni Tags provides AST-based symbol extraction using omni-ast (ast-grep). It enables fast code analysis for tags, symbols, and structural patterns.
 
 ## Features
 
@@ -22,7 +16,7 @@ Omni Tags provides AST-based symbol extraction using xiuxian-ast (ast-grep). It 
 ## Usage
 
 ```rust
-use xiuxian_tags::{CodeTagger, TagExtractor};
+use omni_tags::{CodeTagger, TagExtractor};
 
 let tagger = CodeTagger::new();
 let tags = tagger.extract_tags("src/main.rs")?;

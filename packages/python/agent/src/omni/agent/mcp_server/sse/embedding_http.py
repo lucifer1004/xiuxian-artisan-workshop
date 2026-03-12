@@ -15,7 +15,7 @@ def _embedding_unavailable_response(error: Exception, *, batch: bool) -> JSONRes
         "error": str(error),
         "hint": (
             "MCP embedding endpoint is up, but upstream embedding backend is unavailable. "
-            "Check the Rust embedding service configured by embedding.client_url."
+            "Check Ollama at embedding.litellm_api_base (default http://127.0.0.1:11434)."
         ),
     }
     if batch:
@@ -48,7 +48,7 @@ def _embedding_timeout_response(*, batch: bool, timeout_s: float) -> JSONRespons
         "error": "Embedding call exceeded per-request timeout.",
         "hint": (
             "Upstream embedding backend may be slow or stalled. "
-            "Check Rust embedding service health and mcp.embed_request_timeout_secs."
+            "Check Ollama health and mcp.embed_request_timeout_secs."
         ),
         "timeout_secs": round(timeout_s, 3),
     }

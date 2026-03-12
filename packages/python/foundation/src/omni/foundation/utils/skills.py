@@ -7,7 +7,7 @@ Provides utilities for skill development:
 - Skill path helpers for ODF-EP v7.0 structure
 
 Usage:
-    from omni.foundation.utils.skills import current_skill_dir, skill_path
+    from omni.foundation.skill_utils import current_skill_dir, skill_path
 
     # Get skill root directory
     skill_dir = current_skill_dir()
@@ -18,32 +18,33 @@ Usage:
 """
 
 from pathlib import Path
+from typing import Literal
 
 
 def current_skill_dir() -> Path:
     """
     Get the current skill's root directory.
 
-    Returns the directory containing the calling skill's scripts/__init__.py.
+    Returns the directory containing the calling skill's tools.py.
     Useful for referencing skill-local resources (backlogs, assets, etc.).
 
     Example:
-        from omni.foundation.utils.skills import current_skill_dir
+        from omni.foundation.skill_utils import current_skill_dir
 
-        # In assets/skills/git/scripts/commands.py:
+        # In assets/skills/git/tools.py:
         backlog = current_skill_dir() / "assets" / "Backlog.md"
         readme = current_skill_dir() / "references" / "readme.md"
 
     Returns:
         Path to the skill's root directory
     """
-    # Get the directory of the caller's module (scripts/__init__.py)
+    # Get the directory of the caller's module (tools.py)
     # Walk up to find the skill root (parent of scripts/, references/, assets/)
     caller_frame = _get_caller_frame()
     caller_file = Path(caller_frame.filename)
     skill_dir = caller_file.parent
 
-    # If scripts/__init__.py is in skill root/scripts/, walk up
+    # If tools.py is directly in skill root, return it
     # Otherwise, if called from a subdirectory, walk up
     while skill_dir.name not in ("scripts", "references", "assets", "data"):
         parent = skill_dir.parent
@@ -69,7 +70,7 @@ def skill_path(
         _caller_file: Internal - file path of caller (for testing)
 
     Example:
-        from omni.foundation.utils.skills import skill_path
+        from omni.foundation.skill_utils import skill_path
 
         # Automatic - detects skill from caller
         guide = skill_path("assets/guide.md")
@@ -107,7 +108,7 @@ def skill_asset(relative_path: str, *, skill_dir: Path | None = None) -> Path:
         skill_dir: Optional skill directory
 
     Example:
-        from omni.foundation.utils.skills import skill_asset
+        from omni.foundation.skill_utils import skill_asset
 
         guide = skill_asset("guide.md")
         template = skill_asset("templates/prompt.j2")
@@ -127,7 +128,7 @@ def skill_command(relative_path: str, *, skill_dir: Path | None = None) -> Path:
         skill_dir: Optional skill directory
 
     Example:
-        from omni.foundation.utils.skills import skill_command
+        from omni.foundation.skill_utils import skill_command
 
         workflow = skill_command("workflow.py")
         script = skill_command("helpers.sh")
@@ -147,7 +148,7 @@ def skill_reference(relative_path: str, *, skill_dir: Path | None = None) -> Pat
         skill_dir: Optional skill directory
 
     Example:
-        from omni.foundation.utils.skills import skill_reference
+        from omni.foundation.skill_utils import skill_reference
 
         doc = skill_reference("documentation.md")
 
@@ -166,7 +167,7 @@ def skill_data(relative_path: str, *, skill_dir: Path | None = None) -> Path:
         skill_dir: Optional skill directory
 
     Example:
-        from omni.foundation.utils.skills import skill_data
+        from omni.foundation.skill_utils import skill_data
 
         config = skill_data("config.json")
 
@@ -200,6 +201,7 @@ def _get_caller_frame():
 
 def _skip_internal_frames(frame):
     """Skip internal/utility function frames."""
+    import sys
 
     while frame:
         code = getattr(frame, "f_code", None)
@@ -231,9 +233,9 @@ def _skip_internal_frames(frame):
 
 __all__ = [
     "current_skill_dir",
+    "skill_path",
     "skill_asset",
     "skill_command",
-    "skill_data",
-    "skill_path",
     "skill_reference",
+    "skill_data",
 ]

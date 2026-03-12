@@ -1,6 +1,6 @@
 //! Heartbeat classification helpers for MCP in-flight waits.
 
-use crate::mcp::health::HealthProbeStatus;
+use crate::runtime::health::HealthProbeStatus;
 
 const DEFAULT_INFLIGHT_LOG_INTERVAL_SECS: u64 = 5;
 const DEFAULT_WAIT_HEARTBEAT_DEGRADED_WARN_AFTER_SECS: u64 = 30;
@@ -20,9 +20,9 @@ pub enum WaitHeartbeatState {
 #[must_use]
 pub fn classify_wait_heartbeat(health_probe: &HealthProbeStatus) -> WaitHeartbeatState {
     if health_probe.has_structured_ready_state {
-        return if health_probe.ready == Some(true) && health_probe.initializing == Some(false) {
+        return if health_probe.ready == Some(true) && health_probe.initializing != Some(true) {
             WaitHeartbeatState::Healthy
-        } else if health_probe.ready == Some(false) && health_probe.initializing == Some(true) {
+        } else if health_probe.initializing == Some(true) {
             WaitHeartbeatState::Degraded
         } else {
             WaitHeartbeatState::Unhealthy

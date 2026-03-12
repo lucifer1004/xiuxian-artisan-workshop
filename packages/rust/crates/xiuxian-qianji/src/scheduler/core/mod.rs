@@ -5,7 +5,6 @@ mod consensus;
 mod dispatch;
 mod remote_possession;
 mod run_loop;
-mod telemetry;
 mod types;
 
 pub use types::{QianjiScheduler, SchedulerRuntimeServices};

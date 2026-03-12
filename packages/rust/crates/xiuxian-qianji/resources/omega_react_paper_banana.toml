@@ -69,10 +69,10 @@ routing_strategy = "omega_confidence_bias"
 [[nodes]]
 id = "Live_Lab_Deploy"
 task_type = "write_file"
-label = "Publisher: Qianji JS Live Online"
+label = "Publisher: Qianji Studio Live Online"
 weight = 1.0
 [nodes.params]
-path = ".data/qianji-js/latest_topology.json"
+path = ".data/qianji-studio/public/latest_topology.json"
 content_key = "proposed_diagram_manifest"
 
 [[edges]]

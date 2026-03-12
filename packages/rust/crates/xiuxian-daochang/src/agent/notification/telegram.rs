@@ -5,8 +5,6 @@ use serde_json::json;
 
 use super::{NotificationProvider, recipient_is_telegram_chat_id, recipient_target_for};
 
-const MARKDOWN_V2_PREFIX: &str = "[markdown_v2]\n";
-
 /// Telegram bot API notification provider.
 pub struct TelegramProvider {
     client: Client,
@@ -53,19 +51,13 @@ impl NotificationProvider for TelegramProvider {
             .filter(|raw| !raw.is_empty())
             .unwrap_or_else(|| "https://api.telegram.org".to_string());
         let url = format!("{base}/bot{token}/sendMessage");
-        let (text, parse_mode) = if let Some(markdown_v2) = content.strip_prefix(MARKDOWN_V2_PREFIX)
-        {
-            (markdown_v2, "MarkdownV2")
-        } else {
-            (content, "HTML")
-        };
 
         self.client
             .post(url)
             .json(&json!({
                 "chat_id": chat_id,
-                "text": text,
-                "parse_mode": parse_mode,
+                "text": content,
+                "parse_mode": "HTML",
             }))
             .send()
             .await?

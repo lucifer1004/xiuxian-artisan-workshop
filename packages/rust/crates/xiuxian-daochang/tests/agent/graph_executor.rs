@@ -1,5 +1,3 @@
-//! Agent graph-executor tests for planning, tool dispatch, and failure handling.
-
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -16,8 +14,9 @@ use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, Stream
 use crate::config::{AgentConfig, McpServerEntry};
 use crate::contracts::{
     GraphExecutionPlan, GraphPlanStep, GraphPlanStepKind, GraphWorkflowMode, OmegaDecision,
-    OmegaFallbackPolicy, OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass, WorkflowBridgeMode,
+    OmegaFallbackPolicy, OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass,
 };
+use crate::shortcuts::WorkflowBridgeMode;
 
 use super::{GraphPlanExecutionInput, GraphPlanExecutionOutcome};
 
@@ -74,12 +73,13 @@ impl ServerHandler for MockBridgeServer {
         let args_json = request
             .arguments
             .clone()
-            .map_or_else(|| serde_json::json!({}), serde_json::Value::Object);
+            .map(serde_json::Value::Object)
+            .unwrap_or_else(|| serde_json::json!({}));
 
-        match self.recorded_arguments.lock() {
-            Ok(mut recorded_arguments) => recorded_arguments.push(args_json.clone()),
-            Err(error) => panic!("recorded arguments lock poisoned: {error}"),
-        }
+        self.recorded_arguments
+            .lock()
+            .expect("recorded arguments lock poisoned")
+            .push(args_json.clone());
 
         let has_metadata = request
             .arguments
@@ -100,15 +100,10 @@ impl ServerHandler for MockBridgeServer {
 }
 
 async fn reserve_local_addr() -> std::net::SocketAddr {
-    let probe_result = tokio::net::TcpListener::bind("127.0.0.1:0").await;
-    let probe = match probe_result {
-        Ok(listener) => listener,
-        Err(error) => panic!("reserve local addr: {error}"),
-    };
-    let addr = match probe.local_addr() {
-        Ok(addr) => addr,
-        Err(error) => panic!("read reserved local addr: {error}"),
-    };
+    let probe = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("reserve local addr");
+    let addr = probe.local_addr().expect("read reserved local addr");
     drop(probe);
     addr
 }
@@ -140,11 +135,9 @@ async fn spawn_mock_bridge_server(
         );
 
     let router = Router::new().nest_service("/sse", service);
-    let listener_result = tokio::net::TcpListener::bind(addr).await;
-    let listener = match listener_result {
-        Ok(listener) => listener,
-        Err(error) => panic!("bind mock mcp listener: {error}"),
-    };
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .expect("bind mock mcp listener");
 
     (
         tokio::spawn(async move {
@@ -236,7 +229,7 @@ async fn execute_graph_shortcut_plan_uses_plan_route_to_react_even_when_policy_i
     let decision = build_decision(OmegaFallbackPolicy::SwitchToGraph);
     let plan = build_plan(OmegaFallbackPolicy::SwitchToGraph, "route_to_react");
 
-    let outcome_result = agent
+    let outcome = agent
         .execute_graph_shortcut_plan(
             "telegram:test:graph-executor-react",
             &decision,
@@ -253,11 +246,8 @@ async fn execute_graph_shortcut_plan_uses_plan_route_to_react_even_when_policy_i
                 injection: None,
             },
         )
-        .await;
-    let outcome = match outcome_result {
-        Ok(outcome) => outcome,
-        Err(error) => panic!("plan should route to react instead of retrying bridge: {error}"),
-    };
+        .await
+        .expect("plan should route to react instead of retrying bridge");
 
     match outcome {
         GraphPlanExecutionOutcome::RouteToReact {
@@ -272,10 +262,10 @@ async fn execute_graph_shortcut_plan_uses_plan_route_to_react_even_when_policy_i
         other => panic!("expected RouteToReact, got {other:?}"),
     }
 
-    let captured = match recorded_arguments.lock() {
-        Ok(recorded_arguments) => recorded_arguments.clone(),
-        Err(error) => panic!("recorded arguments lock poisoned: {error}"),
-    };
+    let captured = recorded_arguments
+        .lock()
+        .expect("recorded arguments lock poisoned")
+        .clone();
     assert_eq!(captured.len(), 1, "plan route_to_react must not retry tool");
     assert!(captured[0].get("_omni").is_some());
 
@@ -294,7 +284,7 @@ async fn execute_graph_shortcut_plan_uses_plan_retry_even_when_policy_is_abort()
     let decision = build_decision(OmegaFallbackPolicy::Abort);
     let plan = build_plan(OmegaFallbackPolicy::Abort, "retry_bridge_without_metadata");
 
-    let outcome_result = agent
+    let outcome = agent
         .execute_graph_shortcut_plan(
             "telegram:test:graph-executor-retry",
             &decision,
@@ -311,13 +301,8 @@ async fn execute_graph_shortcut_plan_uses_plan_retry_even_when_policy_is_abort()
                 injection: None,
             },
         )
-        .await;
-    let outcome = match outcome_result {
-        Ok(outcome) => outcome,
-        Err(error) => {
-            panic!("plan retry should succeed on metadata-free second attempt: {error}")
-        }
-    };
+        .await
+        .expect("plan retry should succeed on metadata-free second attempt");
 
     match outcome {
         GraphPlanExecutionOutcome::Completed {
@@ -332,10 +317,10 @@ async fn execute_graph_shortcut_plan_uses_plan_retry_even_when_policy_is_abort()
         other => panic!("expected Completed, got {other:?}"),
     }
 
-    let captured = match recorded_arguments.lock() {
-        Ok(recorded_arguments) => recorded_arguments.clone(),
-        Err(error) => panic!("recorded arguments lock poisoned: {error}"),
-    };
+    let captured = recorded_arguments
+        .lock()
+        .expect("recorded arguments lock poisoned")
+        .clone();
     assert_eq!(
         captured.len(),
         2,
@@ -386,11 +371,7 @@ fn ordered_steps_rejects_non_consecutive_indices() {
         ],
     };
 
-    let ordered_result = super::ordered_steps(&plan);
-    let error = match ordered_result {
-        Ok(_) => panic!("step index gap should fail validation"),
-        Err(error) => error,
-    };
+    let error = super::ordered_steps(&plan).expect_err("step index gap should fail validation");
     assert!(error.to_string().contains("step ordering is invalid"));
 }
 
@@ -431,10 +412,7 @@ fn ordered_steps_rejects_unsupported_fallback_action() {
         ],
     };
 
-    let ordered_result = super::ordered_steps(&plan);
-    let error = match ordered_result {
-        Ok(_) => panic!("unsupported fallback action should fail validation"),
-        Err(error) => error,
-    };
+    let error = super::ordered_steps(&plan)
+        .expect_err("unsupported fallback action should fail validation");
     assert!(error.to_string().contains("unsupported fallback_action"));
 }

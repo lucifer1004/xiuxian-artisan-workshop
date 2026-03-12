@@ -2,12 +2,9 @@ mod common;
 mod discord;
 mod telegram;
 
-#[cfg(test)]
-mod tests;
-
 use std::path::PathBuf;
 
-use xiuxian_daochang::RuntimeSettings;
+use omni_agent::RuntimeSettings;
 
 use crate::cli::{
     ChannelProvider, DiscordRuntimeMode, TelegramChannelMode, WebhookDedupBackendMode,
@@ -35,12 +32,6 @@ pub(crate) async fn run_channel_command(
     req: ChannelCommandRequest,
     runtime_settings: &RuntimeSettings,
 ) -> anyhow::Result<()> {
-    let startup_probe_provider = match req.provider {
-        ChannelProvider::Telegram => "telegram",
-        ChannelProvider::Discord => "discord",
-    };
-    common::run_channel_vision_startup_warmup(startup_probe_provider);
-
     let command_future: std::pin::Pin<
         Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + '_>,
     > = match req.provider {

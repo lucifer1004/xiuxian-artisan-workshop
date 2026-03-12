@@ -1,277 +1,152 @@
 """
-adapter.py - RAG-Anything ↔ Omni Integration Adapter
+react.py - ReAct Workflow Implementation
 
-Bridges RAG-Anything's multimodal processing with Omni's existing services:
-- EmbeddingService for vector generation
-- LLM Client for text/vision completion
-- LanceDB vector store for storage
+ReAct (Reasoning + Acting) pattern for tool-augmented LLM:
+1. LLM thinks about the task
+2. LLM decides to use tools (if needed)
+3. Execute tool calls and collect results
+4. LLM generates final response
+
+This module can be replaced with LangGraph for more complex workflows.
 """
 
-from __future__ import annotations
-
-from pathlib import Path
 from typing import Any
 
-import structlog
-from raganything import RAGAnything, RAGAnythingConfig
+from omni.foundation.services.llm import InferenceClient
 
-logger = structlog.get_logger(__name__)
+from .logging import log_completion, log_result, log_step
 
 
-class OmniRAGAdapter:
-    """
-    Omni-Dev Fusion adapter for RAG-Anything.
+class ReActWorkflow:
+    """ReAct (Reasoning + Acting) workflow executor.
 
-    Reuses Omni's existing services while gaining RAG-Anything's:
-    - Multimodal processing (images, tables, equations)
-    - Document parsing (PDF via Docling/MinerU)
-    - Batch processing with progress tracking
-    - Robust JSON parsing for LLM outputs
+    Features:
+    - Iterative LLM + tool execution
+    - Step tracking and statistics
+    - Tool result formatting for LLM
+    - Max tool call limits for safety
     """
 
     def __init__(
         self,
-        llm_complete_func: callable,
-        llm_vision_func: callable | None = None,
-        embed_func: callable | None = None,
-        working_dir: str | None = None,
-        enable_image_processing: bool = True,
-        enable_table_processing: bool = True,
-        enable_equation_processing: bool = True,
+        engine: InferenceClient,
+        get_tool_schemas,
+        execute_tool,
+        max_tool_calls: int = 10,
+        verbose: bool = False,
     ):
-        """
-        Initialize the RAG adapter.
+        """Initialize ReAct workflow.
 
         Args:
-            llm_complete_func: LLM completion function (text)
-            llm_vision_func: Optional VLM function for image analysis
-            embed_func: Optional embedding function (uses Omni's if not provided)
-            working_dir: Working directory for RAG-Anything storage
-            enable_image_processing: Enable image content extraction
-            enable_table_processing: Enable table structure recognition
-            enable_equation_processing: Enable mathematical notation extraction
+            engine: InferenceClient for LLM calls
+            get_tool_schemas: Function to get tool schemas
+            execute_tool: Function to execute a tool call
+            max_tool_calls: Safety limit on tool calls
+            verbose: Enable verbose logging
         """
-        self.llm_complete = llm_complete_func
-        self.llm_vision = llm_vision_func
-        self.embed = embed_func
+        self.engine = engine
+        self.get_tool_schemas = get_tool_schemas
+        self.execute_tool = execute_tool
+        self.max_tool_calls = max_tool_calls
+        self.verbose = verbose
 
-        # Configure RAG-Anything
-        self.config = RAGAnythingConfig(
-            working_dir=working_dir or str(Path("~/.omni/rag").expanduser()),
-            enable_image_processing=enable_image_processing,
-            enable_table_processing=enable_table_processing,
-            enable_equation_processing=enable_equation_processing,
-        )
+        self.step_count = 0
+        self.tool_calls_count = 0
 
-        # Initialize RAG-Anything (but don't start yet)
-        self._rag: RAGAnything | None = None
-
-        logger.info(
-            "OmniRAGAdapter initialized",
-            working_dir=self.config.working_dir,
-            image_proc=enable_image_processing,
-            table_proc=enable_table_processing,
-            equation_proc=enable_equation_processing,
-        )
-
-    def _ensure_rag(self) -> RAGAnything:
-        """Ensure RAG-Anything is initialized."""
-        if self._rag is None:
-            self._rag = RAGAnything(
-                config=self.config,
-                llm_model_func=self.llm_complete,
-                vision_model_func=self.llm_vision,
-                embed_func=self.embed,
-            )
-        return self._rag
-
-    async def process_document(
+    async def run(
         self,
-        file_path: str,
-        multimodal: bool = True,
-        scheme_name: str = "auto",
-    ) -> dict[str, Any]:
-        """
-        Process a document with RAG-Anything.
-
-        Args:
-            file_path: Path to the document (PDF, Markdown, etc.)
-            multimodal: Enable multimodal content extraction
-            scheme_name: Processing scheme (auto, parallel, sequential)
-
-        Returns:
-            dict with processing results
-        """
-        try:
-            rag = self._ensure_rag()
-
-            # Import InsertionScheme
-            from raganything import InsertionScheme
-
-            # Map string to enum
-            scheme_map = {
-                "auto": InsertionScheme.AUTO,
-                "parallel": InsertionScheme.PARALLEL,
-                "sequential": InsertionScheme.SEQUENTIAL,
-            }
-            scheme = scheme_map.get(scheme_name.lower(), InsertionScheme.AUTO)
-
-            # Process document
-            result = await rag.ainsert(
-                input=file_path,
-                scheme_name=scheme,
-            )
-
-            logger.info(
-                "Document processed",
-                file=file_path,
-                result_type=type(result).__name__,
-            )
-
-            return result if isinstance(result, dict) else {"result": result}
-
-        except ImportError as e:
-            logger.error("RAG-Anything not available", error=str(e))
-            raise RuntimeError("RAG-Anything not installed. Run: pip install raganything") from e
-        except Exception as e:
-            logger.error("Failed to process document", file=file_path, error=str(e))
-            raise
-
-    async def process_text(
-        self,
-        content: str,
-        doc_id: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Process text content directly.
-
-        Args:
-            content: Text content to process
-            doc_id: Optional document ID
-            metadata: Optional metadata
-
-        Returns:
-            dict with processing results
-        """
-        try:
-            rag = self._ensure_rag()
-
-            result = await rag.ainsert(
-                input=content,
-                ids=doc_id,
-            )
-
-            return result if isinstance(result, dict) else {"result": result}
-
-        except Exception as e:
-            logger.error("Failed to process text", error=str(e))
-            raise
-
-    async def aquery(
-        self,
-        query: str,
-        mode: str = "hybrid",
-        system_prompt: str | None = None,
+        task: str,
+        system_prompt: str,
+        messages: list[dict[str, Any]],
     ) -> str:
-        """
-        Query the knowledge base.
+        """Execute the ReAct workflow.
 
         Args:
-            query: Query string
-            mode: Retrieval mode (hybrid, local, global)
-            system_prompt: Optional system prompt override
+            task: The user's task description
+            system_prompt: System prompt for LLM
+            messages: Current conversation messages
 
         Returns:
-            Query response string
+            Final LLM response
         """
-        try:
-            rag = self._ensure_rag()
+        tools = await self.get_tool_schemas()
 
-            result = await rag.aquery(
-                query=query,
-                mode=mode,
+        # ReAct loop: continue until no more tool calls
+        response: dict[str, Any] = {"content": "", "tool_calls": []}
+
+        while True:
+            self.step_count += 1
+
+            # Check safety limit
+            if self.tool_calls_count >= self.max_tool_calls:
+                if self.verbose:
+                    print(f"⚠️  Max tool calls reached ({self.max_tool_calls})")
+                break
+
+            # Call LLM with tools (if available)
+            response = await self.engine.complete(
                 system_prompt=system_prompt,
+                user_query=task,
+                messages=messages,
+                tools=tools if tools else None,
             )
 
-            return result
+            # Update conversation
+            messages.append({"role": "assistant", "content": response["content"]})
 
-        except Exception as e:
-            logger.error("Query failed", query=query, error=str(e))
-            raise
+            # Check for tool calls
+            tool_calls = response.get("tool_calls", [])
+            if not tool_calls:
+                # No more tools needed
+                log_completion(self.step_count, self.tool_calls_count)
+                break
 
-    async def aquery_with_multimodal(
-        self,
-        query: str,
-        multimodal_content: list[dict[str, Any]],
-        mode: str = "hybrid",
-    ) -> str:
-        """
-        Query with multimodal content attachments.
+            # Execute each tool call
+            for tool_call in tool_calls:
+                self.tool_calls_count += 1
 
-        Args:
-            query: Query string
-            multimodal_content: List of multimodal items (images, tables, etc.)
-            mode: Retrieval mode
+                # Log and execute
+                tool_name = tool_call.get("name", "")
+                tool_input = tool_call.get("input", {})
 
-        Returns:
-            Query response string
-        """
-        try:
-            rag = self._ensure_rag()
+                log_step(
+                    self.step_count,
+                    self.max_tool_calls,
+                    tool_name,
+                    tool_input,
+                )
 
-            result = await rag.aquery_with_multimodal(
-                query=query,
-                multimodal_content=multimodal_content,
-                mode=mode,
-            )
+                try:
+                    result = await self.execute_tool(tool_name, tool_input)
+                    is_error = False
+                except Exception as e:
+                    result = str(e)
+                    is_error = True
 
-            return result
+                log_result(result, is_error=is_error)
 
-        except Exception as e:
-            logger.error(
-                "Multimodal query failed",
-                query=query,
-                error=str(e),
-            )
-            raise
+                # Format result for LLM
+                result_content = self._format_tool_result(tool_name, result, is_error)
+                messages.append({"role": "user", "content": result_content})
 
-    def get_status(self) -> dict[str, Any]:
-        """Get adapter status and configuration."""
+        return response["content"]
+
+    def _format_tool_result(self, tool_name: str, result: Any, is_error: bool) -> str:
+        """Format tool result for LLM consumption."""
+        if is_error:
+            return f"[Tool: {tool_name}] Error: {result}"
+
+        result_str = str(result) if result is not None else "No result"
+
+        # Truncate long results
+        if len(result_str) > 2000:
+            result_str = result_str[:2000] + "... [truncated]"
+
+        return f"[Tool: {tool_name}] {result_str}"
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get workflow statistics."""
         return {
-            "initialized": self._rag is not None,
-            "config": {
-                "working_dir": self.config.working_dir,
-                "image_processing": self.config.enable_image_processing,
-                "table_processing": self.config.enable_table_processing,
-                "equation_processing": self.config.enable_equation_processing,
-            },
-            "has_vision_model": self.llm_vision is not None,
-            "has_embed_func": self.embed is not None,
+            "step_count": self.step_count,
+            "tool_calls_count": self.tool_calls_count,
         }
-
-
-def create_rag_adapter(
-    llm_complete_func: callable,
-    llm_vision_func: callable | None = None,
-    embed_func: callable | None = None,
-    **kwargs,
-) -> OmniRAGAdapter:
-    """
-    Factory function to create a RAG adapter with common defaults.
-
-    Args:
-        llm_complete_func: LLM completion function (required)
-        llm_vision_func: Optional VLM function for images
-        embed_func: Optional embedding function
-        **kwargs: Additional OmniRAGAdapter kwargs
-
-    Returns:
-        Configured OmniRAGAdapter instance
-    """
-    return OmniRAGAdapter(
-        llm_complete_func=llm_complete_func,
-        llm_vision_func=llm_vision_func,
-        embed_func=embed_func,
-        **kwargs,
-    )

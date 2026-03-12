@@ -343,7 +343,7 @@ fn test_episode_store_persistence() -> TestResult {
         embedding_dim: 128,
         table_name: "test2".to_string(),
     };
-    let store2 = EpisodeStore::new(config2);
+    let mut store2 = EpisodeStore::new(config2);
 
     // Load from files
     store2.load(&episodes_path_str)?;

@@ -7,11 +7,11 @@
 //! - Sandboxed execution for testing auto-generated skills
 
 use crate::utils::run_safe;
-use pyo3::prelude::*;
-use xiuxian_ast::{SecurityScanner, SecurityViolation};
-use xiuxian_security::{
+use omni_ast::{SecurityScanner, SecurityViolation};
+use omni_security::{
     PermissionGatekeeper, SandboxConfig, SandboxMode, SandboxResult, SandboxRunner, SecretScanner,
 };
+use pyo3::prelude::*;
 
 /// Scan content for secrets (AWS keys, Stripe keys, Slack tokens, etc.)
 /// Returns a violation message if secrets are found, None if clean.
@@ -42,7 +42,7 @@ pub fn contains_secrets(content: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Python wrapper for SecurityViolation from xiuxian-ast
+/// Python wrapper for SecurityViolation from omni-ast
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct PySecurityViolation {
@@ -67,7 +67,7 @@ impl From<SecurityViolation> for PySecurityViolation {
     }
 }
 
-/// Scan Python code for security violations using xiuxian-ast.
+/// Scan Python code for security violations using omni-ast.
 ///
 /// This is the Level 1 defense in the Immune System, using ast-grep
 /// for high-performance pattern matching.
@@ -108,7 +108,7 @@ pub fn is_code_safe(code: &str) -> bool {
 ///
 /// Args:
 ///     tool_name: Full tool name (e.g., "filesystem.read_file")
-///     permissions: List of permission patterns (for example: `"filesystem:*"`, `"git:status"`).
+///     permissions: List of permission patterns (e.g., ["filesystem:*", "git:status"])
 ///
 /// Returns:
 ///     True if allowed, False otherwise.
@@ -233,19 +233,15 @@ impl PySandboxRunner {
 
     /// Run with Docker mode explicitly
     fn use_docker(&mut self) {
-        let config = SandboxConfig {
-            mode: SandboxMode::Docker,
-            ..SandboxConfig::default()
-        };
+        let mut config = SandboxConfig::default();
+        config.mode = SandboxMode::Docker;
         self.runner = SandboxRunner::with_config(config);
     }
 
     /// Run with NsJail mode explicitly (Linux only)
     fn use_nsjail(&mut self) {
-        let config = SandboxConfig {
-            mode: SandboxMode::NsJail,
-            ..SandboxConfig::default()
-        };
+        let mut config = SandboxConfig::default();
+        config.mode = SandboxMode::NsJail;
         self.runner = SandboxRunner::with_config(config);
     }
 }

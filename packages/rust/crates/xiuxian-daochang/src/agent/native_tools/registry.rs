@@ -9,8 +9,6 @@ use std::sync::Arc;
 pub struct NativeToolCallContext {
     /// Session scope key (for example `telegram:1304799691`).
     pub session_id: Option<String>,
-    /// Original assistant tool-call identifier for this invocation.
-    pub tool_call_id: Option<String>,
 }
 
 /// Interface for tools implemented directly in Rust.

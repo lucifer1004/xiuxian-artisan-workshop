@@ -1,4 +1,4 @@
-use xiuxian_tokenizer::count_tokens;
+use omni_tokenizer::count_tokens;
 
 use crate::session::ChatMessage;
 

@@ -141,8 +141,8 @@ async fn test_search_optimized_perf_guard() -> Result<()> {
     let medium_stats = run_profile(&store, table, "medium", medium, &queries).await?;
     let large_stats = run_profile(&store, table, "large", large, &queries).await?;
 
-    let max_p95 = env_f64("OMNI_VECTOR_PERF_P95_MS", 700.0);
-    let max_ratio = env_f64("OMNI_VECTOR_PERF_RATIO_MAX", 4.0);
+    let max_p95 = env_f64("XIUXIAN_VECTOR_PERF_P95_MS", 700.0);
+    let max_ratio = env_f64("XIUXIAN_VECTOR_PERF_RATIO_MAX", 4.0);
 
     println!(
         "search_optimized perf: small(avg={:.2}ms,p50={:.2}ms,p95={:.2}ms), \

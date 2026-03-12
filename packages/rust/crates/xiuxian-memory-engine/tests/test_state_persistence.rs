@@ -1,6 +1,6 @@
 //! State persistence tests for `EpisodeStore`.
 
-use xiuxian_memory_engine::{Episode, EpisodeStore, RecallFeedbackOutcome, StoreConfig};
+use xiuxian_memory_engine::{Episode, EpisodeStore, StoreConfig};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -25,7 +25,6 @@ fn save_state_creates_parent_dirs_and_loads_roundtrip() -> TestResult {
     );
     store.store(episode)?;
     store.update_q("ep-1", 1.0);
-    let _ = store.apply_recall_feedback_for_scope("session-a", RecallFeedbackOutcome::Failure);
 
     store.save_state()?;
 
@@ -34,13 +33,12 @@ fn save_state_creates_parent_dirs_and_loads_roundtrip() -> TestResult {
     assert!(episodes_path.exists(), "episodes state file should exist");
     assert!(q_path.exists(), "q-table state file should exist");
 
-    let reloaded = EpisodeStore::new(config);
+    let mut reloaded = EpisodeStore::new(config);
     reloaded.load_state()?;
 
     assert_eq!(reloaded.len(), 1);
     assert!(reloaded.get("ep-1").is_some());
     assert!(reloaded.q_table.get_q("ep-1") > 0.5);
-    assert!(reloaded.recall_feedback_bias_for_scope("session-a") < 0.0);
     Ok(())
 }
 

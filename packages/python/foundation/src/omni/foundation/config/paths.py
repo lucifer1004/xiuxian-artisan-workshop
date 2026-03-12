@@ -1,294 +1,367 @@
+# mcp-server/writer.py
 """
-Unified Configuration Paths Manager (Refactored)
+DocuSmith - Writing Quality Tools
 
-Layer 1: Semantic Configuration
-Delegates physical path resolution to Layer 0 (dirs.py) via PRJ_SPEC standards.
+Tools for enforcing writing standards from design/writing-style/:
+- lint_writing_style: Check for clutter words (Module 02 - Rosenberg)
+- check_markdown_structure: Validate header hierarchy (Module 03)
+- run_vale_check: Wrapper for Vale CLI linting
 
-Design Philosophy:
-- Layered Architecture:
-    - Layer 0: Environment & Base Dirs (dirs.py) -> Physical Locations
-    - Layer 1: Configuration Logic (paths.py) -> Semantic Locations
-- No more hardcoded strings for directories.
-- Singleton pattern with lazy initialization.
+Usage:
+    from mcp.server.fastmcp import FastMCP
+    from .writer import register_writer_tools
+
+    mcp = FastMCP("my-server")
+    register_writer_tools(mcp)
 """
 
-from __future__ import annotations
-
+import asyncio
 import json
-import warnings
-from pathlib import Path
-from typing import Any, ClassVar
-
-# Layer 0: Physical Directory Management
-from .dirs import PRJ_CACHE, PRJ_CONFIG, PRJ_DATA, PRJ_DIRS, PRJ_RUNTIME
+import re
+import subprocess
+from typing import List, Dict, Any
 
 # =============================================================================
-# Semantic Path Manager
+# Constants from design/writing-style/02_mechanics.md
+# =============================================================================
+
+CLUTTER_WORDS: Dict[str, str] = {
+    r"\butilize\b": "use",
+    r"\bfacilitate\b": "help",
+    r"\bin order to\b": "to",
+    r"\bat this point in time\b": "now",
+    r"\bis capable of\b": "can",
+    r"\bbasically\b": "[DELETE]",
+    r"\bessentially\b": "[DELETE]",
+    r"\bvery\b": "[DELETE]",
+    r"\breally\b": "[DELETE]",
+    r"\bfunctionality\b": "feature",
+    r"\bcommence\b": "start",
+    r"\bterminate\b": "end",
+    r"\bimplement\b": "do",
+    r"\bmodification\b": "change",
+    r"\bsubsequently\b": "then",
+    r"\baccordingly\b": "so",
+    r"\bconsequently\b": "so",
+    r"\bnevertheless\b": "but",
+    r"\bnotwithstanding\b": "despite",
+}
+
+PASSIVE_VOICE_PATTERNS = [
+    r"\b(is|are|was|were|be|been|being)\s+\w+ed\b",
+    r"\b(has|have|had)\s+been\s+\w+ed\b",
+]
+
+# =============================================================================
+# Helper Functions
 # =============================================================================
 
 
-class ConfigPaths:
-    """
-    语义化路径管理器 (Semantic Path Manager).
+def _load_rules_from_file(file_path: str) -> Dict[str, str]:
+    """Load clutter words from a JSON file (for extensibility)."""
+    try:
+        path = Path(file_path)
+        if path.exists():
+            with open(path) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return CLUTTER_WORDS
 
-    Answers "WHERE is X?" - delegates physical location to dirs.py (Layer 0).
 
-    Features:
-    - Uses PRJ_DIRS/PRJ_CONFIG for environment-aware paths
-    - Settings-driven semantic resolution
-    - Singleton pattern (stateless, all state in environment)
+def _check_passive_voice(line: str) -> List[str]:
+    """Detect passive voice in a line."""
+    violations = []
+    for pattern in PASSIVE_VOICE_PATTERNS:
+        if re.search(pattern, line, re.IGNORECASE):
+            # Extract the passive construction
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                violations.append(match.group(0))
+    return violations
 
-    Usage:
-        from omni.foundation.config.paths import get_config_paths
 
-        paths = get_config_paths()
-        paths.project_root  # -> Path to git toplevel
-        paths.get_log_dir() # -> Path to logs directory
-    """
+# =============================================================================
+# MCP Tools
+# =============================================================================
 
-    _instance: ConfigPaths | None = None
-    _DEFAULT_ANTHROPIC_SETTINGS = Path(".claude/settings.json")
-    _DEFAULT_MCP_CONFIG = Path(".mcp.json")
 
-    def __new__(cls) -> ConfigPaths:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+def register_writer_tools(mcp: Any) -> None:
+    """Register all writer tools with the MCP server."""
 
-    # =============================================================================
-    # Semantic Roots
-    # =============================================================================
-
-    @property
-    def project_root(self) -> Path:
-        """Git Toplevel (Immutable anchor).
-
-        The project root is the parent of PRJ_CONFIG_HOME (e.g., .config/).
-        This is typically the git toplevel directory.
+    @mcp.tool()
+    async def lint_writing_style(text: str) -> str:
         """
-        return PRJ_DIRS.config_home.parent
+        Check text against Module 02 (Rosenberg Mechanics) style guide.
 
-    @property
-    def settings_file(self) -> Path:
-        """Main general settings file: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml"""
-        return PRJ_CONFIG("xiuxian-artisan-workshop", "settings.yaml")
+        Checks for:
+        - Clutter words (utilize -> use, facilitate -> help)
+        - Passive voice
+        - Weak language (basically, essentially)
 
-    @property
-    def wendao_settings_file(self) -> Path:
-        """LinkGraph/Wendao settings file: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/wendao.yaml"""
-        return PRJ_CONFIG("xiuxian-artisan-workshop", "wendao.yaml")
+        Args:
+            text: The text to lint
 
-    # =============================================================================
-    # Vendor Specific (Anthropic / OpenAI / etc)
-    # =============================================================================
-
-    def get_anthropic_settings_path(self) -> Path:
+        Returns:
+            JSON string with violations and suggestions
         """
-        Get Anthropic settings path from configuration.
+        violations: List[Dict[str, Any]] = []
+        lines = text.split("\n")
 
-        Strategy:
-        1. Read `api.anthropic_settings` from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml)
-        2. Resolve relative path against project root
-        """
-        from .settings import get_setting
+        for i, line in enumerate(lines, 1):
+            line_num = i
 
-        configured = get_setting("api.anthropic_settings")
-        if configured in (None, ""):
-            return self.project_root / self._DEFAULT_ANTHROPIC_SETTINGS
-        return self._resolve_project_relative_path(configured)
+            # 1. Check Clutter Words
+            for pattern, replacement in CLUTTER_WORDS.items():
+                matches = list(re.finditer(pattern, line, re.IGNORECASE))
+                for match in matches:
+                    violations.append(
+                        {
+                            "type": "clutter_word",
+                            "line": line_num,
+                            "text": match.group(0),
+                            "suggestion": replacement,
+                            "rule": "02_mechanics.md - Strip Clutter",
+                        }
+                    )
 
-    def get_api_base_url(self) -> str | None:
-        """
-        Get API base URL.
+            # 2. Check Passive Voice
+            passive_matches = _check_passive_voice(line)
+            for pmatch in passive_matches:
+                violations.append(
+                    {
+                        "type": "passive_voice",
+                        "line": line_num,
+                        "text": pmatch,
+                        "suggestion": "Use Active Voice",
+                        "rule": "02_mechanics.md - Active Voice",
+                    }
+                )
 
-        Priority:
-        1. From settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml) -> inference.base_url
-        2. Environment variable ANTHROPIC_BASE_URL
-        3. None (uses default Anthropic API)
-        """
-        from .settings import get_setting
+            # 3. Check for weak language
+            weak_patterns = [
+                (r"\bbasically\b", "Delete or be specific"),
+                (r"\bessentially\b", "Delete or be specific"),
+                (r"\bvery\s+\w+", "Use stronger adjective"),
+                (r"\breally\b", "Delete or be specific"),
+            ]
+            for pattern, suggestion in weak_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    violations.append(
+                        {
+                            "type": "weak_language",
+                            "line": line_num,
+                            "text": pattern.replace(r"\b", ""),
+                            "suggestion": suggestion,
+                            "rule": "02_mechanics.md - Strip Clutter",
+                        }
+                    )
 
-        configured = get_setting("inference.base_url")
-        if configured:
-            return str(configured)
-
-        # Keep env fallback for compatibility with existing deployments.
-        import os
-
-        base_url = os.environ.get("ANTHROPIC_BASE_URL")
-        if base_url:
-            return base_url
-
-        return None
-
-    # =============================================================================
-    # Infrastructure (MCP / Logs / Data)
-    # =============================================================================
-
-    def get_mcp_config_path(self) -> Path:
-        """
-        MCP Server Configuration.
-        Location: settings-driven `mcp.config_file` (default `.mcp.json`)
-        """
-        from .settings import get_setting
-
-        configured = get_setting("mcp.config_file")
-        if configured in (None, ""):
-            return self.project_root / self._DEFAULT_MCP_CONFIG
-        return self._resolve_project_relative_path(configured)
-
-    def _resolve_project_relative_path(self, configured: Any) -> Path:
-        """Resolve a configured path against project root when relative."""
-        path = Path(str(configured))
-        if path.is_absolute():
-            return path
-        return self.project_root / path
-
-    def get_mcp_config(self) -> dict[str, Any] | None:
-        """Load and return the MCP configuration."""
-        mcp_path = self.get_mcp_config_path()
-        if mcp_path and mcp_path.exists():
-            try:
-                with open(mcp_path) as f:
-                    return json.load(f)
-            except Exception:
-                pass
-        return None
-
-    def get_mcp_server_config(self, server_name: str) -> dict[str, Any] | None:
-        """Get configuration for a specific MCP server."""
-        config = self.get_mcp_config()
-        if config:
-            servers = config.get("mcpServers", {})
-            return servers.get(server_name)
-        return None
-
-    def get_mcp_timeout(self, server_name: str | None = None) -> int:
-        """Get MCP tool execution timeout in seconds. 0 means no timeout."""
-        from .settings import get_setting
-
-        default_timeout = 1800
-        if server_name:
-            server_config = self.get_mcp_server_config(server_name)
-            if server_config and isinstance(server_config, dict):
-                return int(server_config.get("timeout", default_timeout))
-        raw = get_setting("mcp.timeout", default_timeout)
-        if raw is None or (isinstance(raw, (int, float)) and raw <= 0):
-            return 0
-        return int(raw)
-
-    def get_mcp_idle_timeout(self, server_name: str | None = None) -> int:
-        """Get MCP idle timeout in seconds. 0 = only use wall-clock timeout (no heartbeat check).
-
-        Enforces invariant: idle_timeout <= timeout when both > 0 (see docs/reference/mcp-timeout-spec.md).
-        """
-        from .settings import get_setting
-
-        default_idle = 0
-        if server_name:
-            server_config = self.get_mcp_server_config(server_name)
-            if server_config and isinstance(server_config, dict):
-                raw = server_config.get("idle_timeout", default_idle)
-                idle = int(raw) if raw is not None else default_idle
-            else:
-                idle = default_idle
-        else:
-            raw = get_setting("mcp.idle_timeout", default_idle)
-            if raw is None or (isinstance(raw, (int, float)) and raw <= 0):
-                return 0
-            idle = int(raw)
-        # Enforce idle_timeout <= timeout (spec invariant)
-        timeout = self.get_mcp_timeout(server_name)
-        if timeout > 0 and idle > timeout:
-            warnings.warn(
-                f"mcp.idle_timeout ({idle}) > mcp.timeout ({timeout}); clamping to {timeout}. "
-                "See docs/reference/mcp-timeout-spec.md.",
-                UserWarning,
-                stacklevel=2,
+        # Build response
+        if not violations:
+            return json.dumps(
+                {
+                    "status": "clean",
+                    "message": "No mechanical style violations found.",
+                    "violations": [],
+                }
             )
-            return timeout
-        return idle
 
-    def get_log_dir(self) -> Path:
-        """
-        Runtime Logs.
-        Location: $PRJ_RUNTIME_DIR/logs (e.g., .run/logs)
-        """
-        return PRJ_RUNTIME.ensure_dir("logs")
-
-    def get_data_dir(self, subdir: str = "") -> Path:
-        """
-        Persistent Data Storage.
-        Location: $PRJ_DATA_HOME/<subdir>
-        """
-        if subdir:
-            return PRJ_DATA.ensure_dir(subdir)
-        return PRJ_DATA("")
-
-    def get_cache_dir(self, subdir: str = "") -> Path:
-        """Get cache directory ($PRJ_CACHE_HOME/subdir)."""
-        if subdir:
-            return PRJ_CACHE(subdir)
-        return PRJ_CACHE("")
-
-    # =============================================================================
-    # Utility Methods
-    # =============================================================================
-
-    def list_config_files(self) -> list[dict[str, str | bool]]:
-        """List all configuration files and their paths."""
-        return [
+        return json.dumps(
             {
-                "name": "settings.yaml",
-                "path": str(self.settings_file),
-                "exists": self.settings_file.exists(),
+                "status": "violations",
+                "message": f"Found {len(violations)} style violation(s)",
+                "violations": violations,
             },
+            indent=2,
+        )
+
+    @mcp.tool()
+    async def check_markdown_structure(text: str) -> str:
+        """
+        Check Markdown structure against Module 03 (Structure & AI).
+
+        Checks for:
+        - H1 uniqueness (only one # at top)
+        - Hierarchy jumping (H2 -> H4 not allowed)
+        - Code block labels (Input/Output style)
+        - Proper spacing
+
+        Args:
+            text: The markdown text to check
+
+        Returns:
+            JSON string with structure violations
+        """
+        violations: List[Dict[str, Any]] = []
+        lines = text.split("\n")
+        header_levels: List[int] = []
+        h1_count = 0
+        in_code_block = False
+        code_lang = None
+
+        for i, line in enumerate(lines, 1):
+            line_num = i
+
+            # Track code blocks
+            if line.strip().startswith("```"):
+                if not in_code_block:
+                    in_code_block = True
+                    code_lang = line.strip()[3:].strip() or None
+                    continue
+                else:
+                    in_code_block = False
+                    code_lang = None
+                    continue
+
+            # Check headers
+            if line.startswith("#"):
+                level = len(line.split(" ")[0])
+                header_levels.append(level)
+
+                # H1 check
+                if level == 1:
+                    h1_count += 1
+                    if h1_count > 1:
+                        violations.append(
+                            {
+                                "type": "multiple_h1",
+                                "line": line_num,
+                                "text": line.strip(),
+                                "suggestion": "Use only one H1 per file",
+                                "rule": "03_structure_and_ai.md - H1 Uniqueness",
+                            }
+                        )
+
+                # Hierarchy jumping check
+                if len(header_levels) >= 2:
+                    prev_level = header_levels[-2]
+                    if level > prev_level + 1:
+                        violations.append(
+                            {
+                                "type": "hierarchy_jump",
+                                "line": line_num,
+                                "text": f"H{prev_level} -> H{level}",
+                                "suggestion": f"Change to H{prev_level + 1} or lower",
+                                "rule": "03_structure_and_ai.md - No Header Skipping",
+                            }
+                        )
+
+            # Check for code block without language
+            if in_code_block and not code_lang and not line.strip().startswith("//"):
+                violations.append(
+                    {
+                        "type": "code_without_lang",
+                        "line": line_num,
+                        "text": line[:50] + "..." if len(line) > 50 else line,
+                        "suggestion": "Add language tag to code block",
+                        "rule": "03_structure_and_ai.md - Code Labels",
+                    }
+                )
+
+        # Build response
+        if not violations:
+            return json.dumps(
+                {
+                    "status": "clean",
+                    "message": "Markdown structure is valid.",
+                    "violations": [],
+                }
+            )
+
+        return json.dumps(
             {
-                "name": "wendao.yaml",
-                "path": str(self.wendao_settings_file),
-                "exists": self.wendao_settings_file.exists(),
+                "status": "violations",
+                "message": f"Found {len(violations)} structure violation(s)",
+                "violations": violations,
             },
-            {
-                "name": "anthropic_settings",
-                "path": str(self.get_anthropic_settings_path()),
-                "exists": self.get_anthropic_settings_path().exists(),
-            },
-            {
-                "name": "mcp_config",
-                "path": str(self.get_mcp_config_path()),
-                "exists": self.get_mcp_config_path().exists(),
-            },
-        ]
+            indent=2,
+        )
 
+    @mcp.tool()
+    async def run_vale_check(file_path: str) -> str:
+        """
+        Run Vale CLI on a markdown file and return JSON results.
 
-# =============================================================================
-# Singleton Accessor
-# =============================================================================
+        Args:
+            file_path: Path to the markdown file to lint
 
-_paths_instance: ConfigPaths | None = None
+        Returns:
+            JSON string with Vale linting results
+        """
+        import subprocess
 
+        # Check if vale is available
+        try:
+            subprocess.run(
+                ["vale", "--version"],
+                capture_output=True,
+                check=True,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": "Vale CLI not found. Install with: brew install vale",
+                    "violations": [],
+                }
+            )
 
-def get_config_paths() -> ConfigPaths:
-    """Get the semantic paths manager (singleton)."""
-    global _paths_instance
-    if _paths_instance is None:
-        _paths_instance = ConfigPaths()
-    return _paths_instance
+        # Run vale in JSON format
+        try:
+            result = subprocess.run(
+                ["vale", "--output=JSON", file_path],
+                capture_output=True,
+                text=True,
+            )
 
+            # Parse Vale JSON output
+            if result.returncode == 0:
+                vale_results = json.loads(result.stdout) if result.stdout else {}
+            else:
+                # Vale returns non-zero when errors found
+                vale_results = json.loads(result.stdout) if result.stdout else {}
 
-def get_mcp_config() -> dict[str, Any] | None:
-    """Get MCP configuration from mcp.json."""
-    return get_config_paths().get_mcp_config()
+            # Extract files from Vale output
+            violations = []
+            for file_path_key, alerts in vale_results.items():
+                for alert in alerts:
+                    violations.append(
+                        {
+                            "type": "vale",
+                            "file": file_path_key,
+                            "line": alert.get("Line", 0),
+                            "severity": alert.get("Severity", "info"),
+                            "message": alert.get("Message", ""),
+                            "check": alert.get("Check", ""),
+                        }
+                    )
 
+            return json.dumps(
+                {
+                    "status": "success",
+                    "message": f"Vale found {len(violations)} issue(s)",
+                    "violations": violations,
+                },
+                indent=2,
+            )
 
-def get_anthropic_settings_path() -> Path:
-    """Get path to anthropic/settings.json."""
-    return get_config_paths().get_anthropic_settings_path()
-
-
-def get_mcp_config_path() -> Path:
-    """Get path to mcp.json."""
-    return get_config_paths().get_mcp_config_path()
+        except json.JSONDecodeError:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": "Failed to parse Vale output",
+                    "violations": [],
+                }
+            )
+        except Exception as e:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Vale error: {str(e)}",
+                    "violations": [],
+                }
+            )
 
 
 # =============================================================================
@@ -296,113 +369,8 @@ def get_mcp_config_path() -> Path:
 # =============================================================================
 
 __all__ = [
-    "AuthorizationWait",
-    "ConfigPaths",
-    "format_authorization_wait",
-    "get_anthropic_settings_path",
-    "get_config_paths",
-    "get_mcp_config",
-    "get_mcp_config_path",
+    "register_writer_tools",
+    "CLUTTER_WORDS",
+    "lint_writing_style",
+    "check_markdown_structure",
 ]
-
-
-# =============================================================================
-# Authorization Wait Manager - Forces User Confirmation
-# =============================================================================
-
-
-class AuthorizationWait:
-    """
-    Manages authorization wait state.
-
-    This class ensures that after getting an auth_token:
-    1. The system waits for user confirmation
-    2. Only proceeds when user explicitly says "run just agent-commit"
-    3. Rejects any attempt to bypass the confirmation
-    """
-
-    _pending: ClassVar[dict[str, dict]] = {}
-
-    def __init__(self, auth_token: str, command: str, context: str = ""):
-        self.auth_token = auth_token
-        self.command = command
-        self.context = context
-
-    def is_waiting(self) -> bool:
-        """Check if this authorization is still waiting."""
-        return self.auth_token in AuthorizationWait._pending
-
-    def save(self) -> None:
-        """Save this authorization as pending."""
-        AuthorizationWait._pending[self.auth_token] = {
-            "command": self.command,
-            "context": self.context,
-            "created_at": __import__("time").time(),
-        }
-
-    def confirm(self, user_input: str) -> bool:
-        """Check if user input confirms the authorization."""
-        confirmation_phrases = [
-            "run just agent-commit",
-            "just agent-commit",
-            "agent-commit",
-        ]
-
-        user_input_lower = user_input.lower()
-        for phrase in confirmation_phrases:
-            if phrase in user_input_lower:
-                AuthorizationWait._pending.pop(self.auth_token, None)
-                return True
-
-        return False
-
-    def format_wait_message(self) -> str:
-        """Format the waiting message."""
-        return f"""
-## Authorization Required
-
-**Auth Token:** `{self.auth_token}`
-
-**Command to execute:**
-```
-{self.command}
-```
-
-### IMPORTANT: Do NOT proceed without user confirmation!
-
-**To proceed, you MUST say exactly:**
-> `run just agent-commit`
-
-**I will wait for your confirmation before executing.**
-
----
-*This is a Human-in-the-loop authorization checkpoint.*
-"""
-
-    @classmethod
-    def check_confirmation(
-        cls, user_input: str, auth_token: str | None = None
-    ) -> tuple[bool, str | None]:
-        """Check if user input confirms any pending authorization."""
-        for token, data in cls._pending.items():
-            if auth_token and token != auth_token:
-                continue
-
-            user_input_lower = user_input.lower()
-            if "run just agent-commit" in user_input_lower:
-                cls._pending.pop(token, None)
-                return True, data.get("command")
-
-        return False, None
-
-    @classmethod
-    def clear_all(cls) -> None:
-        """Clear all pending authorizations."""
-        cls._pending.clear()
-
-
-def format_authorization_wait(auth_token: str, command: str) -> str:
-    """Format an authorization wait message."""
-    wait = AuthorizationWait(auth_token=auth_token, command=command)
-    wait.save()
-    return wait.format_wait_message()
