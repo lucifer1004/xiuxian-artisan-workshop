@@ -4,8 +4,8 @@ use crate::link_graph::agentic::{LinkGraphSuggestedLink, LinkGraphSuggestedLinkS
 use crate::link_graph::runtime_config::resolve_link_graph_agentic_runtime;
 use crate::link_graph::valkey_suggested_link_recent_latest;
 use crate::link_graph::{
-    LinkGraphDirection, LinkGraphDisplayHit, LinkGraphHit, LinkGraphPlannedSearchPayload,
-    LinkGraphPromotedOverlayTelemetry, ParsedLinkGraphQuery,
+    LinkGraphCcsAudit, LinkGraphDirection, LinkGraphDisplayHit, LinkGraphHit,
+    LinkGraphPlannedSearchPayload, LinkGraphPromotedOverlayTelemetry, ParsedLinkGraphQuery,
 };
 use std::collections::HashMap;
 
@@ -130,6 +130,9 @@ impl LinkGraphIndex {
             &coactivated_neighbor_node_ids(self, &hits),
         );
 
+        // Compute CCS audit before moving ownership
+        let ccs_audit = self.compute_ccs_audit(&parsed.options.style_anchors, &hits);
+
         LinkGraphPlannedSearchPayload {
             query: parsed.query,
             options: parsed.options,
@@ -148,7 +151,45 @@ impl LinkGraphIndex {
             provisional_suggestions: provisional_suggestions.to_vec(),
             provisional_error,
             promoted_overlay,
+            ccs_audit,
         }
+    }
+
+    fn compute_ccs_audit(
+        &self,
+        style_anchors: &[String],
+        hits: &[LinkGraphDisplayHit],
+    ) -> Option<LinkGraphCcsAudit> {
+        use crate::link_graph::LinkGraphCcsAudit;
+        use crate::zhenfa_router::{audit_search_payload, evaluate_alignment};
+
+        if style_anchors.is_empty() {
+            return None;
+        }
+
+        // Extract evidence from search hits (titles, stems, sections)
+        let evidence: Vec<String> = hits
+            .iter()
+            .flat_map(|hit| {
+                let mut parts = vec![hit.title.clone(), hit.stem.clone()];
+                if !hit.best_section.trim().is_empty() {
+                    parts.push(hit.best_section.clone());
+                }
+                parts
+            })
+            .collect();
+
+        // Run CCS audit using the zhenfa router audit module
+        let audit = audit_search_payload(&evidence, style_anchors);
+        let verdict = evaluate_alignment(style_anchors, &evidence);
+
+        // Build the CCS audit result for payload
+        Some(LinkGraphCcsAudit {
+            ccs_score: audit.ccs_score,
+            passed: audit.passed && verdict.is_aligned,
+            compensated: false,
+            missing_anchors: audit.missing_anchors,
+        })
     }
 }
 

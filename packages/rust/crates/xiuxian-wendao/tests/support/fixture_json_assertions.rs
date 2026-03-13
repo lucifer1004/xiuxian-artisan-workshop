@@ -1,4 +1,6 @@
 //! Shared JSON fixture assertions for `xiuxian-wendao` integration tests.
+//!
+//! This module provides backward-compatible assertions using Insta internally.
 
 use serde_json::Value;
 

@@ -2,7 +2,6 @@ use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use image::DynamicImage;
 use sha2::{Digest, Sha256};
 
 use super::super::super::super::preprocess::PreparedVisionImage;
@@ -14,28 +13,28 @@ static FINGERPRINT_CACHE: OnceLock<Mutex<FingerprintCacheStore>> = OnceLock::new
 
 #[derive(Default)]
 struct FingerprintCacheStore {
-    entries: HashMap<DecodedImageKey, Arc<str>>,
-    order: VecDeque<DecodedImageKey>,
+    entries: HashMap<ResizedPngKey, Arc<str>>,
+    order: VecDeque<ResizedPngKey>,
 }
 
 #[derive(Clone)]
-struct DecodedImageKey(Arc<DynamicImage>);
+struct ResizedPngKey(Arc<[u8]>);
 
-impl PartialEq for DecodedImageKey {
+impl PartialEq for ResizedPngKey {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
 }
 
-impl Eq for DecodedImageKey {}
+impl Eq for ResizedPngKey {}
 
-impl Hash for DecodedImageKey {
+impl Hash for ResizedPngKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
         Arc::as_ptr(&self.0).hash(state);
     }
 }
 
-pub(in crate::llm::vision::deepseek::native) fn prepared_pixels_fingerprint(
+pub(in crate::llm::vision::deepseek) fn prepared_pixels_fingerprint(
     prepared: &PreparedVisionImage,
 ) -> Arc<str> {
     let max_entries = fingerprint_cache_max_entries();
@@ -43,7 +42,7 @@ pub(in crate::llm::vision::deepseek::native) fn prepared_pixels_fingerprint(
         return Arc::<str>::from(build_fingerprint(prepared));
     }
 
-    let key = DecodedImageKey(Arc::clone(&prepared.decoded));
+    let key = ResizedPngKey(Arc::clone(&prepared.resized_png));
     if let Some(fingerprint) = read_cached_fingerprint(&key) {
         return fingerprint;
     }
@@ -53,7 +52,7 @@ pub(in crate::llm::vision::deepseek::native) fn prepared_pixels_fingerprint(
     fingerprint
 }
 
-pub(in crate::llm::vision::deepseek::native) fn fingerprint_cache_clear_for_tests() {
+pub(in crate::llm::vision::deepseek) fn fingerprint_cache_clear_for_tests() {
     let cache = FINGERPRINT_CACHE.get_or_init(|| Mutex::new(FingerprintCacheStore::default()));
     let mut guard = cache
         .lock()
@@ -62,7 +61,7 @@ pub(in crate::llm::vision::deepseek::native) fn fingerprint_cache_clear_for_test
     guard.order.clear();
 }
 
-pub(in crate::llm::vision::deepseek::native) fn fingerprint_cache_len_for_tests() -> usize {
+pub(in crate::llm::vision::deepseek) fn fingerprint_cache_len_for_tests() -> usize {
     let cache = FINGERPRINT_CACHE.get_or_init(|| Mutex::new(FingerprintCacheStore::default()));
     let guard = cache
         .lock()
@@ -72,12 +71,11 @@ pub(in crate::llm::vision::deepseek::native) fn fingerprint_cache_len_for_tests(
 
 fn build_fingerprint(prepared: &PreparedVisionImage) -> String {
     let mut hasher = Sha256::new();
-    hasher.update([prepared.decoded.color().channel_count()]);
-    hasher.update(prepared.decoded.as_bytes());
+    hasher.update(prepared.resized_png.as_ref());
     hex::encode(hasher.finalize())
 }
 
-fn read_cached_fingerprint(key: &DecodedImageKey) -> Option<Arc<str>> {
+fn read_cached_fingerprint(key: &ResizedPngKey) -> Option<Arc<str>> {
     let cache = FINGERPRINT_CACHE.get_or_init(|| Mutex::new(FingerprintCacheStore::default()));
     let guard = cache
         .lock()
@@ -85,7 +83,7 @@ fn read_cached_fingerprint(key: &DecodedImageKey) -> Option<Arc<str>> {
     guard.entries.get(key).cloned()
 }
 
-fn store_cached_fingerprint(key: DecodedImageKey, fingerprint: Arc<str>, max_entries: usize) {
+fn store_cached_fingerprint(key: ResizedPngKey, fingerprint: Arc<str>, max_entries: usize) {
     let cache = FINGERPRINT_CACHE.get_or_init(|| Mutex::new(FingerprintCacheStore::default()));
     let mut guard = cache
         .lock()
@@ -110,6 +108,6 @@ fn fingerprint_cache_max_entries() -> usize {
     std::env::var("XIUXIAN_VISION_OCR_PREPROCESS_CACHE_LOCAL_MAX_ENTRIES")
         .ok()
         .and_then(|raw| raw.trim().parse::<usize>().ok())
-        .or_else(config::preprocess_local_max_entries)
+        .or_else(config::cache_local_max_entries)
         .unwrap_or(DEFAULT_FINGERPRINT_CACHE_MAX_ENTRIES)
 }

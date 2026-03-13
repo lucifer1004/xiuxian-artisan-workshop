@@ -1,3 +1,7 @@
+//! Studio API gateway for Qianji frontend.
+//!
+//! Provides HTTP endpoints for VFS operations, graph queries, and UI configuration.
+
 pub mod types;
 
 #[cfg(feature = "zhenfa-router")]

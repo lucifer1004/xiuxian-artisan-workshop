@@ -14,7 +14,7 @@ fn preprocess_cache_reuses_decoded_image_for_same_bytes_and_dimension() -> Resul
     let first = preprocess_image_for_ocr(Arc::clone(&image), 256)?;
     let second = preprocess_image_for_ocr(image, 256)?;
 
-    assert!(Arc::ptr_eq(&first.decoded, &second.decoded));
+    assert!(Arc::ptr_eq(&first.resized_png, &second.resized_png));
     assert_eq!(first.width, second.width);
     assert_eq!(first.height, second.height);
     Ok(())
@@ -27,7 +27,7 @@ fn preprocess_cache_separates_entries_by_requested_dimension() -> Result<()> {
     let full = preprocess_image_for_ocr(Arc::clone(&image), 1024)?;
     let downscaled = preprocess_image_for_ocr(image, 256)?;
 
-    assert!(!Arc::ptr_eq(&full.decoded, &downscaled.decoded));
+    assert!(!Arc::ptr_eq(&full.resized_png, &downscaled.resized_png));
     assert_ne!(
         (full.width, full.height),
         (downscaled.width, downscaled.height)

@@ -15,7 +15,9 @@ pub use graph_rows::{LinkGraphMetadata, LinkGraphNeighbor, LinkGraphStats};
 pub use hits::{LinkGraphDisplayHit, LinkGraphHit};
 pub use page_index::{PageIndexMeta, PageIndexNode};
 pub use passage::LinkGraphPassage;
-pub use payload::{LinkGraphPlannedSearchPayload, LinkGraphPromotedOverlayTelemetry};
+pub use payload::{
+    LinkGraphCcsAudit, LinkGraphPlannedSearchPayload, LinkGraphPromotedOverlayTelemetry,
+};
 pub use quantum_fusion::{
     QuantumAnchorHit, QuantumContext, QuantumFusionOptions, QuantumFusionTelemetry,
     QuantumSemanticSearchRequest,

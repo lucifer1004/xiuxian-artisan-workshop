@@ -1,54 +1,15 @@
 //! Snapshot-backed full workflow integration contracts for `xiuxian-skills`.
+//!
+//! Uses Insta for snapshot testing.
+
+mod support;
 
 use std::fs;
-use std::path::{Path, PathBuf};
 
+use support::write_fixture_file;
 use tempfile::TempDir;
 use xiuxian_skills::VERSION;
 use xiuxian_skills::{SkillScanner, ToolsScanner};
-
-fn snapshot_path(relative: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("snapshots")
-        .join(relative)
-}
-
-fn fixture_path(relative: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join("full_workflow_snapshots")
-        .join(relative)
-}
-
-fn read_snapshot(relative: &str) -> String {
-    let path = snapshot_path(relative);
-    fs::read_to_string(path.as_path())
-        .unwrap_or_else(|error| panic!("failed to read snapshot {}: {error}", path.display()))
-}
-
-fn assert_snapshot_eq(relative: &str, actual: &str) {
-    let expected = read_snapshot(relative);
-    assert_eq!(
-        expected, actual,
-        "snapshot mismatch: {relative}\n--- expected ---\n{expected}\n--- actual ---\n{actual}"
-    );
-}
-
-fn read_fixture(relative: &str) -> String {
-    let path = fixture_path(relative);
-    fs::read_to_string(path.as_path())
-        .unwrap_or_else(|error| panic!("failed to read fixture {}: {error}", path.display()))
-}
-
-fn write_fixture_file(target: &Path, relative: &str) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(target, read_fixture(relative))?;
-    Ok(())
-}
 
 #[test]
 fn test_version_constant() {
@@ -57,44 +18,48 @@ fn test_version_constant() {
 }
 
 #[test]
-fn snapshot_full_scan_workflow_contract() -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = TempDir::new()?;
+fn snapshot_full_scan_workflow_contract() {
+    let temp_dir = TempDir::new().expect("temp dir");
     let skills_dir = temp_dir.path().join("skills");
-    fs::create_dir_all(&skills_dir)?;
+    fs::create_dir_all(&skills_dir).expect("create skills dir");
 
     let writer_path = skills_dir.join("writer");
-    fs::create_dir_all(writer_path.join("scripts"))?;
+    fs::create_dir_all(writer_path.join("scripts")).expect("create writer scripts");
     write_fixture_file(
         writer_path.join("SKILL.md").as_path(),
-        "full_scan/writer/SKILL.md",
-    )?;
+        "full_workflow_snapshots/full_scan/writer/SKILL.md",
+    );
     write_fixture_file(
         writer_path.join("scripts/text.py").as_path(),
-        "full_scan/writer/scripts/text.py",
-    )?;
+        "full_workflow_snapshots/full_scan/writer/scripts/text.py",
+    );
 
     let git_path = skills_dir.join("git");
-    fs::create_dir_all(&git_path)?;
+    fs::create_dir_all(&git_path).expect("create git");
     write_fixture_file(
         git_path.join("SKILL.md").as_path(),
-        "full_scan/git/SKILL.md",
-    )?;
+        "full_workflow_snapshots/full_scan/git/SKILL.md",
+    );
 
     let skill_scanner = SkillScanner::new();
-    let mut metadatas = skill_scanner.scan_all(&skills_dir, None)?;
+    let mut metadatas = skill_scanner
+        .scan_all(&skills_dir, None)
+        .expect("scan all skills");
     metadatas.sort_by(|left, right| left.skill_name.cmp(&right.skill_name));
 
     let tools_scanner = ToolsScanner::new();
     let writer_metadata = metadatas
         .iter()
         .find(|m| m.skill_name == "writer")
-        .ok_or_else(|| std::io::Error::other("writer metadata should exist"))?;
-    let writer_tools = tools_scanner.scan_scripts(
-        &writer_path.join("scripts"),
-        "writer",
-        &writer_metadata.routing_keywords,
-        &writer_metadata.intents,
-    )?;
+        .expect("writer metadata should exist");
+    let writer_tools = tools_scanner
+        .scan_scripts(
+            &writer_path.join("scripts"),
+            "writer",
+            &writer_metadata.routing_keywords,
+            &writer_metadata.intents,
+        )
+        .expect("scan writer scripts");
 
     let mut tool_names = writer_tools
         .iter()
@@ -121,7 +86,7 @@ fn snapshot_full_scan_workflow_contract() -> Result<(), Box<dyn std::error::Erro
         })
         .collect::<Vec<_>>();
 
-    let actual = serde_json::json!({
+    let snapshot = serde_json::json!({
         "metadata_projection": metadata_projection,
         "writer_tool_count": writer_tools.len(),
         "writer_tool_names": tool_names,
@@ -131,36 +96,37 @@ fn snapshot_full_scan_workflow_contract() -> Result<(), Box<dyn std::error::Erro
             "contains_polish": writer_keywords.contains(&"polish".to_string())
         }
     });
-    let actual = format!("{}\n", serde_json::to_string_pretty(&actual)?);
-    assert_snapshot_eq("full_workflow/full_scan_workflow.json", actual.as_str());
-    Ok(())
+
+    insta::assert_json_snapshot!("full_scan_workflow", snapshot);
 }
 
 #[test]
-fn snapshot_scanner_reports_duplicate_tools_contract() -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = TempDir::new()?;
+fn snapshot_scanner_reports_duplicate_tools_contract() {
+    let temp_dir = TempDir::new().expect("temp dir");
     let skill_path = temp_dir.path().join("skills/test");
-    fs::create_dir_all(skill_path.join("scripts"))?;
+    fs::create_dir_all(skill_path.join("scripts")).expect("create scripts dir");
     write_fixture_file(
         skill_path.join("SKILL.md").as_path(),
-        "duplicate_tools/test/SKILL.md",
-    )?;
+        "full_workflow_snapshots/duplicate_tools/test/SKILL.md",
+    );
     write_fixture_file(
         skill_path.join("scripts/commands.py").as_path(),
-        "duplicate_tools/test/scripts/commands.py",
-    )?;
+        "full_workflow_snapshots/duplicate_tools/test/scripts/commands.py",
+    );
     write_fixture_file(
         skill_path.join("scripts/more_commands.py").as_path(),
-        "duplicate_tools/test/scripts/more_commands.py",
-    )?;
+        "full_workflow_snapshots/duplicate_tools/test/scripts/more_commands.py",
+    );
 
     let tools_scanner = ToolsScanner::new();
-    let tools = tools_scanner.scan_scripts(
-        &skill_path.join("scripts"),
-        "test",
-        &["test".to_string()],
-        &[],
-    )?;
+    let tools = tools_scanner
+        .scan_scripts(
+            &skill_path.join("scripts"),
+            "test",
+            &["test".to_string()],
+            &[],
+        )
+        .expect("scan scripts");
 
     let mut tool_names = tools
         .iter()
@@ -177,45 +143,43 @@ fn snapshot_scanner_reports_duplicate_tools_contract() -> Result<(), Box<dyn std
         .collect::<std::collections::BTreeSet<_>>()
         .len();
 
-    let actual = serde_json::json!({
+    let snapshot = serde_json::json!({
         "tool_count": tools.len(),
         "tool_names": tool_names,
         "unique_tool_name_count": unique_count,
         "unique_file_hash_count": file_hashes_unique
     });
-    let actual = format!("{}\n", serde_json::to_string_pretty(&actual)?);
-    assert_snapshot_eq("full_workflow/duplicate_tools.json", actual.as_str());
-    Ok(())
+
+    insta::assert_json_snapshot!("duplicate_tools", snapshot);
 }
 
 #[test]
-fn snapshot_same_function_name_different_skills_contract() -> Result<(), Box<dyn std::error::Error>>
-{
-    let temp_dir = TempDir::new()?;
+fn snapshot_same_function_name_different_skills_contract() {
+    let temp_dir = TempDir::new().expect("temp dir");
     let skills_dir = temp_dir.path().join("skills");
-    fs::create_dir_all(&skills_dir)?;
+    fs::create_dir_all(&skills_dir).expect("create skills dir");
 
     let skill1_path = skills_dir.join("skill1");
-    fs::create_dir_all(skill1_path.join("scripts"))?;
+    fs::create_dir_all(skill1_path.join("scripts")).expect("create skill1 scripts");
     write_fixture_file(
         skill1_path.join("SKILL.md").as_path(),
-        "cross_skill/skill1/SKILL.md",
-    )?;
+        "full_workflow_snapshots/cross_skill/skill1/SKILL.md",
+    );
     write_fixture_file(
         skill1_path.join("scripts/main.py").as_path(),
-        "cross_skill/skill1/scripts/main.py",
-    )?;
+        "full_workflow_snapshots/cross_skill/skill1/scripts/main.py",
+    );
 
     let skill2_path = skills_dir.join("skill2");
-    fs::create_dir_all(skill2_path.join("scripts"))?;
+    fs::create_dir_all(skill2_path.join("scripts")).expect("create skill2 scripts");
     write_fixture_file(
         skill2_path.join("SKILL.md").as_path(),
-        "cross_skill/skill2/SKILL.md",
-    )?;
+        "full_workflow_snapshots/cross_skill/skill2/SKILL.md",
+    );
     write_fixture_file(
         skill2_path.join("scripts/main.py").as_path(),
-        "cross_skill/skill2/scripts/main.py",
-    )?;
+        "full_workflow_snapshots/cross_skill/skill2/scripts/main.py",
+    );
 
     let tools_scanner = ToolsScanner::new();
     let mut skill1_tools = tools_scanner
@@ -224,7 +188,8 @@ fn snapshot_same_function_name_different_skills_contract() -> Result<(), Box<dyn
             "skill1",
             &["s1".to_string()],
             &[],
-        )?
+        )
+        .expect("scan skill1 scripts")
         .into_iter()
         .map(|tool| tool.tool_name)
         .collect::<Vec<_>>();
@@ -235,20 +200,17 @@ fn snapshot_same_function_name_different_skills_contract() -> Result<(), Box<dyn
             "skill2",
             &["s2".to_string()],
             &[],
-        )?
+        )
+        .expect("scan skill2 scripts")
         .into_iter()
         .map(|tool| tool.tool_name)
         .collect::<Vec<_>>();
     skill2_tools.sort();
 
-    let actual = serde_json::json!({
+    let snapshot = serde_json::json!({
         "skill1_tools": skill1_tools,
         "skill2_tools": skill2_tools
     });
-    let actual = format!("{}\n", serde_json::to_string_pretty(&actual)?);
-    assert_snapshot_eq(
-        "full_workflow/cross_skill_same_function.json",
-        actual.as_str(),
-    );
-    Ok(())
+
+    insta::assert_json_snapshot!("cross_skill_same_function", snapshot);
 }

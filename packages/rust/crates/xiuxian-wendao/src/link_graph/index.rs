@@ -54,6 +54,19 @@ use shared::{
     normalize_path_filter, path_matches_filter,
 };
 
+/// A virtual node synthesized from collapsed dense clusters during knowledge distillation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkGraphVirtualNode {
+    /// Synthesized identifier (e.g., "virtual:cluster:0:abc123").
+    pub id: String,
+    /// Original member node IDs that were collapsed.
+    pub members: Vec<String>,
+    /// Average saliency of collapsed nodes.
+    pub avg_saliency: f64,
+    /// Synthesized title.
+    pub title: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct IndexedSection {
     pub(crate) heading_title: String,
@@ -130,6 +143,8 @@ pub struct LinkGraphIndex {
     incoming: HashMap<String, HashSet<String>>,
     rank_by_id: HashMap<String, f64>,
     edge_count: usize,
+    /// Virtual nodes created by knowledge distillation (collapsed dense clusters).
+    virtual_nodes: HashMap<String, build::VirtualNode>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

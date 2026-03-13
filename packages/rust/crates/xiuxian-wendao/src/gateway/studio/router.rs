@@ -22,6 +22,9 @@ use super::types::{
 };
 use super::{graph, vfs};
 
+/// Shared state for the Studio API.
+///
+/// Contains configuration, VFS roots, and cached graph index.
 pub struct StudioState {
     pub(crate) project_root: PathBuf,
     pub(crate) data_root: PathBuf,
@@ -32,6 +35,7 @@ pub struct StudioState {
 }
 
 impl StudioState {
+    /// Create a new StudioState with default configuration.
     #[must_use]
     pub fn new() -> Self {
         let project_root = PrjDirs::project_root();
@@ -105,6 +109,17 @@ struct GraphNeighborsQuery {
     limit: Option<usize>,
 }
 
+/// Create the Studio API router with all endpoints.
+///
+/// # Endpoints
+///
+/// - `GET /api/vfs` - List root entries
+/// - `GET /api/vfs/scan` - Scan all VFS roots
+/// - `GET /api/vfs/cat?path=` - Read file content
+/// - `GET /api/vfs/{*path}` - Get single entry
+/// - `GET /api/neighbors/{*id}` - Get node neighbors
+/// - `GET /api/graph/neighbors/{*id}` - Get graph neighbors
+/// - `GET/POST /api/ui/config` - UI configuration
 pub fn studio_router(state: Arc<StudioState>) -> Router {
     Router::new()
         .route("/api/vfs", get(vfs_root_entries))

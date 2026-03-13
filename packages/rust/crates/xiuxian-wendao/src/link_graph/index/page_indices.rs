@@ -19,6 +19,17 @@ impl LinkGraphIndex {
             .map(|path| format!("[Path: {}]", path.join(" > ")))
     }
 
+    /// Lookup the parent node id for a page-index node.
+    ///
+    /// Returns `Some(None)` for roots, `Some(Some(parent_id))` for child nodes,
+    /// and `None` when the node id is unknown.
+    #[must_use]
+    pub fn page_index_parent_id(&self, node_id: &str) -> Option<Option<&str>> {
+        self.node_parent_map
+            .get(node_id)
+            .map(|parent| parent.as_deref())
+    }
+
     #[allow(dead_code)]
     pub(super) fn rebuild_all_page_indices(&mut self) {
         self.trees_by_doc.clear();
@@ -63,58 +74,5 @@ impl LinkGraphIndex {
                 .insert(node.node_id.clone(), parent_id.map(str::to_string));
             self.index_page_index_nodes(&node.children, Some(node.node_id.as_str()));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::LinkGraphIndex;
-
-    #[test]
-    fn rebuild_page_index_populates_node_parent_map_with_root_none_and_child_parent_ids()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let temp_dir = tempfile::TempDir::new()?;
-        let docs_dir = temp_dir.path().join("docs");
-        std::fs::create_dir_all(&docs_dir)?;
-        std::fs::write(
-            docs_dir.join("alpha.md"),
-            concat!(
-                "# Alpha\n\n",
-                "alpha root section carries enough words to stay stable and avoid thinning.\n\n",
-                "## Beta\n\n",
-                "beta child section carries enough words to keep the nested page index path.\n\n",
-                "### Gamma\n\n",
-                "gamma leaf section is the nested anchor we use for lineage validation.\n",
-            ),
-        )?;
-
-        let index = LinkGraphIndex::build(temp_dir.path()).map_err(std::io::Error::other)?;
-        let roots = index.page_index("alpha").ok_or("missing page index")?;
-        let root = roots.first().ok_or("missing root node")?;
-        let beta = root.children.first().ok_or("missing beta node")?;
-        let gamma = beta.children.first().ok_or("missing gamma node")?;
-
-        assert_eq!(
-            index.get_node_parent_map().get(root.node_id.as_str()),
-            Some(&None)
-        );
-        assert_eq!(
-            index.get_node_parent_map().get(beta.node_id.as_str()),
-            Some(&Some(root.node_id.clone()))
-        );
-        assert_eq!(
-            index.get_node_parent_map().get(gamma.node_id.as_str()),
-            Some(&Some(beta.node_id.clone()))
-        );
-        assert_eq!(
-            index.page_index_semantic_path(gamma.node_id.as_str()),
-            Some(vec![
-                "Alpha".to_string(),
-                "Beta".to_string(),
-                "Gamma".to_string(),
-            ])
-        );
-
-        Ok(())
     }
 }

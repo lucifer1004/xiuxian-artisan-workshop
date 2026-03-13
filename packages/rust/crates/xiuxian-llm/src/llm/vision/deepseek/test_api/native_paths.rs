@@ -1,8 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use super::super::model_kind::VisionModelKind;
+pub use super::super::native::{DsqRepairResult, repair_dsq_if_needed};
 
-pub(crate) fn resolve_weights_path_with_for_tests(
+pub fn resolve_weights_path_with_for_tests(
     model_root: &Path,
     model_kind: Option<&str>,
     override_path: Option<&str>,

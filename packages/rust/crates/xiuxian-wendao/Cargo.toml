@@ -88,6 +88,8 @@ url = "2.5.7"
 [dev-dependencies]
 tempfile = { workspace = true }
 reqwest = { workspace = true }
+insta = { workspace = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true

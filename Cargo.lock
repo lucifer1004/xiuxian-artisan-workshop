@@ -5486,6 +5486,8 @@ checksum = "e82db8c87c7f1ccecb34ce0c24399b8a73081427f3c7c50a5d597925356115e4"
 dependencies = [
  "console 0.15.11",
  "once_cell",
+ "pest",
+ "pest_derive",
  "serde",
  "similar",
  "tempfile",
@@ -14323,6 +14325,7 @@ dependencies = [
  "async-trait",
  "axum",
  "base64 0.22.1",
+ "byteorder",
  "candle-core",
  "deepseek-ocr-core",
  "deepseek-ocr-dsq",
@@ -14345,6 +14348,7 @@ dependencies = [
  "sha2",
  "spider",
  "spider_agent",
+ "tempfile",
  "thiserror 2.0.18",
  "tokenizers 0.22.2",
  "tokio",
@@ -14448,7 +14452,6 @@ dependencies = [
  "pyo3",
  "quick-xml",
  "redis 1.0.3",
- "reqwest 0.13.2",
  "schemars 1.2.0",
  "serde",
  "serde_json",
@@ -14529,6 +14532,7 @@ version = "0.1.1"
 dependencies = [
  "anyhow",
  "hex",
+ "insta",
  "log",
  "rayon",
  "schemars 1.2.0",
@@ -14544,6 +14548,7 @@ dependencies = [
  "xiuxian-ast",
  "xiuxian-config-core",
  "xiuxian-macros",
+ "xiuxian-testing",
  "xiuxian-types",
 ]
 
@@ -14560,6 +14565,18 @@ dependencies = [
  "walkdir",
  "xiuxian-ast",
  "xiuxian-io",
+]
+
+[[package]]
+name = "xiuxian-testing"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "insta",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -14655,6 +14672,7 @@ dependencies = [
  "dashmap 7.0.0-rc2",
  "dirs 5.0.1",
  "include_dir",
+ "insta",
  "lazy_static",
  "log",
  "once_cell",
@@ -14683,6 +14701,7 @@ dependencies = [
  "xiuxian-logging",
  "xiuxian-macros",
  "xiuxian-skills",
+ "xiuxian-testing",
  "xiuxian-types",
  "xiuxian-vector",
  "xiuxian-zhenfa",

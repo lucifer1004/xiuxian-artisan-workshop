@@ -1,19 +1,17 @@
+use super::super::super::super::util::sanitize_error_string;
 use std::sync::Arc;
 use std::time::Duration;
-
 use tracing::warn;
 
-use super::super::super::super::util::sanitize_error_string;
-
-pub(super) struct ValkeyOcrCache {
-    pub(super) client: redis::Client,
-    pub(super) key_prefix: Arc<str>,
-    pub(super) ttl_secs: u64,
-    pub(super) io_timeout_ms: u64,
+pub struct ValkeyOcrCache {
+    pub client: redis::Client,
+    pub key_prefix: Arc<str>,
+    pub ttl_secs: u64,
+    pub io_timeout_ms: u64,
 }
 
 impl ValkeyOcrCache {
-    pub(super) fn get(&self, key: &str) -> Option<String> {
+    pub fn get(&self, key: &str) -> Option<String> {
         let mut connection = match self.client.get_connection() {
             Ok(connection) => connection,
             Err(error) => {
@@ -42,7 +40,7 @@ impl ValkeyOcrCache {
         }
     }
 
-    pub(super) fn set(&self, key: &str, markdown: &str) -> bool {
+    pub fn set(&self, key: &str, markdown: &str) -> bool {
         let mut connection = match self.client.get_connection() {
             Ok(connection) => connection,
             Err(error) => {

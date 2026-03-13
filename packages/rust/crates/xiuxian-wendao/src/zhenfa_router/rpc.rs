@@ -150,6 +150,7 @@ mod tests {
             provisional_suggestions: vec![],
             provisional_error: None,
             promoted_overlay: None,
+            ccs_audit: None,
         };
 
         let rendered = render_markdown(&payload);

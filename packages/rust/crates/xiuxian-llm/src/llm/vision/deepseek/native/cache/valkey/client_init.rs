@@ -1,17 +1,10 @@
-use std::sync::Arc;
-
-use tracing::warn;
-
 use super::super::super::super::util::sanitize_error_string;
 use super::super::super::env::{cache_key_prefix, cache_valkey_url, parse_env_u64};
 use super::ops::ValkeyOcrCache;
+use std::sync::Arc;
+use tracing::warn;
 
-pub(super) fn load_valkey_cache() -> Option<ValkeyOcrCache> {
-    // Optional distributed cache (Valkey):
-    // - XIUXIAN_VISION_OCR_CACHE_VALKEY_URL: enable switch when non-empty
-    // - XIUXIAN_VISION_OCR_CACHE_PREFIX: key namespace (default xiuxian:vision:ocr:v1)
-    // - XIUXIAN_VISION_OCR_CACHE_TTL_SECS: key ttl (default 3600)
-    // - XIUXIAN_VISION_OCR_CACHE_TIMEOUT_MS: socket read/write timeout (default 200)
+pub fn load_valkey_cache() -> Option<ValkeyOcrCache> {
     let valkey_url = cache_valkey_url()?;
     let key_prefix = cache_key_prefix().unwrap_or_else(|| "xiuxian:vision:ocr:v1".to_string());
     let ttl_secs = parse_env_u64("XIUXIAN_VISION_OCR_CACHE_TTL_SECS").unwrap_or(3_600);
@@ -26,7 +19,17 @@ pub(super) fn load_valkey_cache() -> Option<ValkeyOcrCache> {
     )
 }
 
-pub(super) fn build_valkey_cache(
+pub fn acquire_client(
+    valkey_url: &str,
+    key_prefix: &str,
+    ttl_secs: u64,
+    io_timeout_ms: u64,
+) -> ValkeyOcrCache {
+    build_valkey_cache(valkey_url, key_prefix, ttl_secs, io_timeout_ms)
+        .expect("Valkey client acquisition failed")
+}
+
+pub fn build_valkey_cache(
     valkey_url: &str,
     key_prefix: &str,
     ttl_secs: u64,
@@ -51,6 +54,6 @@ pub(super) fn build_valkey_cache(
     })
 }
 
-pub(super) fn normalize_io_timeout_ms(io_timeout_ms: u64) -> u64 {
+pub fn normalize_io_timeout_ms(io_timeout_ms: u64) -> u64 {
     io_timeout_ms.max(1)
 }

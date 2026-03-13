@@ -1,0 +1,12 @@
+---
+source: packages/rust/crates/xiuxian-skills/tests/test_full_workflow.rs
+expression: snapshot
+---
+{
+  "skill1_tools": [
+    "skill1.process"
+  ],
+  "skill2_tools": [
+    "skill2.process"
+  ]
+}

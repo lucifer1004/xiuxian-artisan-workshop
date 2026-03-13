@@ -12,6 +12,7 @@ use deepseek_ocr_infer_dots::load_model as load_dots_model;
 use deepseek_ocr_infer_paddleocr::load_model as load_paddleocr_model;
 use tokenizers::Tokenizer;
 
+use super::super::super::dsq_alignment::required_qoffset_alignment;
 use super::super::super::model_kind::VisionModelKind;
 use super::super::super::util::sanitize_error_string;
 use super::super::env::{
@@ -21,6 +22,7 @@ use super::super::env::{
 use super::retry::panic_payload_to_string;
 
 use super::core::DeepseekEngine;
+use super::dsq_repair::{DsqRepairResult, repair_dsq_if_needed};
 
 impl DeepseekEngine {
     pub(super) fn load(model_root: &str) -> Result<Self, String> {
@@ -295,16 +297,45 @@ fn resolve_effective_snapshot_path(
 
     match validate_snapshot_alignment(snapshot_path.as_path()) {
         Ok(()) => Ok(Some(snapshot_path)),
-        Err(error) if require_quantized => Err(error),
         Err(error) => {
-            tracing::warn!(
-                event = "llm.vision.deepseek.snapshot.rejected",
+            tracing::info!(
+                event = "llm.vision.deepseek.snapshot.repair_started",
                 path = %snapshot_path.display(),
-                error = %error,
-                fallback = "safetensors",
-                "DeepSeek OCR snapshot rejected by compatibility guard; falling back to unquantized weights"
+                "DeepSeek OCR snapshot is unaligned; attempting automatic Rust-native repair"
             );
-            Ok(None)
+
+            match repair_dsq_if_needed(snapshot_path.as_path()) {
+                DsqRepairResult::Repaired => {
+                    tracing::info!(
+                        event = "llm.vision.deepseek.snapshot.repaired",
+                        path = %snapshot_path.display(),
+                        "DeepSeek OCR snapshot successfully repaired and aligned"
+                    );
+                    Ok(Some(snapshot_path))
+                }
+                DsqRepairResult::AlreadyAligned => {
+                    // This shouldn't happen if validate failed, but handle it gracefully
+                    Ok(Some(snapshot_path))
+                }
+                DsqRepairResult::Failed(repair_error) => {
+                    if require_quantized {
+                        Err(format!(
+                            "DeepSeek OCR snapshot alignment validation failed, and automatic repair also failed: {}. \
+Original error: {}",
+                            repair_error, error
+                        ))
+                    } else {
+                        tracing::warn!(
+                            event = "llm.vision.deepseek.snapshot.repair_failed",
+                            path = %snapshot_path.display(),
+                            error = %repair_error,
+                            fallback = "safetensors",
+                            "DeepSeek OCR snapshot repair failed; falling back to unquantized weights"
+                        );
+                        Ok(None)
+                    }
+                }
+            }
         }
     }
 }
@@ -343,17 +374,6 @@ this DSQ is incompatible with candle quantized loader and can abort the process"
     }
 
     Ok(())
-}
-
-fn required_qoffset_alignment(dtype: DsqTensorDType) -> u64 {
-    match dtype {
-        DsqTensorDType::F32 => 4,
-        DsqTensorDType::Q8_0
-        | DsqTensorDType::Q4K
-        | DsqTensorDType::Q6K
-        | DsqTensorDType::F16
-        | DsqTensorDType::BF16 => 2,
-    }
 }
 
 pub(crate) fn snapshot_qoffset_alignment_with_for_tests(offset: u64, dtype_code: u32) -> bool {

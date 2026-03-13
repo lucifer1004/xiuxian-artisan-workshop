@@ -45,3 +45,15 @@ pub(in crate::llm::vision::deepseek::native) fn parse_env_bool(key: &str) -> Opt
             _ => None,
         })
 }
+
+pub(in crate::llm::vision::deepseek::native) fn parse_env_f32(key: &str) -> Option<f32> {
+    non_empty_env(key).and_then(|value| value.parse::<f32>().ok())
+}
+
+pub(in crate::llm::vision::deepseek::native) fn parse_env_f64(key: &str) -> Option<f64> {
+    non_empty_env(key).and_then(|value| value.parse::<f64>().ok())
+}
+
+pub(in crate::llm::vision::deepseek::native) fn parse_env_string(key: &str) -> Option<String> {
+    non_empty_env(key)
+}

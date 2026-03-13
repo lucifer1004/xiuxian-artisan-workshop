@@ -30,6 +30,11 @@ pub struct LinkGraphSearchOptions {
     /// Keep rows with `modified_ts <= modified_before`.
     #[serde(default)]
     pub modified_before: Option<i64>,
+    /// Style anchors for CCS (Context Completeness Score) audit.
+    /// When provided, the search payload will include a CCS audit result
+    /// measuring how well the retrieved evidence aligns with these anchors.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub style_anchors: Vec<String>,
 }
 
 impl Default for LinkGraphSearchOptions {
@@ -43,6 +48,7 @@ impl Default for LinkGraphSearchOptions {
             created_before: None,
             modified_after: None,
             modified_before: None,
+            style_anchors: Vec::new(),
         }
     }
 }

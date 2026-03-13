@@ -15,7 +15,7 @@ fn config() -> &'static DeepseekTomlConfig {
 
 pub(super) use self::access::{
     base_size, cache_key_prefix, cache_local_max_entries, cache_timeout_ms, cache_ttl_seconds,
-    cache_valkey_url, crop_mode, device, image_size, max_new_tokens, model_root, ocr_prompt,
-    snapshot_path, weights_path,
+    cache_valkey_url, client_url, crop_mode, device, dots_model_root, image_size, max_new_tokens,
+    model_kind, model_root, ocr_prompt, preprocess_local_max_entries, snapshot_path, weights_path,
 };
 pub(crate) use self::snapshot::{DeepseekConfigSnapshot, load_config_with_paths_for_tests};

@@ -77,7 +77,7 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 lance = { workspace = true }
 tempfile = { workspace = true }
 rand = "0.8"
-insta = { version = "1.43.2", features = ["json"] }
+insta = { workspace = true }
 
 [lints]
 workspace = true

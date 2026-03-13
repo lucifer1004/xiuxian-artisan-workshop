@@ -4,13 +4,15 @@ use std::sync::{Arc, OnceLock};
 mod model_root;
 
 use super::config;
+#[cfg(feature = "vision-dots")]
+use super::dsq_alignment::required_qoffset_alignment;
 use super::model_kind::VisionModelKind;
 #[cfg(feature = "vision-dots")]
 use super::native::local_runtime_may_use_metal;
 use super::remote_http::validate_ocr_http_base_url;
 use super::util::non_empty_env;
 #[cfg(feature = "vision-dots")]
-use deepseek_ocr_dsq::{DsqReader, DsqTensorDType};
+use deepseek_ocr_dsq::DsqReader;
 
 /// Process-wide `DeepSeek` OCR runtime descriptor.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -342,18 +344,6 @@ fn validate_quantized_snapshot_alignment(path: &Path) -> Result<(), ()> {
         }
     }
     Ok(())
-}
-
-#[cfg(feature = "vision-dots")]
-const fn required_qoffset_alignment(q_dtype: DsqTensorDType) -> u64 {
-    match q_dtype {
-        DsqTensorDType::F32 => 4,
-        DsqTensorDType::Q8_0
-        | DsqTensorDType::Q4K
-        | DsqTensorDType::Q6K
-        | DsqTensorDType::F16
-        | DsqTensorDType::BF16 => 2,
-    }
 }
 
 pub(crate) fn resolve_local_runtime_safety_reason_for_tests(

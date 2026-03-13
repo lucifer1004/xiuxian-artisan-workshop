@@ -3,11 +3,15 @@ use serde::Deserialize;
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
 use crate::link_graph::LinkGraphPlannedSearchPayload;
+use crate::link_graph::LinkGraphRelatedFilter;
 use crate::{
     AssetRequest, LinkGraphIndex, LinkGraphSearchOptions, SkillVfsResolver, WendaoAssetHandle,
 };
 
+mod audit;
 mod xml_lite;
+
+pub use audit::{audit_search_payload, evaluate_alignment};
 
 const DEFAULT_SEARCH_LIMIT: usize = 20;
 const MAX_SEARCH_LIMIT: usize = 200;
@@ -25,6 +29,9 @@ pub(crate) struct WendaoSearchArgs {
     include_provisional: Option<bool>,
     #[serde(default)]
     provisional_limit: Option<usize>,
+    /// Optional style anchors for CCS (Context Completeness Score) audit.
+    #[serde(default)]
+    anchors: Option<Vec<String>>,
 }
 
 /// Typed extension accessors for Wendao native tools.
@@ -101,13 +108,67 @@ pub async fn wendao_search(
     validate_root_dir_argument(args.root_dir.as_deref())?;
     let options = args.options.unwrap_or_default();
     let index = ctx.link_graph_index()?;
+    let limit = normalize_limit(args.limit);
+
+    // First-pass search
     let payload = index.search_planned_payload_with_agentic(
         query,
-        normalize_limit(args.limit),
-        options,
+        limit,
+        options.clone(),
         args.include_provisional,
         args.provisional_limit,
     );
+
+    // Apply CCS audit and compensation loop if anchors provided
+    if let Some(anchors) = args.anchors {
+        if !anchors.is_empty() {
+            let evidence: Vec<String> = payload
+                .results
+                .iter()
+                .flat_map(|hit| vec![hit.stem.clone(), hit.title.clone()])
+                .collect();
+
+            let audit_result = audit::audit_search_payload(&evidence, &anchors);
+
+            // Apply compensation if CCS < threshold
+            let (mut final_payload, compensated) = if let Some(comp) = &audit_result.compensation {
+                let mut compensated_options = options.clone();
+                // Expand max_distance for broader retrieval
+                if let Some(ref mut related) = compensated_options.filters.related {
+                    related.max_distance =
+                        Some(related.max_distance.unwrap_or(2) + comp.max_distance_delta);
+                } else {
+                    compensated_options.filters.related = Some(LinkGraphRelatedFilter {
+                        max_distance: Some(comp.max_distance_delta + 2),
+                        ..Default::default()
+                    });
+                }
+
+                // Re-search with compensated parameters
+                let compensated_payload = index.search_planned_payload_with_agentic(
+                    query,
+                    limit,
+                    compensated_options,
+                    args.include_provisional,
+                    args.provisional_limit,
+                );
+                (compensated_payload, true)
+            } else {
+                (payload, false)
+            };
+
+            use crate::link_graph::LinkGraphCcsAudit;
+            final_payload.ccs_audit = Some(LinkGraphCcsAudit {
+                ccs_score: audit_result.ccs_score,
+                passed: audit_result.passed,
+                compensated,
+                missing_anchors: audit_result.missing_anchors,
+            });
+
+            return Ok(xml_lite::render_xml_lite(&final_payload));
+        }
+    }
+
     Ok(xml_lite::render_xml_lite(&payload))
 }
 

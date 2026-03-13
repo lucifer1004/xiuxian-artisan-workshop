@@ -1,7 +1,7 @@
 //! Entity deduplication, normalization, and similarity scoring.
 
 use crate::entity::Entity;
-use crate::graph::{GraphError, KnowledgeGraph};
+use crate::graph::{GraphError, KnowledgeGraph, read_lock};
 use serde_json::json;
 use std::collections::HashSet;
 use unicode_normalization::UnicodeNormalization;
@@ -54,7 +54,7 @@ impl KnowledgeGraph {
 
     /// Find potential duplicate entities.
     pub fn find_duplicates(&self, threshold: f32) -> Vec<Vec<String>> {
-        let entities = self.entities.read().unwrap();
+        let entities = read_lock(&self.entities);
         let names: Vec<(String, String)> = entities
             .values()
             .map(|e: &Entity| (e.name.clone(), e.id.clone()))
@@ -97,7 +97,7 @@ impl KnowledgeGraph {
         entity_ids: &[String],
         canonical_name: &str,
     ) -> Result<Entity, GraphError> {
-        let entities = self.entities.read().unwrap();
+        let entities = read_lock(&self.entities);
 
         let mut merged: Option<Entity> = None;
         let mut all_aliases: Vec<String> = Vec::new();
@@ -188,7 +188,7 @@ impl KnowledgeGraph {
 
     /// Find the most canonical name from a group of entity IDs.
     fn find_canonical_name(&self, entity_ids: &[String]) -> String {
-        let entities = self.entities.read().unwrap();
+        let entities = read_lock(&self.entities);
 
         let mut best: Option<(usize, String)> = None;
 

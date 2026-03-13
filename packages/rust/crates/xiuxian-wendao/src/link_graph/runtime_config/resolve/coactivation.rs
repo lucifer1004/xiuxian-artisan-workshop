@@ -9,12 +9,16 @@ use crate::link_graph::runtime_config::settings::{
     parse_positive_usize,
 };
 
+/// Resolve coactivation runtime config with blueprint-aligned keys.
+///
+/// Config keys follow the living_brain_v2 blueprint: `link_graph.saliency.coactivation.*`
 pub fn resolve_link_graph_coactivation_runtime() -> LinkGraphCoactivationRuntimeConfig {
     let settings = merged_wendao_settings();
     let mut resolved = LinkGraphCoactivationRuntimeConfig::default();
 
+    // Blueprint-aligned keys: link_graph.saliency.coactivation.*
     if let Some(value) = first_non_empty(&[
-        get_setting_string(&settings, "link_graph.coactivation.enabled"),
+        get_setting_string(&settings, "link_graph.saliency.coactivation.enabled"),
         std::env::var(LINK_GRAPH_COACTIVATION_ENABLED_ENV).ok(),
     ])
     .as_deref()
@@ -24,7 +28,7 @@ pub fn resolve_link_graph_coactivation_runtime() -> LinkGraphCoactivationRuntime
     }
 
     if let Some(value) = first_non_empty(&[
-        get_setting_string(&settings, "link_graph.coactivation.alpha_scale"),
+        get_setting_string(&settings, "link_graph.saliency.coactivation.alpha_scale"),
         std::env::var(LINK_GRAPH_COACTIVATION_ALPHA_SCALE_ENV).ok(),
     ])
     .as_deref()
@@ -36,7 +40,7 @@ pub fn resolve_link_graph_coactivation_runtime() -> LinkGraphCoactivationRuntime
     if let Some(value) = first_non_empty(&[
         get_setting_string(
             &settings,
-            "link_graph.coactivation.max_neighbors_per_direction",
+            "link_graph.saliency.coactivation.max_neighbors_per_direction",
         ),
         std::env::var(LINK_GRAPH_COACTIVATION_MAX_NEIGHBORS_PER_DIRECTION_ENV).ok(),
     ])
@@ -47,7 +51,10 @@ pub fn resolve_link_graph_coactivation_runtime() -> LinkGraphCoactivationRuntime
     }
 
     if let Some(value) = first_non_empty(&[
-        get_setting_string(&settings, "link_graph.coactivation.touch_queue_depth"),
+        get_setting_string(
+            &settings,
+            "link_graph.saliency.coactivation.touch_queue_depth",
+        ),
         std::env::var(LINK_GRAPH_COACTIVATION_TOUCH_QUEUE_DEPTH_ENV).ok(),
     ])
     .as_deref()

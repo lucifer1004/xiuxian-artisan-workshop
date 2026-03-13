@@ -2,6 +2,18 @@ pub(in crate::llm::vision::deepseek) fn model_root() -> Option<String> {
     super::config().model_root.clone()
 }
 
+pub(in crate::llm::vision::deepseek) fn model_kind() -> Option<String> {
+    super::config().model_kind.clone()
+}
+
+pub(in crate::llm::vision::deepseek) fn client_url() -> Option<String> {
+    super::config().client_url.clone()
+}
+
+pub(in crate::llm::vision::deepseek) fn dots_model_root() -> Option<String> {
+    super::config().dots_model_root.clone()
+}
+
 pub(in crate::llm::vision::deepseek) fn weights_path() -> Option<String> {
     super::config().weights_path.clone()
 }
@@ -40,6 +52,10 @@ pub(in crate::llm::vision::deepseek) fn max_new_tokens() -> Option<usize> {
 
 pub(in crate::llm::vision::deepseek) fn cache_local_max_entries() -> Option<usize> {
     super::config().cache.local_max_entries
+}
+
+pub(in crate::llm::vision::deepseek) fn preprocess_local_max_entries() -> Option<usize> {
+    super::config().cache.preprocess_local_max_entries
 }
 
 pub(in crate::llm::vision::deepseek) fn cache_valkey_url() -> Option<String> {

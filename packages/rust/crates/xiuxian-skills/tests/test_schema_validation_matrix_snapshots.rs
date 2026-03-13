@@ -1,60 +1,25 @@
 //! Snapshot contracts for schema validation and tool name formatting.
+//!
+//! Uses Insta for snapshot testing.
+
+mod support;
 
 use std::fs;
-use std::path::{Path, PathBuf};
 
+use support::read_fixture;
 use tempfile::TempDir;
 use xiuxian_skills::{IndexToolEntry, SkillIndexEntry, ToolsScanner};
 
-fn snapshot_path(relative: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("snapshots")
-        .join(relative)
-}
-
-fn fixture_path(relative: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join("schema_validation_matrix")
-        .join(relative)
-}
-
-fn read_snapshot(relative: &str) -> String {
-    let path = snapshot_path(relative);
-    fs::read_to_string(path.as_path())
-        .unwrap_or_else(|error| panic!("failed to read snapshot {}: {error}", path.display()))
-}
-
-fn assert_snapshot_eq(relative: &str, actual: &str) {
-    let expected = read_snapshot(relative);
-    assert_eq!(
-        expected, actual,
-        "snapshot mismatch: {relative}\n--- expected ---\n{expected}\n--- actual ---\n{actual}"
-    );
-}
-
-fn read_fixture(relative: &str) -> String {
-    let path = fixture_path(relative);
-    fs::read_to_string(path.as_path())
-        .unwrap_or_else(|error| panic!("failed to read fixture {}: {error}", path.display()))
-}
-
-fn write_fixture_file(target: &Path, relative: &str) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(target, read_fixture(relative))?;
-    Ok(())
-}
+// ============================================================================
+// Snapshot: Tool Name Format Matrix
+// ============================================================================
 
 #[test]
-fn snapshot_tool_name_format_matrix_contract() -> Result<(), Box<dyn std::error::Error>> {
+fn snapshot_tool_name_format_matrix_contract() {
     let scanner = ToolsScanner::new();
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new().expect("temp dir");
     let matrix_root = temp_dir.path().join("scripts");
-    fs::create_dir_all(&matrix_root)?;
+    fs::create_dir_all(&matrix_root).expect("create matrix root");
 
     let cases = [
         ("named", "git", "scripts/named/commit.py"),
@@ -71,15 +36,20 @@ fn snapshot_tool_name_format_matrix_contract() -> Result<(), Box<dyn std::error:
     let mut rows = Vec::new();
     for (case_id, skill_name, fixture_rel) in cases {
         let scripts_dir = matrix_root.join(case_id);
-        fs::create_dir_all(&scripts_dir)?;
+        fs::create_dir_all(&scripts_dir).expect("create scripts dir");
+
         let filename = fixture_rel
             .rsplit('/')
             .next()
-            .ok_or_else(|| std::io::Error::other("fixture file name missing"))?;
-        write_fixture_file(scripts_dir.join(filename).as_path(), fixture_rel)?;
+            .expect("fixture file name missing");
+
+        // Write fixture content
+        let content = read_fixture(&format!("schema_validation_matrix/{fixture_rel}"));
+        fs::write(scripts_dir.join(filename), content).expect("write fixture");
 
         let mut tool_names = scanner
-            .scan_scripts(&scripts_dir, skill_name, &[], &[])?
+            .scan_scripts(&scripts_dir, skill_name, &[], &[])
+            .expect("scan scripts")
             .into_iter()
             .map(|tool| tool.tool_name)
             .collect::<Vec<_>>();
@@ -110,16 +80,15 @@ fn snapshot_tool_name_format_matrix_contract() -> Result<(), Box<dyn std::error:
         }));
     }
 
-    let actual = format!("{}\n", serde_json::to_string_pretty(&rows)?);
-    assert_snapshot_eq(
-        "schema_validation/tool_name_format_matrix.json",
-        actual.as_str(),
-    );
-    Ok(())
+    insta::assert_json_snapshot!("tool_name_format_matrix", rows);
 }
 
+// ============================================================================
+// Snapshot: Skill Index JSON Schema
+// ============================================================================
+
 #[test]
-fn snapshot_skill_index_json_schema_contract() -> Result<(), Box<dyn std::error::Error>> {
+fn snapshot_skill_index_json_schema_contract() {
     let mut entry = SkillIndexEntry::new(
         "git".to_string(),
         "Git skill".to_string(),
@@ -147,13 +116,13 @@ fn snapshot_skill_index_json_schema_contract() -> Result<(), Box<dyn std::error:
         .iter()
         .map(|tool| tool.name.clone())
         .collect::<Vec<_>>();
-    let actual = serde_json::json!({
+
+    let snapshot = serde_json::json!({
         "name": entry.name,
         "version": entry.version,
         "tool_count": tool_names.len(),
         "tool_names": tool_names
     });
-    let actual = format!("{}\n", serde_json::to_string_pretty(&actual)?);
-    assert_snapshot_eq("schema_validation/skill_index_schema.json", actual.as_str());
-    Ok(())
+
+    insta::assert_json_snapshot!("skill_index_schema", snapshot);
 }

@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use super::super::config;
+use super::super::model_kind::VisionModelKind;
 use super::super::util::non_empty_env;
-use xiuxian_config_core::{resolve_cache_home, resolve_data_home, resolve_project_root_or_cwd};
 
 pub(super) fn resolve_model_root() -> Option<String> {
     let project_root = project_root();
@@ -15,6 +15,37 @@ pub(super) fn resolve_model_root() -> Option<String> {
     )
 }
 
+pub(crate) fn resolve_model_root_for_kind(kind: VisionModelKind) -> Option<String> {
+    let project_root = project_root();
+    match kind {
+        VisionModelKind::DotsOcr => non_empty_env("XIUXIAN_VISION_DOTS_MODEL_PATH")
+            .map(|value: String| normalize_model_root(value.as_str(), project_root.as_path()))
+            .or_else(|| {
+                config::dots_model_root().map(|value: String| {
+                    normalize_model_root(value.as_str(), project_root.as_path())
+                })
+            })
+            .or_else(|| default_dots_model_root(project_root.as_path())),
+        VisionModelKind::Deepseek | VisionModelKind::PaddleOcrVl => resolve_model_root(),
+    }
+}
+
+fn default_dots_model_root(project_root: &Path) -> Option<String> {
+    let cache_home = resolve_cache_home(project_root);
+    let data_home = resolve_data_home(project_root);
+    let candidates = [
+        cache_home.join("models/dots-ocr"),
+        data_home.join("models/dots-ocr"),
+    ];
+    candidates.into_iter().find_map(|candidate| {
+        if candidate.exists() {
+            Some(candidate.to_string_lossy().to_string())
+        } else {
+            None
+        }
+    })
+}
+
 pub(crate) fn resolve_model_root_with(
     env_model_root: Option<String>,
     config_model_root: Option<String>,
@@ -24,10 +55,8 @@ pub(crate) fn resolve_model_root_with(
 }
 
 fn default_model_root(project_root: &Path) -> Option<String> {
-    let cache_home =
-        resolve_cache_home(Some(project_root)).unwrap_or_else(|| project_root.join(".cache"));
-    let data_home =
-        resolve_data_home(Some(project_root)).unwrap_or_else(|| project_root.join(".data"));
+    let cache_home = resolve_cache_home(project_root);
+    let data_home = resolve_data_home(project_root);
     let candidates = [
         cache_home.join("models/deepseek-ocr-2"),
         cache_home.join("models/DeepSeek-OCR-2"),
@@ -46,7 +75,45 @@ fn default_model_root(project_root: &Path) -> Option<String> {
 }
 
 fn project_root() -> PathBuf {
-    resolve_project_root_or_cwd()
+    resolve_project_root()
+}
+
+fn resolve_project_root() -> PathBuf {
+    std::env::var("PRJ_ROOT")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+}
+
+fn resolve_cache_home(project_root: &Path) -> PathBuf {
+    std::env::var("PRJ_CACHE_HOME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                project_root.join(path)
+            }
+        })
+        .unwrap_or_else(|| project_root.join(".cache"))
+}
+
+fn resolve_data_home(project_root: &Path) -> PathBuf {
+    std::env::var("PRJ_DATA_HOME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                project_root.join(path)
+            }
+        })
+        .unwrap_or_else(|| project_root.join(".data"))
 }
 
 pub(crate) fn normalize_model_root(raw: &str, project_root: &Path) -> String {

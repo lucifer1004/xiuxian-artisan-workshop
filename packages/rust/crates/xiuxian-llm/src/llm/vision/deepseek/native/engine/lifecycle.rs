@@ -10,16 +10,12 @@ use super::super::super::runtime::{DeepseekRuntime, resolve_model_root_for_kind}
 use super::super::super::util::{internal_error, sanitize_error_string};
 use super::super::env::{parse_env_bool, parse_env_string, parse_env_u32, parse_env_u64};
 use super::batch_lane::infer_with_batch_lane;
-use super::retry::should_retry_with_cpu_fallback;
 use crate::llm::error::LlmResult;
 
 use super::core::DeepseekEngine;
 
 static ENGINE_PRIMARY: OnceLock<Result<Arc<DeepseekEngine>, Arc<str>>> = OnceLock::new();
-static ENGINE_PRIMARY_CPU_FALLBACK: OnceLock<Result<Arc<DeepseekEngine>, Arc<str>>> =
-    OnceLock::new();
 static ENGINE_DOTS: OnceLock<Result<Arc<DeepseekEngine>, Arc<str>>> = OnceLock::new();
-static ENGINE_DOTS_CPU_FALLBACK: OnceLock<Result<Arc<DeepseekEngine>, Arc<str>>> = OnceLock::new();
 
 static FORCE_CPU_FALLBACK_PRIMARY: AtomicBool = AtomicBool::new(false);
 static FORCE_CPU_FALLBACK_DOTS: AtomicBool = AtomicBool::new(false);
@@ -115,7 +111,20 @@ pub(crate) fn prewarm(runtime: &DeepseekRuntime) -> LlmResult<()> {
 }
 
 fn get_primary_engine(runtime: &DeepseekRuntime) -> LlmResult<Arc<DeepseekEngine>> {
-    let model_root = runtime_model_root(runtime)?;
+    let model_root = match runtime {
+        DeepseekRuntime::Configured { model_root } => model_root.as_ref(),
+        DeepseekRuntime::Disabled { reason } => {
+            return Err(internal_error(format!(
+                "deepseek runtime disabled: {}",
+                reason
+            )));
+        }
+        DeepseekRuntime::RemoteHttp { .. } => {
+            return Err(internal_error(
+                "get_primary_engine called on RemoteHttp runtime",
+            ));
+        }
+    };
 
     let entry = ENGINE_PRIMARY.get_or_init(|| {
         let started = Instant::now();
@@ -148,45 +157,6 @@ fn get_primary_engine(runtime: &DeepseekRuntime) -> LlmResult<Arc<DeepseekEngine
         Ok(engine) => Ok(Arc::clone(engine)),
         Err(error) => Err(internal_error(format!(
             "deepseek primary engine initialization failed: {}",
-            error.as_ref()
-        ))),
-    }
-}
-
-fn get_primary_cpu_fallback_engine(runtime: &DeepseekRuntime) -> LlmResult<Arc<DeepseekEngine>> {
-    let model_root = runtime_model_root(runtime)?;
-
-    let entry = ENGINE_PRIMARY_CPU_FALLBACK.get_or_init(|| {
-        let started = Instant::now();
-        let loaded = DeepseekEngine::load_for_device(model_root, DeviceKind::Cpu)
-            .map(Arc::new)
-            .map_err(Arc::<str>::from);
-        match &loaded {
-            Ok(_) => {
-                tracing::info!(
-                    event = "llm.vision.deepseek.engine.init_cpu_fallback.completed",
-                    model_root,
-                    elapsed_ms = started.elapsed().as_millis(),
-                    "DeepSeek OCR CPU fallback engine initialized"
-                );
-            }
-            Err(error) => {
-                tracing::error!(
-                    event = "llm.vision.deepseek.engine.init_cpu_fallback.failed",
-                    model_root,
-                    elapsed_ms = started.elapsed().as_millis(),
-                    error = %error,
-                    "DeepSeek OCR CPU fallback engine initialization failed"
-                );
-            }
-        }
-        loaded
-    });
-
-    match entry {
-        Ok(engine) => Ok(Arc::clone(engine)),
-        Err(error) => Err(internal_error(format!(
-            "deepseek primary CPU fallback engine initialization failed: {}",
             error.as_ref()
         ))),
     }
@@ -231,65 +201,9 @@ fn get_dots_engine() -> LlmResult<Arc<DeepseekEngine>> {
     }
 }
 
-fn get_dots_cpu_fallback_engine() -> LlmResult<Arc<DeepseekEngine>> {
-    let model_root = dots_model_root()?;
-
-    let entry = ENGINE_DOTS_CPU_FALLBACK.get_or_init(|| {
-        let started = Instant::now();
-        let loaded = DeepseekEngine::load_for_device_with_kind(
-            model_root.as_str(),
-            DeviceKind::Cpu,
-            VisionModelKind::DotsOcr,
-        )
-        .map(Arc::new)
-        .map_err(Arc::<str>::from);
-        match &loaded {
-            Ok(_) => {
-                tracing::info!(
-                    event = "llm.vision.deepseek.engine.init_dots_cpu_fallback.completed",
-                    model_root = %model_root,
-                    elapsed_ms = started.elapsed().as_millis(),
-                    "DeepSeek OCR Dots CPU fallback engine initialized"
-                );
-            }
-            Err(error) => {
-                tracing::error!(
-                    event = "llm.vision.deepseek.engine.init_dots_cpu_fallback.failed",
-                    model_root = %model_root,
-                    elapsed_ms = started.elapsed().as_millis(),
-                    error = %error,
-                    "DeepSeek OCR Dots CPU fallback engine initialization failed"
-                );
-            }
-        }
-        loaded
-    });
-
-    match entry {
-        Ok(engine) => Ok(Arc::clone(engine)),
-        Err(error) => Err(internal_error(format!(
-            "deepseek dots CPU fallback engine initialization failed: {}",
-            error.as_ref()
-        ))),
-    }
-}
-
-fn runtime_model_root(runtime: &DeepseekRuntime) -> LlmResult<&str> {
-    match runtime {
-        DeepseekRuntime::Configured { model_root } => Ok(model_root.as_ref()),
-        DeepseekRuntime::Disabled { reason } => Err(internal_error(format!(
-            "deepseek runtime disabled: {}",
-            reason.as_ref()
-        ))),
-    }
-}
-
 fn dots_model_root() -> LlmResult<String> {
-    resolve_model_root_for_kind(VisionModelKind::DotsOcr).ok_or_else(|| {
-        internal_error(
-            "deepseek dots model root is not configured (set XIUXIAN_VISION_DOTS_MODEL_PATH or llm.vision.deepseek.dots_model_root, or place model in default cache/data paths)",
-        )
-    })
+    resolve_model_root_for_kind(VisionModelKind::DotsOcr)
+        .ok_or_else(|| internal_error("deepseek dots model root is not configured"))
 }
 
 fn get_engine_for_route_or_fallback(
@@ -318,27 +232,30 @@ fn get_cpu_engine_for_route_or_fallback(
 ) -> LlmResult<(RouteSelection, Arc<DeepseekEngine>)> {
     match route {
         RouteSelection::Primary => {
-            get_primary_cpu_fallback_engine(runtime).map(|engine| (route, engine))
+            let model_root = match runtime {
+                DeepseekRuntime::Configured { model_root } => model_root.as_ref(),
+                _ => {
+                    return Err(internal_error(
+                        "get_cpu_engine called on non-configured runtime",
+                    ));
+                }
+            };
+            DeepseekEngine::load_for_device(model_root, DeviceKind::Cpu)
+                .map(Arc::new)
+                .map(|engine| (route, engine))
+                .map_err(|e| internal_error(format!("CPU fallback load failed: {e}")))
         }
-        RouteSelection::Dots => match get_dots_cpu_fallback_engine() {
-            Ok(engine) => Ok((route, engine)),
-            Err(error) => {
-                tracing::warn!(
-                    event = "llm.vision.deepseek.route.dots_cpu_fallback_primary",
-                    error = %sanitize_error_string(error),
-                    "Dots CPU fallback engine unavailable; falling back to primary CPU fallback engine"
-                );
-                get_primary_cpu_fallback_engine(runtime)
-                    .map(|engine| (RouteSelection::Primary, engine))
-            }
-        },
-    }
-}
-
-fn cpu_fallback_flag(route: RouteSelection) -> &'static AtomicBool {
-    match route {
-        RouteSelection::Primary => &FORCE_CPU_FALLBACK_PRIMARY,
-        RouteSelection::Dots => &FORCE_CPU_FALLBACK_DOTS,
+        RouteSelection::Dots => {
+            let model_root = dots_model_root()?;
+            DeepseekEngine::load_for_device_with_kind(
+                model_root.as_str(),
+                DeviceKind::Cpu,
+                VisionModelKind::DotsOcr,
+            )
+            .map(Arc::new)
+            .map(|engine| (route, engine))
+            .map_err(|e| internal_error(format!("CPU Dots fallback load failed: {e}")))
+        }
     }
 }
 
@@ -390,6 +307,38 @@ fn estimate_tile_count(width: u32, height: u32, image_size: u32, crop_mode: bool
     }
 }
 
+fn cpu_fallback_flag(route: RouteSelection) -> &'static AtomicBool {
+    match route {
+        RouteSelection::Primary => &FORCE_CPU_FALLBACK_PRIMARY,
+        RouteSelection::Dots => &FORCE_CPU_FALLBACK_DOTS,
+    }
+}
+
+fn should_retry_with_cpu_fallback(error_text: &str) -> bool {
+    let lower = error_text.to_ascii_lowercase();
+    lower.contains("metal") || lower.contains("cuda") || lower.contains("out of memory")
+}
+
 pub(crate) fn should_retry_with_cpu_fallback_for_tests(error_text: &str) -> bool {
     should_retry_with_cpu_fallback(error_text)
+}
+
+pub(crate) fn snapshot_cpu_fallback_flags_for_tests() -> (bool, bool) {
+    (
+        FORCE_CPU_FALLBACK_PRIMARY.load(Ordering::Acquire),
+        FORCE_CPU_FALLBACK_DOTS.load(Ordering::Acquire),
+    )
+}
+
+pub(crate) fn clear_cpu_fallback_flags_for_tests() {
+    FORCE_CPU_FALLBACK_PRIMARY.store(false, Ordering::Release);
+    FORCE_CPU_FALLBACK_DOTS.store(false, Ordering::Release);
+}
+
+pub(crate) fn force_primary_cpu_fallback_for_tests() {
+    FORCE_CPU_FALLBACK_PRIMARY.store(true, Ordering::Release);
+}
+
+pub(crate) fn force_dots_cpu_fallback_for_tests() {
+    FORCE_CPU_FALLBACK_DOTS.store(true, Ordering::Release);
 }

@@ -32,6 +32,7 @@ members = [
     "packages/rust/crates/xiuxian-memory",
     "packages/rust/crates/xiuxian-zhixing",
     "packages/rust/crates/xiuxian-zhenfa",
+    "packages/rust/crates/xiuxian-testing",
 ]
 
 # Workspace package metadata (inherited by all crates)
@@ -128,6 +129,9 @@ litellm-rs = { git = "https://github.com/majiayu000/litellm-rs", tag = "v0.4.2",
 # CLI and HTTP (xiuxian-daochang gateway)
 clap = { version = "4.5", features = ["derive"] }
 axum = "0.8"
+
+# Testing utilities
+insta = { version = "1.46.3", features = ["json", "redactions"] }
 
 # Performance optimization - Thin LTO for reduced memory
 [profile.release]

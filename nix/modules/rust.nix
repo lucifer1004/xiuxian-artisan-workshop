@@ -70,6 +70,7 @@ in
     pkgs.cargo-audit
     pkgs.cargo-deny
     pkgs.cargo-sweep
+    pkgs.cargo-insta
   ];
   # https://devenv.sh/languages/
   languages.rust = {

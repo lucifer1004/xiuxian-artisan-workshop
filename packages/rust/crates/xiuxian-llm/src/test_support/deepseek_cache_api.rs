@@ -1,9 +1,47 @@
 use super::deepseek_cache::{DeepseekCacheKeyInput, DeepseekCacheTestFacade};
+use crate::llm::vision::PreparedVisionImage;
+use crate::llm::vision::deepseek::{
+    build_cache_key_with_for_tests, fingerprint_cache_clear_for_tests,
+    fingerprint_cache_len_for_tests,
+};
 
 /// Build `DeepSeek` OCR cache key for test assertions.
 #[must_use]
 pub fn build_deepseek_cache_key_for_tests(input: &DeepseekCacheKeyInput<'_>) -> String {
     DeepseekCacheTestFacade::build_cache_key(input)
+}
+
+/// Build `DeepSeek` OCR cache key from prepared image for test assertions.
+#[must_use]
+pub fn build_deepseek_cache_key_from_prepared_for_tests(
+    model_root: &str,
+    prepared: &PreparedVisionImage,
+    prompt: &str,
+    base_size: u32,
+    image_size: u32,
+    crop_mode: bool,
+    max_new_tokens: u32,
+) -> String {
+    build_cache_key_with_for_tests(
+        model_root,
+        prepared,
+        prompt,
+        base_size,
+        image_size,
+        crop_mode,
+        usize::try_from(max_new_tokens).unwrap_or(usize::MAX),
+    )
+}
+
+/// Clear all `DeepSeek` fingerprint cache entries for deterministic tests.
+pub fn deepseek_fingerprint_cache_clear_for_tests() {
+    fingerprint_cache_clear_for_tests();
+}
+
+/// Return the number of entries in the `DeepSeek` fingerprint cache for test assertions.
+#[must_use]
+pub fn deepseek_fingerprint_cache_len_for_tests() -> usize {
+    fingerprint_cache_len_for_tests()
 }
 
 /// Evaluate `DeepSeek` Valkey GET path with explicit cache settings for tests.

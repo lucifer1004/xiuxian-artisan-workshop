@@ -255,7 +255,7 @@ impl DeepseekEngine {
             event = "llm.vision.deepseek.infer.start",
             width = prepared.width,
             height = prepared.height,
-            decoded_pixels_bytes = prepared.decoded.as_bytes().len(),
+            decoded_pixels_bytes = prepared.resized_png.len(),
             scale = prepared.scale,
             estimated_tiles,
             max_tiles = self.max_tiles,
@@ -417,19 +417,19 @@ fn ocr_inflight_stale_timeout(wait_timeout: Duration) -> Duration {
 
 fn shared_from_llm_result(result: &LlmResult<Option<String>>) -> SharedCoalescedResult {
     match result {
-        Ok(Some(value)) => Ok(Some(Arc::from(value.clone()))),
+        Ok(Some(value)) => Ok(Some(Arc::from(value.as_str()))),
         Ok(None) => Ok(None),
-        Err(error) => Err(Arc::from(error.to_string())),
+        Err(error) => Err(Arc::from(error.to_string().as_str())),
     }
 }
 
 fn llm_result_from_shared(shared: SharedCoalescedResult) -> LlmResult<Option<String>> {
     match shared {
-        Ok(Some(value)) => Ok(Some(value.as_ref().to_string())),
+        Ok(Some(value)) => Ok(Some(value.to_string())),
         Ok(None) => Ok(None),
         Err(error) => Err(internal_error(format!(
             "deepseek OCR coalesced inference failed: {}",
-            error.as_ref()
+            error
         ))),
     }
 }

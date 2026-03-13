@@ -2,6 +2,7 @@ mod device;
 mod parse;
 mod paths;
 
+pub(in crate::llm::vision::deepseek) use self::device::local_runtime_may_use_metal;
 pub(super) use self::device::parse_device_kind;
 pub(crate) use self::device::resolve_device_kind_label_for_tests;
 pub(super) use self::parse::{

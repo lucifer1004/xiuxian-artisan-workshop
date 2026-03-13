@@ -13,6 +13,7 @@ use page_index_fixture_support::{
     PageIndexFixture, assert_page_index_fixture, page_index_tree_snapshot, read_page_index_fixture,
     semantic_documents_snapshot,
 };
+use serde_json::json;
 
 #[test]
 fn test_link_graph_page_index_builds_hierarchy_and_line_ranges()
@@ -117,4 +118,38 @@ fn test_link_graph_page_index_retrieves_parent_chain_for_nested_anchor()
         Some("[Path: Alpha > Beta > Gamma]".to_string())
     );
     Ok(())
+}
+
+#[test]
+fn test_link_graph_page_index_parent_chain_exposes_parent_ids()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = PageIndexFixture::build("hierarchy")?;
+    let index = fixture.build_index()?;
+    let roots = index.page_index("alpha").ok_or("missing page index")?;
+    let root = roots.first().ok_or("missing root node")?;
+    let beta = root.children.first().ok_or("missing beta node")?;
+    let gamma = beta.children.first().ok_or("missing gamma node")?;
+
+    let actual = json!({
+        "root": parent_record(&index, root.node_id.as_str()),
+        "beta": parent_record(&index, beta.node_id.as_str()),
+        "gamma": parent_record(&index, gamma.node_id.as_str()),
+    });
+    assert_page_index_fixture("hierarchy", "parent_chain.json", &actual);
+    Ok(())
+}
+
+fn parent_record(index: &xiuxian_wendao::LinkGraphIndex, node_id: &str) -> serde_json::Value {
+    match index.page_index_parent_id(node_id) {
+        Some(parent_id) => json!({
+            "node_id": node_id,
+            "parent_id": parent_id,
+            "known": true,
+        }),
+        None => json!({
+            "node_id": node_id,
+            "parent_id": null,
+            "known": false,
+        }),
+    }
 }

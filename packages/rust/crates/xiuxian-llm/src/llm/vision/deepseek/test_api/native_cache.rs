@@ -1,6 +1,6 @@
 use crate::llm::vision::PreparedVisionImage;
 
-pub(crate) fn build_cache_key_with_for_tests(
+pub fn build_cache_key_with_for_tests(
     model_root: &str,
     prepared: &PreparedVisionImage,
     prompt: &str,
@@ -9,7 +9,7 @@ pub(crate) fn build_cache_key_with_for_tests(
     crop_mode: bool,
     max_new_tokens: usize,
 ) -> String {
-    super::super::native::DeepseekNativeCacheTestFacade::build_cache_key(
+    super::super::native::build_cache_key(
         model_root,
         prepared,
         prompt,
@@ -20,14 +20,34 @@ pub(crate) fn build_cache_key_with_for_tests(
     )
 }
 
-pub(crate) fn valkey_get_with_for_tests(
+pub fn fingerprint_cache_len_for_tests() -> usize {
+    super::super::native::fingerprint_cache_len_for_tests()
+}
+
+pub fn fingerprint_cache_clear_for_tests() {
+    super::super::native::fingerprint_cache_clear_for_tests();
+}
+
+pub fn local_cache_get_for_tests(key: &str) -> Option<String> {
+    super::super::native::local_cache_get_for_tests(key)
+}
+
+pub fn local_cache_set_with_max_entries_for_tests(key: &str, markdown: &str, max_entries: usize) {
+    super::super::native::local_cache_set_with_max_entries_for_tests(key, markdown, max_entries);
+}
+
+pub fn local_cache_clear_for_tests() {
+    super::super::native::local_cache_clear_for_tests();
+}
+
+pub fn valkey_get_with_for_tests(
     valkey_url: &str,
     key_prefix: &str,
     ttl_secs: u64,
     io_timeout_ms: u64,
     key: &str,
 ) -> Option<String> {
-    super::super::native::DeepseekNativeCacheTestFacade::valkey_get_with(
+    super::super::native::valkey_get_with_for_tests(
         valkey_url,
         key_prefix,
         ttl_secs,
@@ -36,7 +56,7 @@ pub(crate) fn valkey_get_with_for_tests(
     )
 }
 
-pub(crate) fn valkey_set_with_for_tests(
+pub fn valkey_set_with_for_tests(
     valkey_url: &str,
     key_prefix: &str,
     ttl_secs: u64,
@@ -44,7 +64,7 @@ pub(crate) fn valkey_set_with_for_tests(
     key: &str,
     markdown: &str,
 ) -> bool {
-    super::super::native::DeepseekNativeCacheTestFacade::valkey_set_with(
+    super::super::native::valkey_set_with_for_tests(
         valkey_url,
         key_prefix,
         ttl_secs,
@@ -54,50 +74,22 @@ pub(crate) fn valkey_set_with_for_tests(
     )
 }
 
-pub(crate) fn normalize_valkey_timeout_ms_for_tests(io_timeout_ms: u64) -> u64 {
-    super::super::native::DeepseekNativeCacheTestFacade::normalize_valkey_timeout_ms(io_timeout_ms)
+pub fn normalize_valkey_timeout_ms_for_tests(io_timeout_ms: u64) -> u64 {
+    super::super::native::normalize_valkey_timeout_ms_for_tests(io_timeout_ms)
 }
 
-pub(crate) fn local_cache_get_for_tests(key: &str) -> Option<String> {
-    super::super::native::DeepseekNativeCacheTestFacade::local_get(key)
+pub fn normalize_cache_text_view_for_tests(text: &str) -> Option<String> {
+    super::super::native::normalize_cache_text_view_for_tests(text)
 }
 
-pub(crate) fn local_cache_set_with_max_entries_for_tests(
-    key: &str,
-    markdown: &str,
-    max_entries: usize,
-) {
-    super::super::native::DeepseekNativeCacheTestFacade::local_set_with_max_entries(
-        key,
-        markdown,
-        max_entries,
-    );
+pub fn normalize_cache_text_owned_for_tests(text: String) -> Option<String> {
+    super::super::native::normalize_cache_text_owned_for_tests(text)
 }
 
-pub(crate) fn local_cache_clear_for_tests() {
-    super::super::native::DeepseekNativeCacheTestFacade::local_clear();
+pub fn store_markdown_in_cache_for_tests(key: &str, value: &str) {
+    super::super::native::store_markdown_in_cache_for_tests(key, value);
 }
 
-pub(crate) fn fingerprint_cache_len_for_tests() -> usize {
-    super::super::native::DeepseekNativeCacheTestFacade::fingerprint_cache_len()
-}
-
-pub(crate) fn fingerprint_cache_clear_for_tests() {
-    super::super::native::DeepseekNativeCacheTestFacade::fingerprint_cache_clear();
-}
-
-pub(crate) fn normalize_cache_text_view_for_tests(text: &str) -> Option<String> {
-    super::super::native::DeepseekNativeCacheTestFacade::normalize_text_view(text)
-}
-
-pub(crate) fn normalize_cache_text_owned_for_tests(text: String) -> Option<String> {
-    super::super::native::DeepseekNativeCacheTestFacade::normalize_text_owned(text)
-}
-
-pub(crate) fn store_markdown_in_cache_for_tests(cache_key: &str, markdown: &str) {
-    super::super::native::DeepseekNativeCacheTestFacade::store_markdown(cache_key, markdown);
-}
-
-pub(crate) fn cache_layer_labels_for_tests() -> (&'static str, &'static str) {
-    super::super::native::DeepseekNativeCacheTestFacade::cache_layer_labels()
+pub fn cache_layer_labels_for_tests() -> (&'static str, &'static str) {
+    super::super::native::cache_layer_labels_for_tests()
 }

@@ -74,28 +74,6 @@ To prevent context bloating and "hallucination spirals," all Agents MUST follow 
 - **The Integrity Chain**: Every `role: "tool"` message MUST be preceded by an `assistant` message declaring the corresponding `tool_calls`.
 - **Orphan Cleanup**: Orphaned tool results are automatically purged.
 
-## 8. Apply Patch: The "One-Line-One-Prefix" Rule
-
-The `apply_patch` tool uses a strict line-based parser. To prevent the `+` squashing bug, you MUST follow this exact visual structure. Every modification MUST occupy exactly one line.
-
-- **CRITICAL: Newline Requirements**: Every marker (e.g., `*** Begin Patch`) and every content line (e.g., `+line`) **MUST** be followed by a physical newline (`\n`).
-- **NO LINE SQUASHING**: Never combine multiple `+` or `-` lines into a single line (e.g., `+line1+line2` is FATAL).
-- **Correct Format Example**:
-
-```text
-*** Begin Patch
-*** Update File: src/main.rs
-@@
-     context_line
--    deleted_line
-+    added_line_1
-+    added_line_2
-*** End Patch
-```
-
-- **Add-Overwrite Strategy**: If incremental patches (`*** Update File`) fail repeatedly, immediately fall back to overwriting the entire file using `*** Add File`.
-- **ASCII Standard**: Default to ASCII for all edits.
-
 ## 9. Modularization Rules (The Artisan Standards)
 
 - **Split by complexity, not line count**: Split modules handling multiple concerns regardless of file size.

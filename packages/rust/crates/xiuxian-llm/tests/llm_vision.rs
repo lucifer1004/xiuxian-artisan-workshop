@@ -27,7 +27,7 @@ fn preprocess_image_keeps_decoded_payload_ready() -> Result<()> {
 
     assert_eq!((prepared.width, prepared.height), (2_048, 512));
     assert!(!prepared.original.is_empty());
-    assert!(!prepared.decoded.as_bytes().is_empty());
+    assert!(!prepared.resized_png.is_empty());
     Ok(())
 }
 

@@ -1,0 +1,13 @@
+---
+source: packages/rust/crates/xiuxian-skills/tests/test_schema_validation_matrix_snapshots.rs
+expression: snapshot
+---
+{
+  "name": "git",
+  "tool_count": 2,
+  "tool_names": [
+    "git.commit",
+    "git.smart_commit"
+  ],
+  "version": "1.0.0"
+}

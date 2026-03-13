@@ -28,6 +28,21 @@ pub struct PreparedVisionImage {
     pub scale: f64,
 }
 
+impl PreparedVisionImage {
+    /// Create a dummy prepared image for prewarm/testing.
+    pub fn create_dummy(width: u32, height: u32) -> Self {
+        let dummy_data: Arc<[u8]> = Arc::from(vec![0u8; 0]);
+        Self {
+            original: dummy_data.clone(),
+            resized_png: dummy_data.clone(),
+            grayscale_png: dummy_data,
+            width,
+            height,
+            scale: 1.0,
+        }
+    }
+}
+
 /// Preprocess an image using the default max dimension bound.
 ///
 /// # Errors
@@ -108,10 +123,10 @@ fn fit_edge_with_rounding(edge: u32, long_edge: u32, max_dimension: u32) -> u32 
     u32::try_from(bounded).unwrap_or(u32::MAX)
 }
 
-fn encode_png(image: &image::DynamicImage) -> LlmResult<Arc<[u8]>> {
+pub fn encode_png(image: &image::DynamicImage) -> LlmResult<Arc<[u8]>> {
     let mut writer = Cursor::new(Vec::new());
     image
-        .write_to(&mut writer, ImageFormat::Png)
+        .write_to(&mut writer, image::ImageFormat::Png)
         .map_err(|error| internal_error(format!("vision png encode failed: {error}")))?;
     Ok(Arc::from(writer.into_inner()))
 }

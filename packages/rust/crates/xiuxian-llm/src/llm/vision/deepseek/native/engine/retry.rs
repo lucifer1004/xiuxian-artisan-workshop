@@ -27,10 +27,3 @@ pub(super) fn safe_vision_settings() -> VisionSettings {
         crop_mode: true,
     }
 }
-
-pub(super) fn should_retry_with_cpu_fallback(error_text: &str) -> bool {
-    let normalized = error_text.to_ascii_lowercase();
-    normalized.contains("metal error")
-        && normalized.contains("failed to create metal resource")
-        && normalized.contains("buffer")
-}

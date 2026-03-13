@@ -23,10 +23,6 @@ pub struct WebContext {
 }
 
 /// Thin native bridge over `spider::Website`.
-///
-/// Resource hygiene policy:
-/// one `Website` instance is created per ingestion and dropped immediately after
-/// extraction, preventing long-lived crawler memory retention.
 #[derive(Debug, Clone)]
 pub struct SpiderBridge {
     root_url: Arc<str>,
@@ -45,39 +41,30 @@ impl SpiderBridge {
         }
     }
 
-    /// Set crawl page limit for quick ingestion.
+    /// Set crawl page limit.
     #[must_use]
     pub fn with_limit(mut self, page_limit: u32) -> Self {
         self.page_limit = page_limit.max(1);
         self
     }
 
-    /// Enable or disable spider stealth mode hint.
-    ///
-    /// Note: when the crawler is built without `chrome` support, Spider treats
-    /// this flag as a no-op by design.
+    /// Enable stealth mode.
     #[must_use]
     pub fn with_stealth(mut self, stealth_mode: bool) -> Self {
         self.stealth_mode = stealth_mode;
         self
     }
 
-    /// Execute one non-blocking crawl pass and return normalized web context.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LlmError::Internal`] when crawl data cannot be captured from
-    /// the configured URL.
+    /// Execute crawl.
     pub async fn quick_ingest(&self) -> LlmResult<WebContext> {
         let mut website = Website::new_with_firewall(self.root_url.as_ref(), false);
         website.with_limit(self.page_limit);
         website.with_stealth(self.stealth_mode);
+
         let mut receiver = website.subscribe(32).ok_or_else(|| {
-            internal_error(format!(
-                "spider ingest receiver unavailable for {}",
-                self.root_url
-            ))
+            internal_error(format!("spider receiver unavailable for {}", self.root_url))
         })?;
+
         website.crawl().await;
         website.unsubscribe();
 
@@ -88,46 +75,31 @@ impl SpiderBridge {
         let page = page
             .or_else(|| website.get_pages().and_then(|pages| pages.first().cloned()))
             .ok_or_else(|| {
-                internal_error(format!(
-                    "spider ingest returned no pages for {}",
-                    self.root_url
-                ))
+                internal_error(format!("spider returned no pages for {}", self.root_url))
             })?;
 
         let source_url = page.get_url().to_string();
         let html = page.get_html();
-        if html.trim().is_empty() {
-            return Err(internal_error(format!(
-                "spider ingest returned empty content for {source_url}"
-            )));
-        }
-
         let cleaned_html = clean_html(html.as_str());
+
+        let (markdown_content, _source) = resolve_markdown_content(
+            cleaned_html.as_str(),
+            html.as_str(),
+            source_url.as_str(),
+            true,
+        );
+
         let title = page
             .metadata
             .as_deref()
             .and_then(|meta| meta.title.as_deref())
             .map_or_else(|| source_url.clone(), str::to_string);
-        let markdown_content = if cleaned_html.trim().is_empty() {
-            Arc::<str>::from(source_url.clone())
-        } else {
-            Arc::<str>::from(cleaned_html)
-        };
 
         let mut metadata = HashMap::new();
         metadata.insert("engine".to_string(), "spider".to_string());
-        metadata.insert("crawler.url".to_string(), self.root_url.to_string());
-        metadata.insert(
-            "crawler.page_limit".to_string(),
-            self.page_limit.to_string(),
-        );
-        metadata.insert("crawler.stealth".to_string(), self.stealth_mode.to_string());
         if let Some(meta) = page.metadata.as_deref() {
             if let Some(description) = meta.description.as_deref() {
                 metadata.insert("page.description".to_string(), description.to_string());
-            }
-            if let Some(image) = meta.image.as_deref() {
-                metadata.insert("page.image".to_string(), image.to_string());
             }
         }
 
@@ -138,6 +110,21 @@ impl SpiderBridge {
             metadata,
         })
     }
+}
+
+pub(super) fn resolve_markdown_content(
+    cleaned_text: &str,
+    raw_html: &str,
+    url: &str,
+    prefer_raw: bool,
+) -> (Arc<str>, &'static str) {
+    if !cleaned_text.trim().is_empty() {
+        return (Arc::from(cleaned_text), "clean_html");
+    }
+    if !raw_html.trim().is_empty() && prefer_raw {
+        return (Arc::from(raw_html), "raw_html");
+    }
+    (Arc::from(url), "url_fallback")
 }
 
 fn internal_error(message: impl Into<String>) -> LlmError {

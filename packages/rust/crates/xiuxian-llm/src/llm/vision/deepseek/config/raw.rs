@@ -12,6 +12,7 @@ pub(super) struct DeepseekTomlConfig {
     // `resources/config/vision_deepseek.toml` template.
     pub(super) model_root: Option<String>,
     pub(super) model_kind: Option<String>,
+    pub(super) client_url: Option<String>,
     pub(super) dots_model_root: Option<String>,
     pub(super) weights_path: Option<String>,
     pub(super) snapshot_path: Option<String>,
