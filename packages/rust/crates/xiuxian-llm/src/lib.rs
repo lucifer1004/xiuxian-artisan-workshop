@@ -3,6 +3,7 @@
 pub mod embedding;
 pub mod llm;
 pub mod mistral;
+pub mod runtime;
 #[doc(hidden)]
 pub mod test_support;
 pub mod web;

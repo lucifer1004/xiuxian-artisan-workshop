@@ -1,4 +1,8 @@
+{ __inputs__, ... }:
 {
+  packages = [
+    __inputs__.packages.capfox
+  ];
   process.manager.implementation = "process-compose";
   processes = {
     mcp.exec = "uv run omni mcp --port 3002";

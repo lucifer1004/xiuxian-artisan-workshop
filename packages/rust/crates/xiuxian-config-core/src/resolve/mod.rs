@@ -80,11 +80,7 @@ pub fn resolve_and_merge_toml_with_paths(
     } else {
         for path in global_paths {
             let global_root = read_toml(path.as_path())?;
-            if let Some(namespace_value) = global_root
-                .as_table()
-                .and_then(|table| table.get(spec.namespace))
-                .cloned()
-            {
+            if let Some(namespace_value) = get_nested_value(&global_root, spec.namespace) {
                 merge_values(&mut merged, namespace_value, spec.array_merge_strategy);
             }
         }
@@ -143,6 +139,23 @@ fn read_toml(path: &Path) -> Result<toml::Value, ConfigCoreError> {
         path: path.display().to_string(),
         source,
     })
+}
+
+/// Traverse a dotted path in a TOML value to get a nested value.
+///
+/// For example, `get_nested_value(&value, "llm.vision.deepseek")` will traverse
+/// `value["llm"]["vision"]["deepseek"]`.
+fn get_nested_value(value: &toml::Value, dotted_path: &str) -> Option<toml::Value> {
+    let mut current = value;
+    for key in dotted_path.split('.') {
+        match current {
+            toml::Value::Table(table) => {
+                current = table.get(key)?;
+            }
+            _ => return None,
+        }
+    }
+    Some(current.clone())
 }
 
 fn merge_values(dst: &mut toml::Value, src: toml::Value, array_strategy: ArrayMergeStrategy) {
@@ -227,7 +240,11 @@ fn normalize_config_home(
 fn global_candidates(config_home: Option<&Path>) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(config_home) = config_home {
-        candidates.push(config_home.join("omni-dev-fusion").join("xiuxian.toml"));
+        candidates.push(
+            config_home
+                .join("xiuxian-artisan-workshop")
+                .join("xiuxian.toml"),
+        );
     }
     candidates
 }
@@ -239,7 +256,11 @@ fn orphan_candidates(config_home: Option<&Path>, orphan_file: &str) -> Vec<PathB
 
     let mut candidates = Vec::new();
     if let Some(config_home) = config_home {
-        candidates.push(config_home.join("omni-dev-fusion").join(orphan_file));
+        candidates.push(
+            config_home
+                .join("xiuxian-artisan-workshop")
+                .join(orphan_file),
+        );
     }
     candidates
 }

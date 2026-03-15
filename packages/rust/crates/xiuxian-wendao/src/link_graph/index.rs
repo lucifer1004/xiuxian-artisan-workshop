@@ -75,9 +75,13 @@ pub(crate) struct IndexedSection {
     pub(crate) heading_level: usize,
     pub(crate) line_start: usize,
     pub(crate) line_end: usize,
+    pub(crate) byte_start: usize,
+    pub(crate) byte_end: usize,
     pub(crate) section_text: String,
     pub(crate) section_text_lower: String,
     pub(crate) entities: Vec<String>,
+    /// Property drawer attributes extracted from heading (e.g., :ID: arch-v1).
+    pub(crate) attributes: std::collections::HashMap<String, String>,
 }
 
 impl IndexedSection {
@@ -89,9 +93,12 @@ impl IndexedSection {
             heading_level: value.heading_level,
             line_start: value.line_start,
             line_end: value.line_end,
+            byte_start: value.byte_start,
+            byte_end: value.byte_end,
             section_text: value.section_text.clone(),
             section_text_lower: value.section_text_lower.clone(),
             entities: value.entities.clone(),
+            attributes: value.attributes.clone(),
         }
     }
 }
@@ -220,6 +227,26 @@ impl LinkGraphIndex {
 
     pub(crate) fn resolve_doc_id_pub(&self, stem_or_id: &str) -> Option<&str> {
         self.resolve_doc_id(stem_or_id)
+    }
+
+    /// Get document relative path by stem or ID.
+    #[must_use]
+    pub fn doc_path(&self, stem_or_id: &str) -> Option<&str> {
+        let doc_id = self.resolve_doc_id(stem_or_id)?;
+        self.docs_by_id.get(doc_id).map(|doc| doc.path.as_str())
+    }
+
+    /// Get document title by stem or ID.
+    #[must_use]
+    pub fn doc_title(&self, stem_or_id: &str) -> Option<&str> {
+        let doc_id = self.resolve_doc_id(stem_or_id)?;
+        self.docs_by_id.get(doc_id).map(|doc| doc.title.as_str())
+    }
+
+    /// Get all page index trees for Triple-A addressing.
+    #[must_use]
+    pub fn all_page_index_trees(&self) -> &HashMap<String, Vec<PageIndexNode>> {
+        &self.trees_by_doc
     }
 
     /// Extract semantic intent targets for a document.

@@ -283,6 +283,54 @@ nextest-guarded-ocr +nextest_args:
     NEXTTEST_GUARD_PROCESS_SPIKE_RULES="${NEXTTEST_GUARD_PROCESS_SPIKE_RULES-}" \
     just nextest-guarded {{nextest_args}}
 
+# Run nextest with AGGRESSIVE process monitoring.
+# Kills everything immediately if any process exceeds limits.
+# Usage: just nextest-aggressive -p xiuxian-llm --features vision-dots-metal test_real_metal
+# Env overrides:
+#   NEXTTEST_AGGR_MAX_RSS_GB (default 10)
+#   NEXTTEST_AGGR_MAX_VSZ_GB (default 0, disabled - macOS VSZ is misleading)
+#   NEXTTEST_AGGR_SYSTEM_MAX_RSS_GB (default 0) - system-wide RSS guard, kills ANY process exceeding this
+#   NEXTTEST_AGGR_LINKER_MAX (default 2) - max linker processes
+#   NEXTTEST_AGGR_LINKER_RSS_GB (default 2) - max RSS per linker
+#   NEXTTEST_AGGR_POLL_MS (default 50) - polling interval (very fast)
+#   NEXTTEST_AGGR_WATCH_BINARY (default "") - binary name:max_rss_gb to watch (e.g. "llm_vision_deepseek_real_metal:4")
+nextest-aggressive +nextest_args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    max_rss="${NEXTTEST_AGGR_MAX_RSS_GB:-10}"
+    max_vsz="${NEXTTEST_AGGR_MAX_VSZ_GB:-0}"  # Disabled by default - macOS VSZ is ~400GB per process
+    system_max_rss="${NEXTTEST_AGGR_SYSTEM_MAX_RSS_GB:-0}"  # System-wide RSS guard
+    linker_max="${NEXTTEST_AGGR_LINKER_MAX:-2}"
+    linker_rss="${NEXTTEST_AGGR_LINKER_RSS_GB:-2}"
+    poll_ms="${NEXTTEST_AGGR_POLL_MS:-50}"
+    watch_binary="${NEXTTEST_AGGR_WATCH_BINARY:-}"
+
+    mkdir -p ".run/logs" ".run/reports/guarded-nextest"
+
+    watch_args=()
+    if [ -n "${watch_binary}" ]; then
+        watch_args+=(--watch-binary "${watch_binary}")
+    fi
+
+    system_rss_args=()
+    if [ "${system_max_rss}" != "0" ]; then
+        system_rss_args+=(--system-max-rss-gb "${system_max_rss}")
+    fi
+
+    uv run python scripts/guarded_nextest.py \
+        --label "aggressive-${NEXTTEST_GUARD_LABEL:-nextest}" \
+        --max-rss-gb "${max_rss}" \
+        --max-vsz-gb "${max_vsz}" \
+        --poll-ms "${poll_ms}" \
+        --grace-ms 0 \
+        --aggressive-poll-ms "${poll_ms}" \
+        --aggressive-kill "exe=ld:${linker_max}:${linker_rss}" \
+        "${watch_args[@]}" \
+        "${system_rss_args[@]}" \
+        --log-file ".run/logs/guarded-nextest-aggressive.log" \
+        -- cargo nextest run {{nextest_args}}
+
 # Tier-1 test lane: fast logic-only Rust feedback loop.
 # Excludes tests whose names contain `vision` or `ocr`.
 # Example:
@@ -306,6 +354,111 @@ test-vision-smoke:
 #   NEXTTEST_GUARD_MAX_RSS_GB (default 24)
 test-vision-heavy model_root="":
     bash scripts/rust/test_vision_heavy_lane.sh "{{model_root}}"
+
+# ==============================================================================
+# [AIP] Metal Hardware Limit & DSQ Compatibility Stress Tests
+# ==============================================================================
+
+# Metal stress test environment variables
+metal_stress_report_dir := env_var_or_default("METAL_STRESS_REPORT_DIR", ".run/reports/metal-stress")
+metal_stress_max_dimension := env_var_or_default("METAL_STRESS_MAX_DIMENSION", "2048")
+metal_stress_iterations := env_var_or_default("METAL_STRESS_ITERATIONS", "5")
+
+# Run full Metal stress test suite (macOS only).
+# Usage: just test-metal-stress
+# Optional env:
+#   METAL_STRESS_REPORT_DIR - Directory for test reports (default: .run/reports/metal-stress)
+#   METAL_STRESS_MAX_DIMENSION - Maximum image dimension to test (default: 2048)
+#   METAL_STRESS_ITERATIONS - Number of inference iterations for memory test (default: 5)
+test-metal-stress:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "=========================================="
+    echo "[AIP] Metal Hardware Limit Stress Test"
+    echo "=========================================="
+
+    mkdir -p "{{metal_stress_report_dir}}"
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+    # Check environment
+    if [[ "$(uname)" != "Darwin" ]]; then
+        echo "ERROR: This test must run on macOS for Metal testing"
+        exit 1
+    fi
+
+    # Step 1: DSQ alignment matrix test
+    echo "=== Step 1: DSQ Alignment Matrix Test ==="
+    cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_dsq_repair_unit --nocapture 2>&1 | \
+        tee "{{metal_stress_report_dir}}/dsq_alignment_${TIMESTAMP}.log"
+
+    # Step 2: Metal smoke test with telemetry
+    echo "=== Step 2: Metal Smoke Test with Telemetry ==="
+    RUST_LOG=xiuxian_llm=debug \
+    cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --features vision-dots-metal --nocapture 2>&1 | \
+        tee "{{metal_stress_report_dir}}/metal_smoke_${TIMESTAMP}.log" || true
+
+    # Step 3: Buffer boundary probe
+    echo "=== Step 3: Buffer Boundary Probe ==="
+    for dim in 512 768 1024 1280 1536 1792 2048; do
+        echo "Testing max_dimension=$dim"
+        XIUXIAN_VISION_OCR_MAX_DIMENSION=$dim \
+        cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --features vision-dots-metal --nocapture 2>&1 | \
+            grep -E "(PASS|FAIL|Buffer|Metal)" | tee -a "{{metal_stress_report_dir}}/buffer_boundary_${TIMESTAMP}.log" || true
+    done
+
+    # Step 4: Memory reclamation test
+    echo "=== Step 4: Memory Reclamation Test ==="
+    for i in $(seq 1 {{metal_stress_iterations}}); do
+        echo "Iteration $i/{{metal_stress_iterations}}"
+        echo "Memory before: $(vm_stat | grep -E 'free|active' | head -2)" | \
+            tee -a "{{metal_stress_report_dir}}/memory_reclaim_${TIMESTAMP}.log"
+        cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --features vision-dots-metal --nocapture 2>&1 | \
+            tee -a "{{metal_stress_report_dir}}/memory_reclaim_${TIMESTAMP}.log" || true
+        echo "Memory after: $(vm_stat | grep -E 'free|active' | head -2)" | \
+            tee -a "{{metal_stress_report_dir}}/memory_reclaim_${TIMESTAMP}.log"
+        sleep 2
+    done
+
+    echo "=========================================="
+    echo "Stress tests completed!"
+    echo "Reports: {{metal_stress_report_dir}}"
+    echo "=========================================="
+
+# Quick DSQ alignment validation test.
+# Usage: just test-dsq-alignment
+test-dsq-alignment:
+    cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_dsq_repair_unit --nocapture
+
+# Metal buffer boundary test with custom dimension.
+# Usage: just test-metal-buffer 1024
+test-metal-buffer dimension="1024":
+    XIUXIAN_VISION_OCR_MAX_DIMENSION={{dimension}} \
+    cargo nextest run -p xiuxian-llm --test llm_vision_deepseek_smoke --features vision-dots-metal --nocapture
+
+# Real Metal inference test with capacity check and runtime memory guard.
+# 1. Uses capfox to check capacity before starting
+# 2. Monitors memory during execution and kills if exceeded
+# Usage:
+#   just test-real-metal              # Metal GPU inference (10GB limit)
+#   just test-real-metal --cpu        # Force CPU (12GB limit, no GPU)
+#   just test-real-metal --max-rss=8  # Custom memory limit
+# Exit codes:
+#   0   - Test passed
+#   75  - No capacity (capfox denied)
+#   137 - Killed by memory guard
+test-real-metal *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Ensure test binary exists
+    if ! ls target/debug/deps/llm_vision_deepseek_real_metal-* 2>/dev/null | head -1 | xargs -I{} test -x {}; then
+        echo "Building test binary..."
+        cargo build -p xiuxian-llm --features vision-dots-metal --tests
+    fi
+
+    # Run with capfox check + memory guard
+    uv run python scripts/run_real_metal_test.py {{args}}
 
 # Unified local-model safe interface (mistral-sdk + vision).
 # Profiles:

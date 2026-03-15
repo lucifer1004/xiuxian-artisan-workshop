@@ -30,7 +30,7 @@ pub use contracts::{
 pub use entry::QaEntry;
 pub use error::InjectionError;
 pub use orchestrator::{InjectionLayer, ThousandFacesOrchestrator};
-pub use persona::{PersonaProfile, PersonaRegistry};
+pub use persona::{MemoryPersonaRecord, PersonaProfile, PersonaProvider, PersonaRegistry};
 pub use transmuter::{MockTransmuter, ToneTransmuter};
 pub use window::SystemPromptInjectionWindow;
 pub use xml::SYSTEM_PROMPT_INJECTION_TAG;

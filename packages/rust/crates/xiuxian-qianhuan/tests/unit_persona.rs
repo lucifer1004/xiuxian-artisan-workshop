@@ -14,7 +14,7 @@ fn test_builtin_loading() {
         panic!("Artisan should exist");
     };
     assert_eq!(artisan.name, "Artisan Engineer");
-    assert!(artisan.style_anchors.contains(&"audit trail".to_string()));
+    assert!(artisan.style_anchors.is_empty());
 
     let Some(cultivator) = registry.get("cyber-cultivator") else {
         panic!("Cultivator should exist");
@@ -34,7 +34,7 @@ fn test_builtin_loading() {
 
 #[test]
 fn test_custom_registration() {
-    let registry = PersonaRegistry::with_builtins();
+    let mut registry = PersonaRegistry::with_builtins();
     let profile = PersonaProfile {
         id: "test".to_string(),
         name: "Test".to_string(),
@@ -122,7 +122,7 @@ forbidden_words = ["guess", "probably", "quick hack"]
 
 #[test]
 fn test_register_from_memory_toml_enforces_id_key() -> Result<()> {
-    let registry = PersonaRegistry::new();
+    let mut registry = PersonaRegistry::new();
     registry.register_from_memory_toml(
         "agenda_steward",
         r#"

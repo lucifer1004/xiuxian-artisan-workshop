@@ -35,21 +35,32 @@ use serde_json::Value;
 /// Scenario configuration from scenario.toml
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScenarioConfig {
+    /// Scenario metadata (id, name, description, category).
     pub scenario: ScenarioMeta,
+    /// Input configuration for the scenario.
     pub input: InputConfig,
-    pub expected: ExpectedConfig,
+    /// Expected output configuration (optional - snapshots managed by insta).
+    #[serde(default)]
+    pub expected: Option<ExpectedConfig>,
+    /// Runner-specific configuration options.
     #[serde(default)]
     pub runner: RunnerConfig,
 }
 
+/// Scenario metadata from the `[scenario]` section.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScenarioMeta {
+    /// Unique scenario identifier (e.g., "001_routing_keywords_merge").
     pub id: String,
+    /// Human-readable scenario name.
     pub name: String,
+    /// Detailed description of what the scenario tests.
     pub description: String,
+    /// Category for runner selection (e.g., "skill_definition", "page_index").
     pub category: String,
 }
 
+/// Input configuration from the `[input]` section.
 #[derive(Debug, Clone, Deserialize)]
 pub struct InputConfig {
     /// Type of input: "markdown_tree", "arrow_batch", "json"
@@ -60,12 +71,17 @@ pub struct InputConfig {
     pub paths: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// Expected output configuration from the `[expected]` section.
+///
+/// This is optional when using insta snapshots, which are managed automatically
+/// in `tests/snapshots/scenarios/`.
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct ExpectedConfig {
     /// Type of expected output: "json_snapshot", "text_snapshot"
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default)]
     pub output_type: String,
-    /// Expected files to compare
+    /// Expected files to compare (optional)
+    #[serde(default)]
     pub files: Vec<String>,
 }
 
@@ -176,11 +192,18 @@ pub struct ScenarioFramework {
 
 impl ScenarioFramework {
     /// Create a new empty framework with default snapshot path.
+    ///
+    /// The snapshot path is relative to the crate's manifest directory:
+    /// `tests/snapshots/scenarios`
     #[must_use]
     pub fn new() -> Self {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         Self {
             runners: HashMap::new(),
-            snapshot_path: PathBuf::from("../snapshots/scenarios"),
+            snapshot_path: manifest_dir
+                .join("tests")
+                .join("snapshots")
+                .join("scenarios"),
         }
     }
 
@@ -273,7 +296,8 @@ impl Default for ScenarioFramework {
 
 /// Get the scenarios fixture root directory for the current crate.
 ///
-/// This function uses `CARGO_MANIFEST_DIR` to locate the fixtures directory.
+/// This returns the crate-local `tests/fixtures/scenarios` directory,
+/// allowing each crate to define its own scenario tests.
 #[must_use]
 pub fn scenarios_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -393,5 +417,32 @@ mod tests {
         let config = RunnerConfig::default();
         assert!(config.build_page_index.is_none());
         assert!(config.collect_links.is_none());
+    }
+
+    #[test]
+    fn test_scenarios_root_returns_crate_local() {
+        let root = scenarios_root();
+        // Should return crate-local path, not workspace root
+        assert!(
+            root.ends_with("tests/fixtures/scenarios"),
+            "scenarios_root should end with tests/fixtures/scenarios: {:?}",
+            root
+        );
+    }
+
+    #[test]
+    fn test_discover_scenarios_returns_local() {
+        let scenarios = discover_scenarios();
+        // May be empty if no local scenarios exist - that's fine
+        // The key is that it looks in the crate-local directory
+        for scenario in &scenarios {
+            assert!(
+                scenario
+                    .to_string_lossy()
+                    .contains("tests/fixtures/scenarios"),
+                "Scenario should be in crate-local path: {:?}",
+                scenario
+            );
+        }
     }
 }

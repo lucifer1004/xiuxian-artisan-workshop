@@ -69,21 +69,197 @@ pub struct SkillDefinition {
 struct SkillDefinitionHelper {
     name: String,
     description: String,
+    #[serde(default = "default_metadata")]
     metadata: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    routing_keywords: Option<Vec<String>>,
+}
+
+fn default_metadata() -> serde_json::Value {
+    serde_json::Value::Object(serde_json::Map::new())
+}
+
+fn normalize_string_list(values: Vec<String>) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for value in values {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !normalized.iter().any(|existing| existing == trimmed) {
+            normalized.push(trimmed.to_string());
+        }
+    }
+    normalized
+}
+
+fn extract_string_list(value: &serde_json::Value) -> Vec<String> {
+    let values = match value {
+        serde_json::Value::String(value) => vec![value.clone()],
+        serde_json::Value::Array(items) => items
+            .iter()
+            .filter_map(|item| item.as_str().map(str::to_string))
+            .collect(),
+        _ => Vec::new(),
+    };
+    normalize_string_list(values)
+}
+
+fn camel_case_key(key: &str) -> Option<String> {
+    if !key.contains('_') && !key.contains('-') {
+        return None;
+    }
+    let mut iter = key
+        .split(|c| c == '_' || c == '-')
+        .filter(|part| !part.is_empty());
+    let first = iter.next()?;
+    let mut out = first.to_ascii_lowercase();
+    for part in iter {
+        let mut chars = part.chars();
+        if let Some(first_char) = chars.next() {
+            out.extend(first_char.to_uppercase());
+            out.push_str(chars.as_str());
+        }
+    }
+    Some(out)
+}
+
+fn pascal_case_key(key: &str) -> Option<String> {
+    if key.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    if key.contains('_') || key.contains('-') {
+        for part in key
+            .split(|c| c == '_' || c == '-')
+            .filter(|part| !part.is_empty())
+        {
+            let mut chars = part.chars();
+            if let Some(first_char) = chars.next() {
+                out.extend(first_char.to_uppercase());
+                out.push_str(chars.as_str());
+            }
+        }
+        return Some(out);
+    }
+    let mut chars = key.chars();
+    let first_char = chars.next()?;
+    out.extend(first_char.to_uppercase());
+    out.push_str(chars.as_str());
+    Some(out)
+}
+
+fn metadata_key_variants(key: &str) -> Vec<String> {
+    let mut variants = Vec::new();
+    variants.push(key.to_string());
+    if let Some(camel) = camel_case_key(key) {
+        if camel != key {
+            variants.push(camel);
+        }
+    }
+    if let Some(pascal) = pascal_case_key(key) {
+        if !variants.iter().any(|existing| existing == &pascal) {
+            variants.push(pascal);
+        }
+    }
+    variants
+}
+
+fn metadata_get<'a>(metadata: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    let object = metadata.as_object()?;
+    for variant in metadata_key_variants(key) {
+        if let Some(value) = object.get(&variant) {
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn metadata_get_string(metadata: &serde_json::Value, key: &str) -> Option<String> {
+    metadata_get(metadata, key).and_then(|value| value.as_str().map(str::to_string))
+}
+
+fn metadata_get_string_list(metadata: &serde_json::Value, key: &str) -> Vec<String> {
+    metadata_get(metadata, key)
+        .map(extract_string_list)
+        .unwrap_or_default()
+}
+
+fn metadata_get_string_list_variants(metadata: &serde_json::Value, key: &str) -> Vec<String> {
+    let object = match metadata.as_object() {
+        Some(object) => object,
+        None => return Vec::new(),
+    };
+    let mut values = Vec::new();
+    for variant in metadata_key_variants(key) {
+        if let Some(value) = object.get(&variant) {
+            values.extend(extract_string_list(value));
+        }
+    }
+    normalize_string_list(values)
+}
+
+fn metadata_contains_key(metadata: &serde_json::Value, key: &str) -> bool {
+    let object = match metadata.as_object() {
+        Some(object) => object,
+        None => return false,
+    };
+    metadata_key_variants(key)
+        .iter()
+        .any(|variant| object.contains_key(variant))
+}
+
+fn ensure_metadata_object(
+    metadata: &mut serde_json::Value,
+) -> &mut serde_json::Map<String, serde_json::Value> {
+    if !metadata.is_object() {
+        *metadata = serde_json::Value::Object(serde_json::Map::new());
+    }
+    if metadata.as_object_mut().is_none() {
+        *metadata = serde_json::Value::Object(serde_json::Map::new());
+    }
+    match metadata.as_object_mut() {
+        Some(object) => object,
+        None => unreachable!("metadata should be an object after initialization"),
+    }
+}
+
+fn extract_routing_keywords(
+    metadata: &serde_json::Value,
+    explicit: Option<Vec<String>>,
+) -> Vec<String> {
+    let mut keywords = metadata_get_string_list_variants(metadata, "routing_keywords");
+    if let Some(extra) = explicit {
+        keywords.extend(extra);
+    }
+    normalize_string_list(keywords)
+}
+
+fn ensure_metadata_routing_keywords(metadata: &mut serde_json::Value, routing_keywords: &[String]) {
+    let normalized = normalize_string_list(routing_keywords.to_vec());
+    if normalized.is_empty() {
+        return;
+    }
+    let mut merged = metadata_get_string_list_variants(metadata, "routing_keywords");
+    merged.extend(normalized);
+    let merged = normalize_string_list(merged);
+    if merged.is_empty() {
+        return;
+    }
+    let object = ensure_metadata_object(metadata);
+    for variant in metadata_key_variants("routing_keywords") {
+        object.remove(&variant);
+    }
+    object.insert(
+        "routing_keywords".to_string(),
+        serde_json::Value::Array(merged.into_iter().map(serde_json::Value::String).collect()),
+    );
 }
 
 impl From<SkillDefinitionHelper> for SkillDefinition {
     fn from(helper: SkillDefinitionHelper) -> Self {
         let metadata = helper.metadata.clone();
-        let routing_keywords = metadata
-            .get("routing_keywords")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let routing_keywords = extract_routing_keywords(&metadata, helper.routing_keywords);
 
         Self {
             name: helper.name,
@@ -96,10 +272,13 @@ impl From<SkillDefinitionHelper> for SkillDefinition {
 
 impl From<SkillDefinition> for SkillDefinitionHelper {
     fn from(def: SkillDefinition) -> Self {
+        let mut metadata = def.metadata;
+        ensure_metadata_routing_keywords(&mut metadata, &def.routing_keywords);
         Self {
             name: def.name,
             description: def.description,
-            metadata: def.metadata,
+            metadata,
+            routing_keywords: None,
         }
     }
 }
@@ -108,15 +287,7 @@ impl SkillDefinition {
     /// Create a new skill definition.
     #[must_use]
     pub fn new(name: String, description: String, metadata: serde_json::Value) -> Self {
-        let routing_keywords = metadata
-            .get("routing_keywords")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let routing_keywords = extract_routing_keywords(&metadata, None);
 
         Self {
             name,
@@ -129,33 +300,13 @@ impl SkillDefinition {
     /// Get `require_refs` from metadata safely.
     #[must_use]
     pub fn get_require_refs(&self) -> Vec<String> {
-        self.metadata
-            .get("requireRefs")
-            .or(self.metadata.get("require_refs"))
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default()
+        metadata_get_string_list(&self.metadata, "require_refs")
     }
 
     /// Get a specific metadata field as string.
-    /// Tries both camelCase and `snake_case` variations.
+    /// Tries snake_case, camelCase, and PascalCase variations.
     pub fn get_meta_string(&self, key: &str) -> Option<String> {
-        // Try camelCase (first char uppercase) and original key
-        let camel_key = key
-            .chars()
-            .next()
-            .map(|c| c.to_uppercase().to_string() + &key[1..])
-            .unwrap_or_default();
-
-        self.metadata
-            .get(&camel_key)
-            .or(self.metadata.get(key))
-            .and_then(|v| v.as_str())
-            .map(String::from)
+        metadata_get_string(&self.metadata, key)
     }
 
     /// Get skill version from metadata.
@@ -578,6 +729,9 @@ pub enum SchemaError {
     /// The requested type name is not registered.
     #[error("Unknown type: {0}")]
     UnknownType(String),
+    /// JSON Schema serialization failed.
+    #[error("Schema serialization failed: {0}")]
+    Serialization(String),
 }
 
 /// Get JSON Schema for a registered type.
@@ -604,8 +758,7 @@ pub fn get_schema_json(type_name: &str) -> Result<String, SchemaError> {
         "EnvironmentSnapshot" => schemars::schema_for!(EnvironmentSnapshot),
         _ => return Err(SchemaError::UnknownType(type_name.to_string())),
     };
-    serde_json::to_string_pretty(&schema)
-        .map_err(|e| SchemaError::UnknownType(format!("Serialization failed: {e}")))
+    serde_json::to_string_pretty(&schema).map_err(|e| SchemaError::Serialization(e.to_string()))
 }
 
 /// Get list of all registered type names.

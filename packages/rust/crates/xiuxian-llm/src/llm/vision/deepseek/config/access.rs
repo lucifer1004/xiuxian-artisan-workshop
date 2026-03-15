@@ -42,10 +42,6 @@ pub(in crate::llm::vision::deepseek) fn crop_mode() -> Option<bool> {
     super::config().crop_mode
 }
 
-pub(in crate::llm::vision::deepseek) fn max_tiles() -> Option<u32> {
-    super::config().max_tiles
-}
-
 pub(in crate::llm::vision::deepseek) fn max_new_tokens() -> Option<usize> {
     super::config().max_new_tokens
 }

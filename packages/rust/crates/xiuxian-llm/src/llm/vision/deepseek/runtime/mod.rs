@@ -346,29 +346,6 @@ fn validate_quantized_snapshot_alignment(path: &Path) -> Result<(), ()> {
     Ok(())
 }
 
-pub(crate) fn resolve_local_runtime_safety_reason_for_tests(
-    configured_model_kind: Option<&str>,
-    model_root: &Path,
-    explicit_snapshot_path: Option<&Path>,
-    may_use_metal: bool,
-    quantized_requirement_disabled: bool,
-    configured_device: Option<&str>,
-) -> Option<String> {
-    match evaluate_local_runtime_safety(
-        configured_model_kind,
-        model_root,
-        explicit_snapshot_path,
-        may_use_metal,
-        quantized_requirement_disabled,
-        configured_device,
-    ) {
-        LocalRuntimeSafetyDecision::UnsafeBlocked(reason) => Some(reason),
-        LocalRuntimeSafetyDecision::Safe | LocalRuntimeSafetyDecision::UnsafeAllowedByOverride => {
-            None
-        }
-    }
-}
-
 pub(crate) use self::model_root::{
     normalize_model_root, resolve_model_root_for_kind, resolve_model_root_with,
 };

@@ -143,28 +143,3 @@ fn lane_wait_timeout() -> Duration {
             .max(1),
     )
 }
-
-pub(in crate::llm::vision::deepseek::native) fn snapshot_for_tests() -> (usize, bool) {
-    let lane = BATCH_LANE.get_or_init(|| Mutex::new(BatchLaneState::new()));
-    let guard = lane
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    (guard.queue.len(), guard.draining)
-}
-
-pub(in crate::llm::vision::deepseek::native) fn force_draining_for_tests() {
-    let lane = BATCH_LANE.get_or_init(|| Mutex::new(BatchLaneState::new()));
-    let mut guard = lane
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    guard.draining = true;
-}
-
-pub(in crate::llm::vision::deepseek::native) fn clear_for_tests() {
-    let lane = BATCH_LANE.get_or_init(|| Mutex::new(BatchLaneState::new()));
-    let mut guard = lane
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    guard.queue.clear();
-    guard.draining = false;
-}

@@ -1,6 +1,6 @@
 use std::fs::File;
-use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::io::{BufWriter, Read, Seek, Write};
+use std::path::Path;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use deepseek_ocr_dsq::DsqReader;
@@ -18,6 +18,10 @@ pub enum DsqRepairResult {
     Failed(String),
 }
 
+/// Repair DSQ file alignment if needed for CPU inference compatibility.
+///
+/// Checks if the quantized snapshot file has proper alignment for CPU inference.
+/// If misaligned, creates a repaired copy and atomically swaps it into place.
 pub fn repair_dsq_if_needed(path: &Path) -> DsqRepairResult {
     match validate_alignment(path) {
         Ok(true) => DsqRepairResult::AlreadyAligned,

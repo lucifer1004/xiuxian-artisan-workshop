@@ -1,0 +1,14 @@
+# Scenario: Routing Keywords Merge
+# Description: Normalize routing keywords from metadata variants and explicit list
+
+[scenario]
+id = "001_routing_keywords_merge"
+name = "Routing Keywords Merge"
+description = "Normalize routing keywords from metadata variants and explicit list"
+category = "skill_definition"
+
+[input]
+type = "json"
+paths = ["input"]
+
+# Snapshot output managed by insta at tests/snapshots/scenarios/

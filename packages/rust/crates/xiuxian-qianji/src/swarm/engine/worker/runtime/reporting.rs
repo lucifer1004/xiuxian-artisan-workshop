@@ -1,7 +1,7 @@
 use super::super::super::orchestrator::SwarmEngine;
 use super::super::super::{SwarmAgentConfig, SwarmAgentReport};
 use crate::error::QianjiError;
-use omni_window::SessionWindow;
+use xiuxian_window::SessionWindow;
 
 impl SwarmEngine {
     pub(in crate::swarm::engine::worker) fn build_worker_report(

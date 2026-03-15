@@ -8,10 +8,5 @@ category = "hybrid"
 type = "markdown_tree"
 paths = ["input"]
 
-[expected]
-type = "json_snapshot"
-files = ["custom_columns.json", "doc_fallback.json", "duplicate_rows.json"]
-
-[runner]
 build_page_index = true
 collect_links = true

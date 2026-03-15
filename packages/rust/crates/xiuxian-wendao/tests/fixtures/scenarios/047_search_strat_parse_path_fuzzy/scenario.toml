@@ -8,10 +8,5 @@ category = "search_match_strategies"
 type = "none"
 paths = []
 
-[expected]
-type = "json_snapshot"
-files = ["result.json"]
-
-[runner]
 build_page_index = false
 collect_links = false

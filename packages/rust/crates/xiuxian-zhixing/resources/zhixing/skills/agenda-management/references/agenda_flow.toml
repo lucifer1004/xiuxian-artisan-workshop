@@ -31,7 +31,7 @@ max_retries = 10
 output_key = "professor_conclusion"
 score_key = "governance_score"
 [nodes.qianhuan]
-persona_id = "$wendao://skills/agenda-management/references/teacher.md"
+persona_id = "$wendao://skills/agenda-management/references/teacher.md#[Heading:Architecture, Paragraph:3]"
 output_key = "professor_annotated_prompt"
 input_keys = ["student_proposal", "steward_feedback", "wendao_search_results"]
 [nodes.llm]

@@ -8,20 +8,17 @@ mod fixture_read;
 mod link_graph_fixture_tree;
 #[path = "support/page_index_fixture_support.rs"]
 mod page_index_fixture_support;
-
 use page_index_fixture_support::{
     PageIndexFixture, assert_page_index_fixture, page_index_tree_snapshot, read_page_index_fixture,
     semantic_documents_snapshot,
 };
 use serde_json::json;
-
 #[test]
 fn test_link_graph_page_index_builds_hierarchy_and_line_ranges()
 -> Result<(), Box<dyn std::error::Error>> {
     let fixture = PageIndexFixture::build("hierarchy")?;
     let index = fixture.build_index()?;
     let roots = index.page_index("alpha").ok_or("missing page index")?;
-
     let actual = page_index_tree_snapshot(roots);
     assert_page_index_fixture("hierarchy", "tree.json", &actual);
     Ok(())
@@ -33,7 +30,6 @@ fn test_link_graph_page_index_generates_single_root_for_headingless_docs()
     let fixture = PageIndexFixture::build("headingless")?;
     let index = fixture.build_index()?;
     let roots = index.page_index("plain").ok_or("missing page index")?;
-
     let actual = page_index_tree_snapshot(roots);
     assert_page_index_fixture("headingless", "tree.json", &actual);
     Ok(())
@@ -45,7 +41,6 @@ fn test_link_graph_page_index_thins_small_parent_sections() -> Result<(), Box<dy
     let fixture = PageIndexFixture::build("thinning")?;
     let index = fixture.build_index()?;
     let roots = index.page_index("thin").ok_or("missing page index")?;
-
     let actual = page_index_tree_snapshot(roots);
     assert_page_index_fixture("thinning", "tree.json", &actual);
     Ok(())

@@ -3,26 +3,26 @@ use std::path::Path;
 use super::raw::DeepseekTomlConfig;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct DeepseekCacheConfigSnapshot {
-    pub(crate) local_max_entries: Option<usize>,
-    pub(crate) valkey_url: Option<String>,
-    pub(crate) key_prefix: Option<String>,
-    pub(crate) ttl_seconds: Option<u64>,
-    pub(crate) timeout_ms: Option<u64>,
+pub struct DeepseekCacheConfigSnapshot {
+    pub local_max_entries: Option<usize>,
+    pub valkey_url: Option<String>,
+    pub key_prefix: Option<String>,
+    pub ttl_seconds: Option<u64>,
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct DeepseekConfigSnapshot {
-    pub(crate) model_root: Option<String>,
-    pub(crate) weights_path: Option<String>,
-    pub(crate) snapshot_path: Option<String>,
-    pub(crate) ocr_prompt: Option<String>,
-    pub(crate) device: Option<String>,
-    pub(crate) base_size: Option<u32>,
-    pub(crate) image_size: Option<u32>,
-    pub(crate) crop_mode: Option<bool>,
-    pub(crate) max_new_tokens: Option<usize>,
-    pub(crate) cache: DeepseekCacheConfigSnapshot,
+pub struct DeepseekConfigSnapshot {
+    pub model_root: Option<String>,
+    pub weights_path: Option<String>,
+    pub snapshot_path: Option<String>,
+    pub ocr_prompt: Option<String>,
+    pub device: Option<String>,
+    pub base_size: Option<u32>,
+    pub image_size: Option<u32>,
+    pub crop_mode: Option<bool>,
+    pub max_new_tokens: Option<usize>,
+    pub cache: DeepseekCacheConfigSnapshot,
 }
 
 fn to_config_snapshot(config: DeepseekTomlConfig) -> DeepseekConfigSnapshot {

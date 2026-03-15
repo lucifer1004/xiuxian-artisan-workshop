@@ -11,11 +11,6 @@ category = "quantum_fusion"
 type = "markdown_tree"
 paths = ["input/docs"]
 
-[expected]
-type = "json_snapshot"
-files = ["contexts.json"]
-
-[runner]
 build_page_index = true
 collect_links = true
 quantum_options = { alpha = 0.6, max_distance = 2, related_limit = 2 }

@@ -6,19 +6,16 @@ mod native_device;
 #[cfg(feature = "vision-dots")]
 mod native_paths;
 
-pub use self::config_runtime::{
-    load_config_with_paths_for_tests, normalize_model_root_for_tests,
-    resolve_model_root_with_for_tests,
-};
+pub(crate) use self::config_runtime::load_config_with_paths_for_tests;
+pub use self::config_runtime::{normalize_model_root_for_tests, resolve_model_root_with_for_tests};
 
 #[cfg(feature = "vision-dots")]
 pub use self::native_cache::{
-    build_cache_key_with_for_tests, cache_layer_labels_for_tests,
-    fingerprint_cache_clear_for_tests, fingerprint_cache_len_for_tests,
-    local_cache_clear_for_tests, local_cache_get_for_tests,
-    local_cache_set_with_max_entries_for_tests, normalize_cache_text_owned_for_tests,
-    normalize_cache_text_view_for_tests, normalize_valkey_timeout_ms_for_tests,
-    store_markdown_in_cache_for_tests, valkey_get_with_for_tests, valkey_set_with_for_tests,
+    build_cache_key_with_for_tests, cache_layer_labels_for_tests, local_cache_clear_for_tests,
+    local_cache_get_for_tests, local_cache_set_with_max_entries_for_tests,
+    normalize_cache_text_owned_for_tests, normalize_cache_text_view_for_tests,
+    normalize_valkey_timeout_ms_for_tests, store_markdown_in_cache_for_tests,
+    valkey_get_with_for_tests, valkey_set_with_for_tests,
 };
 
 #[cfg(feature = "vision-dots")]

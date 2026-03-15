@@ -12,11 +12,6 @@ type = "markdown_tree"
 paths = ["input"]
 update_path = "update"
 
-[expected]
-type = "json_snapshot"
-files = ["incremental_refresh.json"]
-
-[runner]
 build_page_index = true
 collect_links = false
 test_incremental_refresh = true

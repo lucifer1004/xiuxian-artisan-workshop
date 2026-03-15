@@ -1,5 +1,6 @@
 //! Markdown note parsing for link-graph indexing.
 
+mod blocks;
 mod content;
 mod links;
 mod paths;
@@ -18,6 +19,7 @@ use self::paths::{normalize_slashes, relative_doc_id};
 use self::sections::extract_sections;
 use self::time::resolve_note_timestamps;
 
+pub use self::blocks::extract_blocks;
 pub use self::paths::{is_supported_note, normalize_alias};
 pub use self::sections::ParsedSection;
 

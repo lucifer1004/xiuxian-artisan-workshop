@@ -6,6 +6,8 @@ use std::io::Cursor;
 use std::sync::Arc;
 #[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 use std::time::Instant;
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
+use tokio;
 
 #[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 use anyhow::{Result, bail};
@@ -23,8 +25,8 @@ fn deepseek_smoke_requires_acceleration_feature() {
 }
 
 #[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
-#[test]
-fn deepseek_smoke_runs_real_inference_from_local_model_cache() -> Result<()> {
+#[tokio::test]
+async fn deepseek_smoke_runs_real_inference_from_local_model_cache() -> Result<()> {
     let runtime = get_deepseek_runtime();
     if !runtime.is_enabled() {
         bail!("DeepSeek runtime is disabled: {runtime:?}");
@@ -32,7 +34,9 @@ fn deepseek_smoke_runs_real_inference_from_local_model_cache() -> Result<()> {
 
     let source_png = build_high_contrast_probe_png()?;
     let started = Instant::now();
-    let refinement = VisualRefiner::default().refine(Arc::from(source_png))?;
+    let refinement = VisualRefiner::default()
+        .refine(Arc::from(source_png))
+        .await?;
     let elapsed = started.elapsed();
 
     println!("deepseek_runtime={runtime:?}");

@@ -12,11 +12,17 @@ pub mod error;
 pub mod multimodal;
 /// Provider builders shared by runtime facades.
 pub mod providers;
+/// Runtime profile resolution for OpenAI-compatible multi-provider configs.
+pub mod runtime_profile;
 /// Vision preprocessing and semantic grounding utilities.
 pub mod vision;
 
 pub use client::{
     ChatChoice, ChatMessage, ChatRequest, ChatResponse, ContentPart, ImageUrlContent, LlmClient,
-    MessageContent, OpenAIClient,
+    MessageContent, OpenAIClient, OpenAIWireApi,
 };
 pub use error::{LlmError, LlmResult};
+pub use runtime_profile::{
+    LlmProviderProfileInput, LlmRuntimeDefaults, LlmRuntimeProfileEnv, LlmRuntimeProfileInput,
+    ResolvedLlmRuntimeProfile, resolve_openai_runtime_profile,
+};

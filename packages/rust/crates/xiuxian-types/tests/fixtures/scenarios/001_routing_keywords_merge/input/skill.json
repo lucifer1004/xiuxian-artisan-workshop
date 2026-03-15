@@ -1,0 +1,9 @@
+{
+  "name": "git",
+  "description": "desc",
+  "metadata": {
+    "routing_keywords": ["alpha"],
+    "routingKeywords": ["beta"]
+  },
+  "routing_keywords": ["beta", "gamma", " "]
+}

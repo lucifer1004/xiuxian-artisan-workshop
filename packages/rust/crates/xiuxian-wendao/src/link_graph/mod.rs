@@ -1,5 +1,6 @@
 //! Markdown link graph index + retrieval algorithms.
 
+pub mod addressing;
 pub mod agentic;
 mod context_snapshot;
 mod index;
@@ -13,6 +14,11 @@ mod runtime_config;
 /// GraphMem saliency models, scoring, and Valkey persistence adapters.
 pub mod saliency;
 mod stats_cache;
+
+pub use addressing::{
+    Address, ModificationError, ModificationResult, ResolvedNode, adjust_line_range,
+    build_hash_index, build_id_index, replace_byte_range, resolve_node, update_section_content,
+};
 
 pub use agentic::{
     LINK_GRAPH_SUGGESTED_LINK_DECISION_SCHEMA_VERSION, LINK_GRAPH_SUGGESTED_LINK_SCHEMA_VERSION,
@@ -62,8 +68,8 @@ pub use models::{
     LinkGraphScope, LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSemanticDocument,
     LinkGraphSemanticDocumentKind, LinkGraphSemanticDocumentScope, LinkGraphSemanticSearchPolicy,
     LinkGraphSortField, LinkGraphSortOrder, LinkGraphSortTerm, LinkGraphStats, LinkGraphTagFilter,
-    PageIndexMeta, PageIndexNode, QuantumAnchorHit, QuantumContext, QuantumFusionOptions,
-    QuantumFusionTelemetry, QuantumSemanticSearchRequest,
+    MarkdownBlock, MarkdownBlockKind, PageIndexMeta, PageIndexNode, QuantumAnchorHit,
+    QuantumContext, QuantumFusionOptions, QuantumFusionTelemetry, QuantumSemanticSearchRequest,
 };
 pub use narrator::narrate_subgraph;
 pub use query::{ParsedLinkGraphQuery, parse_search_query};

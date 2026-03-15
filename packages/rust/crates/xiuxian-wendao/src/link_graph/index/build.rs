@@ -17,6 +17,4 @@ pub use cluster_finder::{
 };
 pub use collapse::{VirtualNode, collapse_clusters};
 pub use saliency_snapshot::{MIN_ACTIVATION_COUNT, SALIENCY_THRESHOLD_HIGH, SaliencySnapshot};
-pub use vision_ingress::{
-    NoOpVisionProvider, VisionIngress, VisionProvider, build_cross_modal_edges,
-};
+pub use vision_ingress::{VisionIngress, VisionProvider, build_cross_modal_edges};

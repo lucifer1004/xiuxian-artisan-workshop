@@ -46,6 +46,7 @@ xiuxian-skills = { path = "../xiuxian-skills" }
 xiuxian-logging = { path = "../xiuxian-logging" }
 xiuxian-vector = { path = "../xiuxian-vector" }
 xiuxian-io = { path = "../xiuxian-io" }
+xiuxian-llm = { path = "../xiuxian-llm" }
 
 # Macro utilities
 xiuxian-macros = { path = "../xiuxian-macros" }
@@ -55,6 +56,9 @@ pyo3 = { workspace = true }
 
 # Fast hash for sync (5-10x faster than MD5)
 xxhash-rust = "0.8"
+
+# Content fingerprinting (Blake3)
+blake3 = "1"
 
 # Fast regex for entity reference extraction (10-100x faster than Python)
 regex = "1"

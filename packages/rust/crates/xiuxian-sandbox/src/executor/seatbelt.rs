@@ -9,30 +9,35 @@ use tokio::process::Command as AsyncCommand;
 
 use super::ExecutionResult;
 use super::SandboxExecutor;
+use super::execute_with_limits;
 
 /// Seatbelt executor for macOS
 #[pyclass]
 #[derive(Debug, Clone)]
-pub struct SeatbeltExecutor;
+pub struct SeatbeltExecutor {
+    default_timeout: u64,
+}
 
 #[pymethods]
 impl SeatbeltExecutor {
     #[new]
     #[pyo3(signature = (default_timeout=60))]
+    /// Create a new `SeatbeltExecutor` with a default timeout.
+    #[must_use]
     pub fn new(default_timeout: u64) -> Self {
-        let _ = default_timeout;
-        Self
+        Self { default_timeout }
     }
 
     /// Get executor name
-    pub fn name(&self) -> &str {
-        "seatbelt"
+    #[must_use]
+    pub fn name(&self) -> &'static str {
+        <Self as SandboxExecutor>::name(self)
     }
 }
 
 impl SeatbeltExecutor {
     /// Build sandbox-exec command from SBPL content
-    fn build_command(&self, profile_path: &Path, cmd_vec: &[String]) -> AsyncCommand {
+    fn build_command(profile_path: &Path, cmd_vec: &[String]) -> AsyncCommand {
         let mut cmd = AsyncCommand::new("sandbox-exec");
         cmd.arg("-f").arg(profile_path);
 
@@ -46,7 +51,7 @@ impl SeatbeltExecutor {
 
 #[async_trait::async_trait]
 impl SandboxExecutor for SeatbeltExecutor {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "seatbelt"
     }
 
@@ -75,35 +80,9 @@ impl SandboxExecutor for SeatbeltExecutor {
         };
 
         // Build and execute command
-        let mut command = self.build_command(profile_path, &cmd_vec);
+        let command = Self::build_command(profile_path, &cmd_vec);
 
-        // Note: sandbox-exec on macOS doesn't support stdin input in the same way
-        // We execute without stdin pipe for simplicity
-
-        let start_time = std::time::Instant::now();
-
-        match command.output().await {
-            Ok(output) => {
-                let elapsed = start_time.elapsed();
-                Ok(ExecutionResult {
-                    success: output.status.success(),
-                    exit_code: output.status.code(),
-                    stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                    stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-                    execution_time_ms: elapsed.as_millis() as u64,
-                    memory_used_bytes: None,
-                    error: None,
-                })
-            }
-            Err(e) => Ok(ExecutionResult {
-                success: false,
-                exit_code: None,
-                stdout: String::new(),
-                stderr: String::new(),
-                execution_time_ms: start_time.elapsed().as_millis() as u64,
-                memory_used_bytes: None,
-                error: Some(format!("Failed to execute: {}", e)),
-            }),
-        }
+        // Note: sandbox-exec on macOS doesn't support stdin input in the same way.
+        execute_with_limits(command, self.default_timeout, 0).await
     }
 }

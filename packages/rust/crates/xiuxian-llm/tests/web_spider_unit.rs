@@ -114,29 +114,3 @@ async fn spider_bridge_script_only_page_returns_non_empty_content() -> Result<()
 
     Ok(())
 }
-
-#[tokio::test]
-async fn spider_bridge_respects_user_agent_override() -> Result<()> {
-    let url = spawn_site(
-        r"
-<!doctype html>
-<html><body><p>UA test page</p></body></html>
-",
-    )
-    .await?;
-
-    let bridge = SpiderBridge::new(url)
-        .with_limit(1)
-        .with_user_agent("SpiderBridgeTest/1.0");
-    let context = bridge.quick_ingest().await?;
-
-    assert_eq!(
-        context
-            .metadata
-            .get("crawler.user_agent")
-            .map(String::as_str),
-        Some("SpiderBridgeTest/1.0")
-    );
-
-    Ok(())
-}

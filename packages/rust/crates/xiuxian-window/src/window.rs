@@ -1,4 +1,4 @@
-//! Session window: bounded ring buffer of TurnSlots.
+//! Session window: bounded ring buffer of `TurnSlot`s.
 
 use std::collections::VecDeque;
 
@@ -15,6 +15,7 @@ pub struct SessionWindow {
 
 impl SessionWindow {
     /// Create a session window with a fixed capacity.
+    #[must_use]
     pub fn new(session_id: &str, max_turns: usize) -> Self {
         Self {
             session_id: session_id.to_string(),
@@ -39,14 +40,16 @@ impl SessionWindow {
         self.total_tool_calls += u64::from(tool_count);
         self.ring.push_back(slot);
         while self.ring.len() > self.max_turns {
-            let dropped = self.ring.pop_front().expect("non-empty");
-            self.total_tool_calls = self
-                .total_tool_calls
-                .saturating_sub(u64::from(dropped.tool_count));
+            if let Some(dropped) = self.ring.pop_front() {
+                self.total_tool_calls = self
+                    .total_tool_calls
+                    .saturating_sub(u64::from(dropped.tool_count));
+            }
         }
     }
 
     /// Last `max_turns` turns for context building (oldest to newest).
+    #[must_use]
     pub fn get_recent_turns(&self, max_turns: usize) -> Vec<&TurnSlot> {
         let n = self.ring.len().min(max_turns);
         if n == 0 {
@@ -58,6 +61,7 @@ impl SessionWindow {
     }
 
     /// Stats for consolidation trigger and UI.
+    #[must_use]
     pub fn get_stats(&self) -> (u64, u64, usize) {
         (
             self.ring.len() as u64,
@@ -68,6 +72,7 @@ impl SessionWindow {
 
     /// Drain the oldest `n` turns from the ring for consolidation. Returns drained slots and updates stats.
     /// Caller can summarise and store as episode then drop the returned slots.
+    #[must_use]
     pub fn drain_oldest_turns(&mut self, n: usize) -> Vec<TurnSlot> {
         let take = n.min(self.ring.len());
         let mut out = Vec::with_capacity(take);
@@ -83,6 +88,7 @@ impl SessionWindow {
     }
 
     /// Session identifier for this window.
+    #[must_use]
     pub fn session_id(&self) -> &str {
         &self.session_id
     }

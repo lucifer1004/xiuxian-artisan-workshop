@@ -3515,6 +3515,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_filter"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a1c3cc8e57274ec99de65301228b537f1e4eedc1b8e0f9411c6caac8ae7308f"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2daee4ea451f429a58296525ddf28b45a3b64f1acf6587e2067437bb11e218d"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "jiff",
+ "log",
+]
+
+[[package]]
 name = "equator"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14332,6 +14355,7 @@ dependencies = [
  "deepseek-ocr-infer-deepseek",
  "deepseek-ocr-infer-dots",
  "deepseek-ocr-infer-paddleocr",
+ "env_logger",
  "fast_image_resize 6.0.0",
  "futures",
  "hex",
@@ -14356,7 +14380,6 @@ dependencies = [
  "tracing",
  "xiuxian-config-core",
  "xiuxian-macros",
- "xiuxian-mcp",
 ]
 
 [[package]]
@@ -14617,6 +14640,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "xiuxian-testing",
 ]
 
 [[package]]
@@ -14666,6 +14690,7 @@ dependencies = [
  "arrow 54.3.1",
  "async-trait",
  "axum",
+ "blake3",
  "chrono",
  "clap",
  "comrak",
@@ -14698,6 +14723,7 @@ dependencies = [
  "uuid 1.19.0",
  "walkdir",
  "xiuxian-io",
+ "xiuxian-llm",
  "xiuxian-logging",
  "xiuxian-macros",
  "xiuxian-skills",

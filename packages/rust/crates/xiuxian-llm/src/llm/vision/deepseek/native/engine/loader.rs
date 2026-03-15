@@ -49,6 +49,14 @@ impl DeepseekEngine {
         requested_device: DeviceKind,
         model_kind: VisionModelKind,
     ) -> Result<Self, String> {
+        tracing::debug!(
+            event = "llm.vision.deepseek.engine.load_start",
+            model_root = %model_root,
+            requested_device = ?requested_device,
+            model_kind = %model_kind.as_str(),
+            "DeepseekEngine: Starting model load - CRITICAL MEMORY ALLOCATION POINT"
+        );
+
         let model_paths = resolve_model_paths(model_root, model_kind)?;
         if model_paths.require_quantized && model_paths.snapshot_path.is_none() {
             return Err(
@@ -61,31 +69,82 @@ or set XIUXIAN_VISION_REQUIRE_QUANTIZED=0 to allow unquantized loading."
         let (device, maybe_dtype) = prepare_device_with_fallback(requested_device)?;
         let preferred_dtype = preferred_dtype_for_device(&device);
         let fallback_dtype = maybe_dtype.unwrap_or_else(|| default_dtype_for_device(&device));
+
+        tracing::debug!(
+            event = "llm.vision.deepseek.engine.dtype_resolved",
+            device = ?device,
+            device_is_metal = device.is_metal(),
+            device_is_cpu = device.is_cpu(),
+            preferred_dtype = ?preferred_dtype,
+            fallback_dtype = ?fallback_dtype,
+            model_root = %model_root,
+            quantized = model_paths.snapshot_path.is_some(),
+            "DeepseekEngine: Device and dtype resolved - CHECK FOR F32 ON METAL"
+        );
+
         let (model, dtype) = match load_model_with_dtype(
             model_paths.config_path.as_path(),
-            model_paths.weights_path.as_path(),
+            Some(model_paths.weights_path.as_path()),
             model_paths.snapshot_path.as_deref(),
             &device,
             preferred_dtype,
             model_paths.model_kind,
         ) {
-            Ok(model) => (model, preferred_dtype),
+            Ok(model) => {
+                tracing::debug!(
+                    event = "llm.vision.deepseek.engine.load_success",
+                    dtype = ?preferred_dtype,
+                    "DeepseekEngine: Model loaded with preferred dtype"
+                );
+                (model, preferred_dtype)
+            }
             Err(error) if preferred_dtype != fallback_dtype => {
+                // SAFETY GUARD: Block F16 -> F32 fallback on Metal to prevent memory explosion
+                // F32 on Metal will use ~2x memory compared to F16
+                if device.is_metal()
+                    && preferred_dtype == DType::F16
+                    && fallback_dtype == DType::F32
+                {
+                    let error_str = sanitize_error_string(&error);
+                    tracing::error!(
+                        event = "llm.vision.deepseek.engine.metal_f32_blocked",
+                        preferred = ?preferred_dtype,
+                        fallback = ?fallback_dtype,
+                        error = %error_str,
+                        "DeepSeek OCR: F16 -> F32 fallback on Metal BLOCKED to prevent memory explosion. \
+                         Consider using quantized model or checking Metal driver compatibility."
+                    );
+                    return Err(format!(
+                        "DeepSeek OCR Metal F16 load failed: {}. \
+                         F32 fallback is blocked to prevent memory explosion (F32 uses ~2x memory of F16). \
+                         Solutions: 1) Use quantized .dsq model, 2) Check Metal driver, 3) Force CPU with XIUXIAN_VISION_DEVICE=cpu",
+                        error_str
+                    ));
+                }
+
+                // For non-Metal devices, allow fallback
                 tracing::warn!(
                     event = "llm.vision.deepseek.engine.dtype_fallback",
                     preferred = ?preferred_dtype,
                     fallback = ?fallback_dtype,
+                    device = ?device,
+                    device_is_metal = device.is_metal(),
                     error = %sanitize_error_string(error),
                     "DeepSeek OCR preferred dtype load failed; retrying with backend fallback dtype"
                 );
                 let model = load_model_with_dtype(
                     model_paths.config_path.as_path(),
-                    model_paths.weights_path.as_path(),
+                    Some(model_paths.weights_path.as_path()),
                     model_paths.snapshot_path.as_deref(),
                     &device,
                     fallback_dtype,
                     model_paths.model_kind,
                 )?;
+                tracing::debug!(
+                    event = "llm.vision.deepseek.engine.load_success_fallback",
+                    dtype = ?fallback_dtype,
+                    "DeepseekEngine: Model loaded with fallback dtype"
+                );
                 (model, fallback_dtype)
             }
             Err(error) => return Err(sanitize_error_string(error)),
@@ -198,25 +257,88 @@ fn prepare_device_with_fallback(
 
 fn load_model_with_dtype(
     config_path: &Path,
-    weights_path: &Path,
+    weights_path: Option<&Path>,
     snapshot_path: Option<&Path>,
     device: &candle_core::Device,
     dtype: DType,
     model_kind: VisionModelKind,
 ) -> Result<Box<dyn OcrEngine>, String> {
+    let load_start = std::time::Instant::now();
+
+    eprintln!(
+        "[MEMORY TRACE] load_model_with_dtype() START: weights={:?}, snapshot={:?}, dtype={:?}",
+        weights_path.as_ref().map(|p| p.display()),
+        snapshot_path.as_ref().map(|p| p.display()),
+        dtype
+    );
+
+    tracing::info!(
+        event = "llm.vision.deepseek.engine.load_model_start",
+        config_path = %config_path.display(),
+        weights_path = weights_path.map(|p| p.display().to_string()).unwrap_or_else(|| "none".to_string()),
+        snapshot_path = snapshot_path.map(|p| p.display().to_string()).unwrap_or_else(|| "none".to_string()),
+        device = ?device,
+        dtype = ?dtype,
+        model_kind = %model_kind.as_str(),
+        "[MEMORY TRACE] Starting model load - this is where major memory allocation happens"
+    );
+
     let load_args = ModelLoadArgs {
         kind: model_kind.as_core_kind(),
         config_path: Some(config_path),
-        weights_path: Some(weights_path),
+        weights_path,
         snapshot_path,
         device: device.clone(),
         dtype,
     };
+
+    eprintln!(
+        "[MEMORY TRACE] Calling model loader for {:?}...",
+        model_kind.as_str()
+    );
+
+    tracing::info!(
+        event = "llm.vision.deepseek.engine.calling_model_loader",
+        model_kind = %model_kind.as_str(),
+        "[MEMORY TRACE] Calling model-specific loader (load_dots_model/load_deepseek_model)"
+    );
+
     let result = match model_kind {
         VisionModelKind::Deepseek => load_deepseek_model(load_args),
         VisionModelKind::PaddleOcrVl => load_paddleocr_model(load_args),
         VisionModelKind::DotsOcr => load_dots_model(load_args),
     };
+
+    let elapsed = load_start.elapsed();
+
+    match &result {
+        Ok(_) => {
+            eprintln!(
+                "[MEMORY TRACE] Model loader SUCCESS in {}ms",
+                elapsed.as_millis()
+            );
+            tracing::info!(
+                event = "llm.vision.deepseek.engine.load_model_success",
+                model_kind = %model_kind.as_str(),
+                elapsed_ms = elapsed.as_millis(),
+                "[MEMORY TRACE] Model loaded successfully - check memory usage now"
+            );
+        }
+        Err(e) => {
+            eprintln!(
+                "[MEMORY TRACE] Model loader FAILED: {}",
+                sanitize_error_string(e.to_string())
+            );
+            tracing::error!(
+                event = "llm.vision.deepseek.engine.load_model_failed",
+                model_kind = %model_kind.as_str(),
+                elapsed_ms = elapsed.as_millis(),
+                error = %sanitize_error_string(e.to_string()),
+                "[MEMORY TRACE] Model load failed"
+            );
+        }
+    }
+
     result.map_err(sanitize_error_string)
 }
 

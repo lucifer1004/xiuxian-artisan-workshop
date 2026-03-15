@@ -2,7 +2,6 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use image::GenericImageView;
-use image::ImageFormat;
 use image::imageops::FilterType;
 use imageproc::contrast::equalize_histogram;
 
@@ -123,6 +122,7 @@ fn fit_edge_with_rounding(edge: u32, long_edge: u32, max_dimension: u32) -> u32 
     u32::try_from(bounded).unwrap_or(u32::MAX)
 }
 
+/// Encode a dynamic image to PNG bytes.
 pub fn encode_png(image: &image::DynamicImage) -> LlmResult<Arc<[u8]>> {
     let mut writer = Cursor::new(Vec::new());
     image

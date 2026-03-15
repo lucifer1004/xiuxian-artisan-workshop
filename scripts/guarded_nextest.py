@@ -19,6 +19,7 @@ from pathlib import Path
 class ProcInfo:
     ppid: int
     rss_kb: int
+    vsz_kb: int  # Virtual memory size
     cpu_pct: float
     command: str
 
@@ -29,6 +30,7 @@ class Sample:
     ts_iso: str
     elapsed_s: float
     rss_kb: int
+    vsz_kb: int  # Virtual memory
     cpu_pct: float
     pid_count: int
 
@@ -64,6 +66,24 @@ class ProcessSpikeViolation:
     max_total_rss_gb: float
 
 
+@dataclass(frozen=True)
+class AggressiveKillRule:
+    """Rule for aggressive process killing based on keyword matching."""
+
+    pattern: str
+    max_count: int
+    max_rss_gb: float
+    kill_immediately: bool  # If True, kill offending process immediately without grace
+
+
+@dataclass(frozen=True)
+class WatchBinaryRule:
+    """Rule for watching specific binary for memory violations."""
+
+    binary_name: str
+    max_rss_gb: float
+
+
 def now_iso() -> str:
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -82,6 +102,21 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=6.0,
         help="Kill when process-tree RSS exceeds this GB threshold (default: 6.0)",
+    )
+    parser.add_argument(
+        "--max-vsz-gb",
+        type=float,
+        default=0.0,
+        help="Kill when process-tree virtual memory (VSZ) exceeds this GB threshold. 0 disables (default: 0)",
+    )
+    parser.add_argument(
+        "--system-max-rss-gb",
+        type=float,
+        default=0.0,
+        help=(
+            "System-wide RSS guard: kill if ANY process (not just children) exceeds this RSS. "
+            "Set 0 to disable (default: 0). Useful for catching runaway test processes."
+        ),
     )
     parser.add_argument(
         "--max-growth-gb-per-min",
@@ -141,6 +176,36 @@ def parse_args() -> argparse.Namespace:
             "Example: 'exe=xiuxian-daochang:1:6' or 'exe_prefix=llm-:1:8'. "
             "Set max_total_rss_gb to 0 to disable RSS limit."
         ),
+    )
+    parser.add_argument(
+        "--aggressive-kill",
+        action="append",
+        default=[],
+        help=(
+            "Aggressive kill rule in format 'substring:max_count:max_rss_gb'. "
+            "Immediately kills any matching process that exceeds count OR RSS limit. "
+            "Example: 'exe=ld:2:2' kills excess linker processes. "
+            "Example: 'exe=cargo:1:4' limits cargo to 1 instance with max 4GB RSS."
+        ),
+    )
+    parser.add_argument(
+        "--watch-binary",
+        action="append",
+        default=[],
+        help=(
+            "Watch specific binary name for memory violations. "
+            "Format: 'binary_name:max_rss_gb'. "
+            "Monitors ALL processes matching the binary name (not just child tree). "
+            "Kills immediately when ANY matching process exceeds RSS limit. "
+            "Example: 'llm_vision_deepseek_real_metal:4' kills if test binary exceeds 4GB. "
+            "Example: 'cargo:3' kills if cargo exceeds 3GB."
+        ),
+    )
+    parser.add_argument(
+        "--aggressive-poll-ms",
+        type=int,
+        default=100,
+        help="Polling interval for aggressive kill checks (default: 100ms, faster than normal poll)",
     )
     parser.add_argument(
         "--poll-ms",
@@ -218,9 +283,16 @@ def parse_cpu(raw: str) -> float:
 
 
 def snapshot_process_table() -> tuple[dict[int, ProcInfo], str | None]:
+    """
+    Snapshot process table using ps for fast response.
+
+    Note: On macOS, ps RSS is ~5x lower than Activity Monitor's Memory column.
+    The caller should adjust thresholds accordingly (divide by 5).
+    This is acceptable because we need fast response to catch memory explosions.
+    """
     try:
         result = subprocess.run(
-            ["ps", "-Ao", "pid=,ppid=,rss=,%cpu=,command="],
+            ["ps", "-Ao", "pid=,ppid=,rss=,vsz=,%cpu=,command="],
             capture_output=True,
             text=True,
             check=False,
@@ -233,20 +305,22 @@ def snapshot_process_table() -> tuple[dict[int, ProcInfo], str | None]:
         line = raw.strip()
         if not line:
             continue
-        parts = line.split(None, 4)
-        if len(parts) < 5:
+        parts = line.split(None, 5)
+        if len(parts) < 6:
             continue
         try:
             pid = int(parts[0])
             ppid = int(parts[1])
             rss_kb = int(parts[2])
+            vsz_kb = int(parts[3])
         except ValueError:
             continue
         table[pid] = ProcInfo(
             ppid=ppid,
             rss_kb=rss_kb,
-            cpu_pct=parse_cpu(parts[3]),
-            command=parts[4],
+            vsz_kb=vsz_kb,
+            cpu_pct=parse_cpu(parts[4]),
+            command=parts[5],
         )
     return table, None
 
@@ -273,6 +347,10 @@ def sum_rss_kb(pids: set[int], table: dict[int, ProcInfo]) -> int:
 
 def sum_cpu_pct(pids: set[int], table: dict[int, ProcInfo]) -> float:
     return float(sum(table[pid].cpu_pct for pid in pids if pid in table))
+
+
+def sum_vsz_kb(pids: set[int], table: dict[int, ProcInfo]) -> int:
+    return sum(table[pid].vsz_kb for pid in pids if pid in table)
 
 
 def kill_tree(pids: set[int], sig: int) -> None:
@@ -381,6 +459,192 @@ def parse_process_spike_rule(raw: str) -> ProcessSpikeRule | None:
         max_count=max_count,
         max_total_rss_gb=max_total_rss_gb,
     )
+
+
+def parse_aggressive_kill_rule(raw: str) -> AggressiveKillRule | None:
+    """Parse aggressive kill rule: 'pattern:max_count:max_rss_gb'"""
+    parts = raw.split(":")
+    if len(parts) != 3:
+        return None
+    pattern = parts[0].strip()
+    if not pattern:
+        return None
+    try:
+        max_count = int(parts[1].strip())
+        max_rss_gb = float(parts[2].strip())
+    except ValueError:
+        return None
+    if max_count < 1:
+        return None
+    if max_rss_gb < 0:
+        return None
+    return AggressiveKillRule(
+        pattern=pattern,
+        max_count=max_count,
+        max_rss_gb=max_rss_gb,
+        kill_immediately=True,
+    )
+
+
+def parse_watch_binary_rule(raw: str) -> WatchBinaryRule | None:
+    """Parse watch binary rule: 'binary_name:max_rss_gb'"""
+    parts = raw.split(":")
+    if len(parts) != 2:
+        return None
+    binary_name = parts[0].strip()
+    if not binary_name:
+        return None
+    try:
+        max_rss_gb = float(parts[1].strip())
+    except ValueError:
+        return None
+    if max_rss_gb <= 0:
+        return None
+    return WatchBinaryRule(binary_name=binary_name, max_rss_gb=max_rss_gb)
+
+
+def find_processes_by_binary_name(
+    table: dict[int, ProcInfo],
+    binary_name: str,
+    log_file: Path | None = None,
+) -> list[tuple[int, float]]:
+    """
+    Find all processes matching the binary name (prefix match).
+    Returns list of (pid, rss_gb) tuples.
+    """
+    matches: list[tuple[int, float]] = []
+    for pid, info in table.items():
+        # Extract binary name from command
+        cmd_parts = info.command.split(None, 1)
+        if not cmd_parts:
+            continue
+        exe_path = cmd_parts[0]
+        exe_name = exe_path.rsplit("/", 1)[-1]
+        # Use prefix match to catch binaries like "llm_vision_deepseek_real_metal-abc123"
+        if exe_name.startswith(binary_name):
+            matches.append((pid, kb_to_gb(info.rss_kb)))
+            if log_file:
+                log_line(
+                    log_file,
+                    f"watch_binary_found binary={binary_name!r} exe={exe_name!r} pid={pid} rss_gb={kb_to_gb(info.rss_kb):.2f}",
+                )
+    return matches
+
+
+def evaluate_watch_binary_rules(
+    table: dict[int, ProcInfo],
+    rules: list[WatchBinaryRule],
+    log_file: Path | None = None,
+) -> list[tuple[WatchBinaryRule, list[tuple[int, float]], str]]:
+    """
+    Evaluate watch binary rules and return violations.
+    Returns list of (rule, [(pid, rss_gb), ...], violation_reason).
+    """
+    violations: list[tuple[WatchBinaryRule, list[tuple[int, float]], str]] = []
+
+    for rule in rules:
+        matches = find_processes_by_binary_name(table, rule.binary_name, log_file)
+        if not matches:
+            continue
+
+        # Check if any process exceeds RSS limit
+        exceeded = [(pid, rss) for pid, rss in matches if rss > rule.max_rss_gb]
+        if exceeded:
+            violations.append(
+                (rule, exceeded, f"rss_exceeded: {exceeded[0][1]:.2f}GB > {rule.max_rss_gb}GB")
+            )
+
+    return violations
+
+
+def find_high_vsz_processes(
+    table: dict[int, ProcInfo],
+    max_vsz_gb: float,
+    exclude_pids: set[int],
+    log_file: Path | None = None,
+) -> list[tuple[int, float, str]]:
+    """
+    Find ALL processes (system-wide) with VSZ exceeding threshold.
+    Returns list of (pid, vsz_gb, command) tuples.
+    """
+    matches: list[tuple[int, float, str]] = []
+    for pid, info in table.items():
+        if pid in exclude_pids:
+            continue
+        # Skip our own script
+        if "guarded_nextest.py" in info.command.lower():
+            continue
+        vsz_gb = kb_to_gb(info.vsz_kb)
+        if vsz_gb > max_vsz_gb:
+            matches.append((pid, vsz_gb, truncate_command(info.command)))
+            if log_file:
+                log_line(
+                    log_file,
+                    f"high_vsz_process pid={pid} vsz_gb={vsz_gb:.2f} cmd={truncate_command(info.command)}",
+                )
+    return matches
+
+
+def find_high_rss_processes(
+    table: dict[int, ProcInfo],
+    max_rss_gb: float,
+    exclude_pids: set[int],
+    log_file: Path | None = None,
+) -> list[tuple[int, float, str]]:
+    """
+    Find ALL processes (system-wide) with RSS exceeding threshold.
+    Returns list of (pid, rss_gb, command) tuples.
+    """
+    matches: list[tuple[int, float, str]] = []
+    for pid, info in table.items():
+        if pid in exclude_pids:
+            continue
+        # Skip our own script
+        if "guarded_nextest.py" in info.command.lower():
+            continue
+        rss_gb = kb_to_gb(info.rss_kb)
+        if rss_gb > max_rss_gb:
+            matches.append((pid, rss_gb, truncate_command(info.command)))
+            if log_file:
+                log_line(
+                    log_file,
+                    f"high_rss_process pid={pid} rss_gb={rss_gb:.2f} cmd={truncate_command(info.command)}",
+                )
+    return matches
+
+
+def evaluate_aggressive_kill_rules(
+    table: dict[int, ProcInfo],
+    rules: list[AggressiveKillRule],
+    root_pid: int,
+) -> list[tuple[AggressiveKillRule, list[int], str]]:
+    """
+    Evaluate aggressive kill rules and return violations.
+    Returns list of (rule, matched_pids, violation_reason).
+    """
+    violations: list[tuple[AggressiveKillRule, list[int], str]] = []
+
+    for rule in rules:
+        matched = pids_matching_substring(table, rule.pattern, root_pid)
+        if not matched:
+            continue
+
+        # Check count violation
+        if len(matched) > rule.max_count:
+            violations.append((rule, matched, f"count_exceeded: {len(matched)} > {rule.max_count}"))
+            continue
+
+        # Check RSS violation for any single process
+        if rule.max_rss_gb > 0:
+            for pid in matched:
+                if pid in table:
+                    rss_gb = kb_to_gb(table[pid].rss_kb)
+                    if rss_gb > rule.max_rss_gb:
+                        violations.append(
+                            (rule, [pid], f"rss_exceeded: {rss_gb:.2f}GB > {rule.max_rss_gb}GB")
+                        )
+
+    return violations
 
 
 def evaluate_process_spike_rules(
@@ -494,6 +758,7 @@ def load_last_history_match(
 def run_guarded(args: argparse.Namespace) -> int:
     args.log_file.parent.mkdir(parents=True, exist_ok=True)
     max_rss_kb = int(args.max_rss_gb * 1024 * 1024)
+    max_vsz_kb = int(args.max_vsz_gb * 1024 * 1024) if args.max_vsz_gb > 0 else 0
     poll_sec = max(args.poll_ms, 50) / 1000.0
     grace_sec = max(args.grace_ms, 0) / 1000.0
     log_every = max(args.log_every, 1)
@@ -514,6 +779,49 @@ def run_guarded(args: argparse.Namespace) -> int:
             "Invalid --process-spike-rule values: "
             + ", ".join(repr(value) for value in invalid_spike_rules)
         )
+
+    # Parse aggressive kill rules
+    aggressive_rules = [
+        rule
+        for raw in args.aggressive_kill
+        if raw.strip()
+        for rule in [parse_aggressive_kill_rule(raw.strip())]
+        if rule is not None
+    ]
+    invalid_aggressive_rules = [
+        raw.strip()
+        for raw in args.aggressive_kill
+        if raw.strip() and parse_aggressive_kill_rule(raw.strip()) is None
+    ]
+    if invalid_aggressive_rules:
+        raise ValueError(
+            "Invalid --aggressive-kill values: "
+            + ", ".join(repr(value) for value in invalid_aggressive_rules)
+        )
+
+    # Parse watch-binary rules
+    watch_binary_rules = [
+        rule
+        for raw in args.watch_binary
+        if raw.strip()
+        for rule in [parse_watch_binary_rule(raw.strip())]
+        if rule is not None
+    ]
+    invalid_watch_rules = [
+        raw.strip()
+        for raw in args.watch_binary
+        if raw.strip() and parse_watch_binary_rule(raw.strip()) is None
+    ]
+    if invalid_watch_rules:
+        raise ValueError(
+            "Invalid --watch-binary values: "
+            + ", ".join(repr(value) for value in invalid_watch_rules)
+        )
+
+    aggressive_poll_sec = max(args.aggressive_poll_ms, 50) / 1000.0
+
+    # Use faster polling if aggressive rules are present
+    effective_poll_sec = min(poll_sec, aggressive_poll_sec) if aggressive_rules else poll_sec
 
     if args.truncate_samples:
         args.samples_jsonl.parent.mkdir(parents=True, exist_ok=True)
@@ -565,6 +873,7 @@ def run_guarded(args: argparse.Namespace) -> int:
             ts_iso=now_iso(),
             elapsed_s=round(time.monotonic() - start_ts, 3),
             rss_kb=sum_rss_kb(tree, table) if table else 0,
+            vsz_kb=sum_vsz_kb(tree, table) if table else 0,
             cpu_pct=round(sum_cpu_pct(tree, table), 3) if table else 0.0,
             pid_count=len(tree),
         )
@@ -606,6 +915,9 @@ def run_guarded(args: argparse.Namespace) -> int:
         if sample.rss_kb > max_rss_kb:
             guard_triggered = True
             guard_reason = "rss_threshold_exceeded"
+        elif args.max_vsz_gb > 0 and sample.vsz_kb > max_vsz_kb:
+            guard_triggered = True
+            guard_reason = "vsz_threshold_exceeded"
         elif args.max_pids > 0 and sample.pid_count > args.max_pids:
             guard_triggered = True
             guard_reason = "pid_threshold_exceeded"
@@ -636,6 +948,115 @@ def run_guarded(args: argparse.Namespace) -> int:
                     ):
                         guard_triggered = True
                         guard_reason = "rss_growth_threshold_exceeded"
+
+        # Aggressive kill check (immediate termination on violation)
+        if aggressive_rules and table:
+            aggressive_violations = evaluate_aggressive_kill_rules(
+                table, aggressive_rules, proc.pid
+            )
+            if aggressive_violations:
+                # Log all violations
+                for rule, pids, reason in aggressive_violations:
+                    log_line(
+                        args.log_file,
+                        (
+                            f"aggressive_violation pattern={rule.pattern!r} "
+                            f"reason={reason} pids={pids}"
+                        ),
+                    )
+
+                # KILL EVERYTHING IMMEDIATELY - no grace period
+                log_line(args.log_file, "aggressive_shutdown initiating full process tree kill")
+
+                # Kill the entire process tree with SIGKILL
+                kill_tree(tree, signal.SIGKILL)
+
+                # Also kill any specifically matched processes
+                for rule, pids, reason in aggressive_violations:
+                    for pid in pids:
+                        try:
+                            os.kill(pid, signal.SIGKILL)
+                        except (ProcessLookupError, PermissionError):
+                            pass
+
+                # Wait briefly then exit
+                time.sleep(0.1)
+                log_line(args.log_file, "aggressive_shutdown_complete")
+                return 137  # Exit immediately with killed status
+
+        # Watch binary check - monitor specific binary names for memory violations
+        if watch_binary_rules and table:
+            watch_violations = evaluate_watch_binary_rules(table, watch_binary_rules, args.log_file)
+            if watch_violations:
+                for rule, exceeded, reason in watch_violations:
+                    for pid, rss_gb in exceeded:
+                        log_line(
+                            args.log_file,
+                            (
+                                f"watch_binary_violation binary={rule.binary_name!r} "
+                                f"pid={pid} rss_gb={rss_gb:.2f} max_rss_gb={rule.max_rss_gb} "
+                                f"reason={reason}"
+                            ),
+                        )
+                        # Kill the violating process immediately
+                        try:
+                            os.kill(pid, signal.SIGKILL)
+                            log_line(args.log_file, f"watch_binary_killed pid={pid}")
+                        except (ProcessLookupError, PermissionError):
+                            pass
+
+                # Also kill the process tree to be safe
+                log_line(args.log_file, "watch_binary_shutdown killing process tree")
+                kill_tree(tree, signal.SIGKILL)
+                time.sleep(0.1)
+                return 137
+
+        # High VSZ check - system-wide detection of abnormal virtual memory growth
+        # On macOS, individual processes may have ~400GB VSZ due to address space layout
+        # but if we see VSZ > 10GB on non-system processes, it's suspicious
+        if table and args.max_vsz_gb > 0:
+            high_vsz_procs = find_high_vsz_processes(table, args.max_vsz_gb, tree, args.log_file)
+            if high_vsz_procs:
+                log_line(
+                    args.log_file,
+                    f"high_vsz_violation threshold={args.max_vsz_gb}GB count={len(high_vsz_procs)}",
+                )
+                for pid, vsz_gb, cmd in high_vsz_procs:
+                    log_line(
+                        args.log_file, f"high_vsz_killing pid={pid} vsz_gb={vsz_gb:.2f} cmd={cmd}"
+                    )
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                # Kill our process tree too
+                kill_tree(tree, signal.SIGKILL)
+                time.sleep(0.1)
+                return 137
+
+        # System-wide RSS check - detect ANY process with RSS exceeding threshold
+        if table and args.system_max_rss_gb > 0:
+            high_rss_procs = find_high_rss_processes(
+                table, args.system_max_rss_gb, tree, args.log_file
+            )
+            if high_rss_procs:
+                log_line(
+                    args.log_file,
+                    f"system_high_rss_violation threshold={args.system_max_rss_gb}GB count={len(high_rss_procs)}",
+                )
+                for pid, rss_gb, cmd in high_rss_procs:
+                    log_line(
+                        args.log_file,
+                        f"system_high_rss_killing pid={pid} rss_gb={rss_gb:.2f} cmd={cmd}",
+                    )
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                # Kill our process tree too
+                kill_tree(tree, signal.SIGKILL)
+                time.sleep(0.1)
+                return 137
 
         if guard_triggered:
             kill_pids = set(tree)
@@ -735,7 +1156,7 @@ def run_guarded(args: argparse.Namespace) -> int:
                 kill_tree(kill_pids, signal.SIGKILL)
             break
 
-        time.sleep(poll_sec)
+        time.sleep(effective_poll_sec)
 
     exit_code = proc.wait()
     end_iso = now_iso()

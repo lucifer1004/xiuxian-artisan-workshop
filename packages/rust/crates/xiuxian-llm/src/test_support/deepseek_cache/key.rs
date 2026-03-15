@@ -1,6 +1,5 @@
 use crate::llm::vision::deepseek::build_cache_key_with_for_tests as build_cache_key_from_prepared;
 use crate::llm::vision::{PreparedVisionImage, encode_png};
-use image::GenericImageView;
 use std::sync::Arc;
 
 pub struct DeepseekCacheKeyInput<'a> {
@@ -17,7 +16,7 @@ pub struct DeepseekCacheKeyInput<'a> {
 pub(super) fn build_cache_key(input: &DeepseekCacheKeyInput<'_>) -> String {
     let decoded = build_cache_key_image_for_tests(input.original);
     let original_arc = Arc::from(input.original.to_vec().into_boxed_slice());
-    let png = encode_png(&decoded).unwrap();
+    let png = encode_png(&decoded).unwrap_or_else(|_| Arc::from(Vec::new().into_boxed_slice()));
 
     let prepared = PreparedVisionImage {
         original: original_arc,
@@ -34,7 +33,7 @@ pub(super) fn build_cache_key(input: &DeepseekCacheKeyInput<'_>) -> String {
         input.base_size,
         input.image_size,
         input.crop_mode,
-        usize::try_from(input.max_new_tokens).unwrap(),
+        usize::try_from(input.max_new_tokens).unwrap_or(usize::MAX),
     )
 }
 

@@ -38,9 +38,10 @@ pub(in crate::llm::vision::deepseek::native) fn acquire(
     key: &str,
     _stale_timeout: Duration,
 ) -> CoalesceAcquire {
-    let mut guard = COALESCER.lock().unwrap();
+    let mut guard = COALESCER.lock().unwrap_or_else(|err| err.into_inner());
     if let Some(state) = guard.inflight.get(key) {
-        state.0.lock().unwrap().followers += 1;
+        let mut state_guard = state.0.lock().unwrap_or_else(|err| err.into_inner());
+        state_guard.followers += 1;
         CoalesceAcquire::Follower(CoalesceFollower {
             state: Arc::clone(state),
         })
@@ -55,20 +56,23 @@ pub(in crate::llm::vision::deepseek::native) fn acquire(
 
 impl CoalesceLeaderPermit {
     pub(in crate::llm::vision::deepseek::native) fn complete(self, result: SharedCoalescedResult) {
-        let mut guard = COALESCER.lock().unwrap();
+        let mut guard = COALESCER.lock().unwrap_or_else(|err| err.into_inner());
         if let Some(state_arc) = guard.inflight.remove(&self.key) {
-            let mut state = state_arc.0.lock().unwrap();
+            let mut state = state_arc.0.lock().unwrap_or_else(|err| err.into_inner());
             state.result = Some(result);
             state_arc.1.notify_all();
         }
     }
 
     pub(in crate::llm::vision::deepseek::native) fn follower_count(&self) -> usize {
-        let guard = COALESCER.lock().unwrap();
+        let guard = COALESCER.lock().unwrap_or_else(|err| err.into_inner());
         guard
             .inflight
             .get(&self.key)
-            .map(|s| s.0.lock().unwrap().followers)
+            .map(|s| {
+                let guard = s.0.lock().unwrap_or_else(|err| err.into_inner());
+                guard.followers
+            })
             .unwrap_or(0)
     }
 }
@@ -79,7 +83,7 @@ impl CoalesceFollower {
         timeout: Duration,
     ) -> Option<SharedCoalescedResult> {
         let (lock, cvar) = &*self.state;
-        let mut state = lock.lock().unwrap();
+        let mut state = lock.lock().unwrap_or_else(|err| err.into_inner());
 
         let started = std::time::Instant::now();
         while state.result.is_none() {
@@ -87,7 +91,9 @@ impl CoalesceFollower {
             if elapsed >= timeout {
                 return None;
             }
-            let (new_state, wait_result) = cvar.wait_timeout(state, timeout - elapsed).unwrap();
+            let (new_state, wait_result) = cvar
+                .wait_timeout(state, timeout - elapsed)
+                .unwrap_or_else(|err| err.into_inner());
             state = new_state;
             if wait_result.timed_out() {
                 break;
@@ -95,25 +101,4 @@ impl CoalesceFollower {
         }
         state.result.clone()
     }
-}
-
-pub(in crate::llm::vision::deepseek::native) fn len_for_tests() -> usize {
-    COALESCER.lock().unwrap().inflight.len()
-}
-
-pub(in crate::llm::vision::deepseek::native) fn clear_for_tests() {
-    COALESCER.lock().unwrap().inflight.clear();
-}
-
-pub(in crate::llm::vision::deepseek::native) fn seed_entry_for_tests(
-    _key: &str,
-    _result: SharedCoalescedResult,
-) {
-    // Basic implementation for test support
-}
-
-pub(in crate::llm::vision::deepseek::native) fn drop_leader_without_completion_for_tests(
-    key: &str,
-) {
-    COALESCER.lock().unwrap().inflight.remove(key);
 }

@@ -10,9 +10,9 @@ use crate::scheduler::{
 };
 use crate::swarm::{GlobalSwarmRegistry, RemotePossessionBus};
 use crate::telemetry::{SwarmEvent, unix_millis_now};
-use omni_window::SessionWindow;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+use xiuxian_window::SessionWindow;
 
 impl SwarmEngine {
     pub(in crate::swarm::engine) fn spawn_worker_task(

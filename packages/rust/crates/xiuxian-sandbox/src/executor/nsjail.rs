@@ -15,51 +15,75 @@ use super::execute_with_limits;
 /// Nsjail-specific configuration (from JSON export)
 #[derive(Debug, Clone, Deserialize)]
 pub struct NsJailJsonConfig {
+    /// Container name.
     pub name: String,
+    /// `NsJail` mode string.
     pub mode: String,
+    /// Hostname inside the jail.
     pub hostname: String,
+    /// Command and arguments.
     pub cmd: Vec<String>,
+    /// Environment variables (KEY=VALUE).
     pub env: Vec<String>,
+    /// Mount definitions.
     #[serde(default)]
     pub mount: Vec<MountJson>,
+    /// Address space limit in bytes.
     #[serde(default)]
     pub rlimit_as: u64,
+    /// CPU time limit in seconds.
     #[serde(default)]
     pub rlimit_cpu: u64,
+    /// File size limit in bytes.
     #[serde(default)]
     pub rlimit_fsize: u64,
+    /// Core dump size limit in bytes.
     #[serde(default)]
     pub rlimit_core: u64,
+    /// File descriptor limit.
     #[serde(default)]
     pub rlimit_nofile: u64,
+    /// Process count limit.
     #[serde(default)]
     pub rlimit_nproc: u64,
+    /// Stack size limit in bytes.
     #[serde(default)]
     pub rlimit_stack: u64,
+    /// CPU limit type string.
     #[serde(default)]
     pub rlimit_cpu_type: String,
+    /// Seccomp mode selector.
     #[serde(default)]
     pub seccomp_mode: u32,
+    /// Seccomp policy strings.
     #[serde(default)]
     pub seccomp_string: Vec<String>,
+    /// Log level string.
     pub log_level: String,
+    /// Log output path.
     #[serde(default)]
     pub log: String,
+    /// Whether to create a new network namespace.
     #[serde(default)]
     pub clone_newnet: BoolFlag,
+    /// Whether to create a new user namespace.
     #[serde(default)]
     pub clone_newuser: BoolFlag,
+    /// Whether to create a new PID namespace.
     #[serde(default)]
     pub clone_newpid: BoolFlag,
+    /// Whether to create a new mount namespace.
     #[serde(default)]
     pub clone_newns: BoolFlag,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 #[serde(transparent)]
+/// Boolean flag wrapper used by `NsJail` JSON exports.
 pub struct BoolFlag(bool);
 
 impl BoolFlag {
+    /// Returns true when the flag is enabled.
     #[must_use]
     pub const fn is_enabled(self) -> bool {
         self.0
@@ -67,10 +91,15 @@ impl BoolFlag {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+/// Mount configuration exported by `NsJail` JSON.
 pub struct MountJson {
+    /// Source path on the host.
     pub src: String,
+    /// Destination path in the jail.
     pub dst: String,
+    /// Filesystem type (e.g. "bind", "tmpfs").
     pub fstype: String,
+    /// Whether the mount is read-write.
     pub rw: bool,
 }
 

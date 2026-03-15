@@ -1,8 +1,11 @@
+//! Native paths test API for DeepSeek vision module.
+
 use std::path::{Path, PathBuf};
 
 use super::super::model_kind::VisionModelKind;
 pub use super::super::native::{DsqRepairResult, repair_dsq_if_needed};
 
+/// Resolve weights path with explicit parameters for test assertions.
 pub fn resolve_weights_path_with_for_tests(
     model_root: &Path,
     model_kind: Option<&str>,

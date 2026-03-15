@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgb};
-use xiuxian_llm::llm::vision::preprocess_image_for_ocr;
+use xiuxian_llm::llm::vision::deepseek::preprocess_image_for_ocr;
 
 #[test]
 fn preprocess_cache_reuses_decoded_image_for_same_bytes_and_dimension() -> Result<()> {

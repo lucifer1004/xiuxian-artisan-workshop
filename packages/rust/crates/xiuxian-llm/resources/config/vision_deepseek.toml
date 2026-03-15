@@ -1,4 +1,4 @@
-model_root = ".data/models/deepseek-ocr-2"
+model_root = ".data/models/dots-ocr"
 base_size = 1024
 image_size = 768
 crop_mode = true

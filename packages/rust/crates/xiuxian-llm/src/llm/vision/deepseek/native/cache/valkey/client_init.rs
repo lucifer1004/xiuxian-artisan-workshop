@@ -24,9 +24,8 @@ pub fn acquire_client(
     key_prefix: &str,
     ttl_secs: u64,
     io_timeout_ms: u64,
-) -> ValkeyOcrCache {
+) -> Option<ValkeyOcrCache> {
     build_valkey_cache(valkey_url, key_prefix, ttl_secs, io_timeout_ms)
-        .expect("Valkey client acquisition failed")
 }
 
 pub fn build_valkey_cache(

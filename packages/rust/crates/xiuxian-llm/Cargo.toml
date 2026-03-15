@@ -93,7 +93,6 @@ deepseek-ocr-infer-deepseek = { git = "https://github.com/TimmyOVO/deepseek-ocr.
 deepseek-ocr-infer-dots = { git = "https://github.com/TimmyOVO/deepseek-ocr.rs", rev = "02b933df24f5658d10b37dd48c9c354d95c530c3", package = "deepseek-ocr-infer-dots", optional = true }
 deepseek-ocr-infer-paddleocr = { git = "https://github.com/TimmyOVO/deepseek-ocr.rs", rev = "02b933df24f5658d10b37dd48c9c354d95c530c3", package = "deepseek-ocr-infer-paddleocr", optional = true }
 tokenizers = { workspace = true, optional = true }
-xiuxian-mcp = { path = "../xiuxian-mcp" }
 xiuxian-macros = { path = "../xiuxian-macros" }
 xiuxian-config-core = { path = "../xiuxian-config-core" }
 litellm-rs = { workspace = true, features = ["redis"] }
@@ -113,6 +112,7 @@ mistralrs = { version = "0.7.0" }
 tempfile = "3.10"
 axum = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+env_logger = "0.11"
 
 [lints]
 workspace = true

@@ -11,10 +11,5 @@ category = "page_index"
 type = "markdown_tree"
 paths = ["input"]
 
-[expected]
-type = "json_snapshot"
-files = ["tree.json"]
-
-[runner]
 build_page_index = true
 collect_links = false
