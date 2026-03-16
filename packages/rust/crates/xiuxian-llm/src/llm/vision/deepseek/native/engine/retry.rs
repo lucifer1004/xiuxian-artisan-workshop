@@ -27,3 +27,8 @@ pub(super) fn safe_vision_settings() -> VisionSettings {
         crop_mode: true,
     }
 }
+
+pub(crate) fn safe_vision_settings_for_tests() -> (u32, u32, bool) {
+    let vision = safe_vision_settings();
+    (vision.base_size, vision.image_size, vision.crop_mode)
+}

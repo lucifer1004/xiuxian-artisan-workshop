@@ -8,6 +8,14 @@ metadata:
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.5.0-dev] - 2026-03-15
+#### Architectural Breakthroughs
+- (**qianji**) Implement **Audit Scenario V3.0** with native LinkGraph Triple Loop [UNATTENDED]
+- (**zhenfa**) Establish **Zhenfa Contract System** using XSD (`qianji_plan.xsd`) for strict agent output validation
+- (**zhenfa**) Integrate **ncl-driven Sandbox Profiles** (`strict`) for physical agent isolation
+- (**engineering**) Codify **High-Standard Rust Include Pattern** for hyper-modularity in kernel crates
+- (**research**) Blueprint the **Unified Streaming Parser** (Claude Code/Gemini CLI/Codex) for Zhenfa Event Transmutation
+- (**architecture**) Deconstruct hardcoded Rust loops in favor of **Native Graph Patterns** in Qianji
 ## [v0.4.0](https://github.com/tao3k/xiuxian-artisan-workshop/compare/d733fd3bf66f357c1f32f3d88143ff2ab090157d..v0.4.0) - 2026-01-25
 #### Features
 - Add modern engineering workflows SOP and cleanup terminology

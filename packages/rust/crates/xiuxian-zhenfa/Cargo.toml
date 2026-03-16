@@ -18,8 +18,12 @@ schemars = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+tempfile = { workspace = true }
 uuid = { workspace = true }
 xiuxian-macros = { path = "../xiuxian-macros" }
+xiuxian-testing = { path = "../xiuxian-testing" }
+pulldown-cmark = { workspace = true }
+quick-xml = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

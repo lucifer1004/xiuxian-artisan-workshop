@@ -11,6 +11,7 @@ mod config;
 mod contracts;
 mod entry;
 mod error;
+mod interface;
 /// Orchestration layer for multi-layer prompt assembly.
 pub mod orchestrator;
 /// Persona model and registry for role-mix style injection.
@@ -29,6 +30,7 @@ pub use contracts::{
 };
 pub use entry::QaEntry;
 pub use error::InjectionError;
+pub use interface::ManifestationInterface;
 pub use orchestrator::{InjectionLayer, ThousandFacesOrchestrator};
 pub use persona::{MemoryPersonaRecord, PersonaProfile, PersonaProvider, PersonaRegistry};
 pub use transmuter::{MockTransmuter, ToneTransmuter};

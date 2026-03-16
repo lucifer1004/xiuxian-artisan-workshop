@@ -21,12 +21,16 @@ pub use self::native_cache::{
 #[cfg(feature = "vision-dots")]
 pub use self::native_device::{
     require_quantized_snapshot_with_for_tests, resolve_device_kind_label_with_for_tests,
+    resolve_engine_device_label_with_for_tests,
     resolve_model_kind_for_model_root_label_with_for_tests,
-    resolve_model_kind_label_with_for_tests, should_retry_cpu_fallback_with_for_tests,
+    resolve_model_kind_label_with_for_tests, resolve_model_load_dtype_label_with_for_tests,
+    resolve_vision_settings_with_for_tests, safe_vision_settings_for_tests,
+    should_retry_cpu_fallback_with_for_tests, should_reuse_engine_cache_with_for_tests,
     snapshot_qoffset_alignment_with_for_tests,
 };
 
 #[cfg(feature = "vision-dots")]
 pub use self::native_paths::{
-    DsqRepairResult, repair_dsq_if_needed, resolve_weights_path_with_for_tests,
+    DsqRepairResult, repair_dsq_if_needed, resolve_snapshot_path_with_for_tests,
+    resolve_weights_path_with_for_tests,
 };

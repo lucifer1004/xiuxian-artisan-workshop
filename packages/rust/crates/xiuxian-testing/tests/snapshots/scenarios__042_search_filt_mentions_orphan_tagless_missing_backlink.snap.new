@@ -1,0 +1,11 @@
+---
+source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+assertion_line: 332
+expression: result
+---
+{
+  "scenario_id": "042_search_filt_mentions_orphan_tagless_missing_backlink",
+  "category": "search_filters",
+  "status": "validated",
+  "files": []
+}

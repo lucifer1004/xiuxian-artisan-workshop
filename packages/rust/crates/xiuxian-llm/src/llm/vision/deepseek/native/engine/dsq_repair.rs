@@ -7,6 +7,8 @@ use deepseek_ocr_dsq::DsqReader;
 
 use crate::llm::vision::deepseek::dsq_alignment::required_qoffset_alignment;
 
+const COPY_BUFFER_SIZE: usize = 1024 * 1024;
+
 /// Result of a DSQ repair attempt.
 #[derive(Debug)]
 pub enum DsqRepairResult {
@@ -22,11 +24,12 @@ pub enum DsqRepairResult {
 ///
 /// Checks if the quantized snapshot file has proper alignment for CPU inference.
 /// If misaligned, creates a repaired copy and atomically swaps it into place.
+#[must_use]
 pub fn repair_dsq_if_needed(path: &Path) -> DsqRepairResult {
     match validate_alignment(path) {
         Ok(true) => DsqRepairResult::AlreadyAligned,
         Ok(false) => perform_repair(path),
-        Err(err) => DsqRepairResult::Failed(format!("Initial validation failed: {}", err)),
+        Err(err) => DsqRepairResult::Failed(format!("Initial validation failed: {err}")),
     }
 }
 
@@ -104,10 +107,10 @@ fn perform_repair(path: &Path) -> DsqRepairResult {
     })();
 
     match result {
-        Ok(_) => {
+        Ok(()) => {
             if let Err(e) = std::fs::rename(&temp_path, path) {
                 let _ = std::fs::remove_file(&temp_path);
-                DsqRepairResult::Failed(format!("Atomic swap failed: {}", e))
+                DsqRepairResult::Failed(format!("Atomic swap failed: {e}"))
             } else {
                 DsqRepairResult::Repaired
             }
@@ -123,7 +126,7 @@ fn align_up(offset: u64, alignment: u64) -> u64 {
     if alignment <= 1 {
         return offset;
     }
-    (offset + alignment - 1) / alignment * alignment
+    offset.div_ceil(alignment) * alignment
 }
 
 fn estimate_header_size(
@@ -217,8 +220,7 @@ fn pad_to_offset<W: Write + Seek>(writer: &mut W, target_offset: u64) -> Result<
     let current = writer.stream_position().map_err(|e| e.to_string())?;
     if current > target_offset {
         return Err(format!(
-            "Writer position {} already passed target offset {}",
-            current, target_offset
+            "Writer position {current} already passed target offset {target_offset}"
         ));
     }
     if target_offset > current {
@@ -238,7 +240,7 @@ fn copy_range_internal<R: Read + Seek, W: Write>(
         .seek(std::io::SeekFrom::Start(offset))
         .map_err(|e| e.to_string())?;
     let mut remaining = len;
-    let mut buffer = [0u8; 8 * 1024 * 1024];
+    let mut buffer = vec![0u8; COPY_BUFFER_SIZE];
     while remaining > 0 {
         let to_read = remaining.min(buffer.len() as u64);
         reader

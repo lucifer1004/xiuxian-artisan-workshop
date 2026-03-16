@@ -172,13 +172,11 @@ impl LinkGraphIndex {
                 let anchor_id = candidate.anchor_id;
                 let doc_id = anchor_id
                     .split_once('#')
-                    .map(|(doc_id, _)| doc_id)
-                    .unwrap_or(anchor_id.as_str())
+                    .map_or(anchor_id.as_str(), |(doc_id, _)| doc_id)
                     .to_string();
                 let path = self
                     .get_doc(doc_id.as_str())
-                    .map(|doc| doc.path.clone())
-                    .unwrap_or_else(|| doc_id.clone());
+                    .map_or_else(|| doc_id.clone(), |doc| doc.path.clone());
                 let trace_label =
                     QuantumContext::trace_label_from_semantic_path(&candidate.semantic_path);
                 QuantumContext {

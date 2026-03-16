@@ -1,5 +1,4 @@
 use super::reminders::ReminderSignal;
-use super::schedule_time::render_scheduled_time_local;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
@@ -74,13 +73,10 @@ pub struct DueReminderRecord {
 impl DueReminderRecord {
     /// Convert queue record into external reminder payload.
     #[must_use]
-    pub fn into_signal(self, time_zone: Tz) -> ReminderSignal {
+    pub fn into_signal(self, _time_zone: Tz) -> ReminderSignal {
         ReminderSignal {
-            task_id: self.task_id,
             title: self.title,
-            task_brief: self.task_brief,
             recipient: self.recipient,
-            scheduled_local: Some(render_scheduled_time_local(&self.scheduled_at, time_zone)),
         }
     }
 }

@@ -59,9 +59,7 @@ impl LinkGraphIndex {
                 "exact".to_string(),
             ),
             LinkGraphMatchStrategy::Re if !raw_query.is_empty() => (
-                regex
-                    .map(|compiled| score_document_regex(doc, compiled))
-                    .unwrap_or(0.0),
+                regex.map_or(0.0, |compiled| score_document_regex(doc, compiled)),
                 "regex".to_string(),
             ),
             _ => (1.0, "filtered".to_string()),

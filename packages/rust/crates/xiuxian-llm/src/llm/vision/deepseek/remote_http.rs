@@ -22,7 +22,7 @@ pub async fn infer_remote_deepseek_ocr_from_bytes(
         .build()
         .map_err(|e| internal_error(format!("failed to build HTTP client: {e}")))?;
 
-    let url = format!("{}/v1/vision/ocr", base_url);
+    let url = format!("{base_url}/v1/vision/ocr");
 
     // Simple implementation for now
     let response = client
@@ -37,8 +37,7 @@ pub async fn infer_remote_deepseek_ocr_from_bytes(
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         return Err(internal_error(format!(
-            "OCR remote error ({}): {}",
-            status, body
+            "OCR remote error ({status}): {body}"
         )));
     }
 

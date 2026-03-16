@@ -42,6 +42,7 @@ pub struct QianjiEdge {
 }
 
 /// The stateful execution engine holding the graph structure.
+#[derive(Clone)]
 pub struct QianjiEngine {
     /// The underlying petgraph structure.
     pub graph: StableGraph<QianjiNode, QianjiEdge, Directed>,

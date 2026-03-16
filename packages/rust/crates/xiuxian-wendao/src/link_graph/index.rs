@@ -65,6 +65,10 @@ pub struct LinkGraphVirtualNode {
     pub avg_saliency: f64,
     /// Synthesized title.
     pub title: String,
+    /// Internal edge count (edges between members).
+    pub internal_edges: usize,
+    /// Edge density within cluster (0.0-1.0).
+    pub edge_density: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +86,10 @@ pub(crate) struct IndexedSection {
     pub(crate) entities: Vec<String>,
     /// Property drawer attributes extracted from heading (e.g., :ID: arch-v1).
     pub(crate) attributes: std::collections::HashMap<String, String>,
+    /// Execution log entries from :LOGBOOK: drawer (Blueprint v2.4).
+    pub(crate) logbook: Vec<super::parser::LogbookEntry>,
+    /// Code observations from :OBSERVE: property drawer (Blueprint v2.7).
+    pub(crate) observations: Vec<super::parser::CodeObservation>,
 }
 
 impl IndexedSection {
@@ -99,6 +107,8 @@ impl IndexedSection {
             section_text_lower: value.section_text_lower.clone(),
             entities: value.entities.clone(),
             attributes: value.attributes.clone(),
+            logbook: value.logbook.clone(),
+            observations: value.observations.clone(),
         }
     }
 }
@@ -117,7 +127,7 @@ struct SectionCandidate {
     reason: &'static str,
 }
 
-/// Cache build metadata emitted by the Valkey-backed LinkGraph bootstrap.
+/// Cache build metadata emitted by the Valkey-backed `LinkGraph` bootstrap.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkGraphCacheBuildMeta {
     /// Cache backend name.
@@ -145,6 +155,8 @@ pub struct LinkGraphIndex {
     trees_by_doc: HashMap<String, Vec<PageIndexNode>>,
     /// Map page-index node ids to parent node ids (None for roots).
     node_parent_map: HashMap<String, Option<String>>,
+    /// Explicit anchor registry (`doc_id#ID`) for fast semantic resolution.
+    explicit_id_registry: HashMap<String, PageIndexNode>,
     alias_to_doc_id: HashMap<String, String>,
     outgoing: HashMap<String, HashSet<String>>,
     incoming: HashMap<String, HashSet<String>>,
@@ -155,7 +167,7 @@ pub struct LinkGraphIndex {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Refresh execution mode selected by LinkGraph incremental refresh logic.
+/// Refresh execution mode selected by `LinkGraph` incremental refresh logic.
 pub enum LinkGraphRefreshMode {
     /// No-op (no changed paths provided).
     Noop,
@@ -186,19 +198,19 @@ impl LinkGraphIndex {
         _options: &LinkGraphSearchOptions,
     ) -> Vec<LinkGraphHit> {
         let mut out = Vec::new();
-        if let Some(doc_id) = self.resolve_doc_id(direct_id) {
-            if let Some(doc) = self.docs_by_id.get(doc_id) {
-                out.push(LinkGraphHit {
-                    stem: doc.stem.clone(),
-                    title: doc.title.clone(),
-                    path: doc.path.clone(),
-                    doc_type: doc.doc_type.clone(),
-                    tags: doc.tags.clone(),
-                    score: 1.0,
-                    best_section: None,
-                    match_reason: Some("direct_id".to_string()),
-                });
-            }
+        if let Some(doc_id) = self.resolve_doc_id(direct_id)
+            && let Some(doc) = self.docs_by_id.get(doc_id)
+        {
+            out.push(LinkGraphHit {
+                stem: doc.stem.clone(),
+                title: doc.title.clone(),
+                path: doc.path.clone(),
+                doc_type: doc.doc_type.clone(),
+                tags: doc.tags.clone(),
+                score: 1.0,
+                best_section: None,
+                match_reason: Some("direct_id".to_string()),
+            });
         }
         out
     }
@@ -249,12 +261,57 @@ impl LinkGraphIndex {
         &self.trees_by_doc
     }
 
+    /// Get all virtual nodes created by knowledge distillation.
+    ///
+    /// Virtual nodes represent collapsed dense clusters of high-saliency nodes.
+    /// They inherit edges from their member nodes and can be used for graph traversal.
+    #[must_use]
+    pub fn virtual_nodes(&self) -> Vec<LinkGraphVirtualNode> {
+        self.virtual_nodes
+            .values()
+            .map(|vn| LinkGraphVirtualNode {
+                id: vn.id.clone(),
+                members: vn.members.clone(),
+                avg_saliency: vn.avg_saliency,
+                title: vn.title.clone(),
+                internal_edges: vn.internal_edges,
+                edge_density: vn.edge_density,
+            })
+            .collect()
+    }
+
     /// Extract semantic intent targets for a document.
+    #[must_use]
     pub fn intent_targets(&self, doc_id: &str) -> (Vec<String>, Vec<String>) {
         let Some(doc) = self.docs_by_id.get(doc_id) else {
             return (Vec::new(), Vec::new());
         };
         // This is a simplification, actual implementation might need more parsing
         (doc.tags.clone(), Vec::new())
+    }
+
+    /// Build a `RegistryIndex` for O(1) ID lookups.
+    ///
+    /// The registry index provides fast access to nodes with explicit `:ID:` attributes.
+    #[must_use]
+    pub fn build_registry_index(&self) -> super::addressing::RegistryIndex {
+        super::addressing::RegistryIndex::build_from_trees(&self.trees_by_doc)
+    }
+
+    /// Build a `RegistryIndex` with collision detection.
+    ///
+    /// Returns both the registry index and any ID collisions detected.
+    /// This is the recommended method for semantic validation.
+    #[must_use]
+    pub fn build_registry_index_with_collisions(&self) -> super::addressing::RegistryBuildResult {
+        super::addressing::RegistryIndex::build_from_trees_with_collisions(&self.trees_by_doc)
+    }
+
+    /// Build a `TopologyIndex` for fuzzy path discovery.
+    ///
+    /// The topology index enables structural path lookup and fuzzy matching.
+    #[must_use]
+    pub fn build_topology_index(&self) -> super::addressing::TopologyIndex {
+        super::addressing::TopologyIndex::build_from_trees(&self.trees_by_doc)
     }
 }

@@ -1,4 +1,4 @@
-//! [AIP] Omni ModelBus Runtime Module.
+//! [AIP] Omni `ModelBus` Runtime Module.
 //!
 //! This module provides a unified model bus for hot-swap model management,
 //! supporting Vision, Text, and Embedding modalities with three-state lifecycle:

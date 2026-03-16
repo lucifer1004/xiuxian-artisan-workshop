@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use super::super::config;
-use super::super::model_kind::VisionModelKind;
-use super::super::util::non_empty_env;
+use crate::llm::vision::deepseek::config;
+use crate::llm::vision::deepseek::model_kind::VisionModelKind;
+use crate::llm::vision::deepseek::util::non_empty_env;
 
 pub(super) fn resolve_model_root() -> Option<String> {
     let project_root = project_root();
@@ -82,8 +82,10 @@ fn resolve_project_root() -> PathBuf {
     std::env::var("PRJ_ROOT")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        .map_or_else(
+            || std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            PathBuf::from,
+        )
 }
 
 fn resolve_cache_home(project_root: &Path) -> PathBuf {

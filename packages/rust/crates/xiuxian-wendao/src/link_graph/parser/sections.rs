@@ -1,5 +1,30 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
+/// Execution log entry from `:LOGBOOK:` drawer (Blueprint v2.4).
+///
+/// Represents a single entry in the execution log for workflow tracking.
+/// Format: `- [TIMESTAMP] MESSAGE`
+///
+/// # Example
+///
+/// ```markdown
+/// :LOGBOOK:
+/// - [2025-03-14] Agent Started: Initiating structural audit.
+/// - [2025-03-14] Step [audit] completed with status OK.
+/// :END:
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogbookEntry {
+    /// Timestamp of the log entry (e.g., "2025-03-14").
+    pub timestamp: String,
+    /// The log message content.
+    pub message: String,
+    /// 1-based line number within the document.
+    pub line_number: usize,
+}
+
 /// Parsed section row for section-aware retrieval and `HippoRAG 2` `Passage Nodes`.
 #[derive(Debug, Clone)]
 pub struct ParsedSection {
@@ -27,6 +52,10 @@ pub struct ParsedSection {
     pub entities: Vec<String>,
     /// Property drawer attributes extracted from heading (e.g., :ID: arch-v1).
     pub attributes: std::collections::HashMap<String, String>,
+    /// Execution log entries from `:LOGBOOK:` drawer (Blueprint v2.4).
+    pub logbook: Vec<LogbookEntry>,
+    /// Code observations from `:OBSERVE:` property drawer (Blueprint v2.7).
+    pub observations: Vec<super::code_observation::CodeObservation>,
 }
 
 #[derive(Clone, Copy)]
@@ -75,15 +104,60 @@ fn parse_property_drawer(line: &str) -> Option<(String, String)> {
 
 /// Extract property drawer attributes from lines following a heading.
 ///
-/// Returns (attributes, consumed_line_count) where consumed_line_count is the
-/// number of lines that were property drawer entries.
+/// Supports two formats:
+/// 1. Org-style block format (Blueprint v2.0):
+///    ```markdown
+///    :PROPERTIES:
+///    :ID:       uuid-v4-or-slug
+///    :STATUS:   STABLE
+///    :END:
+///    ```
+/// 2. Compact single-line format:
+///    ```markdown
+///    :ID: arch-v1
+///    :TAGS: core, design
+///    ```
+///
+/// Note: Once a `:PROPERTIES:` block is encountered and closed with `:END:`,
+/// no further property extraction occurs (block format takes precedence).
 fn extract_property_drawers(lines: &[String]) -> HashMap<String, String> {
     let mut attributes = HashMap::new();
+    let mut in_properties_block = false;
+    let mut block_ended = false;
 
     for line in lines {
+        let trimmed = line.trim();
+
+        // Check for :PROPERTIES: block start
+        if trimmed == ":PROPERTIES:" {
+            in_properties_block = true;
+            continue;
+        }
+
+        // Check for :END: block terminator
+        if in_properties_block && trimmed == ":END:" {
+            in_properties_block = false;
+            block_ended = true;
+            continue;
+        }
+
+        // Inside :PROPERTIES: block, parse property lines
+        if in_properties_block {
+            if let Some((key, value)) = parse_property_drawer(line) {
+                attributes.insert(key, value);
+            }
+            continue;
+        }
+
+        // After block ended, stop extracting properties
+        if block_ended {
+            break;
+        }
+
+        // Outside block: support compact single-line format
         if let Some((key, value)) = parse_property_drawer(line) {
             attributes.insert(key, value);
-        } else if line.trim().is_empty() {
+        } else if trimmed.is_empty() {
             // Skip empty lines at the start of the section
             continue;
         } else {
@@ -93,6 +167,87 @@ fn extract_property_drawers(lines: &[String]) -> HashMap<String, String> {
     }
 
     attributes
+}
+
+/// Parse a single logbook entry line.
+///
+/// Format: `- [TIMESTAMP] MESSAGE`
+/// Example: `- [2025-03-14] Agent Started: Initiating structural audit.`
+fn parse_logbook_entry(line: &str, line_number: usize) -> Option<LogbookEntry> {
+    let trimmed = line.trim();
+
+    // Must start with list item marker
+    if !trimmed.starts_with('-') {
+        return None;
+    }
+
+    let rest = trimmed[1..].trim_start();
+
+    // Find timestamp in brackets
+    if !rest.starts_with('[') {
+        return None;
+    }
+
+    let close_bracket = rest.find(']')?;
+    let timestamp = rest[1..close_bracket].trim().to_string();
+
+    if timestamp.is_empty() {
+        return None;
+    }
+
+    let message = rest[close_bracket + 1..].trim().to_string();
+
+    if message.is_empty() {
+        return None;
+    }
+
+    Some(LogbookEntry {
+        timestamp,
+        message,
+        line_number,
+    })
+}
+
+/// Extract execution log entries from `:LOGBOOK:` drawer.
+///
+/// Supports the format specified in Blueprint v2.4:
+/// ```markdown
+/// :LOGBOOK:
+/// - [2025-03-14] Agent Started: Initiating structural audit.
+/// - [2025-03-14] Step [audit] completed with status OK.
+/// :END:
+/// ```
+///
+/// The logbook provides an execution trail for workflow tracking,
+/// enabling LLM agents to read task status like reading a document.
+fn extract_logbook_entries(lines: &[String], start_line: usize) -> Vec<LogbookEntry> {
+    let mut entries = Vec::new();
+    let mut in_logbook_block = false;
+
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        // Check for :LOGBOOK: block start
+        if trimmed == ":LOGBOOK:" {
+            in_logbook_block = true;
+            continue;
+        }
+
+        // Check for :END: block terminator
+        if in_logbook_block && trimmed == ":END:" {
+            break;
+        }
+
+        // Inside :LOGBOOK: block, parse list entries
+        if in_logbook_block {
+            let line_number = start_line + idx + 1;
+            if let Some(entry) = parse_logbook_entry(line, line_number) {
+                entries.push(entry);
+            }
+        }
+    }
+
+    entries
 }
 
 fn parse_markdown_heading(line: &str) -> Option<(usize, String)> {
@@ -137,6 +292,20 @@ fn push_section(
         HashMap::new()
     };
 
+    // Extract execution log entries from :LOGBOOK: drawer (Blueprint v2.4)
+    let logbook = if cursor.heading_level > 0 {
+        extract_logbook_entries(lines, cursor.line_range.0)
+    } else {
+        Vec::new()
+    };
+
+    // Extract code observations from :OBSERVE: property drawer (Blueprint v2.7)
+    let observations = if cursor.heading_level > 0 {
+        super::code_observation::extract_observations(&attributes)
+    } else {
+        Vec::new()
+    };
+
     let extracted = super::links::extract_link_targets(&section_text, source_path, root);
     let line_start = cursor.line_range.0.max(1);
     let line_end = cursor.line_range.1.max(line_start);
@@ -154,6 +323,8 @@ fn push_section(
         section_text,
         entities: extracted.note_links,
         attributes,
+        logbook,
+        observations,
     });
 }
 
@@ -256,104 +427,13 @@ pub(super) fn extract_sections(
             section_text,
             entities: extracted.note_links,
             attributes: HashMap::new(),
+            logbook: Vec::new(),
+            observations: Vec::new(),
         });
     }
     sections
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_property_drawer_valid() {
-        let line = ":ID: arch-v1";
-        let result = parse_property_drawer(line);
-        assert_eq!(result, Some(("ID".to_string(), "arch-v1".to_string())));
-    }
-
-    #[test]
-    fn test_parse_property_drawer_with_spaces() {
-        let line = "  :TAGS: core, design  ";
-        let result = parse_property_drawer(line);
-        assert_eq!(
-            result,
-            Some(("TAGS".to_string(), "core, design".to_string()))
-        );
-    }
-
-    #[test]
-    fn test_parse_property_drawer_no_leading_colon() {
-        let line = "ID: arch-v1";
-        let result = parse_property_drawer(line);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_parse_property_drawer_empty_value() {
-        let line = ":ID:   ";
-        let result = parse_property_drawer(line);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_extract_property_drawers_multiple() {
-        let lines = vec![
-            ":ID: test-123".to_string(),
-            ":TAGS: one, two".to_string(),
-            "".to_string(),
-            "Content starts here".to_string(),
-        ];
-        let attrs = extract_property_drawers(&lines);
-        assert_eq!(attrs.get("ID"), Some(&"test-123".to_string()));
-        assert_eq!(attrs.get("TAGS"), Some(&"one, two".to_string()));
-    }
-
-    #[test]
-    fn test_extract_property_drawers_stops_at_content() {
-        let lines = vec![
-            ":ID: test-456".to_string(),
-            "Not a property".to_string(),
-            ":TAGS: ignored".to_string(),
-        ];
-        let attrs = extract_property_drawers(&lines);
-        assert_eq!(attrs.get("ID"), Some(&"test-456".to_string()));
-        assert!(attrs.get("TAGS").is_none()); // Should not be extracted
-    }
-
-    #[test]
-    fn test_extract_sections_with_property_drawer() {
-        let body = r#"# Main Title
-:ID: main-section
-:TAGS: important
-
-Content here.
-
-## Subsection
-:ID: sub-001
-
-More content.
-"#;
-        let sections = extract_sections(
-            body.as_ref(),
-            std::path::Path::new("test.md"),
-            std::path::Path::new("/"),
-        );
-
-        // First section should have :ID: main-section
-        let first = sections.iter().find(|s| s.heading_title == "Main Title");
-        assert!(first.is_some());
-        let first = first.unwrap();
-        assert_eq!(
-            first.attributes.get("ID"),
-            Some(&"main-section".to_string())
-        );
-        assert_eq!(first.attributes.get("TAGS"), Some(&"important".to_string()));
-
-        // Subsection should have :ID: sub-001
-        let sub = sections.iter().find(|s| s.heading_title == "Subsection");
-        assert!(sub.is_some());
-        let sub = sub.unwrap();
-        assert_eq!(sub.attributes.get("ID"), Some(&"sub-001".to_string()));
-    }
-}
+#[path = "../../../tests/unit/link_graph/parser/sections.rs"]
+mod tests;

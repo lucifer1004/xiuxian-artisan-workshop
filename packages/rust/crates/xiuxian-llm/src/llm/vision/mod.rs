@@ -2,7 +2,7 @@
 
 mod anchor;
 mod cot;
-/// DeepSeek vision model integration for OCR and image understanding.
+/// `DeepSeek` vision model integration for OCR and image understanding.
 pub mod deepseek;
 mod message;
 mod preprocess;

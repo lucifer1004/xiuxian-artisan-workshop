@@ -69,35 +69,33 @@ impl LinkGraphIndex {
             let outgoing_len = self
                 .outgoing
                 .get(source_id)
-                .map_or(0, |targets| targets.len());
+                .map_or(0, std::collections::HashSet::len);
             let incoming_len = self
                 .incoming
                 .get(source_id)
-                .map_or(0, |sources| sources.len());
+                .map_or(0, std::collections::HashSet::len);
             let mut neighbor_indices: Vec<usize> = Vec::with_capacity(outgoing_len + incoming_len);
 
             if let Some(targets) = self.outgoing.get(source_id) {
                 for target_id in targets {
-                    if let Some(target_idx) = node_to_idx.get(target_id).copied() {
-                        if target_idx != source_idx
-                            && seen_epoch_by_idx[target_idx] != current_epoch
-                        {
-                            seen_epoch_by_idx[target_idx] = current_epoch;
-                            neighbor_indices.push(target_idx);
-                        }
+                    if let Some(target_idx) = node_to_idx.get(target_id).copied()
+                        && target_idx != source_idx
+                        && seen_epoch_by_idx[target_idx] != current_epoch
+                    {
+                        seen_epoch_by_idx[target_idx] = current_epoch;
+                        neighbor_indices.push(target_idx);
                     }
                 }
             }
 
             if let Some(sources) = self.incoming.get(source_id) {
                 for source_id in sources {
-                    if let Some(source_neighbor_idx) = node_to_idx.get(source_id).copied() {
-                        if source_neighbor_idx != source_idx
-                            && seen_epoch_by_idx[source_neighbor_idx] != current_epoch
-                        {
-                            seen_epoch_by_idx[source_neighbor_idx] = current_epoch;
-                            neighbor_indices.push(source_neighbor_idx);
-                        }
+                    if let Some(source_neighbor_idx) = node_to_idx.get(source_id).copied()
+                        && source_neighbor_idx != source_idx
+                        && seen_epoch_by_idx[source_neighbor_idx] != current_epoch
+                    {
+                        seen_epoch_by_idx[source_neighbor_idx] = current_epoch;
+                        neighbor_indices.push(source_neighbor_idx);
                     }
                 }
             }

@@ -141,6 +141,7 @@ def main() -> int:
     test_cmd = [
         str(binary),
         "test_real_metal_inference",
+        "--ignored",  # Run ignored tests
         "--test-threads=1",
         "--nocapture",
     ]

@@ -23,8 +23,11 @@ pub use deepseek_config::{
 };
 pub use deepseek_runtime::{
     deepseek_snapshot_qoffset_aligned_for_tests, require_quantized_deepseek_snapshot_for_tests,
-    resolve_deepseek_device_kind_label_for_tests,
+    resolve_deepseek_device_kind_label_for_tests, resolve_deepseek_engine_device_label_for_tests,
+    resolve_deepseek_load_dtype_label_for_tests,
     resolve_deepseek_model_kind_for_model_root_label_for_tests,
-    resolve_deepseek_model_kind_label_for_tests, resolve_deepseek_weights_path_for_tests,
-    should_retry_deepseek_cpu_fallback_for_tests,
+    resolve_deepseek_model_kind_label_for_tests, resolve_deepseek_safe_vision_settings_for_tests,
+    resolve_deepseek_snapshot_path_for_tests, resolve_deepseek_vision_settings_for_tests,
+    resolve_deepseek_weights_path_for_tests, should_retry_deepseek_cpu_fallback_for_tests,
+    should_reuse_deepseek_engine_cache_for_tests,
 };

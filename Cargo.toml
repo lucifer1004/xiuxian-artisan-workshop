@@ -67,6 +67,7 @@ futures = "0.3.32"
 tokio-util = "0.7.18"
 md5 = "0.8.0"
 comrak = { version = "0.50.0", default-features = false }
+pulldown-cmark = "0.10"
 quick-xml = "0.39.2"
 petgraph = "0.7"
 async-trait = "0.1"

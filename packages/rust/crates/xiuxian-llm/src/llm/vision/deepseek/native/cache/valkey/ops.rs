@@ -1,4 +1,4 @@
-use super::super::super::super::util::sanitize_error_string;
+use crate::llm::vision::deepseek::util::sanitize_error_string;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::warn;

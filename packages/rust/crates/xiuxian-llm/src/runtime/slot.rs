@@ -58,16 +58,19 @@ pub struct ModelSlotId(Arc<str>);
 
 impl ModelSlotId {
     /// Creates a new model slot ID from a model root path.
+    #[must_use]
     pub fn from_model_root(model_root: &str) -> Self {
         Self(Arc::from(model_root.to_string()))
     }
 
     /// Creates a new model slot ID from a string.
+    #[must_use]
     pub fn new(id: &str) -> Self {
         Self(Arc::from(id.to_string()))
     }
 
     /// Returns the inner string reference.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -111,6 +114,7 @@ pub struct ModelSlot {
 
 impl ModelSlot {
     /// Creates a new slot in Vacant state.
+    #[must_use]
     pub fn vacant(id: ModelSlotId, executor_id: ExecutorId, metadata: ModelMetadata) -> Self {
         Self {
             id,

@@ -100,3 +100,22 @@ To prevent context bloating and "hallucination spirals," all Agents MUST follow 
 - **[TIER-1: PULSE]** (`fmt`, `ruff format`): Background consistency.
 - **[TIER-2: HEARTBEAT]** (`cargo check`, `pyright`): Primary coding-phase verification.
 - **[TIER-3: GATE]** (`clippy`, `cargo nextest`): High-energy industrial audit (only for [DONE]).
+
+# ExecPlans
+
+When writing complex features or significant refactors, use an ExecPlan (as described in .agent/PLANS.md) from design to implementation.
+
+## Blueprint Adherence
+
+If a task falls under the scope of an existing strategic blueprint (located in `.data/blueprints/`), the ExecPlan MUST strictly adhere to its architectural mandates.
+
+- **Active Reference**: `[[.data/blueprints/project_anchor_semantic_addressing.md]]` (Project AnchoR: Wendao Semantic Addressing Kernel).
+
+## Holistic Evolution Workflow
+
+All structural changes must follow the **Triple-Sync Protocol**:
+
+1.  **Blueprint Check**: Verify if the task falls under an active strategic blueprint.
+2.  **GTD Synchronization**: Update the daily GTD file (`docs/GTD/DAILY_YYYY_MM_DD.md`) to record the task and its status.
+3.  **ExecPlan Creation**: Create a formal ExecPlan (`.cache/codex/execplans/<slug>.md`) that explicitly references and adheres to the relevant blueprint.
+4.  **Implementation**: Execute implementation and validation steps as defined in the plan.

@@ -1,6 +1,6 @@
 use sha2::{Digest, Sha256};
 
-use super::super::super::super::preprocess::PreparedVisionImage;
+use crate::llm::vision::PreparedVisionImage;
 
 pub(in crate::llm::vision::deepseek) fn build_cache_key(
     model_root: &str,

@@ -9,15 +9,37 @@
 //! - `ScenarioRunner`: Trait for category-specific test execution
 //! - `ScenarioFramework`: Registry and executor for runners
 //!
-//! # Scenario Structure
+//! # Directory Structure
 //!
 //! ```text
-//! tests/fixtures/scenarios/001_my_scenario/
-//! ├── input/
-//! │   └── data.md
-//! ├── expected/
-//! │   └── result.json
-//! └── scenario.toml
+//! tests/
+//! ├── scenarios/                    # Scenario definitions (you write)
+//! │   └── 001_page_index_hierarchy/
+//! │       ├── scenario.toml         # Metadata + assertions
+//! │       └── input/                # Input files
+//! │           └── docs/alpha.md
+//! └── snapshots/                    # Snapshots (insta manages)
+//!     └── scenarios__*.snap
+//! ```
+//!
+//! # scenario.toml Format
+//!
+//! ```toml
+//! [scenario]
+//! id = "001_page_index_hierarchy"
+//! name = "Page Index Hierarchy"
+//! category = "page_index"
+//! description = "Build hierarchical page index"
+//!
+//! [input]
+//! type = "markdown_tree"
+//!
+//! [runner]
+//! build_page_index = true
+//!
+//! [assert]  # Optional declarative assertions
+//! node_count = 3
+//! root_title = "Alpha"
 //! ```
 
 use std::collections::HashMap;
@@ -45,6 +67,9 @@ pub struct ScenarioConfig {
     /// Runner-specific configuration options.
     #[serde(default)]
     pub runner: RunnerConfig,
+    /// Declarative assertions (optional).
+    #[serde(default)]
+    pub assert: AssertConfig,
 }
 
 /// Scenario metadata from the `[scenario]` section.
@@ -92,6 +117,25 @@ pub struct RunnerConfig {
     pub build_page_index: Option<bool>,
     /// Whether to collect links during scenario execution.
     pub collect_links: Option<bool>,
+}
+
+/// Declarative assertions from the `[assert]` section.
+///
+/// These are optional and provide human-readable validation rules
+/// that complement insta snapshots.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AssertConfig {
+    /// Expected node count (for tree structures).
+    pub node_count: Option<usize>,
+    /// Expected root title.
+    pub root_title: Option<String>,
+    /// Whether the result should have children.
+    pub has_children: Option<bool>,
+    /// Minimum token count.
+    pub min_token_count: Option<usize>,
+    /// Custom assertions as key-value pairs.
+    #[serde(flatten)]
+    pub custom: HashMap<String, Value>,
 }
 
 // ============================================================================
@@ -194,16 +238,13 @@ impl ScenarioFramework {
     /// Create a new empty framework with default snapshot path.
     ///
     /// The snapshot path is relative to the crate's manifest directory:
-    /// `tests/snapshots/scenarios`
+    /// `tests/snapshots/`
     #[must_use]
     pub fn new() -> Self {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         Self {
             runners: HashMap::new(),
-            snapshot_path: manifest_dir
-                .join("tests")
-                .join("snapshots")
-                .join("scenarios"),
+            snapshot_path: manifest_dir.join("tests").join("snapshots"),
         }
     }
 
@@ -231,19 +272,83 @@ impl ScenarioFramework {
             .map(|b| b.as_ref())
     }
 
+    /// Run all scenarios across all categories.
+    ///
+    /// This discovers all scenarios and matches them to registered runners
+    /// by their category. Insta handles snapshot management.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any scenario execution fails.
+    pub fn run_all(&self) -> Result<usize, Box<dyn Error>> {
+        self.run_all_at(&scenarios_root())
+    }
+
+    /// Run all scenarios at a specific root directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any scenario execution fails.
+    pub fn run_all_at(&self, scenarios_root: &Path) -> Result<usize, Box<dyn Error>> {
+        let scenarios = discover_scenarios_at(scenarios_root);
+        let mut count = 0;
+
+        for scenario_dir in scenarios {
+            let scenario = Scenario::load(scenario_dir)?;
+
+            let runner = match self.find_runner(scenario.category()) {
+                Some(r) => r,
+                None => {
+                    eprintln!(
+                        "Warning: No runner for category '{}', skipping: {}",
+                        scenario.category(),
+                        scenario.id()
+                    );
+                    continue;
+                }
+            };
+
+            count += 1;
+            println!("Running scenario: {} ({})", scenario.name(), scenario.id());
+
+            // Create temp directory and copy input
+            let temp_dir = tempfile::TempDir::new()?;
+            if let Some(input_path) = scenario.input_path() {
+                if input_path.exists() {
+                    copy_dir_recursive(&input_path, temp_dir.path())?;
+                }
+            }
+
+            // Run the scenario
+            let result = runner.run(&scenario, temp_dir.path())?;
+
+            // Use Insta for snapshot comparison
+            let snapshot_path = self.snapshot_path.clone();
+            let snapshot_name = format!("scenarios__{}", scenario.id());
+            insta::with_settings!({
+                snapshot_path => snapshot_path,
+                prepend_module_to_snapshot => false,
+            }, {
+                insta::assert_json_snapshot!(snapshot_name, result);
+            });
+        }
+
+        Ok(count)
+    }
+
     /// Run all scenarios in a category using the registered runner.
     ///
     /// # Errors
     ///
     /// Returns an error if no runner is registered for the category or if
     /// any scenario execution fails.
-    pub fn run_category(&self, category: &str) -> Result<(), Box<dyn Error>> {
+    pub fn run_category(&self, category: &str) -> Result<usize, Box<dyn Error>> {
         let runner = self
             .find_runner(category)
             .ok_or_else(|| format!("No runner registered for category: {}", category))?;
 
         let scenarios = discover_scenarios();
-        let mut ran_any = false;
+        let mut count = 0;
 
         for scenario_dir in scenarios {
             let scenario = Scenario::load(scenario_dir)?;
@@ -252,7 +357,7 @@ impl ScenarioFramework {
                 continue;
             }
 
-            ran_any = true;
+            count += 1;
             println!("Running scenario: {} ({})", scenario.name(), scenario.id());
 
             // Create temp directory and copy input
@@ -268,19 +373,20 @@ impl ScenarioFramework {
 
             // Use Insta for snapshot comparison
             let snapshot_path = self.snapshot_path.clone();
+            let snapshot_name = format!("scenarios__{}", scenario.id());
             insta::with_settings!({
                 snapshot_path => snapshot_path,
                 prepend_module_to_snapshot => false,
             }, {
-                insta::assert_json_snapshot!(format!("{}-result", scenario.id()), result);
+                insta::assert_json_snapshot!(snapshot_name, result);
             });
         }
 
-        if !ran_any {
+        if count == 0 {
             println!("No scenarios found for category: {}", category);
         }
 
-        Ok(())
+        Ok(count)
     }
 }
 
@@ -296,20 +402,19 @@ impl Default for ScenarioFramework {
 
 /// Get the scenarios fixture root directory for the current crate.
 ///
-/// This returns the crate-local `tests/fixtures/scenarios` directory,
+/// This returns the crate-local `tests/scenarios` directory,
 /// allowing each crate to define its own scenario tests.
 #[must_use]
 pub fn scenarios_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
-        .join("fixtures")
         .join("scenarios")
 }
 
 /// Get a custom scenarios root directory.
 #[must_use]
 pub fn scenarios_root_at(base: &Path) -> PathBuf {
-    base.join("tests").join("fixtures").join("scenarios")
+    base.join("tests").join("scenarios")
 }
 
 /// Discover all scenario directories in the default location.
@@ -424,8 +529,8 @@ mod tests {
         let root = scenarios_root();
         // Should return crate-local path, not workspace root
         assert!(
-            root.ends_with("tests/fixtures/scenarios"),
-            "scenarios_root should end with tests/fixtures/scenarios: {:?}",
+            root.ends_with("tests/scenarios"),
+            "scenarios_root should end with tests/scenarios: {:?}",
             root
         );
     }
@@ -437,9 +542,7 @@ mod tests {
         // The key is that it looks in the crate-local directory
         for scenario in &scenarios {
             assert!(
-                scenario
-                    .to_string_lossy()
-                    .contains("tests/fixtures/scenarios"),
+                scenario.to_string_lossy().contains("tests/scenarios"),
                 "Scenario should be in crate-local path: {:?}",
                 scenario
             );

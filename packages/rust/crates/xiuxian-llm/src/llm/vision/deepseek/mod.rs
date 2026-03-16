@@ -21,10 +21,13 @@ pub use test_api::{
     local_cache_set_with_max_entries_for_tests, normalize_cache_text_owned_for_tests,
     normalize_cache_text_view_for_tests, normalize_valkey_timeout_ms_for_tests,
     repair_dsq_if_needed, require_quantized_snapshot_with_for_tests,
-    resolve_device_kind_label_with_for_tests,
+    resolve_device_kind_label_with_for_tests, resolve_engine_device_label_with_for_tests,
     resolve_model_kind_for_model_root_label_with_for_tests,
-    resolve_model_kind_label_with_for_tests, resolve_weights_path_with_for_tests,
-    should_retry_cpu_fallback_with_for_tests, snapshot_qoffset_alignment_with_for_tests,
-    store_markdown_in_cache_for_tests, valkey_get_with_for_tests, valkey_set_with_for_tests,
+    resolve_model_kind_label_with_for_tests, resolve_model_load_dtype_label_with_for_tests,
+    resolve_snapshot_path_with_for_tests, resolve_vision_settings_with_for_tests,
+    resolve_weights_path_with_for_tests, safe_vision_settings_for_tests,
+    should_retry_cpu_fallback_with_for_tests, should_reuse_engine_cache_with_for_tests,
+    snapshot_qoffset_alignment_with_for_tests, store_markdown_in_cache_for_tests,
+    valkey_get_with_for_tests, valkey_set_with_for_tests,
 };
 pub(crate) use test_api::{normalize_model_root_for_tests, resolve_model_root_with_for_tests};

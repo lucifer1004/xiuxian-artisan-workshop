@@ -2,10 +2,10 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
 use std::time::Duration;
 
-use super::super::super::super::preprocess::PreparedVisionImage;
-use super::super::super::util::internal_error;
-use super::super::env::{parse_env_u64, parse_env_usize};
 use crate::llm::error::LlmResult;
+use crate::llm::vision::PreparedVisionImage;
+use crate::llm::vision::deepseek::native::env::{parse_env_u64, parse_env_usize};
+use crate::llm::vision::deepseek::util::internal_error;
 
 use super::core::DeepseekEngine;
 

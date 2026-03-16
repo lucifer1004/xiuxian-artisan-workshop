@@ -1,4 +1,4 @@
-//! [AIP] Unified Model Executor Trait for Omni ModelBus.
+//! [AIP] Unified Model Executor Trait for Omni `ModelBus`.
 //!
 //! This module defines the core abstraction for model execution,
 //! supporting Text, Vision, and Embedding modalities with hot-swap capability.
@@ -42,11 +42,13 @@ pub struct ExecutorId(Arc<str>);
 
 impl ExecutorId {
     /// Creates a new executor ID.
+    #[must_use]
     pub fn new(id: &str) -> Self {
         Self(Arc::from(id.to_string()))
     }
 
     /// Returns the ID as a string slice.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -58,7 +60,7 @@ impl std::fmt::Display for ExecutorId {
     }
 }
 
-/// Core trait for model executors in the Omni ModelBus.
+/// Core trait for model executors in the Omni `ModelBus`.
 ///
 /// Implementations must support hot-swap via `prewarm()` and state transitions.
 #[async_trait]
@@ -74,7 +76,7 @@ pub trait ModelExecutor: Send + Sync {
 
     /// Prewarms the executor for faster first inference.
     ///
-    /// This is called by the ModelBus when transitioning from Hibernated to Active.
+    /// This is called by the `ModelBus` when transitioning from Hibernated to Active.
     fn prewarm(&self) -> LlmResult<()>;
 
     /// Returns the memory footprint in bytes.
@@ -94,6 +96,7 @@ pub struct NoopExecutor {
 
 impl NoopExecutor {
     /// Creates a new no-op executor.
+    #[must_use]
     pub fn new(id: &str) -> Self {
         Self {
             id: ExecutorId::new(id),

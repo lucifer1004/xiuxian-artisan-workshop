@@ -1,0 +1,11 @@
+---
+source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+assertion_line: 332
+expression: result
+---
+{
+  "scenario_id": "002_quantum_fusion_contexts",
+  "category": "quantum_fusion",
+  "status": "validated",
+  "files": []
+}

@@ -3,10 +3,8 @@ shell_zsh_fork = true
 shell_snapshot = true
 tool_parallelism = true
 multi_agent = true
-# Disable unified_exec to prevent internal newline processing issues
 unified_exec = true
-apply_patch_freeform = true
 
-[mcp_servers.omniAgent]
-url = "http://127.0.0.1:3002/mcp"
-enabled = true
+# [mcp_servers.omniAgent]
+# url = "http://127.0.0.1:3002/mcp"
+# enabled = true

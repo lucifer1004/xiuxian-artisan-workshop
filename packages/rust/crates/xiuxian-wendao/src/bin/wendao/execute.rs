@@ -4,6 +4,10 @@
 mod agentic;
 #[path = "execute/attachments.rs"]
 mod attachments;
+#[path = "execute/audit.rs"]
+mod audit;
+#[path = "execute/fix.rs"]
+mod fix;
 #[path = "execute/graph.rs"]
 mod graph;
 #[path = "execute/hmas.rs"]
@@ -20,6 +24,7 @@ use xiuxian_wendao::LinkGraphIndex;
 pub(crate) fn execute(cli: &Cli, index: Option<&LinkGraphIndex>) -> Result<()> {
     match &cli.command {
         Command::Search(_) => search::handle(cli, index),
+        Command::Audit(args) => audit::handle(cli, args, index),
         Command::Attachments(_) => attachments::handle(cli, index),
         Command::Stats
         | Command::Toc(_)
@@ -30,5 +35,6 @@ pub(crate) fn execute(cli: &Cli, index: Option<&LinkGraphIndex>) -> Result<()> {
         Command::Saliency { .. } => saliency::handle(cli),
         Command::Hmas { .. } => hmas::handle(cli),
         Command::Agentic { .. } => agentic::handle(cli, index),
+        Command::Fix(args) => fix::handle(cli, args, index),
     }
 }

@@ -8,7 +8,10 @@ pub(super) fn collect_markdown_files(dir: &Path) -> Result<Vec<PathBuf>> {
     }
 
     let mut files = Vec::new();
-    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(dir)
+        .into_iter()
+        .filter_map(std::result::Result::ok)
+    {
         if entry.file_type().is_file() {
             let path = entry.path().to_path_buf();
             let is_md = path

@@ -27,7 +27,7 @@ impl LinkGraphIndex {
         limit: usize,
         options: LinkGraphSearchOptions,
     ) -> Vec<LinkGraphHit> {
-        self.execute_search_with_doc_boosts(query, limit, options, None)
+        self.execute_search_with_doc_boosts(query, limit, &options, None)
     }
 
     /// Execute query plan with explicit matching/sorting options and
@@ -37,7 +37,7 @@ impl LinkGraphIndex {
         &self,
         query: &str,
         limit: usize,
-        options: LinkGraphSearchOptions,
+        options: &LinkGraphSearchOptions,
         doc_boosts: Option<&HashMap<String, f64>>,
     ) -> Vec<LinkGraphHit> {
         let Some(context) = self.prepare_execution_context(query, limit, &options) else {

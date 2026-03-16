@@ -64,6 +64,7 @@ impl ZhenfaToolAttr {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let config = match ZhenfaToolAttr::parse(attr) {
         Ok(config) => config,
@@ -75,14 +76,7 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(error) => return error.to_compile_error().into(),
     };
 
-    if function.sig.asyncness.is_none() {
-        return syn::Error::new_spanned(
-            &function.sig.fn_token,
-            "`zhenfa_tool` requires an `async fn`",
-        )
-        .to_compile_error()
-        .into();
-    }
+    let is_async = function.sig.asyncness.is_some();
 
     if !function.sig.generics.params.is_empty() {
         return syn::Error::new_spanned(
@@ -153,9 +147,17 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     });
 
+    // Generate the function call based on whether it's async or sync
+    let fn_call = if is_async {
+        quote! { #fn_ident(ctx, parsed_args).await }
+    } else {
+        quote! { #fn_ident(ctx, parsed_args) }
+    };
+
     quote! {
         #function
 
+        #[doc = #description]
         #[derive(Clone, Copy, Debug, Default)]
         #vis struct #struct_ident;
 
@@ -195,7 +197,7 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
                             error
                         ))
                     })?;
-                #fn_ident(ctx, parsed_args).await
+                #fn_call
             }
 
             #mutation_scope_impl

@@ -6,7 +6,7 @@ use super::KnowledgeStorage;
 
 impl KnowledgeStorage {
     /// Initialize the storage (validate Valkey connectivity).
-    pub async fn init(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn init(&self) -> Result<(), Box<dyn std::error::Error>> {
         let client = self.redis_client()?;
         let mut conn = client.get_connection()?;
         let _pong: String = redis::cmd("PING").query(&mut conn)?;
@@ -25,12 +25,11 @@ impl KnowledgeStorage {
     }
 
     /// Upsert a knowledge entry.
-    pub async fn upsert(&self, entry: &KnowledgeEntry) -> Result<(), Box<dyn std::error::Error>> {
-        self.init().await?;
-        let client = self.redis_client().map_err(|e| {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
-                as Box<dyn std::error::Error>
-        })?;
+    pub fn upsert(&self, entry: &KnowledgeEntry) -> Result<(), Box<dyn std::error::Error>> {
+        self.init()?;
+        let client = self
+            .redis_client()
+            .map_err(|e| Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>)?;
         let mut conn = client.get_connection()?;
         let entries_key = self.entries_key();
         let existing_raw: Option<String> = redis::cmd("HGET")
@@ -64,11 +63,10 @@ impl KnowledgeStorage {
     }
 
     /// Count total entries.
-    pub async fn count(&self) -> Result<i64, Box<dyn std::error::Error>> {
-        let client = self.redis_client().map_err(|e| {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
-                as Box<dyn std::error::Error>
-        })?;
+    pub fn count(&self) -> Result<i64, Box<dyn std::error::Error>> {
+        let client = self
+            .redis_client()
+            .map_err(|e| Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>)?;
         let mut conn = client.get_connection()?;
         let total: i64 = redis::cmd("HLEN")
             .arg(self.entries_key())
@@ -77,11 +75,10 @@ impl KnowledgeStorage {
     }
 
     /// Delete an entry by ID.
-    pub async fn delete(&self, id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let client = self.redis_client().map_err(|e| {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
-                as Box<dyn std::error::Error>
-        })?;
+    pub fn delete(&self, id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let client = self
+            .redis_client()
+            .map_err(|e| Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>)?;
         let mut conn = client.get_connection()?;
         let _: i64 = redis::cmd("HDEL")
             .arg(self.entries_key())
@@ -98,10 +95,9 @@ impl KnowledgeStorage {
         &self,
         id: &str,
     ) -> Result<Option<KnowledgeEntry>, Box<dyn std::error::Error>> {
-        let client = self.redis_client().map_err(|e| {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
-                as Box<dyn std::error::Error>
-        })?;
+        let client = self
+            .redis_client()
+            .map_err(|e| Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>)?;
         let mut conn = client.get_connection()?;
         let entries_key = self.entries_key();
         let raw: Option<String> = redis::cmd("HGET")
@@ -120,10 +116,9 @@ impl KnowledgeStorage {
     /// # Errors
     /// Returns an error if Valkey connection or deserialization fails.
     pub fn load_all_entries(&self) -> Result<Vec<KnowledgeEntry>, Box<dyn std::error::Error>> {
-        let client = self.redis_client().map_err(|e| {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
-                as Box<dyn std::error::Error>
-        })?;
+        let client = self
+            .redis_client()
+            .map_err(|e| Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>)?;
         let mut conn = client.get_connection()?;
         let entries_key = self.entries_key();
         let raws: std::collections::HashMap<String, String> =
@@ -137,11 +132,10 @@ impl KnowledgeStorage {
     }
 
     /// Clear all entries.
-    pub async fn clear(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let client = self.redis_client().map_err(|e| {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
-                as Box<dyn std::error::Error>
-        })?;
+    pub fn clear(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let client = self
+            .redis_client()
+            .map_err(|e| Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>)?;
         let mut conn = client.get_connection()?;
         let _: i64 = redis::cmd("DEL").arg(self.entries_key()).query(&mut conn)?;
         Ok(())

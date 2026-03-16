@@ -14,7 +14,7 @@ pub use diagnostics::LinkGraphRelatedPprDiagnostics;
 pub use document::LinkGraphDocument;
 pub use graph_rows::{LinkGraphMetadata, LinkGraphNeighbor, LinkGraphStats};
 pub use hits::{LinkGraphDisplayHit, LinkGraphHit};
-pub use markdown_block::{BlockAddress, BlockKindSpecifier, MarkdownBlock, MarkdownBlockKind};
+pub use markdown_block::{BlockAddress, MarkdownBlock, MarkdownBlockKind};
 pub use page_index::{PageIndexMeta, PageIndexNode};
 pub use passage::LinkGraphPassage;
 pub use payload::{

@@ -44,36 +44,36 @@ pub fn split_logging_args(raw: &[String]) -> (LogSettings, Vec<String>) {
             continue;
         }
 
-        if let Some(value) = arg.strip_prefix("--log-verbose=") {
-            if let Ok(count) = value.parse::<u8>() {
-                settings.verbose = settings.verbose.saturating_add(count);
-                index += 1;
-                continue;
-            }
+        if let Some(value) = arg.strip_prefix("--log-verbose=")
+            && let Ok(count) = value.parse::<u8>()
+        {
+            settings.verbose = settings.verbose.saturating_add(count);
+            index += 1;
+            continue;
         }
 
-        if let Some((value, consumed)) = take_value(raw, index, "--log-format") {
-            if let Ok(format) = value.parse::<LogFormat>() {
-                settings.format = format;
-                index += consumed;
-                continue;
-            }
+        if let Some((value, consumed)) = take_value(raw, index, "--log-format")
+            && let Ok(format) = value.parse::<LogFormat>()
+        {
+            settings.format = format;
+            index += consumed;
+            continue;
         }
 
-        if let Some((value, consumed)) = take_value(raw, index, "--log-color") {
-            if let Ok(color) = value.parse::<LogColor>() {
-                settings.color = color;
-                index += consumed;
-                continue;
-            }
+        if let Some((value, consumed)) = take_value(raw, index, "--log-color")
+            && let Ok(color) = value.parse::<LogColor>()
+        {
+            settings.color = color;
+            index += consumed;
+            continue;
         }
 
-        if let Some((value, consumed)) = take_value(raw, index, "--log-level") {
-            if let Ok(level) = value.parse::<LogLevel>() {
-                settings.level = Some(level);
-                index += consumed;
-                continue;
-            }
+        if let Some((value, consumed)) = take_value(raw, index, "--log-level")
+            && let Ok(level) = value.parse::<LogLevel>()
+        {
+            settings.level = Some(level);
+            index += consumed;
+            continue;
         }
 
         if let Some((value, consumed)) = take_value(raw, index, "--log-filter") {

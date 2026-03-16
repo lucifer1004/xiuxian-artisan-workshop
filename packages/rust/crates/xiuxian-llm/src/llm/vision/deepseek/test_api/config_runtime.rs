@@ -1,15 +1,16 @@
 use std::path::Path;
 
-use super::super::config::DeepseekConfigSnapshot;
+use crate::llm::vision::deepseek::config::{self, DeepseekConfigSnapshot};
+use crate::llm::vision::deepseek::runtime;
 
-/// Load DeepSeek config with explicit paths for test assertions.
+/// Load `DeepSeek` config with explicit paths for test assertions.
 ///
 /// Note: Returns crate-internal type for test support module consumption.
 pub fn load_config_with_paths_for_tests(
     project_root: Option<&Path>,
     config_home: Option<&Path>,
 ) -> DeepseekConfigSnapshot {
-    super::super::config::load_config_with_paths_for_tests(project_root, config_home)
+    config::load_config_with_paths_for_tests(project_root, config_home)
 }
 
 /// Resolve model root with fallback chain for test assertions.
@@ -18,7 +19,7 @@ pub fn resolve_model_root_with_for_tests(
     config_model_root: Option<&str>,
     default_model_root: Option<&str>,
 ) -> Option<String> {
-    super::super::runtime::resolve_model_root_with(
+    runtime::resolve_model_root_with(
         env_model_root.map(ToString::to_string),
         config_model_root.map(ToString::to_string),
         default_model_root.map(ToString::to_string),
@@ -27,5 +28,5 @@ pub fn resolve_model_root_with_for_tests(
 
 /// Normalize model root path for test assertions.
 pub fn normalize_model_root_for_tests(raw: &str, project_root: &Path) -> String {
-    super::super::runtime::normalize_model_root(raw, project_root)
+    runtime::normalize_model_root(raw, project_root)
 }

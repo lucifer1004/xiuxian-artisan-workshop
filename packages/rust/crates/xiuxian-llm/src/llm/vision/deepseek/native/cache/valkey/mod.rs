@@ -37,7 +37,7 @@ pub fn set_with(
     markdown: &str,
 ) -> bool {
     let cache = client_init::acquire_client(valkey_url, key_prefix, ttl_secs, io_timeout_ms);
-    cache.map(|cache| cache.set(key, markdown)).unwrap_or(false)
+    cache.is_some_and(|cache| cache.set(key, markdown))
 }
 
 pub fn normalize_valkey_timeout_ms_for_tests(io_timeout_ms: u64) -> u64 {

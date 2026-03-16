@@ -8,7 +8,7 @@ use super::config;
 use super::dsq_alignment::required_qoffset_alignment;
 use super::model_kind::VisionModelKind;
 #[cfg(feature = "vision-dots")]
-use super::native::local_runtime_may_use_metal;
+use super::native::{local_runtime_may_use_metal, resolve_snapshot_path_with};
 use super::remote_http::validate_ocr_http_base_url;
 use super::util::non_empty_env;
 #[cfg(feature = "vision-dots")]
@@ -173,8 +173,10 @@ fn evaluate_local_runtime_safety(
 ) -> LocalRuntimeSafetyDecision {
     let resolved_model_kind =
         resolve_model_kind_for_model_root_with(configured_model_kind, model_root);
-    let has_usable_snapshot = resolve_snapshot_path_with(model_root, explicit_snapshot_path)
-        .is_some_and(|path| is_usable_quantized_snapshot(path.as_path()));
+    let has_usable_snapshot = match resolve_snapshot_path_with(model_root, explicit_snapshot_path) {
+        Some(path) => is_usable_quantized_snapshot(path.as_path()),
+        None => false,
+    };
 
     if resolved_model_kind != VisionModelKind::DotsOcr || has_usable_snapshot {
         return LocalRuntimeSafetyDecision::Safe;
@@ -208,7 +210,14 @@ fn resolve_model_kind_for_model_root_with(
     model_root: &Path,
 ) -> VisionModelKind {
     let configured = parse_model_kind_with(configured_model_kind);
-    if configured == VisionModelKind::Deepseek && model_root_looks_like_dots(model_root) {
+    let explicit = configured_model_kind
+        .and_then(|value| (!value.eq_ignore_ascii_case("auto")).then_some(value))
+        .and_then(VisionModelKind::parse)
+        .is_some();
+    if !explicit
+        && configured == VisionModelKind::Deepseek
+        && model_root_looks_like_dots(model_root)
+    {
         VisionModelKind::DotsOcr
     } else {
         configured
@@ -233,80 +242,6 @@ fn model_root_looks_like_dots(model_root: &Path) -> bool {
             .file_name()
             .and_then(|value| value.to_str())
             .is_some_and(|name| name.to_ascii_lowercase().contains("dots"))
-}
-
-fn resolve_snapshot_path_with(
-    model_root: &Path,
-    explicit_snapshot_path: Option<&Path>,
-) -> Option<PathBuf> {
-    if let Some(path) = explicit_snapshot_path {
-        return Some(path.to_path_buf());
-    }
-
-    let mut candidates = std::fs::read_dir(model_root)
-        .ok()?
-        .filter_map(|entry| entry.ok().map(|value| value.path()))
-        .filter(|path| {
-            path.extension()
-                .and_then(|value| value.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("dsq"))
-        })
-        .collect::<Vec<_>>();
-    candidates.sort();
-    choose_preferred_snapshot(candidates.as_slice())
-}
-
-const SNAPSHOT_PRIORITY_GROUPS: &[&[&str]] = &[
-    &["q4k", "q4_k"],
-    &["q6k", "q6_k"],
-    &["q8_0", "q8-0", "q80", "q8"],
-];
-
-fn choose_preferred_snapshot(candidates: &[PathBuf]) -> Option<PathBuf> {
-    match candidates {
-        [] => return None,
-        [single] => return Some(single.clone()),
-        _ => {}
-    }
-
-    for token_group in SNAPSHOT_PRIORITY_GROUPS {
-        let valid_matches = candidates
-            .iter()
-            .filter(|path| {
-                is_usable_quantized_snapshot(path.as_path())
-                    && snapshot_matches_priority_group(path.as_path(), token_group)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        match valid_matches.as_slice() {
-            [single] => return Some(single.clone()),
-            [] => {}
-            _ => return None,
-        }
-    }
-
-    for token_group in SNAPSHOT_PRIORITY_GROUPS {
-        let matches = candidates
-            .iter()
-            .filter(|path| snapshot_matches_priority_group(path.as_path(), token_group))
-            .cloned()
-            .collect::<Vec<_>>();
-        match matches.as_slice() {
-            [single] => return Some(single.clone()),
-            [] => {}
-            _ => return None,
-        }
-    }
-
-    None
-}
-
-fn snapshot_matches_priority_group(path: &Path, token_group: &[&str]) -> bool {
-    let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
-        return false;
-    };
-    let lower = name.to_ascii_lowercase();
-    token_group.iter().any(|token| lower.contains(token))
 }
 
 fn is_usable_quantized_snapshot(path: &Path) -> bool {
@@ -346,6 +281,4 @@ fn validate_quantized_snapshot_alignment(path: &Path) -> Result<(), ()> {
     Ok(())
 }
 
-pub(crate) use self::model_root::{
-    normalize_model_root, resolve_model_root_for_kind, resolve_model_root_with,
-};
+pub(crate) use self::model_root::{normalize_model_root, resolve_model_root_with};

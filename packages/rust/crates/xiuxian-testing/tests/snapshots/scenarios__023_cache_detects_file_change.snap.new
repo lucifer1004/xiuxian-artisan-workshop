@@ -1,0 +1,11 @@
+---
+source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+assertion_line: 332
+expression: result
+---
+{
+  "scenario_id": "023_cache_detects_file_change",
+  "category": "cache_build",
+  "status": "validated",
+  "files": []
+}

@@ -1,0 +1,11 @@
+---
+source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+assertion_line: 332
+expression: result
+---
+{
+  "scenario_id": "056_sem_policy_planned_payload",
+  "category": "semantic_policy",
+  "status": "validated",
+  "files": []
+}

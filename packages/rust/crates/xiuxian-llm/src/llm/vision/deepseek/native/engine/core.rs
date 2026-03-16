@@ -5,11 +5,11 @@ use deepseek_ocr_core::{DecodeParameters, OcrEngine, VisionSettings, render_prom
 use image::DynamicImage;
 use tokenizers::Tokenizer;
 
-use super::super::super::super::preprocess::PreparedVisionImage;
-use super::super::super::util::{internal_error, sanitize_error_string};
-use super::super::cache::build_cache_key;
-use super::super::env::{ocr_prompt, parse_env_u64};
 use crate::llm::error::LlmResult;
+use crate::llm::vision::PreparedVisionImage;
+use crate::llm::vision::deepseek::native::cache::build_cache_key;
+use crate::llm::vision::deepseek::native::env::{ocr_prompt, parse_env_u64};
+use crate::llm::vision::deepseek::util::{internal_error, sanitize_error_string};
 
 use super::cache_io::{CacheLayer, non_empty_markdown, read_cache_entry, store_markdown_in_cache};
 use super::coalescer::{CoalesceAcquire, SharedCoalescedResult, acquire as acquire_coalesced};
@@ -300,9 +300,10 @@ impl DeepseekEngine {
         let stream = stop_signal.as_ref().map(|signal| {
             let signal = Arc::clone(signal);
             let callback = move |_step: usize, _tokens: &[i64]| {
-                if signal.load(std::sync::atomic::Ordering::Acquire) {
-                    panic!("deepseek_ocr_interrupted");
-                }
+                assert!(
+                    !signal.load(std::sync::atomic::Ordering::Acquire),
+                    "deepseek_ocr_interrupted"
+                );
             };
             Box::new(callback) as Box<dyn Fn(usize, &[i64])>
         });
@@ -428,8 +429,7 @@ fn llm_result_from_shared(shared: SharedCoalescedResult) -> LlmResult<Option<Str
         Ok(Some(value)) => Ok(Some(value.to_string())),
         Ok(None) => Ok(None),
         Err(error) => Err(internal_error(format!(
-            "deepseek OCR coalesced inference failed: {}",
-            error
+            "deepseek OCR coalesced inference failed: {error}"
         ))),
     }
 }

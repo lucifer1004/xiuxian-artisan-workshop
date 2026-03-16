@@ -1,4 +1,4 @@
-//! PyO3 bindings for sync engine (incremental file sync).
+//! `PyO3` bindings for sync engine (incremental file sync).
 
 use pyo3::prelude::*;
 use serde_json::to_string;
@@ -114,6 +114,7 @@ impl PySyncEngine {
 /// Compute hash from content using xxhash (fast).
 #[pyfunction]
 #[pyo3(signature = (content))]
+#[must_use]
 pub fn compute_hash(content: &str) -> String {
     SyncEngine::compute_hash(content)
 }

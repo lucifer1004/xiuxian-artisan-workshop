@@ -1,6 +1,5 @@
-use super::super::super::orchestrator::SwarmEngine;
-use super::super::super::{SwarmAgentConfig, SwarmAgentReport};
 use crate::error::QianjiError;
+use crate::swarm::engine::{SwarmAgentConfig, SwarmAgentReport, SwarmEngine};
 use xiuxian_window::SessionWindow;
 
 impl SwarmEngine {

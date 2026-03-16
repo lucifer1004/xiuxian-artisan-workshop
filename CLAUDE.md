@@ -86,14 +86,47 @@ Python Integration → Add Python Test → pytest PASSED
 Build & Verify → Full integration test
 ```
 
-**Key points**:
+## Incremental Evolution Protocol
 
-- Rust tests are ~0.3s, Python `uv run omni ...` is ~30s
-- Always add Rust tests before modifying Rust code
-- Default to direct crate-scoped Rust validation (for example `cargo nextest run -p <crate>`) and expand scope only when required.
-- **For pure Rust packages**: `cargo build` in the crate directory is sufficient
-- **For Rust + Python bindings**: Use `uv sync --reinstall-package xiuxian-core-rs`
-- Pure Python changes: No rebuild needed, just run pytest
+To prevent context bloating and "hallucination spirals," follow the **Fragmented Planning Model**:
+
+1. **[TASK-LOCAL-RESEARCH]**: Each sub-task MUST have its own independent [Research] phase. Never search/read for Task N+1 until Task N is `[DONE]`.
+2. **[PHYSICAL-SYNC-GATE]**: Verify "physical reality" via `ls` or `cat` on the target path before ANY implementation.
+3. **[CHECKPOINT-SIGN-OFF]**: After each atomic code change, run relevant unit tests. Only ask for a "Pulse Check" after tests pass.
+
+## ExecPlans & Holistic Evolution
+
+When writing complex features or refactors, use an ExecPlan (`.agent/PLANS.md`).
+
+### Blueprint Adherence
+
+Tasks under an active strategic blueprint MUST strictly adhere to its architectural mandates.
+
+- **Active Reference**: `[[.data/blueprints/project_anchor_semantic_addressing.md]]` (Project AnchoR: Wendao Semantic Addressing Kernel).
+
+### Holistic Evolution Workflow (Triple-Sync Protocol)
+
+1. **Blueprint Check**: Check if task falls under a strategic blueprint.
+2. **GTD Synchronization**: Update today's GTD (`docs/GTD/DAILY_YYYY_MM_DD.md`).
+3. **ExecPlan Creation**: Create a formal plan (`.cache/codex/execplans/<slug>.md`) referencing the blueprint.
+4. **Implementation**: Execute per the plan.
+
+## Project Structure & Sovereignty
+
+- `packages/rust/crates/*`: **Sovereign Kernel**. Core logic, memory systems, indexing.
+- `packages/rust/bindings/python`: PyO3 bridge (`xiuxian-core-rs`).
+- `packages/python/*`: **Utility Adapters**. Lightweight glue only.
+- `internal_skills/`: **Kernel-Level Siddhis (本命神通)** bound to Rust logic.
+
+## Environment & Directory Layout
+
+Use these directories for all project-local paths. Do not hardcode paths.
+
+| Env Var           | Default | Purpose                        |
+| ----------------- | ------- | ------------------------------ |
+| `PRJ_ROOT`        | (root)  | Project root.                  |
+| `PRJ_DATA_HOME`   | `.data` | Persistent project data.       |
+| `PRJ_RUNTIME_DIR` | `.run`  | Runtime state (logs, sockets). |
 
 ---
 

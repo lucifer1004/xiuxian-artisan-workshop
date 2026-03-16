@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use candle_core::DType;
 use deepseek_ocr_core::{
     DecodeParameters, ModelLoadArgs, OcrEngine, VisionSettings,
-    runtime::{DeviceKind, default_dtype_for_device, prepare_device_and_dtype},
+    runtime::{DeviceKind, prepare_device_and_dtype},
 };
 use deepseek_ocr_dsq::{DsqReader, DsqTensorDType};
 use deepseek_ocr_infer_deepseek::load_model as load_deepseek_model;
@@ -12,17 +12,21 @@ use deepseek_ocr_infer_dots::load_model as load_dots_model;
 use deepseek_ocr_infer_paddleocr::load_model as load_paddleocr_model;
 use tokenizers::Tokenizer;
 
-use super::super::super::dsq_alignment::required_qoffset_alignment;
-use super::super::super::model_kind::VisionModelKind;
-use super::super::super::util::sanitize_error_string;
-use super::super::env::{
+use super::retry::panic_payload_to_string;
+use crate::llm::vision::deepseek::dsq_alignment::required_qoffset_alignment;
+use crate::llm::vision::deepseek::model_kind::VisionModelKind;
+use crate::llm::vision::deepseek::native::env::{
     parse_device_kind, parse_env_bool, parse_env_f32, parse_env_f64, parse_env_string,
     parse_env_u32, parse_env_usize, resolve_snapshot_path, resolve_weights_path,
 };
-use super::retry::panic_payload_to_string;
+use crate::llm::vision::deepseek::util::sanitize_error_string;
 
 use super::core::DeepseekEngine;
 use super::dsq_repair::{DsqRepairResult, repair_dsq_if_needed};
+
+const UPSTREAM_DEFAULT_BASE_SIZE: u32 = 1_024;
+const UPSTREAM_DEFAULT_IMAGE_SIZE: u32 = 640;
+const UPSTREAM_DEFAULT_CROP_MODE: bool = true;
 
 impl DeepseekEngine {
     pub(super) fn load(model_root: &str) -> Result<Self, String> {
@@ -54,10 +58,11 @@ impl DeepseekEngine {
             model_root = %model_root,
             requested_device = ?requested_device,
             model_kind = %model_kind.as_str(),
-            "DeepseekEngine: Starting model load - CRITICAL MEMORY ALLOCATION POINT"
+            "DeepSeek OCR engine load started"
         );
 
         let model_paths = resolve_model_paths(model_root, model_kind)?;
+
         if model_paths.require_quantized && model_paths.snapshot_path.is_none() {
             return Err(
                 "DeepSeek OCR quantized snapshot is required but none was found. \
@@ -66,97 +71,29 @@ or set XIUXIAN_VISION_REQUIRE_QUANTIZED=0 to allow unquantized loading."
                     .to_string(),
             );
         }
-        let (device, maybe_dtype) = prepare_device_with_fallback(requested_device)?;
-        let preferred_dtype = preferred_dtype_for_device(&device);
-        let fallback_dtype = maybe_dtype.unwrap_or_else(|| default_dtype_for_device(&device));
 
-        tracing::debug!(
-            event = "llm.vision.deepseek.engine.dtype_resolved",
-            device = ?device,
-            device_is_metal = device.is_metal(),
-            device_is_cpu = device.is_cpu(),
-            preferred_dtype = ?preferred_dtype,
-            fallback_dtype = ?fallback_dtype,
-            model_root = %model_root,
-            quantized = model_paths.snapshot_path.is_some(),
-            "DeepseekEngine: Device and dtype resolved - CHECK FOR F32 ON METAL"
-        );
-
-        let (model, dtype) = match load_model_with_dtype(
-            model_paths.config_path.as_path(),
-            Some(model_paths.weights_path.as_path()),
-            model_paths.snapshot_path.as_deref(),
-            &device,
-            preferred_dtype,
-            model_paths.model_kind,
-        ) {
-            Ok(model) => {
-                tracing::debug!(
-                    event = "llm.vision.deepseek.engine.load_success",
-                    dtype = ?preferred_dtype,
-                    "DeepseekEngine: Model loaded with preferred dtype"
-                );
-                (model, preferred_dtype)
-            }
-            Err(error) if preferred_dtype != fallback_dtype => {
-                // SAFETY GUARD: Block F16 -> F32 fallback on Metal to prevent memory explosion
-                // F32 on Metal will use ~2x memory compared to F16
-                if device.is_metal()
-                    && preferred_dtype == DType::F16
-                    && fallback_dtype == DType::F32
-                {
-                    let error_str = sanitize_error_string(&error);
-                    tracing::error!(
-                        event = "llm.vision.deepseek.engine.metal_f32_blocked",
-                        preferred = ?preferred_dtype,
-                        fallback = ?fallback_dtype,
-                        error = %error_str,
-                        "DeepSeek OCR: F16 -> F32 fallback on Metal BLOCKED to prevent memory explosion. \
-                         Consider using quantized model or checking Metal driver compatibility."
-                    );
-                    return Err(format!(
-                        "DeepSeek OCR Metal F16 load failed: {}. \
-                         F32 fallback is blocked to prevent memory explosion (F32 uses ~2x memory of F16). \
-                         Solutions: 1) Use quantized .dsq model, 2) Check Metal driver, 3) Force CPU with XIUXIAN_VISION_DEVICE=cpu",
-                        error_str
-                    ));
-                }
-
-                // For non-Metal devices, allow fallback
-                tracing::warn!(
-                    event = "llm.vision.deepseek.engine.dtype_fallback",
-                    preferred = ?preferred_dtype,
-                    fallback = ?fallback_dtype,
-                    device = ?device,
-                    device_is_metal = device.is_metal(),
-                    error = %sanitize_error_string(error),
-                    "DeepSeek OCR preferred dtype load failed; retrying with backend fallback dtype"
-                );
-                let model = load_model_with_dtype(
-                    model_paths.config_path.as_path(),
-                    Some(model_paths.weights_path.as_path()),
-                    model_paths.snapshot_path.as_deref(),
-                    &device,
-                    fallback_dtype,
-                    model_paths.model_kind,
-                )?;
-                tracing::debug!(
-                    event = "llm.vision.deepseek.engine.load_success_fallback",
-                    dtype = ?fallback_dtype,
-                    "DeepseekEngine: Model loaded with fallback dtype"
-                );
-                (model, fallback_dtype)
-            }
-            Err(error) => return Err(sanitize_error_string(error)),
-        };
+        let (device, maybe_dtype) = prepare_device(requested_device)?;
+        let dtype = resolve_model_load_dtype(maybe_dtype, device.is_metal() || device.is_cuda());
 
         tracing::info!(
             event = "llm.vision.deepseek.engine.device_selected",
+            requested_device = ?requested_device,
             device = ?device,
             dtype = ?dtype,
-            preferred_dtype = ?preferred_dtype,
+            model_root = %model_root,
+            quantized = model_paths.snapshot_path.is_some(),
             "DeepSeek OCR engine selected execution device and dtype"
         );
+
+        let model = load_model_with_dtype(
+            model_paths.config_path.as_path(),
+            model_paths.weights_path.as_path(),
+            model_paths.snapshot_path.as_deref(),
+            &device,
+            dtype,
+            model_paths.model_kind,
+        )
+        .map_err(sanitize_error_string)?;
 
         let tokenizer =
             Tokenizer::from_file(model_paths.tokenizer_path).map_err(sanitize_error_string)?;
@@ -205,59 +142,39 @@ fn resolve_model_paths(
     let root = Path::new(model_root);
     let require_quantized = require_quantized_snapshot(model_kind);
     let snapshot_path = resolve_effective_snapshot_path(root, require_quantized)?;
+    let config_path = root.join("config.json");
+    let tokenizer_path = root.join("tokenizer.json");
+    let weights_path = resolve_weights_path(root, model_kind)?;
     Ok(ModelPaths {
         model_kind,
-        config_path: root.join("config.json"),
-        tokenizer_path: root.join("tokenizer.json"),
-        weights_path: resolve_weights_path(root, model_kind)?,
+        config_path,
+        tokenizer_path,
+        weights_path,
         snapshot_path,
         require_quantized,
     })
 }
 
-fn prepare_device_with_fallback(
+fn prepare_device(
     requested_device: DeviceKind,
 ) -> Result<(candle_core::Device, Option<DType>), String> {
     let prepare_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         prepare_device_and_dtype(requested_device, None)
     }));
+
     match prepare_result {
-        Ok(Ok(values)) => Ok(values),
-        Ok(Err(error)) => {
-            if matches!(requested_device, DeviceKind::Cpu) {
-                return Err(sanitize_error_string(error));
-            }
-            tracing::warn!(
-                event = "llm.vision.deepseek.engine.device_fallback",
-                requested = ?requested_device,
-                error = %sanitize_error_string(error),
-                fallback = "cpu",
-                "DeepSeek OCR requested device init failed; falling back to CPU"
-            );
-            prepare_device_and_dtype(DeviceKind::Cpu, None).map_err(sanitize_error_string)
-        }
-        Err(payload) => {
-            if matches!(requested_device, DeviceKind::Cpu) {
-                return Err(sanitize_error_string(format!(
-                    "DeepSeek CPU device initialization panicked: {}",
-                    panic_payload_to_string(&payload)
-                )));
-            }
-            tracing::warn!(
-                event = "llm.vision.deepseek.engine.device_fallback_panic",
-                requested = ?requested_device,
-                panic = %panic_payload_to_string(&payload),
-                fallback = "cpu",
-                "DeepSeek OCR requested device panicked during init; falling back to CPU"
-            );
-            prepare_device_and_dtype(DeviceKind::Cpu, None).map_err(sanitize_error_string)
-        }
+        Ok(result) => result.map_err(sanitize_error_string),
+        Err(payload) => Err(sanitize_error_string(format!(
+            "DeepSeek {:?} device initialization panicked: {}",
+            requested_device,
+            panic_payload_to_string(&payload)
+        ))),
     }
 }
 
 fn load_model_with_dtype(
     config_path: &Path,
-    weights_path: Option<&Path>,
+    weights_path: &Path,
     snapshot_path: Option<&Path>,
     device: &candle_core::Device,
     dtype: DType,
@@ -265,43 +182,25 @@ fn load_model_with_dtype(
 ) -> Result<Box<dyn OcrEngine>, String> {
     let load_start = std::time::Instant::now();
 
-    eprintln!(
-        "[MEMORY TRACE] load_model_with_dtype() START: weights={:?}, snapshot={:?}, dtype={:?}",
-        weights_path.as_ref().map(|p| p.display()),
-        snapshot_path.as_ref().map(|p| p.display()),
-        dtype
-    );
-
     tracing::info!(
         event = "llm.vision.deepseek.engine.load_model_start",
         config_path = %config_path.display(),
-        weights_path = weights_path.map(|p| p.display().to_string()).unwrap_or_else(|| "none".to_string()),
-        snapshot_path = snapshot_path.map(|p| p.display().to_string()).unwrap_or_else(|| "none".to_string()),
+        weights_path = %weights_path.display(),
+        snapshot_path = snapshot_path.map_or_else(|| "none".to_string(), |p| p.display().to_string()),
         device = ?device,
         dtype = ?dtype,
         model_kind = %model_kind.as_str(),
-        "[MEMORY TRACE] Starting model load - this is where major memory allocation happens"
+        "DeepSeek OCR invoking model loader"
     );
 
     let load_args = ModelLoadArgs {
         kind: model_kind.as_core_kind(),
         config_path: Some(config_path),
-        weights_path,
+        weights_path: Some(weights_path),
         snapshot_path,
         device: device.clone(),
         dtype,
     };
-
-    eprintln!(
-        "[MEMORY TRACE] Calling model loader for {:?}...",
-        model_kind.as_str()
-    );
-
-    tracing::info!(
-        event = "llm.vision.deepseek.engine.calling_model_loader",
-        model_kind = %model_kind.as_str(),
-        "[MEMORY TRACE] Calling model-specific loader (load_dots_model/load_deepseek_model)"
-    );
 
     let result = match model_kind {
         VisionModelKind::Deepseek => load_deepseek_model(load_args),
@@ -312,31 +211,19 @@ fn load_model_with_dtype(
     let elapsed = load_start.elapsed();
 
     match &result {
-        Ok(_) => {
-            eprintln!(
-                "[MEMORY TRACE] Model loader SUCCESS in {}ms",
-                elapsed.as_millis()
-            );
-            tracing::info!(
-                event = "llm.vision.deepseek.engine.load_model_success",
-                model_kind = %model_kind.as_str(),
-                elapsed_ms = elapsed.as_millis(),
-                "[MEMORY TRACE] Model loaded successfully - check memory usage now"
-            );
-        }
-        Err(e) => {
-            eprintln!(
-                "[MEMORY TRACE] Model loader FAILED: {}",
-                sanitize_error_string(e.to_string())
-            );
-            tracing::error!(
-                event = "llm.vision.deepseek.engine.load_model_failed",
-                model_kind = %model_kind.as_str(),
-                elapsed_ms = elapsed.as_millis(),
-                error = %sanitize_error_string(e.to_string()),
-                "[MEMORY TRACE] Model load failed"
-            );
-        }
+        Ok(_) => tracing::info!(
+            event = "llm.vision.deepseek.engine.load_model_success",
+            model_kind = %model_kind.as_str(),
+            elapsed_ms = elapsed.as_millis(),
+            "DeepSeek OCR model loader completed"
+        ),
+        Err(e) => tracing::error!(
+            event = "llm.vision.deepseek.engine.load_model_failed",
+            model_kind = %model_kind.as_str(),
+            elapsed_ms = elapsed.as_millis(),
+            error = %sanitize_error_string(e.to_string()),
+            "DeepSeek OCR model loader failed"
+        ),
     }
 
     result.map_err(sanitize_error_string)
@@ -377,12 +264,35 @@ fn decode_parameters_from_env() -> DecodeParameters {
     decode
 }
 
-fn vision_settings_from_env() -> VisionSettings {
+fn default_vision_settings() -> VisionSettings {
     VisionSettings {
-        base_size: parse_env_u32("XIUXIAN_VISION_BASE_SIZE").unwrap_or(448),
-        image_size: parse_env_u32("XIUXIAN_VISION_IMAGE_SIZE").unwrap_or(448),
-        crop_mode: parse_env_bool("XIUXIAN_VISION_CROP_MODE").unwrap_or(true),
+        base_size: UPSTREAM_DEFAULT_BASE_SIZE,
+        image_size: UPSTREAM_DEFAULT_IMAGE_SIZE,
+        crop_mode: UPSTREAM_DEFAULT_CROP_MODE,
     }
+}
+
+fn vision_settings_from_env() -> VisionSettings {
+    let defaults = default_vision_settings();
+    VisionSettings {
+        base_size: parse_env_u32("XIUXIAN_VISION_BASE_SIZE").unwrap_or(defaults.base_size),
+        image_size: parse_env_u32("XIUXIAN_VISION_IMAGE_SIZE").unwrap_or(defaults.image_size),
+        crop_mode: parse_env_bool("XIUXIAN_VISION_CROP_MODE").unwrap_or(defaults.crop_mode),
+    }
+}
+
+pub(crate) fn resolve_vision_settings_with_for_tests(
+    base_size: Option<u32>,
+    image_size: Option<u32>,
+    crop_mode: Option<bool>,
+) -> (u32, u32, bool) {
+    let defaults = default_vision_settings();
+    let resolved = VisionSettings {
+        base_size: base_size.unwrap_or(defaults.base_size),
+        image_size: image_size.unwrap_or(defaults.image_size),
+        crop_mode: crop_mode.unwrap_or(defaults.crop_mode),
+    };
+    (resolved.base_size, resolved.image_size, resolved.crop_mode)
 }
 
 fn max_tiles_from_env() -> usize {
@@ -416,7 +326,6 @@ fn resolve_effective_snapshot_path(
     let Some(snapshot_path) = resolve_snapshot_path(model_root) else {
         return Ok(None);
     };
-
     match validate_snapshot_alignment(snapshot_path.as_path()) {
         Ok(()) => Ok(Some(snapshot_path)),
         Err(error) => {
@@ -442,9 +351,8 @@ fn resolve_effective_snapshot_path(
                 DsqRepairResult::Failed(repair_error) => {
                     if require_quantized {
                         Err(format!(
-                            "DeepSeek OCR snapshot alignment validation failed, and automatic repair also failed: {}. \
-Original error: {}",
-                            repair_error, error
+                            "DeepSeek OCR snapshot alignment validation failed, and automatic repair also failed: {repair_error}. \
+Original error: {error}"
                         ))
                     } else {
                         tracing::warn!(
@@ -512,16 +420,42 @@ pub(crate) fn resolve_model_kind_for_model_root_label_with_for_tests(
     value: Option<&str>,
     model_root: &Path,
 ) -> &'static str {
-    resolve_model_kind_for_model_root_with(parse_model_kind_with(value), model_root).as_str()
+    resolve_model_kind_for_model_root_with(value, model_root).as_str()
 }
 
-fn preferred_dtype_for_device(device: &candle_core::Device) -> DType {
-    if device.is_cpu() {
-        DType::F32
-    } else if device.is_metal() {
-        DType::F16
-    } else {
-        DType::BF16
+fn resolve_model_load_dtype(maybe_dtype: Option<DType>, accelerated_backend: bool) -> DType {
+    maybe_dtype.unwrap_or({
+        if accelerated_backend {
+            DType::F16
+        } else {
+            DType::F32
+        }
+    })
+}
+
+pub(crate) fn resolve_model_load_dtype_label_for_tests(
+    prepared_dtype: Option<&str>,
+    accelerated_backend: bool,
+) -> &'static str {
+    let maybe_dtype = prepared_dtype.map(parse_dtype_for_tests);
+    dtype_label(resolve_model_load_dtype(maybe_dtype, accelerated_backend))
+}
+
+fn parse_dtype_for_tests(value: &str) -> DType {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "f32" => DType::F32,
+        "f16" => DType::F16,
+        "bf16" => DType::BF16,
+        other => panic!("unsupported test dtype: {other}"),
+    }
+}
+
+fn dtype_label(dtype: DType) -> &'static str {
+    match dtype {
+        DType::F32 => "f32",
+        DType::F16 => "f16",
+        DType::BF16 => "bf16",
+        other => panic!("unsupported test dtype label: {other:?}"),
     }
 }
 
@@ -531,15 +465,23 @@ fn resolve_model_kind() -> VisionModelKind {
 }
 
 fn resolve_model_kind_for_model_root(model_root: &str) -> VisionModelKind {
-    let configured = resolve_model_kind();
-    resolve_model_kind_for_model_root_with(configured, Path::new(model_root))
+    let configured = parse_env_string("XIUXIAN_VISION_MODEL_KIND");
+    resolve_model_kind_for_model_root_with(configured.as_deref(), Path::new(model_root))
 }
 
 fn resolve_model_kind_for_model_root_with(
-    configured: VisionModelKind,
+    configured_raw: Option<&str>,
     model_root: &Path,
 ) -> VisionModelKind {
-    if configured == VisionModelKind::Deepseek && model_root_looks_like_dots(model_root) {
+    let configured = parse_model_kind_with(configured_raw);
+    let explicit = configured_raw
+        .and_then(|value| (!value.eq_ignore_ascii_case("auto")).then_some(value))
+        .and_then(VisionModelKind::parse)
+        .is_some();
+    if !explicit
+        && configured == VisionModelKind::Deepseek
+        && model_root_looks_like_dots(model_root)
+    {
         tracing::info!(
             event = "llm.vision.deepseek.engine.model_kind_root_fallback",
             requested = VisionModelKind::Deepseek.as_str(),

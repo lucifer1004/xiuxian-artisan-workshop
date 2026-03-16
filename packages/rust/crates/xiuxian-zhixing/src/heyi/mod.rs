@@ -2,8 +2,11 @@ mod agenda_render;
 mod blockers;
 mod constants;
 mod metadata;
+mod reminder_queue;
 mod reminders;
+mod schedule_time;
 mod tasks;
+mod templating;
 mod types;
 
 pub use constants::ATTR_TIMER_RECIPIENT;

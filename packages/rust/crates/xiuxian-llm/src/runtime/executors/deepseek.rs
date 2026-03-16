@@ -1,4 +1,4 @@
-//! [AIP] DeepSeek OCR Executor Adapter for the Omni ModelBus.
+//! [AIP] `DeepSeek` OCR Executor Adapter for the Omni `ModelBus`.
 //!
 //! This module provides a `DeepseekExecutor` that wraps the existing
 //! `DeepseekEngine` and implements the `ModelExecutor` trait for
@@ -13,24 +13,24 @@ use crate::llm::vision::deepseek::{DeepseekRuntime, prewarm_deepseek_ocr};
 use crate::llm::vision::{PreparedVisionImage, infer_deepseek_ocr_truth, preprocess_image};
 use crate::runtime::executor::{ExecutorId, ModelExecutor, ModelInput, ModelOutput};
 
-/// Estimated memory footprint for DeepSeek OCR models (~6GB weights).
+/// Estimated memory footprint for `DeepSeek` OCR models (~6GB weights).
 const DEEPSEEK_MEMORY_BYTES: u64 = 6_000_000_000;
 
-/// Executor adapter for DeepSeek OCR vision models.
+/// Executor adapter for `DeepSeek` OCR vision models.
 ///
-/// This wraps the existing DeepseekEngine infrastructure and provides
-/// a `ModelExecutor` interface for the Omni ModelBus hot-swap architecture.
+/// This wraps the existing `DeepseekEngine` infrastructure and provides
+/// a `ModelExecutor` interface for the Omni `ModelBus` hot-swap architecture.
 pub struct DeepseekExecutor {
     /// Unique executor identifier.
     id: ExecutorId,
-    /// The DeepSeek runtime configuration.
+    /// The `DeepSeek` runtime configuration.
     runtime: DeepseekRuntime,
     /// Whether the executor has been prewarmed.
     prewarmed: OnceLock<bool>,
 }
 
 impl DeepseekExecutor {
-    /// Creates a new DeepSeek executor for the given model root.
+    /// Creates a new `DeepSeek` executor for the given model root.
     #[must_use]
     pub fn new(model_root: &str) -> Self {
         tracing::debug!(
@@ -48,7 +48,7 @@ impl DeepseekExecutor {
         }
     }
 
-    /// Creates a new DeepSeek executor with explicit ID.
+    /// Creates a new `DeepSeek` executor with explicit ID.
     #[must_use]
     pub fn with_id(id: &str, model_root: &str) -> Self {
         tracing::debug!(
@@ -66,7 +66,7 @@ impl DeepseekExecutor {
         }
     }
 
-    /// Preprocesses raw image bytes into PreparedVisionImage.
+    /// Preprocesses raw image bytes into `PreparedVisionImage`.
     fn prepare_image(image_bytes: Vec<u8>) -> LlmResult<Arc<PreparedVisionImage>> {
         let arc_bytes: Arc<[u8]> = Arc::from(image_bytes.into_boxed_slice());
         preprocess_image(arc_bytes).map(Arc::new)
@@ -86,14 +86,17 @@ impl ModelExecutor for DeepseekExecutor {
     async fn execute(&self, input: ModelInput) -> LlmResult<ModelOutput> {
         match input {
             ModelInput::Vision { prompt: _, images } => {
-                if images.is_empty() {
+                // Get first image, error if empty
+                let first_image = if let Some(img) = images.into_iter().next() {
+                    img
+                } else {
                     return Err(LlmError::Internal {
                         message: "DeepSeek OCR requires at least one image".to_string(),
                     });
-                }
+                };
 
                 // Process the first image (current limitation)
-                let prepared = Self::prepare_image(images.into_iter().next().unwrap())?;
+                let prepared = Self::prepare_image(first_image)?;
 
                 // Run inference using the public async API
                 let result = infer_deepseek_ocr_truth(&self.runtime, &prepared, None).await?;
@@ -134,7 +137,7 @@ impl ModelExecutor for DeepseekExecutor {
         let result = prewarm_deepseek_ocr(&self.runtime);
 
         match &result {
-            Ok(_) => {
+            Ok(()) => {
                 let _ = self.prewarmed.set(true);
                 tracing::debug!(
                     event = "llm.runtime.executors.deepseek.prewarm_success",

@@ -7,17 +7,21 @@ mod index;
 mod models;
 mod narrator;
 mod page_index;
-mod parser;
+pub mod parser;
 pub mod ppr_hybrid;
 mod query;
 mod runtime_config;
-/// GraphMem saliency models, scoring, and Valkey persistence adapters.
+/// `GraphMem` saliency models, scoring, and Valkey persistence adapters.
 pub mod saliency;
 mod stats_cache;
 
 pub use addressing::{
-    Address, ModificationError, ModificationResult, ResolvedNode, adjust_line_range,
-    build_hash_index, build_id_index, replace_byte_range, resolve_node, update_section_content,
+    Address, EnhancedResolvedNode, IdCollision, IndexedNode, MatchType, ModificationError,
+    ModificationResult, PathEntry, PathMatch, RegistryBuildResult, RegistryIndex, ResolveError,
+    ResolveMode, ResolvedNode, SkeletonRerankOptions, SkeletonValidatedHit, StructuralTransaction,
+    StructuralTransactionCoordinator, StructureUpdateSignal, TopologyIndex, adjust_line_range,
+    build_hash_index, build_id_index, replace_byte_range, resolve_node, resolve_with_indices,
+    skeleton_rerank, update_section_content,
 };
 
 pub use agentic::{
@@ -72,6 +76,7 @@ pub use models::{
     QuantumContext, QuantumFusionOptions, QuantumFusionTelemetry, QuantumSemanticSearchRequest,
 };
 pub use narrator::narrate_subgraph;
+pub use parser::blocks::extract_blocks;
 pub use query::{ParsedLinkGraphQuery, parse_search_query};
 pub use runtime_config::{
     LinkGraphIndexRuntimeConfig, resolve_link_graph_index_runtime,

@@ -21,8 +21,10 @@ pub fn resolve_project_root() -> PathBuf {
     }
     std::env::var("XIUXIAN_WENDAO_CONFIG_HOME")
         .ok()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        .map_or_else(
+            || std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            PathBuf::from,
+        )
 }
 
 #[must_use]

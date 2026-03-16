@@ -20,7 +20,7 @@ pub fn valkey_suggested_link_log(
     let cache_runtime = resolve_link_graph_cache_runtime()?;
     let agentic_runtime = resolve_link_graph_agentic_runtime();
     valkey_suggested_link_log_with_valkey(
-        request,
+        &request,
         &cache_runtime.valkey_url,
         Some(&cache_runtime.key_prefix),
         Some(agentic_runtime.suggested_link_max_entries),
@@ -30,7 +30,7 @@ pub fn valkey_suggested_link_log(
 
 /// Append one suggested-link proposal to explicit Valkey endpoint.
 pub fn valkey_suggested_link_log_with_valkey(
-    request: LinkGraphSuggestedLinkRequest,
+    request: &LinkGraphSuggestedLinkRequest,
     valkey_url: &str,
     key_prefix: Option<&str>,
     max_entries: Option<usize>,
@@ -45,7 +45,7 @@ pub fn valkey_suggested_link_log_with_valkey(
         .unwrap_or(DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX);
     let stream_key = suggested_link_stream_key(prefix);
     let bounded_max_entries = max_entries.unwrap_or(2000).max(1);
-    let record = normalize_request(request)?;
+    let record = normalize_request(&request)?;
     let payload = serde_json::to_string(&record)
         .map_err(|err| format!("failed to serialize suggested_link record: {err}"))?;
 
@@ -106,10 +106,10 @@ pub fn valkey_suggested_link_recent_with_valkey(
 
     let mut out: Vec<LinkGraphSuggestedLink> = Vec::new();
     for row in rows {
-        if let Ok(parsed) = serde_json::from_str::<LinkGraphSuggestedLink>(&row) {
-            if parsed.schema == LINK_GRAPH_SUGGESTED_LINK_SCHEMA_VERSION {
-                out.push(normalize_record_for_read(parsed));
-            }
+        if let Ok(parsed) = serde_json::from_str::<LinkGraphSuggestedLink>(&row)
+            && parsed.schema == LINK_GRAPH_SUGGESTED_LINK_SCHEMA_VERSION
+        {
+            out.push(normalize_record_for_read(parsed));
         }
     }
     Ok(out)
@@ -175,10 +175,10 @@ pub fn valkey_suggested_link_recent_latest_with_valkey(
         if !seen.insert(normalized.suggestion_id.clone()) {
             continue;
         }
-        if let Some(expected) = state_filter {
-            if normalized.promotion_state != expected {
-                continue;
-            }
+        if let Some(expected) = state_filter
+            && normalized.promotion_state != expected
+        {
+            continue;
         }
         out.push(normalized);
         if out.len() >= bounded_limit {

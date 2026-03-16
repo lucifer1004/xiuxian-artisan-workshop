@@ -98,6 +98,7 @@ fn build_node(
         &section.section_text,
         section.byte_start,
         section.line_start,
+        &structural_path,
     );
 
     PageIndexNode {
@@ -117,6 +118,8 @@ fn build_node(
             attributes: section.attributes.clone(),
             token_count: count_tokens(&section.section_text),
             is_thinned: false,
+            logbook: section.logbook.clone(),
+            observations: section.observations.clone(),
         },
     }
 }

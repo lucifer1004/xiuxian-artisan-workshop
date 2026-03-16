@@ -11,7 +11,7 @@ use crate::link_graph::runtime_config::settings::{
 
 /// Resolve coactivation runtime config with blueprint-aligned keys.
 ///
-/// Config keys follow the living_brain_v2 blueprint: `link_graph.saliency.coactivation.*`
+/// Config keys follow the `living_brain_v2` blueprint: `link_graph.saliency.coactivation.*`
 pub fn resolve_link_graph_coactivation_runtime() -> LinkGraphCoactivationRuntimeConfig {
     let settings = merged_wendao_settings();
     let mut resolved = LinkGraphCoactivationRuntimeConfig::default();

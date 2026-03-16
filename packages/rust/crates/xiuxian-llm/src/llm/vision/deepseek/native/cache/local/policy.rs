@@ -1,4 +1,4 @@
-use super::super::super::env::parse_env_usize;
+use crate::llm::vision::deepseek::native::env::parse_env_usize;
 
 const CACHE_MAX_ENTRIES_ENV: &str = "XIUXIAN_VISION_OCR_CACHE_LOCAL_MAX_ENTRIES";
 const DEFAULT_MAX_ENTRIES: usize = 1_024;

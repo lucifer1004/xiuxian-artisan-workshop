@@ -156,6 +156,7 @@ impl LinkGraphIndexSnapshot {
             attachments_by_doc: self.attachments_by_doc,
             trees_by_doc: HashMap::new(),
             node_parent_map: HashMap::new(),
+            explicit_id_registry: HashMap::new(),
             alias_to_doc_id: self.alias_to_doc_id,
             outgoing: self.outgoing,
             incoming: self.incoming,

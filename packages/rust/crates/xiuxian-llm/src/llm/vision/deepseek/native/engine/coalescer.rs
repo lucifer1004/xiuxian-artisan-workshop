@@ -38,9 +38,14 @@ pub(in crate::llm::vision::deepseek::native) fn acquire(
     key: &str,
     _stale_timeout: Duration,
 ) -> CoalesceAcquire {
-    let mut guard = COALESCER.lock().unwrap_or_else(|err| err.into_inner());
+    let mut guard = COALESCER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(state) = guard.inflight.get(key) {
-        let mut state_guard = state.0.lock().unwrap_or_else(|err| err.into_inner());
+        let mut state_guard = state
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state_guard.followers += 1;
         CoalesceAcquire::Follower(CoalesceFollower {
             state: Arc::clone(state),
@@ -56,24 +61,29 @@ pub(in crate::llm::vision::deepseek::native) fn acquire(
 
 impl CoalesceLeaderPermit {
     pub(in crate::llm::vision::deepseek::native) fn complete(self, result: SharedCoalescedResult) {
-        let mut guard = COALESCER.lock().unwrap_or_else(|err| err.into_inner());
+        let mut guard = COALESCER
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(state_arc) = guard.inflight.remove(&self.key) {
-            let mut state = state_arc.0.lock().unwrap_or_else(|err| err.into_inner());
+            let mut state = state_arc
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             state.result = Some(result);
             state_arc.1.notify_all();
         }
     }
 
     pub(in crate::llm::vision::deepseek::native) fn follower_count(&self) -> usize {
-        let guard = COALESCER.lock().unwrap_or_else(|err| err.into_inner());
-        guard
-            .inflight
-            .get(&self.key)
-            .map(|s| {
-                let guard = s.0.lock().unwrap_or_else(|err| err.into_inner());
-                guard.followers
-            })
-            .unwrap_or(0)
+        let guard = COALESCER
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.inflight.get(&self.key).map_or(0, |s| {
+            let guard =
+                s.0.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+            guard.followers
+        })
     }
 }
 
@@ -83,7 +93,9 @@ impl CoalesceFollower {
         timeout: Duration,
     ) -> Option<SharedCoalescedResult> {
         let (lock, cvar) = &*self.state;
-        let mut state = lock.lock().unwrap_or_else(|err| err.into_inner());
+        let mut state = lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let started = std::time::Instant::now();
         while state.result.is_none() {
@@ -91,9 +103,11 @@ impl CoalesceFollower {
             if elapsed >= timeout {
                 return None;
             }
+            // SAFETY: We verified elapsed < timeout above, so checked_sub will always succeed
+            let remaining = timeout.saturating_sub(elapsed);
             let (new_state, wait_result) = cvar
-                .wait_timeout(state, timeout - elapsed)
-                .unwrap_or_else(|err| err.into_inner());
+                .wait_timeout(state, remaining)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             state = new_state;
             if wait_result.timed_out() {
                 break;

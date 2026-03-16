@@ -1,8 +1,8 @@
 use deepseek_ocr_core::runtime::DeviceKind;
 
-use super::super::super::config;
-use super::super::super::util::non_empty_env;
 use crate::llm::acceleration::{AccelerationDevice, resolve_acceleration_device};
+use crate::llm::vision::deepseek::config;
+use crate::llm::vision::deepseek::util::non_empty_env;
 
 mod policy;
 mod probe;

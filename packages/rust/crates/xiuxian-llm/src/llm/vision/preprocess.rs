@@ -29,6 +29,7 @@ pub struct PreparedVisionImage {
 
 impl PreparedVisionImage {
     /// Create a dummy prepared image for prewarm/testing.
+    #[must_use]
     pub fn create_dummy(width: u32, height: u32) -> Self {
         let dummy_data: Arc<[u8]> = Arc::from(vec![0u8; 0]);
         Self {

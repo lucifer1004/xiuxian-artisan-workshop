@@ -33,42 +33,38 @@ This standard applies to all Markdown notes intended for LinkGraph indexing:
 4. Headings must be semantically meaningful; avoid placeholder headings like `Misc` or `Temp`.
 5. Use English for technical content in repository-managed docs.
 
-## 3. Frontmatter Contract
+## 3. Frontmatter Contract (The ZK/Org-Roam Protocol)
 
-Use this minimal contract at the top of each note:
+Use this contract at the top of each note. This ensures unique identification consistent with Zettelkasten and Org-Roam principles.
 
 ```yaml
 ---
+id: "YYYYMMDDHHMMSS" # Mandatory Unique ID (ZK/Org-Roam compatible)
 title: "Human-readable title"
 category: "architecture|reference|plans|standards|testing|how-to|explanation"
 tags:
   - "domain-tag-1"
-  - "domain-tag-2"
 saliency_base: 5.0
 decay_rate: 0.05
+metadata:
+  title: "Redundant Title Validation"
 ---
 ```
 
-Guidelines:
+## 4. Atomic Note Structure (Zettelkasten)
 
-- `title` should match the primary retrieval phrase users will search.
-- `tags` should include both domain and action vocabulary (for example `router`, `schema`, `benchmark`).
-- `saliency_base` / `decay_rate` should only be adjusted for curated long-lived notes.
+1. **One Concept, One Note**: Each note should focus on a single atomic concept or decision.
+2. **Permanent vs. Ephemeral**:
+   - **Daily Notes** (`docs/GTD/DAILY_*.md`) serve as the "Roam-style" journal for raw input.
+   - **Permanent Notes** (categorized core docs) are refined, alchemized knowledge.
 
-## 4. Heading and Section Rules
-
-1. `#` is note identity (single use).
-2. `##` defines retrievable sections; each `##` should represent one query intent.
-3. `###` is allowed for local decomposition, but avoid deep nesting beyond `###` unless required.
-4. Do not place fake headings inside fenced code blocks for structure.
-
-## 5. Link Authoring Rules
+## 5. Link and Lineage Rules
 
 Use explicit links to improve graph traversal quality:
 
-- Wiki links: `[[target-note-stem]]` for concept relationships.
-- Markdown links: `[label](target-note.md)` for path-stable references.
-- Anchor links: `[label](target-note.md#section-anchor)` when section-level precision is needed.
+- **Wiki links**: `[[target-note-stem]]` for concept relationships.
+- **Bi-directional Integrity**: Every note MUST reference its "Parent" or a Map of Content (MOC).
+- **Backlink Section**: Notes should include a `## References` or `## Linked Notes` section at the bottom to maintain the physical trace of the knowledge web.
 
 Recommended relation block:
 

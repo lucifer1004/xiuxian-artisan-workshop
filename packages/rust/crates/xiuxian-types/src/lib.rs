@@ -109,9 +109,7 @@ fn camel_case_key(key: &str) -> Option<String> {
     if !key.contains('_') && !key.contains('-') {
         return None;
     }
-    let mut iter = key
-        .split(|c| c == '_' || c == '-')
-        .filter(|part| !part.is_empty());
+    let mut iter = key.split(['_', '-']).filter(|part| !part.is_empty());
     let first = iter.next()?;
     let mut out = first.to_ascii_lowercase();
     for part in iter {
@@ -130,10 +128,7 @@ fn pascal_case_key(key: &str) -> Option<String> {
     }
     let mut out = String::new();
     if key.contains('_') || key.contains('-') {
-        for part in key
-            .split(|c| c == '_' || c == '-')
-            .filter(|part| !part.is_empty())
-        {
+        for part in key.split(['_', '-']).filter(|part| !part.is_empty()) {
             let mut chars = part.chars();
             if let Some(first_char) = chars.next() {
                 out.extend(first_char.to_uppercase());
@@ -152,15 +147,15 @@ fn pascal_case_key(key: &str) -> Option<String> {
 fn metadata_key_variants(key: &str) -> Vec<String> {
     let mut variants = Vec::new();
     variants.push(key.to_string());
-    if let Some(camel) = camel_case_key(key) {
-        if camel != key {
-            variants.push(camel);
-        }
+    if let Some(camel) = camel_case_key(key)
+        && camel != key
+    {
+        variants.push(camel);
     }
-    if let Some(pascal) = pascal_case_key(key) {
-        if !variants.iter().any(|existing| existing == &pascal) {
-            variants.push(pascal);
-        }
+    if let Some(pascal) = pascal_case_key(key)
+        && !variants.iter().any(|existing| existing == &pascal)
+    {
+        variants.push(pascal);
     }
     variants
 }
@@ -199,6 +194,7 @@ fn metadata_get_string_list_variants(metadata: &serde_json::Value, key: &str) ->
     normalize_string_list(values)
 }
 
+#[allow(dead_code)]
 fn metadata_contains_key(metadata: &serde_json::Value, key: &str) -> bool {
     let object = match metadata.as_object() {
         Some(object) => object,
@@ -304,7 +300,8 @@ impl SkillDefinition {
     }
 
     /// Get a specific metadata field as string.
-    /// Tries snake_case, camelCase, and PascalCase variations.
+    /// Tries `snake_case`, camelCase, and `PascalCase` variations.
+    #[must_use]
     pub fn get_meta_string(&self, key: &str) -> Option<String> {
         metadata_get_string(&self.metadata, key)
     }

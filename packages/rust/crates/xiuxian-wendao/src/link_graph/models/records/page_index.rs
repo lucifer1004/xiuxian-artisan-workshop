@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::MarkdownBlock;
+use crate::link_graph::parser::{CodeObservation, LogbookEntry};
 
 /// One hierarchical `PageIndex` node derived from a markdown heading section.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,4 +48,8 @@ pub struct PageIndexMeta {
     pub token_count: usize,
     /// Whether descendant content was folded into this node.
     pub is_thinned: bool,
+    /// Execution log entries from :LOGBOOK: drawer (Blueprint v2.4).
+    pub logbook: Vec<LogbookEntry>,
+    /// Code observations from :OBSERVE: property drawer (Blueprint v2.7).
+    pub observations: Vec<CodeObservation>,
 }

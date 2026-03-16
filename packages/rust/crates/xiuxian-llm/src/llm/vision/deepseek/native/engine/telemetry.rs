@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use super::super::super::super::preprocess::PreparedVisionImage;
+use crate::llm::vision::PreparedVisionImage;
 
 pub(super) struct InferenceTelemetry {
     pub(super) total_started: Instant,

@@ -2,6 +2,16 @@
 
 This repository uses ExecPlans for work that is large, uncertain, or cross cutting.
 
+## Blueprint Adherence (Mandatory)
+
+If a task falls under the scope of an existing strategic blueprint (located in `.data/blueprints/`), the ExecPlan MUST:
+
+1.  **Reference the Blueprint**: Explicitly link to the relevant blueprint file.
+2.  **Strict Adherence**: The plan's architectural decisions, data models, and protocols must be derived directly from the blueprint.
+3.  **Audit Alignment**: The `Reflection and Quality Audit` section must explicitly state how the implementation complies with the blueprint's mandates.
+
+Deviations from a blueprint are only allowed if explicitly requested by the Sovereign or if the blueprint itself is updated first.
+
 ## Plan First Gate (Mandatory)
 
 Before any file reads, searches, or command execution (including tests), you must present a plan.

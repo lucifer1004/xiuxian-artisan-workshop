@@ -11,4 +11,6 @@ pub mod policy;
 pub mod preflight;
 /// Graph topological tracking and scheduling state.
 pub mod state;
-pub use self::core::QianjiScheduler;
+pub use self::core::{QianjiScheduler, SchedulerRuntimeServices};
+pub use self::identity::SchedulerAgentIdentity;
+pub use self::policy::{RoleAvailabilityRegistry, SchedulerExecutionPolicy};

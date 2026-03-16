@@ -1,6 +1,8 @@
-use super::super::super::super::util::sanitize_error_string;
-use super::super::super::env::{cache_key_prefix, cache_valkey_url, parse_env_u64};
 use super::ops::ValkeyOcrCache;
+use crate::llm::vision::deepseek::native::env::{
+    cache_key_prefix, cache_valkey_url, parse_env_u64,
+};
+use crate::llm::vision::deepseek::util::sanitize_error_string;
 use std::sync::Arc;
 use tracing::warn;
 

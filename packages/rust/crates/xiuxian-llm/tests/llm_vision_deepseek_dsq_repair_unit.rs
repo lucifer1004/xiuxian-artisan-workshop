@@ -1,3 +1,5 @@
+//! `DeepSeek` OCR DSQ repair unit tests.
+
 use std::fs::File;
 use std::io::Write;
 use tempfile::tempdir;

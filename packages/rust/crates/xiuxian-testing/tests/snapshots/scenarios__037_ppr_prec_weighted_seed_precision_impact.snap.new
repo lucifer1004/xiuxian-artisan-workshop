@@ -1,0 +1,11 @@
+---
+source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+assertion_line: 332
+expression: result
+---
+{
+  "scenario_id": "037_ppr_prec_weighted_seed_precision_impact",
+  "category": "ppr_precision",
+  "status": "no_input",
+  "files": []
+}

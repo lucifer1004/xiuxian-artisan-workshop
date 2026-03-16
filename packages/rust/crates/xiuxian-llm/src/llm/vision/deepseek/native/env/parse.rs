@@ -1,5 +1,5 @@
-use super::super::super::config;
-use super::super::super::util::non_empty_env;
+use crate::llm::vision::deepseek::config;
+use crate::llm::vision::deepseek::util::non_empty_env;
 
 pub(in crate::llm::vision::deepseek::native) fn parse_env_u32(key: &str) -> Option<u32> {
     non_empty_env(key)

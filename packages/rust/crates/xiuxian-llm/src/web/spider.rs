@@ -97,10 +97,10 @@ impl SpiderBridge {
 
         let mut metadata = HashMap::new();
         metadata.insert("engine".to_string(), "spider".to_string());
-        if let Some(meta) = page.metadata.as_deref() {
-            if let Some(description) = meta.description.as_deref() {
-                metadata.insert("page.description".to_string(), description.to_string());
-            }
+        if let Some(meta) = page.metadata.as_deref()
+            && let Some(description) = meta.description.as_deref()
+        {
+            metadata.insert("page.description".to_string(), description.to_string());
         }
 
         Ok(WebContext {

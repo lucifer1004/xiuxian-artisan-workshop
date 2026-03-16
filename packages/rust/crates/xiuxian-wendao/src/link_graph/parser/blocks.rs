@@ -19,9 +19,9 @@
 //! - Item 2
 //! "#;
 //!
-//! let blocks = extract_blocks(section_text, 0, 1);
+//! let blocks = `extract_blocks(section_text`, 0, 1);
 //! // blocks[0] = Paragraph
-//! // blocks[1] = CodeFence { language: "rust" }
+//! // blocks[1] = `CodeFence` { language: "rust" }
 //! // blocks[2] = List { ordered: false }
 //! ```
 
@@ -35,6 +35,7 @@ use comrak::{Arena, Options, nodes::AstNode, nodes::NodeValue, parse_document};
 /// * `section_text` - The raw Markdown content of a section
 /// * `section_byte_offset` - Byte offset of the section within the document
 /// * `section_line_offset` - Starting line number of the section (1-based)
+/// * `structural_path` - Path from document root to this section
 ///
 /// # Returns
 ///
@@ -45,6 +46,7 @@ pub fn extract_blocks(
     section_text: &str,
     section_byte_offset: usize,
     section_line_offset: usize,
+    structural_path: &[String],
 ) -> Vec<MarkdownBlock> {
     let arena = Arena::new();
     let root = parse_document(&arena, section_text, &Options::default());
@@ -59,6 +61,7 @@ pub fn extract_blocks(
             section_byte_offset,
             section_line_offset,
             &mut block_indices,
+            structural_path,
         ) {
             blocks.push(block);
         }
@@ -69,7 +72,7 @@ pub fn extract_blocks(
 
 /// Counter for generating unique block indices by kind.
 #[derive(Default)]
-struct BlockIndexCounter {
+pub(super) struct BlockIndexCounter {
     para: usize,
     code: usize,
     ulist: usize,
@@ -127,22 +130,23 @@ impl BlockIndexCounter {
     }
 }
 
-/// Convert a comrak AST node to a MarkdownBlock.
-fn node_to_block(
+/// Convert a comrak AST node to a `MarkdownBlock`.
+pub(super) fn node_to_block(
     node: &AstNode<'_>,
     section_text: &str,
     section_byte_offset: usize,
     section_line_offset: usize,
     block_indices: &mut BlockIndexCounter,
+    structural_path: &[String],
 ) -> Option<MarkdownBlock> {
     let ast = node.data.borrow();
     let sourcepos = ast.sourcepos;
 
     // Calculate byte range from source position
-    let start_line = sourcepos.start.line.max(0) as usize;
-    let start_col = sourcepos.start.column.max(0) as usize;
-    let end_line = sourcepos.end.line.max(0) as usize;
-    let end_col = sourcepos.end.column.max(0) as usize;
+    let start_line = sourcepos.start.line.max(0);
+    let start_col = sourcepos.start.column.max(0);
+    let end_line = sourcepos.end.line.max(0);
+    let end_col = sourcepos.end.column.max(0);
 
     // Convert line/column to byte offsets within section_text
     let byte_range =
@@ -230,10 +234,6 @@ fn node_to_block(
         | NodeValue::Subtext => {
             return None;
         }
-        // Catch-all for any future NodeValue additions
-        _ => {
-            return None;
-        }
     };
 
     let index = block_indices.next(&kind);
@@ -246,6 +246,7 @@ fn node_to_block(
         ),
         doc_line_range,
         content,
+        structural_path.to_vec(),
     );
 
     Some(block)
@@ -254,7 +255,7 @@ fn node_to_block(
 /// Convert line/column positions to byte range within text.
 ///
 /// Comrak uses 1-based line and column numbers.
-fn line_col_to_byte_range(
+pub(super) fn line_col_to_byte_range(
     text: &str,
     start_line: usize,
     start_col: usize,
@@ -272,8 +273,7 @@ fn line_col_to_byte_range(
                 + text[byte_idx..]
                     .char_indices()
                     .nth(col_offset)
-                    .map(|(i, _)| i)
-                    .unwrap_or(0);
+                    .map_or(0, |(i, _)| i);
 
             // Now find end byte
             if start_line == end_line {
@@ -283,8 +283,7 @@ fn line_col_to_byte_range(
                     + text[start_byte..]
                         .char_indices()
                         .nth(end_col_offset)
-                        .map(|(i, _)| i)
-                        .unwrap_or(text[start_byte..].len());
+                        .map_or(text[start_byte..].len(), |(i, _)| i);
                 return Some((start_byte, end_byte));
             }
 
@@ -309,8 +308,7 @@ fn line_col_to_byte_range(
             let col_byte = remaining
                 .char_indices()
                 .nth(end_col_offset)
-                .map(|(i, _)| i)
-                .unwrap_or(remaining.len());
+                .map_or(remaining.len(), |(i, _)| i);
             end_byte += col_byte;
 
             return Some((start_byte, end_byte));
@@ -331,147 +329,5 @@ fn line_col_to_byte_range(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_extract_blocks_paragraph() {
-        let text = "Hello, world!\n\nSecond paragraph.";
-        let blocks = extract_blocks(text, 0, 1);
-
-        assert_eq!(blocks.len(), 2);
-        assert_eq!(blocks[0].kind, MarkdownBlockKind::Paragraph);
-        assert_eq!(blocks[1].kind, MarkdownBlockKind::Paragraph);
-    }
-
-    #[test]
-    fn test_extract_blocks_code_fence() {
-        let text = r#"```rust
-fn main() {}
-```
-"#;
-        let blocks = extract_blocks(text, 0, 1);
-
-        assert_eq!(blocks.len(), 1);
-        assert!(matches!(
-            &blocks[0].kind,
-            MarkdownBlockKind::CodeFence { language } if language == "rust"
-        ));
-    }
-
-    #[test]
-    fn test_extract_blocks_list() {
-        let text = "- Item 1\n- Item 2\n- Item 3";
-        let blocks = extract_blocks(text, 0, 1);
-
-        assert_eq!(blocks.len(), 1);
-        assert!(matches!(
-            &blocks[0].kind,
-            MarkdownBlockKind::List { ordered: false }
-        ));
-    }
-
-    #[test]
-    fn test_extract_blocks_ordered_list() {
-        let text = "1. First\n2. Second\n3. Third";
-        let blocks = extract_blocks(text, 0, 1);
-
-        assert_eq!(blocks.len(), 1);
-        assert!(matches!(
-            &blocks[0].kind,
-            MarkdownBlockKind::List { ordered: true }
-        ));
-    }
-
-    #[test]
-    fn test_extract_blocks_blockquote() {
-        let text = "> Quoted text\n> More quote";
-        let blocks = extract_blocks(text, 0, 1);
-
-        assert_eq!(blocks.len(), 1);
-        assert_eq!(blocks[0].kind, MarkdownBlockKind::BlockQuote);
-    }
-
-    #[test]
-    fn test_extract_blocks_mixed() {
-        let text = r#"Introduction paragraph.
-
-```python
-print("hello")
-```
-
-- List item 1
-- List item 2
-
-Conclusion paragraph.
-"#;
-        let blocks = extract_blocks(text, 0, 1);
-
-        assert_eq!(blocks.len(), 4);
-        assert_eq!(blocks[0].kind, MarkdownBlockKind::Paragraph);
-        assert!(
-            matches!(&blocks[1].kind, MarkdownBlockKind::CodeFence { language } if language == "python")
-        );
-        assert!(matches!(
-            &blocks[2].kind,
-            MarkdownBlockKind::List { ordered: false }
-        ));
-        assert_eq!(blocks[3].kind, MarkdownBlockKind::Paragraph);
-    }
-
-    #[test]
-    fn test_extract_blocks_byte_range() {
-        let text = "First para.\n\nSecond para.";
-        let blocks = extract_blocks(text, 0, 1);
-
-        assert_eq!(blocks.len(), 2);
-        // First paragraph: "First para."
-        assert_eq!(blocks[0].byte_range.1 - blocks[0].byte_range.0, 11);
-        // Second paragraph: "Second para."
-        assert_eq!(blocks[1].byte_range.1 - blocks[1].byte_range.0, 12);
-    }
-
-    #[test]
-    fn test_extract_blocks_line_range() {
-        let text = "Line 1\n\nLine 3";
-        let blocks = extract_blocks(text, 0, 1);
-
-        assert_eq!(blocks.len(), 2);
-        // First block on line 1
-        assert_eq!(blocks[0].line_range.0, 1);
-        // Second block on line 3
-        assert_eq!(blocks[1].line_range.0, 3);
-    }
-
-    #[test]
-    fn test_extract_blocks_with_offset() {
-        let text = "Content";
-        let blocks = extract_blocks(text, 100, 10);
-
-        assert_eq!(blocks.len(), 1);
-        // Byte range should be offset by 100
-        assert_eq!(blocks[0].byte_range.0, 100);
-        // Line range should be offset by 9 (10-1, since content starts at line 1 relative)
-        assert_eq!(blocks[0].line_range.0, 10);
-    }
-
-    #[test]
-    fn test_line_col_to_byte_range_simple() {
-        let text = "Hello\nWorld";
-        let range = line_col_to_byte_range(text, 1, 1, 1, 5);
-        assert_eq!(range, Some((0, 5)));
-
-        let range = line_col_to_byte_range(text, 2, 1, 2, 5);
-        assert_eq!(range, Some((6, 11)));
-    }
-
-    #[test]
-    fn test_line_col_to_byte_range_multiline() {
-        let text = "Line 1\nLine 2\nLine 3";
-        let range = line_col_to_byte_range(text, 1, 1, 3, 6);
-        assert!(range.is_some());
-        let (start, end) = range.unwrap();
-        assert_eq!(start, 0);
-        assert_eq!(end, text.len());
-    }
-}
+#[path = "../../../tests/unit/link_graph/parser/blocks.rs"]
+mod tests;

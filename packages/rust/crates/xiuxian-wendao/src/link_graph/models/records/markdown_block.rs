@@ -6,7 +6,7 @@
 //! ## Block Types
 //!
 //! - [`MarkdownBlock`] - Represents a single block element with byte ranges and content
-//! - [`MarkdownBlockKind`] - The type variant of a block (Paragraph, CodeFence, List, etc.)
+//! - [`MarkdownBlockKind`] - The type variant of a block (Paragraph, `CodeFence`, List, etc.)
 //!
 //! ## Usage
 //!
@@ -73,6 +73,13 @@ pub struct MarkdownBlock {
     ///
     /// When present, this takes precedence over the generated `block_id`.
     pub id: Option<String>,
+
+    /// Structural path from document root to this block's parent section.
+    ///
+    /// Used for path-aware embedding and skeleton re-ranking.
+    /// Enables semantic clustering by section context.
+    /// Example: `["Architecture", "Storage", "Configuration"]`
+    pub structural_path: Vec<String>,
 }
 
 /// The type variant of a Markdown block.
@@ -144,7 +151,7 @@ impl std::fmt::Display for MarkdownBlockKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Paragraph => write!(f, "Paragraph"),
-            Self::CodeFence { language } => write!(f, "CodeFence({})", language),
+            Self::CodeFence { language } => write!(f, "CodeFence({language})"),
             Self::List { ordered } => {
                 if *ordered {
                     write!(f, "OrderedList")
@@ -170,6 +177,7 @@ impl MarkdownBlock {
     /// * `byte_range` - Byte offsets within the section
     /// * `line_range` - Line numbers within the document
     /// * `content` - The raw block content
+    /// * `structural_path` - Path from document root to parent section
     #[must_use]
     pub fn new(
         kind: MarkdownBlockKind,
@@ -177,6 +185,7 @@ impl MarkdownBlock {
         byte_range: (usize, usize),
         line_range: (usize, usize),
         content: &str,
+        structural_path: Vec<String>,
     ) -> Self {
         let block_id = format!("block-{}-{}", kind.id_prefix(), index);
         let content_hash = compute_block_hash(content);
@@ -189,6 +198,7 @@ impl MarkdownBlock {
             content_hash,
             content: Arc::from(content),
             id: None,
+            structural_path,
         }
     }
 
@@ -203,6 +213,7 @@ impl MarkdownBlock {
     /// Check if this block matches a given kind specifier.
     ///
     /// Used for block path resolution like `/Section/Paragraph[2]`.
+    #[must_use]
     pub fn matches_kind(&self, specifier: &BlockKindSpecifier) -> bool {
         match specifier {
             BlockKindSpecifier::Paragraph => self.kind == MarkdownBlockKind::Paragraph,
@@ -392,7 +403,7 @@ impl BlockAddress {
 }
 
 /// Compute Blake3 hash for block content (truncated to 16 hex chars).
-fn compute_block_hash(content: &str) -> String {
+pub fn compute_block_hash(content: &str) -> String {
     use blake3::Hasher;
     let mut hasher = Hasher::new();
     hasher.update(content.as_bytes());
@@ -401,153 +412,5 @@ fn compute_block_hash(content: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_block_kind_id_prefix() {
-        assert_eq!(MarkdownBlockKind::Paragraph.id_prefix(), "para");
-        assert_eq!(
-            MarkdownBlockKind::CodeFence {
-                language: "rust".into()
-            }
-            .id_prefix(),
-            "code"
-        );
-        assert_eq!(
-            MarkdownBlockKind::List { ordered: true }.id_prefix(),
-            "olist"
-        );
-        assert_eq!(
-            MarkdownBlockKind::List { ordered: false }.id_prefix(),
-            "ulist"
-        );
-        assert_eq!(MarkdownBlockKind::BlockQuote.id_prefix(), "quote");
-        assert_eq!(MarkdownBlockKind::ThematicBreak.id_prefix(), "hr");
-        assert_eq!(MarkdownBlockKind::Table.id_prefix(), "table");
-        assert_eq!(MarkdownBlockKind::HtmlBlock.id_prefix(), "html");
-    }
-
-    #[test]
-    fn test_block_new() {
-        let block = MarkdownBlock::new(
-            MarkdownBlockKind::Paragraph,
-            0,
-            (0, 20),
-            (1, 2),
-            "Hello, world!",
-        );
-
-        assert_eq!(block.block_id, "block-para-0");
-        assert_eq!(block.byte_range, (0, 20));
-        assert_eq!(block.line_range, (1, 2));
-        assert!(block.id.is_none());
-    }
-
-    #[test]
-    fn test_block_with_explicit_id() {
-        let block = MarkdownBlock::new(
-            MarkdownBlockKind::CodeFence {
-                language: "rust".into(),
-            },
-            0,
-            (0, 100),
-            (1, 10),
-            "fn main() {}",
-        )
-        .with_explicit_id("my-snippet".to_string());
-
-        assert_eq!(block.block_id, "my-snippet");
-        assert_eq!(block.id, Some("my-snippet".to_string()));
-    }
-
-    #[test]
-    fn test_block_kind_specifier_parse() {
-        assert_eq!(
-            BlockKindSpecifier::parse("Paragraph"),
-            Some(BlockKindSpecifier::Paragraph)
-        );
-        assert_eq!(
-            BlockKindSpecifier::parse("para"),
-            Some(BlockKindSpecifier::Paragraph)
-        );
-        assert_eq!(
-            BlockKindSpecifier::parse("CodeFence"),
-            Some(BlockKindSpecifier::CodeFence)
-        );
-        assert_eq!(
-            BlockKindSpecifier::parse("code"),
-            Some(BlockKindSpecifier::CodeFence)
-        );
-        assert_eq!(
-            BlockKindSpecifier::parse("List"),
-            Some(BlockKindSpecifier::List)
-        );
-        assert_eq!(BlockKindSpecifier::parse("unknown"), None);
-    }
-
-    #[test]
-    fn test_block_address_parse() {
-        let addr = BlockAddress::parse("Paragraph[2]");
-        assert!(addr.is_some());
-        let addr = addr.unwrap();
-        assert_eq!(addr.kind, BlockKindSpecifier::Paragraph);
-        assert_eq!(addr.index, 2);
-        assert!(addr.sub_index.is_none());
-
-        let addr = BlockAddress::parse("CodeFence[0]");
-        assert!(addr.is_some());
-        let addr = addr.unwrap();
-        assert_eq!(addr.kind, BlockKindSpecifier::CodeFence);
-        assert_eq!(addr.index, 0);
-    }
-
-    #[test]
-    fn test_block_address_parse_with_sub_index() {
-        let addr = BlockAddress::parse("List[1]/Item[3]");
-        assert!(addr.is_some());
-        let addr = addr.unwrap();
-        assert_eq!(addr.kind, BlockKindSpecifier::List);
-        assert_eq!(addr.index, 1);
-        assert_eq!(addr.sub_index, Some(3));
-    }
-
-    #[test]
-    fn test_block_address_to_path_component() {
-        let addr = BlockAddress::new(BlockKindSpecifier::Paragraph, 2);
-        assert_eq!(addr.to_path_component(), "Paragraph[2]");
-
-        let addr = BlockAddress::list_item(1, 3);
-        assert_eq!(addr.to_path_component(), "List[1]/Item[3]");
-    }
-
-    #[test]
-    fn test_block_matches_kind() {
-        let para = MarkdownBlock::new(MarkdownBlockKind::Paragraph, 0, (0, 10), (1, 1), "text");
-        assert!(para.matches_kind(&BlockKindSpecifier::Paragraph));
-        assert!(!para.matches_kind(&BlockKindSpecifier::CodeFence));
-
-        let code = MarkdownBlock::new(
-            MarkdownBlockKind::CodeFence {
-                language: "rust".into(),
-            },
-            0,
-            (0, 10),
-            (1, 1),
-            "fn main() {}",
-        );
-        assert!(code.matches_kind(&BlockKindSpecifier::CodeFence));
-        assert!(!code.matches_kind(&BlockKindSpecifier::Paragraph));
-    }
-
-    #[test]
-    fn test_compute_block_hash() {
-        let hash1 = compute_block_hash("test content");
-        let hash2 = compute_block_hash("test content");
-        assert_eq!(hash1, hash2);
-        assert_eq!(hash1.len(), 16);
-
-        let hash3 = compute_block_hash("different content");
-        assert_ne!(hash1, hash3);
-    }
-}
+#[path = "../../../../tests/unit/link_graph/models/records/markdown_block.rs"]
+mod tests;

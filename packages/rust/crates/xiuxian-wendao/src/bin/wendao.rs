@@ -20,7 +20,15 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     init_from_cli("xiuxian_wendao", &cli.logging).map_err(|err| anyhow!(err))?;
 
-    if let Some(conf) = &cli.config_file {
+    let mut config_path = cli.config_file.clone();
+    if config_path.is_none() {
+        let local_toml = std::path::Path::new("wendao.toml");
+        if local_toml.exists() {
+            config_path = Some(local_toml.to_path_buf());
+        }
+    }
+
+    if let Some(conf) = &config_path {
         if let Some(path_str) = conf.to_str() {
             set_link_graph_wendao_config_override(path_str);
         }
@@ -29,6 +37,7 @@ fn main() -> Result<()> {
     let needs_index = matches!(
         &cli.command,
         Command::Search(_)
+            | Command::Audit(_)
             | Command::Attachments(_)
             | Command::Stats
             | Command::Toc(_)
@@ -36,6 +45,7 @@ fn main() -> Result<()> {
             | Command::Related(_)
             | Command::Metadata(_)
             | Command::Resolve(_)
+            | Command::Fix(_)
             | Command::Agentic {
                 command: AgenticCommand::Plan { .. } | AgenticCommand::Run { .. },
             }

@@ -18,7 +18,7 @@ pub fn valkey_suggested_link_decide(
     let cache_runtime = resolve_link_graph_cache_runtime()?;
     let agentic_runtime = resolve_link_graph_agentic_runtime();
     valkey_suggested_link_decide_with_valkey(
-        request,
+        &request,
         &cache_runtime.valkey_url,
         Some(&cache_runtime.key_prefix),
         Some(agentic_runtime.suggested_link_max_entries),
@@ -28,7 +28,7 @@ pub fn valkey_suggested_link_decide(
 
 /// Apply one suggested-link decision transition on explicit Valkey endpoint.
 pub fn valkey_suggested_link_decide_with_valkey(
-    request: LinkGraphSuggestedLinkDecisionRequest,
+    request: &LinkGraphSuggestedLinkDecisionRequest,
     valkey_url: &str,
     key_prefix: Option<&str>,
     max_entries: Option<usize>,
@@ -43,7 +43,7 @@ pub fn valkey_suggested_link_decide_with_valkey(
         .unwrap_or(DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX);
     let bounded_max_entries = max_entries.unwrap_or(2000).max(1);
     let (suggestion_id, target_state, decided_by, reason, decided_at_unix) =
-        normalize_decision_request(request)?;
+        normalize_decision_request(&request)?;
 
     let stream_key = suggested_link_stream_key(prefix);
     let decision_stream_key = suggested_link_decision_stream_key(prefix);

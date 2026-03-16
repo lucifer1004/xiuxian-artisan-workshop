@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use super::super::super::config;
-use super::super::super::model_kind::VisionModelKind;
-use super::super::super::util::{non_empty_env, sanitize_error_string};
+use crate::llm::vision::deepseek::config;
+use crate::llm::vision::deepseek::model_kind::VisionModelKind;
+use crate::llm::vision::deepseek::util::{non_empty_env, sanitize_error_string};
 
 pub(in crate::llm::vision::deepseek::native) fn resolve_weights_path(
     model_root: &Path,
@@ -66,14 +66,28 @@ fn resolve_weights_path_with(
 pub(in crate::llm::vision::deepseek::native) fn resolve_snapshot_path(
     model_root: &Path,
 ) -> Option<PathBuf> {
-    if let Some(explicit) = non_empty_env("XIUXIAN_VISION_SNAPSHOT_PATH")
+    let explicit_snapshot_path = non_empty_env("XIUXIAN_VISION_SNAPSHOT_PATH")
         .or_else(config::snapshot_path)
-        .map(PathBuf::from)
-    {
-        return Some(explicit);
+        .map(PathBuf::from);
+    resolve_snapshot_path_with(model_root, explicit_snapshot_path.as_deref())
+}
+
+pub(in crate::llm::vision::deepseek) fn resolve_snapshot_path_with(
+    model_root: &Path,
+    override_path: Option<&Path>,
+) -> Option<PathBuf> {
+    if let Some(explicit) = override_path {
+        return Some(explicit.to_path_buf());
     }
 
     auto_detect_snapshot_path(model_root)
+}
+
+pub(in crate::llm::vision::deepseek) fn resolve_snapshot_path_with_for_tests(
+    model_root: &Path,
+    override_path: Option<&Path>,
+) -> Option<PathBuf> {
+    resolve_snapshot_path_with(model_root, override_path)
 }
 
 pub(in crate::llm::vision::deepseek::native) fn ocr_prompt() -> Option<String> {

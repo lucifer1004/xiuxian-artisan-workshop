@@ -1,4 +1,4 @@
-//! [AIP] Omni ModelBus - Global Model Registry and Resource Reclamation.
+//! [AIP] Omni `ModelBus` - Global Model Registry and Resource Reclamation.
 //!
 //! This module implements the central registry for all model executors,
 //! supporting hot-swap, memory pressure management. and prewarm capabilities.
@@ -26,6 +26,7 @@ pub struct ModelBus {
 
 impl ModelBus {
     /// Creates a new model bus.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             slots: Mutex::new(HashMap::new()),
@@ -63,7 +64,7 @@ impl ModelBus {
     /// This establishes mmap without loading pages.
     pub fn hibernate(&self, id: &ModelSlotId) -> LlmResult<SlotState> {
         let slot = self.get(id).ok_or_else(|| LlmError::Internal {
-            message: format!("model slot not found: {}", id),
+            message: format!("model slot not found: {id}"),
         })?;
         slot.hibernate()
     }
@@ -78,20 +79,18 @@ impl ModelBus {
     /// it returns immediately without creating a new executor (preventing memory leaks).
     pub fn activate(&self, id: &ModelSlotId) -> LlmResult<SlotState> {
         let slot = self.get(id).ok_or_else(|| LlmError::Internal {
-            message: format!("model slot not found: {}", id),
+            message: format!("model slot not found: {id}"),
         })?;
 
         // CRITICAL: Check if already active to prevent memory explosion
         // from repeated executor creation
-        if slot.state() == SlotState::Active {
-            if slot.executor().is_some() {
-                tracing::debug!(
-                    event = "llm.runtime.bus.activate_skip",
-                    slot_id = %id,
-                    "ModelBus: Slot already active with executor, skipping creation"
-                );
-                return Ok(SlotState::Active);
-            }
+        if slot.state() == SlotState::Active && slot.executor().is_some() {
+            tracing::debug!(
+                event = "llm.runtime.bus.activate_skip",
+                slot_id = %id,
+                "ModelBus: Slot already active with executor, skipping creation"
+            );
+            return Ok(SlotState::Active);
         }
 
         tracing::debug!(
@@ -211,7 +210,7 @@ impl ModelBus {
     /// This auto-activates the slot if needed (Vacant -> Hibernated -> Active).
     pub async fn execute(&self, id: &ModelSlotId, input: ModelInput) -> LlmResult<ModelOutput> {
         let slot = self.get(id).ok_or_else(|| LlmError::Internal {
-            message: format!("model slot not found: {}", id),
+            message: format!("model slot not found: {id}"),
         })?;
 
         match slot.state() {
@@ -238,7 +237,7 @@ impl ModelBus {
     /// Returns immediately, prewarming happens asynchronously.
     pub fn prewarm_slot_background(&self, id: &ModelSlotId) -> LlmResult<()> {
         let slot = self.get(id).ok_or_else(|| LlmError::Internal {
-            message: format!("model slot not found: {}", id),
+            message: format!("model slot not found: {id}"),
         })?;
 
         // Transition to Hibernated if Vacant

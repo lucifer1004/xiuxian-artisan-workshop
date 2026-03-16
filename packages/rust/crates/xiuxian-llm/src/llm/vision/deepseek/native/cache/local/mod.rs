@@ -40,7 +40,7 @@ pub fn local_get_shared(key: &str) -> Option<Arc<str>> {
 }
 
 pub fn local_set(key: &str, markdown: &str) {
-    DeepseekLocalCache::set(key, markdown)
+    DeepseekLocalCache::set(key, markdown);
 }
 
 pub fn local_clear_for_tests() {

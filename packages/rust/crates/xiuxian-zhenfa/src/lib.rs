@@ -7,6 +7,7 @@ mod native;
 mod router;
 mod transmuter;
 mod xml_lite;
+mod xml_transform;
 
 pub use async_trait;
 pub use schemars;
@@ -17,7 +18,8 @@ pub use client::{ZhenfaClient, ZhenfaClientError, ZhenfaClientSuccess};
 pub use contracts::{
     INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE, INVALID_REQUEST_CODE, JSONRPC_VERSION,
     JsonRpcErrorObject, JsonRpcId, JsonRpcMeta, JsonRpcRequest, JsonRpcResponse,
-    METHOD_NOT_FOUND_CODE, PARSE_ERROR_CODE,
+    METHOD_NOT_FOUND_CODE, PARSE_ERROR_CODE, ZhenfaContractError, resolve_contract_path,
+    validate_contract, validate_contract_reference,
 };
 pub use gateway::{HealthResponse, ZhenfaGatewayBuildError, ZhenfaGatewayBuilder};
 pub use native::{
@@ -28,3 +30,4 @@ pub use native::{
 pub use router::{MethodRegistry, ZhenfaMethodHandler, ZhenfaRouter, method_handler};
 pub use transmuter::{ZhenfaResolveAndWashError, ZhenfaTransmuter, ZhenfaTransmuterError};
 pub use xml_lite::{extract_tag_f32, extract_tag_value};
+pub use xml_transform::{json_str_to_xml, json_to_xml, markdown_to_xml};

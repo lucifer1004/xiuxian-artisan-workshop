@@ -31,12 +31,9 @@ impl PyKnowledgeStorage {
 
     /// Add an entry to storage.
     pub fn add_entry(&self, entry: PyKnowledgeEntry) -> PyResult<()> {
-        self.runtime.block_on(async {
-            self.inner
-                .upsert(&entry.inner)
-                .await
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-        })
+        self.inner
+            .upsert(&entry.inner)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
     /// Get an entry by ID.
@@ -52,16 +49,14 @@ impl PyKnowledgeStorage {
 
     /// Search entries by text.
     pub fn text_search(&self, query: &str, limit: i32) -> PyResult<Vec<PyKnowledgeEntry>> {
-        self.runtime.block_on(async {
-            let entries =
-                self.inner.search_text(query, limit).await.map_err(|e| {
-                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-                })?;
-            Ok(entries
-                .into_iter()
-                .map(|e| PyKnowledgeEntry { inner: e })
-                .collect())
-        })
+        let entries = self
+            .inner
+            .search_text(query, limit)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        Ok(entries
+            .into_iter()
+            .map(|e| PyKnowledgeEntry { inner: e })
+            .collect())
     }
 
     /// Search entries by vector similarity.
@@ -70,29 +65,25 @@ impl PyKnowledgeStorage {
         query_vector: Vec<f32>,
         limit: i32,
     ) -> PyResult<Vec<PyKnowledgeEntry>> {
-        self.runtime.block_on(async {
-            let entries =
-                self.inner.search(&query_vector, limit).await.map_err(|e| {
-                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-                })?;
-            Ok(entries
-                .into_iter()
-                .map(|e| PyKnowledgeEntry { inner: e })
-                .collect())
-        })
+        let entries = self
+            .inner
+            .search(&query_vector, limit)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        Ok(entries
+            .into_iter()
+            .map(|e| PyKnowledgeEntry { inner: e })
+            .collect())
     }
 
     /// Hybrid search (text + vector).
     pub fn search(&self, query: &str, limit: i32) -> PyResult<Vec<PyKnowledgeEntry>> {
-        self.runtime.block_on(async {
-            let entries =
-                self.inner.search_text(query, limit).await.map_err(|e| {
-                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-                })?;
-            Ok(entries
-                .into_iter()
-                .map(|e| PyKnowledgeEntry { inner: e })
-                .collect())
-        })
+        let entries = self
+            .inner
+            .search_text(query, limit)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        Ok(entries
+            .into_iter()
+            .map(|e| PyKnowledgeEntry { inner: e })
+            .collect())
     }
 }

@@ -17,6 +17,7 @@ fn has_empty_source_nodes(source_nodes: &[HmasSourceNode]) -> bool {
 ///
 /// This parser accepts heading-driven or fenced-tag driven HMAS JSON blocks and
 /// enforces payload structure and cross-block consistency checks.
+#[must_use]
 pub fn validate_blackboard_markdown(markdown: &str) -> HmasValidationReport {
     let mut report = HmasValidationReport::ok();
     let blocks = collect_blocks(markdown, &mut report);

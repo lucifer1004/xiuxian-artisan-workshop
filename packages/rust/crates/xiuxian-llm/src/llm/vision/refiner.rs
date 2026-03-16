@@ -75,26 +75,11 @@ impl VisualRefiner {
     ///
     /// Returns an error when preprocessing or OCR truth extraction fails.
     pub async fn refine(&self, image_bytes: Arc<[u8]>) -> LlmResult<VisualRefinement> {
-        eprintln!("[REFINER TRACE] refine() START - preprocessing image");
         let prepared = preprocess_image_with_max_dimension(image_bytes, self.max_dimension)?;
-        eprintln!(
-            "[REFINER TRACE] preprocess done, dims={}x{}",
-            prepared.width, prepared.height
-        );
 
         let runtime = get_deepseek_runtime();
-        eprintln!(
-            "[REFINER TRACE] runtime obtained, enabled={}",
-            runtime.is_enabled()
-        );
-
-        eprintln!("[REFINER TRACE] calling infer_deepseek_ocr_truth...");
         let ocr_truth_markdown =
             infer_deepseek_ocr_truth(runtime.as_ref(), &prepared, None).await?;
-        eprintln!(
-            "[REFINER TRACE] OCR done, result={:?}",
-            ocr_truth_markdown.as_ref().map(|s| s.len())
-        );
 
         let anchors =
             self.detect_visual_anchors(runtime.as_ref(), &prepared, ocr_truth_markdown.as_deref());

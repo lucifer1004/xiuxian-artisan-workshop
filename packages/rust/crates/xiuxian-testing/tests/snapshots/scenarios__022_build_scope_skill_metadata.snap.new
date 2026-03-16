@@ -1,0 +1,11 @@
+---
+source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+assertion_line: 332
+expression: result
+---
+{
+  "scenario_id": "022_build_scope_skill_metadata",
+  "category": "build_scope",
+  "status": "validated",
+  "files": []
+}

@@ -17,6 +17,7 @@ pub struct DeduplicationResult {
 
 impl KnowledgeGraph {
     /// Calculate similarity between two entity names (0.0 to 1.0).
+    #[must_use]
     pub fn name_similarity(name1: &str, name2: &str) -> f32 {
         let n1 = normalize_name(name1);
         let n2 = normalize_name(name2);
@@ -119,10 +120,10 @@ impl KnowledgeGraph {
                         all_aliases.push(entity.name.clone());
                     }
 
-                    if let Some(ref src) = entity.source {
-                        if !sources.contains(src) {
-                            sources.push(src.clone());
-                        }
+                    if let Some(ref src) = entity.source
+                        && !sources.contains(src)
+                    {
+                        sources.push(src.clone());
                     }
 
                     max_confidence = max_confidence.max(entity.confidence);
@@ -205,8 +206,10 @@ impl KnowledgeGraph {
             }
         }
 
-        best.map(|(_, name)| name)
-            .unwrap_or_else(|| entity_ids.first().cloned().unwrap_or_default())
+        best.map_or_else(
+            || entity_ids.first().cloned().unwrap_or_default(),
+            |(_, name)| name,
+        )
     }
 }
 
@@ -243,11 +246,7 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
     for i in 1..=m {
         curr[0] = i;
         for j in 1..=n {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] {
-                0
-            } else {
-                1
-            };
+            let cost = usize::from(a_chars[i - 1] != b_chars[j - 1]);
             let deletion = prev[j] + 1;
             let insertion = curr[j - 1] + 1;
             let substitution = prev[j - 1] + cost;

@@ -1,7 +1,7 @@
-//! [AIP] Concrete ModelExecutor implementations for the Omni ModelBus.
+//! [AIP] Concrete `ModelExecutor` implementations for the Omni `ModelBus`.
 //!
 //! This module provides executor adapters for various model backends:
-//! - `DeepseekExecutor`: DeepSeek OCR vision model adapter
+//! - `DeepseekExecutor`: `DeepSeek` OCR vision model adapter
 
 mod deepseek;
 

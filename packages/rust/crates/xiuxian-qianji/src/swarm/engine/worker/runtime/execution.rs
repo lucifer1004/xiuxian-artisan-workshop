@@ -1,13 +1,12 @@
-use super::super::orchestrator::SwarmEngine;
-use super::super::types::{WorkerJoinSet, WorkerRuntimeConfig};
-use super::super::{SwarmAgentConfig, SwarmAgentReport};
 use crate::QianjiEngine;
 use crate::consensus::{AgentIdentity, ConsensusManager};
 use crate::error::QianjiError;
-use crate::scheduler::core::SchedulerRuntimeServices;
+use crate::scheduler::SchedulerRuntimeServices;
 use crate::scheduler::{
     QianjiScheduler, RoleAvailabilityRegistry, SchedulerAgentIdentity, SchedulerExecutionPolicy,
 };
+use crate::swarm::engine::types::{WorkerJoinSet, WorkerRuntimeConfig};
+use crate::swarm::engine::{SwarmAgentConfig, SwarmAgentReport, SwarmEngine};
 use crate::swarm::{GlobalSwarmRegistry, RemotePossessionBus};
 use crate::telemetry::{SwarmEvent, unix_millis_now};
 use std::sync::Arc;
@@ -95,8 +94,8 @@ impl SwarmEngine {
         identity: &SwarmAgentConfig,
         runtime: &WorkerRuntimeConfig,
     ) -> Arc<QianjiScheduler> {
-        let redis_url = runtime.redis_url.as_deref();
-        let consensus_manager = redis_url.map(|url| {
+        let redis_url: Option<&str> = runtime.redis_url.as_deref();
+        let consensus_manager = redis_url.map(|url: &str| {
             Arc::new(ConsensusManager::with_agent_identity(
                 url.to_string(),
                 AgentIdentity {
@@ -105,9 +104,11 @@ impl SwarmEngine {
                 },
             ))
         });
-        let role_registry: Option<Arc<dyn RoleAvailabilityRegistry>> = redis_url.map(|url| {
-            Arc::new(GlobalSwarmRegistry::new(url.to_string())) as Arc<dyn RoleAvailabilityRegistry>
-        });
+        let role_registry: Option<Arc<dyn RoleAvailabilityRegistry>> =
+            redis_url.map(|url: &str| {
+                Arc::new(GlobalSwarmRegistry::new(url.to_string()))
+                    as Arc<dyn RoleAvailabilityRegistry>
+            });
         let execution_policy = SchedulerExecutionPolicy::new()
             .with_local_proxy_delegation(runtime.allow_local_affinity_proxy);
 

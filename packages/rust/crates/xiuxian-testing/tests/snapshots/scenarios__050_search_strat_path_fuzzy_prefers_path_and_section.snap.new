@@ -1,0 +1,11 @@
+---
+source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+assertion_line: 332
+expression: result
+---
+{
+  "scenario_id": "050_search_strat_path_fuzzy_prefers_path_and_section",
+  "category": "search_match_strategies",
+  "status": "validated",
+  "files": []
+}

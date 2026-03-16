@@ -25,7 +25,7 @@ impl QianjiSafetyGuard {
     #[allow(clippy::unused_self)]
     pub fn audit_topology(&self, engine: &QianjiEngine) -> Result<(), QianjiError> {
         if is_cyclic_directed(&engine.graph) {
-            return Err(QianjiError::TopologyError(
+            return Err(QianjiError::Topology(
                 "Infinite cycle detected without exit condition".to_string(),
             ));
         }

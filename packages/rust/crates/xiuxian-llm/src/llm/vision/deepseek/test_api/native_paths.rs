@@ -1,9 +1,10 @@
-//! Native paths test API for DeepSeek vision module.
+//! Native paths test API for `DeepSeek` vision module.
 
 use std::path::{Path, PathBuf};
 
-use super::super::model_kind::VisionModelKind;
-pub use super::super::native::{DsqRepairResult, repair_dsq_if_needed};
+use crate::llm::vision::deepseek::model_kind::VisionModelKind;
+use crate::llm::vision::deepseek::native;
+pub use crate::llm::vision::deepseek::native::{DsqRepairResult, repair_dsq_if_needed};
 
 /// Resolve weights path with explicit parameters for test assertions.
 pub fn resolve_weights_path_with_for_tests(
@@ -14,5 +15,15 @@ pub fn resolve_weights_path_with_for_tests(
     let kind = model_kind
         .and_then(VisionModelKind::parse)
         .unwrap_or(VisionModelKind::DEFAULT);
-    super::super::native::resolve_weights_path_with_for_tests(model_root, kind, override_path)
+    native::resolve_weights_path_with_for_tests(model_root, kind, override_path)
+}
+
+/// Resolve snapshot path with explicit parameters for test assertions.
+#[must_use]
+pub fn resolve_snapshot_path_with_for_tests(
+    model_root: &Path,
+    override_path: Option<&str>,
+) -> Option<PathBuf> {
+    let override_path = override_path.map(Path::new);
+    native::resolve_snapshot_path_with_for_tests(model_root, override_path)
 }

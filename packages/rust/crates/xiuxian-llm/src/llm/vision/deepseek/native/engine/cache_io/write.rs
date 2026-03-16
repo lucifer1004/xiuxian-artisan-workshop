@@ -1,4 +1,4 @@
-use super::super::super::cache::{local_set, valkey_set};
+use crate::llm::vision::deepseek::native::cache::{local_set, valkey_set};
 
 pub(in crate::llm::vision::deepseek::native::engine) fn store_markdown_in_cache(
     cache_key: &str,

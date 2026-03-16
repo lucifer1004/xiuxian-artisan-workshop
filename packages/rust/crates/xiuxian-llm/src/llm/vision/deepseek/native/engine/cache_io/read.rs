@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use super::super::super::super::super::preprocess::PreparedVisionImage;
-use super::super::super::cache::{
+use super::layer::CacheLayer;
+use crate::llm::vision::PreparedVisionImage;
+use crate::llm::vision::deepseek::native::cache::{
     local_get_shared, local_set, normalize_owned_non_empty, trim_non_empty, valkey_get,
 };
-use super::layer::CacheLayer;
 
 pub(in crate::llm::vision::deepseek::native::engine) fn read_cache_entry(
     cache_layer: CacheLayer,

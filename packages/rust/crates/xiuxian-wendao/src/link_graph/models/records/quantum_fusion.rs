@@ -82,8 +82,10 @@ impl QuantumContext {
         self.trace_label
             .as_deref()
             .filter(|value| !value.trim().is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("quantum:{}:{:.3}", self.anchor_id, self.saliency_score))
+            .map_or_else(
+                || format!("quantum:{}:{:.3}", self.anchor_id, self.saliency_score),
+                str::to_string,
+            )
     }
 
     /// Build a traceability label from a semantic path.
@@ -112,7 +114,7 @@ pub struct QuantumSemanticSearchRequest<'a> {
     pub max_vector_score: Option<f64>,
 }
 
-impl<'a> QuantumSemanticSearchRequest<'a> {
+impl QuantumSemanticSearchRequest<'_> {
     /// Normalize request parameters into safe bounds.
     #[must_use]
     pub fn normalized(&self) -> Self {
@@ -144,14 +146,8 @@ impl<'a> QuantumSemanticSearchRequest<'a> {
     /// Check whether a vector score passes the configured filter.
     #[must_use]
     pub fn allows_vector_score(&self, score: f64) -> bool {
-        let min_ok = self
-            .min_vector_score
-            .map(|min| score >= min)
-            .unwrap_or(true);
-        let max_ok = self
-            .max_vector_score
-            .map(|max| score <= max)
-            .unwrap_or(true);
+        let min_ok = self.min_vector_score.is_none_or(|min| score >= min);
+        let max_ok = self.max_vector_score.is_none_or(|max| score <= max);
         min_ok && max_ok
     }
 }
