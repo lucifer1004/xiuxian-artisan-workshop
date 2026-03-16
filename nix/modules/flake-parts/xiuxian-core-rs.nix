@@ -68,8 +68,6 @@
         };
       };
 
-      packages.wendao =
-        config.nci.outputs."xiuxian-wendao".packages.release.xiuxian-wendao;
       packages.xiuxian-core-rs-python-bindings =
         pkgs.callPackage ../../packages/xiuxian-core-rs.nix
           {

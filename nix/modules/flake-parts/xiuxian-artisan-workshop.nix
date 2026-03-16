@@ -90,7 +90,6 @@ in
           );
     in
     {
-      packages.iwe = pkgs.callPackage ../../packages/iwe.nix { };
       packages.default = self.packages.${system}.xiuxian-artisan-workshop;
       packages.xiuxian-artisan-workshop =
         (pythonSets.mkVirtualEnv "xiuxian-artisan-workshop" workspace.deps.default)

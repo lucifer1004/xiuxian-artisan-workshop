@@ -1,4 +1,4 @@
-name: "Omni-Agent Valkey Live"
+name: "Xiuxian Artisan Workshop Valkey Live"
 
 on:
   workflow_dispatch:

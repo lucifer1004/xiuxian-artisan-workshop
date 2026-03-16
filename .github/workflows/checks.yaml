@@ -32,14 +32,14 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
-      - name: Rust quality gates (check + strict clippy + nextest + omni-core-rs runtime lane)
+      - name: Rust quality gates (check + strict clippy + nextest + xiuxian-core-rs runtime lane)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-quality-gate
 
       - name: Rust dependency security gate (cargo-audit + cargo-deny)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-security-gate
 
-      - name: Rust gate - omni-core-rs lib runtime lane (explicit)
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-omni-core-rs-lib
+      - name: Rust gate - xiuxian-core-rs lib runtime lane (explicit)
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-core-rs-lib
 
       - name: Rust gate - xiuxian-daochang profile matrix (default + no-default-features)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-daochang-profiles
@@ -77,12 +77,45 @@ jobs:
       - name: Telegram isolation gate (Python script regressions)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:telegram-session-isolation-python
 
-  nix-build-default:
+  nix-build-packages:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        package:
+          - xiuxian-artisan-workshop
+          - xiuxian-ast-release
+          - xiuxian-config-core-release
+          - xiuxian-core-rs-release
+          - xiuxian-core-rs-python-bindings
+          - xiuxian-daochang-release
+          - xiuxian-edit-release
+          - xiuxian-event-release
+          - xiuxian-executor-release
+          - xiuxian-io-release
+          - xiuxian-lance-release
+          - xiuxian-llm-release
+          - xiuxian-logging-release
+          - xiuxian-macros-release
+          - xiuxian-mcp-release
+          - xiuxian-memory-release
+          - xiuxian-memory-engine-release
+          - xiuxian-qianhuan-release
+          - xiuxian-qianji-release
+          - xiuxian-sandbox-release
+          - xiuxian-security-release
+          - xiuxian-skills-release
+          - xiuxian-tags-release
+          - xiuxian-testing-release
+          - xiuxian-tokenizer-release
+          - xiuxian-tui-release
+          - xiuxian-types-release
+          - xiuxian-vector-release
+          - xiuxian-wendao-release
+          - xiuxian-window-release
+          - xiuxian-zhenfa-release
+          - xiuxian-zhixing-release
     env:
       MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
     steps:
@@ -96,27 +129,5 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
-      - name: Build default package
-        run: nix build -v
-
-  nix-build-omni-core-rs-python-bindings:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    env:
-      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - uses: ./.github/actions/common-setup
-        with:
-          SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
-
-      - name: Build omni-core-rs-python-bindings
-        run: nix build .\#omni-core-rs-python-bindings -v
+      - name: Build nix package
+        run: nix build .#${{ matrix.package }} -v

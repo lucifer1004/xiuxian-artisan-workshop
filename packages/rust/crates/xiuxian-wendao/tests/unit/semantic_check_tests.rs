@@ -356,7 +356,7 @@ fn test_check_code_observations_typescript_valid() {
 #[test]
 fn test_check_code_observations_with_fuzzy_suggestion() {
     // Create an observation with a pattern that won't match
-    // (Note: The pattern itself is syntactically valid, so this tests the fuzzy suggestion path)
+    // (The pattern is syntactically valid but has no matches in source files)
     let obs = CodeObservation::parse(r#"lang:rust "fn nonexistent_function($$$)""#).unwrap();
     let node = create_node_with_observations("test.md#fuzzy", vec![obs]);
 
@@ -369,8 +369,12 @@ fn test_check_code_observations_with_fuzzy_suggestion() {
     let mut issues = Vec::new();
     check_code_observations(&node, "test.md", &[source], None, &mut issues);
 
-    // The pattern is syntactically valid, so no issues should be reported
-    // (fuzzy suggestions only apply when pattern validation fails)
-    // In this case, the pattern is valid so no issues
-    assert!(issues.is_empty());
+    // The pattern is valid but finds no matches, so a warning is issued
+    assert_eq!(issues.len(), 1);
+    assert_eq!(issues[0].severity, "warning");
+    assert_eq!(issues[0].issue_type, "observation_target_missing");
+    // The fuzzy suggestion should find the similar function
+    assert!(issues[0].fuzzy_suggestion.is_some());
+    let fuzzy = issues[0].fuzzy_suggestion.as_ref().unwrap();
+    assert!(fuzzy.suggested_pattern.contains("existing_function"));
 }

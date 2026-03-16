@@ -47,6 +47,7 @@ from omni.foundation.api.handlers import graph_node
 # Basic Skill Commands
 # =============================================================================
 
+
 @skill_command(
     name="example",
     category="read",
@@ -112,6 +113,7 @@ def process_data(data: list[str], filter_empty: bool = True) -> list[str]:
 # Error Handling Pattern
 # =============================================================================
 
+
 @skill_command(
     name="validate_input",
     category="read",
@@ -140,6 +142,7 @@ def validate_input(name: str, age: int) -> str:
 # =============================================================================
 # Graph Node Pattern (for workflow skills)
 # =============================================================================
+
 
 class WorkflowState(TypedDict):
     """State for the example workflow."""

@@ -1,17 +1,22 @@
-//! Cognitive Supervisor: Thought Dimension Analysis (V2.0).
+//! Cognitive Supervisor: Thought Dimension Analysis (V3.0).
 //!
 //! This module categorizes streaming events into cognitive dimensions,
 //! distinguishing between Meta-level (planning, self-reflection),
 //! Operational-level (task execution, implementation), and
 //! Epistemic-level (uncertainty, knowledge gaps) thoughts.
 //!
-//! ## V2.0 Features
+//! ## V3.0 Features
 //!
 //! - **Three-Dimensional Cognitive Model**: MetaCognitive, Operational, Epistemic
 //! - **Coherence Score**: Real-time quality assessment for Early-Halt
 //! - **Hallucination Defense**: Second line of defense after LogicGate XSD validation
+//! - **VecDeque History**: O(1) front removal for bounded history
 
 use super::ZhenfaStreamingEvent;
+use std::collections::VecDeque;
+
+/// Maximum history size for cognitive tracking.
+const MAX_HISTORY_SIZE: usize = 100;
 
 /// Cognitive dimension classification for agent thoughts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -353,6 +358,50 @@ impl CognitiveSupervisor {
             ("exploring", ThoughtSubcategory::Exploration),
         ];
 
+        // Epistemic pattern detection (V2.0)
+        let epistemic_patterns = [
+            // Uncertainty patterns
+            ("i'm not sure", ThoughtSubcategory::Uncertainty),
+            ("i'm uncertain", ThoughtSubcategory::Uncertainty),
+            ("i don't know", ThoughtSubcategory::Uncertainty),
+            ("unclear", ThoughtSubcategory::Uncertainty),
+            ("might be", ThoughtSubcategory::Uncertainty),
+            // Knowledge gap patterns
+            ("i need more context", ThoughtSubcategory::KnowledgeGap),
+            ("i need to understand", ThoughtSubcategory::KnowledgeGap),
+            ("not familiar with", ThoughtSubcategory::KnowledgeGap),
+            ("i haven't seen", ThoughtSubcategory::KnowledgeGap),
+            // Clarification seeking patterns
+            ("let me clarify", ThoughtSubcategory::ClarificationSeeking),
+            ("can you clarify", ThoughtSubcategory::ClarificationSeeking),
+            ("i should ask", ThoughtSubcategory::ClarificationSeeking),
+            // Confidence assessment patterns
+            ("i'm confident", ThoughtSubcategory::ConfidenceAssessment),
+            ("my confidence", ThoughtSubcategory::ConfidenceAssessment),
+            ("fairly certain", ThoughtSubcategory::ConfidenceAssessment),
+            ("pretty sure", ThoughtSubcategory::ConfidenceAssessment),
+        ];
+
+        // Score epistemic patterns first (V2.0)
+        let mut best_epistemic: Option<(ThoughtSubcategory, f32)> = None;
+        for (pattern, subcategory) in &epistemic_patterns {
+            if text_lower.contains(pattern) {
+                let confidence = 0.75 + (pattern.len() as f32 / text.len().max(1) as f32).min(0.2);
+                match best_epistemic {
+                    None => best_epistemic = Some((*subcategory, confidence)),
+                    Some((_, existing_conf)) if confidence > existing_conf => {
+                        best_epistemic = Some((*subcategory, confidence));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // If epistemic pattern matched strongly, return it
+        if let Some((subcategory, confidence)) = best_epistemic {
+            return (CognitiveDimension::Epistemic, Some(subcategory), confidence);
+        }
+
         // Score meta patterns
         let mut best_meta: Option<(ThoughtSubcategory, f32)> = None;
         for (pattern, subcategory) in &meta_patterns {
@@ -473,11 +522,18 @@ impl CognitiveSupervisor {
             CognitiveDimension::Meta => {
                 self.context.meta_streak += 1;
                 self.context.operational_streak = 0;
+                self.context.epistemic_streak = 0;
             }
             CognitiveDimension::Operational => {
                 self.context.operational_streak += 1;
                 self.context.meta_streak = 0;
+                self.context.epistemic_streak = 0;
                 self.context.in_implementation = true;
+            }
+            CognitiveDimension::Epistemic => {
+                self.context.epistemic_streak += 1;
+                self.context.meta_streak = 0;
+                self.context.operational_streak = 0;
             }
             CognitiveDimension::System => {
                 // System events don't change the streak
@@ -506,6 +562,7 @@ impl CognitiveSupervisor {
     pub fn reset(&mut self) {
         self.thought_history.clear();
         self.context = SupervisorContext::default();
+        self.coherence = CoherenceMetrics::default();
     }
 
     /// Get the cognitive balance (ratio of meta to operational thoughts).
@@ -601,5 +658,83 @@ mod tests {
 
         assert!(supervisor.context().in_implementation);
         assert_eq!(supervisor.context().operational_streak, 1);
+    }
+
+    // V2.0 Tests
+
+    #[test]
+    fn supervisor_classifies_uncertainty_as_epistemic() {
+        let mut supervisor = CognitiveSupervisor::new();
+        let event =
+            ZhenfaStreamingEvent::Thought(Arc::from("I'm not sure if this approach is correct."));
+
+        let classified = supervisor.classify(event);
+        assert_eq!(classified.dimension, CognitiveDimension::Epistemic);
+        assert_eq!(
+            classified.subcategory,
+            Some(ThoughtSubcategory::Uncertainty)
+        );
+    }
+
+    #[test]
+    fn supervisor_classifies_knowledge_gap_as_epistemic() {
+        let mut supervisor = CognitiveSupervisor::new();
+        let event = ZhenfaStreamingEvent::Thought(Arc::from("I need more context about this API."));
+
+        let classified = supervisor.classify(event);
+        assert_eq!(classified.dimension, CognitiveDimension::Epistemic);
+        assert_eq!(
+            classified.subcategory,
+            Some(ThoughtSubcategory::KnowledgeGap)
+        );
+    }
+
+    #[test]
+    fn supervisor_calculates_coherence_score() {
+        let mut supervisor = CognitiveSupervisor::new();
+
+        // Coherent operational thought
+        let event = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
+            "I'll add a function here.",
+        )));
+        assert!(event.coherence > 0.7);
+
+        // Epistemic uncertainty reduces coherence
+        let event = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
+            "I'm not sure about this.",
+        )));
+        assert!(event.coherence < 0.8);
+    }
+
+    #[test]
+    fn supervisor_triggers_early_halt_on_low_coherence() {
+        let mut supervisor = CognitiveSupervisor::with_early_halt_threshold(0.5);
+
+        // Trigger multiple uncertainty events
+        for _ in 0..5 {
+            let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
+                "I'm not sure about this approach.",
+            )));
+        }
+
+        // Check if early halt was triggered
+        assert!(supervisor.should_halt());
+    }
+
+    #[test]
+    fn supervisor_detects_oscillating_behavior() {
+        let mut supervisor = CognitiveSupervisor::new();
+
+        // Create oscillating pattern: Meta-Op-Meta-Op
+        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from("Let me plan...")));
+        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from("This function...")));
+        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
+            "I should reconsider...",
+        )));
+        let event =
+            supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from("I'll add code...")));
+
+        // Oscillating behavior should reduce coherence
+        assert!(event.coherence < 0.75);
     }
 }
