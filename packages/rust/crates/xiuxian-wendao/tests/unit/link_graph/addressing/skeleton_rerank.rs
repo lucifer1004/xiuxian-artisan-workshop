@@ -1,17 +1,17 @@
-//! Unit tests for skeleton_rerank module.
+//! Unit tests for `skeleton_rerank` module.
 
 use super::*;
 use crate::link_graph::{PageIndexMeta, PageIndexNode};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-fn make_test_node(id: &str, title: &str, path: Vec<&str>) -> PageIndexNode {
+fn make_test_node(id: &str, title: &str, path: &[&str]) -> PageIndexNode {
     let mut attrs = HashMap::new();
     if !id.is_empty() {
         attrs.insert("ID".to_string(), id.to_string());
     }
     PageIndexNode {
-        node_id: format!("doc#{}", title),
+        node_id: format!("doc#{title}"),
         parent_id: None,
         title: title.to_string(),
         level: path.len(),
@@ -22,8 +22,8 @@ fn make_test_node(id: &str, title: &str, path: Vec<&str>) -> PageIndexNode {
         metadata: PageIndexMeta {
             line_range: (1, 10),
             byte_range: Some((0, 100)),
-            structural_path: path.iter().map(|s| s.to_string()).collect(),
-            content_hash: Some(format!("hash_{}", title)),
+            structural_path: path.iter().map(std::string::ToString::to_string).collect(),
+            content_hash: Some(format!("hash_{title}")),
             attributes: attrs,
             token_count: 10,
             is_thinned: false,
@@ -36,8 +36,8 @@ fn make_test_node(id: &str, title: &str, path: Vec<&str>) -> PageIndexNode {
 fn build_test_indices() -> (RegistryIndex, TopologyIndex) {
     let mut trees = HashMap::new();
 
-    let intro = make_test_node("intro-id", "Introduction", vec!["Introduction"]);
-    let storage = make_test_node("storage-id", "Storage", vec!["Architecture", "Storage"]);
+    let intro = make_test_node("intro-id", "Introduction", &["Introduction"]);
+    let storage = make_test_node("storage-id", "Storage", &["Architecture", "Storage"]);
 
     trees.insert("test_doc.md".to_string(), vec![intro, storage]);
 
@@ -138,7 +138,7 @@ fn test_parse_anchor_id() {
     );
     assert_eq!(
         parse_anchor_id("no-hash"),
-        ("no-hash".to_string(), "".to_string())
+        ("no-hash".to_string(), String::new())
     );
 }
 

@@ -87,7 +87,7 @@ pub fn normalize_cache_text_view_for_tests(text: &str) -> Option<String> {
 
 /// Normalize cache text from owned string for test assertions.
 #[must_use]
-pub fn normalize_cache_text_owned_for_tests(text: String) -> Option<String> {
+pub fn normalize_cache_text_owned_for_tests(text: &str) -> Option<String> {
     native::normalize_cache_text_owned_for_tests(text)
 }
 

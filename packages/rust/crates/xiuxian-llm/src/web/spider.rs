@@ -56,6 +56,11 @@ impl SpiderBridge {
     }
 
     /// Execute crawl.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `spider` cannot subscribe, crawl, or produce any
+    /// usable page content for the configured root URL.
     pub async fn quick_ingest(&self) -> LlmResult<WebContext> {
         let mut website = Website::new_with_firewall(self.root_url.as_ref(), false);
         website.with_limit(self.page_limit);

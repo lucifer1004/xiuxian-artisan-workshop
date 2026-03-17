@@ -103,6 +103,39 @@ pub fn resolve_deepseek_vision_settings_for_tests(
     }
 }
 
+/// Resolve the low-precision auxiliary preload policy used for `DeepSeek` model loads.
+#[must_use]
+pub fn resolve_deepseek_low_precision_load_policy_for_tests(
+    preload_language_f32_aux: Option<bool>,
+    preload_vision_f32_aux: Option<bool>,
+    preload_linear_weight_f32: Option<bool>,
+    promote_language_input_f32: Option<bool>,
+    lazy_moe_experts: Option<bool>,
+    lazy_clip_transformer_layers: Option<bool>,
+) -> (bool, bool, bool, bool, bool, bool) {
+    #[cfg(feature = "vision-dots")]
+    {
+        crate::llm::vision::deepseek::resolve_low_precision_load_policy_with_for_tests(
+            preload_language_f32_aux,
+            preload_vision_f32_aux,
+            preload_linear_weight_f32,
+            promote_language_input_f32,
+            lazy_moe_experts,
+            lazy_clip_transformer_layers,
+        )
+    }
+    #[cfg(not(feature = "vision-dots"))]
+    {
+        let _ = preload_language_f32_aux;
+        let _ = preload_vision_f32_aux;
+        let _ = preload_linear_weight_f32;
+        let _ = promote_language_input_f32;
+        let _ = lazy_moe_experts;
+        let _ = lazy_clip_transformer_layers;
+        (true, true, true, true, false, false)
+    }
+}
+
 /// Resolve the safe fallback `DeepSeek` OCR vision settings used after retry.
 #[must_use]
 pub fn resolve_deepseek_safe_vision_settings_for_tests() -> (u32, u32, bool) {
@@ -156,7 +189,7 @@ pub fn require_quantized_deepseek_snapshot_for_tests(value: Option<&str>) -> boo
     #[cfg(not(feature = "vision-dots"))]
     {
         let _ = value;
-        true
+        false
     }
 }
 
@@ -204,6 +237,30 @@ pub fn resolve_deepseek_model_kind_for_model_root_label_for_tests(
     #[cfg(not(feature = "vision-dots"))]
     {
         let _ = value;
+        let _ = model_root;
+        "deepseek"
+    }
+}
+
+/// Resolve `DeepSeek` OCR model-kind label using env/config precedence.
+#[must_use]
+pub fn resolve_deepseek_model_kind_for_model_root_label_from_sources_for_tests(
+    env_value: Option<&str>,
+    config_value: Option<&str>,
+    model_root: &Path,
+) -> &'static str {
+    #[cfg(feature = "vision-dots")]
+    {
+        crate::llm::vision::deepseek::resolve_model_kind_for_model_root_label_from_sources_for_tests(
+            env_value,
+            config_value,
+            model_root,
+        )
+    }
+    #[cfg(not(feature = "vision-dots"))]
+    {
+        let _ = env_value;
+        let _ = config_value;
         let _ = model_root;
         "deepseek"
     }

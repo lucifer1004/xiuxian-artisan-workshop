@@ -15,6 +15,8 @@ async fn test_orchestrator_assembly() {
         id: "test".to_string(),
         name: "Cultivator".to_string(),
         voice_tone: "Zen".to_string(),
+        background: None,
+        guidelines: vec![],
         style_anchors: vec!["Dao".to_string()],
         cot_template: "Step 1".to_string(),
         forbidden_words: vec![],

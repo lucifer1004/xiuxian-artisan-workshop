@@ -51,7 +51,7 @@ fn usize_param(node_def: &NodeDefinition, key: &str) -> Option<usize> {
         .params
         .get(key)
         .and_then(serde_json::Value::as_u64)
-        .map(|value| value as usize)
+        .and_then(|value| usize::try_from(value).ok())
 }
 
 fn string_list_param(node_def: &NodeDefinition, key: &str) -> Vec<String> {

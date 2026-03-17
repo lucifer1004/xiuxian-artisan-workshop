@@ -13,7 +13,7 @@ impl LinkGraphIndex {
         context: &SearchExecutionContext,
         graph_candidates: Option<&HashSet<String>>,
     ) -> Vec<ScoredSearchRow> {
-        let runtime_policy = self.resolve_search_runtime_policy(options, context);
+        let runtime_policy = Self::resolve_search_runtime_policy(options, context);
         self.docs_by_id
             .values()
             .flat_map(|doc| {

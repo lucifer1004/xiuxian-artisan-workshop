@@ -19,7 +19,13 @@ pub(super) fn normalize_view(text: &str) -> Option<String> {
 pub(super) fn normalize_owned(text: String) -> Option<String> {
     #[cfg(feature = "vision-dots")]
     {
-        crate::llm::vision::deepseek::normalize_cache_text_owned_for_tests(text)
+        let normalized =
+            crate::llm::vision::deepseek::normalize_cache_text_owned_for_tests(text.as_str())?;
+        if normalized == text {
+            Some(text)
+        } else {
+            Some(normalized)
+        }
     }
     #[cfg(not(feature = "vision-dots"))]
     {

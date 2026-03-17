@@ -16,7 +16,8 @@ use types::{AgenticCommand, Cli, Command};
 use xiuxian_logging::init_from_cli;
 use xiuxian_wendao::set_link_graph_wendao_config_override;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
     init_from_cli("xiuxian_wendao", &cli.logging).map_err(|err| anyhow!(err))?;
 
@@ -28,10 +29,10 @@ fn main() -> Result<()> {
         }
     }
 
-    if let Some(conf) = &config_path {
-        if let Some(path_str) = conf.to_str() {
-            set_link_graph_wendao_config_override(path_str);
-        }
+    if let Some(conf) = &config_path
+        && let Some(path_str) = conf.to_str()
+    {
+        set_link_graph_wendao_config_override(path_str);
     }
 
     let needs_index = matches!(
@@ -46,14 +47,15 @@ fn main() -> Result<()> {
             | Command::Metadata(_)
             | Command::Resolve(_)
             | Command::Fix(_)
+            | Command::Sentinel(_)
             | Command::Agentic {
                 command: AgenticCommand::Plan { .. } | AgenticCommand::Run { .. },
             }
     );
     if needs_index {
         let index = build_index(&cli)?;
-        execute(&cli, Some(&index))
+        execute(&cli, Some(&index)).await
     } else {
-        execute(&cli, None)
+        execute(&cli, None).await
     }
 }

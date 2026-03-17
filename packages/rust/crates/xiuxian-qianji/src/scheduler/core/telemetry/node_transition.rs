@@ -26,3 +26,17 @@ impl QianjiScheduler {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::QianjiEngine;
+
+    #[tokio::test]
+    async fn emit_node_transition_is_callable_without_emitter() {
+        let scheduler = QianjiScheduler::new(QianjiEngine::default());
+        scheduler
+            .emit_node_transition(NodeIndex::new(0), NodeTransitionPhase::Entering, None)
+            .await;
+    }
+}

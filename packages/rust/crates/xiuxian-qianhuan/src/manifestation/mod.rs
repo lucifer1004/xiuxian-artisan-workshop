@@ -5,7 +5,7 @@ pub mod request;
 /// Template helper logic.
 pub mod templates;
 
-pub use manager::ManifestationManager;
+pub use manager::{ManifestationManager, MemoryTemplateRecord};
 pub use request::{
     ManifestationRenderRequest, ManifestationRuntimeContext, ManifestationTemplateTarget,
 };

@@ -6,7 +6,17 @@ backend = "wendao"
 # Watch all markdown and ZK-style docs
 watch_patterns = ["**/*.md", "**/*.markdown", "**/SKILL.md"]
 include_dirs_auto = true
-include_dirs_auto_candidates = ["docs", "assets/knowledge", "src"]
+include_dirs_auto_candidates = ["docs", "assets/knowledge", "packages"]
+
+# Gateway HTTP server configuration
+[gateway]
+# Port for the Wendao API gateway (default: 9517)
+port = 9517
+# Webhook configuration for semantic drift notifications
+# Priority: webhook_url here > WENDAO_WEBHOOK_URL env var
+webhook_url = "http://127.0.0.1:9999"
+webhook_enabled = true
+# webhook_secret = "your-secret-key"
 
 [link_graph.cache]
 valkey_url = "redis://127.0.0.1:6379/0"

@@ -28,7 +28,7 @@ pub fn temp_dir_with_prefix(prefix: &str) -> tempfile::TempDir {
     tempfile::Builder::new()
         .prefix(prefix)
         .tempdir()
-        .expect("failed to create temp directory")
+        .unwrap_or_else(|error| panic!("failed to create temp directory: {error}"))
 }
 
 #[cfg(test)]

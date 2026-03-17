@@ -21,13 +21,24 @@ pub use contracts::{
     METHOD_NOT_FOUND_CODE, PARSE_ERROR_CODE, ZhenfaContractError, resolve_contract_path,
     validate_contract, validate_contract_reference,
 };
-pub use gateway::{HealthResponse, ZhenfaGatewayBuildError, ZhenfaGatewayBuilder};
+pub use gateway::{
+    HealthResponse, NotificationError, NotificationPayload, NotificationService, WebhookConfig,
+    ZhenfaGatewayBuildError, ZhenfaGatewayBuilder, notification_worker,
+};
 pub use native::{
-    ZhenfaAuditSink, ZhenfaContext, ZhenfaDispatchEvent, ZhenfaDispatchOutcome, ZhenfaError,
-    ZhenfaMutationGuard, ZhenfaMutationLock, ZhenfaOrchestrator, ZhenfaOrchestratorHooks,
-    ZhenfaRegistry, ZhenfaResultCache, ZhenfaSignal, ZhenfaSignalSink, ZhenfaTool,
+    BroadcastResult, ExternalSignal, SignalRegistry, SignalRegistryExt, ZhenfaAuditSink,
+    ZhenfaContext, ZhenfaDispatchEvent, ZhenfaDispatchOutcome, ZhenfaError, ZhenfaMutationGuard,
+    ZhenfaMutationLock, ZhenfaOrchestrator, ZhenfaOrchestratorHooks, ZhenfaRegistry,
+    ZhenfaResultCache, ZhenfaSignal, ZhenfaSignalSink, ZhenfaTool,
 };
 pub use router::{MethodRegistry, ZhenfaMethodHandler, ZhenfaRouter, method_handler};
 pub use transmuter::{ZhenfaResolveAndWashError, ZhenfaTransmuter, ZhenfaTransmuterError};
 pub use xml_lite::{extract_tag_f32, extract_tag_value};
 pub use xml_transform::{json_str_to_xml, json_to_xml, markdown_to_xml};
+
+// Re-export streaming types for xiuxian-qianji
+pub use transmuter::streaming::{
+    ClaudeStreamingParser, CodexStreamingParser, CognitiveDistribution, GeminiStreamingParser,
+    PipelineError, PipelineOutput, StreamProvider, StreamingOutcome, StreamingTransmuter,
+    TokenUsage, ZhenfaPipeline, ZhenfaStreamingEvent,
+};

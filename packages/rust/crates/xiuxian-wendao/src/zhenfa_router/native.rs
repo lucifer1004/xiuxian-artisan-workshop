@@ -1,10 +1,13 @@
+use std::fmt::Write;
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
 use crate::link_graph::{
-    Address, LinkGraphPlannedSearchPayload, LinkGraphRelatedFilter, MatchType, PageIndexNode,
-    ResolveMode, resolve_node, resolve_with_indices,
+    Address, LinkGraphCcsAudit, LinkGraphPlannedSearchPayload, LinkGraphRelatedFilter, MatchType,
+    ModificationError, PageIndexNode, ResolveMode, replace_byte_range, resolve_node,
+    resolve_with_indices,
 };
 use crate::{
     AssetRequest, LinkGraphIndex, LinkGraphSearchOptions, SkillVfsResolver, WendaoAssetHandle,
@@ -12,6 +15,8 @@ use crate::{
 
 mod agentic_nav;
 pub mod audit;
+mod forwarder;
+mod remediation;
 mod section_create;
 pub mod semantic_check;
 pub mod sentinel;
@@ -19,6 +24,13 @@ mod xml_lite;
 
 pub use agentic_nav::WendaoAgenticNavTool;
 pub use audit::{audit_search_payload, evaluate_alignment};
+pub use forwarder::{
+    AffectedDocInfo, ForwardNotification, ForwardNotifier, ForwarderConfig, SuggestedAction,
+};
+pub use remediation::{
+    RemediationAction, RemediationConfig, RemediationContextExt, RemediationResult,
+    RemediationWorker,
+};
 pub use semantic_check::WendaoSemanticCheckTool;
 pub use sentinel::{
     AffectedDoc, DriftConfidence, ObservationBus, ObservationRef, ObservationSignal,
@@ -28,17 +40,24 @@ pub use sentinel::{
 const DEFAULT_SEARCH_LIMIT: usize = 20;
 const MAX_SEARCH_LIMIT: usize = 200;
 
+/// Arguments for graph search via the native Wendao tool surface.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
-pub(crate) struct WendaoSearchArgs {
+pub struct WendaoSearchArgs {
+    /// User search query text.
     query: String,
+    /// Maximum number of hits to return.
     #[serde(default)]
     limit: Option<usize>,
+    /// Optional root directory hint for path-scoped search.
     #[serde(default)]
     root_dir: Option<String>,
+    /// Additional search options forwarded to the link-graph planner.
     #[serde(default)]
     options: Option<LinkGraphSearchOptions>,
+    /// Whether provisional results should be included.
     #[serde(default)]
     include_provisional: Option<bool>,
+    /// Upper bound for provisional hits.
     #[serde(default)]
     provisional_limit: Option<usize>,
     /// Optional style anchors for CCS (Context Completeness Score) audit.
@@ -99,6 +118,11 @@ impl WendaoContextExt for ZhenfaContext {
 
 /// Search the Wendao graph index and return stripped XML-Lite `<hit>` records.
 /// Native tool for searching the wendao graph index.
+///
+/// # Errors
+///
+/// Returns a [`ZhenfaError`] when the query is invalid, the root argument is malformed,
+/// or the graph index cannot execute the requested search.
 #[allow(missing_docs)]
 #[zhenfa_tool(
     name = "wendao.search",
@@ -167,7 +191,6 @@ pub fn wendao_search(ctx: &ZhenfaContext, args: WendaoSearchArgs) -> Result<Stri
             (payload, false)
         };
 
-        use crate::link_graph::LinkGraphCcsAudit;
         final_payload.ccs_audit = Some(LinkGraphCcsAudit {
             ccs_score: audit_result.ccs_score,
             passed: audit_result.passed,
@@ -213,7 +236,7 @@ fn validate_root_dir_argument(root_dir: Option<&str>) -> Result<(), ZhenfaError>
 
 /// Arguments for semantic section reading via Triple-A addressing.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
-pub(crate) struct WendaoSemanticReadArgs {
+pub struct WendaoSemanticReadArgs {
     /// Document stem or ID (e.g., "README" or "docs/architecture").
     doc: String,
     /// Semantic address using Triple-A protocol:
@@ -238,6 +261,12 @@ pub(crate) struct WendaoSemanticReadArgs {
 ///
 /// Resolution follows the Triple-A protocol: ID → Path → Hash fallback.
 /// When `fuzzy` is enabled, path drift tolerance allows approximate matches.
+///
+/// # Errors
+///
+/// Returns a [`ZhenfaError`] when the address is invalid, the document cannot be resolved or
+/// read, or the requested section lacks the metadata required for byte-precise extraction.
+#[allow(clippy::needless_pass_by_value, clippy::too_many_lines)]
 #[allow(missing_docs)]
 #[zhenfa_tool(
     name = "wendao.semantic_read",
@@ -321,7 +350,6 @@ pub fn wendao_semantic_read(
     let include_context = args.include_context.unwrap_or(false);
 
     // Build enhanced response with resolution metadata
-    use std::fmt::Write;
     let mut response = String::new();
     let _ = writeln!(
         response,
@@ -403,7 +431,7 @@ fn match_type_to_string(match_type: MatchType) -> &'static str {
 
 /// Arguments for semantic section editing via Triple-A addressing.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
-pub(crate) struct WendaoSemanticEditArgs {
+pub struct WendaoSemanticEditArgs {
     /// Document stem or ID (e.g., "README" or "docs/architecture").
     doc: String,
     /// Semantic address using Triple-A protocol.
@@ -432,6 +460,12 @@ pub(crate) struct WendaoSemanticEditArgs {
 ///
 /// The `verify_hash` option enables optimistic concurrency control:
 /// the tool will fail if the section's content hash has changed since reading.
+///
+/// # Errors
+///
+/// Returns a [`ZhenfaError`] when the address is invalid, the document or section cannot be
+/// resolved, the file cannot be read or written, or the byte-range edit fails validation.
+#[allow(clippy::needless_pass_by_value, clippy::too_many_lines)]
 #[allow(missing_docs)]
 #[zhenfa_tool(
     name = "wendao.semantic_edit",
@@ -443,8 +477,6 @@ pub fn wendao_semantic_edit(
     ctx: &ZhenfaContext,
     args: WendaoSemanticEditArgs,
 ) -> Result<String, ZhenfaError> {
-    use crate::link_graph::{ModificationError, replace_byte_range};
-
     let address = Address::parse(&args.address).ok_or_else(|| {
         ZhenfaError::invalid_arguments(format!(
             "invalid address format: '{}'. Use #id, /path/to/heading, or @hash",
@@ -503,6 +535,14 @@ pub fn wendao_semantic_edit(
                 }
                 ModificationError::NoByteRange => {
                     ZhenfaError::execution("section has no byte range information")
+                }
+                ModificationError::DeltaOverflow { lhs, rhs } => ZhenfaError::execution(
+                    format!("section update length overflow while comparing {lhs} and {rhs}"),
+                ),
+                ModificationError::RangeAdjustmentOverflow { base, delta } => {
+                    ZhenfaError::execution(format!(
+                        "section update range adjustment overflow for base {base} with delta {delta}"
+                    ))
                 }
             })?;
 

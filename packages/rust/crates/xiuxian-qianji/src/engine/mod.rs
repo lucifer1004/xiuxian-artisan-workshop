@@ -50,6 +50,7 @@ pub struct QianjiEngine {
 
 impl QianjiEngine {
     /// Creates an empty engine.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             graph: StableGraph::new(),
@@ -84,7 +85,7 @@ impl QianjiEngine {
             from,
             to,
             QianjiEdge {
-                label: label.map(|s| s.to_string()),
+                label: label.map(ToString::to_string),
                 weight,
             },
         );

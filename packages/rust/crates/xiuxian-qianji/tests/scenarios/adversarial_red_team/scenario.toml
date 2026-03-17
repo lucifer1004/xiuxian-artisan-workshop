@@ -1,0 +1,75 @@
+# Scenario: Multi-Model Adversarial Red-Team Audit
+# 
+# Purpose: This scenario validates the "Adversarial Trinity" pattern:
+# 1. Crafter (GLM-5) produces a vulnerable implementation plan.
+# 2. Inquisitor (Claude 3.5 Sonnet) identifies the flaw and marks severity as 'high'.
+# 3. Qianji Edge back-flows the logic to Crafter for remediation.
+
+[scenario]
+id = "adversarial_red_team"
+name = "GLM-5 vs Claude 3.5 Red-Team Drill"
+description = "Verify that Claude can intercept and force remediation on GLM-5's logical flaws."
+category = "audit_flow"
+
+[input]
+type = "multi_model_mock"
+intent = "Implement a high-performance session cache with shared-state access."
+
+# Stage 1: Crafter (GLM-5) produces a plan with a shared-state race condition.
+[input.crafter]
+model = "glm-5"
+payload = """
+<qianji-audit-plan version="1.0">
+<summary><intent>Implement shared session cache</intent><total-steps>1</total-steps></summary>
+<implementation-steps>
+<step number="1">
+<title>Use raw pointer for session state sharing</title>
+<file-target path="src/cache.rs" action="modify"/>
+<rationale>Raw pointers provide maximum performance for zero-copy sharing.</rationale>
+<content>
+<description>Implement a global static raw pointer to the session map.</description>
+</content>
+</step>
+</implementation-steps>
+<risk-assessment>
+<risk-pair severity="low">
+<potential-issue>Memory access overhead</potential-issue>
+<mitigation-strategy>Use pointers to bypass Arc overhead.</mitigation-strategy>
+</risk-pair>
+</risk-assessment>
+<verification-strategy>
+<test-command>cargo test</test-command>
+<expected-outcome>Sessions are shared across threads.</expected-outcome>
+</verification-strategy>
+</qianji-audit-plan>
+"""
+
+# Stage 2: Inquisitor (Claude) attacks the use of raw pointers.
+[input.inquisitor]
+model = "claude-3-5-sonnet"
+payload = """
+<audit-report severity="critical" version="1.0">
+<summary><overall-score>0.2</overall-score><findings-count>1</findings-count></summary>
+<findings>
+<finding id="F-001">
+<title>Fatal Memory Safety Violation</title>
+<vulnerability-type>Unsafe Shared State</vulnerability-type>
+<location>src/cache.rs</location>
+<evidence>The Crafter proposed using raw pointers for global state without any synchronization mechanism.</evidence>
+<remediation-step>Replace raw pointers with Arc<RwLock<T>> or a zero-copy atomic reference pattern compliant with the Auditor's Codex.</remediation-step>
+</finding>
+</findings>
+</audit-report>
+"""
+
+[runner]
+early_halt_threshold = 0.5
+xsd_validation = true
+max_remediation_loops = 3
+
+[expectations]
+# The flow must trigger a loop back to the Crafter
+edge_traversal = ["crafter", "inquisitor", "crafter"]
+remediation_triggered = true
+final_severity_after_fix = "low"
+cognitive_persistence = true

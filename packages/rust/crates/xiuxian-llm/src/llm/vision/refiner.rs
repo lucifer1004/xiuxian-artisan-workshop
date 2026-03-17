@@ -5,14 +5,14 @@ use super::anchor::{TextAnchor, VisualAnchor};
 use super::cot::{VisualCotInput, VisualCotMode, build_visual_cot_prompt};
 use super::deepseek::{DeepseekRuntime, get_deepseek_runtime, infer_deepseek_ocr_truth};
 use super::preprocess::{
-    DEFAULT_VISION_MAX_DIMENSION, PreparedVisionImage, preprocess_image_with_max_dimension,
+    DEFAULT_VISION_MAX_DIMENSION, PreparedVisionImage, prepare_image_for_ocr_runtime,
 };
 use crate::llm::error::LlmResult;
 
 /// Result container returned by [`VisualRefiner::refine`].
 #[derive(Debug, Clone)]
 pub struct VisualRefinement {
-    /// Preprocessed image variants.
+    /// Prepared image payloads and metadata used by downstream vision flows.
     pub prepared: PreparedVisionImage,
     /// Spatially grounded anchors.
     pub anchors: Vec<VisualAnchor>,
@@ -73,9 +73,17 @@ impl VisualRefiner {
     ///
     /// # Errors
     ///
-    /// Returns an error when preprocessing or OCR truth extraction fails.
+    /// Returns an error when image preparation or OCR truth extraction fails.
     pub async fn refine(&self, image_bytes: Arc<[u8]>) -> LlmResult<VisualRefinement> {
-        let prepared = preprocess_image_with_max_dimension(image_bytes, self.max_dimension)?;
+        let prepared = prepare_image_for_ocr_runtime(image_bytes)?;
+        tracing::debug!(
+            event = "llm.vision.deepseek.refiner.prepare",
+            requested_max_dimension = self.max_dimension,
+            input_mode = prepared.mode.as_str(),
+            width = prepared.width,
+            height = prepared.height,
+            "VisualRefiner prepared image for DeepSeek OCR"
+        );
 
         let runtime = get_deepseek_runtime();
         let ocr_truth_markdown =

@@ -51,6 +51,11 @@ impl InjectionSnapshot {
     }
 
     /// Validate key contract invariants for this snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `total_chars` does not match the retained blocks,
+    /// or when the snapshot exceeds the configured block or character budgets.
     pub fn validate(&self) -> Result<(), String> {
         let computed_chars: usize = self.blocks.iter().map(|block| block.payload_chars).sum();
         if computed_chars != self.total_chars {

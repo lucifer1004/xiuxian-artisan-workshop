@@ -22,6 +22,7 @@ This is the **Map of Content** for the Zhenfa contract and execution kernel. It 
 
 - [[20260315150000-zhenfa-contract-system-spec]]: The core XSD-based validation system for agent outputs.
 - [[20260315152000-unified-streaming-parser-spec]]: High-performance cognitive gateway for multi-agent CLI streams.
+- [[20260315154000-zhenfa-pipeline-spec]]: Unified orchestration wrapper for real-time streaming defense.
 - [[docs/01_core/zhenfa/SPEC]]: The fundamental Zhenfa microkernel specification (Global Ref).
 
 ## 2. Research & Theoretical Formation

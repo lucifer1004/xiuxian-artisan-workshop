@@ -14,10 +14,10 @@ fn test_extract_blocks_paragraph() {
 
 #[test]
 fn test_extract_blocks_code_fence() {
-    let text = r#"```rust
+    let text = r"```rust
 fn main() {}
 ```
-"#;
+";
     let blocks = extract_blocks(text, 0, 1, &["Code".to_string()]);
 
     assert_eq!(blocks.len(), 1);

@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use super::*;
 
-fn make_test_node_with_path(title: &str, path: Vec<&str>, hash: Option<&str>) -> PageIndexNode {
+fn make_test_node_with_path(title: &str, path: &[&str], hash: Option<&str>) -> PageIndexNode {
     PageIndexNode {
-        node_id: format!("doc#{}", title),
+        node_id: format!("doc#{title}"),
         parent_id: None,
         title: title.to_string(),
         level: path.len(),
@@ -18,8 +18,8 @@ fn make_test_node_with_path(title: &str, path: Vec<&str>, hash: Option<&str>) ->
         metadata: crate::link_graph::PageIndexMeta {
             line_range: (1, 10),
             byte_range: Some((0, 100)),
-            structural_path: path.iter().map(|s| s.to_string()).collect(),
-            content_hash: hash.map(|s| s.to_string()),
+            structural_path: path.iter().map(std::string::ToString::to_string).collect(),
+            content_hash: hash.map(std::string::ToString::to_string),
             attributes: HashMap::new(),
             token_count: 10,
             is_thinned: false,
@@ -42,8 +42,8 @@ fn test_build_from_trees() {
     trees.insert(
         "doc.md".to_string(),
         vec![
-            make_test_node_with_path("Intro", vec!["Intro"], Some("hash1")),
-            make_test_node_with_path("Storage", vec!["Architecture", "Storage"], Some("hash2")),
+            make_test_node_with_path("Intro", &["Intro"], Some("hash1")),
+            make_test_node_with_path("Storage", &["Architecture", "Storage"], Some("hash2")),
         ],
     );
 
@@ -60,19 +60,19 @@ fn test_exact_path_match() {
         "doc.md".to_string(),
         vec![make_test_node_with_path(
             "Storage",
-            vec!["Architecture", "Storage"],
+            &["Architecture", "Storage"],
             None,
         )],
     );
 
     let index = TopologyIndex::build_from_trees(&trees);
 
-    let entry = index
-        .exact_path(
-            "doc.md",
-            &["Architecture".to_string(), "Storage".to_string()],
-        )
-        .expect("should find exact path");
+    let Some(entry) = index.exact_path(
+        "doc.md",
+        &["Architecture".to_string(), "Storage".to_string()],
+    ) else {
+        panic!("exact path should resolve");
+    };
     assert_eq!(entry.title, "Storage");
 
     // Wrong path
@@ -93,14 +93,16 @@ fn test_find_by_hash() {
         "doc.md".to_string(),
         vec![make_test_node_with_path(
             "Section",
-            vec!["Section"],
+            &["Section"],
             Some("abc123"),
         )],
     );
 
     let index = TopologyIndex::build_from_trees(&trees);
 
-    let entry = index.find_by_hash("abc123").expect("should find by hash");
+    let Some(entry) = index.find_by_hash("abc123") else {
+        panic!("hash lookup should resolve");
+    };
     assert_eq!(entry.title, "Section");
 
     assert!(index.find_by_hash("notfound").is_none());
@@ -111,14 +113,14 @@ fn test_fuzzy_resolve_exact_title() {
     let mut trees = HashMap::new();
     trees.insert(
         "doc.md".to_string(),
-        vec![make_test_node_with_path("Storage", vec!["Storage"], None)],
+        vec![make_test_node_with_path("Storage", &["Storage"], None)],
     );
 
     let index = TopologyIndex::build_from_trees(&trees);
 
     let matches = index.fuzzy_resolve("storage", 5);
     assert_eq!(matches.len(), 1);
-    assert_eq!(matches[0].similarity_score, 1.0);
+    assert!((matches[0].similarity_score - 1.0).abs() < f32::EPSILON);
     assert_eq!(matches[0].match_type, MatchType::Exact);
 }
 
@@ -129,7 +131,7 @@ fn test_fuzzy_resolve_suffix() {
         "doc.md".to_string(),
         vec![make_test_node_with_path(
             "Storage",
-            vec!["Architecture", "Storage"],
+            &["Architecture", "Storage"],
             None,
         )],
     );
@@ -148,7 +150,7 @@ fn test_fuzzy_resolve_substring() {
         "doc.md".to_string(),
         vec![make_test_node_with_path(
             "Configuration Settings",
-            vec!["Configuration Settings"],
+            &["Configuration Settings"],
             None,
         )],
     );
@@ -171,21 +173,21 @@ fn test_case_insensitive_path() {
         "doc.md".to_string(),
         vec![make_test_node_with_path(
             "Storage",
-            vec!["Architecture", "Storage"],
+            &["Architecture", "Storage"],
             None,
         )],
     );
 
     let index = TopologyIndex::build_from_trees(&trees);
 
-    let result = index
-        .path_case_insensitive(
-            "doc.md",
-            &["architecture".to_string(), "storage".to_string()],
-        )
-        .expect("should find case-insensitive");
+    let Some(result) = index.path_case_insensitive(
+        "doc.md",
+        &["architecture".to_string(), "storage".to_string()],
+    ) else {
+        panic!("case-insensitive path should resolve");
+    };
     assert_eq!(result.match_type, MatchType::CaseInsensitive);
-    assert_eq!(result.similarity_score, 0.95);
+    assert!((result.similarity_score - 0.95).abs() < f32::EPSILON);
 }
 
 #[test]

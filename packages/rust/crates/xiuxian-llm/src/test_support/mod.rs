@@ -20,12 +20,15 @@ pub use deepseek_cache_api::{
 pub use deepseek_config::{
     DeepseekCacheConfigSnapshot, DeepseekConfigSnapshot, load_deepseek_config_with_paths,
     normalize_deepseek_model_root, resolve_deepseek_model_root_with,
+    resolve_default_deepseek_model_root_with,
 };
 pub use deepseek_runtime::{
     deepseek_snapshot_qoffset_aligned_for_tests, require_quantized_deepseek_snapshot_for_tests,
     resolve_deepseek_device_kind_label_for_tests, resolve_deepseek_engine_device_label_for_tests,
     resolve_deepseek_load_dtype_label_for_tests,
+    resolve_deepseek_low_precision_load_policy_for_tests,
     resolve_deepseek_model_kind_for_model_root_label_for_tests,
+    resolve_deepseek_model_kind_for_model_root_label_from_sources_for_tests,
     resolve_deepseek_model_kind_label_for_tests, resolve_deepseek_safe_vision_settings_for_tests,
     resolve_deepseek_snapshot_path_for_tests, resolve_deepseek_vision_settings_for_tests,
     resolve_deepseek_weights_path_for_tests, should_retry_deepseek_cpu_fallback_for_tests,

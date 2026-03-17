@@ -15,4 +15,4 @@ pub use backend::{
 pub use driver::HotReloadDriver;
 pub use policy::{resolve_hot_reload_watch_extensions, resolve_hot_reload_watch_patterns};
 pub use runtime::{HotReloadOutcome, HotReloadRuntime, HotReloadStatus, HotReloadTrigger};
-pub use target::{HotReloadInvocation, HotReloadTarget};
+pub use target::HotReloadTarget;

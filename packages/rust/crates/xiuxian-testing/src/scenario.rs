@@ -45,6 +45,7 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -75,20 +76,20 @@ pub struct ScenarioConfig {
 /// Scenario metadata from the `[scenario]` section.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScenarioMeta {
-    /// Unique scenario identifier (e.g., "001_routing_keywords_merge").
+    /// Unique scenario identifier (e.g., "`001_routing_keywords_merge`").
     pub id: String,
     /// Human-readable scenario name.
     pub name: String,
     /// Detailed description of what the scenario tests.
     pub description: String,
-    /// Category for runner selection (e.g., "skill_definition", "page_index").
+    /// Category for runner selection (e.g., "`skill_definition`", "`page_index`").
     pub category: String,
 }
 
 /// Input configuration from the `[input]` section.
 #[derive(Debug, Clone, Deserialize)]
 pub struct InputConfig {
-    /// Type of input: "markdown_tree", "arrow_batch", "json"
+    /// Type of input: "`markdown_tree`", "`arrow_batch`", "`json`"
     #[serde(rename = "type")]
     pub input_type: String,
     /// Paths relative to scenario directory
@@ -102,7 +103,7 @@ pub struct InputConfig {
 /// in `tests/snapshots/scenarios/`.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ExpectedConfig {
-    /// Type of expected output: "json_snapshot", "text_snapshot"
+    /// Type of expected output: "`json_snapshot`", "`text_snapshot`"
     #[serde(rename = "type", default)]
     pub output_type: String,
     /// Expected files to compare (optional)
@@ -200,7 +201,7 @@ impl Scenario {
 
 /// Trait for category-specific scenario execution.
 ///
-/// Each category of tests (page_index, search, graph, etc.) implements
+/// Each category of tests (`page_index`, `search`, `graph`, etc.) implements
 /// this trait to define how to run scenarios and generate snapshots.
 pub trait ScenarioRunner: Send + Sync {
     /// Get the category name this runner handles.
@@ -269,7 +270,7 @@ impl ScenarioFramework {
         self.runners
             .values()
             .find(|r| r.handles_category(category))
-            .map(|b| b.as_ref())
+            .map(std::convert::AsRef::as_ref)
     }
 
     /// Run all scenarios across all categories.
@@ -296,27 +297,22 @@ impl ScenarioFramework {
         for scenario_dir in scenarios {
             let scenario = Scenario::load(scenario_dir)?;
 
-            let runner = match self.find_runner(scenario.category()) {
-                Some(r) => r,
-                None => {
-                    eprintln!(
-                        "Warning: No runner for category '{}', skipping: {}",
-                        scenario.category(),
-                        scenario.id()
-                    );
-                    continue;
-                }
-            };
+            let runner = self.find_runner(scenario.category()).ok_or_else(|| {
+                io::Error::other(format!(
+                    "No runner registered for scenario category '{}' (scenario: {})",
+                    scenario.category(),
+                    scenario.id()
+                ))
+            })?;
 
             count += 1;
-            println!("Running scenario: {} ({})", scenario.name(), scenario.id());
 
             // Create temp directory and copy input
             let temp_dir = tempfile::TempDir::new()?;
-            if let Some(input_path) = scenario.input_path() {
-                if input_path.exists() {
-                    copy_dir_recursive(&input_path, temp_dir.path())?;
-                }
+            if let Some(input_path) = scenario.input_path()
+                && input_path.exists()
+            {
+                copy_dir_recursive(&input_path, temp_dir.path())?;
             }
 
             // Run the scenario
@@ -343,9 +339,9 @@ impl ScenarioFramework {
     /// Returns an error if no runner is registered for the category or if
     /// any scenario execution fails.
     pub fn run_category(&self, category: &str) -> Result<usize, Box<dyn Error>> {
-        let runner = self
-            .find_runner(category)
-            .ok_or_else(|| format!("No runner registered for category: {}", category))?;
+        let runner = self.find_runner(category).ok_or_else(|| {
+            io::Error::other(format!("No runner registered for category: {category}"))
+        })?;
 
         let scenarios = discover_scenarios();
         let mut count = 0;
@@ -358,14 +354,13 @@ impl ScenarioFramework {
             }
 
             count += 1;
-            println!("Running scenario: {} ({})", scenario.name(), scenario.id());
 
             // Create temp directory and copy input
             let temp_dir = tempfile::TempDir::new()?;
-            if let Some(input_path) = scenario.input_path() {
-                if input_path.exists() {
-                    copy_dir_recursive(&input_path, temp_dir.path())?;
-                }
+            if let Some(input_path) = scenario.input_path()
+                && input_path.exists()
+            {
+                copy_dir_recursive(&input_path, temp_dir.path())?;
             }
 
             // Run the scenario and generate snapshot
@@ -380,10 +375,6 @@ impl ScenarioFramework {
             }, {
                 insta::assert_json_snapshot!(snapshot_name, result);
             });
-        }
-
-        if count == 0 {
-            println!("No scenarios found for category: {}", category);
         }
 
         Ok(count)
@@ -479,7 +470,7 @@ pub fn find_first_doc_name(dir: &Path) -> Result<String, Box<dyn Error>> {
             if let Ok(name) = find_first_doc_name(&path) {
                 return Ok(name);
             }
-        } else if path.extension().map_or(false, |ext| ext == "md") {
+        } else if path.extension().is_some_and(|ext| ext == "md") {
             let stem = path
                 .file_stem()
                 .ok_or("missing file stem")?
@@ -510,6 +501,27 @@ pub fn load_expected_json(scenario_dir: &Path, file: &str) -> Result<Value, Box<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    fn write_scenario_fixture(root: &Path, name: &str, category: &str) {
+        let scenario_dir = root.join(name);
+        fs::create_dir_all(&scenario_dir).expect("scenario dir should be created");
+        fs::write(
+            scenario_dir.join("scenario.toml"),
+            format!(
+                r#"[scenario]
+id = "{name}"
+name = "Fixture Scenario"
+description = "Fixture"
+category = "{category}"
+
+[input]
+type = "json"
+"#
+            ),
+        )
+        .expect("scenario.toml should be written");
+    }
 
     #[test]
     fn test_framework_new() {
@@ -530,8 +542,7 @@ mod tests {
         // Should return crate-local path, not workspace root
         assert!(
             root.ends_with("tests/scenarios"),
-            "scenarios_root should end with tests/scenarios: {:?}",
-            root
+            "scenarios_root should end with tests/scenarios: {root:?}"
         );
     }
 
@@ -543,9 +554,26 @@ mod tests {
         for scenario in &scenarios {
             assert!(
                 scenario.to_string_lossy().contains("tests/scenarios"),
-                "Scenario should be in crate-local path: {:?}",
-                scenario
+                "Scenario should be in crate-local path: {scenario:?}"
             );
         }
+    }
+
+    #[test]
+    fn run_all_at_fails_when_scenario_has_no_registered_runner() {
+        let temp = tempfile::tempdir().expect("tempdir should be created");
+        write_scenario_fixture(temp.path(), "001_missing_runner", "missing_runner");
+
+        let framework = ScenarioFramework::new();
+        let error = framework
+            .run_all_at(temp.path())
+            .expect_err("missing runner should fail closed");
+
+        assert!(
+            error
+                .to_string()
+                .contains("No runner registered for scenario category 'missing_runner'"),
+            "unexpected error: {error}"
+        );
     }
 }

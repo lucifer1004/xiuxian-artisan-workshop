@@ -3,6 +3,10 @@ use std::sync::{Arc, OnceLock};
 
 mod model_root;
 
+pub(crate) use self::model_root::{
+    normalize_model_root, resolve_default_model_root_with_for_tests, resolve_model_root_with,
+};
+
 use super::config;
 #[cfg(feature = "vision-dots")]
 use super::dsq_alignment::required_qoffset_alignment;
@@ -69,7 +73,10 @@ fn load_deepseek_runtime() -> Arc<DeepseekRuntime> {
         });
     }
 
-    if let Some(model_root) = model_root::resolve_model_root() {
+    let configured_model_kind =
+        non_empty_env("XIUXIAN_VISION_MODEL_KIND").or_else(config::model_kind);
+    let resolved_model_kind = parse_model_kind_with(configured_model_kind.as_deref());
+    if let Some(model_root) = model_root::resolve_model_root_for_kind(resolved_model_kind) {
         if let Some(reason) = resolve_local_runtime_safety_reason(model_root.as_str()) {
             tracing::warn!(
                 event = "llm.vision.deepseek.runtime.disabled_unsafe_local_native",
@@ -280,5 +287,3 @@ fn validate_quantized_snapshot_alignment(path: &Path) -> Result<(), ()> {
     }
     Ok(())
 }
-
-pub(crate) use self::model_root::{normalize_model_root, resolve_model_root_with};

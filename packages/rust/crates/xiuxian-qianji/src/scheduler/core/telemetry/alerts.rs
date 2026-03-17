@@ -1,7 +1,10 @@
 use crate::scheduler::core::QianjiScheduler;
-use crate::telemetry::{ConsensusStatus, SwarmEvent, unix_millis_now};
+#[cfg(test)]
+use crate::telemetry::ConsensusStatus;
+use crate::telemetry::{SwarmEvent, unix_millis_now};
 
 impl QianjiScheduler {
+    #[cfg(test)]
     pub(in crate::scheduler::core) fn emit_consensus_spike(
         &self,
         session_id: &str,
@@ -34,5 +37,23 @@ impl QianjiScheduler {
             proxy_role: self.execution_identity.role_class.clone(),
             timestamp_ms: unix_millis_now(),
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::QianjiEngine;
+
+    #[test]
+    fn emit_consensus_spike_is_callable_without_emitter() {
+        let scheduler = QianjiScheduler::new(QianjiEngine::default());
+        scheduler.emit_consensus_spike(
+            "session-1",
+            "node-1",
+            ConsensusStatus::Failed,
+            Some(0.5),
+            Some(0.8),
+        );
     }
 }

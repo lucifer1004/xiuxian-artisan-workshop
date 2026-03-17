@@ -159,7 +159,6 @@ fn extract_property_drawers(lines: &[String]) -> HashMap<String, String> {
             attributes.insert(key, value);
         } else if trimmed.is_empty() {
             // Skip empty lines at the start of the section
-            continue;
         } else {
             // Stop at first non-property line
             break;

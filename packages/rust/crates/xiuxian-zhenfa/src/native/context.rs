@@ -50,8 +50,7 @@ impl ZhenfaContext {
         let should_set = self
             .trace_id
             .as_ref()
-            .map(|value| value.trim().is_empty())
-            .unwrap_or(true);
+            .is_none_or(|value| value.trim().is_empty());
         if should_set {
             self.trace_id = Some(correlation_id.into());
         }

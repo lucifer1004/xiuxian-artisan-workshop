@@ -7,6 +7,26 @@
 
 use serde::{Deserialize, Serialize};
 
+fn timestamp_ms_now() -> u64 {
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
+        Err(_) => 0,
+    }
+}
+
+fn apply_signed_delta(base: usize, delta: i64) -> Option<usize> {
+    if delta >= 0 {
+        let magnitude = usize::try_from(delta).ok()?;
+        base.checked_add(magnitude)
+    } else {
+        let magnitude = match usize::try_from(delta.unsigned_abs()) {
+            Ok(magnitude) => magnitude,
+            Err(_) => usize::MAX,
+        };
+        Some(base.saturating_sub(magnitude))
+    }
+}
+
 /// Result of a structural edit operation.
 ///
 /// Contains all information needed for:
@@ -39,6 +59,7 @@ pub struct StructuralTransaction {
 
 impl StructuralTransaction {
     /// Create a new structural transaction record.
+    #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn new(
         doc_id: String,
@@ -60,10 +81,7 @@ impl StructuralTransaction {
             line_delta,
             old_hash,
             new_hash,
-            timestamp_ms: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0),
+            timestamp_ms: timestamp_ms_now(),
             agent_id,
         }
     }
@@ -86,16 +104,8 @@ impl StructuralTransaction {
         // Range is after edit - shift by delta
         if start >= edit_end {
             let delta = self.byte_delta;
-            let new_start = if delta >= 0 {
-                start + delta as usize
-            } else {
-                start.saturating_sub((-delta) as usize)
-            };
-            let new_end = if delta >= 0 {
-                end + delta as usize
-            } else {
-                end.saturating_sub((-delta) as usize)
-            };
+            let new_start = apply_signed_delta(start, delta)?;
+            let new_end = apply_signed_delta(end, delta)?;
             return Some((new_start, new_end));
         }
 
@@ -196,6 +206,11 @@ impl StructuralTransactionCoordinator {
     ///
     /// Returns `Ok(())` if the transaction is compatible with pending transactions,
     /// or `Err(conflicting_transactions)` if there are conflicts.
+    ///
+    /// # Errors
+    ///
+    /// Returns the conflicting pending transactions when the new transaction overlaps an
+    /// in-flight edit for the same document.
     pub fn record(
         &mut self,
         transaction: StructuralTransaction,

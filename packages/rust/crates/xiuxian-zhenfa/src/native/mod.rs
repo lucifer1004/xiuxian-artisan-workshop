@@ -3,6 +3,7 @@ mod error;
 mod orchestrator;
 mod registry;
 mod signal;
+mod signal_registry;
 mod tool;
 
 pub use context::ZhenfaContext;
@@ -14,4 +15,5 @@ pub use orchestrator::{
 };
 pub use registry::ZhenfaRegistry;
 pub use signal::ZhenfaSignal;
+pub use signal_registry::{BroadcastResult, ExternalSignal, SignalRegistry, SignalRegistryExt};
 pub use tool::ZhenfaTool;

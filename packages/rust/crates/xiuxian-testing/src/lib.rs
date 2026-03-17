@@ -3,7 +3,7 @@
 //! This crate provides:
 //! - **Scenario Framework**: A reusable framework for scenario-based snapshot testing
 //! - **Test Structure Validation**: Utilities to enforce test directory conventions
-//! - **External Test Support**: Convention for mounting external test files via `#[path]`
+//! - **External Test Support**: Convention and policy validation for externalized tests via `#[path]`
 //! - **Test Utilities**: Common helpers for test setup and assertions
 //!
 //! # Scenario Framework
@@ -27,7 +27,11 @@
 //!
 //! # External Test Module Pattern
 //!
-//! Keep tests out of source files using `#[path]` mounting:
+//! Keep tests out of source files using `#[path]` mounting. The shared validation path also treats
+//! inline `#[cfg(test)]` modules as policy violations so crates can fail fast when tests drift back
+//! into `src/`.
+//! For enforcement, prefer the unified `assert_crate_test_policy` helper inside either a consumer
+//! crate test or a dedicated workspace audit crate.
 //!
 //! ```ignore
 //! // src/foo/bar.rs
@@ -63,6 +67,7 @@
 //! ```
 
 pub mod external_test;
+pub mod policy;
 pub mod scenario;
 pub mod utils;
 pub mod validation;
@@ -70,6 +75,11 @@ pub mod validation;
 pub use external_test::{
     ExternalTestMount, ExternalTestValidationIssue, calculate_test_path, generate_path_attribute,
     validate_external_test_mounts,
+};
+
+pub use policy::{
+    CrateTestPolicyReport, assert_crate_test_policy, format_crate_test_policy_report,
+    validate_crate_test_policy,
 };
 
 pub use scenario::{

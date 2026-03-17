@@ -10,8 +10,11 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Write as _;
+use std::path::Path;
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
+use crate::link_graph::parser::CodeObservation;
 use crate::link_graph::{PageIndexNode, RegistryBuildResult, RegistryIndex};
 
 use super::WendaoContextExt;
@@ -43,7 +46,6 @@ impl NodeStatus {
     /// Parse status from string.
     fn from_str(s: &str) -> Self {
         match s.trim().to_uppercase().as_str() {
-            "STABLE" => Self::Stable,
             "DRAFT" => Self::Draft,
             "DEPRECATED" => Self::Deprecated,
             _ => Self::Stable,
@@ -211,6 +213,12 @@ impl IssueLocation {
 /// - **Contract validation**: Validate `:CONTRACT:` attribute constraints.
 ///
 /// Returns an XML-Lite report of all issues found.
+///
+/// # Errors
+///
+/// Returns `ZhenfaError` when the link graph index cannot be loaded or when the
+/// underlying audit core cannot complete.
+#[allow(clippy::needless_pass_by_value)] // The tool macro keeps owned args for tool invocation wiring.
 #[allow(missing_docs)]
 #[zhenfa_tool(
     name = "wendao.semantic_check",
@@ -238,8 +246,7 @@ pub fn wendao_semantic_check(
     };
 
     let summary = format!(
-        "Found {} errors and {} warnings across {} documents",
-        error_count, warning_count, docs_checked_count
+        "Found {error_count} errors and {warning_count} warnings across {docs_checked_count} documents"
     );
 
     // Build per-file reports with health scores
@@ -261,6 +268,10 @@ pub fn wendao_semantic_check(
 /// Run the core audit logic and return raw issues and file contents.
 ///
 /// This allows the CLI and other tools to reuse the auditing logic without XML formatting.
+///
+/// # Errors
+///
+/// Returns `ZhenfaError` when the link graph index cannot be queried.
 pub fn run_audit_core(
     ctx: &ZhenfaContext,
     args: &WendaoSemanticCheckArgs,
@@ -287,8 +298,7 @@ pub fn run_audit_core(
 
     // Resolve source files for fuzzy suggestions (Blueprint v2.9)
     let source_files: Vec<SourceFile> = if let Some(ref paths) = args.source_paths {
-        let path_refs: Vec<&std::path::Path> =
-            paths.iter().map(|p| std::path::Path::new(p)).collect();
+        let path_refs: Vec<&std::path::Path> = paths.iter().map(std::path::Path::new).collect();
         // Try to resolve for all supported languages
         let mut files = Vec::new();
         for lang in [
@@ -350,17 +360,16 @@ pub fn run_audit_core(
         }
 
         if let Some(doc_trees) = trees.get(doc_id) {
+            let audit_pass = AuditPass {
+                doc_id,
+                registry: &registry,
+                checks: &checks,
+                include_warnings,
+                source_files: &source_files,
+                fuzzy_threshold,
+            };
             for root in doc_trees {
-                check_node(
-                    root,
-                    doc_id,
-                    &registry,
-                    &checks,
-                    include_warnings,
-                    &source_files,
-                    fuzzy_threshold,
-                    &mut issues,
-                );
+                check_node(root, &audit_pass, &mut issues);
             }
         }
     }
@@ -368,58 +377,55 @@ pub fn run_audit_core(
     Ok((issues, file_contents))
 }
 
-/// Check a single node and its children for semantic issues.
-fn check_node(
-    node: &PageIndexNode,
-    doc_id: &str,
-    registry: &RegistryIndex,
-    checks: &[CheckType],
+struct AuditPass<'a> {
+    doc_id: &'a str,
+    registry: &'a RegistryIndex,
+    checks: &'a [CheckType],
     include_warnings: bool,
-    source_files: &[SourceFile],
+    source_files: &'a [SourceFile],
     fuzzy_threshold: Option<f32>,
-    issues: &mut Vec<SemanticIssue>,
-) {
+}
+
+/// Check a single node and its children for semantic issues.
+fn check_node(node: &PageIndexNode, audit_pass: &AuditPass<'_>, issues: &mut Vec<SemanticIssue>) {
     // Check this node
-    if checks.contains(&CheckType::DeadLinks) {
-        check_dead_links(node, doc_id, registry, issues);
+    if audit_pass.checks.contains(&CheckType::DeadLinks) {
+        check_dead_links(node, audit_pass.doc_id, audit_pass.registry, issues);
     }
 
-    if checks.contains(&CheckType::DeprecatedRefs) && include_warnings {
-        check_deprecated_refs(node, doc_id, registry, issues);
+    if audit_pass.checks.contains(&CheckType::DeprecatedRefs) && audit_pass.include_warnings {
+        check_deprecated_refs(node, audit_pass.doc_id, audit_pass.registry, issues);
     }
 
-    if checks.contains(&CheckType::Contracts) {
-        check_contracts(node, doc_id, issues);
+    if audit_pass.checks.contains(&CheckType::Contracts) {
+        check_contracts(node, audit_pass.doc_id, issues);
     }
 
-    if checks.contains(&CheckType::HashAlignment) {
-        check_hash_alignment(node, doc_id, registry, issues);
+    if audit_pass.checks.contains(&CheckType::HashAlignment) {
+        check_hash_alignment(node, audit_pass.doc_id, audit_pass.registry, issues);
     }
 
-    if checks.contains(&CheckType::MissingIdentity) && include_warnings {
-        check_missing_identity(node, doc_id, issues);
+    if audit_pass.checks.contains(&CheckType::MissingIdentity) && audit_pass.include_warnings {
+        check_missing_identity(node, audit_pass.doc_id, issues);
     }
 
-    if checks.contains(&CheckType::LegacySyntax) && include_warnings {
-        check_legacy_syntax(node, doc_id, issues);
+    if audit_pass.checks.contains(&CheckType::LegacySyntax) && audit_pass.include_warnings {
+        check_legacy_syntax(node, audit_pass.doc_id, issues);
     }
 
-    if checks.contains(&CheckType::CodeObservations) {
-        check_code_observations(node, doc_id, source_files, fuzzy_threshold, issues);
+    if audit_pass.checks.contains(&CheckType::CodeObservations) {
+        check_code_observations(
+            node,
+            audit_pass.doc_id,
+            audit_pass.source_files,
+            audit_pass.fuzzy_threshold,
+            issues,
+        );
     }
 
     // Recurse into children
     for child in &node.children {
-        check_node(
-            child,
-            doc_id,
-            registry,
-            checks,
-            include_warnings,
-            source_files,
-            fuzzy_threshold,
-            issues,
-        );
+        check_node(child, audit_pass, issues);
     }
 }
 
@@ -761,6 +767,84 @@ fn check_legacy_syntax(node: &PageIndexNode, doc_id: &str, issues: &mut Vec<Sema
     }
 }
 
+fn push_invalid_observation_language_issue(
+    node: &PageIndexNode,
+    doc_id: &str,
+    obs: &CodeObservation,
+    issues: &mut Vec<SemanticIssue>,
+) {
+    issues.push(SemanticIssue {
+        severity: "error".to_string(),
+        issue_type: "invalid_observation_language".to_string(),
+        doc: doc_id.to_string(),
+        node_id: node.node_id.clone(),
+        message: format!(
+            "Unsupported language '{}' in :OBSERVE: pattern",
+            obs.language
+        ),
+        location: Some(IssueLocation::from_node(node)),
+        suggestion: Some(
+            "Use a supported language: rust, python, javascript, typescript, go, java, c, cpp, etc.".to_string()
+        ),
+        fuzzy_suggestion: None,
+    });
+}
+
+fn build_observation_fuzzy_suggestion(
+    obs: &CodeObservation,
+    lang: xiuxian_ast::Lang,
+    source_files: &[SourceFile],
+    fuzzy_threshold: Option<f32>,
+) -> Option<FuzzySuggestionData> {
+    if source_files.is_empty() {
+        return None;
+    }
+
+    suggest_pattern_fix_with_threshold(&obs.pattern, lang, source_files, fuzzy_threshold)
+        .map(|suggestion| FuzzySuggestionData::from_suggestion(suggestion, obs.pattern.clone()))
+}
+
+fn format_observation_source_location(source_location: Option<&str>) -> String {
+    source_location.map_or_else(String::new, |location| {
+        format!("Found similar code at: {location}")
+    })
+}
+
+fn format_observation_suggestion(
+    pattern: &str,
+    description: &str,
+    fuzzy_suggestion_data: Option<&FuzzySuggestionData>,
+    fallback: &str,
+) -> String {
+    if let Some(data) = fuzzy_suggestion_data {
+        format!(
+            "Pattern '{pattern}' {description} {}\nConfidence: {:.0}%\n{}",
+            data.suggested_pattern,
+            data.confidence * 100.0,
+            format_observation_source_location(data.source_location.as_deref())
+        )
+    } else {
+        fallback.to_string()
+    }
+}
+
+fn count_observation_matches(
+    obs: &CodeObservation,
+    lang: xiuxian_ast::Lang,
+    source_files: &[SourceFile],
+) -> usize {
+    source_files
+        .iter()
+        .filter_map(|file| {
+            let file_path = Path::new(&file.path);
+            xiuxian_ast::Lang::from_path(file_path)
+                .filter(|file_lang| *file_lang == lang)
+                .and_then(|_| xiuxian_ast::scan(&file.content, &obs.pattern, lang).ok())
+                .map(|matches| matches.len())
+        })
+        .sum()
+}
+
 /// Check :OBSERVE: code patterns for validity using xiuxian-ast (Blueprint v2.7).
 ///
 /// Validates that all `:OBSERVE:` property drawer entries have:
@@ -778,61 +862,21 @@ fn check_code_observations(
 ) {
     // Check all observations in this node's metadata
     for obs in &node.metadata.observations {
-        // Check if language is supported
-        if obs.ast_language().is_none() {
-            issues.push(SemanticIssue {
-                severity: "error".to_string(),
-                issue_type: "invalid_observation_language".to_string(),
-                doc: doc_id.to_string(),
-                node_id: node.node_id.clone(),
-                message: format!(
-                    "Unsupported language '{}' in :OBSERVE: pattern",
-                    obs.language
-                ),
-                location: Some(IssueLocation::from_node(node)),
-                suggestion: Some(
-                    "Use a supported language: rust, python, javascript, typescript, go, java, c, cpp, etc.".to_string()
-                ),
-                fuzzy_suggestion: None,
-            });
+        let Some(lang) = obs.ast_language() else {
+            push_invalid_observation_language_issue(node, doc_id, obs, issues);
             continue;
-        }
+        };
 
         // Validate the pattern syntax
         if let Err(error) = obs.validate_pattern() {
-            // Try fuzzy suggestion if source files are available
-            let fuzzy_suggestion_data = if !source_files.is_empty() {
-                if let Some(lang) = obs.ast_language() {
-                    suggest_pattern_fix_with_threshold(
-                        &obs.pattern,
-                        lang,
-                        source_files,
-                        fuzzy_threshold,
-                    )
-                    .map(|s| FuzzySuggestionData::from_suggestion(s, obs.pattern.clone()))
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            // Build suggestion text
-            let suggestion_text = if let Some(ref data) = fuzzy_suggestion_data {
-                format!(
-                    "Pattern '{}' is invalid. Consider updating to: {}\nConfidence: {:.0}%\n{}",
-                    obs.pattern,
-                    data.suggested_pattern,
-                    data.confidence * 100.0,
-                    data.source_location
-                        .as_ref()
-                        .map(|l| format!("Found similar code at: {}", l))
-                        .unwrap_or_default()
-                )
-            } else {
-                "Fix the pattern syntax or check xiuxian-ast documentation for valid sgrep patterns"
-                    .to_string()
-            };
+            let fuzzy_suggestion_data =
+                build_observation_fuzzy_suggestion(obs, lang, source_files, fuzzy_threshold);
+            let suggestion_text = format_observation_suggestion(
+                &obs.pattern,
+                "is invalid. Consider updating to:",
+                fuzzy_suggestion_data.as_ref(),
+                "Fix the pattern syntax or check xiuxian-ast documentation for valid sgrep patterns",
+            );
 
             issues.push(SemanticIssue {
                 severity: "error".to_string(),
@@ -847,61 +891,32 @@ fn check_code_observations(
             continue;
         }
 
-        // 3.0 Reachability Check: Check if valid pattern actually matches any code
-        if !source_files.is_empty() {
-            let lang = obs.ast_language().unwrap();
-            let mut total_matches = 0;
-            for file in source_files {
-                let file_path = std::path::Path::new(&file.path);
-                if let Some(file_lang) = xiuxian_ast::Lang::from_path(file_path) {
-                    if file_lang == lang {
-                        if let Ok(matches) = xiuxian_ast::scan(&file.content, &obs.pattern, lang) {
-                            total_matches += matches.len();
-                        }
-                    }
-                }
-            }
-
-            if total_matches == 0 {
-                // Trigger fuzzy suggestion for valid but missing target
-                let fuzzy_suggestion_data = suggest_pattern_fix_with_threshold(
-                    &obs.pattern,
-                    lang,
-                    source_files,
-                    fuzzy_threshold,
-                )
-                .map(|s| FuzzySuggestionData::from_suggestion(s, obs.pattern.clone()));
-
-                let suggestion_text = if let Some(ref data) = fuzzy_suggestion_data {
-                    format!(
-                        "Pattern '{}' found no matches. Best fuzzy match: {}\nConfidence: {:.0}%\n{}",
-                        obs.pattern,
-                        data.suggested_pattern,
-                        data.confidence * 100.0,
-                        data.source_location
-                            .as_ref()
-                            .map(|l| format!("Found similar code at: {}", l))
-                            .unwrap_or_default()
-                    )
-                } else {
-                    "The code may have been renamed, moved, or deleted. No similar code patterns found.".to_string()
-                };
-
-                issues.push(SemanticIssue {
-                    severity: "warning".to_string(),
-                    issue_type: "observation_target_missing".to_string(),
-                    doc: doc_id.to_string(),
-                    node_id: node.node_id.clone(),
-                    message: format!(
-                        "Observation pattern '{}' found no matches in source files",
-                        obs.pattern
-                    ),
-                    location: Some(IssueLocation::from_node(node)),
-                    suggestion: Some(suggestion_text),
-                    fuzzy_suggestion: fuzzy_suggestion_data,
-                });
-            }
+        if source_files.is_empty() || count_observation_matches(obs, lang, source_files) > 0 {
+            continue;
         }
+
+        let fuzzy_suggestion_data =
+            build_observation_fuzzy_suggestion(obs, lang, source_files, fuzzy_threshold);
+        let suggestion_text = format_observation_suggestion(
+            &obs.pattern,
+            "found no matches. Best fuzzy match:",
+            fuzzy_suggestion_data.as_ref(),
+            "The code may have been renamed, moved, or deleted. No similar code patterns found.",
+        );
+
+        issues.push(SemanticIssue {
+            severity: "warning".to_string(),
+            issue_type: "observation_target_missing".to_string(),
+            doc: doc_id.to_string(),
+            node_id: node.node_id.clone(),
+            message: format!(
+                "Observation pattern '{}' found no matches in source files",
+                obs.pattern
+            ),
+            location: Some(IssueLocation::from_node(node)),
+            suggestion: Some(suggestion_text),
+            fuzzy_suggestion: fuzzy_suggestion_data,
+        });
     }
 }
 
@@ -932,8 +947,8 @@ fn build_file_reports(issues: &[SemanticIssue], docs: &[String]) -> Vec<FileAudi
         // Start at 100, subtract 20 for each error, 5 for each warning
         // Minimum score is 0
         let health_score = (100u8)
-            .saturating_sub((error_count * 20) as u8)
-            .saturating_sub((warning_count * 5) as u8);
+            .saturating_sub(issue_penalty(error_count, 20))
+            .saturating_sub(issue_penalty(warning_count, 5));
 
         reports.push(FileAuditReport {
             path: doc_id.clone(),
@@ -998,6 +1013,10 @@ fn validate_contract(contract: &str, content: &str) -> Option<String> {
     None
 }
 
+fn issue_penalty(count: usize, weight: u8) -> u8 {
+    u8::try_from(count).map_or(u8::MAX, |count| count.saturating_mul(weight))
+}
+
 /// Extract arguments from a function-like contract expression.
 fn extract_function_args<'a>(contract: &'a str, function_name: &str) -> Option<&'a str> {
     let prefix = format!("{function_name}(");
@@ -1008,9 +1027,132 @@ fn extract_function_args<'a>(contract: &'a str, function_name: &str) -> Option<&
     }
 }
 
+fn file_health_status(health_score: u8) -> &'static str {
+    if health_score >= 80 {
+        "HEALTHY"
+    } else if health_score >= 50 {
+        "DEGRADED"
+    } else {
+        "UNHEALTHY"
+    }
+}
+
+fn append_file_reports_xml(output: &mut String, file_reports: &[FileAuditReport]) {
+    if file_reports.is_empty() {
+        return;
+    }
+
+    output.push_str("  <files>\n");
+    for file_report in file_reports {
+        let _ = writeln!(
+            output,
+            "    <file path=\"{}\" health=\"{}\" score=\"{}\">",
+            xml_escape(&file_report.path),
+            file_health_status(file_report.health_score),
+            file_report.health_score
+        );
+        let _ = writeln!(output, "      <errors>{}</errors>", file_report.error_count);
+        let _ = writeln!(
+            output,
+            "      <warnings>{}</warnings>",
+            file_report.warning_count
+        );
+        output.push_str("    </file>\n");
+    }
+    output.push_str("  </files>\n");
+}
+
+fn append_issue_location_xml(output: &mut String, location: &IssueLocation) {
+    let byte_range_attr = if let Some((start, end)) = location.byte_range {
+        format!(" byte_start=\"{start}\" byte_end=\"{end}\"")
+    } else {
+        String::new()
+    };
+    let _ = writeln!(
+        output,
+        "      <location line=\"{}\" path=\"{}\"{}/>",
+        location.line,
+        xml_escape(&location.heading_path),
+        byte_range_attr
+    );
+}
+
+fn append_fuzzy_suggestion_xml(output: &mut String, fuzzy: &FuzzySuggestionData) {
+    output.push_str("      <fuzzy_suggestion>\n");
+    let _ = writeln!(
+        output,
+        "        <text>Pattern '{}' found with {:.0}% similarity.</text>",
+        xml_escape(&fuzzy.suggested_pattern),
+        fuzzy.confidence * 100.0
+    );
+    let _ = writeln!(
+        output,
+        "        <replacement_drawer>{}</replacement_drawer>",
+        xml_escape(&fuzzy.replacement_drawer)
+    );
+    let _ = writeln!(
+        output,
+        "        <confidence>{:.2}</confidence>",
+        fuzzy.confidence
+    );
+    if let Some(ref location) = fuzzy.source_location {
+        let _ = writeln!(
+            output,
+            "        <source_location>{}</source_location>",
+            xml_escape(location)
+        );
+    }
+    output.push_str("      </fuzzy_suggestion>\n");
+}
+
+fn append_issue_xml(output: &mut String, issue: &SemanticIssue) {
+    let _ = writeln!(
+        output,
+        "    <issue severity=\"{}\" code=\"{}\">",
+        issue.severity.to_uppercase(),
+        issue_type_to_code(&issue.issue_type)
+    );
+    let _ = writeln!(
+        output,
+        "      <message>{}</message>",
+        xml_escape(&issue.message)
+    );
+    let _ = writeln!(output, "      <doc>{}</doc>", xml_escape(&issue.doc));
+    let _ = writeln!(
+        output,
+        "      <node_id>{}</node_id>",
+        xml_escape(&issue.node_id)
+    );
+    if let Some(ref location) = issue.location {
+        append_issue_location_xml(output, location);
+    }
+    if let Some(ref suggestion) = issue.suggestion {
+        let _ = writeln!(
+            output,
+            "      <suggestion>{}</suggestion>",
+            xml_escape(suggestion)
+        );
+    }
+    if let Some(ref fuzzy) = issue.fuzzy_suggestion {
+        append_fuzzy_suggestion_xml(output, fuzzy);
+    }
+    output.push_str("    </issue>\n");
+}
+
+fn append_issues_xml(output: &mut String, issues: &[SemanticIssue]) {
+    if issues.is_empty() {
+        return;
+    }
+
+    output.push_str("  <issues>\n");
+    for issue in issues {
+        append_issue_xml(output, issue);
+    }
+    output.push_str("  </issues>\n");
+}
+
 /// Format the check result as XML-Lite (Blueprint v2.2).
 fn format_result_as_xml(result: &SemanticCheckResult) -> String {
-    use std::fmt::Write;
     let mut output = String::new();
 
     let _ = writeln!(
@@ -1020,110 +1162,8 @@ fn format_result_as_xml(result: &SemanticCheckResult) -> String {
     );
 
     let _ = writeln!(output, "  <summary>{}</summary>", result.summary);
-
-    // File-level reports with health scores
-    if !result.file_reports.is_empty() {
-        output.push_str("  <files>\n");
-        for file_report in &result.file_reports {
-            let health_status = if file_report.health_score >= 80 {
-                "HEALTHY"
-            } else if file_report.health_score >= 50 {
-                "DEGRADED"
-            } else {
-                "UNHEALTHY"
-            };
-            let _ = writeln!(
-                output,
-                "    <file path=\"{}\" health=\"{}\" score=\"{}\">",
-                xml_escape(&file_report.path),
-                health_status,
-                file_report.health_score
-            );
-            let _ = writeln!(output, "      <errors>{}</errors>", file_report.error_count);
-            let _ = writeln!(
-                output,
-                "      <warnings>{}</warnings>",
-                file_report.warning_count
-            );
-            output.push_str("    </file>\n");
-        }
-        output.push_str("  </files>\n");
-    }
-
-    // Issues
-    if !result.issues.is_empty() {
-        output.push_str("  <issues>\n");
-        for issue in &result.issues {
-            let _ = writeln!(
-                output,
-                "    <issue severity=\"{}\" code=\"{}\">",
-                issue.severity.to_uppercase(),
-                issue_type_to_code(&issue.issue_type)
-            );
-            let _ = writeln!(
-                output,
-                "      <message>{}</message>",
-                xml_escape(&issue.message)
-            );
-            let _ = writeln!(output, "      <doc>{}</doc>", xml_escape(&issue.doc));
-            let _ = writeln!(
-                output,
-                "      <node_id>{}</node_id>",
-                xml_escape(&issue.node_id)
-            );
-            if let Some(ref loc) = issue.location {
-                let byte_range_attr = if let Some((start, end)) = loc.byte_range {
-                    format!(" byte_start=\"{start}\" byte_end=\"{end}\"")
-                } else {
-                    String::new()
-                };
-                let _ = writeln!(
-                    output,
-                    "      <location line=\"{}\" path=\"{}\"{}/>",
-                    loc.line,
-                    xml_escape(&loc.heading_path),
-                    byte_range_attr
-                );
-            }
-            if let Some(ref suggestion) = issue.suggestion {
-                let _ = writeln!(
-                    output,
-                    "      <suggestion>{}</suggestion>",
-                    xml_escape(suggestion)
-                );
-            }
-            // Fuzzy suggestion (Blueprint v2.9)
-            if let Some(ref fuzzy) = issue.fuzzy_suggestion {
-                output.push_str("      <fuzzy_suggestion>\n");
-                let _ = writeln!(
-                    output,
-                    "        <text>Pattern '{}' found with {:.0}% similarity.</text>",
-                    xml_escape(&fuzzy.suggested_pattern),
-                    fuzzy.confidence * 100.0
-                );
-                let _ = writeln!(
-                    output,
-                    "        <replacement_drawer>{}</replacement_drawer>",
-                    xml_escape(&fuzzy.replacement_drawer)
-                );
-                let _ = writeln!(
-                    output,
-                    "        <confidence>{:.2}</confidence>",
-                    fuzzy.confidence
-                );
-                if let Some(ref loc) = fuzzy.source_location {
-                    let _ = writeln!(
-                        output,
-                        "        <source_location>{}</source_location>",
-                        xml_escape(loc)
-                    );
-                }
-                output.push_str("      </fuzzy_suggestion>\n");
-            }
-            output.push_str("    </issue>\n");
-        }
-        output.push_str("  </issues>\n");
-    }
+    append_file_reports_xml(&mut output, &result.file_reports);
+    append_issues_xml(&mut output, &result.issues);
 
     output.push_str("</wendao_audit_report>\n");
     output

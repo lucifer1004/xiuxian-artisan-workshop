@@ -9,7 +9,7 @@ publish = false
 default-run = "wendao"
 
 [features]
-default = []
+default = ["zhenfa-router"]
 zhenfa-router = ["dep:axum"]
 
 [[bin]]
@@ -48,6 +48,7 @@ xiuxian-vector = { path = "../xiuxian-vector" }
 xiuxian-io = { path = "../xiuxian-io" }
 xiuxian-llm = { path = "../xiuxian-llm" }
 xiuxian-ast = { path = "../xiuxian-ast" }
+xiuxian-config-core = { path = "../xiuxian-config-core" }
 
 # Macro utilities
 xiuxian-macros = { path = "../xiuxian-macros" }
@@ -96,6 +97,9 @@ url = "2.5.7"
 # Real-time observation (Project Sentinel Phase 2)
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
+
+# HTTP client for webhook notifications (Phase 7 ForwardNotifier)
+reqwest = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

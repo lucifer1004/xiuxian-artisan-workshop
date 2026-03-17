@@ -1,10 +1,12 @@
 //! AST-based Security Scanning Mechanism.
 
 use crate::contracts::{FlowInstruction, QianjiMechanism, QianjiOutput};
+use crate::executors::security_scan::input::{
+    collect_file_paths, resolve_base_dir, resolve_scan_path,
+};
 use async_trait::async_trait;
 use serde_json::json;
 use std::fs;
-use std::path::Path;
 use xiuxian_ast::SecurityScanner;
 
 /// Mechanism responsible for statically analyzing code files for security violations.
@@ -22,62 +24,29 @@ pub struct SecurityScanMechanism {
 #[async_trait]
 impl QianjiMechanism for SecurityScanMechanism {
     async fn execute(&self, context: &serde_json::Value) -> Result<QianjiOutput, String> {
-        let mut file_paths = Vec::new();
-
-        let files_val = context
-            .get(&self.files_key)
-            .ok_or_else(|| format!("Missing context key: {}", self.files_key))?;
-
-        if let Some(arr) = files_val.as_array() {
-            for v in arr {
-                if let Some(s) = v.as_str() {
-                    file_paths.push(s.to_string());
-                }
-            }
-        } else if let Some(s) = files_val.as_str() {
-            for line in s.split('\n') {
-                let trimmed = line.trim();
-                if !trimmed.is_empty() {
-                    file_paths.push(trimmed.to_string());
-                }
-            }
-        } else {
-            return Err(format!(
-                "Context key {} must be a string or array",
-                self.files_key
-            ));
-        }
-
-        let base_dir = if let Some(cwd_key) = &self.cwd_key {
-            context.get(cwd_key).and_then(|v| v.as_str()).map(Path::new)
-        } else {
-            None
-        };
+        let file_paths = collect_file_paths(context, &self.files_key)?;
+        let base_dir = resolve_base_dir(context, self.cwd_key.as_ref());
 
         let mut all_violations = Vec::new();
         let scanner = SecurityScanner::new();
 
         for file_str in file_paths {
-            let mut path_buf = std::path::PathBuf::from(&file_str);
-            if let Some(base) = base_dir {
-                if path_buf.is_relative() {
-                    path_buf = base.join(path_buf);
-                }
-            }
+            let path_buf = resolve_scan_path(&file_str, base_dir);
 
             // Read file if it exists (it might be a deleted staged file, so we skip reading errors softly)
-            if path_buf.exists() && path_buf.is_file() {
-                if let Ok(content) = fs::read_to_string(&path_buf) {
-                    let file_violations = scanner.scan_all(&content);
-                    for v in file_violations {
-                        all_violations.push(json!({
-                            "file": file_str,
-                            "rule_id": v.rule_id,
-                            "description": v.description,
-                            "line": v.line,
-                            "snippet": v.snippet,
-                        }));
-                    }
+            if path_buf.exists()
+                && path_buf.is_file()
+                && let Ok(content) = fs::read_to_string(&path_buf)
+            {
+                let file_violations = scanner.scan_all(&content);
+                for v in file_violations {
+                    all_violations.push(json!({
+                        "file": file_str,
+                        "rule_id": v.rule_id,
+                        "description": v.description,
+                        "line": v.line,
+                        "snippet": v.snippet,
+                    }));
                 }
             }
         }

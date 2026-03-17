@@ -9,28 +9,6 @@ pub(super) fn env_var_or_override(runtime_env: &QianjiRuntimeEnv, key: &str) -> 
     read_env_non_empty(key)
 }
 
-pub(super) fn resolve_api_key_from_env(
-    runtime_env: &QianjiRuntimeEnv,
-    api_key_env: &str,
-) -> Option<String> {
-    let openai_override = env_override_state(runtime_env, "OPENAI_API_KEY");
-    if let EnvOverrideState::Value(value) = openai_override {
-        return Some(value);
-    }
-
-    match env_override_state(runtime_env, api_key_env) {
-        EnvOverrideState::Value(value) => return Some(value),
-        EnvOverrideState::Empty => return None,
-        EnvOverrideState::Missing => {}
-    }
-
-    if matches!(openai_override, EnvOverrideState::Empty) {
-        return None;
-    }
-
-    read_first_non_empty_env(["OPENAI_API_KEY", api_key_env])
-}
-
 pub(super) fn parse_usize_env_override(runtime_env: &QianjiRuntimeEnv, key: &str) -> Option<usize> {
     env_var_or_override(runtime_env, key).and_then(|value| value.trim().parse::<usize>().ok())
 }
@@ -81,8 +59,4 @@ fn read_env_non_empty(key: &str) -> Option<String> {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-}
-
-fn read_first_non_empty_env<const N: usize>(keys: [&str; N]) -> Option<String> {
-    keys.into_iter().find_map(read_env_non_empty)
 }

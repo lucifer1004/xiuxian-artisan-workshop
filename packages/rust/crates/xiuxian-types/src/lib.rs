@@ -181,9 +181,8 @@ fn metadata_get_string_list(metadata: &serde_json::Value, key: &str) -> Vec<Stri
 }
 
 fn metadata_get_string_list_variants(metadata: &serde_json::Value, key: &str) -> Vec<String> {
-    let object = match metadata.as_object() {
-        Some(object) => object,
-        None => return Vec::new(),
+    let Some(object) = metadata.as_object() else {
+        return Vec::new();
     };
     let mut values = Vec::new();
     for variant in metadata_key_variants(key) {
@@ -196,9 +195,8 @@ fn metadata_get_string_list_variants(metadata: &serde_json::Value, key: &str) ->
 
 #[allow(dead_code)]
 fn metadata_contains_key(metadata: &serde_json::Value, key: &str) -> bool {
-    let object = match metadata.as_object() {
-        Some(object) => object,
-        None => return false,
+    let Some(object) = metadata.as_object() else {
+        return false;
     };
     metadata_key_variants(key)
         .iter()

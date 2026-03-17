@@ -9,32 +9,244 @@ Runner for real_metal test with both capacity check and runtime memory guard.
 from __future__ import annotations
 
 import os
+import pty
 import subprocess
 import sys
 import time
+import tomllib
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # ps RSS is ~5x lower than Activity Monitor's Memory on macOS
 RSS_SCALE_FACTOR = 5
 
-# Find the test binary
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-TEST_BINARY_PATTERN = "llm_vision_deepseek_real_metal-"
 CAPFOX_PATH = PROJECT_ROOT / ".run" / "capfox"
+VISION_CONFIG_PATH = (
+    PROJECT_ROOT
+    / "packages"
+    / "rust"
+    / "crates"
+    / "xiuxian-llm"
+    / "resources"
+    / "config"
+    / "vision_deepseek.toml"
+)
+CPU_TEST_BINARY_PATTERN = "llm_vision_deepseek_real_cpu-"
+METAL_TEST_BINARY_PATTERN = "llm_vision_deepseek_real_metal-"
+DEFAULT_CPU_MAX_RSS_GB = 12.0
+DEFAULT_METAL_MAX_RSS_GB = 10.0
+DEFAULT_CPU_CAPFOX_MEM_PERCENT = 50.0
+DEFAULT_METAL_CAPFOX_MEM_PERCENT = 30.0
+DEFAULT_METAL_CAPFOX_GPU_PERCENT = 80.0
+DEFAULT_METAL_CAPFOX_VRAM_PERCENT = 60.0
 
 
-def find_test_binary() -> Path | None:
-    """Find the real_metal test binary."""
-    deps_dir = PROJECT_ROOT / "target" / "debug" / "deps"
+@dataclass(frozen=True)
+class TestGuardConfig:
+    cpu_max_rss_gb: float = DEFAULT_CPU_MAX_RSS_GB
+    metal_max_rss_gb: float = DEFAULT_METAL_MAX_RSS_GB
+    cpu_capfox_mem_percent: float = DEFAULT_CPU_CAPFOX_MEM_PERCENT
+    metal_capfox_mem_percent: float = DEFAULT_METAL_CAPFOX_MEM_PERCENT
+    metal_capfox_gpu_percent: float = DEFAULT_METAL_CAPFOX_GPU_PERCENT
+    metal_capfox_vram_percent: float = DEFAULT_METAL_CAPFOX_VRAM_PERCENT
+
+
+@dataclass(frozen=True)
+class TestProfileConfig:
+    max_rss_gb: float | None = None
+    capfox_mem_percent: float | None = None
+    capfox_gpu_percent: float | None = None
+    capfox_vram_percent: float | None = None
+    rust_log: str | None = None
+    env_overrides: dict[str, str] = field(default_factory=dict)
+
+
+def _read_test_guard_config(config_path: Path = VISION_CONFIG_PATH) -> TestGuardConfig:
+    try:
+        payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, tomllib.TOMLDecodeError, OSError):
+        return TestGuardConfig()
+
+    section = payload.get("test_guard")
+    if not isinstance(section, dict):
+        return TestGuardConfig()
+
+    def read_float(key: str, fallback: float) -> float:
+        value = section.get(key)
+        return float(value) if isinstance(value, int | float) else fallback
+
+    return TestGuardConfig(
+        cpu_max_rss_gb=read_float("cpu_max_rss_gb", DEFAULT_CPU_MAX_RSS_GB),
+        metal_max_rss_gb=read_float("metal_max_rss_gb", DEFAULT_METAL_MAX_RSS_GB),
+        cpu_capfox_mem_percent=read_float("cpu_capfox_mem_percent", DEFAULT_CPU_CAPFOX_MEM_PERCENT),
+        metal_capfox_mem_percent=read_float(
+            "metal_capfox_mem_percent", DEFAULT_METAL_CAPFOX_MEM_PERCENT
+        ),
+        metal_capfox_gpu_percent=read_float(
+            "metal_capfox_gpu_percent", DEFAULT_METAL_CAPFOX_GPU_PERCENT
+        ),
+        metal_capfox_vram_percent=read_float(
+            "metal_capfox_vram_percent", DEFAULT_METAL_CAPFOX_VRAM_PERCENT
+        ),
+    )
+
+
+def _read_test_profile_config(
+    profile_name: str, config_path: Path = VISION_CONFIG_PATH
+) -> TestProfileConfig | None:
+    try:
+        payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, tomllib.TOMLDecodeError, OSError):
+        return None
+
+    profiles = payload.get("test_profiles")
+    if not isinstance(profiles, dict):
+        return None
+
+    section = profiles.get(profile_name)
+    if not isinstance(section, dict):
+        return None
+
+    def read_float(key: str) -> float | None:
+        value = section.get(key)
+        return float(value) if isinstance(value, int | float) else None
+
+    def read_str(key: str) -> str | None:
+        value = section.get(key)
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def read_bool(key: str) -> bool | None:
+        value = section.get(key)
+        return value if isinstance(value, bool) else None
+
+    def read_int(key: str) -> int | None:
+        value = section.get(key)
+        return int(value) if isinstance(value, int) else None
+
+    env_overrides: dict[str, str] = {}
+    bool_env_keys = {
+        "model_kind": "XIUXIAN_VISION_MODEL_KIND",
+        "decode_use_cache": "XIUXIAN_VISION_OCR_USE_CACHE",
+        "require_quantized": "XIUXIAN_VISION_REQUIRE_QUANTIZED",
+        "allow_empty_output": "XIUXIAN_VISION_ALLOW_EMPTY_OUTPUT",
+        "moe_expert_f32_compute": "XIUXIAN_VISION_MOE_EXPERT_F32_COMPUTE",
+        "shared_expert_f32_compute": "XIUXIAN_VISION_SHARED_EXPERT_F32_COMPUTE",
+        "skip_shared_experts": "XIUXIAN_VISION_SKIP_SHARED_EXPERTS",
+        "stage_trace_stderr": "XIUXIAN_VISION_STAGE_TRACE_STDERR",
+        "preload_language_f32_aux": "XIUXIAN_VISION_PRELOAD_LANGUAGE_F32_AUX",
+        "preload_vision_f32_aux": "XIUXIAN_VISION_PRELOAD_VISION_F32_AUX",
+        "preload_linear_weight_f32": "XIUXIAN_VISION_PRELOAD_LINEAR_WEIGHT_F32",
+        "promote_language_input_f32": "XIUXIAN_VISION_PROMOTE_LANGUAGE_INPUT_F32",
+        "prefill_attention_f32": "XIUXIAN_VISION_PREFILL_ATTENTION_F32",
+        "moe_gate_input_f32": "XIUXIAN_VISION_MOE_GATE_INPUT_F32",
+        "moe_combine_f32": "XIUXIAN_VISION_MOE_COMBINE_F32",
+        "lazy_moe_experts": "XIUXIAN_VISION_LAZY_MOE_EXPERTS",
+        "lazy_clip_transformer_layers": "XIUXIAN_VISION_LAZY_CLIP_TRANSFORMER_LAYERS",
+    }
+    for key, env_key in bool_env_keys.items():
+        value = read_bool(key)
+        if value is not None:
+            env_overrides[env_key] = "1" if value else "0"
+
+    int_env_keys = {
+        "base_size": "XIUXIAN_VISION_BASE_SIZE",
+        "image_size": "XIUXIAN_VISION_IMAGE_SIZE",
+        "max_new_tokens": "XIUXIAN_VISION_OCR_MAX_NEW_TOKENS",
+        "min_output_chars": "XIUXIAN_VISION_MIN_OUTPUT_CHARS",
+    }
+    for key, env_key in int_env_keys.items():
+        value = read_int(key)
+        if value is not None:
+            env_overrides[env_key] = str(value)
+
+    model_kind = read_str("model_kind")
+    if model_kind is not None:
+        env_overrides["XIUXIAN_VISION_MODEL_KIND"] = model_kind
+
+    moe_backend = read_str("moe_backend")
+    if moe_backend is not None:
+        env_overrides["XIUXIAN_VISION_MOE_BACKEND"] = moe_backend
+
+    ocr_prompt = read_str("ocr_prompt")
+    if ocr_prompt is not None:
+        env_overrides["XIUXIAN_VISION_OCR_PROMPT"] = ocr_prompt
+
+    crop_mode = read_bool("crop_mode")
+    if crop_mode is not None:
+        env_overrides["XIUXIAN_VISION_CROP_MODE"] = "1" if crop_mode else "0"
+
+    return TestProfileConfig(
+        max_rss_gb=read_float("max_rss_gb"),
+        capfox_mem_percent=read_float("capfox_mem_percent"),
+        capfox_gpu_percent=read_float("capfox_gpu_percent"),
+        capfox_vram_percent=read_float("capfox_vram_percent"),
+        rust_log=read_str("rust_log"),
+        env_overrides=env_overrides,
+    )
+
+
+def _apply_test_profile(env: dict[str, str], profile: TestProfileConfig) -> None:
+    for key, value in profile.env_overrides.items():
+        env.setdefault(key, value)
+
+
+def _format_env_value(value: str) -> str:
+    return (
+        value.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    )
+
+
+def _env_flag_enabled(env: dict[str, str], key: str) -> bool:
+    value = env.get(key, "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _should_use_pty_output(env: dict[str, str]) -> bool:
+    return os.name == "posix" and _env_flag_enabled(env, "XIUXIAN_VISION_STAGE_TRACE_STDERR")
+
+
+def _selected_passthrough_env(
+    env: dict[str, str], profile: TestProfileConfig | None
+) -> dict[str, str]:
+    keys = (
+        "XIUXIAN_VISION_MOE_BACKEND",
+        "XIUXIAN_VISION_SKIP_SHARED_EXPERTS",
+        "XIUXIAN_VISION_STAGE_TRACE_STDERR",
+    )
+    profile_keys = set(profile.env_overrides) if profile is not None else set()
+    return {
+        key: env[key] for key in keys if key in env and key not in profile_keys and env[key].strip()
+    }
+
+
+def find_test_binary(use_cpu: bool, use_release: bool) -> Path | None:
+    """Find the phase runner test binary for CPU or Metal."""
+    explicit_binary = os.environ.get("XIUXIAN_VISION_TEST_BINARY")
+    if explicit_binary:
+        candidate = Path(explicit_binary).expanduser()
+        if candidate.exists() and candidate.is_file() and os.access(candidate, os.X_OK):
+            return candidate
+        return None
+
+    profile = "release" if use_release else "debug"
+    deps_dir = PROJECT_ROOT / "target" / profile / "deps"
     if not deps_dir.exists():
         return None
 
-    for f in deps_dir.iterdir():
-        if f.name.startswith(TEST_BINARY_PATTERN) and f.is_file() and os.access(f, os.X_OK):
-            if f.suffix in (".d", ".o", ".rmeta"):
-                continue
-            return f
-    return None
+    pattern = CPU_TEST_BINARY_PATTERN if use_cpu else METAL_TEST_BINARY_PATTERN
+    candidates = [
+        f
+        for f in deps_dir.iterdir()
+        if f.name.startswith(pattern)
+        and f.is_file()
+        and os.access(f, os.X_OK)
+        and f.suffix not in (".d", ".o", ".rmeta")
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    return candidates[0]
 
 
 def get_process_rss_kb(pid: int) -> int:
@@ -79,46 +291,87 @@ def get_total_rss_kb(pid: int) -> int:
     return total
 
 
+def _read_pty_chunk(master_fd: int) -> str:
+    try:
+        data = os.read(master_fd, 65536)
+    except OSError:
+        return ""
+    return data.decode("utf-8", errors="replace") if data else ""
+
+
 def main() -> int:
     # Parse arguments
     use_cpu = False
-    max_rss_gb = 10.0  # Default 10GB (Metal mode needs more)
+    use_release = False
+    max_rss_gb: float | None = None
+    profile_name = os.environ.get("XIUXIAN_VISION_TEST_PROFILE")
+    phase = "infer"
 
     for arg in sys.argv[1:]:
         if arg == "--cpu":
             use_cpu = True
-            max_rss_gb = 12.0  # CPU mode may need more RAM
+        elif arg == "--release":
+            use_release = True
         elif arg.startswith("--max-rss="):
             max_rss_gb = float(arg.split("=", 1)[1])
+        elif arg.startswith("--profile="):
+            profile_name = arg.split("=", 1)[1].strip() or None
+        elif arg.startswith("--phase="):
+            phase = arg.split("=", 1)[1].strip().lower()
         elif arg in ("-h", "--help"):
-            print(f"Usage: {sys.argv[0]} [--cpu] [--max-rss=GB]")
+            print(
+                f"Usage: {sys.argv[0]} [--cpu] [--release] [--phase=load|prewarm|infer] [--profile=NAME] [--max-rss=GB]"
+            )
             print("  --cpu         Force CPU device (avoids Metal GPU memory)")
+            print("  --release     Use target/release test binaries instead of target/debug")
+            print("  --phase=...   Run only load, prewarm, or full infer phase (default: infer)")
+            print("  --profile=... Apply a TOML-backed test profile from vision_deepseek.toml")
             print("  --max-rss=GB  Maximum RSS in GB (default: 10 for Metal, 12 for CPU)")
             print()
             print("Uses capfox for capacity check, then monitors memory at runtime.")
             return 0
 
+    if phase not in {"load", "prewarm", "infer"}:
+        print(f"ERROR: unsupported --phase value: {phase}")
+        return 2
+
+    guard = _read_test_guard_config()
+    profile = _read_test_profile_config(profile_name) if profile_name is not None else None
+    if profile_name is not None and profile is None:
+        print(f"ERROR: unknown test profile: {profile_name}")
+        return 2
+    if max_rss_gb is None:
+        if profile and profile.max_rss_gb is not None:
+            max_rss_gb = profile.max_rss_gb
+        else:
+            max_rss_gb = guard.cpu_max_rss_gb if use_cpu else guard.metal_max_rss_gb
+
     # Adjust for ps RSS (ps RSS is ~5x lower than Activity Monitor)
     max_rss_kb = int(max_rss_gb * 1024 * 1024 / RSS_SCALE_FACTOR)
     print(f"Max RSS (Activity Monitor): {max_rss_gb} GB")
     print(f"Max RSS (ps, scaled): {max_rss_kb / 1024:.0f} MB")
+    print(f"Profile: {'release' if use_release else 'debug'}")
+    print(f"Phase: {phase}")
+    if profile_name is not None:
+        print(f"Config profile: {profile_name}")
 
     # Find test binary
-    binary = find_test_binary()
+    binary = find_test_binary(use_cpu, use_release)
     if not binary:
         print("ERROR: Test binary not found.")
-        print("Run: cargo build -p xiuxian-llm --features vision-dots-metal --tests")
+        print("Run the matching ignored-test binary first.")
         return 1
 
     print(f"Test binary: {binary}")
 
     # Check if test image exists
     test_image = PROJECT_ROOT / ".run/tmp/ocr-smoke.png"
-    if not test_image.exists():
+    if phase == "infer" and not test_image.exists():
         print(f"ERROR: Test image not found: {test_image}")
         return 1
 
-    print(f"Test image: {test_image}")
+    if phase == "infer":
+        print(f"Test image: {test_image}")
 
     # Check if capfox exists
     capfox = CAPFOX_PATH
@@ -131,16 +384,38 @@ def main() -> int:
 
     env = os.environ.copy()
     env["RUST_BACKTRACE"] = "1"
-    env["RUST_LOG"] = os.environ.get("RUST_LOG", "xiuxian_llm=debug,info")
+    if profile is not None:
+        _apply_test_profile(env, profile)
+    env["RUST_LOG"] = os.environ.get(
+        "RUST_LOG",
+        profile.rust_log if profile and profile.rust_log else "xiuxian_llm=debug,info",
+    )
+    env["XIUXIAN_VISION_REAL_PHASE"] = phase
 
     if use_cpu:
         env["XIUXIAN_VISION_DEVICE"] = "cpu"
         print("Device: CPU (forced)")
+    else:
+        print("Device: Metal/default")
+    if profile is not None and profile.env_overrides:
+        print("Applied env overrides:")
+        for key in sorted(profile.env_overrides):
+            resolved = env.get(key, profile.env_overrides[key])
+            print(f"  {key}={_format_env_value(resolved)}")
+    passthrough_env = _selected_passthrough_env(env, profile)
+    if passthrough_env:
+        print("Applied passthrough env:")
+        for key in sorted(passthrough_env):
+            print(f"  {key}={_format_env_value(passthrough_env[key])}")
+    use_pty_output = _should_use_pty_output(env)
+    if use_pty_output:
+        print("Output transport: PTY")
 
     # Build test command
+    test_name = "test_real_cpu_inference" if use_cpu else "test_real_metal_inference"
     test_cmd = [
         str(binary),
-        "test_real_metal_inference",
+        test_name,
         "--ignored",  # Run ignored tests
         "--test-threads=1",
         "--nocapture",
@@ -151,29 +426,49 @@ def main() -> int:
         print()
         print("=== Phase 1: Capacity Check ===")
         if use_cpu:
+            cpu_capfox_mem_percent = (
+                profile.capfox_mem_percent
+                if profile and profile.capfox_mem_percent is not None
+                else guard.cpu_capfox_mem_percent
+            )
             check_cmd = [
                 str(capfox),
                 "run",
                 "--task",
                 "deepseek_ocr_test",
                 "--mem",
-                "50",
+                str(cpu_capfox_mem_percent),
                 "--reason",
                 "--",
                 "true",  # Just check capacity, don't run
             ]
         else:
+            metal_capfox_mem_percent = (
+                profile.capfox_mem_percent
+                if profile and profile.capfox_mem_percent is not None
+                else guard.metal_capfox_mem_percent
+            )
+            metal_capfox_gpu_percent = (
+                profile.capfox_gpu_percent
+                if profile and profile.capfox_gpu_percent is not None
+                else guard.metal_capfox_gpu_percent
+            )
+            metal_capfox_vram_percent = (
+                profile.capfox_vram_percent
+                if profile and profile.capfox_vram_percent is not None
+                else guard.metal_capfox_vram_percent
+            )
             check_cmd = [
                 str(capfox),
                 "run",
                 "--task",
                 "deepseek_ocr_metal_test",
                 "--gpu",
-                "80",
+                str(metal_capfox_gpu_percent),
                 "--vram",
-                "60",
+                str(metal_capfox_vram_percent),
                 "--mem",
-                "30",
+                str(metal_capfox_mem_percent),
                 "--reason",
                 "--",
                 "true",
@@ -193,15 +488,30 @@ def main() -> int:
     print()
 
     start_time = time.monotonic()
-    proc = subprocess.Popen(
-        test_cmd,
-        env=env,
-        cwd=test_cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,  # Merge stderr into stdout
-        text=True,
-        bufsize=1,  # Line buffered
-    )
+    master_fd: int | None = None
+    if use_pty_output:
+        master_fd, slave_fd = pty.openpty()
+        try:
+            proc = subprocess.Popen(
+                test_cmd,
+                env=env,
+                cwd=test_cwd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                close_fds=True,
+            )
+        finally:
+            os.close(slave_fd)
+    else:
+        proc = subprocess.Popen(
+            test_cmd,
+            env=env,
+            cwd=test_cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Merge stderr into stdout
+            text=True,
+            bufsize=1,  # Line buffered
+        )
 
     killed = False
     try:
@@ -218,11 +528,18 @@ def main() -> int:
             try:
                 # Use select to check if there's data to read
                 if hasattr(select, "select"):
-                    readable, _, _ = select.select([proc.stdout], [], [], 0.05)
-                    if readable:
-                        line = proc.stdout.readline()
-                        if line:
-                            print(line, end="", flush=True)
+                    if use_pty_output and master_fd is not None:
+                        readable, _, _ = select.select([master_fd], [], [], 0.05)
+                        if readable:
+                            chunk = _read_pty_chunk(master_fd)
+                            if chunk:
+                                print(chunk, end="", flush=True)
+                    elif proc.stdout is not None:
+                        readable, _, _ = select.select([proc.stdout], [], [], 0.05)
+                        if readable:
+                            line = proc.stdout.readline()
+                            if line:
+                                print(line, end="", flush=True)
             except:
                 pass
 
@@ -244,7 +561,14 @@ def main() -> int:
         killed = True
 
     # Read any remaining output
-    if proc.stdout:
+    if use_pty_output and master_fd is not None:
+        while True:
+            chunk = _read_pty_chunk(master_fd)
+            if not chunk:
+                break
+            print(chunk, end="", flush=True)
+        os.close(master_fd)
+    elif proc.stdout:
         remaining = proc.stdout.read()
         if remaining:
             print(remaining, end="", flush=True)

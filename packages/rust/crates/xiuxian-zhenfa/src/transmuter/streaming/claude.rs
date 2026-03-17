@@ -46,17 +46,23 @@ struct ClaudeMessage {
     content: Vec<ContentBlock>,
     #[allow(dead_code)]
     model: String,
-    #[serde(default)]
-    stop_reason: Option<String>,
+    #[serde(default, rename = "stop_reason")]
+    _stop_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 enum ContentBlock {
     #[serde(rename = "text")]
-    Text { text: String },
+    Text {
+        #[serde(rename = "text")]
+        _text: String,
+    },
     #[serde(rename = "thinking")]
-    Thinking { thinking: String },
+    Thinking {
+        #[serde(rename = "thinking")]
+        _thinking: String,
+    },
     #[serde(rename = "tool_use")]
     ToolUse {
         id: String,
@@ -70,11 +76,11 @@ enum ContentBlock {
 #[serde(tag = "type")]
 enum ContentDelta {
     #[serde(rename = "text_delta")]
-    TextDelta { text: String },
+    Text { text: String },
     #[serde(rename = "thinking_delta")]
-    ThinkingDelta { thinking: String },
+    Thinking { thinking: String },
     #[serde(rename = "input_json_delta")]
-    InputJsonDelta { partial_json: String },
+    InputJson { partial_json: String },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -126,7 +132,7 @@ impl StreamingTransmuter for ClaudeStreamingParser {
             .map_err(|e| format!("Failed to parse Claude event: {e}"))?;
 
         match event {
-            ClaudeEvent::MessageStart { .. } => Ok(Vec::new()),
+            ClaudeEvent::MessageStart { .. } | ClaudeEvent::Ping => Ok(Vec::new()),
             ClaudeEvent::ContentBlockStart { content_block, .. } => {
                 if let ContentBlock::ToolUse { id, name, .. } = content_block {
                     self.tool_input_buffers.push((id, name, String::new()));
@@ -134,14 +140,14 @@ impl StreamingTransmuter for ClaudeStreamingParser {
                 Ok(Vec::new())
             }
             ClaudeEvent::ContentBlockDelta { index, delta } => match delta {
-                ContentDelta::TextDelta { text } => {
+                ContentDelta::Text { text } => {
                     self.accumulated.push_str(&text);
                     Ok(vec![ZhenfaStreamingEvent::TextDelta(text.into())])
                 }
-                ContentDelta::ThinkingDelta { thinking } => {
+                ContentDelta::Thinking { thinking } => {
                     Ok(vec![ZhenfaStreamingEvent::Thought(thinking.into())])
                 }
-                ContentDelta::InputJsonDelta { partial_json } => {
+                ContentDelta::InputJson { partial_json } => {
                     if let Some((_, _, buf)) = self.tool_input_buffers.get_mut(index as usize) {
                         buf.push_str(&partial_json);
                     }
@@ -179,7 +185,6 @@ impl StreamingTransmuter for ClaudeStreamingParser {
                 };
                 Ok(vec![ZhenfaStreamingEvent::Finished(outcome)])
             }
-            ClaudeEvent::Ping => Ok(Vec::new()),
             ClaudeEvent::Error { error } => Ok(vec![ZhenfaStreamingEvent::Error {
                 code: error.error_type.into(),
                 message: error.message.into(),

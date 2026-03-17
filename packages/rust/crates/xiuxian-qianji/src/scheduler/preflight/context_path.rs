@@ -1,58 +1,6 @@
-//! Pre-execution context preflight for semantic placeholder resolution.
+//! Context-path helpers for semantic placeholder resolution.
 
-use serde_json::{Map, Value};
-use xiuxian_wendao::embedded_resource_text_from_wendao_uri;
-
-/// Resolves `$wendao://...` placeholders recursively before node execution.
-///
-/// # Errors
-///
-/// Returns an error when a placeholder token is empty or when one semantic URI
-/// cannot be resolved from embedded Wendao resources.
-pub(crate) fn resolve_wendao_placeholders_in_context(context: &Value) -> Result<Value, String> {
-    resolve_value(context, context)
-}
-
-fn resolve_value(value: &Value, context: &Value) -> Result<Value, String> {
-    match value {
-        Value::String(raw) => resolve_string(raw, context).map(Value::String),
-        Value::Array(items) => items
-            .iter()
-            .map(|item| resolve_value(item, context))
-            .collect::<Result<Vec<_>, _>>()
-            .map(Value::Array),
-        Value::Object(object) => {
-            let mut resolved = Map::with_capacity(object.len());
-            for (key, item) in object {
-                resolved.insert(key.clone(), resolve_value(item, context)?);
-            }
-            Ok(Value::Object(resolved))
-        }
-        _ => Ok(value.clone()),
-    }
-}
-
-fn resolve_string(raw: &str, context: &Value) -> Result<String, String> {
-    let trimmed = raw.trim();
-    let Some(token) = trimmed.strip_prefix('$') else {
-        return Ok(raw.to_string());
-    };
-    let token = token.trim();
-    if token.is_empty() {
-        return Err("semantic placeholder must not be empty".to_string());
-    }
-    if !token.starts_with("wendao://") {
-        if let Some(value) = lookup_context_path(context, token)
-            && let Some(text) = context_value_to_text(value)
-        {
-            return Ok(text);
-        }
-        return Ok(raw.to_string());
-    }
-    embedded_resource_text_from_wendao_uri(token)
-        .map(str::to_string)
-        .ok_or_else(|| format!("semantic resource URI `{token}` could not be resolved"))
-}
+use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ContextPathSegment {

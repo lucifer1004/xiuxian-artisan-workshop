@@ -1,4 +1,4 @@
-//! Unit tests for property_drawer_edges module.
+//! Unit tests for `property_drawer_edges` module.
 
 use super::*;
 

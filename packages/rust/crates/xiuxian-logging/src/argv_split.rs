@@ -8,7 +8,7 @@ fn parse_verbose_flag(arg: &str) -> Option<u8> {
     if trimmed.is_empty() || !trimmed.chars().all(|ch| ch == 'v') {
         return None;
     }
-    Some(trimmed.len().min(u8::MAX as usize) as u8)
+    Some(u8::try_from(trimmed.len()).unwrap_or(u8::MAX))
 }
 
 fn take_value<'a>(args: &'a [String], index: usize, flag: &str) -> Option<(&'a str, usize)> {

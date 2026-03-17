@@ -43,7 +43,10 @@ impl fmt::Debug for PersonaRegistry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let persona_count = self.len();
         let provider_set = {
-            let provider = self.provider.read().unwrap_or_else(|err| err.into_inner());
+            let provider = self
+                .provider
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             provider.is_some()
         };
         f.debug_struct("PersonaRegistry")
@@ -55,19 +58,27 @@ impl fmt::Debug for PersonaRegistry {
 
 impl PersonaRegistry {
     fn personas_read(&self) -> std::sync::RwLockReadGuard<'_, HashMap<String, PersonaProfile>> {
-        self.personas.read().unwrap_or_else(|err| err.into_inner())
+        self.personas
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn personas_write(&self) -> std::sync::RwLockWriteGuard<'_, HashMap<String, PersonaProfile>> {
-        self.personas.write().unwrap_or_else(|err| err.into_inner())
+        self.personas
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn provider_read(&self) -> std::sync::RwLockReadGuard<'_, Option<Arc<dyn PersonaProvider>>> {
-        self.provider.read().unwrap_or_else(|err| err.into_inner())
+        self.provider
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn provider_write(&self) -> std::sync::RwLockWriteGuard<'_, Option<Arc<dyn PersonaProvider>>> {
-        self.provider.write().unwrap_or_else(|err| err.into_inner())
+        self.provider
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Creates an empty persona registry.

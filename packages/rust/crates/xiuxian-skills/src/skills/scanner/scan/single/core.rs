@@ -55,12 +55,12 @@ pub fn scan_single_skill_with_structure(
 }
 
 fn warn_if_structure_mismatch(skill_path: &Path, structure: Option<&SkillStructure>) {
-    if let Some(structure) = structure {
-        if !structure.validate_skill_path(skill_path).valid {
-            log::warn!(
-                "Skill structure mismatch at {}: structure validation failed",
-                skill_path.display()
-            );
-        }
+    if let Some(structure) = structure
+        && !structure.validate_skill_path(skill_path).valid
+    {
+        log::warn!(
+            "Skill structure mismatch at {}: structure validation failed",
+            skill_path.display()
+        );
     }
 }

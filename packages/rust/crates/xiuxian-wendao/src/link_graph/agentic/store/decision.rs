@@ -12,13 +12,18 @@ use crate::link_graph::runtime_config::{
 };
 
 /// Apply one suggested-link decision transition (`provisional -> promoted/rejected`).
+///
+/// # Errors
+///
+/// Returns an error when runtime configuration cannot be resolved or the
+/// decision cannot be persisted to Valkey.
 pub fn valkey_suggested_link_decide(
-    request: LinkGraphSuggestedLinkDecisionRequest,
+    request: &LinkGraphSuggestedLinkDecisionRequest,
 ) -> Result<LinkGraphSuggestedLinkDecisionResult, String> {
     let cache_runtime = resolve_link_graph_cache_runtime()?;
     let agentic_runtime = resolve_link_graph_agentic_runtime();
     valkey_suggested_link_decide_with_valkey(
-        &request,
+        request,
         &cache_runtime.valkey_url,
         Some(&cache_runtime.key_prefix),
         Some(agentic_runtime.suggested_link_max_entries),
@@ -26,7 +31,18 @@ pub fn valkey_suggested_link_decide(
     )
 }
 
+fn valkey_stop_index(limit: usize) -> Result<i64, String> {
+    i64::try_from(limit.saturating_sub(1))
+        .map_err(|_| format!("suggested_link decision limit exceeds Valkey LRANGE bounds: {limit}"))
+}
+
 /// Apply one suggested-link decision transition on explicit Valkey endpoint.
+///
+/// # Errors
+///
+/// Returns an error when the Valkey URL is invalid, the decision request cannot
+/// be normalized or serialized, the decision target cannot be found, or the
+/// Valkey write fails.
 pub fn valkey_suggested_link_decide_with_valkey(
     request: &LinkGraphSuggestedLinkDecisionRequest,
     valkey_url: &str,
@@ -43,7 +59,7 @@ pub fn valkey_suggested_link_decide_with_valkey(
         .unwrap_or(DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX);
     let bounded_max_entries = max_entries.unwrap_or(2000).max(1);
     let (suggestion_id, target_state, decided_by, reason, decided_at_unix) =
-        normalize_decision_request(&request)?;
+        normalize_decision_request(request)?;
 
     let stream_key = suggested_link_stream_key(prefix);
     let decision_stream_key = suggested_link_decision_stream_key(prefix);
@@ -52,11 +68,12 @@ pub fn valkey_suggested_link_decide_with_valkey(
     let mut conn = client.get_connection().map_err(|err| {
         format!("failed to connect valkey for link_graph suggested_link store: {err}")
     })?;
+    let stop = valkey_stop_index(bounded_max_entries)?;
 
     let rows = redis::cmd("LRANGE")
         .arg(&stream_key)
         .arg(0)
-        .arg((bounded_max_entries - 1) as i64)
+        .arg(stop)
         .query::<Vec<String>>(&mut conn)
         .map_err(|err| format!("failed to LRANGE suggested_link stream: {err}"))?;
 
@@ -136,6 +153,11 @@ pub fn valkey_suggested_link_decide_with_valkey(
 }
 
 /// Read recent suggested-link decision audit rows.
+///
+/// # Errors
+///
+/// Returns an error when runtime configuration cannot be resolved or the Valkey
+/// read fails.
 pub fn valkey_suggested_link_decisions_recent(
     limit: usize,
 ) -> Result<Vec<LinkGraphSuggestedLinkDecision>, String> {
@@ -148,6 +170,11 @@ pub fn valkey_suggested_link_decisions_recent(
 }
 
 /// Read recent suggested-link decision audit rows from explicit Valkey endpoint.
+///
+/// # Errors
+///
+/// Returns an error when the Valkey URL is invalid, the limit cannot be
+/// represented for `LRANGE`, or the read from Valkey fails.
 pub fn valkey_suggested_link_decisions_recent_with_valkey(
     limit: usize,
     valkey_url: &str,
@@ -167,10 +194,11 @@ pub fn valkey_suggested_link_decisions_recent_with_valkey(
     let mut conn = client.get_connection().map_err(|err| {
         format!("failed to connect valkey for link_graph suggested_link store: {err}")
     })?;
+    let stop = valkey_stop_index(bounded_limit)?;
     let rows = redis::cmd("LRANGE")
         .arg(&stream_key)
         .arg(0)
-        .arg((bounded_limit - 1) as i64)
+        .arg(stop)
         .query::<Vec<String>>(&mut conn)
         .map_err(|err| format!("failed to LRANGE suggested_link decision stream: {err}"))?;
 

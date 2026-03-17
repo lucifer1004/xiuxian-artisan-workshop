@@ -1,0 +1,23 @@
+[workspace]
+members = [
+    "crates/core",
+    "crates/dsq",
+    "crates/dsq-runtime",
+    "crates/infer-deepseek",
+]
+resolver = "2"
+
+[workspace.dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+deepseek-ocr-core = { path = "./crates/core" }
+deepseek-ocr-dsq = { path = "./crates/dsq" }
+deepseek-ocr-dsq-runtime = { path = "./crates/dsq-runtime" }
+tokenizers = { version = "0.22", default-features = true }
+candle-core = { version = "0.9", default-features = false }
+candle-nn = { version = "0.9", default-features = false }
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+rayon = "1.10"

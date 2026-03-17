@@ -123,7 +123,7 @@ impl StreamingOutcome {
             + self
                 .tool_calls
                 .iter()
-                .map(|tc| tc.estimated_size())
+                .map(ToolCallRecord::estimated_size)
                 .sum::<usize>()
     }
 }
@@ -246,7 +246,7 @@ impl ToolCallRecord {
 ///
 /// Each provider (Claude, Gemini, Codex) implements this trait to convert
 /// their native streaming format into `ZhenfaStreamingEvent`s.
-pub trait StreamingTransmuter: Send + Sync {
+pub trait StreamingTransmuter: Send + Sync + std::fmt::Debug {
     /// Parse a single line of streaming output.
     ///
     /// Returns a vector of events parsed from the line. May be empty if
@@ -278,6 +278,7 @@ pub trait StreamingTransmuter: Send + Sync {
 }
 
 /// Blanket implementation for common streaming behavior.
+#[cfg(test)]
 pub(crate) fn accumulate_text(buffer: &mut String, delta: &str) {
     if !delta.is_empty() {
         buffer.push_str(delta);
@@ -285,12 +286,18 @@ pub(crate) fn accumulate_text(buffer: &mut String, delta: &str) {
 }
 
 /// Helper to strip NDJSON prefix if present.
+#[cfg(test)]
 pub(crate) fn strip_ndjson_prefix(line: &str) -> &str {
     line.strip_prefix("data: ").unwrap_or(line).trim()
 }
 
 /// Helper to check if a line is a keep-alive or comment.
+#[cfg(test)]
 pub(crate) fn is_ignorable_line(line: &str) -> bool {
     let trimmed = line.trim();
     trimmed.is_empty() || trimmed == ":" || trimmed.starts_with("//")
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/transmuter/streaming/traits.rs"]
+mod tests;

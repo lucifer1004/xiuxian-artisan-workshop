@@ -52,25 +52,32 @@ impl AdversarialOrchestrator {
 
     /// Evaluates the alignment between an agent's claim and the provided evidence.
     /// Returns a drift score based on semantic overlap and anchor binding.
+    #[must_use]
     pub fn evaluate_alignment(&self, _claim: &str, evidence: &[String]) -> AuditVerdict {
-        let mut matches = 0;
+        let mut matched_anchors = 0.0_f32;
+        let mut total_anchors = 0.0_f32;
         let mut missing = Vec::new();
 
         // This simulates the 'Skeptic' checking for counter-evidence.
         // In full implementation, this could involve Rust-side regex or keyword indices.
         let anchors = &self.prospector.style_anchors;
         for anchor in anchors {
+            total_anchors += 1.0;
             if evidence
                 .iter()
                 .any(|e| e.to_lowercase().contains(&anchor.to_lowercase()))
             {
-                matches += 1;
+                matched_anchors += 1.0;
             } else {
                 missing.push(anchor.clone());
             }
         }
 
-        let drift = 1.0 - (matches as f32 / anchors.len() as f32).max(0.0);
+        let drift = if total_anchors == 0.0 {
+            0.0
+        } else {
+            1.0 - (matched_anchors / total_anchors).clamp(0.0, 1.0)
+        };
 
         AuditVerdict {
             drift_score: drift,

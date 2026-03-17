@@ -30,6 +30,10 @@ pub(in crate::llm::vision::deepseek) fn device() -> Option<String> {
     super::config().device.clone()
 }
 
+pub(in crate::llm::vision::deepseek) fn require_quantized() -> Option<bool> {
+    super::config().require_quantized
+}
+
 pub(in crate::llm::vision::deepseek) fn base_size() -> Option<u32> {
     super::config().base_size
 }
@@ -44,6 +48,54 @@ pub(in crate::llm::vision::deepseek) fn crop_mode() -> Option<bool> {
 
 pub(in crate::llm::vision::deepseek) fn max_new_tokens() -> Option<usize> {
     super::config().max_new_tokens
+}
+
+pub(in crate::llm::vision::deepseek) fn max_tiles() -> Option<u32> {
+    super::config().max_tiles
+}
+
+pub(in crate::llm::vision::deepseek) fn decode_temperature() -> Option<f64> {
+    super::config().decode_temperature
+}
+
+pub(in crate::llm::vision::deepseek) fn decode_top_p() -> Option<f64> {
+    super::config().decode_top_p
+}
+
+pub(in crate::llm::vision::deepseek) fn decode_top_k() -> Option<usize> {
+    super::config().decode_top_k
+}
+
+pub(in crate::llm::vision::deepseek) fn decode_repetition_penalty() -> Option<f32> {
+    super::config().decode_repetition_penalty
+}
+
+pub(in crate::llm::vision::deepseek) fn decode_use_cache() -> Option<bool> {
+    super::config().decode_use_cache
+}
+
+pub(in crate::llm::vision::deepseek) fn preload_language_f32_aux() -> Option<bool> {
+    super::config().preload_language_f32_aux
+}
+
+pub(in crate::llm::vision::deepseek) fn preload_vision_f32_aux() -> Option<bool> {
+    super::config().preload_vision_f32_aux
+}
+
+pub(in crate::llm::vision::deepseek) fn preload_linear_weight_f32() -> Option<bool> {
+    super::config().preload_linear_weight_f32
+}
+
+pub(in crate::llm::vision::deepseek) fn promote_language_input_f32() -> Option<bool> {
+    super::config().promote_language_input_f32
+}
+
+pub(in crate::llm::vision::deepseek) fn lazy_moe_experts() -> Option<bool> {
+    super::config().lazy_moe_experts
+}
+
+pub(in crate::llm::vision::deepseek) fn lazy_clip_transformer_layers() -> Option<bool> {
+    super::config().lazy_clip_transformer_layers
 }
 
 pub(in crate::llm::vision::deepseek) fn cache_local_max_entries() -> Option<usize> {

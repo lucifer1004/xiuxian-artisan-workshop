@@ -19,7 +19,7 @@ pub(crate) struct FixArgs {
     #[arg(long = "confidence", default_value_t = 0.7)]
     pub confidence_threshold: f32,
 
-    /// Only fix issues of this type (e.g., "invalid_observation_pattern").
+    /// Only fix issues of this type (e.g., "`invalid_observation_pattern`").
     #[arg(long = "issue-type")]
     pub issue_type: Option<String>,
 

@@ -146,6 +146,7 @@ fn is_likely_test_file(name: &str) -> bool {
 ///     println!("{}: {} - {}", v.path.display(), v.kind, v.suggestion);
 /// }
 /// ```
+#[must_use]
 pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
     let mut violations = Vec::new();
 
@@ -153,9 +154,8 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
         return violations;
     }
 
-    let entries = match fs::read_dir(tests_dir) {
-        Ok(e) => e,
-        Err(_) => return violations,
+    let Ok(entries) = fs::read_dir(tests_dir) else {
+        return violations;
     };
 
     for entry in entries.flatten() {
@@ -169,12 +169,14 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
                     path: path.clone(),
                     kind: ViolationKind::UnexpectedDirectory,
                     suggestion: format!(
-                        "Consider moving '{}' to a standard location or adding to ALLOWED_DIRS",
-                        name
+                        "Consider moving '{name}' to a standard location or adding to ALLOWED_DIRS"
                     ),
                 });
             }
-        } else if name.ends_with(".rs") {
+        } else if Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+        {
             // Check .rs file naming
 
             // Skip allowed root files
@@ -190,14 +192,11 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
                 } else {
                     "unit"
                 };
+                let suggested_name = base_name.replace("_integration", "").replace("_unit", "");
                 violations.push(StructureViolation {
                     path: path.clone(),
                     kind: ViolationKind::TestPrefixInRoot,
-                    suggestion: format!(
-                        "Move to tests/{}/{}.rs",
-                        category,
-                        base_name.replace("_integration", "").replace("_unit", "")
-                    ),
+                    suggestion: format!("Move to tests/{category}/{suggested_name}.rs"),
                 });
                 continue;
             }
@@ -213,7 +212,7 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
                 violations.push(StructureViolation {
                     path: path.clone(),
                     kind: ViolationKind::UnitSuffixInRoot,
-                    suggestion: format!("Move to tests/unit/{}.rs", base_name),
+                    suggestion: format!("Move to tests/unit/{base_name}.rs"),
                 });
                 continue;
             }
@@ -224,7 +223,7 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
                 violations.push(StructureViolation {
                     path: path.clone(),
                     kind: ViolationKind::IntegrationSuffixInRoot,
-                    suggestion: format!("Move to tests/integration/{}.rs", base_name),
+                    suggestion: format!("Move to tests/integration/{base_name}.rs"),
                 });
                 continue;
             }
@@ -236,8 +235,7 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
                     path: path.clone(),
                     kind: ViolationKind::PySuffixInRoot,
                     suggestion: format!(
-                        "Move to tests/integration/{}_python.rs or tests/unit/{}_python.rs",
-                        base_name, base_name
+                        "Move to tests/integration/{base_name}_python.rs or tests/unit/{base_name}_python.rs"
                     ),
                 });
                 continue;
@@ -248,9 +246,8 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
                 violations.push(StructureViolation {
                     path: path.clone(),
                     kind: ViolationKind::ScatteredTestFile,
-                    suggestion: format!(
-                        "Move to tests/unit/ or tests/integration/ based on test scope"
-                    ),
+                    suggestion: "Move to tests/unit/ or tests/integration/ based on test scope"
+                        .to_string(),
                 });
             }
         }
@@ -268,6 +265,7 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
 /// # Returns
 ///
 /// A vector of violations found in the crate's tests/ directory.
+#[must_use]
 pub fn validate_crate_tests(crate_path: &Path) -> Vec<StructureViolation> {
     validate_tests_structure(&crate_path.join("tests"))
 }
@@ -281,24 +279,30 @@ pub fn validate_crate_tests(crate_path: &Path) -> Vec<StructureViolation> {
 /// # Returns
 ///
 /// A human-readable summary string.
+#[must_use]
 pub fn format_violation_report(violations: &[StructureViolation]) -> String {
+    use std::fmt::Write;
+
     if violations.is_empty() {
         return "✅ No violations found. Tests structure follows conventions.".to_string();
     }
 
-    let mut report = format!(
+    let mut report = String::new();
+    let _ = write!(
+        report,
         "❌ Found {} test structure violation(s):\n\n",
         violations.len()
     );
 
     for (i, v) in violations.iter().enumerate() {
-        report.push_str(&format!(
+        let _ = write!(
+            report,
             "{}. {} ({})\n   💡 {}\n\n",
             i + 1,
             v.path.display(),
             v.kind,
             v.suggestion
-        ));
+        );
     }
 
     report.push_str(

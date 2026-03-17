@@ -11,6 +11,8 @@ publish = false
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
+chrono = { workspace = true }
+log = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -26,7 +28,8 @@ pulldown-cmark = { workspace = true }
 quick-xml = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true

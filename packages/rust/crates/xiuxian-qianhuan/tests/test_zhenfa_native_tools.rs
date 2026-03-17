@@ -1,10 +1,25 @@
+#![doc = "Integration tests for Wendao native search tools under qianhuan feature wiring."]
+#![cfg(feature = "zhenfa-router")]
+
 use std::fs;
+use std::path::Path;
 
 use serde_json::json;
 use tempfile::TempDir;
-use xiuxian_zhenfa::ZhenfaTool;
+use xiuxian_wendao::{LinkGraphIndex, WendaoSearchTool};
+use xiuxian_zhenfa::{ZhenfaContext, ZhenfaTool};
 
-use super::support::{context_with_index, search_tool};
+fn search_tool() -> WendaoSearchTool {
+    WendaoSearchTool
+}
+
+fn context_with_index(root: &Path) -> ZhenfaContext {
+    let mut ctx = ZhenfaContext::default();
+    let index = LinkGraphIndex::build(root)
+        .unwrap_or_else(|error| panic!("build link graph index for test context: {error}"));
+    let _ = ctx.insert_extension(index);
+    ctx
+}
 
 #[tokio::test]
 async fn wendao_search_tool_emits_semantic_hit_type_for_journal_paths() {

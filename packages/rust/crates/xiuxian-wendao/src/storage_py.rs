@@ -17,6 +17,10 @@ pub struct PyKnowledgeStorage {
 #[pymethods]
 impl PyKnowledgeStorage {
     /// Create a new storage instance.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Python runtime error when the Tokio runtime cannot be created.
     #[new]
     #[pyo3(signature = (path, table_name))]
     pub fn new(path: &str, table_name: &str) -> PyResult<Self> {
@@ -30,6 +34,11 @@ impl PyKnowledgeStorage {
     }
 
     /// Add an entry to storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Python runtime error when the underlying storage upsert fails.
+    #[allow(clippy::needless_pass_by_value)] // PyO3 extracts owned wrapper values at the Python binding boundary.
     pub fn add_entry(&self, entry: PyKnowledgeEntry) -> PyResult<()> {
         self.inner
             .upsert(&entry.inner)
@@ -37,6 +46,10 @@ impl PyKnowledgeStorage {
     }
 
     /// Get an entry by ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Python runtime error when the storage lookup fails.
     pub fn get_entry(&self, entry_id: &str) -> PyResult<Option<PyKnowledgeEntry>> {
         self.runtime.block_on(async {
             let entry = self
@@ -48,6 +61,10 @@ impl PyKnowledgeStorage {
     }
 
     /// Search entries by text.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Python runtime error when the underlying text search fails.
     pub fn text_search(&self, query: &str, limit: i32) -> PyResult<Vec<PyKnowledgeEntry>> {
         let entries = self
             .inner
@@ -60,6 +77,11 @@ impl PyKnowledgeStorage {
     }
 
     /// Search entries by vector similarity.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Python runtime error when the underlying vector search fails.
+    #[allow(clippy::needless_pass_by_value)] // PyO3 converts Python sequences into owned Rust vectors for method calls.
     pub fn vector_search(
         &self,
         query_vector: Vec<f32>,
@@ -76,6 +98,10 @@ impl PyKnowledgeStorage {
     }
 
     /// Hybrid search (text + vector).
+    ///
+    /// # Errors
+    ///
+    /// Returns a Python runtime error when the underlying search fails.
     pub fn search(&self, query: &str, limit: i32) -> PyResult<Vec<PyKnowledgeEntry>> {
         let entries = self
             .inner

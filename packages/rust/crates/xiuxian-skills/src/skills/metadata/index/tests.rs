@@ -2,7 +2,7 @@
 //!
 //! Tests SkillMetadata, SnifferRule, ReferencePath, and related types.
 
-use xiuxian_skills::{ReferencePath, SkillIndexEntry, SnifferRule};
+use crate::{ReferencePath, SkillIndexEntry, SnifferRule};
 
 /// Test SnifferRule creation and field access.
 #[test]

@@ -38,19 +38,19 @@ impl KnowledgeGraph {
         }
 
         let distance = levenshtein_distance(&n1, &n2);
-        let similarity = 1.0 - (distance as f32 / max_len as f32);
+        let similarity = 1.0 - bounded_ratio(distance, max_len);
 
         // Apply bonus for word overlap
         let words1: HashSet<&str> = n1.split_whitespace().collect();
         let words2: HashSet<&str> = n2.split_whitespace().collect();
-        let overlap = words1.intersection(&words2).count() as f32;
+        let overlap = bounded_usize_to_f32(words1.intersection(&words2).count());
         let word_bonus = if !words1.is_empty() && !words2.is_empty() {
-            overlap / (words1.len() + words2.len()) as f32 * 0.2
+            overlap / bounded_usize_to_f32(words1.len() + words2.len()) * 0.2
         } else {
             0.0
         };
 
-        (similarity + word_bonus).min(1.0).max(0.0)
+        (similarity + word_bonus).clamp(0.0, 1.0)
     }
 
     /// Find potential duplicate entities.
@@ -93,6 +93,12 @@ impl KnowledgeGraph {
     }
 
     /// Merge multiple entities into a single canonical entity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphError::EntityNotFound`] when none of the provided IDs
+    /// resolve to an entity, or any error from removing or re-adding the
+    /// canonical entity during the merge transaction.
     pub fn merge_entities(
         &self,
         entity_ids: &[String],
@@ -216,6 +222,16 @@ impl KnowledgeGraph {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+fn bounded_ratio(numerator: usize, denominator: usize) -> f32 {
+    let numerator = bounded_usize_to_f32(numerator);
+    let denominator = bounded_usize_to_f32(denominator);
+    numerator / denominator
+}
+
+fn bounded_usize_to_f32(value: usize) -> f32 {
+    u16::try_from(value).map_or(f32::from(u16::MAX), f32::from)
+}
 
 /// Normalize entity name for comparison (Unicode NFKC + lowercase).
 fn normalize_name(name: &str) -> String {

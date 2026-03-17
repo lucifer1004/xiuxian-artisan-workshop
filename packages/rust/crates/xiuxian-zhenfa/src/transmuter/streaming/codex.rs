@@ -1,4 +1,4 @@
-//! Codex / OpenAI streaming parser.
+//! Codex / `OpenAI` streaming parser.
 //!
 //! Parses SSE events from OpenAI-compatible APIs, mapping native events
 //! to the unified `ZhenfaStreamingEvent` model.
@@ -7,7 +7,7 @@ use super::ZhenfaStreamingEvent;
 use super::traits::{StreamingOutcome, StreamingTransmuter, TokenUsage};
 use serde::Deserialize;
 
-/// OpenAI streaming response structure.
+/// `OpenAI` streaming response structure.
 #[derive(Debug, Clone, Deserialize)]
 struct CodexResponse {
     choices: Vec<Choice>,
@@ -65,9 +65,12 @@ struct FunctionCall {
 
 #[derive(Debug, Clone, Deserialize)]
 struct Usage {
-    prompt_tokens: u64,
-    completion_tokens: u64,
-    total_tokens: u64,
+    #[serde(rename = "prompt_tokens")]
+    prompt: u64,
+    #[serde(rename = "completion_tokens")]
+    completion: u64,
+    #[serde(rename = "total_tokens")]
+    total: u64,
 }
 
 /// Parser for Codex / OpenAI-style streaming output.
@@ -119,9 +122,9 @@ impl StreamingTransmuter for CodexStreamingParser {
         // Extract usage if present
         if let Some(usage) = response.usage {
             self.final_usage = Some(TokenUsage {
-                input: usage.prompt_tokens,
-                output: usage.completion_tokens,
-                total: usage.total_tokens,
+                input: usage.prompt,
+                output: usage.completion,
+                total: usage.total,
             });
         }
 

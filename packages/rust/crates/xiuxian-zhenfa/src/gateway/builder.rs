@@ -1,14 +1,18 @@
 use std::collections::HashSet;
 use std::future::Future;
+use std::sync::Arc;
 
 use axum::{Extension, Router, routing::get, routing::post};
 use serde_json::Value;
 use thiserror::Error;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::contracts::{JsonRpcErrorObject, JsonRpcMeta};
+use crate::native::ZhenfaSignal;
 use crate::router::{MethodRegistry, ZhenfaRouter};
 
 use super::handlers::{health_handler, rpc_handler};
+use super::notification::{NotificationService, WebhookConfig, notification_worker};
 
 /// Build errors for the Zhenfa gateway.
 #[derive(Debug, Error)]
@@ -26,6 +30,12 @@ pub enum ZhenfaGatewayBuildError {
 pub struct ZhenfaGatewayBuilder {
     routers: Vec<Box<dyn ZhenfaRouter>>,
     methods: MethodRegistry,
+    /// Signal receiver for notification service.
+    signal_rx: Option<UnboundedReceiver<ZhenfaSignal>>,
+    /// Webhook configuration for notifications.
+    webhook_config: Option<WebhookConfig>,
+    /// Shared HTTP client for webhook requests.
+    http_client: Option<reqwest::Client>,
 }
 
 impl ZhenfaGatewayBuilder {
@@ -56,7 +66,33 @@ impl ZhenfaGatewayBuilder {
         self
     }
 
-    /// Build the Axum router.
+    /// Add signal receiver for webhook notifications.
+    ///
+    /// When signals are received, the gateway will send notifications
+    /// to the configured webhook endpoint.
+    #[must_use]
+    pub fn with_signal_receiver(mut self, rx: UnboundedReceiver<ZhenfaSignal>) -> Self {
+        self.signal_rx = Some(rx);
+        self
+    }
+
+    /// Configure webhook for notifications.
+    #[must_use]
+    pub fn with_webhook(mut self, config: WebhookConfig) -> Self {
+        self.webhook_config = Some(config);
+        self
+    }
+
+    /// Use a shared HTTP client for webhook requests.
+    ///
+    /// This enables efficient connection pooling across all notification requests.
+    #[must_use]
+    pub fn with_http_client(mut self, client: reqwest::Client) -> Self {
+        self.http_client = Some(client);
+        self
+    }
+
+    /// Build the Axum router with optional notification sidecar.
     ///
     /// # Errors
     /// Returns an error when router prefixes are invalid or duplicate.
@@ -79,6 +115,19 @@ impl ZhenfaGatewayBuilder {
 
         for router in &self.routers {
             app = router.mount(app);
+        }
+
+        // Spawn notification sidecar if configured
+        if let (Some(rx), Some(config)) = (self.signal_rx, self.webhook_config) {
+            let client = self.http_client.unwrap_or_else(|| {
+                reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(config.timeout_secs))
+                    .build()
+                    .unwrap_or_else(|_| reqwest::Client::new())
+            });
+
+            let service = Arc::new(NotificationService::with_client(config, client));
+            tokio::spawn(notification_worker(rx, service));
         }
 
         Ok(app)

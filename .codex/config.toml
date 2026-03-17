@@ -1,5 +1,4 @@
 [features]
-shell_zsh_fork = true
 shell_snapshot = true
 tool_parallelism = true
 multi_agent = true

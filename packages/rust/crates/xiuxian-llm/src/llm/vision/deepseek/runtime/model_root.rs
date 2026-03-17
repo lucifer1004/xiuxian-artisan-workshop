@@ -37,13 +37,7 @@ fn default_dots_model_root(project_root: &Path) -> Option<String> {
         cache_home.join("models/dots-ocr"),
         data_home.join("models/dots-ocr"),
     ];
-    candidates.into_iter().find_map(|candidate| {
-        if candidate.exists() {
-            Some(candidate.to_string_lossy().to_string())
-        } else {
-            None
-        }
-    })
+    find_existing_model_root(candidates)
 }
 
 pub(crate) fn resolve_model_root_with(
@@ -57,14 +51,28 @@ pub(crate) fn resolve_model_root_with(
 fn default_model_root(project_root: &Path) -> Option<String> {
     let cache_home = resolve_cache_home(project_root);
     let data_home = resolve_data_home(project_root);
+    default_model_root_with(cache_home.as_path(), data_home.as_path())
+}
+
+fn default_model_root_with(cache_home: &Path, data_home: &Path) -> Option<String> {
     let candidates = [
+        cache_home.join("models/deepseek-ocr"),
+        cache_home.join("models/DeepSeek-OCR"),
+        cache_home.join("MODELS/deepseek-ocr"),
+        cache_home.join("MODELS/DeepSeek-OCR"),
         cache_home.join("models/deepseek-ocr-2"),
         cache_home.join("models/DeepSeek-OCR-2"),
         cache_home.join("MODELS/deepseek-ocr-2"),
         cache_home.join("MODELS/DeepSeek-OCR-2"),
+        data_home.join("models/deepseek-ocr"),
+        data_home.join("models/DeepSeek-OCR"),
         data_home.join("models/deepseek-ocr-2"),
         data_home.join("models/DeepSeek-OCR-2"),
     ];
+    find_existing_model_root(candidates)
+}
+
+fn find_existing_model_root<const N: usize>(candidates: [PathBuf; N]) -> Option<String> {
     candidates.into_iter().find_map(|candidate| {
         if candidate.exists() {
             Some(candidate.to_string_lossy().to_string())
@@ -92,30 +100,34 @@ fn resolve_cache_home(project_root: &Path) -> PathBuf {
     std::env::var("PRJ_CACHE_HOME")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .map(|path| {
-            if path.is_absolute() {
-                path
-            } else {
-                project_root.join(path)
-            }
-        })
-        .unwrap_or_else(|| project_root.join(".cache"))
+        .map_or_else(
+            || project_root.join(".cache"),
+            |value| {
+                let path = PathBuf::from(value);
+                if path.is_absolute() {
+                    path
+                } else {
+                    project_root.join(path)
+                }
+            },
+        )
 }
 
 fn resolve_data_home(project_root: &Path) -> PathBuf {
     std::env::var("PRJ_DATA_HOME")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .map(|path| {
-            if path.is_absolute() {
-                path
-            } else {
-                project_root.join(path)
-            }
-        })
-        .unwrap_or_else(|| project_root.join(".data"))
+        .map_or_else(
+            || project_root.join(".data"),
+            |value| {
+                let path = PathBuf::from(value);
+                if path.is_absolute() {
+                    path
+                } else {
+                    project_root.join(path)
+                }
+            },
+        )
 }
 
 pub(crate) fn normalize_model_root(raw: &str, project_root: &Path) -> String {
@@ -125,4 +137,11 @@ pub(crate) fn normalize_model_root(raw: &str, project_root: &Path) -> String {
     } else {
         project_root.join(value).to_string_lossy().to_string()
     }
+}
+
+pub(crate) fn resolve_default_model_root_with_for_tests(
+    cache_home: &Path,
+    data_home: &Path,
+) -> Option<String> {
+    default_model_root_with(cache_home, data_home)
 }

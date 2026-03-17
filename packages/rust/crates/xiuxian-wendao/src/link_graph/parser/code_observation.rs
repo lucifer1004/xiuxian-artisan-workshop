@@ -8,6 +8,17 @@
 //! The `:OBSERVE:` attribute uses the following syntax:
 //! ```markdown
 //! :OBSERVE: lang:<language> "<sgrep-pattern>"
+//! :OBSERVE: lang:<language> scope:"<path-filter>" "<sgrep-pattern>"
+//! ```
+//!
+//! ## Scope Filter
+//!
+//! The optional `scope:` attribute restricts pattern matching to specific file paths.
+//! This prevents false positives when the same symbol exists in multiple packages.
+//!
+//! ```markdown
+//! ## API Handler
+//! :OBSERVE: lang:rust scope:"src/api/**" "fn $NAME($$$) -> Result<$$$>"
 //! ```
 //!
 //! ## Example
@@ -16,14 +27,10 @@
 //! ## Storage Module
 //! :OBSERVE: lang:rust "fn $NAME($$$ARGS) -> Result<$$$RET, $$$ERR>"
 //! ```
-//!
-//! ## Resolution
-//!
-//! During indexing, the `LinkGraphIndex` resolves these patterns via `xiuxian-ast`,
-//! binding document nodes to specific code byte-ranges.
 
 use std::collections::HashMap;
 use std::fmt;
+use std::hash::BuildHasher;
 
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +44,13 @@ pub struct CodeObservation {
     pub language: String,
     /// The sgrep/ast-grep pattern to match in source code.
     pub pattern: String,
+    /// Optional scope filter to restrict pattern matching to specific paths.
+    ///
+    /// Supports glob patterns like:
+    /// - `"src/api/**"` - Match files under src/api/
+    /// - `"packages/core/**/*.rs"` - Match Rust files in packages/core/
+    /// - `"**/handler.rs"` - Match any handler.rs file
+    pub scope: Option<String>,
     /// The original raw value from the property drawer (for diagnostics).
     pub raw_value: String,
     /// Line number within the document where this observation was declared.
@@ -54,11 +68,19 @@ impl CodeObservation {
         Self {
             language,
             pattern,
+            scope: None,
             raw_value,
             line_number: None,
             is_validated: false,
             validation_error: None,
         }
+    }
+
+    /// Create a code observation with scope filter.
+    #[must_use]
+    pub fn with_scope(mut self, scope: String) -> Self {
+        self.scope = Some(scope);
+        self
     }
 
     /// Create a code observation with line number.
@@ -82,24 +104,47 @@ impl CodeObservation {
         self
     }
 
+    /// Check if a file path matches this observation's scope.
+    ///
+    /// Returns `true` if:
+    /// - No scope is defined (matches all files)
+    /// - The path matches the scope glob pattern
+    #[must_use]
+    pub fn matches_scope(&self, file_path: &str) -> bool {
+        match &self.scope {
+            None => true,
+            Some(scope) => path_matches_scope(file_path, scope),
+        }
+    }
+
     /// Parse a `:OBSERVE:` value string into a `CodeObservation`.
     ///
     /// # Format
     ///
-    /// `lang:<language> "<pattern>"`
+    /// - `lang:<language> "<pattern>"`
+    /// - `lang:<language> scope:"<filter>" "<pattern>"`
     ///
     /// # Examples
     ///
     /// ```
     /// use xiuxian_wendao::link_graph::parser::code_observation::CodeObservation;
     ///
+    /// // Without scope
     /// let obs = CodeObservation::parse(r#"lang:rust "fn $NAME($$$ARGS) -> Result<$$$RET, $$$ERR>""#);
     /// assert!(obs.is_some());
     /// let obs = obs.unwrap();
     /// assert_eq!(obs.language, "rust");
     /// assert_eq!(obs.pattern, "fn $NAME($$$ARGS) -> Result<$$$RET, $$$ERR>");
+    /// assert!(obs.scope.is_none());
+    ///
+    /// // With scope
+    /// let obs = CodeObservation::parse(r#"lang:rust scope:"src/api/**" "fn $NAME($$$) -> Result<$$$>""#);
+    /// assert!(obs.is_some());
+    /// let obs = obs.unwrap();
+    /// assert_eq!(obs.scope, Some("src/api/**".to_string()));
     /// ```
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn parse(value: &str) -> Option<Self> {
         let trimmed = value.trim();
 
@@ -117,9 +162,19 @@ impl CodeObservation {
             return None;
         }
 
-        // Extract the quoted pattern
-        let rest = after_lang[space_pos..].trim();
+        let mut rest = after_lang[space_pos..].trim();
+        let mut scope = None;
 
+        // Check for optional scope:"..." before the pattern
+        if rest.starts_with("scope:\"") {
+            let scope_str = &rest[7..]; // Skip 'scope:"'
+            if let Some(end_quote) = find_closing_quote(scope_str) {
+                scope = Some(scope_str[..end_quote].replace("\\\"", "\""));
+                rest = scope_str[end_quote + 1..].trim();
+            }
+        }
+
+        // Extract the quoted pattern
         // Pattern must be in quotes
         if !rest.starts_with('"') {
             return None;
@@ -127,25 +182,15 @@ impl CodeObservation {
 
         // Find the closing quote (handle escaped quotes)
         let pattern_str = &rest[1..]; // Skip opening quote
-        let mut end_pos = None;
-        let mut chars = pattern_str.char_indices().peekable();
-
-        while let Some((i, ch)) = chars.next() {
-            if ch == '\\' {
-                // Skip the next character (escaped)
-                chars.next();
-                continue;
-            }
-            if ch == '"' {
-                end_pos = Some(i);
-                break;
-            }
-        }
-
-        let end_pos = end_pos?;
+        let end_pos = find_closing_quote(pattern_str)?;
         let pattern = pattern_str[..end_pos].replace("\\\"", "\"");
 
-        Some(Self::new(language, pattern, value.to_string()))
+        let mut obs = Self::new(language, pattern, value.to_string());
+        if let Some(s) = scope {
+            obs = obs.with_scope(s);
+        }
+
+        Some(obs)
     }
 
     /// Get the language for xiuxian-ast queries.
@@ -158,9 +203,10 @@ impl CodeObservation {
 
     /// Validate the pattern using xiuxian-ast.
     ///
-    /// # Returns
+    /// # Errors
     ///
-    /// `Ok(())` if the pattern is valid, `Err(String)` with error message if invalid.
+    /// Returns an error when the observation language is not supported by `xiuxian-ast` or when
+    /// the configured pattern is not accepted by the target parser.
     pub fn validate_pattern(&self) -> Result<(), String> {
         let lang = self
             .ast_language()
@@ -172,14 +218,208 @@ impl CodeObservation {
     }
 }
 
+/// Find the closing quote in a string, handling escaped quotes.
+fn find_closing_quote(s: &str) -> Option<usize> {
+    let mut chars = s.char_indices().peekable();
+
+    while let Some((i, ch)) = chars.next() {
+        if ch == '\\' {
+            // Skip the next character (escaped)
+            chars.next();
+            continue;
+        }
+        if ch == '"' {
+            return Some(i);
+        }
+    }
+
+    None
+}
+
+/// Check if a file path matches a scope glob pattern.
+///
+/// # Supported Patterns
+///
+/// - `**` - Match any number of directories
+/// - `*` - Match any single path segment (no slashes)
+/// - `?` - Match any single character
+/// - Literal characters match themselves
+///
+/// # Examples
+///
+/// ```
+/// use xiuxian_wendao::link_graph::parser::code_observation::path_matches_scope;
+///
+/// assert!(path_matches_scope("src/api/handler.rs", "src/api/**"));
+/// assert!(path_matches_scope("src/api/handler.rs", "**/*.rs"));
+/// assert!(path_matches_scope("packages/core/src/lib.rs", "packages/core/**/*.rs"));
+/// assert!(!path_matches_scope("src/api/handler.rs", "src/db/**"));
+/// ```
+#[must_use]
+pub fn path_matches_scope(file_path: &str, scope: &str) -> bool {
+    // Normalize paths to use forward slashes
+    let normalized_path = file_path.replace('\\', "/");
+    let normalized_scope = scope.replace('\\', "/");
+
+    // Handle ** glob pattern
+    if normalized_scope.contains("**") {
+        match_glob_with_double_star(&normalized_path, &normalized_scope)
+    } else {
+        // Simple glob matching for patterns without **
+        match_simple_glob(&normalized_path, &normalized_scope)
+    }
+}
+
+/// Match a path against a glob pattern containing **.
+fn match_glob_with_double_star(path: &str, pattern: &str) -> bool {
+    // Split pattern by **
+    let parts: Vec<&str> = pattern.split("**").collect();
+
+    if parts.is_empty() {
+        return true;
+    }
+
+    // First part must match the beginning of the path
+    if !parts[0].is_empty() && !path.starts_with(parts[0]) {
+        return false;
+    }
+
+    // Last part must match the end of the path
+    if let Some(last) = parts
+        .last()
+        .filter(|last| parts.len() > 1 && !last.is_empty())
+    {
+        // Handle trailing patterns like "/*.rs" (after **)
+        if let Some(trailing_pattern) = last.strip_prefix('/') {
+            // Use glob matching for the trailing pattern
+            if !path.ends_with(trailing_pattern) {
+                // Try glob matching on the filename portion
+                if trailing_pattern.contains('*') || trailing_pattern.contains('?') {
+                    // For "*.rs", find the filename portion
+                    if let Some(slash_pos) = path.rfind('/') {
+                        let filename = &path[slash_pos + 1..];
+                        if !match_simple_glob(filename, trailing_pattern) {
+                            return false;
+                        }
+                    } else {
+                        // No slash in path, match entire path against pattern
+                        if !match_simple_glob(path, trailing_pattern) {
+                            return false;
+                        }
+                    }
+                } else {
+                    return false;
+                }
+            }
+        } else if !path.ends_with(last) {
+            // Check if path contains last part anywhere
+            let remaining = if parts[0].is_empty() {
+                path
+            } else {
+                &path[parts[0].len()..]
+            };
+            if !remaining.contains(last) && !remaining.ends_with(last) {
+                return false;
+            }
+        }
+    }
+
+    // Check middle parts if any
+    let mut search_pos = 0;
+    for (i, part) in parts.iter().enumerate() {
+        if i == 0 || i == parts.len() - 1 {
+            continue;
+        }
+
+        if part.is_empty() {
+            continue;
+        }
+
+        // Skip leading slash for middle parts
+        let part = if let Some(stripped) = part.strip_prefix('/') {
+            stripped
+        } else {
+            *part
+        };
+
+        if search_pos >= path.len() {
+            return false;
+        }
+
+        if let Some(pos) = path[search_pos..].find(part) {
+            search_pos += pos + part.len();
+        } else {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Match a path against a simple glob pattern (no **).
+///
+/// In this context, `*` matches any characters EXCEPT `/` (path separator).
+/// This ensures `src/*.rs` matches `src/lib.rs` but not `src/sub/lib.rs`.
+fn match_simple_glob(path: &str, pattern: &str) -> bool {
+    let path_chars: Vec<char> = path.chars().collect();
+    let pattern_chars: Vec<char> = pattern.chars().collect();
+
+    let mut path_idx = 0;
+    let mut pattern_idx = 0;
+
+    while pattern_idx < pattern_chars.len() {
+        let p = pattern_chars[pattern_idx];
+
+        if p == '*' {
+            // Skip consecutive *
+            while pattern_idx + 1 < pattern_chars.len() && pattern_chars[pattern_idx + 1] == '*' {
+                pattern_idx += 1;
+            }
+
+            // Try matching zero or more characters (but not across /)
+            let remaining_pattern = &pattern_chars[pattern_idx + 1..];
+
+            // Find the maximum match length before hitting a path separator
+            let max_match_len = path_chars[path_idx..]
+                .iter()
+                .take_while(|&&c| c != '/')
+                .count();
+
+            for try_len in 0..=max_match_len {
+                let remaining_path: String = path_chars[path_idx + try_len..].iter().collect();
+                let remaining_pattern_str: String = remaining_pattern.iter().collect();
+
+                if match_simple_glob(&remaining_path, &remaining_pattern_str) {
+                    return true;
+                }
+            }
+            return false;
+        } else if p == '?' {
+            // ? matches any single character except /
+            if path_idx >= path_chars.len() || path_chars[path_idx] == '/' {
+                return false;
+            }
+            path_idx += 1;
+            pattern_idx += 1;
+        } else {
+            if path_idx >= path_chars.len() || path_chars[path_idx] != p {
+                return false;
+            }
+            path_idx += 1;
+            pattern_idx += 1;
+        }
+    }
+
+    path_idx == path_chars.len()
+}
+
 impl fmt::Display for CodeObservation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            ":OBSERVE: lang:{} \"{}\"",
-            self.language,
-            self.pattern.replace('"', "\\\"")
-        )
+        write!(f, ":OBSERVE: lang:{}", self.language)?;
+        if let Some(ref scope) = self.scope {
+            write!(f, " scope:\"{}\"", scope.replace('"', "\\\""))?;
+        }
+        write!(f, " \"{}\"", self.pattern.replace('"', "\\\""))
     }
 }
 
@@ -195,7 +435,9 @@ impl fmt::Display for CodeObservation {
 /// :OBSERVE: lang:rust "fn $NAME($$$) -> Result<$$$>"
 /// ```
 #[must_use]
-pub fn extract_observations(attributes: &HashMap<String, String>) -> Vec<CodeObservation> {
+pub fn extract_observations<S: BuildHasher>(
+    attributes: &HashMap<String, String, S>,
+) -> Vec<CodeObservation> {
     let mut observations = Vec::new();
 
     // Check for single :OBSERVE: entry
@@ -218,137 +460,5 @@ pub fn extract_observations(attributes: &HashMap<String, String>) -> Vec<CodeObs
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_simple_pattern() {
-        let input = r#"lang:rust "fn $NAME($$$ARGS) -> Result<$$$RET, $$$ERR>""#;
-        let obs = CodeObservation::parse(input);
-        assert!(obs.is_some());
-        let obs = obs.unwrap();
-        assert_eq!(obs.language, "rust");
-        assert_eq!(obs.pattern, "fn $NAME($$$ARGS) -> Result<$$$RET, $$$ERR>");
-    }
-
-    #[test]
-    fn test_parse_python_pattern() {
-        let input = r#"lang:python "def $NAME($$$): $$$BODY""#;
-        let obs = CodeObservation::parse(input);
-        assert!(obs.is_some());
-        let obs = obs.unwrap();
-        assert_eq!(obs.language, "python");
-        assert_eq!(obs.pattern, "def $NAME($$$): $$$BODY");
-    }
-
-    #[test]
-    fn test_parse_with_escaped_quotes() {
-        let input = r#"lang:rust "fn foo() { let s = \"hello\"; }""#;
-        let obs = CodeObservation::parse(input);
-        assert!(obs.is_some());
-        let obs = obs.unwrap();
-        assert_eq!(obs.pattern, r#"fn foo() { let s = "hello"; }"#);
-    }
-
-    #[test]
-    fn test_parse_missing_lang_prefix() {
-        let input = r#""fn $NAME()""#;
-        assert!(CodeObservation::parse(input).is_none());
-    }
-
-    #[test]
-    fn test_parse_missing_quotes() {
-        let input = r#"lang:rust fn $NAME()"#;
-        assert!(CodeObservation::parse(input).is_none());
-    }
-
-    #[test]
-    fn test_parse_empty_language() {
-        let input = r#"lang: "fn $NAME()""#;
-        assert!(CodeObservation::parse(input).is_none());
-    }
-
-    #[test]
-    fn test_ast_language_rust() {
-        let obs = CodeObservation::parse(r#"lang:rust "fn main()""#).unwrap();
-        assert!(obs.ast_language().is_some());
-        assert_eq!(obs.ast_language().unwrap(), xiuxian_ast::Lang::Rust);
-    }
-
-    #[test]
-    fn test_ast_language_python() {
-        let obs = CodeObservation::parse(r#"lang:python "def main():""#).unwrap();
-        assert!(obs.ast_language().is_some());
-        assert_eq!(obs.ast_language().unwrap(), xiuxian_ast::Lang::Python);
-    }
-
-    #[test]
-    fn test_ast_language_unsupported() {
-        let obs = CodeObservation::parse(r#"lang:brainfuck "+-<>""#).unwrap();
-        assert!(obs.ast_language().is_none());
-    }
-
-    #[test]
-    fn test_validate_pattern_valid() {
-        let obs = CodeObservation::parse(r#"lang:rust "fn $NAME()""#).unwrap();
-        assert!(obs.validate_pattern().is_ok());
-    }
-
-    #[test]
-    fn test_validate_pattern_unsupported_lang() {
-        let obs = CodeObservation::parse(r#"lang:brainfuck "+-<>""#).unwrap();
-        let result = obs.validate_pattern();
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Unsupported language"));
-    }
-
-    #[test]
-    fn test_extract_observations_single() {
-        let mut attrs = HashMap::new();
-        attrs.insert(
-            "OBSERVE".to_string(),
-            r#"lang:rust "fn $NAME()""#.to_string(),
-        );
-
-        let observations = extract_observations(&attrs);
-        assert_eq!(observations.len(), 1);
-        assert_eq!(observations[0].language, "rust");
-    }
-
-    #[test]
-    fn test_extract_observations_multiple() {
-        let mut attrs = HashMap::new();
-        attrs.insert(
-            "OBSERVE_1".to_string(),
-            r#"lang:rust "fn $NAME()""#.to_string(),
-        );
-        attrs.insert(
-            "OBSERVE_2".to_string(),
-            r#"lang:python "def $NAME():""#.to_string(),
-        );
-
-        let observations = extract_observations(&attrs);
-        assert_eq!(observations.len(), 2);
-    }
-
-    #[test]
-    fn test_extract_observations_none() {
-        let attrs = HashMap::new();
-        let observations = extract_observations(&attrs);
-        assert!(observations.is_empty());
-    }
-
-    #[test]
-    fn test_display() {
-        let obs = CodeObservation::parse(r#"lang:rust "fn main()""#).unwrap();
-        assert_eq!(obs.to_string(), r#":OBSERVE: lang:rust "fn main()""#);
-    }
-
-    #[test]
-    fn test_with_line() {
-        let obs = CodeObservation::parse(r#"lang:rust "fn main()""#)
-            .unwrap()
-            .with_line(42);
-        assert_eq!(obs.line_number, Some(42));
-    }
-}
+#[path = "../../../tests/unit/link_graph/parser/code_observation.rs"]
+mod tests;

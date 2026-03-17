@@ -4,6 +4,7 @@
 use super::error::sanitize_user_visible;
 use super::error::{LlmError, LlmResult};
 use async_trait::async_trait;
+use futures::Stream;
 #[cfg(feature = "provider-litellm")]
 use futures::StreamExt;
 #[cfg(feature = "provider-litellm")]
@@ -21,6 +22,8 @@ use litellm_rs::core::types::responses::ChatChunk as LiteChatChunk;
 #[cfg(feature = "provider-litellm")]
 use tracing::info;
 
+use std::pin::Pin;
+
 #[cfg(feature = "provider-litellm")]
 use crate::llm::providers::{
     build_openai_like_provider, execute_openai_responses_request,
@@ -32,11 +35,20 @@ pub use litellm_rs::core::types::content::{ContentPart, ImageUrl as ImageUrlCont
 pub use litellm_rs::core::types::message::{MessageContent, MessageRole};
 pub use litellm_rs::core::types::responses::{ChatChoice, ChatResponse};
 
+/// Type alias for a boxed stream of string chunks.
+pub type ChatStream = Pin<Box<dyn Stream<Item = LlmResult<String>> + Send>>;
+
 /// The core trait for interacting with Large Language Models.
 #[async_trait]
 pub trait LlmClient: Send + Sync {
     /// Execute a chat-completion request and return the first text answer.
     async fn chat(&self, request: ChatRequest) -> LlmResult<String>;
+
+    /// Execute a streaming chat-completion request.
+    ///
+    /// Returns a stream of text chunks for real-time processing.
+    /// This enables cognitive supervision and early-halt during generation.
+    async fn chat_stream(&self, request: ChatRequest) -> LlmResult<ChatStream>;
 }
 
 /// Standard OpenAI-compatible HTTP client.
@@ -355,6 +367,16 @@ impl LlmClient for OpenAIClient {
         };
         client.chat(request).await
     }
+
+    async fn chat_stream(&self, request: ChatRequest) -> LlmResult<ChatStream> {
+        let client = OpenAICompatibleClient {
+            api_key: self.api_key.clone(),
+            base_url: self.base_url.clone(),
+            wire_api: OpenAIWireApi::ChatCompletions,
+            http: self.http.clone(),
+        };
+        client.chat_stream(request).await
+    }
 }
 
 #[async_trait]
@@ -375,6 +397,46 @@ impl LlmClient for OpenAICompatibleClient {
         #[cfg(not(feature = "provider-litellm"))]
         Err(LlmError::Internal {
             message: "OpenAICompatibleClient requires feature `provider-litellm`".to_string(),
+        })
+    }
+
+    async fn chat_stream(&self, request: ChatRequest) -> LlmResult<ChatStream> {
+        #[cfg(feature = "provider-litellm")]
+        {
+            let provider = build_openai_like_provider(
+                self.base_url.clone(),
+                Some(self.api_key.clone()),
+                90, // timeout seconds
+            )
+            .await?;
+
+            let stream =
+                LLMProvider::chat_completion_stream(&provider, request, LiteRequestContext::new())
+                    .await
+                    .map_err(|e| map_litellm_openai_like_error("stream initiation", e))?;
+
+            // Map the litellm stream to our ChatStream type
+            let mapped = stream.map(|result| {
+                result
+                    .map_err(|e| map_litellm_openai_like_error("stream chunk", e))
+                    .and_then(|chunk| {
+                        // Extract text content from the chunk
+                        chunk
+                            .choices
+                            .first()
+                            .and_then(|choice| choice.delta.content.clone())
+                            .ok_or(LlmError::EmptyTextChoice)
+                    })
+            });
+
+            Ok(Box::pin(mapped))
+        }
+
+        #[cfg(not(feature = "provider-litellm"))]
+        let _ = request;
+        #[cfg(not(feature = "provider-litellm"))]
+        Err(LlmError::Internal {
+            message: "chat_stream requires feature `provider-litellm`".to_string(),
         })
     }
 }

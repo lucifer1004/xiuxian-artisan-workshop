@@ -319,9 +319,8 @@ fn find_sibling_context(
 
 /// Extract a preview string from content following a heading.
 fn extract_preview(lines: &[&str], heading_line_idx: usize) -> String {
-    let start = heading_line_idx + 1;
-    for i in start..lines.len().min(start + 3) {
-        let trimmed = lines[i].trim();
+    for line in lines.iter().skip(heading_line_idx + 1).take(3) {
+        let trimmed = line.trim();
         if !trimmed.is_empty() && !trimmed.starts_with('#') && !trimmed.starts_with(':') {
             return trimmed.chars().take(80).collect();
         }

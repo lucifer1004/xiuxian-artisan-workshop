@@ -28,8 +28,8 @@ pub(super) fn handle(_cli: &Cli, args: &AuditArgs, index: Option<&LinkGraphIndex
     };
 
     let result = wendao_semantic_check(&ctx, check_args)
-        .map_err(|e| anyhow::anyhow!("Audit failed: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Audit failed: {e:?}"))?;
 
-    println!("{}", result);
+    println!("{result}");
     Ok(())
 }

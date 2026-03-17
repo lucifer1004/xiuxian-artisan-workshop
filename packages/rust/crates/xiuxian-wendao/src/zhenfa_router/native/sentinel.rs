@@ -1,7 +1,7 @@
 //! Project Sentinel: Real-time synchronization and semantic change propagation.
 //!
 //! This module provides the infrastructure for observing the filesystem and
-//! automatically updating the LinkGraph and Audit reports when files change.
+//! automatically updating the `LinkGraph` and Audit reports when files change.
 //!
 //! ## Phase 6: Semantic Change Propagation
 //!
@@ -11,19 +11,23 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use chrono;
-use log::{error, info};
+use log::{error, info, warn};
 use notify::{Event, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, FileIdMap, new_debouncer};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use xiuxian_zhenfa::ZhenfaContext;
+use xiuxian_zhenfa::ZhenfaSignal;
 
+use super::forwarder::ForwardNotifier;
 use crate::LinkGraphIndex;
-use crate::link_graph::PageIndexNode;
+use crate::link_graph::parser::code_observation::path_matches_scope;
+use crate::link_graph::{PageIndexNode, SymbolRef};
 use crate::zhenfa_router::native::WendaoContextExt;
 
 /// Configuration for the Sentinel observer.
@@ -47,17 +51,19 @@ impl Default for SentinelConfig {
 
 /// The Sentinel observer.
 pub struct Sentinel {
-    ctx: Arc<ZhenfaContext>,
-    config: SentinelConfig,
+    _ctx: Arc<ZhenfaContext>,
+    _config: SentinelConfig,
     _debouncer: Debouncer<RecommendedWatcher, FileIdMap>,
 }
 
 impl Sentinel {
     /// Create and start a new Sentinel observer.
-    pub async fn start(
-        ctx: Arc<ZhenfaContext>,
-        config: SentinelConfig,
-    ) -> Result<Self, anyhow::Error> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the filesystem debouncer cannot be created or when any configured
+    /// watch path cannot be registered with the underlying watcher.
+    pub fn start(ctx: Arc<ZhenfaContext>, config: SentinelConfig) -> Result<Self, anyhow::Error> {
         let (tx, mut rx) = mpsc::channel(100);
 
         // Create the debouncer
@@ -77,7 +83,7 @@ impl Sentinel {
         // Watch the paths - new API uses debouncer.watch() directly
         for path in &config.watch_paths {
             if path.exists() {
-                info!("Sentinel watching: {:?}", path);
+                info!("Sentinel watching: {}", path.display());
                 debouncer.watch(path, RecursiveMode::Recursive)?;
             }
         }
@@ -87,14 +93,14 @@ impl Sentinel {
         tokio::spawn(async move {
             while let Some(event) = rx.recv().await {
                 if let Err(e) = handle_sentinel_event(&handler_ctx, event).await {
-                    error!("Sentinel event handler error: {:?}", e);
+                    error!("Sentinel event handler error: {e:?}");
                 }
             }
         });
 
         Ok(Self {
-            ctx,
-            config,
+            _ctx: ctx,
+            _config: config,
             _debouncer: debouncer,
         })
     }
@@ -107,39 +113,143 @@ async fn handle_sentinel_event(ctx: &ZhenfaContext, event: Event) -> Result<(), 
             continue;
         }
 
-        info!("Sentinel detected change in: {:?}", path);
+        info!("Sentinel detected change in: {}", path.display());
 
-        // PHASE 5: Instant LinkGraph Refresh
-        // TODO: Implement incremental indexing for modified docs.
+        // PHASE 5: Instant LinkGraph Refresh for documentation files
+        if !is_source_code(&path) && is_supported_doc(&path) {
+            handle_doc_change(ctx, &path);
+            continue;
+        }
 
-        // PHASE 6: Semantic Change Propagation
+        // PHASE 6: Semantic Change Propagation for source code
         if is_source_code(&path) {
             // Skip high-noise files that would cause false positives
             if is_high_noise_file(&path) {
-                info!("Skipping high-noise file: {:?}", path);
+                info!("Skipping high-noise file: {}", path.display());
                 continue;
             }
 
             // CAS Consistency: Verify file is stable before analysis
             if !verify_file_stable(&path) {
-                info!("File not yet stable, skipping: {:?}", path);
+                info!("File not yet stable, skipping: {}", path.display());
                 continue;
             }
 
-            if let Ok(index) = ctx.link_graph_index() {
-                let signals = propagate_source_change(&index, &path);
-                if !signals.is_empty() {
+            if let Err(e) = handle_source_change(ctx, &path).await {
+                warn!(
+                    "Phase 6 semantic propagation failed for {}: {e}",
+                    path.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Check if a path is a supported documentation file.
+fn is_supported_doc(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "md")
+}
+
+/// Handle documentation file changes (Phase 5: Incremental Refresh).
+fn handle_doc_change(ctx: &ZhenfaContext, path: &Path) {
+    info!("Phase 5: Incremental refresh for doc: {}", path.display());
+
+    // Get mutable access to the index through context
+    // Note: This requires the index to be behind Arc<RwLock> or similar
+    // For now, we emit a signal that can be consumed by the index manager
+
+    let doc_id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown");
+
+    // Emit trace signal for incremental refresh request
+    if let Some(sender) = ctx.get_extension::<mpsc::UnboundedSender<ZhenfaSignal>>() {
+        let signal = ZhenfaSignal::Trace {
+            node_id: format!("sentinel:doc:{doc_id}"),
+            event: format!("incremental_refresh_requested:{}", path.display()),
+        };
+        if sender.send(signal).is_err() {
+            warn!("Failed to emit incremental refresh signal");
+        }
+    }
+
+    // TODO: When LinkGraphIndex is behind Arc<RwLock>:
+    // 1. Parse the modified document
+    // 2. Call index.refresh_symbol_cache_for_doc(doc_id)
+    // 3. Update the page index tree
+
+    info!("Phase 5: Incremental refresh scheduled for: {doc_id}");
+}
+
+/// Handle source code changes (Phase 6: Semantic Propagation).
+async fn handle_source_change(ctx: &ZhenfaContext, path: &Path) -> Result<(), anyhow::Error> {
+    if let Ok(index) = ctx.link_graph_index() {
+        let drift_signals = propagate_source_change(&index, path);
+
+        if drift_signals.is_empty() {
+            return Ok(());
+        }
+
+        info!(
+            "Phase 6.2: Generated {} semantic drift signal(s)",
+            drift_signals.len()
+        );
+
+        // Convert to ZhenfaSignal and emit
+        if let Some(sender) = ctx.get_extension::<mpsc::UnboundedSender<ZhenfaSignal>>() {
+            for drift in &drift_signals {
+                let signal = ZhenfaSignal::SemanticDrift {
+                    source_path: drift.source_path.clone(),
+                    file_stem: drift.file_stem.clone(),
+                    affected_count: drift.affected_docs.len(),
+                    confidence: drift.confidence.to_string(),
+                    summary: drift.summary(),
+                };
+
+                match sender.send(signal) {
+                    Ok(()) => info!("Emitted SemanticDrift signal for: {}", drift.source_path),
+                    Err(e) => warn!("Failed to emit SemanticDrift signal: {e}"),
+                }
+            }
+        } else {
+            warn!("No signal sender attached to context - signals not emitted");
+            // Still log the signals for debugging
+            for signal in &drift_signals {
+                info!("  Signal (not emitted): {}", signal.summary());
+            }
+        }
+
+        // Also emit through ObservationBus if available
+        if let Some(bus) = ctx.get_extension::<ObservationBus>() {
+            for drift in &drift_signals {
+                let signal_ids = bus.emit_drift_signals(drift);
+                if !signal_ids.is_empty() {
+                    info!("Emitted {} ObservationSignals via bus", signal_ids.len());
+                }
+            }
+        }
+
+        // Phase 7: Process drifts through ForwardNotifier for proactive notifications
+        if let Some(forwarder) = ctx.get_extension::<Arc<ForwardNotifier>>() {
+            for drift in &drift_signals {
+                if forwarder.process_drift(drift).await {
                     info!(
-                        "Phase 6.2: Generated {} semantic drift signal(s)",
-                        signals.len()
+                        "ForwardNotifier queued notification for: {}",
+                        drift.source_path
                     );
-                    for signal in &signals {
-                        info!("  Signal: {}", signal.summary());
-                    }
+                } else {
+                    // Not queued - could be rate limited, debounced, or below threshold
+                    log::debug!(
+                        "ForwardNotifier skipped notification for: {} (rate limit/debounce/threshold)",
+                        drift.source_path
+                    );
                 }
             }
         }
     }
+
     Ok(())
 }
 
@@ -176,9 +286,8 @@ fn is_high_noise_file(path: &Path) -> bool {
 /// Returns true if the file has a stable hash (readable and consistent).
 fn verify_file_stable(path: &Path) -> bool {
     // First check: can we read the file?
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return false,
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return false;
     };
 
     // Second check: compute hash and verify file is not empty
@@ -203,9 +312,8 @@ fn is_ignorable_path(path: &Path) -> bool {
 }
 
 fn is_source_code(path: &Path) -> bool {
-    path.extension().map_or(false, |ext| {
-        ext == "rs" || ext == "py" || ext == "ts" || ext == "js"
-    })
+    path.extension()
+        .is_some_and(|ext| ext == "rs" || ext == "py" || ext == "ts" || ext == "js")
 }
 
 // =============================================================================
@@ -219,80 +327,98 @@ fn is_source_code(path: &Path) -> bool {
 /// Patterns like `struct User { $$$ }` yield `["User"]`.
 #[must_use]
 pub fn extract_pattern_symbols(pattern: &str) -> Vec<String> {
+    // Pre-compiled regex patterns for zero-cost repeated extraction
+    static RE_FN: OnceLock<Option<regex::Regex>> = OnceLock::new();
+    static RE_STRUCT: OnceLock<Option<regex::Regex>> = OnceLock::new();
+    static RE_CLASS: OnceLock<Option<regex::Regex>> = OnceLock::new();
+    static RE_ENUM: OnceLock<Option<regex::Regex>> = OnceLock::new();
+    static RE_METHOD: OnceLock<Option<regex::Regex>> = OnceLock::new();
+    static RE_TRAIT: OnceLock<Option<regex::Regex>> = OnceLock::new();
+    static RE_IMPL: OnceLock<Option<regex::Regex>> = OnceLock::new();
+
+    let re_fn = RE_FN
+        .get_or_init(|| regex::Regex::new(r"\bfn\s+([a-z_][a-z0-9_]*)").ok())
+        .as_ref();
+    let re_struct = RE_STRUCT
+        .get_or_init(|| regex::Regex::new(r"\bstruct\s+([A-Z][a-zA-Z0-9_]*)").ok())
+        .as_ref();
+    let re_class = RE_CLASS
+        .get_or_init(|| regex::Regex::new(r"\bclass\s+([A-Z][a-zA-Z0-9_]*)").ok())
+        .as_ref();
+    let re_enum = RE_ENUM
+        .get_or_init(|| regex::Regex::new(r"\benum\s+([A-Z][a-zA-Z0-9_]*)").ok())
+        .as_ref();
+    let re_method = RE_METHOD
+        .get_or_init(|| regex::Regex::new(r"\b(?:async\s+)?fn\s+([a-z_][a-z0-9_]*)\s*\(").ok())
+        .as_ref();
+    let re_trait = RE_TRAIT
+        .get_or_init(|| regex::Regex::new(r"\btrait\s+([A-Z][a-zA-Z0-9_]*)").ok())
+        .as_ref();
+    let re_impl = RE_IMPL
+        .get_or_init(|| {
+            regex::Regex::new(r"\bimpl\s+(?:[A-Z][a-zA-Z0-9_]*\s+for\s+)?([A-Z][a-zA-Z0-9_]*)").ok()
+        })
+        .as_ref();
+
     let mut symbols = Vec::new();
 
     // Extract function names: fn NAME
-    if let Some(caps) = regex::Regex::new(r"\bfn\s+([a-z_][a-z0-9_]*)")
-        .ok()
-        .and_then(|re| re.captures(pattern))
+    if let Some(re_fn) = re_fn
+        && let Some(caps) = re_fn.captures(pattern)
+        && let Some(m) = caps.get(1)
     {
-        if let Some(m) = caps.get(1) {
-            symbols.push(m.as_str().to_string());
-        }
+        symbols.push(m.as_str().to_string());
     }
 
     // Extract struct names: struct NAME
-    if let Some(caps) = regex::Regex::new(r"\bstruct\s+([A-Z][a-zA-Z0-9_]*)")
-        .ok()
-        .and_then(|re| re.captures(pattern))
+    if let Some(re_struct) = re_struct
+        && let Some(caps) = re_struct.captures(pattern)
+        && let Some(m) = caps.get(1)
     {
-        if let Some(m) = caps.get(1) {
-            symbols.push(m.as_str().to_string());
-        }
+        symbols.push(m.as_str().to_string());
     }
 
     // Extract class names: class NAME
-    if let Some(caps) = regex::Regex::new(r"\bclass\s+([A-Z][a-zA-Z0-9_]*)")
-        .ok()
-        .and_then(|re| re.captures(pattern))
+    if let Some(re_class) = re_class
+        && let Some(caps) = re_class.captures(pattern)
+        && let Some(m) = caps.get(1)
     {
-        if let Some(m) = caps.get(1) {
-            symbols.push(m.as_str().to_string());
-        }
+        symbols.push(m.as_str().to_string());
     }
 
     // Extract enum names: enum NAME
-    if let Some(caps) = regex::Regex::new(r"\benum\s+([A-Z][a-zA-Z0-9_]*)")
-        .ok()
-        .and_then(|re| re.captures(pattern))
+    if let Some(re_enum) = re_enum
+        && let Some(caps) = re_enum.captures(pattern)
+        && let Some(m) = caps.get(1)
     {
-        if let Some(m) = caps.get(1) {
-            symbols.push(m.as_str().to_string());
-        }
+        symbols.push(m.as_str().to_string());
     }
 
     // Extract method names: fn NAME( or async fn NAME(
-    if let Some(caps) = regex::Regex::new(r#"\b(?:async\s+)?fn\s+([a-z_][a-z0-9_]*)\s*\("#)
-        .ok()
-        .and_then(|re| re.captures(pattern))
+    if let Some(re_method) = re_method
+        && let Some(caps) = re_method.captures(pattern)
+        && let Some(m) = caps.get(1)
     {
-        if let Some(m) = caps.get(1) {
-            let name = m.as_str().to_string();
-            if !symbols.contains(&name) {
-                symbols.push(name);
-            }
+        let name = m.as_str().to_string();
+        if !symbols.contains(&name) {
+            symbols.push(name);
         }
     }
 
     // Extract trait names: trait NAME
-    if let Some(caps) = regex::Regex::new(r"\btrait\s+([A-Z][a-zA-Z0-9_]*)")
-        .ok()
-        .and_then(|re| re.captures(pattern))
+    if let Some(re_trait) = re_trait
+        && let Some(caps) = re_trait.captures(pattern)
+        && let Some(m) = caps.get(1)
     {
-        if let Some(m) = caps.get(1) {
-            symbols.push(m.as_str().to_string());
-        }
+        symbols.push(m.as_str().to_string());
     }
 
     // Extract impl targets: impl NAME or impl Trait for NAME
-    if let Some(caps) =
-        regex::Regex::new(r"\bimpl\s+(?:[A-Z][a-zA-Z0-9_]*\s+for\s+)?([A-Z][a-zA-Z0-9_]*)")
-            .ok()
-            .and_then(|re| re.captures(pattern))
+    if let Some(re_impl) = re_impl
+        && let Some(caps) = re_impl.captures(pattern)
+        && let Some(m) = caps.get(1)
     {
-        if let Some(m) = caps.get(1) {
-            symbols.push(m.as_str().to_string());
-        }
+        symbols.push(m.as_str().to_string());
     }
 
     symbols
@@ -343,14 +469,26 @@ pub struct AffectedDoc {
 }
 
 /// Confidence level for drift detection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Ordered: `Low < Medium < High` for comparison operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum DriftConfidence {
-    /// High confidence: pattern explicitly references the file/symbol.
-    High,
-    /// Medium confidence: pattern contains related keywords.
-    Medium,
     /// Low confidence: fuzzy heuristic match only.
     Low,
+    /// Medium confidence: pattern contains related keywords.
+    Medium,
+    /// High confidence: pattern explicitly references the file/symbol.
+    High,
+}
+
+impl std::fmt::Display for DriftConfidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::High => write!(f, "high"),
+            Self::Medium => write!(f, "medium"),
+            Self::Low => write!(f, "low"),
+        }
+    }
 }
 
 impl SemanticDriftSignal {
@@ -429,27 +567,131 @@ impl AffectedDoc {
 // Phase 6: Core Propagation Logic
 // =============================================================================
 
+/// Phase 7.6: Check if a file path matches the observation's scope filter.
+///
+/// Returns `true` if:
+/// - The scope is `None` (no filtering)
+/// - The scope matches the file path using glob pattern matching
+///
+/// Returns `false` if:
+/// - The scope is `Some` but doesn't match the file path
+#[must_use]
+fn matches_scope_filter(file_path: &str, scope: Option<&str>) -> bool {
+    match scope {
+        None => true, // No scope means match all files
+        Some(scope_pattern) => path_matches_scope(file_path, scope_pattern),
+    }
+}
+
+fn add_symbol_refs_to_signal(
+    signal: &mut SemanticDriftSignal,
+    symbol_refs: &[SymbolRef],
+    file_path: &str,
+) {
+    for sym_ref in symbol_refs {
+        if !matches_scope_filter(file_path, sym_ref.scope.as_deref()) {
+            continue;
+        }
+
+        if signal
+            .affected_docs
+            .iter()
+            .any(|doc| doc.node_id == sym_ref.node_id)
+        {
+            continue;
+        }
+
+        let affected = AffectedDoc::new(
+            &sym_ref.doc_id,
+            &sym_ref.pattern,
+            &sym_ref.language,
+            &sym_ref.node_id,
+        )
+        .with_line(sym_ref.line_number.unwrap_or(0));
+
+        signal.add_affected_doc(affected);
+    }
+}
+
+fn has_explicit_reference(affected_docs: &[AffectedDoc], file_stem: &str) -> bool {
+    let function_pattern = format!("fn {file_stem}");
+    let struct_pattern = format!("struct {file_stem}");
+    let class_pattern = format!("class {file_stem}");
+
+    affected_docs.iter().any(|doc| {
+        doc.matching_pattern.contains(&function_pattern)
+            || doc.matching_pattern.contains(&struct_pattern)
+            || doc.matching_pattern.contains(&class_pattern)
+    })
+}
+
 /// Phase 6: Core logic for propagating source changes to documentation.
 ///
-/// Scans all documents with `:OBSERVE:` patterns and identifies those that
-/// may reference the changed source file using heuristic matching.
+/// Uses the Symbol-to-Node Inverted Index for O(1) lookup when available,
+/// falling back to heuristic traversal when the index is empty or misses.
+///
+/// # Phase 7.6: Scope Filtering
+///
+/// Observations with a `scope` filter only match files within the specified
+/// path pattern. This prevents false positives when the same symbol exists
+/// in multiple packages.
 ///
 /// # Returns
 ///
 /// A vector of `SemanticDriftSignal` events for each affected observation.
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn propagate_source_change(index: &LinkGraphIndex, path: &Path) -> Vec<SemanticDriftSignal> {
-    info!("Propagating semantic change from code: {:?}", path);
+    info!("Propagating semantic change from code: {}", path.display());
 
     let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let file_stem_lower = file_stem.to_lowercase();
 
-    let mut signal = SemanticDriftSignal::new(path.to_string_lossy(), file_stem);
-    let trees = index.all_page_index_trees();
+    // Phase 7.6: Get file path for scope filtering
+    let file_path_str = path.to_string_lossy();
 
-    // Traverse all document trees to find observations
-    for (doc_id, nodes) in trees {
-        traverse_nodes_for_observations(&nodes, doc_id, file_stem, &file_stem_lower, &mut signal);
+    let mut signal = SemanticDriftSignal::new(path.to_string_lossy(), file_stem);
+
+    // Phase 6.4: O(1) lookup via Symbol-to-Node Inverted Index
+    if index.has_symbols() {
+        // Try direct symbol lookup first (fast path)
+        if let Some(symbol_refs) = index.lookup_symbol(file_stem) {
+            info!(
+                "Phase 6.4: O(1) cache hit for symbol '{}' ({} refs)",
+                file_stem,
+                symbol_refs.len()
+            );
+            add_symbol_refs_to_signal(&mut signal, symbol_refs, &file_path_str);
+        }
+
+        // Also check for snake_case and PascalCase variants
+        let snake_variant = file_stem.to_lowercase().replace('-', "_");
+        if snake_variant != file_stem
+            && let Some(symbol_refs) = index.lookup_symbol(&snake_variant)
+        {
+            add_symbol_refs_to_signal(&mut signal, symbol_refs, &file_path_str);
+        }
+
+        // PascalCase variant (e.g., "user_handler" -> "UserHandler")
+        let pascal_variant = to_pascal_case(file_stem);
+        if let Some(symbol_refs) = index.lookup_symbol(&pascal_variant) {
+            add_symbol_refs_to_signal(&mut signal, symbol_refs, &file_path_str);
+        }
+    }
+
+    // Fall back to heuristic traversal if cache misses or is empty
+    if signal.affected_docs.is_empty() {
+        info!("Phase 6: Cache miss, falling back to heuristic traversal");
+        let trees = index.all_page_index_trees();
+        for (doc_id, nodes) in trees {
+            traverse_nodes_for_observations(
+                nodes,
+                doc_id,
+                file_stem,
+                &file_stem_lower,
+                &mut signal,
+            );
+        }
     }
 
     if signal.affected_docs.is_empty() {
@@ -457,18 +699,7 @@ pub fn propagate_source_change(index: &LinkGraphIndex, path: &Path) -> Vec<Seman
     }
 
     // Determine confidence based on match quality
-    let has_explicit_reference = signal
-        .affected_docs
-        .iter()
-        .any(|d| d.matching_pattern.contains(&format!("fn {}", file_stem)))
-        || signal.affected_docs.iter().any(|d| {
-            d.matching_pattern
-                .contains(&format!("struct {}", file_stem))
-        })
-        || signal
-            .affected_docs
-            .iter()
-            .any(|d| d.matching_pattern.contains(&format!("class {}", file_stem)));
+    let has_explicit_reference = has_explicit_reference(&signal.affected_docs, file_stem);
 
     signal.update_confidence(if has_explicit_reference {
         DriftConfidence::High
@@ -486,6 +717,19 @@ pub fn propagate_source_change(index: &LinkGraphIndex, path: &Path) -> Vec<Seman
     vec![signal]
 }
 
+/// Convert `snake_case` to `PascalCase`.
+fn to_pascal_case(s: &str) -> String {
+    s.split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        })
+        .collect()
+}
+
 /// Recursively traverse page index nodes to find matching observations.
 fn traverse_nodes_for_observations(
     nodes: &[PageIndexNode],
@@ -501,11 +745,9 @@ fn traverse_nodes_for_observations(
 
             // Heuristic matching: pattern contains file stem or related symbols
             let matches = pattern_lower.contains(file_stem_lower)
-                || obs
-                    .pattern
-                    .contains(&format!("{}_{}", file_stem, file_stem))
-                || obs.pattern.contains(&format!("{}::", file_stem))
-                || obs.pattern.contains(&format!("{}.", file_stem));
+                || obs.pattern.contains(&format!("{file_stem}_{file_stem}"))
+                || obs.pattern.contains(&format!("{file_stem}::"))
+                || obs.pattern.contains(&format!("{file_stem}."));
 
             if matches {
                 let affected = AffectedDoc::new(
@@ -644,9 +886,9 @@ impl ObservationSignal {
     #[must_use]
     pub fn doc_id(&self) -> &str {
         match self {
-            Self::Stale { doc_id, .. } => doc_id,
-            Self::Broken { doc_id, .. } => doc_id,
-            Self::Orphaned { doc_id, .. } => doc_id,
+            Self::Stale { doc_id, .. }
+            | Self::Broken { doc_id, .. }
+            | Self::Orphaned { doc_id, .. } => doc_id,
         }
     }
 
@@ -715,6 +957,7 @@ impl ObservationBus {
     }
 
     /// Emit multiple signals from a semantic drift detection.
+    #[must_use]
     pub fn emit_drift_signals(&self, drift: &SemanticDriftSignal) -> Vec<u64> {
         let signals = ObservationSignal::stale_from_drift(drift);
         signals.into_iter().filter_map(|s| self.emit(s)).collect()
@@ -730,405 +973,28 @@ impl ObservationBus {
 /// Convert observation signals to a streaming status format.
 ///
 /// This function transforms internal signals into a format suitable
-/// for agent notification via the ZhenfaStreamingEvent::Status channel.
+/// for agent notification via the `ZhenfaStreamingEvent::Status` channel.
 #[must_use]
 pub fn signals_to_status_batch(signals: &[ObservationSignal]) -> String {
+    use std::fmt::Write as _;
+
     let mut batch = String::new();
     batch.push_str("=== Observation Signal Batch ===\n");
 
     for (i, signal) in signals.iter().enumerate() {
-        batch.push_str(&format!("{}. {}\n", i + 1, signal.to_status_message()));
+        let _ = writeln!(batch, "{}. {}", i + 1, signal.to_status_message());
     }
 
-    batch.push_str(&format!(
+    let _ = write!(
+        batch,
         "\nTotal: {} signal(s), {} require immediate attention",
         signals.len(),
         signals.iter().filter(|s| s.requires_attention()).count()
-    ));
+    );
 
     batch
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_semantic_drift_signal_summary() {
-        let mut signal = SemanticDriftSignal::new("src/lib.rs", "lib");
-        signal.add_affected_doc(AffectedDoc::new(
-            "docs/api",
-            "fn lib_init($$$)",
-            "rust",
-            "node-1",
-        ));
-        signal.update_confidence(DriftConfidence::High);
-
-        let summary = signal.summary();
-        assert!(summary.contains("lib"));
-        assert!(summary.contains("docs/api"));
-    }
-
-    #[test]
-    fn test_semantic_drift_signal_serialization() {
-        let mut signal = SemanticDriftSignal::new("src/lib.rs", "lib");
-        signal.add_affected_doc(AffectedDoc::new(
-            "docs/api",
-            "fn lib_init($$$)",
-            "rust",
-            "node-1",
-        ));
-
-        let json = signal.to_streaming_payload();
-        assert!(json.contains("lib"));
-        assert!(json.contains("docs/api"));
-    }
-
-    #[test]
-    fn test_drift_confidence_levels() {
-        assert_eq!(DriftConfidence::High, DriftConfidence::High);
-        assert_ne!(DriftConfidence::High, DriftConfidence::Low);
-    }
-
-    #[test]
-    fn test_affected_doc_builder() {
-        let doc = AffectedDoc::new("docs/test", "pattern", "rust", "node-1").with_line(42);
-
-        assert_eq!(doc.doc_id, "docs/test");
-        assert_eq!(doc.matching_pattern, "pattern");
-        assert_eq!(doc.language, "rust");
-        assert_eq!(doc.line_number, Some(42));
-        assert_eq!(doc.node_id, "node-1");
-    }
-
-    #[test]
-    fn test_is_source_code() {
-        assert!(is_source_code(Path::new("src/lib.rs")));
-        assert!(is_source_code(Path::new("app/main.py")));
-        assert!(is_source_code(Path::new("ui/index.ts")));
-        assert!(is_source_code(Path::new("web/app.js")));
-        assert!(!is_source_code(Path::new("docs/README.md")));
-        assert!(!is_source_code(Path::new("config.toml")));
-    }
-
-    #[test]
-    fn test_is_ignorable_path() {
-        assert!(is_ignorable_path(Path::new(".git/config")));
-        assert!(is_ignorable_path(Path::new("target/debug/app")));
-        assert!(!is_ignorable_path(Path::new("src/lib.rs")));
-    }
-
-    // =========================================================================
-    // ObservationSignal Tests
-    // =========================================================================
-
-    #[test]
-    fn test_observation_signal_stale_from_drift() {
-        let mut drift = SemanticDriftSignal::new("src/lib.rs", "lib");
-        drift.add_affected_doc(AffectedDoc::new(
-            "docs/api",
-            "fn lib_init($$$)",
-            "rust",
-            "node-1",
-        ));
-        drift.update_confidence(DriftConfidence::High);
-
-        let signals = ObservationSignal::stale_from_drift(&drift);
-        assert_eq!(signals.len(), 1);
-
-        match &signals[0] {
-            ObservationSignal::Stale {
-                doc_id,
-                observation,
-                trigger_source,
-                confidence,
-            } => {
-                assert_eq!(doc_id, "docs/api");
-                assert_eq!(observation.pattern, "fn lib_init($$$)");
-                assert_eq!(observation.language, "rust");
-                assert_eq!(*trigger_source, "src/lib.rs");
-                assert_eq!(*confidence, DriftConfidence::High);
-            }
-            _ => panic!("Expected Stale signal"),
-        }
-    }
-
-    #[test]
-    fn test_observation_signal_to_status_message() {
-        let signal = ObservationSignal::Stale {
-            doc_id: "docs/api".to_string(),
-            observation: ObservationRef {
-                pattern: "fn test()".to_string(),
-                language: "rust".to_string(),
-                line_number: 42,
-                node_id: "node-1".to_string(),
-            },
-            trigger_source: "src/lib.rs".to_string(),
-            confidence: DriftConfidence::High,
-        };
-
-        let msg = signal.to_status_message();
-        assert!(msg.contains("Stale"));
-        assert!(msg.contains("docs/api"));
-        assert!(msg.contains("fn test()"));
-        assert!(msg.contains("High"));
-    }
-
-    #[test]
-    fn test_observation_signal_requires_attention() {
-        let high_stale = ObservationSignal::Stale {
-            doc_id: "docs/api".to_string(),
-            observation: ObservationRef {
-                pattern: "fn test()".to_string(),
-                language: "rust".to_string(),
-                line_number: 1,
-                node_id: "n1".to_string(),
-            },
-            trigger_source: "src/lib.rs".to_string(),
-            confidence: DriftConfidence::High,
-        };
-        assert!(high_stale.requires_attention());
-
-        let low_stale = ObservationSignal::Stale {
-            doc_id: "docs/api".to_string(),
-            observation: ObservationRef {
-                pattern: "fn test()".to_string(),
-                language: "rust".to_string(),
-                line_number: 1,
-                node_id: "n1".to_string(),
-            },
-            trigger_source: "src/lib.rs".to_string(),
-            confidence: DriftConfidence::Low,
-        };
-        assert!(!low_stale.requires_attention());
-
-        let broken = ObservationSignal::Broken {
-            doc_id: "docs/api".to_string(),
-            observation: ObservationRef {
-                pattern: "fn test()".to_string(),
-                language: "rust".to_string(),
-                line_number: 1,
-                node_id: "n1".to_string(),
-            },
-            error: "Pattern not found".to_string(),
-        };
-        assert!(broken.requires_attention());
-    }
-
-    #[test]
-    fn test_observation_bus_emit() {
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        let mut bus = ObservationBus::new();
-        assert!(!bus.is_connected());
-
-        bus.connect(tx);
-        assert!(bus.is_connected());
-
-        let signal = ObservationSignal::Stale {
-            doc_id: "docs/api".to_string(),
-            observation: ObservationRef {
-                pattern: "fn test()".to_string(),
-                language: "rust".to_string(),
-                line_number: 1,
-                node_id: "n1".to_string(),
-            },
-            trigger_source: "src/lib.rs".to_string(),
-            confidence: DriftConfidence::High,
-        };
-
-        let id = bus.emit(signal);
-        assert!(id.is_some());
-
-        let received = rx.try_recv();
-        assert!(received.is_ok());
-    }
-
-    #[test]
-    fn test_observation_bus_emit_drift_signals() {
-        let (tx, _rx) = mpsc::unbounded_channel();
-        let mut bus = ObservationBus::new();
-        bus.connect(tx);
-
-        let mut drift = SemanticDriftSignal::new("src/lib.rs", "lib");
-        drift.add_affected_doc(AffectedDoc::new("docs/a", "p1", "rust", "n1"));
-        drift.add_affected_doc(AffectedDoc::new("docs/b", "p2", "rust", "n2"));
-
-        let ids = bus.emit_drift_signals(&drift);
-        assert_eq!(ids.len(), 2);
-    }
-
-    #[test]
-    fn test_signals_to_status_batch() {
-        let signals = vec![
-            ObservationSignal::Stale {
-                doc_id: "docs/a".to_string(),
-                observation: ObservationRef {
-                    pattern: "fn a()".to_string(),
-                    language: "rust".to_string(),
-                    line_number: 1,
-                    node_id: "n1".to_string(),
-                },
-                trigger_source: "src/a.rs".to_string(),
-                confidence: DriftConfidence::High,
-            },
-            ObservationSignal::Broken {
-                doc_id: "docs/b".to_string(),
-                observation: ObservationRef {
-                    pattern: "fn b()".to_string(),
-                    language: "rust".to_string(),
-                    line_number: 2,
-                    node_id: "n2".to_string(),
-                },
-                error: "Not found".to_string(),
-            },
-        ];
-
-        let batch = signals_to_status_batch(&signals);
-        assert!(batch.contains("Observation Signal Batch"));
-        assert!(batch.contains("2 signal(s)"));
-        assert!(batch.contains("2 require immediate attention"));
-    }
-
-    // =========================================================================
-    // Audit Recommendation Function Tests
-    // =========================================================================
-
-    #[test]
-    fn test_is_high_noise_file() {
-        // High noise files
-        assert!(is_high_noise_file(Path::new("src/mod.rs")));
-        assert!(is_high_noise_file(Path::new("src/lib.rs")));
-        assert!(is_high_noise_file(Path::new("bin/main.rs")));
-        assert!(is_high_noise_file(Path::new("prelude.rs")));
-        assert!(is_high_noise_file(Path::new("types.rs")));
-        assert!(is_high_noise_file(Path::new("error.rs")));
-        assert!(is_high_noise_file(Path::new("utils.rs")));
-
-        // Regular source files
-        assert!(!is_high_noise_file(Path::new("src/parser.rs")));
-        assert!(!is_high_noise_file(Path::new("src/sentinel.rs")));
-        assert!(!is_high_noise_file(Path::new("app/models/user.rs")));
-    }
-
-    #[test]
-    fn test_extract_pattern_symbols_function() {
-        let symbols = extract_pattern_symbols("fn process_data($$$)");
-        assert_eq!(symbols, vec!["process_data"]);
-
-        let symbols =
-            extract_pattern_symbols("async fn fetch_user(id: u32) -> Result<User, Error>");
-        assert!(symbols.contains(&"fetch_user".to_string()));
-    }
-
-    #[test]
-    fn test_extract_pattern_symbols_struct() {
-        let symbols = extract_pattern_symbols("struct User { $$$ }");
-        assert_eq!(symbols, vec!["User"]);
-
-        let symbols =
-            extract_pattern_symbols("struct HttpRequest { method: String, path: String }");
-        assert!(symbols.contains(&"HttpRequest".to_string()));
-    }
-
-    #[test]
-    fn test_extract_pattern_symbols_class() {
-        let symbols = extract_pattern_symbols("class UserProfile { $$$ }");
-        assert_eq!(symbols, vec!["UserProfile"]);
-    }
-
-    #[test]
-    fn test_extract_pattern_symbols_enum() {
-        let symbols = extract_pattern_symbols("enum Status { $$$ }");
-        assert_eq!(symbols, vec!["Status"]);
-    }
-
-    #[test]
-    fn test_extract_pattern_symbols_trait() {
-        let symbols = extract_pattern_symbols("trait Handler { $$$ }");
-        assert_eq!(symbols, vec!["Handler"]);
-    }
-
-    #[test]
-    fn test_extract_pattern_symbols_impl() {
-        let symbols = extract_pattern_symbols("impl User { $$$ }");
-        assert!(symbols.contains(&"User".to_string()));
-
-        let symbols = extract_pattern_symbols("impl Display for User { $$$ }");
-        assert!(symbols.contains(&"User".to_string()));
-    }
-
-    #[test]
-    fn test_extract_pattern_symbols_multiple() {
-        // Pattern with function name - note: return types not currently extracted
-        let symbols = extract_pattern_symbols("fn create_user() -> User { $$$ }");
-        assert!(symbols.contains(&"create_user".to_string()));
-        // Note: 'User' in return type is not extracted - only explicit struct/enum/class keywords
-
-        // Pattern with explicit struct and function
-        let symbols = extract_pattern_symbols("struct User { } fn create_user() { $$$ }");
-        assert!(symbols.contains(&"User".to_string()));
-        assert!(symbols.contains(&"create_user".to_string()));
-    }
-
-    #[test]
-    fn test_extract_pattern_symbols_empty() {
-        let symbols = extract_pattern_symbols("$$$");
-        assert!(symbols.is_empty());
-
-        let symbols = extract_pattern_symbols("// just a comment");
-        assert!(symbols.is_empty());
-    }
-
-    #[test]
-    fn test_verify_file_stable_with_temp_file() {
-        use std::io::Write;
-
-        // Create a temp file with content
-        let temp_dir = std::env::temp_dir();
-        let temp_path = temp_dir.join("xiuxian_test_stable.rs");
-
-        let mut file = std::fs::File::create(&temp_path).unwrap();
-        file.write_all(b"fn main() {}").unwrap();
-        drop(file);
-
-        assert!(verify_file_stable(&temp_path));
-
-        // Cleanup
-        std::fs::remove_file(&temp_path).ok();
-    }
-
-    #[test]
-    fn test_verify_file_stable_nonexistent() {
-        assert!(!verify_file_stable(Path::new("/nonexistent/file.rs")));
-    }
-
-    #[test]
-    fn test_compute_file_hash_with_temp_file() {
-        use std::io::Write;
-
-        let temp_dir = std::env::temp_dir();
-        let temp_path = temp_dir.join("xiuxian_test_hash.txt");
-
-        let mut file = std::fs::File::create(&temp_path).unwrap();
-        file.write_all(b"test content for hashing").unwrap();
-        drop(file);
-
-        let hash = compute_file_hash(&temp_path);
-        assert!(hash.is_some());
-        let hash = hash.unwrap();
-        assert_eq!(hash.len(), 64); // Blake3 hex length
-
-        // Same content should produce same hash
-        let hash2 = compute_file_hash(&temp_path).unwrap();
-        assert_eq!(hash, hash2);
-
-        // Cleanup
-        std::fs::remove_file(&temp_path).ok();
-    }
-
-    #[test]
-    fn test_compute_file_hash_nonexistent() {
-        let hash = compute_file_hash(Path::new("/nonexistent/file.rs"));
-        assert!(hash.is_none());
-    }
-}
+#[path = "../../../tests/unit/zhenfa_router/native/sentinel.rs"]
+mod tests;

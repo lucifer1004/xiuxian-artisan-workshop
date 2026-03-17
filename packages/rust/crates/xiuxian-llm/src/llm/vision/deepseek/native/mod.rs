@@ -7,9 +7,13 @@ mod env;
 use super::model_kind::VisionModelKind;
 
 pub(super) use engine::infer;
+pub(crate) use engine::load_only_for_tests;
 pub(super) use engine::prewarm;
 pub(crate) use engine::require_quantized_snapshot_with_for_tests;
+pub(crate) use engine::reset_engine_state_for_tests;
 pub(crate) use engine::resolve_engine_device_label_with_for_tests;
+pub(crate) use engine::resolve_low_precision_load_policy_for_tests;
+pub(crate) use engine::resolve_model_kind_for_model_root_label_from_sources_for_tests;
 pub(crate) use engine::resolve_model_kind_for_model_root_label_with_for_tests;
 pub(crate) use engine::resolve_model_kind_label_with_for_tests;
 pub(crate) use engine::resolve_model_load_dtype_label_for_tests;

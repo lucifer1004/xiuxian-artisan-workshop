@@ -1,7 +1,7 @@
 //! Native device test API for `DeepSeek` vision module.
 
 use crate::llm::acceleration::AccelerationDevice;
-use crate::llm::vision::deepseek::native;
+use crate::llm::vision::deepseek::{DeepseekRuntime, native};
 
 /// Resolve device kind label with explicit parameters for test assertions.
 #[must_use]
@@ -43,6 +43,20 @@ pub fn resolve_model_kind_for_model_root_label_with_for_tests(
     )
 }
 
+/// Resolve model kind for model root label with env/config precedence for test assertions.
+#[must_use]
+pub fn resolve_model_kind_for_model_root_label_from_sources_for_tests(
+    env_model_kind: Option<&str>,
+    config_model_kind: Option<&str>,
+    model_root: &std::path::Path,
+) -> &'static str {
+    native::resolve_model_kind_for_model_root_label_from_sources_for_tests(
+        env_model_kind,
+        config_model_kind,
+        model_root,
+    )
+}
+
 /// Check if error indicates CPU fallback should be retried for test assertions.
 #[must_use]
 pub fn should_retry_cpu_fallback_with_for_tests(error_text: &str) -> bool {
@@ -77,6 +91,26 @@ pub fn resolve_vision_settings_with_for_tests(
     native::resolve_vision_settings_with_for_tests(base_size, image_size, crop_mode)
 }
 
+/// Resolve the low-precision auxiliary preload policy used for `DeepSeek` model loads.
+#[must_use]
+pub fn resolve_low_precision_load_policy_with_for_tests(
+    preload_language_f32_aux: Option<bool>,
+    preload_vision_f32_aux: Option<bool>,
+    preload_linear_weight_f32: Option<bool>,
+    promote_language_input_f32: Option<bool>,
+    lazy_moe_experts: Option<bool>,
+    lazy_clip_transformer_layers: Option<bool>,
+) -> (bool, bool, bool, bool, bool, bool) {
+    native::resolve_low_precision_load_policy_for_tests(
+        preload_language_f32_aux,
+        preload_vision_f32_aux,
+        preload_linear_weight_f32,
+        promote_language_input_f32,
+        lazy_moe_experts,
+        lazy_clip_transformer_layers,
+    )
+}
+
 /// Resolve the safe fallback vision settings used after decode retry escalation.
 #[must_use]
 pub fn safe_vision_settings_for_tests() -> (u32, u32, bool) {
@@ -99,4 +133,18 @@ pub fn should_reuse_engine_cache_with_for_tests(
         requested_device,
         force_cpu,
     )
+}
+
+/// Load the configured `DeepSeek` OCR engine without running a real OCR decode.
+///
+/// # Errors
+///
+/// Returns an error when the runtime is disabled or model loading fails.
+pub fn load_deepseek_ocr_for_tests(runtime: &DeepseekRuntime) -> crate::llm::error::LlmResult<()> {
+    native::load_only_for_tests(runtime)
+}
+
+/// Reset the cached `DeepSeek` engine state to isolate phase-oriented tests.
+pub fn reset_deepseek_engine_state_for_tests() {
+    native::reset_engine_state_for_tests();
 }

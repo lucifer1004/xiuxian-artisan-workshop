@@ -1,7 +1,7 @@
 //! Scenario runners for different test categories.
 //!
 //! Each runner implements `ScenarioRunner` and handles a specific category
-//! of tests (page_index, search, graph, etc.).
+//! of tests (`page_index`, search, graph, etc.).
 
 mod graph;
 mod page_index;

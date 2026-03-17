@@ -41,6 +41,7 @@ fn default_limit() -> usize {
 /// It combines vector similarity search with AST-guided validation to compute
 /// recommended exploration paths based on task intent.
 #[allow(missing_docs)]
+#[allow(clippy::needless_pass_by_value)]
 #[zhenfa_tool(
     name = "wendao.agentic_nav",
     description = "Navigate the knowledge graph with reasoning-driven discovery. Combines vector search with AST validation for structured exploration paths.",
@@ -145,45 +146,58 @@ fn render_agentic_nav_result(
 ) -> String {
     use std::fmt::Write;
     let mut xml = String::new();
-    writeln!(xml, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>").unwrap();
-    writeln!(xml, "<agentic_nav_result>").unwrap();
-    writeln!(xml, "  <query>{}</query>", xml_escape(query)).unwrap();
-    writeln!(xml, "  <candidates>").unwrap();
+
+    macro_rules! xml_line {
+        ($($arg:tt)*) => {
+            if writeln!(xml, $($arg)*).is_err() {
+                unreachable!("writing XML into String cannot fail");
+            }
+        };
+    }
+
+    macro_rules! xml_inline {
+        ($($arg:tt)*) => {
+            if write!(xml, $($arg)*).is_err() {
+                unreachable!("writing XML into String cannot fail");
+            }
+        };
+    }
+
+    xml_line!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+    xml_line!("<agentic_nav_result>");
+    xml_line!("  <query>{}</query>", xml_escape(query));
+    xml_line!("  <candidates>");
 
     for v in validated.iter().take(limit) {
-        writeln!(xml, "    <candidate>").unwrap();
-        writeln!(xml, "      <doc_id>{}</doc_id>", xml_escape(&v.doc_id)).unwrap();
-        writeln!(
-            xml,
+        xml_line!("    <candidate>");
+        xml_line!("      <doc_id>{}</doc_id>", xml_escape(&v.doc_id));
+        xml_line!(
             "      <anchor_id>{}</anchor_id>",
             xml_escape(&v.hit.anchor_id)
-        )
-        .unwrap();
-        writeln!(xml, "      <is_valid>{}</is_valid>", v.is_valid).unwrap();
-        writeln!(xml, "      <score>{:.4}</score>", v.reranked_score).unwrap();
+        );
+        xml_line!("      <is_valid>{}</is_valid>", v.is_valid);
+        xml_line!("      <score>{:.4}</score>", v.reranked_score);
 
         // Add navigation hint based on validation status and structural position
         let hint = generate_navigation_hint(v);
-        writeln!(
-            xml,
+        xml_line!(
             "      <navigation_hint>{}</navigation_hint>",
             xml_escape(&hint)
-        )
-        .unwrap();
+        );
 
         if let Some(ref path) = v.structural_path {
-            writeln!(xml, "      <structural_path>").unwrap();
+            xml_line!("      <structural_path>");
             for segment in path {
-                writeln!(xml, "        <segment>{}</segment>", xml_escape(segment)).unwrap();
+                xml_line!("        <segment>{}</segment>", xml_escape(segment));
             }
-            writeln!(xml, "      </structural_path>").unwrap();
+            xml_line!("      </structural_path>");
         }
-        writeln!(xml, "    </candidate>").unwrap();
+        xml_line!("    </candidate>");
     }
 
-    writeln!(xml, "  </candidates>").unwrap();
-    writeln!(xml, "  <total_found>{}</total_found>", validated.len()).unwrap();
-    write!(xml, "</agentic_nav_result>").unwrap();
+    xml_line!("  </candidates>");
+    xml_line!("  <total_found>{}</total_found>", validated.len());
+    xml_inline!("</agentic_nav_result>");
 
     xml
 }

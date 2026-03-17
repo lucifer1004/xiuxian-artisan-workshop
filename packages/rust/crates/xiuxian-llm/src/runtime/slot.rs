@@ -34,7 +34,6 @@ pub enum SlotState {
 impl From<u8> for SlotState {
     fn from(value: u8) -> Self {
         match value {
-            0 => Self::Vacant,
             1 => Self::Hibernated,
             2 => Self::Active,
             _ => Self::Vacant,
@@ -149,7 +148,8 @@ impl ModelSlot {
     ///
     /// This establishes mmap without loading pages into physical memory.
     /// Page faults will occur on first access.
-    pub fn hibernate(&self) -> LlmResult<SlotState> {
+    #[must_use]
+    pub fn hibernate(&self) -> SlotState {
         let prev = self.state.compare_exchange(
             SlotState::Vacant as u8,
             SlotState::Hibernated as u8,
@@ -166,9 +166,9 @@ impl ModelSlot {
                     model_root = %self.metadata.model_root.display(),
                     "Model slot hibernated (Vacant -> Hibernated)"
                 );
-                Ok(SlotState::Vacant)
+                SlotState::Vacant
             }
-            Err(current) => Ok(SlotState::from(current)),
+            Err(current) => SlotState::from(current),
         }
     }
 
@@ -329,6 +329,10 @@ impl ModelSlot {
     }
 
     /// Executes inference if Active.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the slot is not active or the executor fails.
     pub async fn execute(&self, input: ModelInput) -> LlmResult<ModelOutput> {
         let executor = self.executor().ok_or_else(|| LlmError::Internal {
             message: format!("slot {} is not active", self.id),
@@ -370,7 +374,7 @@ mod tests {
         assert_eq!(slot.state(), SlotState::Vacant);
 
         // Vacant -> Hibernated
-        let prev = slot.hibernate().unwrap();
+        let prev = slot.hibernate();
         assert_eq!(prev, SlotState::Vacant);
         assert_eq!(slot.state(), SlotState::Hibernated);
 

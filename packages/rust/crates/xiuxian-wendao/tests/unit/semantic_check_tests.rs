@@ -1,4 +1,4 @@
-//! Unit tests for semantic_check module (Blueprint v2.2).
+//! Unit tests for `semantic_check` module (Blueprint v2.2).
 
 use super::*;
 use crate::link_graph::parser::CodeObservation;
@@ -237,7 +237,7 @@ fn test_health_score_bounds() {
 // Code Observation Check Tests (Blueprint v2.7)
 // =============================================================================
 
-/// Helper to create a PageIndexNode with observations.
+/// Helper to create a `PageIndexNode` with observations.
 fn create_node_with_observations(
     node_id: &str,
     observations: Vec<CodeObservation>,
@@ -265,10 +265,17 @@ fn create_node_with_observations(
     }
 }
 
+fn parse_observation(raw: &str) -> CodeObservation {
+    let Some(observation) = CodeObservation::parse(raw) else {
+        panic!("expected test observation to parse: {raw}");
+    };
+    observation
+}
+
 #[test]
 fn test_check_code_observations_valid_pattern() {
     // Create a valid Rust observation
-    let obs = CodeObservation::parse(r#"lang:rust "fn $NAME($$$) -> Result<$$$>""#).unwrap();
+    let obs = parse_observation(r#"lang:rust "fn $NAME($$$) -> Result<$$$>""#);
     let node = create_node_with_observations("test.md#valid", vec![obs]);
 
     let mut issues = Vec::new();
@@ -281,7 +288,7 @@ fn test_check_code_observations_valid_pattern() {
 #[test]
 fn test_check_code_observations_unsupported_language() {
     // Create an observation with unsupported language
-    let obs = CodeObservation::parse(r#"lang:brainfuck "+-<>""#).unwrap();
+    let obs = parse_observation(r#"lang:brainfuck "+-<>""#);
     let node = create_node_with_observations("test.md#unsupported", vec![obs]);
 
     let mut issues = Vec::new();
@@ -299,9 +306,9 @@ fn test_check_code_observations_unsupported_language() {
 #[test]
 fn test_check_code_observations_multiple_issues() {
     // Create multiple observations with various issues
-    let obs1 = CodeObservation::parse(r#"lang:rust "fn $NAME()""#).unwrap(); // valid
-    let obs2 = CodeObservation::parse(r#"lang:brainfuck "+-<>""#).unwrap(); // unsupported
-    let obs3 = CodeObservation::parse(r#"lang:python "def $NAME():""#).unwrap(); // valid
+    let obs1 = parse_observation(r#"lang:rust "fn $NAME()""#); // valid
+    let obs2 = parse_observation(r#"lang:brainfuck "+-<>""#); // unsupported
+    let obs3 = parse_observation(r#"lang:python "def $NAME():""#); // valid
 
     let node = create_node_with_observations("test.md#mixed", vec![obs1, obs2, obs3]);
 
@@ -328,7 +335,7 @@ fn test_check_code_observations_no_observations() {
 #[test]
 fn test_check_code_observations_python_valid() {
     // Test valid Python pattern
-    let obs = CodeObservation::parse(r#"lang:python "def $NAME($$$): $$$BODY""#).unwrap();
+    let obs = parse_observation(r#"lang:python "def $NAME($$$): $$$BODY""#);
     let node = create_node_with_observations("test.md#python", vec![obs]);
 
     let mut issues = Vec::new();
@@ -340,7 +347,7 @@ fn test_check_code_observations_python_valid() {
 #[test]
 fn test_check_code_observations_typescript_valid() {
     // Test valid TypeScript pattern
-    let obs = CodeObservation::parse(r#"lang:typescript "function $NAME($$$): $$$RET""#).unwrap();
+    let obs = parse_observation(r#"lang:typescript "function $NAME($$$): $$$RET""#);
     let node = create_node_with_observations("test.md#ts", vec![obs]);
 
     let mut issues = Vec::new();
@@ -357,7 +364,7 @@ fn test_check_code_observations_typescript_valid() {
 fn test_check_code_observations_with_fuzzy_suggestion() {
     // Create an observation with a pattern that won't match
     // (The pattern is syntactically valid but has no matches in source files)
-    let obs = CodeObservation::parse(r#"lang:rust "fn nonexistent_function($$$)""#).unwrap();
+    let obs = parse_observation(r#"lang:rust "fn nonexistent_function($$$)""#);
     let node = create_node_with_observations("test.md#fuzzy", vec![obs]);
 
     // Create a source file with a similar function
@@ -375,6 +382,8 @@ fn test_check_code_observations_with_fuzzy_suggestion() {
     assert_eq!(issues[0].issue_type, "observation_target_missing");
     // The fuzzy suggestion should find the similar function
     assert!(issues[0].fuzzy_suggestion.is_some());
-    let fuzzy = issues[0].fuzzy_suggestion.as_ref().unwrap();
+    let Some(fuzzy) = issues[0].fuzzy_suggestion.as_ref() else {
+        panic!("expected fuzzy suggestion data for missing observation target");
+    };
     assert!(fuzzy.suggested_pattern.contains("existing_function"));
 }

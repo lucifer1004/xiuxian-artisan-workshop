@@ -169,16 +169,16 @@ fn write_header_internal<W: Write>(
         .write_u32::<LittleEndian>(header.block_size)
         .map_err(|e| e.to_string())?;
     writer
-        .write_u32::<LittleEndian>(records.len() as u32)
+        .write_u32::<LittleEndian>(usize_to_u32(records.len(), "DSQ record count")?)
         .map_err(|e| e.to_string())?;
 
     for r in records {
         write_string_internal(writer, &r.name)?;
         writer
-            .write_u32::<LittleEndian>(r.out_dim as u32)
+            .write_u32::<LittleEndian>(usize_to_u32(r.out_dim, "DSQ tensor out_dim")?)
             .map_err(|e| e.to_string())?;
         writer
-            .write_u32::<LittleEndian>(r.in_dim as u32)
+            .write_u32::<LittleEndian>(usize_to_u32(r.in_dim, "DSQ tensor in_dim")?)
             .map_err(|e| e.to_string())?;
         writer
             .write_u32::<LittleEndian>(r.q_dtype.as_u32())
@@ -210,7 +210,7 @@ fn write_header_internal<W: Write>(
 fn write_string_internal<W: Write>(writer: &mut W, s: &str) -> Result<(), String> {
     let bytes = s.as_bytes();
     writer
-        .write_u32::<LittleEndian>(bytes.len() as u32)
+        .write_u32::<LittleEndian>(usize_to_u32(bytes.len(), "DSQ string length")?)
         .map_err(|e| e.to_string())?;
     writer.write_all(bytes).map_err(|e| e.to_string())?;
     Ok(())
@@ -224,7 +224,8 @@ fn pad_to_offset<W: Write + Seek>(writer: &mut W, target_offset: u64) -> Result<
         ));
     }
     if target_offset > current {
-        let padding = vec![0u8; (target_offset - current) as usize];
+        let padding_len = u64_to_usize(target_offset - current, "DSQ padding length")?;
+        let padding = vec![0u8; padding_len];
         writer.write_all(&padding).map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -241,15 +242,26 @@ fn copy_range_internal<R: Read + Seek, W: Write>(
         .map_err(|e| e.to_string())?;
     let mut remaining = len;
     let mut buffer = vec![0u8; COPY_BUFFER_SIZE];
+    let buffer_len = u64::try_from(buffer.len())
+        .map_err(|_| "DSQ copy buffer length exceeds u64 range".to_string())?;
     while remaining > 0 {
-        let to_read = remaining.min(buffer.len() as u64);
+        let to_read = remaining.min(buffer_len);
+        let to_read_usize = u64_to_usize(to_read, "DSQ copy chunk length")?;
         reader
-            .read_exact(&mut buffer[..to_read as usize])
+            .read_exact(&mut buffer[..to_read_usize])
             .map_err(|e| e.to_string())?;
         writer
-            .write_all(&buffer[..to_read as usize])
+            .write_all(&buffer[..to_read_usize])
             .map_err(|e| e.to_string())?;
         remaining -= to_read;
     }
     Ok(())
+}
+
+fn usize_to_u32(value: usize, label: &str) -> Result<u32, String> {
+    u32::try_from(value).map_err(|_| format!("{label} exceeds u32 range: {value}"))
+}
+
+fn u64_to_usize(value: u64, label: &str) -> Result<usize, String> {
+    usize::try_from(value).map_err(|_| format!("{label} exceeds usize range: {value}"))
 }

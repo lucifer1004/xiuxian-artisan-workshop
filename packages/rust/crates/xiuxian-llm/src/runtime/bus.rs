@@ -62,16 +62,25 @@ impl ModelBus {
     /// Hibernates a slot (Vacant -> Hibernated).
     ///
     /// This establishes mmap without loading pages.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested model slot is not registered.
     pub fn hibernate(&self, id: &ModelSlotId) -> LlmResult<SlotState> {
         let slot = self.get(id).ok_or_else(|| LlmError::Internal {
             message: format!("model slot not found: {id}"),
         })?;
-        slot.hibernate()
+        Ok(slot.hibernate())
     }
 
     /// Activates a slot (Hibernated -> Active).
     ///
     /// This loads the executor and prepares for inference.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the slot or its executor factory cannot be found,
+    /// or when executor creation fails.
     ///
     /// # Memory Safety
     ///
@@ -188,17 +197,26 @@ impl ModelBus {
     ///
     /// This transitions Vacant slots to Hibernated and prepares them
     /// for fast activation on first inference.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when one of the slots cannot be prepared for
+    /// hibernation, or when the slot registry mutex is poisoned.
     pub fn prewarm_all(&self) -> LlmResult<usize> {
         let slots: Vec<Arc<ModelSlot>> = self
             .slots
             .lock()
-            .map(|guard| guard.values().cloned().collect())
-            .unwrap_or_default();
+            .map_err(|_| LlmError::Internal {
+                message: "model slot registry mutex poisoned".to_string(),
+            })?
+            .values()
+            .cloned()
+            .collect();
 
         let mut count = 0;
         for slot in slots {
             if slot.state() == SlotState::Vacant {
-                slot.hibernate()?;
+                let _ = slot.hibernate();
                 count += 1;
             }
         }
@@ -208,6 +226,10 @@ impl ModelBus {
     /// Executes inference on an active slot.
     ///
     /// This auto-activates the slot if needed (Vacant -> Hibernated -> Active).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the slot cannot be found, activated, or executed.
     pub async fn execute(&self, id: &ModelSlotId, input: ModelInput) -> LlmResult<ModelOutput> {
         let slot = self.get(id).ok_or_else(|| LlmError::Internal {
             message: format!("model slot not found: {id}"),
@@ -235,6 +257,10 @@ impl ModelBus {
     /// for fast activation without blocking the current thread.
     ///
     /// Returns immediately, prewarming happens asynchronously.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the slot cannot be found.
     pub fn prewarm_slot_background(&self, id: &ModelSlotId) -> LlmResult<()> {
         let slot = self.get(id).ok_or_else(|| LlmError::Internal {
             message: format!("model slot not found: {id}"),
@@ -242,7 +268,7 @@ impl ModelBus {
 
         // Transition to Hibernated if Vacant
         if slot.state() == SlotState::Vacant {
-            slot.hibernate()?;
+            let _ = slot.hibernate();
         }
 
         // Spawn background task for prewarming
@@ -270,6 +296,11 @@ pub trait ExecutorFactory: Send + Sync {
     fn id(&self) -> &ExecutorId;
 
     /// Creates an executor for the given metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the executor cannot be constructed from the
+    /// provided model metadata.
     fn create(&self, metadata: &ModelMetadata) -> LlmResult<Arc<Box<dyn ModelExecutor>>>;
 }
 

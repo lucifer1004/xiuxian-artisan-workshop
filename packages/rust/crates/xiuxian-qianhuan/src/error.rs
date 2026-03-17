@@ -38,4 +38,4 @@ pub enum InjectionError {
 }
 
 /// Convenience result alias for manifestation operations.
-pub type Result<T> = std::result::Result<T, InjectionError>;
+pub(crate) type Result<T> = std::result::Result<T, InjectionError>;

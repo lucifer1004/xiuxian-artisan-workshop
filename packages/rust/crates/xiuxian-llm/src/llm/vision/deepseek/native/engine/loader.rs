@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use candle_core::DType;
 use deepseek_ocr_core::{
@@ -7,17 +7,18 @@ use deepseek_ocr_core::{
     runtime::{DeviceKind, prepare_device_and_dtype},
 };
 use deepseek_ocr_dsq::{DsqReader, DsqTensorDType};
-use deepseek_ocr_infer_deepseek::load_model as load_deepseek_model;
+use deepseek_ocr_infer_deepseek::{LowPrecisionLoadPolicy, load_model_with_low_precision_policy};
 use deepseek_ocr_infer_dots::load_model as load_dots_model;
 use deepseek_ocr_infer_paddleocr::load_model as load_paddleocr_model;
 use tokenizers::Tokenizer;
 
 use super::retry::panic_payload_to_string;
+use crate::llm::vision::deepseek::config;
 use crate::llm::vision::deepseek::dsq_alignment::required_qoffset_alignment;
 use crate::llm::vision::deepseek::model_kind::VisionModelKind;
 use crate::llm::vision::deepseek::native::env::{
-    parse_device_kind, parse_env_bool, parse_env_f32, parse_env_f64, parse_env_string,
-    parse_env_u32, parse_env_usize, resolve_snapshot_path, resolve_weights_path,
+    parse_env_bool, parse_env_f32, parse_env_f64, parse_env_string, parse_env_u32, parse_env_usize,
+    resolve_snapshot_path, resolve_weights_path,
 };
 use crate::llm::vision::deepseek::util::sanitize_error_string;
 
@@ -29,23 +30,12 @@ const UPSTREAM_DEFAULT_IMAGE_SIZE: u32 = 640;
 const UPSTREAM_DEFAULT_CROP_MODE: bool = true;
 
 impl DeepseekEngine {
-    pub(super) fn load(model_root: &str) -> Result<Self, String> {
-        Self::load_for_device(model_root, parse_device_kind())
-    }
-
     pub(super) fn load_for_device(
         model_root: &str,
         requested_device: DeviceKind,
     ) -> Result<Self, String> {
         let model_kind = resolve_model_kind_for_model_root(model_root);
         Self::load_for_device_with_kind(model_root, requested_device, model_kind)
-    }
-
-    pub(super) fn load_with_kind(
-        model_root: &str,
-        model_kind: VisionModelKind,
-    ) -> Result<Self, String> {
-        Self::load_for_device_with_kind(model_root, parse_device_kind(), model_kind)
     }
 
     pub(super) fn load_for_device_with_kind(
@@ -74,6 +64,10 @@ or set XIUXIAN_VISION_REQUIRE_QUANTIZED=0 to allow unquantized loading."
 
         let (device, maybe_dtype) = prepare_device(requested_device)?;
         let dtype = resolve_model_load_dtype(maybe_dtype, device.is_metal() || device.is_cuda());
+        let decode = decode_parameters_from_env();
+        let vision = vision_settings_from_env();
+        let max_tiles = max_tiles_from_env();
+        let low_precision_load_policy = low_precision_load_policy_from_env();
 
         tracing::info!(
             event = "llm.vision.deepseek.engine.device_selected",
@@ -84,6 +78,38 @@ or set XIUXIAN_VISION_REQUIRE_QUANTIZED=0 to allow unquantized loading."
             quantized = model_paths.snapshot_path.is_some(),
             "DeepSeek OCR engine selected execution device and dtype"
         );
+        tracing::info!(
+            event = "llm.vision.deepseek.engine.effective_config",
+            model_root = %model_root,
+            model_kind = %model_paths.model_kind.as_str(),
+            config_path = %model_paths.config_path.display(),
+            tokenizer_path = %model_paths.tokenizer_path.display(),
+            weights_path = %model_paths.weights_path.display(),
+            snapshot_path = model_paths
+                .snapshot_path
+                .as_ref()
+                .map_or_else(|| "<none>".to_string(), |value| value.display().to_string()),
+            device = ?device,
+            dtype = ?dtype,
+            base_size = vision.base_size,
+            image_size = vision.image_size,
+            crop_mode = vision.crop_mode,
+            max_tiles,
+            max_new_tokens = decode.max_new_tokens,
+            decode_temperature = decode.temperature,
+            decode_top_p = ?decode.top_p,
+            decode_top_k = ?decode.top_k,
+            decode_repetition_penalty = decode.repetition_penalty,
+            decode_use_cache = decode.use_cache,
+            preload_language_f32_aux = low_precision_load_policy.preload_language_f32_aux,
+            preload_vision_f32_aux = low_precision_load_policy.preload_vision_f32_aux,
+            preload_linear_weight_f32 = low_precision_load_policy.preload_linear_weight_f32,
+            promote_language_input_f32 = low_precision_load_policy.promote_language_input_f32,
+            lazy_moe_experts = low_precision_load_policy.lazy_moe_experts,
+            lazy_clip_transformer_layers = low_precision_load_policy.lazy_clip_transformer_layers,
+            require_quantized = model_paths.require_quantized,
+            "DeepSeek OCR effective config resolved"
+        );
 
         let model = load_model_with_dtype(
             model_paths.config_path.as_path(),
@@ -92,6 +118,7 @@ or set XIUXIAN_VISION_REQUIRE_QUANTIZED=0 to allow unquantized loading."
             &device,
             dtype,
             model_paths.model_kind,
+            low_precision_load_policy,
         )
         .map_err(sanitize_error_string)?;
 
@@ -111,17 +138,12 @@ or set XIUXIAN_VISION_REQUIRE_QUANTIZED=0 to allow unquantized loading."
             "DeepSeek OCR model engine loaded"
         );
 
-        let decode = decode_parameters_from_env();
-        let vision = vision_settings_from_env();
-        let max_tiles = max_tiles_from_env();
-
         Ok(Self {
             model: Mutex::new(model),
             tokenizer,
             vision,
             max_tiles,
             decode,
-            model_root: Arc::from(model_root.to_string()),
         })
     }
 }
@@ -179,6 +201,7 @@ fn load_model_with_dtype(
     device: &candle_core::Device,
     dtype: DType,
     model_kind: VisionModelKind,
+    low_precision_load_policy: LowPrecisionLoadPolicy,
 ) -> Result<Box<dyn OcrEngine>, String> {
     let load_start = std::time::Instant::now();
 
@@ -190,6 +213,12 @@ fn load_model_with_dtype(
         device = ?device,
         dtype = ?dtype,
         model_kind = %model_kind.as_str(),
+        preload_language_f32_aux = low_precision_load_policy.preload_language_f32_aux,
+        preload_vision_f32_aux = low_precision_load_policy.preload_vision_f32_aux,
+        preload_linear_weight_f32 = low_precision_load_policy.preload_linear_weight_f32,
+        promote_language_input_f32 = low_precision_load_policy.promote_language_input_f32,
+        lazy_moe_experts = low_precision_load_policy.lazy_moe_experts,
+        lazy_clip_transformer_layers = low_precision_load_policy.lazy_clip_transformer_layers,
         "DeepSeek OCR invoking model loader"
     );
 
@@ -203,7 +232,9 @@ fn load_model_with_dtype(
     };
 
     let result = match model_kind {
-        VisionModelKind::Deepseek => load_deepseek_model(load_args),
+        VisionModelKind::Deepseek => {
+            load_model_with_low_precision_policy(load_args, low_precision_load_policy)
+        }
         VisionModelKind::PaddleOcrVl => load_paddleocr_model(load_args),
         VisionModelKind::DotsOcr => load_dots_model(load_args),
     };
@@ -302,15 +333,61 @@ fn max_tiles_from_env() -> usize {
     usize::try_from(max_tiles).unwrap_or(usize::MAX)
 }
 
+fn low_precision_load_policy_from_env() -> LowPrecisionLoadPolicy {
+    LowPrecisionLoadPolicy {
+        preload_language_f32_aux: parse_env_bool("XIUXIAN_VISION_PRELOAD_LANGUAGE_F32_AUX")
+            .unwrap_or(true),
+        preload_vision_f32_aux: parse_env_bool("XIUXIAN_VISION_PRELOAD_VISION_F32_AUX")
+            .unwrap_or(true),
+        preload_linear_weight_f32: parse_env_bool("XIUXIAN_VISION_PRELOAD_LINEAR_WEIGHT_F32")
+            .unwrap_or(true),
+        promote_language_input_f32: parse_env_bool("XIUXIAN_VISION_PROMOTE_LANGUAGE_INPUT_F32")
+            .unwrap_or(true),
+        lazy_moe_experts: parse_env_bool("XIUXIAN_VISION_LAZY_MOE_EXPERTS").unwrap_or(false),
+        lazy_clip_transformer_layers: parse_env_bool("XIUXIAN_VISION_LAZY_CLIP_TRANSFORMER_LAYERS")
+            .unwrap_or(false),
+    }
+}
+
+pub(crate) fn resolve_low_precision_load_policy_for_tests(
+    preload_language_f32_aux: Option<bool>,
+    preload_vision_f32_aux: Option<bool>,
+    preload_linear_weight_f32: Option<bool>,
+    promote_language_input_f32: Option<bool>,
+    lazy_moe_experts: Option<bool>,
+    lazy_clip_transformer_layers: Option<bool>,
+) -> (bool, bool, bool, bool, bool, bool) {
+    let policy = LowPrecisionLoadPolicy {
+        preload_language_f32_aux: preload_language_f32_aux.unwrap_or(true),
+        preload_vision_f32_aux: preload_vision_f32_aux.unwrap_or(true),
+        preload_linear_weight_f32: preload_linear_weight_f32.unwrap_or(true),
+        promote_language_input_f32: promote_language_input_f32.unwrap_or(true),
+        lazy_moe_experts: lazy_moe_experts.unwrap_or(false),
+        lazy_clip_transformer_layers: lazy_clip_transformer_layers.unwrap_or(false),
+    };
+    (
+        policy.preload_language_f32_aux,
+        policy.preload_vision_f32_aux,
+        policy.preload_linear_weight_f32,
+        policy.promote_language_input_f32,
+        policy.lazy_moe_experts,
+        policy.lazy_clip_transformer_layers,
+    )
+}
+
 fn require_quantized_snapshot(model_kind: VisionModelKind) -> bool {
-    let env_value = std::env::var("XIUXIAN_VISION_REQUIRE_QUANTIZED").ok();
-    require_quantized_snapshot_with(env_value.as_deref(), model_kind)
+    match parse_env_bool("XIUXIAN_VISION_REQUIRE_QUANTIZED") {
+        Some(value) => {
+            require_quantized_snapshot_with(Some(if value { "true" } else { "false" }), model_kind)
+        }
+        None => require_quantized_snapshot_with(None, model_kind),
+    }
 }
 
 fn require_quantized_snapshot_with(value: Option<&str>, model_kind: VisionModelKind) -> bool {
     value
         .map(|raw| raw.trim().to_ascii_lowercase())
-        .map_or(model_kind == VisionModelKind::Deepseek, |raw| {
+        .map_or(model_kind == VisionModelKind::DotsOcr, |raw| {
             !matches!(raw.as_str(), "0" | "false" | "no" | "off")
         })
 }
@@ -459,14 +536,17 @@ fn dtype_label(dtype: DType) -> &'static str {
     }
 }
 
-fn resolve_model_kind() -> VisionModelKind {
-    let configured = parse_env_string("XIUXIAN_VISION_MODEL_KIND");
-    parse_model_kind_with(configured.as_deref())
+fn resolve_model_kind_for_model_root(model_root: &str) -> VisionModelKind {
+    let configured = parse_env_string("XIUXIAN_VISION_MODEL_KIND").or_else(config::model_kind);
+    resolve_model_kind_for_model_root_with(configured.as_deref(), Path::new(model_root))
 }
 
-fn resolve_model_kind_for_model_root(model_root: &str) -> VisionModelKind {
-    let configured = parse_env_string("XIUXIAN_VISION_MODEL_KIND");
-    resolve_model_kind_for_model_root_with(configured.as_deref(), Path::new(model_root))
+pub(crate) fn resolve_model_kind_for_model_root_label_from_sources_for_tests(
+    env_value: Option<&str>,
+    config_value: Option<&str>,
+    model_root: &Path,
+) -> &'static str {
+    resolve_model_kind_for_model_root_with(env_value.or(config_value), model_root).as_str()
 }
 
 fn resolve_model_kind_for_model_root_with(

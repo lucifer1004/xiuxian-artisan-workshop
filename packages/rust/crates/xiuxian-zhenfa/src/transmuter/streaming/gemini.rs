@@ -25,8 +25,8 @@ struct Candidate {
 #[derive(Debug, Clone, Deserialize)]
 struct Content {
     parts: Vec<Part>,
-    #[serde(default)]
-    role: String,
+    #[serde(default, rename = "role")]
+    _role: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -52,9 +52,12 @@ struct FunctionCall {
 
 #[derive(Debug, Clone, Deserialize)]
 struct UsageMetadata {
-    prompt_token_count: u64,
-    candidates_token_count: u64,
-    total_token_count: u64,
+    #[serde(rename = "prompt_token_count")]
+    prompt: u64,
+    #[serde(rename = "candidates_token_count")]
+    candidates: u64,
+    #[serde(rename = "total_token_count")]
+    total: u64,
 }
 
 /// Parser for Gemini CLI streaming output.
@@ -108,9 +111,9 @@ impl StreamingTransmuter for GeminiStreamingParser {
         // Extract usage if present
         if let Some(usage) = response.usage_metadata {
             self.final_usage = Some(TokenUsage {
-                input: usage.prompt_token_count,
-                output: usage.candidates_token_count,
-                total: usage.total_token_count,
+                input: usage.prompt,
+                output: usage.candidates,
+                total: usage.total,
             });
         }
 

@@ -7,11 +7,12 @@ use axum::{
     extract::{Path as AxumPath, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::get,
 };
 use serde::Deserialize;
 use tokio::sync::{OnceCell, RwLock};
 use xiuxian_io::PrjDirs;
+use xiuxian_zhenfa::ZhenfaSignal;
 
 use crate::link_graph::LinkGraphIndex;
 use crate::skill_vfs::SkillVfsResolver;
@@ -20,13 +21,15 @@ use super::types::{
     ApiError, GraphNeighborsResponse, NodeNeighbors, UiConfig, VfsContentResponse, VfsEntry,
     VfsScanResult,
 };
-use super::{graph, vfs};
+use super::{graph, search, vfs};
 
 /// Shared state for the Studio API.
 ///
 /// Contains configuration, VFS roots, and cached graph index.
 pub struct StudioState {
+    #[cfg(test)]
     pub(crate) project_root: PathBuf,
+    #[cfg(test)]
     pub(crate) data_root: PathBuf,
     pub(crate) knowledge_root: PathBuf,
     pub(crate) internal_skill_root: PathBuf,
@@ -34,8 +37,33 @@ pub struct StudioState {
     pub(crate) graph_index: OnceCell<Arc<LinkGraphIndex>>,
 }
 
+/// Shared state used by the top-level gateway process.
+#[derive(Clone)]
+pub struct GatewayState {
+    /// Optional graph index for CLI-powered stats endpoint.
+    pub index: Option<Arc<LinkGraphIndex>>,
+    /// Signal sender for notification worker.
+    pub signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>,
+    /// Studio-specific state for VFS/graph/search APIs.
+    pub studio: Arc<StudioState>,
+}
+
+impl GatewayState {
+    #[must_use]
+    pub fn new(
+        index: Option<Arc<LinkGraphIndex>>,
+        signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>,
+    ) -> Self {
+        Self {
+            index,
+            signal_tx,
+            studio: Arc::new(StudioState::new()),
+        }
+    }
+}
+
 impl StudioState {
-    /// Create a new StudioState with default configuration.
+    /// Create a new `StudioState` with default configuration.
     #[must_use]
     pub fn new() -> Self {
         let project_root = PrjDirs::project_root();
@@ -46,7 +74,9 @@ impl StudioState {
             std::env::var("PRJ_INTERNAL_SKILLS_DIR").ok().as_deref(),
         );
         Self {
+            #[cfg(test)]
             project_root,
+            #[cfg(test)]
             data_root,
             knowledge_root,
             internal_skill_root,
@@ -97,6 +127,12 @@ impl StudioState {
     }
 }
 
+impl Default for StudioState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct VfsCatQuery {
     path: Option<String>,
@@ -119,8 +155,10 @@ struct GraphNeighborsQuery {
 /// - `GET /api/vfs/{*path}` - Get single entry
 /// - `GET /api/neighbors/{*id}` - Get node neighbors
 /// - `GET /api/graph/neighbors/{*id}` - Get graph neighbors
+/// - `GET /api/search` - Search knowledge base
+/// - `GET /api/search/autocomplete` - Search autocomplete suggestions
 /// - `GET/POST /api/ui/config` - UI configuration
-pub fn studio_router(state: Arc<StudioState>) -> Router {
+pub fn studio_router(state: Arc<GatewayState>) -> Router {
     Router::new()
         .route("/api/vfs", get(vfs_root_entries))
         .route("/api/vfs/scan", get(vfs_scan))
@@ -128,35 +166,37 @@ pub fn studio_router(state: Arc<StudioState>) -> Router {
         .route("/api/vfs/{*path}", get(vfs_entry))
         .route("/api/neighbors/{*id}", get(node_neighbors))
         .route("/api/graph/neighbors/{*id}", get(graph_neighbors))
+        .route("/api/search", get(search::search_knowledge))
+        .route("/api/search/autocomplete", get(search::search_autocomplete))
         .route("/api/ui/config", get(get_ui_config).post(set_ui_config))
         .with_state(state)
 }
 
 async fn vfs_root_entries(
-    State(state): State<Arc<StudioState>>,
+    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<Vec<VfsEntry>>, StudioApiError> {
-    let entries = vfs::list_root_entries(state.as_ref())?;
+    let entries = vfs::list_root_entries(state.studio.as_ref());
     Ok(Json(entries))
 }
 
 async fn vfs_scan(
-    State(state): State<Arc<StudioState>>,
+    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<VfsScanResult>, StudioApiError> {
-    let result = vfs::scan_roots(state.as_ref())?;
+    let result = vfs::scan_roots(state.studio.as_ref());
     Ok(Json(result))
 }
 
 async fn vfs_entry(
     AxumPath(path): AxumPath<String>,
-    State(state): State<Arc<StudioState>>,
+    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<VfsEntry>, StudioApiError> {
-    let entry = vfs::get_entry(state.as_ref(), path.as_str())?;
+    let entry = vfs::get_entry(state.studio.as_ref(), path.as_str())?;
     Ok(Json(entry))
 }
 
 async fn vfs_cat(
     Query(query): Query<VfsCatQuery>,
-    State(state): State<Arc<StudioState>>,
+    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<VfsContentResponse>, StudioApiError> {
     let path = query
         .path
@@ -164,44 +204,49 @@ async fn vfs_cat(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| StudioApiError::bad_request("MISSING_PATH", "`path` is required"))?;
-    let payload = vfs::read_content(state.as_ref(), path).await?;
+    let payload = vfs::read_content(state.studio.as_ref(), path).await?;
     Ok(Json(payload))
 }
 
 async fn node_neighbors(
     AxumPath(id): AxumPath<String>,
-    State(state): State<Arc<StudioState>>,
+    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<NodeNeighbors>, StudioApiError> {
-    let payload = graph::node_neighbors(state.as_ref(), id.as_str()).await?;
+    let payload = graph::node_neighbors(state.studio.as_ref(), id.as_str()).await?;
     Ok(Json(payload))
 }
 
 async fn graph_neighbors(
     AxumPath(id): AxumPath<String>,
     Query(query): Query<GraphNeighborsQuery>,
-    State(state): State<Arc<StudioState>>,
+    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<GraphNeighborsResponse>, StudioApiError> {
     let direction = query.direction.unwrap_or_else(|| "both".to_string());
     let hops = query.hops.unwrap_or(2).clamp(1, 5);
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
-    let payload =
-        graph::graph_neighbors(state.as_ref(), id.as_str(), direction.as_str(), hops, limit)
-            .await?;
+    let payload = graph::graph_neighbors(
+        state.studio.as_ref(),
+        id.as_str(),
+        direction.as_str(),
+        hops,
+        limit,
+    )
+    .await?;
     Ok(Json(payload))
 }
 
 async fn get_ui_config(
-    State(state): State<Arc<StudioState>>,
+    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<UiConfig>, StudioApiError> {
-    Ok(Json(state.ui_config()))
+    Ok(Json(state.studio.ui_config()))
 }
 
 async fn set_ui_config(
-    State(state): State<Arc<StudioState>>,
+    State(state): State<Arc<GatewayState>>,
     Json(config): Json<UiConfig>,
 ) -> Result<Json<UiConfig>, StudioApiError> {
-    state.set_ui_config(config);
-    Ok(Json(state.ui_config()))
+    state.studio.set_ui_config(config);
+    Ok(Json(state.studio.ui_config()))
 }
 
 fn sanitize_index_paths(raw: Vec<String>) -> Vec<String> {
@@ -227,6 +272,16 @@ pub(crate) struct StudioApiError {
 }
 
 impl StudioApiError {
+    #[cfg(test)]
+    pub(crate) fn status(&self) -> StatusCode {
+        self.status
+    }
+
+    #[cfg(test)]
+    pub(crate) fn code(&self) -> &str {
+        self.error.code.as_str()
+    }
+
     pub(crate) fn bad_request(code: &str, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::BAD_REQUEST,

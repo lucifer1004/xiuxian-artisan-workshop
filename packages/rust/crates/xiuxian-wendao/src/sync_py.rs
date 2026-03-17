@@ -77,9 +77,9 @@ impl PySyncEngine {
         }
     }
 
-    fn load_manifest(&self) -> PyResult<String> {
+    fn load_manifest(&self) -> String {
         let manifest = self.inner.load_manifest();
-        Ok(serde_json::to_string(&manifest.0).unwrap_or_default())
+        serde_json::to_string(&manifest.0).unwrap_or_default()
     }
 
     fn save_manifest(&self, manifest_json: &str) -> PyResult<()> {

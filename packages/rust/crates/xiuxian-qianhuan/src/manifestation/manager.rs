@@ -239,7 +239,7 @@ impl ManifestationManager {
             target_id,
             self.template_watch_roots(),
             self.template_watch_patterns(),
-            Arc::new(move |_| manager.reload_templates_if_changed()),
+            Arc::new(move || manager.reload_templates_if_changed()),
         )
     }
 

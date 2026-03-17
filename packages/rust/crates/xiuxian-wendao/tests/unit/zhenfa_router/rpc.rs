@@ -1,4 +1,4 @@
-//! Unit tests for zhenfa_router/rpc module.
+//! Unit tests for `zhenfa_router/rpc` module.
 
 use super::*;
 

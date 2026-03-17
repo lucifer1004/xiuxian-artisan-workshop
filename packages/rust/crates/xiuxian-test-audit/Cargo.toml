@@ -1,0 +1,14 @@
+[package]
+name = "xiuxian-test-audit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+description = "Workspace-level audit gates for shared xiuxian test policy"
+
+[dev-dependencies]
+xiuxian-testing = { path = "../xiuxian-testing" }
+
+[lints]
+workspace = true

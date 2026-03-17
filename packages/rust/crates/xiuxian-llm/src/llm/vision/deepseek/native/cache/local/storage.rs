@@ -10,11 +10,6 @@ pub(super) fn get(key: &str) -> Option<String> {
     guard.get(key).map(|value| value.as_ref().to_string())
 }
 
-pub(super) fn get_shared(key: &str) -> Option<Arc<str>> {
-    let guard = local_cache().read().ok()?;
-    guard.get(key).cloned()
-}
-
 pub(super) fn len() -> usize {
     local_cache().read().map_or(0, |guard| guard.len())
 }

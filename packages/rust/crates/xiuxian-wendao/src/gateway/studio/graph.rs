@@ -1,7 +1,7 @@
 //! Graph operations for the studio API.
 
 use super::router::{StudioApiError, StudioState};
-use super::types::{GraphLink, GraphNeighborsResponse, GraphNode, NodeNeighbors};
+use super::types::{GraphNeighborsResponse, GraphNode, NodeNeighbors};
 
 /// Get immediate neighbors for a node.
 pub(crate) async fn node_neighbors(
@@ -25,9 +25,9 @@ pub(crate) async fn node_neighbors(
 pub(crate) async fn graph_neighbors(
     state: &StudioState,
     id: &str,
-    direction: &str,
-    hops: usize,
-    limit: usize,
+    _direction: &str,
+    _hops: usize,
+    _limit: usize,
 ) -> Result<GraphNeighborsResponse, StudioApiError> {
     let _index = state.graph_index().await?;
 

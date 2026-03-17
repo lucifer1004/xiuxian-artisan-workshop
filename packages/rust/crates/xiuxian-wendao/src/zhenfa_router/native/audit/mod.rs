@@ -38,7 +38,7 @@ pub use audit_bridge::{
 pub use ccs::{audit_search_payload, evaluate_alignment};
 pub use compensation::CompensationRequest;
 pub use fuzzy_suggest::{
-    FuzzySuggestion, SourceFile, resolve_source_files, suggest_pattern_fix,
-    suggest_pattern_fix_with_threshold,
+    FuzzySuggestion, SourceFile, cache_stats, clear_candidate_cache, format_suggestion,
+    resolve_source_files, suggest_pattern_fix, suggest_pattern_fix_with_threshold,
 };
 pub use verdict::AuditResult;

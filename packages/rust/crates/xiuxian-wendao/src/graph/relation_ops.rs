@@ -82,7 +82,7 @@ impl KnowledgeGraph {
     }
 
     /// Remove all relations where the given entity is the source.
-    pub fn remove_relations_for_source(&self, source_name: &str) -> Result<(), GraphError> {
+    pub fn remove_relations_for_source(&self, source_name: &str) {
         let mut relations = write_lock::<HashMap<String, Relation>>(&self.relations);
         let mut outgoing = write_lock::<HashMap<String, HashSet<String>>>(&self.outgoing_relations);
         let mut incoming = write_lock::<HashMap<String, HashSet<String>>>(&self.incoming_relations);
@@ -96,7 +96,6 @@ impl KnowledgeGraph {
                 }
             }
         }
-        Ok(())
     }
 
     /// Get all relations as a vector.

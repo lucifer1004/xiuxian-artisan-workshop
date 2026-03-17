@@ -81,7 +81,10 @@ mod tests {
             ]
         });
 
-        let output = audit.execute(&context).await.unwrap();
+        let output = audit
+            .execute(&context)
+            .await
+            .unwrap_or_else(|err| panic!("formal audit should pass: {err}"));
         assert_eq!(output.data["audit_status"], "passed");
         match output.instruction {
             FlowInstruction::Continue => {}
@@ -106,7 +109,10 @@ mod tests {
             ]
         });
 
-        let output = audit.execute(&context).await.unwrap();
+        let output = audit
+            .execute(&context)
+            .await
+            .unwrap_or_else(|err| panic!("formal audit should produce retry output: {err}"));
         assert_eq!(output.data["audit_status"], "failed");
         match output.instruction {
             FlowInstruction::RetryNodes(nodes) => {

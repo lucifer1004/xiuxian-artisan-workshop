@@ -10,7 +10,7 @@ use crate::link_graph::PageIndexNode;
 /// A path entry representing a node's position in the document structure.
 #[derive(Debug, Clone)]
 pub struct PathEntry {
-    /// Full structural path (e.g., ["Architecture", "Storage", "Configuration"]).
+    /// Full structural path (e.g., `["Architecture", "Storage", "Configuration"]`).
     pub path: Vec<String>,
     /// Stable node ID for anchoring after discovery.
     pub node_id: String,
@@ -258,7 +258,7 @@ impl TopologyIndex {
                     let mut scored = m.clone();
                     // Score based on how much of the title the query covers
                     scored.similarity_score =
-                        0.7 + (query_lower.len() as f32 / title.len() as f32).min(0.25);
+                        0.7 + similarity_ratio(query_lower.len(), title.len()).min(0.25);
                     scored.match_type = MatchType::TitleSubstring;
 
                     if !matches.iter().any(|existing: &PathMatch| {
@@ -337,6 +337,11 @@ pub(super) fn path_match_suffix(path_lower: &[String], query_lower: &str) -> boo
     }
 
     true
+}
+
+fn similarity_ratio(left: usize, right: usize) -> f32 {
+    f32::from(u16::try_from(left).unwrap_or(u16::MAX))
+        / f32::from(u16::try_from(right.max(1)).unwrap_or(u16::MAX))
 }
 
 #[cfg(test)]

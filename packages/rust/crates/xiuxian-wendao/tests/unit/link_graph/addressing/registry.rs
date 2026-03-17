@@ -10,7 +10,7 @@ fn make_test_node(id: &str, title: &str) -> PageIndexNode {
         attrs.insert("ID".to_string(), id.to_string());
     }
     PageIndexNode {
-        node_id: format!("doc#{}", title),
+        node_id: format!("doc#{title}"),
         parent_id: None,
         title: title.to_string(),
         level: 1,
@@ -73,7 +73,9 @@ fn test_get_returns_correct_doc() {
 
     let registry = RegistryIndex::build_from_trees(&trees);
 
-    let indexed = registry.get("my-id").expect("should find node");
+    let Some(indexed) = registry.get("my-id") else {
+        panic!("registry should contain my-id");
+    };
     assert_eq!(indexed.doc_id, "doc1.md");
     assert_eq!(indexed.node.title, "Section");
 }

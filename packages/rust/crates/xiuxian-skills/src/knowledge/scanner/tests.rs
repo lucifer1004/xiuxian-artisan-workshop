@@ -1,4 +1,5 @@
 use super::*;
+use crate::KnowledgeCategory;
 use std::fs::File;
 use std::io::Write;
 use tempfile::TempDir;
@@ -25,8 +26,8 @@ This document describes best practices for git commits.
     let mut file = File::create(&doc_path).unwrap();
     file.write_all(content.as_bytes()).unwrap();
 
-    let scanner = KnowledgeScanner::new();
-    let entry = scanner.scan_document(&doc_path, temp_dir.path()).unwrap();
+    let _scanner = KnowledgeScanner::new();
+    let entry = KnowledgeScanner::scan_document(&doc_path, temp_dir.path()).unwrap();
 
     assert_eq!(entry.title, "Git Commit Best Practices");
     assert_eq!(
@@ -43,16 +44,16 @@ fn test_scan_document_without_frontmatter() {
     let temp_dir = TempDir::new().unwrap();
     let doc_path = temp_dir.path().join("readme.md");
 
-    let content = r#"# README
+    let content = r"# README
 
 This is a simple readme without frontmatter.
-"#;
+";
 
     let mut file = File::create(&doc_path).unwrap();
     file.write_all(content.as_bytes()).unwrap();
 
-    let scanner = KnowledgeScanner::new();
-    let entry = scanner.scan_document(&doc_path, temp_dir.path()).unwrap();
+    let _scanner = KnowledgeScanner::new();
+    let entry = KnowledgeScanner::scan_document(&doc_path, temp_dir.path()).unwrap();
 
     // Title should be derived from filename
     assert_eq!(entry.title, "readme");
@@ -67,8 +68,8 @@ fn test_scan_document_non_markdown() {
 
     std::fs::write(&doc_path, r#"{"key": "value"}"#).unwrap();
 
-    let scanner = KnowledgeScanner::new();
-    let entry = scanner.scan_document(&doc_path, temp_dir.path());
+    let _scanner = KnowledgeScanner::new();
+    let entry = KnowledgeScanner::scan_document(&doc_path, temp_dir.path());
 
     assert!(entry.is_none());
 }

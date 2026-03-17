@@ -10,8 +10,6 @@ mod contract_validation;
 mod contracts;
 #[path = "integration/error_mapping.rs"]
 mod error_mapping;
-#[path = "integration/external_mounts.rs"]
-mod external_mounts;
 #[path = "integration/native_registry.rs"]
 mod native_registry;
 #[path = "integration/transmuter.rs"]

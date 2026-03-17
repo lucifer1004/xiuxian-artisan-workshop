@@ -9,7 +9,7 @@ use xiuxian_llm::llm::vision::{
     TextAnchor, VisibilityScrubPolicy, VisualAnchor, VisualCotInput, VisualCotMode,
     VisualRefinement, build_semantic_overlay, build_visual_cot_prompt, build_visual_user_message,
     build_visual_user_message_from_refinement, build_visual_user_message_with_ocr_truth,
-    fit_dimensions, preprocess_image, scrub_text_anchors,
+    fit_dimensions, prepare_image_for_ocr_runtime, preprocess_image, scrub_text_anchors,
 };
 use xiuxian_llm::llm::{ContentPart, MessageContent};
 
@@ -28,6 +28,19 @@ fn preprocess_image_keeps_decoded_payload_ready() -> Result<()> {
     assert_eq!((prepared.width, prepared.height), (2_048, 512));
     assert!(!prepared.original.is_empty());
     assert!(!prepared.resized_png.is_empty());
+    Ok(())
+}
+
+#[test]
+fn prepare_image_for_ocr_runtime_keeps_original_payload_for_engine_decode() -> Result<()> {
+    let source_png = build_test_png(4_096, 1_024)?;
+    let prepared = prepare_image_for_ocr_runtime(Arc::from(source_png))?;
+
+    assert_eq!(prepared.mode.as_str(), "original_passthrough");
+    assert_eq!((prepared.width, prepared.height), (4_096, 1_024));
+    assert!((prepared.scale - 1.0).abs() < f64::EPSILON);
+    assert!(Arc::ptr_eq(&prepared.original, &prepared.engine_input));
+    assert_eq!(prepared.original.len(), prepared.engine_input.len());
     Ok(())
 }
 

@@ -2,7 +2,7 @@
 
 use std::io;
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use super::router::StudioState;
 use super::types::{VfsCategory, VfsContentResponse, VfsEntry, VfsScanEntry, VfsScanResult};
@@ -34,7 +34,7 @@ impl From<io::Error> for VfsError {
 }
 
 /// List root entries for the VFS.
-pub(crate) fn list_root_entries(state: &StudioState) -> Result<Vec<VfsEntry>, VfsError> {
+pub(crate) fn list_root_entries(state: &StudioState) -> Vec<VfsEntry> {
     let mut entries = Vec::new();
 
     // Add skills root
@@ -63,11 +63,11 @@ pub(crate) fn list_root_entries(state: &StudioState) -> Result<Vec<VfsEntry>, Vf
         });
     }
 
-    Ok(entries)
+    entries
 }
 
 /// Scan all VFS roots and return a summary.
-pub(crate) fn scan_roots(state: &StudioState) -> Result<VfsScanResult, VfsError> {
+pub(crate) fn scan_roots(state: &StudioState) -> VfsScanResult {
     let start = Instant::now();
     let mut entries = Vec::new();
     let mut file_count = 0;
@@ -97,12 +97,12 @@ pub(crate) fn scan_roots(state: &StudioState) -> Result<VfsScanResult, VfsError>
         );
     }
 
-    Ok(VfsScanResult {
+    VfsScanResult {
         entries,
         file_count,
         dir_count,
-        scan_duration_ms: start.elapsed().as_millis() as u64,
-    })
+        scan_duration_ms: elapsed_millis_u64(start.elapsed()),
+    }
 }
 
 /// Get a single VFS entry by path.
@@ -135,12 +135,11 @@ pub(crate) fn get_entry(state: &StudioState, path: &str) -> Result<VfsEntry, Vfs
             .modified()
             .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-            .unwrap_or(0),
-        content_type: if !is_dir {
-            guess_content_type(&full_path)
-        } else {
+            .map_or(0, |d| d.as_secs()),
+        content_type: if is_dir {
             None
+        } else {
+            Some(guess_content_type(&full_path))
         },
     })
 }
@@ -165,7 +164,7 @@ pub(crate) async fn read_content(
     let content = tokio::fs::read_to_string(&full_path)
         .await
         .map_err(VfsError::Io)?;
-    let content_type = guess_content_type(&full_path).unwrap_or_else(|| "text/plain".to_string());
+    let content_type = guess_content_type(&full_path);
 
     Ok(VfsContentResponse {
         path: path.to_string(),
@@ -203,8 +202,7 @@ fn scan_directory(
                         .as_ref()
                         .and_then(|m| m.modified().ok())
                         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0),
+                        .map_or(0, |d| d.as_secs()),
                     content_type: None,
                     has_frontmatter: false,
                     wendao_id: None,
@@ -222,14 +220,13 @@ fn scan_directory(
                     } else {
                         VfsCategory::Knowledge
                     },
-                    size: metadata.as_ref().map(|m| m.len()).unwrap_or(0),
+                    size: metadata.as_ref().map_or(0, std::fs::Metadata::len),
                     modified: metadata
                         .as_ref()
                         .and_then(|m| m.modified().ok())
                         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0),
-                    content_type: guess_content_type(&path),
+                        .map_or(0, |d| d.as_secs()),
+                    content_type: Some(guess_content_type(&path)),
                     has_frontmatter,
                     wendao_id: None,
                 });
@@ -249,14 +246,18 @@ fn is_markdown_with_frontmatter(path: &Path) -> bool {
     }
 }
 
-fn guess_content_type(path: &Path) -> Option<String> {
+fn elapsed_millis_u64(elapsed: Duration) -> u64 {
+    u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
+}
+
+fn guess_content_type(path: &Path) -> String {
     match path.extension().and_then(|e| e.to_str()) {
-        Some("md") => Some("text/markdown".to_string()),
-        Some("py") => Some("text/x-python".to_string()),
-        Some("rs") => Some("text/x-rust".to_string()),
-        Some("toml") => Some("application/toml".to_string()),
-        Some("json") => Some("application/json".to_string()),
-        Some("yaml") | Some("yml") => Some("application/yaml".to_string()),
-        _ => Some("text/plain".to_string()),
+        Some("md") => "text/markdown".to_string(),
+        Some("py") => "text/x-python".to_string(),
+        Some("rs") => "text/x-rust".to_string(),
+        Some("toml") => "application/toml".to_string(),
+        Some("json") => "application/json".to_string(),
+        Some("yaml" | "yml") => "application/yaml".to_string(),
+        _ => "text/plain".to_string(),
     }
 }

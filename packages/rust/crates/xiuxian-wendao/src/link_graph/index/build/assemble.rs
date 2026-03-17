@@ -211,6 +211,7 @@ impl LinkGraphIndex {
             rank_by_id,
             edge_count,
             virtual_nodes,
+            symbol_to_docs: HashMap::new(),
         };
         index.rebuild_all_page_indices();
         Ok(index)
@@ -414,6 +415,7 @@ impl LinkGraphIndex {
             rank_by_id,
             edge_count,
             virtual_nodes,
+            symbol_to_docs: HashMap::new(),
         };
         index.rebuild_all_page_indices();
         sync_graphmem_state_best_effort(&index);

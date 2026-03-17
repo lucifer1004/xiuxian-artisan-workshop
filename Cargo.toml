@@ -32,6 +32,7 @@ members = [
     "packages/rust/crates/xiuxian-memory",
     "packages/rust/crates/xiuxian-zhixing",
     "packages/rust/crates/xiuxian-zhenfa",
+    "packages/rust/crates/xiuxian-test-audit",
     "packages/rust/crates/xiuxian-testing",
 ]
 
@@ -155,3 +156,9 @@ missing_docs = "warn"      # Public APIs must have documentation
 pedantic = { level = "warn", priority = -1 }
 unwrap_used = "deny"       # Deny unwrap usage in production
 expect_used = "deny"       # Deny expect usage in production
+
+[patch."https://github.com/TimmyOVO/deepseek-ocr.rs"]
+deepseek-ocr-core = { path = "third_party/deepseek-ocr/crates/core" }
+deepseek-ocr-dsq = { path = "third_party/deepseek-ocr/crates/dsq" }
+deepseek-ocr-dsq-runtime = { path = "third_party/deepseek-ocr/crates/dsq-runtime" }
+deepseek-ocr-infer-deepseek = { path = "third_party/deepseek-ocr/crates/infer-deepseek" }

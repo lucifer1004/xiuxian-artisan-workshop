@@ -53,7 +53,7 @@ pub fn evaluate_alignment(anchors: &[String], evidence: &[String]) -> AuditVerdi
         }
     }
 
-    let drift = 1.0 - (matches as f32 / anchors.len() as f32).max(0.0);
+    let drift = 1.0 - bounded_ratio(matches, anchors.len()).max(0.0);
 
     AuditVerdict {
         drift_score: drift,
@@ -88,6 +88,16 @@ pub fn audit_search_payload(evidence: &[String], anchors: &[String]) -> AuditRes
             None
         },
     }
+}
+
+fn bounded_ratio(numerator: usize, denominator: usize) -> f32 {
+    let numerator = bounded_usize_to_f32(numerator);
+    let denominator = bounded_usize_to_f32(denominator);
+    numerator / denominator
+}
+
+fn bounded_usize_to_f32(value: usize) -> f32 {
+    u16::try_from(value).map_or(f32::from(u16::MAX), f32::from)
 }
 
 #[cfg(test)]

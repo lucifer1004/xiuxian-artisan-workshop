@@ -3007,7 +3007,6 @@ dependencies = [
 [[package]]
 name = "deepseek-ocr-core"
 version = "0.3.7"
-source = "git+https://github.com/TimmyOVO/deepseek-ocr.rs?rev=02b933df24f5658d10b37dd48c9c354d95c530c3#02b933df24f5658d10b37dd48c9c354d95c530c3"
 dependencies = [
  "anyhow",
  "candle-core",
@@ -3028,7 +3027,6 @@ dependencies = [
 [[package]]
 name = "deepseek-ocr-dsq"
 version = "0.1.0"
-source = "git+https://github.com/TimmyOVO/deepseek-ocr.rs?rev=02b933df24f5658d10b37dd48c9c354d95c530c3#02b933df24f5658d10b37dd48c9c354d95c530c3"
 dependencies = [
  "byteorder",
  "memmap2",
@@ -3049,7 +3047,6 @@ dependencies = [
 [[package]]
 name = "deepseek-ocr-dsq-runtime"
 version = "0.1.0"
-source = "git+https://github.com/TimmyOVO/deepseek-ocr.rs?rev=02b933df24f5658d10b37dd48c9c354d95c530c3#02b933df24f5658d10b37dd48c9c354d95c530c3"
 dependencies = [
  "anyhow",
  "candle-core",
@@ -3062,7 +3059,6 @@ dependencies = [
 [[package]]
 name = "deepseek-ocr-infer-deepseek"
 version = "0.3.7"
-source = "git+https://github.com/TimmyOVO/deepseek-ocr.rs?rev=02b933df24f5658d10b37dd48c9c354d95c530c3#02b933df24f5658d10b37dd48c9c354d95c530c3"
 dependencies = [
  "anyhow",
  "candle-core",
@@ -14457,6 +14453,7 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "tracing",
+ "tracing-subscriber",
  "xiuxian-config-core",
  "xiuxian-macros",
 ]
@@ -14554,6 +14551,7 @@ dependencies = [
  "pyo3",
  "quick-xml",
  "redis 1.0.3",
+ "reqwest 0.13.2",
  "schemars 1.2.0",
  "serde",
  "serde_json",
@@ -14576,6 +14574,7 @@ dependencies = [
  "async-trait",
  "futures",
  "include_dir",
+ "insta",
  "log",
  "md5",
  "petgraph 0.7.1",
@@ -14596,6 +14595,7 @@ dependencies = [
  "xiuxian-logging",
  "xiuxian-macros",
  "xiuxian-qianhuan",
+ "xiuxian-testing",
  "xiuxian-wendao",
  "xiuxian-window",
  "xiuxian-zhenfa",
@@ -14667,6 +14667,13 @@ dependencies = [
  "walkdir",
  "xiuxian-ast",
  "xiuxian-io",
+]
+
+[[package]]
+name = "xiuxian-test-audit"
+version = "0.1.1"
+dependencies = [
+ "xiuxian-testing",
 ]
 
 [[package]]
@@ -14805,6 +14812,7 @@ dependencies = [
  "uuid 1.19.0",
  "walkdir",
  "xiuxian-ast",
+ "xiuxian-config-core",
  "xiuxian-io",
  "xiuxian-llm",
  "xiuxian-logging",
@@ -14832,6 +14840,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "chrono",
+ "log",
  "pulldown-cmark 0.10.3",
  "quick-xml",
  "reqwest 0.13.2",

@@ -72,11 +72,20 @@ pub trait ModelExecutor: Send + Sync {
     fn name(&self) -> &'static str;
 
     /// Executes the model with the given input.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the executor cannot produce an output for the
+    /// requested input.
     async fn execute(&self, input: ModelInput) -> LlmResult<ModelOutput>;
 
     /// Prewarms the executor for faster first inference.
     ///
     /// This is called by the `ModelBus` when transitioning from Hibernated to Active.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the executor cannot prepare its runtime state.
     fn prewarm(&self) -> LlmResult<()>;
 
     /// Returns the memory footprint in bytes.

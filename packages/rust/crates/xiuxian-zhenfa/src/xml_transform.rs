@@ -3,7 +3,7 @@ use pulldown_cmark::{
 };
 use serde_json::Value;
 
-/// Convert a serde_json Value into a normalized XML payload.
+/// Convert a `serde_json` Value into a normalized XML payload.
 #[must_use]
 pub fn json_to_xml(value: &Value) -> String {
     let mut writer = XmlWriter::new();
@@ -14,6 +14,10 @@ pub fn json_to_xml(value: &Value) -> String {
 }
 
 /// Parse JSON text and convert it into a normalized XML payload.
+///
+/// # Errors
+///
+/// Returns `serde_json::Error` when `input` is not valid JSON text.
 pub fn json_str_to_xml(input: &str) -> Result<String, serde_json::Error> {
     let value: Value = serde_json::from_str(input)?;
     Ok(json_to_xml(&value))
@@ -98,29 +102,7 @@ fn open_markdown_tag(writer: &mut XmlWriter, tag: Tag) {
             classes,
             attrs,
         } => {
-            let mut attributes = vec![("level".to_string(), (level as u8).to_string())];
-            if let Some(id) = id {
-                attributes.push(("id".to_string(), id.to_string()));
-            }
-            if !classes.is_empty() {
-                let joined = classes
-                    .iter()
-                    .map(|class| class.as_ref())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                attributes.push(("class".to_string(), joined));
-            }
-            for (name, value) in attrs {
-                let value = value
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "true".to_string());
-                attributes.push((name.to_string(), value));
-            }
-            let borrowed_attributes = attributes
-                .iter()
-                .map(|(name, value)| (name.as_str(), value.clone()))
-                .collect::<Vec<_>>();
-            writer.open("heading", &borrowed_attributes);
+            open_heading_tag(writer, level, id, &classes, attrs);
         }
         Tag::BlockQuote => writer.open("blockquote", &[]),
         Tag::CodeBlock(kind) => {
@@ -163,16 +145,7 @@ fn open_markdown_tag(writer: &mut XmlWriter, tag: Tag) {
             title,
             id,
         } => {
-            let mut attributes = vec![("kind", link_type_to_string(link_type))];
-            if !dest_url.is_empty() {
-                attributes.push(("dest", dest_url.to_string()));
-            }
-            if !title.is_empty() {
-                attributes.push(("title", title.to_string()));
-            }
-            if !id.is_empty() {
-                attributes.push(("id", id.to_string()));
-            }
+            let attributes = media_attributes(link_type, &dest_url, &title, &id);
             writer.open("link", &attributes);
         }
         Tag::Image {
@@ -181,16 +154,7 @@ fn open_markdown_tag(writer: &mut XmlWriter, tag: Tag) {
             title,
             id,
         } => {
-            let mut attributes = vec![("kind", link_type_to_string(link_type))];
-            if !dest_url.is_empty() {
-                attributes.push(("dest", dest_url.to_string()));
-            }
-            if !title.is_empty() {
-                attributes.push(("title", title.to_string()));
-            }
-            if !id.is_empty() {
-                attributes.push(("id", id.to_string()));
-            }
+            let attributes = media_attributes(link_type, &dest_url, &title, &id);
             writer.open("image", &attributes);
         }
         Tag::MetadataBlock(kind) => {
@@ -201,6 +165,59 @@ fn open_markdown_tag(writer: &mut XmlWriter, tag: Tag) {
             writer.open("metadata", &[("kind", kind.to_string())]);
         }
     }
+}
+
+fn open_heading_tag<'a>(
+    writer: &mut XmlWriter,
+    level: pulldown_cmark::HeadingLevel,
+    id: Option<pulldown_cmark::CowStr<'a>>,
+    classes: &[pulldown_cmark::CowStr<'a>],
+    attrs: Vec<(
+        pulldown_cmark::CowStr<'a>,
+        Option<pulldown_cmark::CowStr<'a>>,
+    )>,
+) {
+    let mut attributes = vec![("level".to_string(), (level as u8).to_string())];
+    if let Some(id) = id {
+        attributes.push(("id".to_string(), id.to_string()));
+    }
+    if !classes.is_empty() {
+        let joined = classes
+            .iter()
+            .map(std::convert::AsRef::as_ref)
+            .collect::<Vec<_>>()
+            .join(" ");
+        attributes.push(("class".to_string(), joined));
+    }
+    for (name, value) in attrs {
+        let value = value.map_or_else(|| "true".to_string(), |value| value.to_string());
+        attributes.push((name.to_string(), value));
+    }
+
+    let borrowed_attributes = attributes
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.clone()))
+        .collect::<Vec<_>>();
+    writer.open("heading", &borrowed_attributes);
+}
+
+fn media_attributes<'a>(
+    link_type: LinkType,
+    dest_url: &pulldown_cmark::CowStr<'a>,
+    title: &pulldown_cmark::CowStr<'a>,
+    id: &pulldown_cmark::CowStr<'a>,
+) -> Vec<(&'static str, String)> {
+    let mut attributes = vec![("kind", link_type_to_string(link_type))];
+    if !dest_url.is_empty() {
+        attributes.push(("dest", dest_url.to_string()));
+    }
+    if !title.is_empty() {
+        attributes.push(("title", title.to_string()));
+    }
+    if !id.is_empty() {
+        attributes.push(("id", id.to_string()));
+    }
+    attributes
 }
 
 fn close_markdown_tag(writer: &mut XmlWriter, tag: TagEnd) {
@@ -336,42 +353,5 @@ fn render_attrs(attrs: &[(&str, String)]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn json_to_xml_basic() {
-        let value = serde_json::json!({
-            "name": "alpha",
-            "count": 2,
-            "active": true,
-            "items": [1, "two", null]
-        });
-        let xml = json_to_xml(&value);
-        assert!(xml.contains(r#"<document type="json">"#));
-        assert!(xml.contains(r#"<field name="name">"#));
-        assert!(xml.contains("<string>alpha</string>"));
-        assert!(xml.contains(r#"<number type="integer">2</number>"#));
-        assert!(xml.contains("<boolean>true</boolean>"));
-        assert!(xml.contains("<null/>"));
-    }
-
-    #[test]
-    fn json_to_xml_escapes_text() {
-        let value = serde_json::json!({ "note": "a < b & c" });
-        let xml = json_to_xml(&value);
-        assert!(xml.contains("&lt;"));
-        assert!(xml.contains("&amp;"));
-    }
-
-    #[test]
-    fn markdown_to_xml_basic() {
-        let xml = markdown_to_xml("# Title\n\nHello **world**");
-        assert!(xml.contains(r#"<document type="markdown">"#));
-        assert!(xml.contains(r#"<heading level="1">"#));
-        assert!(xml.contains("<text>Title</text>"));
-        assert!(xml.contains("<paragraph>"));
-        assert!(xml.contains("<strong>"));
-        assert!(xml.contains("<text>world</text>"));
-    }
-}
+#[path = "../tests/unit/xml_transform.rs"]
+mod tests;

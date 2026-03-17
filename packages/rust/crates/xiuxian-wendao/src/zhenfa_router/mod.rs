@@ -1,6 +1,10 @@
 #[cfg(feature = "zhenfa-router")]
 mod http;
 mod models;
+/// Native Zhenfa router implementations for Wendao.
+///
+/// This module contains the core logic for semantic operations,
+/// search tools, and context extensions specific to the Wendao knowledge graph.
 pub mod native;
 mod rpc;
 

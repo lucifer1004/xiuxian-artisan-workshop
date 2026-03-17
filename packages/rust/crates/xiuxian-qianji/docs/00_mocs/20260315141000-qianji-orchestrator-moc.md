@@ -20,6 +20,7 @@ This is the **Map of Content** for the Qianji Orchestration engine. It serves as
 ## 1. Primary Entry Points (Permanent Specs)
 
 - [[20260315140000-autonomous-audit-feature-v3]]: The native graph-driven Triple Loop.
+- [[20260315142000-streaming-llm-executor-spec]]: High-precision streaming analyzer with live supervision.
 - [[qianji-spec]]: The fundamental LinkGraph and Consensus architecture (Global Ref).
 
 ## 2. Theoretical Foundations (Research)
@@ -39,5 +40,5 @@ This is the **Map of Content** for the Qianji Orchestration engine. It serves as
 ## Linked Notes
 
 - Parent: [[docs/01_core/qianji/PROTOTYPE_DESIGN]]
-- Related: [[xiuxian-zhenfa-moc]]
+- Related: [[20260315151000-zhenfa-matrix-moc]]
 - Depends on: [[xiuxian-llm]]

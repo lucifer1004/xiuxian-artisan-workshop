@@ -41,6 +41,7 @@ pub struct VectorRecordBatchReader {
 
 impl VectorRecordBatchReader {
     /// Create a new reader from a vector store batch.
+    #[must_use]
     pub fn new(schema: Arc<Schema>, batches: Vec<RecordBatch>) -> Self {
         Self {
             schema,
@@ -50,6 +51,11 @@ impl VectorRecordBatchReader {
     }
 
     /// Create a reader from individual vectors.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `dimension` exceeds the Arrow fixed-size-list range or if building the
+    /// underlying Arrow arrays or record batch fails.
     pub fn from_vectors(
         ids: Vec<String>,
         vectors: Vec<Vec<f32>>,
@@ -61,12 +67,15 @@ impl VectorRecordBatchReader {
         let content_array = StringArray::from(contents);
         let metadata_array = StringArray::from(metadatas);
         let schema = Self::default_schema(dimension)?;
+        let dimension = i32::try_from(dimension).map_err(|_| {
+            ArrowError::SchemaError("vector dimension exceeds i32 range".to_string())
+        })?;
 
         // Flatten vectors
         let flat_values: Vec<f32> = vectors.into_iter().flatten().collect();
         let vector_array = FixedSizeListArray::try_new(
             Arc::new(Field::new("item", DataType::Float32, true)),
-            dimension as i32,
+            dimension,
             Arc::new(Float32Array::from(flat_values)),
             None,
         )?;
@@ -89,6 +98,10 @@ impl VectorRecordBatchReader {
     }
 
     /// Build the default schema used by vector-store record batches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `dimension` exceeds the Arrow fixed-size-list range.
     pub fn default_schema(dimension: usize) -> Result<Arc<Schema>, ArrowError> {
         let dimension = i32::try_from(dimension).map_err(|_| {
             ArrowError::SchemaError("vector dimension exceeds i32 range".to_string())
@@ -128,7 +141,8 @@ impl RecordBatchReader for VectorRecordBatchReader {
     }
 }
 
-/// Extract string values from a StringArray at a specific index.
+/// Extract string values from a `StringArray` at a specific index.
+#[must_use]
 pub fn extract_string(array: &StringArray, index: usize) -> String {
     if array.is_null(index) {
         String::new()
@@ -138,6 +152,7 @@ pub fn extract_string(array: &StringArray, index: usize) -> String {
 }
 
 /// Extract optional string from metadata column.
+#[must_use]
 pub fn extract_optional_string(array: Option<&StringArray>, index: usize) -> Option<String> {
     array.and_then(|arr| {
         if arr.is_null(index) {

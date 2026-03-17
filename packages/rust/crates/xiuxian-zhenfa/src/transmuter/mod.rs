@@ -8,10 +8,4 @@ mod washing;
 
 pub mod streaming;
 
-pub use washing::{
-    ZhenfaResolveAndWashError, ZhenfaTransmuter, ZhenfaTransmuterError, check_semantic_integrity,
-    refine_for_llm, validate_structure,
-};
-
-// Re-export streaming types at module level for convenience
-pub use streaming::{StreamingOutcome, StreamingTransmuter, ZhenfaStreamingEvent};
+pub use washing::{ZhenfaResolveAndWashError, ZhenfaTransmuter, ZhenfaTransmuterError};

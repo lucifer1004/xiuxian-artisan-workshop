@@ -20,7 +20,7 @@ pub(in crate::llm::vision::deepseek::native::engine) fn read_cache_entry(
         }
         CacheLayer::Valkey => {
             let hit = valkey_get(cache_key)?;
-            let text = normalize_owned_non_empty(hit);
+            let text = normalize_owned_non_empty(hit.as_str());
             complete_cache_read(cache_layer, text, Some(cache_key), prepared, total_started)
         }
     }

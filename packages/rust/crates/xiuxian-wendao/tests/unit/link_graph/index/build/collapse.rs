@@ -4,7 +4,10 @@ use super::*;
 
 fn make_cluster(members: Vec<&str>, avg_saliency: f64) -> DenseCluster {
     DenseCluster {
-        members: members.iter().map(|s| s.to_string()).collect(),
+        members: members
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect(),
         avg_saliency,
         internal_edges: members.len() * 2,
         edge_density: 0.5,
@@ -17,7 +20,7 @@ fn make_doc(id: &str, stem: &str) -> LinkGraphDocument {
         id_lower: id.to_lowercase(),
         stem: stem.to_string(),
         stem_lower: stem.to_lowercase(),
-        path: format!("{}.md", id),
+        path: format!("{id}.md"),
         path_lower: format!("{}.md", id.to_lowercase()),
         title: stem.to_string(),
         title_lower: stem.to_lowercase(),

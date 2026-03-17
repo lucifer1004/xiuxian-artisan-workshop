@@ -42,6 +42,8 @@ mod detect;
 mod dirs;
 mod error;
 mod sync;
+#[cfg(feature = "notify")]
+mod watcher;
 
 // ============================================================================
 // Public Re-exports
@@ -51,6 +53,10 @@ pub use async_io::read_text_safe_async;
 pub use dirs::{PrjDirs, get_cache_home, get_config_home, get_data_home};
 pub use error::IoError;
 pub use sync::read_text_safe;
+#[cfg(feature = "notify")]
+pub use watcher::{
+    FileEvent, FileWatcherHandle, WatcherConfig, WatcherResult, start_file_watcher, watch_path,
+};
 
 // Re-export detection utilities for advanced use
 pub use detect::{decode_buffer, is_binary};

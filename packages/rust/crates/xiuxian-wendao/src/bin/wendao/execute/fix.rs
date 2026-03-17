@@ -30,7 +30,7 @@ pub(super) fn handle(_cli: &Cli, args: &FixArgs, index: Option<&LinkGraphIndex>)
     };
 
     let (issues, file_contents) = run_audit_core(&ctx, &check_args)
-        .map_err(|e| anyhow::anyhow!("Audit core failed: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Audit core failed: {e:?}"))?;
 
     if issues.is_empty() {
         println!("✅ No issues found. Your knowledge base is healthy.");
@@ -75,8 +75,7 @@ pub(super) fn handle(_cli: &Cli, args: &FixArgs, index: Option<&LinkGraphIndex>)
             // Resolve doc_id to physical path using the index
             let path = if let Some(idx) = index {
                 idx.doc_path(&doc_id)
-                    .map(|p| p.to_string())
-                    .unwrap_or_else(|| doc_id.clone())
+                    .map_or_else(|| doc_id.clone(), std::string::ToString::to_string)
             } else {
                 doc_id.clone()
             };
@@ -85,10 +84,7 @@ pub(super) fn handle(_cli: &Cli, args: &FixArgs, index: Option<&LinkGraphIndex>)
             let mut modified_content = match content_opt {
                 Some(c) => c,
                 None => std::fs::read_to_string(&path).with_context(|| {
-                    format!(
-                        "Failed to read file for fixing: {} (resolved from {})",
-                        path, doc_id
-                    )
+                    format!("Failed to read file for fixing: {path} (resolved from {doc_id})")
                 })?,
             };
 
@@ -97,8 +93,8 @@ pub(super) fn handle(_cli: &Cli, args: &FixArgs, index: Option<&LinkGraphIndex>)
             // Apply fixes in reverse order to maintain byte offset integrity
             let mut sorted_fixes = file_fixes;
             sorted_fixes.sort_by(|a, b| {
-                let a_start = a.byte_range.as_ref().map(|r| r.start).unwrap_or(usize::MAX);
-                let b_start = b.byte_range.as_ref().map(|r| r.start).unwrap_or(usize::MAX);
+                let a_start = a.byte_range.as_ref().map_or(usize::MAX, |r| r.start);
+                let b_start = b.byte_range.as_ref().map_or(usize::MAX, |r| r.start);
                 b_start.cmp(&a_start)
             });
 
@@ -110,14 +106,14 @@ pub(super) fn handle(_cli: &Cli, args: &FixArgs, index: Option<&LinkGraphIndex>)
                 ) {
                     success_count += 1;
                 } else {
-                    println!("  ❌ Failed to apply fix to {}: {}", doc_id, result);
+                    println!("  ❌ Failed to apply fix to {doc_id}: {result}");
                 }
             }
 
             if success_count > 0 {
                 std::fs::write(&path, modified_content)
-                    .with_context(|| format!("Failed to write fixed content to: {}", path))?;
-                println!("  ✓ Applied {} fixes to {}", success_count, doc_id);
+                    .with_context(|| format!("Failed to write fixed content to: {path}"))?;
+                println!("  ✓ Applied {success_count} fixes to {doc_id}");
             }
         }
         println!("\n✅ Remediation complete.");

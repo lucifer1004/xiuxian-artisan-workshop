@@ -14,13 +14,18 @@ use super::common::{push_stream_entry, redis_client};
 use super::normalize::{normalize_record_for_read, normalize_request};
 
 /// Append one suggested-link proposal to Valkey passive stream.
+///
+/// # Errors
+///
+/// Returns an error when runtime configuration cannot be resolved or the
+/// request cannot be persisted to Valkey.
 pub fn valkey_suggested_link_log(
-    request: LinkGraphSuggestedLinkRequest,
+    request: &LinkGraphSuggestedLinkRequest,
 ) -> Result<LinkGraphSuggestedLink, String> {
     let cache_runtime = resolve_link_graph_cache_runtime()?;
     let agentic_runtime = resolve_link_graph_agentic_runtime();
     valkey_suggested_link_log_with_valkey(
-        &request,
+        request,
         &cache_runtime.valkey_url,
         Some(&cache_runtime.key_prefix),
         Some(agentic_runtime.suggested_link_max_entries),
@@ -28,7 +33,17 @@ pub fn valkey_suggested_link_log(
     )
 }
 
+fn valkey_stop_index(limit: usize) -> Result<i64, String> {
+    i64::try_from(limit.saturating_sub(1))
+        .map_err(|_| format!("suggested_link limit exceeds Valkey LRANGE bounds: {limit}"))
+}
+
 /// Append one suggested-link proposal to explicit Valkey endpoint.
+///
+/// # Errors
+///
+/// Returns an error when the Valkey URL is invalid, the request cannot be
+/// normalized or serialized, or the write to Valkey fails.
 pub fn valkey_suggested_link_log_with_valkey(
     request: &LinkGraphSuggestedLinkRequest,
     valkey_url: &str,
@@ -45,7 +60,7 @@ pub fn valkey_suggested_link_log_with_valkey(
         .unwrap_or(DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX);
     let stream_key = suggested_link_stream_key(prefix);
     let bounded_max_entries = max_entries.unwrap_or(2000).max(1);
-    let record = normalize_request(&request)?;
+    let record = normalize_request(request)?;
     let payload = serde_json::to_string(&record)
         .map_err(|err| format!("failed to serialize suggested_link record: {err}"))?;
 
@@ -67,6 +82,11 @@ pub fn valkey_suggested_link_log_with_valkey(
 }
 
 /// Read recent suggested-link proposals from Valkey passive stream.
+///
+/// # Errors
+///
+/// Returns an error when runtime configuration cannot be resolved or the Valkey
+/// read fails.
 pub fn valkey_suggested_link_recent(limit: usize) -> Result<Vec<LinkGraphSuggestedLink>, String> {
     let cache_runtime = resolve_link_graph_cache_runtime()?;
     valkey_suggested_link_recent_with_valkey(
@@ -77,6 +97,11 @@ pub fn valkey_suggested_link_recent(limit: usize) -> Result<Vec<LinkGraphSuggest
 }
 
 /// Read recent suggested-link proposals from explicit Valkey endpoint.
+///
+/// # Errors
+///
+/// Returns an error when the Valkey URL is invalid, the limit cannot be
+/// represented for `LRANGE`, or the read from Valkey fails.
 pub fn valkey_suggested_link_recent_with_valkey(
     limit: usize,
     valkey_url: &str,
@@ -96,11 +121,12 @@ pub fn valkey_suggested_link_recent_with_valkey(
     let mut conn = client.get_connection().map_err(|err| {
         format!("failed to connect valkey for link_graph suggested_link store: {err}")
     })?;
+    let stop = valkey_stop_index(bounded_limit)?;
 
     let rows = redis::cmd("LRANGE")
         .arg(&stream_key)
         .arg(0)
-        .arg((bounded_limit - 1) as i64)
+        .arg(stop)
         .query::<Vec<String>>(&mut conn)
         .map_err(|err| format!("failed to LRANGE suggested_link stream: {err}"))?;
 
@@ -116,6 +142,11 @@ pub fn valkey_suggested_link_recent_with_valkey(
 }
 
 /// Read recent suggested-link proposals as latest unique states.
+///
+/// # Errors
+///
+/// Returns an error when runtime configuration cannot be resolved or the Valkey
+/// read fails.
 pub fn valkey_suggested_link_recent_latest(
     limit: usize,
     state_filter: Option<LinkGraphSuggestedLinkState>,
@@ -132,6 +163,11 @@ pub fn valkey_suggested_link_recent_latest(
 }
 
 /// Read recent suggested-link proposals as latest unique states from explicit Valkey endpoint.
+///
+/// # Errors
+///
+/// Returns an error when the Valkey URL is invalid, the scan limit cannot be
+/// represented for `LRANGE`, or the read from Valkey fails.
 pub fn valkey_suggested_link_recent_latest_with_valkey(
     limit: usize,
     valkey_url: &str,
@@ -154,11 +190,12 @@ pub fn valkey_suggested_link_recent_latest_with_valkey(
     let mut conn = client.get_connection().map_err(|err| {
         format!("failed to connect valkey for link_graph suggested_link store: {err}")
     })?;
+    let stop = valkey_stop_index(bounded_scan_limit)?;
 
     let rows = redis::cmd("LRANGE")
         .arg(&stream_key)
         .arg(0)
-        .arg((bounded_scan_limit - 1) as i64)
+        .arg(stop)
         .query::<Vec<String>>(&mut conn)
         .map_err(|err| format!("failed to LRANGE suggested_link stream: {err}"))?;
 

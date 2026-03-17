@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 mod policy;
 mod storage;
 
@@ -8,10 +6,6 @@ pub struct DeepseekLocalCache;
 impl DeepseekLocalCache {
     pub fn get(key: &str) -> Option<String> {
         storage::get(key)
-    }
-
-    pub fn get_shared(key: &str) -> Option<Arc<str>> {
-        storage::get_shared(key)
     }
 
     pub fn set(key: &str, markdown: &str) {
@@ -33,10 +27,6 @@ impl DeepseekLocalCache {
 
 pub fn local_get(key: &str) -> Option<String> {
     DeepseekLocalCache::get(key)
-}
-
-pub fn local_get_shared(key: &str) -> Option<Arc<str>> {
-    DeepseekLocalCache::get_shared(key)
 }
 
 pub fn local_set(key: &str, markdown: &str) {

@@ -1,5 +1,6 @@
+use std::io::{self, Write as _};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use deepseek_ocr_core::{DecodeParameters, OcrEngine, VisionSettings, render_prompt};
 use image::DynamicImage;
@@ -7,12 +8,10 @@ use tokenizers::Tokenizer;
 
 use crate::llm::error::LlmResult;
 use crate::llm::vision::PreparedVisionImage;
-use crate::llm::vision::deepseek::native::cache::build_cache_key;
-use crate::llm::vision::deepseek::native::env::{ocr_prompt, parse_env_u64};
+use crate::llm::vision::deepseek::native::env::ocr_prompt;
 use crate::llm::vision::deepseek::util::{internal_error, sanitize_error_string};
 
-use super::cache_io::{CacheLayer, non_empty_markdown, read_cache_entry, store_markdown_in_cache};
-use super::coalescer::{CoalesceAcquire, SharedCoalescedResult, acquire as acquire_coalesced};
+use super::cache_io::non_empty_markdown;
 use super::image_decode::decode_engine_input_image;
 use super::retry::{safe_vision_settings, should_retry_with_safe_vision};
 use super::telemetry::{InferenceTelemetry, log_inference_completed};
@@ -23,7 +22,6 @@ pub(super) struct DeepseekEngine {
     pub(super) vision: VisionSettings,
     pub(super) max_tiles: usize,
     pub(super) decode: DecodeParameters,
-    pub(super) model_root: Arc<str>,
 }
 
 struct DecodedMarkdown {
@@ -34,18 +32,23 @@ struct DecodedMarkdown {
     model_decode_ms: u128,
 }
 
-const DEFAULT_BATCH_WINDOW_MS: u64 = 50;
-const DEFAULT_INFLIGHT_WAIT_TIMEOUT_MS: u64 = 30_000;
-const DEFAULT_INFLIGHT_STALE_MS: u64 = 120_000;
-
 impl DeepseekEngine {
     pub(super) fn warmup_once(&self, prepared: &PreparedVisionImage) -> LlmResult<()> {
         let prompt = render_prompt("plain", "", "<image>\n<|grounding|>Warmup.")
             .map_err(|error| internal_error(format!("deepseek warmup prompt failed: {error}")))?;
         let image = decode_engine_input_image(prepared);
         let images = [image];
-        let mut decode = self.decode.clone();
-        decode.max_new_tokens = 1;
+        let decode = warmup_decode_parameters(&self.decode);
+        let vision = warmup_vision_settings(self.vision);
+        tracing::info!(
+            event = "llm.vision.deepseek.engine.prewarm_decode",
+            max_new_tokens = decode.max_new_tokens,
+            use_cache = decode.use_cache,
+            base_size = vision.base_size,
+            image_size = vision.image_size,
+            crop_mode = vision.crop_mode,
+            "DeepSeek OCR prewarm decode parameters resolved"
+        );
         let model = self
             .model
             .lock()
@@ -55,7 +58,7 @@ impl DeepseekEngine {
                 &self.tokenizer,
                 prompt.as_str(),
                 &images,
-                self.vision,
+                vision,
                 &decode,
                 None,
             )
@@ -72,76 +75,15 @@ impl DeepseekEngine {
         let prompt_text = resolve_ocr_prompt_text();
         let (effective_vision, estimated_tiles) =
             resolve_effective_vision_settings(self.vision, prepared, self.max_tiles);
-        let cache_key = build_cache_key(
-            self.model_root.as_ref(),
-            prepared,
-            prompt_text.as_str(),
-            effective_vision.base_size,
-            effective_vision.image_size,
-            effective_vision.crop_mode,
-            self.decode.max_new_tokens,
+        tracing::debug!(
+            event = "llm.vision.deepseek.infer.direct_path",
+            width = prepared.width,
+            height = prepared.height,
+            estimated_tiles,
+            input_mode = prepared.mode.as_str(),
+            "DeepSeek OCR inference is using the direct single-request path"
         );
-
-        if let Some(markdown) =
-            Self::try_read_cached_markdown(cache_key.as_str(), prepared, total_started)
-        {
-            return Ok(Some(markdown));
-        }
-
-        let batch_window = ocr_batch_window();
-        let inflight_wait_timeout = ocr_inflight_wait_timeout();
-        let inflight_stale_timeout = ocr_inflight_stale_timeout(inflight_wait_timeout);
-        let mut leader = None;
-        match acquire_coalesced(cache_key.as_str(), inflight_stale_timeout) {
-            CoalesceAcquire::Follower(follower) => {
-                if let Some(shared) = follower.wait(inflight_wait_timeout) {
-                    tracing::debug!(
-                        event = "llm.vision.deepseek.infer.coalesce_hit",
-                        key_len = cache_key.len(),
-                        wait_timeout_ms = inflight_wait_timeout.as_millis(),
-                        "DeepSeek OCR coalescer follower reused in-flight inference result"
-                    );
-                    return llm_result_from_shared(shared);
-                }
-                tracing::warn!(
-                    event = "llm.vision.deepseek.infer.coalesce_timeout",
-                    key_len = cache_key.len(),
-                    wait_timeout_ms = inflight_wait_timeout.as_millis(),
-                    "DeepSeek OCR coalescer follower wait timed out; falling back to direct inference"
-                );
-            }
-            CoalesceAcquire::Leader(permit) => {
-                leader = Some(permit);
-            }
-        }
-
-        if let Some(permit) = leader {
-            let followers = permit.follower_count();
-            if followers > 0 && !batch_window.is_zero() {
-                tracing::debug!(
-                    event = "llm.vision.deepseek.infer.coalesce_window",
-                    followers,
-                    batch_window_ms = batch_window.as_millis(),
-                    "DeepSeek OCR coalescer leader waiting micro-batch window"
-                );
-                std::thread::sleep(batch_window);
-            }
-
-            let result = self.infer_uncached_markdown(
-                cache_key.as_str(),
-                prepared,
-                prompt_text.as_str(),
-                total_started,
-                effective_vision,
-                estimated_tiles,
-                stop_signal.clone(),
-            );
-            permit.complete(shared_from_llm_result(&result));
-            return result;
-        }
-
-        self.infer_uncached_markdown(
-            cache_key.as_str(),
+        self.infer_direct_markdown(
             prepared,
             prompt_text.as_str(),
             total_started,
@@ -151,29 +93,8 @@ impl DeepseekEngine {
         )
     }
 
-    fn try_read_cached_markdown(
-        cache_key: &str,
-        prepared: &PreparedVisionImage,
-        total_started: Instant,
-    ) -> Option<String> {
-        if let Some(markdown) =
-            read_cache_entry(CacheLayer::Local, cache_key, prepared, total_started)
-        {
-            return Some(markdown);
-        }
-
-        if let Some(markdown) =
-            read_cache_entry(CacheLayer::Valkey, cache_key, prepared, total_started)
-        {
-            return Some(markdown);
-        }
-
-        None
-    }
-
-    fn infer_uncached_markdown(
+    fn infer_direct_markdown(
         &self,
-        cache_key: &str,
         prepared: &PreparedVisionImage,
         prompt_text: &str,
         total_started: Instant,
@@ -193,6 +114,21 @@ impl DeepseekEngine {
             .map_err(|error| internal_error(format!("deepseek prompt render failed: {error}")))?;
         let decode = self.decode.clone();
         self.log_decode_budget(prepared, estimated_tiles, &decode);
+        emit_stage_trace(
+            "xiuxian.decode.started",
+            &[
+                ("use_cache", decode.use_cache.to_string()),
+                ("max_new_tokens", decode.max_new_tokens.to_string()),
+                ("base_size", effective_vision.base_size.to_string()),
+                ("image_size", effective_vision.image_size.to_string()),
+                ("crop_mode", effective_vision.crop_mode.to_string()),
+                ("input_mode", prepared.mode.as_str().to_string()),
+                (
+                    "engine_input_bytes",
+                    prepared.engine_input.len().to_string(),
+                ),
+            ],
+        );
 
         let model = self
             .model
@@ -207,7 +143,6 @@ impl DeepseekEngine {
             stop_signal,
         )?;
 
-        store_markdown_in_cache(cache_key, decoded.markdown.as_str());
         let telemetry = InferenceTelemetry {
             total_started,
             image_decode_ms,
@@ -255,10 +190,13 @@ impl DeepseekEngine {
             event = "llm.vision.deepseek.infer.start",
             width = prepared.width,
             height = prepared.height,
-            decoded_pixels_bytes = prepared.resized_png.len(),
+            input_mode = prepared.mode.as_str(),
+            original_bytes = prepared.original.len(),
+            engine_input_bytes = prepared.engine_input.len(),
             scale = prepared.scale,
             estimated_tiles,
             max_tiles = self.max_tiles,
+            pipeline = "direct",
             configured_base_size = self.vision.base_size,
             configured_image_size = self.vision.image_size,
             configured_crop_mode = self.vision.crop_mode,
@@ -297,8 +235,7 @@ impl DeepseekEngine {
         decode: &DecodeParameters,
         stop_signal: Option<Arc<std::sync::atomic::AtomicBool>>,
     ) -> LlmResult<DecodedMarkdown> {
-        let stream = stop_signal.as_ref().map(|signal| {
-            let signal = Arc::clone(signal);
+        let stream = stop_signal.map(|signal| {
             let callback = move |_step: usize, _tokens: &[i64]| {
                 assert!(
                     !signal.load(std::sync::atomic::Ordering::Acquire),
@@ -356,6 +293,44 @@ impl DeepseekEngine {
     }
 }
 
+fn stage_trace_enabled() -> bool {
+    std::env::var("XIUXIAN_VISION_STAGE_TRACE_STDERR")
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
+}
+
+fn emit_stage_trace(stage: &str, fields: &[(&str, String)]) {
+    if !stage_trace_enabled() {
+        return;
+    }
+    let mut line = format!("[XIUXIAN STAGE] {stage}");
+    for (key, value) in fields {
+        line.push(' ');
+        line.push_str(key);
+        line.push('=');
+        line.push_str(value);
+    }
+    eprintln!("{line}");
+    let _ = io::stderr().flush();
+}
+
+fn warmup_decode_parameters(base: &DecodeParameters) -> DecodeParameters {
+    let mut decode = base.clone();
+    decode.max_new_tokens = 1;
+    decode.use_cache = false;
+    decode
+}
+
+fn warmup_vision_settings(configured: VisionSettings) -> VisionSettings {
+    let safe = safe_vision_settings();
+    VisionSettings {
+        base_size: configured.base_size.min(safe.base_size),
+        image_size: configured.image_size.min(safe.image_size),
+        crop_mode: configured.crop_mode && safe.crop_mode,
+    }
+}
+
 fn resolve_effective_vision_settings(
     configured: VisionSettings,
     prepared: &PreparedVisionImage,
@@ -373,6 +348,65 @@ fn resolve_effective_vision_settings(
         return (effective, estimated_tiles);
     }
     (configured, estimated_tiles)
+}
+
+#[cfg(test)]
+mod tests {
+    use deepseek_ocr_core::{DecodeParameters, VisionSettings};
+
+    use super::warmup_decode_parameters;
+
+    #[test]
+    fn warmup_decode_disables_cache_and_limits_generation() {
+        let base = DecodeParameters {
+            max_new_tokens: 512,
+            do_sample: false,
+            temperature: 0.0,
+            top_p: Some(0.95),
+            top_k: Some(40),
+            repetition_penalty: 1.2,
+            no_repeat_ngram_size: Some(16),
+            seed: Some(7),
+            use_cache: true,
+        };
+
+        let decode = warmup_decode_parameters(&base);
+
+        assert_eq!(decode.max_new_tokens, 1);
+        assert!(!decode.use_cache);
+        assert_eq!(decode.do_sample, base.do_sample);
+        assert_eq!(decode.temperature, base.temperature);
+        assert_eq!(decode.top_p, base.top_p);
+        assert_eq!(decode.top_k, base.top_k);
+        assert_eq!(decode.repetition_penalty, base.repetition_penalty);
+        assert_eq!(decode.no_repeat_ngram_size, base.no_repeat_ngram_size);
+        assert_eq!(decode.seed, base.seed);
+    }
+
+    #[test]
+    fn warmup_vision_uses_safe_ocr_dimensions_without_upscaling_smaller_configs() {
+        let configured = VisionSettings {
+            base_size: 1024,
+            image_size: 640,
+            crop_mode: true,
+        };
+
+        let warmup = super::warmup_vision_settings(configured);
+
+        assert_eq!(warmup.base_size, 448);
+        assert_eq!(warmup.image_size, 448);
+        assert!(warmup.crop_mode);
+
+        let smaller = VisionSettings {
+            base_size: 320,
+            image_size: 256,
+            crop_mode: false,
+        };
+        let warmup_smaller = super::warmup_vision_settings(smaller);
+        assert_eq!(warmup_smaller.base_size, 320);
+        assert_eq!(warmup_smaller.image_size, 256);
+        assert!(!warmup_smaller.crop_mode);
+    }
 }
 
 fn estimate_tile_count(width: u32, height: u32, image_size: u32, crop_mode: bool) -> usize {
@@ -393,43 +427,4 @@ fn estimate_tile_count(width: u32, height: u32, image_size: u32, crop_mode: bool
 fn resolve_ocr_prompt_text() -> String {
     ocr_prompt()
         .unwrap_or_else(|| "<image>\n<|grounding|>Convert this image to markdown.".to_string())
-}
-
-fn ocr_batch_window() -> Duration {
-    Duration::from_millis(
-        parse_env_u64("XIUXIAN_VISION_OCR_BATCH_WINDOW_MS").unwrap_or(DEFAULT_BATCH_WINDOW_MS),
-    )
-}
-
-fn ocr_inflight_wait_timeout() -> Duration {
-    Duration::from_millis(
-        parse_env_u64("XIUXIAN_VISION_OCR_INFLIGHT_WAIT_TIMEOUT_MS")
-            .unwrap_or(DEFAULT_INFLIGHT_WAIT_TIMEOUT_MS)
-            .max(1),
-    )
-}
-
-fn ocr_inflight_stale_timeout(wait_timeout: Duration) -> Duration {
-    let stale_ms = parse_env_u64("XIUXIAN_VISION_OCR_INFLIGHT_STALE_MS")
-        .unwrap_or(DEFAULT_INFLIGHT_STALE_MS)
-        .max(u64::try_from(wait_timeout.as_millis()).unwrap_or(u64::MAX));
-    Duration::from_millis(stale_ms)
-}
-
-fn shared_from_llm_result(result: &LlmResult<Option<String>>) -> SharedCoalescedResult {
-    match result {
-        Ok(Some(value)) => Ok(Some(Arc::from(value.as_str()))),
-        Ok(None) => Ok(None),
-        Err(error) => Err(Arc::from(error.to_string().as_str())),
-    }
-}
-
-fn llm_result_from_shared(shared: SharedCoalescedResult) -> LlmResult<Option<String>> {
-    match shared {
-        Ok(Some(value)) => Ok(Some(value.to_string())),
-        Ok(None) => Ok(None),
-        Err(error) => Err(internal_error(format!(
-            "deepseek OCR coalesced inference failed: {error}"
-        ))),
-    }
 }

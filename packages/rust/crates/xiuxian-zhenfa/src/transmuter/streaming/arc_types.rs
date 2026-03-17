@@ -189,8 +189,7 @@ impl<'de> Deserialize<'de> for ArcStreamingEvent {
                         message: message.ok_or_else(|| de::Error::missing_field("message"))?,
                     }),
                     _ => Err(de::Error::custom(format!(
-                        "unknown event type: {}",
-                        event_type
+                        "unknown event type: {event_type}"
                     ))),
                 }
             }
@@ -207,7 +206,7 @@ impl ArcStreamingEvent {
         Self::Thought(text.into())
     }
 
-    /// Create a TextDelta event from a string.
+    /// Create a `TextDelta` event from a string.
     #[must_use]
     pub fn text_delta(text: impl Into<Arc<str>>) -> Self {
         Self::TextDelta(text.into())
@@ -380,7 +379,7 @@ impl ArcStreamingOutcome {
             + self
                 .tool_calls
                 .iter()
-                .map(|tc| tc.estimated_size())
+                .map(ArcToolCallRecord::estimated_size)
                 .sum::<usize>()
     }
 }
@@ -579,28 +578,24 @@ impl EventBuffer {
 impl From<super::ZhenfaStreamingEvent> for ArcStreamingEvent {
     fn from(event: super::ZhenfaStreamingEvent) -> Self {
         match event {
-            super::ZhenfaStreamingEvent::Thought(text) => Self::Thought(text.into()),
-            super::ZhenfaStreamingEvent::TextDelta(text) => Self::TextDelta(text.into()),
-            super::ZhenfaStreamingEvent::ToolCall { id, name, input } => Self::ToolCall {
-                id: id.into(),
-                name: name.into(),
-                input,
-            },
-            super::ZhenfaStreamingEvent::ToolResult { id, output } => Self::ToolResult {
-                id: id.into(),
-                output,
-            },
-            super::ZhenfaStreamingEvent::Status(text) => Self::Status(text.into()),
-            super::ZhenfaStreamingEvent::Progress { message, percent } => Self::Progress {
-                message: message.into(),
-                percent,
-            },
+            super::ZhenfaStreamingEvent::Thought(text) => Self::Thought(text),
+            super::ZhenfaStreamingEvent::TextDelta(text) => Self::TextDelta(text),
+            super::ZhenfaStreamingEvent::ToolCall { id, name, input } => {
+                Self::ToolCall { id, name, input }
+            }
+            super::ZhenfaStreamingEvent::ToolResult { id, output } => {
+                Self::ToolResult { id, output }
+            }
+            super::ZhenfaStreamingEvent::Status(text) => Self::Status(text),
+            super::ZhenfaStreamingEvent::Progress { message, percent } => {
+                Self::Progress { message, percent }
+            }
             super::ZhenfaStreamingEvent::Finished(outcome) => Self::Finished(ArcStreamingOutcome {
                 success: outcome.success,
                 tokens_used: outcome
                     .tokens_used
                     .map(|t| ArcTokenUsage::new(t.input, t.output)),
-                final_text: outcome.final_text.into(),
+                final_text: outcome.final_text,
                 tool_calls: outcome
                     .tool_calls
                     .into_iter()
@@ -608,76 +603,11 @@ impl From<super::ZhenfaStreamingEvent> for ArcStreamingEvent {
                     .collect(),
                 exit_code: outcome.exit_code,
             }),
-            super::ZhenfaStreamingEvent::Error { code, message } => Self::Error {
-                code: code.into(),
-                message: message.into(),
-            },
+            super::ZhenfaStreamingEvent::Error { code, message } => Self::Error { code, message },
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn arc_event_creates_thought() {
-        let event = ArcStreamingEvent::thought("Test thought");
-        assert!(matches!(event, ArcStreamingEvent::Thought(_)));
-        assert_eq!(event.text_content(), Some("Test thought"));
-    }
-
-    #[test]
-    fn arc_event_estimates_size() {
-        let event = ArcStreamingEvent::thought("Hello world");
-        assert!(event.estimated_size() > 11);
-    }
-
-    #[test]
-    fn event_buffer_pushes_and_drains() {
-        let mut buffer = EventBuffer::with_capacity(10);
-
-        buffer.push(ArcStreamingEvent::thought("Event 1"));
-        buffer.push(ArcStreamingEvent::thought("Event 2"));
-
-        assert_eq!(buffer.len(), 2);
-        assert!(!buffer.is_empty());
-
-        let drained: Vec<_> = buffer.drain().collect();
-        assert_eq!(drained.len(), 2);
-        assert!(buffer.is_empty());
-    }
-
-    #[test]
-    fn event_buffer_flush_threshold() {
-        let mut buffer = EventBuffer::new();
-        // Set a very low threshold to trigger flush on size
-        buffer.set_max_size(100);
-
-        // Add small event
-        buffer.push(ArcStreamingEvent::thought("Hi"));
-
-        // Add large event that should exceed threshold
-        buffer.push(ArcStreamingEvent::thought(
-            "This is a longer text that should push us over the threshold",
-        ));
-
-        // Total size should exceed 100 bytes now
-        assert!(
-            buffer.total_size() >= 100,
-            "Total size should be at least 100"
-        );
-        assert!(
-            buffer.should_flush(),
-            "Buffer should flush when size threshold exceeded"
-        );
-    }
-
-    #[test]
-    fn converts_from_standard_event() {
-        let standard = super::super::ZhenfaStreamingEvent::Thought(std::sync::Arc::from("test"));
-        let arc: ArcStreamingEvent = standard.into();
-
-        assert_eq!(arc.text_content(), Some("test"));
-    }
-}
+#[path = "../../../tests/unit/transmuter/streaming/arc_types.rs"]
+mod tests;

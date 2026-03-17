@@ -163,6 +163,7 @@ impl LinkGraphIndexSnapshot {
             rank_by_id: self.rank_by_id,
             edge_count: self.edge_count,
             virtual_nodes: HashMap::new(),
+            symbol_to_docs: HashMap::new(),
         };
         index.rebuild_all_page_indices();
         index

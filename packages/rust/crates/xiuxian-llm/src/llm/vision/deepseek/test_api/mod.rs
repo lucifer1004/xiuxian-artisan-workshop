@@ -7,7 +7,10 @@ mod native_device;
 mod native_paths;
 
 pub(crate) use self::config_runtime::load_config_with_paths_for_tests;
-pub use self::config_runtime::{normalize_model_root_for_tests, resolve_model_root_with_for_tests};
+pub use self::config_runtime::{
+    normalize_model_root_for_tests, resolve_default_model_root_with_for_tests,
+    resolve_model_root_with_for_tests,
+};
 
 #[cfg(feature = "vision-dots")]
 pub use self::native_cache::{
@@ -20,8 +23,10 @@ pub use self::native_cache::{
 
 #[cfg(feature = "vision-dots")]
 pub use self::native_device::{
-    require_quantized_snapshot_with_for_tests, resolve_device_kind_label_with_for_tests,
-    resolve_engine_device_label_with_for_tests,
+    load_deepseek_ocr_for_tests, require_quantized_snapshot_with_for_tests,
+    reset_deepseek_engine_state_for_tests, resolve_device_kind_label_with_for_tests,
+    resolve_engine_device_label_with_for_tests, resolve_low_precision_load_policy_with_for_tests,
+    resolve_model_kind_for_model_root_label_from_sources_for_tests,
     resolve_model_kind_for_model_root_label_with_for_tests,
     resolve_model_kind_label_with_for_tests, resolve_model_load_dtype_label_with_for_tests,
     resolve_vision_settings_with_for_tests, safe_vision_settings_for_tests,

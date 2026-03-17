@@ -11,7 +11,6 @@ use crate::llm::vision::PreparedVisionImage;
 use crate::llm::vision::deepseek::runtime::DeepseekRuntime;
 use crate::llm::vision::deepseek::util::{internal_error, sanitize_error_string};
 
-use super::batch_lane::infer_with_batch_lane;
 use super::core::DeepseekEngine;
 
 static ENGINE_SLOT: OnceLock<Mutex<Option<CachedEngine>>> = OnceLock::new();
@@ -50,7 +49,7 @@ pub(crate) fn infer(
 
     let engine = get_or_create_engine(runtime, use_cpu)?;
 
-    match infer_with_batch_lane(engine, prepared, stop_signal.clone()) {
+    match engine.infer_markdown(prepared, stop_signal.clone()) {
         Ok(markdown) => Ok(markdown),
         Err(error) => {
             let error_text = error.to_string();
@@ -62,7 +61,7 @@ pub(crate) fn infer(
                     "DeepSeek OCR decode hit a Metal resource error; retrying on CPU"
                 );
                 let cpu_engine = get_or_create_engine(runtime, true)?;
-                infer_with_batch_lane(cpu_engine, prepared, stop_signal)
+                cpu_engine.infer_markdown(prepared, stop_signal)
             } else {
                 Err(error)
             }
@@ -89,6 +88,31 @@ pub(crate) fn prewarm(runtime: &DeepseekRuntime) -> LlmResult<()> {
         );
     }
     Ok(())
+}
+
+pub(crate) fn load_only_for_tests(runtime: &DeepseekRuntime) -> LlmResult<()> {
+    let started = Instant::now();
+    let _ = get_or_create_engine(runtime, false)?;
+    tracing::info!(
+        event = "llm.vision.deepseek.engine.load_only_completed",
+        elapsed_ms = started.elapsed().as_millis(),
+        "DeepSeek OCR load-only phase completed"
+    );
+    Ok(())
+}
+
+pub(crate) fn reset_engine_state_for_tests() {
+    FORCE_CPU_FALLBACK.store(false, Ordering::Release);
+    if let Some(slot) = ENGINE_SLOT.get() {
+        let mut guard = slot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *guard = None;
+    }
+    tracing::debug!(
+        event = "llm.vision.deepseek.engine.test_reset",
+        "DeepSeek OCR engine state reset for test isolation"
+    );
 }
 
 fn get_or_create_engine(

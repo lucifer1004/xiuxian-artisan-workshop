@@ -7,10 +7,10 @@
 //!
 //! ## V3.0 Features
 //!
-//! - **Three-Dimensional Cognitive Model**: MetaCognitive, Operational, Epistemic
+//! - **Three-Dimensional Cognitive Model**: `Meta`, `Operational`, `Epistemic`
 //! - **Coherence Score**: Real-time quality assessment for Early-Halt
-//! - **Hallucination Defense**: Second line of defense after LogicGate XSD validation
-//! - **VecDeque History**: O(1) front removal for bounded history
+//! - **Hallucination Defense**: Second line of defense after `LogicGate` XSD validation
+//! - **`VecDeque` History**: O(1) front removal for bounded history
 
 use super::ZhenfaStreamingEvent;
 use std::collections::VecDeque;
@@ -86,6 +86,83 @@ pub enum ThoughtSubcategory {
     ConfidenceAssessment,
 }
 
+type ThoughtPattern = (&'static str, ThoughtSubcategory);
+
+const META_PATTERNS: &[ThoughtPattern] = &[
+    ("i should", ThoughtSubcategory::Planning),
+    ("let me plan", ThoughtSubcategory::Planning),
+    ("first, i'll", ThoughtSubcategory::Planning),
+    ("my approach", ThoughtSubcategory::Planning),
+    ("the plan is", ThoughtSubcategory::Planning),
+    (
+        "wait, let me reconsider",
+        ThoughtSubcategory::SelfReflection,
+    ),
+    ("actually, i think", ThoughtSubcategory::SelfReflection),
+    ("on second thought", ThoughtSubcategory::SelfReflection),
+    ("i realize that", ThoughtSubcategory::SelfReflection),
+    ("let me think about", ThoughtSubcategory::SelfReflection),
+    (
+        "alternative approach",
+        ThoughtSubcategory::StrategyEvaluation,
+    ),
+    ("another way", ThoughtSubcategory::StrategyEvaluation),
+    ("better approach", ThoughtSubcategory::StrategyEvaluation),
+    ("instead of", ThoughtSubcategory::StrategyEvaluation),
+    ("the error", ThoughtSubcategory::ErrorAnalysis),
+    ("went wrong", ThoughtSubcategory::ErrorAnalysis),
+    ("failed because", ThoughtSubcategory::ErrorAnalysis),
+    ("the issue is", ThoughtSubcategory::ErrorAnalysis),
+    ("my goal", ThoughtSubcategory::GoalSetting),
+    ("the objective", ThoughtSubcategory::GoalSetting),
+    ("what i want to achieve", ThoughtSubcategory::GoalSetting),
+];
+
+const OPERATIONAL_PATTERNS: &[ThoughtPattern] = &[
+    ("this function", ThoughtSubcategory::CodeAnalysis),
+    ("the code", ThoughtSubcategory::CodeAnalysis),
+    ("this file", ThoughtSubcategory::CodeAnalysis),
+    ("the implementation", ThoughtSubcategory::CodeAnalysis),
+    ("this module", ThoughtSubcategory::CodeAnalysis),
+    ("i'll add", ThoughtSubcategory::ImplementationReasoning),
+    ("i'll modify", ThoughtSubcategory::ImplementationReasoning),
+    (
+        "i need to change",
+        ThoughtSubcategory::ImplementationReasoning,
+    ),
+    ("the fix is", ThoughtSubcategory::ImplementationReasoning),
+    ("debugging", ThoughtSubcategory::Debugging),
+    ("trace the issue", ThoughtSubcategory::Debugging),
+    ("the bug", ThoughtSubcategory::Debugging),
+    ("verify that", ThoughtSubcategory::Validation),
+    ("check if", ThoughtSubcategory::Validation),
+    ("ensure that", ThoughtSubcategory::Validation),
+    ("confirm that", ThoughtSubcategory::Validation),
+    ("let me search", ThoughtSubcategory::Exploration),
+    ("looking for", ThoughtSubcategory::Exploration),
+    ("i need to find", ThoughtSubcategory::Exploration),
+    ("exploring", ThoughtSubcategory::Exploration),
+];
+
+const EPISTEMIC_PATTERNS: &[ThoughtPattern] = &[
+    ("i'm not sure", ThoughtSubcategory::Uncertainty),
+    ("i'm uncertain", ThoughtSubcategory::Uncertainty),
+    ("i don't know", ThoughtSubcategory::Uncertainty),
+    ("unclear", ThoughtSubcategory::Uncertainty),
+    ("might be", ThoughtSubcategory::Uncertainty),
+    ("i need more context", ThoughtSubcategory::KnowledgeGap),
+    ("i need to understand", ThoughtSubcategory::KnowledgeGap),
+    ("not familiar with", ThoughtSubcategory::KnowledgeGap),
+    ("i haven't seen", ThoughtSubcategory::KnowledgeGap),
+    ("let me clarify", ThoughtSubcategory::ClarificationSeeking),
+    ("can you clarify", ThoughtSubcategory::ClarificationSeeking),
+    ("i should ask", ThoughtSubcategory::ClarificationSeeking),
+    ("i'm confident", ThoughtSubcategory::ConfidenceAssessment),
+    ("my confidence", ThoughtSubcategory::ConfidenceAssessment),
+    ("fairly certain", ThoughtSubcategory::ConfidenceAssessment),
+    ("pretty sure", ThoughtSubcategory::ConfidenceAssessment),
+];
+
 /// Coherence metrics for Early-Halt decision making.
 #[derive(Debug, Clone, Default)]
 pub struct CoherenceMetrics {
@@ -102,8 +179,8 @@ pub struct CoherenceMetrics {
 /// Pattern matcher for cognitive dimension detection.
 #[derive(Debug, Default)]
 pub struct CognitiveSupervisor {
-    /// History of classified thoughts for context.
-    thought_history: Vec<CognitiveDimension>,
+    /// History of classified thoughts for context (`VecDeque` for O(1) front removal).
+    thought_history: VecDeque<CognitiveDimension>,
     /// Current operational context.
     context: SupervisorContext,
     /// Coherence metrics for Early-Halt (V2.0).
@@ -127,6 +204,46 @@ pub struct SupervisorContext {
     pub epistemic_streak: u32,
     /// Number of consecutive uncertainty expressions (V2.0).
     pub uncertainty_streak: u32,
+}
+
+fn saturating_u32_to_f32(value: u32) -> f32 {
+    f32::from(u16::try_from(value).unwrap_or(u16::MAX))
+}
+
+fn saturating_usize_to_f32(value: usize) -> f32 {
+    f32::from(u16::try_from(value).unwrap_or(u16::MAX))
+}
+
+fn ratio_from_counts(numerator: usize, denominator: usize) -> f32 {
+    debug_assert!(denominator > 0);
+    saturating_usize_to_f32(numerator) / saturating_usize_to_f32(denominator)
+}
+
+fn pattern_confidence(pattern: &str, text_len: usize, base: f32, bonus_cap: f32) -> f32 {
+    base + (ratio_from_counts(pattern.len(), text_len.max(1))).min(bonus_cap)
+}
+
+fn best_pattern_match(
+    text_lower: &str,
+    text_len: usize,
+    patterns: &[ThoughtPattern],
+    base: f32,
+    bonus_cap: f32,
+) -> Option<(ThoughtSubcategory, f32)> {
+    let mut best_match = None;
+    for (pattern, subcategory) in patterns {
+        if text_lower.contains(pattern) {
+            let confidence = pattern_confidence(pattern, text_len, base, bonus_cap);
+            match best_match {
+                None => best_match = Some((*subcategory, confidence)),
+                Some((_, existing_confidence)) if confidence > existing_confidence => {
+                    best_match = Some((*subcategory, confidence));
+                }
+                _ => {}
+            }
+        }
+    }
+    best_match
 }
 
 impl CognitiveSupervisor {
@@ -182,6 +299,12 @@ impl CognitiveSupervisor {
         self.coherence.early_halt_triggered
     }
 
+    /// Get the configured Early-Halt threshold.
+    #[must_use]
+    pub const fn early_halt_threshold(&self) -> f32 {
+        self.early_halt_threshold
+    }
+
     /// Calculate coherence score for an event.
     fn calculate_coherence(
         &mut self,
@@ -198,7 +321,7 @@ impl CognitiveSupervisor {
 
             // Excessive uncertainty streak reduces coherence further
             if self.context.uncertainty_streak > 3 {
-                coherence -= 0.1 * (self.context.uncertainty_streak - 3) as f32;
+                coherence -= 0.1 * saturating_u32_to_f32(self.context.uncertainty_streak - 3);
             }
         } else {
             self.context.uncertainty_streak = 0;
@@ -217,7 +340,7 @@ impl CognitiveSupervisor {
 
         // Long meta streak without operational action
         if self.context.meta_streak > 5 {
-            coherence -= 0.05 * (self.context.meta_streak - 5) as f32;
+            coherence -= 0.05 * saturating_u32_to_f32(self.context.meta_streak - 5);
         }
 
         // Detect incoherent patterns (oscillating between meta/operational without progress)
@@ -243,23 +366,22 @@ impl CognitiveSupervisor {
             return false;
         }
 
-        // Check last 4 entries for pattern: A-B-A-B
-        let len = self.thought_history.len();
-        let last_4: Vec<_> = self.thought_history[len - 4..].iter().collect();
+        // Check last 4 entries for pattern: A-B-A-B using VecDeque iterators
+        let last_4: Vec<_> = self.thought_history.iter().rev().take(4).collect();
 
-        // Pattern: Meta-Op-Meta-Op or Op-Meta-Op-Meta
+        // Pattern: Meta-Op-Meta-Op or Op-Meta-Op-Meta (reversed order from rev())
         matches!(
-            (&last_4[0], &last_4[1], &last_4[2], &last_4[3]),
+            (last_4[0], last_4[1], last_4[2], last_4[3]),
             (
-                CognitiveDimension::Meta,
-                CognitiveDimension::Operational,
-                CognitiveDimension::Meta,
-                CognitiveDimension::Operational
-            ) | (
                 CognitiveDimension::Operational,
                 CognitiveDimension::Meta,
                 CognitiveDimension::Operational,
                 CognitiveDimension::Meta
+            ) | (
+                CognitiveDimension::Meta,
+                CognitiveDimension::Operational,
+                CognitiveDimension::Meta,
+                CognitiveDimension::Operational
             )
         )
     }
@@ -276,10 +398,10 @@ impl CognitiveSupervisor {
             ZhenfaStreamingEvent::ToolResult { .. } => {
                 (CognitiveDimension::Instrumental, None, 1.0)
             }
-            ZhenfaStreamingEvent::Status(_) => (CognitiveDimension::System, None, 1.0),
-            ZhenfaStreamingEvent::Progress { .. } => (CognitiveDimension::System, None, 1.0),
-            ZhenfaStreamingEvent::Finished(_) => (CognitiveDimension::System, None, 1.0),
-            ZhenfaStreamingEvent::Error { .. } => (CognitiveDimension::System, None, 1.0),
+            ZhenfaStreamingEvent::Status(_)
+            | ZhenfaStreamingEvent::Progress { .. }
+            | ZhenfaStreamingEvent::Finished(_)
+            | ZhenfaStreamingEvent::Error { .. } => (CognitiveDimension::System, None, 1.0),
         }
     }
 
@@ -289,148 +411,18 @@ impl CognitiveSupervisor {
         text: &str,
     ) -> (CognitiveDimension, Option<ThoughtSubcategory>, f32) {
         let text_lower = text.to_lowercase();
-
-        // Meta pattern detection
-        let meta_patterns = [
-            // Planning patterns
-            ("i should", ThoughtSubcategory::Planning),
-            ("let me plan", ThoughtSubcategory::Planning),
-            ("first, i'll", ThoughtSubcategory::Planning),
-            ("my approach", ThoughtSubcategory::Planning),
-            ("the plan is", ThoughtSubcategory::Planning),
-            // Self-reflection patterns
-            (
-                "wait, let me reconsider",
-                ThoughtSubcategory::SelfReflection,
-            ),
-            ("actually, i think", ThoughtSubcategory::SelfReflection),
-            ("on second thought", ThoughtSubcategory::SelfReflection),
-            ("i realize that", ThoughtSubcategory::SelfReflection),
-            ("let me think about", ThoughtSubcategory::SelfReflection),
-            // Strategy evaluation patterns
-            (
-                "alternative approach",
-                ThoughtSubcategory::StrategyEvaluation,
-            ),
-            ("another way", ThoughtSubcategory::StrategyEvaluation),
-            ("better approach", ThoughtSubcategory::StrategyEvaluation),
-            ("instead of", ThoughtSubcategory::StrategyEvaluation),
-            // Error analysis patterns
-            ("the error", ThoughtSubcategory::ErrorAnalysis),
-            ("went wrong", ThoughtSubcategory::ErrorAnalysis),
-            ("failed because", ThoughtSubcategory::ErrorAnalysis),
-            ("the issue is", ThoughtSubcategory::ErrorAnalysis),
-            // Goal setting patterns
-            ("my goal", ThoughtSubcategory::GoalSetting),
-            ("the objective", ThoughtSubcategory::GoalSetting),
-            ("what i want to achieve", ThoughtSubcategory::GoalSetting),
-        ];
-
-        // Operational pattern detection
-        let operational_patterns = [
-            // Code analysis patterns
-            ("this function", ThoughtSubcategory::CodeAnalysis),
-            ("the code", ThoughtSubcategory::CodeAnalysis),
-            ("this file", ThoughtSubcategory::CodeAnalysis),
-            ("the implementation", ThoughtSubcategory::CodeAnalysis),
-            ("this module", ThoughtSubcategory::CodeAnalysis),
-            // Implementation reasoning patterns
-            ("i'll add", ThoughtSubcategory::ImplementationReasoning),
-            ("i'll modify", ThoughtSubcategory::ImplementationReasoning),
-            (
-                "i need to change",
-                ThoughtSubcategory::ImplementationReasoning,
-            ),
-            ("the fix is", ThoughtSubcategory::ImplementationReasoning),
-            // Debugging patterns
-            ("debugging", ThoughtSubcategory::Debugging),
-            ("trace the issue", ThoughtSubcategory::Debugging),
-            ("the bug", ThoughtSubcategory::Debugging),
-            // Validation patterns
-            ("verify that", ThoughtSubcategory::Validation),
-            ("check if", ThoughtSubcategory::Validation),
-            ("ensure that", ThoughtSubcategory::Validation),
-            ("confirm that", ThoughtSubcategory::Validation),
-            // Exploration patterns
-            ("let me search", ThoughtSubcategory::Exploration),
-            ("looking for", ThoughtSubcategory::Exploration),
-            ("i need to find", ThoughtSubcategory::Exploration),
-            ("exploring", ThoughtSubcategory::Exploration),
-        ];
-
-        // Epistemic pattern detection (V2.0)
-        let epistemic_patterns = [
-            // Uncertainty patterns
-            ("i'm not sure", ThoughtSubcategory::Uncertainty),
-            ("i'm uncertain", ThoughtSubcategory::Uncertainty),
-            ("i don't know", ThoughtSubcategory::Uncertainty),
-            ("unclear", ThoughtSubcategory::Uncertainty),
-            ("might be", ThoughtSubcategory::Uncertainty),
-            // Knowledge gap patterns
-            ("i need more context", ThoughtSubcategory::KnowledgeGap),
-            ("i need to understand", ThoughtSubcategory::KnowledgeGap),
-            ("not familiar with", ThoughtSubcategory::KnowledgeGap),
-            ("i haven't seen", ThoughtSubcategory::KnowledgeGap),
-            // Clarification seeking patterns
-            ("let me clarify", ThoughtSubcategory::ClarificationSeeking),
-            ("can you clarify", ThoughtSubcategory::ClarificationSeeking),
-            ("i should ask", ThoughtSubcategory::ClarificationSeeking),
-            // Confidence assessment patterns
-            ("i'm confident", ThoughtSubcategory::ConfidenceAssessment),
-            ("my confidence", ThoughtSubcategory::ConfidenceAssessment),
-            ("fairly certain", ThoughtSubcategory::ConfidenceAssessment),
-            ("pretty sure", ThoughtSubcategory::ConfidenceAssessment),
-        ];
-
-        // Score epistemic patterns first (V2.0)
-        let mut best_epistemic: Option<(ThoughtSubcategory, f32)> = None;
-        for (pattern, subcategory) in &epistemic_patterns {
-            if text_lower.contains(pattern) {
-                let confidence = 0.75 + (pattern.len() as f32 / text.len().max(1) as f32).min(0.2);
-                match best_epistemic {
-                    None => best_epistemic = Some((*subcategory, confidence)),
-                    Some((_, existing_conf)) if confidence > existing_conf => {
-                        best_epistemic = Some((*subcategory, confidence));
-                    }
-                    _ => {}
-                }
-            }
-        }
+        let text_len = text.len();
+        let best_epistemic =
+            best_pattern_match(&text_lower, text_len, EPISTEMIC_PATTERNS, 0.75, 0.2);
 
         // If epistemic pattern matched strongly, return it
         if let Some((subcategory, confidence)) = best_epistemic {
             return (CognitiveDimension::Epistemic, Some(subcategory), confidence);
         }
 
-        // Score meta patterns
-        let mut best_meta: Option<(ThoughtSubcategory, f32)> = None;
-        for (pattern, subcategory) in &meta_patterns {
-            if text_lower.contains(pattern) {
-                let confidence = 0.7 + (pattern.len() as f32 / text.len().max(1) as f32).min(0.25);
-                match best_meta {
-                    None => best_meta = Some((*subcategory, confidence)),
-                    Some((_, existing_conf)) if confidence > existing_conf => {
-                        best_meta = Some((*subcategory, confidence));
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        // Score operational patterns
-        let mut best_operational: Option<(ThoughtSubcategory, f32)> = None;
-        for (pattern, subcategory) in &operational_patterns {
-            if text_lower.contains(pattern) {
-                let confidence = 0.7 + (pattern.len() as f32 / text.len().max(1) as f32).min(0.25);
-                match best_operational {
-                    None => best_operational = Some((*subcategory, confidence)),
-                    Some((_, existing_conf)) if confidence > existing_conf => {
-                        best_operational = Some((*subcategory, confidence));
-                    }
-                    _ => {}
-                }
-            }
-        }
+        let best_meta = best_pattern_match(&text_lower, text_len, META_PATTERNS, 0.7, 0.25);
+        let best_operational =
+            best_pattern_match(&text_lower, text_len, OPERATIONAL_PATTERNS, 0.7, 0.25);
 
         // Decide between meta and operational
         match (best_meta, best_operational) {
@@ -457,18 +449,12 @@ impl CognitiveSupervisor {
                 Some(subcategory),
                 confidence,
             ),
-            (None, None) => {
-                // No pattern matched - use heuristics
-                self.classify_by_heuristics(text)
-            }
+            (None, None) => Self::classify_by_heuristics(text),
         }
     }
 
     /// Fallback classification using heuristics when no patterns match.
-    fn classify_by_heuristics(
-        &self,
-        text: &str,
-    ) -> (CognitiveDimension, Option<ThoughtSubcategory>, f32) {
+    fn classify_by_heuristics(text: &str) -> (CognitiveDimension, Option<ThoughtSubcategory>, f32) {
         let text_lower = text.to_lowercase();
 
         // Check for question marks (often meta-reflection)
@@ -499,8 +485,9 @@ impl CognitiveSupervisor {
             .count();
 
         // Heuristic scoring
-        let meta_score = question_count as f32 * 0.2 + first_person_indicators as f32 * 0.3;
-        let operational_score = action_count as f32 * 0.25;
+        let meta_score = saturating_usize_to_f32(question_count) * 0.2
+            + saturating_usize_to_f32(first_person_indicators) * 0.3;
+        let operational_score = saturating_usize_to_f32(action_count) * 0.25;
 
         if meta_score > operational_score {
             (CognitiveDimension::Meta, None, 0.5 + meta_score * 0.1)
@@ -544,15 +531,16 @@ impl CognitiveSupervisor {
             }
         }
 
-        self.thought_history.push(dimension);
+        self.thought_history.push_back(dimension);
 
-        // Keep history bounded
-        if self.thought_history.len() > 100 {
-            self.thought_history.remove(0);
+        // Keep history bounded with O(1) front removal
+        if self.thought_history.len() > MAX_HISTORY_SIZE {
+            self.thought_history.pop_front();
         }
     }
 
     /// Get the current context.
+    #[cfg(test)]
     #[must_use]
     pub fn context(&self) -> &SupervisorContext {
         &self.context
@@ -566,6 +554,7 @@ impl CognitiveSupervisor {
     }
 
     /// Get the cognitive balance (ratio of meta to operational thoughts).
+    #[cfg(test)]
     #[must_use]
     pub fn cognitive_balance(&self) -> f32 {
         if self.thought_history.is_empty() {
@@ -578,163 +567,27 @@ impl CognitiveSupervisor {
             .filter(|&&d| d == CognitiveDimension::Meta)
             .count();
 
-        meta_count as f32 / self.thought_history.len() as f32
+        ratio_from_counts(meta_count, self.thought_history.len())
+    }
+
+    /// Get the current history length.
+    #[must_use]
+    pub fn history_len(&self) -> usize {
+        self.thought_history.len()
+    }
+
+    /// Get a slice of the history.
+    #[must_use]
+    pub fn history_slice(&self, start: usize, end: usize) -> Vec<CognitiveDimension> {
+        self.thought_history
+            .iter()
+            .skip(start)
+            .take(end.saturating_sub(start))
+            .copied()
+            .collect()
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Arc;
-
-    #[test]
-    fn supervisor_classifies_planning_as_meta() {
-        let mut supervisor = CognitiveSupervisor::new();
-        let event =
-            ZhenfaStreamingEvent::Thought(Arc::from("Let me plan my approach to this problem."));
-
-        let classified = supervisor.classify(event);
-        assert_eq!(classified.dimension, CognitiveDimension::Meta);
-        assert_eq!(classified.subcategory, Some(ThoughtSubcategory::Planning));
-    }
-
-    #[test]
-    fn supervisor_classifies_code_analysis_as_operational() {
-        let mut supervisor = CognitiveSupervisor::new();
-        let event =
-            ZhenfaStreamingEvent::Thought(Arc::from("This function handles the validation logic."));
-
-        let classified = supervisor.classify(event);
-        assert_eq!(classified.dimension, CognitiveDimension::Operational);
-        assert_eq!(
-            classified.subcategory,
-            Some(ThoughtSubcategory::CodeAnalysis)
-        );
-    }
-
-    #[test]
-    fn supervisor_classifies_tool_call_as_instrumental() {
-        let mut supervisor = CognitiveSupervisor::new();
-        let event = ZhenfaStreamingEvent::ToolCall {
-            id: Arc::from("call_1"),
-            name: Arc::from("read_file"),
-            input: serde_json::Value::Null,
-        };
-
-        let classified = supervisor.classify(event);
-        assert_eq!(classified.dimension, CognitiveDimension::Instrumental);
-    }
-
-    #[test]
-    fn supervisor_tracks_cognitive_balance() {
-        let mut supervisor = CognitiveSupervisor::new();
-
-        // Add some meta thoughts
-        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from("Let me plan...")));
-        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
-            "I should reconsider...",
-        )));
-
-        // Add some operational thoughts
-        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
-            "This code needs...",
-        )));
-        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
-            "I'll add a function...",
-        )));
-
-        let balance = supervisor.cognitive_balance();
-        assert!(balance > 0.0 && balance < 1.0);
-    }
-
-    #[test]
-    fn supervisor_context_updates_on_classification() {
-        let mut supervisor = CognitiveSupervisor::new();
-
-        // Classify operational thought
-        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
-            "I'll implement this feature.",
-        )));
-
-        assert!(supervisor.context().in_implementation);
-        assert_eq!(supervisor.context().operational_streak, 1);
-    }
-
-    // V2.0 Tests
-
-    #[test]
-    fn supervisor_classifies_uncertainty_as_epistemic() {
-        let mut supervisor = CognitiveSupervisor::new();
-        let event =
-            ZhenfaStreamingEvent::Thought(Arc::from("I'm not sure if this approach is correct."));
-
-        let classified = supervisor.classify(event);
-        assert_eq!(classified.dimension, CognitiveDimension::Epistemic);
-        assert_eq!(
-            classified.subcategory,
-            Some(ThoughtSubcategory::Uncertainty)
-        );
-    }
-
-    #[test]
-    fn supervisor_classifies_knowledge_gap_as_epistemic() {
-        let mut supervisor = CognitiveSupervisor::new();
-        let event = ZhenfaStreamingEvent::Thought(Arc::from("I need more context about this API."));
-
-        let classified = supervisor.classify(event);
-        assert_eq!(classified.dimension, CognitiveDimension::Epistemic);
-        assert_eq!(
-            classified.subcategory,
-            Some(ThoughtSubcategory::KnowledgeGap)
-        );
-    }
-
-    #[test]
-    fn supervisor_calculates_coherence_score() {
-        let mut supervisor = CognitiveSupervisor::new();
-
-        // Coherent operational thought
-        let event = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
-            "I'll add a function here.",
-        )));
-        assert!(event.coherence > 0.7);
-
-        // Epistemic uncertainty reduces coherence
-        let event = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
-            "I'm not sure about this.",
-        )));
-        assert!(event.coherence < 0.8);
-    }
-
-    #[test]
-    fn supervisor_triggers_early_halt_on_low_coherence() {
-        let mut supervisor = CognitiveSupervisor::with_early_halt_threshold(0.5);
-
-        // Trigger multiple uncertainty events
-        for _ in 0..5 {
-            let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
-                "I'm not sure about this approach.",
-            )));
-        }
-
-        // Check if early halt was triggered
-        assert!(supervisor.should_halt());
-    }
-
-    #[test]
-    fn supervisor_detects_oscillating_behavior() {
-        let mut supervisor = CognitiveSupervisor::new();
-
-        // Create oscillating pattern: Meta-Op-Meta-Op
-        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from("Let me plan...")));
-        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from("This function...")));
-        let _ = supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from(
-            "I should reconsider...",
-        )));
-        let event =
-            supervisor.classify(ZhenfaStreamingEvent::Thought(Arc::from("I'll add code...")));
-
-        // Oscillating behavior should reduce coherence
-        assert!(event.coherence < 0.75);
-    }
-}
+#[path = "../../../tests/unit/transmuter/streaming/supervisor.rs"]
+mod tests;

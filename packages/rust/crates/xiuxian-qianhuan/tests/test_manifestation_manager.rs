@@ -3,10 +3,9 @@
 use serde_json::json;
 use std::fs;
 use tempfile::tempdir;
-use xiuxian_qianhuan::interface::ManifestationInterface;
 use xiuxian_qianhuan::{
-    ManifestationManager, ManifestationRenderRequest, ManifestationRuntimeContext,
-    ManifestationTemplateTarget,
+    ManifestationInterface, ManifestationManager, ManifestationRenderRequest,
+    ManifestationRuntimeContext, ManifestationTemplateTarget,
 };
 
 #[test]

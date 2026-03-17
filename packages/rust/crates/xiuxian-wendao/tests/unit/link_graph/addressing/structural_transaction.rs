@@ -1,4 +1,4 @@
-//! Unit tests for structural_transaction module.
+//! Unit tests for `structural_transaction` module.
 
 use super::*;
 
@@ -10,8 +10,8 @@ fn make_test_transaction(
 ) -> StructuralTransaction {
     StructuralTransaction::new(
         doc_id.to_string(),
-        format!("{}.md", doc_id),
-        Some(format!("{}#section", doc_id)),
+        format!("{doc_id}.md"),
+        Some(format!("{doc_id}#section")),
         byte_range,
         byte_delta,
         line_delta,
@@ -35,6 +35,13 @@ fn test_adjust_byte_range_after_edit() {
     // Range after edit - should shift by +50
     let adjusted = tx.adjust_byte_range((250, 300));
     assert_eq!(adjusted, Some((300, 350)));
+}
+
+#[test]
+fn test_adjust_byte_range_after_negative_delta() {
+    let tx = make_test_transaction("doc", (100, 200), -50, -2);
+    let adjusted = tx.adjust_byte_range((250, 300));
+    assert_eq!(adjusted, Some((200, 250)));
 }
 
 #[test]
@@ -90,7 +97,7 @@ fn test_coordinator_rejects_conflicting() {
 fn test_coordinator_adjust_byte_range() {
     let mut coordinator = StructuralTransactionCoordinator::new();
     let tx = make_test_transaction("doc", (100, 200), 50, 2);
-    coordinator.record(tx).unwrap();
+    assert!(coordinator.record(tx).is_ok());
 
     let adjusted = coordinator.adjust_byte_range("doc", (250, 300));
     assert_eq!(adjusted, Some((300, 350)));

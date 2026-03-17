@@ -1,7 +1,9 @@
 //! Runtime signal payloads emitted by native zhenfa tools.
 
+use serde::{Deserialize, Serialize};
+
 /// Asynchronous fire-and-forget signal emitted during native tool execution.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ZhenfaSignal {
     /// Reinforcement-learning reward signal.
     Reward {
@@ -18,5 +20,20 @@ pub enum ZhenfaSignal {
         node_id: String,
         /// Trace event payload.
         event: String,
+    },
+    /// Semantic drift signal for documentation synchronization.
+    ///
+    /// Emitted when source code changes may affect documentation with `:OBSERVE:` patterns.
+    SemanticDrift {
+        /// The source file that changed.
+        source_path: String,
+        /// File stem used for heuristic matching.
+        file_stem: String,
+        /// Number of affected documents.
+        affected_count: usize,
+        /// Confidence level: "high", "medium", or "low".
+        confidence: String,
+        /// Human-readable summary.
+        summary: String,
     },
 }

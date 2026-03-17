@@ -1,4 +1,4 @@
-//! Unit tests for cluster_finder module.
+//! Unit tests for `cluster_finder` module.
 
 use super::*;
 

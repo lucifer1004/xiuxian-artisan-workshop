@@ -7,6 +7,11 @@ use crate::llm::vision::deepseek::native;
 pub use crate::llm::vision::deepseek::native::{DsqRepairResult, repair_dsq_if_needed};
 
 /// Resolve weights path with explicit parameters for test assertions.
+///
+/// # Errors
+///
+/// Returns an error when the requested model kind or weight layout cannot be
+/// resolved into a concrete on-disk weights file.
 pub fn resolve_weights_path_with_for_tests(
     model_root: &Path,
     model_kind: Option<&str>,

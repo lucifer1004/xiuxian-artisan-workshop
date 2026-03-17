@@ -40,7 +40,7 @@ impl QianjiMechanism for ProbabilisticRouter {
         for (name, weight) in eligible {
             pick -= weight;
             if pick <= 0.0 {
-                selected_branch = name.clone();
+                selected_branch.clone_from(name);
                 break;
             }
         }
@@ -59,23 +59,22 @@ impl QianjiMechanism for ProbabilisticRouter {
 fn confidence_bias(context: &serde_json::Value) -> Result<f32, String> {
     let raw = context
         .get("omega_confidence")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(1.0);
-    let bias = to_f32(raw, "omega_confidence")?;
+        .map_or(Ok(1.0_f32), |value| {
+            serde_json::from_value::<f32>(value.clone())
+                .map_err(|_error| "omega_confidence must be a finite number".to_string())
+        })?;
+    let bias = validate_f32(raw, "omega_confidence")?;
     if bias <= 0.0 {
         return Err("omega_confidence must be positive".to_string());
     }
     Ok(bias)
 }
 
-fn to_f32(value: f64, field: &str) -> Result<f32, String> {
+fn validate_f32(value: f32, field: &str) -> Result<f32, String> {
     if !value.is_finite() {
         return Err(format!("{field} must be finite"));
     }
-    if value > f64::from(f32::MAX) || value < f64::from(f32::MIN) {
-        return Err(format!("{field} must fit within f32 range"));
-    }
-    Ok(value as f32)
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -88,7 +87,10 @@ mod tests {
         let router = ProbabilisticRouter {
             branches: vec![("alpha".to_string(), 1.0)],
         };
-        let output = router.execute(&json!({})).await.unwrap();
+        let output = router
+            .execute(&json!({}))
+            .await
+            .unwrap_or_else(|err| panic!("router should succeed: {err}"));
         assert_eq!(output.data["selected_route"], "alpha");
         match output.instruction {
             FlowInstruction::SelectBranch(branch) => assert_eq!(branch, "alpha"),
@@ -99,7 +101,9 @@ mod tests {
     #[tokio::test]
     async fn test_router_empty_branches_error() {
         let router = ProbabilisticRouter { branches: vec![] };
-        let err = router.execute(&json!({})).await.unwrap_err();
+        let Err(err) = router.execute(&json!({})).await else {
+            panic!("router should fail when no branches are configured");
+        };
         assert!(err.contains("no branches"));
     }
 
@@ -108,7 +112,9 @@ mod tests {
         let router = ProbabilisticRouter {
             branches: vec![("alpha".to_string(), 0.0)],
         };
-        let err = router.execute(&json!({})).await.unwrap_err();
+        let Err(err) = router.execute(&json!({})).await else {
+            panic!("router should fail when no positive weights exist");
+        };
         assert!(err.contains("no positive"));
     }
 
@@ -117,10 +123,9 @@ mod tests {
         let router = ProbabilisticRouter {
             branches: vec![("alpha".to_string(), 1.0)],
         };
-        let err = router
-            .execute(&json!({ "omega_confidence": -1.0 }))
-            .await
-            .unwrap_err();
+        let Err(err) = router.execute(&json!({ "omega_confidence": -1.0 })).await else {
+            panic!("router should fail for invalid omega_confidence");
+        };
         assert!(err.contains("omega_confidence"));
     }
 }

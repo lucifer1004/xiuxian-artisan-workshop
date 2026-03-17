@@ -2,6 +2,7 @@ use super::QianjiScheduler;
 use crate::telemetry::SwarmEvent;
 
 mod alerts;
+#[cfg(test)]
 mod node_transition;
 
 impl QianjiScheduler {

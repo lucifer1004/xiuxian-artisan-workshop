@@ -41,7 +41,8 @@ pub fn prewarm_deepseek_ocr(runtime: &DeepseekRuntime) -> LlmResult<()> {
         DeepseekRuntime::Disabled { .. } => Ok(()),
         DeepseekRuntime::Configured { .. } => prewarm_enabled_runtime(runtime),
         DeepseekRuntime::RemoteHttp { base_url } => {
-            super::remote_http::prewarm_remote_deepseek_ocr(base_url.as_ref())
+            super::remote_http::prewarm_remote_deepseek_ocr(base_url.as_ref());
+            Ok(())
         }
     }
 }

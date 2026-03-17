@@ -7,13 +7,12 @@ use crate::runtime_config::env_vars::{
 };
 use crate::runtime_config::model::{QianjiRuntimeEnv, QianjiRuntimeWendaoIngesterConfig};
 use crate::runtime_config::toml_config::QianjiTomlWendaoIngester;
-use std::io;
 use xiuxian_macros::string_first_non_empty;
 
 pub(super) fn resolve_qianji_runtime_wendao_ingester(
     file_wendao: &QianjiTomlWendaoIngester,
     runtime_env: &QianjiRuntimeEnv,
-) -> io::Result<QianjiRuntimeWendaoIngesterConfig> {
+) -> QianjiRuntimeWendaoIngesterConfig {
     let graph_scope = string_first_non_empty!(
         runtime_env.qianji_memory_promotion_graph_scope.as_deref(),
         env_var_or_override(runtime_env, "QIANJI_MEMORY_PROMOTION_GRAPH_SCOPE").as_deref(),
@@ -50,11 +49,11 @@ pub(super) fn resolve_qianji_runtime_wendao_ingester(
         .or(file_wendao.persist_best_effort)
         .unwrap_or(DEFAULT_MEMORY_PROMOTION_PERSIST_BEST_EFFORT);
 
-    Ok(QianjiRuntimeWendaoIngesterConfig {
+    QianjiRuntimeWendaoIngesterConfig {
         graph_scope,
         graph_scope_key,
         graph_dimension,
         persist,
         persist_best_effort,
-    })
+    }
 }

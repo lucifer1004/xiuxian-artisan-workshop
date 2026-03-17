@@ -10,7 +10,9 @@ use async_trait::async_trait;
 
 use crate::llm::error::{LlmError, LlmResult};
 use crate::llm::vision::deepseek::{DeepseekRuntime, prewarm_deepseek_ocr};
-use crate::llm::vision::{PreparedVisionImage, infer_deepseek_ocr_truth, preprocess_image};
+use crate::llm::vision::{
+    PreparedVisionImage, infer_deepseek_ocr_truth, prepare_image_for_ocr_runtime,
+};
 use crate::runtime::executor::{ExecutorId, ModelExecutor, ModelInput, ModelOutput};
 
 /// Estimated memory footprint for `DeepSeek` OCR models (~6GB weights).
@@ -66,10 +68,10 @@ impl DeepseekExecutor {
         }
     }
 
-    /// Preprocesses raw image bytes into `PreparedVisionImage`.
+    /// Prepares raw image bytes for `DeepSeek` OCR while preserving the original image payload.
     fn prepare_image(image_bytes: Vec<u8>) -> LlmResult<Arc<PreparedVisionImage>> {
         let arc_bytes: Arc<[u8]> = Arc::from(image_bytes.into_boxed_slice());
-        preprocess_image(arc_bytes).map(Arc::new)
+        prepare_image_for_ocr_runtime(arc_bytes).map(Arc::new)
     }
 }
 
@@ -87,9 +89,7 @@ impl ModelExecutor for DeepseekExecutor {
         match input {
             ModelInput::Vision { prompt: _, images } => {
                 // Get first image, error if empty
-                let first_image = if let Some(img) = images.into_iter().next() {
-                    img
-                } else {
+                let Some(first_image) = images.into_iter().next() else {
                     return Err(LlmError::Internal {
                         message: "DeepSeek OCR requires at least one image".to_string(),
                     });
@@ -97,6 +97,13 @@ impl ModelExecutor for DeepseekExecutor {
 
                 // Process the first image (current limitation)
                 let prepared = Self::prepare_image(first_image)?;
+                tracing::debug!(
+                    event = "llm.runtime.executors.deepseek.execute.prepare",
+                    input_mode = prepared.mode.as_str(),
+                    width = prepared.width,
+                    height = prepared.height,
+                    "DeepseekExecutor prepared image for OCR execution"
+                );
 
                 // Run inference using the public async API
                 let result = infer_deepseek_ocr_truth(&self.runtime, &prepared, None).await?;

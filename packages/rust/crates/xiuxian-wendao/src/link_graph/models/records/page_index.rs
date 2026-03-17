@@ -38,7 +38,7 @@ pub struct PageIndexMeta {
     pub line_range: (usize, usize),
     /// Optional byte range for precise AST-level mutations.
     pub byte_range: Option<(usize, usize)>,
-    /// Hierarchical structural path (e.g., ["Heading", "Architecture", "Storage"]).
+    /// Hierarchical structural path (e.g., `["Heading", "Architecture", "Storage"]`).
     pub structural_path: Vec<String>,
     /// Content-based fingerprint (Blake3 hash) for self-healing and deduplication.
     pub content_hash: Option<String>,

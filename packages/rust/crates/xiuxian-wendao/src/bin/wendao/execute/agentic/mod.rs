@@ -25,7 +25,7 @@ pub(super) fn handle(cli: &Cli, index: Option<&LinkGraphIndex>) -> Result<()> {
             agent_id,
             created_at_unix,
         } => {
-            let row = valkey_suggested_link_log(LinkGraphSuggestedLinkRequest {
+            let request = LinkGraphSuggestedLinkRequest {
                 source_id: source_id.clone(),
                 target_id: target_id.clone(),
                 relation: relation.clone(),
@@ -33,8 +33,8 @@ pub(super) fn handle(cli: &Cli, index: Option<&LinkGraphIndex>) -> Result<()> {
                 evidence: evidence.clone(),
                 agent_id: agent_id.clone(),
                 created_at_unix: *created_at_unix,
-            })
-            .map_err(anyhow::Error::msg)?;
+            };
+            let row = valkey_suggested_link_log(&request).map_err(anyhow::Error::msg)?;
             emit(&row, cli.output)
         }
         AgenticCommand::Recent {
@@ -65,14 +65,14 @@ pub(super) fn handle(cli: &Cli, index: Option<&LinkGraphIndex>) -> Result<()> {
             reason,
             decided_at_unix,
         } => {
-            let result = valkey_suggested_link_decide(LinkGraphSuggestedLinkDecisionRequest {
+            let request = LinkGraphSuggestedLinkDecisionRequest {
                 suggestion_id: suggestion_id.clone(),
                 target_state: (*target_state).into(),
                 decided_by: decided_by.clone(),
                 reason: reason.clone(),
                 decided_at_unix: *decided_at_unix,
-            })
-            .map_err(anyhow::Error::msg)?;
+            };
+            let result = valkey_suggested_link_decide(&request).map_err(anyhow::Error::msg)?;
             emit(&result, cli.output)
         }
         AgenticCommand::Decisions { limit } => {
@@ -88,7 +88,7 @@ pub(super) fn handle(cli: &Cli, index: Option<&LinkGraphIndex>) -> Result<()> {
             time_budget_ms,
         } => {
             let index = index.context("link_graph index is required for agentic plan command")?;
-            let mut config = index.resolve_agentic_expansion_config();
+            let mut config = LinkGraphIndex::resolve_agentic_expansion_config();
             if let Some(value) = max_workers {
                 config.max_workers = (*value).max(1);
             }
@@ -126,7 +126,7 @@ pub(super) fn handle(cli: &Cli, index: Option<&LinkGraphIndex>) -> Result<()> {
         } => {
             let index = index.context("link_graph index is required for agentic run command")?;
             let mut config: LinkGraphAgenticExecutionConfig =
-                index.resolve_agentic_execution_config();
+                LinkGraphIndex::resolve_agentic_execution_config();
             if let Some(value) = max_workers {
                 config.expansion.max_workers = (*value).max(1);
             }

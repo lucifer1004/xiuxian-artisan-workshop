@@ -1,4 +1,4 @@
-/// Text normalization utilities for cache keys.
+//! Text normalization utilities for cache keys.
 
 pub fn trim_non_empty(text: &str) -> Option<&str> {
     let trimmed = text.trim();
@@ -9,7 +9,7 @@ pub fn trim_non_empty(text: &str) -> Option<&str> {
     }
 }
 
-pub fn normalize_owned_non_empty(text: String) -> Option<String> {
+pub fn normalize_owned_non_empty(text: &str) -> Option<String> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         None
@@ -24,6 +24,6 @@ pub fn normalize_cache_text_view_for_tests(text: &str) -> Option<String> {
 }
 
 /// Normalizes cache text from owned string (for test API compatibility).
-pub fn normalize_cache_text_owned_for_tests(text: String) -> Option<String> {
+pub fn normalize_cache_text_owned_for_tests(text: &str) -> Option<String> {
     normalize_owned_non_empty(text)
 }

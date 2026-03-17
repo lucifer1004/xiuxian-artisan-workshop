@@ -18,6 +18,7 @@ pub(super) struct DeepseekTomlConfig {
     pub(super) snapshot_path: Option<String>,
     pub(super) ocr_prompt: Option<String>,
     pub(super) device: Option<String>,
+    pub(super) require_quantized: Option<bool>,
     pub(super) base_size: Option<u32>,
     pub(super) image_size: Option<u32>,
     pub(super) crop_mode: Option<bool>,
@@ -28,12 +29,19 @@ pub(super) struct DeepseekTomlConfig {
     pub(super) decode_top_k: Option<usize>,
     pub(super) decode_repetition_penalty: Option<f32>,
     pub(super) decode_use_cache: Option<bool>,
+    pub(super) preload_language_f32_aux: Option<bool>,
+    pub(super) preload_vision_f32_aux: Option<bool>,
+    pub(super) preload_linear_weight_f32: Option<bool>,
+    pub(super) promote_language_input_f32: Option<bool>,
+    pub(super) lazy_moe_experts: Option<bool>,
+    pub(super) lazy_clip_transformer_layers: Option<bool>,
     pub(super) ocr_batch_window_ms: Option<u64>,
     pub(super) ocr_batch_max_size: Option<usize>,
     pub(super) auto_route_complex_min_tiles: Option<u32>,
     pub(super) auto_route_complex_min_pixels: Option<u64>,
     pub(super) ocr_inflight_wait_timeout_ms: Option<u64>,
     pub(super) ocr_inflight_stale_ms: Option<u64>,
+    pub(super) test_guard: DeepseekTomlTestGuardConfig,
     pub(super) cache: DeepseekTomlCacheConfig,
 }
 
@@ -46,4 +54,15 @@ pub(super) struct DeepseekTomlCacheConfig {
     pub(super) key_prefix: Option<String>,
     pub(super) ttl_seconds: Option<u64>,
     pub(super) timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub(super) struct DeepseekTomlTestGuardConfig {
+    pub(super) cpu_max_rss_gb: Option<f64>,
+    pub(super) metal_max_rss_gb: Option<f64>,
+    pub(super) cpu_capfox_mem_percent: Option<f64>,
+    pub(super) metal_capfox_mem_percent: Option<f64>,
+    pub(super) metal_capfox_gpu_percent: Option<f64>,
+    pub(super) metal_capfox_vram_percent: Option<f64>,
 }

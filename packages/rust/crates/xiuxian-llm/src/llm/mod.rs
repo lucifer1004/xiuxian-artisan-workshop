@@ -19,7 +19,7 @@ pub mod vision;
 
 pub use client::{
     ChatChoice, ChatMessage, ChatRequest, ChatResponse, ContentPart, ImageUrlContent, LlmClient,
-    MessageContent, OpenAIClient, OpenAIWireApi,
+    MessageContent, OpenAIClient, OpenAICompatibleClient, OpenAIWireApi,
 };
 pub use error::{LlmError, LlmResult};
 pub use runtime_profile::{

@@ -1,4 +1,4 @@
-//! Unit tests for markdown_block module.
+//! Unit tests for `markdown_block` module.
 
 use super::*;
 

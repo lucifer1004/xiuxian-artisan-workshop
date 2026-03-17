@@ -1,4 +1,4 @@
-//! Unit tests for agentic_nav module.
+//! Unit tests for `agentic_nav` module.
 
 use super::*;
 
@@ -27,16 +27,14 @@ fn test_generate_navigation_hint_invalid_anchor() {
         reranked_score: 0.3,
     };
 
-    let hint = generate_navigation_hint(&hit);
+    let navigation_hint = generate_navigation_hint(&hit);
     assert!(
-        hint.contains("Orphaned anchor"),
-        "Expected orphaned hint for invalid anchor, got: {}",
-        hint
+        navigation_hint.contains("Orphaned anchor"),
+        "Expected orphaned hint for invalid anchor, got: {navigation_hint}"
     );
     assert!(
-        hint.contains("content may have changed"),
-        "Hint should mention content change, got: {}",
-        hint
+        navigation_hint.contains("content may have changed"),
+        "Hint should mention content change, got: {navigation_hint}"
     );
 }
 
@@ -57,16 +55,14 @@ fn test_generate_navigation_hint_root_level() {
         reranked_score: 0.95,
     };
 
-    let hint = generate_navigation_hint(&hit);
+    let navigation_hint = generate_navigation_hint(&hit);
     assert!(
-        hint.contains("Root-level"),
-        "Expected root-level hint, got: {}",
-        hint
+        navigation_hint.contains("Root-level"),
+        "Expected root-level hint, got: {navigation_hint}"
     );
     assert!(
-        hint.contains("high-level overview"),
-        "Hint should mention overview, got: {}",
-        hint
+        navigation_hint.contains("high-level overview"),
+        "Hint should mention overview, got: {navigation_hint}"
     );
 }
 
@@ -87,16 +83,14 @@ fn test_generate_navigation_hint_top_level() {
         reranked_score: 0.95,
     };
 
-    let hint = generate_navigation_hint(&hit);
+    let navigation_hint = generate_navigation_hint(&hit);
     assert!(
-        hint.contains("Top-level section"),
-        "Expected top-level hint, got: {}",
-        hint
+        navigation_hint.contains("Top-level section"),
+        "Expected top-level hint, got: {navigation_hint}"
     );
     assert!(
-        hint.contains("good entry point"),
-        "Hint should mention entry point, got: {}",
-        hint
+        navigation_hint.contains("good entry point"),
+        "Hint should mention entry point, got: {navigation_hint}"
     );
 }
 
@@ -117,21 +111,18 @@ fn test_generate_navigation_hint_nested_moderate() {
         reranked_score: 0.90,
     };
 
-    let hint = generate_navigation_hint(&hit);
+    let navigation_hint = generate_navigation_hint(&hit);
     assert!(
-        hint.contains("Nested section"),
-        "Expected nested hint, got: {}",
-        hint
+        navigation_hint.contains("Nested section"),
+        "Expected nested hint, got: {navigation_hint}"
     );
     assert!(
-        hint.contains("depth 2"),
-        "Hint should mention depth, got: {}",
-        hint
+        navigation_hint.contains("depth 2"),
+        "Hint should mention depth, got: {navigation_hint}"
     );
     assert!(
-        hint.contains("implementation details"),
-        "Hint should mention details, got: {}",
-        hint
+        navigation_hint.contains("implementation details"),
+        "Hint should mention details, got: {navigation_hint}"
     );
 }
 
@@ -156,11 +147,10 @@ fn test_generate_navigation_hint_nested_deep() {
         reranked_score: 0.85,
     };
 
-    let hint = generate_navigation_hint(&hit);
+    let navigation_hint = generate_navigation_hint(&hit);
     assert!(
-        hint.contains("depth 3"),
-        "Hint should mention depth 3, got: {}",
-        hint
+        navigation_hint.contains("depth 3"),
+        "Hint should mention depth 3, got: {navigation_hint}"
     );
 }
 
@@ -187,21 +177,18 @@ fn test_generate_navigation_hint_deeply_nested() {
         reranked_score: 0.80,
     };
 
-    let hint = generate_navigation_hint(&hit);
+    let navigation_hint = generate_navigation_hint(&hit);
     assert!(
-        hint.contains("Deeply nested"),
-        "Expected deeply nested hint, got: {}",
-        hint
+        navigation_hint.contains("Deeply nested"),
+        "Expected deeply nested hint, got: {navigation_hint}"
     );
     assert!(
-        hint.contains("highly specific"),
-        "Hint should mention specificity, got: {}",
-        hint
+        navigation_hint.contains("highly specific"),
+        "Hint should mention specificity, got: {navigation_hint}"
     );
     assert!(
-        hint.contains("parent context"),
-        "Hint should mention context, got: {}",
-        hint
+        navigation_hint.contains("parent context"),
+        "Hint should mention context, got: {navigation_hint}"
     );
 }
 
@@ -260,8 +247,7 @@ fn test_render_agentic_nav_result_with_navigation_hint() {
     // For depth 1, should mention entry point
     assert!(
         xml.contains("entry point"),
-        "XML should contain entry point hint for depth 1, got: {}",
-        xml
+        "XML should contain entry point hint for depth 1, got: {xml}"
     );
 }
 
@@ -290,8 +276,7 @@ fn test_render_agentic_nav_result_with_invalid_anchor_hint() {
     );
     assert!(
         xml.contains("Orphaned anchor"),
-        "XML should contain orphaned anchor hint, got: {}",
-        xml
+        "XML should contain orphaned anchor hint, got: {xml}"
     );
 }
 
@@ -320,13 +305,11 @@ fn test_render_agentic_nav_result_with_structural_path() {
     );
     assert!(
         xml.contains("<segment>Architecture</segment>"),
-        "XML should contain Architecture segment, got: {}",
-        xml
+        "XML should contain Architecture segment, got: {xml}"
     );
     assert!(
         xml.contains("<segment>Storage</segment>"),
-        "XML should contain Storage segment, got: {}",
-        xml
+        "XML should contain Storage segment, got: {xml}"
     );
 }
 
@@ -338,14 +321,14 @@ fn test_render_agentic_nav_result_limit() {
     let validated: Vec<SkeletonValidatedHit> = (0..5)
         .map(|i| SkeletonValidatedHit {
             hit: QuantumAnchorHit {
-                anchor_id: format!("doc.md#section{}", i),
-                vector_score: 0.9 - (i as f64 * 0.1),
+                anchor_id: format!("doc.md#section{i}"),
+                vector_score: 0.9 - (f64::from(i) * 0.1),
             },
             is_valid: true,
             doc_id: "doc.md".to_string(),
-            anchor: format!("section{}", i),
+            anchor: format!("section{i}"),
             structural_path: Some(vec![format!("Section {}", i)]),
-            reranked_score: 0.95 - (i as f64 * 0.1),
+            reranked_score: 0.95 - (f64::from(i) * 0.1),
         })
         .collect();
 
@@ -360,8 +343,7 @@ fn test_render_agentic_nav_result_limit() {
     let candidate_count = xml.matches("<candidate>").count();
     assert_eq!(
         candidate_count, 2,
-        "Should have exactly 2 candidates, got {}",
-        candidate_count
+        "Should have exactly 2 candidates, got {candidate_count}"
     );
 }
 

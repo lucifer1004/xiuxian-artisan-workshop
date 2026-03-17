@@ -108,7 +108,7 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let args_ty = match inputs[1] {
         FnArg::Typed(PatType { ty, .. }) => ty.as_ref(),
-        arg => {
+        arg @ FnArg::Receiver(_) => {
             return syn::Error::new_spanned(
                 arg,
                 "`zhenfa_tool` second argument must be a typed args struct",

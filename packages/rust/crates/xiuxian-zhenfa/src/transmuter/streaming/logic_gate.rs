@@ -4,9 +4,16 @@
 //! enforcing the project's "Physical Law" (XSD schema) without waiting for
 //! complete documents. This is the primary defense against AI hallucinations.
 
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, OnceLock};
 use thiserror::Error;
+
+type SharedStr = Arc<str>;
+type SharedStrSet = HashSet<SharedStr>;
+type RequiredAttrMap = HashMap<SharedStr, Vec<SharedStr>>;
+type ChildTagMap = HashMap<SharedStr, SharedStrSet>;
+type EnumAttrMap = HashMap<(SharedStr, SharedStr), SharedStrSet>;
+type XmlAttributes = Vec<(SharedStr, SharedStr)>;
 
 /// Validation errors detected during incremental parsing.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
@@ -35,13 +42,13 @@ pub enum LogicGateError {
 #[derive(Debug, Clone)]
 pub struct XsdConstraintMap {
     /// Tags allowed at the root level (zero-copy).
-    root_tags: HashSet<Arc<str>>,
+    root_tags: SharedStrSet,
     /// Tags allowed inside each parent tag (zero-copy).
-    child_tags: std::collections::HashMap<Arc<str>, HashSet<Arc<str>>>,
+    child_tags: ChildTagMap,
     /// Required attributes for each tag (zero-copy).
-    required_attrs: std::collections::HashMap<Arc<str>, Vec<Arc<str>>>,
+    required_attrs: RequiredAttrMap,
     /// Enumerated attribute values (zero-copy).
-    enum_attrs: std::collections::HashMap<(Arc<str>, Arc<str>), HashSet<Arc<str>>>,
+    enum_attrs: EnumAttrMap,
 }
 
 impl XsdConstraintMap {
@@ -51,7 +58,7 @@ impl XsdConstraintMap {
         let mut root_tags = HashSet::new();
         root_tags.insert(Arc::from("qianji-audit-plan"));
 
-        let mut child_tags = std::collections::HashMap::new();
+        let mut child_tags = HashMap::new();
 
         // qianji-audit-plan children
         let mut plan_children = HashSet::new();
@@ -73,12 +80,12 @@ impl XsdConstraintMap {
         child_tags.insert(Arc::from("implementation-steps"), steps_children);
 
         // step children
-        let mut step_children = HashSet::new();
-        step_children.insert(Arc::from("title"));
-        step_children.insert(Arc::from("file-target"));
-        step_children.insert(Arc::from("rationale"));
-        step_children.insert(Arc::from("content"));
-        child_tags.insert(Arc::from("step"), step_children);
+        let mut single_step_children = HashSet::new();
+        single_step_children.insert(Arc::from("title"));
+        single_step_children.insert(Arc::from("file-target"));
+        single_step_children.insert(Arc::from("rationale"));
+        single_step_children.insert(Arc::from("content"));
+        child_tags.insert(Arc::from("step"), single_step_children);
 
         // content children
         let mut content_children = HashSet::new();
@@ -104,7 +111,7 @@ impl XsdConstraintMap {
         child_tags.insert(Arc::from("verification-strategy"), verify_children);
 
         // Required attributes
-        let mut required_attrs = std::collections::HashMap::new();
+        let mut required_attrs = HashMap::new();
         required_attrs.insert(Arc::from("step"), vec![Arc::from("number")]);
         required_attrs.insert(
             Arc::from("file-target"),
@@ -113,7 +120,7 @@ impl XsdConstraintMap {
         required_attrs.insert(Arc::from("risk-pair"), vec![Arc::from("severity")]);
 
         // Enumerated attributes
-        let mut enum_attrs = std::collections::HashMap::new();
+        let mut enum_attrs = HashMap::new();
 
         let mut action_values = HashSet::new();
         action_values.insert(Arc::from("create"));
@@ -154,8 +161,7 @@ impl XsdConstraintMap {
     pub fn is_allowed_child(&self, parent: &str, child: &str) -> bool {
         self.child_tags
             .get(parent)
-            .map(|children| children.contains(child))
-            .unwrap_or(false)
+            .is_some_and(|children| children.contains(child))
     }
 
     /// Check if an attribute value is valid for the given tag/attribute pair.
@@ -166,17 +172,13 @@ impl XsdConstraintMap {
         self.enum_attrs
             .iter()
             .find(|((t, a), _)| &**t == tag && &**a == attr)
-            .map(|(_, values)| values.contains(value))
-            .unwrap_or(true) // If not an enum, any value is allowed
+            .is_none_or(|(_, values)| values.contains(value)) // If not an enum, any value is allowed
     }
 
     /// Get required attributes for a tag.
     #[must_use]
     pub fn required_attributes(&self, tag: &str) -> &[Arc<str>] {
-        self.required_attrs
-            .get(tag)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[])
+        self.required_attrs.get(tag).map_or(&[], Vec::as_slice)
     }
 }
 
@@ -186,11 +188,15 @@ impl Default for XsdConstraintMap {
     }
 }
 
+/// Global static constraint map for zero initialization overhead.
+/// This is lazily initialized on first access and shared across all `LogicGate` instances.
+static QIANJI_AUDIT_PLAN_CONSTRAINTS: OnceLock<XsdConstraintMap> = OnceLock::new();
+
 /// The Logic Gate validator for incremental XML parsing.
 #[derive(Debug)]
 pub struct LogicGate {
-    /// Constraint map derived from XSD.
-    constraints: XsdConstraintMap,
+    /// Constraint map derived from XSD (shared reference to static).
+    constraints: &'static XsdConstraintMap,
     /// Stack of open tags for context (zero-copy).
     tag_stack: Vec<Arc<str>>,
     /// Next expected step number.
@@ -201,16 +207,27 @@ pub struct LogicGate {
 
 impl LogicGate {
     /// Create a new Logic Gate with the default Qianji audit plan constraints.
+    ///
+    /// Uses a globally cached constraint map for zero initialization overhead
+    /// on subsequent calls.
     #[must_use]
     pub fn new() -> Self {
-        Self::with_constraints(XsdConstraintMap::qianji_audit_plan())
+        let constraints =
+            QIANJI_AUDIT_PLAN_CONSTRAINTS.get_or_init(XsdConstraintMap::qianji_audit_plan);
+        Self {
+            constraints,
+            tag_stack: Vec::new(),
+            next_step_number: 1,
+            text_buffer: String::new(),
+        }
     }
 
     /// Create a Logic Gate with custom constraints.
+    #[cfg(test)]
     #[must_use]
     pub fn with_constraints(constraints: XsdConstraintMap) -> Self {
         Self {
-            constraints,
+            constraints: Box::leak(Box::new(constraints)),
             tag_stack: Vec::new(),
             next_step_number: 1,
             text_buffer: String::new(),
@@ -277,7 +294,7 @@ impl LogicGate {
                 });
             } else {
                 let is_self_closing = tag_body.ends_with('/');
-                let attrs = Self::parse_attributes_static(tag_body)?;
+                let attrs = Self::parse_attributes_static(tag_body);
 
                 self.validate_opening_tag(tag_name, &attrs)?;
                 events.push(LogicGateEvent::TagOpened {
@@ -314,7 +331,11 @@ impl LogicGate {
             }
         } else {
             // Check if tag is allowed as child of current parent
-            let parent = self.tag_stack.last().unwrap();
+            let Some(parent) = self.tag_stack.last() else {
+                return Err(LogicGateError::MalformedXml {
+                    message: Arc::from("tag stack was unexpectedly empty"),
+                });
+            };
             if !self.constraints.is_allowed_child(parent, tag) {
                 return Err(LogicGateError::ForbiddenTag {
                     tag: Arc::from(tag),
@@ -343,18 +364,17 @@ impl LogicGate {
         }
 
         // Check step linearity
-        if tag == "step" {
-            if let Some((_, num_str)) = attrs.iter().find(|(k, _)| k.as_ref() == "number") {
-                if let Ok(num) = num_str.parse::<u32>() {
-                    if num != self.next_step_number {
-                        return Err(LogicGateError::NonSequentialStep {
-                            expected: self.next_step_number,
-                            actual: num,
-                        });
-                    }
-                    self.next_step_number += 1;
-                }
+        if tag == "step"
+            && let Some((_, num_str)) = attrs.iter().find(|(k, _)| k.as_ref() == "number")
+            && let Ok(num) = num_str.parse::<u32>()
+        {
+            if num != self.next_step_number {
+                return Err(LogicGateError::NonSequentialStep {
+                    expected: self.next_step_number,
+                    actual: num,
+                });
             }
+            self.next_step_number += 1;
         }
 
         self.tag_stack.push(Arc::from(tag));
@@ -369,22 +389,17 @@ impl LogicGate {
             Some(expected) if expected.as_ref() == tag => Ok(()),
             Some(expected) => Err(LogicGateError::MalformedXml {
                 message: Arc::from(
-                    format!(
-                        "mismatched closing tag: expected </{}>, found </{}>",
-                        expected, tag
-                    )
-                    .as_str(),
+                    format!("mismatched closing tag: expected </{expected}>, found </{tag}>")
+                        .as_str(),
                 ),
             }),
             None => Err(LogicGateError::MalformedXml {
-                message: Arc::from(format!("unexpected closing tag </{}>", tag).as_str()),
+                message: Arc::from(format!("unexpected closing tag </{tag}>").as_str()),
             }),
         }
     }
 
-    fn parse_attributes_static(
-        tag_body: &str,
-    ) -> Result<Vec<(Arc<str>, Arc<str>)>, LogicGateError> {
+    fn parse_attributes_static(tag_body: &str) -> XmlAttributes {
         let mut attrs = Vec::new();
         let mut in_value = false;
         let mut current_key = String::new();
@@ -426,7 +441,7 @@ impl LogicGate {
             }
         }
 
-        Ok(attrs)
+        attrs
     }
 
     /// Reset the parser state for a new document.
@@ -437,18 +452,21 @@ impl LogicGate {
     }
 
     /// Check if the parser has finished processing.
+    #[cfg(test)]
     #[must_use]
     pub const fn is_complete(&self) -> bool {
         self.tag_stack.is_empty()
     }
 
     /// Get the current tag stack depth.
+    #[cfg(test)]
     #[must_use]
     pub fn depth(&self) -> usize {
         self.tag_stack.len()
     }
 
     /// Get the current parent tag.
+    #[cfg(test)]
     #[must_use]
     pub fn current_parent(&self) -> Option<&str> {
         self.tag_stack.last().map(|s| &**s)
@@ -479,75 +497,5 @@ pub enum LogicGateEvent {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn logic_gate_accepts_valid_qianji_plan() {
-        let mut gate = LogicGate::new();
-        let xml = r#"<?xml version="1.0"?>
-<qianji-audit-plan version="1.0">
-  <summary>
-    <intent>Test</intent>
-    <total-steps>1</total-steps>
-  </summary>
-</qianji-audit-plan>"#;
-
-        let result = gate.hot_validate(xml);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn logic_gate_rejects_forbidden_tag() {
-        let mut gate = LogicGate::new();
-        let xml = r#"<invalid-root></invalid-root>"#;
-
-        let result = gate.hot_validate(xml);
-        assert!(matches!(result, Err(LogicGateError::ForbiddenTag { .. })));
-    }
-
-    #[test]
-    fn logic_gate_rejects_invalid_action() {
-        let mut gate = LogicGate::new();
-        let xml = r#"<qianji-audit-plan version="1.0">
-  <summary><intent>Test</intent><total-steps>1</total-steps></summary>
-  <implementation-steps>
-    <step number="1">
-      <file-target path="test.rs" action="ship"/>
-    </step>
-  </implementation-steps>
-</qianji-audit-plan>"#;
-
-        let result = gate.hot_validate(xml);
-        assert!(matches!(
-            result,
-            Err(LogicGateError::InvalidAttribute { .. })
-        ));
-    }
-
-    #[test]
-    fn logic_gate_rejects_non_sequential_steps() {
-        let mut gate = LogicGate::new();
-        let xml = r#"<qianji-audit-plan version="1.0">
-  <summary><intent>Test</intent><total-steps>2</total-steps></summary>
-  <implementation-steps>
-    <step number="2"><title>Skip</title></step>
-  </implementation-steps>
-</qianji-audit-plan>"#;
-
-        let result = gate.hot_validate(xml);
-        assert!(matches!(
-            result,
-            Err(LogicGateError::NonSequentialStep { .. })
-        ));
-    }
-
-    #[test]
-    fn xsd_constraint_map_allows_known_children() {
-        let map = XsdConstraintMap::qianji_audit_plan();
-
-        assert!(map.is_allowed_child("qianji-audit-plan", "summary"));
-        assert!(map.is_allowed_child("implementation-steps", "step"));
-        assert!(!map.is_allowed_child("summary", "step"));
-    }
-}
+#[path = "../../../tests/unit/transmuter/streaming/logic_gate.rs"]
+mod tests;

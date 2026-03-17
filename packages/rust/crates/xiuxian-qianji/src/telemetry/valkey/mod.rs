@@ -88,7 +88,7 @@ impl ValkeyPulseEmitter {
             return false;
         }
         let slot = self.sample_counter.fetch_add(1, Ordering::Relaxed);
-        slot % sample_rate != 0
+        !slot.is_multiple_of(sample_rate)
     }
 
     fn current_sample_rate(&self) -> u64 {

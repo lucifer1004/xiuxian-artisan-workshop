@@ -18,7 +18,7 @@ pub(super) fn handle_log(
     agent_id: &str,
     created_at_unix: Option<f64>,
 ) -> Result<()> {
-    let row = valkey_suggested_link_log(LinkGraphSuggestedLinkRequest {
+    let request = LinkGraphSuggestedLinkRequest {
         source_id: source_id.to_string(),
         target_id: target_id.to_string(),
         relation: relation.to_string(),
@@ -26,8 +26,8 @@ pub(super) fn handle_log(
         evidence: evidence.to_string(),
         agent_id: agent_id.to_string(),
         created_at_unix,
-    })
-    .map_err(anyhow::Error::msg)?;
+    };
+    let row = valkey_suggested_link_log(&request).map_err(anyhow::Error::msg)?;
     emit(&row, cli.output)
 }
 
@@ -62,14 +62,14 @@ pub(super) fn handle_decide(
     reason: &str,
     decided_at_unix: Option<f64>,
 ) -> Result<()> {
-    let result = valkey_suggested_link_decide(LinkGraphSuggestedLinkDecisionRequest {
+    let request = LinkGraphSuggestedLinkDecisionRequest {
         suggestion_id: suggestion_id.to_string(),
         target_state,
         decided_by: decided_by.to_string(),
         reason: reason.to_string(),
         decided_at_unix,
-    })
-    .map_err(anyhow::Error::msg)?;
+    };
+    let result = valkey_suggested_link_decide(&request).map_err(anyhow::Error::msg)?;
     emit(&result, cli.output)
 }
 

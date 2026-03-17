@@ -2,8 +2,11 @@ use crate::contracts::{FlowInstruction, QianjiMechanism, QianjiOutput};
 use async_trait::async_trait;
 use serde_json::json;
 
+/// Mechanism that retries a target node when observed drift exceeds a threshold.
 pub struct SynapseCalibrator {
+    /// Node id to retry when calibration fails.
     pub target_node_id: String,
+    /// Drift threshold above which the mechanism requests a retry.
     pub drift_threshold: f32,
 }
 
@@ -14,8 +17,8 @@ impl QianjiMechanism for SynapseCalibrator {
         // This is a simplified version of the Drift Calculation
         let drift_score = context
             .get("drift_score")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) as f32;
+            .and_then(|value| serde_json::from_value::<f32>(value.clone()).ok())
+            .unwrap_or(0.0);
 
         if drift_score > self.drift_threshold {
             Ok(QianjiOutput {

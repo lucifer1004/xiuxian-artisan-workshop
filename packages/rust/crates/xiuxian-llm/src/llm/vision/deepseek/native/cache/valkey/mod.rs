@@ -1,14 +1,6 @@
 mod client_init;
 mod ops;
 
-pub fn get(key: &str) -> Option<String> {
-    if let Some(cache) = client_init::load_valkey_cache() {
-        cache.get(key)
-    } else {
-        None
-    }
-}
-
 pub fn set(key: &str, markdown: &str) -> bool {
     if let Some(cache) = client_init::load_valkey_cache() {
         cache.set(key, markdown)

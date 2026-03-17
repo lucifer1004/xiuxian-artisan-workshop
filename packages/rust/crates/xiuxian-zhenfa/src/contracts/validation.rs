@@ -182,7 +182,7 @@ fn ensure_well_formed_xml(xml: &str) -> Result<(), String> {
 
     loop {
         match reader.read_event() {
-            Ok(Event::Start(_)) | Ok(Event::Empty(_)) => {
+            Ok(Event::Start(_) | Event::Empty(_)) => {
                 saw_root = true;
             }
             Ok(Event::Eof) => break,

@@ -10,10 +10,11 @@ use super::metadata::ToolAnnotations;
 pub const INTERNAL_SKILL_BINDING_PREFIX: &str = "internal://";
 
 /// Workflow type for internal skill execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum InternalSkillWorkflowType {
     /// Execution driven by the `Qianji` orchestration engine.
+    #[default]
     QianjiFlow,
     /// Direct dispatch to a native tool provider.
     NativeDispatch,
@@ -23,19 +24,12 @@ pub enum InternalSkillWorkflowType {
     Agentic,
 }
 
-impl Default for InternalSkillWorkflowType {
-    fn default() -> Self {
-        Self::QianjiFlow
-    }
-}
-
 impl InternalSkillWorkflowType {
     /// Parse a workflow type from raw manifest values.
     #[must_use]
     pub fn from_raw(raw: Option<&str>) -> Self {
         let normalized = raw.unwrap_or("qianji_flow").trim().to_ascii_lowercase();
         match normalized.as_str() {
-            "qianji_flow" | "qianji-flow" | "qianji" | "flow" | "workflow" => Self::QianjiFlow,
             "native_dispatch" | "native-dispatch" => Self::NativeDispatch,
             "native" => Self::Native,
             "agentic" => Self::Agentic,
@@ -45,7 +39,7 @@ impl InternalSkillWorkflowType {
 
     /// Return a stable string form for serialization.
     #[must_use]
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::QianjiFlow => "qianji_flow",
             Self::NativeDispatch => "native_dispatch",
@@ -374,7 +368,10 @@ pub fn compile_internal_skill_manifest_aliases(
 }
 
 /// Build a mount report from compiled specs and discovered paths.
-#[must_use]
+///
+/// # Errors
+///
+/// Returns an error when `internal_id` does not map to a registered runtime binding.
 pub fn resolve_internal_skill_binding_target_from_manifest(
     internal_id: &str,
 ) -> Result<String, InternalSkillNativeAliasCompileError> {

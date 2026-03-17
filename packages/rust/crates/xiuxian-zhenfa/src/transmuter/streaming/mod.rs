@@ -8,26 +8,35 @@
 //!
 //! All text content uses `Arc<str>` for zero-copy sharing across consumers,
 //! eliminating heap allocations for each text delta in high-throughput scenarios.
+//!
+//! # Pipeline Architecture
+//!
+//! The `ZhenfaPipeline` provides the sovereign encapsulation for xiuxian-qianji:
+//!
+//! ```text
+//! Raw Stream → Parser → LogicGate → CognitiveSupervisor → Output
+//! ```
 
+#[cfg(test)]
 mod arc_types;
 mod claude;
 mod codex;
+#[cfg(test)]
 mod formatter;
 mod gemini;
 mod logic_gate;
+mod pipeline;
 mod supervisor;
 mod traits;
 
-pub use arc_types::{ArcStreamingOutcome, ArcTokenUsage, ArcToolCallRecord, EventBuffer};
 pub use claude::ClaudeStreamingParser;
 pub use codex::CodexStreamingParser;
-pub use formatter::{AnsiFormatter, DisplayStyle};
 pub use gemini::GeminiStreamingParser;
-pub use logic_gate::{LogicGate, LogicGateError, LogicGateEvent, XsdConstraintMap};
-pub use supervisor::{
-    CognitiveDimension, CognitiveEvent, CognitiveSupervisor, SupervisorContext, ThoughtSubcategory,
+pub use pipeline::{
+    CognitiveDistribution, ExternalSignal, PipelineError, PipelineOutput, StreamProvider,
+    ZhenfaPipeline,
 };
-pub use traits::{StreamingOutcome, StreamingTransmuter};
+pub use traits::{StreamingOutcome, StreamingTransmuter, TokenUsage};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
@@ -223,8 +232,7 @@ impl<'de> Deserialize<'de> for ZhenfaStreamingEvent {
                             .ok_or_else(|| serde::de::Error::missing_field("message"))?,
                     }),
                     _ => Err(serde::de::Error::custom(format!(
-                        "unknown event type: {}",
-                        event_type
+                        "unknown event type: {event_type}"
                     ))),
                 }
             }
@@ -235,125 +243,13 @@ impl<'de> Deserialize<'de> for ZhenfaStreamingEvent {
 }
 
 impl ZhenfaStreamingEvent {
-    /// Create a Thought event.
-    #[must_use]
-    pub fn thought(text: impl Into<Arc<str>>) -> Self {
-        Self::Thought(text.into())
-    }
-
-    /// Create a TextDelta event.
-    #[must_use]
-    pub fn text_delta(text: impl Into<Arc<str>>) -> Self {
-        Self::TextDelta(text.into())
-    }
-
-    /// Create a Status event.
-    #[must_use]
-    pub fn status(text: impl Into<Arc<str>>) -> Self {
-        Self::Status(text.into())
-    }
-
-    /// Check if this event represents terminal state.
-    #[must_use]
-    pub const fn is_terminal(&self) -> bool {
-        matches!(self, Self::Finished(_) | Self::Error { .. })
-    }
-
-    /// Check if this event contains tool-related content.
-    #[must_use]
-    pub const fn is_tool_event(&self) -> bool {
-        matches!(self, Self::ToolCall { .. } | Self::ToolResult { .. })
-    }
-
-    /// Extract text content if this is a text or thought event.
+    /// Extract text content if this is a text-bearing event.
     #[must_use]
     pub fn text_content(&self) -> Option<&str> {
         match self {
             Self::Thought(text) | Self::TextDelta(text) | Self::Status(text) => Some(text),
+            Self::Progress { message, .. } => Some(message),
             _ => None,
         }
     }
-
-    /// Get the estimated memory size in bytes.
-    #[must_use]
-    pub fn estimated_size(&self) -> usize {
-        match self {
-            Self::Thought(text) | Self::TextDelta(text) | Self::Status(text) => {
-                text.len() + std::mem::size_of::<Self>()
-            }
-            Self::ToolCall { id, name, input } => {
-                id.len() + name.len() + input.to_string().len() + std::mem::size_of::<Self>()
-            }
-            Self::ToolResult { id, output } => {
-                id.len() + output.to_string().len() + std::mem::size_of::<Self>()
-            }
-            Self::Progress { message, .. } => message.len() + std::mem::size_of::<Self>(),
-            Self::Finished(outcome) => outcome.estimated_size() + std::mem::size_of::<Self>(),
-            Self::Error { code, message } => {
-                code.len() + message.len() + std::mem::size_of::<Self>()
-            }
-        }
-    }
-}
-
-/// Provider identifier for streaming parsers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum StreamingProvider {
-    /// Claude Code CLI (Anthropic).
-    Claude,
-    /// Gemini CLI (Google).
-    Gemini,
-    /// Codex / OpenAI-style agents.
-    Codex,
-}
-
-impl StreamingProvider {
-    /// Get the appropriate parser for this provider.
-    #[must_use]
-    pub fn parser(&self) -> Box<dyn StreamingTransmuter> {
-        match self {
-            Self::Claude => Box::new(ClaudeStreamingParser::new()),
-            Self::Gemini => Box::new(GeminiStreamingParser::new()),
-            Self::Codex => Box::new(CodexStreamingParser::new()),
-        }
-    }
-}
-
-impl std::fmt::Display for StreamingProvider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Claude => write!(f, "claude"),
-            Self::Gemini => write!(f, "gemini"),
-            Self::Codex => write!(f, "codex"),
-        }
-    }
-}
-
-/// Detect the streaming provider from the first line of output.
-///
-/// # Errors
-///
-/// Returns an error string if the provider cannot be determined.
-pub fn detect_provider(first_line: &str) -> Result<StreamingProvider, String> {
-    let trimmed = first_line.trim();
-
-    // Claude uses NDJSON with specific event types
-    if trimmed.starts_with("{\"type\":\"") && trimmed.contains("\"message\"") {
-        return Ok(StreamingProvider::Claude);
-    }
-
-    // Gemini uses event-stream format
-    if trimmed.starts_with("data:") || trimmed.contains("\"candidates\"") {
-        return Ok(StreamingProvider::Gemini);
-    }
-
-    // Codex/OpenAI style
-    if trimmed.contains("\"choices\"") || trimmed.contains("\"delta\"") {
-        return Ok(StreamingProvider::Codex);
-    }
-
-    Err(format!(
-        "Unable to detect streaming provider from: {}",
-        &trimmed[..trimmed.len().min(100)]
-    ))
 }

@@ -9,6 +9,8 @@ mod graph;
 #[cfg(feature = "zhenfa-router")]
 mod router;
 #[cfg(feature = "zhenfa-router")]
+mod search;
+#[cfg(feature = "zhenfa-router")]
 mod vfs;
 
 #[cfg(feature = "zhenfa-router")]

@@ -50,5 +50,8 @@ pub fn resolve_qianji_runtime_wendao_ingester_config_with_env(
     let project_root = resolve_project_root(runtime_env);
     let config_home = resolve_prj_config_home(runtime_env, &project_root);
     let file_cfg = load_qianji_toml(runtime_env, &project_root, &config_home)?;
-    wendao::resolve_qianji_runtime_wendao_ingester(&file_cfg.memory_promotion.wendao, runtime_env)
+    Ok(wendao::resolve_qianji_runtime_wendao_ingester(
+        &file_cfg.memory_promotion.wendao,
+        runtime_env,
+    ))
 }

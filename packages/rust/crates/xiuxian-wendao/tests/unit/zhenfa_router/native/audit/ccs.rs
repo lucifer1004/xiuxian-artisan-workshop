@@ -45,7 +45,7 @@ fn test_ccs_empty_anchors() {
 
     // Empty anchors = perfect score (nothing to miss)
     assert!(result.passed);
-    assert_eq!(result.ccs_score, 1.0);
+    assert!((result.ccs_score - 1.0).abs() < f64::EPSILON);
 }
 
 #[test]

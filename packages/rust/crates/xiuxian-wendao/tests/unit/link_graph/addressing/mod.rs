@@ -69,7 +69,7 @@ fn test_find_by_id() {
         },
     };
 
-    let found = find_by_id(&[node.clone()], "my-section");
+    let found = find_by_id(std::slice::from_ref(&node), "my-section");
     assert!(found.is_some());
 
     let not_found = find_by_id(&[node], "other-id");
@@ -101,7 +101,7 @@ fn test_find_by_path() {
     };
 
     let found = find_by_path(
-        &[node.clone()],
+        std::slice::from_ref(&node),
         &["Architecture".to_string(), "Storage".to_string()],
     );
     assert!(found.is_some());
@@ -134,7 +134,7 @@ fn test_find_by_hash() {
         },
     };
 
-    let found = find_by_hash(&[node.clone()], "def456");
+    let found = find_by_hash(std::slice::from_ref(&node), "def456");
     assert!(found.is_some());
 
     let not_found = find_by_hash(&[node], "other-hash");
@@ -144,7 +144,9 @@ fn test_find_by_hash() {
 #[test]
 fn test_replace_byte_range_basic() {
     let content = "Hello, world!";
-    let result = replace_byte_range(content, 7, 12, "Rust", None).unwrap();
+    let Ok(result) = replace_byte_range(content, 7, 12, "Rust", None) else {
+        panic!("replace_byte_range should succeed");
+    };
     assert_eq!(result.new_content, "Hello, Rust!");
     assert_eq!(result.byte_delta, -1); // "world" (5) -> "Rust" (4)
     assert_eq!(result.line_delta, 0);
@@ -155,7 +157,9 @@ fn test_replace_byte_range_with_hash_verification() {
     let content = "Hello, world!";
     // Compute hash of "world"
     let hash = compute_hash("world");
-    let result = replace_byte_range(content, 7, 12, "Rust", Some(&hash)).unwrap();
+    let Ok(result) = replace_byte_range(content, 7, 12, "Rust", Some(&hash)) else {
+        panic!("replace_byte_range should verify the hash");
+    };
     assert_eq!(result.new_content, "Hello, Rust!");
 }
 
@@ -204,7 +208,9 @@ fn test_update_section_content() {
     };
 
     let doc_content = "old content here";
-    let result = update_section_content(doc_content, &node, "new content").unwrap();
+    let Ok(result) = update_section_content(doc_content, &node, "new content") else {
+        panic!("update_section_content should succeed");
+    };
     assert_eq!(result.new_content, "new content here");
     assert_eq!(result.byte_delta, 0); // "old content" (11) -> "new content" (11) = 0
 }
@@ -231,6 +237,13 @@ fn test_adjust_line_range_after() {
     let (start, end) = adjust_line_range(10, 20, 5, 30);
     assert_eq!(start, 10);
     assert_eq!(end, 20);
+}
+
+#[test]
+fn test_adjust_line_range_before_negative_delta() {
+    let (start, end) = adjust_line_range(10, 20, -3, 5);
+    assert_eq!(start, 7);
+    assert_eq!(end, 17);
 }
 
 #[test]

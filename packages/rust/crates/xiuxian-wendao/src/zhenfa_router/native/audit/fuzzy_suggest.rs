@@ -48,8 +48,8 @@ use serde::{Deserialize, Serialize};
 const CONFIDENCE_THRESHOLD: f32 = 0.65;
 
 /// Thread-local cache for candidate matches.
-/// Key: file_path
-/// Value: (content_hash, Vec<CandidateMatch>)
+/// Key: `file_path`
+/// Value: (`content_hash`, Vec<CandidateMatch>)
 type CacheValue = (u64, Vec<CandidateMatch>);
 thread_local! {
     static CANDIDATE_CACHE: RefCell<HashMap<String, CacheValue>> = RefCell::new(HashMap::new());
@@ -229,7 +229,7 @@ fn is_identifier_like(s: &str) -> bool {
         && s.chars().all(|c| c.is_alphanumeric() || c == '_')
         && s.chars()
             .next()
-            .map_or(false, |c| c.is_alphabetic() || c == '_')
+            .is_some_and(|c| c.is_alphabetic() || c == '_')
 }
 
 /// Calculate similarity score between two pattern skeletons.
@@ -310,8 +310,20 @@ fn jaccard_similarity<T: std::hash::Hash + Eq + std::borrow::Borrow<T>>(a: &[T],
     if union == 0 {
         0.0
     } else {
-        intersection as f32 / union as f32
+        bounded_ratio(intersection, union)
     }
+}
+
+/// Convert small heuristic counts into `f32` without unchecked casts.
+fn bounded_ratio(numerator: usize, denominator: usize) -> f32 {
+    let numerator = bounded_usize_to_f32(numerator);
+    let denominator = bounded_usize_to_f32(denominator);
+    numerator / denominator
+}
+
+/// Saturate large counts because fuzzy matching only needs stable heuristic ratios.
+fn bounded_usize_to_f32(value: usize) -> f32 {
+    u16::try_from(value).map_or(f32::from(u16::MAX), f32::from)
 }
 
 /// Calculate Levenshtein edit distance between two strings.
@@ -334,13 +346,15 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
         row[0] = i;
     }
 
-    for j in 0..=b_len {
-        matrix[0][j] = j;
+    if let Some(first_row) = matrix.first_mut() {
+        for (j, cell) in first_row.iter_mut().enumerate() {
+            *cell = j;
+        }
     }
 
     for (i, a_char) in a_chars.iter().enumerate() {
         for (j, b_char) in b_chars.iter().enumerate() {
-            let cost = if a_char == b_char { 0 } else { 1 };
+            let cost = usize::from(a_char != b_char);
             matrix[i + 1][j + 1] = (matrix[i][j + 1] + 1)
                 .min(matrix[i + 1][j] + 1)
                 .min(matrix[i][j] + cost);
@@ -358,29 +372,7 @@ fn string_similarity(a: &str, b: &str) -> f32 {
     }
 
     let distance = levenshtein_distance(a, b);
-    1.0 - (distance as f32 / max_len as f32)
-}
-
-/// Extract identifier names from source code using skeleton patterns.
-fn extract_identifiers_from_source(content: &str, lang: xiuxian_ast::Lang) -> Vec<String> {
-    let patterns = xiuxian_ast::get_skeleton_patterns(lang);
-    let mut identifiers = Vec::new();
-
-    for pattern in patterns {
-        if let Some(capture_name) = extract_capture_name(pattern) {
-            let results =
-                xiuxian_ast::extract_items(content, pattern, lang, Some(vec![&capture_name]));
-            for result in results {
-                if let Some(name) = result.captures.get(&capture_name) {
-                    if !identifiers.contains(name) {
-                        identifiers.push(name.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    identifiers
+    1.0 - bounded_ratio(distance, max_len)
 }
 
 /// Extract the primary capture name from a pattern.
@@ -418,10 +410,10 @@ fn extract_capture_name(pattern: &str) -> Option<String> {
         }
     }
 
-    if !capture.is_empty() {
-        Some(capture)
-    } else {
+    if capture.is_empty() {
         None
+    } else {
+        Some(capture)
     }
 }
 
@@ -447,7 +439,7 @@ struct CandidateMatch {
 /// * `original_pattern` - The pattern that failed validation
 /// * `lang` - Target language for the pattern
 /// * `source_files` - Source files to search for candidates
-/// * `threshold` - Optional confidence threshold (uses CONFIDENCE_THRESHOLD if None)
+/// * `threshold` - Optional confidence threshold (uses `CONFIDENCE_THRESHOLD` if None)
 ///
 /// # Returns
 ///
@@ -468,7 +460,7 @@ pub fn suggest_pattern_fix(
 /// * `original_pattern` - The pattern that failed validation
 /// * `lang` - Target language for the pattern
 /// * `source_files` - Source files to search for candidates
-/// * `threshold` - Optional confidence threshold (uses CONFIDENCE_THRESHOLD if None)
+/// * `threshold` - Optional confidence threshold (uses `CONFIDENCE_THRESHOLD` if None)
 ///
 /// # Returns
 ///
@@ -572,11 +564,11 @@ fn scan_for_candidates(
     // Check cache first
     let cached = CANDIDATE_CACHE.with(|cache| {
         let cache = cache.borrow();
-        if let Some((cached_hash, candidates)) = cache.get(file_path) {
-            if *cached_hash == content_hash {
-                // Cache hit! Return cached candidates
-                return Some(candidates.clone());
-            }
+        if let Some((cached_hash, candidates)) = cache.get(file_path)
+            && *cached_hash == content_hash
+        {
+            // Cache hit! Return cached candidates
+            return Some(candidates.clone());
         }
         None
     });
@@ -590,11 +582,17 @@ fn scan_for_candidates(
     let mut candidates = Vec::new();
 
     for pattern in patterns {
-        let results = xiuxian_ast::extract_items(content, pattern, lang, None);
+        let capture_name = extract_capture_name(pattern);
+        let capture_filters = capture_name.as_ref().map(|name| vec![name.as_str()]);
+        let results = xiuxian_ast::extract_items(content, pattern, lang, capture_filters);
 
         for result in results {
             // Extract identifier from captures
-            let identifier = result.captures.values().next().cloned();
+            let identifier = capture_name
+                .as_ref()
+                .and_then(|name| result.captures.get(name))
+                .cloned()
+                .or_else(|| result.captures.values().next().cloned());
 
             // Extract just the signature line for skeleton comparison
             // This ensures we compare similar structural complexity
@@ -633,7 +631,7 @@ fn generate_suggested_pattern(
     let signature = extract_signature_line(&best_match.matched_text, lang);
 
     // Convert to a pattern by replacing identifiers with metavariables
-    patternize_signature(&signature, &best_match.identifier, lang)
+    patternize_signature(&signature, best_match.identifier.as_ref(), lang)
 }
 
 /// Extract just the signature line from matched code.
@@ -677,7 +675,7 @@ fn extract_signature_line(code: &str, lang: xiuxian_ast::Lang) -> String {
 /// Convert a signature to a pattern by adding metavariables.
 fn patternize_signature(
     signature: &str,
-    identifier: &Option<String>,
+    identifier: Option<&String>,
     _lang: xiuxian_ast::Lang,
 ) -> String {
     let mut pattern = signature.to_string();
@@ -714,7 +712,7 @@ pub fn format_suggestion(suggestion: &FuzzySuggestion) -> String {
         suggestion
             .source_location
             .as_ref()
-            .map(|l| format!("Found similar code at: {}", l))
+            .map(|l| format!("Found similar code at: {l}"))
             .unwrap_or_default()
     )
 }
@@ -722,7 +720,7 @@ pub fn format_suggestion(suggestion: &FuzzySuggestion) -> String {
 /// Resolve source files from directory paths.
 ///
 /// This is a simple implementation that scans for common source file extensions.
-/// For more sophisticated discovery, use the dependency_indexer.
+/// For more sophisticated discovery, use the `dependency_indexer`.
 #[must_use]
 pub fn resolve_source_files(paths: &[&Path], lang: xiuxian_ast::Lang) -> Vec<SourceFile> {
     let mut files = Vec::new();
@@ -730,32 +728,29 @@ pub fn resolve_source_files(paths: &[&Path], lang: xiuxian_ast::Lang) -> Vec<Sou
 
     for path in paths {
         if path.is_file() {
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if extensions.contains(&ext) {
-                    if let Ok(content) = std::fs::read_to_string(path) {
-                        files.push(SourceFile {
-                            path: path.display().to_string(),
-                            content,
-                        });
-                    }
-                }
+            if let Some(ext) = path.extension().and_then(|e| e.to_str())
+                && extensions.contains(&ext)
+                && let Ok(content) = std::fs::read_to_string(path)
+            {
+                files.push(SourceFile {
+                    path: path.display().to_string(),
+                    content,
+                });
             }
         } else if path.is_dir() {
             // Simple directory scan - could be enhanced with walkdir
             if let Ok(entries) = std::fs::read_dir(path) {
                 for entry in entries.flatten() {
                     let entry_path = entry.path();
-                    if entry_path.is_file() {
-                        if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
-                            if extensions.contains(&ext) {
-                                if let Ok(content) = std::fs::read_to_string(&entry_path) {
-                                    files.push(SourceFile {
-                                        path: entry_path.display().to_string(),
-                                        content,
-                                    });
-                                }
-                            }
-                        }
+                    if entry_path.is_file()
+                        && let Some(ext) = entry_path.extension().and_then(|e| e.to_str())
+                        && extensions.contains(&ext)
+                        && let Ok(content) = std::fs::read_to_string(&entry_path)
+                    {
+                        files.push(SourceFile {
+                            path: entry_path.display().to_string(),
+                            content,
+                        });
                     }
                 }
             }
@@ -766,136 +761,5 @@ pub fn resolve_source_files(paths: &[&Path], lang: xiuxian_ast::Lang) -> Vec<Sou
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_tokenize_pattern_simple() {
-        let tokens = tokenize_pattern("fn $NAME()");
-        assert!(tokens.contains(&"fn".to_string()));
-        assert!(tokens.contains(&"$NAME".to_string()));
-        assert!(tokens.contains(&"(".to_string()));
-        assert!(tokens.contains(&")".to_string()));
-    }
-
-    #[test]
-    fn test_tokenize_pattern_with_arrow() {
-        let tokens = tokenize_pattern("fn $NAME() -> Result<$$$>");
-        assert!(tokens.contains(&"->".to_string()));
-        assert!(tokens.contains(&"<".to_string()));
-        assert!(tokens.contains(&">".to_string()));
-    }
-
-    #[test]
-    fn test_extract_pattern_skeleton() {
-        let skeleton = PatternSkeleton::extract("fn $NAME($$$ARGS) -> Result<$$$>");
-
-        assert!(skeleton.keywords.contains(&"fn".to_string()));
-        assert!(skeleton.keywords.contains(&"Result".to_string()));
-        assert!(skeleton.metavariables.contains(&"$NAME".to_string()));
-        assert!(skeleton.metavariables.contains(&"$$$ARGS".to_string()));
-        assert!(skeleton.structure.contains(&"(".to_string()));
-        assert!(skeleton.structure.contains(&")".to_string()));
-        assert!(skeleton.structure.contains(&"->".to_string()));
-    }
-
-    #[test]
-    fn test_jaccard_similarity_identical() {
-        let a = vec!["fn", "Result"];
-        let b = vec!["fn", "Result"];
-        assert!((jaccard_similarity(&a, &b) - 1.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_jaccard_similarity_no_overlap() {
-        let a = vec!["fn", "Result"];
-        let b = vec!["def", "class"];
-        assert!((jaccard_similarity(&a, &b) - 0.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_jaccard_similarity_partial() {
-        let a = vec!["fn", "Result"];
-        let b = vec!["fn", "Option"];
-        // intersection = 1, union = 3
-        assert!((jaccard_similarity(&a, &b) - 0.333).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_levenshtein_distance_identical() {
-        assert_eq!(levenshtein_distance("hello", "hello"), 0);
-    }
-
-    #[test]
-    fn test_levenshtein_distance_one_change() {
-        assert_eq!(levenshtein_distance("hello", "hallo"), 1);
-    }
-
-    #[test]
-    fn test_levenshtein_distance_insertion() {
-        assert_eq!(levenshtein_distance("hello", "hellos"), 1);
-    }
-
-    #[test]
-    fn test_string_similarity() {
-        let sim = string_similarity("process_data", "process_records");
-        assert!(sim > 0.5);
-        assert!(sim < 1.0);
-    }
-
-    #[test]
-    fn test_extract_capture_name() {
-        assert_eq!(extract_capture_name("fn $NAME"), Some("NAME".to_string()));
-        assert_eq!(
-            extract_capture_name("def $FUNC($$$)"),
-            Some("FUNC".to_string())
-        );
-        assert_eq!(extract_capture_name("class $$$$"), None); // $$$ is skipped
-    }
-
-    #[test]
-    fn test_suggest_pattern_fix_finds_renamed_symbol() {
-        let source = SourceFile {
-            path: "src/lib.rs".to_string(),
-            content: "fn process_records(data: Vec<u8>) -> Result<()> { todo!() }".to_string(),
-        };
-
-        let suggestion =
-            suggest_pattern_fix("fn process_data($$$)", xiuxian_ast::Lang::Rust, &[source]);
-
-        assert!(suggestion.is_some());
-        let s = suggestion.unwrap();
-        assert!(s.suggested_pattern.contains("process_records"));
-        assert!(s.confidence >= CONFIDENCE_THRESHOLD);
-        assert!(s.source_location.is_some());
-    }
-
-    #[test]
-    fn test_suggest_pattern_fix_no_similar_code() {
-        let source = SourceFile {
-            path: "src/lib.rs".to_string(),
-            content: "struct Point { x: i32, y: i32 }".to_string(),
-        };
-
-        let suggestion =
-            suggest_pattern_fix("fn process_data($$$)", xiuxian_ast::Lang::Rust, &[source]);
-
-        // Should return None because no similar function exists
-        assert!(suggestion.is_none());
-    }
-
-    #[test]
-    fn test_format_suggestion() {
-        let suggestion = FuzzySuggestion {
-            suggested_pattern: "fn process_records($$$)".to_string(),
-            confidence: 0.85,
-            source_location: Some("src/lib.rs:42".to_string()),
-            replacement_drawer: r#":OBSERVE: lang:rust "fn process_records($$$)""#.to_string(),
-        };
-
-        let formatted = format_suggestion(&suggestion);
-        assert!(formatted.contains("process_records"));
-        assert!(formatted.contains("85%"));
-        assert!(formatted.contains("src/lib.rs:42"));
-    }
-}
+#[path = "../../../../tests/unit/zhenfa_router/native/audit/fuzzy_suggest.rs"]
+mod tests;

@@ -12,6 +12,8 @@ async fn test_ccs_detailed_missing_info_identification() {
         id: "artisan".to_string(),
         name: "Artisan".to_string(),
         voice_tone: "Precise".to_string(),
+        background: None,
+        guidelines: vec![],
         style_anchors: vec![
             "milimeter-level alignment".to_string(),
             "audit trail".to_string(),

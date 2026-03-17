@@ -53,9 +53,8 @@ pub async fn infer_remote_deepseek_ocr_from_bytes(
     }
 }
 
-pub fn prewarm_remote_deepseek_ocr(base_url: &str) -> LlmResult<()> {
+pub fn prewarm_remote_deepseek_ocr(base_url: &str) {
     tracing::info!(base_url, "Remote DeepSeek OCR prewarm requested (noop)");
-    Ok(())
 }
 
 fn internal_error(message: String) -> LlmError {

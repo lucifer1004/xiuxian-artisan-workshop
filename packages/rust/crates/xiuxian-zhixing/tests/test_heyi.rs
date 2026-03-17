@@ -290,8 +290,8 @@ async fn test_add_task_normalizes_local_time_input() -> std::result::Result<(), 
 }
 
 #[tokio::test]
-async fn test_add_task_rejects_invalid_time_without_persisting_state(
-) -> std::result::Result<(), Box<dyn Error>> {
+async fn test_add_task_rejects_invalid_time_without_persisting_state()
+-> std::result::Result<(), Box<dyn Error>> {
     let graph = Arc::new(KnowledgeGraph::new());
     let tmp = tempdir()?;
     let storage = Arc::new(MarkdownStorage::new(tmp.path().to_path_buf()));
