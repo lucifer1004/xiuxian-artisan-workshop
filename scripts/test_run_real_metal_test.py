@@ -469,6 +469,52 @@ ocr_prompt = "<image>\\n<|grounding|>Return exactly one visible digit from the i
     assert profile.env_overrides["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "1"
 
 
+def test_read_test_profile_config_supports_expected_substring_override(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "vision_deepseek.toml"
+    config_path.write_text(
+        """
+[test_profiles.deepseek_metal_smoke_12g_amount_value]
+max_rss_gb = 12.0
+capfox_mem_percent = 30.0
+capfox_gpu_percent = 80.0
+capfox_vram_percent = 60.0
+rust_log = "info"
+model_kind = "deepseek"
+base_size = 384
+image_size = 384
+crop_mode = false
+max_new_tokens = 8
+min_output_chars = 6
+decode_use_cache = false
+require_quantized = false
+preload_language_f32_aux = false
+preload_vision_f32_aux = false
+preload_linear_weight_f32 = false
+promote_language_input_f32 = false
+prefill_attention_f32 = false
+moe_gate_input_f32 = false
+moe_backend = "metal_fast"
+shared_expert_f32_compute = false
+lazy_moe_experts = false
+lazy_clip_transformer_layers = true
+expected_substring = "128.50"
+ocr_prompt = "<image>\\n<|grounding|>Return only the amount value from the image. No label. No markdown. No explanation."
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = _MODULE._read_test_profile_config(
+        "deepseek_metal_smoke_12g_amount_value",
+        config_path,
+    )
+
+    assert profile is not None
+    assert profile.env_overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] == "128.50"
+
+
 def test_read_test_profile_config_supports_metal_fast_shared_diagnostics(
     tmp_path: Path,
 ) -> None:
@@ -548,6 +594,7 @@ moe_backend = "metal_fast"
 shared_expert_f32_compute = false
 lazy_moe_experts = false
 lazy_clip_transformer_layers = true
+expected_substring = "0"
 ocr_prompt = "<image>\\n<|grounding|>Return exactly one visible digit from the image. No markdown. No explanation."
 """.strip()
         + "\n",
@@ -561,6 +608,55 @@ ocr_prompt = "<image>\\n<|grounding|>Return exactly one visible digit from the i
 
     assert profile is not None
     assert profile.env_overrides["XIUXIAN_VISION_SHARED_EXPERT_F32_COMPUTE"] == "0"
+    assert profile.env_overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] == "0"
+
+
+def test_read_test_profile_config_supports_telegram_word_profile(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "vision_deepseek.toml"
+    config_path.write_text(
+        """
+[test_profiles.deepseek_metal_smoke_12g_safe384_telegram_word_metal_fast_eager_shared_native]
+max_rss_gb = 12.0
+capfox_mem_percent = 30.0
+capfox_gpu_percent = 80.0
+capfox_vram_percent = 60.0
+rust_log = "info"
+model_kind = "deepseek"
+base_size = 384
+image_size = 384
+crop_mode = false
+max_new_tokens = 2
+min_output_chars = 8
+decode_use_cache = false
+require_quantized = false
+preload_language_f32_aux = false
+preload_vision_f32_aux = false
+preload_linear_weight_f32 = false
+promote_language_input_f32 = false
+prefill_attention_f32 = false
+moe_gate_input_f32 = false
+moe_backend = "metal_fast"
+shared_expert_f32_compute = false
+lazy_moe_experts = false
+lazy_clip_transformer_layers = true
+expected_substring = "Telegram"
+ocr_prompt = "<image>\\n<|grounding|>Return only the visible word Telegram from the image. No label. No markdown. No explanation."
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = _MODULE._read_test_profile_config(
+        "deepseek_metal_smoke_12g_safe384_telegram_word_metal_fast_eager_shared_native",
+        config_path,
+    )
+
+    assert profile is not None
+    assert profile.env_overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] == "Telegram"
+    assert profile.env_overrides["XIUXIAN_VISION_OCR_MAX_NEW_TOKENS"] == "2"
+    assert profile.env_overrides["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "8"
 
 
 def test_selected_passthrough_env_reports_non_profile_overrides() -> None:

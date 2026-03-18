@@ -1,6 +1,7 @@
 //! Shared testing utilities for xiuxian crates.
 //!
 //! This crate provides:
+//! - **Contract Kernel**: Shared findings, reports, rule-pack interfaces, and advisory audit types
 //! - **Scenario Framework**: A reusable framework for scenario-based snapshot testing
 //! - **Test Structure Validation**: Utilities to enforce test directory conventions
 //! - **External Test Support**: Convention and policy validation for externalized tests via `#[path]`
@@ -9,7 +10,12 @@
 //! # Scenario Framework
 //!
 //! The scenario framework allows you to define test scenarios as directories with
-//! input files and configuration. It uses Insta for snapshot testing.
+//! input files and configuration. It uses Insta for snapshot testing and exposes
+//! a shared snapshot policy for deterministic ordering, rich metadata, and
+//! reusable redactions. The recommended policy also includes shared stability
+//! presets for portable paths and common runtime-volatility fields. For fixture
+//! roots that should not leak into snapshot headers, use `portable_ci()`. For
+//! runtime-heavy suites, use `runtime_heavy()`.
 //!
 //! ## Directory Structure
 //!
@@ -45,7 +51,10 @@
 //! ## Example
 //!
 //! ```ignore
-//! use xiuxian_testing::{ScenarioFramework, ScenarioRunner, Scenario};
+//! use xiuxian_testing::{
+//!     Scenario, ScenarioFramework, ScenarioRunner, ScenarioSnapshotPolicy,
+//!     ScenarioSnapshotRedaction,
+//! };
 //!
 //! struct MyRunner;
 //!
@@ -60,17 +69,28 @@
 //!
 //! #[test]
 //! fn test_my_scenarios() {
-//!     let mut framework = ScenarioFramework::new();
+//!     let mut policy = ScenarioSnapshotPolicy::runtime_heavy();
+//!     policy.add_redaction(ScenarioSnapshotRedaction::sort(".warnings"));
+//!     let mut framework = ScenarioFramework::new().with_snapshot_policy(policy);
 //!     framework.register(Box::new(MyRunner));
 //!     framework.run_all().unwrap();  // Runs all scenarios with registered runners
 //! }
 //! ```
 
+pub mod contracts;
 pub mod external_test;
 pub mod policy;
 pub mod scenario;
 pub mod utils;
 pub mod validation;
+
+pub use contracts::{
+    AdvisoryAuditExecutor, AdvisoryAuditPolicy, AdvisoryAuditRequest, ArtifactKind,
+    CollectedArtifact, CollectedArtifacts, CollectionContext, ContractExecutionMode,
+    ContractFinding, ContractReport, ContractStats, ContractSuite, EvidenceKind, FindingConfidence,
+    FindingEvidence, FindingExamples, FindingMode, FindingSeverity, NoopAdvisoryAuditExecutor,
+    NoopRulePack, RoleAuditFinding, RulePack, RulePackDescriptor,
+};
 
 pub use external_test::{
     ExternalTestMount, ExternalTestValidationIssue, calculate_test_path, generate_path_attribute,
@@ -84,6 +104,7 @@ pub use policy::{
 
 pub use scenario::{
     AssertConfig, Scenario, ScenarioConfig, ScenarioFramework, ScenarioMeta, ScenarioRunner,
+    ScenarioSnapshotPolicy, ScenarioSnapshotRedaction, ScenarioSnapshotRedactionPreset,
     copy_dir_recursive, discover_scenarios, discover_scenarios_at, find_first_doc_name,
     load_expected_json, scenarios_root, scenarios_root_at,
 };

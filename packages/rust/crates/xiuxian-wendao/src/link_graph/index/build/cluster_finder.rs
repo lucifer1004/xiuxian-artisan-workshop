@@ -64,7 +64,7 @@ impl DenseCluster {
                 .iter()
                 .filter_map(|id| saliency_map.get(id))
                 .sum::<f64>()
-                / members.len() as f64
+                / usize_to_f64_saturating(members.len())
         };
 
         // Count internal edges
@@ -80,7 +80,8 @@ impl DenseCluster {
         // possible_edges = n * (n-1) for directed graph
         let n = members.len();
         let possible_edges = if n > 1 { n * (n - 1) } else { 1 };
-        let edge_density = internal_edges as f64 / possible_edges as f64;
+        let edge_density =
+            usize_to_f64_saturating(internal_edges) / usize_to_f64_saturating(possible_edges);
 
         Self {
             members,
@@ -253,7 +254,11 @@ fn compute_edge_density(
 
     let n = members.len();
     let possible_edges = n * (n - 1);
-    internal_edges as f64 / possible_edges as f64
+    usize_to_f64_saturating(internal_edges) / usize_to_f64_saturating(possible_edges)
+}
+
+fn usize_to_f64_saturating(value: usize) -> f64 {
+    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
 }
 
 #[cfg(test)]

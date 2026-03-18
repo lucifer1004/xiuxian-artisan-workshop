@@ -1,13 +1,23 @@
 ---
 source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+description: "Scenario llm_analyzer_basic_streaming [llm_analyzer]: LLM Analyzer Basic Streaming"
 expression: result
+info:
+  id: llm_analyzer_basic_streaming
+  name: LLM Analyzer Basic Streaming
+  category: llm_analyzer
+  description: Test basic LLM analyzer configuration structure with cognitive supervision
+  input_type: config
+  input_paths: []
+  expected_output_type: ~
+input_file: packages/rust/crates/xiuxian-qianji/tests/scenarios/llm_analyzer_basic_streaming/scenario.toml
 ---
 {
+  "category": "llm_analyzer",
+  "cognitive_supervision": true,
+  "early_halt_threshold": 0.3,
   "scenario_id": "llm_analyzer_basic_streaming",
   "scenario_name": "LLM Analyzer Basic Streaming",
-  "category": "llm_analyzer",
   "status": "configured",
-  "streaming_enabled": true,
-  "cognitive_supervision": true,
-  "early_halt_threshold": 0.3
+  "streaming_enabled": true
 }

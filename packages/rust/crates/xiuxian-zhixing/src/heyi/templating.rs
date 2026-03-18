@@ -2,9 +2,6 @@ use super::ZhixingHeyi;
 use serde_json::{Map, Value, json};
 
 const DEFAULT_ZHIXING_DOMAIN: &str = "zhixing.agenda";
-const MARKDOWN_V2_SPECIAL_CHARS: [char; 19] = [
-    '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!', '\\',
-];
 
 impl ZhixingHeyi {
     pub(super) fn render_with_qianhuan_context(
@@ -50,15 +47,4 @@ impl ZhixingHeyi {
                 ))
             })
     }
-}
-
-pub(super) fn escape_markdown_v2(raw: &str) -> String {
-    let mut escaped = String::with_capacity(raw.len());
-    for ch in raw.chars() {
-        if MARKDOWN_V2_SPECIAL_CHARS.contains(&ch) {
-            escaped.push('\\');
-        }
-        escaped.push(ch);
-    }
-    escaped
 }

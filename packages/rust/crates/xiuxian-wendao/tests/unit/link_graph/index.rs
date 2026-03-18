@@ -31,12 +31,16 @@ fn test_symbol_ref_serialization() {
         scope: Some("src/api/**".to_string()),
     };
 
-    let json = serde_json::to_string(&symbol_ref).unwrap();
+    let Ok(json) = serde_json::to_string(&symbol_ref) else {
+        panic!("symbol reference serialization should succeed");
+    };
     assert!(json.contains("process_data"));
     assert!(json.contains("rust"));
     assert!(json.contains("src/api"));
 
-    let deserialized: SymbolRef = serde_json::from_str(&json).unwrap();
+    let Ok(deserialized) = serde_json::from_str::<SymbolRef>(&json) else {
+        panic!("symbol reference deserialization should succeed");
+    };
     assert_eq!(deserialized.doc_id, "docs/api");
     assert_eq!(deserialized.line_number, Some(42));
     assert_eq!(deserialized.scope, Some("src/api/**".to_string()));
@@ -53,7 +57,11 @@ fn test_symbol_ref_serialization_no_scope() {
         scope: None,
     };
 
-    let json = serde_json::to_string(&symbol_ref).unwrap();
-    let deserialized: SymbolRef = serde_json::from_str(&json).unwrap();
+    let Ok(json) = serde_json::to_string(&symbol_ref) else {
+        panic!("symbol reference serialization should succeed");
+    };
+    let Ok(deserialized) = serde_json::from_str::<SymbolRef>(&json) else {
+        panic!("symbol reference deserialization should succeed");
+    };
     assert!(deserialized.scope.is_none());
 }

@@ -1,24 +1,34 @@
 ---
 source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+description: "Scenario adversarial_red_team [audit_flow]: GLM-5 vs Claude 3.5 Red-Team Drill"
 expression: result
+info:
+  id: adversarial_red_team
+  name: GLM-5 vs Claude 3.5 Red-Team Drill
+  category: audit_flow
+  description: "Verify that Claude can intercept and force remediation on GLM-5's logical flaws."
+  input_type: multi_model_mock
+  input_paths: []
+  expected_output_type: ~
+input_file: packages/rust/crates/xiuxian-qianji/tests/scenarios/adversarial_red_team/scenario.toml
 ---
 {
-  "scenario_id": "adversarial_red_team",
-  "scenario_name": "GLM-5 vs Claude 3.5 Red-Team Drill",
   "category": "audit_flow",
-  "triple_loop": {
-    "plan_phase": "configured",
-    "execute_phase": "configured",
-    "verify_phase": "configured"
-  },
   "cognitive_supervision": {
-    "enabled": true,
+    "coherence_monitoring": true,
     "early_halt_threshold": 0.3,
-    "coherence_monitoring": true
+    "enabled": true
   },
   "remediation": {
-    "max_attempts": 5,
-    "auto_retry": true
+    "auto_retry": true,
+    "max_attempts": 5
+  },
+  "scenario_id": "adversarial_red_team",
+  "scenario_name": "GLM-5 vs Claude 3.5 Red-Team Drill",
+  "triple_loop": {
+    "execute_phase": "configured",
+    "plan_phase": "configured",
+    "verify_phase": "configured"
   },
   "xsd_contract": "qianji_plan.xsd"
 }

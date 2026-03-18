@@ -3,6 +3,7 @@
 //! This command starts the Sentinel daemon that watches specified paths
 //! for file changes, emits semantic drift signals through the `ObservationBus`.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -60,7 +61,7 @@ async fn handle_watch(args: &SentinelWatchArgs, index: Option<&LinkGraphIndex>) 
     let (signal_tx, mut signal_rx) = mpsc::unbounded_channel::<ZhenfaSignal>();
 
     // Build ZhenfaContext with optional LinkGraphIndex
-    let mut ctx = ZhenfaContext::new(Some("sentinel".to_string()), None, Default::default());
+    let mut ctx = ZhenfaContext::new(Some("sentinel".to_string()), None, HashMap::default());
 
     // Attach signal sender so Sentinel can emit signals
     ctx.attach_signal_sender(signal_tx);

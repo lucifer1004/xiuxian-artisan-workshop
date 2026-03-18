@@ -145,7 +145,9 @@ fn test_line_col_to_byte_range_multiline() {
     let text = "Line 1\nLine 2\nLine 3";
     let range = line_col_to_byte_range(text, 1, 1, 3, 6);
     assert!(range.is_some());
-    let (start, end) = range.unwrap();
+    let Some((start, end)) = range else {
+        panic!("multiline byte range should exist");
+    };
     assert_eq!(start, 0);
     assert_eq!(end, text.len());
 }

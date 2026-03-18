@@ -21,12 +21,8 @@ pub struct InternalSkillIntentCatalog {
 
 impl InternalSkillIntentCatalog {
     /// Build a reusable internal-skill intent catalog from prebuilt link-graph indexes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when a provided index cannot expose raw intent targets for a mounted
-    /// internal-skill `SKILL.md` document.
-    pub fn from_link_graph_indexes<'a, I>(indexes: I) -> Result<Self>
+    #[must_use]
+    pub fn from_link_graph_indexes<'a, I>(indexes: I) -> Self
     where
         I: IntoIterator<Item = &'a LinkGraphIndex>,
     {
@@ -34,9 +30,9 @@ impl InternalSkillIntentCatalog {
         for index in indexes {
             extend_manifest_intents_from_index(index, &mut intended_manifests);
         }
-        Ok(Self {
+        Self {
             intended_manifests: intended_manifests.into_iter().collect(),
-        })
+        }
     }
 }
 

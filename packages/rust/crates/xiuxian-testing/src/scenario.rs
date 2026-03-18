@@ -47,8 +47,9 @@ use std::error::Error;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 // ============================================================================
@@ -226,6 +227,494 @@ pub trait ScenarioRunner: Send + Sync {
 }
 
 // ============================================================================
+// Snapshot Policy
+// ============================================================================
+
+/// Shared Insta policy for scenario snapshots.
+///
+/// This keeps snapshot settings centralized so all scenario execution paths
+/// use the same determinism, metadata, and redaction rules.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScenarioSnapshotPolicy {
+    sort_maps: bool,
+    metadata: ScenarioSnapshotMetadataPolicy,
+    redactions: Vec<ScenarioSnapshotRedaction>,
+}
+
+impl ScenarioSnapshotPolicy {
+    /// Create a policy with stable JSON ordering and no metadata churn.
+    ///
+    /// This keeps the default path deterministic while avoiding automatic
+    /// snapshot header changes for existing consumer crates.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            sort_maps: true,
+            metadata: ScenarioSnapshotMetadataPolicy::new(),
+            redactions: Vec::new(),
+        }
+    }
+
+    /// Create the richer recommended policy for generated scenario snapshots.
+    ///
+    /// This enables snapshot description, structured info metadata, an
+    /// input-file backlink to the scenario definition, and shared stability
+    /// presets for portable paths plus common runtime volatility fields.
+    #[must_use]
+    pub fn recommended() -> Self {
+        let mut policy = Self {
+            metadata: ScenarioSnapshotMetadataPolicy::recommended(),
+            ..Self::new()
+        };
+        policy
+            .add_redaction_preset(ScenarioSnapshotRedactionPreset::portable_paths())
+            .add_redaction_preset(ScenarioSnapshotRedactionPreset::runtime_volatility());
+        policy
+    }
+
+    /// Create a profile for snapshots that must remain portable across CI,
+    /// mirrored workspaces, or fixture roots that are not part of the public
+    /// test contract.
+    ///
+    /// This keeps the richer metadata envelope from `recommended()` while
+    /// omitting the `input_file` header.
+    #[must_use]
+    pub fn portable_ci() -> Self {
+        let mut policy = Self::recommended();
+        policy.set_include_input_file(false);
+        policy
+    }
+
+    /// Create a profile for snapshots that contain runtime-oriented metrics.
+    ///
+    /// This builds on `recommended()` and rounds common timing fields so
+    /// runtime-heavy suites can stay stable without bespoke selector lists.
+    #[must_use]
+    pub fn runtime_heavy() -> Self {
+        let mut policy = Self::recommended();
+        policy.add_redaction_preset(ScenarioSnapshotRedactionPreset::timing_noise());
+        policy
+    }
+
+    /// Return whether serialized maps are sorted before snapshotting.
+    #[must_use]
+    pub fn sort_maps(&self) -> bool {
+        self.sort_maps
+    }
+
+    /// Set whether serialized maps are sorted before snapshotting.
+    pub fn set_sort_maps(&mut self, value: bool) -> &mut Self {
+        self.sort_maps = value;
+        self
+    }
+
+    /// Return whether snapshot descriptions are emitted.
+    #[must_use]
+    pub fn include_description(&self) -> bool {
+        self.metadata.include_description()
+    }
+
+    /// Set whether snapshot descriptions are emitted.
+    pub fn set_include_description(&mut self, value: bool) -> &mut Self {
+        self.metadata.set_include_description(value);
+        self
+    }
+
+    /// Return whether structured snapshot info metadata is emitted.
+    #[must_use]
+    pub fn include_info(&self) -> bool {
+        self.metadata.include_info()
+    }
+
+    /// Set whether structured snapshot info metadata is emitted.
+    pub fn set_include_info(&mut self, value: bool) -> &mut Self {
+        self.metadata.set_include_info(value);
+        self
+    }
+
+    /// Return whether the scenario definition path is attached as snapshot metadata.
+    #[must_use]
+    pub fn include_input_file(&self) -> bool {
+        self.metadata.include_input_file()
+    }
+
+    /// Set whether the scenario definition path is attached as snapshot metadata.
+    pub fn set_include_input_file(&mut self, value: bool) -> &mut Self {
+        self.metadata.set_include_input_file(value);
+        self
+    }
+
+    /// Add a reusable redaction rule to the policy.
+    pub fn add_redaction(&mut self, redaction: ScenarioSnapshotRedaction) -> &mut Self {
+        self.redactions.push(redaction);
+        self
+    }
+
+    /// Add a shared preset of redactions for common snapshot-noise patterns.
+    pub fn add_redaction_preset(&mut self, preset: ScenarioSnapshotRedactionPreset) -> &mut Self {
+        self.redactions.extend(preset.redactions());
+        self
+    }
+
+    /// Return the configured redaction rules.
+    #[must_use]
+    pub fn redactions(&self) -> &[ScenarioSnapshotRedaction] {
+        &self.redactions
+    }
+
+    fn settings_for(&self, snapshot_path: &Path, scenario: &Scenario) -> insta::Settings {
+        let mut settings = insta::Settings::clone_current();
+        settings.set_snapshot_path(snapshot_path);
+        settings.set_prepend_module_to_snapshot(false);
+        settings.set_sort_maps(self.sort_maps);
+
+        if self.metadata.include_description() {
+            settings.set_description(Self::description_for(scenario));
+        } else {
+            settings.remove_description();
+        }
+
+        if self.metadata.include_input_file() {
+            settings.set_input_file(scenario.dir.join("scenario.toml"));
+        } else {
+            settings.remove_input_file();
+        }
+
+        for redaction in &self.redactions {
+            redaction.apply(&mut settings);
+        }
+
+        if self.metadata.include_info() {
+            let info = Self::info_for(scenario);
+            settings.set_info(&info);
+        } else {
+            settings.remove_info();
+        }
+
+        settings
+    }
+
+    fn description_for(scenario: &Scenario) -> String {
+        format!(
+            "Scenario {} [{}]: {}",
+            scenario.id(),
+            scenario.category(),
+            scenario.name()
+        )
+    }
+
+    fn info_for(scenario: &Scenario) -> ScenarioSnapshotInfo<'_> {
+        ScenarioSnapshotInfo {
+            id: scenario.id(),
+            name: scenario.name(),
+            category: scenario.category(),
+            description: &scenario.config.scenario.description,
+            input_type: &scenario.config.input.input_type,
+            input_paths: &scenario.config.input.paths,
+            expected_output_type: scenario
+                .config
+                .expected
+                .as_ref()
+                .map(|expected| expected.output_type.as_str())
+                .filter(|value| !value.is_empty()),
+        }
+    }
+}
+
+impl Default for ScenarioSnapshotPolicy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ScenarioSnapshotMetadataPolicy {
+    include_description: bool,
+    include_info: bool,
+    include_input_file: bool,
+}
+
+impl ScenarioSnapshotMetadataPolicy {
+    fn new() -> Self {
+        Self {
+            include_description: false,
+            include_info: false,
+            include_input_file: false,
+        }
+    }
+
+    fn recommended() -> Self {
+        Self {
+            include_description: true,
+            include_info: true,
+            include_input_file: true,
+        }
+    }
+
+    fn include_description(&self) -> bool {
+        self.include_description
+    }
+
+    fn set_include_description(&mut self, value: bool) {
+        self.include_description = value;
+    }
+
+    fn include_info(&self) -> bool {
+        self.include_info
+    }
+
+    fn set_include_info(&mut self, value: bool) {
+        self.include_info = value;
+    }
+
+    fn include_input_file(&self) -> bool {
+        self.include_input_file
+    }
+
+    fn set_include_input_file(&mut self, value: bool) {
+        self.include_input_file = value;
+    }
+}
+
+/// Shared groups of scenario redactions for common snapshot-stability patterns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScenarioSnapshotRedactionPreset {
+    /// Normalize common path-bearing fields so snapshots stay portable across
+    /// workspaces, home directories, and temp roots.
+    PortablePaths,
+    /// Replace common runtime-generated identifiers and timestamps with stable
+    /// placeholders.
+    RuntimeVolatility,
+    /// Round common timing and duration fields that tend to fluctuate between
+    /// executions while preserving their overall scale.
+    TimingNoise,
+}
+
+impl ScenarioSnapshotRedactionPreset {
+    /// Preset for path-bearing fields in scenario output payloads.
+    #[must_use]
+    pub fn portable_paths() -> Self {
+        Self::PortablePaths
+    }
+
+    /// Preset for runtime-generated identifiers and timestamps.
+    #[must_use]
+    pub fn runtime_volatility() -> Self {
+        Self::RuntimeVolatility
+    }
+
+    /// Preset for common timing and duration metrics in runtime-heavy output.
+    #[must_use]
+    pub fn timing_noise() -> Self {
+        Self::TimingNoise
+    }
+
+    fn redactions(self) -> Vec<ScenarioSnapshotRedaction> {
+        match self {
+            Self::PortablePaths => vec![
+                ScenarioSnapshotRedaction::normalize_path(".**.path"),
+                ScenarioSnapshotRedaction::normalize_path(".**.file_path"),
+                ScenarioSnapshotRedaction::normalize_path(".**.input_path"),
+                ScenarioSnapshotRedaction::normalize_path(".**.output_path"),
+                ScenarioSnapshotRedaction::normalize_path(".**.source_path"),
+                ScenarioSnapshotRedaction::normalize_path(".**.target_path"),
+                ScenarioSnapshotRedaction::normalize_path(".**.temp_dir"),
+                ScenarioSnapshotRedaction::normalize_path(".**.workspace_root"),
+                ScenarioSnapshotRedaction::normalize_path(".**.cwd"),
+                ScenarioSnapshotRedaction::normalize_path(".**.input_paths[]"),
+                ScenarioSnapshotRedaction::normalize_path(".**.output_paths[]"),
+            ],
+            Self::RuntimeVolatility => vec![
+                ScenarioSnapshotRedaction::replace(".**.request_id", "[request-id]"),
+                ScenarioSnapshotRedaction::replace(".**.trace_id", "[trace-id]"),
+                ScenarioSnapshotRedaction::replace(".**.session_id", "[session-id]"),
+                ScenarioSnapshotRedaction::replace(".**.run_id", "[run-id]"),
+                ScenarioSnapshotRedaction::replace(".**.correlation_id", "[correlation-id]"),
+                ScenarioSnapshotRedaction::replace(".**.timestamp", "[timestamp]"),
+                ScenarioSnapshotRedaction::replace(".**.created_at", "[created-at]"),
+                ScenarioSnapshotRedaction::replace(".**.updated_at", "[updated-at]"),
+                ScenarioSnapshotRedaction::replace(".**.started_at", "[started-at]"),
+                ScenarioSnapshotRedaction::replace(".**.finished_at", "[finished-at]"),
+                ScenarioSnapshotRedaction::replace(".**.completed_at", "[completed-at]"),
+                ScenarioSnapshotRedaction::replace(".**.generated_at", "[generated-at]"),
+            ],
+            Self::TimingNoise => vec![
+                ScenarioSnapshotRedaction::round(".**.latency_ms", 2),
+                ScenarioSnapshotRedaction::round(".**.duration_ms", 2),
+                ScenarioSnapshotRedaction::round(".**.elapsed_ms", 2),
+                ScenarioSnapshotRedaction::round(".**.processing_ms", 2),
+                ScenarioSnapshotRedaction::round(".**.total_ms", 2),
+                ScenarioSnapshotRedaction::round(".**.latency_secs", 4),
+                ScenarioSnapshotRedaction::round(".**.duration_secs", 4),
+                ScenarioSnapshotRedaction::round(".**.elapsed_secs", 4),
+                ScenarioSnapshotRedaction::round(".**.processing_secs", 4),
+                ScenarioSnapshotRedaction::round(".**.total_secs", 4),
+            ],
+        }
+    }
+}
+
+/// A reusable redaction rule for scenario snapshots.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScenarioSnapshotRedaction {
+    /// Replace the matched value with a static placeholder.
+    Replace {
+        /// Insta selector path such as `.request.id`.
+        selector: String,
+        /// Replacement placeholder written into the snapshot.
+        replacement: String,
+    },
+    /// Sort a matched collection before storing it in the snapshot.
+    Sort {
+        /// Insta selector path such as `.flags`.
+        selector: String,
+    },
+    /// Round a matched floating-point value to a fixed precision.
+    Round {
+        /// Insta selector path such as `.timings.latency_ms`.
+        selector: String,
+        /// Number of digits to preserve after the decimal point.
+        decimals: usize,
+    },
+    /// Normalize a selected path string to a portable snapshot representation.
+    NormalizePath {
+        /// Insta selector path such as `.artifacts.output_path`.
+        selector: String,
+    },
+}
+
+impl ScenarioSnapshotRedaction {
+    /// Create a static placeholder redaction.
+    #[must_use]
+    pub fn replace(selector: impl Into<String>, replacement: impl Into<String>) -> Self {
+        Self::Replace {
+            selector: selector.into(),
+            replacement: replacement.into(),
+        }
+    }
+
+    /// Create a sorting redaction for unstable sequence or map ordering.
+    #[must_use]
+    pub fn sort(selector: impl Into<String>) -> Self {
+        Self::Sort {
+            selector: selector.into(),
+        }
+    }
+
+    /// Create a rounding redaction for floating-point noise.
+    #[must_use]
+    pub fn round(selector: impl Into<String>, decimals: usize) -> Self {
+        Self::Round {
+            selector: selector.into(),
+            decimals,
+        }
+    }
+
+    /// Normalize a selected path string to a portable snapshot representation.
+    #[must_use]
+    pub fn normalize_path(selector: impl Into<String>) -> Self {
+        Self::NormalizePath {
+            selector: selector.into(),
+        }
+    }
+
+    fn apply(&self, settings: &mut insta::Settings) {
+        match self {
+            Self::Replace {
+                selector,
+                replacement,
+            } => settings.add_redaction(selector, replacement.as_str()),
+            Self::Sort { selector } => settings.add_redaction(selector, insta::sorted_redaction()),
+            Self::Round { selector, decimals } => {
+                settings.add_redaction(selector, insta::rounded_redaction(*decimals));
+            }
+            Self::NormalizePath { selector } => settings.add_redaction(
+                selector,
+                insta::dynamic_redaction(|value, _path| match value.as_str() {
+                    Some(raw) => normalize_snapshot_path(raw).into(),
+                    None => value,
+                }),
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+struct ScenarioSnapshotInfo<'a> {
+    id: &'a str,
+    name: &'a str,
+    category: &'a str,
+    description: &'a str,
+    input_type: &'a str,
+    input_paths: &'a [String],
+    expected_output_type: Option<&'a str>,
+}
+
+fn normalize_snapshot_path(raw: &str) -> String {
+    let normalized = normalize_path_separators(raw);
+    let prefixes = [
+        (workspace_root(), "[workspace]"),
+        (home_dir(), "[home]"),
+        (Some(std::env::temp_dir()), "[temp]"),
+    ];
+
+    for (prefix, placeholder) in prefixes {
+        if let Some(prefix) = prefix
+            && let Some(rewritten) = rewrite_path_prefix(&normalized, &prefix, placeholder)
+        {
+            return rewritten;
+        }
+    }
+
+    normalized
+}
+
+fn normalize_path_separators(raw: &str) -> String {
+    raw.replace('\\', "/")
+}
+
+fn rewrite_path_prefix(raw: &str, prefix: &Path, placeholder: &str) -> Option<String> {
+    let normalized_prefix = normalize_path_separators(&prefix.to_string_lossy());
+    let suffix = raw
+        .strip_prefix(&normalized_prefix)?
+        .trim_start_matches('/');
+
+    if suffix.is_empty() {
+        Some(placeholder.to_string())
+    } else {
+        Some(format!("{placeholder}/{suffix}"))
+    }
+}
+
+fn workspace_root() -> Option<PathBuf> {
+    static WORKSPACE_ROOT: OnceLock<Option<PathBuf>> = OnceLock::new();
+    WORKSPACE_ROOT.get_or_init(detect_workspace_root).clone()
+}
+
+fn detect_workspace_root() -> Option<PathBuf> {
+    let mut current = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    loop {
+        let manifest_path = current.join("Cargo.toml");
+        if let Ok(manifest) = fs::read_to_string(&manifest_path)
+            && manifest.contains("[workspace]")
+        {
+            return Some(current);
+        }
+
+        if !current.pop() {
+            return None;
+        }
+    }
+}
+
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
+// ============================================================================
 // ScenarioFramework
 // ============================================================================
 
@@ -233,6 +722,7 @@ pub trait ScenarioRunner: Send + Sync {
 pub struct ScenarioFramework {
     runners: HashMap<String, Box<dyn ScenarioRunner>>,
     snapshot_path: PathBuf,
+    snapshot_policy: ScenarioSnapshotPolicy,
 }
 
 impl ScenarioFramework {
@@ -246,6 +736,7 @@ impl ScenarioFramework {
         Self {
             runners: HashMap::new(),
             snapshot_path: manifest_dir.join("tests").join("snapshots"),
+            snapshot_policy: ScenarioSnapshotPolicy::default(),
         }
     }
 
@@ -255,7 +746,31 @@ impl ScenarioFramework {
         Self {
             runners: HashMap::new(),
             snapshot_path: snapshot_path.into(),
+            snapshot_policy: ScenarioSnapshotPolicy::default(),
         }
+    }
+
+    /// Return the current snapshot policy.
+    #[must_use]
+    pub fn snapshot_policy(&self) -> &ScenarioSnapshotPolicy {
+        &self.snapshot_policy
+    }
+
+    /// Return the current snapshot policy for in-place updates.
+    pub fn snapshot_policy_mut(&mut self) -> &mut ScenarioSnapshotPolicy {
+        &mut self.snapshot_policy
+    }
+
+    /// Replace the current snapshot policy.
+    pub fn set_snapshot_policy(&mut self, snapshot_policy: ScenarioSnapshotPolicy) {
+        self.snapshot_policy = snapshot_policy;
+    }
+
+    /// Replace the current snapshot policy and return the framework.
+    #[must_use]
+    pub fn with_snapshot_policy(mut self, snapshot_policy: ScenarioSnapshotPolicy) -> Self {
+        self.snapshot_policy = snapshot_policy;
+        self
     }
 
     /// Register a scenario runner.
@@ -318,15 +833,7 @@ impl ScenarioFramework {
             // Run the scenario
             let result = runner.run(&scenario, temp_dir.path())?;
 
-            // Use Insta for snapshot comparison
-            let snapshot_path = self.snapshot_path.clone();
-            let snapshot_name = format!("scenarios__{}", scenario.id());
-            insta::with_settings!({
-                snapshot_path => snapshot_path,
-                prepend_module_to_snapshot => false,
-            }, {
-                insta::assert_json_snapshot!(snapshot_name, result);
-            });
+            self.assert_scenario_snapshot(&scenario, &result);
         }
 
         Ok(count)
@@ -366,18 +873,20 @@ impl ScenarioFramework {
             // Run the scenario and generate snapshot
             let result = runner.run(&scenario, temp_dir.path())?;
 
-            // Use Insta for snapshot comparison
-            let snapshot_path = self.snapshot_path.clone();
-            let snapshot_name = format!("scenarios__{}", scenario.id());
-            insta::with_settings!({
-                snapshot_path => snapshot_path,
-                prepend_module_to_snapshot => false,
-            }, {
-                insta::assert_json_snapshot!(snapshot_name, result);
-            });
+            self.assert_scenario_snapshot(&scenario, &result);
         }
 
         Ok(count)
+    }
+
+    fn assert_scenario_snapshot(&self, scenario: &Scenario, result: &Value) {
+        let snapshot_name = format!("scenarios__{}", scenario.id());
+        let settings = self
+            .snapshot_policy
+            .settings_for(&self.snapshot_path, scenario);
+        settings.bind(|| {
+            insta::assert_json_snapshot!(snapshot_name, result);
+        });
     }
 }
 
@@ -505,8 +1014,10 @@ mod tests {
 
     fn write_scenario_fixture(root: &Path, name: &str, category: &str) {
         let scenario_dir = root.join(name);
-        fs::create_dir_all(&scenario_dir).expect("scenario dir should be created");
-        fs::write(
+        if let Err(error) = fs::create_dir_all(&scenario_dir) {
+            panic!("scenario dir should be created: {error}");
+        }
+        if let Err(error) = fs::write(
             scenario_dir.join("scenario.toml"),
             format!(
                 r#"[scenario]
@@ -519,14 +1030,18 @@ category = "{category}"
 type = "json"
 "#
             ),
-        )
-        .expect("scenario.toml should be written");
+        ) {
+            panic!("scenario.toml should be written: {error}");
+        }
     }
 
     #[test]
     fn test_framework_new() {
         let framework = ScenarioFramework::new();
         assert!(framework.find_runner("nonexistent").is_none());
+        assert!(framework.snapshot_policy().sort_maps());
+        assert!(!framework.snapshot_policy().include_description());
+        assert!(!framework.snapshot_policy().include_info());
     }
 
     #[test]
@@ -561,13 +1076,16 @@ type = "json"
 
     #[test]
     fn run_all_at_fails_when_scenario_has_no_registered_runner() {
-        let temp = tempfile::tempdir().expect("tempdir should be created");
+        let temp = match tempfile::tempdir() {
+            Ok(temp) => temp,
+            Err(error) => panic!("tempdir should be created: {error}"),
+        };
         write_scenario_fixture(temp.path(), "001_missing_runner", "missing_runner");
 
         let framework = ScenarioFramework::new();
-        let error = framework
-            .run_all_at(temp.path())
-            .expect_err("missing runner should fail closed");
+        let Err(error) = framework.run_all_at(temp.path()) else {
+            panic!("missing runner should fail closed");
+        };
 
         assert!(
             error
@@ -575,5 +1093,289 @@ type = "json"
                 .contains("No runner registered for scenario category 'missing_runner'"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn snapshot_policy_recommended_enables_rich_metadata() {
+        let policy = ScenarioSnapshotPolicy::recommended();
+
+        assert!(policy.sort_maps());
+        assert!(policy.include_description());
+        assert!(policy.include_info());
+        assert!(policy.include_input_file());
+        assert!(
+            policy
+                .redactions()
+                .contains(&ScenarioSnapshotRedaction::normalize_path(".**.path"))
+        );
+        assert!(
+            policy
+                .redactions()
+                .contains(&ScenarioSnapshotRedaction::replace(
+                    ".**.request_id",
+                    "[request-id]"
+                ))
+        );
+        assert!(
+            !policy
+                .redactions()
+                .contains(&ScenarioSnapshotRedaction::round(".**.latency_ms", 2))
+        );
+    }
+
+    #[test]
+    fn snapshot_policy_portable_ci_disables_input_file_metadata() {
+        let policy = ScenarioSnapshotPolicy::portable_ci();
+
+        assert!(policy.sort_maps());
+        assert!(policy.include_description());
+        assert!(policy.include_info());
+        assert!(!policy.include_input_file());
+    }
+
+    #[test]
+    fn snapshot_policy_runtime_heavy_adds_timing_redactions() {
+        let policy = ScenarioSnapshotPolicy::runtime_heavy();
+
+        assert!(policy.include_input_file());
+        assert!(
+            policy
+                .redactions()
+                .contains(&ScenarioSnapshotRedaction::round(".**.latency_ms", 2))
+        );
+        assert!(
+            policy
+                .redactions()
+                .contains(&ScenarioSnapshotRedaction::round(".**.duration_secs", 4))
+        );
+    }
+
+    #[test]
+    fn snapshot_policy_supports_redaction_builders() {
+        let mut policy = ScenarioSnapshotPolicy::new();
+        policy
+            .add_redaction(ScenarioSnapshotRedaction::replace(".request.id", "[id]"))
+            .add_redaction(ScenarioSnapshotRedaction::sort(".flags"))
+            .add_redaction(ScenarioSnapshotRedaction::round(".timings.latency_ms", 2))
+            .add_redaction(ScenarioSnapshotRedaction::normalize_path(
+                ".artifacts.output_path",
+            ));
+
+        assert_eq!(policy.redactions().len(), 4);
+        assert_eq!(
+            policy.redactions()[0],
+            ScenarioSnapshotRedaction::Replace {
+                selector: ".request.id".to_string(),
+                replacement: "[id]".to_string(),
+            }
+        );
+        assert_eq!(
+            policy.redactions()[1],
+            ScenarioSnapshotRedaction::Sort {
+                selector: ".flags".to_string(),
+            }
+        );
+        assert_eq!(
+            policy.redactions()[2],
+            ScenarioSnapshotRedaction::Round {
+                selector: ".timings.latency_ms".to_string(),
+                decimals: 2,
+            }
+        );
+        assert_eq!(
+            policy.redactions()[3],
+            ScenarioSnapshotRedaction::NormalizePath {
+                selector: ".artifacts.output_path".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn snapshot_policy_supports_redaction_presets() {
+        let mut policy = ScenarioSnapshotPolicy::new();
+        policy
+            .add_redaction_preset(ScenarioSnapshotRedactionPreset::portable_paths())
+            .add_redaction_preset(ScenarioSnapshotRedactionPreset::runtime_volatility())
+            .add_redaction_preset(ScenarioSnapshotRedactionPreset::timing_noise());
+
+        assert!(
+            policy
+                .redactions()
+                .contains(&ScenarioSnapshotRedaction::normalize_path(".**.temp_dir"))
+        );
+        assert!(
+            policy
+                .redactions()
+                .contains(&ScenarioSnapshotRedaction::replace(
+                    ".**.started_at",
+                    "[started-at]"
+                ))
+        );
+        assert!(
+            policy
+                .redactions()
+                .contains(&ScenarioSnapshotRedaction::round(".**.elapsed_ms", 2))
+        );
+    }
+
+    #[test]
+    fn snapshot_policy_builds_metadata_rich_settings() {
+        let temp = match tempfile::tempdir() {
+            Ok(temp) => temp,
+            Err(error) => panic!("tempdir should be created: {error}"),
+        };
+        write_scenario_fixture(temp.path(), "001_policy", "policy_case");
+        let scenario = match Scenario::load(temp.path().join("001_policy")) {
+            Ok(scenario) => scenario,
+            Err(error) => panic!("scenario should load: {error}"),
+        };
+        let snapshot_path = temp.path().join("snapshots");
+        let policy = ScenarioSnapshotPolicy::recommended();
+
+        let settings = policy.settings_for(&snapshot_path, &scenario);
+
+        assert!(settings.sort_maps());
+        assert!(!settings.prepend_module_to_snapshot());
+        assert_eq!(settings.snapshot_path(), snapshot_path.as_path());
+        assert_eq!(
+            settings.description(),
+            Some("Scenario 001_policy [policy_case]: Fixture Scenario")
+        );
+        assert_eq!(
+            settings.input_file(),
+            Some(scenario.dir.join("scenario.toml").as_path())
+        );
+        assert!(settings.has_info());
+    }
+
+    #[test]
+    fn snapshot_policy_portable_ci_omits_input_file_from_settings() {
+        let temp = match tempfile::tempdir() {
+            Ok(temp) => temp,
+            Err(error) => panic!("tempdir should be created: {error}"),
+        };
+        write_scenario_fixture(temp.path(), "001_portable", "portable_case");
+        let scenario = match Scenario::load(temp.path().join("001_portable")) {
+            Ok(scenario) => scenario,
+            Err(error) => panic!("scenario should load: {error}"),
+        };
+        let snapshot_path = temp.path().join("snapshots");
+        let policy = ScenarioSnapshotPolicy::portable_ci();
+
+        let settings = policy.settings_for(&snapshot_path, &scenario);
+
+        assert_eq!(settings.input_file(), None);
+        assert!(settings.has_info());
+        assert_eq!(
+            settings.description(),
+            Some("Scenario 001_portable [portable_case]: Fixture Scenario")
+        );
+    }
+
+    #[test]
+    fn snapshot_policy_clears_disabled_metadata_from_parent_settings() {
+        let temp = match tempfile::tempdir() {
+            Ok(temp) => temp,
+            Err(error) => panic!("tempdir should be created: {error}"),
+        };
+        write_scenario_fixture(temp.path(), "001_clean", "clean_case");
+        let scenario = match Scenario::load(temp.path().join("001_clean")) {
+            Ok(scenario) => scenario,
+            Err(error) => panic!("scenario should load: {error}"),
+        };
+        let snapshot_path = temp.path().join("snapshots");
+        let policy = ScenarioSnapshotPolicy::portable_ci();
+        let mut parent = insta::Settings::new();
+        parent.set_description("parent description");
+        parent.set_input_file(temp.path().join("parent.toml"));
+        parent.set_info(&serde_json::json!({ "parent": true }));
+
+        parent.bind(|| {
+            let settings = policy.settings_for(&snapshot_path, &scenario);
+
+            assert_eq!(settings.input_file(), None);
+            assert_eq!(
+                settings.description(),
+                Some("Scenario 001_clean [clean_case]: Fixture Scenario")
+            );
+            assert!(settings.has_info());
+        });
+    }
+
+    #[test]
+    fn snapshot_policy_new_removes_parent_metadata_when_disabled() {
+        let temp = match tempfile::tempdir() {
+            Ok(temp) => temp,
+            Err(error) => panic!("tempdir should be created: {error}"),
+        };
+        write_scenario_fixture(temp.path(), "001_minimal", "minimal_case");
+        let scenario = match Scenario::load(temp.path().join("001_minimal")) {
+            Ok(scenario) => scenario,
+            Err(error) => panic!("scenario should load: {error}"),
+        };
+        let snapshot_path = temp.path().join("snapshots");
+        let policy = ScenarioSnapshotPolicy::new();
+        let mut parent = insta::Settings::new();
+        parent.set_description("parent description");
+        parent.set_input_file(temp.path().join("parent.toml"));
+        parent.set_info(&serde_json::json!({ "parent": true }));
+
+        parent.bind(|| {
+            let settings = policy.settings_for(&snapshot_path, &scenario);
+
+            assert_eq!(settings.description(), None);
+            assert_eq!(settings.input_file(), None);
+            assert!(!settings.has_info());
+        });
+    }
+
+    #[test]
+    fn framework_can_replace_snapshot_policy() {
+        let mut framework = ScenarioFramework::new();
+        let mut policy = ScenarioSnapshotPolicy::recommended();
+        policy.set_sort_maps(false);
+        framework.set_snapshot_policy(policy.clone());
+
+        assert_eq!(framework.snapshot_policy(), &policy);
+        assert!(!framework.snapshot_policy().sort_maps());
+    }
+
+    #[test]
+    fn normalize_path_redaction_stabilizes_workspace_and_temp_prefixes() {
+        let Some(workspace_root) = workspace_root() else {
+            panic!("workspace root should be detected");
+        };
+        let workspace_path = workspace_root
+            .join("packages")
+            .join("rust")
+            .join("crates")
+            .join("xiuxian-testing")
+            .to_string_lossy()
+            .replace('/', "\\");
+        let temp_path = std::env::temp_dir()
+            .join("xiuxian-testing")
+            .join("fixture.json")
+            .to_string_lossy()
+            .to_string();
+        let mut settings = insta::Settings::new();
+        ScenarioSnapshotRedaction::normalize_path(".workspace").apply(&mut settings);
+        ScenarioSnapshotRedaction::normalize_path(".temp").apply(&mut settings);
+
+        settings.bind(|| {
+            insta::assert_json_snapshot!(
+                serde_json::json!({
+                    "workspace": workspace_path,
+                    "temp": temp_path,
+                    "relative": "docs/alpha.md",
+                }),
+                @r#"
+                {
+                  "relative": "docs/alpha.md",
+                  "temp": "[temp]/xiuxian-testing/fixture.json",
+                  "workspace": "[workspace]/packages/rust/crates/xiuxian-testing"
+                }
+                "#
+            );
+        });
     }
 }

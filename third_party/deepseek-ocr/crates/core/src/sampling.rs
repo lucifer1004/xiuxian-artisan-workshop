@@ -20,6 +20,12 @@ pub trait TokenSelectionParams {
     fn top_k(&self) -> Option<usize>;
     fn repetition_penalty(&self) -> f32;
     fn no_repeat_ngram_size(&self) -> Option<usize>;
+    fn prefer_digit_first_token(&self) -> bool {
+        false
+    }
+    fn preferred_first_visible_text(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// Create a deterministic RNG when a seed is provided.

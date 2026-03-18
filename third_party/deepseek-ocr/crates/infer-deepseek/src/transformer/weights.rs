@@ -46,6 +46,19 @@ fn emit_stage_trace(stage: &str, fields: &[(&str, String)]) {
     let _ = std::io::stderr().flush();
 }
 
+fn skip_shared_experts_enabled() -> bool {
+    env::var("XIUXIAN_VISION_SKIP_SHARED_EXPERTS")
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinearWeightMaterialization {
+    DefaultContiguous,
+    KeepViewForMetalFastPack,
+}
+
 /// Fully connected layer weights captured directly from safetensors via [`VarBuilder`].
 #[derive(Clone)]
 pub struct LinearWeights {
@@ -82,6 +95,7 @@ impl LinearWeights {
         out_dim: usize,
         in_dim: usize,
         bias: bool,
+        materialization: LinearWeightMaterialization,
         group: LinearLayerGroup,
         module: QuantModule,
         snapshot_hits: Option<&mut SnapshotLinearMap>,
@@ -89,6 +103,7 @@ impl LinearWeights {
     ) -> Result<Self> {
         let load_started_at = Instant::now();
         let label = qualified_name(vb, "weight");
+        let has_bias = bias && vb.contains_tensor("bias");
         emit_stage_trace(
             "deepseek.language.linear.weight.get.start",
             &[
@@ -114,17 +129,26 @@ impl LinearWeights {
                 ("label", label.clone()),
             ],
         );
-        let weight_init = weight_init.contiguous()?;
-        emit_stage_trace(
-            "deepseek.language.linear.weight.contiguous.completed",
-            &[
-                (
-                    "elapsed_ms",
-                    load_started_at.elapsed().as_millis().to_string(),
-                ),
-                ("label", label.clone()),
-            ],
-        );
+        let weight_init = if matches!(
+            materialization,
+            LinearWeightMaterialization::DefaultContiguous
+        ) || has_bias
+        {
+            let weight_init = weight_init.contiguous()?;
+            emit_stage_trace(
+                "deepseek.language.linear.weight.contiguous.completed",
+                &[
+                    (
+                        "elapsed_ms",
+                        load_started_at.elapsed().as_millis().to_string(),
+                    ),
+                    ("label", label.clone()),
+                ],
+            );
+            weight_init
+        } else {
+            weight_init
+        };
         let mut weight = Some(weight_init.clone());
         let load_policy = current_low_precision_load_policy();
         let weight_f32 = if load_policy.preload_linear_weight_f32
@@ -306,6 +330,7 @@ impl AttentionWeights {
             num_heads * head_dim,
             hidden_size,
             true,
+            LinearWeightMaterialization::DefaultContiguous,
             LinearLayerGroup::Text,
             QuantModule::TextLinear,
             snapshot_hits.as_mut(),
@@ -326,6 +351,7 @@ impl AttentionWeights {
             num_kv_heads * kv_head_dim,
             hidden_size,
             true,
+            LinearWeightMaterialization::DefaultContiguous,
             LinearLayerGroup::Text,
             QuantModule::TextLinear,
             snapshot_hits.as_mut(),
@@ -346,6 +372,7 @@ impl AttentionWeights {
             num_kv_heads * v_head_dim,
             hidden_size,
             true,
+            LinearWeightMaterialization::DefaultContiguous,
             LinearLayerGroup::Text,
             QuantModule::TextLinear,
             snapshot_hits.as_mut(),
@@ -366,6 +393,7 @@ impl AttentionWeights {
             hidden_size,
             num_heads * v_head_dim,
             true,
+            LinearWeightMaterialization::DefaultContiguous,
             LinearLayerGroup::Text,
             QuantModule::TextLinear,
             snapshot_hits.as_mut(),
@@ -403,6 +431,7 @@ impl DenseMlpWeights {
         hidden_size: usize,
         intermediate_size: usize,
         snapshot: Option<&QuantizedSnapshot>,
+        materialization: LinearWeightMaterialization,
     ) -> Result<Self> {
         let gate_vb = vb.pp("gate_proj");
         let up_vb = vb.pp("up_proj");
@@ -431,6 +460,7 @@ impl DenseMlpWeights {
             intermediate_size,
             hidden_size,
             true,
+            materialization,
             LinearLayerGroup::Text,
             QuantModule::TextLinear,
             snapshot_hits.as_mut(),
@@ -441,6 +471,7 @@ impl DenseMlpWeights {
             intermediate_size,
             hidden_size,
             true,
+            materialization,
             LinearLayerGroup::Text,
             QuantModule::TextLinear,
             snapshot_hits.as_mut(),
@@ -451,6 +482,7 @@ impl DenseMlpWeights {
             hidden_size,
             intermediate_size,
             true,
+            materialization,
             LinearLayerGroup::Text,
             QuantModule::TextLinear,
             snapshot_hits.as_mut(),
@@ -462,6 +494,71 @@ impl DenseMlpWeights {
             down_proj,
         })
     }
+}
+
+fn load_shared_experts(
+    layer_idx: usize,
+    cfg: &DeepseekV2Config,
+    vb: &VarBuilder,
+    hidden_size: usize,
+    moe_intermediate_size: usize,
+    snapshot: Option<&QuantizedSnapshot>,
+    load_started_at: &Instant,
+) -> Result<Option<DenseMlpWeights>> {
+    let Some(count) = cfg.n_shared_experts.filter(|c| *c > 0) else {
+        return Ok(None);
+    };
+    if skip_shared_experts_enabled() {
+        emit_stage_trace(
+            "deepseek.language.transformer_layer.mlp.moe.shared_experts.skipped",
+            &[
+                (
+                    "elapsed_ms",
+                    load_started_at.elapsed().as_millis().to_string(),
+                ),
+                ("layer_idx", layer_idx.to_string()),
+                ("shared_expert_count", count.to_string()),
+                ("reason", "env_override".to_string()),
+            ],
+        );
+        info!(
+            elapsed_ms = load_started_at.elapsed().as_millis(),
+            layer_idx,
+            shared_expert_count = count,
+            "deepseek language load stage completed: moe_shared_experts_skipped"
+        );
+        return Ok(None);
+    }
+
+    let vb = vb.pp("shared_experts");
+    let intermediate = moe_intermediate_size * count;
+    emit_stage_trace(
+        "deepseek.language.transformer_layer.mlp.moe.shared_experts.start",
+        &[
+            (
+                "elapsed_ms",
+                load_started_at.elapsed().as_millis().to_string(),
+            ),
+            ("layer_idx", layer_idx.to_string()),
+            ("shared_expert_count", count.to_string()),
+        ],
+    );
+    info!(
+        elapsed_ms = load_started_at.elapsed().as_millis(),
+        layer_idx,
+        shared_expert_count = count,
+        "deepseek language load stage completed: moe_shared_experts_start"
+    );
+    Ok(Some(
+        DenseMlpWeights::load(
+            &vb,
+            hidden_size,
+            intermediate,
+            snapshot,
+            LinearWeightMaterialization::DefaultContiguous,
+        )
+        .with_context(|| format!("failed to load shared_experts for layer {layer_idx}"))?,
+    ))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -553,6 +650,8 @@ pub struct DeferredDenseMlpWeights {
     intermediate_size: usize,
     layer_idx: usize,
     expert_idx: usize,
+    materialization: LinearWeightMaterialization,
+    cache_policy: DeferredExpertCachePolicy,
     cache: Arc<Mutex<Option<DenseMlpWeights>>>,
 }
 
@@ -568,8 +667,25 @@ impl fmt::Debug for DeferredDenseMlpWeights {
             .field("intermediate_size", &self.intermediate_size)
             .field("layer_idx", &self.layer_idx)
             .field("expert_idx", &self.expert_idx)
+            .field("materialization", &self.materialization)
+            .field("cache_policy", &self.cache_policy)
             .field("loaded", &loaded)
             .finish()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeferredExpertCachePolicy {
+    Retain,
+    Ephemeral,
+}
+
+impl DeferredExpertCachePolicy {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Retain => "retain",
+            Self::Ephemeral => "ephemeral",
+        }
     }
 }
 
@@ -581,6 +697,8 @@ impl DeferredDenseMlpWeights {
         intermediate_size: usize,
         layer_idx: usize,
         expert_idx: usize,
+        materialization: LinearWeightMaterialization,
+        cache_policy: DeferredExpertCachePolicy,
     ) -> Self {
         Self {
             source,
@@ -589,6 +707,8 @@ impl DeferredDenseMlpWeights {
             intermediate_size,
             layer_idx,
             expert_idx,
+            materialization,
+            cache_policy,
             cache: Arc::new(Mutex::new(None)),
         }
     }
@@ -598,27 +718,56 @@ impl DeferredDenseMlpWeights {
             .cache
             .lock()
             .expect("deferred moe expert cache mutex poisoned");
-        if let Some(weights) = slot.as_ref() {
-            return Ok(weights.clone());
+        if matches!(self.cache_policy, DeferredExpertCachePolicy::Retain) {
+            if let Some(weights) = slot.as_ref() {
+                return Ok(weights.clone());
+            }
         }
         let weights = with_low_precision_load_policy(self.source.inner.load_policy, || {
             let vb = self.source.build_var_builder()?;
             let expert_vb = vb.pp(self.prefix.clone());
-            DenseMlpWeights::load(&expert_vb, self.hidden_size, self.intermediate_size, None)
-                .with_context(|| {
-                    format!(
-                        "failed to lazily load MoE expert {} for layer {}",
-                        self.expert_idx, self.layer_idx
-                    )
-                })
+            DenseMlpWeights::load(
+                &expert_vb,
+                self.hidden_size,
+                self.intermediate_size,
+                None,
+                self.materialization,
+            )
+            .with_context(|| {
+                format!(
+                    "failed to lazily load MoE expert {} for layer {}",
+                    self.expert_idx, self.layer_idx
+                )
+            })
         })?;
         info!(
             layer_idx = self.layer_idx,
             expert_idx = self.expert_idx,
+            cache_policy = self.cache_policy.label(),
             "deepseek language load stage completed: moe_expert_materialized"
         );
-        *slot = Some(weights.clone());
+        if matches!(self.cache_policy, DeferredExpertCachePolicy::Retain) {
+            *slot = Some(weights.clone());
+        }
         Ok(weights)
+    }
+
+    #[cfg(test)]
+    fn cache_policy(&self) -> DeferredExpertCachePolicy {
+        self.cache_policy
+    }
+
+    #[cfg(test)]
+    fn materialization(&self) -> LinearWeightMaterialization {
+        self.materialization
+    }
+
+    #[cfg(test)]
+    fn is_cached(&self) -> bool {
+        self.cache
+            .lock()
+            .map(|slot| slot.is_some())
+            .unwrap_or(false)
     }
 }
 
@@ -654,10 +803,9 @@ pub struct MoeMetalFastExpertPack {
 }
 
 impl MoeMetalFastExpertPack {
-    fn from_slow(weights: &MoeSlowWeights) -> Result<Option<Self>> {
-        let mut gate_proj = Vec::with_capacity(weights.experts.len());
-        let mut up_proj = Vec::with_capacity(weights.experts.len());
-        let mut down_proj = Vec::with_capacity(weights.experts.len());
+    fn from_slow(weights: &MoeSlowWeights, layer_idx: usize) -> Result<Option<Self>> {
+        let pack_started_at = Instant::now();
+        let mut eager_experts = Vec::with_capacity(weights.experts.len());
         let mut hidden_size = None;
         let mut intermediate_size = None;
 
@@ -666,36 +814,127 @@ impl MoeMetalFastExpertPack {
                 MoeExpertWeights::Eager(expert) => expert,
                 MoeExpertWeights::Deferred(_) => return Ok(None),
             };
-            let Some(gate) = float_packable_weight(&expert.gate_proj) else {
+            if float_packable_weight(&expert.gate_proj).is_none() {
                 return Ok(None);
-            };
-            let Some(up) = float_packable_weight(&expert.up_proj) else {
+            }
+            if float_packable_weight(&expert.up_proj).is_none() {
                 return Ok(None);
-            };
-            let Some(down) = float_packable_weight(&expert.down_proj) else {
+            }
+            if float_packable_weight(&expert.down_proj).is_none() {
                 return Ok(None);
-            };
+            }
 
             hidden_size.get_or_insert(expert.gate_proj.in_dim);
             intermediate_size.get_or_insert(expert.gate_proj.out_dim);
-            gate_proj.push(gate.clone());
-            up_proj.push(up.clone());
-            down_proj.push(down.clone());
+            eager_experts.push(expert);
         }
 
-        if gate_proj.is_empty() {
+        if eager_experts.is_empty() {
             return Ok(None);
         }
 
-        Ok(Some(Self {
-            gate_proj: Tensor::stack(&gate_proj, 0)?.contiguous()?,
-            up_proj: Tensor::stack(&up_proj, 0)?.contiguous()?,
-            down_proj: Tensor::stack(&down_proj, 0)?.contiguous()?,
-            expert_count: gate_proj.len(),
+        emit_stage_trace(
+            "deepseek.language.transformer_layer.mlp.moe.pack.start",
+            &[
+                (
+                    "elapsed_ms",
+                    pack_started_at.elapsed().as_millis().to_string(),
+                ),
+                ("layer_idx", layer_idx.to_string()),
+                ("expert_count", eager_experts.len().to_string()),
+            ],
+        );
+        let gate_proj = Tensor::stack(
+            &eager_experts
+                .iter()
+                .map(|expert| {
+                    float_packable_weight(&expert.gate_proj)
+                        .expect("validated packable gate_proj")
+                        .clone()
+                })
+                .collect::<Vec<_>>(),
+            0,
+        )?
+        .contiguous()?;
+        emit_stage_trace(
+            "deepseek.language.transformer_layer.mlp.moe.pack.gate.completed",
+            &[
+                (
+                    "elapsed_ms",
+                    pack_started_at.elapsed().as_millis().to_string(),
+                ),
+                ("layer_idx", layer_idx.to_string()),
+                ("expert_count", eager_experts.len().to_string()),
+            ],
+        );
+        let up_proj = Tensor::stack(
+            &eager_experts
+                .iter()
+                .map(|expert| {
+                    float_packable_weight(&expert.up_proj)
+                        .expect("validated packable up_proj")
+                        .clone()
+                })
+                .collect::<Vec<_>>(),
+            0,
+        )?
+        .contiguous()?;
+        emit_stage_trace(
+            "deepseek.language.transformer_layer.mlp.moe.pack.up.completed",
+            &[
+                (
+                    "elapsed_ms",
+                    pack_started_at.elapsed().as_millis().to_string(),
+                ),
+                ("layer_idx", layer_idx.to_string()),
+                ("expert_count", eager_experts.len().to_string()),
+            ],
+        );
+        let down_proj = Tensor::stack(
+            &eager_experts
+                .iter()
+                .map(|expert| {
+                    float_packable_weight(&expert.down_proj)
+                        .expect("validated packable down_proj")
+                        .clone()
+                })
+                .collect::<Vec<_>>(),
+            0,
+        )?
+        .contiguous()?;
+        emit_stage_trace(
+            "deepseek.language.transformer_layer.mlp.moe.pack.down.completed",
+            &[
+                (
+                    "elapsed_ms",
+                    pack_started_at.elapsed().as_millis().to_string(),
+                ),
+                ("layer_idx", layer_idx.to_string()),
+                ("expert_count", eager_experts.len().to_string()),
+            ],
+        );
+
+        let pack = Self {
+            gate_proj,
+            up_proj,
+            down_proj,
+            expert_count: eager_experts.len(),
             hidden_size: hidden_size.expect("non-empty expert pack should set hidden_size"),
             intermediate_size: intermediate_size
                 .expect("non-empty expert pack should set intermediate_size"),
-        }))
+        };
+        emit_stage_trace(
+            "deepseek.language.transformer_layer.mlp.moe.pack.completed",
+            &[
+                (
+                    "elapsed_ms",
+                    pack_started_at.elapsed().as_millis().to_string(),
+                ),
+                ("layer_idx", layer_idx.to_string()),
+                ("expert_count", pack.expert_count.to_string()),
+            ],
+        );
+        Ok(Some(pack))
     }
 }
 
@@ -704,6 +943,61 @@ fn float_packable_weight(weights: &LinearWeights) -> Option<&Tensor> {
         return None;
     }
     weights.weight.as_ref()
+}
+
+fn routed_expert_materialization(
+    backend: MoeExecutionBackend,
+    snapshot_present: bool,
+) -> LinearWeightMaterialization {
+    if matches!(backend, MoeExecutionBackend::MetalFast) && !snapshot_present {
+        LinearWeightMaterialization::KeepViewForMetalFastPack
+    } else {
+        LinearWeightMaterialization::DefaultContiguous
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RoutedExpertLoadStrategy {
+    Eager,
+    Deferred,
+}
+
+impl RoutedExpertLoadStrategy {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Eager => "eager",
+            Self::Deferred => "deferred",
+        }
+    }
+}
+
+fn routed_expert_load_strategy(
+    load_policy: LowPrecisionLoadPolicy,
+    backend: MoeExecutionBackend,
+    snapshot_present: bool,
+    has_deferred_source: bool,
+) -> RoutedExpertLoadStrategy {
+    if snapshot_present || !has_deferred_source {
+        return RoutedExpertLoadStrategy::Eager;
+    }
+    if load_policy.lazy_moe_experts || matches!(backend, MoeExecutionBackend::MetalFast) {
+        RoutedExpertLoadStrategy::Deferred
+    } else {
+        RoutedExpertLoadStrategy::Eager
+    }
+}
+
+fn routed_expert_cache_policy(
+    backend: MoeExecutionBackend,
+    load_strategy: RoutedExpertLoadStrategy,
+) -> DeferredExpertCachePolicy {
+    if matches!(backend, MoeExecutionBackend::MetalFast)
+        && matches!(load_strategy, RoutedExpertLoadStrategy::Deferred)
+    {
+        DeferredExpertCachePolicy::Ephemeral
+    } else {
+        DeferredExpertCachePolicy::Retain
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -733,6 +1027,7 @@ pub enum MoeBackendWeights {
 
 impl MoeBackendWeights {
     fn new(
+        layer_idx: usize,
         backend: MoeExecutionBackend,
         experts: Vec<MoeExpertWeights>,
         shared_experts: Option<DenseMlpWeights>,
@@ -748,7 +1043,7 @@ impl MoeBackendWeights {
                     experts,
                     shared_experts: shared_experts.clone(),
                 };
-                let packed_experts = MoeMetalFastExpertPack::from_slow(&slow)?;
+                let packed_experts = MoeMetalFastExpertPack::from_slow(&slow, layer_idx)?;
                 let fallback_experts = if packed_experts.is_some() {
                     None
                 } else {
@@ -796,6 +1091,7 @@ impl MoeWeights {
     ) -> Result<Self> {
         let load_started_at = Instant::now();
         let load_policy = current_low_precision_load_policy();
+        let backend = MoeExecutionBackend::select(vb.device());
         let hidden_size = cfg.hidden_size;
         let moe_intermediate_size = cfg
             .moe_intermediate_size
@@ -837,8 +1133,14 @@ impl MoeWeights {
             expert_count = num_routed,
             "deepseek language load stage completed: moe_gate_ready"
         );
-        let lazy_experts =
-            load_policy.lazy_moe_experts && snapshot.is_none() && deferred_source.is_some();
+        let routed_load_strategy = routed_expert_load_strategy(
+            load_policy,
+            backend,
+            snapshot.is_some(),
+            deferred_source.is_some(),
+        );
+        let routed_cache_policy = routed_expert_cache_policy(backend, routed_load_strategy);
+        let lazy_experts = matches!(routed_load_strategy, RoutedExpertLoadStrategy::Deferred);
         if load_policy.lazy_moe_experts && snapshot.is_some() {
             info!(
                 elapsed_ms = load_started_at.elapsed().as_millis(),
@@ -853,9 +1155,14 @@ impl MoeWeights {
         } else if lazy_experts {
             info!(
                 elapsed_ms = load_started_at.elapsed().as_millis(),
-                layer_idx, "deepseek language load stage enabled: moe_lazy_experts"
+                layer_idx,
+                moe_backend = backend.label(),
+                routed_load_strategy = routed_load_strategy.label(),
+                routed_cache_policy = routed_cache_policy.label(),
+                "deepseek language load stage enabled: moe_lazy_experts"
             );
         }
+        let routed_materialization = routed_expert_materialization(backend, snapshot.is_some());
         let aux_bias = if vb.pp("gate").contains_tensor("e_score_correction_bias") {
             Some(
                 vb.pp("gate")
@@ -892,11 +1199,17 @@ impl MoeWeights {
                     ("layer_idx", layer_idx.to_string()),
                     ("expert_idx", expert_idx.to_string()),
                     ("lazy", lazy_experts.to_string()),
+                    ("load_strategy", routed_load_strategy.label().to_string()),
+                    ("cache_policy", routed_cache_policy.label().to_string()),
                 ],
             );
             info!(
                 elapsed_ms = load_started_at.elapsed().as_millis(),
-                layer_idx, expert_idx, "deepseek language load stage completed: moe_expert_start"
+                layer_idx,
+                expert_idx,
+                routed_load_strategy = routed_load_strategy.label(),
+                routed_cache_policy = routed_cache_policy.label(),
+                "deepseek language load stage completed: moe_expert_start"
             );
             if lazy_experts {
                 let source = deferred_source
@@ -910,6 +1223,8 @@ impl MoeWeights {
                         moe_intermediate_size,
                         layer_idx,
                         expert_idx,
+                        routed_materialization,
+                        routed_cache_policy,
                     ),
                 ));
                 emit_stage_trace(
@@ -922,6 +1237,8 @@ impl MoeWeights {
                         ("layer_idx", layer_idx.to_string()),
                         ("expert_idx", expert_idx.to_string()),
                         ("lazy", true.to_string()),
+                        ("load_strategy", routed_load_strategy.label().to_string()),
+                        ("cache_policy", routed_cache_policy.label().to_string()),
                         ("loaded_experts", experts.len().to_string()),
                     ],
                 );
@@ -930,67 +1247,56 @@ impl MoeWeights {
                     layer_idx,
                     expert_idx,
                     staged_experts = experts.len(),
+                    routed_cache_policy = routed_cache_policy.label(),
                     "deepseek language load stage completed: moe_expert_deferred"
                 );
-            } else {
-                let expert_vb = vb.pp(format!("experts.{expert_idx}"));
-                let expert =
-                    DenseMlpWeights::load(&expert_vb, hidden_size, moe_intermediate_size, snapshot)
-                        .with_context(|| {
-                            format!("failed to load MoE expert {expert_idx} (layer {layer_idx})")
-                        })?;
-                experts.push(MoeExpertWeights::Eager(expert));
-                emit_stage_trace(
-                    "deepseek.language.transformer_layer.mlp.moe.expert.completed",
-                    &[
-                        (
-                            "elapsed_ms",
-                            load_started_at.elapsed().as_millis().to_string(),
-                        ),
-                        ("layer_idx", layer_idx.to_string()),
-                        ("expert_idx", expert_idx.to_string()),
-                        ("lazy", false.to_string()),
-                        ("loaded_experts", experts.len().to_string()),
-                    ],
-                );
-                info!(
-                    elapsed_ms = load_started_at.elapsed().as_millis(),
-                    layer_idx,
-                    expert_idx,
-                    loaded_experts = experts.len(),
-                    "deepseek language load stage completed: moe_expert_ready"
-                );
+                continue;
             }
-        }
 
-        let shared_experts = if let Some(count) = cfg.n_shared_experts.filter(|c| *c > 0) {
-            let vb = vb.pp("shared_experts");
-            let intermediate = moe_intermediate_size * count;
+            let expert_vb = vb.pp(format!("experts.{expert_idx}"));
+            let expert = DenseMlpWeights::load(
+                &expert_vb,
+                hidden_size,
+                moe_intermediate_size,
+                snapshot,
+                routed_materialization,
+            )
+            .with_context(|| {
+                format!("failed to load MoE expert {expert_idx} (layer {layer_idx})")
+            })?;
+            experts.push(MoeExpertWeights::Eager(expert));
             emit_stage_trace(
-                "deepseek.language.transformer_layer.mlp.moe.shared_experts.start",
+                "deepseek.language.transformer_layer.mlp.moe.expert.completed",
                 &[
                     (
                         "elapsed_ms",
                         load_started_at.elapsed().as_millis().to_string(),
                     ),
                     ("layer_idx", layer_idx.to_string()),
-                    ("shared_expert_count", count.to_string()),
+                    ("expert_idx", expert_idx.to_string()),
+                    ("lazy", false.to_string()),
+                    ("load_strategy", routed_load_strategy.label().to_string()),
+                    ("loaded_experts", experts.len().to_string()),
                 ],
             );
             info!(
                 elapsed_ms = load_started_at.elapsed().as_millis(),
                 layer_idx,
-                shared_expert_count = count,
-                "deepseek language load stage completed: moe_shared_experts_start"
+                expert_idx,
+                loaded_experts = experts.len(),
+                "deepseek language load stage completed: moe_expert_ready"
             );
-            Some(
-                DenseMlpWeights::load(&vb, hidden_size, intermediate, snapshot).with_context(
-                    || format!("failed to load shared_experts for layer {layer_idx}"),
-                )?,
-            )
-        } else {
-            None
-        };
+        }
+
+        let shared_experts = load_shared_experts(
+            layer_idx,
+            cfg,
+            vb,
+            hidden_size,
+            moe_intermediate_size,
+            snapshot,
+            &load_started_at,
+        )?;
         if shared_experts.is_some() {
             emit_stage_trace(
                 "deepseek.language.transformer_layer.mlp.moe.shared_experts.completed",
@@ -1007,8 +1313,7 @@ impl MoeWeights {
                 layer_idx, "deepseek language load stage completed: moe_shared_experts_ready"
             );
         }
-        let backend = MoeExecutionBackend::select(vb.device());
-        let backend = MoeBackendWeights::new(backend, experts, shared_experts)?;
+        let backend = MoeBackendWeights::new(layer_idx, backend, experts, shared_experts)?;
         emit_stage_trace(
             "deepseek.language.transformer_layer.mlp.moe.backend.completed",
             &[
@@ -1080,8 +1385,14 @@ impl MlpWeights {
         if should_use_moe(cfg, layer_idx) {
             MoeWeights::load(cfg, layer_idx, vb, snapshot, deferred_source).map(MlpWeights::Moe)
         } else {
-            DenseMlpWeights::load(vb, hidden_size, intermediate_size, snapshot)
-                .map(MlpWeights::Dense)
+            DenseMlpWeights::load(
+                vb,
+                hidden_size,
+                intermediate_size,
+                snapshot,
+                LinearWeightMaterialization::DefaultContiguous,
+            )
+            .map(MlpWeights::Dense)
         }
     }
 }
@@ -1474,15 +1785,25 @@ pub(crate) fn qualified_name(vb: &VarBuilder, tensor: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        DeferredDenseMlpWeights, DeferredMoeLoadSource, DenseMlpWeights, LinearWeights,
-        MoeBackendWeights, MoeExecutionBackend, MoeExpertWeights, MoeMetalFastExpertPack,
-        MoeSlowWeights, stage_trace_enabled,
+        DeferredDenseMlpWeights, DeferredExpertCachePolicy, DeferredMoeLoadSource, DenseMlpWeights,
+        LinearWeightMaterialization, LinearWeights, MoeBackendWeights, MoeExecutionBackend,
+        MoeExpertWeights, MoeMetalFastExpertPack, MoeSlowWeights, RoutedExpertLoadStrategy,
+        load_shared_experts, routed_expert_cache_policy, routed_expert_load_strategy,
+        routed_expert_materialization, skip_shared_experts_enabled, stage_trace_enabled,
     };
+    use crate::config::DeepseekV2Config;
     use crate::model::LowPrecisionLoadPolicy;
-    use candle_core::{DType, Device, Tensor};
+    use crate::quantization::{LinearLayerGroup, QuantModule};
+    use candle_core::{
+        DType, Device, Tensor,
+        quantized::{GgmlDType, QMatMul, QTensor},
+    };
+    use candle_nn::VarBuilder;
+    use std::time::Instant;
     use std::{
+        collections::HashMap,
         path::PathBuf,
-        sync::{Mutex, OnceLock},
+        sync::{Arc, Mutex, OnceLock},
     };
 
     fn env_lock() -> &'static Mutex<()> {
@@ -1501,6 +1822,82 @@ mod tests {
             in_dim,
             label: label.to_string(),
         }
+    }
+
+    fn test_linear_with_weight(label: &str, weight: Tensor) -> LinearWeights {
+        let dims = weight.shape().dims();
+        let [out_dim, in_dim]: [usize; 2] = dims.try_into().expect("expected rank-2 weight");
+        LinearWeights {
+            weight: Some(weight),
+            weight_f32: None,
+            bias: None,
+            qmatmul: None,
+            out_dim,
+            in_dim,
+            label: label.to_string(),
+        }
+    }
+
+    fn test_linear_with_bias(label: &str, out_dim: usize, in_dim: usize) -> LinearWeights {
+        let mut linear = test_linear(label, out_dim, in_dim, 1.0);
+        linear.bias = Some(Tensor::zeros(out_dim, DType::F32, &Device::Cpu).unwrap());
+        linear
+    }
+
+    fn test_linear_quantized(
+        label: &str,
+        out_dim: usize,
+        in_dim: usize,
+        fill: f32,
+    ) -> LinearWeights {
+        let weight = Tensor::from_vec(
+            vec![fill; out_dim * in_dim],
+            (out_dim, in_dim),
+            &Device::Cpu,
+        )
+        .unwrap();
+        let qtensor = QTensor::quantize(&weight, GgmlDType::Q8_0).unwrap();
+        LinearWeights {
+            weight: None,
+            weight_f32: None,
+            bias: None,
+            qmatmul: Some(Arc::new(QMatMul::from_qtensor(qtensor).unwrap())),
+            out_dim,
+            in_dim,
+            label: label.to_string(),
+        }
+    }
+
+    fn test_non_contiguous_weight(out_dim: usize, in_dim: usize) -> Tensor {
+        let base = Tensor::from_vec(
+            (0..(out_dim * in_dim))
+                .map(|v| v as f32)
+                .collect::<Vec<_>>(),
+            (in_dim, out_dim),
+            &Device::Cpu,
+        )
+        .unwrap();
+        let view = base.transpose(0, 1).unwrap();
+        assert_eq!(view.shape().dims(), &[out_dim, in_dim]);
+        assert!(!view.is_contiguous());
+        view
+    }
+
+    fn test_var_builder(weight: Tensor, bias: Option<Tensor>) -> VarBuilder<'static> {
+        let mut tensors = HashMap::from([("weight".to_string(), weight)]);
+        if let Some(bias) = bias {
+            tensors.insert("bias".to_string(), bias);
+        }
+        VarBuilder::from_tensors(tensors, DType::F32, &Device::Cpu)
+    }
+
+    fn test_dense_var_builder(gate: Tensor, up: Tensor, down: Tensor) -> VarBuilder<'static> {
+        let tensors = HashMap::from([
+            ("gate_proj.weight".to_string(), gate),
+            ("up_proj.weight".to_string(), up),
+            ("down_proj.weight".to_string(), down),
+        ]);
+        VarBuilder::from_tensors(tensors, DType::F32, &Device::Cpu)
     }
 
     fn test_dense(fill: f32) -> DenseMlpWeights {
@@ -1556,6 +1953,222 @@ mod tests {
     }
 
     #[test]
+    fn routed_expert_materialization_only_keeps_views_for_metal_fast_without_snapshot() {
+        assert_eq!(
+            routed_expert_materialization(MoeExecutionBackend::Slow, false),
+            LinearWeightMaterialization::DefaultContiguous
+        );
+        assert_eq!(
+            routed_expert_materialization(MoeExecutionBackend::MetalFast, true),
+            LinearWeightMaterialization::DefaultContiguous
+        );
+        assert_eq!(
+            routed_expert_materialization(MoeExecutionBackend::MetalFast, false),
+            LinearWeightMaterialization::KeepViewForMetalFastPack
+        );
+    }
+
+    #[test]
+    fn routed_expert_load_strategy_keeps_eager_for_slow_backend_by_default() {
+        assert_eq!(
+            routed_expert_load_strategy(
+                LowPrecisionLoadPolicy::default(),
+                MoeExecutionBackend::Slow,
+                false,
+                true,
+            ),
+            RoutedExpertLoadStrategy::Eager
+        );
+    }
+
+    #[test]
+    fn routed_expert_load_strategy_defers_for_metal_fast_without_snapshot() {
+        assert_eq!(
+            routed_expert_load_strategy(
+                LowPrecisionLoadPolicy::default(),
+                MoeExecutionBackend::MetalFast,
+                false,
+                true,
+            ),
+            RoutedExpertLoadStrategy::Deferred
+        );
+    }
+
+    #[test]
+    fn routed_expert_load_strategy_respects_snapshot_and_missing_source() {
+        assert_eq!(
+            routed_expert_load_strategy(
+                LowPrecisionLoadPolicy {
+                    lazy_moe_experts: true,
+                    ..LowPrecisionLoadPolicy::default()
+                },
+                MoeExecutionBackend::MetalFast,
+                true,
+                true,
+            ),
+            RoutedExpertLoadStrategy::Eager
+        );
+        assert_eq!(
+            routed_expert_load_strategy(
+                LowPrecisionLoadPolicy {
+                    lazy_moe_experts: true,
+                    ..LowPrecisionLoadPolicy::default()
+                },
+                MoeExecutionBackend::MetalFast,
+                false,
+                false,
+            ),
+            RoutedExpertLoadStrategy::Eager
+        );
+    }
+
+    #[test]
+    fn routed_expert_cache_policy_is_ephemeral_for_metal_fast_deferred() {
+        assert_eq!(
+            routed_expert_cache_policy(
+                MoeExecutionBackend::MetalFast,
+                RoutedExpertLoadStrategy::Deferred,
+            ),
+            DeferredExpertCachePolicy::Ephemeral
+        );
+    }
+
+    #[test]
+    fn routed_expert_cache_policy_retains_for_non_metal_or_eager_paths() {
+        assert_eq!(
+            routed_expert_cache_policy(
+                MoeExecutionBackend::Slow,
+                RoutedExpertLoadStrategy::Deferred,
+            ),
+            DeferredExpertCachePolicy::Retain
+        );
+        assert_eq!(
+            routed_expert_cache_policy(
+                MoeExecutionBackend::MetalFast,
+                RoutedExpertLoadStrategy::Eager,
+            ),
+            DeferredExpertCachePolicy::Retain
+        );
+    }
+
+    #[test]
+    fn linear_weights_default_mode_makes_weight_contiguous() {
+        let vb = test_var_builder(test_non_contiguous_weight(3, 2), None);
+        let weights = LinearWeights::load(
+            &vb,
+            3,
+            2,
+            false,
+            LinearWeightMaterialization::DefaultContiguous,
+            LinearLayerGroup::Text,
+            QuantModule::TextLinear,
+            None,
+            None,
+        )
+        .expect("linear load should succeed");
+        assert!(
+            weights
+                .weight
+                .as_ref()
+                .expect("dense path should keep weight")
+                .is_contiguous()
+        );
+    }
+
+    #[test]
+    fn linear_weights_keep_view_mode_preserves_non_contiguous_weight() {
+        let vb = test_var_builder(test_non_contiguous_weight(3, 2), None);
+        let weights = LinearWeights::load(
+            &vb,
+            3,
+            2,
+            false,
+            LinearWeightMaterialization::KeepViewForMetalFastPack,
+            LinearLayerGroup::Text,
+            QuantModule::TextLinear,
+            None,
+            None,
+        )
+        .expect("linear load should succeed");
+        assert!(
+            !weights
+                .weight
+                .as_ref()
+                .expect("dense path should keep weight")
+                .is_contiguous()
+        );
+    }
+
+    #[test]
+    fn linear_weights_keep_view_mode_still_forces_contiguous_when_bias_exists() {
+        let vb = test_var_builder(
+            test_non_contiguous_weight(3, 2),
+            Some(Tensor::zeros(3, DType::F32, &Device::Cpu).unwrap()),
+        );
+        let weights = LinearWeights::load(
+            &vb,
+            3,
+            2,
+            true,
+            LinearWeightMaterialization::KeepViewForMetalFastPack,
+            LinearLayerGroup::Text,
+            QuantModule::TextLinear,
+            None,
+            None,
+        )
+        .expect("linear load should succeed");
+        assert!(
+            weights
+                .weight
+                .as_ref()
+                .expect("bias path should keep weight")
+                .is_contiguous()
+        );
+        assert!(weights.bias.is_some());
+    }
+
+    #[test]
+    fn dense_mlp_keep_view_mode_preserves_non_contiguous_projection_weights() {
+        let vb = test_dense_var_builder(
+            test_non_contiguous_weight(3, 2),
+            test_non_contiguous_weight(3, 2),
+            test_non_contiguous_weight(2, 3),
+        );
+        let weights = DenseMlpWeights::load(
+            &vb,
+            2,
+            3,
+            None,
+            LinearWeightMaterialization::KeepViewForMetalFastPack,
+        )
+        .expect("dense mlp load should succeed");
+        assert!(
+            !weights
+                .gate_proj
+                .weight
+                .as_ref()
+                .expect("gate weight should exist")
+                .is_contiguous()
+        );
+        assert!(
+            !weights
+                .up_proj
+                .weight
+                .as_ref()
+                .expect("up weight should exist")
+                .is_contiguous()
+        );
+        assert!(
+            !weights
+                .down_proj
+                .weight
+                .as_ref()
+                .expect("down weight should exist")
+                .is_contiguous()
+        );
+    }
+
+    #[test]
     fn metal_fast_pack_stacks_eager_float_experts() {
         let slow = MoeSlowWeights {
             experts: vec![
@@ -1564,7 +2177,7 @@ mod tests {
             ],
             shared_experts: None,
         };
-        let pack = MoeMetalFastExpertPack::from_slow(&slow)
+        let pack = MoeMetalFastExpertPack::from_slow(&slow, 0)
             .expect("pack construction should succeed")
             .expect("eager float experts should pack");
         assert_eq!(pack.gate_proj.shape().dims(), &[2, 3, 2]);
@@ -1592,20 +2205,49 @@ mod tests {
                     3,
                     0,
                     0,
+                    LinearWeightMaterialization::DefaultContiguous,
+                    DeferredExpertCachePolicy::Retain,
                 ),
             )],
             shared_experts: None,
         };
         assert!(
-            MoeMetalFastExpertPack::from_slow(&slow)
+            MoeMetalFastExpertPack::from_slow(&slow, 0)
                 .expect("deferred experts should skip packing")
                 .is_none()
         );
     }
 
     #[test]
+    fn metal_fast_pack_accepts_view_backed_experts_and_outputs_contiguous_pack() {
+        let slow = MoeSlowWeights {
+            experts: vec![
+                MoeExpertWeights::Eager(DenseMlpWeights {
+                    gate_proj: test_linear_with_weight("gate0", test_non_contiguous_weight(3, 2)),
+                    up_proj: test_linear_with_weight("up0", test_non_contiguous_weight(3, 2)),
+                    down_proj: test_linear_with_weight("down0", test_non_contiguous_weight(2, 3)),
+                }),
+                MoeExpertWeights::Eager(DenseMlpWeights {
+                    gate_proj: test_linear_with_weight("gate1", test_non_contiguous_weight(3, 2)),
+                    up_proj: test_linear_with_weight("up1", test_non_contiguous_weight(3, 2)),
+                    down_proj: test_linear_with_weight("down1", test_non_contiguous_weight(2, 3)),
+                }),
+            ],
+            shared_experts: None,
+        };
+        let pack = MoeMetalFastExpertPack::from_slow(&slow, 3)
+            .expect("pack construction should succeed")
+            .expect("view-backed eager experts should pack");
+        assert!(pack.gate_proj.is_contiguous());
+        assert!(pack.up_proj.is_contiguous());
+        assert!(pack.down_proj.is_contiguous());
+        assert_eq!(pack.gate_proj.shape().dims(), &[2, 3, 2]);
+    }
+
+    #[test]
     fn metal_fast_backend_prepares_pack_when_eager_float_experts_exist() {
         let backend = MoeBackendWeights::new(
+            0,
             MoeExecutionBackend::MetalFast,
             vec![
                 MoeExpertWeights::Eager(test_dense(1.0)),
@@ -1621,6 +2263,139 @@ mod tests {
                 assert_eq!(weights.expert_count, 2);
             }
             MoeBackendWeights::Slow(_) => panic!("expected metal fast backend"),
+        }
+    }
+
+    #[test]
+    fn metal_fast_backend_falls_back_for_bias_or_quantized_experts() {
+        let bias_backend = MoeBackendWeights::new(
+            0,
+            MoeExecutionBackend::MetalFast,
+            vec![MoeExpertWeights::Eager(DenseMlpWeights {
+                gate_proj: test_linear_with_bias("gate", 3, 2),
+                up_proj: test_linear("up", 3, 2, 2.0),
+                down_proj: test_linear("down", 2, 3, 3.0),
+            })],
+            None,
+        )
+        .expect("backend build should succeed");
+        match bias_backend {
+            MoeBackendWeights::MetalFast(weights) => {
+                assert!(weights.packed_experts.is_none());
+                assert!(weights.fallback_experts.is_some());
+            }
+            MoeBackendWeights::Slow(_) => panic!("expected metal fast backend"),
+        }
+
+        let quantized_backend = MoeBackendWeights::new(
+            0,
+            MoeExecutionBackend::MetalFast,
+            vec![MoeExpertWeights::Eager(DenseMlpWeights {
+                gate_proj: test_linear_quantized("gate", 32, 32, 1.0),
+                up_proj: test_linear("up", 32, 32, 2.0),
+                down_proj: test_linear("down", 32, 32, 3.0),
+            })],
+            None,
+        )
+        .expect("backend build should succeed");
+        match quantized_backend {
+            MoeBackendWeights::MetalFast(weights) => {
+                assert!(weights.packed_experts.is_none());
+                assert!(weights.fallback_experts.is_some());
+            }
+            MoeBackendWeights::Slow(_) => panic!("expected metal fast backend"),
+        }
+    }
+
+    #[test]
+    fn metal_fast_backend_keeps_deferred_experts_as_fallback_layout() {
+        let source = DeferredMoeLoadSource::new(
+            vec![PathBuf::from("model.safetensors")],
+            DType::F16,
+            &Device::Cpu,
+            LowPrecisionLoadPolicy::default(),
+        );
+        let backend = MoeBackendWeights::new(
+            0,
+            MoeExecutionBackend::MetalFast,
+            vec![MoeExpertWeights::Deferred(
+                DeferredDenseMlpWeights::new_expert(
+                    source,
+                    "model.layers.0.mlp.experts.0".to_string(),
+                    2,
+                    3,
+                    0,
+                    0,
+                    LinearWeightMaterialization::DefaultContiguous,
+                    DeferredExpertCachePolicy::Retain,
+                ),
+            )],
+            None,
+        )
+        .expect("backend build should succeed");
+        match backend {
+            MoeBackendWeights::MetalFast(weights) => {
+                assert!(weights.packed_experts.is_none());
+                assert!(weights.fallback_experts.is_some());
+                assert_eq!(weights.expert_count, 1);
+            }
+            MoeBackendWeights::Slow(_) => panic!("expected metal fast backend"),
+        }
+    }
+
+    #[test]
+    fn skip_shared_experts_flag_parses_truthy_and_falsy_values() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        // SAFETY: tests serialize access to this process-wide env var through env_lock().
+        unsafe {
+            std::env::remove_var("XIUXIAN_VISION_SKIP_SHARED_EXPERTS");
+        }
+        assert!(!skip_shared_experts_enabled());
+
+        // SAFETY: tests serialize access to this process-wide env var through env_lock().
+        unsafe {
+            std::env::set_var("XIUXIAN_VISION_SKIP_SHARED_EXPERTS", "yes");
+        }
+        assert!(skip_shared_experts_enabled());
+
+        // SAFETY: tests serialize access to this process-wide env var through env_lock().
+        unsafe {
+            std::env::set_var("XIUXIAN_VISION_SKIP_SHARED_EXPERTS", "off");
+        }
+        assert!(!skip_shared_experts_enabled());
+
+        // SAFETY: tests serialize access to this process-wide env var through env_lock().
+        unsafe {
+            std::env::remove_var("XIUXIAN_VISION_SKIP_SHARED_EXPERTS");
+        }
+    }
+
+    #[test]
+    fn load_shared_experts_short_circuits_when_skip_flag_is_enabled() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        // SAFETY: tests serialize access to this process-wide env var through env_lock().
+        unsafe {
+            std::env::set_var("XIUXIAN_VISION_SKIP_SHARED_EXPERTS", "on");
+        }
+        let vb = VarBuilder::from_tensors(HashMap::new(), DType::F32, &Device::Cpu);
+        let cfg: DeepseekV2Config = serde_json::from_value(serde_json::json!({
+            "vocab_size": 32,
+            "hidden_size": 2,
+            "intermediate_size": 3,
+            "num_hidden_layers": 1,
+            "num_attention_heads": 1,
+            "max_position_embeddings": 32,
+            "hidden_act": "relu",
+            "n_shared_experts": 2
+        }))
+        .expect("minimal shared-expert config should parse");
+        let shared = load_shared_experts(0, &cfg, &vb, 2, 3, None, &Instant::now())
+            .expect("skip flag should bypass shared-expert tensor lookup");
+        assert!(shared.is_none());
+
+        // SAFETY: tests serialize access to this process-wide env var through env_lock().
+        unsafe {
+            std::env::remove_var("XIUXIAN_VISION_SKIP_SHARED_EXPERTS");
         }
     }
 
@@ -1650,4 +2425,33 @@ mod tests {
             std::env::remove_var("XIUXIAN_VISION_STAGE_TRACE_STDERR");
         }
     }
+}
+
+#[test]
+fn deferred_dense_mlp_weights_store_cache_policy() {
+    let source = DeferredMoeLoadSource::new(
+        vec![PathBuf::from("model.safetensors")],
+        DType::F16,
+        &Device::Cpu,
+        LowPrecisionLoadPolicy::default(),
+    );
+    let deferred = DeferredDenseMlpWeights::new_expert(
+        source,
+        "model.layers.0.mlp.experts.0".to_string(),
+        2,
+        3,
+        0,
+        0,
+        LinearWeightMaterialization::KeepViewForMetalFastPack,
+        DeferredExpertCachePolicy::Ephemeral,
+    );
+    assert_eq!(
+        deferred.cache_policy(),
+        DeferredExpertCachePolicy::Ephemeral
+    );
+    assert_eq!(
+        deferred.materialization(),
+        LinearWeightMaterialization::KeepViewForMetalFastPack
+    );
+    assert!(!deferred.is_cached());
 }

@@ -1,14 +1,23 @@
 ---
 source: packages/rust/crates/xiuxian-testing/src/scenario.rs
-assertion_line: 332
+description: "Scenario cognitive_drift_early_halt [llm_analyzer]: Adversarial Cognitive Drift Drill"
 expression: result
+info:
+  id: cognitive_drift_early_halt
+  name: Adversarial Cognitive Drift Drill
+  category: llm_analyzer
+  description: Simulates logical drift to verify real-time interception and artifact persistence.
+  input_type: streaming_mock
+  input_paths: []
+  expected_output_type: ~
+input_file: packages/rust/crates/xiuxian-qianji/tests/scenarios/cognitive_drift_early_halt/scenario.toml
 ---
 {
+  "category": "llm_analyzer",
+  "cognitive_supervision": true,
+  "early_halt_threshold": 0.3,
   "scenario_id": "cognitive_drift_early_halt",
   "scenario_name": "Adversarial Cognitive Drift Drill",
-  "category": "llm_analyzer",
   "status": "configured",
-  "streaming_enabled": true,
-  "cognitive_supervision": true,
-  "early_halt_threshold": 0.3
+  "streaming_enabled": true
 }

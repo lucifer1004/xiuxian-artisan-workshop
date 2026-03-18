@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use axum::{
     Json, Router,
@@ -10,16 +11,17 @@ use axum::{
     routing::get,
 };
 use serde::Deserialize;
-use tokio::sync::{OnceCell, RwLock};
+use tokio::sync::OnceCell;
 use xiuxian_io::PrjDirs;
 use xiuxian_zhenfa::ZhenfaSignal;
 
 use crate::link_graph::LinkGraphIndex;
 use crate::skill_vfs::SkillVfsResolver;
+use crate::unified_symbol::UnifiedSymbolIndex;
 
 use super::types::{
-    ApiError, GraphNeighborsResponse, NodeNeighbors, UiConfig, VfsContentResponse, VfsEntry,
-    VfsScanResult,
+    ApiError, AstSearchHit, GraphNeighborsResponse, NodeNeighbors, UiConfig, VfsContentResponse,
+    VfsEntry, VfsScanResult,
 };
 use super::{graph, search, vfs};
 
@@ -27,14 +29,14 @@ use super::{graph, search, vfs};
 ///
 /// Contains configuration, VFS roots, and cached graph index.
 pub struct StudioState {
-    #[cfg(test)]
     pub(crate) project_root: PathBuf,
-    #[cfg(test)]
     pub(crate) data_root: PathBuf,
     pub(crate) knowledge_root: PathBuf,
     pub(crate) internal_skill_root: PathBuf,
     pub(crate) ui_config: Arc<RwLock<UiConfig>>,
     pub(crate) graph_index: OnceCell<Arc<LinkGraphIndex>>,
+    pub(crate) symbol_index: OnceCell<Arc<UnifiedSymbolIndex>>,
+    pub(crate) ast_index: OnceCell<Arc<Vec<AstSearchHit>>>,
 }
 
 /// Shared state used by the top-level gateway process.
@@ -49,6 +51,7 @@ pub struct GatewayState {
 }
 
 impl GatewayState {
+    /// Create gateway state shared by the CLI endpoints and Studio router.
     #[must_use]
     pub fn new(
         index: Option<Arc<LinkGraphIndex>>,
@@ -59,6 +62,13 @@ impl GatewayState {
             signal_tx,
             studio: Arc::new(StudioState::new()),
         }
+    }
+
+    pub(crate) async fn link_graph_index(&self) -> Result<Arc<LinkGraphIndex>, StudioApiError> {
+        if let Some(index) = &self.index {
+            return Ok(Arc::clone(index));
+        }
+        self.studio.graph_index().await
     }
 }
 
@@ -74,9 +84,7 @@ impl StudioState {
             std::env::var("PRJ_INTERNAL_SKILLS_DIR").ok().as_deref(),
         );
         Self {
-            #[cfg(test)]
             project_root,
-            #[cfg(test)]
             data_root,
             knowledge_root,
             internal_skill_root,
@@ -84,17 +92,33 @@ impl StudioState {
                 index_paths: Vec::new(),
             })),
             graph_index: OnceCell::new(),
+            symbol_index: OnceCell::new(),
+            ast_index: OnceCell::new(),
         }
     }
 
     pub(crate) fn ui_config(&self) -> UiConfig {
-        self.ui_config.blocking_read().clone()
+        self.ui_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     pub(crate) fn set_ui_config(&self, config: UiConfig) {
         let sanitized = sanitize_index_paths(config.index_paths);
-        let mut guard = self.ui_config.blocking_write();
+        let mut guard = self
+            .ui_config
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.index_paths = sanitized;
+    }
+
+    pub(crate) fn configured_index_paths(&self) -> Vec<String> {
+        self.ui_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .index_paths
+            .clone()
     }
 
     pub(crate) async fn graph_index(&self) -> Result<Arc<LinkGraphIndex>, StudioApiError> {
@@ -121,6 +145,64 @@ impl StudioState {
                     )
                 })?;
                 Ok::<Arc<LinkGraphIndex>, StudioApiError>(Arc::new(index))
+            })
+            .await?;
+        Ok(Arc::clone(index))
+    }
+
+    pub(crate) async fn symbol_index(&self) -> Result<Arc<UnifiedSymbolIndex>, StudioApiError> {
+        let project_root = self.project_root.clone();
+        let index = self
+            .symbol_index
+            .get_or_try_init(|| async move {
+                let build = tokio::task::spawn_blocking(move || {
+                    search::build_symbol_index(project_root.as_path())
+                })
+                .await
+                .map_err(|error| {
+                    StudioApiError::internal(
+                        "SYMBOL_INDEX_BUILD_PANIC",
+                        "Failed to build studio symbol index",
+                        Some(error.to_string()),
+                    )
+                })?;
+                let index = build.map_err(|error| {
+                    StudioApiError::internal(
+                        "SYMBOL_INDEX_BUILD_FAILED",
+                        "Failed to build studio symbol index",
+                        Some(error),
+                    )
+                })?;
+                Ok::<Arc<UnifiedSymbolIndex>, StudioApiError>(Arc::new(index))
+            })
+            .await?;
+        Ok(Arc::clone(index))
+    }
+
+    pub(crate) async fn ast_index(&self) -> Result<Arc<Vec<AstSearchHit>>, StudioApiError> {
+        let project_root = self.project_root.clone();
+        let index = self
+            .ast_index
+            .get_or_try_init(|| async move {
+                let build = tokio::task::spawn_blocking(move || {
+                    search::build_ast_index(project_root.as_path())
+                })
+                .await
+                .map_err(|error| {
+                    StudioApiError::internal(
+                        "AST_INDEX_BUILD_PANIC",
+                        "Failed to build studio AST index",
+                        Some(error.to_string()),
+                    )
+                })?;
+                let index = build.map_err(|error| {
+                    StudioApiError::internal(
+                        "AST_INDEX_BUILD_FAILED",
+                        "Failed to build studio AST index",
+                        Some(error),
+                    )
+                })?;
+                Ok::<Arc<Vec<AstSearchHit>>, StudioApiError>(Arc::new(index))
             })
             .await?;
         Ok(Arc::clone(index))
@@ -155,10 +237,14 @@ struct GraphNeighborsQuery {
 /// - `GET /api/vfs/{*path}` - Get single entry
 /// - `GET /api/neighbors/{*id}` - Get node neighbors
 /// - `GET /api/graph/neighbors/{*id}` - Get graph neighbors
+/// - `GET /api/topology/3d` - Get deterministic graph topology payload
 /// - `GET /api/search` - Search knowledge base
+/// - `GET /api/search/ast` - Search AST definitions
+/// - `GET /api/search/references` - Search symbol references and usages
+/// - `GET /api/search/symbols` - Search project symbols
 /// - `GET /api/search/autocomplete` - Search autocomplete suggestions
 /// - `GET/POST /api/ui/config` - UI configuration
-pub fn studio_router(state: Arc<GatewayState>) -> Router {
+pub fn studio_routes() -> Router<Arc<GatewayState>> {
     Router::new()
         .route("/api/vfs", get(vfs_root_entries))
         .route("/api/vfs/scan", get(vfs_scan))
@@ -166,10 +252,18 @@ pub fn studio_router(state: Arc<GatewayState>) -> Router {
         .route("/api/vfs/{*path}", get(vfs_entry))
         .route("/api/neighbors/{*id}", get(node_neighbors))
         .route("/api/graph/neighbors/{*id}", get(graph_neighbors))
+        .route("/api/topology/3d", get(topology_3d))
         .route("/api/search", get(search::search_knowledge))
+        .route("/api/search/ast", get(search::search_ast))
+        .route("/api/search/references", get(search::search_references))
+        .route("/api/search/symbols", get(search::search_symbols))
         .route("/api/search/autocomplete", get(search::search_autocomplete))
         .route("/api/ui/config", get(get_ui_config).post(set_ui_config))
-        .with_state(state)
+}
+
+/// Create the Studio API router with state already attached.
+pub fn studio_router(state: Arc<GatewayState>) -> Router {
+    studio_routes().with_state(state)
 }
 
 async fn vfs_root_entries(
@@ -212,7 +306,7 @@ async fn node_neighbors(
     AxumPath(id): AxumPath<String>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<NodeNeighbors>, StudioApiError> {
-    let payload = graph::node_neighbors(state.studio.as_ref(), id.as_str()).await?;
+    let payload = graph::node_neighbors(state.as_ref(), id.as_str()).await?;
     Ok(Json(payload))
 }
 
@@ -224,14 +318,16 @@ async fn graph_neighbors(
     let direction = query.direction.unwrap_or_else(|| "both".to_string());
     let hops = query.hops.unwrap_or(2).clamp(1, 5);
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
-    let payload = graph::graph_neighbors(
-        state.studio.as_ref(),
-        id.as_str(),
-        direction.as_str(),
-        hops,
-        limit,
-    )
-    .await?;
+    let payload =
+        graph::graph_neighbors(state.as_ref(), id.as_str(), direction.as_str(), hops, limit)
+            .await?;
+    Ok(Json(payload))
+}
+
+async fn topology_3d(
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Json<super::types::Topology3D>, StudioApiError> {
+    let payload = graph::topology_3d(state.as_ref()).await?;
     Ok(Json(payload))
 }
 
@@ -253,11 +349,18 @@ fn sanitize_index_paths(raw: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut out = Vec::new();
     for path in raw {
-        let trimmed = path.trim().trim_matches('/');
+        let trimmed = path.trim();
         if trimmed.is_empty() {
             continue;
         }
-        let normalized = trimmed.replace('\\', "/");
+        let normalized = trimmed
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .trim_start_matches("./")
+            .to_string();
+        if normalized.is_empty() {
+            continue;
+        }
         if seen.insert(normalized.clone()) {
             out.push(normalized);
         }

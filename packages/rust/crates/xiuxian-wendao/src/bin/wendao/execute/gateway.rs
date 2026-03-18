@@ -23,7 +23,7 @@ use tokio::sync::mpsc;
 
 use crate::types::{Cli, GatewayArgs, GatewayCommand, GatewayStartArgs};
 use xiuxian_wendao::LinkGraphIndex;
-use xiuxian_wendao::gateway::studio::{GatewayState, studio_router};
+use xiuxian_wendao::gateway::studio::{GatewayState, studio_routes};
 use xiuxian_zhenfa::{NotificationService, WebhookConfig, ZhenfaSignal, notification_worker};
 
 /// Default port for the gateway server.
@@ -56,7 +56,7 @@ async fn handle_start(
     let port = resolve_port(args.port, config_path.as_deref());
 
     // 1. Start Webhook notification sidecar
-    let (signal_tx, signal_rx) = mpsc::unbounded_channel();
+    let (signal_tx, signal_rx) = mpsc::unbounded_channel::<ZhenfaSignal>();
 
     // Configure webhook: TOML > env var > defaults
     let webhook_config = resolve_webhook_config(config_path.as_deref());
@@ -84,7 +84,7 @@ async fn handle_start(
         .route("/api/health", get(health))
         .route("/api/stats", get(stats))
         .route("/api/notify", get(notify_status))
-        .merge(studio_router(Arc::clone(&app_state)))
+        .merge(studio_routes())
         .with_state(app_state);
 
     // 4. Start the server
@@ -99,7 +99,7 @@ async fn handle_start(
     Ok(axum::serve(listener, app).await?)
 }
 
-/// Resolve the config file from CLI override, local project file, or PRJ_ROOT.
+/// Resolve the config file from CLI override, local project file, or `PRJ_ROOT`.
 fn resolve_config_path(cli_config: Option<&Path>) -> Option<PathBuf> {
     if let Some(path) = cli_config {
         return Some(path.to_path_buf());
@@ -265,10 +265,13 @@ async fn health() -> Json<&'static str> {
 /// Stats endpoint.
 async fn stats(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     match &state.index {
-        Some(index) => Json(
-            serde_json::to_value(index.stats())
-                .unwrap_or_else(|_| json!({"error": "serialization failed"})),
-        ),
+        Some(index) => {
+            let payload = LinkGraphIndex::stats(index.as_ref());
+            Json(
+                serde_json::to_value(payload)
+                    .unwrap_or_else(|_| json!({"error": "serialization failed"})),
+            )
+        }
         None => Json(json!({"error": "no index loaded"})),
     }
 }

@@ -5,25 +5,16 @@
 //!
 //! ## Usage
 //!
-//! ```ignore
+//! ~~~ignore
 //! use crate::link_graph::parser::blocks::extract_blocks;
 //!
-//! let section_text = r#"
-//! This is a paragraph.
+//! let section_text = "This is a paragraph.\n\n```rust\nfn main() {}\n```\n\n- Item 1\n- Item 2\n";
 //!
-//! ```rust
-//! fn main() {}
-//! ```
-//!
-//! - Item 1
-//! - Item 2
-//! "#;
-//!
-//! let blocks = `extract_blocks(section_text`, 0, 1);
+//! let blocks = extract_blocks(section_text, 0, 1, &[]);
 //! // blocks[0] = Paragraph
 //! // blocks[1] = `CodeFence` { language: "rust" }
 //! // blocks[2] = List { ordered: false }
-//! ```
+//! ~~~
 
 use crate::link_graph::models::{MarkdownBlock, MarkdownBlockKind};
 use comrak::{Arena, Options, nodes::AstNode, nodes::NodeValue, parse_document};
@@ -52,7 +43,7 @@ pub fn extract_blocks(
     let root = parse_document(&arena, section_text, &Options::default());
 
     let mut blocks = Vec::new();
-    let mut block_indices: BlockIndexCounter = Default::default();
+    let mut block_indices = BlockIndexCounter::default();
 
     for node in root.children() {
         if let Some(block) = node_to_block(
@@ -194,11 +185,9 @@ pub(super) fn node_to_block(
         // Skip headings (handled at section level) and other inline elements
         NodeValue::Heading(_)
         | NodeValue::Document
-        | NodeValue::FrontMatter(_) => {
-            return None;
-        }
+        | NodeValue::FrontMatter(_)
         // Skip inline elements that shouldn't be standalone blocks
-        NodeValue::Text(_)
+        | NodeValue::Text(_)
         | NodeValue::SoftBreak
         | NodeValue::LineBreak
         | NodeValue::Code(_)

@@ -1,10 +1,10 @@
 //! Scenario-based snapshot tests for xiuxian-types.
 
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use xiuxian_testing::{Scenario, ScenarioFramework, ScenarioRunner};
+use xiuxian_testing::{Scenario, ScenarioFramework, ScenarioRunner, ScenarioSnapshotPolicy};
 use xiuxian_types::SkillDefinition;
 
 struct SkillDefinitionRunner;
@@ -24,9 +24,24 @@ impl ScenarioRunner for SkillDefinitionRunner {
     }
 }
 
+fn manifest_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
 #[test]
 fn test_skill_definition_scenarios() {
-    let mut framework = ScenarioFramework::new();
+    let manifest = manifest_dir();
+    let scenarios_root = manifest.join("tests").join("fixtures").join("scenarios");
+    let snapshot_path = manifest.join("tests").join("snapshots");
+
+    let mut framework = ScenarioFramework::with_snapshot_path(&snapshot_path)
+        .with_snapshot_policy(ScenarioSnapshotPolicy::portable_ci());
     framework.register(Box::new(SkillDefinitionRunner));
-    framework.run_category("skill_definition").unwrap();
+    let count = framework
+        .run_all_at(&scenarios_root)
+        .unwrap_or_else(|error| panic!("skill definition scenarios should pass: {error}"));
+    assert!(
+        count > 0,
+        "should run at least one skill definition scenario"
+    );
 }

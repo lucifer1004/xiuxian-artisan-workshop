@@ -5,10 +5,11 @@ use std::path::{Path, PathBuf};
 use xiuxian_testing::assert_crate_test_policy;
 
 fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../../")
-        .canonicalize()
-        .expect("workspace root should exist")
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../");
+    match workspace_root.canonicalize() {
+        Ok(path) => path,
+        Err(error) => panic!("workspace root should exist: {error}"),
+    }
 }
 
 fn crate_root(crate_name: &str) -> PathBuf {

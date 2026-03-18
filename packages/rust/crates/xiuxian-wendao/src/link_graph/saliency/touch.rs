@@ -72,7 +72,7 @@ fn enqueue_touch(task: SaliencyTouchTask) {
     let sender = touch_queue_sender();
     match sender.try_send(task) {
         Ok(()) => {}
-        Err(mpsc::TrySendError::Full(task)) | Err(mpsc::TrySendError::Disconnected(task)) => {
+        Err(mpsc::TrySendError::Full(task) | mpsc::TrySendError::Disconnected(task)) => {
             execute_touch_task(task);
         }
     }

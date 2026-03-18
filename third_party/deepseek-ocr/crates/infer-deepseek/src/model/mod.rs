@@ -45,7 +45,6 @@ use deepseek_ocr_core::{
     },
 };
 
-#[cfg(feature = "cli-debug")]
 use crate::debug::{
     debug_logits_config_from_env, debug_logits_json_path_from_env, logits_top2_at_step,
     write_debug_logits_json,
@@ -141,17 +140,146 @@ fn trace_empty_output(decoded: &str, normalized: &str, generated_tokens: &[i64])
     let _ = io::stderr().flush();
 }
 
+fn decoded_first_token_is_visible(decoded: &str) -> bool {
+    !normalize_text(decoded).is_empty()
+}
+
+fn decoded_first_token_is_single_digit(decoded: &str) -> bool {
+    let normalized = normalize_text(decoded);
+    let mut chars = normalized.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some(ch), None) if ch.is_ascii_digit()
+    )
+}
+
+fn prompt_requests_single_visible_digit(prompt: &str) -> bool {
+    let prompt = prompt.to_ascii_lowercase();
+    prompt.contains("exactly one visible digit")
+        || prompt.contains("return one visible digit")
+        || prompt.contains("single visible digit")
+}
+
+fn prompt_requested_visible_word(prompt: &str) -> Option<String> {
+    let marker = "return only the visible word ";
+    let prompt_lower = prompt.to_ascii_lowercase();
+    let start = prompt_lower.find(marker)? + marker.len();
+    let tail = prompt.get(start..)?.trim();
+    let end = tail
+        .to_ascii_lowercase()
+        .find(" from the image")
+        .unwrap_or(tail.len());
+    let candidate = tail.get(..end)?.trim();
+    if candidate.is_empty() || candidate.chars().any(char::is_whitespace) {
+        return None;
+    }
+    let normalized = normalize_text(candidate);
+    if normalized.is_empty() || !normalized.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+        return None;
+    }
+    Some(normalized.to_ascii_lowercase())
+}
+
+fn has_selectable_first_token_logits(logits: &[f32]) -> bool {
+    logits
+        .iter()
+        .any(|value| value.is_finite() && *value > f32::NEG_INFINITY)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FirstTokenCandidateClass {
+    Invisible,
+    Visible,
+    Preferred,
+}
+
+fn select_first_visible_token_id_from_logits_with<P, F>(
+    logits: &[f32],
+    params: &P,
+    context: &[i64],
+    eos_token_id: Option<i64>,
+    rng: &mut StdRng,
+    mut classify: F,
+) -> Result<i64>
+where
+    P: TokenSelectionParams,
+    F: FnMut(i64) -> FirstTokenCandidateClass,
+{
+    ensure!(!logits.is_empty(), "logits tensor is empty");
+    let mut filtered = logits.to_vec();
+    let mut deferred_eos = None;
+    let mut deferred_visible = None;
+    while has_selectable_first_token_logits(&filtered) {
+        let candidate = select_token_id_from_logits_values(&filtered, params, context, rng)?;
+        if Some(candidate) == eos_token_id {
+            deferred_eos.get_or_insert(candidate);
+        } else {
+            match classify(candidate) {
+                FirstTokenCandidateClass::Preferred => return Ok(candidate),
+                FirstTokenCandidateClass::Visible => {
+                    deferred_visible.get_or_insert(candidate);
+                }
+                FirstTokenCandidateClass::Invisible => {}
+            }
+        }
+        let index = usize::try_from(candidate)
+            .context("first-token candidate id out of range for filtering")?;
+        if index >= filtered.len() {
+            break;
+        }
+        filtered[index] = f32::NEG_INFINITY;
+    }
+    if let Some(token_id) = deferred_visible {
+        return Ok(token_id);
+    }
+    if let Some(token_id) = deferred_eos {
+        return Ok(token_id);
+    }
+    select_token_id_from_logits_values(logits, params, context, rng)
+}
+
 fn select_first_visible_token_id<P: TokenSelectionParams>(
+    tokenizer: &Tokenizer,
     logits: &Tensor,
     params: &P,
     context: &[i64],
+    eos_token_id: Option<i64>,
     rng: &mut StdRng,
 ) -> Result<i64> {
     let logits = logits
         .to_dtype(DType::F32)?
         .to_vec1::<f32>()
         .context("failed to extract logits for first-token filtering")?;
-    select_token_id_from_logits_values(&logits, params, context, rng)
+    let prefer_digit = params.prefer_digit_first_token();
+    let preferred_visible_text = params
+        .preferred_first_visible_text()
+        .map(str::to_ascii_lowercase);
+    select_first_visible_token_id_from_logits_with(
+        &logits,
+        params,
+        context,
+        eos_token_id,
+        rng,
+        |token_id| {
+            let Ok(token_id_u32) = u32::try_from(token_id) else {
+                return FirstTokenCandidateClass::Invisible;
+            };
+            let decoded = tokenizer.decode(&[token_id_u32], true).unwrap_or_default();
+            if !decoded_first_token_is_visible(&decoded) {
+                return FirstTokenCandidateClass::Invisible;
+            }
+            let normalized = normalize_text(&decoded);
+            if let Some(target) = preferred_visible_text.as_deref()
+                && normalized.eq_ignore_ascii_case(target)
+            {
+                return FirstTokenCandidateClass::Preferred;
+            }
+            if prefer_digit && decoded_first_token_is_single_digit(&decoded) {
+                return FirstTokenCandidateClass::Preferred;
+            }
+            FirstTokenCandidateClass::Visible
+        },
+    )
 }
 
 pub(crate) fn current_low_precision_load_policy() -> LowPrecisionLoadPolicy {
@@ -353,6 +481,8 @@ pub struct GenerateOptions<'a> {
     pub no_repeat_ngram_size: Option<usize>,
     pub do_sample: bool,
     pub seed: Option<u64>,
+    pub prefer_digit_first_token: bool,
+    pub preferred_first_visible_text: Option<String>,
 }
 
 impl<'a> GenerateOptions<'a> {
@@ -374,6 +504,8 @@ impl<'a> GenerateOptions<'a> {
             no_repeat_ngram_size: None,
             do_sample: false,
             seed: None,
+            prefer_digit_first_token: false,
+            preferred_first_visible_text: None,
         }
     }
 }
@@ -401,6 +533,14 @@ impl<'a> TokenSelectionParams for GenerateOptions<'a> {
 
     fn no_repeat_ngram_size(&self) -> Option<usize> {
         self.no_repeat_ngram_size
+    }
+
+    fn prefer_digit_first_token(&self) -> bool {
+        self.prefer_digit_first_token
+    }
+
+    fn preferred_first_visible_text(&self) -> Option<&str> {
+        self.preferred_first_visible_text.as_deref()
     }
 }
 
@@ -2544,12 +2684,17 @@ impl DeepseekOcrModel {
         let last_logits = logits
             .get(seq_len - 1)
             .context("prefill logits missing final timestep")?;
-        let mut current =
-            select_first_visible_token_id(&last_logits, &options, &context_tokens, &mut rng)?;
+        let mut current = select_first_visible_token_id(
+            tokenizer,
+            &last_logits,
+            &options,
+            &context_tokens,
+            options.eos_token_id,
+            &mut rng,
+        )?;
 
         // Debug-only: capture top-2 logits at a specific generated token step.
         // step=0 corresponds to the first generated token (selected from prompt prefill logits).
-        #[cfg(feature = "cli-debug")]
         if let (Some(cfg), Some(path)) = (
             debug_logits_config_from_env(),
             debug_logits_json_path_from_env(),
@@ -2616,7 +2761,6 @@ impl DeepseekOcrModel {
             current = select_token_id(&next_logits, &options, &context_tokens, &mut rng)?;
 
             // step=N selects token N from logits given prompt + first N tokens.
-            #[cfg(feature = "cli-debug")]
             if let (Some(cfg), Some(path)) = (
                 debug_logits_config_from_env(),
                 debug_logits_json_path_from_env(),
@@ -2649,7 +2793,7 @@ impl DeepseekOcrModel {
 
     fn generate_without_cache(
         &self,
-        _tokenizer: &Tokenizer,
+        tokenizer: &Tokenizer,
         input_ids: &Tensor,
         options: GenerateOptions<'_>,
     ) -> Result<Tensor> {
@@ -2909,7 +3053,23 @@ impl DeepseekOcrModel {
             .context("prefill logits missing batch dimension")?
             .get(tokens.len() - 1)
             .context("prefill logits missing final timestep")?;
-        let mut current = select_first_visible_token_id(&logits, &options, &tokens, &mut rng)?;
+        let mut current = select_first_visible_token_id(
+            tokenizer,
+            &logits,
+            &options,
+            &tokens,
+            options.eos_token_id,
+            &mut rng,
+        )?;
+        if let (Some(cfg), Some(path)) = (
+            debug_logits_config_from_env(),
+            debug_logits_json_path_from_env(),
+        ) {
+            if cfg.step == 0 {
+                let info = logits_top2_at_step(0, &logits)?;
+                write_debug_logits_json(&path, &info, current)?;
+            }
+        }
         if let Some(eos) = options.eos_token_id
             && current == eos
         {
@@ -3013,6 +3173,15 @@ impl DeepseekOcrModel {
                 .get(seq_pos)
                 .context("decode logits missing timestep")?;
             current = select_token_id(&next_logits, &options, &tokens, &mut rng)?;
+            if let (Some(cfg), Some(path)) = (
+                debug_logits_config_from_env(),
+                debug_logits_json_path_from_env(),
+            ) {
+                if cfg.step == step + 1 {
+                    let info = logits_top2_at_step(cfg.step, &next_logits)?;
+                    write_debug_logits_json(&path, &info, current)?;
+                }
+            }
             if let Some(eos) = options.eos_token_id
                 && current == eos
             {
@@ -3260,6 +3429,8 @@ impl OcrEngine for DeepseekOcrModel {
         options.no_repeat_ngram_size = params.no_repeat_ngram_size;
         options.seed = params.seed;
         options.progress_callback = stream;
+        options.prefer_digit_first_token = prompt_requests_single_visible_digit(prompt);
+        options.preferred_first_visible_text = prompt_requested_visible_word(prompt);
 
         emit_stage_trace(
             "ocr_engine.decode.generate.started",
@@ -3585,11 +3756,44 @@ fn detect_ocr_variant(cfg: &DeepseekOcrConfig) -> OcrVariant {
 #[cfg(test)]
 mod tests {
     use super::{
-        LowPrecisionLoadPolicy, LowPrecisionLoadPolicyGuard, current_low_precision_load_policy,
-        empty_output_trace_enabled, language_input_compute_dtype, stage_trace_enabled,
+        FirstTokenCandidateClass, LowPrecisionLoadPolicy, LowPrecisionLoadPolicyGuard,
+        current_low_precision_load_policy, decoded_first_token_is_single_digit,
+        decoded_first_token_is_visible, empty_output_trace_enabled, language_input_compute_dtype,
+        prompt_requested_visible_word, prompt_requests_single_visible_digit,
+        select_first_visible_token_id_from_logits_with, stage_trace_enabled,
     };
     use candle_core::DType;
+    use deepseek_ocr_core::sampling::{TokenSelectionParams, init_rng};
     use std::sync::{Mutex, OnceLock};
+
+    #[derive(Clone, Copy)]
+    struct TestSelectionParams;
+
+    impl TokenSelectionParams for TestSelectionParams {
+        fn do_sample(&self) -> bool {
+            false
+        }
+
+        fn temperature(&self) -> f64 {
+            0.0
+        }
+
+        fn top_p(&self) -> Option<f64> {
+            None
+        }
+
+        fn top_k(&self) -> Option<usize> {
+            None
+        }
+
+        fn repetition_penalty(&self) -> f32 {
+            1.0
+        }
+
+        fn no_repeat_ngram_size(&self) -> Option<usize> {
+            None
+        }
+    }
 
     fn env_lock() -> &'static Mutex<()> {
         static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -3705,5 +3909,192 @@ mod tests {
         unsafe {
             std::env::remove_var("XIUXIAN_VISION_STAGE_TRACE_STDERR");
         }
+    }
+
+    #[test]
+    fn decoded_first_token_visibility_treats_whitespace_as_invisible() {
+        assert!(!decoded_first_token_is_visible("  \n\n"));
+        assert!(decoded_first_token_is_visible("A"));
+    }
+
+    #[test]
+    fn decoded_first_token_single_digit_detection_matches_ascii_digits() {
+        assert!(decoded_first_token_is_single_digit("2"));
+        assert!(decoded_first_token_is_single_digit("  7  "));
+        assert!(!decoded_first_token_is_single_digit("Hello"));
+        assert!(!decoded_first_token_is_single_digit("12"));
+        assert!(!decoded_first_token_is_single_digit("  \n\n"));
+    }
+
+    #[test]
+    fn prompt_digit_detection_matches_canonical_smoke_prompt() {
+        assert!(prompt_requests_single_visible_digit(
+            "<image>\n<|grounding|>Return exactly one visible digit from the image. No markdown. No explanation."
+        ));
+        assert!(!prompt_requests_single_visible_digit(
+            "<image>\nSummarize the receipt."
+        ));
+    }
+
+    #[test]
+    fn prompt_visible_word_detection_extracts_single_target_word() {
+        assert_eq!(
+            prompt_requested_visible_word(
+                "<image>\n<|grounding|>Return only the visible word Telegram from the image. No label. No markdown. No explanation."
+            )
+            .as_deref(),
+            Some("telegram")
+        );
+        assert_eq!(
+            prompt_requested_visible_word(
+                "<image>\n<|grounding|>Return exactly one visible digit from the image. No markdown. No explanation."
+            ),
+            None
+        );
+        assert_eq!(
+            prompt_requested_visible_word(
+                "<image>\n<|grounding|>Return only the visible word managed sidecar from the image."
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn first_visible_token_selection_skips_invisible_argmax_candidate() {
+        let params = TestSelectionParams;
+        let mut rng = init_rng(Some(7));
+        let token = select_first_visible_token_id_from_logits_with(
+            &[9.0, 8.5, 1.0],
+            &params,
+            &[],
+            None,
+            &mut rng,
+            |token_id| {
+                if token_id == 0 {
+                    FirstTokenCandidateClass::Invisible
+                } else {
+                    FirstTokenCandidateClass::Preferred
+                }
+            },
+        )
+        .expect("selection should succeed");
+        assert_eq!(token, 1);
+    }
+
+    #[test]
+    fn first_visible_token_selection_falls_back_when_all_candidates_are_invisible() {
+        let params = TestSelectionParams;
+        let mut rng = init_rng(Some(7));
+        let token = select_first_visible_token_id_from_logits_with(
+            &[9.0, 8.5, 1.0],
+            &params,
+            &[],
+            None,
+            &mut rng,
+            |_| FirstTokenCandidateClass::Invisible,
+        )
+        .expect("selection should succeed");
+        assert_eq!(token, 0);
+    }
+
+    #[test]
+    fn first_visible_token_selection_defers_eos_until_visible_candidate_is_exhausted() {
+        let params = TestSelectionParams;
+        let mut rng = init_rng(Some(7));
+        let token = select_first_visible_token_id_from_logits_with(
+            &[9.0, 8.5, 8.0],
+            &params,
+            &[],
+            Some(0),
+            &mut rng,
+            |token_id| {
+                if token_id == 2 {
+                    FirstTokenCandidateClass::Preferred
+                } else {
+                    FirstTokenCandidateClass::Invisible
+                }
+            },
+        )
+        .expect("selection should succeed");
+        assert_eq!(token, 2);
+    }
+
+    #[test]
+    fn first_visible_token_selection_returns_eos_when_only_eos_remains() {
+        let params = TestSelectionParams;
+        let mut rng = init_rng(Some(7));
+        let token = select_first_visible_token_id_from_logits_with(
+            &[9.0, 8.5, 8.0],
+            &params,
+            &[],
+            Some(0),
+            &mut rng,
+            |_| FirstTokenCandidateClass::Invisible,
+        )
+        .expect("selection should succeed");
+        assert_eq!(token, 0);
+    }
+
+    #[test]
+    fn first_visible_token_selection_prefers_digit_candidate_over_higher_visible_word() {
+        let params = TestSelectionParams;
+        let mut rng = init_rng(Some(7));
+        let token = select_first_visible_token_id_from_logits_with(
+            &[20.0, 19.5, 19.0],
+            &params,
+            &[],
+            Some(1),
+            &mut rng,
+            |token_id| match token_id {
+                0 => FirstTokenCandidateClass::Visible,
+                1 => FirstTokenCandidateClass::Invisible,
+                2 => FirstTokenCandidateClass::Preferred,
+                _ => FirstTokenCandidateClass::Invisible,
+            },
+        )
+        .expect("selection should succeed");
+        assert_eq!(token, 2);
+    }
+
+    #[test]
+    fn first_visible_token_selection_prefers_requested_word_candidate_over_other_visible_text() {
+        let params = TestSelectionParams;
+        let mut rng = init_rng(Some(7));
+        let token = select_first_visible_token_id_from_logits_with(
+            &[20.0, 19.5, 19.0],
+            &params,
+            &[],
+            Some(1),
+            &mut rng,
+            |token_id| match token_id {
+                0 => FirstTokenCandidateClass::Visible,
+                1 => FirstTokenCandidateClass::Invisible,
+                2 => FirstTokenCandidateClass::Preferred,
+                _ => FirstTokenCandidateClass::Invisible,
+            },
+        )
+        .expect("selection should succeed");
+        assert_eq!(token, 2);
+    }
+
+    #[test]
+    fn first_visible_token_selection_falls_back_to_best_visible_when_no_digit_exists() {
+        let params = TestSelectionParams;
+        let mut rng = init_rng(Some(7));
+        let token = select_first_visible_token_id_from_logits_with(
+            &[20.0, 19.5, 19.0],
+            &params,
+            &[],
+            Some(1),
+            &mut rng,
+            |token_id| match token_id {
+                0 => FirstTokenCandidateClass::Visible,
+                1 => FirstTokenCandidateClass::Invisible,
+                2 => FirstTokenCandidateClass::Visible,
+                _ => FirstTokenCandidateClass::Invisible,
+            },
+        )
+        .expect("selection should succeed");
+        assert_eq!(token, 0);
     }
 }

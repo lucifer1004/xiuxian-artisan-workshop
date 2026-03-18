@@ -22,7 +22,7 @@ fn test_empty_cluster() {
     let outgoing = HashMap::new();
     let cluster = DenseCluster::new(vec![], &saliency, &outgoing);
     assert_eq!(cluster.members.len(), 0);
-    assert_eq!(cluster.avg_saliency, 0.0);
+    assert!(cluster.avg_saliency.abs() < f64::EPSILON);
     assert!(!cluster.is_valid());
 }
 

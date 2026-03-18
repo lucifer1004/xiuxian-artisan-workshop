@@ -1,24 +1,34 @@
 ---
 source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+description: "Scenario audit_triple_loop [audit_flow]: Audit Triple Loop"
 expression: result
+info:
+  id: audit_triple_loop
+  name: Audit Triple Loop
+  category: audit_flow
+  description: Test the complete Qianji audit flow with Plan-Execute-Verify cycle and cognitive supervision
+  input_type: workflow
+  input_paths: []
+  expected_output_type: ~
+input_file: packages/rust/crates/xiuxian-qianji/tests/scenarios/audit_triple_loop/scenario.toml
 ---
 {
-  "scenario_id": "audit_triple_loop",
-  "scenario_name": "Audit Triple Loop",
   "category": "audit_flow",
-  "triple_loop": {
-    "plan_phase": "configured",
-    "execute_phase": "configured",
-    "verify_phase": "configured"
-  },
   "cognitive_supervision": {
-    "enabled": true,
+    "coherence_monitoring": true,
     "early_halt_threshold": 0.3,
-    "coherence_monitoring": true
+    "enabled": true
   },
   "remediation": {
-    "max_attempts": 5,
-    "auto_retry": true
+    "auto_retry": true,
+    "max_attempts": 5
+  },
+  "scenario_id": "audit_triple_loop",
+  "scenario_name": "Audit Triple Loop",
+  "triple_loop": {
+    "execute_phase": "configured",
+    "plan_phase": "configured",
+    "verify_phase": "configured"
   },
   "xsd_contract": "qianji_plan.xsd"
 }

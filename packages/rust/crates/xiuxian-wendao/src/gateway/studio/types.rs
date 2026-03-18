@@ -341,6 +341,126 @@ pub struct SearchResponse {
     pub selected_mode: Option<String>,
 }
 
+/// A matched AST definition extracted from source code.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AstSearchHit {
+    /// Captured definition name.
+    pub name: String,
+    /// Signature line or skeleton snippet.
+    pub signature: String,
+    /// Source file path relative to the project root.
+    pub path: String,
+    /// Source language name.
+    pub language: String,
+    /// Owning crate or package name.
+    pub crate_name: String,
+    /// 1-based start line.
+    pub line_start: usize,
+    /// 1-based end line.
+    pub line_end: usize,
+    /// Search relevance score.
+    pub score: f64,
+}
+
+/// Response for studio AST definition search queries.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AstSearchResponse {
+    /// Original query string.
+    pub query: String,
+    /// Matching AST hits.
+    pub hits: Vec<AstSearchHit>,
+    /// Total number of hits returned.
+    pub hit_count: usize,
+    /// Selected AST scope.
+    pub selected_scope: String,
+}
+
+/// One source-level reference or usage hit for a symbol.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceSearchHit {
+    /// Queried symbol name.
+    pub name: String,
+    /// Source file path relative to the project root.
+    pub path: String,
+    /// Source language name.
+    pub language: String,
+    /// Owning crate or package name.
+    pub crate_name: String,
+    /// 1-based line number for the usage.
+    pub line: usize,
+    /// 1-based column number of the first match.
+    pub column: usize,
+    /// Full source line containing the usage.
+    pub line_text: String,
+    /// Search relevance score.
+    pub score: f64,
+}
+
+/// Response for studio reference or usage search queries.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceSearchResponse {
+    /// Original query string.
+    pub query: String,
+    /// Matching reference hits.
+    pub hits: Vec<ReferenceSearchHit>,
+    /// Total number of hits returned.
+    pub hit_count: usize,
+    /// Selected semantic scope.
+    pub selected_scope: String,
+}
+
+/// Search domain for symbol hits.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum SymbolSearchSource {
+    /// Symbol declared in the current project workspace.
+    Project,
+    /// Symbol imported from an external dependency.
+    External,
+}
+
+/// A symbol-level search hit extracted from source files.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SymbolSearchHit {
+    /// Symbol name.
+    pub name: String,
+    /// Symbol classification.
+    pub kind: String,
+    /// Source file path relative to the project root.
+    pub path: String,
+    /// 1-based source line.
+    pub line: usize,
+    /// Source location in `path:line` format.
+    pub location: String,
+    /// Source language.
+    pub language: String,
+    /// Owning crate or package name.
+    pub crate_name: String,
+    /// Symbol source domain.
+    pub source: SymbolSearchSource,
+    /// Search relevance score.
+    pub score: f64,
+}
+
+/// Response for studio symbol search queries.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SymbolSearchResponse {
+    /// Original query string.
+    pub query: String,
+    /// Matching symbol hits.
+    pub hits: Vec<SymbolSearchHit>,
+    /// Total number of hits returned.
+    pub hit_count: usize,
+    /// Selected symbol search scope.
+    pub selected_scope: String,
+}
+
 /// Type of autocomplete suggestion.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
 #[serde(rename_all = "lowercase")]
@@ -426,6 +546,13 @@ pub fn studio_type_collection() -> TypeCollection {
         .register::<KnowledgeSearchResult>()
         .register::<SearchHit>()
         .register::<SearchResponse>()
+        .register::<AstSearchHit>()
+        .register::<AstSearchResponse>()
+        .register::<ReferenceSearchHit>()
+        .register::<ReferenceSearchResponse>()
+        .register::<SymbolSearchSource>()
+        .register::<SymbolSearchHit>()
+        .register::<SymbolSearchResponse>()
         .register::<AutocompleteSuggestionType>()
         .register::<AutocompleteSuggestion>()
         .register::<AutocompleteResponse>()

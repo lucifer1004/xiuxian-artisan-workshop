@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn make_cluster(members: Vec<&str>, avg_saliency: f64) -> DenseCluster {
+fn make_cluster(members: &[&str], avg_saliency: f64) -> DenseCluster {
     DenseCluster {
         members: members
             .iter()
@@ -94,7 +94,7 @@ fn test_collapse_single_cluster() {
         ["x.md".to_string()].into_iter().collect(),
     );
 
-    let cluster = make_cluster(vec!["a.md", "b.md", "c.md"], 0.85);
+    let cluster = make_cluster(&["a.md", "b.md", "c.md"], 0.85);
     let result = collapse_clusters(vec![cluster], &docs_by_id, &mut outgoing, &mut incoming);
 
     assert_eq!(result.len(), 1);

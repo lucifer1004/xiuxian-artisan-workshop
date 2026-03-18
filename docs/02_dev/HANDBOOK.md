@@ -537,6 +537,7 @@ Settings are read from `packages/conf/settings.yaml` when env vars are not set.
 **Production deployment** (manual):
 
 1. Start Valkey: `just valkey-start`
+   The local daemon keeps `pid`/`log` files under `.run/valkey` and writes `dump.rdb` under `.cache/valkey`.
 2. Expose webhook (e.g. nginx → `http://127.0.0.1:18081`)
 3. Set webhook: `curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://your-domain.com/telegram/webhook"`
 4. Run agent:

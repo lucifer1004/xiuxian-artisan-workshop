@@ -4,7 +4,7 @@ use crate::types::KnowledgeCategory;
 
 /// Knowledge category Python wrapper.
 #[pyclass]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PyKnowledgeCategory {
     pub(crate) inner: KnowledgeCategory,
 }

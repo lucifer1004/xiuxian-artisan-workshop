@@ -1,6 +1,8 @@
 { __inputs__, ... }:
 let
   gatewayConfig = "packages/rust/crates/xiuxian-wendao/wendao.toml";
+  gatewayTargetDir = ".cache/cargo-target/wendao-gateway-process-compose";
+  sentinelTargetDir = ".cache/cargo-target/wendao-sentinel-process-compose";
 in
 {
   packages = [
@@ -24,7 +26,7 @@ in
 
     # Wendao Phase 7.6 Integrated Services
     wendao-gateway = {
-      exec = "VALKEY_URL=redis://127.0.0.1:6379/0 cargo run -p xiuxian-wendao -- --conf ${gatewayConfig} gateway start";
+      exec = "CARGO_TARGET_DIR=${gatewayTargetDir} VALKEY_URL=redis://127.0.0.1:6379/0 cargo run -p xiuxian-wendao -- --conf ${gatewayConfig} gateway start";
       process-compose = {
         depends_on = {
           valkey.condition = "process_healthy";
@@ -40,13 +42,13 @@ in
           initial_delay_seconds = 60;
           period_seconds = 5;
           timeout_seconds = 2;
-          failure_threshold = 24;
+          failure_threshold = 48;
         };
       };
     };
 
     wendao-sentinel = {
-      exec = "VALKEY_URL=redis://127.0.0.1:6379/0 cargo run -p xiuxian-wendao -- --conf ${gatewayConfig} sentinel watch";
+      exec = "CARGO_TARGET_DIR=${sentinelTargetDir} VALKEY_URL=redis://127.0.0.1:6379/0 cargo run -p xiuxian-wendao -- --conf ${gatewayConfig} sentinel watch";
       process-compose = {
         depends_on = {
           wendao-gateway.condition = "process_healthy";

@@ -83,21 +83,33 @@ mod tests {
     use std::fs;
 
     fn create_temp_crate() -> tempfile::TempDir {
-        let temp = tempfile::tempdir().expect("tempdir should be created");
-        fs::create_dir_all(temp.path().join("src")).expect("src dir should be created");
-        fs::write(
+        let temp = match tempfile::tempdir() {
+            Ok(temp) => temp,
+            Err(error) => panic!("tempdir should be created: {error}"),
+        };
+        if let Err(error) = fs::create_dir_all(temp.path().join("src")) {
+            panic!("src dir should be created: {error}");
+        }
+        if let Err(error) = fs::write(
             temp.path().join("Cargo.toml"),
             "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-        )
-        .expect("Cargo.toml should be written");
+        ) {
+            panic!("Cargo.toml should be written: {error}");
+        }
         temp
     }
 
     fn write_fixture_file(crate_root: &Path, relative_path: &str, content: &str) {
         let path = crate_root.join(relative_path);
-        fs::create_dir_all(path.parent().expect("fixture path should have parent"))
-            .expect("fixture directories should be created");
-        fs::write(path, content).expect("fixture file should be written");
+        let Some(parent) = path.parent() else {
+            panic!("fixture path should have parent: {path:?}");
+        };
+        if let Err(error) = fs::create_dir_all(parent) {
+            panic!("fixture directories should be created: {error}");
+        }
+        if let Err(error) = fs::write(path, content) {
+            panic!("fixture file should be written: {error}");
+        }
     }
 
     #[test]
@@ -117,14 +129,14 @@ mod tests;
         write_fixture_file(
             temp.path(),
             "tests/unit/foo.rs",
-            r#"
+            r"
 use super::*;
 
 #[test]
 fn helper_exists() {
     helper();
 }
-"#,
+",
         );
 
         let report = validate_crate_test_policy(temp.path());
@@ -137,13 +149,13 @@ fn helper_exists() {
         write_fixture_file(
             temp.path(),
             "src/foo.rs",
-            r#"
+            r"
 #[cfg(test)]
 mod tests {
     #[test]
     fn inline_policy_violation() {}
 }
-"#,
+",
         );
         write_fixture_file(
             temp.path(),

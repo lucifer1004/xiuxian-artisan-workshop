@@ -465,21 +465,194 @@ Evidence:
 - `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_load_15g_v6.log`
 - `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_13g_v3.log`
 
-This narrows the next bounded work:
+Confirmed follow-up:
 
-- the remaining accepted-head wall is no longer best described as an mmap or pre-language-load
-  spike
-- the immediate overshoot is still concentrated in load, not decode
-- the next investigation should stay inside `LinearWeights::load` for MoE expert projections,
-  especially the `get/contiguous` materialization path, before reopening more MoE compute toggles
+- eager routed-expert `LinearWeights::load` now keeps view-backed weights when the accepted
+  `metal_fast` branch is building a packable eager expert layout
+- contiguous materialization for those routed experts was moved to the explicit `metal_fast`
+  pack path instead of happening once in `LinearWeights::load` and again in the pack builder
+- the code now emits explicit pack-boundary traces:
+  - `deepseek.language.transformer_layer.mlp.moe.pack.start`
+  - `...pack.gate.completed`
+  - `...pack.up.completed`
+  - `...pack.down.completed`
+  - `...pack.completed`
 
-That means the codebase is now structurally ready for the real MoE fast-path work, but the memory
-and quality baseline are still governed by the existing slow implementation.
+This changes the diagnosis materially:
+
+- the widened guarded `load` run no longer dies during eager routed-expert linear materialization
+- the accepted-head widened `load` run now reaches `deepseek.language.weights_ready` and exits
+  successfully under the `15 GB` guard
+- the guarded `infer` run still misses the `13 GB` budget, but it now lives much longer and dies
+  materially later than the earlier accepted-head baseline
+- the old accepted-head `infer` trace died in about `1.2s`, immediately after layer `4`, at about
+  `13.29 GB`
+- the new accepted-head `infer` trace dies in about `18.9s`, at about `13.04 GB`, while loading
+  layer `5` routed experts
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_load_15g_v7.log`
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_13g_v4.log`
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_13g_v3.log`
+
+Rejected follow-up:
+
+- a direct routed-expert projection-pack rewrite was tested next
+- instead of loading eager routed experts into `DenseMlpWeights` and letting `from_slow(...)`
+  stack them, the branch loaded gate/up/down one projection at a time and wrote them directly into
+  a preallocated packed carrier
+- the intent was to remove the transient "whole expert struct plus packed copy" residency during
+  widened guarded `load`
+- the guarded widened `load` result regressed: the new probe died at about `15.05 GB` during
+  layer `6` routed-expert `up_proj/down_proj` fetch, instead of matching the retained `v7` run
+  that reached `deepseek.language.weights_ready`
+- the branch was reverted, and the accepted head remains the earlier retained materialization trim
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_load_15g_v8.log`
+
+This narrows the next bounded work again:
+
+- mmap is still resolved
+- contiguous expert-weight materialization is no longer the active widened-load wall
+- pack construction itself is no longer the active widened-load wall
+- the remaining accepted-head overshoot is now better described as eager routed-expert
+  `weight.get(...)` residency during the infer-side load path, especially once layer `5` begins
+- the next investigation should stay inside eager expert fetch/materialization order for the
+  existing `metal_fast + shared_expert_f32_compute = false` head, not reopen earlier toggle
+  branches and not pivot to `candle-core`
+
+13 GB parity follow-up:
+
+- a like-for-like accepted-head `phase=load --max-rss=13` trace was captured next to compare
+  pure load against the existing accepted-head `phase=infer --max-rss=13` evidence
+- pure `load` does not pass the `13 GB` guard either
+- the new pure-load wall appears earlier than the current infer wall:
+  - the `13 GB` pure-load run dies in layer `4` while loading `shared_experts`
+  - the older accepted-head `13 GB` infer run dies later, in layer `5` routed-expert fetch
+- this means the remaining `13 GB` problem is not infer-only overhead
+- it also means shared-expert load residency is still an active contributor under the target guard,
+  even though the widened `15 GB` load path reaches `weights_ready`
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_load_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_13g_v4.log`
+
+Shared-expert attribution follow-up:
+
+- `skip_shared_experts` originally only affected forward execution; the load path still materialized
+  `shared_experts`, which made the earlier `13 GB` comparison ambiguous
+- the load path now honors the same existing diagnostic flag, without changing the default head or
+  introducing a new toggle
+- with `skip_shared_experts = true`, the widened `phase=load --max-rss=13` repro no longer dies in
+  `shared_experts`; it now dies earlier in the same layer `4`, during routed-expert eager loads
+  around expert `45`
+- the matching `phase=infer --max-rss=13` repro also skips `shared_experts` at load time and still
+  dies in layer `4`, during routed-expert eager loads around expert `38`
+- this means `shared_experts` are a real contributor to the remaining `13 GB` miss, but they are
+  not the full wall; once removed from the load path, the next active boundary is still eager
+  routed-expert `weight.get(...)` residency in layer `4`
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_skip_shared_trace_pty_load_13g_v2.log`
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_skip_shared_trace_pty_13g_v1.log`
+
+Lazy routed-expert best-case follow-up:
+
+- a manual repo-local diagnostic was run with the same accepted-head shape as the current
+  `skip_shared` probe, but with only one extra difference: `XIUXIAN_VISION_LAZY_MOE_EXPERTS=1`
+- the `phase=load --max-rss=13` run then passed cleanly and reached `deepseek.language.weights_ready`
+- that widened-best-case load repro finished in about `13.6s`, with observed RSS around `6.62 GB`
+- a matching `phase=infer --max-rss=13` no-trace repro was then allowed to run for `86s`; it never
+  approached the budget wall, with observed RSS staying at or below about `7.57 GB`
+- this is not yet an accepted product head, but it is now a strong attribution result:
+  the remaining `13 GB` wall is dominated by eager routed-expert residency, not by shared experts,
+  not by mmap, and not by generic decode overhead
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_manual_lazy_skip_shared_trace_pty_load_13g_v2.log`
+- `.run/tmp/downstream_deepseek_metal_manual_lazy_skip_shared_infer_13g_notrace_v1.log`
+
+Retained `metal_fast` routed-expert deferral landing:
+
+- the retained canonical profile is still
+  `deepseek_metal_smoke_12g_safe384_digit1_native_inputs_native_attn_native_gate_inputs_metal_fast_eager_shared_native`
+- no new TOML profile or env toggle was added
+- instead, `transformer/weights.rs` now chooses an internal routed-expert load strategy; under
+  `MoeExecutionBackend::MetalFast`, with a deferred source and no snapshot, routed experts now
+  stay deferred even when the external `lazy_moe_experts` flag is still off
+- shared experts remain eager, so the retained profile shape is unchanged at the surface
+- the widened `phase=load --max-rss=15` repro now passes cleanly and reaches
+  `deepseek.language.weights_ready` in about `14.1s`
+- the guarded `phase=infer --max-rss=13` repro still misses the target budget, but it no longer
+  dies in model-load residency; it reaches `deepseek.language.weights_ready`, enters
+  `block.forward.moe`, and only then dies at roughly `13.02 GB` after about `40.4s`
+- the new last visible stage is inside deferred routed-expert forward execution, around
+  `block.forward.moe.expert.started layer_idx=3 expert_idx=27`, not inside eager routed-expert
+  load-time `weight.get(...)`
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_load_15g_v9.log`
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_13g_v5.log`
+
+That means the codebase is now structurally ready for the real MoE fast-path work, but the active
+budget wall has moved out of load-time routed-expert residency and into deferred routed-expert
+forward materialization.
+
+Follow-up landing on that new wall:
+
+- deferred routed experts now keep their `gate/up/down` projection tensors view-backed during
+  `DeferredDenseMlpWeights::materialize(...)` instead of eagerly forcing all three projections
+  contiguous up front
+- this does not add any new profile or external toggle; it only changes the internal
+  `metal_fast + deferred routed expert` materialization path
+- the widened `phase=load --max-rss=15` run still passes comfortably, now finishing in about
+  `5.0s` with observed RSS topping out around `10.36 GB`
+- more importantly, the guarded no-trace `phase=infer --max-rss=13` run no longer fails on memory
+  at all; it completes inference in about `32.7s`, stays under budget with observed RSS peaking
+  around `9.19 GB`, and fails only because OCR output is empty
+
+Retained follow-up:
+
+- the canonical Metal profile first moved from OOM to a single-token empty-output failure
+- the empty-output trace pinned that failure to whitespace token `6776`
+- a narrow retained fix now changes only first-token selection: whitespace-only decoded candidates
+  are skipped, and `eos` is deferred until no visible candidate remains
+
+New evidence:
+
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_load_15g_ephemeral_v2.log`
+- `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_infer_13g_ephemeral_v2.log`
+- `.run/tmp/downstream_deepseek_metal_first_visible_infer_13g_emptytrace_v1.log`
+- `.run/tmp/downstream_deepseek_metal_first_visible_eos_deferred_infer_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_first_visible_eos_deferred_infer_12g_v1.log`
+
+This changes the active diagnosis again:
+
+- the retained canonical Metal profile is no longer blocked on memory
+- the retained first-token filter removes the whitespace-token blocker from the canonical path
+- the guarded `infer` run now passes with `status=0` at both `13 GB` and `12 GB`
+- the retained digit-first follow-up now chooses token `18` (`0`) at step `0` even though the raw
+  logits still rank whitespace token `6776` first and `eos` second
+- the representative smoke output is now `0`, so the canonical one-digit smoke is no longer
+  blocked on minimal prompt-level semantics either
+- a stronger multi-token amount-value probe also stays inside the `12 GB` guard, but it took about
+  `252s` and returned `No units.` instead of an amount substring; the next quality wall is now
+  semantic correctness and practical latency, not memory
+- two shorter month-value probes also stayed inside the `12 GB` guard, but neither completed in a
+  practical smoke window, regardless of whether decode cache was disabled or enabled
 
 ## Recommendation
 
-The next major research/implementation spike should start from the question:
+The next bounded investigation should move from Metal stability and first-token semantics to richer
+OCR quality coverage:
 
-`How do we port the shape of mistralrs-core's gather-based Metal MoE fast path into vendored deepseek-ocr without changing Candle itself?`
+`Which stronger OCR-quality probe stays small enough to act as a real smoke gate, now that amount-value probes are semantically wrong and both cache and no-cache month-value probes are still too slow under the same 12 GB budget?`
 
-Until that spike is exhausted, `candle-core` should remain out of scope.
+`candle-core` should remain out of scope.

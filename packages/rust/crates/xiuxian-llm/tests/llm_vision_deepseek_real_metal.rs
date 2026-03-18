@@ -67,6 +67,7 @@ async fn test_real_metal_inference() -> Result<()> {
             let image_path = resolve_test_image_path(project_root)?;
             let allow_empty_output = resolve_allow_empty_output();
             let min_output_chars = resolve_min_output_chars();
+            let expected_substring = resolve_expected_substring();
 
             let source_png = std::fs::read(&image_path)
                 .with_context(|| format!("Failed to read image from {}", image_path.display()))?;
@@ -92,7 +93,17 @@ async fn test_real_metal_inference() -> Result<()> {
                         markdown.chars().count()
                     );
                 }
+                if let Some(expected) = expected_substring.as_deref() {
+                    assert!(
+                        markdown.contains(expected),
+                        "OCR output missing expected substring `{expected}`: {}",
+                        preview_text(markdown, 120)
+                    );
+                }
             } else {
+                if let Some(expected) = expected_substring.as_deref() {
+                    bail!("OCR produced no output; expected substring `{expected}`");
+                }
                 if allow_empty_output {
                     eprintln!("[TEST] OCR produced no output, but empty output is allowed");
                 } else {
@@ -189,10 +200,26 @@ fn resolve_min_output_chars() -> usize {
 }
 
 #[cfg(feature = "vision-dots-metal")]
+fn resolve_expected_substring() -> Option<String> {
+    parse_expected_substring(
+        std::env::var("XIUXIAN_VISION_EXPECT_SUBSTRING")
+            .ok()
+            .as_deref(),
+    )
+}
+
+#[cfg(feature = "vision-dots-metal")]
 fn parse_min_output_chars(raw: Option<&str>) -> usize {
     raw.and_then(|value| value.trim().parse::<usize>().ok())
         .filter(|&value| value > 0)
         .unwrap_or(11)
+}
+
+#[cfg(feature = "vision-dots-metal")]
+fn parse_expected_substring(raw: Option<&str>) -> Option<String> {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 #[cfg(feature = "vision-dots-metal")]
@@ -219,4 +246,20 @@ fn parse_min_output_chars_defaults_to_11() {
 fn parse_min_output_chars_accepts_positive_override() {
     assert_eq!(parse_min_output_chars(Some("1")), 1);
     assert_eq!(parse_min_output_chars(Some("12")), 12);
+}
+
+#[cfg(feature = "vision-dots-metal")]
+#[test]
+fn parse_expected_substring_ignores_missing_or_blank_values() {
+    assert_eq!(parse_expected_substring(None), None);
+    assert_eq!(parse_expected_substring(Some("   ")), None);
+}
+
+#[cfg(feature = "vision-dots-metal")]
+#[test]
+fn parse_expected_substring_trims_value() {
+    assert_eq!(
+        parse_expected_substring(Some(" 128.50 ")).as_deref(),
+        Some("128.50")
+    );
 }

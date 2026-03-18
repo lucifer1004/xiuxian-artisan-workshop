@@ -102,7 +102,7 @@ impl SaliencySnapshot {
             return 0.0;
         }
         let sum: f64 = self.states.values().map(|s| s.current_saliency).sum();
-        sum / self.states.len() as f64
+        sum / usize_to_f64_saturating(self.states.len())
     }
 
     /// Get top N nodes by saliency.
@@ -116,6 +116,10 @@ impl SaliencySnapshot {
         });
         sorted.into_iter().take(n).collect()
     }
+}
+
+fn usize_to_f64_saturating(value: usize) -> f64 {
+    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
 }
 
 #[cfg(test)]

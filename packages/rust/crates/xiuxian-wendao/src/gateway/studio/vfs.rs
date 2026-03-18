@@ -1,11 +1,19 @@
 //! VFS (Virtual File System) operations for the studio API.
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use std::{collections::HashSet, fs};
 
 use super::router::StudioState;
 use super::types::{VfsCategory, VfsContentResponse, VfsEntry, VfsScanEntry, VfsScanResult};
+
+#[derive(Debug, Clone)]
+struct ResolvedVfsRoot {
+    request_root: String,
+    display_name: String,
+    filesystem_path: PathBuf,
+}
 
 /// VFS operation error type.
 #[derive(Debug)]
@@ -35,35 +43,17 @@ impl From<io::Error> for VfsError {
 
 /// List root entries for the VFS.
 pub(crate) fn list_root_entries(state: &StudioState) -> Vec<VfsEntry> {
-    let mut entries = Vec::new();
-
-    // Add skills root
-    let skills_root = &state.internal_skill_root;
-    if skills_root.exists() {
-        entries.push(VfsEntry {
-            path: "skills".to_string(),
-            name: "skills".to_string(),
+    resolved_vfs_roots(state)
+        .into_iter()
+        .map(|root| VfsEntry {
+            path: root.request_root,
+            name: root.display_name,
             is_dir: true,
             size: 0,
             modified: 0,
             content_type: None,
-        });
-    }
-
-    // Add knowledge root
-    let knowledge_root = &state.knowledge_root;
-    if knowledge_root.exists() {
-        entries.push(VfsEntry {
-            path: "knowledge".to_string(),
-            name: "knowledge".to_string(),
-            is_dir: true,
-            size: 0,
-            modified: 0,
-            content_type: None,
-        });
-    }
-
-    entries
+        })
+        .collect()
 }
 
 /// Scan all VFS roots and return a summary.
@@ -73,24 +63,27 @@ pub(crate) fn scan_roots(state: &StudioState) -> VfsScanResult {
     let mut file_count = 0;
     let mut dir_count = 0;
 
-    // Scan skills root
-    let skills_root = &state.internal_skill_root;
-    if skills_root.exists() {
+    for root in resolved_vfs_roots(state) {
+        dir_count += 1;
+        let modified = fs::metadata(&root.filesystem_path)
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(|timestamp| timestamp.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |duration| duration.as_secs());
+        entries.push(VfsScanEntry {
+            path: root.request_root.clone(),
+            name: root.display_name.clone(),
+            is_dir: true,
+            category: VfsCategory::Folder,
+            size: 0,
+            modified,
+            content_type: None,
+            has_frontmatter: false,
+            wendao_id: None,
+        });
         scan_directory(
-            skills_root,
-            "skills",
-            &mut entries,
-            &mut file_count,
-            &mut dir_count,
-        );
-    }
-
-    // Scan knowledge root
-    let knowledge_root = &state.knowledge_root;
-    if knowledge_root.exists() {
-        scan_directory(
-            knowledge_root,
-            "knowledge",
+            root.filesystem_path.as_path(),
+            root.request_root.as_str(),
             &mut entries,
             &mut file_count,
             &mut dir_count,
@@ -107,13 +100,7 @@ pub(crate) fn scan_roots(state: &StudioState) -> VfsScanResult {
 
 /// Get a single VFS entry by path.
 pub(crate) fn get_entry(state: &StudioState, path: &str) -> Result<VfsEntry, VfsError> {
-    let (root, rest) = path.split_once('/').unwrap_or((path, ""));
-
-    let full_path = match root {
-        "skills" => state.internal_skill_root.join(rest),
-        "knowledge" => state.knowledge_root.join(rest),
-        _ => return Err(VfsError::UnknownRoot(root.to_string())),
-    };
+    let full_path = resolve_vfs_path(state, path)?;
 
     if !full_path.exists() {
         return Err(VfsError::NotFound(path.to_string()));
@@ -149,13 +136,7 @@ pub(crate) async fn read_content(
     state: &StudioState,
     path: &str,
 ) -> Result<VfsContentResponse, VfsError> {
-    let (root, rest) = path.split_once('/').unwrap_or((path, ""));
-
-    let full_path = match root {
-        "skills" => state.internal_skill_root.join(rest),
-        "knowledge" => state.knowledge_root.join(rest),
-        _ => return Err(VfsError::UnknownRoot(root.to_string())),
-    };
+    let full_path = resolve_vfs_path(state, path)?;
 
     if !full_path.exists() {
         return Err(VfsError::NotFound(path.to_string()));
@@ -192,11 +173,7 @@ fn scan_directory(
                     path: relative.clone(),
                     name: entry.file_name().to_string_lossy().to_string(),
                     is_dir: true,
-                    category: if prefix == "skills" {
-                        VfsCategory::Skill
-                    } else {
-                        VfsCategory::Knowledge
-                    },
+                    category: VfsCategory::Folder,
                     size: 0,
                     modified: metadata
                         .as_ref()
@@ -215,11 +192,7 @@ fn scan_directory(
                     path: relative,
                     name: entry.file_name().to_string_lossy().to_string(),
                     is_dir: false,
-                    category: if prefix == "skills" {
-                        VfsCategory::Skill
-                    } else {
-                        VfsCategory::Knowledge
-                    },
+                    category: classify_file_category(prefix, &path),
                     size: metadata.as_ref().map_or(0, std::fs::Metadata::len),
                     modified: metadata
                         .as_ref()
@@ -232,6 +205,175 @@ fn scan_directory(
                 });
             }
         }
+    }
+}
+
+fn resolved_vfs_roots(state: &StudioState) -> Vec<ResolvedVfsRoot> {
+    let mut roots = Vec::new();
+    let mut seen_fs_paths = HashSet::new();
+    let mut seen_request_roots = HashSet::new();
+
+    for configured in state.configured_index_paths() {
+        push_root(
+            &mut roots,
+            &mut seen_fs_paths,
+            &mut seen_request_roots,
+            resolve_root_candidate(state, configured.as_str()),
+        );
+    }
+
+    let project_skills = state.project_root.join("skills");
+    for (request_root, filesystem_path) in [
+        ("blueprints", state.data_root.join("blueprints")),
+        ("knowledge", state.knowledge_root.clone()),
+        ("internal_skills", state.internal_skill_root.clone()),
+        ("docs", state.project_root.join("docs")),
+        ("skills", project_skills),
+    ] {
+        push_root(
+            &mut roots,
+            &mut seen_fs_paths,
+            &mut seen_request_roots,
+            Some(ResolvedVfsRoot {
+                request_root: request_root.to_string(),
+                display_name: request_root.to_string(),
+                filesystem_path,
+            }),
+        );
+    }
+
+    roots
+}
+
+fn push_root(
+    roots: &mut Vec<ResolvedVfsRoot>,
+    seen_fs_paths: &mut HashSet<String>,
+    seen_request_roots: &mut HashSet<String>,
+    candidate: Option<ResolvedVfsRoot>,
+) {
+    let Some(mut candidate) = candidate else {
+        return;
+    };
+    if !candidate.filesystem_path.exists() {
+        return;
+    }
+
+    let normalized_fs_path = candidate
+        .filesystem_path
+        .to_string_lossy()
+        .replace('\\', "/");
+    if !seen_fs_paths.insert(normalized_fs_path) {
+        return;
+    }
+
+    if !seen_request_roots.insert(candidate.request_root.clone()) {
+        let mut suffix = 2usize;
+        loop {
+            let alternative = format!("{}-{suffix}", candidate.request_root);
+            if seen_request_roots.insert(alternative.clone()) {
+                candidate.request_root.clone_from(&alternative);
+                candidate.display_name = alternative;
+                break;
+            }
+            suffix += 1;
+        }
+    }
+
+    roots.push(candidate);
+}
+
+fn resolve_root_candidate(state: &StudioState, raw: &str) -> Option<ResolvedVfsRoot> {
+    let normalized = normalize_configured_root(raw)?;
+    let filesystem_path = resolve_filesystem_root(state, normalized.as_str());
+    let request_root = request_root_alias(normalized.as_str(), &filesystem_path)?;
+    Some(ResolvedVfsRoot {
+        display_name: request_root.clone(),
+        request_root,
+        filesystem_path,
+    })
+}
+
+fn normalize_configured_root(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let normalized = trimmed
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .trim_start_matches("./")
+        .to_string();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+fn resolve_filesystem_root(state: &StudioState, normalized: &str) -> PathBuf {
+    let candidate = Path::new(normalized);
+    if candidate.is_absolute() {
+        return candidate.to_path_buf();
+    }
+
+    match normalized {
+        "knowledge" => state.knowledge_root.clone(),
+        "internal_skills" => state.internal_skill_root.clone(),
+        "skills" => {
+            let project_skills = state.project_root.join("skills");
+            if project_skills.exists() {
+                project_skills
+            } else {
+                state.internal_skill_root.clone()
+            }
+        }
+        "blueprints" => state.data_root.join("blueprints"),
+        _ => state.project_root.join(normalized),
+    }
+}
+
+fn request_root_alias(normalized: &str, filesystem_path: &Path) -> Option<String> {
+    let candidate = if Path::new(normalized).is_absolute() || normalized.contains('/') {
+        filesystem_path.file_name().map_or_else(
+            || normalized.to_string(),
+            |component| component.to_string_lossy().to_string(),
+        )
+    } else {
+        normalized.to_string()
+    };
+
+    if candidate.trim().is_empty() {
+        None
+    } else {
+        Some(candidate)
+    }
+}
+
+fn resolve_vfs_path(state: &StudioState, requested_path: &str) -> Result<PathBuf, VfsError> {
+    let (root, rest) = requested_path
+        .split_once('/')
+        .unwrap_or((requested_path, ""));
+    let full_path = resolved_vfs_roots(state)
+        .into_iter()
+        .find(|candidate| candidate.request_root == root)
+        .map(|candidate| candidate.filesystem_path.join(rest))
+        .ok_or_else(|| VfsError::UnknownRoot(root.to_string()))?;
+    Ok(full_path)
+}
+
+fn classify_file_category(root: &str, path: &Path) -> VfsCategory {
+    if path.file_name().and_then(|name| name.to_str()) == Some("SKILL.md") || root.contains("skill")
+    {
+        VfsCategory::Skill
+    } else if root == "knowledge" {
+        VfsCategory::Knowledge
+    } else if matches!(
+        path.extension().and_then(|ext| ext.to_str()),
+        Some("md" | "markdown" | "bpmn")
+    ) {
+        VfsCategory::Doc
+    } else {
+        VfsCategory::Other
     }
 }
 
@@ -261,3 +403,7 @@ fn guess_content_type(path: &Path) -> String {
         _ => "text/plain".to_string(),
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/gateway/studio/vfs.rs"]
+mod tests;

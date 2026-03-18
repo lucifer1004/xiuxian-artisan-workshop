@@ -6,7 +6,9 @@
 mod graph;
 mod page_index;
 mod search;
+mod semantic_check;
 
 pub use graph::GraphRunner;
 pub use page_index::PageIndexRunner;
 pub use search::SearchRunner;
+pub use semantic_check::SemanticCheckRunner;

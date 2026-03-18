@@ -27,7 +27,8 @@ if ! command -v valkey-cli >/dev/null 2>&1; then
 fi
 
 RUNTIME_DIR="${PRJ_RUNTIME_DIR:-.run}/valkey"
-mkdir -p "$RUNTIME_DIR"
+DATA_DIR="${PRJ_CACHE_HOME:-.cache}/valkey"
+mkdir -p "$RUNTIME_DIR" "$DATA_DIR"
 PIDFILE="$RUNTIME_DIR/valkey-${PORT}.pid"
 LOGFILE="$RUNTIME_DIR/valkey-${PORT}.log"
 URL="redis://${HOST}:${PORT}/${DB}"
@@ -48,10 +49,10 @@ valkey-server \
   --port "$PORT" \
   --bind "${HOST}" \
   --daemonize yes \
-  --dir "$RUNTIME_DIR" \
+  --dir "$DATA_DIR" \
   --pidfile "$PIDFILE" \
   --logfile "$LOGFILE"
 
 sleep 0.2
 valkey-cli -u "$URL" ping
-echo "Valkey started. pidfile=$PIDFILE logfile=$LOGFILE"
+echo "Valkey started. pidfile=$PIDFILE logfile=$LOGFILE datadir=$DATA_DIR"

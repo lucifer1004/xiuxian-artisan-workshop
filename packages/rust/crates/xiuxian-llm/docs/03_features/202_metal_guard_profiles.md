@@ -155,17 +155,94 @@ and native MoE gating-input matmul dtype in the same guarded single-digit probe.
 
 Current status:
 
-- remains the current best research profile shape for the smallest non-empty-output investigation
-- historical guarded runs briefly completed without tripping the `12 GB` guard, but that behavior is
-  not yet reproducible on the current tree
-- after the accepted sampling-helper tightening, the latest guarded recheck still landed slightly
-  above budget at about `12.04 GB`
-- this means the profile is close enough to keep, but it is still not a passing smoke baseline
+- retained as the canonical guarded Metal smoke profile for the current `metal_fast` DeepSeek OCR
+  path
+- after the retained digit-first follow-up, the profile now passes guarded `infer` at both
+  `12 GB` and `13 GB`
+- the retained behavior is still narrow and prompt-scoped: whitespace-only decoded candidates are
+  skipped, `eos` is deferred until no visible candidate remains, and prompts that explicitly ask
+  for exactly one visible digit now prefer single-digit visible candidates over other visible text
+- the current smoke evidence returns a reproducible preview (`0`) under the `12 GB` guard, and
+  the canonical profile now encodes that minimum semantic contract directly with
+  `expected_substring = "0"`
+- step-0 logits still rank whitespace token `6776` highest and `eos` second, so the retained
+  semantic change is in first-token selection policy, not raw logits ordering
 
 Primary evidence:
 
 - `.run/tmp/downstream_deepseek_metal_safe384_digit1_native_inputs_native_attn_native_gate_inputs.log`
 - `.run/tmp/downstream_deepseek_metal_safe384_digit1_native_inputs_native_attn_native_gate_inputs_post_visible_revert.log`
+- `.run/tmp/downstream_deepseek_metal_first_visible_eos_deferred_infer_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_first_visible_eos_deferred_infer_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_first_visible_eos_deferred_infer_13g_emptytrace_v1.log`
+- `.run/tmp/downstream_deepseek_metal_digit_first_canonical_12g_v5.log`
+- `.run/tmp/downstream_deepseek_metal_digit_first_canonical_12g_v6.log`
+- `.run/tmp/downstream_deepseek_metal_canonical_step0_logits_v5.json`
+
+### `deepseek_metal_smoke_12g_safe384_amount_value_metal_fast_eager_shared_native`
+
+Exploratory multi-token quality profile that keeps the same accepted `metal_fast` guarded shape,
+but raises the semantic bar from a single visible digit to the amount value and requires the output
+to contain `128.50`.
+
+Current status:
+
+- retained as an exploratory quality profile only
+- it stays within the `12 GB` guard, so memory is no longer the limiting factor for this shape
+- it is not suitable as the next smoke gate: the run took about `252s` and returned `No units.`
+  instead of an amount substring
+
+Primary evidence:
+
+- `.run/tmp/downstream_deepseek_metal_amount_value_12g_v1.log`
+
+### `deepseek_metal_smoke_12g_safe384_telegram_word_metal_fast_eager_shared_native`
+
+Retained stronger-quality Metal profile that keeps the same accepted `metal_fast` guarded shape,
+but raises the semantic bar from a single visible digit to the visible word `Telegram`.
+
+Current status:
+
+- retained as the next practical stronger-quality gate on top of the canonical one-digit smoke
+- stays within the `12 GB` guard and completes in a practical smoke window
+- depends on the retained prompt-aware first-token word preference; under the current implementation
+  it returns `Telegram` in about `37s`
+
+Primary evidence:
+
+- `.run/tmp/downstream_deepseek_metal_telegram_profile_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_telegram_probe_12g_v2.log`
+
+### Exploratory month-value probes
+
+Two shorter month-value probes were run with manual prompt overrides on top of the canonical
+accepted-head profile:
+
+- no-cache month probe: `.run/tmp/downstream_deepseek_metal_month_value_probe_12g_v1.log`
+- cache-enabled month probe: `.run/tmp/downstream_deepseek_metal_month_value_cache_probe_12g_v1.log`
+
+Current status:
+
+- both stayed within the `12 GB` guard, so they do not reopen the memory problem
+- neither completed within a practical smoke-test window
+- cache did not make the month-value probe fast enough to become the next gate
+
+### Rejected short-field probes
+
+Two additional short-field probes were explored on top of the canonical accepted head:
+
+- early `Telegram` word probe before the retained prompt-aware word preference:
+  `.run/tmp/downstream_deepseek_metal_telegram_probe_12g_v1.log`
+- invoice suffix probe: `.run/tmp/downstream_deepseek_metal_invoice_suffix_probe_12g_v1.log`
+
+Current status:
+
+- the early `Telegram` probe no longer reflects the retained implementation and has been
+  superseded by the passing `v2` evidence above
+- the invoice suffix probe stayed well below the `12 GB` guard after the initial load/prefill
+  spike, but it did not produce a useful OCR result inside a practical smoke window
+- the invoice suffix probe settled into the same long low-RSS tail as the rejected month-value
+  probes and was manually stopped instead of being promoted into a TOML profile
 
 ### Rejected Follow-Up: Visible-First Token Steering
 
@@ -179,6 +256,9 @@ Current status:
   `12.1-12.3 GB` range
 - the lighter sampling-helper tightening was retained, but the visible-first steering path itself
   was not justified by the guarded results
+- a later retained fix narrowed the scope further by changing only first-token selection on the
+  canonical profile and by deferring `eos` until visible candidates are exhausted; that retained
+  landing supersedes this rejected branch and does not use a separate profile
 
 Primary evidence:
 

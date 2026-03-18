@@ -172,6 +172,10 @@ def _read_test_profile_config(
     if ocr_prompt is not None:
         env_overrides["XIUXIAN_VISION_OCR_PROMPT"] = ocr_prompt
 
+    expected_substring = read_str("expected_substring")
+    if expected_substring is not None:
+        env_overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] = expected_substring
+
     crop_mode = read_bool("crop_mode")
     if crop_mode is not None:
         env_overrides["XIUXIAN_VISION_CROP_MODE"] = "1" if crop_mode else "0"

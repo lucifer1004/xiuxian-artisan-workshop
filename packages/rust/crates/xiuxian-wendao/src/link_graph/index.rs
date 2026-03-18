@@ -170,6 +170,15 @@ pub struct SymbolCacheStats {
     pub total_references: usize,
 }
 
+/// Parent resolution for a page-index node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageIndexParent<'a> {
+    /// The node exists and is a root node.
+    Root,
+    /// The node exists and is nested under the given parent node id.
+    Parent(&'a str),
+}
+
 /// Fast in-memory markdown link graph index.
 #[derive(Debug, Clone)]
 pub struct LinkGraphIndex {

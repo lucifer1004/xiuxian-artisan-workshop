@@ -51,8 +51,10 @@ fn test_find_insertion_point_with_siblings() {
     assert_eq!(result.start_level, 2);
     // When inserting a new H2 under Main, after existing H2s,
     // prev_sibling should be Beta (the last H2), next_sibling should be None
-    assert!(result.prev_sibling.is_some(), "should have prev_sibling");
-    assert_eq!(result.prev_sibling.as_ref().unwrap().title, "Beta");
+    let Some(prev_sibling) = result.prev_sibling.as_ref() else {
+        panic!("should have prev_sibling");
+    };
+    assert_eq!(prev_sibling.title, "Beta");
     assert!(
         result.next_sibling.is_none(),
         "should not have next_sibling at end"
@@ -112,7 +114,9 @@ fn test_build_new_sections_content_with_plain_id() {
     assert!(content.contains("# Section\n:ID:"));
     // ID should be 12 chars (truncated UUID)
     let id_line: Vec<&str> = content.lines().collect();
-    let id_part = id_line[1].strip_prefix(":ID: ").unwrap();
+    let Some(id_part) = id_line[1].strip_prefix(":ID: ") else {
+        panic!("expected generated ID line to start with ':ID: '");
+    };
     assert_eq!(id_part.len(), 12);
 }
 

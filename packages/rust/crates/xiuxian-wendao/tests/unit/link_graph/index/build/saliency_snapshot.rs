@@ -5,14 +5,14 @@ fn test_empty_snapshot() {
     let snapshot = SaliencySnapshot::empty();
     assert_eq!(snapshot.known_count(), 0);
     assert_eq!(snapshot.high_saliency_count(), 0);
-    assert_eq!(snapshot.saliency_of("unknown"), 0.0);
+    assert!(snapshot.saliency_of("unknown").abs() < f64::EPSILON);
     assert!(!snapshot.is_high_saliency("unknown"));
 }
 
 #[test]
 fn test_average_saliency_empty() {
     let snapshot = SaliencySnapshot::empty();
-    assert_eq!(snapshot.average_saliency(), 0.0);
+    assert!(snapshot.average_saliency().abs() < f64::EPSILON);
 }
 
 #[test]

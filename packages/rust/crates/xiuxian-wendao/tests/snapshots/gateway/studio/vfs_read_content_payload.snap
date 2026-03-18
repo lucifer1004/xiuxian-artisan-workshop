@@ -1,0 +1,9 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/../../../tests/unit/gateway/studio/support.rs
+expression: value
+---
+{
+  "content": "<bpmn />",
+  "contentType": "text/plain",
+  "path": "blueprints/default.bpmn"
+}

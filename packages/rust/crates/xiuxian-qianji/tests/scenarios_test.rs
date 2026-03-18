@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use xiuxian_testing::ScenarioFramework;
+use xiuxian_testing::{ScenarioFramework, ScenarioSnapshotPolicy};
 
 mod support;
 use support::runners::{AuditFlowRunner, LlmAnalyzerRunner};
@@ -21,7 +21,8 @@ fn run_all_scenarios() {
     let scenarios_root = manifest.join("tests").join("scenarios");
     let snapshot_path = manifest.join("tests").join("snapshots");
 
-    let mut framework = ScenarioFramework::with_snapshot_path(&snapshot_path);
+    let mut framework = ScenarioFramework::with_snapshot_path(&snapshot_path)
+        .with_snapshot_policy(ScenarioSnapshotPolicy::recommended());
     // Register all runners
     framework.register(Box::new(LlmAnalyzerRunner));
     framework.register(Box::new(AuditFlowRunner));

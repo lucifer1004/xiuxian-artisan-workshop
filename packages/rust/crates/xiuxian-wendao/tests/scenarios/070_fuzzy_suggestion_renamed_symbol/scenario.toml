@@ -13,9 +13,9 @@ paths = ["input"]
 
 [runner]
 semantic_check = true
-source_paths = ["../src"]
+source_paths = ["src"]
 
 [assert]
 issue_count = 1
-issue_type = "invalid_observation_pattern"
+issue_type = "observation_target_missing"
 has_fuzzy_suggestion = true

@@ -45,10 +45,10 @@ fn test_resolve_port_default() {
 #[test]
 fn test_resolve_port_from_cli_config_path() {
     let config_path = write_temp_gateway_config(
-        r#"
+        r"
 [gateway]
 port = 18080
-"#,
+",
     );
 
     let port = resolve_port(None, Some(config_path.as_path()));
@@ -162,11 +162,13 @@ async fn test_notification_channel() {
         confidence: "high".to_string(),
         summary: "Test drift".to_string(),
     };
-    tx.send(signal).unwrap();
+    assert!(tx.send(signal).is_ok());
 
     // Receive it
-    let received = rx.recv().await;
-    assert!(received.is_some());
+    let Some(received) = rx.recv().await else {
+        panic!("notification channel should receive the test signal");
+    };
+    assert!(matches!(received, ZhenfaSignal::SemanticDrift { .. }));
 }
 
 #[test]
