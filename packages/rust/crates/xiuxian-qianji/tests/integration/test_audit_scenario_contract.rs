@@ -1,3 +1,5 @@
+//! Regression coverage for the pinned Qianji audit-flow contract reference.
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -26,7 +28,7 @@ const VALID_AUDIT_PLAN: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
     </risk-pair>
   </risk-assessment>
   <verification-strategy>
-    <test-command>cargo test -p xiuxian-qianji --test test_audit_scenario_contract</test-command>
+    <test-command>cargo test -p xiuxian-qianji --test audit_scenario_contract</test-command>
     <expected-outcome>Scenario contract path resolves and validates the canonical XML plan.</expected-outcome>
   </verification-strategy>
 </qianji-audit-plan>

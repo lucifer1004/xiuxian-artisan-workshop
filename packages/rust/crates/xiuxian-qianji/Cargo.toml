@@ -89,6 +89,18 @@ required-features = ["llm"]
 name = "contract_feedback_pipeline"
 path = "tests/integration/contract_feedback_pipeline.rs"
 
+[[test]]
+name = "audit_scenario_contract"
+path = "tests/integration/test_audit_scenario_contract.rs"
+
+[[test]]
+name = "wendao_persisted_rest_docs_contract_feedback"
+path = "tests/integration/test_wendao_persisted_rest_docs_contract_feedback.rs"
+
+[[test]]
+name = "wendao_live_rest_docs_contract_feedback"
+path = "tests/integration/test_wendao_live_rest_docs_contract_feedback.rs"
+
 # Unit tests for telemetry
 [[test]]
 name = "unit_telemetry_events"
