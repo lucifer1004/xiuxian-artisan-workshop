@@ -1,30 +1,10 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/../../../tests/unit/gateway/studio/support.rs
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
 expression: value
 ---
 {
-  "dirCount": 5,
+  "dirCount": 3,
   "entries": [
-    {
-      "category": "folder",
-      "contentType": null,
-      "hasFrontmatter": false,
-      "isDir": true,
-      "name": "blueprints",
-      "path": "blueprints",
-      "size": 0,
-      "wendaoId": null
-    },
-    {
-      "category": "doc",
-      "contentType": "text/plain",
-      "hasFrontmatter": false,
-      "isDir": false,
-      "name": "default.bpmn",
-      "path": "blueprints/default.bpmn",
-      "size": 8,
-      "wendaoId": null
-    },
     {
       "category": "folder",
       "contentType": null,
@@ -32,6 +12,8 @@ expression: value
       "isDir": true,
       "name": "docs",
       "path": "docs",
+      "projectName": "kernel",
+      "rootLabel": "docs",
       "size": 0,
       "wendaoId": null
     },
@@ -42,6 +24,8 @@ expression: value
       "isDir": false,
       "name": "guide.md",
       "path": "docs/guide.md",
+      "projectName": "kernel",
+      "rootLabel": "docs",
       "size": 16,
       "wendaoId": null
     },
@@ -52,6 +36,8 @@ expression: value
       "isDir": true,
       "name": "internal_skills",
       "path": "internal_skills",
+      "projectName": "kernel",
+      "rootLabel": "internal_skills",
       "size": 0,
       "wendaoId": null
     },
@@ -62,6 +48,8 @@ expression: value
       "isDir": true,
       "name": "writer",
       "path": "internal_skills/writer",
+      "projectName": "kernel",
+      "rootLabel": "internal_skills",
       "size": 0,
       "wendaoId": null
     },
@@ -72,29 +60,11 @@ expression: value
       "isDir": false,
       "name": "SKILL.md",
       "path": "internal_skills/writer/SKILL.md",
+      "projectName": "kernel",
+      "rootLabel": "internal_skills",
       "size": 21,
-      "wendaoId": null
-    },
-    {
-      "category": "folder",
-      "contentType": null,
-      "hasFrontmatter": false,
-      "isDir": true,
-      "name": "knowledge",
-      "path": "knowledge",
-      "size": 0,
-      "wendaoId": null
-    },
-    {
-      "category": "knowledge",
-      "contentType": "text/markdown",
-      "hasFrontmatter": false,
-      "isDir": false,
-      "name": "context.md",
-      "path": "knowledge/context.md",
-      "size": 18,
       "wendaoId": null
     }
   ],
-  "fileCount": 4
+  "fileCount": 2
 }

@@ -84,9 +84,11 @@ pub use runtime_config::{
     set_link_graph_config_home_override, set_link_graph_wendao_config_override,
 };
 pub use saliency::{
-    LINK_GRAPH_SALIENCY_SCHEMA_VERSION, LinkGraphSaliencyPolicy, LinkGraphSaliencyState,
-    LinkGraphSaliencyTouchRequest, compute_link_graph_saliency, valkey_saliency_del,
-    valkey_saliency_get, valkey_saliency_get_many, valkey_saliency_get_many_with_valkey,
+    LINK_GRAPH_SALIENCY_SCHEMA_VERSION, LinkGraphSaliencyDecaySweepRequest,
+    LinkGraphSaliencyDecaySweepResult, LinkGraphSaliencyPolicy, LinkGraphSaliencyState,
+    LinkGraphSaliencyTouchRequest, compute_link_graph_saliency, valkey_saliency_decay_all,
+    valkey_saliency_decay_all_with_valkey, valkey_saliency_del, valkey_saliency_get,
+    valkey_saliency_get_many, valkey_saliency_get_many_with_valkey,
     valkey_saliency_get_with_valkey, valkey_saliency_touch, valkey_saliency_touch_with_valkey,
 };
 pub use stats_cache::{

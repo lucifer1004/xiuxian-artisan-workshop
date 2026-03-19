@@ -1,9 +1,9 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/../../../tests/unit/gateway/studio/support.rs
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
 expression: value
 ---
 {
-  "hitCount": 1,
+  "hitCount": 2,
   "hits": [
     {
       "column": 20,
@@ -13,6 +13,20 @@ expression: value
       "lineText": "let _service = AlphaService { ready: true };",
       "name": "AlphaService",
       "path": "packages/rust/crates/demo/src/lib.rs",
+      "projectName": "kernel",
+      "rootLabel": "packages",
+      "score": 0.9
+    },
+    {
+      "column": 20,
+      "crateName": "demo",
+      "language": "rust",
+      "line": 6,
+      "lineText": "let _service = AlphaService { ready: true };",
+      "name": "AlphaService",
+      "path": "packages/rust/crates/demo/src/lib.rs",
+      "projectName": "kernel",
+      "rootLabel": "packages",
       "score": 0.9
     }
   ],

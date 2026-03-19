@@ -1,0 +1,239 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/analysis/../../../../tests/unit/gateway/studio/support.rs
+expression: value
+---
+{
+  "diagnostics": [],
+  "documentHash": "1769c5608a6ab2664d596f6dadfbfd309312abfba9c3f24dfe67dc4142d859d0",
+  "edgeCount": 9,
+  "edges": [
+    {
+      "evidence": {
+        "confidence": 1.0,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "path": "docs/analysis.md"
+      },
+      "id": "edge:1",
+      "kind": "contains",
+      "label": "contains",
+      "sourceId": "doc:0",
+      "targetId": "sec:1"
+    },
+    {
+      "evidence": {
+        "confidence": 1.0,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "path": "docs/analysis.md"
+      },
+      "id": "edge:2",
+      "kind": "contains",
+      "label": "contains",
+      "sourceId": "sec:1",
+      "targetId": "sec:3"
+    },
+    {
+      "evidence": {
+        "confidence": 1.0,
+        "lineEnd": 4,
+        "lineStart": 4,
+        "path": "docs/analysis.md"
+      },
+      "id": "edge:3",
+      "kind": "contains",
+      "label": "contains",
+      "sourceId": "sec:3",
+      "targetId": "task:4"
+    },
+    {
+      "evidence": {
+        "confidence": 1.0,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "path": "docs/analysis.md"
+      },
+      "id": "edge:4",
+      "kind": "contains",
+      "label": "contains",
+      "sourceId": "sec:3",
+      "targetId": "task:5"
+    },
+    {
+      "evidence": {
+        "confidence": 0.9,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "path": "docs/analysis.md"
+      },
+      "id": "edge:5",
+      "kind": "next_step",
+      "label": "next",
+      "sourceId": "task:4",
+      "targetId": "task:5"
+    },
+    {
+      "evidence": {
+        "confidence": 1.0,
+        "lineEnd": 7,
+        "lineStart": 7,
+        "path": "docs/analysis.md"
+      },
+      "id": "edge:6",
+      "kind": "contains",
+      "label": "contains",
+      "sourceId": "sec:1",
+      "targetId": "sec:7"
+    },
+    {
+      "evidence": {
+        "confidence": 0.85,
+        "lineEnd": 8,
+        "lineStart": 8,
+        "path": "docs/analysis.md"
+      },
+      "id": "edge:7",
+      "kind": "references",
+      "label": "docs/guide.md",
+      "sourceId": "sec:7",
+      "targetId": "ref:docs-guidemd"
+    },
+    {
+      "evidence": {
+        "confidence": 0.85,
+        "lineEnd": 8,
+        "lineStart": 8,
+        "path": "docs/analysis.md"
+      },
+      "id": "edge:8",
+      "kind": "references",
+      "label": "internal_skills/writer/SKILL.md",
+      "sourceId": "sec:7",
+      "targetId": "ref:internal-skills-writer-skillmd"
+    },
+    {
+      "evidence": {
+        "confidence": 1.0,
+        "lineEnd": 10,
+        "lineStart": 10,
+        "path": "docs/analysis.md"
+      },
+      "id": "edge:9",
+      "kind": "contains",
+      "label": "contains",
+      "sourceId": "sec:7",
+      "targetId": "code:10"
+    }
+  ],
+  "nodeCount": 9,
+  "nodes": [
+    {
+      "depth": 0,
+      "id": "doc:0",
+      "kind": "document",
+      "label": "docs/analysis.md",
+      "lineEnd": 12,
+      "lineStart": 1,
+      "parentId": null
+    },
+    {
+      "depth": 1,
+      "id": "sec:1",
+      "kind": "section",
+      "label": "Analysis Kernel",
+      "lineEnd": 1,
+      "lineStart": 1,
+      "parentId": "doc:0"
+    },
+    {
+      "depth": 2,
+      "id": "sec:3",
+      "kind": "section",
+      "label": "Inputs",
+      "lineEnd": 3,
+      "lineStart": 3,
+      "parentId": "sec:1"
+    },
+    {
+      "depth": 3,
+      "id": "task:4",
+      "kind": "task",
+      "label": "Parse markdown",
+      "lineEnd": 4,
+      "lineStart": 4,
+      "parentId": "sec:3"
+    },
+    {
+      "depth": 3,
+      "id": "task:5",
+      "kind": "task",
+      "label": "Build IR",
+      "lineEnd": 5,
+      "lineStart": 5,
+      "parentId": "sec:3"
+    },
+    {
+      "depth": 2,
+      "id": "sec:7",
+      "kind": "section",
+      "label": "Links",
+      "lineEnd": 7,
+      "lineStart": 7,
+      "parentId": "sec:1"
+    },
+    {
+      "depth": 1,
+      "id": "ref:docs-guidemd",
+      "kind": "reference",
+      "label": "docs/guide.md",
+      "lineEnd": 8,
+      "lineStart": 8,
+      "parentId": null
+    },
+    {
+      "depth": 1,
+      "id": "ref:internal-skills-writer-skillmd",
+      "kind": "reference",
+      "label": "internal_skills/writer/SKILL.md",
+      "lineEnd": 8,
+      "lineStart": 8,
+      "parentId": null
+    },
+    {
+      "depth": 3,
+      "id": "code:10",
+      "kind": "codeblock",
+      "label": "code block (rust)",
+      "lineEnd": 12,
+      "lineStart": 10,
+      "parentId": "sec:7"
+    }
+  ],
+  "path": "docs/analysis.md",
+  "projections": [
+    {
+      "complexityScore": 20.25,
+      "diagnostics": [],
+      "edgeCount": 9,
+      "kind": "mindmap",
+      "nodeCount": 9,
+      "source": "mindmap\n  root((docs/analysis.md))\n    Analysis Kernel\n      Inputs\n        Parse markdown\n        Build IR\n      Links\n    docs/guide.md\n    internal_skills/writer/SKILL.md\n        code block (rust)\n"
+    },
+    {
+      "complexityScore": 20.25,
+      "diagnostics": [],
+      "edgeCount": 9,
+      "kind": "flowchart",
+      "nodeCount": 9,
+      "source": "flowchart TD\n  N0[\"docs/analysis.md\"]\n  N1[\"Analysis Kernel\"]\n  N2[\"Inputs\"]\n  N3[\"Parse markdown\"]\n  N4[\"Build IR\"]\n  N5[\"Links\"]\n  N6[\"docs/guide.md\"]\n  N7[\"internal_skills/writer/SKILL.md\"]\n  N8[\"code block (rust)\"]\n  N0 -->|contains| N1\n  N1 -->|contains| N2\n  N2 -->|contains| N3\n  N2 -->|contains| N4\n  N3 -->|next| N4\n  N1 -->|contains| N5\n  N5 -->|docs/guide.md| N6\n  N5 -->|internal_skills/writer/SKILL.md| N7\n  N5 -->|contains| N8\n"
+    },
+    {
+      "complexityScore": 20.25,
+      "diagnostics": [],
+      "edgeCount": 9,
+      "kind": "graph",
+      "nodeCount": 9,
+      "source": "graph LR\n  N0[\"docs/analysis.md\"]\n  N1[\"Analysis Kernel\"]\n  N2[\"Inputs\"]\n  N3[\"Parse markdown\"]\n  N4[\"Build IR\"]\n  N5[\"Links\"]\n  N6[\"docs/guide.md\"]\n  N7[\"internal_skills/writer/SKILL.md\"]\n  N8[\"code block (rust)\"]\n  N0 -->|contains| N1\n  N1 -->|contains| N2\n  N2 -->|contains| N3\n  N2 -->|contains| N4\n  N3 -->|next| N4\n  N1 -->|contains| N5\n  N5 -->|docs/guide.md| N6\n  N5 -->|internal_skills/writer/SKILL.md| N7\n  N5 -->|contains| N8\n"
+    }
+  ]
+}

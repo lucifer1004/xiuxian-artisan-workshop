@@ -160,24 +160,41 @@ fn prompt_requests_single_visible_digit(prompt: &str) -> bool {
         || prompt.contains("single visible digit")
 }
 
-fn prompt_requested_visible_word(prompt: &str) -> Option<String> {
-    let marker = "return only the visible word ";
+fn prompt_requested_visible_first_token(prompt: &str) -> Option<String> {
     let prompt_lower = prompt.to_ascii_lowercase();
-    let start = prompt_lower.find(marker)? + marker.len();
+    let (start, marker_kind) = [
+        ("return only the visible word ", false),
+        ("return only the visible phrase ", true),
+    ]
+    .into_iter()
+    .find_map(|(marker, is_phrase)| {
+        prompt_lower
+            .find(marker)
+            .map(|start| (start + marker.len(), is_phrase))
+    })?;
     let tail = prompt.get(start..)?.trim();
     let end = tail
         .to_ascii_lowercase()
         .find(" from the image")
         .unwrap_or(tail.len());
     let candidate = tail.get(..end)?.trim();
-    if candidate.is_empty() || candidate.chars().any(char::is_whitespace) {
+    if candidate.is_empty() {
+        return None;
+    }
+    if !marker_kind && candidate.chars().any(char::is_whitespace) {
         return None;
     }
     let normalized = normalize_text(candidate);
-    if normalized.is_empty() || !normalized.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+    let first = normalized.split_whitespace().next()?;
+    let anchor: String = first
+        .chars()
+        .skip_while(|ch| !ch.is_ascii_alphanumeric())
+        .take_while(|ch| ch.is_ascii_alphanumeric())
+        .collect();
+    if normalized.is_empty() || anchor.is_empty() {
         return None;
     }
-    Some(normalized.to_ascii_lowercase())
+    Some(anchor.to_ascii_lowercase())
 }
 
 fn has_selectable_first_token_logits(logits: &[f32]) -> bool {
@@ -3430,7 +3447,7 @@ impl OcrEngine for DeepseekOcrModel {
         options.seed = params.seed;
         options.progress_callback = stream;
         options.prefer_digit_first_token = prompt_requests_single_visible_digit(prompt);
-        options.preferred_first_visible_text = prompt_requested_visible_word(prompt);
+        options.preferred_first_visible_text = prompt_requested_visible_first_token(prompt);
 
         emit_stage_trace(
             "ocr_engine.decode.generate.started",
@@ -3759,7 +3776,7 @@ mod tests {
         FirstTokenCandidateClass, LowPrecisionLoadPolicy, LowPrecisionLoadPolicyGuard,
         current_low_precision_load_policy, decoded_first_token_is_single_digit,
         decoded_first_token_is_visible, empty_output_trace_enabled, language_input_compute_dtype,
-        prompt_requested_visible_word, prompt_requests_single_visible_digit,
+        prompt_requested_visible_first_token, prompt_requests_single_visible_digit,
         select_first_visible_token_id_from_logits_with, stage_trace_enabled,
     };
     use candle_core::DType;
@@ -3937,22 +3954,43 @@ mod tests {
     }
 
     #[test]
-    fn prompt_visible_word_detection_extracts_single_target_word() {
+    fn prompt_visible_token_detection_extracts_word_or_phrase_prefix() {
         assert_eq!(
-            prompt_requested_visible_word(
+            prompt_requested_visible_first_token(
                 "<image>\n<|grounding|>Return only the visible word Telegram from the image. No label. No markdown. No explanation."
             )
             .as_deref(),
             Some("telegram")
         );
         assert_eq!(
-            prompt_requested_visible_word(
+            prompt_requested_visible_first_token(
+                "<image>\n<|grounding|>Return only the visible phrase Telegram OCR from the image. No label. No markdown. No explanation."
+            )
+            .as_deref(),
+            Some("telegram")
+        );
+        assert_eq!(
+            prompt_requested_visible_first_token(
+                "<image>\n<|grounding|>Return only the visible phrase 2026-03-09-001 from the image. No label. No markdown. No explanation."
+            )
+            .as_deref(),
+            Some("2026")
+        );
+        assert_eq!(
+            prompt_requested_visible_first_token(
+                "<image>\n<|grounding|>Return only the visible phrase $128.50 from the image. No label. No markdown. No explanation."
+            )
+            .as_deref(),
+            Some("128")
+        );
+        assert_eq!(
+            prompt_requested_visible_first_token(
                 "<image>\n<|grounding|>Return exactly one visible digit from the image. No markdown. No explanation."
             ),
             None
         );
         assert_eq!(
-            prompt_requested_visible_word(
+            prompt_requested_visible_first_token(
                 "<image>\n<|grounding|>Return only the visible word managed sidecar from the image."
             ),
             None

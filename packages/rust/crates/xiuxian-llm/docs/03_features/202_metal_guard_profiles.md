@@ -213,6 +213,123 @@ Primary evidence:
 - `.run/tmp/downstream_deepseek_metal_telegram_profile_12g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_telegram_probe_12g_v2.log`
 
+### `deepseek_metal_smoke_12g_safe384_telegram_phrase_metal_fast_eager_shared_native`
+
+Retained phrase-level follow-up on top of the same accepted `metal_fast` guarded shape. This keeps
+the same `12 GB` budget but raises the semantic bar again from a single visible word to the visible
+phrase `Telegram OCR`.
+
+Current status:
+
+- retained as the strongest short-form quality gate that is still practical under the current
+  accepted Metal head
+- stays within the `12 GB` guard and completes without reintroducing the long low-RSS tail
+- depends on the retained prompt-aware first-token preference, now generalized to support
+  `visible phrase ...` prompts by anchoring the first visible token
+- under the current implementation the profile-backed rerun returns `Telegram OCR` in about `59s`
+
+Primary evidence:
+
+- `.run/tmp/downstream_deepseek_metal_telegram_phrase_profile_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_telegram_phrase_probe_12g_v1.log`
+
+### `deepseek_metal_smoke_12g_safe384_sidecar_line_metal_fast_eager_shared_native`
+
+Retained line-level follow-up on top of the same accepted `metal_fast` guarded shape. This keeps
+the same `12 GB` budget but raises the semantic bar from a short phrase gate to a short structured
+line fragment: `sidecar health check`.
+
+Current status:
+
+- retained as the lower-bound structured-line gate under the accepted `metal_fast` head
+- promoted into TOML and harness coverage in this pass
+- the matching manual probe stays within the `12 GB` guard without reopening the old low-RSS tail
+- uses the same prompt-aware first-token path as the retained `Telegram` and `Telegram OCR` gates,
+  but targets the visible phrase `managed sidecar health check`
+- the retained manual probe returns `Managed sidecar health check.` in about `94s`
+- one fresh profile-backed rerun also completed successfully under the same `12 GB` guard and
+  returned `Managed sidecar health check.` in about `162s`
+- a later file-capture rerun for the same profile was denied by `capfox` with `cpu_overload`, so
+  repeatability is currently sensitive to ambient workspace load even though the gate has now been
+  observed passing as a real profile-backed Metal run
+
+Primary evidence:
+
+- `.run/tmp/downstream_deepseek_metal_sidecar_line_profile_12g_v1.observed.log`
+- `.run/tmp/downstream_deepseek_metal_sidecar_line_profile_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_sidecar_line_probe_12g_v1.log`
+
+### `deepseek_metal_smoke_12g_safe384_managed_sidecar_line_metal_fast_eager_shared_native`
+
+Retained stronger follow-up on the same accepted `metal_fast` guarded shape. This keeps the same
+`12 GB` budget and the same visible phrase target, but now requires the leading token as well:
+`Managed sidecar health check`.
+
+Current status:
+
+- retained as a profile-backed stronger line gate under the accepted `metal_fast` head
+- uses the same guarded shape as the existing sidecar and memory-line probes, with
+  `max_new_tokens = 6`
+- the direct profile-backed rerun completed successfully under the `12 GB` guard and returned
+  `Managed sidecar health check.` in about `80s`
+- this uses the new CLI prompt/substr override path in the harness, so the evidence is a direct
+  file-backed run rather than an observed side note
+
+Primary evidence:
+
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v2.log`
+
+### `deepseek_metal_smoke_12g_safe384_memory_line_metal_fast_eager_shared_native`
+
+Configured memory-line follow-up on top of the same accepted `metal_fast` guarded shape.
+
+Current status:
+
+- profile default (`max_new_tokens = 6`) is no longer retained under the same `12 GB` guard after
+  local `target/debug` refresh; repeated reruns now exceed the guard before decode completes
+- narrowed decode budget (`max_new_tokens = 2`) produced two passing runs, but subsequent reruns
+  in the same workspace snapshot failed again under the same `12 GB` guard
+- phase-isolation confirms this wall is not decode-only in the current snapshot: both
+  `--phase=prewarm` and `--phase=load` exceed the same `12 GB` guard, and a `13 GB` load retry
+  also exceeds guard
+- forcing `XIUXIAN_VISION_LAZY_MOE_EXPERTS=1` in `--phase=prewarm` does not restore `12 GB`
+  stability in this snapshot
+- `max_new_tokens = 3` still reintroduces the same guard breach; the memory-line branch is
+  currently exploratory only and not retained
+
+Primary evidence:
+
+- `.run/tmp/downstream_deepseek_metal_memory_line_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_12g_v3.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_probe_12g_v4_after_rebuild.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v2.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v3.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens3_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v2_after_toml.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v3_after_toml.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_prewarm_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_prewarm_lazy_moe_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_load_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_13g_load_v1.log`
+
+### GPU runner surface
+
+The shared guarded runner in `scripts/run_real_metal_test.py` is now GPU-backend aware rather than
+hard-wired to CPU-versus-Metal only.
+
+Current status:
+
+- the runner now accepts `--cuda` in addition to the retained default Metal path and the older
+  `--cpu` fallback
+- CUDA currently reuses the Metal-style GPU guard defaults unless explicit CUDA guard values are
+  added to `test_guard`
+- the shared ignored test surface now exposes both `test_real_metal_inference` and
+  `test_real_cuda_inference` from the same file-backed GPU harness
+- this is execution-surface readiness only; there is still no retained local CUDA evidence in this
+  workspace snapshot
+
 ### Exploratory month-value probes
 
 Two shorter month-value probes were run with manual prompt overrides on top of the canonical
@@ -226,6 +343,36 @@ Current status:
 - both stayed within the `12 GB` guard, so they do not reopen the memory problem
 - neither completed within a practical smoke-test window
 - cache did not make the month-value probe fast enough to become the next gate
+
+### Exploratory structured-field probes
+
+Two more bounded structured-field probes were run after extending the retained prompt-aware first
+visible-token anchor so punctuation-led phrases can still contribute an alphanumeric first anchor.
+
+Primary evidence:
+
+- visible year probe: `.run/tmp/downstream_deepseek_metal_year_word_probe_12g_v1.log`
+- visible invoice-number probe: `.run/tmp/downstream_deepseek_metal_invoice_number_probe_12g_v3.log`
+- visible amount-line probe: `.run/tmp/downstream_deepseek_metal_amount_line_probe_12g_v1.log`
+
+Current status:
+
+- both probes stay within the `12 GB` guard after the initial load/prefill window
+- neither is practical enough to promote into a profile-backed gate yet
+- the visible year probe still settles into the same long low-RSS tail seen in the earlier
+  year-value probe
+- the visible invoice-number probe also falls into a low-RSS tail, so the retained punctuation
+  anchor is not sufficient by itself to make full structured numeric fields practical
+- the amount-line probe gets farther than the numeric-only amount probe because it starts with a
+  stable alphabetic token, but it still settles into a long high-RSS plateau around `9 GB` for
+  more than `170s` without producing a useful OCR result, so it remains exploratory only
+- the visible line `Hello from Telegram OCR.` is also exploratory only: it is allowed under the
+  shared `12 GB` guard, but after an initial `~9.4 GB` decode window it drops into a long
+  low-RSS tail around `1.54 GB` for more than `100s` without converging to a retained result
+- the title-line candidate `Omni OCR smoke test` now has a clean non-capacity run:
+  `.run/tmp/downstream_deepseek_metal_title_line_probe_12g_v2.log` passed `capfox` and stayed
+  within the `12 GB` guard, but fell into the same long low-RSS tail around `1.67 GB` for more
+  than `100s` without converging to a retained result, so it remains exploratory-only
 
 ### Rejected short-field probes
 
@@ -291,23 +438,58 @@ Validated evidence:
 
 - `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_load_15g_v3.log`
 - `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_trace_pty_13g_v3.log`
+- `.run/tmp/downstream_deepseek_metal_accepted_head_load_15g_stage_trace_v1.log`
+- `.run/tmp/downstream_deepseek_metal_accepted_head_infer_13g_stage_trace_v1.log`
 
-Latest accepted-head attribution:
+Latest accepted-head attribution (2026-03-18 refresh):
 
-- the trace now reliably crosses `deepseek.load.weights_mmap.completed`
-- the trace now reliably crosses `deepseek.load.deferred_moe_source.completed`
-- the trace now reliably crosses `deepseek.load.language.started`
-- widened `load` diagnostics now go well past the old mmap boundary and into per-layer load
-  internals
-- with the finer MoE and linear-loader traces, the accepted-head `load` wall is now attributable
-  inside MoE expert linear materialization rather than at a generic layer boundary
-- the latest representative widened `load` trace dies during layer `5` expert loading, with the
-  last visible linear label inside `model.layers.5.mlp.experts.59.up_proj.weight`
-- the guarded `infer` diagnostic reaches `deepseek.language.transformer_layer.start` for
-  `layer_idx=5` after completing layer `4` before the `13 GB` guard kills the process
+- the trace still reliably crosses `deepseek.load.weights_mmap.completed`,
+  `deepseek.load.deferred_moe_source.completed`, and `deepseek.load.language.started`
+- the canonical accepted-head profile now passes with PTY tracing for both widened diagnostics:
+  `--phase=load --max-rss=15` and `--phase=infer --max-rss=13`
+- load reaches `deepseek.language.weights_ready` with observed peak RSS around `9.10 GB`
+- infer reaches `deepseek.language.weights_ready`, `xiuxian.decode.started`, and
+  `ocr_engine.decode.generate.completed`, with observed peak RSS around `10.88 GB` and final OCR
+  output `0`
+- no guard kill occurs in this refreshed canonical run pair; earlier layer-5 kill attribution
+  remains historical evidence for older snapshots and exploratory branches
 
-This means the active accepted-head wall is no longer "somewhere around mmap". The current bounded
-investigation should stay inside `LinearWeights::load` for MoE expert projections.
+Structured year-token follow-up (2026-03-18 exploratory):
+
+- two guarded retries still fail quickly even with `max_new_tokens=1` and the same accepted-head
+  profile
+- `--phase=infer --max-rss=12` exits on guard at `12.25 GB` for the longer structured prompt
+  variant
+- `--phase=infer --max-rss=12` exits on guard at `12.80 GB`, and `--max-rss=13` exits on guard at
+  `13.39 GB`, for the shorter `Return year.` prompt variant
+- a widened `--max-rss=15` short-prompt run does not provide a retained success signal yet; it
+  drifts into a long low-RSS tail (`~2.20 GB`) without a practical completion boundary before
+  manual stop
+- this branch remains exploratory-only and is not promoted into the retained quality ladder
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_year_token_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_short_prompt_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_short_prompt_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_short_prompt_15g_v1.log`
+
+Structured day-token follow-up (2026-03-18 exploratory):
+
+- a new compact structured-field probe (`day token 09`, still `max_new_tokens=1`) does not open a
+  retained window on the same accepted head
+- `--phase=infer --max-rss=12` exits on guard at `12.27 GB` after about `31.8s`
+- `--phase=infer --max-rss=13` exits on guard at `13.11 GB` after about `26.4s`
+- a widened `--max-rss=15` retry clears the early spike (around `10.91 GB`), then falls into a
+  long low-RSS tail at `~2.94 GB`; no completion boundary appears in-log and the run was manually
+  stopped after sustained plateau
+- this branch is exploratory-only and is not promoted into the retained quality ladder
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_day_token_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_day_token_probe_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_day_token_probe_15g_v1.log`
 
 ## Evidence Rule
 

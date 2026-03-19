@@ -87,9 +87,11 @@ pub mod validation;
 pub use contracts::{
     AdvisoryAuditExecutor, AdvisoryAuditPolicy, AdvisoryAuditRequest, ArtifactKind,
     CollectedArtifact, CollectedArtifacts, CollectionContext, ContractExecutionMode,
-    ContractFinding, ContractReport, ContractStats, ContractSuite, EvidenceKind, FindingConfidence,
-    FindingEvidence, FindingExamples, FindingMode, FindingSeverity, NoopAdvisoryAuditExecutor,
-    NoopRulePack, RoleAuditFinding, RulePack, RulePackDescriptor,
+    ContractFinding, ContractKnowledgeBatch, ContractKnowledgeDecision, ContractKnowledgeEnvelope,
+    ContractReport, ContractRunConfig, ContractStats, ContractSuite, ContractSuiteRunner,
+    EvidenceKind, FindingConfidence, FindingEvidence, FindingExamples, FindingMode,
+    FindingSeverity, ModularityRulePack, NoopAdvisoryAuditExecutor, NoopRulePack, RestDocsRulePack,
+    RoleAuditFinding, RulePack, RulePackDescriptor,
 };
 
 pub use external_test::{

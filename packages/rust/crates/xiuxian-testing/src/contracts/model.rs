@@ -18,7 +18,7 @@ pub enum ContractExecutionMode {
 }
 
 /// Severity assigned to one contract finding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum FindingSeverity {
     /// Informational finding.
     Info,

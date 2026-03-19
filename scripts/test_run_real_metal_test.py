@@ -38,10 +38,55 @@ metal_capfox_vram_percent = 65.0
     assert guard.metal_capfox_vram_percent == 65.0
 
 
+def test_read_test_guard_config_supports_cuda_values(tmp_path: Path) -> None:
+    config_path = tmp_path / "vision_deepseek.toml"
+    config_path.write_text(
+        """
+[test_guard]
+metal_max_rss_gb = 16.0
+metal_capfox_mem_percent = 35.0
+metal_capfox_gpu_percent = 85.0
+metal_capfox_vram_percent = 65.0
+cuda_max_rss_gb = 20.0
+cuda_capfox_mem_percent = 40.0
+cuda_capfox_gpu_percent = 90.0
+cuda_capfox_vram_percent = 70.0
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    guard = _MODULE._read_test_guard_config(config_path)
+
+    assert guard.metal_max_rss_gb == 16.0
+    assert guard.cuda_max_rss_gb == 20.0
+    assert guard.cuda_capfox_mem_percent == 40.0
+    assert guard.cuda_capfox_gpu_percent == 90.0
+    assert guard.cuda_capfox_vram_percent == 70.0
+
+
 def test_read_test_guard_config_falls_back_when_missing() -> None:
     guard = _MODULE._read_test_guard_config(Path("/nonexistent/vision_deepseek.toml"))
 
     assert guard == _MODULE.TestGuardConfig()
+
+
+def test_resolve_requested_device_defaults_to_metal() -> None:
+    assert _MODULE.resolve_requested_device([]) == "metal"
+
+
+def test_resolve_requested_device_supports_cpu_and_cuda() -> None:
+    assert _MODULE.resolve_requested_device(["--cpu"]) == "cpu"
+    assert _MODULE.resolve_requested_device(["--cuda"]) == "cuda"
+
+
+def test_resolve_requested_device_rejects_conflicting_flags() -> None:
+    try:
+        _MODULE.resolve_requested_device(["--cpu", "--cuda"])
+    except ValueError as exc:
+        assert "Choose only one" in str(exc)
+    else:
+        raise AssertionError("expected resolve_requested_device to reject conflicting flags")
 
 
 def test_read_test_profile_config_reads_env_overrides(tmp_path: Path) -> None:
@@ -659,11 +704,207 @@ ocr_prompt = "<image>\\n<|grounding|>Return only the visible word Telegram from 
     assert profile.env_overrides["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "8"
 
 
+def test_read_test_profile_config_supports_telegram_phrase_profile(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "vision_deepseek.toml"
+    config_path.write_text(
+        """
+[test_profiles.deepseek_metal_smoke_12g_safe384_telegram_phrase_metal_fast_eager_shared_native]
+max_rss_gb = 12.0
+capfox_mem_percent = 30.0
+capfox_gpu_percent = 80.0
+capfox_vram_percent = 60.0
+rust_log = "info"
+model_kind = "deepseek"
+base_size = 384
+image_size = 384
+crop_mode = false
+max_new_tokens = 3
+min_output_chars = 12
+decode_use_cache = false
+require_quantized = false
+preload_language_f32_aux = false
+preload_vision_f32_aux = false
+preload_linear_weight_f32 = false
+promote_language_input_f32 = false
+prefill_attention_f32 = false
+moe_gate_input_f32 = false
+moe_backend = "metal_fast"
+shared_expert_f32_compute = false
+lazy_moe_experts = false
+lazy_clip_transformer_layers = true
+expected_substring = "Telegram OCR"
+ocr_prompt = "<image>\\n<|grounding|>Return only the visible phrase Telegram OCR from the image. No label. No markdown. No explanation."
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = _MODULE._read_test_profile_config(
+        "deepseek_metal_smoke_12g_safe384_telegram_phrase_metal_fast_eager_shared_native",
+        config_path,
+    )
+
+    assert profile is not None
+    assert profile.env_overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] == "Telegram OCR"
+    assert profile.env_overrides["XIUXIAN_VISION_OCR_MAX_NEW_TOKENS"] == "3"
+    assert profile.env_overrides["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "12"
+
+
+def test_read_test_profile_config_supports_sidecar_line_profile(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "vision_deepseek.toml"
+    config_path.write_text(
+        """
+[test_profiles.deepseek_metal_smoke_12g_safe384_sidecar_line_metal_fast_eager_shared_native]
+max_rss_gb = 12.0
+capfox_mem_percent = 30.0
+capfox_gpu_percent = 80.0
+capfox_vram_percent = 60.0
+rust_log = "info"
+model_kind = "deepseek"
+base_size = 384
+image_size = 384
+crop_mode = false
+max_new_tokens = 6
+min_output_chars = 22
+decode_use_cache = false
+require_quantized = false
+preload_language_f32_aux = false
+preload_vision_f32_aux = false
+preload_linear_weight_f32 = false
+promote_language_input_f32 = false
+prefill_attention_f32 = false
+moe_gate_input_f32 = false
+moe_backend = "metal_fast"
+shared_expert_f32_compute = false
+lazy_moe_experts = false
+lazy_clip_transformer_layers = true
+expected_substring = "sidecar health check"
+ocr_prompt = "<image>\\n<|grounding|>Return only the visible phrase managed sidecar health check from the image. No label. No markdown. No explanation."
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = _MODULE._read_test_profile_config(
+        "deepseek_metal_smoke_12g_safe384_sidecar_line_metal_fast_eager_shared_native",
+        config_path,
+    )
+
+    assert profile is not None
+    assert profile.env_overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] == "sidecar health check"
+    assert profile.env_overrides["XIUXIAN_VISION_OCR_MAX_NEW_TOKENS"] == "6"
+    assert profile.env_overrides["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "22"
+
+
+def test_read_test_profile_config_supports_memory_line_profile(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "vision_deepseek.toml"
+    config_path.write_text(
+        """
+[test_profiles.deepseek_metal_smoke_12g_safe384_memory_line_metal_fast_eager_shared_native]
+max_rss_gb = 12.0
+capfox_mem_percent = 30.0
+capfox_gpu_percent = 80.0
+capfox_vram_percent = 60.0
+rust_log = "info"
+model_kind = "deepseek"
+base_size = 384
+image_size = 384
+crop_mode = false
+max_new_tokens = 6
+min_output_chars = 24
+decode_use_cache = false
+require_quantized = false
+preload_language_f32_aux = false
+preload_vision_f32_aux = false
+preload_linear_weight_f32 = false
+promote_language_input_f32 = false
+prefill_attention_f32 = false
+moe_gate_input_f32 = false
+moe_backend = "metal_fast"
+shared_expert_f32_compute = false
+lazy_moe_experts = false
+lazy_clip_transformer_layers = true
+expected_substring = "Memory should stay stable"
+ocr_prompt = "<image>\\n<|grounding|>Return only the visible phrase memory should stay stable from the image. No label. No markdown. No explanation."
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = _MODULE._read_test_profile_config(
+        "deepseek_metal_smoke_12g_safe384_memory_line_metal_fast_eager_shared_native",
+        config_path,
+    )
+
+    assert profile is not None
+    assert profile.env_overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] == "Memory should stay stable"
+    assert profile.env_overrides["XIUXIAN_VISION_OCR_MAX_NEW_TOKENS"] == "6"
+    assert profile.env_overrides["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "24"
+
+
+def test_read_test_profile_config_supports_managed_sidecar_line_profile(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "vision_deepseek.toml"
+    config_path.write_text(
+        """
+[test_profiles.deepseek_metal_smoke_12g_safe384_managed_sidecar_line_metal_fast_eager_shared_native]
+max_rss_gb = 12.0
+capfox_mem_percent = 30.0
+capfox_gpu_percent = 80.0
+capfox_vram_percent = 60.0
+rust_log = "info"
+model_kind = "deepseek"
+base_size = 384
+image_size = 384
+crop_mode = false
+max_new_tokens = 6
+min_output_chars = 28
+decode_use_cache = false
+require_quantized = false
+preload_language_f32_aux = false
+preload_vision_f32_aux = false
+preload_linear_weight_f32 = false
+promote_language_input_f32 = false
+prefill_attention_f32 = false
+moe_gate_input_f32 = false
+moe_backend = "metal_fast"
+shared_expert_f32_compute = false
+lazy_moe_experts = false
+lazy_clip_transformer_layers = true
+expected_substring = "Managed sidecar health check"
+ocr_prompt = "<image>\\n<|grounding|>Return only the visible phrase managed sidecar health check from the image. No label. No markdown. No explanation."
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = _MODULE._read_test_profile_config(
+        "deepseek_metal_smoke_12g_safe384_managed_sidecar_line_metal_fast_eager_shared_native",
+        config_path,
+    )
+
+    assert profile is not None
+    assert (
+        profile.env_overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] == "Managed sidecar health check"
+    )
+    assert profile.env_overrides["XIUXIAN_VISION_OCR_MAX_NEW_TOKENS"] == "6"
+    assert profile.env_overrides["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "28"
+
+
 def test_selected_passthrough_env_reports_non_profile_overrides() -> None:
     env = {
         "XIUXIAN_VISION_MOE_BACKEND": "metal_fast",
         "XIUXIAN_VISION_SKIP_SHARED_EXPERTS": "1",
         "XIUXIAN_VISION_STAGE_TRACE_STDERR": "1",
+        "DEEPSEEK_OCR_DEBUG_LOGITS_STEP": "0",
+        "DEEPSEEK_OCR_DEBUG_LOGITS_JSON": "/tmp/debug-logits.json",
         "XIUXIAN_VISION_MODEL_KIND": "deepseek",
     }
     profile = _MODULE.TestProfileConfig(env_overrides={"XIUXIAN_VISION_MODEL_KIND": "deepseek"})
@@ -674,7 +915,60 @@ def test_selected_passthrough_env_reports_non_profile_overrides() -> None:
         "XIUXIAN_VISION_MOE_BACKEND": "metal_fast",
         "XIUXIAN_VISION_SKIP_SHARED_EXPERTS": "1",
         "XIUXIAN_VISION_STAGE_TRACE_STDERR": "1",
+        "DEEPSEEK_OCR_DEBUG_LOGITS_STEP": "0",
+        "DEEPSEEK_OCR_DEBUG_LOGITS_JSON": "/tmp/debug-logits.json",
     }
+
+
+def test_parse_manual_cli_overrides_supports_prompt_file(tmp_path: Path) -> None:
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text(
+        "<image>\n<|grounding|>Return only the visible phrase managed sidecar health check.",
+        encoding="utf-8",
+    )
+
+    overrides, image_path = _MODULE._parse_manual_cli_overrides(
+        [
+            f"--ocr-prompt-file={prompt_path}",
+            "--expected-substring=managed sidecar health check",
+            "--min-output-chars=28",
+            "--max-new-tokens=6",
+            "--image=.run/tmp/ocr-smoke.png",
+        ]
+    )
+
+    assert image_path == Path(".run/tmp/ocr-smoke.png")
+    assert (
+        overrides["XIUXIAN_VISION_OCR_PROMPT"]
+        == "<image>\n<|grounding|>Return only the visible phrase managed sidecar health check."
+    )
+    assert overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] == "managed sidecar health check"
+    assert overrides["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "28"
+    assert overrides["XIUXIAN_VISION_OCR_MAX_NEW_TOKENS"] == "6"
+
+
+def test_cli_overrides_replace_profile_env_values() -> None:
+    env = {
+        "XIUXIAN_VISION_EXPECT_SUBSTRING": "sidecar health check",
+        "XIUXIAN_VISION_MIN_OUTPUT_CHARS": "22",
+    }
+    profile = _MODULE.TestProfileConfig(
+        env_overrides={
+            "XIUXIAN_VISION_EXPECT_SUBSTRING": "sidecar health check",
+            "XIUXIAN_VISION_MIN_OUTPUT_CHARS": "22",
+        }
+    )
+
+    _MODULE._apply_test_profile(env, profile)
+    cli_overrides = {
+        "XIUXIAN_VISION_EXPECT_SUBSTRING": "managed sidecar health check",
+        "XIUXIAN_VISION_MIN_OUTPUT_CHARS": "28",
+    }
+    for key, value in cli_overrides.items():
+        env[key] = value
+
+    assert env["XIUXIAN_VISION_EXPECT_SUBSTRING"] == "managed sidecar health check"
+    assert env["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "28"
 
 
 def test_find_test_binary_prefers_explicit_override(monkeypatch, tmp_path: Path) -> None:
@@ -683,7 +977,7 @@ def test_find_test_binary_prefers_explicit_override(monkeypatch, tmp_path: Path)
     binary.chmod(0o755)
     monkeypatch.setenv("XIUXIAN_VISION_TEST_BINARY", str(binary))
 
-    found = _MODULE.find_test_binary(use_cpu=False, use_release=False)
+    found = _MODULE.find_test_binary("metal", use_release=False)
 
     assert found == binary
 
@@ -691,4 +985,4 @@ def test_find_test_binary_prefers_explicit_override(monkeypatch, tmp_path: Path)
 def test_find_test_binary_rejects_missing_explicit_override(monkeypatch) -> None:
     monkeypatch.setenv("XIUXIAN_VISION_TEST_BINARY", "/nonexistent/llm_vision")
 
-    assert _MODULE.find_test_binary(use_cpu=False, use_release=False) is None
+    assert _MODULE.find_test_binary("metal", use_release=False) is None

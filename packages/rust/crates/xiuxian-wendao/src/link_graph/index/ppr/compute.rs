@@ -7,6 +7,7 @@ use super::super::{LinkGraphIndex, LinkGraphPprSubgraphMode, LinkGraphRelatedPpr
 use super::runtime::resolve_related_ppr_runtime;
 use super::types::RelatedPprComputation;
 use crate::link_graph::runtime_config::resolve_link_graph_related_runtime;
+use crate::link_graph::saliency::{learned_saliency_signal_from_state, valkey_saliency_get_many};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -69,8 +70,7 @@ impl LinkGraphIndex {
             return None;
         }
         let candidate_count = Self::candidate_count_from_horizon(&horizon_distances, seed_ids);
-        let seed_weights: HashMap<String, f64> =
-            seed_ids.iter().cloned().map(|id| (id, 1.0)).collect();
+        let seed_weights = resolve_related_ppr_seed_weights(seed_ids);
         let telemetry = run_related_ppr_orchestration(
             self,
             &seed_weights,
@@ -113,5 +113,37 @@ impl LinkGraphIndex {
         self.related_ppr_compute(seed_ids, max_distance, options)
             .map(|row| row.ranked_doc_ids)
             .unwrap_or_default()
+    }
+}
+
+fn resolve_related_ppr_seed_weights(seed_ids: &HashSet<String>) -> HashMap<String, f64> {
+    let mut ordered_seed_ids: Vec<String> = seed_ids.iter().cloned().collect();
+    ordered_seed_ids.sort_unstable();
+    let fallback_weights = ordered_seed_ids
+        .iter()
+        .cloned()
+        .map(|seed_id| (seed_id, 1.0))
+        .collect::<HashMap<_, _>>();
+
+    let Ok(states) = valkey_saliency_get_many(&ordered_seed_ids) else {
+        return fallback_weights;
+    };
+
+    let mut total_weight = 0.0_f64;
+    let mut weighted_seed_ids: HashMap<String, f64> =
+        HashMap::with_capacity(ordered_seed_ids.len());
+    for seed_id in ordered_seed_ids {
+        let weight = states
+            .get(&seed_id)
+            .map_or(1.0, learned_saliency_signal_from_state)
+            .max(0.0);
+        total_weight += weight;
+        weighted_seed_ids.insert(seed_id, weight);
+    }
+
+    if total_weight <= 0.0 {
+        fallback_weights
+    } else {
+        weighted_seed_ids
     }
 }

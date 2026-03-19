@@ -17,6 +17,7 @@ Standardized documentation surface for the `xiuxian-testing` contract-testing ke
 
 - [[03_features/201_rulepack_specification]]: Rule-pack model, severity policy, and finding schema.
 - [[03_features/202_multi_role_audit_integration]]: How `Qianji`, `Qianhuan`, `Zhenfa`, and `Wendao` compose the advisory audit loop.
+- [[03_features/203_docs_workflow_alignment]]: How documentation authoring is wired into unattended workflow loops with contract gates.
 
 ## 05_research: Theoretical Hardening
 

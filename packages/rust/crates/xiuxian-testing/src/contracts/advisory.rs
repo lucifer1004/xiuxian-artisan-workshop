@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use super::model::{
-    CollectedArtifacts, ContractFinding, EvidenceKind, FindingConfidence, FindingEvidence,
-    FindingExamples, FindingSeverity,
+    CollectedArtifacts, CollectionContext, ContractFinding, EvidenceKind, FindingConfidence,
+    FindingEvidence, FindingExamples, FindingMode, FindingSeverity,
 };
 
 /// Policy that decides whether a rule pack should trigger advisory execution.
@@ -39,10 +39,16 @@ pub struct AdvisoryAuditRequest {
     pub suite_id: String,
     /// Rule-pack identifier.
     pub pack_id: String,
+    /// Rule-pack version.
+    pub pack_version: String,
+    /// Logical domains covered by the rule pack.
+    pub pack_domains: Vec<String>,
     /// Baseline findings from deterministic evaluation.
     pub findings: Vec<ContractFinding>,
     /// Collected artifacts available to the advisory lane.
     pub artifacts: CollectedArtifacts,
+    /// Collection context for the suite run.
+    pub collection_context: CollectionContext,
     /// Requested role identifiers.
     pub requested_roles: Vec<String>,
 }
@@ -113,6 +119,76 @@ impl RoleAuditFinding {
             message: message.into(),
         });
     }
+
+    /// Convert one role-attributed advisory finding into a normalized contract finding.
+    #[must_use]
+    pub fn into_contract_finding(
+        self,
+        pack_id: impl Into<String>,
+        ordinal: usize,
+    ) -> ContractFinding {
+        let Self {
+            role_id,
+            rule_id,
+            severity,
+            confidence,
+            summary,
+            why_it_matters,
+            remediation,
+            evidence,
+            trace_id,
+            examples,
+            mut labels,
+        } = self;
+
+        let title = if summary.trim().is_empty() {
+            format!("{role_id} advisory finding")
+        } else {
+            summary.clone()
+        };
+        let trace_ids = trace_id.iter().cloned().collect::<Vec<_>>();
+
+        labels
+            .entry("role_id".to_string())
+            .or_insert_with(|| role_id.clone());
+        labels
+            .entry("source_lane".to_string())
+            .or_insert_with(|| "advisory".to_string());
+        if let Some(existing_trace_id) = trace_id.as_ref() {
+            labels
+                .entry("trace_id".to_string())
+                .or_insert_with(|| existing_trace_id.clone());
+        }
+
+        ContractFinding {
+            rule_id: rule_id.unwrap_or_else(|| normalized_advisory_rule_id(&role_id, ordinal)),
+            pack_id: pack_id.into(),
+            severity,
+            mode: FindingMode::Advisory,
+            confidence,
+            advisory_role_ids: vec![role_id],
+            trace_ids,
+            title,
+            summary,
+            why_it_matters,
+            remediation,
+            evidence,
+            examples,
+            labels,
+        }
+    }
+}
+
+fn normalized_advisory_rule_id(role_id: &str, ordinal: usize) -> String {
+    let mut normalized = String::with_capacity(role_id.len());
+    for character in role_id.chars() {
+        if character.is_ascii_alphanumeric() {
+            normalized.push(character.to_ascii_uppercase());
+        } else {
+            normalized.push('_');
+        }
+    }
+    format!("ADVISORY-{normalized}-{:03}", ordinal + 1)
 }
 
 /// Async executor for multi-role advisory audits.

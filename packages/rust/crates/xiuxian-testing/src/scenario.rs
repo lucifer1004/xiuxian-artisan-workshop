@@ -77,7 +77,7 @@ pub struct ScenarioConfig {
 /// Scenario metadata from the `[scenario]` section.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScenarioMeta {
-    /// Unique scenario identifier (e.g., "`001_routing_keywords_merge`").
+    /// Unique scenario identifier per crate (e.g., "`001_routing_keywords_merge`").
     pub id: String,
     /// Human-readable scenario name.
     pub name: String,
@@ -806,12 +806,11 @@ impl ScenarioFramework {
     ///
     /// Returns an error if any scenario execution fails.
     pub fn run_all_at(&self, scenarios_root: &Path) -> Result<usize, Box<dyn Error>> {
-        let scenarios = discover_scenarios_at(scenarios_root);
+        let scenarios = load_scenarios_at(scenarios_root)?;
+        ensure_unique_scenario_ids(&scenarios)?;
         let mut count = 0;
 
-        for scenario_dir in scenarios {
-            let scenario = Scenario::load(scenario_dir)?;
-
+        for scenario in scenarios {
             let runner = self.find_runner(scenario.category()).ok_or_else(|| {
                 io::Error::other(format!(
                     "No runner registered for scenario category '{}' (scenario: {})",
@@ -850,12 +849,11 @@ impl ScenarioFramework {
             io::Error::other(format!("No runner registered for category: {category}"))
         })?;
 
-        let scenarios = discover_scenarios();
+        let scenarios = load_scenarios_at(&scenarios_root())?;
+        ensure_unique_scenario_ids(&scenarios)?;
         let mut count = 0;
 
-        for scenario_dir in scenarios {
-            let scenario = Scenario::load(scenario_dir)?;
-
+        for scenario in scenarios {
             if !runner.handles_category(scenario.category()) {
                 continue;
             }
@@ -941,6 +939,30 @@ pub fn discover_scenarios_at(root: &Path) -> Vec<PathBuf> {
     scenarios
 }
 
+fn load_scenarios_at(root: &Path) -> Result<Vec<Scenario>, Box<dyn Error>> {
+    discover_scenarios_at(root)
+        .into_iter()
+        .map(Scenario::load)
+        .collect()
+}
+
+fn ensure_unique_scenario_ids(scenarios: &[Scenario]) -> Result<(), io::Error> {
+    let mut seen = HashMap::new();
+
+    for scenario in scenarios {
+        if let Some(existing_dir) = seen.insert(scenario.id().to_string(), scenario.dir.clone()) {
+            return Err(io::Error::other(format!(
+                "Duplicate scenario id '{}' found in '{}' and '{}'; scenario ids must be unique to avoid snapshot collisions",
+                scenario.id(),
+                existing_dir.display(),
+                scenario.dir.display(),
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 /// Copy a directory recursively.
 ///
 /// # Errors
@@ -1013,7 +1035,11 @@ mod tests {
     use std::fs;
 
     fn write_scenario_fixture(root: &Path, name: &str, category: &str) {
-        let scenario_dir = root.join(name);
+        write_scenario_fixture_with_id(root, name, name, category);
+    }
+
+    fn write_scenario_fixture_with_id(root: &Path, dir_name: &str, id: &str, category: &str) {
+        let scenario_dir = root.join(dir_name);
         if let Err(error) = fs::create_dir_all(&scenario_dir) {
             panic!("scenario dir should be created: {error}");
         }
@@ -1021,7 +1047,7 @@ mod tests {
             scenario_dir.join("scenario.toml"),
             format!(
                 r#"[scenario]
-id = "{name}"
+id = "{id}"
 name = "Fixture Scenario"
 description = "Fixture"
 category = "{category}"
@@ -1058,6 +1084,36 @@ type = "json"
         assert!(
             root.ends_with("tests/scenarios"),
             "scenarios_root should end with tests/scenarios: {root:?}"
+        );
+    }
+
+    #[test]
+    fn run_all_at_fails_when_scenario_ids_collide() {
+        let temp = match tempfile::tempdir() {
+            Ok(temp) => temp,
+            Err(error) => panic!("tempdir should be created: {error}"),
+        };
+        write_scenario_fixture_with_id(temp.path(), "001_first", "001_collision", "collision_case");
+        write_scenario_fixture_with_id(
+            temp.path(),
+            "002_second",
+            "001_collision",
+            "collision_case",
+        );
+
+        let framework = ScenarioFramework::new();
+        let Err(error) = framework.run_all_at(temp.path()) else {
+            panic!("duplicate scenario ids should fail closed");
+        };
+        let message = error.to_string();
+
+        assert!(
+            message.contains("Duplicate scenario id '001_collision'"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            message.contains("001_first") && message.contains("002_second"),
+            "duplicate path context should be present: {error}"
         );
     }
 

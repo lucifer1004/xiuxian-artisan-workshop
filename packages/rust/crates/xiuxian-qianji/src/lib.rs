@@ -9,6 +9,8 @@ pub mod app;
 pub mod bootcamp;
 /// Distributed consensus management for multi-agent synchronization.
 pub mod consensus;
+/// Contract-feedback execution bridge for contract suite runs and Wendao export.
+pub mod contract_feedback;
 /// Contract definitions for nodes, instructions, and manifests.
 pub mod contracts;
 /// Core graph engine based on petgraph.
@@ -42,6 +44,17 @@ pub use app::{MEMORY_PROMOTION_PIPELINE_TOML, QianjiApp, RESEARCH_TRINITY_TOML};
 pub use bootcamp::{
     BootcampLlmMode, BootcampRunOptions, BootcampVfsMount, WorkflowReport, run_scenario,
     run_workflow, run_workflow_with_mounts,
+};
+pub use contract_feedback::{QianjiContractFeedbackRun, run_contract_feedback_flow};
+#[cfg(feature = "llm")]
+pub use contract_feedback::{
+    QianjiLiveContractFeedbackOptions, QianjiLiveContractFeedbackRuntime,
+    run_and_persist_contract_feedback_flow_with_live_advisory,
+    run_contract_feedback_flow_with_live_advisory,
+};
+pub use contract_feedback::{
+    QianjiPersistedContractFeedbackRun, persist_contract_feedback_run,
+    run_and_persist_contract_feedback_flow,
 };
 pub use contracts::{
     FlowInstruction, NodeQianhuanExecutionMode, NodeStatus, QianjiManifest, QianjiMechanism,

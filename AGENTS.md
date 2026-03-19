@@ -40,6 +40,7 @@ To prevent context bloating and "hallucination spirals," all Agents MUST follow 
 ## 4. Context & Exploration Protocol
 
 - **Codebase First**: Build context by examining code and configuration before making assumptions.
+- **Project Environment First**: For project-scoped commands, prefer running through `direnv exec` in the project root (for example `direnv exec . <command>`) to ensure environment parity.
 - **High-Performance Search**: **ALWAYS** prefer `rg` or `rg --files` over `grep`. If `rg` is unavailable, only then fall back to alternatives.
 - **Tool Parallelization**: Parallelize I/O intensive tool calls (e.g., `cat`, `rg`, `sed`, `ls`, `git show`) using `multi_tool_use.parallel` whenever possible. Never chain commands with shell separators that degrade output readability.
 
@@ -77,6 +78,7 @@ To prevent context bloating and "hallucination spirals," all Agents MUST follow 
 ## 9. Modularization Rules (The Artisan Standards)
 
 - **Split by complexity, not line count**: Split modules handling multiple concerns regardless of file size.
+- **Feature Folder-First (Rust)**: For medium/complex Rust features, create a dedicated feature folder (for example `session/cache/` or `graph/query/`) instead of expanding a single flat file. Prefer one folder per feature boundary, with sub-modules organized by responsibility.
 - **Namespace reflects intent**: Sub-module names should map to the feature (e.g. `graph/query.rs`).
 - **`mod.rs` is interface-only**: Re-export sub-modules only. No implementation logic.
 - **Visibility Control**: Use `pub(crate)` for internal communication; limit `pub` to public surfaces.
@@ -93,13 +95,15 @@ To prevent context bloating and "hallucination spirals," all Agents MUST follow 
 - **Tests follow code**: Add or update tests for every feature change. **A feature is not landed until verified.**
 - **Cross-Layer Validation**: Validate both Rust core (`cargo nextest`) and Python connectivity (`uv run pytest`).
 - **Rust Clippy (Zero-Tolerance)**: Global lint suppression (`#![allow(...)]`) is STRICTLY FORBIDDEN. Fix the code.
+- **Rust Warnings Closure**: Rust compiler and clippy warnings in the touched scope MUST be resolved before a feature is marked as fully landed.
+- **Clippy Cost Gate**: Run full clippy verification only when a feature reaches `[DONE]`/fully landed status to control iteration cost during active development.
 - **`missing_errors_doc`**: Add explicit `# Errors` docs for public `Result` APIs.
 
 ## 12. Global Tiered Verification Protocol
 
 - **[TIER-1: PULSE]** (`fmt`, `ruff format`): Background consistency.
 - **[TIER-2: HEARTBEAT]** (`cargo check`, `pyright`): Primary coding-phase verification.
-- **[TIER-3: GATE]** (`clippy`, `cargo nextest`): High-energy industrial audit (only for [DONE]).
+- **[TIER-3: GATE]** (`cargo clippy --all-targets --all-features -- -D warnings`, `cargo nextest`): High-energy industrial audit, executed only for `[DONE]`/fully landed features.
 
 # ExecPlans
 
@@ -116,6 +120,6 @@ If a task falls under the scope of an existing strategic blueprint (located in `
 All structural changes must follow the **Triple-Sync Protocol**:
 
 1.  **Blueprint Check**: Verify if the task falls under an active strategic blueprint.
-2.  **GTD Synchronization**: Update the daily GTD file (`docs/GTD/DAILY_YYYY_MM_DD.md`) to record the task and its status.
+2.  **GTD + Package Docs Synchronization**: Update the daily GTD file (`docs/GTD/DAILY_YYYY_MM_DD.md`) and synchronize progress in the corresponding package docs (for example `packages/<scope>/<package>/docs/` or the package `README.md`) so package-level documentation tracks real implementation status.
 3.  **ExecPlan Creation**: Create a formal ExecPlan (`.cache/codex/execplans/<slug>.md`) that explicitly references and adheres to the relevant blueprint.
 4.  **Implementation**: Execute implementation and validation steps as defined in the plan.

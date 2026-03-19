@@ -43,6 +43,12 @@ if [[ "$(uname -s)" == "Darwin" && -z ${SDKROOT:-} ]]; then
   fi
 fi
 
+# Prefer the system Clang toolchain on macOS for crates that compile C/C++ code.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  export CC="${CC:-/usr/bin/clang}"
+  export CXX="${CXX:-/usr/bin/clang++}"
+fi
+
 # Prefer precompiled Metal kernels on local macOS builds.
 # Auto-fallback for isolated environments where `metal` tool is unavailable.
 if [[ "$(uname -s)" == "Darwin" && -z ${MISTRALRS_METAL_PRECOMPILE:-} ]]; then

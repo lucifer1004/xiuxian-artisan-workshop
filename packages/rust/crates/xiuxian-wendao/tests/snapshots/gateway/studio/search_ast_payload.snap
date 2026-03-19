@@ -1,5 +1,5 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/../../../tests/unit/gateway/studio/support.rs
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
 expression: value
 ---
 {
@@ -11,7 +11,11 @@ expression: value
       "lineEnd": 2,
       "lineStart": 1,
       "name": "AlphaClient",
+      "nodeKind": null,
+      "ownerTitle": null,
       "path": "packages/python/demo/tool.py",
+      "projectName": "kernel",
+      "rootLabel": "packages",
       "score": 0.95,
       "signature": "class AlphaClient:"
     },
@@ -21,7 +25,11 @@ expression: value
       "lineEnd": 3,
       "lineStart": 1,
       "name": "AlphaService",
+      "nodeKind": null,
+      "ownerTitle": null,
       "path": "packages/rust/crates/demo/src/lib.rs",
+      "projectName": "kernel",
+      "rootLabel": "packages",
       "score": 0.95,
       "signature": "pub struct AlphaService {"
     },
@@ -31,7 +39,11 @@ expression: value
       "lineEnd": 5,
       "lineStart": 5,
       "name": "alpha_handler",
+      "nodeKind": null,
+      "ownerTitle": null,
       "path": "packages/rust/crates/demo/src/lib.rs",
+      "projectName": "kernel",
+      "rootLabel": "packages",
       "score": 0.95,
       "signature": "pub fn alpha_handler() {}"
     },
@@ -41,7 +53,11 @@ expression: value
       "lineEnd": 5,
       "lineStart": 4,
       "name": "alpha_helper",
+      "nodeKind": null,
+      "ownerTitle": null,
       "path": "packages/python/demo/tool.py",
+      "projectName": "kernel",
+      "rootLabel": "packages",
       "score": 0.95,
       "signature": "def alpha_helper():"
     }

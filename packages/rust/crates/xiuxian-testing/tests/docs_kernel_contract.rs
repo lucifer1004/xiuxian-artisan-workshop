@@ -19,6 +19,7 @@ fn docs_kernel_files_exist_and_are_indexed() {
         "01_core/101_contract_testing_kernel.md",
         "03_features/201_rulepack_specification.md",
         "03_features/202_multi_role_audit_integration.md",
+        "03_features/203_docs_workflow_alignment.md",
         "05_research/301_research_tracker.md",
         "06_roadmap/401_contract_testing_program.md",
     ];
@@ -37,6 +38,7 @@ fn docs_kernel_files_exist_and_are_indexed() {
         "01_core/101_contract_testing_kernel",
         "03_features/201_rulepack_specification",
         "03_features/202_multi_role_audit_integration",
+        "03_features/203_docs_workflow_alignment",
         "05_research/301_research_tracker",
         "06_roadmap/401_contract_testing_program",
     ];
@@ -98,6 +100,54 @@ fn multi_role_integration_page_covers_runtime_stack() {
         assert!(
             page.contains(marker),
             "expected multi-role integration page to include {marker}"
+        );
+    }
+}
+
+#[test]
+fn docs_workflow_alignment_page_covers_bridge_contract() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let page = read_file(&manifest_dir.join("docs/03_features/203_docs_workflow_alignment.md"));
+
+    let required_markers = [
+        "qianji",
+        "scenario audit",
+        "formal_audit",
+        "workflow input",
+        "ContractSuiteRunner",
+        "AdvisoryAuditRequest",
+        "ContractKnowledgeBatch",
+        "run_contract_feedback_flow",
+        "wendao",
+    ];
+
+    for marker in required_markers {
+        assert!(
+            page.contains(marker),
+            "expected docs workflow alignment page to include {marker}"
+        );
+    }
+}
+
+#[test]
+fn roadmap_tracks_live_downstream_consumer_evidence() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let roadmap = read_file(&manifest_dir.join("docs/06_roadmap/401_contract_testing_program.md"));
+
+    let required_markers = [
+        "xiuxian-llm",
+        "DeepSeek OCR",
+        "expected_substring",
+        "Telegram OCR",
+        "sidecar health check",
+        "memory-line branch",
+        "max_new_tokens=2",
+    ];
+
+    for marker in required_markers {
+        assert!(
+            roadmap.contains(marker),
+            "expected contract testing roadmap to include {marker}"
         );
     }
 }

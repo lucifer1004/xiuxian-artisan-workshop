@@ -1,42 +1,58 @@
-//! Real Metal inference verification test using actual image and weights.
+//! Real GPU inference verification test using actual image and weights.
 //!
-//! This test is `#[ignore]` by default to prevent accidental memory exhaustion.
+//! These tests are `#[ignore]` by default to prevent accidental memory exhaustion.
 //! Use the capfox script to run safely with memory limits:
 //!   just test-real-metal
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 use std::sync::Arc;
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 use std::sync::Once;
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 use std::time::Instant;
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 use anyhow::{Context, Result, bail};
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 use tracing_subscriber::EnvFilter;
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 use xiuxian_llm::llm::vision::deepseek::{
     load_deepseek_ocr_for_tests, prewarm_deepseek_ocr, reset_deepseek_engine_state_for_tests,
 };
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 use xiuxian_llm::llm::vision::{VisualRefiner, get_deepseek_runtime};
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 static LOGGING_INIT: Once = Once::new();
 
-#[cfg(not(feature = "vision-dots-metal"))]
+#[cfg(not(any(feature = "vision-dots-metal", feature = "vision-dots-cuda")))]
 #[test]
-fn real_metal_inference_requires_metal_feature() {
-    eprintln!("Skipping real Metal inference test: enable `vision-dots-metal` feature.");
+fn real_gpu_inference_requires_gpu_feature() {
+    eprintln!(
+        "Skipping real GPU inference test: enable `vision-dots-metal` or `vision-dots-cuda`."
+    );
 }
 
-/// Real Metal inference test - requires explicit --ignored flag.
+/// Real GPU inference test - requires explicit --ignored flag.
 /// Use `just test-real-metal` for safe execution with memory guard.
 #[cfg(feature = "vision-dots-metal")]
 #[ignore]
 #[tokio::test]
 async fn test_real_metal_inference() -> Result<()> {
+    run_real_gpu_inference().await
+}
+
+/// Real GPU inference test - requires explicit --ignored flag.
+/// Use the shared runner with `--cuda` for safe execution with memory guard.
+#[cfg(feature = "vision-dots-cuda")]
+#[ignore]
+#[tokio::test]
+async fn test_real_cuda_inference() -> Result<()> {
+    run_real_gpu_inference().await
+}
+
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
+async fn run_real_gpu_inference() -> Result<()> {
     init_test_logging();
     let runtime = get_deepseek_runtime();
     eprintln!("[TEST] runtime: enabled={}", runtime.is_enabled());
@@ -113,11 +129,11 @@ async fn test_real_metal_inference() -> Result<()> {
         }
     }
 
-    eprintln!("[TEST] ✓ Real Metal phase passed");
+    eprintln!("[TEST] ✓ Real GPU phase passed");
     Ok(())
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 fn init_test_logging() {
     LOGGING_INIT.call_once(|| {
         let filter = std::env::var("RUST_LOG")
@@ -129,7 +145,7 @@ fn init_test_logging() {
     });
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 fn resolve_test_image_path(project_root: &std::path::Path) -> Result<std::path::PathBuf> {
     if let Ok(path) = std::env::var("XIUXIAN_VISION_TEST_IMAGE") {
         let path = std::path::PathBuf::from(path);
@@ -150,7 +166,7 @@ fn resolve_test_image_path(project_root: &std::path::Path) -> Result<std::path::
     bail!("Test image not found at {}", fallback.display())
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RealRunPhase {
     Load,
@@ -158,7 +174,7 @@ enum RealRunPhase {
     Infer,
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 impl RealRunPhase {
     fn as_str(self) -> &'static str {
         match self {
@@ -169,7 +185,7 @@ impl RealRunPhase {
     }
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 fn resolve_real_run_phase() -> Result<RealRunPhase> {
     let Some(raw) = std::env::var_os("XIUXIAN_VISION_REAL_PHASE") else {
         return Ok(RealRunPhase::Infer);
@@ -182,7 +198,7 @@ fn resolve_real_run_phase() -> Result<RealRunPhase> {
     }
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 fn resolve_allow_empty_output() -> bool {
     std::env::var("XIUXIAN_VISION_ALLOW_EMPTY_OUTPUT")
         .ok()
@@ -190,7 +206,7 @@ fn resolve_allow_empty_output() -> bool {
         .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 fn resolve_min_output_chars() -> usize {
     parse_min_output_chars(
         std::env::var("XIUXIAN_VISION_MIN_OUTPUT_CHARS")
@@ -199,7 +215,7 @@ fn resolve_min_output_chars() -> usize {
     )
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 fn resolve_expected_substring() -> Option<String> {
     parse_expected_substring(
         std::env::var("XIUXIAN_VISION_EXPECT_SUBSTRING")
@@ -208,21 +224,21 @@ fn resolve_expected_substring() -> Option<String> {
     )
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 fn parse_min_output_chars(raw: Option<&str>) -> usize {
     raw.and_then(|value| value.trim().parse::<usize>().ok())
         .filter(|&value| value > 0)
         .unwrap_or(11)
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 fn parse_expected_substring(raw: Option<&str>) -> Option<String> {
     raw.map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 fn preview_text(value: &str, max_chars: usize) -> String {
     let preview = value.chars().take(max_chars).collect::<String>();
     preview
@@ -232,7 +248,7 @@ fn preview_text(value: &str, max_chars: usize) -> String {
         .replace('\t', "\\t")
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 #[test]
 fn parse_min_output_chars_defaults_to_11() {
     assert_eq!(parse_min_output_chars(None), 11);
@@ -241,21 +257,21 @@ fn parse_min_output_chars_defaults_to_11() {
     assert_eq!(parse_min_output_chars(Some("abc")), 11);
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 #[test]
 fn parse_min_output_chars_accepts_positive_override() {
     assert_eq!(parse_min_output_chars(Some("1")), 1);
     assert_eq!(parse_min_output_chars(Some("12")), 12);
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 #[test]
 fn parse_expected_substring_ignores_missing_or_blank_values() {
     assert_eq!(parse_expected_substring(None), None);
     assert_eq!(parse_expected_substring(Some("   ")), None);
 }
 
-#[cfg(feature = "vision-dots-metal")]
+#[cfg(any(feature = "vision-dots-metal", feature = "vision-dots-cuda"))]
 #[test]
 fn parse_expected_substring_trims_value() {
     assert_eq!(

@@ -78,6 +78,10 @@ impl ContractSuite {
     pub fn rule_pack_count(&self) -> usize {
         self.rule_packs.len()
     }
+
+    pub(crate) fn iter_rule_packs(&self) -> impl Iterator<Item = &dyn RulePack> {
+        self.rule_packs.iter().map(Box::as_ref)
+    }
 }
 
 /// Minimal rule pack that collects and emits nothing.

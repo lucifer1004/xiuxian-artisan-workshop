@@ -46,6 +46,10 @@ let
         fi
       fi
 
+      # Prefer the system Clang toolchain on macOS for crates that compile C/C++ code.
+      export CC="''${CC:-/usr/bin/clang}"
+      export CXX="''${CXX:-/usr/bin/clang++}"
+
       # Prefer precompiled Metal kernels on local macOS builds.
       # In isolated environments where `metal` is unavailable (common in CI/Nix),
       # auto-fallback to runtime kernel compilation for build reliability.

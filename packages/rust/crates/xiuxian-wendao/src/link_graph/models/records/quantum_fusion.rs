@@ -1,3 +1,5 @@
+use super::super::semantic_policy::LinkGraphSemanticSearchPolicy;
+use super::retrieval_plan::LinkGraphRetrievalBudget;
 use crate::link_graph::models::LinkGraphRelatedPprOptions;
 use serde::{Deserialize, Serialize};
 
@@ -115,6 +117,25 @@ pub struct QuantumSemanticSearchRequest<'a> {
 }
 
 impl QuantumSemanticSearchRequest<'_> {
+    /// Build a semantic-ignition request from retrieval-plan budget and policy.
+    #[must_use]
+    pub fn from_retrieval_budget<'a>(
+        query_text: Option<&'a str>,
+        query_vector: &'a [f32],
+        budget: Option<&LinkGraphRetrievalBudget>,
+        semantic_policy: Option<LinkGraphSemanticSearchPolicy>,
+    ) -> QuantumSemanticSearchRequest<'a> {
+        let semantic_policy = semantic_policy.unwrap_or_default().normalized();
+        QuantumSemanticSearchRequest {
+            query_text,
+            query_vector,
+            candidate_limit: budget.map_or(1, |value| value.candidate_limit.max(1)),
+            min_vector_score: semantic_policy.min_vector_score,
+            max_vector_score: None,
+        }
+        .normalized()
+    }
+
     /// Normalize request parameters into safe bounds.
     #[must_use]
     pub fn normalized(&self) -> Self {

@@ -14585,6 +14585,7 @@ dependencies = [
  "reqwest 0.13.2",
  "serde",
  "serde_json",
+ "serde_yaml",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -14682,6 +14683,7 @@ version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "insta",
  "serde",
  "serde_json",
@@ -14783,6 +14785,7 @@ dependencies = [
  "comrak",
  "dashmap 7.0.0-rc2",
  "dirs 5.0.1",
+ "globset",
  "include_dir",
  "insta",
  "lazy_static",

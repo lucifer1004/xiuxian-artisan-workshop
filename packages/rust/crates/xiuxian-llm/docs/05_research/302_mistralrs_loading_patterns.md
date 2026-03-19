@@ -642,17 +642,64 @@ This changes the active diagnosis again:
   logits still rank whitespace token `6776` first and `eos` second
 - the representative smoke output is now `0`, so the canonical one-digit smoke is no longer
   blocked on minimal prompt-level semantics either
+- the retained prompt-aware follow-up for `visible word ...` prompts also remains practical under
+  the same accepted head: the `Telegram` word profile finishes within the `12 GB` guard and
+  returns `Telegram` in about `37s`
+- the same bounded prompt-aware mechanism now extends to `visible phrase ...` prompts by only
+  anchoring the first visible token; under the same accepted head, a `Telegram OCR` phrase probe
+  also completes within the `12 GB` guard and returns the full phrase in about `59s` in the
+  formal profile-backed rerun
+- the same retained anchor was then widened slightly so punctuation-led phrases can still surface
+  an alphanumeric first anchor; this is enough to make prompts such as `2026-03-09-001` and
+  `$128.50` representable without adding a new policy toggle
+- that widening is not sufficient to promote full structured numeric fields yet: both a visible
+  `2026` word probe and a visible invoice-number probe stayed inside the `12 GB` budget but fell
+  into the same long low-RSS tail instead of converging to a practical smoke result
 - a stronger multi-token amount-value probe also stays inside the `12 GB` guard, but it took about
   `252s` and returned `No units.` instead of an amount substring; the next quality wall is now
   semantic correctness and practical latency, not memory
 - two shorter month-value probes also stayed inside the `12 GB` guard, but neither completed in a
   practical smoke window, regardless of whether decode cache was disabled or enabled
 
+Canonical accepted-head guarded refresh (2026-03-18):
+
+- a new PTY-traced canonical pair was captured with
+  `--phase=load --max-rss=15` and `--phase=infer --max-rss=13`
+- both runs now pass with `status=0` under the same accepted-head profile
+- the widened load run reaches `deepseek.language.weights_ready` with observed peak RSS around
+  `9.10 GB`
+- the widened infer run reaches decode (`xiuxian.decode.started`) and completion
+  (`ocr_engine.decode.generate.completed`) with observed peak RSS around `10.88 GB`, then returns
+  OCR preview `0`
+- this confirms that the current retained head is still memory-stable under widened guarded
+  diagnostics; the active next wall is quality and latency for richer structured probes, not
+  canonical-head memory failure
+- a fresh year-token exploratory branch remains non-retained under the same accepted head:
+  `--max-rss=12` and `--max-rss=13` short-form runs still hit fast guard kills (`12.25 GB`,
+  `12.80 GB`, `13.39 GB` across prompt variants), while a widened `--max-rss=15` short-form retry
+  falls into a long low-RSS tail (`~2.20 GB`) without practical convergence
+- a fresh compact day-token branch is also non-retained under the same accepted head:
+  `--max-rss=12` and `--max-rss=13` hit fast guard kills (`12.27 GB`, `13.11 GB`), and a widened
+  `--max-rss=15` retry clears the early spike but then flattens into a long `~2.94 GB` low-RSS
+  tail without in-log completion before manual stop
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_accepted_head_load_15g_stage_trace_v1.log`
+- `.run/tmp/downstream_deepseek_metal_accepted_head_infer_13g_stage_trace_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_short_prompt_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_short_prompt_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_short_prompt_15g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_day_token_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_day_token_probe_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_day_token_probe_15g_v1.log`
+
 ## Recommendation
 
 The next bounded investigation should move from Metal stability and first-token semantics to richer
 OCR quality coverage:
 
-`Which stronger OCR-quality probe stays small enough to act as a real smoke gate, now that amount-value probes are semantically wrong and both cache and no-cache month-value probes are still too slow under the same 12 GB budget?`
+`Which stronger OCR-quality probe should come after the retained Telegram OCR phrase gate, now that punctuation-aware structured-field prompts are representable but year/invoice/day compact probes still fail to produce a retained practical window, while amount-value probes are still semantically wrong and month-value probes remain too slow?`
 
 `candle-core` should remain out of scope.

@@ -1,12 +1,9 @@
 use super::*;
 use crate::gateway::studio::router::StudioState;
-use crate::gateway::studio::types::UiConfig;
+use crate::gateway::studio::test_support::assert_studio_json_snapshot;
+use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
 use serde_json::json;
 use tempfile::tempdir;
-
-#[path = "support.rs"]
-mod support;
-use support::assert_studio_json_snapshot;
 
 struct VfsFixture {
     state: StudioState,
@@ -18,34 +15,26 @@ fn make_vfs_fixture() -> VfsFixture {
         tempdir().unwrap_or_else(|err| panic!("failed to create vfs fixture tempdir: {err}"));
     let docs_dir = temp_dir.path().join("docs");
     let skills_dir = temp_dir.path().join("internal_skills").join("writer");
-    let knowledge_dir = temp_dir.path().join(".data").join("knowledge");
-    let blueprints_dir = temp_dir.path().join(".data").join("blueprints");
 
     std::fs::create_dir_all(&docs_dir)
         .unwrap_or_else(|err| panic!("failed to create docs dir: {err}"));
     std::fs::create_dir_all(&skills_dir)
         .unwrap_or_else(|err| panic!("failed to create internal skills dir: {err}"));
-    std::fs::create_dir_all(&knowledge_dir)
-        .unwrap_or_else(|err| panic!("failed to create knowledge dir: {err}"));
-    std::fs::create_dir_all(&blueprints_dir)
-        .unwrap_or_else(|err| panic!("failed to create blueprints dir: {err}"));
 
     std::fs::write(docs_dir.join("guide.md"), "# Guide\n\nHello.\n")
         .unwrap_or_else(|err| panic!("failed to write docs fixture: {err}"));
     std::fs::write(skills_dir.join("SKILL.md"), "---\nname: Writer\n---\n")
         .unwrap_or_else(|err| panic!("failed to write skill fixture: {err}"));
-    std::fs::write(knowledge_dir.join("context.md"), "# Context\n\nWorld.\n")
-        .unwrap_or_else(|err| panic!("failed to write knowledge fixture: {err}"));
-    std::fs::write(blueprints_dir.join("default.bpmn"), "<bpmn />")
-        .unwrap_or_else(|err| panic!("failed to write blueprint fixture: {err}"));
 
     let mut state = StudioState::new();
     state.project_root = temp_dir.path().to_path_buf();
-    state.data_root = temp_dir.path().join(".data");
-    state.knowledge_root = knowledge_dir;
-    state.internal_skill_root = temp_dir.path().join("internal_skills");
+    state.config_root = temp_dir.path().to_path_buf();
     state.set_ui_config(UiConfig {
-        index_paths: vec!["docs".to_string(), "internal_skills".to_string()],
+        projects: vec![UiProjectConfig {
+            name: "kernel".to_string(),
+            root: ".".to_string(),
+            dirs: vec!["docs".to_string(), "internal_skills".to_string()],
+        }],
     });
 
     VfsFixture {
@@ -55,7 +44,7 @@ fn make_vfs_fixture() -> VfsFixture {
 }
 
 #[test]
-fn scan_roots_includes_configured_and_builtin_roots() {
+fn scan_roots_only_includes_configured_roots() {
     let fixture = make_vfs_fixture();
 
     let result = scan_roots(&fixture.state);
@@ -72,6 +61,8 @@ fn scan_roots_includes_configured_and_builtin_roots() {
                 "contentType": entry.content_type,
                 "hasFrontmatter": entry.has_frontmatter,
                 "wendaoId": entry.wendao_id,
+                "projectName": entry.project_name,
+                "rootLabel": entry.root_label,
             })
         })
         .collect::<Vec<_>>();
@@ -101,6 +92,8 @@ fn list_root_entries_reflects_runtime_root_resolution() {
                 "isDir": entry.is_dir,
                 "size": entry.size,
                 "contentType": entry.content_type,
+                "projectName": entry.project_name,
+                "rootLabel": entry.root_label,
             })
         })
         .collect::<Vec<_>>();
@@ -129,12 +122,12 @@ fn get_entry_resolves_configured_relative_roots() {
 }
 
 #[tokio::test]
-async fn read_content_supports_builtin_blueprints_root() {
+async fn read_content_supports_only_configured_roots() {
     let fixture = make_vfs_fixture();
 
-    let payload = read_content(&fixture.state, "blueprints/default.bpmn")
+    let payload = read_content(&fixture.state, "internal_skills/writer/SKILL.md")
         .await
-        .unwrap_or_else(|err| panic!("expected blueprint content to load: {err}"));
+        .unwrap_or_else(|err| panic!("expected skill content to load: {err}"));
 
     assert_studio_json_snapshot(
         "vfs_read_content_payload",
@@ -144,4 +137,214 @@ async fn read_content_supports_builtin_blueprints_root() {
             "contentType": payload.content_type,
         }),
     );
+}
+
+#[tokio::test]
+async fn glob_dirs_filter_scan_and_read_results() {
+    let temp_dir =
+        tempdir().unwrap_or_else(|err| panic!("failed to create glob filter tempdir: {err}"));
+    let docs_dir = temp_dir.path().join("docs");
+    let private_dir = docs_dir.join("private");
+    std::fs::create_dir_all(&private_dir)
+        .unwrap_or_else(|err| panic!("failed to create glob filter dirs: {err}"));
+    std::fs::write(docs_dir.join("guide.md"), "# Public\n")
+        .unwrap_or_else(|err| panic!("failed to write public markdown fixture: {err}"));
+    std::fs::write(private_dir.join("secret.md"), "# Secret\n")
+        .unwrap_or_else(|err| panic!("failed to write private markdown fixture: {err}"));
+
+    let mut state = StudioState::new();
+    state.project_root = temp_dir.path().to_path_buf();
+    state.config_root = temp_dir.path().to_path_buf();
+    state.set_ui_config(UiConfig {
+        projects: vec![UiProjectConfig {
+            name: "kernel".to_string(),
+            root: ".".to_string(),
+            dirs: vec![
+                "docs".to_string(),
+                "**/*.md".to_string(),
+                "!docs/private/**".to_string(),
+            ],
+        }],
+    });
+
+    let paths = scan_roots(&state)
+        .entries
+        .into_iter()
+        .map(|entry| entry.path)
+        .collect::<Vec<_>>();
+    assert!(paths.iter().any(|path| path == "docs/guide.md"));
+    assert!(!paths.iter().any(|path| path == "docs/private/secret.md"));
+
+    let blocked = read_content(&state, "docs/private/secret.md").await;
+    let Err(VfsError::NotFound(path)) = blocked else {
+        panic!("expected glob-filtered file read to fail");
+    };
+    assert_eq!(path, "docs/private/secret.md");
+}
+
+#[test]
+fn scan_roots_exposes_project_grouping_metadata_for_monorepo_docs() {
+    let temp_dir =
+        tempdir().unwrap_or_else(|err| panic!("failed to create monorepo tempdir: {err}"));
+    let alpha_project_root = temp_dir.path().join("packages").join("alpha");
+    let beta_project_root = temp_dir.path().join("packages").join("beta");
+    let alpha_docs = alpha_project_root.join("docs");
+    let beta_docs = beta_project_root.join("docs");
+
+    std::fs::create_dir_all(&alpha_docs)
+        .unwrap_or_else(|err| panic!("failed to create alpha docs dir: {err}"));
+    std::fs::create_dir_all(&beta_docs)
+        .unwrap_or_else(|err| panic!("failed to create beta docs dir: {err}"));
+    std::fs::write(
+        alpha_project_root.join("Cargo.toml"),
+        "[package]\nname = \"alpha\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap_or_else(|err| panic!("failed to write alpha Cargo.toml: {err}"));
+    std::fs::write(
+        beta_project_root.join("Cargo.toml"),
+        "[package]\nname = \"beta\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap_or_else(|err| panic!("failed to write beta Cargo.toml: {err}"));
+    std::fs::write(alpha_docs.join("guide.md"), "# Alpha\n")
+        .unwrap_or_else(|err| panic!("failed to write alpha docs fixture: {err}"));
+    std::fs::write(beta_docs.join("guide.md"), "# Beta\n")
+        .unwrap_or_else(|err| panic!("failed to write beta docs fixture: {err}"));
+
+    let mut state = StudioState::new();
+    state.project_root = temp_dir.path().to_path_buf();
+    state.config_root = temp_dir.path().to_path_buf();
+    state.set_ui_config(UiConfig {
+        projects: vec![
+            UiProjectConfig {
+                name: "alpha".to_string(),
+                root: "packages/alpha".to_string(),
+                dirs: vec!["docs".to_string()],
+            },
+            UiProjectConfig {
+                name: "beta".to_string(),
+                root: "packages/beta".to_string(),
+                dirs: vec!["docs".to_string()],
+            },
+        ],
+    });
+
+    let mut project_entries = scan_roots(&state)
+        .entries
+        .into_iter()
+        .filter(|entry| entry.project_name.is_some())
+        .map(|entry| {
+            json!({
+                "path": entry.path,
+                "name": entry.name,
+                "projectName": entry.project_name,
+                "rootLabel": entry.root_label,
+                "isDir": entry.is_dir,
+            })
+        })
+        .collect::<Vec<_>>();
+    project_entries.sort_by(|left, right| left["path"].as_str().cmp(&right["path"].as_str()));
+
+    assert_studio_json_snapshot(
+        "vfs_monorepo_project_roots_payload",
+        json!({ "entries": project_entries }),
+    );
+}
+
+#[test]
+fn scan_roots_snapshots_config_root_relative_resolution() {
+    let temp_dir = tempdir()
+        .unwrap_or_else(|err| panic!("failed to create config-root fixture tempdir: {err}"));
+    let repo_docs = temp_dir.path().join("docs");
+    let studio_docs = temp_dir
+        .path()
+        .join(".data")
+        .join("qianji-studio")
+        .join("docs");
+
+    std::fs::create_dir_all(&repo_docs)
+        .unwrap_or_else(|err| panic!("failed to create repo docs dir: {err}"));
+    std::fs::create_dir_all(&studio_docs)
+        .unwrap_or_else(|err| panic!("failed to create studio docs dir: {err}"));
+    std::fs::write(repo_docs.join("main.md"), "# Main\n")
+        .unwrap_or_else(|err| panic!("failed to write repo docs fixture: {err}"));
+    std::fs::write(studio_docs.join("kernel.md"), "# Kernel\n")
+        .unwrap_or_else(|err| panic!("failed to write studio docs fixture: {err}"));
+
+    let mut state = StudioState::new();
+    state.project_root = temp_dir.path().to_path_buf();
+    state.config_root = temp_dir.path().join(".data").join("qianji-studio");
+    state.set_ui_config(UiConfig {
+        projects: vec![
+            UiProjectConfig {
+                name: "kernel".to_string(),
+                root: ".".to_string(),
+                dirs: vec!["docs".to_string()],
+            },
+            UiProjectConfig {
+                name: "main".to_string(),
+                root: temp_dir.path().to_string_lossy().to_string(),
+                dirs: vec!["docs".to_string()],
+            },
+        ],
+    });
+
+    let mut entries = scan_roots(&state)
+        .entries
+        .into_iter()
+        .map(|entry| {
+            json!({
+                "path": entry.path,
+                "name": entry.name,
+                "projectName": entry.project_name,
+                "rootLabel": entry.root_label,
+                "isDir": entry.is_dir,
+            })
+        })
+        .collect::<Vec<_>>();
+    entries.sort_by(|left, right| left["path"].as_str().cmp(&right["path"].as_str()));
+
+    assert_studio_json_snapshot(
+        "vfs_config_root_relative_resolution_payload",
+        json!({ "entries": entries }),
+    );
+}
+
+#[test]
+fn get_entry_supports_tilde_project_root() {
+    let Some(home) = dirs::home_dir() else {
+        return;
+    };
+    let temp_dir = tempfile::Builder::new()
+        .prefix("wendao-studio-tilde-")
+        .tempdir_in(home.as_path())
+        .unwrap_or_else(|err| panic!("failed to create tilde fixture tempdir in HOME: {err}"));
+
+    let docs_dir = temp_dir.path().join("docs");
+    std::fs::create_dir_all(&docs_dir)
+        .unwrap_or_else(|err| panic!("failed to create tilde docs dir: {err}"));
+    std::fs::write(docs_dir.join("guide.md"), "# Tilde Guide\n")
+        .unwrap_or_else(|err| panic!("failed to write tilde docs fixture: {err}"));
+
+    let relative_to_home = temp_dir
+        .path()
+        .strip_prefix(home.as_path())
+        .unwrap_or_else(|err| panic!("failed to derive tempdir path under HOME: {err}"))
+        .to_string_lossy()
+        .replace('\\', "/");
+    let configured_root = format!("~/{relative_to_home}");
+
+    let state = StudioState::new();
+    state.set_ui_config(UiConfig {
+        projects: vec![UiProjectConfig {
+            name: "main".to_string(),
+            root: configured_root,
+            dirs: vec!["docs".to_string()],
+        }],
+    });
+
+    let entry = get_entry(&state, "docs/guide.md")
+        .unwrap_or_else(|err| panic!("expected docs file entry under tilde root: {err}"));
+    assert_eq!(entry.path, "docs/guide.md");
+    assert_eq!(entry.name, "guide.md");
+    assert!(!entry.is_dir);
 }

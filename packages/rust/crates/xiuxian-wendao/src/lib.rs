@@ -76,6 +76,8 @@ pub mod fusion_py;
 // ---------------------------------------------------------------------------
 // Feature modules (enhancer, link graph refs, dependency, unified symbol)
 // ---------------------------------------------------------------------------
+/// Bridges contract-testing findings into Wendao knowledge ingestion payloads.
+pub mod contract_feedback;
 pub mod dep_indexer_py;
 pub mod dependency_indexer;
 pub mod enhancer;
@@ -93,6 +95,7 @@ pub mod zhenfa_router;
 // ---------------------------------------------------------------------------
 // Public re-exports (crate API)
 // ---------------------------------------------------------------------------
+pub use contract_feedback::WendaoContractFeedbackAdapter;
 pub use dep_indexer_py::{
     PyDependencyConfig, PyDependencyIndexResult, PyDependencyIndexer, PyDependencyStats,
     PyExternalDependency, PyExternalSymbol, PySymbolIndex,
@@ -139,10 +142,10 @@ pub use link_graph::{
     LinkGraphMetadata, LinkGraphNeighbor, LinkGraphPassage, LinkGraphPlannedSearchPayload,
     LinkGraphPprSubgraphMode, LinkGraphRefreshMode, LinkGraphRelatedFilter,
     LinkGraphRelatedPprDiagnostics, LinkGraphRelatedPprOptions, LinkGraphRetrievalBudget,
-    LinkGraphRetrievalMode, LinkGraphRetrievalPlanRecord, LinkGraphSaliencyPolicy,
-    LinkGraphSaliencyState, LinkGraphSaliencyTouchRequest, LinkGraphScope, LinkGraphSearchFilters,
-    LinkGraphSearchOptions, LinkGraphSortField, LinkGraphSortOrder, LinkGraphSortTerm,
-    LinkGraphStats, LinkGraphSuggestedLink, LinkGraphSuggestedLinkDecision,
+    LinkGraphRetrievalMode, LinkGraphRetrievalPlanRecord, LinkGraphSaliencyDecaySweepRequest,
+    LinkGraphSaliencyPolicy, LinkGraphSaliencyState, LinkGraphSaliencyTouchRequest, LinkGraphScope,
+    LinkGraphSearchFilters, LinkGraphSearchOptions, LinkGraphSortField, LinkGraphSortOrder,
+    LinkGraphSortTerm, LinkGraphStats, LinkGraphSuggestedLink, LinkGraphSuggestedLinkDecision,
     LinkGraphSuggestedLinkDecisionRequest, LinkGraphSuggestedLinkDecisionResult,
     LinkGraphSuggestedLinkRequest, LinkGraphSuggestedLinkState, LinkGraphTagFilter,
     ParsedLinkGraphQuery, QUANTUM_SALIENCY_COLUMN, QuantumAnchorHit, QuantumContext,
@@ -155,8 +158,9 @@ pub use link_graph::{
     valkey_quantum_context_snapshot_get, valkey_quantum_context_snapshot_get_with_valkey,
     valkey_quantum_context_snapshot_rollback, valkey_quantum_context_snapshot_rollback_with_valkey,
     valkey_quantum_context_snapshot_save, valkey_quantum_context_snapshot_save_with_valkey,
-    valkey_saliency_del, valkey_saliency_get, valkey_saliency_get_with_valkey,
-    valkey_saliency_touch, valkey_saliency_touch_with_valkey, valkey_suggested_link_decide,
+    valkey_saliency_decay_all, valkey_saliency_decay_all_with_valkey, valkey_saliency_del,
+    valkey_saliency_get, valkey_saliency_get_with_valkey, valkey_saliency_touch,
+    valkey_saliency_touch_with_valkey, valkey_suggested_link_decide,
     valkey_suggested_link_decide_with_valkey, valkey_suggested_link_decisions_recent,
     valkey_suggested_link_decisions_recent_with_valkey, valkey_suggested_link_log,
     valkey_suggested_link_log_with_valkey, valkey_suggested_link_recent,

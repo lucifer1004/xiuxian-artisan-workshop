@@ -1,5 +1,5 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/../../../tests/unit/gateway/studio/support.rs
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
 expression: value
 ---
 {
@@ -7,15 +7,10 @@ expression: value
     {
       "contentType": null,
       "isDir": true,
-      "name": "blueprints",
-      "path": "blueprints",
-      "size": 0
-    },
-    {
-      "contentType": null,
-      "isDir": true,
       "name": "docs",
       "path": "docs",
+      "projectName": "kernel",
+      "rootLabel": "docs",
       "size": 0
     },
     {
@@ -23,13 +18,8 @@ expression: value
       "isDir": true,
       "name": "internal_skills",
       "path": "internal_skills",
-      "size": 0
-    },
-    {
-      "contentType": null,
-      "isDir": true,
-      "name": "knowledge",
-      "path": "knowledge",
+      "projectName": "kernel",
+      "rootLabel": "internal_skills",
       "size": 0
     }
   ]

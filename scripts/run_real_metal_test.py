@@ -36,20 +36,28 @@ CPU_TEST_BINARY_PATTERN = "llm_vision_deepseek_real_cpu-"
 METAL_TEST_BINARY_PATTERN = "llm_vision_deepseek_real_metal-"
 DEFAULT_CPU_MAX_RSS_GB = 12.0
 DEFAULT_METAL_MAX_RSS_GB = 10.0
+DEFAULT_CUDA_MAX_RSS_GB = DEFAULT_METAL_MAX_RSS_GB
 DEFAULT_CPU_CAPFOX_MEM_PERCENT = 50.0
 DEFAULT_METAL_CAPFOX_MEM_PERCENT = 30.0
 DEFAULT_METAL_CAPFOX_GPU_PERCENT = 80.0
 DEFAULT_METAL_CAPFOX_VRAM_PERCENT = 60.0
+DEFAULT_CUDA_CAPFOX_MEM_PERCENT = DEFAULT_METAL_CAPFOX_MEM_PERCENT
+DEFAULT_CUDA_CAPFOX_GPU_PERCENT = DEFAULT_METAL_CAPFOX_GPU_PERCENT
+DEFAULT_CUDA_CAPFOX_VRAM_PERCENT = DEFAULT_METAL_CAPFOX_VRAM_PERCENT
 
 
 @dataclass(frozen=True)
 class TestGuardConfig:
     cpu_max_rss_gb: float = DEFAULT_CPU_MAX_RSS_GB
     metal_max_rss_gb: float = DEFAULT_METAL_MAX_RSS_GB
+    cuda_max_rss_gb: float = DEFAULT_CUDA_MAX_RSS_GB
     cpu_capfox_mem_percent: float = DEFAULT_CPU_CAPFOX_MEM_PERCENT
     metal_capfox_mem_percent: float = DEFAULT_METAL_CAPFOX_MEM_PERCENT
     metal_capfox_gpu_percent: float = DEFAULT_METAL_CAPFOX_GPU_PERCENT
     metal_capfox_vram_percent: float = DEFAULT_METAL_CAPFOX_VRAM_PERCENT
+    cuda_capfox_mem_percent: float = DEFAULT_CUDA_CAPFOX_MEM_PERCENT
+    cuda_capfox_gpu_percent: float = DEFAULT_CUDA_CAPFOX_GPU_PERCENT
+    cuda_capfox_vram_percent: float = DEFAULT_CUDA_CAPFOX_VRAM_PERCENT
 
 
 @dataclass(frozen=True)
@@ -60,6 +68,14 @@ class TestProfileConfig:
     capfox_vram_percent: float | None = None
     rust_log: str | None = None
     env_overrides: dict[str, str] = field(default_factory=dict)
+
+
+def _read_text_file(path: Path) -> str | None:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return text.strip() or None
 
 
 def _read_test_guard_config(config_path: Path = VISION_CONFIG_PATH) -> TestGuardConfig:
@@ -76,20 +92,44 @@ def _read_test_guard_config(config_path: Path = VISION_CONFIG_PATH) -> TestGuard
         value = section.get(key)
         return float(value) if isinstance(value, int | float) else fallback
 
+    metal_max_rss_gb = read_float("metal_max_rss_gb", DEFAULT_METAL_MAX_RSS_GB)
+    metal_capfox_mem_percent = read_float(
+        "metal_capfox_mem_percent", DEFAULT_METAL_CAPFOX_MEM_PERCENT
+    )
+    metal_capfox_gpu_percent = read_float(
+        "metal_capfox_gpu_percent", DEFAULT_METAL_CAPFOX_GPU_PERCENT
+    )
+    metal_capfox_vram_percent = read_float(
+        "metal_capfox_vram_percent", DEFAULT_METAL_CAPFOX_VRAM_PERCENT
+    )
+
     return TestGuardConfig(
         cpu_max_rss_gb=read_float("cpu_max_rss_gb", DEFAULT_CPU_MAX_RSS_GB),
-        metal_max_rss_gb=read_float("metal_max_rss_gb", DEFAULT_METAL_MAX_RSS_GB),
+        metal_max_rss_gb=metal_max_rss_gb,
+        cuda_max_rss_gb=read_float("cuda_max_rss_gb", metal_max_rss_gb),
         cpu_capfox_mem_percent=read_float("cpu_capfox_mem_percent", DEFAULT_CPU_CAPFOX_MEM_PERCENT),
-        metal_capfox_mem_percent=read_float(
-            "metal_capfox_mem_percent", DEFAULT_METAL_CAPFOX_MEM_PERCENT
-        ),
-        metal_capfox_gpu_percent=read_float(
-            "metal_capfox_gpu_percent", DEFAULT_METAL_CAPFOX_GPU_PERCENT
-        ),
-        metal_capfox_vram_percent=read_float(
-            "metal_capfox_vram_percent", DEFAULT_METAL_CAPFOX_VRAM_PERCENT
-        ),
+        metal_capfox_mem_percent=metal_capfox_mem_percent,
+        metal_capfox_gpu_percent=metal_capfox_gpu_percent,
+        metal_capfox_vram_percent=metal_capfox_vram_percent,
+        cuda_capfox_mem_percent=read_float("cuda_capfox_mem_percent", metal_capfox_mem_percent),
+        cuda_capfox_gpu_percent=read_float("cuda_capfox_gpu_percent", metal_capfox_gpu_percent),
+        cuda_capfox_vram_percent=read_float("cuda_capfox_vram_percent", metal_capfox_vram_percent),
     )
+
+
+def resolve_requested_device(argv: list[str]) -> str:
+    requested: str | None = None
+    for arg in argv:
+        if arg == "--cpu":
+            device = "cpu"
+        elif arg == "--cuda":
+            device = "cuda"
+        else:
+            continue
+        if requested is not None and requested != device:
+            raise ValueError("Choose only one of --cpu or --cuda; omit both for Metal.")
+        requested = device
+    return requested or "metal"
 
 
 def _read_test_profile_config(
@@ -217,6 +257,8 @@ def _selected_passthrough_env(
         "XIUXIAN_VISION_MOE_BACKEND",
         "XIUXIAN_VISION_SKIP_SHARED_EXPERTS",
         "XIUXIAN_VISION_STAGE_TRACE_STDERR",
+        "DEEPSEEK_OCR_DEBUG_LOGITS_STEP",
+        "DEEPSEEK_OCR_DEBUG_LOGITS_JSON",
     )
     profile_keys = set(profile.env_overrides) if profile is not None else set()
     return {
@@ -224,8 +266,41 @@ def _selected_passthrough_env(
     }
 
 
-def find_test_binary(use_cpu: bool, use_release: bool) -> Path | None:
-    """Find the phase runner test binary for CPU or Metal."""
+def _parse_manual_cli_overrides(argv: list[str]) -> tuple[dict[str, str], Path | None]:
+    overrides: dict[str, str] = {}
+    image_path: Path | None = None
+    for arg in argv:
+        if arg.startswith("--image="):
+            raw = arg.split("=", 1)[1].strip()
+            if raw:
+                image_path = Path(raw).expanduser()
+        elif arg.startswith("--ocr-prompt="):
+            raw = arg.split("=", 1)[1]
+            if raw.strip():
+                overrides["XIUXIAN_VISION_OCR_PROMPT"] = raw
+        elif arg.startswith("--ocr-prompt-file="):
+            raw = arg.split("=", 1)[1].strip()
+            if raw:
+                prompt_text = _read_text_file(Path(raw).expanduser())
+                if prompt_text is not None:
+                    overrides["XIUXIAN_VISION_OCR_PROMPT"] = prompt_text
+        elif arg.startswith("--expected-substring="):
+            raw = arg.split("=", 1)[1]
+            if raw.strip():
+                overrides["XIUXIAN_VISION_EXPECT_SUBSTRING"] = raw
+        elif arg.startswith("--min-output-chars="):
+            raw = arg.split("=", 1)[1].strip()
+            if raw:
+                overrides["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] = raw
+        elif arg.startswith("--max-new-tokens="):
+            raw = arg.split("=", 1)[1].strip()
+            if raw:
+                overrides["XIUXIAN_VISION_OCR_MAX_NEW_TOKENS"] = raw
+    return overrides, image_path
+
+
+def find_test_binary(requested_device: str, use_release: bool) -> Path | None:
+    """Find the phase runner test binary for CPU or GPU backends."""
     explicit_binary = os.environ.get("XIUXIAN_VISION_TEST_BINARY")
     if explicit_binary:
         candidate = Path(explicit_binary).expanduser()
@@ -238,7 +313,7 @@ def find_test_binary(use_cpu: bool, use_release: bool) -> Path | None:
     if not deps_dir.exists():
         return None
 
-    pattern = CPU_TEST_BINARY_PATTERN if use_cpu else METAL_TEST_BINARY_PATTERN
+    pattern = CPU_TEST_BINARY_PATTERN if requested_device == "cpu" else METAL_TEST_BINARY_PATTERN
     candidates = [
         f
         for f in deps_dir.iterdir()
@@ -305,15 +380,20 @@ def _read_pty_chunk(master_fd: int) -> str:
 
 def main() -> int:
     # Parse arguments
-    use_cpu = False
     use_release = False
     max_rss_gb: float | None = None
     profile_name = os.environ.get("XIUXIAN_VISION_TEST_PROFILE")
     phase = "infer"
+    cli_env_overrides, cli_image_path = _parse_manual_cli_overrides(sys.argv[1:])
+    try:
+        requested_device = resolve_requested_device(sys.argv[1:])
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        return 2
 
     for arg in sys.argv[1:]:
-        if arg == "--cpu":
-            use_cpu = True
+        if arg in {"--cpu", "--cuda"}:
+            continue
         elif arg == "--release":
             use_release = True
         elif arg.startswith("--max-rss="):
@@ -322,15 +402,33 @@ def main() -> int:
             profile_name = arg.split("=", 1)[1].strip() or None
         elif arg.startswith("--phase="):
             phase = arg.split("=", 1)[1].strip().lower()
+        elif (
+            arg.startswith("--image=")
+            or arg.startswith("--ocr-prompt=")
+            or arg.startswith("--ocr-prompt-file=")
+            or arg.startswith("--expected-substring=")
+            or arg.startswith("--min-output-chars=")
+            or arg.startswith("--max-new-tokens=")
+        ):
+            continue
         elif arg in ("-h", "--help"):
             print(
-                f"Usage: {sys.argv[0]} [--cpu] [--release] [--phase=load|prewarm|infer] [--profile=NAME] [--max-rss=GB]"
+                f"Usage: {sys.argv[0]} [--cpu|--cuda] [--release] [--phase=load|prewarm|infer] [--profile=NAME] [--max-rss=GB] [--image=PATH] [--ocr-prompt-file=PATH]"
             )
             print("  --cpu         Force CPU device (avoids Metal GPU memory)")
+            print(
+                "  --cuda        Force CUDA device (reuses Metal-like GPU guard defaults until CUDA-specific guard values are configured)"
+            )
             print("  --release     Use target/release test binaries instead of target/debug")
             print("  --phase=...   Run only load, prewarm, or full infer phase (default: infer)")
             print("  --profile=... Apply a TOML-backed test profile from vision_deepseek.toml")
             print("  --max-rss=GB  Maximum RSS in GB (default: 10 for Metal, 12 for CPU)")
+            print("  --image=...   Override the default OCR smoke image path")
+            print("  --ocr-prompt=... Override OCR prompt directly for a manual probe")
+            print("  --ocr-prompt-file=... Read OCR prompt from a file for a manual probe")
+            print("  --expected-substring=... Override substring assertion for a manual probe")
+            print("  --min-output-chars=... Override minimum output chars for a manual probe")
+            print("  --max-new-tokens=... Override decode budget for a manual probe")
             print()
             print("Uses capfox for capacity check, then monitors memory at runtime.")
             return 0
@@ -347,8 +445,12 @@ def main() -> int:
     if max_rss_gb is None:
         if profile and profile.max_rss_gb is not None:
             max_rss_gb = profile.max_rss_gb
+        elif requested_device == "cpu":
+            max_rss_gb = guard.cpu_max_rss_gb
+        elif requested_device == "cuda":
+            max_rss_gb = guard.cuda_max_rss_gb
         else:
-            max_rss_gb = guard.cpu_max_rss_gb if use_cpu else guard.metal_max_rss_gb
+            max_rss_gb = guard.metal_max_rss_gb
 
     # Adjust for ps RSS (ps RSS is ~5x lower than Activity Monitor)
     max_rss_kb = int(max_rss_gb * 1024 * 1024 / RSS_SCALE_FACTOR)
@@ -360,7 +462,7 @@ def main() -> int:
         print(f"Config profile: {profile_name}")
 
     # Find test binary
-    binary = find_test_binary(use_cpu, use_release)
+    binary = find_test_binary(requested_device, use_release)
     if not binary:
         print("ERROR: Test binary not found.")
         print("Run the matching ignored-test binary first.")
@@ -369,7 +471,7 @@ def main() -> int:
     print(f"Test binary: {binary}")
 
     # Check if test image exists
-    test_image = PROJECT_ROOT / ".run/tmp/ocr-smoke.png"
+    test_image = cli_image_path or (PROJECT_ROOT / ".run/tmp/ocr-smoke.png")
     if phase == "infer" and not test_image.exists():
         print(f"ERROR: Test image not found: {test_image}")
         return 1
@@ -390,15 +492,20 @@ def main() -> int:
     env["RUST_BACKTRACE"] = "1"
     if profile is not None:
         _apply_test_profile(env, profile)
+    for key, value in cli_env_overrides.items():
+        env[key] = value
     env["RUST_LOG"] = os.environ.get(
         "RUST_LOG",
         profile.rust_log if profile and profile.rust_log else "xiuxian_llm=debug,info",
     )
     env["XIUXIAN_VISION_REAL_PHASE"] = phase
 
-    if use_cpu:
+    if requested_device == "cpu":
         env["XIUXIAN_VISION_DEVICE"] = "cpu"
         print("Device: CPU (forced)")
+    elif requested_device == "cuda":
+        env["XIUXIAN_VISION_DEVICE"] = "cuda"
+        print("Device: CUDA (forced)")
     else:
         print("Device: Metal/default")
     if profile is not None and profile.env_overrides:
@@ -406,6 +513,10 @@ def main() -> int:
         for key in sorted(profile.env_overrides):
             resolved = env.get(key, profile.env_overrides[key])
             print(f"  {key}={_format_env_value(resolved)}")
+    if cli_env_overrides:
+        print("Applied CLI overrides:")
+        for key in sorted(cli_env_overrides):
+            print(f"  {key}={_format_env_value(cli_env_overrides[key])}")
     passthrough_env = _selected_passthrough_env(env, profile)
     if passthrough_env:
         print("Applied passthrough env:")
@@ -416,7 +527,12 @@ def main() -> int:
         print("Output transport: PTY")
 
     # Build test command
-    test_name = "test_real_cpu_inference" if use_cpu else "test_real_metal_inference"
+    if requested_device == "cpu":
+        test_name = "test_real_cpu_inference"
+    elif requested_device == "cuda":
+        test_name = "test_real_cuda_inference"
+    else:
+        test_name = "test_real_metal_inference"
     test_cmd = [
         str(binary),
         test_name,
@@ -429,7 +545,7 @@ def main() -> int:
     if capfox:
         print()
         print("=== Phase 1: Capacity Check ===")
-        if use_cpu:
+        if requested_device == "cpu":
             cpu_capfox_mem_percent = (
                 profile.capfox_mem_percent
                 if profile and profile.capfox_mem_percent is not None
@@ -447,32 +563,51 @@ def main() -> int:
                 "true",  # Just check capacity, don't run
             ]
         else:
-            metal_capfox_mem_percent = (
-                profile.capfox_mem_percent
-                if profile and profile.capfox_mem_percent is not None
-                else guard.metal_capfox_mem_percent
-            )
-            metal_capfox_gpu_percent = (
-                profile.capfox_gpu_percent
-                if profile and profile.capfox_gpu_percent is not None
-                else guard.metal_capfox_gpu_percent
-            )
-            metal_capfox_vram_percent = (
-                profile.capfox_vram_percent
-                if profile and profile.capfox_vram_percent is not None
-                else guard.metal_capfox_vram_percent
-            )
+            if requested_device == "cuda":
+                gpu_task = "deepseek_ocr_cuda_test"
+                gpu_capfox_mem_percent = (
+                    profile.capfox_mem_percent
+                    if profile and profile.capfox_mem_percent is not None
+                    else guard.cuda_capfox_mem_percent
+                )
+                gpu_capfox_gpu_percent = (
+                    profile.capfox_gpu_percent
+                    if profile and profile.capfox_gpu_percent is not None
+                    else guard.cuda_capfox_gpu_percent
+                )
+                gpu_capfox_vram_percent = (
+                    profile.capfox_vram_percent
+                    if profile and profile.capfox_vram_percent is not None
+                    else guard.cuda_capfox_vram_percent
+                )
+            else:
+                gpu_task = "deepseek_ocr_metal_test"
+                gpu_capfox_mem_percent = (
+                    profile.capfox_mem_percent
+                    if profile and profile.capfox_mem_percent is not None
+                    else guard.metal_capfox_mem_percent
+                )
+                gpu_capfox_gpu_percent = (
+                    profile.capfox_gpu_percent
+                    if profile and profile.capfox_gpu_percent is not None
+                    else guard.metal_capfox_gpu_percent
+                )
+                gpu_capfox_vram_percent = (
+                    profile.capfox_vram_percent
+                    if profile and profile.capfox_vram_percent is not None
+                    else guard.metal_capfox_vram_percent
+                )
             check_cmd = [
                 str(capfox),
                 "run",
                 "--task",
-                "deepseek_ocr_metal_test",
+                gpu_task,
                 "--gpu",
-                str(metal_capfox_gpu_percent),
+                str(gpu_capfox_gpu_percent),
                 "--vram",
-                str(metal_capfox_vram_percent),
+                str(gpu_capfox_vram_percent),
                 "--mem",
-                str(metal_capfox_mem_percent),
+                str(gpu_capfox_mem_percent),
                 "--reason",
                 "--",
                 "true",

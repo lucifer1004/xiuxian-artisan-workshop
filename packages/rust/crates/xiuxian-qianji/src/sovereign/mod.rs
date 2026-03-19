@@ -29,12 +29,17 @@
 //! that led to Commit-X".
 
 pub mod artifact_observer;
+pub mod contract_feedback_sink;
 pub mod thought_aggregator;
 pub mod wendao_sink;
 
 pub use artifact_observer::{
     ArtifactIngestionResult, ArtifactObserver, ArtifactObserverBuilder, ArtifactObserverConfig,
     NoopWendaoIngestionSink, WendaoIngestionSink,
+};
+pub use contract_feedback_sink::{
+    ContractFeedbackKnowledgeSink, InMemoryContractFeedbackSink,
+    KnowledgeStorageContractFeedbackSink,
 };
 pub use thought_aggregator::{ThoughtAggregator, ToolCallRecord};
 pub use wendao_sink::{

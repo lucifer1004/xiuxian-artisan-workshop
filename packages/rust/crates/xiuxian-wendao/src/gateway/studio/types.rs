@@ -25,6 +25,12 @@ pub struct VfsEntry {
     /// MIME content type guess for files.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_type: Option<String>,
+    /// Project grouping label for multi-root monorepo views.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+    /// Root label under the grouped project node.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_label: Option<String>,
 }
 
 /// Category classification for VFS entries.
@@ -67,6 +73,12 @@ pub struct VfsScanEntry {
     /// Wendao document ID if indexed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wendao_id: Option<String>,
+    /// Project grouping label for multi-root monorepo views.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+    /// Root label under the grouped project node.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_label: Option<String>,
 }
 
 /// Result of a VFS scan operation.
@@ -341,6 +353,74 @@ pub struct SearchResponse {
     pub selected_mode: Option<String>,
 }
 
+/// Attachment category for studio attachment search hits.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum AttachmentSearchKind {
+    /// Image attachment.
+    Image,
+    /// PDF attachment.
+    Pdf,
+    /// GPG/PGP attachment.
+    Gpg,
+    /// Generic document attachment.
+    Document,
+    /// Compressed/archive attachment.
+    Archive,
+    /// Audio attachment.
+    Audio,
+    /// Video attachment.
+    Video,
+    /// Other/unknown attachment type.
+    Other,
+}
+
+/// One attachment search hit projected for studio UI.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentSearchHit {
+    /// Source path projected to studio display path (open target).
+    pub path: String,
+    /// Source note identifier (org-id style owner id).
+    pub source_id: String,
+    /// Source note stem.
+    pub source_stem: String,
+    /// Source note title when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_title: Option<String>,
+    /// Source note path projected to studio display path.
+    pub source_path: String,
+    /// Stable attachment identifier (org-attachment style key).
+    pub attachment_id: String,
+    /// Raw attachment target path extracted from markdown.
+    pub attachment_path: String,
+    /// Attachment filename/basename.
+    pub attachment_name: String,
+    /// Attachment extension (without leading dot).
+    pub attachment_ext: String,
+    /// Attachment kind classification.
+    pub kind: AttachmentSearchKind,
+    /// Search relevance score.
+    pub score: f64,
+    /// Optional vision snippet for multimodal attachments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vision_snippet: Option<String>,
+}
+
+/// Response for studio attachment search queries.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentSearchResponse {
+    /// Original query string.
+    pub query: String,
+    /// Matching attachment hits.
+    pub hits: Vec<AttachmentSearchHit>,
+    /// Total number of hits returned.
+    pub hit_count: usize,
+    /// Selected semantic scope.
+    pub selected_scope: String,
+}
+
 /// A matched AST definition extracted from source code.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -355,6 +435,18 @@ pub struct AstSearchHit {
     pub language: String,
     /// Owning crate or package name.
     pub crate_name: String,
+    /// Configured project name when the source path maps to a studio project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+    /// Configured root label when the source path maps to a project root path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_label: Option<String>,
+    /// Optional AST node kind for richer Markdown search presentation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_kind: Option<String>,
+    /// Optional owning Markdown section title/path for property-box derived hits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_title: Option<String>,
     /// 1-based start line.
     pub line_start: usize,
     /// 1-based end line.
@@ -377,6 +469,26 @@ pub struct AstSearchResponse {
     pub selected_scope: String,
 }
 
+/// Response for native studio definition resolution.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DefinitionResolveResponse {
+    /// Original query string.
+    pub query: String,
+    /// Optional source path used to bias resolution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    /// Optional source line used by the caller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_line: Option<usize>,
+    /// Resolved definition hit.
+    pub definition: AstSearchHit,
+    /// Total number of considered candidates.
+    pub candidate_count: usize,
+    /// Selected semantic scope.
+    pub selected_scope: String,
+}
+
 /// One source-level reference or usage hit for a symbol.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -389,6 +501,12 @@ pub struct ReferenceSearchHit {
     pub language: String,
     /// Owning crate or package name.
     pub crate_name: String,
+    /// Configured project name when the source path maps to a studio project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+    /// Configured root label when the source path maps to a project root path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_label: Option<String>,
     /// 1-based line number for the usage.
     pub line: usize,
     /// 1-based column number of the first match.
@@ -441,6 +559,12 @@ pub struct SymbolSearchHit {
     pub language: String,
     /// Owning crate or package name.
     pub crate_name: String,
+    /// Configured project name when the source path maps to a studio project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+    /// Configured root label when the source path maps to a project root path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_label: Option<String>,
     /// Symbol source domain.
     pub source: SymbolSearchSource,
     /// Search relevance score.
@@ -499,14 +623,166 @@ pub struct AutocompleteResponse {
     pub suggestions: Vec<AutocompleteSuggestion>,
 }
 
+// === Analysis Types ===
+
+/// Structural node classification in the Markdown analysis IR.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum AnalysisNodeKind {
+    /// Document root node.
+    Document,
+    /// Heading/section node.
+    Section,
+    /// Task-list item node.
+    Task,
+    /// Fenced code block node.
+    CodeBlock,
+    /// Wiki-link reference node.
+    Reference,
+}
+
+/// Structural edge classification in the Markdown analysis IR.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalysisEdgeKind {
+    /// Parent-child containment relation.
+    Contains,
+    /// Cross-reference relation from context to referenced target.
+    References,
+    /// Sequential task progression relation.
+    NextStep,
+}
+
+/// Evidence anchor for extracted analysis artifacts.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisEvidence {
+    /// Source path where the artifact was extracted.
+    pub path: String,
+    /// 1-based start line.
+    pub line_start: usize,
+    /// 1-based end line.
+    pub line_end: usize,
+    /// Confidence score in `[0.0, 1.0]`.
+    pub confidence: f64,
+}
+
+/// One node in the Markdown analysis IR.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisNode {
+    /// Stable node identifier.
+    pub id: String,
+    /// Node kind.
+    pub kind: AnalysisNodeKind,
+    /// Display label.
+    pub label: String,
+    /// Structural depth (document root is 0).
+    pub depth: usize,
+    /// 1-based start line.
+    pub line_start: usize,
+    /// 1-based end line.
+    pub line_end: usize,
+    /// Optional parent node id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+}
+
+/// One directed relation in the Markdown analysis IR.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalysisEdge {
+    /// Stable edge identifier.
+    pub id: String,
+    /// Edge kind.
+    pub kind: AnalysisEdgeKind,
+    /// Source node id.
+    pub source_id: String,
+    /// Target node id.
+    pub target_id: String,
+    /// Optional edge label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Evidence details for this edge.
+    pub evidence: AnalysisEvidence,
+}
+
+/// Mermaid projection kind derived from Markdown analysis IR.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum MermaidViewKind {
+    /// Hierarchical outline projection.
+    Mindmap,
+    /// Procedural projection.
+    Flowchart,
+    /// Relation-centric projection.
+    Graph,
+}
+
+/// One Mermaid projection artifact emitted by the analysis kernel.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MermaidProjection {
+    /// Projection kind.
+    pub kind: MermaidViewKind,
+    /// Mermaid source payload.
+    pub source: String,
+    /// Number of nodes represented in this projection.
+    pub node_count: usize,
+    /// Number of edges represented in this projection.
+    pub edge_count: usize,
+    /// Lightweight complexity score for UI heuristics.
+    pub complexity_score: f64,
+    /// Projection-level diagnostics.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<String>,
+}
+
+/// Full Markdown analysis payload for Studio.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkdownAnalysisResponse {
+    /// Source path used for analysis.
+    pub path: String,
+    /// Content hash for cache keying and version checks.
+    pub document_hash: String,
+    /// Total node count in the IR.
+    pub node_count: usize,
+    /// Total edge count in the IR.
+    pub edge_count: usize,
+    /// Extracted IR nodes.
+    pub nodes: Vec<AnalysisNode>,
+    /// Extracted IR edges.
+    pub edges: Vec<AnalysisEdge>,
+    /// Derived Mermaid projections.
+    pub projections: Vec<MermaidProjection>,
+    /// Compiler diagnostics for this analysis run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<String>,
+}
+
 // === UI Config Types ===
+
+/// Project-scoped explorer configuration for the studio frontend.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UiProjectConfig {
+    /// Stable project name shown in the explorer.
+    pub name: String,
+    /// Project root relative to the Wendao project root, or absolute.
+    pub root: String,
+    /// Indexed directories relative to the project root.
+    #[serde(default)]
+    pub dirs: Vec<String>,
+}
 
 /// UI configuration for the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct UiConfig {
-    /// Paths to expand by default in the file tree.
-    pub index_paths: Vec<String>,
+    /// Project-scoped explorer configuration.
+    #[serde(default)]
+    pub projects: Vec<UiProjectConfig>,
 }
 
 // === Error Types ===
@@ -548,6 +824,7 @@ pub fn studio_type_collection() -> TypeCollection {
         .register::<SearchResponse>()
         .register::<AstSearchHit>()
         .register::<AstSearchResponse>()
+        .register::<DefinitionResolveResponse>()
         .register::<ReferenceSearchHit>()
         .register::<ReferenceSearchResponse>()
         .register::<SymbolSearchSource>()
@@ -556,6 +833,15 @@ pub fn studio_type_collection() -> TypeCollection {
         .register::<AutocompleteSuggestionType>()
         .register::<AutocompleteSuggestion>()
         .register::<AutocompleteResponse>()
+        .register::<AnalysisNodeKind>()
+        .register::<AnalysisEdgeKind>()
+        .register::<AnalysisEvidence>()
+        .register::<AnalysisNode>()
+        .register::<AnalysisEdge>()
+        .register::<MermaidViewKind>()
+        .register::<MermaidProjection>()
+        .register::<MarkdownAnalysisResponse>()
+        .register::<UiProjectConfig>()
         .register::<UiConfig>()
         .register::<ApiError>()
 }

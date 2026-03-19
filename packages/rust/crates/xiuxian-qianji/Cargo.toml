@@ -16,6 +16,7 @@ pyo3 = ["dep:pyo3"]
 petgraph = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 toml = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
@@ -37,6 +38,7 @@ xiuxian-zhenfa = { path = "../xiuxian-zhenfa" }
 xiuxian-logging = { path = "../xiuxian-logging" }
 xiuxian-llm = { path = "../xiuxian-llm", optional = true }
 xiuxian-window = { path = "../xiuxian-window" }
+xiuxian-testing = { path = "../xiuxian-testing" }
 pyo3 = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 
@@ -44,7 +46,6 @@ reqwest = { workspace = true, optional = true }
 tempfile = { workspace = true }
 insta = { workspace = true }
 xiuxian-zhixing = { path = "../xiuxian-zhixing" }
-xiuxian-testing = { path = "../xiuxian-testing" }
 
 [lints]
 workspace = true
@@ -73,6 +74,20 @@ required-features = ["llm"]
 name = "llm_multi_tenancy"
 path = "tests/integration/llm_multi_tenancy.rs"
 required-features = ["llm"]
+
+[[test]]
+name = "formal_audit_advisory_llm"
+path = "tests/integration/formal_audit_advisory_llm.rs"
+required-features = ["llm"]
+
+[[test]]
+name = "contract_feedback_pipeline_llm"
+path = "tests/integration/contract_feedback_pipeline_llm.rs"
+required-features = ["llm"]
+
+[[test]]
+name = "contract_feedback_pipeline"
+path = "tests/integration/contract_feedback_pipeline.rs"
 
 # Unit tests for telemetry
 [[test]]

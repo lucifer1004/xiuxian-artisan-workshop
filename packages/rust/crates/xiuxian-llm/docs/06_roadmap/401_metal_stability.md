@@ -776,18 +776,102 @@ Retained follow-up evidence:
 - a retained prompt-aware word-preference follow-up now makes a shorter stronger-quality gate
   practical: the `Telegram` word probe on the same accepted head completes inside the `12 GB`
   budget and returns `Telegram` in about `37s`
+- a retained phrase-level follow-up on the same accepted head also now completes inside the
+  `12 GB` budget: the profile-backed `Telegram OCR` probe finishes in about `59s`, so phrase-level
+  OCR is now part of the retained short-form quality ladder rather than a manual-only experiment
+- a retained line-level follow-up now also passes on top of the same accepted head: the matching
+  manual `managed sidecar health check` probe stays within the `12 GB` budget and returns
+  `Managed sidecar health check.` in about `94s`, and one fresh profile-backed rerun also
+  completed under the same `12 GB` guard in about `162s`
+- a later file-capture rerun for that same profile was denied by `capfox` with `cpu_overload`, so
+  the gate is now retained but still operationally sensitive to ambient workspace load
+- a retained stronger line-level follow-up now also validates under the same accepted head: the
+  direct file-backed rerun for `Managed sidecar health check` completes under the same `12 GB`
+  guard and returns `Managed sidecar health check.` in about `80s`
+- the memory-line gate changed after refreshing the local `target/debug` binary: the profile
+  default (`max_new_tokens=6`) now repeatedly exceeds the same `12 GB` guard before decode
+  completion (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v1.log`,
+  `.run/tmp/downstream_deepseek_metal_memory_line_probe_12g_v4_after_rebuild.log`)
+- narrowing only the decode budget to `max_new_tokens=2` initially yielded two guarded passes
+  under the same `12 GB` cap, both converging to `Memory should` in about `60-61s`
+  (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v1.log`,
+  `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v2.log`)
+- later reruns on the same workspace snapshot failed again under the same guard for both profile
+  default and CLI-override paths
+  (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v2_after_toml.log`,
+  `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v3_after_toml.log`,
+  `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v3.log`)
+- phase-isolation now shows this wall is not decode-only: both `--phase=prewarm` and
+  `--phase=load` exceed the `12 GB` guard on the same accepted head
+  (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_prewarm_v1.log`,
+  `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_load_v1.log`), and the
+  `13 GB` load retry still exceeds guard (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_13g_load_v1.log`)
+- forcing `XIUXIAN_VISION_LAZY_MOE_EXPERTS=1` for `--phase=prewarm` does not recover the `12 GB`
+  target in this snapshot
+  (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_prewarm_lazy_moe_v1.log`)
+- moving from `max_new_tokens=2` to `max_new_tokens=3` reintroduces the old kill point
+  (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens3_v1.log`), so the
+  memory-line branch is currently exploratory-only rather than retained
+- a small retained widening of the prompt-aware first visible-token anchor now also covers
+  punctuation-led phrases such as `2026-03-09-001` and `$128.50`, but the first two structured
+  probes built on top of that widening still fall into the old long low-RSS tail and therefore do
+  not yet qualify as practical gates
+- a fuller amount-line probe starting from the stable alphabetic prefix `Amount:` also now has
+  evidence: it stays inside the `12 GB` guard, but settles into a long `~9 GB` plateau for more
+  than `170s` without converging to a useful OCR result, so alphabetic prefixing alone is not yet
+  enough to promote structured amount fields
+- a line-level follow-up for `Hello from Telegram OCR.` also stays inside the `12 GB` guard, but
+  after the first decode burst it drops into a long low-RSS tail around `1.54 GB` for more than
+  `100s`, so it does not qualify as the next retained sentence gate
+- the title-line candidate `Omni OCR smoke test` now has a clean guarded run:
+  `.run/tmp/downstream_deepseek_metal_title_line_probe_12g_v2.log` passed `capfox` and stayed
+  within the `12 GB` guard, but settled into the same long low-RSS tail around `1.67 GB` for more
+  than `100s`, so it remains exploratory-only rather than the next retained gate
 - two shorter month-value probes on the same accepted head also stayed within the `12 GB` budget,
   but neither completed within a practical smoke window; enabling decode cache did not make that
   probe fast enough to promote
 - the remaining rejected short-field follow-up is invoice suffix `001`; it also stayed within the
   `12 GB` budget after the initial spike but settled into the same long low-RSS tail and was
   manually stopped without a useful OCR result
+- the shared guarded runner is now GPU-backend aware rather than Metal-only at the execution
+  surface: it accepts `--cuda`, exposes a matching `test_real_cuda_inference` entry point, and
+  can consume optional CUDA guard values while falling back to the existing Metal-style GPU guard
+  defaults if no CUDA-specific guard config is present
+- this is still readiness rather than retained evidence; the current workspace snapshot has no
+  local CUDA hardware proof, so all retained quality gates remain Metal-backed
 
 Evidence:
 
 - `.run/tmp/downstream_deepseek_metal_metal_fast_profile_shared_native_infer_13g_ephemeral_emptytrace_v2.log`
 - `.run/tmp/downstream_deepseek_metal_first_visible_infer_13g_emptytrace_v1.log`
 - `.run/tmp/downstream_deepseek_metal_first_visible_eos_deferred_infer_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_telegram_phrase_profile_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_telegram_phrase_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_sidecar_line_profile_12g_v1.observed.log`
+- `.run/tmp/downstream_deepseek_metal_sidecar_line_profile_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_sidecar_line_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v2.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_12g_v3.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_probe_12g_v4_after_rebuild.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v2.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v3.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens3_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v2_after_toml.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v3_after_toml.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_prewarm_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_prewarm_lazy_moe_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_load_v1.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_13g_load_v1.log`
+- `.run/tmp/downstream_deepseek_metal_omni_line_probe_12g_v3.log`
+- `.run/tmp/downstream_deepseek_metal_year_word_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_invoice_number_probe_12g_v3.log`
+- `.run/tmp/downstream_deepseek_metal_amount_line_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_hello_line_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_title_line_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_title_line_probe_12g_v2.log`
 - `.run/tmp/downstream_deepseek_metal_first_visible_eos_deferred_infer_13g_emptytrace_v1.log`
 - `.run/tmp/downstream_deepseek_metal_first_visible_eos_deferred_infer_12g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_digit_first_canonical_12g_v5.log`
@@ -799,6 +883,15 @@ Evidence:
 - `.run/tmp/downstream_deepseek_metal_month_value_probe_12g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_month_value_cache_probe_12g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_invoice_suffix_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_accepted_head_load_15g_stage_trace_v1.log`
+- `.run/tmp/downstream_deepseek_metal_accepted_head_infer_13g_stage_trace_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_short_prompt_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_short_prompt_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_year_token_short_prompt_15g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_day_token_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_day_token_probe_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_day_token_probe_15g_v1.log`
 
 ## Exit Criterion
 
@@ -812,5 +905,20 @@ This roadmap item is complete only when the guarded Metal DeepSeek OCR smoke pat
 Current status:
 
 - satisfied for the current canonical smoke profile
-- the next bounded step should strengthen OCR-quality coverage with a shorter practical gate, not
+- the retained quality ladder now includes `0`, `Telegram`, `Telegram OCR`,
+  `sidecar health check`, and `Managed sidecar health check`
+- a fresh canonical accepted-head guarded refresh now also passes with PTY stage tracing at both
+  widened diagnostics: `--phase=load --max-rss=15` and `--phase=infer --max-rss=13`
+- in that refresh, load reaches `deepseek.language.weights_ready` with observed peak RSS around
+  `9.10 GB`, and infer reaches `xiuxian.decode.started` plus
+  `ocr_engine.decode.generate.completed` with observed peak RSS around `10.88 GB`
+- the memory-line branch remains exploratory-only in the latest reruns; it is not currently part
+  of the retained ladder
+- a fresh structured year-token exploratory branch is also not retained yet: `12 GB` and `13 GB`
+  guarded runs both hit fast guard kills (`12.25 GB`, `13.39 GB`), and a widened `15 GB` run
+  entered a long low-RSS tail (`~2.20 GB`) without converging before manual stop
+- a fresh compact day-token exploratory branch (`09`) is also not retained yet: `12 GB` and `13 GB`
+  guarded runs hit fast guard kills (`12.27 GB`, `13.11 GB`), and a widened `15 GB` retry enters
+  the same long low-RSS tail (`~2.94 GB`) without in-log completion before manual stop
+- the next bounded step should move from these short-form gates to a compact structured field, not
   revisit Metal memory surgery

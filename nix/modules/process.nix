@@ -11,7 +11,7 @@ in
   process.manager.implementation = "process-compose";
   processes = {
     valkey = {
-      exec = "valkey-server";
+      exec = "valkey-server .config/xiuxian-artisan-workshop/valkey.conf";
       process-compose = {
         readiness_probe = {
           exec.command = "valkey-cli ping";
