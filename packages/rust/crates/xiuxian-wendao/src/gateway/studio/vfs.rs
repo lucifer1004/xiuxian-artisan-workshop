@@ -375,7 +375,8 @@ pub(crate) fn resolve_navigation_target(
         .find(|candidate| !has_semantic_prefix(candidate.as_str()))
         .cloned()
         .unwrap_or_else(|| requested_path.trim().replace('\\', "/"));
-    let (project_name, root_label) = navigation_target_project_metadata(state, fallback_path.as_str());
+    let (project_name, root_label) =
+        navigation_target_project_metadata(state, fallback_path.as_str());
 
     super::types::StudioNavigationTarget {
         path: fallback_path.clone(),
