@@ -445,6 +445,15 @@ async fn search_ast_returns_payload() {
                     "rootLabel": hit.root_label,
                     "nodeKind": hit.node_kind,
                     "ownerTitle": hit.owner_title,
+                    "navigationTarget": {
+                        "path": hit.navigation_target.path,
+                        "category": hit.navigation_target.category,
+                        "projectName": hit.navigation_target.project_name,
+                        "rootLabel": hit.navigation_target.root_label,
+                        "line": hit.navigation_target.line,
+                        "lineEnd": hit.navigation_target.line_end,
+                        "column": hit.navigation_target.column,
+                    },
                     "lineStart": hit.line_start,
                     "lineEnd": hit.line_end,
                     "score": round_f64(hit.score),
@@ -498,6 +507,15 @@ async fn search_ast_includes_markdown_outline_hits() {
                     "rootLabel": hit.root_label,
                     "nodeKind": hit.node_kind,
                     "ownerTitle": hit.owner_title,
+                    "navigationTarget": {
+                        "path": hit.navigation_target.path,
+                        "category": hit.navigation_target.category,
+                        "projectName": hit.navigation_target.project_name,
+                        "rootLabel": hit.navigation_target.root_label,
+                        "line": hit.navigation_target.line,
+                        "lineEnd": hit.navigation_target.line_end,
+                        "column": hit.navigation_target.column,
+                    },
                     "lineStart": hit.line_start,
                     "lineEnd": hit.line_end,
                     "score": round_f64(hit.score),
@@ -551,6 +569,15 @@ async fn search_ast_includes_markdown_property_drawer_hits() {
                     "rootLabel": hit.root_label,
                     "nodeKind": hit.node_kind,
                     "ownerTitle": hit.owner_title,
+                    "navigationTarget": {
+                        "path": hit.navigation_target.path,
+                        "category": hit.navigation_target.category,
+                        "projectName": hit.navigation_target.project_name,
+                        "rootLabel": hit.navigation_target.root_label,
+                        "line": hit.navigation_target.line,
+                        "lineEnd": hit.navigation_target.line_end,
+                        "column": hit.navigation_target.column,
+                    },
                     "lineStart": hit.line_start,
                     "lineEnd": hit.line_end,
                     "score": round_f64(hit.score),
@@ -621,6 +648,15 @@ async fn search_definition_returns_best_payload() {
             "sourceLine": response.0.source_line,
             "candidateCount": response.0.candidate_count,
             "selectedScope": response.0.selected_scope,
+            "navigationTarget": {
+                "path": response.0.navigation_target.path,
+                "category": response.0.navigation_target.category,
+                "projectName": response.0.navigation_target.project_name,
+                "rootLabel": response.0.navigation_target.root_label,
+                "line": response.0.navigation_target.line,
+                "lineEnd": response.0.navigation_target.line_end,
+                "column": response.0.navigation_target.column,
+            },
             "definition": {
                 "name": response.0.definition.name,
                 "signature": response.0.definition.signature,
@@ -678,6 +714,70 @@ async fn search_definition_accepts_absolute_source_paths() {
     assert_eq!(
         response.0.definition.path,
         "packages/rust/crates/demo/src/service.rs"
+    );
+}
+
+#[tokio::test]
+async fn search_definition_uses_markdown_observe_hints() {
+    let fixture = make_state_with_docs(vec![
+        (
+            "packages/notes/index.md",
+            "# Index\n\n:PROPERTIES:\n:OBSERVE: lang:python scope:\"packages/python/demo/**\" \"AlphaService\"\n:END:\n",
+        ),
+        (
+            "packages/rust/crates/demo/src/service.rs",
+            "pub struct AlphaService;\n",
+        ),
+        (
+            "packages/python/demo/service.py",
+            "class AlphaService:\n    pass\n",
+        ),
+    ]);
+
+    let result = search_definition(
+        Query(DefinitionResolveQuery {
+            q: Some("AlphaService".to_string()),
+            path: Some("packages/notes/index.md".to_string()),
+            line: Some(4),
+        }),
+        State(Arc::clone(&fixture.state)),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected markdown-observe definition resolve request to succeed");
+    };
+
+    assert_studio_json_snapshot(
+        "search_definition_markdown_observe_hint_payload",
+        json!({
+            "query": response.0.query,
+            "sourcePath": response.0.source_path,
+            "sourceLine": response.0.source_line,
+            "candidateCount": response.0.candidate_count,
+            "selectedScope": response.0.selected_scope,
+            "navigationTarget": {
+                "path": response.0.navigation_target.path,
+                "category": response.0.navigation_target.category,
+                "projectName": response.0.navigation_target.project_name,
+                "rootLabel": response.0.navigation_target.root_label,
+                "line": response.0.navigation_target.line,
+                "lineEnd": response.0.navigation_target.line_end,
+                "column": response.0.navigation_target.column,
+            },
+            "definition": {
+                "name": response.0.definition.name,
+                "signature": response.0.definition.signature,
+                "path": response.0.definition.path,
+                "language": response.0.definition.language,
+                "crateName": response.0.definition.crate_name,
+                "projectName": response.0.definition.project_name,
+                "rootLabel": response.0.definition.root_label,
+                "lineStart": response.0.definition.line_start,
+                "lineEnd": response.0.definition.line_end,
+                "score": round_f64(response.0.definition.score),
+            },
+        }),
     );
 }
 
@@ -742,6 +842,15 @@ async fn search_references_returns_payload() {
                     "crateName": hit.crate_name,
                     "projectName": hit.project_name,
                     "rootLabel": hit.root_label,
+                    "navigationTarget": {
+                        "path": hit.navigation_target.path,
+                        "category": hit.navigation_target.category,
+                        "projectName": hit.navigation_target.project_name,
+                        "rootLabel": hit.navigation_target.root_label,
+                        "line": hit.navigation_target.line,
+                        "lineEnd": hit.navigation_target.line_end,
+                        "column": hit.navigation_target.column,
+                    },
                     "line": hit.line,
                     "column": hit.column,
                     "lineText": hit.line_text,
@@ -820,6 +929,15 @@ async fn search_symbols_returns_payload() {
                     "crateName": hit.crate_name,
                     "projectName": hit.project_name,
                     "rootLabel": hit.root_label,
+                    "navigationTarget": {
+                        "path": hit.navigation_target.path,
+                        "category": hit.navigation_target.category,
+                        "projectName": hit.navigation_target.project_name,
+                        "rootLabel": hit.navigation_target.root_label,
+                        "line": hit.navigation_target.line,
+                        "lineEnd": hit.navigation_target.line_end,
+                        "column": hit.navigation_target.column,
+                    },
                     "source": hit.source,
                     "score": round_f64(hit.score),
                 })
@@ -845,10 +963,7 @@ async fn search_symbols_respects_glob_dir_filters() {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
             root: ".".to_string(),
-            dirs: vec![
-                "packages".to_string(),
-                "packages/alpha/**/*.rs".to_string(),
-            ],
+            dirs: vec!["packages".to_string(), "packages/alpha/**/*.rs".to_string()],
         }],
     });
 

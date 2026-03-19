@@ -5,9 +5,9 @@ use crate::gateway::studio::pathing;
 use crate::gateway::studio::types::UiProjectConfig;
 
 #[derive(Debug, Clone, Default)]
-pub(super) struct SearchProjectMetadata {
-    pub(super) project_name: Option<String>,
-    pub(super) root_label: Option<String>,
+pub(crate) struct SearchProjectMetadata {
+    pub(crate) project_name: Option<String>,
+    pub(crate) root_label: Option<String>,
 }
 
 pub(super) fn normalize_path(path: &Path) -> String {
@@ -68,7 +68,7 @@ pub(super) fn index_path_for_entry(project_root: &Path, path: &Path) -> String {
         .map_or_else(|_| normalize_path(path), normalize_path)
 }
 
-pub(super) fn project_metadata_for_path(
+pub(crate) fn project_metadata_for_path(
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],

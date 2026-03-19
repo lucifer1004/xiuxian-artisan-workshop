@@ -16,6 +16,15 @@ expression: value
     "score": 1.15,
     "signature": "pub struct AlphaService {"
   },
+  "navigationTarget": {
+    "category": "doc",
+    "column": null,
+    "line": 1,
+    "lineEnd": 3,
+    "path": "packages/rust/crates/demo/src/service.rs",
+    "projectName": "kernel",
+    "rootLabel": "packages"
+  },
   "query": "AlphaService",
   "selectedScope": "definition",
   "sourceLine": 2,

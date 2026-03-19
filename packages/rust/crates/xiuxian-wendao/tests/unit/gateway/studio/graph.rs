@@ -77,6 +77,270 @@ fn push_ui_config_from_toml(fixture: &GraphFixture, toml_content: &str) {
     fixture.state.studio.set_ui_config(UiConfig { projects });
 }
 
+fn sorted_graph_nodes_payload(nodes: Vec<GraphNode>) -> Vec<serde_json::Value> {
+    let mut payload = nodes
+        .into_iter()
+        .map(|node| {
+            json!({
+                "id": node.id,
+                "label": node.label,
+                "path": node.path,
+                "navigationTarget": node.navigation_target,
+                "nodeType": node.node_type,
+                "isCenter": node.is_center,
+                "distance": node.distance,
+            })
+        })
+        .collect::<Vec<_>>();
+    payload.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+    payload
+}
+
+fn sorted_graph_links_payload(links: Vec<GraphLink>) -> Vec<serde_json::Value> {
+    let mut payload = links
+        .into_iter()
+        .map(|link| {
+            json!({
+                "source": link.source,
+                "target": link.target,
+                "direction": link.direction,
+                "distance": link.distance,
+            })
+        })
+        .collect::<Vec<_>>();
+    payload.sort_by(|left, right| {
+        left["source"]
+            .as_str()
+            .cmp(&right["source"].as_str())
+            .then_with(|| left["target"].as_str().cmp(&right["target"].as_str()))
+    });
+    payload
+}
+
+fn markdown_analysis_response_with_section_graph()
+-> crate::gateway::studio::types::MarkdownAnalysisResponse {
+    use crate::gateway::studio::types::MarkdownAnalysisResponse;
+
+    MarkdownAnalysisResponse {
+        path: "main/docs/index.md".to_string(),
+        document_hash: "doc-hash".to_string(),
+        node_count: 6,
+        edge_count: 5,
+        nodes: markdown_analysis_section_nodes(),
+        edges: markdown_analysis_section_edges(),
+        projections: Vec::new(),
+        diagnostics: Vec::new(),
+    }
+}
+
+fn markdown_analysis_section_nodes() -> Vec<crate::gateway::studio::types::AnalysisNode> {
+    use crate::gateway::studio::types::{AnalysisNode, AnalysisNodeKind};
+
+    vec![
+        AnalysisNode {
+            id: "main/docs/index.md#document".to_string(),
+            kind: AnalysisNodeKind::Document,
+            label: "index.md".to_string(),
+            depth: 0,
+            line_start: 1,
+            line_end: 20,
+            parent_id: None,
+        },
+        AnalysisNode {
+            id: "main/docs/index.md#section:overview".to_string(),
+            kind: AnalysisNodeKind::Section,
+            label: "Overview".to_string(),
+            depth: 1,
+            line_start: 3,
+            line_end: 12,
+            parent_id: Some("main/docs/index.md#document".to_string()),
+        },
+        AnalysisNode {
+            id: "main/docs/index.md#task:1".to_string(),
+            kind: AnalysisNodeKind::Task,
+            label: "Finish gateway fallback".to_string(),
+            depth: 2,
+            line_start: 8,
+            line_end: 8,
+            parent_id: Some("main/docs/index.md#section:overview".to_string()),
+        },
+        AnalysisNode {
+            id: "main/docs/index.md#prop:id".to_string(),
+            kind: AnalysisNodeKind::Property,
+            label: ":ID: GraphProtocol".to_string(),
+            depth: 2,
+            line_start: 4,
+            line_end: 4,
+            parent_id: Some("main/docs/index.md#section:overview".to_string()),
+        },
+        AnalysisNode {
+            id: "main/docs/index.md#observe:1".to_string(),
+            kind: AnalysisNodeKind::Observation,
+            label: ":OBSERVE: lang:rust \"fn compile() { $$$ }\"".to_string(),
+            depth: 2,
+            line_start: 5,
+            line_end: 5,
+            parent_id: Some("main/docs/index.md#section:overview".to_string()),
+        },
+        AnalysisNode {
+            id: "main/docs/index.md#symbol:compile".to_string(),
+            kind: AnalysisNodeKind::Symbol,
+            label: "compile".to_string(),
+            depth: 3,
+            line_start: 5,
+            line_end: 5,
+            parent_id: Some("main/docs/index.md#observe:1".to_string()),
+        },
+    ]
+}
+
+fn markdown_analysis_section_edges() -> Vec<crate::gateway::studio::types::AnalysisEdge> {
+    use crate::gateway::studio::types::{AnalysisEdge, AnalysisEdgeKind, AnalysisEvidence};
+
+    vec![
+        AnalysisEdge {
+            id: "e1".to_string(),
+            kind: AnalysisEdgeKind::Contains,
+            source_id: "main/docs/index.md#document".to_string(),
+            target_id: "main/docs/index.md#section:overview".to_string(),
+            label: Some("contains".to_string()),
+            evidence: AnalysisEvidence {
+                path: "main/docs/index.md".to_string(),
+                line_start: 3,
+                line_end: 12,
+                confidence: 1.0,
+            },
+        },
+        AnalysisEdge {
+            id: "e2".to_string(),
+            kind: AnalysisEdgeKind::Contains,
+            source_id: "main/docs/index.md#section:overview".to_string(),
+            target_id: "main/docs/index.md#prop:id".to_string(),
+            label: Some("contains".to_string()),
+            evidence: AnalysisEvidence {
+                path: "main/docs/index.md".to_string(),
+                line_start: 4,
+                line_end: 4,
+                confidence: 1.0,
+            },
+        },
+        AnalysisEdge {
+            id: "e3".to_string(),
+            kind: AnalysisEdgeKind::Contains,
+            source_id: "main/docs/index.md#section:overview".to_string(),
+            target_id: "main/docs/index.md#observe:1".to_string(),
+            label: Some("contains".to_string()),
+            evidence: AnalysisEvidence {
+                path: "main/docs/index.md".to_string(),
+                line_start: 5,
+                line_end: 5,
+                confidence: 1.0,
+            },
+        },
+        AnalysisEdge {
+            id: "e4".to_string(),
+            kind: AnalysisEdgeKind::NextStep,
+            source_id: "main/docs/index.md#section:overview".to_string(),
+            target_id: "main/docs/index.md#task:1".to_string(),
+            label: Some("next".to_string()),
+            evidence: AnalysisEvidence {
+                path: "main/docs/index.md".to_string(),
+                line_start: 8,
+                line_end: 8,
+                confidence: 0.9,
+            },
+        },
+        AnalysisEdge {
+            id: "e5".to_string(),
+            kind: AnalysisEdgeKind::References,
+            source_id: "main/docs/index.md#observe:1".to_string(),
+            target_id: "main/docs/index.md#symbol:compile".to_string(),
+            label: Some("compile".to_string()),
+            evidence: AnalysisEvidence {
+                path: "main/docs/index.md".to_string(),
+                line_start: 5,
+                line_end: 5,
+                confidence: 0.95,
+            },
+        },
+    ]
+}
+
+fn markdown_analysis_response_for_symbol(
+    observe_label: &str,
+) -> crate::gateway::studio::types::MarkdownAnalysisResponse {
+    use crate::gateway::studio::types::{
+        AnalysisEdge, AnalysisEdgeKind, AnalysisEvidence, AnalysisNode, AnalysisNodeKind,
+        MarkdownAnalysisResponse,
+    };
+
+    MarkdownAnalysisResponse {
+        path: "docs/index.md".to_string(),
+        document_hash: "doc-hash".to_string(),
+        node_count: 3,
+        edge_count: 2,
+        nodes: vec![
+            AnalysisNode {
+                id: "docs/index.md#document".to_string(),
+                kind: AnalysisNodeKind::Document,
+                label: "index.md".to_string(),
+                depth: 0,
+                line_start: 1,
+                line_end: 3,
+                parent_id: None,
+            },
+            AnalysisNode {
+                id: "docs/index.md#observe:3:observe".to_string(),
+                kind: AnalysisNodeKind::Observation,
+                label: observe_label.to_string(),
+                depth: 1,
+                line_start: 3,
+                line_end: 3,
+                parent_id: Some("docs/index.md#document".to_string()),
+            },
+            AnalysisNode {
+                id: "docs/index.md#symbol:alphaservice".to_string(),
+                kind: AnalysisNodeKind::Symbol,
+                label: "AlphaService".to_string(),
+                depth: 2,
+                line_start: 3,
+                line_end: 3,
+                parent_id: Some("docs/index.md#observe:3:observe".to_string()),
+            },
+        ],
+        edges: vec![
+            AnalysisEdge {
+                id: "e1".to_string(),
+                kind: AnalysisEdgeKind::Contains,
+                source_id: "docs/index.md#document".to_string(),
+                target_id: "docs/index.md#observe:3:observe".to_string(),
+                label: Some("contains".to_string()),
+                evidence: AnalysisEvidence {
+                    path: "docs/index.md".to_string(),
+                    line_start: 3,
+                    line_end: 3,
+                    confidence: 1.0,
+                },
+            },
+            AnalysisEdge {
+                id: "e2".to_string(),
+                kind: AnalysisEdgeKind::References,
+                source_id: "docs/index.md#observe:3:observe".to_string(),
+                target_id: "docs/index.md#symbol:alphaservice".to_string(),
+                label: Some("AlphaService".to_string()),
+                evidence: AnalysisEvidence {
+                    path: "docs/index.md".to_string(),
+                    line_start: 3,
+                    line_end: 3,
+                    confidence: 1.0,
+                },
+            },
+        ],
+        projections: Vec::new(),
+        diagnostics: Vec::new(),
+    }
+}
+
 #[tokio::test]
 async fn node_neighbors_returns_live_neighbors() {
     let fixture = make_graph_fixture(vec![
@@ -173,6 +437,7 @@ dirs = ["."]
                 "id": response.center.id,
                 "label": response.center.label,
                 "path": response.center.path,
+                "navigationTarget": response.center.navigation_target,
                 "nodeType": response.center.node_type,
                 "isCenter": response.center.is_center,
                 "distance": response.center.distance,
@@ -187,108 +452,11 @@ dirs = ["."]
 
 #[test]
 fn graph_neighbors_from_markdown_analysis_returns_graph_payload() {
-    let response = graph_neighbors_from_markdown_analysis(
-        &crate::gateway::studio::types::MarkdownAnalysisResponse {
-            path: "main/docs/index.md".to_string(),
-            document_hash: "doc-hash".to_string(),
-            node_count: 3,
-            edge_count: 2,
-            nodes: vec![
-                crate::gateway::studio::types::AnalysisNode {
-                    id: "main/docs/index.md#document".to_string(),
-                    kind: crate::gateway::studio::types::AnalysisNodeKind::Document,
-                    label: "index.md".to_string(),
-                    depth: 0,
-                    line_start: 1,
-                    line_end: 20,
-                    parent_id: None,
-                },
-                crate::gateway::studio::types::AnalysisNode {
-                    id: "main/docs/index.md#section:overview".to_string(),
-                    kind: crate::gateway::studio::types::AnalysisNodeKind::Section,
-                    label: "Overview".to_string(),
-                    depth: 1,
-                    line_start: 3,
-                    line_end: 12,
-                    parent_id: Some("main/docs/index.md#document".to_string()),
-                },
-                crate::gateway::studio::types::AnalysisNode {
-                    id: "main/docs/index.md#task:1".to_string(),
-                    kind: crate::gateway::studio::types::AnalysisNodeKind::Task,
-                    label: "Finish gateway fallback".to_string(),
-                    depth: 2,
-                    line_start: 8,
-                    line_end: 8,
-                    parent_id: Some("main/docs/index.md#section:overview".to_string()),
-                },
-            ],
-            edges: vec![
-                crate::gateway::studio::types::AnalysisEdge {
-                    id: "e1".to_string(),
-                    kind: crate::gateway::studio::types::AnalysisEdgeKind::Contains,
-                    source_id: "main/docs/index.md#document".to_string(),
-                    target_id: "main/docs/index.md#section:overview".to_string(),
-                    label: Some("contains".to_string()),
-                    evidence: crate::gateway::studio::types::AnalysisEvidence {
-                        path: "main/docs/index.md".to_string(),
-                        line_start: 3,
-                        line_end: 12,
-                        confidence: 1.0,
-                    },
-                },
-                crate::gateway::studio::types::AnalysisEdge {
-                    id: "e2".to_string(),
-                    kind: crate::gateway::studio::types::AnalysisEdgeKind::NextStep,
-                    source_id: "main/docs/index.md#section:overview".to_string(),
-                    target_id: "main/docs/index.md#task:1".to_string(),
-                    label: Some("next".to_string()),
-                    evidence: crate::gateway::studio::types::AnalysisEvidence {
-                        path: "main/docs/index.md".to_string(),
-                        line_start: 8,
-                        line_end: 8,
-                        confidence: 0.9,
-                    },
-                },
-            ],
-            projections: Vec::new(),
-            diagnostics: Vec::new(),
-        },
-    );
+    let analysis = markdown_analysis_response_with_section_graph();
+    let response = graph_neighbors_from_markdown_analysis(&analysis);
 
-    let mut nodes = response
-        .nodes
-        .into_iter()
-        .map(|node| {
-            json!({
-                "id": node.id,
-                "label": node.label,
-                "path": node.path,
-                "nodeType": node.node_type,
-                "isCenter": node.is_center,
-                "distance": node.distance,
-            })
-        })
-        .collect::<Vec<_>>();
-    nodes.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
-
-    let mut links = response
-        .links
-        .into_iter()
-        .map(|link| {
-            json!({
-                "source": link.source,
-                "target": link.target,
-                "direction": link.direction,
-                "distance": link.distance,
-            })
-        })
-        .collect::<Vec<_>>();
-    links.sort_by(|left, right| {
-        left["source"]
-            .as_str()
-            .cmp(&right["source"].as_str())
-            .then_with(|| left["target"].as_str().cmp(&right["target"].as_str()))
-    });
+    let nodes = sorted_graph_nodes_payload(response.nodes);
+    let links = sorted_graph_links_payload(response.links);
 
     assert_studio_json_snapshot(
         "graph_neighbors_markdown_analysis_payload",
@@ -306,6 +474,199 @@ fn graph_neighbors_from_markdown_analysis_returns_graph_payload() {
             "totalNodes": response.total_nodes,
             "totalLinks": response.total_links,
         }),
+    );
+}
+
+#[tokio::test]
+async fn graph_neighbors_markdown_symbol_uses_shared_definition_resolution() {
+    let fixture = make_graph_fixture(vec![
+        (
+            "docs/index.md",
+            "# Index\n\nObserve `AlphaService` from the runtime notes.\n",
+        ),
+        (
+            "packages/rust/crates/demo/src/service.rs",
+            "pub struct AlphaService;\n",
+        ),
+        (
+            "packages/rust/crates/other/src/service.rs",
+            "pub struct AlphaService;\n",
+        ),
+    ]);
+    push_ui_config_from_toml(
+        &fixture,
+        r#"
+[link_graph.projects.kernel]
+root = "."
+dirs = ["docs", "packages"]
+"#,
+    );
+
+    let mut response = graph_neighbors_from_markdown_analysis(
+        &crate::gateway::studio::types::MarkdownAnalysisResponse {
+            path: "docs/index.md".to_string(),
+            document_hash: "doc-hash".to_string(),
+            node_count: 3,
+            edge_count: 2,
+            nodes: vec![
+                crate::gateway::studio::types::AnalysisNode {
+                    id: "docs/index.md#document".to_string(),
+                    kind: crate::gateway::studio::types::AnalysisNodeKind::Document,
+                    label: "index.md".to_string(),
+                    depth: 0,
+                    line_start: 1,
+                    line_end: 3,
+                    parent_id: None,
+                },
+                crate::gateway::studio::types::AnalysisNode {
+                    id: "docs/index.md#observe:3:observe".to_string(),
+                    kind: crate::gateway::studio::types::AnalysisNodeKind::Observation,
+                    label:
+                        ":OBSERVE: lang:rust scope:\"packages/rust/crates/other/**\" \"AlphaService\""
+                            .to_string(),
+                    depth: 1,
+                    line_start: 3,
+                    line_end: 3,
+                    parent_id: Some("docs/index.md#document".to_string()),
+                },
+                crate::gateway::studio::types::AnalysisNode {
+                    id: "docs/index.md#symbol:alphaservice".to_string(),
+                    kind: crate::gateway::studio::types::AnalysisNodeKind::Symbol,
+                    label: "AlphaService".to_string(),
+                    depth: 2,
+                    line_start: 3,
+                    line_end: 3,
+                    parent_id: Some("docs/index.md#observe:3:observe".to_string()),
+                },
+            ],
+            edges: vec![
+                crate::gateway::studio::types::AnalysisEdge {
+                    id: "e1".to_string(),
+                    kind: crate::gateway::studio::types::AnalysisEdgeKind::Contains,
+                    source_id: "docs/index.md#document".to_string(),
+                    target_id: "docs/index.md#observe:3:observe".to_string(),
+                    label: Some("contains".to_string()),
+                    evidence: crate::gateway::studio::types::AnalysisEvidence {
+                        path: "docs/index.md".to_string(),
+                        line_start: 3,
+                        line_end: 3,
+                        confidence: 1.0,
+                    },
+                },
+                crate::gateway::studio::types::AnalysisEdge {
+                    id: "e2".to_string(),
+                    kind: crate::gateway::studio::types::AnalysisEdgeKind::References,
+                    source_id: "docs/index.md#observe:3:observe".to_string(),
+                    target_id: "docs/index.md#symbol:alphaservice".to_string(),
+                    label: Some("AlphaService".to_string()),
+                    evidence: crate::gateway::studio::types::AnalysisEvidence {
+                        path: "docs/index.md".to_string(),
+                        line_start: 3,
+                        line_end: 3,
+                        confidence: 1.0,
+                    },
+                },
+            ],
+            projections: Vec::new(),
+            diagnostics: Vec::new(),
+        },
+    );
+    let result = decorate_markdown_graph_navigation(fixture.state.as_ref(), &mut response).await;
+    let Ok(()) = result else {
+        panic!("expected markdown graph navigation decoration to succeed");
+    };
+
+    let Some(symbol_node) = response
+        .nodes
+        .iter()
+        .find(|node| node.label == "AlphaService" && node.id.contains("symbol:"))
+    else {
+        panic!("expected markdown graph payload to include observation symbol node");
+    };
+
+    assert_eq!(
+        symbol_node
+            .navigation_target
+            .as_ref()
+            .map(|target| target.path.as_str()),
+        Some("packages/rust/crates/other/src/service.rs")
+    );
+    assert_eq!(
+        symbol_node
+            .navigation_target
+            .as_ref()
+            .and_then(|target| target.line),
+        Some(1)
+    );
+    assert_eq!(
+        symbol_node
+            .navigation_target
+            .as_ref()
+            .and_then(|target| target.column),
+        Some(1)
+    );
+}
+
+#[tokio::test]
+async fn graph_neighbors_markdown_symbol_prefers_observe_language_hint() {
+    let fixture = make_graph_fixture(vec![
+        (
+            "docs/index.md",
+            "# Index\n\nObserve `AlphaService` from the runtime notes.\n",
+        ),
+        (
+            "packages/rust/crates/demo/src/service.rs",
+            "pub struct AlphaService;\n",
+        ),
+        (
+            "packages/python/demo/service.py",
+            "class AlphaService:\n    pass\n",
+        ),
+    ]);
+    push_ui_config_from_toml(
+        &fixture,
+        r#"
+[link_graph.projects.kernel]
+root = "."
+dirs = ["docs", "packages"]
+"#,
+    );
+
+    let analysis = markdown_analysis_response_for_symbol(":OBSERVE: lang:python \"AlphaService\"");
+    let mut response = graph_neighbors_from_markdown_analysis(&analysis);
+    let result = decorate_markdown_graph_navigation(fixture.state.as_ref(), &mut response).await;
+    let Ok(()) = result else {
+        panic!("expected markdown graph navigation decoration to succeed");
+    };
+
+    let Some(symbol_node) = response
+        .nodes
+        .iter()
+        .find(|node| node.label == "AlphaService" && node.id.contains("symbol:"))
+    else {
+        panic!("expected markdown graph payload to include observation symbol node");
+    };
+
+    assert_eq!(
+        symbol_node
+            .navigation_target
+            .as_ref()
+            .map(|target| target.path.as_str()),
+        Some("packages/python/demo/service.py")
+    );
+    assert_eq!(
+        symbol_node
+            .navigation_target
+            .as_ref()
+            .and_then(|target| target.line),
+        Some(1)
+    );
+    assert_eq!(
+        symbol_node
+            .navigation_target
+            .as_ref()
+            .and_then(|target| target.column),
+        Some(1)
     );
 }
 
@@ -423,8 +784,14 @@ dirs = ["docs", "**/*.md", "!docs/private/**"]
 "#,
     );
 
-    let blocked =
-        graph_neighbors(fixture.state.as_ref(), "docs/private/index.md", "both", 1, 10).await;
+    let blocked = graph_neighbors(
+        fixture.state.as_ref(),
+        "docs/private/index.md",
+        "both",
+        1,
+        10,
+    )
+    .await;
     let Err(error) = blocked else {
         panic!("expected glob-filtered graph node to be hidden");
     };

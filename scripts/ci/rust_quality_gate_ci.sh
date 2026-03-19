@@ -11,6 +11,9 @@ just rust-nextest
 just rust-xiuxian-llm-mcp
 just rust-xiuxian-daochang-mcp-facade-smoke
 just rust-xiuxian-daochang-backend-role-contracts
+just rust-xiuxian-qianji-scenario-audit-contracts
+just rust-xiuxian-testing-contract-gates
+just rust-xiuxian-wendao-contract-feedback-consumer
 if [[ ${OMNI_ENABLE_EMBED_ROLE_PERF_GATE:-0} == "1" ]]; then
   profile="${OMNI_EMBED_ROLE_PERF_GATE_PROFILE:-medium}"
   case "${profile}" in

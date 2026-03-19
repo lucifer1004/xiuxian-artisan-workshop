@@ -133,7 +133,9 @@ pub(crate) fn normalize_project_dir_root(raw: &str) -> Option<String> {
 /// Non-filter entries or invalid patterns return `None`.
 pub(crate) fn compile_project_dir_filter(raw: &str) -> Option<ProjectFileFilter> {
     if let Some(pattern) = dir_regex_pattern(raw) {
-        return Regex::new(pattern).ok().map(ProjectFileFilter::IncludeRegex);
+        return Regex::new(pattern)
+            .ok()
+            .map(ProjectFileFilter::IncludeRegex);
     }
 
     let (included, pattern) = dir_glob_pattern(raw)?;
@@ -229,7 +231,7 @@ pub(crate) fn path_matches_project_file_filters(
         }
     }
 
-    if matched_project { false } else { true }
+    !matched_project
 }
 
 /// Resolve a normalized path-like config value against `base`.
@@ -298,12 +300,12 @@ mod tests {
     #[test]
     fn normalize_project_dir_entry_preserves_regex_rules() {
         assert_eq!(
-            normalize_project_dir_entry(r#"re:^docs/[^/]+\.md$"#),
-            Some(r#"re:^docs/[^/]+\.md$"#.to_string())
+            normalize_project_dir_entry(r"re:^docs/[^/]+\.md$"),
+            Some(r"re:^docs/[^/]+\.md$".to_string())
         );
         assert_eq!(
-            normalize_project_dir_entry(r#"regex:^docs/.+\.md$"#),
-            Some(r#"re:^docs/.+\.md$"#.to_string())
+            normalize_project_dir_entry(r"regex:^docs/.+\.md$"),
+            Some(r"re:^docs/.+\.md$".to_string())
         );
     }
 
@@ -325,7 +327,7 @@ mod tests {
 
     #[test]
     fn normalize_project_dir_root_ignores_filter_entries() {
-        assert_eq!(normalize_project_dir_root(r#"re:^docs/.+\.md$"#), None);
+        assert_eq!(normalize_project_dir_root(r"re:^docs/.+\.md$"), None);
         assert_eq!(normalize_project_dir_root("**/*.md"), None);
         assert_eq!(normalize_project_dir_root("!**/private/**"), None);
         assert_eq!(normalize_project_dir_root("docs"), Some("docs".to_string()));
@@ -334,7 +336,7 @@ mod tests {
     #[test]
     fn compile_project_dir_filter_handles_re_and_glob_prefixes() {
         let Some(ProjectFileFilter::IncludeRegex(regex)) =
-            compile_project_dir_filter(r#"re:^docs/.+\.md$"#)
+            compile_project_dir_filter(r"re:^docs/.+\.md$")
         else {
             panic!("expected regex filter to compile");
         };

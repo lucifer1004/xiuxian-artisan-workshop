@@ -14,6 +14,7 @@ use serde::Deserialize;
 use xiuxian_io::PrjDirs;
 use xiuxian_zhenfa::ZhenfaSignal;
 
+use crate::gateway::openapi::paths as openapi_paths;
 use crate::link_graph::LinkGraphIndex;
 use crate::unified_symbol::UnifiedSymbolIndex;
 
@@ -329,6 +330,7 @@ struct MarkdownAnalysisQuery {
 /// - `GET /api/vfs` - List root entries
 /// - `GET /api/vfs/scan` - Scan all VFS roots
 /// - `GET /api/vfs/cat?path=` - Read file content
+/// - `GET /api/vfs/resolve?path=` - Resolve a studio navigation target from a semantic path
 /// - `GET /api/vfs/{*path}` - Get single entry
 /// - `GET /api/neighbors/{*id}` - Get node neighbors
 /// - `GET /api/graph/neighbors/{*id}` - Get graph neighbors
@@ -344,22 +346,53 @@ struct MarkdownAnalysisQuery {
 /// - `GET/POST /api/ui/config` - UI configuration
 pub fn studio_routes() -> Router<Arc<GatewayState>> {
     Router::new()
-        .route("/api/vfs", get(vfs_root_entries))
-        .route("/api/vfs/scan", get(vfs_scan))
-        .route("/api/vfs/cat", get(vfs_cat))
-        .route("/api/vfs/{*path}", get(vfs_entry))
-        .route("/api/neighbors/{*id}", get(node_neighbors))
-        .route("/api/graph/neighbors/{*id}", get(graph_neighbors))
-        .route("/api/topology/3d", get(topology_3d))
-        .route("/api/search", get(search::search_knowledge))
-        .route("/api/search/attachments", get(search::search_attachments))
-        .route("/api/search/ast", get(search::search_ast))
-        .route("/api/search/definition", get(search::search_definition))
-        .route("/api/search/references", get(search::search_references))
-        .route("/api/search/symbols", get(search::search_symbols))
-        .route("/api/search/autocomplete", get(search::search_autocomplete))
-        .route("/api/analysis/markdown", get(analysis_markdown))
-        .route("/api/ui/config", get(get_ui_config).post(set_ui_config))
+        .route(openapi_paths::API_VFS_ROOT_AXUM_PATH, get(vfs_root_entries))
+        .route(openapi_paths::API_VFS_SCAN_AXUM_PATH, get(vfs_scan))
+        .route(openapi_paths::API_VFS_CAT_AXUM_PATH, get(vfs_cat))
+        .route("/api/vfs/resolve", get(vfs_resolve))
+        .route(openapi_paths::API_VFS_ENTRY_AXUM_PATH, get(vfs_entry))
+        .route(openapi_paths::API_NEIGHBORS_AXUM_PATH, get(node_neighbors))
+        .route(
+            openapi_paths::API_GRAPH_NEIGHBORS_AXUM_PATH,
+            get(graph_neighbors),
+        )
+        .route(openapi_paths::API_TOPOLOGY_3D_AXUM_PATH, get(topology_3d))
+        .route(
+            openapi_paths::API_SEARCH_AXUM_PATH,
+            get(search::search_knowledge),
+        )
+        .route(
+            openapi_paths::API_SEARCH_ATTACHMENTS_AXUM_PATH,
+            get(search::search_attachments),
+        )
+        .route(
+            openapi_paths::API_SEARCH_AST_AXUM_PATH,
+            get(search::search_ast),
+        )
+        .route(
+            openapi_paths::API_SEARCH_DEFINITION_AXUM_PATH,
+            get(search::search_definition),
+        )
+        .route(
+            openapi_paths::API_SEARCH_REFERENCES_AXUM_PATH,
+            get(search::search_references),
+        )
+        .route(
+            openapi_paths::API_SEARCH_SYMBOLS_AXUM_PATH,
+            get(search::search_symbols),
+        )
+        .route(
+            openapi_paths::API_SEARCH_AUTOCOMPLETE_AXUM_PATH,
+            get(search::search_autocomplete),
+        )
+        .route(
+            openapi_paths::API_ANALYSIS_MARKDOWN_AXUM_PATH,
+            get(analysis_markdown),
+        )
+        .route(
+            openapi_paths::API_UI_CONFIG_AXUM_PATH,
+            get(get_ui_config).post(set_ui_config),
+        )
 }
 
 /// Create the Studio API router with state already attached.
@@ -400,6 +433,20 @@ async fn vfs_cat(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| StudioApiError::bad_request("MISSING_PATH", "`path` is required"))?;
     let payload = vfs::read_content(state.studio.as_ref(), path).await?;
+    Ok(Json(payload))
+}
+
+async fn vfs_resolve(
+    Query(query): Query<VfsCatQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Json<super::types::StudioNavigationTarget>, StudioApiError> {
+    let path = query
+        .path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| StudioApiError::bad_request("MISSING_PATH", "`path` is required"))?;
+    let payload = vfs::resolve_navigation_target(state.studio.as_ref(), path);
     Ok(Json(payload))
 }
 

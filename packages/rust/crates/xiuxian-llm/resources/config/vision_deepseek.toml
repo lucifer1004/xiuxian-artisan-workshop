@@ -24,6 +24,9 @@ metal_capfox_mem_percent = 30.0
 metal_capfox_gpu_percent = 80.0
 metal_capfox_vram_percent = 60.0
 
+[test_defaults]
+metal_infer_profile = "deepseek_metal_smoke_12g_safe384_managed_sidecar_line_metal_fast_eager_shared_native"
+
 [test_profiles.deepseek_metal_guard_12g]
 max_rss_gb = 12.0
 capfox_mem_percent = 30.0

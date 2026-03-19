@@ -32,7 +32,6 @@ members = [
     "packages/rust/crates/xiuxian-memory",
     "packages/rust/crates/xiuxian-zhixing",
     "packages/rust/crates/xiuxian-zhenfa",
-    "packages/rust/crates/xiuxian-test-audit",
     "packages/rust/crates/xiuxian-testing",
 ]
 

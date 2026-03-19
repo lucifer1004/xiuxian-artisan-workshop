@@ -28,13 +28,13 @@ For our V1, these primitives are comparative references. The production orchestr
 
 The mapping below keeps ownership boundaries explicit:
 
-| Workflow stage | System of record | Xiuxian component |
-| --- | --- | --- |
-| task intent and acceptance | product requirement envelope | `qianji` workflow input |
-| planning baseline | iteration plan context | `qianji` workflow state |
+| Workflow stage                | System of record                 | Xiuxian component                                      |
+| ----------------------------- | -------------------------------- | ------------------------------------------------------ |
+| task intent and acceptance    | product requirement envelope     | `qianji` workflow input                                |
+| planning baseline             | iteration plan context           | `qianji` workflow state                                |
 | deterministic contract checks | pass/fail/warn contract evidence | `xiuxian-testing` rule packs and `ContractSuiteRunner` |
-| advisory role audit | role-attributed interpretation | `qianhuan` + `qianji` (+ `zhenfa` stream) |
-| persisted audit memory | trace and finding retrieval | `wendao` via contract knowledge export |
+| advisory role audit           | role-attributed interpretation   | `qianhuan` + `qianji` (+ `zhenfa` stream)              |
+| persisted audit memory        | trace and finding retrieval      | `wendao` via contract knowledge export                 |
 
 ## Execution Contract
 

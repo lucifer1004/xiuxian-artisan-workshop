@@ -31,6 +31,12 @@ pub struct VfsEntry {
     /// Root label under the grouped project node.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_label: Option<String>,
+    /// Configured project root used to resolve this VFS root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_root: Option<String>,
+    /// Configured project directories associated with the resolved root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_dirs: Option<Vec<String>>,
 }
 
 /// Category classification for VFS entries.
@@ -79,6 +85,12 @@ pub struct VfsScanEntry {
     /// Root label under the grouped project node.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_label: Option<String>,
+    /// Configured project root used to resolve this VFS root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_root: Option<String>,
+    /// Configured project directories associated with the resolved root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_dirs: Option<Vec<String>>,
 }
 
 /// Result of a VFS scan operation.
@@ -137,6 +149,9 @@ pub struct GraphNode {
     pub label: String,
     /// File path if applicable.
     pub path: String,
+    /// Optional display-ready navigation target when clicking the node should open a file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub navigation_target: Option<StudioNavigationTarget>,
     /// Node type for styling.
     pub node_type: String,
     /// Whether this is the center of the query.
@@ -333,6 +348,8 @@ pub struct SearchHit {
     /// Reason for the match.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub match_reason: Option<String>,
+    /// Display-ready navigation target for opening this hit in studio.
+    pub navigation_target: StudioNavigationTarget,
 }
 
 /// Response for search queries.
@@ -447,6 +464,8 @@ pub struct AstSearchHit {
     /// Optional owning Markdown section title/path for property-box derived hits.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_title: Option<String>,
+    /// Display-ready navigation target for opening this hit in studio.
+    pub navigation_target: StudioNavigationTarget,
     /// 1-based start line.
     pub line_start: usize,
     /// 1-based end line.
@@ -481,12 +500,39 @@ pub struct DefinitionResolveResponse {
     /// Optional source line used by the caller.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_line: Option<usize>,
+    /// Display-ready navigation target for the resolved definition.
+    pub navigation_target: StudioNavigationTarget,
     /// Resolved definition hit.
     pub definition: AstSearchHit,
     /// Total number of considered candidates.
     pub candidate_count: usize,
     /// Selected semantic scope.
     pub selected_scope: String,
+}
+
+/// Display-ready navigation metadata for opening a studio selection target.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct StudioNavigationTarget {
+    /// Path relative to the project root.
+    pub path: String,
+    /// UI category for the selection target.
+    pub category: String,
+    /// Configured project name when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+    /// Configured root label when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_label: Option<String>,
+    /// Optional 1-based start line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<usize>,
+    /// Optional 1-based end line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_end: Option<usize>,
+    /// Optional 1-based column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<usize>,
 }
 
 /// One source-level reference or usage hit for a symbol.
@@ -507,6 +553,8 @@ pub struct ReferenceSearchHit {
     /// Configured root label when the source path maps to a project root path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_label: Option<String>,
+    /// Display-ready navigation target for opening this hit in studio.
+    pub navigation_target: StudioNavigationTarget,
     /// 1-based line number for the usage.
     pub line: usize,
     /// 1-based column number of the first match.
@@ -565,6 +613,8 @@ pub struct SymbolSearchHit {
     /// Configured root label when the source path maps to a project root path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_label: Option<String>,
+    /// Display-ready navigation target for opening this hit in studio.
+    pub navigation_target: StudioNavigationTarget,
     /// Symbol source domain.
     pub source: SymbolSearchSource,
     /// Search relevance score.
@@ -633,6 +683,12 @@ pub enum AnalysisNodeKind {
     Document,
     /// Heading/section node.
     Section,
+    /// Property drawer attribute node.
+    Property,
+    /// `:OBSERVE:` property drawer entry.
+    Observation,
+    /// Code symbol derived from an observation pattern.
+    Symbol,
     /// Task-list item node.
     Task,
     /// Fenced code block node.
@@ -824,6 +880,7 @@ pub fn studio_type_collection() -> TypeCollection {
         .register::<SearchResponse>()
         .register::<AstSearchHit>()
         .register::<AstSearchResponse>()
+        .register::<StudioNavigationTarget>()
         .register::<DefinitionResolveResponse>()
         .register::<ReferenceSearchHit>()
         .register::<ReferenceSearchResponse>()

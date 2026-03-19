@@ -3,16 +3,25 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+use crate::link_graph::parser::code_observation::CodeObservation;
 use crate::link_graph::{LinkGraphDirection, LinkGraphMetadata};
 
 use super::analysis;
 use super::pathing;
 use super::router::{GatewayState, StudioApiError};
+use super::search::{DefinitionMatchMode, DefinitionResolveOptions, resolve_best_definition};
 use super::types::{
     AnalysisEdgeKind, AnalysisNodeKind, ClusterInfo, GraphLink, GraphNeighborsResponse, GraphNode,
-    MarkdownAnalysisResponse, NodeNeighbors, Topology3D, TopologyLink, TopologyNode,
+    MarkdownAnalysisResponse, NodeNeighbors, StudioNavigationTarget, Topology3D, TopologyLink,
+    TopologyNode,
 };
 use super::vfs::{graph_lookup_candidates, studio_display_path};
+
+#[derive(Default)]
+struct MarkdownSymbolNavigationHints {
+    scopes: Vec<String>,
+    languages: Vec<String>,
+}
 
 /// Get immediate neighbors for a node.
 pub(crate) async fn node_neighbors(
@@ -98,9 +107,10 @@ pub(crate) async fn graph_neighbors(
     limit: usize,
 ) -> Result<GraphNeighborsResponse, StudioApiError> {
     let index = state.link_graph_index().await?;
-    let metadata = match resolve_metadata(state, index.as_ref(), id) {
-        Some(metadata) => metadata,
-        None => return markdown_graph_fallback(state, id).await,
+    let Some(metadata) = resolve_metadata(state, index.as_ref(), id) else {
+        let mut fallback = markdown_graph_fallback(state, id).await?;
+        let _ = decorate_markdown_graph_navigation(state, &mut fallback).await;
+        return Ok(fallback);
     };
     let center_id = metadata.path.clone();
     let project_root = state.studio.project_root.clone();
@@ -135,6 +145,10 @@ pub(crate) async fn graph_neighbors(
         id: center_display_id.clone(),
         label: display_name(&metadata),
         path: center_display_id.clone(),
+        navigation_target: Some(super::vfs::resolve_navigation_target(
+            state.studio.as_ref(),
+            center_display_id.as_str(),
+        )),
         node_type: classify_node_type(center_id.as_str()),
         is_center: true,
         distance: 0,
@@ -149,6 +163,10 @@ pub(crate) async fn graph_neighbors(
                 id: neighbor_display_path.clone(),
                 label: display_label(&neighbor.title, &neighbor.stem),
                 path: neighbor_display_path.clone(),
+                navigation_target: Some(super::vfs::resolve_navigation_target(
+                    state.studio.as_ref(),
+                    neighbor_display_path.as_str(),
+                )),
                 node_type: classify_node_type(neighbor.path.as_str()),
                 is_center: false,
                 distance: neighbor.distance,
@@ -321,7 +339,9 @@ async fn markdown_graph_fallback(
     let analysis = analysis::analyze_markdown(state.studio.as_ref(), path)
         .await
         .map_err(|_| StudioApiError::not_found(format!("Node not found: {path}")))?;
-    Ok(graph_neighbors_from_markdown_analysis(&analysis))
+    let mut response = graph_neighbors_from_markdown_analysis(&analysis);
+    decorate_markdown_graph_navigation(state, &mut response).await?;
+    Ok(response)
 }
 
 fn graph_neighbors_from_markdown_analysis(
@@ -333,6 +353,15 @@ fn graph_neighbors_from_markdown_analysis(
         .find(|node| matches!(node.kind, AnalysisNodeKind::Document))
         .or_else(|| analysis.nodes.iter().min_by_key(|node| node.depth));
 
+    let base_navigation_target = StudioNavigationTarget {
+        path: analysis.path.clone(),
+        category: classify_node_type(analysis.path.as_str()),
+        project_name: None,
+        root_label: None,
+        line: None,
+        line_end: None,
+        column: None,
+    };
     let mut nodes = analysis
         .nodes
         .iter()
@@ -340,6 +369,12 @@ fn graph_neighbors_from_markdown_analysis(
             id: node.id.clone(),
             label: node.label.clone(),
             path: analysis.path.clone(),
+            navigation_target: Some(StudioNavigationTarget {
+                line: Some(node.line_start),
+                line_end: Some(node.line_end),
+                column: Some(1),
+                ..base_navigation_target.clone()
+            }),
             node_type: markdown_graph_node_type(node.kind),
             is_center: analysis_center_node.is_some_and(|center| center.id == node.id),
             distance: node.depth,
@@ -355,6 +390,12 @@ fn graph_neighbors_from_markdown_analysis(
                 .unwrap_or(analysis.path.as_str())
                 .to_string(),
             path: analysis.path.clone(),
+            navigation_target: Some(StudioNavigationTarget {
+                line: Some(1),
+                line_end: Some(1),
+                column: Some(1),
+                ..base_navigation_target.clone()
+            }),
             node_type: "doc".to_string(),
             is_center: true,
             distance: 0,
@@ -408,10 +449,110 @@ fn graph_neighbors_from_markdown_analysis(
     }
 }
 
+async fn decorate_markdown_graph_navigation(
+    state: &GatewayState,
+    response: &mut GraphNeighborsResponse,
+) -> Result<(), StudioApiError> {
+    let ast_index = state.studio.ast_index().await?;
+    let project_root = state.studio.project_root.clone();
+    let config_root = state.studio.config_root.clone();
+    let projects = state.studio.configured_projects();
+    let navigation_hints = markdown_symbol_navigation_hints(response);
+
+    for node in &mut response.nodes {
+        if !node.id.contains("symbol:") {
+            continue;
+        }
+
+        let Some(definition) = resolve_best_definition(
+            project_root.as_path(),
+            config_root.as_path(),
+            projects.as_slice(),
+            ast_index.as_slice(),
+            node.label.as_str(),
+            DefinitionResolveOptions {
+                scope_patterns: navigation_hints
+                    .get(node.id.as_str())
+                    .map(|hints| hints.scopes.as_slice()),
+                languages: navigation_hints
+                    .get(node.id.as_str())
+                    .map(|hints| hints.languages.as_slice()),
+                match_mode: DefinitionMatchMode::ExactOnly,
+                include_markdown: false,
+                ..DefinitionResolveOptions::default()
+            },
+        ) else {
+            continue;
+        };
+
+        let mut navigation_target = definition.navigation_target.clone();
+        navigation_target.path =
+            studio_display_path(state.studio.as_ref(), definition.path.as_str());
+        navigation_target.line = Some(definition.line_start);
+        navigation_target.line_end = Some(definition.line_end);
+        navigation_target.column = Some(1);
+        node.navigation_target = Some(navigation_target);
+    }
+
+    if let Some(center) = response.nodes.iter().find(|node| node.is_center).cloned() {
+        response.center = center;
+    }
+
+    Ok(())
+}
+
+fn markdown_symbol_navigation_hints(
+    response: &GraphNeighborsResponse,
+) -> HashMap<String, MarkdownSymbolNavigationHints> {
+    let observation_hints = response
+        .nodes
+        .iter()
+        .filter_map(|node| {
+            observation_hints_from_label(node.label.as_str()).map(|hints| (node.id.as_str(), hints))
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut symbol_hints = HashMap::<String, MarkdownSymbolNavigationHints>::new();
+    for link in &response.links {
+        let Some(hints) = observation_hints.get(link.source.as_str()) else {
+            continue;
+        };
+        let entry = symbol_hints.entry(link.target.clone()).or_default();
+        if let Some(scope) = hints.scope.as_ref() {
+            entry.scopes.push(scope.clone());
+        }
+        entry.languages.push(hints.language.clone());
+    }
+    symbol_hints
+}
+
+fn observation_hints_from_label(label: &str) -> Option<CodeObservation> {
+    let value = observation_value_from_label(label)?;
+    CodeObservation::parse(value)
+}
+
+fn observation_value_from_label(label: &str) -> Option<&str> {
+    if !label.starts_with(':') {
+        return None;
+    }
+    let remainder = &label[1..];
+    let key_end = remainder.find(':')?;
+    let key = remainder[..key_end].trim();
+    if key != "OBSERVE" && !key.starts_with("OBSERVE_") {
+        return None;
+    }
+    let value = remainder[key_end + 1..].trim();
+    if value.is_empty() { None } else { Some(value) }
+}
+
 fn markdown_graph_node_type(kind: AnalysisNodeKind) -> String {
     match kind {
         AnalysisNodeKind::Document | AnalysisNodeKind::Section => "doc".to_string(),
-        AnalysisNodeKind::Task | AnalysisNodeKind::Reference => "knowledge".to_string(),
+        AnalysisNodeKind::Symbol
+        | AnalysisNodeKind::Property
+        | AnalysisNodeKind::Observation
+        | AnalysisNodeKind::Task
+        | AnalysisNodeKind::Reference => "knowledge".to_string(),
         AnalysisNodeKind::CodeBlock => "other".to_string(),
     }
 }

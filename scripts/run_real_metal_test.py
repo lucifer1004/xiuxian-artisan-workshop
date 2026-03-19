@@ -70,6 +70,11 @@ class TestProfileConfig:
     env_overrides: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class TestDefaultProfiles:
+    metal_infer_profile: str | None = None
+
+
 def _read_text_file(path: Path) -> str | None:
     try:
         text = path.read_text(encoding="utf-8")
@@ -230,6 +235,23 @@ def _read_test_profile_config(
     )
 
 
+def _read_test_default_profiles(
+    config_path: Path = VISION_CONFIG_PATH,
+) -> TestDefaultProfiles:
+    try:
+        payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, tomllib.TOMLDecodeError, OSError):
+        return TestDefaultProfiles()
+
+    section = payload.get("test_defaults")
+    if not isinstance(section, dict):
+        return TestDefaultProfiles()
+
+    value = section.get("metal_infer_profile")
+    metal_infer_profile = value.strip() if isinstance(value, str) and value.strip() else None
+    return TestDefaultProfiles(metal_infer_profile=metal_infer_profile)
+
+
 def _apply_test_profile(env: dict[str, str], profile: TestProfileConfig) -> None:
     for key, value in profile.env_overrides.items():
         env.setdefault(key, value)
@@ -266,6 +288,23 @@ def _selected_passthrough_env(
     }
 
 
+def _resolve_default_profile_name(
+    requested_device: str,
+    phase: str,
+    explicit_profile_name: str | None,
+    cli_env_overrides: dict[str, str],
+    cli_image_path: Path | None,
+    defaults: TestDefaultProfiles,
+) -> str | None:
+    if explicit_profile_name is not None:
+        return explicit_profile_name
+    if requested_device != "metal" or phase != "infer":
+        return None
+    if cli_env_overrides or cli_image_path is not None:
+        return None
+    return defaults.metal_infer_profile
+
+
 def _parse_manual_cli_overrides(argv: list[str]) -> tuple[dict[str, str], Path | None]:
     overrides: dict[str, str] = {}
     image_path: Path | None = None
@@ -299,6 +338,15 @@ def _parse_manual_cli_overrides(argv: list[str]) -> tuple[dict[str, str], Path |
     return overrides, image_path
 
 
+def _candidate_test_binary_dirs(requested_device: str, use_release: bool) -> list[Path]:
+    profile = "release" if use_release else "debug"
+    candidates: list[Path] = []
+    if requested_device == "metal" and not use_release:
+        candidates.append(PROJECT_ROOT / ".run" / "target-real-metal-cli-debug" / "debug" / "deps")
+    candidates.append(PROJECT_ROOT / "target" / profile / "deps")
+    return candidates
+
+
 def find_test_binary(requested_device: str, use_release: bool) -> Path | None:
     """Find the phase runner test binary for CPU or GPU backends."""
     explicit_binary = os.environ.get("XIUXIAN_VISION_TEST_BINARY")
@@ -308,24 +356,23 @@ def find_test_binary(requested_device: str, use_release: bool) -> Path | None:
             return candidate
         return None
 
-    profile = "release" if use_release else "debug"
-    deps_dir = PROJECT_ROOT / "target" / profile / "deps"
-    if not deps_dir.exists():
-        return None
-
     pattern = CPU_TEST_BINARY_PATTERN if requested_device == "cpu" else METAL_TEST_BINARY_PATTERN
-    candidates = [
-        f
-        for f in deps_dir.iterdir()
-        if f.name.startswith(pattern)
-        and f.is_file()
-        and os.access(f, os.X_OK)
-        and f.suffix not in (".d", ".o", ".rmeta")
-    ]
-    if not candidates:
-        return None
-    candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
-    return candidates[0]
+    for deps_dir in _candidate_test_binary_dirs(requested_device, use_release):
+        if not deps_dir.exists():
+            continue
+        candidates = [
+            f
+            for f in deps_dir.iterdir()
+            if f.name.startswith(pattern)
+            and f.is_file()
+            and os.access(f, os.X_OK)
+            and f.suffix not in (".d", ".o", ".rmeta")
+        ]
+        if not candidates:
+            continue
+        candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        return candidates[0]
+    return None
 
 
 def get_process_rss_kb(pid: int) -> int:
@@ -422,6 +469,7 @@ def main() -> int:
             print("  --release     Use target/release test binaries instead of target/debug")
             print("  --phase=...   Run only load, prewarm, or full infer phase (default: infer)")
             print("  --profile=... Apply a TOML-backed test profile from vision_deepseek.toml")
+            print("                 Metal infer defaults to the TOML pilot profile when unset")
             print("  --max-rss=GB  Maximum RSS in GB (default: 10 for Metal, 12 for CPU)")
             print("  --image=...   Override the default OCR smoke image path")
             print("  --ocr-prompt=... Override OCR prompt directly for a manual probe")
@@ -437,6 +485,15 @@ def main() -> int:
         print(f"ERROR: unsupported --phase value: {phase}")
         return 2
 
+    defaults = _read_test_default_profiles()
+    profile_name = _resolve_default_profile_name(
+        requested_device=requested_device,
+        phase=phase,
+        explicit_profile_name=profile_name,
+        cli_env_overrides=cli_env_overrides,
+        cli_image_path=cli_image_path,
+        defaults=defaults,
+    )
     guard = _read_test_guard_config()
     profile = _read_test_profile_config(profile_name) if profile_name is not None else None
     if profile_name is not None and profile is None:

@@ -142,6 +142,31 @@ lazy_clip_transformer_layers = true
     }
 
 
+def test_read_test_default_profiles_supports_metal_infer_profile(tmp_path: Path) -> None:
+    config_path = tmp_path / "vision_deepseek.toml"
+    config_path.write_text(
+        """
+[test_defaults]
+metal_infer_profile = "deepseek_metal_smoke_12g_safe384_managed_sidecar_line_metal_fast_eager_shared_native"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    defaults = _MODULE._read_test_default_profiles(config_path)
+
+    assert (
+        defaults.metal_infer_profile
+        == "deepseek_metal_smoke_12g_safe384_managed_sidecar_line_metal_fast_eager_shared_native"
+    )
+
+
+def test_read_test_default_profiles_falls_back_when_missing() -> None:
+    defaults = _MODULE._read_test_default_profiles(Path("/nonexistent/vision_deepseek.toml"))
+
+    assert defaults == _MODULE.TestDefaultProfiles()
+
+
 def test_apply_test_profile_respects_existing_env() -> None:
     profile = _MODULE.TestProfileConfig(
         env_overrides={
@@ -971,6 +996,78 @@ def test_cli_overrides_replace_profile_env_values() -> None:
     assert env["XIUXIAN_VISION_MIN_OUTPUT_CHARS"] == "28"
 
 
+def test_resolve_default_profile_name_prefers_explicit_profile() -> None:
+    defaults = _MODULE.TestDefaultProfiles(metal_infer_profile="pilot-profile")
+
+    resolved = _MODULE._resolve_default_profile_name(
+        requested_device="metal",
+        phase="infer",
+        explicit_profile_name="manual-profile",
+        cli_env_overrides={},
+        cli_image_path=None,
+        defaults=defaults,
+    )
+
+    assert resolved == "manual-profile"
+
+
+def test_resolve_default_profile_name_uses_metal_infer_default() -> None:
+    defaults = _MODULE.TestDefaultProfiles(metal_infer_profile="pilot-profile")
+
+    resolved = _MODULE._resolve_default_profile_name(
+        requested_device="metal",
+        phase="infer",
+        explicit_profile_name=None,
+        cli_env_overrides={},
+        cli_image_path=None,
+        defaults=defaults,
+    )
+
+    assert resolved == "pilot-profile"
+
+
+def test_resolve_default_profile_name_skips_manual_probe_overrides() -> None:
+    defaults = _MODULE.TestDefaultProfiles(metal_infer_profile="pilot-profile")
+
+    resolved = _MODULE._resolve_default_profile_name(
+        requested_device="metal",
+        phase="infer",
+        explicit_profile_name=None,
+        cli_env_overrides={"XIUXIAN_VISION_OCR_PROMPT": "<image> custom"},
+        cli_image_path=None,
+        defaults=defaults,
+    )
+
+    assert resolved is None
+
+
+def test_resolve_default_profile_name_skips_non_metal_or_non_infer() -> None:
+    defaults = _MODULE.TestDefaultProfiles(metal_infer_profile="pilot-profile")
+
+    assert (
+        _MODULE._resolve_default_profile_name(
+            requested_device="cpu",
+            phase="infer",
+            explicit_profile_name=None,
+            cli_env_overrides={},
+            cli_image_path=None,
+            defaults=defaults,
+        )
+        is None
+    )
+    assert (
+        _MODULE._resolve_default_profile_name(
+            requested_device="metal",
+            phase="load",
+            explicit_profile_name=None,
+            cli_env_overrides={},
+            cli_image_path=None,
+            defaults=defaults,
+        )
+        is None
+    )
+
+
 def test_find_test_binary_prefers_explicit_override(monkeypatch, tmp_path: Path) -> None:
     binary = tmp_path / "llm_vision_deepseek_real_metal-explicit"
     binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
@@ -986,3 +1083,61 @@ def test_find_test_binary_rejects_missing_explicit_override(monkeypatch) -> None
     monkeypatch.setenv("XIUXIAN_VISION_TEST_BINARY", "/nonexistent/llm_vision")
 
     assert _MODULE.find_test_binary("metal", use_release=False) is None
+
+
+def test_candidate_test_binary_dirs_prefers_real_metal_cli_debug_surface(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(_MODULE, "PROJECT_ROOT", tmp_path)
+
+    assert _MODULE._candidate_test_binary_dirs("metal", use_release=False) == [
+        tmp_path / ".run" / "target-real-metal-cli-debug" / "debug" / "deps",
+        tmp_path / "target" / "debug" / "deps",
+    ]
+
+
+def test_find_test_binary_prefers_real_metal_cli_debug_surface(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("XIUXIAN_VISION_TEST_BINARY", raising=False)
+    monkeypatch.setattr(_MODULE, "PROJECT_ROOT", tmp_path)
+
+    run_deps = tmp_path / ".run" / "target-real-metal-cli-debug" / "debug" / "deps"
+    target_deps = tmp_path / "target" / "debug" / "deps"
+    run_deps.mkdir(parents=True)
+    target_deps.mkdir(parents=True)
+
+    preferred = run_deps / "llm_vision_deepseek_real_metal-run"
+    fallback = target_deps / "llm_vision_deepseek_real_metal-target"
+    for binary in (preferred, fallback):
+        binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        binary.chmod(0o755)
+
+    found = _MODULE.find_test_binary("metal", use_release=False)
+
+    assert found == preferred
+
+
+def test_find_test_binary_falls_back_to_target_debug_when_run_surface_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("XIUXIAN_VISION_TEST_BINARY", raising=False)
+    monkeypatch.setattr(_MODULE, "PROJECT_ROOT", tmp_path)
+
+    target_deps = tmp_path / "target" / "debug" / "deps"
+    target_deps.mkdir(parents=True)
+    fallback = target_deps / "llm_vision_deepseek_real_metal-target"
+    fallback.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fallback.chmod(0o755)
+
+    found = _MODULE.find_test_binary("metal", use_release=False)
+
+    assert found == fallback
+
+
+def test_candidate_test_binary_dirs_keeps_release_on_standard_target(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(_MODULE, "PROJECT_ROOT", tmp_path)
+
+    assert _MODULE._candidate_test_binary_dirs("metal", use_release=True) == [
+        tmp_path / "target" / "release" / "deps",
+    ]

@@ -192,6 +192,15 @@ jobs:
       - name: Rust gate - xiuxian-daochang backend role contracts
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-daochang-backend-role-contracts
 
+      - name: Rust gate - xiuxian-qianji scenario-audit contracts
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-qianji-scenario-audit-contracts
+
+      - name: Rust gate - xiuxian-testing contract packs
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-testing-contract-gates
+
+      - name: Rust gate - xiuxian-wendao contract-feedback consumer
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-wendao-contract-feedback-consumer
+
       - name: Runtime gate - native runtime smoke
         run: secretspec run --provider env --profile default -- devenv tasks run ci:native-runtime-smoke
 

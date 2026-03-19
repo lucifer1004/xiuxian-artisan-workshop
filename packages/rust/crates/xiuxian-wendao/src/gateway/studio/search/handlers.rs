@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use std::path::{Component, Path};
+use std::path::Path;
 use std::sync::Arc;
 
 use axum::{
@@ -9,7 +9,6 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::dependency_indexer::SymbolKind;
 use crate::link_graph::{
     LinkGraphAttachmentKind, LinkGraphDisplayHit, LinkGraphIndex, LinkGraphRetrievalMode,
     LinkGraphSearchOptions,
@@ -22,13 +21,20 @@ use super::super::types::{
     AstSearchHit, AstSearchResponse, AttachmentSearchHit, AttachmentSearchKind,
     AttachmentSearchResponse, AutocompleteResponse, AutocompleteSuggestion,
     AutocompleteSuggestionType, DefinitionResolveResponse, ReferenceSearchResponse, SearchHit,
-    SearchResponse, SymbolSearchHit, SymbolSearchResponse, SymbolSearchSource, UiProjectConfig,
+    SearchResponse, StudioNavigationTarget, SymbolSearchHit, SymbolSearchResponse,
+    SymbolSearchSource, UiProjectConfig,
 };
 use super::super::vfs::{graph_lookup_candidates, studio_display_path};
 
-use super::project_scope::{SearchProjectMetadata, normalize_path, project_metadata_for_path};
+use super::definition::{
+    DefinitionResolveOptions, ast_hit_matches, enrich_ast_hit_project_metadata,
+    resolve_definition_candidates, score_ast_hit,
+};
+use super::observation_hints::definition_observation_hints;
+use super::project_scope::project_metadata_for_path;
 use super::source_index;
 use super::source_index::build_reference_hits;
+use super::support::source_language_label;
 
 const DEFAULT_SEARCH_LIMIT: usize = 10;
 const MAX_SEARCH_LIMIT: usize = 200;
@@ -150,15 +156,23 @@ pub(in crate::gateway::studio) async fn search_knowledge(
             )
             .then_some((hit, canonical_path))
         })
-        .map(|(hit, canonical_path)| SearchHit {
-            stem: hit.stem,
-            title: strip_option(&hit.title),
-            path: studio_display_path(state.studio.as_ref(), canonical_path.as_str()),
-            doc_type: hit.doc_type,
-            tags: hit.tags,
-            score: hit.score.max(0.0),
-            best_section: strip_option(&hit.best_section),
-            match_reason: strip_option(&hit.match_reason),
+        .map(|(hit, canonical_path)| {
+            let path = studio_display_path(state.studio.as_ref(), canonical_path.as_str());
+            let navigation_target = crate::gateway::studio::vfs::resolve_navigation_target(
+                state.studio.as_ref(),
+                path.as_str(),
+            );
+            SearchHit {
+                stem: hit.stem,
+                title: strip_option(&hit.title),
+                path,
+                doc_type: hit.doc_type,
+                tags: hit.tags,
+                score: hit.score.max(0.0),
+                best_section: strip_option(&hit.best_section),
+                match_reason: strip_option(&hit.match_reason),
+                navigation_target,
+            }
         })
         .collect::<Vec<_>>();
     let hit_count = hits.len();
@@ -233,7 +247,9 @@ pub(in crate::gateway::studio) async fn search_attachments(
                 attachment_ext: hit.attachment_ext,
                 kind: attachment_kind_to_api(hit.kind),
                 score: hit.score.max(0.0),
-                vision_snippet: hit.vision_snippet.and_then(|value| strip_option(value.as_str())),
+                vision_snippet: hit
+                    .vision_snippet
+                    .and_then(|value| strip_option(value.as_str())),
             }
         })
         .collect::<Vec<_>>();
@@ -326,18 +342,16 @@ pub(in crate::gateway::studio) async fn search_ast(
         .filter(|hit| ast_hit_matches(hit, raw_query))
         .map(|hit| {
             let mut hit = hit.clone();
-            apply_project_metadata(
-                &mut hit.project_name,
-                &mut hit.root_label,
-                project_metadata_for_path(
-                    project_root.as_path(),
-                    config_root.as_path(),
-                    projects.as_slice(),
-                    hit.path.as_str(),
-                ),
+            enrich_ast_hit_project_metadata(
+                &mut hit,
+                project_root.as_path(),
+                config_root.as_path(),
+                projects.as_slice(),
             );
             hit.score = score_ast_hit(&hit, raw_query);
+            hit.navigation_target = ast_navigation_target(&hit);
             hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
+            hit.navigation_target.path = hit.path.clone();
             hit
         })
         .collect::<Vec<_>>();
@@ -387,77 +401,35 @@ pub(in crate::gateway::studio) async fn search_definition(
     let config_root = state.studio.config_root.clone();
     let projects = state.studio.configured_projects();
     let index = state.studio.ast_index().await?;
-
-    let mut candidates = index
-        .iter()
-        .filter(|hit| {
-            pathing::path_matches_project_file_filters(
-                project_root.as_path(),
-                config_root.as_path(),
-                projects.as_slice(),
-                hit.path.as_str(),
-            )
-        })
-        .filter(|hit| hit.name.eq_ignore_ascii_case(raw_query))
-        .map(|hit| {
-            let mut hit = hit.clone();
-            apply_project_metadata(
-                &mut hit.project_name,
-                &mut hit.root_label,
-                project_metadata_for_path(
-                    project_root.as_path(),
-                    config_root.as_path(),
-                    projects.as_slice(),
-                    hit.path.as_str(),
-                ),
-            );
-            hit.score = score_definition_hit(&hit, raw_query, source_path_candidates.as_deref());
-            hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
-            hit
-        })
-        .collect::<Vec<_>>();
-
-    if candidates.is_empty() {
-        candidates = index
-            .iter()
-            .filter(|hit| {
-                pathing::path_matches_project_file_filters(
-                    project_root.as_path(),
-                    config_root.as_path(),
-                    projects.as_slice(),
-                    hit.path.as_str(),
-                )
-            })
-            .filter(|hit| ast_hit_matches(hit, raw_query))
-            .map(|hit| {
-                let mut hit = hit.clone();
-                apply_project_metadata(
-                    &mut hit.project_name,
-                    &mut hit.root_label,
-                    project_metadata_for_path(
-                        project_root.as_path(),
-                        config_root.as_path(),
-                        projects.as_slice(),
-                        hit.path.as_str(),
-                    ),
-                );
-                hit.score =
-                    score_definition_hit(&hit, raw_query, source_path_candidates.as_deref());
-                hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
-                hit
-            })
-            .collect::<Vec<_>>();
+    let markdown_observation_hints = definition_observation_hints(
+        state.as_ref(),
+        source_path_candidates.as_deref(),
+        source_line,
+        raw_query,
+    )
+    .await;
+    let mut candidates = resolve_definition_candidates(
+        project_root.as_path(),
+        config_root.as_path(),
+        projects.as_slice(),
+        index.as_slice(),
+        raw_query,
+        DefinitionResolveOptions {
+            source_paths: source_path_candidates.as_deref(),
+            scope_patterns: markdown_observation_hints
+                .as_ref()
+                .map(|hints| hints.scope_patterns.as_slice()),
+            languages: markdown_observation_hints
+                .as_ref()
+                .map(|hints| hints.languages.as_slice()),
+            ..DefinitionResolveOptions::default()
+        },
+    );
+    for hit in &mut candidates {
+        hit.navigation_target = ast_navigation_target(hit);
+        hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
+        hit.navigation_target.path = hit.path.clone();
     }
-
-    candidates.sort_by(|left, right| {
-        right
-            .score
-            .partial_cmp(&left.score)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| left.name.cmp(&right.name))
-            .then_with(|| left.path.cmp(&right.path))
-            .then_with(|| left.line_start.cmp(&right.line_start))
-    });
 
     let candidate_count = candidates.len();
     let definition = candidates.into_iter().next().ok_or_else(|| {
@@ -468,6 +440,7 @@ pub(in crate::gateway::studio) async fn search_definition(
         query: raw_query.to_string(),
         source_path,
         source_line,
+        navigation_target: definition.navigation_target.clone(),
         definition,
         candidate_count,
         selected_scope: "definition".to_string(),
@@ -506,6 +479,7 @@ pub(in crate::gateway::studio) async fn search_symbols(
                 projects.as_slice(),
             );
             hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
+            hit.navigation_target.path = hit.path.clone();
             hit
         })
         .filter(|hit| {
@@ -597,6 +571,7 @@ pub(in crate::gateway::studio) async fn search_references(
     });
     for hit in &mut hits {
         hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
+        hit.navigation_target.path = hit.path.clone();
     }
     let hit_count = hits.len();
 
@@ -656,7 +631,11 @@ fn strip_option(value: &str) -> Option<String> {
 fn canonical_graph_path(state: &GatewayState, index: &LinkGraphIndex, raw_path: &str) -> String {
     graph_lookup_candidates(state.studio.as_ref(), raw_path)
         .into_iter()
-        .find_map(|candidate| index.metadata(candidate.as_str()).map(|metadata| metadata.path))
+        .find_map(|candidate| {
+            index
+                .metadata(candidate.as_str())
+                .map(|metadata| metadata.path)
+        })
         .unwrap_or_else(|| raw_path.replace('\\', "/"))
 }
 
@@ -669,6 +648,13 @@ fn symbol_to_hit(
 ) -> SymbolSearchHit {
     let (path, line) = split_location(symbol.location.as_str());
     let metadata = project_metadata_for_path(project_root, config_root, projects, path.as_str());
+    let navigation_target = symbol_navigation_target(
+        path.as_str(),
+        symbol.crate_or_local(),
+        metadata.project_name.as_deref(),
+        metadata.root_label.as_deref(),
+        line,
+    );
 
     SymbolSearchHit {
         name: symbol.name.clone(),
@@ -682,12 +668,48 @@ fn symbol_to_hit(
         crate_name: symbol.crate_or_local().to_string(),
         project_name: metadata.project_name,
         root_label: metadata.root_label,
+        navigation_target,
         source: if symbol.is_project() {
             SymbolSearchSource::Project
         } else {
             SymbolSearchSource::External
         },
         score: score_symbol(symbol.name.as_str(), path.as_str(), query),
+    }
+}
+
+fn ast_navigation_target(hit: &AstSearchHit) -> StudioNavigationTarget {
+    StudioNavigationTarget {
+        path: hit.path.clone(),
+        category: "doc".to_string(),
+        project_name: hit
+            .project_name
+            .clone()
+            .or_else(|| Some(hit.crate_name.clone())),
+        root_label: hit.root_label.clone(),
+        line: Some(hit.line_start),
+        line_end: Some(hit.line_end),
+        column: None,
+    }
+}
+
+fn symbol_navigation_target(
+    path: &str,
+    crate_name: &str,
+    project_name: Option<&str>,
+    root_label: Option<&str>,
+    line: usize,
+) -> StudioNavigationTarget {
+    StudioNavigationTarget {
+        path: path.to_string(),
+        category: "doc".to_string(),
+        project_name: project_name
+            .map(ToString::to_string)
+            .or_else(|| Some(crate_name.to_string())),
+        root_label: root_label.map(ToString::to_string),
+        line: Some(line),
+        line_end: Some(line),
+        column: None,
     }
 }
 
@@ -698,48 +720,6 @@ struct AutocompleteCollector<'a> {
     limit: usize,
 }
 
-fn apply_project_metadata(
-    project_name: &mut Option<String>,
-    root_label: &mut Option<String>,
-    metadata: SearchProjectMetadata,
-) {
-    *project_name = metadata.project_name;
-    *root_label = metadata.root_label;
-}
-
-pub(in crate::gateway::studio::search) fn infer_crate_name(relative_path: &Path) -> String {
-    let components = relative_path
-        .components()
-        .filter_map(|component| match component {
-            Component::Normal(value) => Some(value.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-
-    match components.as_slice() {
-        [packages, rust, crates, crate_name, ..]
-            if packages == "packages" && rust == "rust" && crates == "crates" =>
-        {
-            crate_name.clone()
-        }
-        [packages, python, package_name, ..] if packages == "packages" && python == "python" => {
-            package_name.clone()
-        }
-        [data, workspace_name, ..] if data == ".data" => workspace_name.clone(),
-        [skills, skill_name, ..] if skills == "internal_skills" => skill_name.clone(),
-        [first, ..] => first.clone(),
-        [] => "workspace".to_string(),
-    }
-}
-
-pub(in crate::gateway::studio::search) fn source_language_label(path: &Path) -> Option<&'static str> {
-    match path.extension().and_then(|extension| extension.to_str()) {
-        Some("rs") => Some("rust"),
-        Some("py") => Some("python"),
-        _ => None,
-    }
-}
-
 fn split_location(location: &str) -> (String, usize) {
     match location.rsplit_once(':') {
         Some((path, line)) => (
@@ -747,120 +727,6 @@ fn split_location(location: &str) -> (String, usize) {
             line.parse::<usize>().unwrap_or_default().max(1),
         ),
         None => (location.to_string(), 1),
-    }
-}
-
-pub(in crate::gateway::studio::search) fn first_signature_line(text: &str) -> &str {
-    text.lines().next().map(str::trim).unwrap_or_default()
-}
-
-fn ast_hit_matches(hit: &AstSearchHit, query: &str) -> bool {
-    let query_lc = query.to_ascii_lowercase();
-    hit.name.to_ascii_lowercase().contains(query_lc.as_str())
-        || hit
-            .signature
-            .to_ascii_lowercase()
-            .contains(query_lc.as_str())
-        || hit.path.to_ascii_lowercase().contains(query_lc.as_str())
-        || hit
-            .language
-            .to_ascii_lowercase()
-            .contains(query_lc.as_str())
-        || hit
-            .crate_name
-            .to_ascii_lowercase()
-            .contains(query_lc.as_str())
-        || hit
-            .node_kind
-            .as_ref()
-            .is_some_and(|value| value.to_ascii_lowercase().contains(query_lc.as_str()))
-        || hit
-            .owner_title
-            .as_ref()
-            .is_some_and(|value| value.to_ascii_lowercase().contains(query_lc.as_str()))
-}
-
-fn score_ast_hit(hit: &AstSearchHit, query: &str) -> f64 {
-    let query_lc = query.to_ascii_lowercase();
-    let name_lc = hit.name.to_ascii_lowercase();
-    let signature_lc = hit.signature.to_ascii_lowercase();
-    let path_lc = hit.path.to_ascii_lowercase();
-    let owner_title_lc = hit
-        .owner_title
-        .as_deref()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let node_kind_lc = hit
-        .node_kind
-        .as_deref()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    if name_lc == query_lc {
-        1.0
-    } else if name_lc.starts_with(query_lc.as_str()) {
-        0.95
-    } else if name_lc.contains(query_lc.as_str()) {
-        0.88
-    } else if owner_title_lc.contains(query_lc.as_str()) {
-        0.84
-    } else if signature_lc.contains(query_lc.as_str()) {
-        0.8
-    } else if node_kind_lc.contains(query_lc.as_str()) {
-        0.76
-    } else if path_lc.contains(query_lc.as_str()) {
-        0.72
-    } else {
-        0.5
-    }
-}
-
-fn score_definition_hit(hit: &AstSearchHit, query: &str, source_paths: Option<&[String]>) -> f64 {
-    let mut score = score_ast_hit(hit, query);
-
-    if let Some(source_paths) = source_paths {
-        let hit_parent = Path::new(hit.path.as_str()).parent().map(normalize_path);
-        let source_bonus = source_paths
-            .iter()
-            .map(|source_path| {
-                let normalized_source_path = source_path.replace('\\', "/");
-                let source_path = Path::new(normalized_source_path.as_str());
-                let source_crate = infer_crate_name(source_path);
-                let mut bonus = 0.0;
-
-                if hit.path == normalized_source_path {
-                    bonus += 0.15;
-                }
-
-                if hit.crate_name.eq_ignore_ascii_case(source_crate.as_str()) {
-                    bonus += 0.1;
-                }
-
-                let source_parent = source_path.parent().map(normalize_path);
-                if source_parent.is_some() && source_parent == hit_parent {
-                    bonus += 0.05;
-                }
-
-                bonus
-            })
-            .fold(0.0, f64::max);
-        score += source_bonus;
-    }
-
-    score
-}
-
-pub(in crate::gateway::studio::search) fn score_reference_hit(line_text: &str, query: &str) -> f64 {
-    let normalized_line = line_text.trim();
-    if normalized_line.contains(query) {
-        0.9
-    } else if normalized_line
-        .to_ascii_lowercase()
-        .contains(query.to_ascii_lowercase().as_str())
-    {
-        0.82
-    } else {
-        0.7
     }
 }
 
@@ -879,23 +745,6 @@ fn score_symbol(name: &str, path: &str, query: &str) -> f64 {
         0.72
     } else {
         0.5
-    }
-}
-
-pub(in crate::gateway::studio::search) fn symbol_kind_label(kind: &SymbolKind) -> &'static str {
-    match kind {
-        SymbolKind::Struct => "struct",
-        SymbolKind::Enum => "enum",
-        SymbolKind::Trait => "trait",
-        SymbolKind::Function => "function",
-        SymbolKind::Method => "method",
-        SymbolKind::Field => "field",
-        SymbolKind::Impl => "impl",
-        SymbolKind::Mod => "module",
-        SymbolKind::Const => "const",
-        SymbolKind::Static => "static",
-        SymbolKind::TypeAlias => "type_alias",
-        SymbolKind::Unknown => "unknown",
     }
 }
 

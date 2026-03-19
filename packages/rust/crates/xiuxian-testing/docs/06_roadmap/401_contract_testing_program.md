@@ -134,10 +134,20 @@ is still Metal-backed because no local CUDA proof has been captured yet.
 
 ## Immediate Next Steps
 
-1. Implement the `contracts` data model in `xiuxian-testing`.
-2. Land a minimal markdown and JSON reporter.
-3. Prototype `rest_docs` against `xiuxian-wendao` gateway endpoints.
-4. Prototype `modularity` against `xiuxian-testing` itself.
+Delivered in this pass:
+
+1. `qianji` scenario-audit (`formal_audit`) is now a named contract-feedback gate.
+2. `xiuxian-testing` contract packs are enforced through CI-visible gates.
+3. `xiuxian-wendao` now exposes a stable bundled gateway `OpenAPI` artifact for clean `rest_docs` validation.
+4. One persisted `qianji -> wendao` downstream proof now exists through
+   `wendao_persisted_rest_docs_contract_feedback`, and the strengthened
+   `xiuxian_wendao_contract_feedback_consumer.sh` gate covers both adapter
+   mapping and sink persistence.
+
+Remaining next steps:
+
+1. Stabilize Wendao export ingestion around `ContractKnowledgeBatch` and define one retrieval query for active drift tracking.
+2. Expand contract-pack CI adoption to one more kernel crate after `xiuxian-wendao`.
 
 ## Snapshot Governance Notes
 
@@ -146,7 +156,13 @@ is still Metal-backed because no local CUDA proof has been captured yet.
   same `id`.
 - Current verification evidence:
   - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/xiuxian-testing-nextest cargo nextest run -p xiuxian-testing --lib --tests --no-fail-fast`
+  - `direnv exec . bash scripts/rust/xiuxian_qianji_scenario_audit_contracts.sh`
+  - `direnv exec . bash scripts/rust/xiuxian_testing_contract_gates.sh`
+  - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/wendao-live-openapi-gate bash scripts/rust/xiuxian_wendao_live_openapi_contract_feedback.sh`
+  - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/wendao-contract-feedback-consumer bash scripts/rust/xiuxian_wendao_contract_feedback_consumer.sh`
+  - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/wendao-contract-feedback-consumer cargo test -p xiuxian-qianji --test wendao_persisted_rest_docs_contract_feedback`
   - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/xiuxian-testing-nextest cargo clippy -p xiuxian-testing --all-targets -- -D warnings`
+  - `direnv exec . bash scripts/ci_scripts_smoke.sh`
   - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/wendao-scenarios-nextest cargo nextest run -p xiuxian-wendao --test scenarios_test --no-fail-fast`
 
 ## Exit Criteria for the V1 Design Stage

@@ -801,6 +801,10 @@ Retained follow-up evidence:
   (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v2_after_toml.log`,
   `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v3_after_toml.log`,
   `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v3.log`)
+- the same default memory-line profile has now been re-run on the verified `.run` binary surface
+  and passes again in `93.9s` with OCR preview `Memory should stay stable.`, so the current state
+  is not "memory-line is globally gone" but "memory-line is binary-surface scoped in this
+  checkout"
 - phase-isolation now shows this wall is not decode-only: both `--phase=prewarm` and
   `--phase=load` exceed the `12 GB` guard on the same accepted head
   (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_prewarm_v1.log`,
@@ -811,7 +815,8 @@ Retained follow-up evidence:
   (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_prewarm_lazy_moe_v1.log`)
 - moving from `max_new_tokens=2` to `max_new_tokens=3` reintroduces the old kill point
   (`.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens3_v1.log`), so the
-  memory-line branch is currently exploratory-only rather than retained
+  refreshed local `target/debug` surface remains exploratory, but the verified `.run` surface is
+  retained again for the default memory-line gate
 - a small retained widening of the prompt-aware first visible-token anchor now also covers
   punctuation-led phrases such as `2026-03-09-001` and `$128.50`, but the first two structured
   probes built on top of that widening still fall into the old long low-RSS tail and therefore do
@@ -892,6 +897,13 @@ Evidence:
 - `.run/tmp/downstream_deepseek_metal_day_token_probe_12g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_day_token_probe_13g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_day_token_probe_15g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_digit9_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_digit9_probe_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_digit9_probe_15g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_digit9_probe_15g_v2.log`
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_probe_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_probe_15g_v1.log`
 
 ## Exit Criterion
 
@@ -920,5 +932,80 @@ Current status:
 - a fresh compact day-token exploratory branch (`09`) is also not retained yet: `12 GB` and `13 GB`
   guarded runs hit fast guard kills (`12.27 GB`, `13.11 GB`), and a widened `15 GB` retry enters
   the same long low-RSS tail (`~2.94 GB`) without in-log completion before manual stop
-- the next bounded step should move from these short-form gates to a compact structured field, not
-  revisit Metal memory surgery
+- a fresh compact single-digit exploratory branch (`expected_substring=9`) is also not retained:
+  `12 GB` and `13 GB` guarded runs still hit fast guard kills (`12.11 GB`, `13.04 GB`), while
+  widened `15 GB` retries do complete but repeatedly return `0` instead of `9`
+- the closest production-like compact field so far is the tighter amount-prefix branch
+  (`expected_substring=Amount: $128`, `max_new_tokens=4`): it misses `12 GB` by only `0.01 GB`
+  (`12.01 GB`), still spikes out at `13.14 GB` under `13 GB`, and widened `15 GB` no longer dies
+  early but drains into a long low-RSS tail (`~0.60 GB`) without in-log completion before manual
+  stop
+- direct smoke-image inspection sharpens the next ranking: the corrected exact `Amount: $128`
+  prefix can touch the `12 GB` edge once (`12.00 GB`, `39.8s`), but the same run regresses to
+  `12.57 GB` after `95.0s` on immediate repeat; the matching invoice-prefix branch (`Invoice No:
+2026`) is worse and hits `13.11 GB` under the same `12 GB` guard
+- that exact `Amount: $128` branch has now also been re-run on the verified `.run` binary surface;
+  it no longer dies on the old `12 GB` wall, but it still does not become retained because it
+  drains into a long `~1.08 GB` low-RSS plateau through at least `152s` without decode completion
+  before manual stop
+- the matching invoice exact-prefix branch (`Invoice No: 2026`) has now been re-run on the same
+  verified `.run` binary surface too; it also no longer dies on the old peak-memory wall, but it
+  still does not become retained because it flattens into a long `~0.30 GB` low-RSS plateau
+  through at least `126s` without decode completion before manual stop
+- a shorter amount-side prefix (`Amount: $1`, `max_new_tokens=2`) is also not retained: it spends
+  about `80s` at low RSS (`~0.13 GB`), then ramps and still dies on the same guard at `12.08 GB`
+  after `100.7s`
+- a label-only invoice-side prefix (`Invoice No:`, `max_new_tokens=3`) is also not retained: it
+  improves on `Invoice No: 2026`, but still ramps into the same `12 GB` guard at `12.09 GB` after
+  `54.4s`
+- a non-numeric compact label (`Line 2:`, `max_new_tokens=2`) is also not retained: it still hits
+  the same `12 GB` guard at `12.27 GB` after `39.6s`
+- treat the amount-side prefix as the best production-like candidate for now, but keep it
+  exploratory-only until it both converges and becomes repeat-stable; deprioritize the
+  invoice-prefix branch and do not assume that merely changing binary surface, shortening the
+  visible prefix, or stripping numeric suffixes will solve it; the current decision wall for both
+  exact structured fields is convergence, not raw peak RSS alone
+- the current smoke image has now exhausted its most plausible compact-field families; the next
+  bounded step should either formalize pilot limits around the retained text gates or move to a new
+  image/dataset, not revisit Metal memory surgery
+- retained text gates themselves are now known to be binary-surface sensitive in this checkout:
+  `Managed sidecar health check` regresses on the current default `target/debug` binary
+  (`12.04 GB`, `45.1s`), but still passes when pinned to the older verified
+  `.run/target-real-metal-cli-debug` binary (`104.1s`, successful OCR preview)
+- that verified surface is now re-established on the default runner path itself: the managed-sidecar
+  retained profile passes through the normal `scripts/run_real_metal_test.py` entrypoint in
+  `127.0s`, and a cooled retry also passes in `99.9s`, both on the auto-selected `.run` binary
+- the two immediate reruns between those passes were rejected by `capfox` as `cpu_overload`, so the
+  current soak picture is not a clean uninterrupted streak yet
+- a further cooled retry now passes in `140.0s` as well, so the default-runner soak state is
+  three valid post-alignment passes plus transient environment noise, which is materially stronger
+  than the earlier single-pass or two-pass state
+- a next-day rerun now passes in `94.4s` too, so this retained managed-sidecar lane is no longer
+  supported only by same-session soak evidence; the default runner path now has cross-day passing
+  proof on the verified `.run` binary surface
+- that retained lane is now also the TOML-backed default Metal infer entry: a no-profile
+  `scripts/run_real_metal_test.py` invocation auto-selects the managed-sidecar retained profile and
+  passes in `89.1s`, which makes the limited-pilot validation entry explicit rather than tribal
+- the adjacent retained `sidecar_line` profile has now also been revalidated on the same verified
+  `.run` binary surface (`86.9s`, OCR preview `Managed sidecar health check.`, exit `0`), so the
+  retained sidecar-family proof now covers both the pilot-default managed-sidecar lane and the
+  lower-bound structured-line lane on one binary surface
+
+Production and de-vendor gates should now be treated separately:
+
+- production-pilot readiness no longer depends on removing vendored `deepseek-ocr` first
+- the production-pilot gate for the current Metal head is:
+  - keep the canonical accepted-head load/infer pair green
+  - promote at least one production-like compact field into the retained ladder under the same
+    `12 GB` guard
+  - pass a repeated guarded soak on the retained head after cold restarts, not just a single happy
+    path run
+- until the current build surface is revalidated, any limited pilot must be scoped to the verified
+  retained-gate binary surface rather than arbitrary local `target/debug` builds
+- the de-vendor gate is later and stricter:
+  - remove the root `[patch."https://github.com/TimmyOVO/deepseek-ocr.rs"]` override only after the
+    accepted-head behavior is preserved without the vendored path
+  - the non-vendored path must still pass script validation, vendored `infer-deepseek` library
+    tests, and the isolated real-Metal harness compile surface before production promotion
+- until those conditions are met, `third_party/deepseek-ocr` remains part of the accepted runtime
+  path even if a limited Metal pilot becomes production-eligible earlier

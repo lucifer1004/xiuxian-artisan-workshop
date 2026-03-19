@@ -1015,6 +1015,21 @@ rust-xiuxian-daochang-backend-role-contracts:
     @bash scripts/rust/xiuxian_daochang_backend_role_contracts.sh
 
 [group('validate')]
+rust-xiuxian-qianji-scenario-audit-contracts:
+    @echo "Running xiuxian-qianji scenario-audit contract tests..."
+    @bash scripts/rust/xiuxian_qianji_scenario_audit_contracts.sh
+
+[group('validate')]
+rust-xiuxian-testing-contract-gates:
+    @echo "Running xiuxian-testing contract gates..."
+    @bash scripts/rust/xiuxian_testing_contract_gates.sh
+
+[group('validate')]
+rust-xiuxian-wendao-contract-feedback-consumer:
+    @echo "Running xiuxian-wendao contract-feedback consumer tests..."
+    @bash scripts/rust/xiuxian_wendao_contract_feedback_consumer.sh
+
+[group('validate')]
 rust-xiuxian-daochang-embedding-role-perf-smoke \
     single_runs="20" \
     batch_runs="10" \

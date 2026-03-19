@@ -8,6 +8,10 @@ expression: value
     "id": "kernel/alpha.md",
     "isCenter": true,
     "label": "Alpha",
+    "navigationTarget": {
+      "category": "doc",
+      "path": "kernel/alpha.md"
+    },
     "nodeType": "doc",
     "path": "kernel/alpha.md"
   },

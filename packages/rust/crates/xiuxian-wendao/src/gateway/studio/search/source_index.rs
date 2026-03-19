@@ -8,7 +8,7 @@ use xiuxian_ast::{Lang, extract_items, get_skeleton_patterns};
 use crate::dependency_indexer::extract_symbols;
 use crate::gateway::studio::analysis;
 use crate::gateway::studio::types::{
-    AnalysisNodeKind, AstSearchHit, ReferenceSearchHit, UiProjectConfig,
+    AnalysisNodeKind, AstSearchHit, ReferenceSearchHit, StudioNavigationTarget, UiProjectConfig,
 };
 use crate::link_graph::parser::{ParsedSection, parse_note};
 use crate::unified_symbol::UnifiedSymbolIndex;
@@ -16,7 +16,7 @@ use crate::unified_symbol::UnifiedSymbolIndex;
 use super::project_scope::{
     configured_project_scan_roots, index_path_for_entry, project_metadata_for_path,
 };
-use super::handlers::{
+use super::support::{
     first_signature_line, infer_crate_name, score_reference_hit, source_language_label,
     symbol_kind_label,
 };
@@ -100,6 +100,14 @@ pub(super) fn build_ast_index(
                         root_label: None,
                         node_kind: None,
                         owner_title: None,
+                        navigation_target: ast_navigation_target(
+                            normalized_path.as_str(),
+                            crate_name.as_str(),
+                            None,
+                            None,
+                            result.line_start,
+                            result.line_end,
+                        ),
                         line_start: result.line_start,
                         line_end: result.line_end,
                         score: 0.0,
@@ -206,6 +214,14 @@ pub(super) fn build_reference_hits(
                     projects,
                     normalized_path.as_str(),
                 );
+                let navigation_target = reference_navigation_target(
+                    normalized_path.as_str(),
+                    crate_name.as_str(),
+                    metadata.project_name.as_deref(),
+                    metadata.root_label.as_deref(),
+                    line_number,
+                    line_text[..mat.start()].chars().count() + 1,
+                );
 
                 hits.push(ReferenceSearchHit {
                     name: query.to_string(),
@@ -214,6 +230,7 @@ pub(super) fn build_reference_hits(
                     crate_name: crate_name.clone(),
                     project_name: metadata.project_name,
                     root_label: metadata.root_label,
+                    navigation_target,
                     line: line_number,
                     column: line_text[..mat.start()].chars().count() + 1,
                     line_text: line_text.trim().to_string(),
@@ -283,7 +300,7 @@ fn build_markdown_ast_hits(
     let mut hits = analysis::compile_markdown_nodes(path, content)
         .into_iter()
         .filter_map(|node| {
-            let signature = markdown_signature(&node.kind, node.depth, node.label.as_str())?;
+            let signature = markdown_signature(node.kind, node.depth, node.label.as_str())?;
             Some(AstSearchHit {
                 name: node.label,
                 signature,
@@ -292,8 +309,16 @@ fn build_markdown_ast_hits(
                 crate_name: crate_name.to_string(),
                 project_name: None,
                 root_label: None,
-                node_kind: markdown_node_kind(&node.kind).map(ToOwned::to_owned),
+                node_kind: markdown_node_kind(node.kind).map(ToOwned::to_owned),
                 owner_title: None,
+                navigation_target: ast_navigation_target(
+                    path,
+                    crate_name,
+                    None,
+                    None,
+                    node.line_start,
+                    node.line_end,
+                ),
                 line_start: node.line_start,
                 line_end: node.line_end,
                 score: 0.0,
@@ -311,7 +336,7 @@ fn build_markdown_ast_hits(
     hits
 }
 
-fn markdown_signature(kind: &AnalysisNodeKind, depth: usize, label: &str) -> Option<String> {
+fn markdown_signature(kind: AnalysisNodeKind, depth: usize, label: &str) -> Option<String> {
     match kind {
         AnalysisNodeKind::Section => Some(format!("{} {label}", "#".repeat(depth.clamp(1, 6)))),
         AnalysisNodeKind::Task => Some(format!("- [ ] {label}")),
@@ -319,7 +344,7 @@ fn markdown_signature(kind: &AnalysisNodeKind, depth: usize, label: &str) -> Opt
     }
 }
 
-fn markdown_node_kind(kind: &AnalysisNodeKind) -> Option<&'static str> {
+fn markdown_node_kind(kind: AnalysisNodeKind) -> Option<&'static str> {
     match kind {
         AnalysisNodeKind::Section => Some("section"),
         AnalysisNodeKind::Task => Some("task"),
@@ -347,6 +372,14 @@ fn build_markdown_property_hits(
             root_label: None,
             node_kind: Some("property".to_string()),
             owner_title: owner_title.clone(),
+            navigation_target: ast_navigation_target(
+                path,
+                crate_name,
+                None,
+                None,
+                section.line_start,
+                section.line_end,
+            ),
             line_start: section.line_start,
             line_end: section.line_end,
             score: 0.0,
@@ -373,6 +406,14 @@ fn build_markdown_observation_hits(
             root_label: None,
             node_kind: Some("observation".to_string()),
             owner_title: owner_title.clone(),
+            navigation_target: ast_navigation_target(
+                path,
+                crate_name,
+                None,
+                None,
+                section.line_start,
+                section.line_end,
+            ),
             line_start: section.line_start,
             line_end: section.line_end,
             score: 0.0,
@@ -412,5 +453,47 @@ fn ast_search_lang(path: &Path) -> Option<Lang> {
         | Lang::Lua
         | Lang::Php => Lang::from_path(path),
         _ => None,
+    }
+}
+
+fn ast_navigation_target(
+    path: &str,
+    crate_name: &str,
+    project_name: Option<&str>,
+    root_label: Option<&str>,
+    line_start: usize,
+    line_end: usize,
+) -> StudioNavigationTarget {
+    StudioNavigationTarget {
+        path: path.to_string(),
+        category: "doc".to_string(),
+        project_name: project_name
+            .map(ToString::to_string)
+            .or_else(|| Some(crate_name.to_string())),
+        root_label: root_label.map(ToString::to_string),
+        line: Some(line_start),
+        line_end: Some(line_end),
+        column: None,
+    }
+}
+
+fn reference_navigation_target(
+    path: &str,
+    crate_name: &str,
+    project_name: Option<&str>,
+    root_label: Option<&str>,
+    line: usize,
+    column: usize,
+) -> StudioNavigationTarget {
+    StudioNavigationTarget {
+        path: path.to_string(),
+        category: "doc".to_string(),
+        project_name: project_name
+            .map(ToString::to_string)
+            .or_else(|| Some(crate_name.to_string())),
+        root_label: root_label.map(ToString::to_string),
+        line: Some(line),
+        line_end: Some(line),
+        column: Some(column),
     }
 }

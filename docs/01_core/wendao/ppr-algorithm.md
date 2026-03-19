@@ -188,12 +188,12 @@ All payloads stay schema-validated through shared contracts.
     `graph_only_search_timeout`, `graph_only_payload_overridden`,
     `graph_only_payload_mode_conflict`, or `graph_only_policy_missing`.
 - escalation remains bounded by runtime config:
-  - `link_graph.retrieval_mode`,
-  - `link_graph.candidate_multiplier`,
-  - `link_graph.max_sources`,
-  - `link_graph.hybrid.min_hits`,
-  - `link_graph.hybrid.min_top_score`,
-  - `link_graph.graph_rows_per_source`.
+  - `link_graph.retrieval.mode`,
+  - `link_graph.retrieval.candidate_multiplier`,
+  - `link_graph.retrieval.max_sources`,
+  - `link_graph.retrieval.hybrid_min_hits`,
+  - `link_graph.retrieval.hybrid_min_top_score`,
+  - `link_graph.retrieval.graph_rows_per_source`.
 - CLI verbose output now includes an explicit `link_graph.search.policy` phase.
 
 6. **WG5: Rollout and Default Switch — Done (core default)**

@@ -252,12 +252,16 @@ Current status:
 - a later file-capture rerun for the same profile was denied by `capfox` with `cpu_overload`, so
   repeatability is currently sensitive to ambient workspace load even though the gate has now been
   observed passing as a real profile-backed Metal run
+- after the managed-sidecar runner realignment, the same sidecar-line profile was revalidated on
+  the verified `.run/target-real-metal-cli-debug` surface and passed again in `86.9s` with the
+  OCR preview `Managed sidecar health check.`
 
 Primary evidence:
 
 - `.run/tmp/downstream_deepseek_metal_sidecar_line_profile_12g_v1.observed.log`
 - `.run/tmp/downstream_deepseek_metal_sidecar_line_profile_12g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_sidecar_line_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_sidecar_line_profile_12g_v2_realign.log`
 
 ### `deepseek_metal_smoke_12g_safe384_managed_sidecar_line_metal_fast_eager_shared_native`
 
@@ -287,6 +291,9 @@ Current status:
 
 - profile default (`max_new_tokens = 6`) is no longer retained under the same `12 GB` guard after
   local `target/debug` refresh; repeated reruns now exceed the guard before decode completes
+- the same profile default has now been revalidated on the verified
+  `.run/target-real-metal-cli-debug` surface and passes again in `93.9s` with OCR preview
+  `Memory should stay stable.`
 - narrowed decode budget (`max_new_tokens = 2`) produced two passing runs, but subsequent reruns
   in the same workspace snapshot failed again under the same `12 GB` guard
 - phase-isolation confirms this wall is not decode-only in the current snapshot: both
@@ -294,13 +301,14 @@ Current status:
   also exceeds guard
 - forcing `XIUXIAN_VISION_LAZY_MOE_EXPERTS=1` in `--phase=prewarm` does not restore `12 GB`
   stability in this snapshot
-- `max_new_tokens = 3` still reintroduces the same guard breach; the memory-line branch is
-  currently exploratory only and not retained
+- `max_new_tokens = 3` still reintroduces the same guard breach on the refreshed `target/debug`
+  surface; the memory-line branch is therefore binary-surface scoped rather than globally retained
 
 Primary evidence:
 
 - `.run/tmp/downstream_deepseek_metal_memory_line_probe_12g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_memory_line_profile_12g_v3.log`
+- `.run/tmp/downstream_deepseek_metal_memory_line_profile_12g_v5_realign.log`
 - `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_memory_line_probe_12g_v4_after_rebuild.log`
 - `.run/tmp/downstream_deepseek_metal_memory_line_profile_default_12g_tokens2_v1.log`
@@ -490,6 +498,162 @@ Evidence:
 - `.run/tmp/downstream_deepseek_metal_day_token_probe_12g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_day_token_probe_13g_v1.log`
 - `.run/tmp/downstream_deepseek_metal_day_token_probe_15g_v1.log`
+
+Structured digit-9 follow-up (2026-03-18 exploratory):
+
+- a compact single-digit follow-up (`expected_substring=9`) was run to test whether a stronger
+  numeric target can still stay practical without reopening memory surgery
+- `--phase=infer --max-rss=12` exits on guard at `12.11 GB` after about `32.8s`
+- `--phase=infer --max-rss=13` exits on guard at `13.04 GB` after about `33.2s`
+- widened `--max-rss=15` retries do complete (`~55-59s` inference), but both return OCR preview
+  `0` and fail semantic assertion (`missing expected substring 9`)
+- this branch is exploratory-only and is not promoted into the retained quality ladder
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_digit9_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_digit9_probe_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_digit9_probe_15g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_digit9_probe_15g_v2.log`
+
+Structured amount-prefix follow-up (2026-03-18 exploratory):
+
+- a tighter production-like amount probe was run with the same accepted head by lowering decode
+  budget to `max_new_tokens=4` and only requiring substring `Amount: $128`
+- `--phase=infer --max-rss=12` now misses by only `0.01 GB`, exiting on guard at `12.01 GB` after
+  about `39.4s`
+- `--phase=infer --max-rss=13` still spikes out at `13.14 GB` after about `33.9s`
+- a widened `--max-rss=15` retry no longer dies early, but it does not produce an in-log
+  completion boundary either; after peaking around `10.59 GB` it drains into a long low-RSS tail at
+  `~0.60 GB` until manual stop
+- this is the closest production-like compact field so far, but it is still exploratory-only and
+  not yet retained
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_probe_13g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_probe_15g_v1.log`
+
+Structured exact amount-prefix and invoice-prefix follow-up (2026-03-18 exploratory):
+
+- after directly inspecting `.run/tmp/ocr-smoke.png`, the next compact probes were aligned to the
+  actual visible structured fields `Amount: $128.50` and `Invoice No: 2026-03-09-001`
+- a corrected exact amount-prefix branch requiring only `Amount: $128` under `--max-rss=12`
+  reaches the guard edge once at `12.00 GB` in about `39.8s`, but the same parameters regress on
+  immediate repeat to `12.57 GB` in about `95.0s`
+- the same exact amount-prefix branch has now been rerun on the verified
+  `.run/target-real-metal-cli-debug` surface; it no longer dies on the old `12 GB` wall, but it
+  settles into a long `~1.08 GB` low-RSS plateau through at least `152s` without an in-log decode
+  completion boundary and was manually stopped
+- the corresponding invoice-prefix branch requiring only `Invoice No: 2026` was materially worse
+  on refreshed `target/debug`, tripping the same `12 GB` guard at `13.11 GB` in about `33.9s`
+- that same invoice-prefix branch has now also been rerun on the verified
+  `.run/target-real-metal-cli-debug` surface; it no longer dies on the old guard wall either, but
+  it settles into a long `~0.30 GB` low-RSS plateau through at least `126s` without an in-log
+  decode completion boundary and was manually stopped
+- this keeps `Amount: $128` as the best production-like compact field direction so far, but the
+  exact-prefix branch is still exploratory-only because realignment changes the failure mode
+  without producing a retained completion; the invoice-prefix branch improves its peak-memory shape
+  on the verified surface but remains deprioritized because it still does not converge
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_exact_probe_12g_v2.log`
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_exact_probe_12g_v3.log`
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_exact_probe_12g_v4_realign.log`
+- `.run/tmp/downstream_deepseek_metal_invoice_prefix_probe_12g_v1.log`
+- `.run/tmp/downstream_deepseek_metal_invoice_prefix_probe_12g_v2_realign.log`
+
+Structured shorter amount-side prefix follow-up (2026-03-18 exploratory):
+
+- a shorter amount-side probe then required only visible prefix `Amount: $1` with
+  `max_new_tokens=2` under the same accepted head
+- this did not promote the branch: the run sat at very low RSS (`~0.13 GB`) for roughly `80s`,
+  then ramped sharply and still hit guard at `12.08 GB` after about `100.7s`
+- shortening the visible amount-side prefix alone is therefore not enough to make the branch
+  retained; it only moves the wall later in time
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_amount_prefix_dollar1_probe_12g_v1.log`
+
+Structured invoice label-only follow-up (2026-03-18 exploratory):
+
+- a label-only invoice-side probe then required visible prefix `Invoice No:` with
+  `max_new_tokens=3` under the same accepted head
+- this is better than the earlier `Invoice No: 2026` branch, but it is still not retained: the run
+  idles at low RSS (`~0.13 GB`) through the early window, then ramps and still hits the `12 GB`
+  guard at `12.09 GB` after about `54.4s`
+- removing the numeric suffix therefore does not make invoice-side compact fields practical either;
+  invoice-side is not a clean escape hatch from the amount-side wall
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_invoice_label_probe_12g_v1.log`
+
+Structured non-numeric line-label follow-up (2026-03-18 exploratory):
+
+- a different compact field family was then tested with visible prefix `Line 2:` and
+  `max_new_tokens=2` under the same accepted head
+- this valid guarded rerun is also non-retained: after a low-RSS early window it ramps sharply and
+  still hits the `12 GB` guard at `12.27 GB` after about `39.6s`
+- this matters because `Line 2:` is not part of the amount/invoice numeric family; the failure
+  shows the current smoke image does not have an obviously clean compact-label escape hatch either
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_line2_label_probe_12g_v2.log`
+
+Retained-gate surface-sensitivity follow-up (2026-03-18 exploratory but decision-complete):
+
+- after compact-field mining was exhausted on the current smoke image, the next bounded step
+  shifted to pilot-limit verification on already-retained text gates
+- a fresh `Managed sidecar health check` rerun on the current default `target/debug` binary
+  regressed and hit the `12 GB` guard at `12.04 GB` after about `45.1s`
+- the same retained-gate prompt/assertion, when pinned back to the older verified
+  `.run/target-real-metal-cli-debug` binary surface, still passes and returns
+  `Managed sidecar health check.` in about `104.1s`
+- this does not erase the retained text-gate evidence, but it does tighten the pilot boundary:
+  current retained-gate repeatability is binary-surface sensitive and must not be generalized to
+  arbitrary local `target/debug` builds
+- the default runner path is now re-aligned to that verified surface as well: a normal
+  `scripts/run_real_metal_test.py --profile=deepseek_metal_smoke_12g_safe384_managed_sidecar_line_metal_fast_eager_shared_native`
+  invocation auto-selects `.run/target-real-metal-cli-debug`, passes under the shared `12 GB`
+  guard, and returns `Managed sidecar health check.` in `127.0s`
+- the first two immediate repeat attempts on that same default-runner path were rejected by
+  `capfox` with `cpu_overload`, so they do not count as acceptance evidence
+- after a short cooldown, the next default-runner repeat passed again in `99.9s` with the same OCR
+  output, which upgrades the current state to two valid post-alignment passes (`v6`, `v9`) with
+  transient capacity noise (`v7`, `v8`) in between
+- a further cooled repeat now passes as well in `140.0s` with the same OCR output, so the current
+  default-runner soak picture is three valid post-alignment passes (`v6`, `v9`, `v10`) plus two
+  non-counting `cpu_overload` denials (`v7`, `v8`)
+- a next-day rerun now passes too in `94.4s` with the same OCR output, which upgrades the current
+  state from "same-session soak stability" to "cross-day default-runner stability" for this
+  retained managed-sidecar lane
+- the runner now also codifies this retained lane as the TOML-backed default Metal infer entry:
+  when no explicit profile or manual probe overrides are provided, it resolves
+  `[test_defaults].metal_infer_profile` to the managed-sidecar retained profile
+- a no-profile invocation of `scripts/run_real_metal_test.py` now auto-selects that TOML default
+  and passes in `89.1s`, so the limited-pilot entry is no longer "remember this profile name" but
+  a concrete default runner path
+- the adjacent `sidecar_line` retained profile has now also been revalidated on the same verified
+  `.run` binary surface, so the retained sidecar-family evidence is no longer scoped to the
+  managed-sidecar default entry alone
+
+Evidence:
+
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v3.log`
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v4_oldbinary.log`
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v6_default_runner.log`
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v7_default_runner_repeat1.log`
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v8_default_runner_repeat1_retry.log`
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v9_default_runner_repeat2_after_cooldown.log`
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v10_default_runner_repeat3_after_cooldown.log`
+- `.run/tmp/downstream_deepseek_metal_managed_sidecar_line_profile_12g_v11_default_runner_next_day.log`
+- `.run/tmp/downstream_deepseek_metal_default_entry_v12_no_profile.log`
+- `.run/tmp/downstream_deepseek_metal_sidecar_line_profile_12g_v2_realign.log`
 
 ## Evidence Rule
 

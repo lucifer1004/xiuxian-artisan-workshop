@@ -117,6 +117,10 @@ fn get_entry_resolves_configured_relative_roots() {
             "isDir": entry.is_dir,
             "size": entry.size,
             "contentType": entry.content_type,
+            "projectName": entry.project_name,
+            "rootLabel": entry.root_label,
+            "projectRoot": entry.project_root,
+            "projectDirs": entry.project_dirs,
         }),
     );
 }
@@ -251,6 +255,50 @@ fn scan_roots_exposes_project_grouping_metadata_for_monorepo_docs() {
 }
 
 #[test]
+fn resolve_navigation_target_preserves_project_metadata_for_scoped_display_paths() {
+    let temp_dir =
+        tempdir().unwrap_or_else(|err| panic!("failed to create scoped navigation tempdir: {err}"));
+    let alpha_project_root = temp_dir.path().join("packages").join("alpha");
+    let beta_project_root = temp_dir.path().join("packages").join("beta");
+    let alpha_docs = alpha_project_root.join("docs");
+    let beta_docs = beta_project_root.join("docs");
+
+    std::fs::create_dir_all(&alpha_docs)
+        .unwrap_or_else(|err| panic!("failed to create alpha docs dir: {err}"));
+    std::fs::create_dir_all(&beta_docs)
+        .unwrap_or_else(|err| panic!("failed to create beta docs dir: {err}"));
+    std::fs::write(alpha_docs.join("guide.md"), "# Alpha\n")
+        .unwrap_or_else(|err| panic!("failed to write alpha docs fixture: {err}"));
+    std::fs::write(beta_docs.join("guide.md"), "# Beta\n")
+        .unwrap_or_else(|err| panic!("failed to write beta docs fixture: {err}"));
+
+    let mut state = StudioState::new();
+    state.project_root = temp_dir.path().to_path_buf();
+    state.config_root = temp_dir.path().to_path_buf();
+    state.set_ui_config(UiConfig {
+        projects: vec![
+            UiProjectConfig {
+                name: "alpha".to_string(),
+                root: "packages/alpha".to_string(),
+                dirs: vec!["docs".to_string()],
+            },
+            UiProjectConfig {
+                name: "beta".to_string(),
+                root: "packages/beta".to_string(),
+                dirs: vec!["docs".to_string()],
+            },
+        ],
+    });
+
+    let target = resolve_navigation_target(&state, "alpha/docs/guide.md");
+
+    assert_eq!(target.path, "alpha/docs/guide.md");
+    assert_eq!(target.project_name.as_deref(), Some("alpha"));
+    assert_eq!(target.root_label.as_deref(), Some("docs"));
+    assert_eq!(target.category, "doc");
+}
+
+#[test]
 fn scan_roots_snapshots_config_root_relative_resolution() {
     let temp_dir = tempdir()
         .unwrap_or_else(|err| panic!("failed to create config-root fixture tempdir: {err}"));
@@ -347,4 +395,86 @@ fn get_entry_supports_tilde_project_root() {
     assert_eq!(entry.path, "docs/guide.md");
     assert_eq!(entry.name, "guide.md");
     assert!(!entry.is_dir);
+}
+
+#[test]
+fn graph_lookup_candidates_normalize_wendao_uri_targets() {
+    let fixture = make_vfs_fixture();
+
+    let candidates =
+        graph_lookup_candidates(&fixture.state, "$wendao://internal_skills/writer/SKILL.md");
+
+    assert!(candidates.contains(&"$wendao://internal_skills/writer/SKILL.md".to_string()));
+    assert!(candidates.contains(&"wendao://internal_skills/writer/SKILL.md".to_string()));
+    assert!(candidates.contains(&"internal_skills/writer/SKILL.md".to_string()));
+}
+
+#[test]
+fn graph_lookup_candidates_normalize_id_targets() {
+    let fixture = make_vfs_fixture();
+
+    let candidates = graph_lookup_candidates(&fixture.state, "id:docs/guide.md");
+
+    assert!(candidates.contains(&"id:docs/guide.md".to_string()));
+    assert!(candidates.contains(&"docs/guide.md".to_string()));
+}
+
+#[test]
+fn scan_roots_carries_project_metadata_on_descendants() {
+    let temp_dir = tempdir()
+        .unwrap_or_else(|err| panic!("failed to create descendant metadata tempdir: {err}"));
+    let alpha_docs = temp_dir.path().join("packages").join("alpha").join("docs");
+    let beta_docs = temp_dir.path().join("packages").join("beta").join("docs");
+
+    std::fs::create_dir_all(&alpha_docs)
+        .unwrap_or_else(|err| panic!("failed to create alpha docs dir: {err}"));
+    std::fs::create_dir_all(&beta_docs)
+        .unwrap_or_else(|err| panic!("failed to create beta docs dir: {err}"));
+    std::fs::write(alpha_docs.join("alpha-guide.md"), "# Alpha\n")
+        .unwrap_or_else(|err| panic!("failed to write alpha guide fixture: {err}"));
+    std::fs::write(beta_docs.join("beta-guide.md"), "# Beta\n")
+        .unwrap_or_else(|err| panic!("failed to write beta guide fixture: {err}"));
+
+    let mut state = StudioState::new();
+    state.project_root = temp_dir.path().to_path_buf();
+    state.config_root = temp_dir.path().to_path_buf();
+    state.set_ui_config(UiConfig {
+        projects: vec![
+            UiProjectConfig {
+                name: "alpha".to_string(),
+                root: "packages/alpha".to_string(),
+                dirs: vec!["docs".to_string()],
+            },
+            UiProjectConfig {
+                name: "beta".to_string(),
+                root: "packages/beta".to_string(),
+                dirs: vec!["docs".to_string()],
+            },
+        ],
+    });
+
+    let entries = scan_roots(&state).entries;
+    let alpha_entry = entries
+        .iter()
+        .find(|entry| entry.name == "alpha-guide.md")
+        .unwrap_or_else(|| panic!("expected alpha descendant entry in scan payload"));
+    let beta_entry = entries
+        .iter()
+        .find(|entry| entry.name == "beta-guide.md")
+        .unwrap_or_else(|| panic!("expected beta descendant entry in scan payload"));
+
+    assert_eq!(alpha_entry.project_name.as_deref(), Some("alpha"));
+    assert_eq!(alpha_entry.root_label.as_deref(), Some("docs"));
+    assert_eq!(alpha_entry.project_root.as_deref(), Some("packages/alpha"));
+    assert_eq!(
+        alpha_entry.project_dirs.clone().unwrap_or_default(),
+        vec!["docs".to_string()]
+    );
+    assert_eq!(beta_entry.project_name.as_deref(), Some("beta"));
+    assert_eq!(beta_entry.root_label.as_deref(), Some("docs"));
+    assert_eq!(beta_entry.project_root.as_deref(), Some("packages/beta"));
+    assert_eq!(
+        beta_entry.project_dirs.clone().unwrap_or_default(),
+        vec!["docs".to_string()]
+    );
 }

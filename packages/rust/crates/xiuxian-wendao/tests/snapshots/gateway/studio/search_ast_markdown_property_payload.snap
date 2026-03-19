@@ -11,6 +11,15 @@ expression: value
       "lineEnd": 6,
       "lineStart": 1,
       "name": "ID",
+      "navigationTarget": {
+        "category": "doc",
+        "column": null,
+        "line": 1,
+        "lineEnd": 6,
+        "path": "docs/index.md",
+        "projectName": "main",
+        "rootLabel": "docs"
+      },
       "nodeKind": "property",
       "ownerTitle": "Studio Functional Ledger",
       "path": "docs/index.md",
@@ -25,6 +34,15 @@ expression: value
       "lineEnd": 6,
       "lineStart": 1,
       "name": "OBSERVE",
+      "navigationTarget": {
+        "category": "doc",
+        "column": null,
+        "line": 1,
+        "lineEnd": 6,
+        "path": "docs/index.md",
+        "projectName": "main",
+        "rootLabel": "docs"
+      },
       "nodeKind": "observation",
       "ownerTitle": "Studio Functional Ledger",
       "path": "docs/index.md",

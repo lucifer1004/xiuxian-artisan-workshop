@@ -19,19 +19,24 @@ fn make_analysis_fixture() -> AnalysisFixture {
 
     std::fs::write(
         docs_dir.join("analysis.md"),
-        r"# Analysis Kernel
+        r#"# Analysis Kernel
 
 ## Inputs
 - [ ] Parse markdown
 - [x] Build IR
 
 ## Links
+:PROPERTIES:
+:ID: AnalysisKernel
+:OBSERVE: lang:rust scope:"src/gateway/studio/**" "fn compile() { $$$ }"
+:END:
+
 Reference [[docs/guide.md]] and [[internal_skills/writer/SKILL.md]].
 
 ```rust
 fn compile() {}
 ```
-",
+"#,
     )
     .unwrap_or_else(|err| panic!("failed to write markdown analysis fixture: {err}"));
 
