@@ -11,8 +11,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use dashmap::DashMap;
-use omni_ast::AstLanguage;
 use rayon::prelude::*;
+use xiuxian_ast::AstLanguage;
 
 use crate::StructuralEditor;
 
@@ -77,7 +77,7 @@ impl Default for BatchConfig {
 
 /// Detect programming language from file path.
 fn detect_language(path: &Path) -> String {
-    use omni_ast::SupportLang;
+    use xiuxian_ast::SupportLang;
 
     if let Some(lang) = SupportLang::from_path(path) {
         return format!("{:?}", lang).to_lowercase();

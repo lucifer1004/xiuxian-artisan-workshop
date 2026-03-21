@@ -12,7 +12,24 @@ just rust-xiuxian-llm-mcp
 just rust-xiuxian-daochang-mcp-facade-smoke
 just rust-xiuxian-daochang-backend-role-contracts
 just rust-xiuxian-qianji-scenario-audit-contracts
-just rust-xiuxian-testing-contract-gates
+if ! command -v cargo-nextest >/dev/null 2>&1; then
+  echo "cargo-nextest is required but not installed." >&2
+  echo "Install with: nix profile add nixpkgs#cargo-nextest" >&2
+  exit 1
+fi
+
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" cargo nextest run -p xiuxian-testing \
+  --test contracts_kernel \
+  --test contracts_rest_docs \
+  --test contracts_modularity \
+  --test contracts_runner \
+  --test contracts_knowledge_export \
+  --test docs_kernel_contract \
+  --no-fail-fast
+
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" cargo nextest run -p xiuxian-vector \
+  --test xiuxian-testing-gate \
+  --no-fail-fast
 just rust-xiuxian-wendao-contract-feedback-consumer
 if [[ ${OMNI_ENABLE_EMBED_ROLE_PERF_GATE:-0} == "1" ]]; then
   profile="${OMNI_EMBED_ROLE_PERF_GATE_PROFILE:-medium}"

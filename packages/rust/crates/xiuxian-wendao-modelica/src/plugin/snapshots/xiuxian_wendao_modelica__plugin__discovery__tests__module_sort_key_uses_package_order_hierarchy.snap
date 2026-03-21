@@ -1,0 +1,58 @@
+---
+source: packages/rust/crates/xiuxian-wendao-modelica/src/plugin/discovery.rs
+expression: payload
+---
+[
+  {
+    "path": "package.mo",
+    "key": [
+      [
+        0,
+        ""
+      ]
+    ]
+  },
+  {
+    "path": "UsersGuide/package.mo",
+    "key": [
+      [
+        0,
+        ""
+      ],
+      [
+        0,
+        "UsersGuide"
+      ]
+    ]
+  },
+  {
+    "path": "Controllers/package.mo",
+    "key": [
+      [
+        0,
+        ""
+      ],
+      [
+        1,
+        "Controllers"
+      ]
+    ]
+  },
+  {
+    "path": "Controllers/Examples/package.mo",
+    "key": [
+      [
+        0,
+        ""
+      ],
+      [
+        1,
+        "Controllers"
+      ],
+      [
+        0,
+        "Examples"
+      ]
+    ]
+  }
+]

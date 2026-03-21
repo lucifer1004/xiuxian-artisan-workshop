@@ -6,7 +6,9 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use omni_ast::{AstLanguage, LanguageExt, MatcherExt, MetaVariable, Pattern, SupportLang};
+use xiuxian_ast::{
+    AstLanguage, Doc, LanguageExt, MatcherExt, MetaVariable, NodeMatch, Pattern, SupportLang,
+};
 
 use crate::error::{SearchError, TagError};
 use crate::patterns::{
@@ -30,7 +32,7 @@ impl TagExtractor {
         language: Option<&str>,
     ) -> Result<String, TagError> {
         let path = path.as_ref();
-        let content = omni_io::read_text_safe(path, 1024 * 1024)?; // 1MB limit for outlining
+        let content = xiuxian_io::read_text_safe(path, 1024 * 1024)?; // 1MB limit for outlining
 
         let lang = match language {
             Some(l) => match SupportLang::from_str(l) {
@@ -96,7 +98,7 @@ impl TagExtractor {
         language: Option<&str>,
     ) -> Result<String, SearchError> {
         let path = path.as_ref();
-        let content = omni_io::read_text_safe(path, 1024 * 1024)?;
+        let content = xiuxian_io::read_text_safe(path, 1024 * 1024)?;
 
         let lang = match language {
             Some(l) => match SupportLang::from_str(l) {
@@ -537,7 +539,7 @@ impl TagExtractor {
     }
 
     /// Get the text of a variable capture from a matched node
-    fn get_capture<D: omni_ast::Doc>(m: &omni_ast::NodeMatch<D>, capture: &str) -> String {
+    fn get_capture<D: Doc>(m: &NodeMatch<D>, capture: &str) -> String {
         m.get_env()
             .get_match(capture)
             .map(|n| n.text().to_string())

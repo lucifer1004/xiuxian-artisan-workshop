@@ -3,6 +3,7 @@
 //! Provides terminal UI rendering with foldable panels and event-driven updates.
 //! Integrates with omni-events for reactive state management.
 
+pub mod cli_args;
 pub mod components;
 pub mod event;
 pub mod renderer;
@@ -20,9 +21,7 @@ use std::error::Error;
 
 /// Initialize the TUI subsystem with logging
 pub fn init_logger() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .format_timestamp(None)
-        .init();
+    let _ = xiuxian_logging::init("xiuxian_tui", &xiuxian_logging::LogSettings::default());
 }
 
 /// Main entry point for running the TUI application

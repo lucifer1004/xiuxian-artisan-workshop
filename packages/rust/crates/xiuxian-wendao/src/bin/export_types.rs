@@ -1,6 +1,6 @@
 //! Export TypeScript bindings from Rust Specta types.
 //!
-//! This binary generates `bindings.ts` for the Qianji Studio frontend,
+//! This binary generates `bindings.ts` for the Wendao frontend,
 //! ensuring type safety between the Rust backend and TypeScript frontend.
 //!
 //! Usage:
@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .header("// Auto-generated from xiuxian-wendao\n// Run: cargo run --bin export_types --features zhenfa-router\n\n")
         .export(&types)?;
 
-    let output_path = std::path::PathBuf::from(".data/qianji-studio/src/api/bindings.ts");
+    let output_path = std::path::PathBuf::from(".data/wendao-frontend/src/api/bindings.ts");
 
     // Ensure parent directory exists
     if let Some(parent) = output_path.parent() {

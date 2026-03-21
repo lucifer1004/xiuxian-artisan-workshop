@@ -49,6 +49,7 @@ fn make_state_with_docs(docs: Vec<(&str, &str)>) -> StudioStateFixture {
                 "internal_skills".to_string(),
             ],
         }],
+        repo_projects: Vec::new(),
     });
 
     StudioStateFixture {
@@ -76,6 +77,8 @@ async fn search_knowledge_requires_query() {
         Query(SearchQuery {
             q: Some("   ".to_string()),
             limit: None,
+            intent: None,
+            repo: None,
         }),
         State(Arc::clone(&fixture.state)),
     )
@@ -83,6 +86,29 @@ async fn search_knowledge_requires_query() {
 
     let Err(error) = result else {
         panic!("expected missing-query request to fail");
+    };
+
+    assert_eq!(error.status(), axum::http::StatusCode::BAD_REQUEST);
+    assert_eq!(error.code(), "MISSING_QUERY");
+}
+
+#[tokio::test]
+async fn search_intent_requires_query() {
+    let fixture = make_state_with_docs(Vec::new());
+
+    let result = search_intent(
+        Query(SearchQuery {
+            q: Some("   ".to_string()),
+            intent: Some("debug_lookup".to_string()),
+            limit: None,
+            repo: None,
+        }),
+        State(Arc::clone(&fixture.state)),
+    )
+    .await;
+
+    let Err(error) = result else {
+        panic!("expected missing-query intent request to fail");
     };
 
     assert_eq!(error.status(), axum::http::StatusCode::BAD_REQUEST);
@@ -106,6 +132,8 @@ async fn search_knowledge_returns_payload() {
         Query(SearchQuery {
             q: Some("wendao".to_string()),
             limit: Some(5),
+            intent: None,
+            repo: None,
         }),
         State(fixture.state),
     )
@@ -121,6 +149,9 @@ async fn search_knowledge_returns_payload() {
             "query": response.0.query,
             "hitCount": response.0.hit_count,
             "selectedMode": response.0.selected_mode,
+            "searchMode": response.0.search_mode,
+            "intent": response.0.intent,
+            "intentConfidence": response.0.intent_confidence.map(round_f64),
             "graphConfidenceScore": response.0.graph_confidence_score.map(round_f64),
             "hits": response.0.hits.into_iter().map(|hit| {
                 json!({
@@ -132,8 +163,50 @@ async fn search_knowledge_returns_payload() {
                     "score": round_f64(hit.score),
                     "bestSection": hit.best_section,
                     "matchReason": hit.match_reason,
+                    "hierarchicalUri": hit.hierarchical_uri,
+                    "hierarchy": hit.hierarchy,
+                    "saliencyScore": hit.saliency_score.map(round_f64),
+                    "auditStatus": hit.audit_status,
+                    "verificationState": hit.verification_state,
+                    "implicitBacklinks": hit.implicit_backlinks,
                 })
             }).collect::<Vec<_>>(),
+        }),
+    );
+}
+
+#[tokio::test]
+async fn search_intent_returns_payload() {
+    let fixture = make_state_with_docs(vec![(
+        "alpha.md",
+        "# Alpha\n\nIntent search keyword: wendao.\n",
+    )]);
+
+    let result = search_intent(
+        Query(SearchQuery {
+            q: Some("wendao".to_string()),
+            limit: Some(5),
+            intent: Some("debug_lookup".to_string()),
+            repo: None,
+        }),
+        State(fixture.state),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected intent search request to succeed");
+    };
+
+    assert_studio_json_snapshot(
+        "search_intent_payload",
+        json!({
+            "query": response.0.query,
+            "hitCount": response.0.hit_count,
+            "selectedMode": response.0.selected_mode,
+            "searchMode": response.0.search_mode,
+            "intent": response.0.intent,
+            "intentConfidence": response.0.intent_confidence.map(round_f64),
+            "graphConfidenceScore": response.0.graph_confidence_score.map(round_f64),
         }),
     );
 }
@@ -155,6 +228,8 @@ async fn search_knowledge_uses_studio_display_paths() {
         Query(SearchQuery {
             q: Some("wendao".to_string()),
             limit: Some(5),
+            intent: None,
+            repo: None,
         }),
         State(Arc::clone(&fixture.state)),
     )
@@ -209,7 +284,7 @@ async fn search_knowledge_uses_project_scoped_display_paths_for_duplicate_roots(
             "# Kernel\n\nThis note contains search target keyword: wendao.\n",
         ),
         (
-            ".data/qianji-studio/docs/main.md",
+            ".data/wendao-frontend/docs/main.md",
             "# Main\n\nThis note also contains search target keyword: wendao.\n",
         ),
     ]);
@@ -222,16 +297,19 @@ async fn search_knowledge_uses_project_scoped_display_paths_for_duplicate_roots(
             },
             UiProjectConfig {
                 name: "main".to_string(),
-                root: ".data/qianji-studio".to_string(),
+                root: ".data/wendao-frontend".to_string(),
                 dirs: vec!["docs".to_string()],
             },
         ],
+        repo_projects: Vec::new(),
     });
 
     let result = search_knowledge(
         Query(SearchQuery {
             q: Some("wendao".to_string()),
             limit: Some(10),
+            intent: None,
+            repo: None,
         }),
         State(Arc::clone(&fixture.state)),
     )
@@ -296,6 +374,7 @@ async fn search_attachments_returns_payload() {
             root: ".".to_string(),
             dirs: vec!["docs".to_string()],
         }],
+        repo_projects: Vec::new(),
     });
 
     let result = search_attachments(
@@ -475,6 +554,7 @@ async fn search_ast_includes_markdown_outline_hits() {
             root: ".".to_string(),
             dirs: vec!["docs".to_string()],
         }],
+        repo_projects: Vec::new(),
     });
 
     let result = search_ast(
@@ -537,6 +617,7 @@ async fn search_ast_includes_markdown_property_drawer_hits() {
             root: ".".to_string(),
             dirs: vec!["docs".to_string()],
         }],
+        repo_projects: Vec::new(),
     });
 
     let result = search_ast(
@@ -965,6 +1046,7 @@ async fn search_symbols_respects_glob_dir_filters() {
             root: ".".to_string(),
             dirs: vec!["packages".to_string(), "packages/alpha/**/*.rs".to_string()],
         }],
+        repo_projects: Vec::new(),
     });
 
     let result = search_symbols(
@@ -993,4 +1075,47 @@ async fn search_symbols_respects_glob_dir_filters() {
             .all(|path| path.starts_with("packages/alpha/")),
         "unexpected glob-filtered hit paths: {hit_paths:?}",
     );
+}
+
+#[test]
+fn repo_navigation_target_prefixes_repo_root_for_relative_paths() {
+    let target = repo_navigation_target("mcl", "Modelica/package.mo");
+    assert_eq!(target.path, "mcl/Modelica/package.mo");
+    assert_eq!(target.category, "repo_code");
+    assert_eq!(target.project_name.as_deref(), Some("mcl"));
+    assert_eq!(target.root_label.as_deref(), Some("mcl"));
+}
+
+#[test]
+fn repo_navigation_target_does_not_duplicate_existing_repo_root_prefix() {
+    let target = repo_navigation_target("mcl", "mcl/Modelica/package.mo");
+    assert_eq!(target.path, "mcl/Modelica/package.mo");
+}
+
+#[test]
+fn parse_content_search_line_parses_ripgrep_output() {
+    let parsed = parse_content_search_line(
+        "/tmp/repo/src/DifferentialEquations.jl:42:@reexport using SciMLBase",
+    );
+    let Some((path, line_number, snippet)) = parsed else {
+        panic!("expected ripgrep output to parse");
+    };
+
+    assert_eq!(path, "/tmp/repo/src/DifferentialEquations.jl");
+    assert_eq!(line_number, 42);
+    assert_eq!(snippet, "@reexport using SciMLBase");
+}
+
+#[test]
+fn supported_code_extension_includes_julia_and_modelica() {
+    assert!(is_supported_code_extension("src/Foo.jl"));
+    assert!(is_supported_code_extension("Modelica/package.mo"));
+    assert!(!is_supported_code_extension("docs/readme.md"));
+}
+
+#[test]
+fn truncate_content_search_snippet_limits_output_length() {
+    let value = "abcdefghijklmnopqrstuvwxyz";
+    let truncated = truncate_content_search_snippet(value, 8);
+    assert_eq!(truncated, "abcdefgh...");
 }

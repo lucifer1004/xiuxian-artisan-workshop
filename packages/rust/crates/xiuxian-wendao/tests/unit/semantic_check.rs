@@ -153,6 +153,50 @@ fn test_issue_type_to_code() {
         "ERR_MISSING_IDENTITY"
     );
     assert_eq!(issue_type_to_code("legacy_syntax"), "WARN_LEGACY_SYNTAX");
+    assert_eq!(
+        issue_type_to_code("doc_identity_protocol"),
+        "ERR_DOC_IDENTITY_PROTOCOL"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_tree"),
+        "WARN_MISSING_PACKAGE_DOCS_TREE"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index"),
+        "ERR_MISSING_PACKAGE_DOCS_INDEX"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_section_landing"),
+        "WARN_MISSING_PACKAGE_DOCS_SECTION"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index_section_link"),
+        "WARN_MISSING_PACKAGE_DOCS_INDEX_LINK"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index_relations_block"),
+        "WARN_MISSING_PACKAGE_DOCS_RELATIONS_BLOCK"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index_footer_block"),
+        "WARN_MISSING_PACKAGE_DOCS_FOOTER_BLOCK"
+    );
+    assert_eq!(
+        issue_type_to_code("incomplete_package_docs_index_footer_block"),
+        "WARN_INCOMPLETE_PACKAGE_DOCS_FOOTER_BLOCK"
+    );
+    assert_eq!(
+        issue_type_to_code("stale_package_docs_index_footer_standards"),
+        "WARN_STALE_PACKAGE_DOCS_FOOTER_STANDARDS"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index_relation_link"),
+        "WARN_MISSING_PACKAGE_DOCS_RELATION_LINK"
+    );
+    assert_eq!(
+        issue_type_to_code("stale_package_docs_index_relation_link"),
+        "WARN_STALE_PACKAGE_DOCS_RELATION_LINK"
+    );
     assert_eq!(issue_type_to_code("unknown"), "UNKNOWN");
 }
 

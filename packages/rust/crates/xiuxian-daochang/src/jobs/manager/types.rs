@@ -9,7 +9,7 @@ use crate::shortcuts::WorkflowBridgeMode;
 
 /// Input bundle for deterministic graph-plan execution.
 #[derive(Debug, Clone)]
-pub(in crate::agent) struct GraphPlanExecutionInput {
+pub(crate) struct GraphPlanExecutionInput {
     /// Source shortcut mode (`graph` or `omega`) for telemetry/fallback records.
     pub workflow_mode: WorkflowBridgeMode,
     /// Runtime turn identifier shared with route trace and reflection.
@@ -26,7 +26,7 @@ pub(in crate::agent) struct GraphPlanExecutionInput {
 
 /// Deterministic graph-plan execution result.
 #[derive(Debug, Clone)]
-pub(in crate::agent) enum GraphPlanExecutionOutcome {
+pub(crate) enum GraphPlanExecutionOutcome {
     Completed {
         output: String,
         tool_summary: ToolExecutionSummary,
@@ -39,9 +39,9 @@ pub(in crate::agent) enum GraphPlanExecutionOutcome {
 
 /// Graph-plan execution error carrying tool-attempt summary for memory feedback.
 #[derive(Debug)]
-pub(in crate::agent) struct GraphPlanExecutionError {
-    pub(in crate::agent) error: anyhow::Error,
-    pub(in crate::agent) tool_summary: ToolExecutionSummary,
+pub(crate) struct GraphPlanExecutionError {
+    pub(crate) error: anyhow::Error,
+    pub(crate) tool_summary: ToolExecutionSummary,
 }
 
 #[derive(Debug)]

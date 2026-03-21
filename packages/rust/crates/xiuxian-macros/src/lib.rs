@@ -19,7 +19,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Expr, parse_macro_input};
+use syn::{parse_macro_input, Expr};
 
 mod zhenfa_tool;
 

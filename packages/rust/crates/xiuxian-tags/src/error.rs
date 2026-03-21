@@ -4,7 +4,7 @@
 
 use thiserror::Error;
 
-use omni_io::IoError;
+use xiuxian_io::IoError;
 
 /// Error types for tag extraction
 #[derive(Error, Debug)]

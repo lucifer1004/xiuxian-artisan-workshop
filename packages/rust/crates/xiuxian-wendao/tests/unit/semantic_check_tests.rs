@@ -150,6 +150,50 @@ fn test_issue_type_to_code() {
         issue_type_to_code("invalid_observation_pattern"),
         "ERR_INVALID_OBSERVER_PATTERN"
     );
+    assert_eq!(
+        issue_type_to_code("doc_identity_protocol"),
+        "ERR_DOC_IDENTITY_PROTOCOL"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_tree"),
+        "WARN_MISSING_PACKAGE_DOCS_TREE"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index"),
+        "ERR_MISSING_PACKAGE_DOCS_INDEX"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_section_landing"),
+        "WARN_MISSING_PACKAGE_DOCS_SECTION"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index_section_link"),
+        "WARN_MISSING_PACKAGE_DOCS_INDEX_LINK"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index_relations_block"),
+        "WARN_MISSING_PACKAGE_DOCS_RELATIONS_BLOCK"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index_footer_block"),
+        "WARN_MISSING_PACKAGE_DOCS_FOOTER_BLOCK"
+    );
+    assert_eq!(
+        issue_type_to_code("incomplete_package_docs_index_footer_block"),
+        "WARN_INCOMPLETE_PACKAGE_DOCS_FOOTER_BLOCK"
+    );
+    assert_eq!(
+        issue_type_to_code("stale_package_docs_index_footer_standards"),
+        "WARN_STALE_PACKAGE_DOCS_FOOTER_STANDARDS"
+    );
+    assert_eq!(
+        issue_type_to_code("missing_package_docs_index_relation_link"),
+        "WARN_MISSING_PACKAGE_DOCS_RELATION_LINK"
+    );
+    assert_eq!(
+        issue_type_to_code("stale_package_docs_index_relation_link"),
+        "WARN_STALE_PACKAGE_DOCS_RELATION_LINK"
+    );
     assert_eq!(issue_type_to_code("unknown"), "UNKNOWN");
 }
 
@@ -208,6 +252,45 @@ fn test_build_file_reports() {
     assert_eq!(reports[1].error_count, 1);
     assert_eq!(reports[1].warning_count, 0);
     assert_eq!(reports[1].health_score, 80);
+}
+
+#[test]
+fn test_build_file_reports_deduplicates_alias_doc_paths() {
+    let cwd = std::env::current_dir().expect("cwd");
+    let temp = tempfile::tempdir_in(&cwd).expect("tempdir");
+    let doc_path = temp.path().join("docs/index.md");
+    std::fs::create_dir_all(doc_path.parent().expect("parent")).expect("create dir");
+    std::fs::write(&doc_path, "# Demo\n").expect("write doc");
+
+    let absolute_path = doc_path
+        .canonicalize()
+        .expect("canonicalize")
+        .to_string_lossy()
+        .to_string();
+    let relative_path = doc_path
+        .strip_prefix(&cwd)
+        .expect("strip prefix")
+        .to_string_lossy()
+        .to_string();
+
+    let issues = vec![SemanticIssue {
+        severity: "warning".to_string(),
+        issue_type: "doc_identity_protocol".to_string(),
+        doc: absolute_path.clone(),
+        node_id: absolute_path.clone(),
+        message: "Alias path warning".to_string(),
+        location: None,
+        suggestion: None,
+        fuzzy_suggestion: None,
+    }];
+
+    let docs = vec![relative_path.clone(), absolute_path];
+    let reports = build_file_reports(&issues, &docs);
+
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].path, relative_path);
+    assert_eq!(reports[0].warning_count, 1);
+    assert_eq!(reports[0].error_count, 0);
 }
 
 #[test]

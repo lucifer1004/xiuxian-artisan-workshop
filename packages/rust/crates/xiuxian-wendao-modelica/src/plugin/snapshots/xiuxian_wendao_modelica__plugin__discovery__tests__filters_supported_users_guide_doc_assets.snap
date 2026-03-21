@@ -1,0 +1,22 @@
+---
+source: packages/rust/crates/xiuxian-wendao-modelica/src/plugin/discovery.rs
+expression: payload
+---
+[
+  {
+    "path": "UsersGuide/package.mo",
+    "supported": true
+  },
+  {
+    "path": "UsersGuide/Overview.mo",
+    "supported": true
+  },
+  {
+    "path": "UsersGuide/Guide.md",
+    "supported": true
+  },
+  {
+    "path": "UsersGuide/package.order",
+    "supported": false
+  }
+]

@@ -8,6 +8,7 @@ pub static RESOURCES: ::include_dir::Dir<'_> =
     ::include_dir::include_dir!("$CARGO_MANIFEST_DIR/resources");
 
 mod agent;
+mod agent_builder;
 mod channels;
 mod config;
 mod contracts;
@@ -18,6 +19,7 @@ mod jobs;
 mod llm;
 mod mcp;
 mod observability;
+mod resolve;
 mod runtime_agent_factory;
 mod session;
 mod shortcuts;

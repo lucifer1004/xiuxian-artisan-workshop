@@ -1,302 +1,543 @@
+//! Python bindings for the memory engine primitives.
+
+use std::sync::Arc;
+
 use pyo3::prelude::*;
-use serde_json::{Value, json};
+use pyo3::types::PyModule;
+use serde_json::json;
 
-use crate::graph::{KnowledgeGraph, SkillDoc};
-use crate::kg_cache;
+use crate::{
+    Episode, EpisodeStore, IntentEncoder, QTable, StoreConfig, TwoPhaseConfig, TwoPhaseSearch,
+};
 
-use super::parsers::parse_relation_type;
-use super::{PyEntity, PyRelation, PySkillDoc};
+fn to_py_value_error(error: impl std::fmt::Display) -> PyErr {
+    pyo3::exceptions::PyValueError::new_err(error.to_string())
+}
 
-/// Python wrapper for KnowledgeGraph.
+fn episode_to_json(episode: &Episode) -> serde_json::Value {
+    json!({
+        "id": episode.id,
+        "intent": episode.intent,
+        "intent_embedding": episode.intent_embedding,
+        "experience": episode.experience,
+        "outcome": episode.outcome,
+        "q_value": episode.q_value,
+        "success_count": episode.success_count,
+        "failure_count": episode.failure_count,
+        "created_at": episode.created_at,
+        "scope": episode.scope,
+    })
+}
+
+fn serialize_json(value: &serde_json::Value) -> PyResult<String> {
+    serde_json::to_string(value).map_err(to_py_value_error)
+}
+
+/// Python wrapper for a memory episode.
 #[pyclass]
 #[derive(Debug, Clone)]
-pub struct PyKnowledgeGraph {
-    pub(crate) inner: KnowledgeGraph,
+pub struct PyEpisode {
+    pub(crate) inner: Episode,
 }
 
 #[pymethods]
-impl PyKnowledgeGraph {
+impl PyEpisode {
     #[new]
-    fn new() -> Self {
+    #[pyo3(signature = (id, intent, intent_embedding, experience, outcome, scope=None))]
+    fn new(
+        id: String,
+        intent: String,
+        intent_embedding: Vec<f32>,
+        experience: String,
+        outcome: String,
+        scope: Option<String>,
+    ) -> Self {
+        let inner = match scope {
+            Some(scope) => {
+                Episode::new_scoped(id, intent, intent_embedding, experience, outcome, scope)
+            }
+            None => Episode::new(id, intent, intent_embedding, experience, outcome),
+        };
+        Self { inner }
+    }
+
+    #[getter]
+    fn id(&self) -> String {
+        self.inner.id.clone()
+    }
+
+    #[getter]
+    fn intent(&self) -> String {
+        self.inner.intent.clone()
+    }
+
+    #[getter]
+    fn intent_embedding(&self) -> Vec<f32> {
+        self.inner.intent_embedding.clone()
+    }
+
+    #[getter]
+    fn experience(&self) -> String {
+        self.inner.experience.clone()
+    }
+
+    #[getter]
+    fn outcome(&self) -> String {
+        self.inner.outcome.clone()
+    }
+
+    #[getter]
+    fn q_value(&self) -> f32 {
+        self.inner.q_value
+    }
+
+    #[getter]
+    fn success_count(&self) -> u32 {
+        self.inner.success_count
+    }
+
+    #[getter]
+    fn failure_count(&self) -> u32 {
+        self.inner.failure_count
+    }
+
+    #[getter]
+    fn created_at(&self) -> i64 {
+        self.inner.created_at
+    }
+
+    #[getter]
+    fn scope(&self) -> String {
+        self.inner.scope.clone()
+    }
+
+    fn utility(&self) -> f32 {
+        self.inner.utility()
+    }
+
+    fn total_uses(&self) -> u32 {
+        self.inner.total_uses()
+    }
+
+    fn is_validated(&self) -> bool {
+        self.inner.is_validated()
+    }
+
+    fn to_json(&self) -> PyResult<String> {
+        serialize_json(&episode_to_json(&self.inner))
+    }
+}
+
+/// Python-facing store configuration.
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct PyStoreConfig {
+    /// Storage path for persisted memory state.
+    #[pyo3(get, set)]
+    pub path: String,
+    /// Embedding dimension used by the store encoder.
+    #[pyo3(get, set)]
+    pub embedding_dim: usize,
+    /// Backing table name for persisted state files.
+    #[pyo3(get, set)]
+    pub table_name: String,
+}
+
+impl Default for PyStoreConfig {
+    fn default() -> Self {
+        let config = StoreConfig::default();
         Self {
-            inner: KnowledgeGraph::new(),
+            path: config.path,
+            embedding_dim: config.embedding_dim,
+            table_name: config.table_name,
+        }
+    }
+}
+
+impl From<PyStoreConfig> for StoreConfig {
+    fn from(value: PyStoreConfig) -> Self {
+        Self {
+            path: value.path,
+            embedding_dim: value.embedding_dim,
+            table_name: value.table_name,
+        }
+    }
+}
+
+#[pymethods]
+impl PyStoreConfig {
+    #[new]
+    #[pyo3(signature = (path=None, embedding_dim=None, table_name=None))]
+    fn new(path: Option<String>, embedding_dim: Option<usize>, table_name: Option<String>) -> Self {
+        let defaults = Self::default();
+        Self {
+            path: path.unwrap_or(defaults.path),
+            embedding_dim: embedding_dim.unwrap_or(defaults.embedding_dim),
+            table_name: table_name.unwrap_or(defaults.table_name),
+        }
+    }
+}
+
+/// Python wrapper for the intent encoder.
+#[pyclass]
+#[derive(Clone)]
+pub struct PyIntentEncoder {
+    pub(crate) inner: Arc<IntentEncoder>,
+}
+
+#[pymethods]
+impl PyIntentEncoder {
+    #[new]
+    #[pyo3(signature = (dimension=384))]
+    fn new(dimension: usize) -> Self {
+        Self {
+            inner: Arc::new(IntentEncoder::new(dimension)),
         }
     }
 
-    fn add_entity(&self, entity: PyEntity) -> PyResult<()> {
-        self.inner
-            .add_entity(entity.inner)
-            .map(|_| ())
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    fn encode(&self, intent: &str) -> Vec<f32> {
+        self.inner.encode(intent)
     }
 
-    fn add_relation(&self, relation: PyRelation) -> PyResult<()> {
-        self.inner
-            .add_relation(relation.inner)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    fn cosine_similarity(&self, a: Vec<f32>, b: Vec<f32>) -> f32 {
+        self.inner.cosine_similarity(&a, &b)
     }
 
-    fn search_entities(&self, query: &str, limit: i32) -> Vec<PyEntity> {
-        self.inner
-            .search_entities(query, limit)
-            .into_iter()
-            .map(|e| PyEntity { inner: e })
-            .collect()
+    fn dimension(&self) -> usize {
+        self.inner.dimension()
     }
+}
 
-    fn get_entity(&self, entity_id: &str) -> Option<PyEntity> {
-        self.inner
-            .get_entity(entity_id)
-            .map(|e| PyEntity { inner: e })
-    }
+/// Python wrapper for the Q-table.
+#[pyclass]
+#[derive(Clone)]
+pub struct PyQTable {
+    pub(crate) inner: Arc<QTable>,
+}
 
-    fn get_entity_by_name(&self, name: &str) -> Option<PyEntity> {
-        self.inner
-            .get_entity_by_name(name)
-            .map(|e| PyEntity { inner: e })
-    }
-
-    fn get_relations(
-        &self,
-        entity_name: Option<&str>,
-        relation_type: Option<&str>,
-    ) -> Vec<PyRelation> {
-        let rtype = relation_type.map(parse_relation_type);
-        self.inner
-            .get_relations(entity_name, rtype)
-            .into_iter()
-            .map(|r| PyRelation { inner: r })
-            .collect()
-    }
-
-    fn multi_hop_search(&self, start_name: &str, max_hops: usize) -> Vec<PyEntity> {
-        self.inner
-            .multi_hop_search(start_name, max_hops)
-            .into_iter()
-            .map(|e| PyEntity { inner: e })
-            .collect()
-    }
-
-    fn get_stats(&self) -> String {
-        let stats = self.inner.get_stats();
-        let value = json!({
-            "total_entities": stats.total_entities,
-            "total_relations": stats.total_relations,
-            "entities_by_type": stats.entities_by_type,
-            "relations_by_type": stats.relations_by_type,
-        });
-        serde_json::to_string(&value).unwrap_or_else(|_| "{}".to_string())
-    }
-
-    fn clear(&mut self) {
-        self.inner.clear();
-    }
-
-    fn save_to_file(&self, path: &str) -> PyResult<()> {
-        self.inner
-            .save_to_file(path)
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
-    }
-
-    fn load_from_file(&mut self, path: &str) -> PyResult<()> {
-        self.inner
-            .load_from_file(path)
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
-    }
-
-    /// Save the graph snapshot to Valkey using `scope_key`.
-    ///
-    /// Invalidates the KG cache for this scope so subsequent loads see fresh data.
-    #[pyo3(signature = (scope_key, dimension=1024))]
-    fn save_to_valkey(&self, scope_key: &str, dimension: usize) -> PyResult<()> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        runtime
-            .block_on(self.inner.save_to_valkey(scope_key, dimension))
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        kg_cache::invalidate(scope_key);
-        Ok(())
-    }
-
-    /// Load the graph snapshot from Valkey by `scope_key`.
-    fn load_from_valkey(&mut self, scope_key: &str) -> PyResult<()> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        runtime
-            .block_on(self.inner.load_from_valkey(scope_key))
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
-    }
-
-    fn export_as_json(&self) -> PyResult<String> {
-        self.inner
-            .export_as_json()
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
-    }
-
-    fn get_all_entities_json(&self) -> PyResult<String> {
-        let entities = self.inner.get_all_entities();
-        let entities_json: Vec<Value> = entities
-            .into_iter()
-            .map(|e| {
-                json!({
-                    "id": e.id,
-                    "name": e.name,
-                    "entity_type": e.entity_type.to_string(),
-                    "description": e.description,
-                    "source": e.source,
-                    "aliases": e.aliases,
-                    "confidence": e.confidence,
-                })
-            })
-            .collect();
-        serde_json::to_string(&entities_json)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
-    }
-
-    /// Batch-register skill docs as entities and relations in the graph.
-    fn register_skill_entities(&self, docs: Vec<PySkillDoc>) -> PyResult<String> {
-        let skill_docs: Vec<SkillDoc> = docs.into_iter().map(|d| d.inner).collect();
-        let result = self
-            .inner
-            .register_skill_entities(&skill_docs)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        let value = json!({
-            "entities_added": result.entities_added,
-            "relations_added": result.relations_added,
-            "status": "success",
-        });
-        serde_json::to_string(&value)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
-    }
-
-    /// Register skill entities from a JSON string (convenience method).
-    fn register_skill_entities_json(&self, json_str: &str) -> PyResult<String> {
-        let parsed: Vec<Value> = serde_json::from_str(json_str)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-
-        let mut skill_docs = Vec::with_capacity(parsed.len());
-        for val in &parsed {
-            let doc = SkillDoc {
-                id: val
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                doc_type: val
-                    .get("type")
-                    .or_else(|| val.get("doc_type"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                skill_name: val
-                    .get("skill_name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                tool_name: val
-                    .get("tool_name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                content: val
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                routing_keywords: val
-                    .get("routing_keywords")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|x| x.as_str().map(str::to_string))
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-            };
-            skill_docs.push(doc);
+#[pymethods]
+impl PyQTable {
+    #[new]
+    #[pyo3(signature = (learning_rate=None, discount_factor=None))]
+    fn new(learning_rate: Option<f32>, discount_factor: Option<f32>) -> Self {
+        let table = match (learning_rate, discount_factor) {
+            (Some(learning_rate), Some(discount_factor)) => {
+                QTable::with_params(learning_rate, discount_factor)
+            }
+            _ => QTable::new(),
+        };
+        Self {
+            inner: Arc::new(table),
         }
-
-        let result = self
-            .inner
-            .register_skill_entities(&skill_docs)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        let value = json!({
-            "entities_added": result.entities_added,
-            "relations_added": result.relations_added,
-            "status": "success",
-        });
-        serde_json::to_string(&value)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
-    /// Query-time tool relevance scoring via KnowledgeGraph traversal.
-    #[pyo3(signature = (query_terms, max_hops = 2, limit = 10))]
-    #[allow(clippy::needless_pass_by_value)]
-    fn query_tool_relevance(
+    fn update(&self, episode_id: &str, reward: f32) -> f32 {
+        self.inner.update(episode_id, reward)
+    }
+
+    fn get_q(&self, episode_id: &str) -> f32 {
+        self.inner.get_q(episode_id)
+    }
+
+    fn init_episode(&self, episode_id: &str) {
+        self.inner.init_episode(episode_id);
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    fn get_all_ids(&self) -> Vec<String> {
+        self.inner.get_all_ids()
+    }
+}
+
+/// Python-facing two-phase search configuration.
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct PyTwoPhaseConfig {
+    /// Phase 1 candidate count.
+    #[pyo3(get, set)]
+    pub k1: usize,
+    /// Phase 2 result count.
+    #[pyo3(get, set)]
+    pub k2: usize,
+    /// Reranking weight for Q-values.
+    #[pyo3(get, set)]
+    pub lambda: f32,
+}
+
+impl Default for PyTwoPhaseConfig {
+    fn default() -> Self {
+        let config = TwoPhaseConfig::default();
+        Self {
+            k1: config.k1,
+            k2: config.k2,
+            lambda: config.lambda,
+        }
+    }
+}
+
+impl From<PyTwoPhaseConfig> for TwoPhaseConfig {
+    fn from(value: PyTwoPhaseConfig) -> Self {
+        Self {
+            k1: value.k1,
+            k2: value.k2,
+            lambda: value.lambda,
+        }
+    }
+}
+
+#[pymethods]
+impl PyTwoPhaseConfig {
+    #[new]
+    #[pyo3(signature = (k1=None, k2=None, lambda=None))]
+    fn new(k1: Option<usize>, k2: Option<usize>, lambda: Option<f32>) -> Self {
+        let defaults = Self::default();
+        Self {
+            k1: k1.unwrap_or(defaults.k1),
+            k2: k2.unwrap_or(defaults.k2),
+            lambda: lambda.unwrap_or(defaults.lambda),
+        }
+    }
+}
+
+/// Python wrapper for the two-phase search engine.
+#[pyclass]
+pub struct PyTwoPhaseSearch {
+    pub(crate) inner: TwoPhaseSearch,
+}
+
+#[pymethods]
+impl PyTwoPhaseSearch {
+    #[new]
+    #[pyo3(signature = (q_table=None, encoder=None, config=None))]
+    fn new(
+        q_table: Option<PyRef<'_, PyQTable>>,
+        encoder: Option<PyRef<'_, PyIntentEncoder>>,
+        config: Option<PyTwoPhaseConfig>,
+    ) -> Self {
+        let q_table = q_table
+            .map(|table| Arc::clone(&table.inner))
+            .unwrap_or_else(|| Arc::new(QTable::new()));
+        let encoder = encoder
+            .map(|encoder| Arc::clone(&encoder.inner))
+            .unwrap_or_else(|| Arc::new(IntentEncoder::default()));
+        let config = config.map(Into::into).unwrap_or_default();
+        Self {
+            inner: TwoPhaseSearch::new(q_table, encoder, config),
+        }
+    }
+
+    #[pyo3(signature = (episodes_json, intent, k1=None, k2=None, lambda=None))]
+    fn search_json(
         &self,
-        query_terms: Vec<String>,
-        max_hops: usize,
-        limit: usize,
+        episodes_json: &str,
+        intent: &str,
+        k1: Option<usize>,
+        k2: Option<usize>,
+        lambda: Option<f32>,
     ) -> PyResult<String> {
-        let results = self
+        let episodes: Vec<Episode> =
+            serde_json::from_str(episodes_json).map_err(to_py_value_error)?;
+        let results = self.inner.search(&episodes, intent, k1, k2, lambda);
+        let payload = json!(
+            results
+                .into_iter()
+                .map(
+                    |(episode, score)| json!({"episode": episode_to_json(&episode), "score": score})
+                )
+                .collect::<Vec<_>>()
+        );
+        serialize_json(&payload)
+    }
+}
+
+/// Python wrapper for the episode store.
+#[pyclass]
+pub struct PyEpisodeStore {
+    pub(crate) inner: EpisodeStore,
+}
+
+#[pymethods]
+impl PyEpisodeStore {
+    #[new]
+    #[pyo3(signature = (config=None))]
+    fn new(config: Option<PyStoreConfig>) -> Self {
+        let config = config.map(Into::into).unwrap_or_else(StoreConfig::default);
+        Self {
+            inner: EpisodeStore::new(config),
+        }
+    }
+
+    fn store_episode(&self, episode: &PyEpisode) -> PyResult<String> {
+        self.inner
+            .store(episode.inner.clone())
+            .map_err(to_py_value_error)
+    }
+
+    fn store_episode_for_scope(&self, scope: &str, episode: &PyEpisode) -> PyResult<String> {
+        self.inner
+            .store_for_scope(scope, episode.inner.clone())
+            .map_err(to_py_value_error)
+    }
+
+    fn get_episode_json(&self, episode_id: &str) -> PyResult<Option<String>> {
+        self.inner
+            .get(episode_id)
+            .map(|episode| serialize_json(&episode_to_json(&episode)))
+            .transpose()
+    }
+
+    fn get_all_episodes_json(&self) -> PyResult<String> {
+        let episodes = self
             .inner
-            .query_tool_relevance(&query_terms, max_hops, limit);
-        let json_arr: Vec<Value> = results
-            .iter()
-            .map(|(name, score)| json!([name, score]))
-            .collect();
-        serde_json::to_string(&json_arr)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
-    }
-
-    fn get_all_relations_json(&self) -> PyResult<String> {
-        let relations = self.inner.get_all_relations();
-        let relations_json: Vec<Value> = relations
+            .get_all()
             .into_iter()
-            .map(|r| {
-                json!({
-                    "id": r.id,
-                    "source": r.source,
-                    "target": r.target,
-                    "relation_type": r.relation_type.to_string(),
-                    "description": r.description,
-                    "source_doc": r.source_doc,
-                    "confidence": r.confidence,
-                })
-            })
-            .collect();
-        serde_json::to_string(&relations_json)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+            .map(|episode| episode_to_json(&episode))
+            .collect::<Vec<_>>();
+        serialize_json(&json!(episodes))
+    }
+
+    fn recall_json(&self, intent: &str, top_k: usize) -> PyResult<String> {
+        let payload = self
+            .inner
+            .recall(intent, top_k)
+            .into_iter()
+            .map(|(episode, score)| json!({"episode": episode_to_json(&episode), "score": score}))
+            .collect::<Vec<_>>();
+        serialize_json(&json!(payload))
+    }
+
+    fn two_phase_recall_json(
+        &self,
+        intent: &str,
+        k1: usize,
+        k2: usize,
+        lambda: f32,
+    ) -> PyResult<String> {
+        let payload = self
+            .inner
+            .two_phase_recall(intent, k1, k2, lambda)
+            .into_iter()
+            .map(|(episode, score)| json!({"episode": episode_to_json(&episode), "score": score}))
+            .collect::<Vec<_>>();
+        serialize_json(&json!(payload))
+    }
+
+    fn update_q(&self, episode_id: &str, reward: f32) -> f32 {
+        self.inner.update_q(episode_id, reward)
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    fn stats_json(&self) -> PyResult<String> {
+        let stats = self.inner.stats();
+        let payload = json!({
+            "total_episodes": stats.total_episodes,
+            "validated_episodes": stats.validated_episodes,
+            "avg_age_hours": stats.avg_age_hours,
+            "q_table_size": stats.q_table_size,
+        });
+        serialize_json(&payload)
     }
 }
 
-/// Invalidate the in-process KG cache for the given scope key.
-///
-/// Call after evicting the knowledge vector store so the long-lived process
-/// does not retain the graph in memory. Safe to call when cache is empty.
+/// Create a Python episode wrapper from raw episode fields.
 #[pyfunction]
-pub fn invalidate_kg_cache(scope_key: &str) {
-    kg_cache::invalidate(scope_key);
+#[pyo3(signature = (id, intent, intent_embedding, experience, outcome, scope=None))]
+pub fn create_episode(
+    id: String,
+    intent: String,
+    intent_embedding: Vec<f32>,
+    experience: String,
+    outcome: String,
+    scope: Option<String>,
+) -> PyEpisode {
+    PyEpisode::new(id, intent, intent_embedding, experience, outcome, scope)
 }
 
-/// Load `KnowledgeGraph` from Valkey with caching.
-///
-/// Uses an in-process cache keyed by path. Avoids repeated disk reads
-/// when the same scope key is accessed across multiple recalls.
-/// Returns None only when backend returns empty and caller chooses to ignore it.
-///
-/// # Errors
-///
-/// Returns `PyErr` when Valkey loading fails.
+/// Create a Python episode wrapper and derive its embedding with an encoder.
 #[pyfunction]
-pub fn load_kg_from_valkey_cached(scope_key: &str) -> PyResult<Option<PyKnowledgeGraph>> {
-    match kg_cache::load_from_valkey_cached(scope_key) {
-        Ok(Some(graph)) => Ok(Some(PyKnowledgeGraph { inner: graph })),
-        Ok(None) => Ok(None),
-        Err(e) => Err(pyo3::exceptions::PyIOError::new_err(e.to_string())),
-    }
+#[pyo3(signature = (id, intent, experience, outcome, encoder=None, scope=None))]
+pub fn create_episode_with_embedding(
+    id: String,
+    intent: String,
+    experience: String,
+    outcome: String,
+    encoder: Option<PyRef<'_, PyIntentEncoder>>,
+    scope: Option<String>,
+) -> PyEpisode {
+    let encoder = encoder
+        .map(|encoder| Arc::clone(&encoder.inner))
+        .unwrap_or_else(|| Arc::new(IntentEncoder::default()));
+    let embedding = encoder.encode(&intent);
+    PyEpisode::new(id, intent, embedding, experience, outcome, scope)
+}
+
+/// Create a Python episode store wrapper.
+#[pyfunction]
+#[pyo3(signature = (config=None))]
+pub fn create_episode_store(config: Option<PyStoreConfig>) -> PyEpisodeStore {
+    PyEpisodeStore::new(config)
+}
+
+/// Create a Python intent encoder wrapper.
+#[pyfunction]
+#[pyo3(signature = (dimension=384))]
+pub fn create_intent_encoder(dimension: usize) -> PyIntentEncoder {
+    PyIntentEncoder::new(dimension)
+}
+
+/// Create a Python Q-table wrapper.
+#[pyfunction]
+#[pyo3(signature = (learning_rate=None, discount_factor=None))]
+pub fn create_q_table(learning_rate: Option<f32>, discount_factor: Option<f32>) -> PyQTable {
+    PyQTable::new(learning_rate, discount_factor)
+}
+
+/// Create a Python two-phase search wrapper.
+#[pyfunction]
+#[pyo3(signature = (q_table=None, encoder=None, config=None))]
+pub fn create_two_phase_search(
+    q_table: Option<PyRef<'_, PyQTable>>,
+    encoder: Option<PyRef<'_, PyIntentEncoder>>,
+    config: Option<PyTwoPhaseConfig>,
+) -> PyTwoPhaseSearch {
+    PyTwoPhaseSearch::new(q_table, encoder, config)
+}
+
+/// Calculate the blended semantic and Q-value score.
+#[pyfunction]
+pub fn calculate_score(similarity: f32, q_value: f32, lambda: f32) -> f32 {
+    crate::calculate_score(similarity, q_value, lambda)
+}
+
+/// Register memory engine Python bindings into a Python module.
+pub fn register_memory_module(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<PyEpisode>()?;
+    module.add_class::<PyEpisodeStore>()?;
+    module.add_class::<PyIntentEncoder>()?;
+    module.add_class::<PyQTable>()?;
+    module.add_class::<PyStoreConfig>()?;
+    module.add_class::<PyTwoPhaseConfig>()?;
+    module.add_class::<PyTwoPhaseSearch>()?;
+    module.add_function(wrap_pyfunction!(create_episode, module)?)?;
+    module.add_function(wrap_pyfunction!(create_episode_store, module)?)?;
+    module.add_function(wrap_pyfunction!(create_episode_with_embedding, module)?)?;
+    module.add_function(wrap_pyfunction!(create_intent_encoder, module)?)?;
+    module.add_function(wrap_pyfunction!(create_q_table, module)?)?;
+    module.add_function(wrap_pyfunction!(create_two_phase_search, module)?)?;
+    module.add_function(wrap_pyfunction!(calculate_score, module)?)?;
+    Ok(())
 }

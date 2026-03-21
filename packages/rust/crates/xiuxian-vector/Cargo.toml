@@ -75,6 +75,7 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 lance = { workspace = true }
+xiuxian-testing = { path = "../xiuxian-testing" }
 tempfile = { workspace = true }
 rand = "0.8"
 insta = { workspace = true }

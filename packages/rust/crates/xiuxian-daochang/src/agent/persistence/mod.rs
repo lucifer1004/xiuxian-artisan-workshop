@@ -5,8 +5,8 @@ use xiuxian_memory_engine::{EpisodeStore, MemoryGatePolicy};
 
 use crate::observability::SessionEvent;
 
-use super::super::Agent;
-use super::super::memory::{sanitize_decay_factor, should_apply_decay};
+use super::Agent;
+use super::memory::{sanitize_decay_factor, should_apply_decay};
 use super::persist_memory_state;
 
 impl Agent {

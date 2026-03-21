@@ -5,9 +5,8 @@ mod render;
 use anyhow::{Context, Result};
 use xiuxian_qianhuan::{InjectionPolicy, InjectionSnapshot};
 
-use crate::contracts::OmegaDecision;
+use crate::contracts::{OmegaDecision, WorkflowBridgeMode};
 use crate::session::ChatMessage;
-use crate::shortcuts::WorkflowBridgeMode;
 
 pub(super) struct InjectionNormalizationResult {
     pub(super) snapshot: Option<InjectionSnapshot>,

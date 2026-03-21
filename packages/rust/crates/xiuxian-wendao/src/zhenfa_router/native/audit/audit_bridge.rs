@@ -56,6 +56,16 @@ use std::hash::BuildHasher;
 
 use serde::{Deserialize, Serialize};
 
+use super::super::semantic_check::docs_governance::{
+    DOC_IDENTITY_PROTOCOL_ISSUE_TYPE, INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE,
+    MISSING_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE, MISSING_PACKAGE_DOCS_INDEX_ISSUE_TYPE,
+    MISSING_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE,
+    MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE,
+    MISSING_PACKAGE_DOCS_INDEX_SECTION_LINK_ISSUE_TYPE,
+    MISSING_PACKAGE_DOCS_SECTION_LANDING_ISSUE_TYPE, MISSING_PACKAGE_DOCS_TREE_ISSUE_TYPE,
+    STALE_PACKAGE_DOCS_INDEX_FOOTER_STANDARDS_ISSUE_TYPE,
+    STALE_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE,
+};
 use super::super::semantic_check::{FuzzySuggestionData, IssueLocation, SemanticIssue};
 
 /// Byte range for precise content addressing.
@@ -186,6 +196,15 @@ pub enum FixResult {
     },
 }
 
+/// Operation mode for a batch fix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BatchFixMode {
+    /// Replace existing content in an existing file.
+    Replace,
+    /// Create a new file with the provided replacement content.
+    CreateFile,
+}
+
 impl std::fmt::Display for FixResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -235,6 +254,8 @@ pub struct BatchFix {
     pub confidence: f32,
     /// Source location where similar code was found (if applicable).
     pub source_location: Option<String>,
+    /// Operation mode for this fix.
+    pub mode: BatchFixMode,
 
     // === v3.0 Surgical Fix Fields ===
     /// SHA-256 hash of file content at audit time.
@@ -264,6 +285,7 @@ impl BatchFix {
             replacement,
             confidence,
             source_location: None,
+            mode: BatchFixMode::Replace,
             base_hash: None,
             byte_range: None,
         }
@@ -288,8 +310,26 @@ impl BatchFix {
             replacement,
             confidence,
             source_location: None,
+            mode: BatchFixMode::Replace,
             base_hash: Some(base_hash),
             byte_range: Some(byte_range),
+        }
+    }
+
+    /// Create a fix that materializes a missing file.
+    #[must_use]
+    pub fn create_file(doc_path: String, replacement: String, confidence: f32) -> Self {
+        Self {
+            issue_type: MISSING_PACKAGE_DOCS_INDEX_ISSUE_TYPE.to_string(),
+            doc_path,
+            line_number: 1,
+            original_content: String::new(),
+            replacement,
+            confidence,
+            source_location: None,
+            mode: BatchFixMode::CreateFile,
+            base_hash: None,
+            byte_range: None,
         }
     }
 
@@ -324,6 +364,7 @@ impl BatchFix {
             replacement: suggestion.replacement_drawer.clone(),
             confidence: suggestion.confidence,
             source_location: suggestion.source_location.clone(),
+            mode: BatchFixMode::Replace,
             base_hash: None,
             byte_range: None,
         }
@@ -425,6 +466,12 @@ impl BatchFix {
         self.base_hash.is_some() && self.byte_range.is_some()
     }
 
+    /// Check if this fix creates a new file.
+    #[must_use]
+    pub const fn is_create_file(&self) -> bool {
+        matches!(self.mode, BatchFixMode::CreateFile)
+    }
+
     /// Apply the fix using surgical precision (v3.1).
     ///
     /// This method uses byte-range addressing for precise, safe content modification.
@@ -441,6 +488,12 @@ impl BatchFix {
     /// - `FixResult::OutOfBounds` if byte range exceeds file size
     /// - `FixResult::ContentMismatch` if content at range doesn't match expected
     pub fn apply_surgical(&self, content: &mut String) -> FixResult {
+        if self.is_create_file() {
+            content.clear();
+            content.push_str(&self.replacement);
+            return FixResult::Success;
+        }
+
         // Get byte range (fallback to string search if not available)
         let Some(range) = self.byte_range else {
             // Fallback to v2.9 string search
@@ -527,6 +580,37 @@ fn compute_hash(content: &str) -> String {
     hash.to_hex().to_string()
 }
 
+fn resolve_file_content<'a, S: BuildHasher>(
+    file_contents: &'a HashMap<String, String, S>,
+    doc_path: &str,
+) -> Option<&'a String> {
+    if let Some(content) = file_contents.get(doc_path) {
+        return Some(content);
+    }
+
+    let normalized_doc = doc_path.replace('\\', "/");
+    let mut best_match: Option<(&String, usize)> = None;
+
+    for (candidate, content) in file_contents {
+        let normalized_candidate = candidate.replace('\\', "/");
+        let is_match = normalized_candidate == normalized_doc
+            || normalized_doc.ends_with(&normalized_candidate)
+            || normalized_candidate.ends_with(&normalized_doc);
+
+        if !is_match {
+            continue;
+        }
+
+        let score = normalized_candidate.len();
+        match best_match {
+            Some((_, best_score)) if best_score >= score => {}
+            _ => best_match = Some((content, score)),
+        }
+    }
+
+    best_match.map(|(content, _)| content)
+}
+
 /// Trait for bridging audit results to external tools.
 pub trait AuditBridge: Send + std::fmt::Debug {
     /// Process audit issues and generate batch fixes.
@@ -542,7 +626,105 @@ impl AuditBridge for DefaultAuditBridge {
         issues
             .iter()
             .filter_map(|issue| {
-                // Only process issues with fuzzy suggestions
+                if issue.issue_type == DOC_IDENTITY_PROTOCOL_ISSUE_TYPE {
+                    return Some(BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        issue.location.as_ref().map_or(0, |loc| loc.line),
+                        String::new(),
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    ));
+                }
+
+                if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_SECTION_LINK_ISSUE_TYPE {
+                    return Some(BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        issue.location.as_ref().map_or(0, |loc| loc.line),
+                        String::new(),
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    ));
+                }
+
+                if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE {
+                    return Some(BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        issue.location.as_ref().map_or(0, |loc| loc.line),
+                        String::new(),
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    ));
+                }
+
+                if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE {
+                    return Some(BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        issue.location.as_ref().map_or(0, |loc| loc.line),
+                        String::new(),
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    ));
+                }
+
+                if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE {
+                    return Some(BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        issue.location.as_ref().map_or(0, |loc| loc.line),
+                        String::new(),
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    ));
+                }
+
+                if issue.issue_type == INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE {
+                    return Some(BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        issue.location.as_ref().map_or(0, |loc| loc.line),
+                        String::new(),
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    ));
+                }
+
+                if issue.issue_type == STALE_PACKAGE_DOCS_INDEX_FOOTER_STANDARDS_ISSUE_TYPE {
+                    return Some(BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        issue.location.as_ref().map_or(0, |loc| loc.line),
+                        String::new(),
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    ));
+                }
+
+                if issue.issue_type == STALE_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE {
+                    return Some(BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        issue.location.as_ref().map_or(0, |loc| loc.line),
+                        String::new(),
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    ));
+                }
+
+                if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_ISSUE_TYPE
+                    || issue.issue_type == MISSING_PACKAGE_DOCS_TREE_ISSUE_TYPE
+                    || issue.issue_type == MISSING_PACKAGE_DOCS_SECTION_LANDING_ISSUE_TYPE
+                {
+                    return Some(BatchFix::create_file(
+                        issue.doc.clone(),
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    ));
+                }
+
                 issue.fuzzy_suggestion.as_ref().map(|suggestion| {
                     BatchFix::from_fuzzy_suggestion(
                         issue.doc.clone(),
@@ -591,13 +773,181 @@ pub fn generate_surgical_fixes<S: BuildHasher>(
     issues
         .iter()
         .filter_map(|issue| {
-            // Only process issues with fuzzy suggestions and location
-            let suggestion = issue.fuzzy_suggestion.as_ref()?;
+            if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_ISSUE_TYPE
+                || issue.issue_type == MISSING_PACKAGE_DOCS_TREE_ISSUE_TYPE
+                || issue.issue_type == MISSING_PACKAGE_DOCS_SECTION_LANDING_ISSUE_TYPE
+            {
+                return Some(BatchFix::create_file(
+                    issue.doc.clone(),
+                    issue.suggestion.clone().unwrap_or_default(),
+                    1.0,
+                ));
+            }
+
             let location = issue.location.as_ref()?;
+            let file_content = resolve_file_content(file_contents, &issue.doc)?;
 
-            // Get file content for hash computation
-            let file_content = file_contents.get(&issue.doc)?;
+            if issue.issue_type == DOC_IDENTITY_PROTOCOL_ISSUE_TYPE {
+                let (start, end) = location.byte_range?;
+                let byte_range = ByteRange::new(start, end);
+                let original_content = byte_range
+                    .extract(file_content)
+                    .unwrap_or_default()
+                    .to_string();
+                return Some(
+                    BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        location.line,
+                        original_content,
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    )
+                    .with_surgical(byte_range, compute_hash(file_content)),
+                );
+            }
 
+            if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_SECTION_LINK_ISSUE_TYPE {
+                let (start, end) = location.byte_range?;
+                let byte_range = ByteRange::new(start, end);
+                let original_content = byte_range
+                    .extract(file_content)
+                    .unwrap_or_default()
+                    .to_string();
+                return Some(
+                    BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        location.line,
+                        original_content,
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    )
+                    .with_surgical(byte_range, compute_hash(file_content)),
+                );
+            }
+
+            if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE {
+                let (start, end) = location.byte_range?;
+                let byte_range = ByteRange::new(start, end);
+                let original_content = byte_range
+                    .extract(file_content)
+                    .unwrap_or_default()
+                    .to_string();
+                return Some(
+                    BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        location.line,
+                        original_content,
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    )
+                    .with_surgical(byte_range, compute_hash(file_content)),
+                );
+            }
+
+            if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE {
+                let (start, end) = location.byte_range?;
+                let byte_range = ByteRange::new(start, end);
+                let original_content = byte_range
+                    .extract(file_content)
+                    .unwrap_or_default()
+                    .to_string();
+                return Some(
+                    BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        location.line,
+                        original_content,
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    )
+                    .with_surgical(byte_range, compute_hash(file_content)),
+                );
+            }
+
+            if issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE {
+                let (start, end) = location.byte_range?;
+                let byte_range = ByteRange::new(start, end);
+                let original_content = byte_range
+                    .extract(file_content)
+                    .unwrap_or_default()
+                    .to_string();
+                return Some(
+                    BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        location.line,
+                        original_content,
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    )
+                    .with_surgical(byte_range, compute_hash(file_content)),
+                );
+            }
+
+            if issue.issue_type == INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE {
+                let (start, end) = location.byte_range?;
+                let byte_range = ByteRange::new(start, end);
+                let original_content = byte_range
+                    .extract(file_content)
+                    .unwrap_or_default()
+                    .to_string();
+                return Some(
+                    BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        location.line,
+                        original_content,
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    )
+                    .with_surgical(byte_range, compute_hash(file_content)),
+                );
+            }
+
+            if issue.issue_type == STALE_PACKAGE_DOCS_INDEX_FOOTER_STANDARDS_ISSUE_TYPE {
+                let (start, end) = location.byte_range?;
+                let byte_range = ByteRange::new(start, end);
+                let original_content = byte_range
+                    .extract(file_content)
+                    .unwrap_or_default()
+                    .to_string();
+                return Some(
+                    BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        location.line,
+                        original_content,
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    )
+                    .with_surgical(byte_range, compute_hash(file_content)),
+                );
+            }
+
+            if issue.issue_type == STALE_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE {
+                let (start, end) = location.byte_range?;
+                let byte_range = ByteRange::new(start, end);
+                let original_content = byte_range
+                    .extract(file_content)
+                    .unwrap_or_default()
+                    .to_string();
+                return Some(
+                    BatchFix::new(
+                        issue.issue_type.clone(),
+                        issue.doc.clone(),
+                        location.line,
+                        original_content,
+                        issue.suggestion.clone().unwrap_or_default(),
+                        1.0,
+                    )
+                    .with_surgical(byte_range, compute_hash(file_content)),
+                );
+            }
+
+            let suggestion = issue.fuzzy_suggestion.as_ref()?;
             Some(BatchFix::from_fuzzy_suggestion_surgical(
                 issue.doc.clone(),
                 location,

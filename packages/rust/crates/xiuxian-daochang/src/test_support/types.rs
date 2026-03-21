@@ -17,10 +17,10 @@ mod agent {
     }
 
     mod memory_recall_metrics_impl {
-        include!("../src/agent/memory_recall_metrics.rs");
+        include!("../agent/memory_recall_metrics.rs");
 
         mod tests {
-            include!("agent/memory_recall_metrics.rs");
+            include!("../agent/memory_recall_metrics.rs");
         }
 
         fn lint_symbol_probe() {

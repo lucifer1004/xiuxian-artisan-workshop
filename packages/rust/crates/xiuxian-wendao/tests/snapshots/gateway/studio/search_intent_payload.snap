@@ -1,0 +1,13 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
+expression: value
+---
+{
+  "graphConfidenceScore": 0.0,
+  "hitCount": 0,
+  "intent": "debug_lookup",
+  "intentConfidence": 0.0,
+  "query": "wendao",
+  "searchMode": "vector_only",
+  "selectedMode": "vector_only"
+}

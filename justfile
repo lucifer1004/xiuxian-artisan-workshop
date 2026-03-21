@@ -1020,11 +1020,6 @@ rust-xiuxian-qianji-scenario-audit-contracts:
     @bash scripts/rust/xiuxian_qianji_scenario_audit_contracts.sh
 
 [group('validate')]
-rust-xiuxian-testing-contract-gates:
-    @echo "Running xiuxian-testing contract gates..."
-    @bash scripts/rust/xiuxian_testing_contract_gates.sh
-
-[group('validate')]
 rust-xiuxian-wendao-contract-feedback-consumer:
     @echo "Running xiuxian-wendao contract-feedback consumer tests..."
     @bash scripts/rust/xiuxian_wendao_contract_feedback_consumer.sh
@@ -1753,7 +1748,7 @@ clean-generated:
 generate-bindings:
     @echo "Generating TypeScript bindings from Rust Specta types..."
     cargo run --bin export_types --features zhenfa-router
-    @echo "Bindings written to .data/qianji-studio/src/api/bindings.ts"
+    @echo "Bindings written to .data/wendao-frontend/src/api/bindings.ts"
 
 [group('dev')]
 clean-rust:
@@ -2822,7 +2817,7 @@ test-qianji-evolution:
 # Launch the high-performance React + Rspack laboratory for visual evolution.
 studio:
     @echo "🚀 Launching Qianji Sovereign Studio (Rspack + React + TS)..."
-    @cd .data/qianji-studio && npm run dev
+    @cd .data/wendao-frontend && npm run dev
 
 # Run REAL LLM evolution test for Qianji JS (requires OPENAI_API_KEY).
 # Usage: just test-evolution "Your visual intent"

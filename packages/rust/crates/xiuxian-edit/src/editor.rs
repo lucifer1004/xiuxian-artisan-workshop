@@ -7,7 +7,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 // Use omni-ast for unified ast-grep (re-exports Pattern, SupportLang, LanguageExt)
-use omni_ast::{AstLanguage, LanguageExt, MatcherExt, Pattern, SupportLang};
+use xiuxian_ast::{AstLanguage, LanguageExt, MatcherExt, Pattern, SupportLang};
 
 use crate::capture::substitute_captures;
 use crate::diff::generate_unified_diff;
@@ -138,7 +138,7 @@ impl StructuralEditor {
         config: EditConfig,
     ) -> Result<EditResult, EditError> {
         let path = path.as_ref();
-        let content = omni_io::read_text_safe(path, config.max_file_size)?;
+        let content = xiuxian_io::read_text_safe(path, config.max_file_size)?;
 
         let lang_str = match language {
             Some(l) => l.to_string(),

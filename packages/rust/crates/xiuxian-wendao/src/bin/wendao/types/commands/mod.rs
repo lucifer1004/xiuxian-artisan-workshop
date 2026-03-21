@@ -8,6 +8,7 @@ mod fix;
 mod gateway;
 mod graph;
 mod hmas;
+mod repo;
 mod saliency;
 mod search;
 mod sentinel;
@@ -20,6 +21,7 @@ pub(crate) use fix::FixArgs;
 pub(crate) use gateway::{GatewayArgs, GatewayCommand, GatewayStartArgs};
 pub(crate) use graph::{MetadataArgs, NeighborsArgs, RelatedArgs, ResolveArgs, TocArgs};
 pub(crate) use hmas::HmasCommand;
+pub(crate) use repo::{RepoCommand, RepoSyncModeArg};
 pub(crate) use saliency::SaliencyCommand;
 pub(crate) use search::SearchArgs;
 pub(crate) use sentinel::{SentinelArgs, SentinelCommand, SentinelWatchArgs};
@@ -58,6 +60,11 @@ pub(crate) enum Command {
     Agentic {
         #[command(subcommand)]
         command: AgenticCommand,
+    },
+    /// Query Repo Intelligence surfaces.
+    Repo {
+        #[command(subcommand)]
+        command: RepoCommand,
     },
     /// Apply automated fixes to documents based on semantic audit issues.
     ///

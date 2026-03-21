@@ -5,6 +5,7 @@ mod control_command_rule_specs;
 mod discord;
 pub(crate) mod managed_commands;
 mod managed_runtime;
+mod runtime_snapshot;
 pub(crate) mod telegram;
 mod traits;
 

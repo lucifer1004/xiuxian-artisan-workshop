@@ -26,10 +26,16 @@ let functions = analyzer.find_functions(&ast)?;
 ## Supported Languages
 
 - Python
+- Julia (feature-gated tree-sitter parser)
 - Rust
 - JavaScript/TypeScript
 - Go
 - Java
+
+## Testing
+
+- Julia parser snapshots use `xiuxian-testing` `ScenarioFramework` under `tests/fixtures/scenarios/`
+- Low-level Julia parser unit snapshots remain in `src/snapshots/`
 
 ## License
 

@@ -4,3 +4,6 @@
 [submodule "packages/ncl"]
 	path = packages/ncl
 	url = https://github.com/tao3k/omnibus-ncl.git
+[submodule "packages/rust/crates/xiuxian-ast/tree-sitter-modelica"]
+	path = packages/rust/crates/xiuxian-ast/tree-sitter-modelica
+	url = https://github.com/OpenModelica/tree-sitter-modelica.git

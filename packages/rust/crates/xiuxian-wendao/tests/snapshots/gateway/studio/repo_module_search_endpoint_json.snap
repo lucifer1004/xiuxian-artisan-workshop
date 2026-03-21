@@ -1,0 +1,15 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
+expression: value
+---
+{
+  "modules": [
+    {
+      "module_id": "repo:gateway-sync:module:GatewaySyncPkg",
+      "path": "src/GatewaySyncPkg.jl",
+      "qualified_name": "GatewaySyncPkg",
+      "repo_id": "gateway-sync"
+    }
+  ],
+  "repo_id": "gateway-sync"
+}

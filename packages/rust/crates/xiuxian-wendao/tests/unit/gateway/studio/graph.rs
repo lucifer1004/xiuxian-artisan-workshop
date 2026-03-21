@@ -74,7 +74,10 @@ fn push_ui_config_from_toml(fixture: &GraphFixture, toml_content: &str) {
         )
         .collect::<Vec<_>>();
 
-    fixture.state.studio.set_ui_config(UiConfig { projects });
+    fixture.state.studio.set_ui_config(UiConfig {
+        projects,
+        repo_projects: Vec::new(),
+    });
 }
 
 fn sorted_graph_nodes_payload(nodes: Vec<GraphNode>) -> Vec<serde_json::Value> {
@@ -862,7 +865,7 @@ async fn graph_neighbors_indexes_configured_projects_outside_knowledge_root() {
     let fixture = make_graph_fixture(vec![
         ("docs/overview.md", "# Overview\n\nKernel docs.\n"),
         (
-            ".data/qianji-studio/docs/03_features/202_topology_and_graph_navigation.md",
+            ".data/wendao-frontend/docs/03_features/202_topology_and_graph_navigation.md",
             "# Topology\n\nSee [[overview]].\n",
         ),
     ]);
@@ -874,7 +877,7 @@ root = "."
 dirs = ["docs"]
 
 [link_graph.projects.main]
-root = ".data/qianji-studio"
+root = ".data/wendao-frontend"
 dirs = ["docs"]
 "#,
     );
@@ -931,7 +934,7 @@ async fn graph_neighbors_rebuilds_after_ui_config_update() {
     let fixture = make_graph_fixture(vec![
         ("docs/overview.md", "# Overview\n\nKernel docs.\n"),
         (
-            ".data/qianji-studio/docs/03_features/202_topology_and_graph_navigation.md",
+            ".data/wendao-frontend/docs/03_features/202_topology_and_graph_navigation.md",
             "# Topology\n\nSee [[overview]].\n",
         ),
     ]);
@@ -958,7 +961,7 @@ root = "."
 dirs = ["docs"]
 
 [link_graph.projects.main]
-root = ".data/qianji-studio"
+root = ".data/wendao-frontend"
 dirs = ["docs"]
 "#,
     );

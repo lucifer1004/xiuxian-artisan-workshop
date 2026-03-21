@@ -52,6 +52,7 @@ fn compile() {}
             root: ".".to_string(),
             dirs: vec!["docs".to_string()],
         }],
+        repo_projects: Vec::new(),
     });
 
     AnalysisFixture {

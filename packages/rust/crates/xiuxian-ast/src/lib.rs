@@ -32,7 +32,11 @@
 mod chunk;
 mod extract;
 mod item;
+#[cfg(feature = "julia")]
+mod julia_tree_sitter;
 mod lang;
+#[cfg(feature = "modelica")]
+mod modelica_tree_sitter;
 mod python;
 mod python_tree_sitter;
 mod re_exports;
@@ -74,4 +78,16 @@ pub use chunk::{CodeChunk, chunk_code};
 // Tree-sitter based Python parser for robust decorator extraction
 pub use python_tree_sitter::{
     DecoratedFunction, DecoratorArguments, DecoratorInfo, ParameterInfo, TreeSitterPythonParser,
+};
+
+#[cfg(feature = "julia")]
+pub use julia_tree_sitter::{
+    JuliaDocAttachment, JuliaDocTargetKind, JuliaFileSummary, JuliaImport, JuliaParseError,
+    JuliaSourceSummary, JuliaSymbol, JuliaSymbolKind, TreeSitterJuliaParser,
+};
+
+#[cfg(feature = "modelica")]
+pub use modelica_tree_sitter::{
+    ModelicaFileSummary, ModelicaImport, ModelicaParseError, ModelicaSymbol, ModelicaSymbolKind,
+    TreeSitterModelicaParser,
 };

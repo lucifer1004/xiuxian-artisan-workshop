@@ -1,0 +1,30 @@
+---
+source: packages/rust/crates/xiuxian-wendao-modelica/src/plugin/discovery.rs
+expression: payload
+---
+[
+  {
+    "path": "Controllers/Examples/Step.mo",
+    "surface": "example"
+  },
+  {
+    "path": "Controllers/Examples/ExampleUtilities/Helper.mo",
+    "surface": "support"
+  },
+  {
+    "path": "Controllers/Examples/Utilities/Helper.mo",
+    "surface": "support"
+  },
+  {
+    "path": "Controllers/Internal/Helper.mo",
+    "surface": "support"
+  },
+  {
+    "path": "Controllers/PI.mo",
+    "surface": "api"
+  },
+  {
+    "path": "UsersGuide/Overview.mo",
+    "surface": "documentation"
+  }
+]

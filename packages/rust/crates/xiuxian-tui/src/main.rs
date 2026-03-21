@@ -83,6 +83,7 @@ fn main() -> Result<()> {
         // Reverse mode: Connect to Python's socket
         info!("Connecting to Python socket as client...");
         SocketClient::connect(&args.socket, event_tx.clone())
+            .context("Failed to connect to socket server")?
     } else {
         // Legacy mode: Bind and listen
         info!("Binding socket as server...");

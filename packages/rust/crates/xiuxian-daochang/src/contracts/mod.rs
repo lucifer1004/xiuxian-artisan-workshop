@@ -4,6 +4,7 @@ mod memory_gate;
 mod omega;
 mod route_trace;
 
+pub use crate::shortcuts::WorkflowBridgeMode;
 pub use discover::{DiscoverConfidence, DiscoverMatch};
 pub use graph_plan::{GraphExecutionPlan, GraphPlanStep, GraphPlanStepKind, GraphWorkflowMode};
 pub use memory_gate::{MemoryGateDecision, MemoryGateVerdict};

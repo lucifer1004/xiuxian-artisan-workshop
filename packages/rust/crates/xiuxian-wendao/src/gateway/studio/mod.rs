@@ -26,3 +26,7 @@ pub(crate) mod test_support;
 #[cfg(all(test, feature = "zhenfa-router"))]
 #[path = "../../../tests/unit/studio_vfs_performance.rs"]
 mod studio_vfs_performance_tests;
+
+#[cfg(all(test, feature = "zhenfa-router"))]
+#[path = "../../../tests/unit/studio_repo_sync_api.rs"]
+mod studio_repo_sync_api_tests;

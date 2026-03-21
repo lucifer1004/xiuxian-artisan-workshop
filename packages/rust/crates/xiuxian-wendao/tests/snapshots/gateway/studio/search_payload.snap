@@ -6,6 +6,9 @@ expression: value
   "graphConfidenceScore": 0.0,
   "hitCount": 0,
   "hits": [],
+  "intent": "semantic_lookup",
+  "intentConfidence": 0.0,
   "query": "wendao",
+  "searchMode": "vector_only",
   "selectedMode": "vector_only"
 }

@@ -3,6 +3,7 @@
 //! Listens on /tmp/omni-omega.sock for JSON events in omni-events format:
 //! {"source": "omega", "topic": "omega/mission/start", "payload": {...}, "timestamp": "..."}
 
+use anyhow::Context;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,14 +19,73 @@ use std::time::Duration;
 /// Received event from Python
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SocketEvent {
+    /// Event source identifier.
     pub source: String,
+    /// Event topic used for routing.
     pub topic: String,
+    /// Event payload content.
     pub payload: Value,
+    /// Event timestamp in string form.
     pub timestamp: String,
 }
 
 /// Event callback for received events
 pub type EventCallback = Box<dyn Fn(SocketEvent) + Send + 'static>;
+
+/// Unix Domain Socket client for receiving events from an external socket.
+#[derive(Debug, Clone)]
+pub struct SocketClient;
+
+impl SocketClient {
+    /// Connect to an existing Unix socket and forward events to a channel.
+    pub fn connect(
+        socket_path: &str,
+        tx: std::sync::mpsc::Sender<SocketEvent>,
+    ) -> anyhow::Result<thread::JoinHandle<()>> {
+        let stream = UnixStream::connect(socket_path)
+            .with_context(|| format!("failed to connect to socket at {socket_path}"))?;
+        let socket_path = socket_path.to_string();
+
+        let handle = thread::spawn(move || {
+            let mut reader = BufReader::new(stream);
+            loop {
+                let mut line = String::new();
+                match reader.read_line(&mut line) {
+                    Ok(0) => {
+                        info!("Socket client reached EOF on {}", socket_path);
+                        break;
+                    }
+                    Ok(_) => {
+                        let line = line.trim();
+                        if line.is_empty() {
+                            continue;
+                        }
+                        match serde_json::from_str::<SocketEvent>(line) {
+                            Ok(event) => {
+                                if tx.send(event).is_err() {
+                                    warn!("Socket client receiver dropped for {}", socket_path);
+                                    break;
+                                }
+                            }
+                            Err(error) => {
+                                warn!(
+                                    "Failed to parse socket event from {}: {}",
+                                    socket_path, error
+                                );
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        error!("Socket client read error on {}: {}", socket_path, error);
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(handle)
+    }
+}
 
 /// Unix Domain Socket server for receiving Python events
 #[derive(Clone)]
@@ -61,7 +121,7 @@ impl SocketServer {
     }
 
     /// Start the server in a background thread
-    pub fn start(&self) -> Result<thread::JoinHandle<()>, Box<dyn std::error::Error>> {
+    pub fn start(&self) -> anyhow::Result<thread::JoinHandle<()>> {
         let socket_path = Path::new(&self.socket_path);
 
         // Remove existing socket file
@@ -178,10 +238,7 @@ impl SocketServer {
 }
 
 /// Send an event through Unix socket (for testing)
-pub fn send_event(
-    socket_path: &str,
-    event: &SocketEvent,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn send_event(socket_path: &str, event: &SocketEvent) -> anyhow::Result<()> {
     let mut stream = UnixStream::connect(socket_path)?;
 
     let json = serde_json::to_string(event)?;

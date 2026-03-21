@@ -82,6 +82,7 @@ in
     pkgs.ollama
     pkgs.valkey
     pkgs.ngrok
+    pkgs.nodejs
   ];
 
   dotenv.enable = true;

@@ -207,17 +207,17 @@ impl BroadcastEventHandler {
 
 /// Subscribe to omni-events for custom TuiEvents
 pub struct EventSubscriber {
-    rx: broadcast::Receiver<omni_events::OmniEvent>,
+    rx: broadcast::Receiver<xiuxian_event::OmniEvent>,
 }
 
 impl EventSubscriber {
     /// Create a new subscriber
-    pub fn new(rx: broadcast::Receiver<omni_events::OmniEvent>) -> Self {
+    pub fn new(rx: broadcast::Receiver<xiuxian_event::OmniEvent>) -> Self {
         Self { rx }
     }
 
     /// Receive the next omni-event (blocking)
-    pub fn recv(&mut self) -> Result<omni_events::OmniEvent, broadcast::error::RecvError> {
+    pub fn recv(&mut self) -> Result<xiuxian_event::OmniEvent, broadcast::error::RecvError> {
         // Use blocking receive for sync TUI
         loop {
             match self.rx.try_recv() {

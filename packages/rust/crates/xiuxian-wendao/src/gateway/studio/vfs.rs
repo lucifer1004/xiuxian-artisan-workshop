@@ -5,8 +5,12 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::{collections::HashSet, fs};
 
+use crate::repo_intelligence::{
+    RegisteredRepository, RepoSyncMode, RepoSyncQuery, repo_sync_for_registered_repository,
+};
+
 use super::pathing;
-use super::router::StudioState;
+use super::router::{StudioState, configured_repositories};
 use super::types::{
     UiProjectConfig, VfsCategory, VfsContentResponse, VfsEntry, VfsScanEntry, VfsScanResult,
 };
@@ -315,8 +319,48 @@ fn resolved_vfs_roots(state: &StudioState) -> Vec<ResolvedVfsRoot> {
         }
     }
 
+    for repository in configured_repositories(state) {
+        push_root(
+            &mut roots,
+            &mut seen_fs_paths,
+            resolve_repo_checkout_root_candidate(state, repository),
+        );
+    }
+
     assign_request_roots(&mut roots);
     roots
+}
+
+fn resolve_repo_checkout_root_candidate(
+    state: &StudioState,
+    repository: RegisteredRepository,
+) -> Option<ResolvedVfsRoot> {
+    let sync = repo_sync_for_registered_repository(
+        &RepoSyncQuery {
+            repo_id: repository.id.clone(),
+            mode: RepoSyncMode::Status,
+        },
+        &repository,
+        state.project_root.as_path(),
+    )
+    .ok()?;
+    let filesystem_path = PathBuf::from(sync.checkout_path.as_str());
+    if !filesystem_path.exists() {
+        return None;
+    }
+
+    let repo_id = repository.id;
+    Some(ResolvedVfsRoot {
+        request_root: repo_id.clone(),
+        display_name: repo_id.clone(),
+        filesystem_path: filesystem_path.clone(),
+        project_name: Some(repo_id.clone()),
+        root_label: Some(repo_id),
+        project_root: Some(normalize_path_string(filesystem_path.as_path())),
+        project_dirs: vec![".".to_string()],
+        filter_prefix: String::new(),
+        file_filters: Vec::new(),
+    })
 }
 
 pub(crate) fn graph_lookup_candidates(state: &StudioState, requested_path: &str) -> Vec<String> {

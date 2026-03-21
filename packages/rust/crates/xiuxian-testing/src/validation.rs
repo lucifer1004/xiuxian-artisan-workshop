@@ -36,6 +36,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Optional structure policy overrides loaded from crate-level configuration.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TestsStructurePolicy {
+    /// Additional allowed directories directly under `tests/`.
+    pub allowed_directories: Vec<String>,
+    /// Additional allowed Rust file names directly under `tests/`.
+    pub allowed_root_files: Vec<String>,
+}
+
 /// Represents a violation of the test directory structure convention.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructureViolation {
@@ -89,16 +98,28 @@ const ALLOWED_DIRS: &[&str] = &[
 ];
 
 /// Allowed file patterns in tests/ root (entry points).
-const ALLOWED_ROOT_FILE_PATTERNS: &[&str] = &["mod.rs", "lib.rs", "scenarios_test.rs"];
+const ALLOWED_ROOT_FILE_PATTERNS: &[&str] = &[
+    "mod.rs",
+    "lib.rs",
+    "scenarios_test.rs",
+    "xiuxian-testing-gate.rs",
+];
 
 /// Check if a file name matches an allowed root file pattern.
-fn is_allowed_root_file(name: &str) -> bool {
+fn is_allowed_root_file(name: &str, policy: Option<&TestsStructurePolicy>) -> bool {
     // Allow entry points like *_test.rs
     if name.ends_with("_test.rs") {
         return true;
     }
     // Allow specific patterns
     ALLOWED_ROOT_FILE_PATTERNS.contains(&name)
+        || policy.is_some_and(|config| config.allowed_root_files.iter().any(|entry| entry == name))
+}
+
+/// Check if a directory name is allowed directly under tests/.
+fn is_allowed_directory(name: &str, policy: Option<&TestsStructurePolicy>) -> bool {
+    ALLOWED_DIRS.contains(&name)
+        || policy.is_some_and(|config| config.allowed_directories.iter().any(|entry| entry == name))
 }
 
 /// Check if a file name indicates it should be in unit/.
@@ -112,17 +133,6 @@ fn is_integration_test_file(name: &str) -> bool {
         || name.starts_with("integration_")
         || name.contains("_indexer_")
         || name.contains("_debug")
-}
-
-/// Check if a file is a test file (not a helper module).
-fn is_likely_test_file(name: &str) -> bool {
-    let name_lower = name.to_lowercase();
-    name_lower.contains("test")
-        || name_lower.contains("_unit")
-        || name_lower.contains("_integration")
-        || name_lower.contains("_py")
-        || name_lower.contains("_rpc")
-        || name_lower.contains("_contracts")
 }
 
 /// Validate the structure of a tests/ directory.
@@ -148,6 +158,15 @@ fn is_likely_test_file(name: &str) -> bool {
 /// ```
 #[must_use]
 pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
+    validate_tests_structure_with_policy(tests_dir, None)
+}
+
+/// Validate the structure of a tests/ directory with optional policy overrides.
+#[must_use]
+pub fn validate_tests_structure_with_policy(
+    tests_dir: &Path,
+    policy: Option<&TestsStructurePolicy>,
+) -> Vec<StructureViolation> {
     let mut violations = Vec::new();
 
     if !tests_dir.exists() {
@@ -164,12 +183,13 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
 
         if path.is_dir() {
             // Check if directory is allowed
-            if !ALLOWED_DIRS.contains(&name.as_str()) {
+            if !is_allowed_directory(&name, policy) {
                 violations.push(StructureViolation {
                     path: path.clone(),
                     kind: ViolationKind::UnexpectedDirectory,
                     suggestion: format!(
-                        "Consider moving '{name}' to a standard location or adding to ALLOWED_DIRS"
+                        "Consider moving '{name}' to a standard location or allow it via \
+                         tests/xiuxian-testings-rules.toml [tests].allowed_directories"
                     ),
                 });
             }
@@ -180,7 +200,7 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
             // Check .rs file naming
 
             // Skip allowed root files
-            if is_allowed_root_file(&name) {
+            if is_allowed_root_file(&name, policy) {
                 continue;
             }
 
@@ -241,15 +261,14 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
                 continue;
             }
 
-            // Check for other scattered test files
-            if is_likely_test_file(&name) && !is_allowed_root_file(&name) {
-                violations.push(StructureViolation {
-                    path: path.clone(),
-                    kind: ViolationKind::ScatteredTestFile,
-                    suggestion: "Move to tests/unit/ or tests/integration/ based on test scope"
-                        .to_string(),
-                });
-            }
+            // Any other root-level Rust test file should be organized or explicitly allowed.
+            violations.push(StructureViolation {
+                path: path.clone(),
+                kind: ViolationKind::ScatteredTestFile,
+                suggestion: "Move to tests/unit/ or tests/integration/ based on test scope, or \
+                             allow this file via tests/xiuxian-testings-rules.toml [tests].allowed_root_files"
+                    .to_string(),
+            });
         }
     }
 
@@ -267,7 +286,16 @@ pub fn validate_tests_structure(tests_dir: &Path) -> Vec<StructureViolation> {
 /// A vector of violations found in the crate's tests/ directory.
 #[must_use]
 pub fn validate_crate_tests(crate_path: &Path) -> Vec<StructureViolation> {
-    validate_tests_structure(&crate_path.join("tests"))
+    validate_crate_tests_with_policy(crate_path, None)
+}
+
+/// Validate tests structure for a specific crate with optional policy overrides.
+#[must_use]
+pub fn validate_crate_tests_with_policy(
+    crate_path: &Path,
+    policy: Option<&TestsStructurePolicy>,
+) -> Vec<StructureViolation> {
+    validate_tests_structure_with_policy(&crate_path.join("tests"), policy)
 }
 
 /// Get a summary report of violations.
@@ -315,14 +343,28 @@ pub fn format_violation_report(violations: &[StructureViolation]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn test_is_allowed_root_file() {
-        assert!(is_allowed_root_file("mod.rs"));
-        assert!(is_allowed_root_file("scenarios_test.rs"));
-        assert!(is_allowed_root_file("my_test.rs"));
-        assert!(!is_allowed_root_file("test_entity.rs"));
-        assert!(!is_allowed_root_file("entity_unit.rs"));
+        assert!(is_allowed_root_file("mod.rs", None));
+        assert!(is_allowed_root_file("scenarios_test.rs", None));
+        assert!(is_allowed_root_file("xiuxian-testing-gate.rs", None));
+        assert!(is_allowed_root_file("my_test.rs", None));
+        assert!(!is_allowed_root_file("test_entity.rs", None));
+        assert!(!is_allowed_root_file("entity_unit.rs", None));
+    }
+
+    #[test]
+    fn test_is_allowed_root_file_with_policy_override() {
+        let policy = TestsStructurePolicy {
+            allowed_directories: Vec::new(),
+            allowed_root_files: vec!["quantum_fusion_saliency_window.rs".to_string()],
+        };
+        assert!(is_allowed_root_file(
+            "quantum_fusion_saliency_window.rs",
+            Some(&policy)
+        ));
     }
 
     #[test]
@@ -345,6 +387,48 @@ mod tests {
     fn test_validate_nonexistent_directory() {
         let violations = validate_tests_structure(Path::new("/nonexistent/path/tests"));
         assert!(violations.is_empty());
+    }
+
+    #[test]
+    fn test_validate_tests_structure_flags_unclassified_root_rs_file() {
+        let temp =
+            tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir should exist: {error}"));
+        let tests_dir = temp.path().join("tests");
+        fs::create_dir_all(&tests_dir)
+            .unwrap_or_else(|error| panic!("tests dir should exist: {error}"));
+        fs::write(
+            tests_dir.join("quantum_fusion_saliency_window.rs"),
+            "#[test]\nfn smoke() {}\n",
+        )
+        .unwrap_or_else(|error| panic!("test fixture should exist: {error}"));
+
+        let violations = validate_tests_structure(&tests_dir);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].kind, ViolationKind::ScatteredTestFile);
+    }
+
+    #[test]
+    fn test_validate_tests_structure_with_policy_allows_root_file_and_directory() {
+        let temp =
+            tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir should exist: {error}"));
+        let tests_dir = temp.path().join("tests");
+        fs::create_dir_all(tests_dir.join("bench"))
+            .unwrap_or_else(|error| panic!("custom directory should exist: {error}"));
+        fs::write(
+            tests_dir.join("coactivation_multihop_diffusion.rs"),
+            "#[test]\nfn smoke() {}\n",
+        )
+        .unwrap_or_else(|error| panic!("test fixture should exist: {error}"));
+
+        let policy = TestsStructurePolicy {
+            allowed_directories: vec!["bench".to_string()],
+            allowed_root_files: vec!["coactivation_multihop_diffusion.rs".to_string()],
+        };
+        let violations = validate_tests_structure_with_policy(&tests_dir, Some(&policy));
+        assert!(
+            violations.is_empty(),
+            "expected no violations: {violations:?}"
+        );
     }
 
     #[test]

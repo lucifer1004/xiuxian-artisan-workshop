@@ -19,6 +19,22 @@ pub(crate) fn resolve_string(
     default.to_string()
 }
 
+pub(crate) fn resolve_optional_string(
+    cli_value: Option<String>,
+    env_name: &str,
+    settings_value: Option<&str>,
+) -> Option<String> {
+    cli_value
+        .and_then(|value| trim_non_empty(&value))
+        .or_else(|| {
+            std::env::var(env_name)
+                .ok()
+                .as_deref()
+                .and_then(trim_non_empty)
+        })
+        .or_else(|| settings_value.and_then(trim_non_empty))
+}
+
 pub(crate) fn resolve_positive_u64(
     cli_value: Option<u64>,
     env_name: &str,
@@ -169,6 +185,11 @@ fn parse_dedup_backend(raw: &str) -> Option<WebhookDedupBackendMode> {
         "valkey" | "redis" => Some(WebhookDedupBackendMode::Valkey),
         _ => None,
     }
+}
+
+fn trim_non_empty(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 #[must_use]

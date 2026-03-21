@@ -47,14 +47,17 @@ Standardized documentation repository for the Wendao DocOS Kernel, leveraging AS
 :END:
 
 - [[06_roadmap/401_project_sentinel]]: Project Sentinel (Auditing).
+- [[06_roadmap/402_repo_intelligence_mvp]]: Repo Intelligence common core and plugin API MVP.
+- [[06_roadmap/403_document_projection_and_retrieval_enhancement]]: Document projection and retrieval enhancement on top of Repo Intelligence.
+- [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]]: SciML and MSL repo intelligence architecture and boundary mapping.
 
 :RELATIONS:
-:LINKS: [[01_core/101_triple_a_protocol]], [[06_roadmap/401_project_sentinel]]
+:LINKS: [[01_core/101_triple_a_protocol]], [[06_roadmap/401_project_sentinel]], [[06_roadmap/402_repo_intelligence_mvp]], [[06_roadmap/403_document_projection_and_retrieval_enhancement]], [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]]
 :END:
 
 ---
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-03-18
+:LAST_SYNC: 2026-03-19
 :END:

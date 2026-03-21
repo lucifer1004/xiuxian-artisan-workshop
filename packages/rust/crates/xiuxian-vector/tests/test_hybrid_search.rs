@@ -16,13 +16,14 @@ async fn test_hybrid_search_without_keyword_index_falls_back_to_vector() -> Resu
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().to_string_lossy().into_owned();
     let store = VectorStore::new(&db_path, None).await?;
+    let query_vector = vec![0.1; 1536];
 
     // Add documents first so the table exists
     store
         .add_documents(
             "test",
             vec!["doc1".to_string()],
-            vec![vec![0.1; 1024]],
+            vec![query_vector.clone()],
             vec!["test content".to_string()],
             vec![r#"{"category": "test"}"#.to_string()],
         )
@@ -30,7 +31,7 @@ async fn test_hybrid_search_without_keyword_index_falls_back_to_vector() -> Resu
 
     // Without keyword backend enabled, hybrid search should degrade gracefully.
     let results = store
-        .hybrid_search("test", "test query", vec![0.1; 1024], 10)
+        .hybrid_search("test", "test query", query_vector, 10)
         .await?;
 
     assert!(!results.is_empty());

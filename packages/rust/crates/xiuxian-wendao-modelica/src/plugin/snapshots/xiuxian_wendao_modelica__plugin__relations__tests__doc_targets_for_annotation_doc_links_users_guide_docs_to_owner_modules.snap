@@ -1,0 +1,28 @@
+---
+source: packages/rust/crates/xiuxian-wendao-modelica/src/plugin/relations.rs
+expression: payload
+---
+[
+  {
+    "path": "UsersGuide/Overview.mo",
+    "targets": [
+      "repo:modelica-demo:module:DemoLib",
+      "repo:modelica-demo:module:DemoLib.UsersGuide"
+    ]
+  },
+  {
+    "path": "Controllers/UsersGuide/Tuning.mo",
+    "targets": [
+      "repo:modelica-demo:module:DemoLib.Controllers",
+      "repo:modelica-demo:module:DemoLib.Controllers.UsersGuide"
+    ]
+  },
+  {
+    "path": "Controllers/UsersGuide/Tutorial/FirstSteps.mo",
+    "targets": [
+      "repo:modelica-demo:module:DemoLib.Controllers",
+      "repo:modelica-demo:module:DemoLib.Controllers.UsersGuide",
+      "repo:modelica-demo:module:DemoLib.Controllers.UsersGuide.Tutorial"
+    ]
+  }
+]

@@ -1,17 +1,17 @@
-use super::Agent;
-use super::memory_state::{MemoryStateBackend, MemoryStateLoadStatus};
+use crate::agent::Agent;
+use crate::agent::memory_state::{MemoryStateBackend, MemoryStateLoadStatus};
 use crate::config::AgentConfig;
 use crate::embedding::EmbeddingClient;
 use crate::llm::LlmClient;
 use crate::observability::SessionEvent;
 use crate::session::{BoundedSessionStore, SessionStore};
 use anyhow::{Context, Result};
-use omni_memory::{EpisodeStore, StoreConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
+use xiuxian_memory_engine::{EpisodeStore, StoreConfig};
 
 impl Agent {
     /// Build agent from config. Connects to first MCP server that has a URL.

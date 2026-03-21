@@ -1,0 +1,21 @@
+---
+source: packages/rust/crates/xiuxian-wendao-modelica/src/plugin/parsing.rs
+expression: payload
+---
+[
+  {
+    "name": "ControllerState",
+    "kind": "Type",
+    "signature": "record ControllerState"
+  },
+  {
+    "name": "Gain",
+    "kind": "Constant",
+    "signature": "parameter Gain = 1;"
+  },
+  {
+    "name": "Limiter",
+    "kind": "Type",
+    "signature": "block Limiter"
+  }
+]

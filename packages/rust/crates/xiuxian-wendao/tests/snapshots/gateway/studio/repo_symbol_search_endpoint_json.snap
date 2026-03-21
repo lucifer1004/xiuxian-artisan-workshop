@@ -1,0 +1,19 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
+expression: value
+---
+{
+  "repo_id": "gateway-sync",
+  "symbols": [
+    {
+      "kind": "function",
+      "module_id": "repo:gateway-sync:module:GatewaySyncPkg",
+      "name": "solve",
+      "path": "src/GatewaySyncPkg.jl",
+      "qualified_name": "GatewaySyncPkg.solve",
+      "repo_id": "gateway-sync",
+      "signature": "solve() = nothing",
+      "symbol_id": "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+    }
+  ]
+}

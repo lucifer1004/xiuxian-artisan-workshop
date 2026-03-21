@@ -33,6 +33,7 @@ agent-vision-dots-metal = ["xiuxian-llm/vision-dots-metal"]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 async-trait = "0.1"
 tracing = { workspace = true }
@@ -64,6 +65,7 @@ xiuxian-wendao = { path = "../xiuxian-wendao", features = ["zhenfa-router"] }
 xiuxian-config-core = { path = "../xiuxian-config-core" }
 xiuxian-mcp = { path = "../xiuxian-mcp" }
 xiuxian-logging = { path = "../xiuxian-logging" }
+xiuxian-skills = { path = "../xiuxian-skills" }
 xiuxian-window = { path = "../xiuxian-window" }
 xiuxian-tokenizer = { path = "../xiuxian-tokenizer" }
 xiuxian-zhixing = { path = "../xiuxian-zhixing" }

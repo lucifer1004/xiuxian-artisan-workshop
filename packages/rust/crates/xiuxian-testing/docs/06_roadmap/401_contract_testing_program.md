@@ -157,7 +157,8 @@ Remaining next steps:
 - Current verification evidence:
   - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/xiuxian-testing-nextest cargo nextest run -p xiuxian-testing --lib --tests --no-fail-fast`
   - `direnv exec . bash scripts/rust/xiuxian_qianji_scenario_audit_contracts.sh`
-  - `direnv exec . bash scripts/rust/xiuxian_testing_contract_gates.sh`
+  - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/xiuxian-testing-nextest cargo nextest run -p xiuxian-testing --test contracts_kernel --test contracts_rest_docs --test contracts_modularity --test contracts_runner --test contracts_knowledge_export --test docs_kernel_contract --no-fail-fast`
+  - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/xiuxian-vector-nextest cargo nextest run -p xiuxian-vector --test xiuxian-testing-gate --no-fail-fast`
   - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/wendao-live-openapi-gate bash scripts/rust/xiuxian_wendao_live_openapi_contract_feedback.sh`
   - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/wendao-contract-feedback-consumer bash scripts/rust/xiuxian_wendao_contract_feedback_consumer.sh`
   - `direnv exec . env CARGO_TARGET_DIR=.cache/cargo-target/wendao-contract-feedback-consumer cargo test -p xiuxian-qianji --test wendao_persisted_rest_docs_contract_feedback`

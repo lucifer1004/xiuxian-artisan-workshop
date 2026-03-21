@@ -72,7 +72,7 @@ task_type = "write_file"
 label = "Publisher: Qianji Studio Live Online"
 weight = 1.0
 [nodes.params]
-path = ".data/qianji-studio/public/latest_topology.json"
+path = ".data/wendao-frontend/public/latest_topology.json"
 content_key = "proposed_diagram_manifest"
 
 [[edges]]

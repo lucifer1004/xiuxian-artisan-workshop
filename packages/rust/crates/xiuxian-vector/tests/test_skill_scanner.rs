@@ -85,8 +85,10 @@ fn test_scan_all_multiple_skills() -> TestResult {
         writer_path.join("SKILL.md"),
         r#"---
 name: "writer"
-version: "1.0"
-routing_keywords: ["write", "edit"]
+metadata:
+  version: "1.0"
+  source: "https://example.com/skills/writer"
+  routing_keywords: ["write", "edit"]
 ---
 # Writer
 "#,
@@ -99,8 +101,10 @@ routing_keywords: ["write", "edit"]
         git_path.join("SKILL.md"),
         r#"---
 name: "git"
-version: "1.0"
-routing_keywords: ["commit", "branch"]
+metadata:
+  version: "1.0"
+  source: "https://example.com/skills/git"
+  routing_keywords: ["commit", "branch"]
 ---
 # Git
 "#,

@@ -1,0 +1,36 @@
+---
+source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+description: "Scenario 002_julia_file_summary [julia_parser]: Julia File Summary"
+expression: result
+info:
+  id: 002_julia_file_summary
+  name: Julia File Summary
+  category: julia_parser
+  description: Parse a Julia include file without a root module declaration
+  input_type: julia_file_source
+  input_paths:
+    - input
+  expected_output_type: ~
+---
+{
+  "docstrings": [
+    {
+      "content": "Fast solve docs.",
+      "target_kind": "symbol",
+      "target_name": "fastsolve"
+    }
+  ],
+  "exports": [],
+  "imports": [],
+  "includes": [
+    "nested/extra.jl"
+  ],
+  "module_name": null,
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "fastsolve",
+      "signature": "fastsolve(problem::Problem) = problem.x"
+    }
+  ]
+}

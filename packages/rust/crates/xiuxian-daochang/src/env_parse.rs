@@ -29,6 +29,20 @@ pub fn parse_bool_from_env(name: &str) -> Option<bool> {
     )
 }
 
+#[must_use]
+pub fn resolve_valkey_url_env() -> Option<String> {
+    std::env::var("XIUXIAN_WENDAO_VALKEY_URL")
+        .ok()
+        .as_deref()
+        .and_then(trim_non_empty)
+        .or_else(|| {
+            std::env::var("VALKEY_URL")
+                .ok()
+                .as_deref()
+                .and_then(trim_non_empty)
+        })
+}
+
 fn parse_env_value<T>(
     name: &str,
     parser: impl FnOnce(&str) -> Option<T>,
@@ -41,4 +55,9 @@ fn parse_env_value<T>(
         tracing::warn!(env_var = %name, value = %raw, "{invalid_message}");
         None
     }
+}
+
+fn trim_non_empty(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }

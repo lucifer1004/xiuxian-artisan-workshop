@@ -327,6 +327,23 @@ pub struct KnowledgeSearchResult {
 /// A search hit from the graph index.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
+pub struct SearchBacklinkItem {
+    /// Stable backlink identifier.
+    pub id: String,
+    /// Optional backlink title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Optional backlink source path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Optional relation-kind label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+}
+
+/// A search hit from the graph index.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchHit {
     /// Document stem (filename without extension).
     pub stem: String,
@@ -348,6 +365,27 @@ pub struct SearchHit {
     /// Reason for the match.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub match_reason: Option<String>,
+    /// Optional hierarchical URI for path-mapped search navigation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hierarchical_uri: Option<String>,
+    /// Optional hierarchy segments used for breadcrumbs and side drawers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hierarchy: Option<Vec<String>>,
+    /// Optional saliency score (0-1) when available from retrieval fusion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saliency_score: Option<f64>,
+    /// Optional audit status propagated from upstream analyzers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_status: Option<String>,
+    /// Optional verification state propagated from upstream analyzers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification_state: Option<String>,
+    /// Optional implicit backlinks derived from relation/projection context.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implicit_backlinks: Option<Vec<String>>,
+    /// Optional structured backlink metadata derived from relation/projection context.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implicit_backlink_items: Option<Vec<SearchBacklinkItem>>,
     /// Display-ready navigation target for opening this hit in studio.
     pub navigation_target: StudioNavigationTarget,
 }
@@ -368,6 +406,15 @@ pub struct SearchResponse {
     /// Selected search mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_mode: Option<String>,
+    /// Optional semantic intent label for the search transaction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intent: Option<String>,
+    /// Optional confidence score for semantic intent resolution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intent_confidence: Option<f64>,
+    /// Optional canonical search mode alias for frontend consumption.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search_mode: Option<String>,
 }
 
 /// Attachment category for studio attachment search hits.
@@ -832,6 +879,29 @@ pub struct UiProjectConfig {
     pub dirs: Vec<String>,
 }
 
+/// Repo-Intelligence project configuration pushed from frontend `wendao.toml`.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UiRepoProjectConfig {
+    /// Stable project identifier from `[link_graph.projects.<id>]`.
+    pub id: String,
+    /// Optional local root path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root: Option<String>,
+    /// Optional upstream git URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Optional git reference (branch/tag) from `ref`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git_ref: Option<String>,
+    /// Optional refresh policy (`fetch` or `manual`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh: Option<String>,
+    /// Enabled plugin identifiers for this project.
+    #[serde(default)]
+    pub plugins: Vec<String>,
+}
+
 /// UI configuration for the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -839,6 +909,9 @@ pub struct UiConfig {
     /// Project-scoped explorer configuration.
     #[serde(default)]
     pub projects: Vec<UiProjectConfig>,
+    /// Repo-Intelligence project configuration pushed from frontend.
+    #[serde(default)]
+    pub repo_projects: Vec<UiRepoProjectConfig>,
 }
 
 // === Error Types ===
@@ -876,6 +949,7 @@ pub fn studio_type_collection() -> TypeCollection {
         .register::<NodeState>()
         .register::<ResearchStateEvent>()
         .register::<KnowledgeSearchResult>()
+        .register::<SearchBacklinkItem>()
         .register::<SearchHit>()
         .register::<SearchResponse>()
         .register::<AstSearchHit>()
@@ -899,6 +973,7 @@ pub fn studio_type_collection() -> TypeCollection {
         .register::<MermaidProjection>()
         .register::<MarkdownAnalysisResponse>()
         .register::<UiProjectConfig>()
+        .register::<UiRepoProjectConfig>()
         .register::<UiConfig>()
         .register::<ApiError>()
 }

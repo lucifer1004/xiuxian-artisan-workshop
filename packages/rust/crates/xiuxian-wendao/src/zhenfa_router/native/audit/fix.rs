@@ -176,15 +176,26 @@ impl AtomicFixBatch {
         let mut previews = HashMap::new();
 
         for (path, fixes) in filtered {
-            // Read file content
-            let Ok(content) = std::fs::read_to_string(&path) else {
-                continue;
+            let content = match std::fs::read_to_string(&path) {
+                Ok(content) => content,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::NotFound
+                        && fixes.len() == 1
+                        && fixes[0].is_create_file() =>
+                {
+                    String::new()
+                }
+                Err(_) => continue,
             };
 
             let file_previews: Vec<FixPreview> = fixes
                 .iter()
                 .filter_map(|fix| {
-                    let preview_content = fix.preview(&content).ok()?;
+                    let preview_content = if fix.is_create_file() {
+                        fix.replacement.clone()
+                    } else {
+                        fix.preview(&content).ok()?
+                    };
                     Some(FixPreview {
                         line_number: fix.line_number,
                         original: fix.original_content.clone(),
@@ -241,9 +252,15 @@ impl AtomicFixBatch {
         let filtered = self.filter_by_confidence();
 
         for (path, mut fixes) in filtered {
-            // Read file content
             let content = match std::fs::read_to_string(&path) {
                 Ok(c) => c,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::NotFound
+                        && fixes.len() == 1
+                        && fixes[0].is_create_file() =>
+                {
+                    String::new()
+                }
                 Err(e) => {
                     report
                         .errors
@@ -253,9 +270,22 @@ impl AtomicFixBatch {
                 }
             };
 
+            let create_file_mode = fixes.len() == 1 && fixes[0].is_create_file();
+
+            if create_file_mode && path.exists() {
+                report.failures += 1;
+                report.files_skipped += 1;
+                report.errors.push(format!(
+                    "Refusing to create {} because the file already exists",
+                    path.display()
+                ));
+                continue;
+            }
+
             // ONE-TIME hash verification (CAS check) before any modifications
             // Get expected hash from first surgical fix (all fixes for same file share same base_hash)
-            if let Some(first_fix) = fixes.iter().find(|f| f.is_surgical())
+            if !create_file_mode
+                && let Some(first_fix) = fixes.iter().find(|f| f.is_surgical())
                 && let Some(ref expected_hash) = first_fix.base_hash
             {
                 let actual_hash = compute_blake3_hash(&content);
@@ -311,6 +341,18 @@ impl AtomicFixBatch {
 
             // Only write if all fixes succeeded AND not in dry-run mode
             if file_success && !self.dry_run {
+                if let Some(parent) = path.parent()
+                    && let Err(error) = std::fs::create_dir_all(parent)
+                {
+                    report.errors.push(format!(
+                        "Failed to create parent directories for {}: {}",
+                        path.display(),
+                        error
+                    ));
+                    report.files_skipped += 1;
+                    continue;
+                }
+
                 match std::fs::write(&path, &modified_content) {
                     Ok(()) => {
                         report.files_modified += 1;

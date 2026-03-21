@@ -17,7 +17,6 @@ mod mcp_startup;
 mod memory;
 mod memory_recall;
 mod memory_recall_feedback;
-mod memory_recall_feedback_state;
 mod memory_recall_metrics;
 mod memory_recall_state;
 mod memory_state;
@@ -33,15 +32,15 @@ mod turn_execution;
 mod turn_support;
 
 use anyhow::{Context, Result};
-use omni_tokenizer::count_tokens;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 
-use omni_memory::EpisodeStore;
+use xiuxian_memory_engine::EpisodeStore;
 use xiuxian_qianhuan::{InjectionPolicy, InjectionSnapshot};
+use xiuxian_tokenizer::count_tokens;
 
 use crate::config::AgentConfig;
 use crate::contracts::{
@@ -52,10 +51,7 @@ use crate::embedding::EmbeddingClient;
 use crate::llm::LlmClient;
 use crate::observability::SessionEvent;
 use crate::session::{BoundedSessionStore, ChatMessage, SessionStore, SessionSummarySegment};
-use crate::shortcuts::{
-    CRAWL_TOOL_NAME, WorkflowBridgeMode, parse_crawl_shortcut, parse_react_shortcut,
-    parse_workflow_bridge_shortcut,
-};
+use crate::shortcuts::parse_react_shortcut;
 use embedding_dimension::{
     EMBEDDING_SOURCE_EMBEDDING, EMBEDDING_SOURCE_EMBEDDING_REPAIRED, repair_embedding_dimension,
 };
@@ -70,7 +66,6 @@ use memory_recall_feedback::{
     resolve_feedback_outcome, update_feedback_bias,
 };
 use memory_state::{MemoryStateBackend, MemoryStateLoadStatus};
-use omega::ShortcutFallbackAction;
 use reflection::PolicyHintDirective;
 use system_prompt_injection_state::SYSTEM_PROMPT_INJECTION_CONTEXT_MESSAGE_NAME;
 
@@ -84,10 +79,10 @@ pub use consolidation::summarise_drained_turns;
 pub use context_budget::prune_messages_for_token_budget;
 pub use context_budget_state::{SessionContextBudgetClassSnapshot, SessionContextBudgetSnapshot};
 pub use graph_bridge::{GraphBridgeRequest, GraphBridgeResult, validate_graph_bridge_request};
-pub use native_tools::registry::NativeToolRegistry;
 pub use memory_recall_metrics::{MemoryRecallLatencyBucketsSnapshot, MemoryRecallMetricsSnapshot};
 pub use memory_recall_state::{SessionMemoryRecallDecision, SessionMemoryRecallSnapshot};
 pub use memory_state::MemoryRuntimeStatusSnapshot;
+pub use native_tools::registry::NativeToolRegistry;
 pub use session_context::{
     SessionContextMode, SessionContextSnapshotInfo, SessionContextStats, SessionContextWindowInfo,
 };

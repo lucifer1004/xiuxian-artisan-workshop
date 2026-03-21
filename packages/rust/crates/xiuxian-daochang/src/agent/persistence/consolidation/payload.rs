@@ -1,5 +1,4 @@
 use anyhow::Result;
-use omni_memory::{Episode, EpisodeStore};
 
 use crate::observability::SessionEvent;
 use crate::session::SessionSummarySegment;
@@ -9,6 +8,7 @@ use super::super::super::consolidation::{
     build_consolidated_summary_text, now_unix_ms, summarise_drained_turns,
 };
 use super::{ConsolidatedEpisode, ConsolidationSummaryPayload};
+use xiuxian_memory_engine::{Episode, EpisodeStore};
 
 impl Agent {
     pub(super) async fn build_consolidation_payload(

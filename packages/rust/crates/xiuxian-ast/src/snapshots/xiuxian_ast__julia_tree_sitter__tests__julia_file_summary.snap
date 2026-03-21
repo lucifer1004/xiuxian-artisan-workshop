@@ -1,0 +1,28 @@
+---
+source: packages/rust/crates/xiuxian-ast/src/julia_tree_sitter.rs
+expression: summary
+---
+JuliaFileSummary {
+    module_name: None,
+    exports: [],
+    imports: [],
+    symbols: [
+        JuliaSymbol {
+            name: "fastsolve",
+            kind: Function,
+            signature: Some(
+                "fastsolve(problem::Problem) = problem.x",
+            ),
+        },
+    ],
+    docstrings: [
+        JuliaDocAttachment {
+            target_name: "fastsolve",
+            target_kind: Symbol,
+            content: "Fast solve docs.",
+        },
+    ],
+    includes: [
+        "nested/extra.jl",
+    ],
+}

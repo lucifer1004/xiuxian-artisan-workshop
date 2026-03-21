@@ -100,8 +100,11 @@ pub use external_test::{
 };
 
 pub use policy::{
-    CrateTestPolicyReport, assert_crate_test_policy, format_crate_test_policy_report,
-    validate_crate_test_policy,
+    CrateTestPolicyReport, assert_crate_test_policy,
+    assert_crate_test_policy_with_workspace_config,
+    assert_crate_tests_structure_with_workspace_config, format_crate_test_policy_report,
+    validate_crate_test_policy, validate_crate_test_policy_with_workspace_config,
+    validate_crate_tests_structure_with_workspace_config,
 };
 
 pub use scenario::{
@@ -114,6 +117,7 @@ pub use scenario::{
 pub use utils::{assert_json_eq, temp_dir_with_prefix};
 
 pub use validation::{
-    StructureViolation, ViolationKind, format_violation_report, validate_crate_tests,
-    validate_tests_structure,
+    StructureViolation, TestsStructurePolicy, ViolationKind, format_violation_report,
+    validate_crate_tests, validate_crate_tests_with_policy, validate_tests_structure,
+    validate_tests_structure_with_policy,
 };

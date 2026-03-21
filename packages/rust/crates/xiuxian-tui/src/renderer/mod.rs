@@ -227,7 +227,7 @@ impl TuiRenderer {
                 state.on_tick();
             }
             crate::TuiEvent::Custom(data) => {
-                state.on_custom_event(data);
+                state.on_custom_event(&data);
             }
         }
     }

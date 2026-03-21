@@ -13,7 +13,7 @@ in
     __inputs__.llm-agents.packages.${system}.claude-code
   ];
   claude.code.enable = true;
-  claude.code.env = {
+  env = {
     ANTHROPIC_BASE_URL = "https://aiproxy.xin/api";
     ANTHROPIC_AUTH_TOKEN = config.secretspec.secrets.GLM_API_KEY;
     API_TIMEOUT_MS = "2000000";

@@ -1,0 +1,288 @@
+# Repo Intelligence for SciML and MSL
+
+:PROPERTIES:
+:ID: wendao-repo-intelligence-sciml-msl
+:PARENT: [[index]]
+:TAGS: roadmap, repo-intelligence, julia, modelica, plugins, git
+:STATUS: PLANNED
+:END:
+
+## Core Vision
+
+This roadmap note defines a Wendao-native **Repository Intelligence** architecture for two target ecosystems:
+
+- Julia SciML repositories
+- MSL (Modelica Standard Library)
+
+The goal is to move beyond fuzzy search and give agents a stable, pre-indexed understanding of repositories. The first milestone is a Repo Intelligence MVP that answers repository overview, module, symbol, example, and documentation coverage queries without repeated repository exploration. Deep wiki generation remains a downstream phase built on top of the indexed repository graph.
+
+## Architecture Mapping
+
+This note maps the proposed system directly onto the current Wendao architecture instead of using conceptual overlays.
+
+### Current Module Boundaries
+
+- `xiuxian-wendao`
+  - owns the common Repo Intelligence core
+  - owns the plugin authoring interface
+  - owns the Julia repo-intelligence bridge and normalization flow
+- `xiuxian-ast`
+  - owns Julia syntax parsing primitives used by Repo Intelligence
+- `xiuxian-wendao-modelica`
+  - is an external Rust extension crate
+  - implements Modelica and MSL-specific semantic analysis against Wendao's plugin interface
+
+In concrete terms, the target structure is:
+
+```text
+xiuxian-wendao
+  - repo_intelligence common core
+  - repo_intelligence plugin interface
+  - repo_intelligence julia bridge/orchestration
+
+xiuxian-ast
+  - julia syntax parser and source-summary extraction
+
+xiuxian-wendao-modelica
+  - external Modelica/MSL extension crate
+```
+
+### Terminology Mapping
+
+To avoid architectural ambiguity, the following terms are mapped to concrete implementation targets:
+
+| Conceptual term    | Concrete implementation meaning                                                                                                |
+| :----------------- | :----------------------------------------------------------------------------------------------------------------------------- |
+| `Prospector`       | Repo analysis logic in `xiuxian-wendao::repo_intelligence::julia` and external plugin crates such as `xiuxian-wendao-modelica` |
+| `HippoRAG`         | Wendao graph, retrieval, and fusion capabilities                                                                               |
+| `Annotator`        | Later-stage document projection or classification flow, not part of the Repo Intelligence MVP indexing path                    |
+| `Trinity / Qianji` | Higher-level orchestration for documentation workflows, not a required dependency for core repository indexing                 |
+| `Skeptic`          | Post-generation or post-projection verifier that checks generated content against indexed repository records                   |
+
+## Common Core and Extension Boundary
+
+### Common Core in `xiuxian-wendao`
+
+The common core should absorb everything that is high-performance, repeated, and repository-agnostic:
+
+- repository registry from `link_graph.projects.<id>` in `wendao.toml`
+- git mirror management
+- local checkout validation and canonical git-root discovery
+- managed checkout materialization from upstream git URLs
+- mirror-backed checkout refresh policy
+- registry-aware library entry points so external crates can reuse the same configured query surface with custom plugin registries
+- lifecycle health summarization for source status and drift diagnostics
+- lifecycle freshness timestamps for sync observation and last local fetch visibility
+- lifecycle staleness classification for mirror freshness reporting
+- grouped status-summary projection for agent-facing sync inspection
+- incremental discovery and invalidation
+- normalized record storage
+- graph persistence
+- shared query contracts
+- plugin registration and diagnostics
+
+Legacy `[[repo_intelligence.repos]]` configuration should not remain part of the active runtime contract. Older files may still carry that table during migration, but the runtime loader should ignore it and derive registrations only from project-scoped entries.
+
+### Plugin Interface Inside `xiuxian-wendao`
+
+The plugin authoring interface is integrated into `xiuxian-wendao`, not split into a separate package. A plugin or native analyzer should operate against Wendao-owned records and relations.
+
+The first interface should stay narrow:
+
+1. detect whether a repository or file set is supported
+2. analyze files into normalized records
+3. enrich cross-file and cross-module relations
+4. optionally expand or rerank query results
+
+### Native Julia Support
+
+Julia repository intelligence is a Wendao-native path, but the syntax parser itself should stay in `xiuxian-ast`.
+
+The Julia path should therefore split responsibilities:
+
+- `xiuxian-ast`
+  - parses Julia source files
+  - extracts root modules, literal include edges, exports, imports, conservative symbol summaries, and source docstring attachments
+- `xiuxian-wendao::repo_intelligence::julia`
+  - loads repository metadata
+  - resolves local git checkout metadata
+  - consumes managed checkouts prepared by the common core when only `url/ref` is configured
+  - discovers doc and example assets
+  - walks the root-file include graph
+  - normalizes Julia records and source-derived docs into Wendao-owned repository records
+  - emits relation edges such as `Uses` and `Documents`
+
+The Julia bridge should focus on:
+
+- `Project.toml` awareness
+- module and include structure
+- exported names and reexport surfaces
+- documentation asset discovery and linking
+- conservative method and signature extraction
+
+Julia support should be described as a Wendao-native repo-intelligence flow backed by `xiuxian-ast`, not as a standalone external plugin crate.
+
+### External Modelica Support
+
+Modelica support should live in an external crate:
+
+- crate name: `xiuxian-wendao-modelica`
+- role: external Rust extension crate for Modelica and MSL analysis
+
+This crate should use the plugin interface integrated into `xiuxian-wendao` and return normalized records rather than mutating Wendao internals directly.
+
+Current conservative implementation status:
+
+- the workspace crate boundary is established
+- `register_into(...)` integrates a `modelica` plugin into an existing Wendao registry
+- the first implementation indexes `package.mo` hierarchies, lightweight `.mo` declarations, `Examples`, `UsersGuide`, and conservative `annotation(Documentation(...))` docs
+- repository walking now skips hidden/VCS paths, preventing `.git` internals from leaking into documentation inventory
+- the external crate itself is now split into a feature folder so plugin entry, discovery, parsing, and relation construction evolve independently instead of accreting in a monolithic `lib.rs`
+- `package.order` is now consumed for canonical module ordering, and the common-core module query path preserves analyzer order for equal-score matches so Modelica package semantics can survive the query layer
+- `package.order` also now feeds canonical example ordering, and the common-core example query path preserves analyzer order for equal-score matches so example catalogs can keep Modelica-authored sequence semantics
+- Modelica discovery now classifies repository paths into API, example, documentation, and support surfaces before projection, keeping runnable `Examples/` models in the example surface while treating `Examples/ExampleUtilities` as support-only and `UsersGuide/` models as documentation assets, preventing tutorial/doc/support models from inflating library symbol counts or polluting default search surfaces
+- `UsersGuide` file docs and `UsersGuide` annotation docs now also emit `Documents` links to their owning functional modules and visible `UsersGuide` hierarchy modules instead of only linking the root package, allowing module-scoped documentation coverage to surface nested guide pages and inline guide annotations in the relevant subsystem
+- external Modelica discovery now also emits semantic `DocRecord.format` hints for `UsersGuide` assets, distinguishing generic guide pages from `Tutorial`, `ReleaseNotes`, `References/Literature`, `Overview`, `Contact`, `Glossar/Glossary`, `Concept/*Concept`, and `Parameters/Parameterization` content while preserving `_annotation` variants for inline `annotation(Documentation(...))` payloads
+- external Modelica discovery now also preserves `package.order` semantics in projected `UsersGuide` doc ordering, keeps `package.mo` and inline annotation payloads in a stable relative position, and excludes non-doc control files such as `package.order` from the doc graph
+- external Modelica discovery now also normalizes file-backed doc titles to page titles instead of raw filenames, improving downstream projection and agent-facing readability without changing the common-core schema
+- external Modelica queries already reuse the same common-core `repo.overview`, `module.search`, `symbol.search`, `example.search`, and `doc.coverage` entry points through registry-aware helpers
+- package-local documentation tracking for the external extension now lives under `packages/rust/crates/xiuxian-wendao-modelica/docs/`, mirroring the `01_core` / `03_features` / `05_research` / `06_roadmap` section layout used by `xiuxian-wendao/docs`
+
+## Repository Intelligence MVP
+
+### MVP Query Surface
+
+The first delivery target is a deterministic repository query layer, not deep wiki generation.
+
+The MVP should answer:
+
+- `repo.overview`
+- `module.search`
+- `symbol.search`
+- `example.search`
+- `doc.coverage`
+
+These five queries are the stable contract that downstream agents and later documentation generation should consume.
+
+`doc.coverage` should be defined as a repository-graph aggregation query, not a query-time guessing routine. The correct pipeline is:
+
+1. discover `DocRecord` inventory during repository analysis
+2. emit explicit `RelationKind::Documents` edges during Julia/Modelica link phases
+3. aggregate documentation coverage from those relations at query time
+
+The query should not infer coverage from ad-hoc path or title matching inside the service layer.
+
+### Record Model
+
+The initial normalized record model should include:
+
+- `RepositoryRecord`
+- `ModuleRecord`
+- `SymbolRecord`
+- `ExampleRecord`
+- `DocRecord`
+- `RelationRecord`
+- `DiagnosticRecord`
+
+This record model must be language-neutral so both SciML and MSL can flow through the same Wendao core.
+
+## Retrieval and Ranking
+
+Wendao should continue to use weighted fusion across vector, keyword, and graph signals. However, this note treats retrieval fusion as a shared Wendao concern, not a Julia-only architecture.
+
+### Weighted RRF
+
+For each candidate document or entity $d$, the fused score is:
+
+$$Score(d) = \sum_{i \in \{Vector, Keyword, Graph\}} \frac{W_i}{K + rank_i(d)}$$
+
+Where:
+
+- $rank_i(d)$ is the rank of $d$ in the $i$-th retrieval engine
+- $W_i$ is the engine weight
+- $K$ is a smoothing constant, defaulting to 60
+
+### Shared Signal Sources
+
+1. **Vector (LanceDB)** for semantic similarity recall
+2. **Keyword (Tantivy/BM25)** for exact token matching
+3. **Graph (Wendao graph/PPR)** for structural saliency and topology-aware relevance
+
+### Intent-Driven Weighting
+
+Query-intent-driven weighting remains a Wendao retrieval concern and should be shared by Julia and Modelica repository intelligence flows.
+
+## Proposed API and Configuration
+
+### Configuration Shape
+
+The repository registry should live in `wendao.toml`. Example:
+
+```toml
+[link_graph.projects.sciml-diffeq]
+url = "https://github.com/SciML/DifferentialEquations.jl.git"
+ref = "main"
+refresh = "fetch"
+plugins = ["julia"]
+dirs = ["docs"]
+
+[link_graph.projects.msl]
+url = "https://github.com/modelica/ModelicaStandardLibrary.git"
+ref = "main"
+refresh = "fetch"
+plugins = ["modelica"]
+dirs = ["Modelica/UsersGuide"]
+```
+
+### Search and Query Modes
+
+The first public API should reflect the MVP query surface instead of introducing Julia-specific URI schemes as the primary contract.
+
+Examples:
+
+```bash
+wendao repo sync --repo sciml-diffeq
+wendao repo sync --repo sciml-diffeq --mode refresh
+wendao repo sync --repo sciml-diffeq --mode status
+wendao repo overview --repo sciml-diffeq
+wendao repo module-search --repo sciml-diffeq --query OrdinaryDiffEq
+wendao repo symbol-search --repo sciml-diffeq --query solve
+wendao repo example-search --repo msl --query HeatExchanger
+wendao repo doc-coverage --repo msl --module Modelica.Fluid
+```
+
+For remote repositories, the common core now uses a two-stage source lifecycle:
+
+1. prepare or refresh a cache-local bare mirror under `PRJ_CACHE_HOME`
+2. materialize or refresh a managed checkout from that mirror
+
+This keeps remote fetch behavior inside the common core and prevents language plugins from owning repository transport details.
+
+The common core now exposes this lifecycle explicitly through `wendao repo sync --repo <id>`, which reports the resolved source kind, requested sync mode, configured refresh policy, mirror/check-out lifecycle states, mirror revision, drift state, checkout path, optional mirror path, upstream URL, and checkout revision before any language-specific analysis runs. `--mode refresh` can force a remote refresh even when the repository is configured with `refresh = "manual"`. `--mode status` is read-only: it inspects the current cache state and returns `missing` lifecycle states when mirror or checkout assets do not exist yet.
+
+For external extensions, the common core now also exposes registry-aware library entry points so a crate such as `xiuxian-wendao-modelica` can answer the same repository query families without depending on CLI wrappers or gateway-only glue.
+
+## Deep Wiki as a Later Phase
+
+Deep wiki generation remains in scope, but not as a prerequisite for Repo Intelligence MVP.
+
+The intended flow is:
+
+1. build repository intelligence records and relations
+2. expose stable repository query APIs
+3. project documentation views such as tutorial, how-to, explanation, and reference
+4. optionally use Qianji for classification, refinement, and audit
+
+## Execution Phases
+
+1. **Phase 1 (Wendao Core)**: add `repo_intelligence` common core plus native Julia support inside `xiuxian-wendao`
+2. **Phase 2 (External Extension Validation)**: build `xiuxian-wendao-modelica` as the first external extension crate
+3. **Phase 3 (Documentation Projection)**: implement Diataxis-oriented deep wiki projection on top of the indexed repository graph
+
+Phase 2 is now started and minimally landed through the first conservative `xiuxian-wendao-modelica` crate plus registry-aware query validation.
+
+## Why Better
+
+- **Vs. BM25 only**: topology, records, and semantic relations are available to retrieval and navigation
+- **Vs. ad-hoc agent exploration**: agents consume stable repository queries instead of repeating repository scans
+- **Vs. repo-specific one-off tooling**: SciML and MSL share one Wendao core while preserving language-specific precision at the correct boundary

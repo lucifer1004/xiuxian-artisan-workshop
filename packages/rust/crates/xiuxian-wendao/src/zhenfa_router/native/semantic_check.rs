@@ -6,12 +6,13 @@
 //! - Contract validation: Check `:CONTRACT:` constraints
 //! - Code observation validation: Check `:OBSERVE:` patterns (Blueprint v2.7)
 //! - Fuzzy pattern suggestion: Suggest fixes for invalid patterns (Blueprint v2.9)
+//! - Docs governance validation for package-local crate docs
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
 use crate::link_graph::parser::CodeObservation;
@@ -19,6 +20,8 @@ use crate::link_graph::{PageIndexNode, RegistryBuildResult, RegistryIndex};
 
 use super::WendaoContextExt;
 use super::audit::{FuzzySuggestion, SourceFile, suggest_pattern_fix_with_threshold};
+
+pub(crate) mod docs_governance;
 
 /// Standard property drawer attribute keys (Blueprint v2.0).
 mod attrs {
@@ -94,6 +97,8 @@ pub enum CheckType {
     LegacySyntax,
     /// Validate :OBSERVE: code patterns using xiuxian-ast (Blueprint v2.7).
     CodeObservations,
+    /// Validate package-local crate docs governance rules.
+    DocGovernance,
 }
 
 /// A reference with an optional expected hash.
@@ -231,7 +236,9 @@ pub fn wendao_semantic_check(
     args: WendaoSemanticCheckArgs,
 ) -> Result<String, ZhenfaError> {
     let (issues, file_contents) = run_audit_core(ctx, &args)?;
-    let docs_checked_count = file_contents.len();
+    let docs_list: Vec<String> = file_contents.keys().cloned().collect();
+    let report_docs = collect_report_doc_paths(&docs_list, &issues);
+    let docs_checked_count = report_docs.len();
 
     // Build result
     let error_count = issues.iter().filter(|i| i.severity == "error").count();
@@ -250,8 +257,7 @@ pub fn wendao_semantic_check(
     );
 
     // Build per-file reports with health scores
-    let docs_list: Vec<String> = file_contents.keys().cloned().collect();
-    let file_reports = build_file_reports(&issues, &docs_list);
+    let file_reports = build_file_reports(&issues, &report_docs);
 
     let result = SemanticCheckResult {
         status: status.to_string(),
@@ -293,6 +299,7 @@ pub fn run_audit_core(
             CheckType::MissingIdentity,
             CheckType::LegacySyntax,
             CheckType::CodeObservations,
+            CheckType::DocGovernance,
         ]
     });
 
@@ -320,6 +327,17 @@ pub fn run_audit_core(
 
     // Collect all issues
     let mut issues = Vec::new();
+
+    if checks.contains(&CheckType::DocGovernance) {
+        let workspace_issues = docs_governance::collect_workspace_doc_governance_issues(
+            index.root(),
+            args.doc.as_deref(),
+        );
+        for issue in &workspace_issues {
+            seed_explicit_doc_content(&issue.doc, &mut file_contents);
+        }
+        issues.extend(workspace_issues);
+    }
 
     // Check for ID collisions first (before moving registry out)
     if checks.contains(&CheckType::IdCollisions) {
@@ -350,6 +368,10 @@ pub fn run_audit_core(
         trees.keys().cloned().collect()
     };
 
+    if let Some(explicit_doc) = args.doc.as_deref() {
+        seed_explicit_doc_content(explicit_doc, &mut file_contents);
+    }
+
     // Get fuzzy confidence threshold
     let fuzzy_threshold = args.fuzzy_confidence_threshold;
 
@@ -357,6 +379,14 @@ pub fn run_audit_core(
         // Load content for hash/context check
         if let Ok(content) = std::fs::read_to_string(doc_id) {
             file_contents.insert(doc_id.clone(), content);
+        }
+
+        if checks.contains(&CheckType::DocGovernance)
+            && let Some(content) = file_contents.get(doc_id)
+        {
+            issues.extend(docs_governance::collect_doc_governance_issues(
+                doc_id, content,
+            ));
         }
 
         if let Some(doc_trees) = trees.get(doc_id) {
@@ -374,7 +404,59 @@ pub fn run_audit_core(
         }
     }
 
+    if checks.contains(&CheckType::DocGovernance)
+        && let Some(explicit_doc) = args.doc.as_deref()
+        && explicit_doc != "."
+        && !explicit_doc.is_empty()
+        && !docs_governance::is_package_local_crate_doc(explicit_doc)
+        && !docs_to_check.iter().any(|doc_id| doc_id == explicit_doc)
+        && let Some(content) = resolve_explicit_doc_content(explicit_doc, &file_contents)
+    {
+        issues.extend(docs_governance::collect_doc_governance_issues(
+            explicit_doc,
+            content,
+        ));
+    }
+
     Ok((issues, file_contents))
+}
+
+fn seed_explicit_doc_content(doc: &str, file_contents: &mut HashMap<String, String>) {
+    if doc.is_empty() || doc == "." {
+        return;
+    }
+
+    let path = Path::new(doc);
+    if !path.is_file() {
+        return;
+    }
+
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return;
+    };
+
+    file_contents
+        .entry(doc.to_string())
+        .or_insert_with(|| content.clone());
+
+    if let Ok(canonical_path) = path.canonicalize() {
+        let canonical_key = canonical_path.to_string_lossy().to_string();
+        file_contents.entry(canonical_key).or_insert(content);
+    }
+}
+
+fn resolve_explicit_doc_content<'a>(
+    doc: &str,
+    file_contents: &'a HashMap<String, String>,
+) -> Option<&'a String> {
+    file_contents.get(doc).or_else(|| {
+        Path::new(doc)
+            .canonicalize()
+            .ok()
+            .and_then(|canonical_path| {
+                file_contents.get(&canonical_path.to_string_lossy().to_string())
+            })
+    })
 }
 
 struct AuditPass<'a> {
@@ -934,9 +1016,14 @@ fn generate_suggested_id(title: &str) -> String {
 /// Build per-file audit reports with health scores.
 fn build_file_reports(issues: &[SemanticIssue], docs: &[String]) -> Vec<FileAuditReport> {
     let mut reports = Vec::new();
+    let deduped_docs = collect_report_doc_paths(docs, issues);
 
-    for doc_id in docs {
-        let doc_issues: Vec<_> = issues.iter().filter(|i| &i.doc == doc_id).collect();
+    for doc_id in &deduped_docs {
+        let doc_identity = report_doc_identity(doc_id);
+        let doc_issues: Vec<_> = issues
+            .iter()
+            .filter(|issue| report_doc_identity(&issue.doc) == doc_identity)
+            .collect();
         let error_count = doc_issues.iter().filter(|i| i.severity == "error").count();
         let warning_count = doc_issues
             .iter()
@@ -959,6 +1046,70 @@ fn build_file_reports(issues: &[SemanticIssue], docs: &[String]) -> Vec<FileAudi
     }
 
     reports
+}
+
+fn collect_report_doc_paths(issues_docs: &[String], issues: &[SemanticIssue]) -> Vec<String> {
+    let mut report_docs: Vec<String> = Vec::new();
+    let mut identities: Vec<String> = Vec::new();
+
+    for doc_path in issues_docs
+        .iter()
+        .cloned()
+        .chain(issues.iter().map(|issue| issue.doc.clone()))
+    {
+        let identity = report_doc_identity(&doc_path);
+        if let Some(existing_idx) = identities.iter().position(|existing| existing == &identity) {
+            if should_prefer_report_path(&report_docs[existing_idx], &doc_path) {
+                report_docs[existing_idx] = doc_path;
+            }
+            continue;
+        }
+
+        identities.push(identity);
+        report_docs.push(doc_path);
+    }
+
+    report_docs
+}
+
+fn report_doc_identity(doc_path: &str) -> String {
+    canonicalize_doc_path(doc_path).map_or_else(
+        || normalize_doc_path_key(doc_path),
+        |path| normalize_doc_path_key(&path),
+    )
+}
+
+fn canonicalize_doc_path(doc_path: &str) -> Option<String> {
+    let path = Path::new(doc_path);
+    path.is_file()
+        .then(|| path.canonicalize().ok())
+        .flatten()
+        .map(path_buf_to_string)
+}
+
+fn normalize_doc_path_key(doc_path: &str) -> String {
+    doc_path.replace('\\', "/")
+}
+
+fn path_buf_to_string(path: PathBuf) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn should_prefer_report_path(existing: &str, candidate: &str) -> bool {
+    let existing_path = Path::new(existing);
+    let candidate_path = Path::new(candidate);
+
+    match (existing_path.is_absolute(), candidate_path.is_absolute()) {
+        (true, false) => return true,
+        (false, true) => return false,
+        _ => {}
+    }
+
+    if candidate.len() != existing.len() {
+        return candidate.len() < existing.len();
+    }
+
+    candidate < existing
 }
 
 /// Validate a contract expression against content.
@@ -1182,6 +1333,33 @@ fn issue_type_to_code(issue_type: &str) -> &'static str {
         "legacy_syntax" => "WARN_LEGACY_SYNTAX",
         "invalid_observation_language" => "ERR_INVALID_OBSERVER_LANG",
         "invalid_observation_pattern" => "ERR_INVALID_OBSERVER_PATTERN",
+        docs_governance::DOC_IDENTITY_PROTOCOL_ISSUE_TYPE => "ERR_DOC_IDENTITY_PROTOCOL",
+        docs_governance::MISSING_PACKAGE_DOCS_TREE_ISSUE_TYPE => "WARN_MISSING_PACKAGE_DOCS_TREE",
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_ISSUE_TYPE => "ERR_MISSING_PACKAGE_DOCS_INDEX",
+        docs_governance::MISSING_PACKAGE_DOCS_SECTION_LANDING_ISSUE_TYPE => {
+            "WARN_MISSING_PACKAGE_DOCS_SECTION"
+        }
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_SECTION_LINK_ISSUE_TYPE => {
+            "WARN_MISSING_PACKAGE_DOCS_INDEX_LINK"
+        }
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE => {
+            "WARN_MISSING_PACKAGE_DOCS_RELATIONS_BLOCK"
+        }
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE => {
+            "WARN_MISSING_PACKAGE_DOCS_FOOTER_BLOCK"
+        }
+        docs_governance::INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE => {
+            "WARN_INCOMPLETE_PACKAGE_DOCS_FOOTER_BLOCK"
+        }
+        docs_governance::STALE_PACKAGE_DOCS_INDEX_FOOTER_STANDARDS_ISSUE_TYPE => {
+            "WARN_STALE_PACKAGE_DOCS_FOOTER_STANDARDS"
+        }
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE => {
+            "WARN_MISSING_PACKAGE_DOCS_RELATION_LINK"
+        }
+        docs_governance::STALE_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE => {
+            "WARN_STALE_PACKAGE_DOCS_RELATION_LINK"
+        }
         _ => "UNKNOWN",
     }
 }

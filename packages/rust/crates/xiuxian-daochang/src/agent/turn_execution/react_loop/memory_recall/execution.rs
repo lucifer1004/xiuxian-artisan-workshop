@@ -10,7 +10,7 @@ use crate::agent::memory::{RecalledEpisodeCandidate, select_recall_credit_candid
 use crate::agent::memory_recall::{
     MEMORY_RECALL_MESSAGE_NAME, build_memory_context_message, filter_recalled_episodes,
 };
-use omni_memory::Episode;
+use xiuxian_memory_engine::Episode;
 
 impl Agent {
     pub(in super::super) async fn apply_memory_recall_if_enabled(

@@ -1,0 +1,21 @@
+---
+source: packages/rust/crates/xiuxian-wendao-modelica/src/plugin/discovery.rs
+expression: payload
+---
+{
+  "conventions": [
+    {
+      "title": "Documentation",
+      "format": "modelica_users_guide_documentation"
+    },
+    {
+      "title": "ModelicaCode",
+      "format": "modelica_users_guide_modelica_code"
+    },
+    {
+      "title": "Icons",
+      "format": "modelica_users_guide_icons"
+    }
+  ],
+  "non_conventions": []
+}

@@ -1,4 +1,5 @@
 use super::*;
+use crate::contracts::WorkflowBridgeMode;
 
 impl Agent {
     fn route_trace_stream_name(&self) -> &str {
@@ -41,7 +42,7 @@ impl Agent {
         decision: &OmegaDecision,
         workflow_mode: WorkflowBridgeMode,
         tool_name: &str,
-        action: ShortcutFallbackAction,
+        action: &str,
         error: &anyhow::Error,
     ) {
         tracing::warn!(
@@ -51,7 +52,7 @@ impl Agent {
             tool_name,
             route = decision.route.as_str(),
             fallback_policy = decision.fallback_policy.as_str(),
-            fallback_action = action.as_str(),
+            fallback_action = action,
             error = %error,
             "omega route fallback applied"
         );
@@ -72,7 +73,7 @@ impl Agent {
         );
     }
 
-    pub(in crate::agent) fn record_graph_plan_step_started(
+    pub(crate) fn record_graph_plan_step_started(
         &self,
         session_id: &str,
         plan: &GraphExecutionPlan,
@@ -94,7 +95,7 @@ impl Agent {
         );
     }
 
-    pub(in crate::agent) fn record_graph_plan_step_succeeded(
+    pub(crate) fn record_graph_plan_step_succeeded(
         &self,
         session_id: &str,
         plan: &GraphExecutionPlan,
@@ -118,7 +119,7 @@ impl Agent {
         );
     }
 
-    pub(in crate::agent) fn record_graph_plan_step_failed(
+    pub(crate) fn record_graph_plan_step_failed(
         &self,
         session_id: &str,
         plan: &GraphExecutionPlan,
@@ -142,7 +143,7 @@ impl Agent {
         );
     }
 
-    pub(in crate::agent) fn record_graph_execution_completed(
+    pub(crate) fn record_graph_execution_completed(
         &self,
         session_id: &str,
         plan: &GraphExecutionPlan,
@@ -163,7 +164,7 @@ impl Agent {
         );
     }
 
-    pub(in crate::agent) fn record_graph_execution_rerouted(
+    pub(crate) fn record_graph_execution_rerouted(
         &self,
         session_id: &str,
         plan: &GraphExecutionPlan,
@@ -184,7 +185,7 @@ impl Agent {
         );
     }
 
-    pub(in crate::agent) async fn record_route_trace(&self, trace: &RouteTrace) {
+    pub(crate) async fn record_route_trace(&self, trace: &RouteTrace) {
         let route_trace_json = serde_json::to_string(trace)
             .unwrap_or_else(|_| "{\"error\":\"route_trace_serialize_failed\"}".to_string());
         let fallback_applied = trace.fallback_applied.unwrap_or(false);

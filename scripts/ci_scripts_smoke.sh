@@ -10,7 +10,6 @@ bash -n \
   scripts/rust/xiuxian_daochang_mcp_facade_smoke.sh \
   scripts/rust/xiuxian_daochang_backend_role_contracts.sh \
   scripts/rust/xiuxian_qianji_scenario_audit_contracts.sh \
-  scripts/rust/xiuxian_testing_contract_gates.sh \
   scripts/rust/xiuxian_wendao_contract_feedback_consumer.sh \
   scripts/rust/xiuxian_llm_mcp_check.sh \
   scripts/rust/wendao_retrieval_audits.sh \
@@ -25,7 +24,6 @@ just --dry-run rust-xiuxian-daochang-dependency-assertions >/dev/null
 just --dry-run rust-xiuxian-daochang-mcp-facade-smoke >/dev/null
 just --dry-run rust-xiuxian-daochang-backend-role-contracts >/dev/null
 just --dry-run rust-xiuxian-qianji-scenario-audit-contracts >/dev/null
-just --dry-run rust-xiuxian-testing-contract-gates >/dev/null
 just --dry-run rust-xiuxian-wendao-contract-feedback-consumer >/dev/null
 just --dry-run rust-xiuxian-daochang-embedding-role-perf-smoke >/dev/null
 just --dry-run rust-xiuxian-llm-mcp >/dev/null
