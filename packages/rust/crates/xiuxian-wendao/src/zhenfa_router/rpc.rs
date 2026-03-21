@@ -49,6 +49,7 @@ pub fn execute_search(request: &WendaoSearchRequest) -> Result<String, String> {
 ///
 /// # Errors
 /// Returns an error when index construction, query execution, or payload serialization fails.
+#[cfg(feature = "zhenfa-router")]
 pub async fn execute_search_async(request: &WendaoSearchRequest) -> Result<String, String> {
     let (root, root_dir, query, limit, base_options, response_format) =
         validate_search_request(request)?;

@@ -1,5 +1,6 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
+assertion_line: 22
 expression: value
 ---
 {
@@ -161,24 +162,30 @@ expression: value
     {
       "audit_status": "unreviewed",
       "kind": "type",
+      "line_end": null,
+      "line_start": null,
       "module_id": "repo:managed:module:ManagedPkg",
       "name": "Problem",
       "path": "src/ManagedPkg.jl",
       "qualified_name": "ManagedPkg.Problem",
       "repo_id": "managed",
       "signature": null,
-      "symbol_id": "repo:managed:symbol:ManagedPkg.Problem"
+      "symbol_id": "repo:managed:symbol:ManagedPkg.Problem",
+      "verification_state": "verified"
     },
     {
       "audit_status": "unreviewed",
       "kind": "function",
+      "line_end": null,
+      "line_start": null,
       "module_id": "repo:managed:module:ManagedPkg",
       "name": "solve",
       "path": "src/ManagedPkg.jl",
       "qualified_name": "ManagedPkg.solve",
       "repo_id": "managed",
       "signature": "solve(problem::Problem)",
-      "symbol_id": "repo:managed:symbol:ManagedPkg.solve"
+      "symbol_id": "repo:managed:symbol:ManagedPkg.solve",
+      "verification_state": "verified"
     }
   ]
 }

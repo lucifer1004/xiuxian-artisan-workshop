@@ -34,7 +34,10 @@ pub(super) fn build_ast_index(
             .into_iter()
             .filter_entry(|entry| !should_skip_entry(entry))
         {
-            let entry = entry.map_err(|error| error.to_string())?;
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
             if !entry.file_type().is_file() {
                 continue;
             }
@@ -42,23 +45,23 @@ pub(super) fn build_ast_index(
             let normalized_path = index_path_for_entry(project_root, entry.path());
             let normalized_path_ref = Path::new(normalized_path.as_str());
             if is_markdown_path(normalized_path_ref) {
-                let content = std::fs::read_to_string(entry.path())
-                    .map_err(|error| format!("{}: {error}", entry.path().display()))?;
-                let crate_name = markdown_scope_name(normalized_path_ref);
+                if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                    let crate_name = markdown_scope_name(normalized_path_ref);
 
-                for hit in build_markdown_ast_hits(
-                    root.as_path(),
-                    entry.path(),
-                    normalized_path.as_str(),
-                    content.as_str(),
-                    crate_name.as_str(),
-                ) {
-                    let dedupe_key = format!(
-                        "{}:{}:{}:{}",
-                        hit.path, hit.line_start, hit.line_end, hit.name
-                    );
-                    if seen.insert(dedupe_key) {
-                        hits.push(hit);
+                    for hit in build_markdown_ast_hits(
+                        root.as_path(),
+                        entry.path(),
+                        normalized_path.as_str(),
+                        content.as_str(),
+                        crate_name.as_str(),
+                    ) {
+                        let dedupe_key = format!(
+                            "{}:{}:{}:{}",
+                            hit.path, hit.line_start, hit.line_end, hit.name
+                        );
+                        if seen.insert(dedupe_key) {
+                            hits.push(hit);
+                        }
                     }
                 }
                 continue;
@@ -68,50 +71,50 @@ pub(super) fn build_ast_index(
                 continue;
             };
 
-            let content = std::fs::read_to_string(entry.path())
-                .map_err(|error| format!("{}: {error}", entry.path().display()))?;
-            let crate_name = infer_crate_name(normalized_path_ref);
+            if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                let crate_name = infer_crate_name(normalized_path_ref);
 
-            for pattern in get_skeleton_patterns(lang) {
-                for result in extract_items(content.as_str(), pattern, lang, Some(vec!["NAME"])) {
-                    let name =
-                        result.captures.get("NAME").cloned().unwrap_or_else(|| {
+                for pattern in get_skeleton_patterns(lang) {
+                    for result in extract_items(content.as_str(), pattern, lang, Some(vec!["NAME"]))
+                    {
+                        let name = result.captures.get("NAME").cloned().unwrap_or_else(|| {
                             first_signature_line(result.text.as_str()).to_string()
                         });
-                    let signature = first_signature_line(result.text.as_str()).to_string();
-                    if signature.is_empty() {
-                        continue;
-                    }
-                    let dedupe_key = format!(
-                        "{normalized_path}:{}:{}:{name}",
-                        result.line_start, result.line_end
-                    );
-                    if !seen.insert(dedupe_key) {
-                        continue;
-                    }
+                        let signature = first_signature_line(result.text.as_str()).to_string();
+                        if signature.is_empty() {
+                            continue;
+                        }
+                        let dedupe_key = format!(
+                            "{normalized_path}:{}:{}:{name}",
+                            result.line_start, result.line_end
+                        );
+                        if !seen.insert(dedupe_key) {
+                            continue;
+                        }
 
-                    hits.push(AstSearchHit {
-                        name,
-                        signature,
-                        path: normalized_path.clone(),
-                        language: lang.as_str().to_string(),
-                        crate_name: crate_name.clone(),
-                        project_name: None,
-                        root_label: None,
-                        node_kind: None,
-                        owner_title: None,
-                        navigation_target: ast_navigation_target(
-                            normalized_path.as_str(),
-                            crate_name.as_str(),
-                            None,
-                            None,
-                            result.line_start,
-                            result.line_end,
-                        ),
-                        line_start: result.line_start,
-                        line_end: result.line_end,
-                        score: 0.0,
-                    });
+                        hits.push(AstSearchHit {
+                            name,
+                            signature,
+                            path: normalized_path.clone(),
+                            language: lang.as_str().to_string(),
+                            crate_name: crate_name.clone(),
+                            project_name: None,
+                            root_label: None,
+                            node_kind: None,
+                            owner_title: None,
+                            navigation_target: ast_navigation_target(
+                                normalized_path.as_str(),
+                                crate_name.as_str(),
+                                None,
+                                None,
+                                result.line_start,
+                                result.line_end,
+                            ),
+                            line_start: result.line_start,
+                            line_end: result.line_end,
+                            score: 0.0,
+                        });
+                    }
                 }
             }
         }
@@ -127,12 +130,16 @@ pub(super) fn build_symbol_index(
 ) -> Result<UnifiedSymbolIndex, String> {
     let mut index = UnifiedSymbolIndex::new();
 
+    // 1. Scan regular project roots
     for root in configured_project_scan_roots(config_root, projects) {
         for entry in WalkDir::new(root.as_path())
             .into_iter()
             .filter_entry(|entry| !should_skip_entry(entry))
         {
-            let entry = entry.map_err(|error| error.to_string())?;
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
             if !entry.file_type().is_file() {
                 continue;
             }
@@ -142,17 +149,17 @@ pub(super) fn build_symbol_index(
             };
             let normalized_path = index_path_for_entry(project_root, entry.path());
             let crate_name = infer_crate_name(Path::new(normalized_path.as_str()));
-            let symbols = extract_symbols(entry.path(), language)
-                .map_err(|error| format!("{}: {error}", entry.path().display()))?;
 
-            for symbol in symbols {
-                let location = format!("{normalized_path}:{}", symbol.line);
-                index.add_project_symbol(
-                    symbol.name.as_str(),
-                    symbol_kind_label(&symbol.kind),
-                    location.as_str(),
-                    crate_name.as_str(),
-                );
+            if let Ok(symbols) = extract_symbols(entry.path(), language) {
+                for symbol in symbols {
+                    let location = format!("{normalized_path}:{}", symbol.line);
+                    index.add_project_symbol(
+                        symbol.name.as_str(),
+                        symbol_kind_label(&symbol.kind),
+                        location.as_str(),
+                        crate_name.as_str(),
+                    );
+                }
             }
         }
     }
@@ -185,7 +192,10 @@ pub(super) fn build_reference_hits(
             .into_iter()
             .filter_entry(|entry| !should_skip_entry(entry))
         {
-            let entry = entry.map_err(|error| error.to_string())?;
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
             if !entry.file_type().is_file() {
                 continue;
             }
@@ -196,46 +206,45 @@ pub(super) fn build_reference_hits(
                 continue;
             };
             let crate_name = infer_crate_name(normalized_path_ref);
-            let content = std::fs::read_to_string(entry.path())
-                .map_err(|error| format!("{}: {error}", entry.path().display()))?;
+            if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                for (line_idx, line_text) in content.lines().enumerate() {
+                    let line_number = line_idx + 1;
+                    if definition_locations.contains(&(normalized_path.clone(), line_number)) {
+                        continue;
+                    }
 
-            for (line_idx, line_text) in content.lines().enumerate() {
-                let line_number = line_idx + 1;
-                if definition_locations.contains(&(normalized_path.clone(), line_number)) {
-                    continue;
+                    let Some(mat) = regex.find(line_text) else {
+                        continue;
+                    };
+                    let metadata = project_metadata_for_path(
+                        project_root,
+                        config_root,
+                        projects,
+                        normalized_path.as_str(),
+                    );
+                    let navigation_target = reference_navigation_target(
+                        normalized_path.as_str(),
+                        crate_name.as_str(),
+                        metadata.project_name.as_deref(),
+                        metadata.root_label.as_deref(),
+                        line_number,
+                        line_text[..mat.start()].chars().count() + 1,
+                    );
+
+                    hits.push(ReferenceSearchHit {
+                        name: query.to_string(),
+                        path: normalized_path.clone(),
+                        language: lang.as_str().to_string(),
+                        crate_name: crate_name.clone(),
+                        project_name: metadata.project_name,
+                        root_label: metadata.root_label,
+                        navigation_target,
+                        line: line_number,
+                        column: line_text[..mat.start()].chars().count() + 1,
+                        line_text: line_text.trim().to_string(),
+                        score: score_reference_hit(line_text, query),
+                    });
                 }
-
-                let Some(mat) = regex.find(line_text) else {
-                    continue;
-                };
-                let metadata = project_metadata_for_path(
-                    project_root,
-                    config_root,
-                    projects,
-                    normalized_path.as_str(),
-                );
-                let navigation_target = reference_navigation_target(
-                    normalized_path.as_str(),
-                    crate_name.as_str(),
-                    metadata.project_name.as_deref(),
-                    metadata.root_label.as_deref(),
-                    line_number,
-                    line_text[..mat.start()].chars().count() + 1,
-                );
-
-                hits.push(ReferenceSearchHit {
-                    name: query.to_string(),
-                    path: normalized_path.clone(),
-                    language: lang.as_str().to_string(),
-                    crate_name: crate_name.clone(),
-                    project_name: metadata.project_name,
-                    root_label: metadata.root_label,
-                    navigation_target,
-                    line: line_number,
-                    column: line_text[..mat.start()].chars().count() + 1,
-                    line_text: line_text.trim().to_string(),
-                    score: score_reference_hit(line_text, query),
-                });
             }
         }
     }

@@ -75,10 +75,10 @@ fn hints_from_analysis(
         if seen_languages.insert(observation.language.clone()) {
             languages.push(observation.language);
         }
-        if let Some(scope) = observation.scope
-            && seen_scopes.insert(scope.clone())
-        {
-            scope_patterns.push(scope);
+        if let Some(scope) = observation.scope {
+            if seen_scopes.insert(scope.clone()) {
+                scope_patterns.push(scope);
+            }
         }
     }
 
@@ -128,10 +128,7 @@ fn observation_references_query(
     analysis.edges.iter().any(|edge| {
         matches!(edge.kind, AnalysisEdgeKind::References)
             && edge.source_id == observation_id
-            && (edge
-                .label
-                .as_ref()
-                .is_some_and(|label| label.to_ascii_lowercase() == query_lc)
+            && (edge.label.to_ascii_lowercase() == query_lc
                 || nodes_by_id
                     .get(edge.target_id.as_str())
                     .is_some_and(|node| node.label.to_ascii_lowercase() == query_lc))

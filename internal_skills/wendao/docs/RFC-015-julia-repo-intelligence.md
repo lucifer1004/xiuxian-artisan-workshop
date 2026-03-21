@@ -93,23 +93,25 @@ Each entity is represented as a multi-dimensional drawer comprising "Bone" (Stat
 Based on the Stage 2 audit, the following milestones are established to bridge the gap between backend contracts and modern frontend interaction.
 
 ### Phase 1: Core & Julia (Status: In Progress)
+
 - [x] Hierarchical URI scheme definition.
 - [x] Julia Multiple Dispatch signature extraction.
 - [x] Page Index tree construction logic.
 - [ ] **Skeptic Audit Integration**: Add `audit_status` to `SymbolRecord` and implement basic consistency checks between AST and Docstrings.
 
 ### Phase 2: External Plugin (Status: In Progress)
+
 - [x] Modelica `package.order` aware scanning.
 - [x] MSL Record extraction (Modules, Symbols, Examples).
 - [ ] **Projection Closure**: Implement the `ProjectionPageSeed` mapping for Modelica `UsersGuide` to ensure MSL documentation is correctly projected into the Deep Wiki.
 - [ ] **Equation First-Class Support**: Extract Modelica equations into LaTeX for the Entity Drawer "Equation Slot."
 
 ### Phase 3: Modern UI & Deep Wiki Projection (Status: Planned)
+
 - [ ] **Contextual Side-Drawer**: Implement the `SideDrawer` component in `wendao-frontend` to host the AST Skeleton and Semantic Slots without context switching.
 - [ ] **Truth Visualization**: Render the **Skeptic Badge** (Shield icon) in search results to distinguish verified repository truth from AI-generated drafts.
 - [ ] **Interactive Refinement**: Enable "Click-to-Refine" in drawers, allowing users to assist the Trinity Annotator in completing missing logic flows.
 - [ ] **Saliency Heatmap**: Visualize HippoRAG PPR scores as hot/star indicators to highlight core repository hubs.
-
 
 ## 13. Research and SOTA Alignment (Technical Justification)
 

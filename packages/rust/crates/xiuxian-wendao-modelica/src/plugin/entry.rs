@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_wendao::analyzers::{
     AnalysisContext, PluginAnalysisOutput, PluginLinkContext, PluginRegistry, RegisteredRepository,
     RelationRecord, RepoIntelligenceError, RepoIntelligencePlugin, RepoSourceFile,
     RepositoryAnalysisOutput,
@@ -49,7 +49,7 @@ impl RepoIntelligencePlugin for ModelicaRepoIntelligencePlugin {
         context: &AnalysisContext,
         repository_root: &Path,
     ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
-        analysis::analyze_repository(context, repository_root, MODELICA_PLUGIN_ID)
+        analysis::analyze_repository(context, repository_root)
     }
 
     fn enrich_relations(

@@ -1,9 +1,11 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
+assertion_line: 9
 expression: value
 ---
 {
   "center_page": {
+    "doc_id": "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
     "doc_ids": [
       "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
       "repo:gateway-sync:doc:docs/solve.md"
@@ -15,11 +17,19 @@ expression: value
       "julia_docstring",
       "md"
     ],
+    "keywords": [
+      "GatewaySyncPkg.solve",
+      "docs/solve.md",
+      "julia_docstring",
+      "md",
+      "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve"
+    ],
     "kind": "reference",
     "module_ids": [
       "repo:gateway-sync:module:GatewaySyncPkg"
     ],
     "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+    "path": "docs/solve.md",
     "paths": [
       "docs/solve.md",
       "examples/solve_demo.jl",
@@ -79,6 +89,7 @@ expression: value
     "pages": [
       {
         "page": {
+          "doc_id": "repo:gateway-sync:doc:README.md",
           "doc_ids": [
             "repo:gateway-sync:doc:README.md",
             "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
@@ -91,11 +102,19 @@ expression: value
             "julia_docstring",
             "md"
           ],
+          "keywords": [
+            "README.md",
+            "julia_docstring",
+            "md",
+            "repo:gateway-sync:doc:README.md",
+            "solve_demo"
+          ],
           "kind": "how_to",
           "module_ids": [
             "repo:gateway-sync:module:GatewaySyncPkg"
           ],
           "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
+          "path": "README.md",
           "paths": [
             "README.md",
             "docs/solve.md",

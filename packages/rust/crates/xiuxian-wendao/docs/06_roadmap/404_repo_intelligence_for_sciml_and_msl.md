@@ -4,7 +4,7 @@
 :ID: wendao-repo-intelligence-sciml-msl
 :PARENT: [[index]]
 :TAGS: roadmap, repo-intelligence, julia, modelica, plugins, git
-:STATUS: PLANNED
+:STATUS: IN-PROGRESS
 :END:
 
 ## Core Vision
@@ -16,6 +16,27 @@ This roadmap note defines a Wendao-native **Repository Intelligence** architectu
 
 The goal is to move beyond fuzzy search and give agents a stable, pre-indexed understanding of repositories. The first milestone is a Repo Intelligence MVP that answers repository overview, module, symbol, example, and documentation coverage queries without repeated repository exploration. Deep wiki generation remains a downstream phase built on top of the indexed repository graph.
 
+## Implementation Update: Hot-Path Removal and Visible Progress
+
+Current 2026-03-21 checkpoint:
+
+- Studio now has a dedicated `gateway/studio/repo_index/` feature folder for repository-intelligence background indexing.
+- The coordinator owns:
+  - a single-worker queue
+  - per-repo phase tracking
+  - snapshot storage
+  - aggregate `/api/repo/index/status` reporting
+- `code_search` no longer performs request-time repository analysis or checkout-wide source scanning. It reads repo-index snapshots and returns explicit pending metadata through the unified search contract:
+  - `partial`
+  - `indexingState`
+  - `pendingRepos`
+  - `skippedRepos`
+- Repo-intelligence read endpoints now use cached-only analysis lookup so missing snapshots surface as `REPO_INDEX_PENDING` instead of silently triggering cold analysis.
+- Julia repository analysis now performs a cheap preflight before heavy indexing so unsupported layouts settle into `unsupported` state instead of re-triggering hot-path failures.
+- The frontend now separates `repoIndexStatus` from `vfsStatus`, polls `/api/repo/index/status` independently, keeps workspace boot gated only on health/config sync, and surfaces indexing progress in the bottom status bar.
+
+This closes the main architectural gap that previously allowed large multi-repo Julia configs to collapse Studio responsiveness under repeated request-time analysis.
+
 ## Architecture Mapping
 
 This note maps the proposed system directly onto the current Wendao architecture instead of using conceptual overlays.
@@ -25,7 +46,7 @@ This note maps the proposed system directly onto the current Wendao architecture
 - `xiuxian-wendao`
   - owns the common Repo Intelligence core
   - owns the plugin authoring interface
-  - owns the Julia repo-intelligence bridge and normalization flow
+  - owns the Julia analyzer bridge and normalization flow
 - `xiuxian-ast`
   - owns Julia syntax parsing primitives used by Repo Intelligence
 - `xiuxian-wendao-modelica`
@@ -36,9 +57,9 @@ In concrete terms, the target structure is:
 
 ```text
 xiuxian-wendao
-  - repo_intelligence common core
-  - repo_intelligence plugin interface
-  - repo_intelligence julia bridge/orchestration
+  - analyzers common core
+  - analyzers plugin interface
+  - analyzers julia bridge/orchestration
 
 xiuxian-ast
   - julia syntax parser and source-summary extraction
@@ -51,13 +72,13 @@ xiuxian-wendao-modelica
 
 To avoid architectural ambiguity, the following terms are mapped to concrete implementation targets:
 
-| Conceptual term    | Concrete implementation meaning                                                                                                |
-| :----------------- | :----------------------------------------------------------------------------------------------------------------------------- |
-| `Prospector`       | Repo analysis logic in `xiuxian-wendao::repo_intelligence::julia` and external plugin crates such as `xiuxian-wendao-modelica` |
-| `HippoRAG`         | Wendao graph, retrieval, and fusion capabilities                                                                               |
-| `Annotator`        | Later-stage document projection or classification flow, not part of the Repo Intelligence MVP indexing path                    |
-| `Trinity / Qianji` | Higher-level orchestration for documentation workflows, not a required dependency for core repository indexing                 |
-| `Skeptic`          | Post-generation or post-projection verifier that checks generated content against indexed repository records                   |
+| Conceptual term    | Concrete implementation meaning                                                                                                       |
+| :----------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| `Prospector`       | Repo analysis logic in `xiuxian-wendao::analyzers::{languages, service}` and external plugin crates such as `xiuxian-wendao-modelica` |
+| `HippoRAG`         | Wendao graph, retrieval, and fusion capabilities                                                                                      |
+| `Annotator`        | Later-stage document projection or classification flow, not part of the Repo Intelligence MVP indexing path                           |
+| `Trinity / Qianji` | Higher-level orchestration for documentation workflows, not a required dependency for core repository indexing                        |
+| `Skeptic`          | Post-generation or post-projection verifier that checks generated content against indexed repository records                          |
 
 ## Common Core and Extension Boundary
 
@@ -69,6 +90,7 @@ The common core should absorb everything that is high-performance, repeated, and
 - git mirror management
 - local checkout validation and canonical git-root discovery
 - managed checkout materialization from upstream git URLs
+- explicit git checkout feature-folder structure under `src/git/checkout/` so transport, refs, metadata, namespace, and locking evolve as independent responsibilities instead of regressing into a monolithic service file
 - mirror-backed checkout refresh policy
 - registry-aware library entry points so external crates can reuse the same configured query surface with custom plugin registries
 - lifecycle health summarization for source status and drift diagnostics
@@ -81,7 +103,7 @@ The common core should absorb everything that is high-performance, repeated, and
 - shared query contracts
 - plugin registration and diagnostics
 
-Legacy `[[repo_intelligence.repos]]` configuration should not remain part of the active runtime contract. Older files may still carry that table during migration, but the runtime loader should ignore it and derive registrations only from project-scoped entries.
+Legacy `[[repo_intelligence.repos]]` configuration should not remain part of the active runtime contract. Older files may still carry that table during migration, but the runtime loader now ignores it and derives registrations only from project-scoped entries.
 
 ### Plugin Interface Inside `xiuxian-wendao`
 
@@ -103,14 +125,15 @@ The Julia path should therefore split responsibilities:
 - `xiuxian-ast`
   - parses Julia source files
   - extracts root modules, literal include edges, exports, imports, conservative symbol summaries, and source docstring attachments
-- `xiuxian-wendao::repo_intelligence::julia`
-  - loads repository metadata
-  - resolves local git checkout metadata
-  - consumes managed checkouts prepared by the common core when only `url/ref` is configured
-  - discovers doc and example assets
-  - walks the root-file include graph
-  - normalizes Julia records and source-derived docs into Wendao-owned repository records
-  - emits relation edges such as `Uses` and `Documents`
+- `xiuxian-wendao::analyzers::languages::julia` plus `xiuxian-wendao::analyzers::service`
+  - register the built-in Julia analyzer
+  - load repository metadata
+  - resolve local git checkout metadata
+  - consume managed checkouts prepared by the common core when only `url/ref` is configured
+  - discover doc and example assets
+  - walk the root-file include graph
+  - normalize Julia records and source-derived docs into Wendao-owned repository records
+  - emit relation edges such as `Uses` and `Documents`
 
 The Julia bridge should focus on:
 
@@ -120,7 +143,7 @@ The Julia bridge should focus on:
 - documentation asset discovery and linking
 - conservative method and signature extraction
 
-Julia support should be described as a Wendao-native repo-intelligence flow backed by `xiuxian-ast`, not as a standalone external plugin crate.
+Julia support should be described as a Wendao-native analyzer flow backed by `xiuxian-ast`, not as a standalone external plugin crate.
 
 ### External Modelica Support
 
@@ -257,6 +280,14 @@ For remote repositories, the common core now uses a two-stage source lifecycle:
 2. materialize or refresh a managed checkout from that mirror
 
 This keeps remote fetch behavior inside the common core and prevents language plugins from owning repository transport details.
+
+Current implementation checkpoint for this transport layer:
+
+- repository transport is now owned by `xiuxian-wendao::git::checkout` instead of `analyzers`
+- managed checkouts now derive ghq-style physical paths from the configured remote URL
+- if a configured repo keeps the same logical id but changes URL in `wendao.toml`, the managed mirror remote is overwritten from config and the checkout is synchronized against that new source of truth
+- managed checkout mutation now uses a dedicated lock path under `PRJ_DATA_HOME/.data/xiuxian-wendao/repo-intelligence/locks/...`
+- `checkout/mod.rs` is now interface-only, with checkout data types in `types.rs` and checkout locking in `lock.rs`
 
 The common core now exposes this lifecycle explicitly through `wendao repo sync --repo <id>`, which reports the resolved source kind, requested sync mode, configured refresh policy, mirror/check-out lifecycle states, mirror revision, drift state, checkout path, optional mirror path, upstream URL, and checkout revision before any language-specific analysis runs. `--mode refresh` can force a remote refresh even when the repository is configured with `refresh = "manual"`. `--mode status` is read-only: it inspects the current cache state and returns `missing` lifecycle states when mirror or checkout assets do not exist yet.
 

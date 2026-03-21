@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
-    DocCoverageQuery, ExampleSearchQuery, ModuleSearchQuery, RepoOverviewQuery, SymbolSearchQuery,
-    analyze_repository_from_config_with_registry, bootstrap_builtin_registry,
+use xiuxian_wendao::analyzers::{
+    DocCoverageQuery, ExampleSearchQuery, ModuleSearchQuery, PluginRegistry, RepoOverviewQuery,
+    SymbolSearchQuery, analyze_repository_from_config_with_registry,
     build_projected_page_index_documents, build_projected_page_index_trees, build_projected_pages,
     build_projection_inputs, doc_coverage_from_config_with_registry,
     example_search_from_config_with_registry, module_search_from_config_with_registry,
@@ -23,7 +23,8 @@ fn modelica_plugin_supports_registry_aware_repo_queries() -> TestResult {
     let repo_dir = create_modelica_repo(temp.path())?;
     let config_path = write_repo_config(temp.path(), &repo_dir)?;
 
-    let mut registry = bootstrap_builtin_registry()?;
+    // Use a fresh registry with only the xiuxian-wendao-modelica plugin
+    let mut registry = PluginRegistry::new();
     register_into(&mut registry)?;
     let analysis = analyze_repository_from_config_with_registry(
         "modelica-demo",
@@ -140,12 +141,8 @@ fn write_repo_config(base: &Path, repo_dir: &Path) -> Result<PathBuf, Box<dyn st
     fs::write(
         &config_path,
         format!(
-            r#"[repo_intelligence]
-enabled = true
-
-[[repo_intelligence.repos]]
-id = "modelica-demo"
-path = "{}"
+            r#"[link_graph.projects.modelica-demo]
+root = "{}"
 plugins = ["modelica"]
 "#,
             repo_dir.display()

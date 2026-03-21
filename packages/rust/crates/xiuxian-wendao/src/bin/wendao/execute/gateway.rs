@@ -23,6 +23,7 @@ use tokio::sync::mpsc;
 
 use crate::types::{Cli, GatewayArgs, GatewayCommand, GatewayStartArgs};
 use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::analyzers::bootstrap_builtin_registry;
 use xiuxian_wendao::gateway::{
     openapi::paths as openapi_paths,
     studio::{GatewayState, studio_routes},
@@ -77,9 +78,14 @@ async fn handle_start(
     );
 
     // 2. Create app state with index and signal channel
+    // Note: Julia/Modelica plugins should be registered here if this crate
+    // depended on them. Since it doesn't (to avoid circular dependency),
+    // they are currently empty. A separate aggregator crate would be needed
+    // to provide a pre-populated registry.
     let app_state = Arc::new(AppState::new(
         index.map(|i| Arc::new(i.clone())),
         Some(signal_tx),
+        build_plugin_registry()?,
     ));
 
     // 3. Build the Axum router
@@ -299,6 +305,10 @@ async fn notify_status(State(state): State<Arc<AppState>>) -> Json<serde_json::V
         "webhook_configured": !webhook_url.is_empty(),
         "webhook_url": if webhook_url.is_empty() { serde_json::Value::Null } else { json!(webhook_url) }
     }))
+}
+
+fn build_plugin_registry() -> Result<Arc<xiuxian_wendao::analyzers::PluginRegistry>> {
+    Ok(Arc::new(bootstrap_builtin_registry()?))
 }
 
 #[cfg(test)]

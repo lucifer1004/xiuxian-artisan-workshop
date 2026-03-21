@@ -7,9 +7,15 @@ authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
 
+[features]
+default = []
+# Enable tree-sitter based parsing for richer AST extraction
+tree-sitter = ["xiuxian-ast/modelica"]
+
 [dependencies]
 walkdir = { workspace = true }
 xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false }
+xiuxian-ast = { path = "../xiuxian-ast", optional = true }
 
 [dev-dependencies]
 git2 = { workspace = true }

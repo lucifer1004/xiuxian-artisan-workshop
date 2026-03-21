@@ -1,5 +1,6 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
+assertion_line: 22
 expression: value
 ---
 {
@@ -7,6 +8,7 @@ expression: value
     "kind": "page",
     "node": null,
     "page": {
+      "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
       "doc_ids": [
         "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
       ],
@@ -14,11 +16,18 @@ expression: value
       "format_hints": [
         "julia_docstring"
       ],
+      "keywords": [
+        "ProjectionPkg.solve",
+        "julia_docstring",
+        "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+        "src/ProjectionPkg.jl"
+      ],
       "kind": "reference",
       "module_ids": [
         "repo:projection-sample:module:ProjectionPkg"
       ],
       "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.solve",
+      "path": "src/ProjectionPkg.jl",
       "paths": [
         "src/ProjectionPkg.jl",
         "src/ProjectionPkg.jl#symbol:solve"

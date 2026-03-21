@@ -1,14 +1,40 @@
-use xiuxian_wendao::repo_intelligence::{DocRecord, RepoSymbolKind};
+//! Shared types for Modelica repository intelligence.
 
+use xiuxian_wendao::analyzers::{DocRecord, ImportKind, RepoSymbolKind};
+
+/// Collected documentation record with target IDs.
 #[derive(Debug, Clone)]
 pub(crate) struct CollectedDoc {
     pub(crate) record: DocRecord,
     pub(crate) target_ids: Vec<String>,
 }
 
-#[derive(Debug)]
-pub(crate) struct ParsedDeclaration {
+/// Parsed import statement from Modelica source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ParsedImport {
+    /// Imported package/class name.
     pub(crate) name: String,
+    /// Optional alias for the import.
+    pub(crate) alias: Option<String>,
+    /// Normalized import kind.
+    pub(crate) kind: ImportKind,
+    /// Source location: starting line number (1-based).
+    pub(crate) line_start: Option<usize>,
+}
+
+/// Parsed symbol declaration from Modelica source.
+#[derive(Debug, Clone)]
+pub(crate) struct ParsedDeclaration {
+    /// Symbol display name.
+    pub(crate) name: String,
+    /// Normalized symbol kind.
     pub(crate) kind: RepoSymbolKind,
+    /// Signature snippet (first line of declaration).
     pub(crate) signature: String,
+    /// Source location: starting line number (1-based).
+    pub(crate) line_start: Option<usize>,
+    /// Source location: ending line number (1-based).
+    pub(crate) line_end: Option<usize>,
+    /// Mathematical equations within this declaration.
+    pub(crate) equations: Vec<String>,
 }

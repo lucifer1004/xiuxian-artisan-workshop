@@ -1,10 +1,11 @@
-//! Integration snapshot for deterministic projected page records.
+//! Integration snapshot for projected pages.
 
 use insta::assert_json_snapshot;
-use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
-    DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind,
-    RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord, build_projected_pages,
+use std::collections::BTreeMap;
+use xiuxian_wendao::analyzers::{
+    DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, RepoProjectedPagesQuery,
+    RepoSymbolKind, RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord,
+    build_repo_projected_pages,
 };
 
 #[test]
@@ -34,9 +35,14 @@ fn builds_projected_pages_from_stage_one_records() {
             qualified_name: "Demo.Controllers.PI".to_string(),
             kind: RepoSymbolKind::Type,
             path: "Controllers/PI.mo".to_string(),
+            line_start: None,
+            line_end: None,
             signature: None,
             audit_status: None,
+            verification_state: None,
+            attributes: BTreeMap::new(),
         }],
+        imports: Vec::new(),
         examples: vec![ExampleRecord {
             repo_id: "demo".to_string(),
             example_id: "repo:demo:example:Controllers/Examples/Step.mo".to_string(),
@@ -51,15 +57,6 @@ fn builds_projected_pages_from_stage_one_records() {
                 title: "First Steps".to_string(),
                 path: "Controllers/UsersGuide/Tutorial/FirstSteps.mo".to_string(),
                 format: Some("modelica_users_guide_tutorial".to_string()),
-            },
-            DocRecord {
-                repo_id: "demo".to_string(),
-                doc_id:
-                    "repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-                        .to_string(),
-                title: "Version 4.1.0".to_string(),
-                path: "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0".to_string(),
-                format: Some("modelica_users_guide_release_notes_version".to_string()),
             },
             DocRecord {
                 repo_id: "demo".to_string(),
@@ -79,14 +76,6 @@ fn builds_projected_pages_from_stage_one_records() {
             },
             RelationRecord {
                 repo_id: "demo".to_string(),
-                source_id:
-                    "repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-                        .to_string(),
-                target_id: "repo:demo:module:Demo.Controllers".to_string(),
-                kind: RelationKind::Documents,
-            },
-            RelationRecord {
-                repo_id: "demo".to_string(),
                 source_id: "repo:demo:doc:Controllers/PI.mo#annotation.documentation".to_string(),
                 target_id: "repo:demo:symbol:Demo.Controllers.PI".to_string(),
                 kind: RelationKind::Documents,
@@ -101,16 +90,20 @@ fn builds_projected_pages_from_stage_one_records() {
         diagnostics: Vec::new(),
     };
 
-    let pages = build_projected_pages(&analysis);
-    let payload = json!({
-        "page_count": pages.len(),
-        "pages": pages,
-    });
+    let result = build_repo_projected_pages(
+        &RepoProjectedPagesQuery {
+            repo_id: "demo".to_string(),
+        },
+        &analysis,
+    );
 
     insta::with_settings!({
         snapshot_path => "../snapshots",
         prepend_module_to_snapshot => false,
     }, {
-        assert_json_snapshot!("repo_projected_pages__repo_projected_pages", payload);
+        assert_json_snapshot!(
+            "repo_projected_pages__repo_projected_pages",
+            result
+        );
     });
 }

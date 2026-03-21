@@ -1,5 +1,6 @@
 use super::*;
 use crate::gateway::studio::router::{GatewayState, StudioState};
+use crate::gateway::studio::search::support::strip_option;
 use crate::gateway::studio::test_support::{assert_studio_json_snapshot, round_f64};
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
 use serde_json::json;
@@ -74,13 +75,13 @@ async fn search_knowledge_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
     let result = search_knowledge(
+        State(Arc::clone(&fixture.state)),
         Query(SearchQuery {
             q: Some("   ".to_string()),
             limit: None,
             intent: None,
             repo: None,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -97,13 +98,13 @@ async fn search_intent_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
     let result = search_intent(
+        State(Arc::clone(&fixture.state)),
         Query(SearchQuery {
             q: Some("   ".to_string()),
             intent: Some("debug_lookup".to_string()),
             limit: None,
             repo: None,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -129,13 +130,13 @@ async fn search_knowledge_returns_payload() {
     ]);
 
     let result = search_knowledge(
+        State(fixture.state),
         Query(SearchQuery {
             q: Some("wendao".to_string()),
             limit: Some(5),
             intent: None,
             repo: None,
         }),
-        State(fixture.state),
     )
     .await;
 
@@ -183,13 +184,13 @@ async fn search_intent_returns_payload() {
     )]);
 
     let result = search_intent(
+        State(fixture.state),
         Query(SearchQuery {
             q: Some("wendao".to_string()),
             limit: Some(5),
             intent: Some("debug_lookup".to_string()),
             repo: None,
         }),
-        State(fixture.state),
     )
     .await;
 
@@ -225,13 +226,13 @@ async fn search_knowledge_uses_studio_display_paths() {
     ]);
 
     let result = search_knowledge(
+        State(Arc::clone(&fixture.state)),
         Query(SearchQuery {
             q: Some("wendao".to_string()),
             limit: Some(5),
             intent: None,
             repo: None,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -305,13 +306,13 @@ async fn search_knowledge_uses_project_scoped_display_paths_for_duplicate_roots(
     });
 
     let result = search_knowledge(
+        State(Arc::clone(&fixture.state)),
         Query(SearchQuery {
             q: Some("wendao".to_string()),
             limit: Some(10),
             intent: None,
             repo: None,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -340,6 +341,7 @@ async fn search_attachments_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
     let result = search_attachments(
+        State(Arc::clone(&fixture.state)),
         Query(AttachmentSearchQuery {
             q: Some("   ".to_string()),
             limit: None,
@@ -347,7 +349,6 @@ async fn search_attachments_requires_query() {
             kind: Vec::new(),
             case_sensitive: false,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -378,6 +379,7 @@ async fn search_attachments_returns_payload() {
     });
 
     let result = search_attachments(
+        State(Arc::clone(&fixture.state)),
         Query(AttachmentSearchQuery {
             q: Some("topology".to_string()),
             limit: Some(10),
@@ -385,7 +387,6 @@ async fn search_attachments_returns_payload() {
             kind: Vec::new(),
             case_sensitive: false,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -420,6 +421,43 @@ async fn search_attachments_returns_payload() {
 }
 
 #[tokio::test]
+async fn search_attachments_respects_extension_and_kind_filters() {
+    let fixture = make_state_with_docs(vec![(
+        "docs/alpha.md",
+        "# Alpha\n\n![Topology](assets/topology.png)\n\n[Spec](files/spec.pdf)\n",
+    )]);
+    fixture.state.studio.set_ui_config(UiConfig {
+        projects: vec![UiProjectConfig {
+            name: "kernel".to_string(),
+            root: ".".to_string(),
+            dirs: vec!["docs".to_string()],
+        }],
+        repo_projects: Vec::new(),
+    });
+
+    let result = search_attachments(
+        State(Arc::clone(&fixture.state)),
+        Query(AttachmentSearchQuery {
+            q: Some("spec".to_string()),
+            limit: Some(10),
+            ext: vec!["pdf".to_string()],
+            kind: vec!["pdf".to_string()],
+            case_sensitive: false,
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected filtered attachment search request to succeed");
+    };
+
+    assert_eq!(response.0.hit_count, 1);
+    assert_eq!(response.0.hits[0].attachment_name, "spec.pdf");
+    assert_eq!(response.0.hits[0].attachment_ext, "pdf");
+    assert_eq!(response.0.hits[0].kind, "pdf");
+}
+
+#[tokio::test]
 async fn autocomplete_limits_and_filters_prefix() {
     let fixture = make_state_with_docs(vec![
         (
@@ -430,11 +468,11 @@ async fn autocomplete_limits_and_filters_prefix() {
     ]);
 
     let result = search_autocomplete(
+        State(fixture.state),
         Query(AutocompleteQuery {
             prefix: Some("se".to_string()),
             limit: Some(2),
         }),
-        State(fixture.state),
     )
     .await;
 
@@ -457,15 +495,59 @@ async fn autocomplete_limits_and_filters_prefix() {
 }
 
 #[tokio::test]
+async fn autocomplete_includes_code_symbols() {
+    let fixture = make_state_with_docs(vec![
+        (
+            "packages/rust/crates/demo/src/lib.rs",
+            "pub struct AlphaService;\npub fn alpha_handler() {}\n",
+        ),
+        (
+            "packages/python/demo/tool.py",
+            "class AlphaClient:\n    pass\n\ndef alpha_helper():\n    return None\n",
+        ),
+    ]);
+
+    let result = search_autocomplete(
+        State(fixture.state),
+        Query(AutocompleteQuery {
+            prefix: Some("al".to_string()),
+            limit: Some(10),
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected code-symbol autocomplete request to succeed");
+    };
+
+    let suggestions = response
+        .0
+        .suggestions
+        .into_iter()
+        .map(|suggestion| (suggestion.text, suggestion.suggestion_type))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        suggestions,
+        vec![
+            ("AlphaClient".to_string(), "symbol".to_string()),
+            ("AlphaService".to_string(), "symbol".to_string()),
+            ("alpha_handler".to_string(), "symbol".to_string()),
+            ("alpha_helper".to_string(), "symbol".to_string()),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn search_ast_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
     let result = search_ast(
+        State(Arc::clone(&fixture.state)),
         Query(AstSearchQuery {
             q: Some("   ".to_string()),
             limit: None,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -495,11 +577,11 @@ async fn search_ast_returns_payload() {
     ]);
 
     let result = search_ast(
+        State(fixture.state),
         Query(AstSearchQuery {
             q: Some("alpha".to_string()),
             limit: Some(10),
         }),
-        State(fixture.state),
     )
     .await;
 
@@ -558,11 +640,11 @@ async fn search_ast_includes_markdown_outline_hits() {
     });
 
     let result = search_ast(
+        State(Arc::clone(&fixture.state)),
         Query(AstSearchQuery {
             q: Some("ast".to_string()),
             limit: Some(10),
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -621,11 +703,11 @@ async fn search_ast_includes_markdown_property_drawer_hits() {
     });
 
     let result = search_ast(
+        State(Arc::clone(&fixture.state)),
         Query(AstSearchQuery {
             q: Some("SearchBar".to_string()),
             limit: Some(10),
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -673,12 +755,12 @@ async fn search_definition_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
     let result = search_definition(
+        State(Arc::clone(&fixture.state)),
         Query(DefinitionResolveQuery {
             q: Some("   ".to_string()),
             path: None,
             line: None,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -708,12 +790,12 @@ async fn search_definition_returns_best_payload() {
     ]);
 
     let result = search_definition(
+        State(fixture.state),
         Query(DefinitionResolveQuery {
             q: Some("AlphaService".to_string()),
             path: Some("packages/rust/crates/demo/src/lib.rs".to_string()),
             line: Some(2),
         }),
-        State(fixture.state),
     )
     .await;
 
@@ -779,12 +861,12 @@ async fn search_definition_accepts_absolute_source_paths() {
         .to_string();
 
     let result = search_definition(
+        State(Arc::clone(&fixture.state)),
         Query(DefinitionResolveQuery {
             q: Some("AlphaService".to_string()),
             path: Some(absolute_source_path),
             line: Some(2),
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -816,12 +898,12 @@ async fn search_definition_uses_markdown_observe_hints() {
     ]);
 
     let result = search_definition(
+        State(Arc::clone(&fixture.state)),
         Query(DefinitionResolveQuery {
             q: Some("AlphaService".to_string()),
             path: Some("packages/notes/index.md".to_string()),
             line: Some(4),
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -867,11 +949,11 @@ async fn search_references_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
     let result = search_references(
+        State(Arc::clone(&fixture.state)),
         Query(ReferenceSearchQuery {
             q: Some("   ".to_string()),
             limit: None,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -897,11 +979,11 @@ async fn search_references_returns_payload() {
     ]);
 
     let result = search_references(
+        State(fixture.state),
         Query(ReferenceSearchQuery {
             q: Some("AlphaService".to_string()),
             limit: Some(10),
         }),
-        State(fixture.state),
     )
     .await;
 
@@ -947,11 +1029,11 @@ async fn search_symbols_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
     let result = search_symbols(
+        State(Arc::clone(&fixture.state)),
         Query(SymbolSearchQuery {
             q: Some("   ".to_string()),
             limit: None,
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -981,11 +1063,11 @@ async fn search_symbols_returns_payload() {
     ]);
 
     let result = search_symbols(
+        State(fixture.state),
         Query(SymbolSearchQuery {
             q: Some("alpha".to_string()),
             limit: Some(10),
         }),
-        State(fixture.state),
     )
     .await;
 
@@ -1050,11 +1132,11 @@ async fn search_symbols_respects_glob_dir_filters() {
     });
 
     let result = search_symbols(
+        State(Arc::clone(&fixture.state)),
         Query(SymbolSearchQuery {
             q: Some("GlobFilteredSymbol".to_string()),
             limit: Some(10),
         }),
-        State(Arc::clone(&fixture.state)),
     )
     .await;
 
@@ -1079,7 +1161,7 @@ async fn search_symbols_respects_glob_dir_filters() {
 
 #[test]
 fn repo_navigation_target_prefixes_repo_root_for_relative_paths() {
-    let target = repo_navigation_target("mcl", "Modelica/package.mo");
+    let target = repo_navigation_target("mcl", "Modelica/package.mo", None, None, None);
     assert_eq!(target.path, "mcl/Modelica/package.mo");
     assert_eq!(target.category, "repo_code");
     assert_eq!(target.project_name.as_deref(), Some("mcl"));
@@ -1088,7 +1170,7 @@ fn repo_navigation_target_prefixes_repo_root_for_relative_paths() {
 
 #[test]
 fn repo_navigation_target_does_not_duplicate_existing_repo_root_prefix() {
-    let target = repo_navigation_target("mcl", "mcl/Modelica/package.mo");
+    let target = repo_navigation_target("mcl", "mcl/Modelica/package.mo", None, None, None);
     assert_eq!(target.path, "mcl/Modelica/package.mo");
 }
 
@@ -1118,4 +1200,39 @@ fn truncate_content_search_snippet_limits_output_length() {
     let value = "abcdefghijklmnopqrstuvwxyz";
     let truncated = truncate_content_search_snippet(value, 8);
     assert_eq!(truncated, "abcdefgh...");
+}
+
+#[test]
+fn code_content_globs_do_not_exclude_cache_root() {
+    assert!(!CODE_CONTENT_EXCLUDE_GLOBS.contains(&"!.cache/**"));
+}
+
+#[test]
+fn parse_repo_code_search_query_extracts_lang_kind_and_term() {
+    let spec = parse_repo_code_search_query("lang:julia kind:file reexport");
+    assert_eq!(spec.search_term(), Some("reexport"));
+    assert!(spec.language_filters.contains("julia"));
+    assert!(spec.kind_filters.contains("file"));
+}
+
+#[test]
+fn parse_repo_code_search_query_keeps_unknown_kind_token_in_search_term() {
+    let spec = parse_repo_code_search_query("kind:custom reexport");
+    assert_eq!(spec.search_term(), Some("kind:custom reexport"));
+}
+
+#[test]
+fn language_filter_matches_julia_path_extensions() {
+    let mut filters = std::collections::HashSet::new();
+    filters.insert("julia".to_string());
+
+    assert!(path_matches_language_filters(
+        "src/BaseModelica.jl",
+        &filters
+    ));
+    assert!(path_matches_language_filters(
+        "src/generated/parser.julia",
+        &filters
+    ));
+    assert!(!path_matches_language_filters("docs/index.md", &filters));
 }

@@ -167,6 +167,25 @@ fn test_fuzzy_resolve_substring() {
 }
 
 #[test]
+fn test_fuzzy_resolve_title_typo() {
+    let mut trees = HashMap::new();
+    trees.insert(
+        "doc.md".to_string(),
+        vec![make_test_node_with_path("Storage", &["Storage"], None)],
+    );
+
+    let index = TopologyIndex::build_from_trees(&trees);
+
+    let matches = index.fuzzy_resolve("stroage", 5);
+    assert!(!matches.is_empty());
+    assert!(
+        matches
+            .iter()
+            .any(|m| m.match_type == MatchType::TitleFuzzy)
+    );
+}
+
+#[test]
 fn test_case_insensitive_path() {
     let mut trees = HashMap::new();
     trees.insert(

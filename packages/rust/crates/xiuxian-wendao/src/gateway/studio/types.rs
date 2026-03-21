@@ -40,7 +40,7 @@ pub struct VfsEntry {
 }
 
 /// Category classification for VFS entries.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum VfsCategory {
     /// Directory/folder.
@@ -56,7 +56,7 @@ pub enum VfsCategory {
 }
 
 /// A scanned entry with metadata for VFS tree display.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct VfsScanEntry {
     /// Full path relative to the VFS root.
@@ -103,375 +103,281 @@ pub struct VfsScanResult {
     pub file_count: usize,
     /// Total number of directories scanned.
     pub dir_count: usize,
-    /// Time taken to scan in milliseconds.
+    /// Time taken for the scan in milliseconds.
     pub scan_duration_ms: u64,
 }
 
-/// Response for VFS file content read.
+/// Payload for file content operations.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct VfsContentResponse {
-    /// Path of the file read.
+    /// Full path to the file.
     pub path: String,
-    /// File content as UTF-8 string.
-    pub content: String,
     /// MIME content type.
     pub content_type: String,
+    /// Raw file content.
+    pub content: String,
+    /// File modification timestamp.
+    pub modified: u64,
 }
 
 // === Graph Types ===
 
-/// Neighbors of a node in the graph.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct NodeNeighbors {
-    /// Node identifier.
-    pub node_id: String,
-    /// Display name of the node.
-    pub name: String,
-    /// Type of the node (e.g., "doc", "skill").
-    pub node_type: String,
-    /// IDs of nodes with incoming edges to this node.
-    pub incoming: Vec<String>,
-    /// IDs of nodes this node points to.
-    pub outgoing: Vec<String>,
-    /// IDs of nodes reachable within 2 hops.
-    pub two_hop: Vec<String>,
-}
-
-/// A node in the graph visualization.
+/// A single node in the link-graph visualization.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphNode {
-    /// Unique node identifier.
+    /// Global identifier for the node.
     pub id: String,
     /// Display label.
     pub label: String,
-    /// File path if applicable.
+    /// File path if the node represents a document.
     pub path: String,
-    /// Optional display-ready navigation target when clicking the node should open a file.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub navigation_target: Option<StudioNavigationTarget>,
-    /// Node type for styling.
+    /// Display-ready navigation target.
+    pub navigation_target: StudioNavigationTarget,
+    /// Optional node type (e.g., "CORE", "FEATURE").
     pub node_type: String,
-    /// Whether this is the center of the query.
+    /// Whether this is the focal node of the query.
     pub is_center: bool,
-    /// Distance from the center node.
+    /// Shortest-path distance from the center node.
     pub distance: usize,
 }
 
-/// A link between graph nodes.
+/// A single edge in the link-graph visualization.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct GraphLink {
-    /// Source node ID.
-    pub source: String,
-    /// Target node ID.
-    pub target: String,
-    /// Direction of the link ("incoming", "outgoing", "bidirectional").
-    pub direction: String,
-    /// Distance from center for filtering.
-    pub distance: usize,
+pub struct GraphEdge {
+    /// Global identifier for the edge.
+    pub id: String,
+    /// Semantic kind of the relationship.
+    pub kind: String,
+    /// Source node identifier.
+    pub source_id: String,
+    /// Target node identifier.
+    pub target_id: String,
+    /// Display label for the relationship.
+    pub label: String,
 }
 
-/// Response for graph neighbors query.
+/// Result of a graph neighbor traversal.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct GraphNeighborsResponse {
-    /// The center node of the query.
-    pub center: GraphNode,
-    /// All nodes in the neighborhood.
+pub struct GraphNeighborsResult {
+    /// Nodes in the neighbor subgraph.
     pub nodes: Vec<GraphNode>,
-    /// All links between nodes.
-    pub links: Vec<GraphLink>,
-    /// Total number of nodes.
-    pub total_nodes: usize,
-    /// Total number of links.
-    pub total_links: usize,
+    /// Edes connecting the neighbors.
+    pub edges: Vec<GraphEdge>,
 }
 
-/// A node in the 3D topology visualization.
+/// Payload for 3D graph topology visualization.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct TopologyNode {
-    /// Unique node identifier.
-    pub id: String,
-    /// Display name.
-    pub name: String,
-    /// Node type for styling.
-    pub node_type: String,
-    /// 3D position [x, y, z].
-    pub position: [f32; 3],
-    /// Cluster ID if clustered.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cluster_id: Option<String>,
-}
-
-/// A link in the 3D topology.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct TopologyLink {
-    /// Source node ID.
-    pub from: String,
-    /// Target node ID.
-    pub to: String,
-    /// Optional link label.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-}
-
-/// Information about a cluster in the 3D topology.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct ClusterInfo {
-    /// Cluster identifier.
-    pub id: String,
-    /// Display name.
-    pub name: String,
-    /// Centroid position [x, y, z].
-    pub centroid: [f32; 3],
-    /// Number of nodes in cluster.
-    pub node_count: usize,
-    /// Color for rendering (CSS color string).
-    pub color: String,
-}
-
-/// Complete 3D topology for visualization.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct Topology3D {
-    /// All nodes in the topology.
-    pub nodes: Vec<TopologyNode>,
-    /// All links between nodes.
-    pub links: Vec<TopologyLink>,
-    /// Cluster information for grouping.
-    pub clusters: Vec<ClusterInfo>,
-}
-
-// === State Types ===
-
-/// State of a research/workflow node.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
-#[serde(rename_all = "snake_case")]
-pub enum NodeState {
-    /// Node is idle.
-    Idle,
-    /// Node is active.
-    Active,
-    /// Node is processing.
-    Processing,
-    /// Node completed successfully.
-    Success,
-    /// Node is waiting.
-    Wait,
-}
-
-/// Event for research state updates.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(
-    tag = "type",
-    rename_all = "snake_case",
-    rename_all_fields = "camelCase"
-)]
-pub enum ResearchStateEvent {
-    /// A node was activated.
-    NodeActivated {
-        /// Node identifier.
-        node_id: String,
-        /// New state.
-        state: NodeState,
-    },
-    /// A workflow step started.
-    StepStarted {
-        /// Step identifier.
-        step_id: String,
-        /// Timestamp in milliseconds.
-        timestamp: u64,
-    },
-    /// A workflow step completed.
-    StepCompleted {
-        /// Step identifier.
-        step_id: String,
-        /// Whether the step succeeded.
-        success: bool,
-        /// Duration in milliseconds.
-        duration_ms: u64,
-    },
-    /// The topology was updated.
-    TopologyUpdated {
-        /// Total node count.
-        node_count: usize,
-        /// Total link count.
-        link_count: usize,
-    },
+pub struct Topology3dPayload {
+    /// All nodes in the global graph.
+    pub nodes: Vec<GraphNode>,
+    /// All edges in the global graph.
+    pub links: Vec<GraphEdge>,
 }
 
 // === Search Types ===
 
-/// A knowledge search result.
+/// Navigation target for opening files/symbols in the Studio editor.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct KnowledgeSearchResult {
-    /// Result identifier.
-    pub id: String,
-    /// Display name.
-    pub name: String,
-    /// Relevance score.
-    pub score: f64,
-    /// Text snippet.
-    pub snippet: String,
-    /// Source path.
-    pub source: String,
+pub struct StudioNavigationTarget {
+    /// Full path or URI.
+    pub path: String,
+    /// Navigation category (e.g., "doc", "symbol").
+    pub category: String,
+    /// Optional project label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+    /// Optional root label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_label: Option<String>,
+    /// 1-based line number.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<usize>,
+    /// 1-based end line number.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_end: Option<usize>,
+    /// 1-based column number.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<usize>,
 }
 
-/// A search hit from the graph index.
+/// A single hit in a knowledge base search.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeSearchHit {
+    /// Global node identifier.
+    pub id: String,
+    /// Display label.
+    pub label: String,
+    /// File path.
+    pub path: String,
+    /// Navigation target.
+    pub navigation_target: StudioNavigationTarget,
+    /// Semantic score (0.0 - 1.0).
+    pub score: f64,
+    /// Snippet highlighting matching terms.
+    pub snippet: String,
+}
+
+/// Structured backlink metadata surfaced on search hits.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchBacklinkItem {
     /// Stable backlink identifier.
     pub id: String,
-    /// Optional backlink title.
+    /// Optional display title.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    /// Optional backlink source path.
+    /// Optional source path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    /// Optional relation-kind label.
+    /// Optional relation kind.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
 }
 
-/// A search hit from the graph index.
+/// Unified search hit consumed by the frontend search surface.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchHit {
-    /// Document stem (filename without extension).
+    /// Stable stem or primary identifier.
     pub stem: String,
-    /// Document title if available.
+    /// Optional display title.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    /// Full file path.
+    /// Repository-relative or workspace-relative path.
     pub path: String,
-    /// Document type classification.
+    /// Optional logical hit kind.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub doc_type: Option<String>,
-    /// Associated tags.
+    /// Search-visible tags.
     pub tags: Vec<String>,
-    /// Relevance score.
+    /// Normalized score.
     pub score: f64,
-    /// Best matching section.
+    /// Optional best section or signature summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub best_section: Option<String>,
-    /// Reason for the match.
+    /// Optional match-reason string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub match_reason: Option<String>,
-    /// Optional hierarchical URI for path-mapped search navigation.
+    /// Optional hierarchical URI.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hierarchical_uri: Option<String>,
-    /// Optional hierarchy segments used for breadcrumbs and side drawers.
+    /// Optional hierarchy segments.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hierarchy: Option<Vec<String>>,
-    /// Optional saliency score (0-1) when available from retrieval fusion.
+    /// Optional saliency score.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub saliency_score: Option<f64>,
-    /// Optional audit status propagated from upstream analyzers.
+    /// Optional audit status.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audit_status: Option<String>,
-    /// Optional verification state propagated from upstream analyzers.
+    /// Optional verification state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verification_state: Option<String>,
-    /// Optional implicit backlinks derived from relation/projection context.
+    /// Optional backlink identifiers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implicit_backlinks: Option<Vec<String>>,
-    /// Optional structured backlink metadata derived from relation/projection context.
+    /// Optional structured backlink items.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implicit_backlink_items: Option<Vec<SearchBacklinkItem>>,
-    /// Display-ready navigation target for opening this hit in studio.
-    pub navigation_target: StudioNavigationTarget,
+    /// Optional navigation target.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub navigation_target: Option<StudioNavigationTarget>,
 }
 
-/// Response for search queries.
+/// Unified search response consumed by the frontend search shell.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResponse {
     /// Original query string.
     pub query: String,
-    /// Search hits.
+    /// Matching hits.
     pub hits: Vec<SearchHit>,
-    /// Total number of hits.
+    /// Total number of hits returned.
     pub hit_count: usize,
-    /// Confidence score from graph analysis.
+    /// Optional graph confidence score.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph_confidence_score: Option<f64>,
-    /// Selected search mode.
+    /// Optional selected mode label.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_mode: Option<String>,
-    /// Optional semantic intent label for the search transaction.
+    /// Optional resolved intent label.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub intent: Option<String>,
-    /// Optional confidence score for semantic intent resolution.
+    /// Optional resolved intent confidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub intent_confidence: Option<f64>,
-    /// Optional canonical search mode alias for frontend consumption.
+    /// Optional backend search mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub search_mode: Option<String>,
+    /// Whether the backend returned partial results because repo indexes are still warming.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub partial: bool,
+    /// Optional aggregate indexing state for code search.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indexing_state: Option<String>,
+    /// Repo ids that are still queued or indexing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_repos: Vec<String>,
+    /// Repo ids skipped because their repo index is unsupported or failed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_repos: Vec<String>,
 }
 
-/// Attachment category for studio attachment search hits.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
-#[serde(rename_all = "snake_case")]
-pub enum AttachmentSearchKind {
-    /// Image attachment.
-    Image,
-    /// PDF attachment.
-    Pdf,
-    /// GPG/PGP attachment.
-    Gpg,
-    /// Generic document attachment.
-    Document,
-    /// Compressed/archive attachment.
-    Archive,
-    /// Audio attachment.
-    Audio,
-    /// Video attachment.
-    Video,
-    /// Other/unknown attachment type.
-    Other,
+/// A hit derived from search intent hints (e.g., task-oriented).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct IntentSearchHit {
+    /// Display label for the intent.
+    pub label: String,
+    /// Target semantic action.
+    pub action: String,
+    /// Score indicating intent alignment.
+    pub score: f64,
 }
 
-/// One attachment search hit projected for studio UI.
+/// A hit representing an attachment or external resource.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AttachmentSearchHit {
-    /// Source path projected to studio display path (open target).
+    /// Attachment filename.
+    pub name: String,
+    /// Relative path.
     pub path: String,
-    /// Source note identifier (org-id style owner id).
+    /// Stable source document identifier.
     pub source_id: String,
-    /// Source note stem.
+    /// Source document stem.
     pub source_stem: String,
-    /// Source note title when available.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_title: Option<String>,
-    /// Source note path projected to studio display path.
+    /// Source document title.
+    pub source_title: String,
+    /// Source document path.
     pub source_path: String,
-    /// Stable attachment identifier (org-attachment style key).
+    /// Stable attachment identifier.
     pub attachment_id: String,
-    /// Raw attachment target path extracted from markdown.
+    /// Relative attachment path.
     pub attachment_path: String,
-    /// Attachment filename/basename.
+    /// Attachment display name.
     pub attachment_name: String,
-    /// Attachment extension (without leading dot).
+    /// Lowercased attachment extension without leading dot.
     pub attachment_ext: String,
-    /// Attachment kind classification.
-    pub kind: AttachmentSearchKind,
-    /// Search relevance score.
+    /// Attachment kind label.
+    pub kind: String,
+    /// Navigation target.
+    pub navigation_target: StudioNavigationTarget,
+    /// Relevance score.
     pub score: f64,
-    /// Optional vision snippet for multimodal attachments.
+    /// Optional OCR or vision snippet for the attachment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vision_snippet: Option<String>,
 }
 
-/// Response for studio attachment search queries.
+/// Response for Studio attachment search queries.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AttachmentSearchResponse {
@@ -481,11 +387,11 @@ pub struct AttachmentSearchResponse {
     pub hits: Vec<AttachmentSearchHit>,
     /// Total number of hits returned.
     pub hit_count: usize,
-    /// Selected semantic scope.
+    /// Selected attachment scope label.
     pub selected_scope: String,
 }
 
-/// A matched AST definition extracted from source code.
+/// A single hit in an AST definition search.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AstSearchHit {
@@ -521,6 +427,56 @@ pub struct AstSearchHit {
     pub score: f64,
 }
 
+/// Result of a best-definition resolution.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DefinitionSearchHit {
+    /// Symbol or definition name.
+    pub name: String,
+    /// Display signature for the definition.
+    pub signature: String,
+    /// Repository-relative path to the definition.
+    pub path: String,
+    /// Source language label for the definition.
+    pub language: String,
+    /// Owning crate or repository identifier.
+    pub crate_name: String,
+    /// Optional project grouping label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+    /// Optional root label derived from configured project scopes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_label: Option<String>,
+    /// Optional AST node kind for the resolved symbol.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_kind: Option<String>,
+    /// Optional owner title or containing symbol label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_title: Option<String>,
+    /// Navigation target for opening the definition in Studio.
+    pub navigation_target: StudioNavigationTarget,
+    /// 1-based starting line for the definition span.
+    pub line_start: usize,
+    /// 1-based ending line for the definition span.
+    pub line_end: usize,
+    /// Resolution score assigned to this candidate.
+    pub score: f64,
+    /// Hints derived from :OBSERVE: property boxes.
+    pub observation_hints: Vec<ObservationHint>,
+}
+
+/// A hint for observing code patterns near a definition.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ObservationHint {
+    /// Language constraint (e.g., "rust").
+    pub language: String,
+    /// File path scope (e.g., "src/**").
+    pub scope: String,
+    /// Pattern to observe.
+    pub pattern: String,
+}
+
 /// Response for studio AST definition search queries.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -547,72 +503,53 @@ pub struct DefinitionResolveResponse {
     /// Optional source line used by the caller.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_line: Option<usize>,
+    /// Number of candidate definitions considered for this resolution.
+    pub candidate_count: usize,
+    /// The selected scope used to resolve the definition.
+    pub selected_scope: String,
     /// Display-ready navigation target for the resolved definition.
     pub navigation_target: StudioNavigationTarget,
-    /// Resolved definition hit.
-    pub definition: AstSearchHit,
-    /// Total number of considered candidates.
-    pub candidate_count: usize,
-    /// Selected semantic scope.
-    pub selected_scope: String,
+    /// The resolved definition hit.
+    pub definition: DefinitionSearchHit,
+    /// Display-ready navigation target for the resolved definition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_target: Option<StudioNavigationTarget>,
+    /// The actual hit that was resolved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_hit: Option<DefinitionSearchHit>,
 }
 
-/// Display-ready navigation metadata for opening a studio selection target.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct StudioNavigationTarget {
-    /// Path relative to the project root.
-    pub path: String,
-    /// UI category for the selection target.
-    pub category: String,
-    /// Configured project name when available.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub project_name: Option<String>,
-    /// Configured root label when available.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub root_label: Option<String>,
-    /// Optional 1-based start line.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub line: Option<usize>,
-    /// Optional 1-based end line.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub line_end: Option<usize>,
-    /// Optional 1-based column.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub column: Option<usize>,
-}
-
-/// One source-level reference or usage hit for a symbol.
+/// A hit indicating where a symbol is referenced or used.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ReferenceSearchHit {
-    /// Queried symbol name.
+    /// Symbol name being referenced.
     pub name: String,
-    /// Source file path relative to the project root.
+    /// Referencing file path.
     pub path: String,
-    /// Source language name.
+    /// Language of the referencing file.
     pub language: String,
-    /// Owning crate or package name.
+    /// Crate name of the referencing file.
     pub crate_name: String,
-    /// Configured project name when the source path maps to a studio project.
+    /// Project grouping label.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_name: Option<String>,
-    /// Configured root label when the source path maps to a project root path.
+    /// Root label.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_label: Option<String>,
-    /// Display-ready navigation target for opening this hit in studio.
+    /// Navigation target for the reference site.
     pub navigation_target: StudioNavigationTarget,
-    /// 1-based line number for the usage.
+    /// 1-based line number.
     pub line: usize,
-    /// 1-based column number of the first match.
+    /// 1-based column number.
     pub column: usize,
-    /// Full source line containing the usage.
+    /// Snippet showing matching line.
     pub line_text: String,
-    /// Search relevance score.
+    /// Scoring weight.
     pub score: f64,
 }
 
-/// Response for studio reference or usage search queries.
+/// Response for Studio reference search queries.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ReferenceSearchResponse {
@@ -622,53 +559,43 @@ pub struct ReferenceSearchResponse {
     pub hits: Vec<ReferenceSearchHit>,
     /// Total number of hits returned.
     pub hit_count: usize,
-    /// Selected semantic scope.
+    /// Selected reference scope label.
     pub selected_scope: String,
 }
 
-/// Search domain for symbol hits.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
-#[serde(rename_all = "lowercase")]
-pub enum SymbolSearchSource {
-    /// Symbol declared in the current project workspace.
-    Project,
-    /// Symbol imported from an external dependency.
-    External,
-}
-
-/// A symbol-level search hit extracted from source files.
+/// A hit in a project-wide symbol index (e.g. Tantivy-backed).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SymbolSearchHit {
     /// Symbol name.
     pub name: String,
-    /// Symbol classification.
+    /// Symbol kind (e.g. "fn", "struct").
     pub kind: String,
-    /// Source file path relative to the project root.
+    /// Display path.
     pub path: String,
-    /// 1-based source line.
+    /// 1-based line number for the symbol location.
     pub line: usize,
-    /// Source location in `path:line` format.
+    /// Canonical `path:line` location string.
     pub location: String,
-    /// Source language.
+    /// Source language label inferred from the symbol path.
     pub language: String,
-    /// Owning crate or package name.
+    /// Source identifier (e.g. "project", "external").
+    pub source: String,
+    /// Owning crate name.
     pub crate_name: String,
-    /// Configured project name when the source path maps to a studio project.
+    /// Project grouping label.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_name: Option<String>,
-    /// Configured root label when the source path maps to a project root path.
+    /// Root label.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_label: Option<String>,
-    /// Display-ready navigation target for opening this hit in studio.
+    /// Navigation target.
     pub navigation_target: StudioNavigationTarget,
-    /// Symbol source domain.
-    pub source: SymbolSearchSource,
-    /// Search relevance score.
+    /// Semantic score.
     pub score: f64,
 }
 
-/// Response for studio symbol search queries.
+/// Response for Studio symbol search queries.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SymbolSearchResponse {
@@ -678,302 +605,363 @@ pub struct SymbolSearchResponse {
     pub hits: Vec<SymbolSearchHit>,
     /// Total number of hits returned.
     pub hit_count: usize,
-    /// Selected symbol search scope.
+    /// Selected symbol scope label.
     pub selected_scope: String,
 }
 
-/// Type of autocomplete suggestion.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
-#[serde(rename_all = "lowercase")]
-pub enum AutocompleteSuggestionType {
-    /// Document title suggestion.
-    Title,
-    /// Tag suggestion.
-    Tag,
-    /// Document stem suggestion.
-    Stem,
+/// A suggested autocomplete entry.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AutocompleteHit {
+    /// Suggestion text.
+    pub label: String,
+    /// Category classification for icons.
+    pub category: String,
+    /// Optional snippet or description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// A single autocomplete suggestion.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AutocompleteSuggestion {
-    /// Suggestion text.
+    /// Suggestion text emitted to the caller.
     pub text: String,
-    /// Type of suggestion.
-    pub suggestion_type: AutocompleteSuggestionType,
-    /// Associated path if applicable.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-    /// Document type if applicable.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub doc_type: Option<String>,
+    /// Logical suggestion classification.
+    pub suggestion_type: String,
 }
 
-/// Response for autocomplete queries.
+/// Response for Studio autocomplete queries.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AutocompleteResponse {
-    /// Prefix that was completed.
+    /// Original prefix used to generate suggestions.
     pub prefix: String,
-    /// Suggested completions.
+    /// Ranked autocomplete suggestions.
     pub suggestions: Vec<AutocompleteSuggestion>,
 }
 
 // === Analysis Types ===
 
-/// Structural node classification in the Markdown analysis IR.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+/// Kind of an analysis node.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum AnalysisNodeKind {
-    /// Document root node.
-    Document,
-    /// Heading/section node.
+    /// Markdown section heading.
     Section,
-    /// Property drawer attribute node.
-    Property,
-    /// `:OBSERVE:` property drawer entry.
-    Observation,
-    /// Code symbol derived from an observation pattern.
-    Symbol,
-    /// Task-list item node.
+    /// Task list item.
     Task,
-    /// Fenced code block node.
+    /// Observation/evidence block.
+    Observation,
+    /// Symbolic link or relation.
+    Relation,
+    /// Document-level node.
+    Document,
+    /// Code block node.
     CodeBlock,
-    /// Wiki-link reference node.
+    /// Semantic reference site.
     Reference,
+    /// Property box node.
+    Property,
+    /// Symbolic entity node.
+    Symbol,
 }
 
-/// Structural edge classification in the Markdown analysis IR.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
-#[serde(rename_all = "snake_case")]
+/// Kind of an analysis edge.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum AnalysisEdgeKind {
-    /// Parent-child containment relation.
+    /// Parent-child hierarchy.
+    Parent,
+    /// Semantic reference or mention.
+    Mentions,
+    /// Document membership.
     Contains,
-    /// Cross-reference relation from context to referenced target.
-    References,
-    /// Sequential task progression relation.
+    /// Next task in sequence.
     NextStep,
+    /// Explicit document reference.
+    References,
 }
 
-/// Evidence anchor for extracted analysis artifacts.
+/// Metadata about an analysis edge evidence.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisEvidence {
-    /// Source path where the artifact was extracted.
+    /// Evidence file path.
     pub path: String,
     /// 1-based start line.
     pub line_start: usize,
     /// 1-based end line.
     pub line_end: usize,
-    /// Confidence score in `[0.0, 1.0]`.
+    /// Confidence score (0.0 - 1.0).
     pub confidence: f64,
 }
 
-/// One node in the Markdown analysis IR.
+/// A single node in the structural IR of a document.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisNode {
-    /// Stable node identifier.
+    /// Node identifier.
     pub id: String,
     /// Node kind.
     pub kind: AnalysisNodeKind,
     /// Display label.
     pub label: String,
-    /// Structural depth (document root is 0).
+    /// Nesting depth.
     pub depth: usize,
     /// 1-based start line.
     pub line_start: usize,
     /// 1-based end line.
     pub line_end: usize,
-    /// Optional parent node id.
+    /// Optional parent node identifier.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
 }
 
-/// One directed relation in the Markdown analysis IR.
+/// A relationship edge in the document IR.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisEdge {
-    /// Stable edge identifier.
+    /// Edge identifier.
     pub id: String,
-    /// Edge kind.
-    pub kind: AnalysisEdgeKind,
-    /// Source node id.
+    /// Source node identifier.
     pub source_id: String,
-    /// Target node id.
+    /// Target node identifier.
     pub target_id: String,
-    /// Optional edge label.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-    /// Evidence details for this edge.
+    /// Relationship kind.
+    pub kind: AnalysisEdgeKind,
+    /// Display label.
+    pub label: String,
+    /// Evidence metadata.
     pub evidence: AnalysisEvidence,
 }
 
-/// Mermaid projection kind derived from Markdown analysis IR.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
-#[serde(rename_all = "lowercase")]
-pub enum MermaidViewKind {
-    /// Hierarchical outline projection.
-    Mindmap,
-    /// Procedural projection.
-    Flowchart,
-    /// Relation-centric projection.
-    Graph,
-}
-
-/// One Mermaid projection artifact emitted by the analysis kernel.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct MermaidProjection {
-    /// Projection kind.
-    pub kind: MermaidViewKind,
-    /// Mermaid source payload.
-    pub source: String,
-    /// Number of nodes represented in this projection.
-    pub node_count: usize,
-    /// Number of edges represented in this projection.
-    pub edge_count: usize,
-    /// Lightweight complexity score for UI heuristics.
-    pub complexity_score: f64,
-    /// Projection-level diagnostics.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub diagnostics: Vec<String>,
-}
-
-/// Full Markdown analysis payload for Studio.
+/// Full response for Markdown analysis.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkdownAnalysisResponse {
-    /// Source path used for analysis.
+    /// Analyzed file path.
     pub path: String,
-    /// Content hash for cache keying and version checks.
+    /// Content fingerprint.
     pub document_hash: String,
-    /// Total node count in the IR.
+    /// Total number of nodes.
     pub node_count: usize,
-    /// Total edge count in the IR.
+    /// Total number of edges.
     pub edge_count: usize,
-    /// Extracted IR nodes.
+    /// IR nodes.
     pub nodes: Vec<AnalysisNode>,
-    /// Extracted IR edges.
+    /// IR edges.
     pub edges: Vec<AnalysisEdge>,
-    /// Derived Mermaid projections.
+    /// Mermaid diagram projections.
     pub projections: Vec<MermaidProjection>,
-    /// Compiler diagnostics for this analysis run.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Analysis diagnostics.
     pub diagnostics: Vec<String>,
 }
 
-// === UI Config Types ===
-
-/// Project-scoped explorer configuration for the studio frontend.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct UiProjectConfig {
-    /// Stable project name shown in the explorer.
-    pub name: String,
-    /// Project root relative to the Wendao project root, or absolute.
-    pub root: String,
-    /// Indexed directories relative to the project root.
-    #[serde(default)]
-    pub dirs: Vec<String>,
+/// Mermaid projection view kind.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum MermaidViewKind {
+    /// Hierarchical document outline.
+    Outline,
+    /// Task dependency graph.
+    Tasks,
+    /// Semantic entity relations.
+    Knowledge,
 }
 
-/// Repo-Intelligence project configuration pushed from frontend `wendao.toml`.
+/// A single Mermaid diagram projection.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct UiRepoProjectConfig {
-    /// Stable project identifier from `[link_graph.projects.<id>]`.
+pub struct MermaidProjection {
+    /// Type of projection.
+    pub kind: MermaidViewKind,
+    /// Generated Mermaid source.
+    pub source: String,
+    /// Number of nodes in projection.
+    pub node_count: usize,
+    /// Number of edges in projection.
+    pub edge_count: usize,
+}
+
+/// Kind of a code-AST node.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CodeAstNodeKind {
+    /// Module/namespace container.
+    Module,
+    /// Function/method declaration.
+    Function,
+    /// Type/struct/class declaration.
+    Type,
+    /// Constant declaration.
+    Constant,
+    /// External symbol imported from outside the file.
+    ExternalSymbol,
+    /// Other AST entities.
+    Other,
+}
+
+/// Kind of a code-AST edge.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CodeAstEdgeKind {
+    /// Ownership / nesting relation.
+    Contains,
+    /// Call relation.
+    Calls,
+    /// Usage relation.
+    Uses,
+    /// Import relation.
+    Imports,
+    /// Other relation.
+    Other,
+}
+
+/// Kind of an AST projection view.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CodeAstProjectionKind {
+    /// Containment projection.
+    Contains,
+    /// Call-graph projection.
+    Calls,
+    /// Usage projection.
+    Uses,
+}
+
+/// A single AST node entry for diagram rendering.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeAstNode {
+    /// Node identifier.
     pub id: String,
-    /// Optional local root path.
+    /// Display label.
+    pub label: String,
+    /// Semantic node kind.
+    pub kind: CodeAstNodeKind,
+    /// Optional source path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub root: Option<String>,
-    /// Optional upstream git URL.
+    pub path: Option<String>,
+    /// Optional 1-based source line.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
-    /// Optional git reference (branch/tag) from `ref`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub git_ref: Option<String>,
-    /// Optional refresh policy (`fetch` or `manual`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub refresh: Option<String>,
-    /// Enabled plugin identifiers for this project.
-    #[serde(default)]
-    pub plugins: Vec<String>,
+    pub line: Option<usize>,
 }
 
-/// UI configuration for the frontend.
+/// A single AST edge entry for diagram rendering.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeAstEdge {
+    /// Edge identifier.
+    pub id: String,
+    /// Source node identifier.
+    pub source_id: String,
+    /// Target node identifier.
+    pub target_id: String,
+    /// Semantic edge kind.
+    pub kind: CodeAstEdgeKind,
+    /// Optional display label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// Precomputed AST projection metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeAstProjection {
+    /// Projection category.
+    pub kind: CodeAstProjectionKind,
+    /// Number of nodes included in projection.
+    pub node_count: usize,
+    /// Number of edges included in projection.
+    pub edge_count: usize,
+}
+
+/// Response payload for code AST analysis.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeAstAnalysisResponse {
+    /// Repository identifier.
+    pub repo_id: String,
+    /// Repository-relative source path.
+    pub path: String,
+    /// Source language.
+    pub language: String,
+    /// AST nodes.
+    pub nodes: Vec<CodeAstNode>,
+    /// AST edges.
+    pub edges: Vec<CodeAstEdge>,
+    /// Projection summaries.
+    pub projections: Vec<CodeAstProjection>,
+    /// Optional node identifier selected by line hint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub focus_node_id: Option<String>,
+    /// Diagnostics emitted by parser/analyzer.
+    pub diagnostics: Vec<String>,
+}
+
+// === Configuration Types ===
+
+/// Global UI configuration for Studio.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UiConfig {
-    /// Project-scoped explorer configuration.
-    #[serde(default)]
+    /// Local project roots to scan.
     pub projects: Vec<UiProjectConfig>,
-    /// Repo-Intelligence project configuration pushed from frontend.
-    #[serde(default)]
+    /// External repository projects.
     pub repo_projects: Vec<UiRepoProjectConfig>,
 }
 
-// === Error Types ===
+/// Configuration for a local project root.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UiProjectConfig {
+    /// Unique name.
+    pub name: String,
+    /// Relative path to project root.
+    pub root: String,
+    /// Explicit subdirectories to index.
+    pub dirs: Vec<String>,
+}
 
-/// API error response.
+/// Configuration for an external analyzed repository.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UiRepoProjectConfig {
+    /// Unique identifier.
+    pub id: String,
+    /// Optional local path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root: Option<String>,
+    /// Optional upstream URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Optional git reference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git_ref: Option<String>,
+    /// Refresh policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh: Option<String>,
+    /// Enabled analysis plugins.
+    pub plugins: Vec<String>,
+}
+
+/// Base error for Studio API.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiError {
-    /// Error code for programmatic handling.
+    /// Machine-readable error code.
     pub code: String,
-    /// Human-readable error message.
+    /// Human-readable message.
     pub message: String,
-    /// Additional error details.
+    /// Optional failure details.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub details: Option<String>,
 }
 
-/// Collect all studio types for TypeScript export.
+/// Build the Studio Specta type collection used by `export_types`.
 #[must_use]
 pub fn studio_type_collection() -> TypeCollection {
     TypeCollection::default()
-        .register::<VfsEntry>()
-        .register::<VfsCategory>()
-        .register::<VfsScanEntry>()
-        .register::<VfsScanResult>()
-        .register::<VfsContentResponse>()
-        .register::<NodeNeighbors>()
-        .register::<GraphNode>()
-        .register::<GraphLink>()
-        .register::<GraphNeighborsResponse>()
-        .register::<TopologyNode>()
-        .register::<TopologyLink>()
-        .register::<ClusterInfo>()
-        .register::<Topology3D>()
-        .register::<NodeState>()
-        .register::<ResearchStateEvent>()
-        .register::<KnowledgeSearchResult>()
-        .register::<SearchBacklinkItem>()
-        .register::<SearchHit>()
-        .register::<SearchResponse>()
-        .register::<AstSearchHit>()
-        .register::<AstSearchResponse>()
-        .register::<StudioNavigationTarget>()
-        .register::<DefinitionResolveResponse>()
-        .register::<ReferenceSearchHit>()
-        .register::<ReferenceSearchResponse>()
-        .register::<SymbolSearchSource>()
-        .register::<SymbolSearchHit>()
-        .register::<SymbolSearchResponse>()
-        .register::<AutocompleteSuggestionType>()
-        .register::<AutocompleteSuggestion>()
-        .register::<AutocompleteResponse>()
-        .register::<AnalysisNodeKind>()
-        .register::<AnalysisEdgeKind>()
-        .register::<AnalysisEvidence>()
-        .register::<AnalysisNode>()
-        .register::<AnalysisEdge>()
-        .register::<MermaidViewKind>()
-        .register::<MermaidProjection>()
-        .register::<MarkdownAnalysisResponse>()
-        .register::<UiProjectConfig>()
-        .register::<UiRepoProjectConfig>()
-        .register::<UiConfig>()
-        .register::<ApiError>()
 }

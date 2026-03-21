@@ -1,13 +1,14 @@
 use std::path::Path;
 
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_wendao::analyzers::{
     AnalysisContext, DiagnosticRecord, RepoIntelligenceError, RepositoryAnalysisOutput,
     RepositoryRecord,
 };
 
 use super::discovery::{
-    collect_doc_records, collect_example_records, collect_module_records, collect_symbol_records,
-    discover_package_files, discover_package_orders, modules_by_qualified_name,
+    collect_doc_records, collect_example_records, collect_import_records, collect_module_records,
+    collect_symbol_records, discover_package_files, discover_package_orders,
+    modules_by_qualified_name,
 };
 use super::parsing::parse_package_name;
 use super::relations::collect_relation_records;
@@ -15,7 +16,6 @@ use super::relations::collect_relation_records;
 pub(crate) fn analyze_repository(
     context: &AnalysisContext,
     repository_root: &Path,
-    plugin_id: &str,
 ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
     let root_package_path = repository_root.join("package.mo");
     if !root_package_path.is_file() {
@@ -51,6 +51,12 @@ pub(crate) fn analyze_repository(
     );
     let module_lookup = modules_by_qualified_name(&modules);
     let symbols = collect_symbol_records(
+        &context.repository.id,
+        repository_root,
+        root_package_name.as_str(),
+        &module_lookup,
+    )?;
+    let imports = collect_import_records(
         &context.repository.id,
         repository_root,
         root_package_name.as_str(),
@@ -93,14 +99,16 @@ pub(crate) fn analyze_repository(
         }),
         modules,
         symbols,
+        imports,
         examples,
         docs,
         relations,
         diagnostics: vec![DiagnosticRecord {
             repo_id: context.repository.id.clone(),
-            plugin_id: Some(plugin_id.to_string()),
-            path: None,
+            path: "package.mo".to_string(),
+            line: 1,
             message: "Modelica analysis is conservative and currently based on package layout plus lightweight declaration scanning.".to_string(),
+            severity: "info".to_string(),
         }],
     })
 }

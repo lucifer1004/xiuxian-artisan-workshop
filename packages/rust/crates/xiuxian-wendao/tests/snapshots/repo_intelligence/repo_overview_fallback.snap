@@ -1,14 +1,16 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
+assertion_line: 22
 expression: value
 ---
 {
   "diagnostics": [
     {
+      "line": 0,
       "message": "expected root file `src/FallbackPkg.jl` was not found; using `Other.jl` instead",
       "path": "src/Other.jl",
-      "plugin_id": "julia",
-      "repo_id": "fallback"
+      "repo_id": "fallback",
+      "severity": "warning"
     }
   ],
   "docs": [
@@ -168,24 +170,30 @@ expression: value
     {
       "audit_status": "unreviewed",
       "kind": "type",
+      "line_end": null,
+      "line_start": null,
       "module_id": "repo:fallback:module:FallbackPkgAlt",
       "name": "Problem",
       "path": "src/Other.jl",
       "qualified_name": "FallbackPkgAlt.Problem",
       "repo_id": "fallback",
       "signature": null,
-      "symbol_id": "repo:fallback:symbol:FallbackPkgAlt.Problem"
+      "symbol_id": "repo:fallback:symbol:FallbackPkgAlt.Problem",
+      "verification_state": "verified"
     },
     {
       "audit_status": "unreviewed",
       "kind": "function",
+      "line_end": null,
+      "line_start": null,
       "module_id": "repo:fallback:module:FallbackPkgAlt",
       "name": "solve",
       "path": "src/Other.jl",
       "qualified_name": "FallbackPkgAlt.solve",
       "repo_id": "fallback",
       "signature": "solve(problem::Problem)",
-      "symbol_id": "repo:fallback:symbol:FallbackPkgAlt.solve"
+      "symbol_id": "repo:fallback:symbol:FallbackPkgAlt.solve",
+      "verification_state": "verified"
     }
   ]
 }

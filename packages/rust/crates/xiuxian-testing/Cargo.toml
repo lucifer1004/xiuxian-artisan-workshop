@@ -7,12 +7,19 @@ authors = ["CyberXiuXian Artisan Studio"]
 license = "Apache-2.0"
 publish = false
 
+[features]
+default = []
+performance = ["dep:futures", "dep:hdrhistogram", "dep:tokio"]
+
 [dependencies]
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
 async-trait = { workspace = true }
+futures = { workspace = true, optional = true }
+hdrhistogram = { version = "7.5", optional = true }
+tokio = { workspace = true, optional = true }
 
 # Error handling
 anyhow = { workspace = true }

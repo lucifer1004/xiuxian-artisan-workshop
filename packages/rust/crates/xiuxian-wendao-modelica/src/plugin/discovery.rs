@@ -3,11 +3,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
-use xiuxian_wendao::repo_intelligence::{
-    DocRecord, ExampleRecord, ModuleRecord, RepoIntelligenceError, SymbolRecord,
+use xiuxian_wendao::analyzers::{
+    DocRecord, ExampleRecord, ImportRecord, ModuleRecord, RepoIntelligenceError, SymbolRecord,
 };
 
-use super::parsing::{contains_documentation_annotation, parse_symbol_declarations};
+use super::parsing::{contains_documentation_annotation, parse_imports, parse_symbol_declarations};
 use super::relations::{
     annotation_doc_title, doc_targets_for_annotation_doc, doc_targets_for_file_doc,
 };
@@ -183,13 +183,115 @@ pub(crate) fn collect_symbol_records(
                 qualified_name,
                 kind: declaration.kind,
                 path: relative.clone(),
+                line_start: declaration.line_start,
+                line_end: declaration.line_end,
                 signature: Some(declaration.signature),
+                audit_status: None,
+                verification_state: None,
+                attributes: if declaration.equations.is_empty() {
+                    BTreeMap::new()
+                } else {
+                    let mut attrs = BTreeMap::new();
+                    attrs.insert(
+                        "equation_latex".to_string(),
+                        declaration.equations.join("\n\n"),
+                    );
+                    attrs
+                },
             });
         }
     }
 
     symbols.sort_by(|left, right| left.qualified_name.cmp(&right.qualified_name));
     Ok(symbols)
+}
+
+pub(crate) fn collect_import_records(
+    repo_id: &str,
+    repository_root: &Path,
+    root_package_name: &str,
+    modules: &BTreeMap<String, ModuleRecord>,
+) -> Result<Vec<ImportRecord>, RepoIntelligenceError> {
+    let mut imports = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for path in repository_file_paths(repository_root) {
+        if !path.is_file() || path.extension().and_then(std::ffi::OsStr::to_str) != Some("mo") {
+            continue;
+        }
+        let relative = match relative_path(repository_root, &path) {
+            Some(relative) => relative,
+            None => continue,
+        };
+        if repository_surface(relative.as_str()) == RepositorySurface::Support {
+            continue;
+        }
+        let Some(module_qualified_name) =
+            containing_module_name(root_package_name, relative.as_str())
+        else {
+            continue;
+        };
+        let source_module_id = modules
+            .get(module_qualified_name.as_str())
+            .map(|module| module.module_id.clone())
+            .unwrap_or_else(|| module_id(repo_id, module_qualified_name.as_str()));
+
+        let contents =
+            fs::read_to_string(&path).map_err(|error| RepoIntelligenceError::AnalysisFailed {
+                message: format!("failed to read Modelica file `{}`: {error}", path.display()),
+            })?;
+
+        for parsed_import in parse_imports(&contents) {
+            let source_module = parsed_import.name.clone();
+            let import_name = parsed_import
+                .alias
+                .clone()
+                .unwrap_or_else(|| import_leaf_name(source_module.as_str()));
+            let target_package = source_module
+                .split('.')
+                .next()
+                .unwrap_or(source_module.as_str())
+                .to_string();
+            let resolved_id = modules
+                .get(source_module.as_str())
+                .map(|module| module.module_id.clone());
+            let kind_key = match parsed_import.kind {
+                xiuxian_wendao::analyzers::ImportKind::Symbol => "symbol",
+                xiuxian_wendao::analyzers::ImportKind::Module => "module",
+                xiuxian_wendao::analyzers::ImportKind::Reexport => "reexport",
+            };
+            let import_key = (source_module.clone(), import_name.clone(), kind_key);
+            if !seen.insert(import_key) {
+                continue;
+            }
+            imports.push(ImportRecord {
+                repo_id: repo_id.to_string(),
+                module_id: source_module_id.clone(),
+                import_name,
+                target_package,
+                source_module,
+                kind: parsed_import.kind,
+                resolved_id,
+            });
+        }
+    }
+
+    imports.sort_by(|left, right| {
+        left.source_module
+            .cmp(&right.source_module)
+            .then_with(|| left.import_name.cmp(&right.import_name))
+            .then_with(|| left.target_package.cmp(&right.target_package))
+    });
+    Ok(imports)
+}
+
+fn import_leaf_name(import_path: &str) -> String {
+    import_path
+        .rsplit('.')
+        .next()
+        .unwrap_or(import_path)
+        .trim()
+        .to_string()
 }
 
 pub(crate) fn collect_example_records(

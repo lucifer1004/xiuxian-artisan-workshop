@@ -489,14 +489,17 @@ fn scan_roots_carries_project_metadata_on_descendants() {
 
 #[tokio::test]
 async fn scan_roots_and_read_content_support_repo_checkout_roots() {
-    let temp_dir = tempdir()
-        .unwrap_or_else(|err| panic!("failed to create repo root tempdir: {err}"));
+    let temp_dir =
+        tempdir().unwrap_or_else(|err| panic!("failed to create repo root tempdir: {err}"));
     let repo_root = temp_dir.path().join("repos").join("mcl");
     let modelica_dir = repo_root.join("Modelica");
     std::fs::create_dir_all(&modelica_dir)
         .unwrap_or_else(|err| panic!("failed to create repo fixture dirs: {err}"));
-    std::fs::write(modelica_dir.join("package.mo"), "within Modelica; end Modelica;\n")
-        .unwrap_or_else(|err| panic!("failed to write repo fixture file: {err}"));
+    std::fs::write(
+        modelica_dir.join("package.mo"),
+        "within Modelica; end Modelica;\n",
+    )
+    .unwrap_or_else(|err| panic!("failed to write repo fixture file: {err}"));
     Repository::init(&repo_root)
         .unwrap_or_else(|err| panic!("failed to initialize git repo fixture: {err}"));
 

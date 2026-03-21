@@ -85,7 +85,7 @@ fn test_julia_parser_scenarios() {
         .with_snapshot_policy(ScenarioSnapshotPolicy::portable_ci());
     framework.register(Box::new(JuliaParserRunner));
     let count = framework
-        .run_all_at(&scenarios_root)
+        .run_category_at("julia_parser", &scenarios_root)
         .unwrap_or_else(|error| panic!("julia parser scenarios should pass: {error}"));
     assert!(count >= 2, "should run Julia parser scenarios");
 }

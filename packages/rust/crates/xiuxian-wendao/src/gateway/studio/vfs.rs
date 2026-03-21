@@ -1,797 +1,572 @@
-//! VFS (Virtual File System) operations for the studio API.
+//! Virtual File System (VFS) orchestration for Studio API.
 
-use std::io;
+use std::collections::HashSet;
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
-use std::{collections::HashSet, fs};
+use std::time::Instant;
 
-use crate::repo_intelligence::{
-    RegisteredRepository, RepoSyncMode, RepoSyncQuery, repo_sync_for_registered_repository,
-};
+use walkdir::{DirEntry, WalkDir};
 
-use super::pathing;
-use super::router::{StudioState, configured_repositories};
-use super::types::{
-    UiProjectConfig, VfsCategory, VfsContentResponse, VfsEntry, VfsScanEntry, VfsScanResult,
+use crate::analyzers::config::RegisteredRepository;
+use crate::gateway::studio::pathing::resolve_path_like;
+use crate::gateway::studio::router::{StudioState, configured_repositories};
+use crate::gateway::studio::types::{
+    StudioNavigationTarget, VfsCategory, VfsContentResponse, VfsEntry, VfsScanEntry, VfsScanResult,
 };
+use crate::git::checkout::{RepositorySyncMode, resolve_repository_source};
+
+pub type VfsError = crate::gateway::studio::router::StudioApiError;
 
 #[derive(Debug, Clone)]
-struct ResolvedVfsRoot {
-    request_root: String,
-    display_name: String,
-    filesystem_path: PathBuf,
-    project_name: Option<String>,
-    root_label: Option<String>,
-    project_root: Option<String>,
-    project_dirs: Vec<String>,
-    filter_prefix: String,
-    file_filters: Vec<pathing::ProjectFileFilter>,
+pub struct ProjectFileFilter {
+    pub root: PathBuf,
+    pub allowed_subdirs: HashSet<PathBuf>,
 }
 
-#[derive(Debug, Clone)]
-struct ResolvedVfsPath {
-    full_path: PathBuf,
-    root: ResolvedVfsRoot,
-    rest: String,
-}
-
-struct ScanDirectoryConfig<'a> {
-    file_filters: &'a [pathing::ProjectFileFilter],
-    project_name: Option<&'a str>,
-    root_label: Option<&'a str>,
-    project_root: Option<&'a str>,
-    project_dirs: &'a [String],
-}
-
-struct ScanDirectoryCounters<'a> {
-    entries: &'a mut Vec<VfsScanEntry>,
-    file_count: &'a mut usize,
-    dir_count: &'a mut usize,
-}
-
-/// VFS operation error type.
-#[derive(Debug)]
-pub(crate) enum VfsError {
-    Io(io::Error),
-    NotFound(String),
-    UnknownRoot(String),
-}
-
-impl std::fmt::Display for VfsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            VfsError::Io(e) => write!(f, "IO error: {e}"),
-            VfsError::NotFound(path) => write!(f, "Path not found: {path}"),
-            VfsError::UnknownRoot(root) => write!(f, "Unknown VFS root: {root}"),
+impl ProjectFileFilter {
+    pub fn matches(&self, path: &Path) -> bool {
+        if !path.starts_with(&self.root) {
+            return false;
         }
+        if self.allowed_subdirs.is_empty() {
+            return true;
+        }
+        self.allowed_subdirs
+            .iter()
+            .any(|subdir| path.starts_with(subdir))
     }
 }
 
-impl std::error::Error for VfsError {}
-
-impl From<io::Error> for VfsError {
-    fn from(e: io::Error) -> Self {
-        VfsError::Io(e)
-    }
+pub(crate) struct VfsRoot {
+    pub request_root: String,
+    pub full_path: PathBuf,
+    pub project_name: Option<String>,
+    pub root_label: Option<String>,
+    pub filter_prefix: String,
+    pub file_filters: Vec<ProjectFileFilter>,
 }
 
-/// List root entries for the VFS.
-pub(crate) fn list_root_entries(state: &StudioState) -> Vec<VfsEntry> {
-    resolved_vfs_roots(state)
-        .into_iter()
-        .map(|root| VfsEntry {
-            path: root.request_root,
-            name: root.display_name,
-            is_dir: true,
-            size: 0,
-            modified: 0,
-            content_type: None,
-            project_name: root.project_name,
-            root_label: root.root_label,
-            project_root: root.project_root,
-            project_dirs: (!root.project_dirs.is_empty()).then_some(root.project_dirs),
-        })
-        .collect()
+struct VfsCounters {
+    files: usize,
+    dirs: usize,
 }
 
-/// Scan all VFS roots and return a summary.
-pub(crate) fn scan_roots(state: &StudioState) -> VfsScanResult {
+pub(crate) fn scan_all_roots(state: &StudioState) -> VfsScanResult {
     let start = Instant::now();
     let mut entries = Vec::new();
-    let mut file_count = 0;
-    let mut dir_count = 0;
+    let mut counters = VfsCounters { files: 0, dirs: 0 };
 
-    for root in resolved_vfs_roots(state) {
-        dir_count += 1;
-        let modified = fs::metadata(&root.filesystem_path)
-            .ok()
-            .and_then(|metadata| metadata.modified().ok())
-            .and_then(|timestamp| timestamp.duration_since(std::time::UNIX_EPOCH).ok())
-            .map_or(0, |duration| duration.as_secs());
-        entries.push(VfsScanEntry {
-            path: root.request_root.clone(),
-            name: root.display_name.clone(),
-            is_dir: true,
-            category: VfsCategory::Folder,
-            size: 0,
-            modified,
-            content_type: None,
-            has_frontmatter: false,
-            wendao_id: None,
-            project_name: root.project_name.clone(),
-            root_label: root.root_label.clone(),
-            project_root: root.project_root.clone(),
-            project_dirs: (!root.project_dirs.is_empty()).then(|| root.project_dirs.clone()),
-        });
-        let config = ScanDirectoryConfig {
-            file_filters: root.file_filters.as_slice(),
-            project_name: root.project_name.as_deref(),
-            root_label: root.root_label.as_deref(),
-            project_root: root.project_root.as_deref(),
-            project_dirs: root.project_dirs.as_slice(),
-        };
-        let mut counters = ScanDirectoryCounters {
-            entries: &mut entries,
-            file_count: &mut file_count,
-            dir_count: &mut dir_count,
-        };
+    let roots = resolve_all_vfs_roots(state);
+    let config = state.ui_config();
+
+    for root in roots {
         scan_directory(
-            root.filesystem_path.as_path(),
+            &root.full_path,
+            root.project_name.as_deref(),
+            root.root_label.as_deref(),
             root.request_root.as_str(),
             root.filter_prefix.as_str(),
             &config,
             &mut counters,
+            &root.file_filters,
+            &mut entries,
         );
     }
 
     VfsScanResult {
         entries,
-        file_count,
-        dir_count,
-        scan_duration_ms: elapsed_millis_u64(start.elapsed()),
+        file_count: counters.files,
+        dir_count: counters.dirs,
+        scan_duration_ms: start.elapsed().as_millis() as u64,
     }
 }
 
-/// Get a single VFS entry by path.
-pub(crate) fn get_entry(state: &StudioState, path: &str) -> Result<VfsEntry, VfsError> {
-    let resolved = resolve_vfs_path(state, path)?;
-    let full_path = resolved.full_path;
-
-    if !full_path.exists() {
-        return Err(VfsError::NotFound(path.to_string()));
+pub(crate) fn scan_roots(state: &StudioState) -> VfsScanResult {
+    if let Some(existing) = state
+        .vfs_scan
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+    {
+        return existing.clone();
     }
 
-    let metadata = std::fs::metadata(&full_path)?;
-    if metadata.is_file() {
-        let filter_path =
-            join_filter_path(resolved.root.filter_prefix.as_str(), resolved.rest.as_str());
-        if !matches_file_filters(filter_path.as_str(), resolved.root.file_filters.as_slice()) {
-            return Err(VfsError::NotFound(path.to_string()));
-        }
+    let result = scan_all_roots(state);
+    let mut guard = state
+        .vfs_scan
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(existing) = guard.as_ref() {
+        return existing.clone();
     }
-    let is_dir = metadata.is_dir();
-    let name = full_path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
-
-    Ok(VfsEntry {
-        path: path.to_string(),
-        name,
-        is_dir,
-        size: metadata.len(),
-        modified: metadata
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map_or(0, |d| d.as_secs()),
-        content_type: if is_dir {
-            None
-        } else {
-            Some(guess_content_type(&full_path))
-        },
-        project_name: resolved.root.project_name.clone(),
-        root_label: resolved.root.root_label.clone(),
-        project_root: resolved.root.project_root.clone(),
-        project_dirs: (!resolved.root.project_dirs.is_empty())
-            .then(|| resolved.root.project_dirs.clone()),
-    })
+    *guard = Some(result.clone());
+    result
 }
 
-/// Read file content from VFS.
-pub(crate) async fn read_content(
-    state: &StudioState,
-    path: &str,
-) -> Result<VfsContentResponse, VfsError> {
-    let resolved = resolve_vfs_path(state, path)?;
-    let full_path = resolved.full_path;
+pub(crate) fn list_root_entries(state: &StudioState) -> Vec<VfsEntry> {
+    let mut entries = Vec::new();
 
-    if !full_path.exists() {
-        return Err(VfsError::NotFound(path.to_string()));
+    for root in resolve_all_vfs_roots(state) {
+        let metadata = fs::metadata(root.full_path.as_path()).ok();
+        let modified = metadata
+            .as_ref()
+            .and_then(|value| value.modified().ok())
+            .and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |duration| duration.as_secs());
+        let project_dirs = root.file_filters.first().map(|filter| {
+            filter
+                .allowed_subdirs
+                .iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+        });
+        entries.push(VfsEntry {
+            path: root.request_root.clone(),
+            name: root
+                .root_label
+                .clone()
+                .or_else(|| root.project_name.clone())
+                .unwrap_or_else(|| root.request_root.clone()),
+            is_dir: metadata.as_ref().map_or(true, fs::Metadata::is_dir),
+            size: metadata.as_ref().map_or(0, fs::Metadata::len),
+            modified,
+            content_type: None,
+            project_name: root.project_name.clone(),
+            root_label: root.root_label.clone(),
+            project_root: Some(root.full_path.to_string_lossy().to_string()),
+            project_dirs,
+        });
     }
-    let metadata = std::fs::metadata(&full_path)?;
-    if metadata.is_file() {
-        let filter_path =
-            join_filter_path(resolved.root.filter_prefix.as_str(), resolved.rest.as_str());
-        if !matches_file_filters(filter_path.as_str(), resolved.root.file_filters.as_slice()) {
-            return Err(VfsError::NotFound(path.to_string()));
-        }
-    }
 
-    let content = tokio::fs::read_to_string(&full_path)
-        .await
-        .map_err(VfsError::Io)?;
-    let content_type = guess_content_type(&full_path);
-
-    Ok(VfsContentResponse {
-        path: path.to_string(),
-        content,
-        content_type,
-    })
+    entries.sort_by(|left, right| left.path.cmp(&right.path));
+    entries
 }
 
-fn scan_directory(
-    base: &Path,
-    prefix: &str,
-    filter_prefix: &str,
-    config: &ScanDirectoryConfig<'_>,
-    counters: &mut ScanDirectoryCounters<'_>,
-) {
-    if let Ok(dir_entries) = std::fs::read_dir(base) {
-        for entry in dir_entries.flatten() {
-            let path = entry.path();
-            let relative = format!("{}/{}", prefix, entry.file_name().to_string_lossy());
-            let filter_relative =
-                join_filter_path(filter_prefix, entry.file_name().to_string_lossy().as_ref());
-            let metadata = entry.metadata().ok();
+pub(crate) fn resolve_navigation_target(state: &StudioState, path: &str) -> StudioNavigationTarget {
+    let normalized = path.trim().trim_start_matches('/').to_string();
+    let project_name = state
+        .configured_projects()
+        .into_iter()
+        .find(|project| {
+            normalized == project.name
+                || normalized.starts_with(format!("{}/", project.name).as_str())
+        })
+        .map(|project| project.name);
 
-            if path.is_dir() {
-                *counters.dir_count += 1;
-                counters.entries.push(VfsScanEntry {
-                    path: relative.clone(),
-                    name: entry.file_name().to_string_lossy().to_string(),
-                    is_dir: true,
-                    category: VfsCategory::Folder,
-                    size: 0,
-                    modified: metadata
-                        .as_ref()
-                        .and_then(|m| m.modified().ok())
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map_or(0, |d| d.as_secs()),
-                    content_type: None,
-                    has_frontmatter: false,
-                    wendao_id: None,
-                    project_name: config.project_name.map(ToOwned::to_owned),
-                    root_label: config.root_label.map(ToOwned::to_owned),
-                    project_root: config.project_root.map(ToOwned::to_owned),
-                    project_dirs: (!config.project_dirs.is_empty())
-                        .then(|| config.project_dirs.to_vec()),
-                });
-                scan_directory(&path, &relative, filter_relative.as_str(), config, counters);
-            } else {
-                if !matches_file_filters(filter_relative.as_str(), config.file_filters) {
-                    continue;
-                }
-                *counters.file_count += 1;
-                let has_frontmatter = is_markdown_with_frontmatter(&path);
-                counters.entries.push(VfsScanEntry {
-                    path: relative,
-                    name: entry.file_name().to_string_lossy().to_string(),
-                    is_dir: false,
-                    category: classify_file_category(prefix, &path),
-                    size: metadata.as_ref().map_or(0, std::fs::Metadata::len),
-                    modified: metadata
-                        .as_ref()
-                        .and_then(|m| m.modified().ok())
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map_or(0, |d| d.as_secs()),
-                    content_type: Some(guess_content_type(&path)),
-                    has_frontmatter,
-                    wendao_id: None,
-                    project_name: config.project_name.map(ToOwned::to_owned),
-                    root_label: config.root_label.map(ToOwned::to_owned),
-                    project_root: config.project_root.map(ToOwned::to_owned),
-                    project_dirs: (!config.project_dirs.is_empty())
-                        .then(|| config.project_dirs.to_vec()),
-                });
-            }
-        }
-    }
-}
-
-fn resolved_vfs_roots(state: &StudioState) -> Vec<ResolvedVfsRoot> {
-    let mut roots = Vec::new();
-    let mut seen_fs_paths = HashSet::new();
-
-    for project in state.configured_projects() {
-        let file_filters = project_file_filters(&project);
-        for configured in &project.dirs {
-            push_root(
-                &mut roots,
-                &mut seen_fs_paths,
-                resolve_project_root_candidate(
-                    state,
-                    &project,
-                    configured.as_str(),
-                    file_filters.clone(),
-                ),
-            );
-        }
-    }
-
-    for repository in configured_repositories(state) {
-        push_root(
-            &mut roots,
-            &mut seen_fs_paths,
-            resolve_repo_checkout_root_candidate(state, repository),
-        );
-    }
-
-    assign_request_roots(&mut roots);
-    roots
-}
-
-fn resolve_repo_checkout_root_candidate(
-    state: &StudioState,
-    repository: RegisteredRepository,
-) -> Option<ResolvedVfsRoot> {
-    let sync = repo_sync_for_registered_repository(
-        &RepoSyncQuery {
-            repo_id: repository.id.clone(),
-            mode: RepoSyncMode::Status,
-        },
-        &repository,
-        state.project_root.as_path(),
-    )
-    .ok()?;
-    let filesystem_path = PathBuf::from(sync.checkout_path.as_str());
-    if !filesystem_path.exists() {
-        return None;
-    }
-
-    let repo_id = repository.id;
-    Some(ResolvedVfsRoot {
-        request_root: repo_id.clone(),
-        display_name: repo_id.clone(),
-        filesystem_path: filesystem_path.clone(),
-        project_name: Some(repo_id.clone()),
-        root_label: Some(repo_id),
-        project_root: Some(normalize_path_string(filesystem_path.as_path())),
-        project_dirs: vec![".".to_string()],
-        filter_prefix: String::new(),
-        file_filters: Vec::new(),
-    })
-}
-
-pub(crate) fn graph_lookup_candidates(state: &StudioState, requested_path: &str) -> Vec<String> {
-    let mut candidates = Vec::new();
-    let normalized_requested_path = requested_path.trim().replace('\\', "/");
-    push_unique_candidate(&mut candidates, normalized_requested_path.clone());
-
-    if let Some(stripped_dollar) = normalized_requested_path.strip_prefix('$') {
-        push_unique_candidate(&mut candidates, stripped_dollar.to_string());
-    }
-
-    let semantic_candidates = semantic_lookup_candidates(normalized_requested_path.as_str());
-    for candidate in semantic_candidates {
-        push_unique_candidate(&mut candidates, candidate);
-    }
-
-    let path_candidates = candidates.clone();
-    for candidate in path_candidates {
-        if let Ok(resolved) = resolve_vfs_path(state, candidate.as_str()) {
-            let full_path = resolved.full_path;
-            push_unique_candidate(
-                &mut candidates,
-                normalize_graph_index_path(state, full_path.as_path()),
-            );
-            push_unique_candidate(&mut candidates, normalize_path_string(full_path.as_path()));
-        }
-    }
-
-    candidates
-}
-
-pub(crate) fn resolve_navigation_target(
-    state: &StudioState,
-    requested_path: &str,
-) -> super::types::StudioNavigationTarget {
-    let candidates = graph_lookup_candidates(state, requested_path);
-
-    for candidate in &candidates {
-        if let Ok(entry) = get_entry(state, candidate.as_str()) {
-            let (project_name, root_label) =
-                navigation_target_project_metadata(state, entry.path.as_str());
-            return super::types::StudioNavigationTarget {
-                path: entry.path.clone(),
-                category: inferred_navigation_category(entry.path.as_str(), entry.is_dir),
-                project_name: entry.project_name.or(project_name),
-                root_label: entry.root_label.or(root_label),
-                line: None,
-                line_end: None,
-                column: None,
-            };
-        }
-    }
-
-    let fallback_path = candidates
-        .iter()
-        .find(|candidate| !has_semantic_prefix(candidate.as_str()))
-        .cloned()
-        .unwrap_or_else(|| requested_path.trim().replace('\\', "/"));
-    let (project_name, root_label) =
-        navigation_target_project_metadata(state, fallback_path.as_str());
-
-    super::types::StudioNavigationTarget {
-        path: fallback_path.clone(),
-        category: inferred_navigation_category(fallback_path.as_str(), false),
+    StudioNavigationTarget {
+        path: normalized,
+        category: "file".to_string(),
         project_name,
-        root_label,
+        root_label: None,
         line: None,
         line_end: None,
         column: None,
     }
 }
 
-fn navigation_target_project_metadata(
-    state: &StudioState,
-    path: &str,
-) -> (Option<String>, Option<String>) {
-    resolved_vfs_roots(state)
-        .into_iter()
-        .filter_map(|root| {
-            if path == root.request_root {
-                return Some((root.request_root.len(), root.project_name, root.root_label));
-            }
+fn resolve_all_vfs_roots(state: &StudioState) -> Vec<VfsRoot> {
+    let mut roots = Vec::new();
+    let projects = state.configured_projects();
 
-            path.strip_prefix(root.request_root.as_str())
-                .filter(|suffix| suffix.starts_with('/'))
-                .map(|_| (root.request_root.len(), root.project_name, root.root_label))
-        })
-        .max_by_key(|(request_root_len, _, _)| *request_root_len)
-        .map(|(_, project_name, root_label)| (project_name, root_label))
-        .unwrap_or((None, None))
-}
+    for project in projects {
+        let project_name = Some(project.name.clone());
+        let project_root = match resolve_path_like(&state.config_root, project.root.as_str()) {
+            Some(p) => p,
+            None => continue,
+        };
 
-fn semantic_lookup_candidates(requested_path: &str) -> Vec<String> {
-    let mut candidates = Vec::new();
-    let without_dollar = requested_path.strip_prefix('$').unwrap_or(requested_path);
-    if let Some(rest) = strip_ascii_prefix_case_insensitive(without_dollar, "wendao://") {
-        let normalized = rest.trim_start_matches('/').to_string();
-        push_unique_candidate(&mut candidates, normalized);
+        let file_filters = compile_project_filters(&project_root, &project.dirs);
+
+        roots.push(VfsRoot {
+            request_root: project.name.clone(),
+            full_path: project_root,
+            project_name,
+            root_label: None,
+            filter_prefix: String::new(),
+            file_filters,
+        });
     }
-    if let Some(rest) = strip_ascii_prefix_case_insensitive(without_dollar, "id:") {
-        let normalized = rest.trim_start_matches('/').to_string();
-        push_unique_candidate(&mut candidates, normalized);
-    }
-    candidates
-}
 
-fn strip_ascii_prefix_case_insensitive<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
-    value
-        .get(..prefix.len())
-        .filter(|candidate| candidate.eq_ignore_ascii_case(prefix))
-        .map(|_| &value[prefix.len()..])
-}
-
-fn has_semantic_prefix(value: &str) -> bool {
-    let trimmed = value.trim_start_matches('$');
-    trimmed
-        .get(..9)
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("wendao://"))
-        || trimmed
-            .get(..3)
-            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("id:"))
-}
-
-fn inferred_navigation_category(path: &str, is_dir: bool) -> String {
-    if is_dir {
-        return "folder".to_string();
-    }
-    if path.starts_with("knowledge/") {
-        return "knowledge".to_string();
-    }
-    if path.ends_with("SKILL.md") {
-        return "skill".to_string();
-    }
-    "doc".to_string()
-}
-
-pub(crate) fn studio_display_path(state: &StudioState, graph_path: &str) -> String {
-    let full_path = graph_path_to_filesystem_path(state, graph_path);
-    let mut best_match: Option<(usize, String)> = None;
-
-    for root in resolved_vfs_roots(state) {
-        let Ok(rest) = full_path.strip_prefix(&root.filesystem_path) else {
+    let repositories = configured_repositories(state);
+    for repository in repositories {
+        let Some(root) = resolve_repo_vfs_root(state, &repository) else {
             continue;
         };
-        let rest = normalize_relative_path(rest);
-        let candidate = if rest.is_empty() {
-            root.request_root
-        } else {
-            format!("{}/{}", root.request_root, rest)
-        };
-        let depth = root.filesystem_path.components().count();
-        match &best_match {
-            Some((best_depth, _)) if *best_depth >= depth => {}
-            _ => best_match = Some((depth, candidate)),
-        }
+        roots.push(root);
     }
 
-    best_match.map_or_else(|| graph_path.replace('\\', "/"), |(_, path)| path)
+    roots
 }
 
-fn push_root(
-    roots: &mut Vec<ResolvedVfsRoot>,
-    seen_fs_paths: &mut HashSet<String>,
-    candidate: Option<ResolvedVfsRoot>,
+fn resolve_repo_vfs_root(
+    state: &StudioState,
+    repository: &RegisteredRepository,
+) -> Option<VfsRoot> {
+    let source = resolve_repository_source(
+        repository,
+        state.config_root.as_path(),
+        RepositorySyncMode::Status,
+    )
+    .ok()?;
+
+    if !source.checkout_root.is_dir() {
+        return None;
+    }
+
+    let checkout_root = source.checkout_root;
+    Some(VfsRoot {
+        request_root: repository.id.clone(),
+        full_path: checkout_root.clone(),
+        project_name: Some(repository.id.clone()),
+        root_label: None,
+        filter_prefix: String::new(),
+        file_filters: vec![ProjectFileFilter {
+            root: checkout_root,
+            allowed_subdirs: HashSet::new(),
+        }],
+    })
+}
+
+fn compile_project_filters(root: &Path, dirs: &[String]) -> Vec<ProjectFileFilter> {
+    let mut allowed_subdirs = HashSet::new();
+    for dir in dirs {
+        allowed_subdirs.insert(root.join(dir));
+    }
+    vec![ProjectFileFilter {
+        root: root.to_path_buf(),
+        allowed_subdirs,
+    }]
+}
+
+#[allow(clippy::too_many_arguments)]
+fn scan_directory(
+    dir_path: &Path,
+    project_name: Option<&str>,
+    root_label: Option<&str>,
+    request_root: &str,
+    filter_prefix: &str,
+    _config: &crate::gateway::studio::types::UiConfig,
+    counters: &mut VfsCounters,
+    filters: &[ProjectFileFilter],
+    entries: &mut Vec<VfsScanEntry>,
 ) {
-    let Some(candidate) = candidate else {
-        return;
-    };
-    if !candidate.filesystem_path.exists() {
-        return;
-    }
-
-    let normalized_fs_path = candidate
-        .filesystem_path
-        .to_string_lossy()
-        .replace('\\', "/");
-    if !seen_fs_paths.insert(normalized_fs_path) {
-        return;
-    }
-
-    roots.push(candidate);
-}
-
-fn assign_request_roots(roots: &mut [ResolvedVfsRoot]) {
-    let mut seen_labels = HashSet::new();
-    let mut duplicate_labels = HashSet::new();
-
-    for root in roots.iter() {
-        if !seen_labels.insert(root.request_root.clone()) {
-            duplicate_labels.insert(root.request_root.clone());
-        }
-    }
-
-    let mut seen_request_roots = HashSet::new();
-    for root in roots.iter_mut() {
-        if duplicate_labels.contains(root.request_root.as_str())
-            && let (Some(project_name), Some(root_label)) =
-                (root.project_name.as_deref(), root.root_label.as_deref())
-        {
-            root.request_root = scoped_request_root(project_name, root_label);
-        }
-
-        if !seen_request_roots.insert(root.request_root.clone()) {
-            let mut suffix = 2usize;
-            loop {
-                let alternative = format!("{}-{suffix}", root.request_root);
-                if seen_request_roots.insert(alternative.clone()) {
-                    root.request_root = alternative;
-                    break;
-                }
-                suffix += 1;
-            }
-        }
-    }
-}
-
-fn resolve_project_root_candidate(
-    state: &StudioState,
-    project: &UiProjectConfig,
-    raw: &str,
-    file_filters: Vec<pathing::ProjectFileFilter>,
-) -> Option<ResolvedVfsRoot> {
-    let normalized = normalize_configured_root(raw)?;
-    let filesystem_path =
-        resolve_project_filesystem_root(state, project.root.as_str(), normalized.as_str())?;
-    let root_label = configured_root_label(
-        normalized.as_str(),
-        filesystem_path.as_path(),
-        project.name.as_str(),
-    )?;
-    let filter_prefix = if normalized == "." {
-        String::new()
-    } else {
-        normalized.clone()
-    };
-    Some(ResolvedVfsRoot {
-        display_name: root_label.clone(),
-        request_root: root_label.clone(),
-        filesystem_path,
-        project_name: Some(project.name.clone()),
-        root_label: Some(root_label),
-        project_root: Some(project.root.clone()),
-        project_dirs: project.dirs.clone(),
-        filter_prefix,
-        file_filters,
-    })
-}
-
-fn normalize_configured_root(raw: &str) -> Option<String> {
-    pathing::normalize_project_dir_root(raw)
-}
-
-fn resolve_project_filesystem_root(
-    state: &StudioState,
-    root: &str,
-    normalized: &str,
-) -> Option<PathBuf> {
-    let project_root = pathing::resolve_path_like(state.config_root.as_path(), root)?;
-    pathing::resolve_path_like(project_root.as_path(), normalized)
-}
-
-fn configured_root_label(
-    normalized: &str,
-    filesystem_path: &Path,
-    project_name: &str,
-) -> Option<String> {
-    if normalized == "." {
-        return Some(project_name.to_string());
-    }
-    root_leaf_label(normalized, filesystem_path).or_else(|| Some(project_name.to_string()))
-}
-
-fn root_leaf_label(normalized: &str, filesystem_path: &Path) -> Option<String> {
-    filesystem_path.file_name().map_or_else(
-        || {
-            normalized
-                .rsplit('/')
-                .find(|segment| !segment.trim().is_empty())
-                .map(ToOwned::to_owned)
-        },
-        |component| Some(component.to_string_lossy().to_string()),
-    )
-}
-
-fn scoped_request_root(project_name: &str, root_label: &str) -> String {
-    if root_label == project_name {
-        project_name.to_string()
-    } else {
-        format!("{project_name}/{root_label}")
-    }
-}
-
-fn normalize_graph_index_path(state: &StudioState, full_path: &Path) -> String {
-    full_path.strip_prefix(&state.project_root).map_or_else(
-        |_| normalize_path_string(full_path),
-        normalize_relative_path,
-    )
-}
-
-fn graph_path_to_filesystem_path(state: &StudioState, graph_path: &str) -> PathBuf {
-    let candidate = Path::new(graph_path);
-    if candidate.is_absolute() {
-        candidate.to_path_buf()
-    } else {
-        state.project_root.join(candidate)
-    }
-}
-
-fn normalize_path_string(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
-}
-
-fn normalize_relative_path(path: &Path) -> String {
-    normalize_path_string(path)
-        .trim_start_matches("./")
-        .to_string()
-}
-
-fn push_unique_candidate(candidates: &mut Vec<String>, candidate: String) {
-    if candidate.is_empty() || candidates.iter().any(|existing| existing == &candidate) {
-        return;
-    }
-    candidates.push(candidate);
-}
-
-fn resolve_vfs_path(
-    state: &StudioState,
-    requested_path: &str,
-) -> Result<ResolvedVfsPath, VfsError> {
-    let normalized_request = requested_path.trim().replace('\\', "/");
-    let Some((candidate, normalized_rest)) = resolved_vfs_roots(state)
+    let walk = WalkDir::new(dir_path)
+        .max_depth(10)
         .into_iter()
-        .filter_map(|candidate| {
-            if normalized_request == candidate.request_root {
-                return Some((candidate, String::new()));
-            }
+        .filter_entry(|e| !should_skip_entry(e));
 
-            normalized_request
-                .strip_prefix(candidate.request_root.as_str())
-                .filter(|suffix| suffix.starts_with('/'))
-                .map(|suffix| (candidate, suffix.trim_start_matches('/').to_string()))
-        })
-        .max_by_key(|(candidate, _)| candidate.request_root.len())
-    else {
-        let unknown_root = normalized_request
-            .split('/')
-            .next()
-            .unwrap_or(normalized_request.as_str())
-            .to_string();
-        return Err(VfsError::UnknownRoot(unknown_root));
-    };
-    let full_path = if normalized_rest.is_empty() {
-        candidate.filesystem_path.clone()
-    } else {
-        candidate.filesystem_path.join(normalized_rest.as_str())
-    };
-    Ok(ResolvedVfsPath {
-        full_path,
-        root: candidate,
-        rest: normalized_rest,
+    for entry in walk.flatten() {
+        let path = entry.path();
+        if !filters.iter().any(|f| f.matches(path)) {
+            continue;
+        }
+
+        let metadata = entry.metadata().ok();
+        let size = metadata.as_ref().map_or(0, fs::Metadata::len);
+        let modified = metadata
+            .as_ref()
+            .and_then(|value| value.modified().ok())
+            .and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |duration| duration.as_secs());
+
+        let is_dir = entry.file_type().is_dir();
+        if is_dir {
+            counters.dirs += 1;
+        } else {
+            counters.files += 1;
+        }
+
+        let rel_path = path.strip_prefix(dir_path).unwrap_or(path);
+        let display_path = if filter_prefix.is_empty() {
+            format!("{}/{}", request_root, rel_path.display())
+        } else {
+            format!("{}/{}/{}", request_root, filter_prefix, rel_path.display())
+        };
+
+        entries.push(VfsScanEntry {
+            path: display_path.replace('\\', "/"),
+            name: entry.file_name().to_string_lossy().to_string(),
+            is_dir,
+            category: guess_category(entry.path()),
+            size,
+            modified,
+            content_type: None,
+            has_frontmatter: false,
+            wendao_id: None,
+            project_name: project_name.map(String::from),
+            root_label: root_label.map(String::from),
+            project_root: None,
+            project_dirs: None,
+        });
+    }
+}
+
+fn should_skip_entry(entry: &DirEntry) -> bool {
+    let name = entry.file_name().to_string_lossy();
+    name.starts_with('.') || name == "target" || name == "node_modules"
+}
+
+fn guess_category(path: &Path) -> VfsCategory {
+    if path.is_dir() {
+        return VfsCategory::Folder;
+    }
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("md") | Some("markdown") => VfsCategory::Doc,
+        Some("skill") => VfsCategory::Skill,
+        _ => VfsCategory::Other,
+    }
+}
+
+pub(crate) fn get_entry(state: &StudioState, path: &str) -> Result<VfsEntry, VfsError> {
+    let resolved = resolve_vfs_path(state, path)?;
+    let metadata = fs::metadata(&resolved.full_path)
+        .map_err(|e| VfsError::internal("IO_ERROR", e.to_string(), None))?;
+
+    Ok(VfsEntry {
+        path: path.to_string(),
+        name: resolved
+            .full_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string(),
+        is_dir: metadata.is_dir(),
+        size: metadata.len(),
+        modified: metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+        content_type: None,
+        project_name: None,
+        root_label: None,
+        project_root: None,
+        project_dirs: None,
     })
 }
 
-fn project_file_filters(project: &UiProjectConfig) -> Vec<pathing::ProjectFileFilter> {
-    project
-        .dirs
-        .iter()
-        .filter_map(|entry| pathing::compile_project_dir_filter(entry.as_str()))
-        .collect()
+pub(crate) async fn read_content(
+    state: &StudioState,
+    path: &str,
+) -> Result<VfsContentResponse, VfsError> {
+    let resolved = resolve_vfs_path(state, path)?;
+    let content = fs::read_to_string(&resolved.full_path)
+        .map_err(|e| VfsError::internal("IO_ERROR", e.to_string(), None))?;
+    let metadata = fs::metadata(&resolved.full_path)
+        .map_err(|e| VfsError::internal("IO_ERROR", e.to_string(), None))?;
+
+    Ok(VfsContentResponse {
+        path: path.to_string(),
+        content_type: "text/plain".to_string(),
+        content,
+        modified: metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+    })
 }
 
-fn join_filter_path(prefix: &str, path: &str) -> String {
-    let normalized_path = path.trim_start_matches('/').replace('\\', "/");
-    if prefix.is_empty() || prefix == "." {
-        normalized_path
-    } else if normalized_path.is_empty() {
-        prefix.to_string()
-    } else {
-        format!("{prefix}/{normalized_path}")
+struct ResolvedVfsPath {
+    full_path: PathBuf,
+}
+
+fn resolve_vfs_path(state: &StudioState, path: &str) -> Result<ResolvedVfsPath, VfsError> {
+    for root in resolve_all_vfs_roots(state) {
+        if path == root.request_root {
+            return Ok(ResolvedVfsPath {
+                full_path: root.full_path,
+            });
+        }
+        let prefix = format!("{}/", root.request_root);
+        if path.starts_with(&prefix) {
+            let rel = &path[prefix.len()..];
+            return Ok(ResolvedVfsPath {
+                full_path: root.full_path.join(rel),
+            });
+        }
     }
-}
-
-fn matches_file_filters(path: &str, filters: &[pathing::ProjectFileFilter]) -> bool {
-    pathing::matches_project_file_filters(path, filters)
-}
-
-fn classify_file_category(root: &str, path: &Path) -> VfsCategory {
-    let root_leaf = root.rsplit('/').next().unwrap_or(root);
-    if path.file_name().and_then(|name| name.to_str()) == Some("SKILL.md")
-        || root_leaf.contains("skill")
-    {
-        VfsCategory::Skill
-    } else if root_leaf == "knowledge" {
-        VfsCategory::Knowledge
-    } else if matches!(
-        path.extension().and_then(|ext| ext.to_str()),
-        Some("md" | "markdown" | "bpmn")
-    ) {
-        VfsCategory::Doc
-    } else {
-        VfsCategory::Other
-    }
-}
-
-fn is_markdown_with_frontmatter(path: &Path) -> bool {
-    if path.extension().and_then(|e| e.to_str()) != Some("md") {
-        return false;
-    }
-    if let Ok(content) = std::fs::read_to_string(path) {
-        content.starts_with("---\n")
-    } else {
-        false
-    }
-}
-
-fn elapsed_millis_u64(elapsed: Duration) -> u64 {
-    u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
-}
-
-fn guess_content_type(path: &Path) -> String {
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("md") => "text/markdown".to_string(),
-        Some("py") => "text/x-python".to_string(),
-        Some("rs") => "text/x-rust".to_string(),
-        Some("toml") => "application/toml".to_string(),
-        Some("json") => "application/json".to_string(),
-        Some("yaml" | "yml") => "application/yaml".to_string(),
-        _ => "text/plain".to_string(),
-    }
+    Err(VfsError::not_found(format!("VFS path not found: {path}")))
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/gateway/studio/vfs.rs"]
-mod tests;
+mod tests {
+    use std::fs;
+    use std::path::Path;
+
+    use git2::{Repository, Signature};
+    use uuid::Uuid;
+
+    use super::{resolve_all_vfs_roots, resolve_vfs_path, scan_all_roots, scan_roots};
+    use crate::gateway::studio::router::{StudioState, configured_repositories};
+    use crate::gateway::studio::types::{UiConfig, UiRepoProjectConfig};
+    use crate::git::checkout::{RepositorySyncMode, resolve_repository_source};
+
+    fn init_git_repository(root: &Path) {
+        let repository = Repository::init(root).expect("init repository");
+        fs::write(
+            root.join("Project.toml"),
+            "name = \"BaseModelica\"\nversion = \"0.1.0\"\n",
+        )
+        .expect("write project file");
+        fs::create_dir_all(root.join("src")).expect("create src dir");
+        fs::write(
+            root.join("src").join("BaseModelica.jl"),
+            "module BaseModelica\nend\n",
+        )
+        .expect("write julia source");
+
+        let mut index = repository.index().expect("open index");
+        index
+            .add_path(Path::new("Project.toml"))
+            .expect("stage project file");
+        index
+            .add_path(Path::new("src/BaseModelica.jl"))
+            .expect("stage source file");
+        let tree_id = index.write_tree().expect("write tree");
+        let tree = repository.find_tree(tree_id).expect("find tree");
+        let signature = Signature::now("vfs-test", "vfs-test@example.com").expect("signature");
+        repository
+            .commit(Some("HEAD"), &signature, &signature, "init", &tree, &[])
+            .expect("commit");
+    }
+
+    #[test]
+    fn scan_all_roots_includes_repo_project_checkout_entries() {
+        let source = tempfile::tempdir().expect("tempdir");
+        init_git_repository(source.path());
+        let repo_id = format!("repo-vfs-{}", Uuid::new_v4());
+        let state = StudioState::new();
+        state.set_ui_config(UiConfig {
+            projects: Vec::new(),
+            repo_projects: vec![UiRepoProjectConfig {
+                id: repo_id.clone(),
+                root: None,
+                url: Some(source.path().display().to_string()),
+                git_ref: None,
+                refresh: Some("manual".to_string()),
+                plugins: vec!["julia".to_string()],
+            }],
+        });
+        let repositories = configured_repositories(&state);
+        let repository = repositories.first().expect("configured repository");
+        resolve_repository_source(
+            repository,
+            state.config_root.as_path(),
+            RepositorySyncMode::Ensure,
+        )
+        .expect("materialize checkout before scan");
+
+        let result = scan_all_roots(&state);
+
+        assert!(
+            result
+                .entries
+                .iter()
+                .any(|entry| entry.path == format!("{repo_id}/src/BaseModelica.jl"))
+        );
+
+        for root in resolve_all_vfs_roots(&state) {
+            if root.request_root == repo_id && root.full_path.exists() {
+                fs::remove_dir_all(root.full_path).expect("cleanup managed checkout");
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_vfs_path_supports_repo_project_checkout_files() {
+        let source = tempfile::tempdir().expect("tempdir");
+        init_git_repository(source.path());
+        let repo_id = format!("repo-vfs-resolve-{}", Uuid::new_v4());
+        let state = StudioState::new();
+        state.set_ui_config(UiConfig {
+            projects: Vec::new(),
+            repo_projects: vec![UiRepoProjectConfig {
+                id: repo_id.clone(),
+                root: None,
+                url: Some(source.path().display().to_string()),
+                git_ref: None,
+                refresh: Some("manual".to_string()),
+                plugins: vec!["julia".to_string()],
+            }],
+        });
+        let repositories = configured_repositories(&state);
+        let repository = repositories.first().expect("configured repository");
+        resolve_repository_source(
+            repository,
+            state.config_root.as_path(),
+            RepositorySyncMode::Ensure,
+        )
+        .expect("materialize checkout before resolving");
+
+        let resolved = resolve_vfs_path(&state, format!("{repo_id}/src/BaseModelica.jl").as_str())
+            .expect("resolve repo vfs path");
+
+        assert!(resolved.full_path.is_file());
+
+        for root in resolve_all_vfs_roots(&state) {
+            if root.request_root == repo_id && root.full_path.exists() {
+                fs::remove_dir_all(root.full_path).expect("cleanup managed checkout");
+            }
+        }
+    }
+
+    #[test]
+    fn scan_roots_reuses_cached_entries_until_ui_config_changes() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let project_root = temp.path().join("workspace");
+        let docs_dir = project_root.join("docs");
+        fs::create_dir_all(&docs_dir).expect("create docs dir");
+        fs::write(docs_dir.join("guide.md"), "# guide\n").expect("write guide");
+
+        let state = StudioState::new();
+        state.set_ui_config(UiConfig {
+            projects: vec![crate::gateway::studio::types::UiProjectConfig {
+                name: "kernel".to_string(),
+                root: project_root.display().to_string(),
+                dirs: vec!["docs".to_string()],
+            }],
+            repo_projects: Vec::new(),
+        });
+
+        let first = scan_roots(&state);
+        assert!(
+            first
+                .entries
+                .iter()
+                .any(|entry| entry.path == "kernel/docs/guide.md")
+        );
+        fs::remove_file(docs_dir.join("guide.md")).expect("remove guide");
+        let cached = scan_roots(&state);
+        assert_eq!(cached.entries, first.entries);
+
+        let notes_dir = project_root.join("notes");
+        fs::create_dir_all(&notes_dir).expect("create notes dir");
+        fs::write(notes_dir.join("todo.md"), "# todo\n").expect("write note");
+
+        state.set_ui_config(UiConfig {
+            projects: vec![crate::gateway::studio::types::UiProjectConfig {
+                name: "kernel".to_string(),
+                root: project_root.display().to_string(),
+                dirs: vec!["docs".to_string(), "notes".to_string()],
+            }],
+            repo_projects: Vec::new(),
+        });
+
+        let refreshed = scan_roots(&state);
+        assert!(
+            refreshed
+                .entries
+                .iter()
+                .any(|entry| entry.path == "kernel/notes/todo.md")
+        );
+        assert!(
+            refreshed
+                .entries
+                .iter()
+                .all(|entry| entry.path != "kernel/docs/guide.md")
+        );
+    }
+}

@@ -1,314 +1,359 @@
-use std::cmp::Ordering;
+//! Logic for resolving the best semantic definition for a query.
+
 use std::path::Path;
 
-use crate::gateway::studio::pathing;
-use crate::gateway::studio::types::{AstSearchHit, UiProjectConfig};
-use crate::link_graph::parser::code_observation::path_matches_scope;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 
-use super::project_scope::{normalize_path, project_metadata_for_path};
-use super::support::infer_crate_name;
+use crate::gateway::studio::types::{AstSearchHit, DefinitionSearchHit, UiProjectConfig};
+use crate::search::{FuzzyMatcher, FuzzySearchOptions, LexicalMatcher};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum DefinitionMatchMode {
+use super::project_scope::project_metadata_for_path;
+
+/// Match mode for definition resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefinitionMatchMode {
+    /// Only allow exact name matches.
     ExactOnly,
+    /// Prefer exact match, fall back to fuzzy if none found.
     ExactThenFuzzy,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct DefinitionResolveOptions<'a> {
-    pub(crate) source_paths: Option<&'a [String]>,
-    pub(crate) scope_patterns: Option<&'a [String]>,
-    pub(crate) languages: Option<&'a [String]>,
-    pub(crate) match_mode: DefinitionMatchMode,
-    pub(crate) include_markdown: bool,
+/// Options for resolving a definition.
+#[derive(Debug, Clone)]
+pub struct DefinitionResolveOptions {
+    /// Maximum number of candidates to consider.
+    pub limit: usize,
+    /// Match mode to use.
+    pub match_mode: DefinitionMatchMode,
+    /// Optional scope patterns to restrict resolution.
+    pub scope_patterns: Option<Vec<String>>,
+    /// Optional languages to restrict resolution.
+    pub languages: Option<Vec<String>>,
+    /// Optional source path used to prefer nearby definitions.
+    pub preferred_source_path: Option<String>,
+    /// Whether to include Markdown headings in resolution.
+    pub include_markdown: bool,
+    /// Shared fuzzy-search options used when fuzzy fallback is enabled.
+    pub fuzzy_options: FuzzySearchOptions,
 }
 
-impl Default for DefinitionResolveOptions<'_> {
+impl Default for DefinitionResolveOptions {
     fn default() -> Self {
         Self {
-            source_paths: None,
+            limit: 10,
+            match_mode: DefinitionMatchMode::ExactThenFuzzy,
             scope_patterns: None,
             languages: None,
-            match_mode: DefinitionMatchMode::ExactThenFuzzy,
+            preferred_source_path: None,
             include_markdown: true,
+            fuzzy_options: FuzzySearchOptions::symbol_search(),
         }
     }
 }
 
-pub(crate) fn enrich_ast_hit_project_metadata(
-    hit: &mut AstSearchHit,
+/// Resolves the best definition hit from a list of AST hits.
+pub fn resolve_best_definition(
+    query_str: &str,
+    ast_hits: &[AstSearchHit],
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
-) {
-    let metadata =
-        project_metadata_for_path(project_root, config_root, projects, hit.path.as_str());
-    hit.project_name = metadata.project_name;
-    hit.root_label = metadata.root_label;
-}
-
-pub(crate) fn resolve_best_definition(
-    project_root: &Path,
-    config_root: &Path,
-    projects: &[UiProjectConfig],
-    index: &[AstSearchHit],
-    query: &str,
-    options: DefinitionResolveOptions<'_>,
-) -> Option<AstSearchHit> {
-    resolve_definition_candidates(project_root, config_root, projects, index, query, options)
-        .into_iter()
-        .next()
-}
-
-pub(crate) fn resolve_definition_candidates(
-    project_root: &Path,
-    config_root: &Path,
-    projects: &[UiProjectConfig],
-    index: &[AstSearchHit],
-    query: &str,
-    options: DefinitionResolveOptions<'_>,
-) -> Vec<AstSearchHit> {
-    let mut candidates = collect_definition_candidates(
+    options: &DefinitionResolveOptions,
+) -> Option<DefinitionSearchHit> {
+    resolve_definition_candidates(
+        query_str,
+        ast_hits,
         project_root,
         config_root,
         projects,
-        index,
-        query,
         options,
-        true,
-    );
-
-    if candidates.is_empty() && matches!(options.match_mode, DefinitionMatchMode::ExactThenFuzzy) {
-        candidates = collect_definition_candidates(
-            project_root,
-            config_root,
-            projects,
-            index,
-            query,
-            options,
-            false,
-        );
-    }
-
-    candidates = prefer_language_matched_candidates(candidates, options.languages);
-    candidates = prefer_scope_matched_candidates(candidates, options.scope_patterns);
-
-    candidates.sort_by(|left, right| {
-        right
-            .score
-            .partial_cmp(&left.score)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| left.name.cmp(&right.name))
-            .then_with(|| left.path.cmp(&right.path))
-            .then_with(|| left.line_start.cmp(&right.line_start))
-    });
-    candidates
+    )
+    .into_iter()
+    .next()
 }
 
-fn collect_definition_candidates(
+pub(crate) fn resolve_definition_candidates(
+    query_str: &str,
+    ast_hits: &[AstSearchHit],
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
-    index: &[AstSearchHit],
-    query: &str,
-    options: DefinitionResolveOptions<'_>,
-    exact_only: bool,
-) -> Vec<AstSearchHit> {
-    index
+    options: &DefinitionResolveOptions,
+) -> Vec<DefinitionSearchHit> {
+    let query = query_str.trim();
+    if query.is_empty() {
+        return Vec::new();
+    }
+
+    let scope_matcher = options
+        .scope_patterns
+        .as_ref()
+        .and_then(|patterns| build_scope_matcher(patterns.as_slice()));
+    let preferred_parent = options
+        .preferred_source_path
+        .as_deref()
+        .map(Path::new)
+        .and_then(Path::parent)
+        .map(normalize_path);
+
+    // 1. Filter by language/scope if needed
+    let filtered_hits = ast_hits
         .iter()
         .filter(|hit| {
-            pathing::path_matches_project_file_filters(
-                project_root,
-                config_root,
-                projects,
-                hit.path.as_str(),
+            if let Some(langs) = &options.languages {
+                if !langs.contains(&hit.language) {
+                    return false;
+                }
+            }
+            if !options.include_markdown && hit.language == "markdown" {
+                return false;
+            }
+            if let Some(matcher) = &scope_matcher {
+                let relative_path = normalize_match_path(project_root, hit.path.as_str());
+                if !matcher.is_match(relative_path.as_str()) && !matcher.is_match(hit.path.as_str())
+                {
+                    return false;
+                }
+            }
+            true
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    // 2. Try exact matches first
+    let mut candidates = filtered_hits
+        .iter()
+        .filter(|hit| hit.name == query)
+        .map(|hit| {
+            (
+                hit.clone(),
+                definition_match_score(1.0_f64, hit.path.as_str(), preferred_parent.as_deref()),
             )
         })
-        .filter(|hit| options.include_markdown || !hit.language.eq_ignore_ascii_case("markdown"))
-        .filter(|hit| {
-            if exact_only {
-                hit.name.eq_ignore_ascii_case(query)
-            } else {
-                ast_hit_matches(hit, query)
-            }
-        })
-        .map(|hit| {
-            let mut hit = hit.clone();
-            enrich_ast_hit_project_metadata(&mut hit, project_root, config_root, projects);
-            hit.score = score_definition_hit(
-                &hit,
-                query,
-                options.source_paths,
-                options.scope_patterns,
-                options.languages,
-            );
-            hit
+        .collect::<Vec<_>>();
+
+    // 3. Fall back to case-insensitive if needed
+    if candidates.is_empty() {
+        candidates = filtered_hits
+            .iter()
+            .filter(|hit| hit.name.eq_ignore_ascii_case(query))
+            .map(|hit| {
+                (
+                    hit.clone(),
+                    definition_match_score(
+                        0.98_f64,
+                        hit.path.as_str(),
+                        preferred_parent.as_deref(),
+                    ),
+                )
+            })
+            .collect::<Vec<_>>();
+    }
+
+    // 4. Fall back to substring if enabled
+    if candidates.is_empty() && matches!(options.match_mode, DefinitionMatchMode::ExactThenFuzzy) {
+        candidates = filtered_hits
+            .iter()
+            .filter(|hit| hit.name.to_lowercase().contains(&query.to_lowercase()))
+            .map(|hit| {
+                (
+                    hit.clone(),
+                    definition_match_score(0.8_f64, hit.path.as_str(), preferred_parent.as_deref()),
+                )
+            })
+            .collect::<Vec<_>>();
+    }
+
+    // 5. Fall back to lexical fuzzy if enabled
+    if candidates.is_empty() && matches!(options.match_mode, DefinitionMatchMode::ExactThenFuzzy) {
+        fn ast_hit_name(hit: &AstSearchHit) -> &str {
+            hit.name.as_str()
+        }
+
+        let matcher = LexicalMatcher::new(
+            filtered_hits.as_slice(),
+            ast_hit_name,
+            options.fuzzy_options,
+        );
+        let fuzzy_matches = matcher
+            .search(query, options.limit)
+            .expect("lexical matcher is infallible");
+        candidates = fuzzy_matches
+            .into_iter()
+            .map(|fuzzy_match| {
+                let path = fuzzy_match.item.path.clone();
+                (
+                    fuzzy_match.item,
+                    definition_match_score(
+                        f64::from(fuzzy_match.score),
+                        path.as_str(),
+                        preferred_parent.as_deref(),
+                    ),
+                )
+            })
+            .collect();
+    }
+
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+
+    // Sort candidates by some heuristic if there are multiple
+    candidates.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                let a_exact = a.0.name == query;
+                let b_exact = b.0.name == query;
+                b_exact.cmp(&a_exact)
+            })
+            .then_with(|| a.0.path.cmp(&b.0.path))
+    });
+
+    candidates
+        .into_iter()
+        .map(|(hit, score)| {
+            definition_hit_from_ast(hit, score, project_root, config_root, projects)
         })
         .collect()
 }
 
-fn prefer_language_matched_candidates(
-    candidates: Vec<AstSearchHit>,
-    languages: Option<&[String]>,
-) -> Vec<AstSearchHit> {
-    let Some(languages) = languages.filter(|languages| !languages.is_empty()) else {
-        return candidates;
-    };
+fn definition_hit_from_ast(
+    hit: AstSearchHit,
+    score: f64,
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+) -> DefinitionSearchHit {
+    let metadata =
+        project_metadata_for_path(project_root, config_root, projects, hit.path.as_str());
+    let mut navigation_target = hit.navigation_target;
+    navigation_target.project_name = metadata.project_name.clone();
+    navigation_target.root_label = metadata.root_label.clone();
 
-    let matched = candidates
-        .iter()
-        .filter(|hit| {
-            languages
-                .iter()
-                .any(|language| hit.language.eq_ignore_ascii_case(language.as_str()))
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    if matched.is_empty() {
-        candidates
-    } else {
-        matched
+    DefinitionSearchHit {
+        name: hit.name,
+        signature: hit.signature,
+        path: hit.path,
+        language: hit.language,
+        crate_name: hit.crate_name,
+        project_name: metadata.project_name,
+        root_label: metadata.root_label,
+        node_kind: hit.node_kind,
+        owner_title: hit.owner_title,
+        navigation_target,
+        line_start: hit.line_start,
+        line_end: hit.line_end,
+        score,
+        observation_hints: Vec::new(),
     }
 }
 
-fn prefer_scope_matched_candidates(
-    candidates: Vec<AstSearchHit>,
-    scope_patterns: Option<&[String]>,
-) -> Vec<AstSearchHit> {
-    let Some(scope_patterns) = scope_patterns.filter(|patterns| !patterns.is_empty()) else {
-        return candidates;
-    };
-
-    let scoped = candidates
-        .iter()
-        .filter(|hit| {
-            scope_patterns
-                .iter()
-                .any(|scope| path_matches_scope(hit.path.as_str(), scope.as_str()))
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    if scoped.is_empty() {
-        candidates
-    } else {
-        scoped
+fn build_scope_matcher(patterns: &[String]) -> Option<GlobSet> {
+    let mut builder = GlobSetBuilder::new();
+    let mut has_pattern = false;
+    for pattern in patterns {
+        let Ok(glob) = Glob::new(pattern) else {
+            continue;
+        };
+        builder.add(glob);
+        has_pattern = true;
     }
-}
 
-pub(crate) fn ast_hit_matches(hit: &AstSearchHit, query: &str) -> bool {
-    let query_lc = query.to_ascii_lowercase();
-    hit.name.to_ascii_lowercase().contains(query_lc.as_str())
-        || hit
-            .signature
-            .to_ascii_lowercase()
-            .contains(query_lc.as_str())
-        || hit.path.to_ascii_lowercase().contains(query_lc.as_str())
-        || hit
-            .language
-            .to_ascii_lowercase()
-            .contains(query_lc.as_str())
-        || hit
-            .crate_name
-            .to_ascii_lowercase()
-            .contains(query_lc.as_str())
-        || hit
-            .node_kind
-            .as_ref()
-            .is_some_and(|value| value.to_ascii_lowercase().contains(query_lc.as_str()))
-        || hit
-            .owner_title
-            .as_ref()
-            .is_some_and(|value| value.to_ascii_lowercase().contains(query_lc.as_str()))
-}
-
-pub(crate) fn score_ast_hit(hit: &AstSearchHit, query: &str) -> f64 {
-    let query_lc = query.to_ascii_lowercase();
-    let name_lc = hit.name.to_ascii_lowercase();
-    let signature_lc = hit.signature.to_ascii_lowercase();
-    let path_lc = hit.path.to_ascii_lowercase();
-    let owner_title_lc = hit
-        .owner_title
-        .as_deref()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let node_kind_lc = hit
-        .node_kind
-        .as_deref()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    if name_lc == query_lc {
-        1.0
-    } else if name_lc.starts_with(query_lc.as_str()) {
-        0.95
-    } else if name_lc.contains(query_lc.as_str()) {
-        0.88
-    } else if owner_title_lc.contains(query_lc.as_str()) {
-        0.84
-    } else if signature_lc.contains(query_lc.as_str()) {
-        0.8
-    } else if node_kind_lc.contains(query_lc.as_str()) {
-        0.76
-    } else if path_lc.contains(query_lc.as_str()) {
-        0.72
-    } else {
-        0.5
+    if !has_pattern {
+        return None;
     }
+
+    builder.build().ok()
 }
 
-fn score_definition_hit(
-    hit: &AstSearchHit,
-    query: &str,
-    source_paths: Option<&[String]>,
-    scope_patterns: Option<&[String]>,
-    languages: Option<&[String]>,
+fn normalize_match_path(project_root: &Path, path: &str) -> String {
+    let path = Path::new(path);
+    if path.is_absolute() {
+        return path
+            .strip_prefix(project_root)
+            .map_or_else(|_| normalize_path(path), normalize_path);
+    }
+
+    normalize_path(path)
+}
+
+fn normalize_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn definition_match_score(
+    base_score: f64,
+    candidate_path: &str,
+    preferred_parent: Option<&str>,
 ) -> f64 {
-    let mut score = score_ast_hit(hit, query);
+    base_score + definition_scope_bonus(candidate_path, preferred_parent)
+}
 
-    if let Some(source_paths) = source_paths {
-        let hit_parent = Path::new(hit.path.as_str()).parent().map(normalize_path);
-        let source_bonus = source_paths
-            .iter()
-            .map(|source_path| {
-                let normalized_source_path = source_path.replace('\\', "/");
-                let source_path = Path::new(normalized_source_path.as_str());
-                let source_crate = infer_crate_name(source_path);
-                let mut bonus = 0.0;
+fn definition_scope_bonus(candidate_path: &str, preferred_parent: Option<&str>) -> f64 {
+    let Some(preferred_parent) = preferred_parent else {
+        return 0.0;
+    };
+    let candidate_parent = Path::new(candidate_path)
+        .parent()
+        .map(normalize_path)
+        .unwrap_or_default();
+    if candidate_parent == preferred_parent {
+        0.15
+    } else {
+        0.0
+    }
+}
 
-                if hit.path == normalized_source_path {
-                    bonus += 0.15;
-                }
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
 
-                if hit.crate_name.eq_ignore_ascii_case(source_crate.as_str()) {
-                    bonus += 0.1;
-                }
+    use super::*;
+    use crate::gateway::studio::types::StudioNavigationTarget;
 
-                let source_parent = source_path.parent().map(normalize_path);
-                if source_parent.is_some() && source_parent == hit_parent {
-                    bonus += 0.05;
-                }
-
-                bonus
-            })
-            .fold(0.0, f64::max);
-        score += source_bonus;
+    fn ast_hit(name: &str) -> AstSearchHit {
+        AstSearchHit {
+            name: name.to_string(),
+            signature: format!("fn {name}()"),
+            path: "src/lib.rs".to_string(),
+            language: "rust".to_string(),
+            crate_name: "demo".to_string(),
+            project_name: None,
+            root_label: None,
+            node_kind: Some("function".to_string()),
+            owner_title: None,
+            navigation_target: StudioNavigationTarget {
+                path: "src/lib.rs".to_string(),
+                category: "symbol".to_string(),
+                project_name: None,
+                root_label: None,
+                line: Some(10),
+                line_end: Some(12),
+                column: Some(1),
+            },
+            line_start: 10,
+            line_end: 12,
+            score: 1.0,
+        }
     }
 
-    if let Some(scope_patterns) = scope_patterns
-        && scope_patterns
-            .iter()
-            .any(|scope| path_matches_scope(hit.path.as_str(), scope.as_str()))
-    {
-        score += 0.2;
-    }
+    #[test]
+    fn resolve_best_definition_uses_lexical_fallback_for_typos() {
+        let hits = vec![ast_hit("spawn_local")];
 
-    if let Some(languages) = languages
-        && languages
-            .iter()
-            .any(|language| hit.language.eq_ignore_ascii_case(language.as_str()))
-    {
-        score += 0.2;
-    }
+        let result = resolve_best_definition(
+            "spwan_local",
+            hits.as_slice(),
+            Path::new("."),
+            Path::new("."),
+            &[],
+            &DefinitionResolveOptions::default(),
+        )
+        .expect("definition should resolve through fuzzy fallback");
 
-    score
+        assert_eq!(result.name, "spawn_local");
+        assert!(result.score < 1.0);
+        assert!(result.score > 0.0);
+    }
 }

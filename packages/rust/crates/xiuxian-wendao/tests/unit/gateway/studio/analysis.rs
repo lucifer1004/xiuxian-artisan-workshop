@@ -1,4 +1,5 @@
 use super::*;
+use crate::gateway::studio::analysis::service::AnalysisError;
 use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::test_support::{assert_studio_json_snapshot, round_f64};
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
@@ -107,8 +108,6 @@ async fn analyze_markdown_returns_ir_and_projections() {
                     "source": projection.source,
                     "nodeCount": projection.node_count,
                     "edgeCount": projection.edge_count,
-                    "complexityScore": round_f64(projection.complexity_score),
-                    "diagnostics": projection.diagnostics,
                 })
             }).collect::<Vec<_>>(),
             "diagnostics": payload.diagnostics,

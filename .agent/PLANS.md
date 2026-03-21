@@ -41,7 +41,7 @@ Small, isolated fixes do not require a full ExecPlan.
 
 1. Policy file: `.agent/PLANS.md` (this file).
 2. Template file: `.agent/execplans/_template.md`.
-3. Active plans: `.cache/codex/execplans/<slug>.md`.
+3. Active plans: `$PRJ_CACHE_HOME/codex/execplans/<slug>.md`.
 
 ## Required Plan Structure
 
@@ -118,6 +118,6 @@ This section must be the last checkpoint before marking work DONE.
 
 ## Quick Start
 
-1. Copy `.agent/execplans/_template.md` to `.cache/codex/execplans/<slug>.md`.
+1. Copy `.agent/execplans/_template.md` to `$PRJ_CACHE_HOME/codex/execplans/<slug>.md`.
 2. Fill `Purpose`, `Scope and Boundaries`, `Context`, and `Plan of Work` before coding.
 3. Keep the plan current until the initiative is complete.

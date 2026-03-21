@@ -3,44 +3,40 @@
 #[path = "../support/repo_intelligence.rs"]
 mod repo_test_support;
 
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
+use repo_test_support::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_wendao::analyzers::{
     ProjectedPageIndexNode, RepoProjectedPageIndexTreesQuery, RepoProjectedPagesQuery,
-    RepoProjectedRetrievalContextQuery, repo_projected_page_index_trees_from_config,
-    repo_projected_pages_from_config, repo_projected_retrieval_context_from_config,
+    RepoProjectedRetrievalContextQuery, build_repo_projected_page_index_trees,
+    build_repo_projected_pages, build_repo_projected_retrieval_context,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn projected_retrieval_context_lookup_resolves_page_context() -> TestResult {
-    let temp = tempfile::tempdir()?;
-    let repo_dir = create_sample_julia_repo(temp.path(), "ProjectionPkg", true)?;
-    let config_path = write_repo_config(temp.path(), &repo_dir, "projection-sample")?;
+    let analysis = sample_projection_analysis("projection-sample");
 
-    let pages = repo_projected_pages_from_config(
+    let pages = build_repo_projected_pages(
         &RepoProjectedPagesQuery {
             repo_id: "projection-sample".to_string(),
         },
-        Some(&config_path),
-        temp.path(),
-    )?;
+        &analysis,
+    );
     let page = pages
         .pages
         .iter()
         .find(|page| page.title == "solve")
         .expect("expected a projected page titled `solve`");
 
-    let result = repo_projected_retrieval_context_from_config(
+    let result = build_repo_projected_retrieval_context(
         &RepoProjectedRetrievalContextQuery {
             repo_id: "projection-sample".to_string(),
             page_id: page.page_id.clone(),
             node_id: None,
             related_limit: 3,
         },
-        Some(&config_path),
-        temp.path(),
+        &analysis,
     )?;
 
     assert_repo_json_snapshot(
@@ -52,16 +48,13 @@ fn projected_retrieval_context_lookup_resolves_page_context() -> TestResult {
 
 #[test]
 fn projected_retrieval_context_lookup_resolves_node_context() -> TestResult {
-    let temp = tempfile::tempdir()?;
-    let repo_dir = create_sample_julia_repo(temp.path(), "ProjectionPkg", true)?;
-    let config_path = write_repo_config(temp.path(), &repo_dir, "projection-sample")?;
+    let analysis = sample_projection_analysis("projection-sample");
 
-    let trees = repo_projected_page_index_trees_from_config(
+    let trees = build_repo_projected_page_index_trees(
         &RepoProjectedPageIndexTreesQuery {
             repo_id: "projection-sample".to_string(),
         },
-        Some(&config_path),
-        temp.path(),
+        &analysis,
     )?;
 
     let tree = trees
@@ -72,15 +65,14 @@ fn projected_retrieval_context_lookup_resolves_node_context() -> TestResult {
     let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
         .expect("expected a projected page-index node titled `Anchors`");
 
-    let result = repo_projected_retrieval_context_from_config(
+    let result = build_repo_projected_retrieval_context(
         &RepoProjectedRetrievalContextQuery {
             repo_id: "projection-sample".to_string(),
             page_id: tree.page_id.clone(),
             node_id: Some(node_id),
             related_limit: 3,
         },
-        Some(&config_path),
-        temp.path(),
+        &analysis,
     )?;
 
     assert_repo_json_snapshot(

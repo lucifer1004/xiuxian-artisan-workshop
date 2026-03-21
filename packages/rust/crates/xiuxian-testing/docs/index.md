@@ -19,6 +19,7 @@ Standardized documentation surface for the `xiuxian-testing` contract-testing ke
 - [[03_features/201_rulepack_specification]]: Rule-pack model, severity policy, and finding schema.
 - [[03_features/202_multi_role_audit_integration]]: How `Qianji`, `Qianhuan`, `Zhenfa`, and `Wendao` compose the advisory audit loop.
 - [[03_features/203_docs_workflow_alignment]]: How documentation authoring is wired into unattended workflow loops with contract gates.
+- [[03_features/204_performance_gate_kernel]]: Reusable performance budget kernel and JSON report contract.
 - [[03_features/201_xiuxian_testing_feature_ledger]]
 
 ## 05_research: Theoretical Hardening
@@ -32,7 +33,7 @@ Standardized documentation surface for the `xiuxian-testing` contract-testing ke
 - [[06_roadmap/401_xiuxian_testing_roadmap]]
 
 :RELATIONS:
-:LINKS: [[01_core/101_contract_testing_kernel]], [[03_features/201_rulepack_specification]], [[03_features/202_multi_role_audit_integration]], [[03_features/203_docs_workflow_alignment]], [[05_research/301_research_tracker]], [[06_roadmap/401_contract_testing_program]], [[01_core/101_xiuxian_testing_core_boundary]], [[03_features/201_xiuxian_testing_feature_ledger]], [[05_research/301_xiuxian_testing_research_agenda]], [[06_roadmap/401_xiuxian_testing_roadmap]]
+:LINKS: [[01_core/101_contract_testing_kernel]], [[03_features/201_rulepack_specification]], [[03_features/202_multi_role_audit_integration]], [[03_features/203_docs_workflow_alignment]], [[03_features/204_performance_gate_kernel]], [[05_research/301_research_tracker]], [[06_roadmap/401_contract_testing_program]], [[01_core/101_xiuxian_testing_core_boundary]], [[03_features/201_xiuxian_testing_feature_ledger]], [[05_research/301_xiuxian_testing_research_agenda]], [[06_roadmap/401_xiuxian_testing_roadmap]]
 :END:
 
 ---

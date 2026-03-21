@@ -1,5 +1,6 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
+assertion_line: 9
 expression: value
 ---
 {
@@ -7,6 +8,7 @@ expression: value
   "trees": [
     {
       "doc_id": "explanation/readme-md-69ddd14a3dad",
+      "kind": "explanation",
       "page_id": "repo:gateway-sync:projection:explanation:doc:repo:gateway-sync:doc:README.md",
       "path": "explanation/readme-md-69ddd14a3dad.md",
       "repo_id": "gateway-sync",
@@ -24,6 +26,7 @@ expression: value
           "structural_path": [
             "README.md"
           ],
+          "summary": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: explanation\n:FORMATS: md\n:END:",
           "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: explanation\n:FORMATS: md\n:END:",
           "title": "README.md",
           "token_count": 8
@@ -43,6 +46,7 @@ expression: value
                 "Overview",
                 "Anchors"
               ],
+              "summary": ":ID: anchors\n:PATHS: src/GatewaySyncPkg",
               "text": ":ID: anchors\n:PATHS: src/GatewaySyncPkg.jl\n\nModules:\n- `GatewaySyncPkg` (src/GatewaySyncPkg.jl)",
               "title": "Anchors",
               "token_count": 8
@@ -60,6 +64,7 @@ expression: value
                 "Overview",
                 "Sources"
               ],
+              "summary": ":ID: sources\n:PATHS: README",
               "text": ":ID: sources\n:PATHS: README.md\n\nDocumentation:\n- `README.md` (README.md)",
               "title": "Sources",
               "token_count": 8
@@ -77,6 +82,7 @@ expression: value
                 "Overview",
                 "Examples"
               ],
+              "summary": ":ID: examples\n:PATHS: examples/solve_demo",
               "text": ":ID: examples\n:PATHS: examples/solve_demo.jl\n\nExamples:\n- `solve_demo` (examples/solve_demo.jl)",
               "title": "Examples",
               "token_count": 8
@@ -92,6 +98,7 @@ expression: value
           "structural_path": [
             "Overview"
           ],
+          "summary": ":ID: overview\n:PATHS: README",
           "text": ":ID: overview\n:PATHS: README.md, examples/solve_demo.jl\n\nProjected explanation page for `README.md`.\nFormat hints:\n- `md`\nSource paths:\n- `README.md`\n- `examples/solve_demo.jl`",
           "title": "Overview",
           "token_count": 20
@@ -101,6 +108,7 @@ expression: value
     },
     {
       "doc_id": "howto/solve-demo-a7807d4bc821",
+      "kind": "how_to",
       "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
       "path": "howto/solve-demo-a7807d4bc821.md",
       "repo_id": "gateway-sync",
@@ -118,6 +126,7 @@ expression: value
           "structural_path": [
             "solve_demo"
           ],
+          "summary": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: howto\n:FORMATS: julia_docstring, md\n:END:",
           "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: howto\n:FORMATS: julia_docstring, md\n:END:",
           "title": "solve_demo",
           "token_count": 9
@@ -137,6 +146,7 @@ expression: value
                 "Overview",
                 "Anchors"
               ],
+              "summary": ":ID: anchors\n:PATHS: src/GatewaySyncPkg",
               "text": ":ID: anchors\n:PATHS: src/GatewaySyncPkg.jl\n\nModules:\n- `GatewaySyncPkg` (src/GatewaySyncPkg.jl)\n\nSymbols:\n- `GatewaySyncPkg.solve` (src/GatewaySyncPkg.jl)",
               "title": "Anchors",
               "token_count": 12
@@ -154,6 +164,7 @@ expression: value
                 "Overview",
                 "Supporting Docs"
               ],
+              "summary": ":ID: sources\n:PATHS: README",
               "text": ":ID: sources\n:PATHS: README.md, docs/solve.md, src/GatewaySyncPkg.jl#symbol:solve\n\nDocumentation:\n- `README.md` (README.md)\n- `solve` (docs/solve.md)\n- `solve` (src/GatewaySyncPkg.jl#symbol:solve)",
               "title": "Supporting Docs",
               "token_count": 16
@@ -171,6 +182,7 @@ expression: value
                 "Overview",
                 "Examples"
               ],
+              "summary": ":ID: examples\n:PATHS: examples/solve_demo",
               "text": ":ID: examples\n:PATHS: examples/solve_demo.jl\n\nExamples:\n- `solve_demo` (examples/solve_demo.jl)",
               "title": "Examples",
               "token_count": 8
@@ -186,6 +198,7 @@ expression: value
           "structural_path": [
             "Overview"
           ],
+          "summary": ":ID: overview\n:PATHS: README",
           "text": ":ID: overview\n:PATHS: README.md, docs/solve.md, examples/solve_demo.jl, src/GatewaySyncPkg.jl#symbol:solve\n\nProjected how-to page for `solve_demo`.\nFormat hints:\n- `julia_docstring`\n- `md`\nSource paths:\n- `README.md`\n- `docs/solve.md`\n- `examples/solve_demo.jl`\n- `src/GatewaySyncPkg.jl#symbol:solve`",
           "title": "Overview",
           "token_count": 28
@@ -195,6 +208,7 @@ expression: value
     },
     {
       "doc_id": "reference/gatewaysyncpkg-fb1701217f99",
+      "kind": "reference",
       "page_id": "repo:gateway-sync:projection:reference:module:repo:gateway-sync:module:GatewaySyncPkg",
       "path": "reference/gatewaysyncpkg-fb1701217f99.md",
       "repo_id": "gateway-sync",
@@ -212,6 +226,7 @@ expression: value
           "structural_path": [
             "GatewaySyncPkg"
           ],
+          "summary": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring, md\n:END:",
           "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring, md\n:END:",
           "title": "GatewaySyncPkg",
           "token_count": 9
@@ -231,6 +246,7 @@ expression: value
                 "Overview",
                 "Anchors"
               ],
+              "summary": ":ID: anchors\n:PATHS: src/GatewaySyncPkg",
               "text": ":ID: anchors\n:PATHS: src/GatewaySyncPkg.jl\n\nModules:\n- `GatewaySyncPkg` (src/GatewaySyncPkg.jl)",
               "title": "Anchors",
               "token_count": 8
@@ -248,6 +264,7 @@ expression: value
                 "Overview",
                 "Documentation"
               ],
+              "summary": ":ID: sources\n:PATHS: README",
               "text": ":ID: sources\n:PATHS: README.md, docs/solve.md, src/GatewaySyncPkg.jl#symbol:solve\n\nDocumentation:\n- `README.md` (README.md)\n- `solve` (docs/solve.md)\n- `solve` (src/GatewaySyncPkg.jl#symbol:solve)",
               "title": "Documentation",
               "token_count": 16
@@ -265,6 +282,7 @@ expression: value
                 "Overview",
                 "Examples"
               ],
+              "summary": ":ID: examples\n:PATHS: examples/solve_demo",
               "text": ":ID: examples\n:PATHS: examples/solve_demo.jl\n\nExamples:\n- `solve_demo` (examples/solve_demo.jl)",
               "title": "Examples",
               "token_count": 8
@@ -280,6 +298,7 @@ expression: value
           "structural_path": [
             "Overview"
           ],
+          "summary": ":ID: overview\n:PATHS: README",
           "text": ":ID: overview\n:PATHS: README.md, docs/solve.md, examples/solve_demo.jl, src/GatewaySyncPkg.jl, src/GatewaySyncPkg.jl#symbol:solve\n\nProjected reference page for `GatewaySyncPkg`.\nFormat hints:\n- `julia_docstring`\n- `md`\nSource paths:\n- `README.md`\n- `docs/solve.md`\n- `examples/solve_demo.jl`\n- `src/GatewaySyncPkg.jl`\n- `src/GatewaySyncPkg.jl#symbol:solve`",
           "title": "Overview",
           "token_count": 31
@@ -289,6 +308,7 @@ expression: value
     },
     {
       "doc_id": "reference/gatewaysyncpkg-solve-426791875262",
+      "kind": "reference",
       "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
       "path": "reference/gatewaysyncpkg-solve-426791875262.md",
       "repo_id": "gateway-sync",
@@ -306,6 +326,7 @@ expression: value
           "structural_path": [
             "GatewaySyncPkg.solve"
           ],
+          "summary": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring, md\n:END:",
           "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring, md\n:END:",
           "title": "GatewaySyncPkg.solve",
           "token_count": 9
@@ -325,6 +346,7 @@ expression: value
                 "Overview",
                 "Anchors"
               ],
+              "summary": ":ID: anchors\n:PATHS: src/GatewaySyncPkg",
               "text": ":ID: anchors\n:PATHS: src/GatewaySyncPkg.jl\n\nModules:\n- `GatewaySyncPkg` (src/GatewaySyncPkg.jl)\n\nSymbols:\n- `GatewaySyncPkg.solve` (src/GatewaySyncPkg.jl)",
               "title": "Anchors",
               "token_count": 12
@@ -342,6 +364,7 @@ expression: value
                 "Overview",
                 "Documentation"
               ],
+              "summary": ":ID: sources\n:PATHS: docs/solve",
               "text": ":ID: sources\n:PATHS: docs/solve.md, src/GatewaySyncPkg.jl#symbol:solve\n\nDocumentation:\n- `solve` (docs/solve.md)\n- `solve` (src/GatewaySyncPkg.jl#symbol:solve)",
               "title": "Documentation",
               "token_count": 12
@@ -359,6 +382,7 @@ expression: value
                 "Overview",
                 "Examples"
               ],
+              "summary": ":ID: examples\n:PATHS: examples/solve_demo",
               "text": ":ID: examples\n:PATHS: examples/solve_demo.jl\n\nExamples:\n- `solve_demo` (examples/solve_demo.jl)",
               "title": "Examples",
               "token_count": 8
@@ -374,6 +398,7 @@ expression: value
           "structural_path": [
             "Overview"
           ],
+          "summary": ":ID: overview\n:PATHS: docs/solve",
           "text": ":ID: overview\n:PATHS: docs/solve.md, examples/solve_demo.jl, src/GatewaySyncPkg.jl, src/GatewaySyncPkg.jl#symbol:solve\n\nProjected reference page for `GatewaySyncPkg.solve`.\nFormat hints:\n- `julia_docstring`\n- `md`\nSource paths:\n- `docs/solve.md`\n- `examples/solve_demo.jl`\n- `src/GatewaySyncPkg.jl`\n- `src/GatewaySyncPkg.jl#symbol:solve`",
           "title": "Overview",
           "token_count": 28
@@ -383,6 +408,7 @@ expression: value
     },
     {
       "doc_id": "reference/solve-69592caeddee",
+      "kind": "reference",
       "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
       "path": "reference/solve-69592caeddee.md",
       "repo_id": "gateway-sync",
@@ -400,6 +426,7 @@ expression: value
           "structural_path": [
             "solve"
           ],
+          "summary": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: md\n:END:",
           "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: md\n:END:",
           "title": "solve",
           "token_count": 8
@@ -419,6 +446,7 @@ expression: value
                 "Overview",
                 "Anchors"
               ],
+              "summary": ":ID: anchors\n:PATHS: src/GatewaySyncPkg",
               "text": ":ID: anchors\n:PATHS: src/GatewaySyncPkg.jl\n\nSymbols:\n- `GatewaySyncPkg.solve` (src/GatewaySyncPkg.jl)",
               "title": "Anchors",
               "token_count": 8
@@ -436,6 +464,7 @@ expression: value
                 "Overview",
                 "Documentation"
               ],
+              "summary": ":ID: sources\n:PATHS: docs/solve",
               "text": ":ID: sources\n:PATHS: docs/solve.md\n\nDocumentation:\n- `solve` (docs/solve.md)",
               "title": "Documentation",
               "token_count": 8
@@ -453,6 +482,7 @@ expression: value
                 "Overview",
                 "Examples"
               ],
+              "summary": ":ID: examples\n:PATHS: examples/solve_demo",
               "text": ":ID: examples\n:PATHS: examples/solve_demo.jl\n\nExamples:\n- `solve_demo` (examples/solve_demo.jl)",
               "title": "Examples",
               "token_count": 8
@@ -468,6 +498,7 @@ expression: value
           "structural_path": [
             "Overview"
           ],
+          "summary": ":ID: overview\n:PATHS: docs/solve",
           "text": ":ID: overview\n:PATHS: docs/solve.md, examples/solve_demo.jl\n\nProjected reference page for `solve`.\nFormat hints:\n- `md`\nSource paths:\n- `docs/solve.md`\n- `examples/solve_demo.jl`",
           "title": "Overview",
           "token_count": 20
@@ -477,6 +508,7 @@ expression: value
     },
     {
       "doc_id": "reference/solve-c6d7a0c3b0a4",
+      "kind": "reference",
       "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
       "path": "reference/solve-c6d7a0c3b0a4.md",
       "repo_id": "gateway-sync",
@@ -494,6 +526,7 @@ expression: value
           "structural_path": [
             "solve"
           ],
+          "summary": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring\n:END:",
           "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring\n:END:",
           "title": "solve",
           "token_count": 8
@@ -513,6 +546,7 @@ expression: value
                 "Overview",
                 "Anchors"
               ],
+              "summary": ":ID: anchors\n:PATHS: src/GatewaySyncPkg",
               "text": ":ID: anchors\n:PATHS: src/GatewaySyncPkg.jl\n\nSymbols:\n- `GatewaySyncPkg.solve` (src/GatewaySyncPkg.jl)",
               "title": "Anchors",
               "token_count": 8
@@ -530,6 +564,7 @@ expression: value
                 "Overview",
                 "Documentation"
               ],
+              "summary": ":ID: sources\n:PATHS: src/GatewaySyncPkg",
               "text": ":ID: sources\n:PATHS: src/GatewaySyncPkg.jl#symbol:solve\n\nDocumentation:\n- `solve` (src/GatewaySyncPkg.jl#symbol:solve)",
               "title": "Documentation",
               "token_count": 8
@@ -547,6 +582,7 @@ expression: value
                 "Overview",
                 "Examples"
               ],
+              "summary": ":ID: examples\n:PATHS: examples/solve_demo",
               "text": ":ID: examples\n:PATHS: examples/solve_demo.jl\n\nExamples:\n- `solve_demo` (examples/solve_demo.jl)",
               "title": "Examples",
               "token_count": 8
@@ -562,6 +598,7 @@ expression: value
           "structural_path": [
             "Overview"
           ],
+          "summary": ":ID: overview\n:PATHS: examples/solve_demo",
           "text": ":ID: overview\n:PATHS: examples/solve_demo.jl, src/GatewaySyncPkg.jl#symbol:solve\n\nProjected reference page for `solve`.\nFormat hints:\n- `julia_docstring`\nSource paths:\n- `examples/solve_demo.jl`\n- `src/GatewaySyncPkg.jl#symbol:solve`",
           "title": "Overview",
           "token_count": 20

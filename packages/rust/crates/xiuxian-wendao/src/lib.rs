@@ -41,6 +41,8 @@
 //! ```
 use pyo3::prelude::*;
 
+extern crate self as xiuxian_wendao;
+
 // ---------------------------------------------------------------------------
 // Core domain modules
 // ---------------------------------------------------------------------------
@@ -52,6 +54,7 @@ pub mod kg_cache;
 pub mod link_graph;
 pub mod link_graph_py;
 pub mod schemas;
+pub mod search;
 pub mod storage;
 pub mod sync;
 mod types;
@@ -72,10 +75,12 @@ pub mod sync_py;
 // ---------------------------------------------------------------------------
 pub mod fusion;
 pub mod fusion_py;
+pub mod git;
 
 // ---------------------------------------------------------------------------
 // Feature modules (enhancer, link graph refs, dependency, unified symbol)
 // ---------------------------------------------------------------------------
+pub mod analyzers;
 /// Bridges contract-testing findings into Wendao knowledge ingestion payloads.
 pub mod contract_feedback;
 pub mod dep_indexer_py;
@@ -86,7 +91,6 @@ pub mod gateway;
 pub mod ingress;
 pub mod link_graph_refs;
 mod link_graph_refs_py;
-pub mod repo_intelligence;
 pub mod skill_vfs;
 pub mod unified_symbol;
 pub mod unified_symbol_py;
@@ -96,6 +100,27 @@ pub mod zhenfa_router;
 // ---------------------------------------------------------------------------
 // Public re-exports (crate API)
 // ---------------------------------------------------------------------------
+pub use analyzers::{
+    AnalysisContext, DiagnosticRecord, DocCoverageQuery, DocCoverageResult, DocRecord,
+    ExampleRecord, ExampleSearchHit, ExampleSearchQuery, ExampleSearchResult, ModuleRecord,
+    ModuleSearchHit, ModuleSearchQuery, ModuleSearchResult, PluginAnalysisOutput,
+    PluginLinkContext, PluginRegistry, RegisteredRepository, RelationKind, RelationRecord,
+    RepoBacklinkItem, RepoIntelligenceConfig, RepoIntelligenceError, RepoIntelligencePlugin,
+    RepoOverviewQuery, RepoOverviewResult, RepoSourceFile, RepoSourceKind, RepoSymbolKind,
+    RepoSyncDriftState, RepoSyncFreshnessSummary, RepoSyncHealthState, RepoSyncLifecycleSummary,
+    RepoSyncMode, RepoSyncQuery, RepoSyncResult, RepoSyncRevisionSummary, RepoSyncStalenessState,
+    RepoSyncState, RepoSyncStatusSummary, RepositoryAnalysisOutput, RepositoryPluginConfig,
+    RepositoryRecord, RepositoryRef, RepositoryRefreshPolicy, SymbolRecord, SymbolSearchHit,
+    SymbolSearchQuery, SymbolSearchResult, analyze_repository_from_config,
+    analyze_repository_from_config_with_registry, bootstrap_builtin_registry, build_doc_coverage,
+    build_example_search, build_module_search, build_repo_overview, build_symbol_search,
+    doc_coverage_from_config, doc_coverage_from_config_with_registry, example_search_from_config,
+    example_search_from_config_with_registry, load_registered_repository,
+    load_repo_intelligence_config, module_search_from_config,
+    module_search_from_config_with_registry, repo_overview_from_config,
+    repo_overview_from_config_with_registry, repo_sync_from_config, symbol_search_from_config,
+    symbol_search_from_config_with_registry,
+};
 pub use contract_feedback::WendaoContractFeedbackAdapter;
 pub use dep_indexer_py::{
     PyDependencyConfig, PyDependencyIndexResult, PyDependencyIndexer, PyDependencyStats,
@@ -183,27 +208,10 @@ pub use link_graph_refs_py::{
     link_graph_extract_entity_refs, link_graph_find_referencing_notes, link_graph_get_ref_stats,
     link_graph_is_valid_ref, link_graph_parse_entity_ref,
 };
-pub use repo_intelligence::{
-    AnalysisContext, DiagnosticRecord, DocCoverageQuery, DocCoverageResult, DocRecord,
-    ExampleRecord, ExampleSearchHit, ExampleSearchQuery, ExampleSearchResult, ModuleRecord,
-    ModuleSearchHit, ModuleSearchQuery, ModuleSearchResult, PluginAnalysisOutput,
-    PluginLinkContext, PluginRegistry, RegisteredRepository, RelationKind, RelationRecord,
-    RepoIntelligenceConfig, RepoIntelligenceError, RepoIntelligencePlugin, RepoOverviewQuery,
-    RepoOverviewResult, RepoBacklinkItem, RepoSourceFile, RepoSourceKind, RepoSymbolKind, RepoSyncDriftState,
-    RepoSyncFreshnessSummary, RepoSyncHealthState, RepoSyncLifecycleSummary, RepoSyncMode,
-    RepoSyncQuery, RepoSyncResult, RepoSyncRevisionSummary, RepoSyncStalenessState, RepoSyncState,
-    RepoSyncStatusSummary, RepositoryAnalysisOutput, RepositoryPluginConfig, RepositoryRecord,
-    RepositoryRef, RepositoryRefreshPolicy, SymbolRecord, SymbolSearchHit, SymbolSearchQuery,
-    SymbolSearchResult,
-    analyze_repository_from_config, analyze_repository_from_config_with_registry,
-    bootstrap_builtin_registry, build_doc_coverage, build_example_search, build_module_search,
-    build_repo_overview, build_symbol_search, doc_coverage_from_config,
-    doc_coverage_from_config_with_registry, example_search_from_config,
-    example_search_from_config_with_registry, load_registered_repository,
-    load_repo_intelligence_config, module_search_from_config,
-    module_search_from_config_with_registry, repo_overview_from_config,
-    repo_overview_from_config_with_registry, repo_sync_from_config, symbol_search_from_config,
-    symbol_search_from_config_with_registry,
+pub use search::{
+    FuzzyMatch, FuzzyMatcher, FuzzyScore, FuzzySearchOptions, LexicalMatcher, SearchDocument,
+    SearchDocumentFields, SearchDocumentIndex, TantivyDocumentMatch, TantivyMatcher, edit_distance,
+    levenshtein_distance, normalized_score, passes_prefix_requirement, shared_prefix_len,
 };
 pub use skill_vfs::{
     ATTR_JOURNAL_CARRYOVER, ATTR_TIMER_REMINDED, ATTR_TIMER_SCHEDULED, AssetRequest,

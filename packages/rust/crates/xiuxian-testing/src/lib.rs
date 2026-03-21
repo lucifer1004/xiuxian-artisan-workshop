@@ -79,6 +79,8 @@
 
 pub mod contracts;
 pub mod external_test;
+#[cfg(feature = "performance")]
+pub mod performance;
 pub mod policy;
 pub mod scenario;
 pub mod utils;
@@ -97,6 +99,11 @@ pub use contracts::{
 pub use external_test::{
     ExternalTestMount, ExternalTestValidationIssue, calculate_test_path, generate_path_attribute,
     validate_external_test_mounts,
+};
+#[cfg(feature = "performance")]
+pub use performance::{
+    PerfBudget, PerfQuantiles, PerfReport, PerfRunConfig, PerfSummary, assert_perf_budget,
+    default_reports_root, report_output_path, run_async_budget, run_sync_budget,
 };
 
 pub use policy::{

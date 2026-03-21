@@ -89,6 +89,10 @@ pub const API_SEARCH_AUTOCOMPLETE_OPENAPI_PATH: &str = "/api/search/autocomplete
 pub const API_ANALYSIS_MARKDOWN_AXUM_PATH: &str = "/api/analysis/markdown";
 /// `OpenAPI` path for the markdown analysis endpoint.
 pub const API_ANALYSIS_MARKDOWN_OPENAPI_PATH: &str = "/api/analysis/markdown";
+/// Axum runtime path for the code AST analysis endpoint.
+pub const API_ANALYSIS_CODE_AST_AXUM_PATH: &str = "/api/analysis/code-ast";
+/// `OpenAPI` path for the code AST analysis endpoint.
+pub const API_ANALYSIS_CODE_AST_OPENAPI_PATH: &str = "/api/analysis/code-ast";
 /// Axum runtime path for the UI config endpoint.
 pub const API_UI_CONFIG_AXUM_PATH: &str = "/api/ui/config";
 /// `OpenAPI` path for the UI config endpoint.
@@ -117,6 +121,14 @@ pub const API_REPO_DOC_COVERAGE_OPENAPI_PATH: &str = "/api/repo/doc-coverage";
 pub const API_REPO_SYNC_AXUM_PATH: &str = "/api/repo/sync";
 /// `OpenAPI` path for the repo sync endpoint.
 pub const API_REPO_SYNC_OPENAPI_PATH: &str = "/api/repo/sync";
+/// Axum runtime path for the repo index enqueue endpoint.
+pub const API_REPO_INDEX_AXUM_PATH: &str = "/api/repo/index";
+/// `OpenAPI` path for the repo index enqueue endpoint.
+pub const API_REPO_INDEX_OPENAPI_PATH: &str = "/api/repo/index";
+/// Axum runtime path for the repo index status endpoint.
+pub const API_REPO_INDEX_STATUS_AXUM_PATH: &str = "/api/repo/index/status";
+/// `OpenAPI` path for the repo index status endpoint.
+pub const API_REPO_INDEX_STATUS_OPENAPI_PATH: &str = "/api/repo/index/status";
 /// Axum runtime path for the repo projected-pages endpoint.
 pub const API_REPO_PROJECTED_PAGES_AXUM_PATH: &str = "/api/repo/projected-pages";
 /// `OpenAPI` path for the repo projected-pages endpoint.
@@ -311,6 +323,12 @@ pub const WENDAO_GATEWAY_ROUTE_CONTRACTS: &[RouteContract] = &[
     RouteContract {
         axum_path: API_ANALYSIS_MARKDOWN_AXUM_PATH,
         openapi_path: API_ANALYSIS_MARKDOWN_OPENAPI_PATH,
+        methods: &["get"],
+        path_params: &[],
+    },
+    RouteContract {
+        axum_path: API_ANALYSIS_CODE_AST_AXUM_PATH,
+        openapi_path: API_ANALYSIS_CODE_AST_OPENAPI_PATH,
         methods: &["get"],
         path_params: &[],
     },

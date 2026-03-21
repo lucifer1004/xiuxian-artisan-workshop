@@ -1,5 +1,6 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
+assertion_line: 22
 expression: value
 ---
 {
@@ -162,24 +163,30 @@ expression: value
       {
         "audit_status": "unreviewed",
         "kind": "type",
+        "line_end": null,
+        "line_start": null,
         "module_id": "repo:sample:module:SamplePkg",
         "name": "Problem",
         "path": "src/SamplePkg.jl",
         "qualified_name": "SamplePkg.Problem",
         "repo_id": "sample",
         "signature": null,
-        "symbol_id": "repo:sample:symbol:SamplePkg.Problem"
+        "symbol_id": "repo:sample:symbol:SamplePkg.Problem",
+        "verification_state": "verified"
       },
       {
         "audit_status": "unreviewed",
         "kind": "function",
+        "line_end": null,
+        "line_start": null,
         "module_id": "repo:sample:module:SamplePkg",
         "name": "solve",
         "path": "src/SamplePkg.jl",
         "qualified_name": "SamplePkg.solve",
         "repo_id": "sample",
         "signature": "solve(problem::Problem)",
-        "symbol_id": "repo:sample:symbol:SamplePkg.solve"
+        "symbol_id": "repo:sample:symbol:SamplePkg.solve",
+        "verification_state": "verified"
       }
     ]
   },

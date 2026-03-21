@@ -7,11 +7,11 @@ pub mod types;
 #[cfg(feature = "zhenfa-router")]
 mod analysis;
 #[cfg(feature = "zhenfa-router")]
-mod graph;
-#[cfg(feature = "zhenfa-router")]
 mod pathing;
 #[cfg(feature = "zhenfa-router")]
-mod router;
+pub mod repo_index;
+#[cfg(feature = "zhenfa-router")]
+pub mod router;
 #[cfg(feature = "zhenfa-router")]
 mod search;
 #[cfg(feature = "zhenfa-router")]

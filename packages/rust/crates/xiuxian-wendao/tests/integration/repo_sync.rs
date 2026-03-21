@@ -10,8 +10,8 @@ use std::time::{Duration, SystemTime};
 
 use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::json;
-use xiuxian_config_core::resolve_cache_home;
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_config_core::resolve_data_home;
+use xiuxian_wendao::analyzers::{
     RepoSyncDriftState, RepoSyncHealthState, RepoSyncMode, RepoSyncQuery, RepoSyncStalenessState,
     repo_sync_from_config,
 };
@@ -502,9 +502,9 @@ fn append_repo_file_and_commit(
 }
 
 fn repo_cache_root(cwd: &Path) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-    let cache_home = resolve_cache_home(Some(cwd))
-        .ok_or_else(|| "failed to resolve cache home for repo sync tests".to_string())?;
-    Ok(cache_home.join("xiuxian-wendao").join("repo-intelligence"))
+    let data_home = resolve_data_home(Some(cwd))
+        .ok_or_else(|| "failed to resolve data home for repo sync tests".to_string())?;
+    Ok(data_home.join("xiuxian-wendao").join("repo-intelligence"))
 }
 
 fn managed_mirror_root(

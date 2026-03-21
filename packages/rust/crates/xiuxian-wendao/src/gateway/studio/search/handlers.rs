@@ -1,82 +1,41 @@
-use std::cmp::Ordering;
+//! Search backend integration for Studio API.
+
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 use std::sync::Arc;
 
-use axum::{
-    Json,
-    extract::{Query, State},
-};
+use axum::Json;
+use axum::extract::{Query, State};
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 
-use crate::link_graph::{
-    LinkGraphAttachmentKind, LinkGraphDisplayHit, LinkGraphIndex, LinkGraphRetrievalMode,
-    LinkGraphSearchOptions,
+use crate::analyzers::{
+    ExampleSearchQuery, ModuleSearchQuery, SymbolSearchQuery as RepoSymbolSearchQuery,
+    build_example_search, build_module_search, build_symbol_search,
 };
-use crate::repo_intelligence::{
-    ExampleSearchQuery as RepoExampleSearchQuery, ExampleSearchResult as RepoExampleSearchResult,
-    ModuleSearchQuery as RepoModuleSearchQuery, ModuleSearchResult as RepoModuleSearchResult,
-    RegisteredRepository, RepoBacklinkItem, RepoIntelligenceError,
-    RepoSyncMode, RepoSyncQuery,
-    SymbolSearchQuery as RepoSymbolSearchQuery, SymbolSearchResult as RepoSymbolSearchResult,
-    analyze_registered_repository, build_example_search, build_module_search,
-    repo_sync_for_registered_repository,
-    build_symbol_search,
+use crate::gateway::studio::repo_index::{RepoIndexPhase, RepoIndexSnapshot};
+use crate::gateway::studio::router::{
+    GatewayState, StudioApiError, configured_repositories, configured_repository,
+    map_repo_intelligence_error,
 };
+use crate::gateway::studio::types::{
+    AstSearchHit, AstSearchResponse, AttachmentSearchHit, AttachmentSearchResponse,
+    AutocompleteResponse, AutocompleteSuggestion, DefinitionResolveResponse,
+    ReferenceSearchResponse, SearchBacklinkItem, SearchHit, SearchResponse, StudioNavigationTarget,
+    SymbolSearchHit, SymbolSearchResponse, UiProjectConfig,
+};
+use crate::link_graph::LinkGraphAttachmentKind;
 use crate::unified_symbol::UnifiedSymbolIndex;
 
-use super::super::pathing;
-use super::super::router::{GatewayState, StudioApiError, configured_repositories};
-use super::super::types::{
-    AstSearchHit, AstSearchResponse, AttachmentSearchHit, AttachmentSearchKind,
-    AttachmentSearchResponse, AutocompleteResponse, AutocompleteSuggestion,
-    AutocompleteSuggestionType, DefinitionResolveResponse, ReferenceSearchResponse,
-    SearchBacklinkItem, SearchHit, SearchResponse, StudioNavigationTarget, SymbolSearchHit,
-    SymbolSearchResponse, SymbolSearchSource, UiProjectConfig,
-};
-use super::super::vfs::{graph_lookup_candidates, studio_display_path};
-
 use super::definition::{
-    DefinitionResolveOptions, ast_hit_matches, enrich_ast_hit_project_metadata,
-    resolve_definition_candidates, score_ast_hit,
+    DefinitionMatchMode, DefinitionResolveOptions, resolve_best_definition,
+    resolve_definition_candidates,
 };
 use super::observation_hints::definition_observation_hints;
 use super::project_scope::project_metadata_for_path;
 use super::source_index;
-use super::source_index::build_reference_hits;
-use super::support::source_language_label;
 
-const DEFAULT_SEARCH_LIMIT: usize = 10;
-const MAX_SEARCH_LIMIT: usize = 200;
-const DEFAULT_ATTACHMENT_SEARCH_LIMIT: usize = 10;
-const MAX_ATTACHMENT_SEARCH_LIMIT: usize = 200;
-const DEFAULT_AST_SEARCH_LIMIT: usize = 10;
-const MAX_AST_SEARCH_LIMIT: usize = 200;
-const DEFAULT_REFERENCE_SEARCH_LIMIT: usize = 10;
-const MAX_REFERENCE_SEARCH_LIMIT: usize = 200;
-const DEFAULT_SYMBOL_SEARCH_LIMIT: usize = 10;
-const MAX_SYMBOL_SEARCH_LIMIT: usize = 200;
-const DEFAULT_AUTOCOMPLETE_LIMIT: usize = 5;
-const MAX_AUTOCOMPLETE_LIMIT: usize = 20;
-const CODE_CONTENT_SNIPPET_MAX_CHARS: usize = 160;
-const CODE_CONTENT_RIPGREP_MAX_FILE_SIZE: &str = "512K";
-const CODE_CONTENT_EXCLUDE_GLOBS: [&str; 8] = [
-    "!.git/**",
-    "!node_modules/**",
-    "!target/**",
-    "!dist/**",
-    "!build/**",
-    "!.cache/**",
-    "!**/*.min.js",
-    "!**/*.min.css",
-];
-const CODE_CONTENT_EXTENSIONS: [&str; 15] = [
-    "jl", "julia", "mo", "rs", "py", "ts", "tsx", "js", "jsx", "m", "c", "cpp", "h", "hpp",
-    "java",
-];
-
-pub(crate) fn build_ast_index(
+pub fn build_ast_index(
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
@@ -84,7 +43,11 @@ pub(crate) fn build_ast_index(
     source_index::build_ast_index(project_root, config_root, projects)
 }
 
-pub(crate) fn build_symbol_index(
+#[cfg(test)]
+#[path = "../../../../tests/unit/gateway/studio/search.rs"]
+mod studio_search_tests;
+
+pub fn build_symbol_index(
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
@@ -93,1682 +56,1660 @@ pub(crate) fn build_symbol_index(
 }
 
 #[derive(Debug, Deserialize)]
-pub(in crate::gateway::studio) struct SearchQuery {
-    q: Option<String>,
+pub struct SearchQuery {
+    #[serde(alias = "query")]
+    pub q: Option<String>,
     #[serde(default)]
-    intent: Option<String>,
+    pub intent: Option<String>,
     #[serde(default)]
-    repo: Option<String>,
+    pub repo: Option<String>,
     #[serde(default)]
-    limit: Option<usize>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
-pub(in crate::gateway::studio) struct AttachmentSearchQuery {
-    q: Option<String>,
+pub struct DefinitionResolveQuery {
+    pub q: Option<String>,
     #[serde(default)]
-    limit: Option<usize>,
+    pub path: Option<String>,
     #[serde(default)]
-    ext: Vec<String>,
-    #[serde(default)]
-    kind: Vec<String>,
-    #[serde(default)]
-    case_sensitive: bool,
+    pub line: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
-pub(in crate::gateway::studio) struct AutocompleteQuery {
-    prefix: Option<String>,
+pub struct AttachmentSearchQuery {
+    pub q: Option<String>,
     #[serde(default)]
-    limit: Option<usize>,
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub ext: Vec<String>,
+    #[serde(default)]
+    pub kind: Vec<String>,
+    #[serde(default)]
+    pub case_sensitive: bool,
 }
 
 #[derive(Debug, Deserialize)]
-pub(in crate::gateway::studio) struct SymbolSearchQuery {
-    q: Option<String>,
+pub struct AutocompleteQuery {
+    pub prefix: Option<String>,
     #[serde(default)]
-    limit: Option<usize>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
-pub(in crate::gateway::studio) struct AstSearchQuery {
-    q: Option<String>,
+pub struct AstSearchQuery {
+    pub q: Option<String>,
     #[serde(default)]
-    limit: Option<usize>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
-pub(in crate::gateway::studio) struct DefinitionResolveQuery {
-    q: Option<String>,
-    path: Option<String>,
+pub struct ReferenceSearchQuery {
+    pub q: Option<String>,
     #[serde(default)]
-    line: Option<usize>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
-pub(in crate::gateway::studio) struct ReferenceSearchQuery {
-    q: Option<String>,
+pub struct SymbolSearchQuery {
+    pub q: Option<String>,
     #[serde(default)]
-    limit: Option<usize>,
+    pub limit: Option<usize>,
 }
 
-pub(in crate::gateway::studio) async fn search_knowledge(
-    Query(query): Query<SearchQuery>,
+pub async fn search_knowledge(
     State(state): State<Arc<GatewayState>>,
-) -> Result<Json<SearchResponse>, StudioApiError> {
-    let payload = run_knowledge_search(query, state, None).await?;
-    Ok(Json(payload))
-}
-
-pub(in crate::gateway::studio) async fn search_intent(
     Query(query): Query<SearchQuery>,
-    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<SearchResponse>, StudioApiError> {
-    let payload = run_knowledge_search(query, state, Some("intent_search")).await?;
-    Ok(Json(payload))
-}
-
-async fn run_knowledge_search(
-    query: SearchQuery,
-    state: Arc<GatewayState>,
-    default_intent: Option<&str>,
-) -> Result<SearchResponse, StudioApiError> {
-    let raw_query = query
-        .q
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| StudioApiError::bad_request("MISSING_QUERY", "`q` is required"))?;
-
-    let limit = query
-        .limit
-        .unwrap_or(DEFAULT_SEARCH_LIMIT)
-        .clamp(1, MAX_SEARCH_LIMIT);
-    let requested_intent = normalized_intent(query.intent.as_deref());
-    let requested_repo = normalized_repo_filter(query.repo.as_deref());
-
-    if is_code_search_intent(requested_intent.as_deref()) {
-        return run_repo_code_search(
-            raw_query,
-            limit,
-            requested_repo.as_deref(),
-            requested_intent,
-            default_intent,
-            state,
-        )
-        .await;
+    let raw_query = query.q.unwrap_or_default();
+    let query_text = raw_query.trim();
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Knowledge search requires a non-empty query",
+        ));
     }
 
-    let project_root = state.studio.project_root.clone();
-    let config_root = state.studio.config_root.clone();
-    let projects = state.studio.configured_projects();
-    let index = state.link_graph_index().await?;
-    let payload = index.search_planned_payload(raw_query, limit, LinkGraphSearchOptions::default());
-
-    let hits = payload
-        .hits
-        .into_iter()
-        .filter_map(|hit| {
-            let canonical_path =
-                canonical_graph_path(state.as_ref(), index.as_ref(), hit.path.as_str());
-            pathing::path_matches_project_file_filters(
-                project_root.as_path(),
-                config_root.as_path(),
-                projects.as_slice(),
-                canonical_path.as_str(),
-            )
-            .then_some((hit, canonical_path))
-        })
-        .map(|(hit, canonical_path)| {
-            let path = studio_display_path(state.studio.as_ref(), canonical_path.as_str());
-            let navigation_target = crate::gateway::studio::vfs::resolve_navigation_target(
-                state.studio.as_ref(),
-                path.as_str(),
-            );
-            let hierarchy = hierarchy_segments(path.as_str());
-            let hierarchical_uri = hierarchical_uri_for_path(path.as_str());
-            SearchHit {
-                stem: hit.stem,
-                title: strip_option(&hit.title),
-                path,
-                doc_type: hit.doc_type,
-                tags: hit.tags,
-                score: hit.score.max(0.0),
-                best_section: strip_option(&hit.best_section),
-                match_reason: strip_option(&hit.match_reason),
-                hierarchical_uri,
-                hierarchy,
-                saliency_score: Some(hit.score.max(0.0)),
-                audit_status: None,
-                verification_state: None,
-                implicit_backlinks: None,
-                implicit_backlink_items: None,
-                navigation_target,
-            }
-        })
-        .collect::<Vec<_>>();
-    let hit_count = hits.len();
-    let selected_mode = retrieval_mode_to_string(payload.selected_mode);
-    let intent = requested_intent
-        .or_else(|| default_intent.map(str::to_string))
-        .or_else(|| inferred_intent_from_mode(selected_mode.as_str()));
-    let intent_confidence = intent
-        .as_ref()
-        .map(|_| payload.graph_confidence_score.clamp(0.0, 1.0));
-
-    Ok(SearchResponse {
-        query: raw_query.to_string(),
-        hits,
-        hit_count,
-        graph_confidence_score: Some(payload.graph_confidence_score),
-        selected_mode: Some(selected_mode.clone()),
-        intent,
-        intent_confidence,
-        search_mode: Some(selected_mode),
-    })
-}
-
-#[derive(Debug)]
-struct RankedCodeSearchHit {
-    hit: SearchHit,
-    score: f64,
-    rank: usize,
-}
-
-async fn run_repo_code_search(
-    raw_query: &str,
-    limit: usize,
-    repo_filter: Option<&str>,
-    requested_intent: Option<String>,
-    default_intent: Option<&str>,
-    state: Arc<GatewayState>,
-) -> Result<SearchResponse, StudioApiError> {
-    let worker_query = raw_query.to_string();
-    let worker_repo_filter = repo_filter.map(str::to_string);
-    let worker_project_root = state.studio.project_root.clone();
-    let worker_repositories = configured_repositories(state.studio.as_ref());
-    let ranked_hits = tokio::task::spawn_blocking(move || {
-        collect_repo_code_search_hits(
-            worker_project_root.as_path(),
-            worker_repositories,
-            worker_query.as_str(),
-            limit,
-            worker_repo_filter.as_deref(),
-        )
-    })
-    .await
-    .map_err(|error| {
-        StudioApiError::internal(
-            "REPO_CODE_SEARCH_PANIC",
-            "Repo code search task failed unexpectedly",
-            Some(error.to_string()),
-        )
-    })?
-    .map_err(map_repo_intelligence_error)?;
-
-    let hits = ranked_hits
-        .into_iter()
-        .map(|ranked| ranked.hit)
-        .collect::<Vec<_>>();
-    let hit_count = hits.len();
-    let intent = requested_intent
-        .or_else(|| default_intent.map(str::to_string))
-        .or_else(|| Some("code_search".to_string()));
-    let intent_confidence = intent.as_ref().map(|_| 1.0);
-
-    Ok(SearchResponse {
-        query: raw_query.to_string(),
-        hits,
-        hit_count,
-        graph_confidence_score: None,
-        selected_mode: Some("code_search".to_string()),
-        intent,
-        intent_confidence,
-        search_mode: Some("code_search".to_string()),
-    })
-}
-
-fn collect_repo_code_search_hits(
-    project_root: &Path,
-    repositories: Vec<RegisteredRepository>,
-    query: &str,
-    limit: usize,
-    repo_filter: Option<&str>,
-) -> Result<Vec<RankedCodeSearchHit>, RepoIntelligenceError> {
-    let mut repositories = repositories;
-    repositories.sort_by(|left, right| left.id.cmp(&right.id));
-    repositories.dedup_by(|left, right| left.id == right.id);
-    if let Some(filter) = normalized_repo_filter(repo_filter) {
-        if !repositories.iter().any(|repository| repository.id == filter) {
-            return Err(RepoIntelligenceError::UnknownRepository { repo_id: filter });
-        }
-        repositories.retain(|repository| repository.id == filter);
-    }
-    if repositories.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let source_limit = repo_code_source_limit(limit);
-    let mut ranked = Vec::new();
-    for repository in repositories {
-        let repo_id = repository.id.clone();
-        let content_hits = rank_content_search_hits(
-            project_root,
-            &repository,
-            query,
-            source_limit,
-        )?;
-        let content_hit_count = content_hits.len();
-        ranked.extend(content_hits);
-        if content_hit_count > 0 {
-            continue;
-        }
-
-        let structured_limit = source_limit;
-        let analysis = analyze_registered_repository(&repository, project_root)?;
-        let symbol_result = build_symbol_search(
-            &RepoSymbolSearchQuery {
-                repo_id: repo_id.clone(),
-                query: query.to_string(),
-                limit: structured_limit,
-            },
-            &analysis,
-        );
-        ranked.extend(rank_symbol_search_hits(repo_id.as_str(), symbol_result));
-
-        let module_result = build_module_search(
-            &RepoModuleSearchQuery {
-                repo_id: repo_id.clone(),
-                query: query.to_string(),
-                limit: structured_limit,
-            },
-            &analysis,
-        );
-        ranked.extend(rank_module_search_hits(repo_id.as_str(), module_result));
-
-        let example_result = build_example_search(
-            &RepoExampleSearchQuery {
-                repo_id: repo_id.clone(),
-                query: query.to_string(),
-                limit: structured_limit,
-            },
-            &analysis,
-        );
-        ranked.extend(rank_example_search_hits(repo_id.as_str(), example_result));
-    }
-
-    ranked.sort_by(|left, right| {
-        right
-            .score
-            .partial_cmp(&left.score)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| left.rank.cmp(&right.rank))
-            .then_with(|| left.hit.path.cmp(&right.hit.path))
-            .then_with(|| left.hit.stem.cmp(&right.hit.stem))
-    });
-
-    let mut dedup = HashSet::new();
-    ranked.retain(|entry| {
-        let key = format!(
-            "{}|{}|{}",
-            entry.hit.doc_type.as_deref().unwrap_or("unknown"),
-            entry.hit.path,
-            entry.hit.stem
-        );
-        dedup.insert(key)
-    });
-    ranked.truncate(limit);
-    Ok(ranked)
-}
-
-fn rank_symbol_search_hits(
-    repo_id: &str,
-    result: RepoSymbolSearchResult,
-) -> Vec<RankedCodeSearchHit> {
-    if !result.symbol_hits.is_empty() {
-        return result
-            .symbol_hits
-            .into_iter()
-            .enumerate()
-            .map(|(index, hit)| {
-                let rank = hit.rank.unwrap_or(index + 1);
-                let score = score_with_rank_fallback(hit.saliency_score.or(hit.score), rank);
-                let path = normalize_repo_record_path(hit.symbol.path.as_str());
-                let hierarchy = hit
-                    .hierarchy
-                    .or_else(|| repo_hierarchy_segments(repo_id, path.as_str()));
-                let hierarchical_uri = hit
-                    .hierarchical_uri
-                    .or_else(|| repo_hierarchical_uri(repo_id, path.as_str()));
-                let audit_status = hit.audit_status.or(hit.symbol.audit_status.clone());
-                let verification_state = hit.verification_state.or_else(|| {
-                    verification_state_from_audit_status(audit_status.as_deref())
-                        .map(str::to_string)
-                });
-                let kind = format!("{:?}", hit.symbol.kind).to_ascii_lowercase();
-                RankedCodeSearchHit {
-                    hit: SearchHit {
-                        stem: hit.symbol.name.clone(),
-                        title: Some(hit.symbol.qualified_name.clone()),
-                        path: path.clone(),
-                        doc_type: Some("symbol".to_string()),
-                        tags: vec![
-                            repo_id.to_string(),
-                            "code".to_string(),
-                            "symbol".to_string(),
-                            format!("kind:{kind}"),
-                        ],
-                        score,
-                        best_section: hit.symbol.signature.clone(),
-                        match_reason: Some("repo_symbol_search".to_string()),
-                        hierarchical_uri,
-                        hierarchy,
-                        saliency_score: hit.saliency_score.or(hit.score),
-                        audit_status,
-                        verification_state,
-                        implicit_backlinks: hit.implicit_backlinks,
-                        implicit_backlink_items: map_repo_backlink_items(
-                            hit.implicit_backlink_items,
-                        ),
-                        navigation_target: repo_navigation_target(repo_id, path.as_str()),
-                    },
-                    score,
-                    rank,
-                }
-            })
-            .collect();
-    }
-
-    result
-        .symbols
-        .into_iter()
-        .enumerate()
-        .map(|(index, symbol)| {
-            let rank = index + 1;
-            let score = score_with_rank_fallback(None, rank);
-            let path = normalize_repo_record_path(symbol.path.as_str());
-            let hierarchy = repo_hierarchy_segments(repo_id, path.as_str());
-            let hierarchical_uri = repo_hierarchical_uri(repo_id, path.as_str());
-            let kind = format!("{:?}", symbol.kind).to_ascii_lowercase();
-            RankedCodeSearchHit {
-                hit: SearchHit {
-                    stem: symbol.name.clone(),
-                    title: Some(symbol.qualified_name.clone()),
-                    path: path.clone(),
-                    doc_type: Some("symbol".to_string()),
-                    tags: vec![
-                        repo_id.to_string(),
-                        "code".to_string(),
-                        "symbol".to_string(),
-                        format!("kind:{kind}"),
-                    ],
-                    score,
-                    best_section: symbol.signature,
-                    match_reason: Some("repo_symbol_search".to_string()),
-                    hierarchical_uri,
-                    hierarchy,
-                    saliency_score: Some(score),
-                    audit_status: symbol.audit_status.clone(),
-                    verification_state: verification_state_from_audit_status(
-                        symbol.audit_status.as_deref(),
-                    )
-                    .map(str::to_string),
-                    implicit_backlinks: None,
-                    implicit_backlink_items: None,
-                    navigation_target: repo_navigation_target(repo_id, path.as_str()),
-                },
-                score,
-                rank,
-            }
-        })
-        .collect()
-}
-
-fn rank_module_search_hits(
-    repo_id: &str,
-    result: RepoModuleSearchResult,
-) -> Vec<RankedCodeSearchHit> {
-    if !result.module_hits.is_empty() {
-        return result
-            .module_hits
-            .into_iter()
-            .enumerate()
-            .map(|(index, hit)| {
-                let rank = hit.rank.unwrap_or(index + 1);
-                let score = score_with_rank_fallback(hit.saliency_score.or(hit.score), rank);
-                let path = normalize_repo_record_path(hit.module.path.as_str());
-                let hierarchy = hit
-                    .hierarchy
-                    .or_else(|| repo_hierarchy_segments(repo_id, path.as_str()));
-                let hierarchical_uri = hit
-                    .hierarchical_uri
-                    .or_else(|| repo_hierarchical_uri(repo_id, path.as_str()));
-                RankedCodeSearchHit {
-                    hit: SearchHit {
-                        stem: module_stem(hit.module.qualified_name.as_str()),
-                        title: Some(hit.module.qualified_name.clone()),
-                        path: path.clone(),
-                        doc_type: Some("module".to_string()),
-                        tags: vec![
-                            repo_id.to_string(),
-                            "code".to_string(),
-                            "module".to_string(),
-                        ],
-                        score,
-                        best_section: Some(hit.module.module_id.clone()),
-                        match_reason: Some("repo_module_search".to_string()),
-                        hierarchical_uri,
-                        hierarchy,
-                        saliency_score: hit.saliency_score.or(hit.score),
-                        audit_status: None,
-                        verification_state: None,
-                        implicit_backlinks: hit.implicit_backlinks,
-                        implicit_backlink_items: map_repo_backlink_items(
-                            hit.implicit_backlink_items,
-                        ),
-                        navigation_target: repo_navigation_target(repo_id, path.as_str()),
-                    },
-                    score,
-                    rank,
-                }
-            })
-            .collect();
-    }
-
-    result
-        .modules
-        .into_iter()
-        .enumerate()
-        .map(|(index, module)| {
-            let rank = index + 1;
-            let score = score_with_rank_fallback(None, rank);
-            let path = normalize_repo_record_path(module.path.as_str());
-            RankedCodeSearchHit {
-                hit: SearchHit {
-                    stem: module_stem(module.qualified_name.as_str()),
-                    title: Some(module.qualified_name),
-                    path: path.clone(),
-                    doc_type: Some("module".to_string()),
-                    tags: vec![
-                        repo_id.to_string(),
-                        "code".to_string(),
-                        "module".to_string(),
-                    ],
-                    score,
-                    best_section: Some(module.module_id),
-                    match_reason: Some("repo_module_search".to_string()),
-                    hierarchical_uri: repo_hierarchical_uri(repo_id, path.as_str()),
-                    hierarchy: repo_hierarchy_segments(repo_id, path.as_str()),
-                    saliency_score: Some(score),
-                    audit_status: None,
-                    verification_state: None,
-                    implicit_backlinks: None,
-                    implicit_backlink_items: None,
-                    navigation_target: repo_navigation_target(repo_id, path.as_str()),
-                },
-                score,
-                rank,
-            }
-        })
-        .collect()
-}
-
-fn rank_example_search_hits(
-    repo_id: &str,
-    result: RepoExampleSearchResult,
-) -> Vec<RankedCodeSearchHit> {
-    if !result.example_hits.is_empty() {
-        return result
-            .example_hits
-            .into_iter()
-            .enumerate()
-            .map(|(index, hit)| {
-                let rank = hit.rank.unwrap_or(index + 1);
-                let score = score_with_rank_fallback(hit.saliency_score.or(hit.score), rank);
-                let path = normalize_repo_record_path(hit.example.path.as_str());
-                let hierarchy = hit
-                    .hierarchy
-                    .or_else(|| repo_hierarchy_segments(repo_id, path.as_str()));
-                let hierarchical_uri = hit
-                    .hierarchical_uri
-                    .or_else(|| repo_hierarchical_uri(repo_id, path.as_str()));
-                RankedCodeSearchHit {
-                    hit: SearchHit {
-                        stem: hit.example.title.clone(),
-                        title: Some(hit.example.title),
-                        path: path.clone(),
-                        doc_type: Some("example".to_string()),
-                        tags: vec![
-                            repo_id.to_string(),
-                            "code".to_string(),
-                            "example".to_string(),
-                        ],
-                        score,
-                        best_section: hit.example.summary,
-                        match_reason: Some("repo_example_search".to_string()),
-                        hierarchical_uri,
-                        hierarchy,
-                        saliency_score: hit.saliency_score.or(hit.score),
-                        audit_status: None,
-                        verification_state: None,
-                        implicit_backlinks: hit.implicit_backlinks,
-                        implicit_backlink_items: map_repo_backlink_items(
-                            hit.implicit_backlink_items,
-                        ),
-                        navigation_target: repo_navigation_target(repo_id, path.as_str()),
-                    },
-                    score,
-                    rank,
-                }
-            })
-            .collect();
-    }
-
-    result
-        .examples
-        .into_iter()
-        .enumerate()
-        .map(|(index, example)| {
-            let rank = index + 1;
-            let score = score_with_rank_fallback(None, rank);
-            let path = normalize_repo_record_path(example.path.as_str());
-            RankedCodeSearchHit {
-                hit: SearchHit {
-                    stem: example.title.clone(),
-                    title: Some(example.title),
-                    path: path.clone(),
-                    doc_type: Some("example".to_string()),
-                    tags: vec![
-                        repo_id.to_string(),
-                        "code".to_string(),
-                        "example".to_string(),
-                    ],
-                    score,
-                    best_section: example.summary,
-                    match_reason: Some("repo_example_search".to_string()),
-                    hierarchical_uri: repo_hierarchical_uri(repo_id, path.as_str()),
-                    hierarchy: repo_hierarchy_segments(repo_id, path.as_str()),
-                    saliency_score: Some(score),
-                    audit_status: None,
-                    verification_state: None,
-                    implicit_backlinks: None,
-                    implicit_backlink_items: None,
-                    navigation_target: repo_navigation_target(repo_id, path.as_str()),
-                },
-                score,
-                rank,
-            }
-        })
-        .collect()
-}
-
-fn rank_content_search_hits(
-    project_root: &Path,
-    repository: &RegisteredRepository,
-    query: &str,
-    limit: usize,
-) -> Result<Vec<RankedCodeSearchHit>, RepoIntelligenceError> {
-    if limit == 0 {
-        return Ok(Vec::new());
-    }
-    let checkout_root = resolve_content_search_checkout_root(project_root, repository)?;
-    if !checkout_root.is_dir() {
-        return Ok(Vec::new());
-    }
-
-    let mut command = Command::new("rg");
-    command
-        .arg("--line-number")
-        .arg("--with-filename")
-        .arg("--no-heading")
-        .arg("--color")
-        .arg("never")
-        .arg("--fixed-strings")
-        .arg("--ignore-case")
-        .arg("--max-count")
-        .arg("1")
-        .arg("--max-filesize")
-        .arg(CODE_CONTENT_RIPGREP_MAX_FILE_SIZE);
-    for glob in CODE_CONTENT_EXCLUDE_GLOBS {
-        command.arg("--glob").arg(glob);
-    }
-    command.arg(query).arg(checkout_root.as_path());
-
-    let output = match command.output() {
-        Ok(output) => output,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(RepoIntelligenceError::AnalysisFailed {
-                message: format!(
-                    "failed to execute content search for repo `{}`: {error}",
-                    repository.id
-                ),
-            });
-        }
-    };
-    if !output.status.success() {
-        if output.status.code() == Some(1) {
-            return Ok(Vec::new());
-        }
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let detail = if stderr.is_empty() {
-            "unknown ripgrep failure".to_string()
-        } else {
-            stderr
-        };
-        return Err(RepoIntelligenceError::AnalysisFailed {
-            message: format!(
-                "content search failed for repo `{}`: {detail}",
-                repository.id
-            ),
-        });
-    }
-
-    let repo_id = repository.id.clone();
-    let query_lc = query.to_ascii_lowercase();
-    let mut ranked = Vec::new();
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        if ranked.len() >= limit {
-            break;
-        }
-        let Some((raw_path, line_number, line_snippet)) = parse_content_search_line(line) else {
-            continue;
-        };
-        let normalized_path = normalize_repo_record_path(
-            Path::new(raw_path)
-                .strip_prefix(checkout_root.as_path())
-                .unwrap_or_else(|_| Path::new(raw_path))
-                .to_string_lossy()
-                .as_ref(),
-        );
-        if normalized_path.is_empty() || !is_supported_code_extension(normalized_path.as_str()) {
-            continue;
-        }
-        let rank = ranked.len() + 1;
-        let score = content_search_score(
-            query_lc.as_str(),
-            normalized_path.as_str(),
-            line_snippet,
-            rank,
-        );
-        let stem = Path::new(normalized_path.as_str())
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(normalized_path.as_str())
-            .to_string();
-        ranked.push(RankedCodeSearchHit {
-            hit: SearchHit {
-                stem,
-                title: Some(normalized_path.clone()),
-                path: normalized_path.clone(),
-                doc_type: Some("code".to_string()),
-                tags: vec![
-                    repo_id.clone(),
-                    "code".to_string(),
-                    "content".to_string(),
-                ],
-                score,
-                best_section: Some(content_search_best_section(line_number, line_snippet)),
-                match_reason: Some("repo_content_search".to_string()),
-                hierarchical_uri: repo_hierarchical_uri(repo_id.as_str(), normalized_path.as_str()),
-                hierarchy: repo_hierarchy_segments(repo_id.as_str(), normalized_path.as_str()),
-                saliency_score: Some(score),
-                audit_status: None,
-                verification_state: None,
-                implicit_backlinks: None,
-                implicit_backlink_items: None,
-                navigation_target: repo_navigation_target(repo_id.as_str(), normalized_path.as_str()),
-            },
-            score,
-            rank,
-        });
-    }
-
-    Ok(ranked)
-}
-
-fn resolve_content_search_checkout_root(
-    project_root: &Path,
-    repository: &RegisteredRepository,
-) -> Result<PathBuf, RepoIntelligenceError> {
-    let sync = repo_sync_for_registered_repository(
-        &RepoSyncQuery {
-            repo_id: repository.id.clone(),
-            mode: RepoSyncMode::Status,
-        },
-        repository,
-        project_root,
-    )?;
-    let checkout_path = PathBuf::from(sync.checkout_path);
-    if checkout_path.is_absolute() {
-        Ok(checkout_path)
-    } else {
-        Ok(project_root.join(checkout_path))
-    }
-}
-
-fn parse_content_search_line(line: &str) -> Option<(&str, usize, &str)> {
-    let mut segments = line.splitn(3, ':');
-    let path = segments.next()?.trim();
-    let line_number = segments.next()?.trim().parse::<usize>().ok()?.max(1);
-    let snippet = segments.next().unwrap_or_default().trim();
-    (!path.is_empty()).then_some((path, line_number, snippet))
-}
-
-fn is_supported_code_extension(path: &str) -> bool {
-    Path::new(path)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .map(|extension| extension.to_ascii_lowercase())
-        .is_some_and(|extension| CODE_CONTENT_EXTENSIONS.contains(&extension.as_str()))
-}
-
-fn content_search_score(query_lc: &str, path: &str, snippet: &str, rank: usize) -> f64 {
-    let path_lc = path.to_ascii_lowercase();
-    let file_name_lc = Path::new(path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let snippet_lc = snippet.to_ascii_lowercase();
-
-    let mut score = 0.58;
-    if file_name_lc.contains(query_lc) {
-        score += 0.2;
-    } else if path_lc.contains(query_lc) {
-        score += 0.12;
-    }
-    if snippet_lc.contains(query_lc) {
-        score += 0.12;
-    }
-    if snippet_lc.starts_with(query_lc) {
-        score += 0.05;
-    }
-    score -= (rank.saturating_sub(1) as f64) * 0.001;
-    score.clamp(0.0, 0.94)
-}
-
-fn content_search_best_section(line_number: usize, line_snippet: &str) -> String {
-    format!(
-        "L{line_number}: {}",
-        truncate_content_search_snippet(line_snippet, CODE_CONTENT_SNIPPET_MAX_CHARS)
+    let limit = query.limit.unwrap_or(10).max(1);
+    let response = build_knowledge_search_response(
+        state.studio.as_ref(),
+        query_text,
+        limit,
+        query
+            .intent
+            .clone()
+            .or_else(|| Some("semantic_lookup".to_string())),
     )
+    .await?;
+    Ok(Json(response))
 }
 
-fn truncate_content_search_snippet(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return value.to_string();
-    }
-
-    let mut truncated = value.chars().take(max_chars).collect::<String>();
-    truncated.push_str("...");
-    truncated
-}
-
-fn repo_code_source_limit(limit: usize) -> usize {
-    limit
-        .saturating_mul(3)
-        .clamp(DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT)
-}
-
-fn score_with_rank_fallback(score: Option<f64>, rank: usize) -> f64 {
-    score.unwrap_or_else(|| (1.0 / rank.max(1) as f64).clamp(0.0, 1.0))
-}
-
-fn module_stem(qualified_name: &str) -> String {
-    qualified_name
-        .rsplit(['.', ':'])
-        .find(|segment| !segment.is_empty())
-        .unwrap_or(qualified_name)
-        .to_string()
-}
-
-fn normalize_repo_record_path(path: &str) -> String {
-    path.trim().replace('\\', "/")
-}
-
-fn repo_navigation_target(repo_id: &str, path: &str) -> StudioNavigationTarget {
-    let normalized_path = path.trim().trim_start_matches('/');
-    let rooted_path = if normalized_path.is_empty() {
-        repo_id.to_string()
-    } else if normalized_path.starts_with(&format!("{repo_id}/")) {
-        normalized_path.to_string()
-    } else {
-        format!("{repo_id}/{normalized_path}")
-    };
-
-    StudioNavigationTarget {
-        path: rooted_path,
-        category: "repo_code".to_string(),
-        project_name: Some(repo_id.to_string()),
-        root_label: Some(repo_id.to_string()),
-        line: None,
-        line_end: None,
-        column: None,
-    }
-}
-
-fn repo_hierarchy_segments(repo_id: &str, path: &str) -> Option<Vec<String>> {
-    let mut segments = vec!["repo".to_string(), repo_id.to_string()];
-    for segment in path
-        .split('/')
-        .map(str::trim)
-        .filter(|segment| !segment.is_empty())
-    {
-        segments.push(segment.to_string());
-    }
-    (!segments.is_empty()).then_some(segments)
-}
-
-fn repo_hierarchical_uri(repo_id: &str, path: &str) -> Option<String> {
-    let normalized = path.trim().trim_start_matches('/');
-    (!normalized.is_empty()).then(|| format!("wendao://repo/{repo_id}/{normalized}"))
-}
-
-fn map_repo_backlink_items(
-    items: Option<Vec<RepoBacklinkItem>>,
-) -> Option<Vec<SearchBacklinkItem>> {
-    items.and_then(|items| {
-        let mapped = items
-            .into_iter()
-            .filter_map(|item| {
-                let id = item.id.trim().to_string();
-                (!id.is_empty()).then_some(SearchBacklinkItem {
-                    id,
-                    title: item.title,
-                    path: item.path,
-                    kind: item.kind,
-                })
-            })
-            .collect::<Vec<_>>();
-        (!mapped.is_empty()).then_some(mapped)
-    })
-}
-
-fn normalized_repo_filter(repo: Option<&str>) -> Option<String> {
-    repo.map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-}
-
-fn is_code_search_intent(intent: Option<&str>) -> bool {
-    matches!(intent, Some("code_search" | "code"))
-}
-
-fn verification_state_from_audit_status(audit_status: Option<&str>) -> Option<&'static str> {
-    let normalized = audit_status?.trim().to_ascii_lowercase();
-    if normalized.is_empty() {
-        None
-    } else if normalized.contains("verify")
-        || normalized.contains("approved")
-        || normalized.contains("pass")
-    {
-        Some("verified")
-    } else if normalized.contains("pending")
-        || normalized.contains("review")
-        || normalized.contains("triage")
-    {
-        Some("pending")
-    } else if normalized.contains("reject")
-        || normalized.contains("fail")
-        || normalized.contains("error")
-    {
-        Some("failed")
-    } else {
-        None
-    }
-}
-
-fn map_repo_intelligence_error(error: RepoIntelligenceError) -> StudioApiError {
-    match error {
-        RepoIntelligenceError::UnknownRepository { repo_id } => StudioApiError::bad_request(
-            "UNKNOWN_REPOSITORY",
-            format!("Repo Intelligence repository `{repo_id}` is not registered"),
-        ),
-        RepoIntelligenceError::MissingRequiredPlugin { repo_id, plugin_id } => {
-            StudioApiError::bad_request(
-                "MISSING_REQUIRED_PLUGIN",
-                format!("repo `{repo_id}` requires plugin `{plugin_id}`"),
-            )
-        }
-        RepoIntelligenceError::MissingPlugin { plugin_id } => StudioApiError::bad_request(
-            "MISSING_PLUGIN",
-            format!("repo intelligence plugin `{plugin_id}` is not registered"),
-        ),
-        RepoIntelligenceError::MissingRepositoryPath { repo_id } => StudioApiError::bad_request(
-            "MISSING_REPOSITORY_PATH",
-            format!("repo `{repo_id}` does not declare a local path"),
-        ),
-        RepoIntelligenceError::MissingRepositorySource { repo_id } => StudioApiError::bad_request(
-            "MISSING_REPOSITORY_SOURCE",
-            format!("repo `{repo_id}` must declare a local path or upstream url"),
-        ),
-        RepoIntelligenceError::InvalidRepositoryPath { path, reason, .. } => {
-            StudioApiError::bad_request(
-                "INVALID_REPOSITORY_PATH",
-                format!("invalid repository path `{path}`: {reason}"),
-            )
-        }
-        RepoIntelligenceError::UnsupportedRepositoryLayout { repo_id, message } => {
-            StudioApiError::bad_request(
-                "UNSUPPORTED_REPOSITORY_LAYOUT",
-                format!("repo `{repo_id}` has unsupported layout: {message}"),
-            )
-        }
-        RepoIntelligenceError::UnknownProjectedPage { repo_id, page_id } => {
-            StudioApiError::not_found(format!(
-                "repo `{repo_id}` does not contain projected page `{page_id}`"
-            ))
-        }
-        RepoIntelligenceError::UnknownProjectedPageFamilyCluster {
-            repo_id,
-            page_id,
-            kind,
-        } => StudioApiError::not_found(format!(
-            "repo `{repo_id}` does not contain projected page family `{kind:?}` in page `{page_id}`"
-        )),
-        RepoIntelligenceError::UnknownProjectedPageIndexNode {
-            repo_id,
-            page_id,
-            node_id,
-        } => StudioApiError::not_found(format!(
-            "repo `{repo_id}` does not contain projected page-index node `{node_id}` in page `{page_id}`"
-        )),
-        RepoIntelligenceError::ConfigLoad { message } => {
-            StudioApiError::bad_request("CONFIG_LOAD_FAILED", message)
-        }
-        RepoIntelligenceError::DuplicatePlugin { plugin_id } => StudioApiError::internal(
-            "DUPLICATE_PLUGIN",
-            "Repo intelligence plugin registry is inconsistent",
-            Some(format!("duplicate plugin `{plugin_id}`")),
-        ),
-        RepoIntelligenceError::AnalysisFailed { message } => StudioApiError::internal(
-            "REPO_INTELLIGENCE_FAILED",
-            "Repo intelligence task failed",
-            Some(message),
-        ),
-    }
-}
-
-pub(in crate::gateway::studio) async fn search_attachments(
-    Query(query): Query<AttachmentSearchQuery>,
+pub async fn search_intent(
     State(state): State<Arc<GatewayState>>,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<SearchResponse>, StudioApiError> {
+    let raw_query = query.q.unwrap_or_default();
+    let query_text = raw_query.trim();
+    let intent = query.intent.clone().unwrap_or_default();
+    let limit = query.limit.unwrap_or(10).max(1);
+
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Intent search requires a non-empty query",
+        ));
+    }
+
+    if intent == "code_search" {
+        let response =
+            build_code_search_response(state.studio.as_ref(), raw_query, query.repo, limit)?;
+        return Ok(Json(response));
+    }
+
+    let response = build_knowledge_search_response(
+        state.studio.as_ref(),
+        query_text,
+        limit,
+        (!intent.is_empty()).then_some(intent),
+    )
+    .await?;
+    Ok(Json(response))
+}
+
+pub async fn search_attachments(
+    State(state): State<Arc<GatewayState>>,
+    Query(query): Query<AttachmentSearchQuery>,
 ) -> Result<Json<AttachmentSearchResponse>, StudioApiError> {
-    let raw_query = query
-        .q
-        .as_deref()
-        .map(str::trim)
+    let raw_query = query.q.unwrap_or_default();
+    let query_text = raw_query.trim();
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Attachment search requires a non-empty query",
+        ));
+    }
+
+    let limit = query.limit.unwrap_or(20).max(1);
+    let projects = state.studio.configured_projects();
+    let graph_index = state.link_graph_index().await?;
+    let extensions = query
+        .ext
+        .iter()
+        .map(|value| value.trim().trim_start_matches('.').to_ascii_lowercase())
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| StudioApiError::bad_request("MISSING_QUERY", "`q` is required"))?;
-    let limit = query
-        .limit
-        .unwrap_or(DEFAULT_ATTACHMENT_SEARCH_LIMIT)
-        .clamp(1, MAX_ATTACHMENT_SEARCH_LIMIT);
+        .collect::<Vec<_>>();
     let kinds = query
         .kind
         .iter()
-        .map(|kind| LinkGraphAttachmentKind::from_alias(kind.as_str()))
+        .map(|value| LinkGraphAttachmentKind::from_alias(value))
         .collect::<Vec<_>>();
-
-    let project_root = state.studio.project_root.clone();
-    let config_root = state.studio.config_root.clone();
-    let projects = state.studio.configured_projects();
-    let index = state.link_graph_index().await?;
-    let hits = index
+    let hits = graph_index
         .search_attachments(
-            raw_query,
+            query_text,
             limit,
-            query.ext.as_slice(),
+            extensions.as_slice(),
             kinds.as_slice(),
             query.case_sensitive,
         )
         .into_iter()
-        .filter_map(|hit| {
-            let canonical_source_path =
-                canonical_graph_path(state.as_ref(), index.as_ref(), hit.source_path.as_str());
-            pathing::path_matches_project_file_filters(
-                project_root.as_path(),
-                config_root.as_path(),
+        .map(|hit| {
+            attachment_search_hit(
+                state.studio.project_root.as_path(),
+                state.studio.config_root.as_path(),
                 projects.as_slice(),
-                canonical_source_path.as_str(),
+                hit,
             )
-            .then_some((hit, canonical_source_path))
-        })
-        .map(|(hit, canonical_source_path)| {
-            let source_path =
-                studio_display_path(state.studio.as_ref(), canonical_source_path.as_str());
-            let source_id = hit.source_id;
-            let attachment_path = hit.attachment_path;
-            AttachmentSearchHit {
-                path: source_path.clone(),
-                source_id: source_id.clone(),
-                source_stem: hit.source_stem,
-                source_title: strip_option(hit.source_title.as_str()),
-                source_path,
-                attachment_id: attachment_id_for(source_id.as_str(), attachment_path.as_str()),
-                attachment_path,
-                attachment_name: hit.attachment_name,
-                attachment_ext: hit.attachment_ext,
-                kind: attachment_kind_to_api(hit.kind),
-                score: hit.score.max(0.0),
-                vision_snippet: hit
-                    .vision_snippet
-                    .and_then(|value| strip_option(value.as_str())),
-            }
         })
         .collect::<Vec<_>>();
-    let hit_count = hits.len();
 
     Ok(Json(AttachmentSearchResponse {
-        query: raw_query.to_string(),
+        query: query_text.to_string(),
+        hit_count: hits.len(),
         hits,
-        hit_count,
         selected_scope: "attachments".to_string(),
     }))
 }
 
-pub(in crate::gateway::studio) async fn search_autocomplete(
-    Query(query): Query<AutocompleteQuery>,
+pub async fn search_ast(
     State(state): State<Arc<GatewayState>>,
-) -> Result<Json<AutocompleteResponse>, StudioApiError> {
-    let prefix = query
-        .prefix
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| StudioApiError::bad_request("MISSING_PREFIX", "`prefix` is required"))?;
-
-    let limit = query
-        .limit
-        .unwrap_or(DEFAULT_AUTOCOMPLETE_LIMIT)
-        .clamp(1, MAX_AUTOCOMPLETE_LIMIT);
-    let project_root = state.studio.project_root.clone();
-    let config_root = state.studio.config_root.clone();
-    let projects = state.studio.configured_projects();
-    let index = state.link_graph_index().await?;
-    let payload =
-        index.search_planned_payload(prefix, limit.max(2), LinkGraphSearchOptions::default());
-    let filtered_hits = payload
-        .hits
-        .into_iter()
-        .filter_map(|hit| {
-            let canonical_path =
-                canonical_graph_path(state.as_ref(), index.as_ref(), hit.path.as_str());
-            pathing::path_matches_project_file_filters(
-                project_root.as_path(),
-                config_root.as_path(),
-                projects.as_slice(),
-                canonical_path.as_str(),
-            )
-            .then(|| {
-                let mut hit = hit;
-                hit.path = canonical_path;
-                hit
-            })
-        })
-        .collect::<Vec<_>>();
-
-    Ok(Json(AutocompleteResponse {
-        prefix: prefix.to_string(),
-        suggestions: collect_autocomplete_suggestions(prefix, filtered_hits.as_slice(), limit),
-    }))
-}
-
-pub(in crate::gateway::studio) async fn search_ast(
     Query(query): Query<AstSearchQuery>,
-    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<AstSearchResponse>, StudioApiError> {
-    let raw_query = query
-        .q
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| StudioApiError::bad_request("MISSING_QUERY", "`q` is required"))?;
+    let raw_query = query.q.unwrap_or_default();
+    let query_text = raw_query.trim();
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "AST search requires a non-empty query",
+        ));
+    }
 
-    let limit = query
-        .limit
-        .unwrap_or(DEFAULT_AST_SEARCH_LIMIT)
-        .clamp(1, MAX_AST_SEARCH_LIMIT);
-    let project_root = state.studio.project_root.clone();
-    let config_root = state.studio.config_root.clone();
+    let limit = query.limit.unwrap_or(20).max(1);
+    let ast_index = state.studio.ast_index().await?;
     let projects = state.studio.configured_projects();
-    let index = state.studio.ast_index().await?;
-    let mut hits = index
+    let mut hits = ast_index
         .iter()
-        .filter(|hit| {
-            pathing::path_matches_project_file_filters(
-                project_root.as_path(),
-                config_root.as_path(),
-                projects.as_slice(),
-                hit.path.as_str(),
-            )
-        })
-        .filter(|hit| ast_hit_matches(hit, raw_query))
+        .filter(|hit| ast_hit_matches(hit, query_text))
         .map(|hit| {
-            let mut hit = hit.clone();
-            enrich_ast_hit_project_metadata(
-                &mut hit,
-                project_root.as_path(),
-                config_root.as_path(),
+            enrich_ast_hit(
+                hit,
+                state.studio.project_root.as_path(),
+                state.studio.config_root.as_path(),
                 projects.as_slice(),
-            );
-            hit.score = score_ast_hit(&hit, raw_query);
-            hit.navigation_target = ast_navigation_target(&hit);
-            hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
-            hit.navigation_target.path = hit.path.clone();
-            hit
+            )
         })
         .collect::<Vec<_>>();
     hits.sort_by(|left, right| {
         right
             .score
             .partial_cmp(&left.score)
-            .unwrap_or(Ordering::Equal)
+            .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.name.cmp(&right.name))
             .then_with(|| left.path.cmp(&right.path))
             .then_with(|| left.line_start.cmp(&right.line_start))
     });
     hits.truncate(limit);
-    let hit_count = hits.len();
 
     Ok(Json(AstSearchResponse {
-        query: raw_query.to_string(),
+        query: query_text.to_string(),
+        hit_count: hits.len(),
         hits,
-        hit_count,
         selected_scope: "definitions".to_string(),
     }))
 }
 
-pub(in crate::gateway::studio) async fn search_definition(
-    Query(query): Query<DefinitionResolveQuery>,
+pub async fn search_definition(
     State(state): State<Arc<GatewayState>>,
+    Query(query): Query<DefinitionResolveQuery>,
 ) -> Result<Json<DefinitionResolveResponse>, StudioApiError> {
-    let raw_query = query
-        .q
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| StudioApiError::bad_request("MISSING_QUERY", "`q` is required"))?;
+    let raw_query = query.q.unwrap_or_default();
+    let query_text = raw_query.trim();
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Definition search requires a non-empty query",
+        ));
+    }
 
     let source_path = query
         .path
         .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string);
-    let source_path_candidates = source_path
-        .as_deref()
-        .map(|path| graph_lookup_candidates(state.studio.as_ref(), path))
-        .filter(|candidates| !candidates.is_empty());
-    let source_line = query.line.filter(|line| *line > 0);
-    let project_root = state.studio.project_root.clone();
-    let config_root = state.studio.config_root.clone();
+        .map(|path| normalize_source_path(state.studio.project_root.as_path(), path));
+    let source_paths = source_path
+        .as_ref()
+        .map(|path| std::slice::from_ref(path))
+        .filter(|paths| !paths.is_empty());
+    let observation_hints =
+        definition_observation_hints(state.as_ref(), source_paths, query.line, query_text).await;
+    let ast_index = state.studio.ast_index().await?;
     let projects = state.studio.configured_projects();
-    let index = state.studio.ast_index().await?;
-    let markdown_observation_hints = definition_observation_hints(
-        state.as_ref(),
-        source_path_candidates.as_deref(),
-        source_line,
-        raw_query,
-    )
-    .await;
-    let mut candidates = resolve_definition_candidates(
-        project_root.as_path(),
-        config_root.as_path(),
+    let options = DefinitionResolveOptions {
+        scope_patterns: observation_hints.as_ref().and_then(|hints| {
+            (!hints.scope_patterns.is_empty()).then_some(hints.scope_patterns.clone())
+        }),
+        languages: observation_hints
+            .as_ref()
+            .and_then(|hints| (!hints.languages.is_empty()).then_some(hints.languages.clone())),
+        preferred_source_path: source_path.clone(),
+        match_mode: DefinitionMatchMode::ExactOnly,
+        include_markdown: false,
+        ..DefinitionResolveOptions::default()
+    };
+    let candidates = resolve_definition_candidates(
+        query_text,
+        ast_index.as_slice(),
+        state.studio.project_root.as_path(),
+        state.studio.config_root.as_path(),
         projects.as_slice(),
-        index.as_slice(),
-        raw_query,
-        DefinitionResolveOptions {
-            source_paths: source_path_candidates.as_deref(),
-            scope_patterns: markdown_observation_hints
-                .as_ref()
-                .map(|hints| hints.scope_patterns.as_slice()),
-            languages: markdown_observation_hints
-                .as_ref()
-                .map(|hints| hints.languages.as_slice()),
-            ..DefinitionResolveOptions::default()
-        },
+        &options,
     );
-    for hit in &mut candidates {
-        hit.navigation_target = ast_navigation_target(hit);
-        hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
-        hit.navigation_target.path = hit.path.clone();
-    }
-
-    let candidate_count = candidates.len();
-    let definition = candidates.into_iter().next().ok_or_else(|| {
-        StudioApiError::not_found(format!("No definition found for `{raw_query}`"))
-    })?;
+    let Some(definition) = resolve_best_definition(
+        query_text,
+        ast_index.as_slice(),
+        state.studio.project_root.as_path(),
+        state.studio.config_root.as_path(),
+        projects.as_slice(),
+        &options,
+    ) else {
+        return Err(StudioApiError::not_found("Definition not found"));
+    };
+    let navigation_target = definition.navigation_target.clone();
 
     Ok(Json(DefinitionResolveResponse {
-        query: raw_query.to_string(),
+        query: query_text.to_string(),
         source_path,
-        source_line,
-        navigation_target: definition.navigation_target.clone(),
-        definition,
-        candidate_count,
+        source_line: query.line,
+        candidate_count: candidates.len(),
         selected_scope: "definition".to_string(),
+        navigation_target: navigation_target.clone(),
+        definition: definition.clone(),
+        resolved_target: Some(navigation_target),
+        resolved_hit: Some(definition),
     }))
 }
 
-pub(in crate::gateway::studio) async fn search_symbols(
-    Query(query): Query<SymbolSearchQuery>,
+pub async fn search_references(
     State(state): State<Arc<GatewayState>>,
-) -> Result<Json<SymbolSearchResponse>, StudioApiError> {
-    let raw_query = query
-        .q
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| StudioApiError::bad_request("MISSING_QUERY", "`q` is required"))?;
-
-    let limit = query
-        .limit
-        .unwrap_or(DEFAULT_SYMBOL_SEARCH_LIMIT)
-        .clamp(1, MAX_SYMBOL_SEARCH_LIMIT);
-    let search_window = limit.saturating_mul(4).min(MAX_SYMBOL_SEARCH_LIMIT);
-    let project_root = state.studio.project_root.clone();
-    let config_root = state.studio.config_root.clone();
-    let projects = state.studio.configured_projects();
-    let index = state.studio.symbol_index().await?;
-    let mut hits = index
-        .search_project(raw_query, search_window)
-        .into_iter()
-        .map(|symbol| {
-            let mut hit = symbol_to_hit(
-                symbol,
-                raw_query,
-                project_root.as_path(),
-                config_root.as_path(),
-                projects.as_slice(),
-            );
-            hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
-            hit.navigation_target.path = hit.path.clone();
-            hit
-        })
-        .filter(|hit| {
-            pathing::path_matches_project_file_filters(
-                project_root.as_path(),
-                config_root.as_path(),
-                projects.as_slice(),
-                hit.path.as_str(),
-            )
-        })
-        .collect::<Vec<_>>();
-    hits.sort_by(|left, right| {
-        right
-            .score
-            .partial_cmp(&left.score)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| left.name.cmp(&right.name))
-            .then_with(|| left.path.cmp(&right.path))
-            .then_with(|| left.line.cmp(&right.line))
-    });
-    hits.truncate(limit);
-    let hit_count = hits.len();
-
-    Ok(Json(SymbolSearchResponse {
-        query: raw_query.to_string(),
-        hits,
-        hit_count,
-        selected_scope: "project".to_string(),
-    }))
-}
-
-pub(in crate::gateway::studio) async fn search_references(
     Query(query): Query<ReferenceSearchQuery>,
-    State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<ReferenceSearchResponse>, StudioApiError> {
-    let raw_query = query
-        .q
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| StudioApiError::bad_request("MISSING_QUERY", "`q` is required"))?;
+    let raw_query = query.q.unwrap_or_default();
+    let query_text = raw_query.trim();
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Reference search requires a non-empty query",
+        ));
+    }
 
-    let limit = query
-        .limit
-        .unwrap_or(DEFAULT_REFERENCE_SEARCH_LIMIT)
-        .clamp(1, MAX_REFERENCE_SEARCH_LIMIT);
     let ast_index = state.studio.ast_index().await?;
-    let project_root = state.studio.project_root.clone();
-    let config_root = state.studio.config_root.clone();
     let projects = state.studio.configured_projects();
-    let worker_project_root = project_root.clone();
-    let worker_config_root = config_root.clone();
-    let worker_projects = projects.clone();
-    let query_owned = raw_query.to_string();
-    let ast_hits = ast_index.as_ref().clone();
-    let hits = tokio::task::spawn_blocking(move || {
-        build_reference_hits(
-            worker_project_root.as_path(),
-            worker_config_root.as_path(),
-            worker_projects.as_slice(),
-            ast_hits.as_slice(),
-            query_owned.as_str(),
-            limit,
-        )
-    })
-    .await
-    .map_err(|error| {
+    let hits = source_index::build_reference_hits(
+        state.studio.project_root.as_path(),
+        state.studio.config_root.as_path(),
+        projects.as_slice(),
+        ast_index.as_slice(),
+        query_text,
+        query.limit.unwrap_or(20).max(1),
+    )
+    .map_err(|detail| {
         StudioApiError::internal(
-            "REFERENCE_SEARCH_PANIC",
-            "Failed to execute studio reference search",
-            Some(error.to_string()),
-        )
-    })?
-    .map_err(|error| {
-        StudioApiError::internal(
-            "REFERENCE_SEARCH_FAILED",
-            "Failed to execute studio reference search",
-            Some(error),
+            "REFERENCE_SEARCH_BUILD_FAILED",
+            "Failed to build Studio reference search results",
+            Some(detail),
         )
     })?;
-    let mut hits = hits;
-    hits.retain(|hit| {
-        pathing::path_matches_project_file_filters(
-            project_root.as_path(),
-            config_root.as_path(),
-            projects.as_slice(),
-            hit.path.as_str(),
-        )
-    });
-    for hit in &mut hits {
-        hit.path = studio_display_path(state.studio.as_ref(), hit.path.as_str());
-        hit.navigation_target.path = hit.path.clone();
-    }
-    let hit_count = hits.len();
 
     Ok(Json(ReferenceSearchResponse {
-        query: raw_query.to_string(),
+        query: query_text.to_string(),
+        hit_count: hits.len(),
         hits,
-        hit_count,
         selected_scope: "references".to_string(),
     }))
 }
 
-fn retrieval_mode_to_string(mode: LinkGraphRetrievalMode) -> String {
-    match mode {
-        LinkGraphRetrievalMode::GraphOnly => "graph_only".to_string(),
-        LinkGraphRetrievalMode::Hybrid => "hybrid".to_string(),
-        LinkGraphRetrievalMode::VectorOnly => "vector_only".to_string(),
+pub async fn search_symbols(
+    State(state): State<Arc<GatewayState>>,
+    Query(query): Query<SymbolSearchQuery>,
+) -> Result<Json<SymbolSearchResponse>, StudioApiError> {
+    let raw_query = query.q.unwrap_or_default();
+    let query_text = raw_query.trim();
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Symbol search requires a non-empty query",
+        ));
     }
-}
 
-fn attachment_kind_to_api(kind: LinkGraphAttachmentKind) -> AttachmentSearchKind {
-    match kind {
-        LinkGraphAttachmentKind::Image => AttachmentSearchKind::Image,
-        LinkGraphAttachmentKind::Pdf => AttachmentSearchKind::Pdf,
-        LinkGraphAttachmentKind::Gpg => AttachmentSearchKind::Gpg,
-        LinkGraphAttachmentKind::Document => AttachmentSearchKind::Document,
-        LinkGraphAttachmentKind::Archive => AttachmentSearchKind::Archive,
-        LinkGraphAttachmentKind::Audio => AttachmentSearchKind::Audio,
-        LinkGraphAttachmentKind::Video => AttachmentSearchKind::Video,
-        LinkGraphAttachmentKind::Other => AttachmentSearchKind::Other,
-    }
-}
-
-fn attachment_id_for(source_id: &str, attachment_path: &str) -> String {
-    let owner = source_id.trim();
-    let owner = if owner.is_empty() { "unknown" } else { owner };
-    let normalized_attachment = attachment_path
-        .trim()
-        .replace('\\', "/")
-        .trim_start_matches('/')
-        .to_string();
-    if normalized_attachment.is_empty() {
-        format!("att://{owner}")
-    } else {
-        format!("att://{owner}/{normalized_attachment}")
-    }
-}
-
-fn strip_option(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
-fn normalized_intent(intent: Option<&str>) -> Option<String> {
-    intent
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-}
-
-fn inferred_intent_from_mode(mode: &str) -> Option<String> {
-    match mode {
-        "graph_only" => Some("graph_navigation".to_string()),
-        "vector_only" => Some("semantic_lookup".to_string()),
-        "hybrid" => Some("hybrid_search".to_string()),
-        _ => None,
-    }
-}
-
-fn hierarchy_segments(path: &str) -> Option<Vec<String>> {
-    let segments = path
-        .split('/')
-        .map(str::trim)
-        .filter(|segment| !segment.is_empty())
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    (!segments.is_empty()).then_some(segments)
-}
-
-fn hierarchical_uri_for_path(path: &str) -> Option<String> {
-    let normalized = path.trim_start_matches('/').trim();
-    (!normalized.is_empty()).then(|| format!("wendao://{normalized}"))
-}
-
-fn canonical_graph_path(state: &GatewayState, index: &LinkGraphIndex, raw_path: &str) -> String {
-    graph_lookup_candidates(state.studio.as_ref(), raw_path)
+    let limit = query.limit.unwrap_or(20).max(1);
+    let index = state.studio.symbol_index().await?;
+    let projects = state.studio.configured_projects();
+    let glob_matcher = build_project_glob_matcher(projects.as_slice());
+    let mut hits: Vec<SymbolSearchHit> = index
+        .search_unified(query_text, limit)
         .into_iter()
-        .find_map(|candidate| {
-            index
-                .metadata(candidate.as_str())
-                .map(|metadata| metadata.path)
+        .enumerate()
+        .map(|(rank, symbol)| {
+            symbol_search_hit(
+                state.studio.project_root.as_path(),
+                state.studio.config_root.as_path(),
+                projects.as_slice(),
+                symbol,
+                rank,
+            )
         })
-        .unwrap_or_else(|| raw_path.replace('\\', "/"))
+        .filter(|hit| {
+            glob_matcher
+                .as_ref()
+                .is_none_or(|matcher| matcher.is_match(hit.path.as_str()))
+        })
+        .collect();
+    hits.sort_by(|left, right| {
+        left.name
+            .cmp(&right.name)
+            .then_with(|| left.path.cmp(&right.path))
+            .then_with(|| left.line.cmp(&right.line))
+    });
+
+    Ok(Json(SymbolSearchResponse {
+        query: query_text.to_string(),
+        hit_count: hits.len(),
+        selected_scope: "project".to_string(),
+        hits: {
+            hits.truncate(limit);
+            hits
+        },
+    }))
 }
 
-fn symbol_to_hit(
-    symbol: &crate::unified_symbol::UnifiedSymbol,
-    query: &str,
+pub async fn search_autocomplete(
+    State(state): State<Arc<GatewayState>>,
+    Query(query): Query<AutocompleteQuery>,
+) -> Result<Json<AutocompleteResponse>, StudioApiError> {
+    let prefix = query.prefix.unwrap_or_default().trim().to_string();
+    let limit = query.limit.unwrap_or(8).max(1);
+    let suggestions = if prefix.is_empty() {
+        Vec::new()
+    } else {
+        let ast_index = state.studio.ast_index().await?;
+        build_autocomplete_suggestions(ast_index.as_slice(), prefix.as_str(), limit)
+    };
+
+    Ok(Json(AutocompleteResponse {
+        prefix,
+        suggestions,
+    }))
+}
+
+fn build_autocomplete_suggestions(
+    ast_hits: &[AstSearchHit],
+    prefix: &str,
+    limit: usize,
+) -> Vec<AutocompleteSuggestion> {
+    let normalized_prefix = prefix.to_ascii_lowercase();
+    let mut suggestions = Vec::new();
+    let mut seen = HashSet::new();
+
+    for suggestion in ast_hits
+        .iter()
+        .filter_map(|hit| autocomplete_suggestion_from_ast(hit, normalized_prefix.as_str()))
+    {
+        let dedupe_key = suggestion.text.to_ascii_lowercase();
+        if seen.insert(dedupe_key) {
+            suggestions.push(suggestion);
+        }
+    }
+
+    suggestions.sort_by(|left, right| {
+        autocomplete_suggestion_rank(left)
+            .cmp(&autocomplete_suggestion_rank(right))
+            .then_with(|| left.text.cmp(&right.text))
+    });
+    suggestions.truncate(limit);
+    suggestions
+}
+
+fn autocomplete_suggestion_from_ast(
+    hit: &AstSearchHit,
+    normalized_prefix: &str,
+) -> Option<AutocompleteSuggestion> {
+    let text = hit.name.trim();
+    if text.is_empty() || !autocomplete_matches_prefix(text, normalized_prefix) {
+        return None;
+    }
+
+    Some(AutocompleteSuggestion {
+        text: text.to_string(),
+        suggestion_type: autocomplete_suggestion_type(hit).to_string(),
+    })
+}
+
+fn autocomplete_matches_prefix(text: &str, normalized_prefix: &str) -> bool {
+    let normalized_text = text.to_ascii_lowercase();
+    if normalized_text.starts_with(normalized_prefix) {
+        return true;
+    }
+
+    normalized_text
+        .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+        .any(|token| !token.is_empty() && token.starts_with(normalized_prefix))
+}
+
+fn autocomplete_suggestion_type(hit: &AstSearchHit) -> &'static str {
+    if hit.language == "markdown" {
+        match hit.node_kind.as_deref() {
+            Some("property") | Some("observation") => "metadata",
+            _ => "heading",
+        }
+    } else {
+        "symbol"
+    }
+}
+
+fn autocomplete_suggestion_rank(suggestion: &AutocompleteSuggestion) -> usize {
+    match suggestion.suggestion_type.as_str() {
+        "symbol" => 0,
+        "heading" => 1,
+        "metadata" => 2,
+        _ => 3,
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct ParsedCodeSearchQuery {
+    query: String,
+    repo: Option<String>,
+    languages: Vec<String>,
+    kinds: Vec<String>,
+}
+
+const CODE_CONTENT_EXTENSIONS: [&str; 4] = ["jl", "julia", "mo", "modelica"];
+const CODE_CONTENT_EXCLUDE_GLOBS: [&str; 7] = [
+    ".git/**",
+    ".cache/**",
+    ".devenv/**",
+    ".direnv/**",
+    "node_modules/**",
+    "target/**",
+    "dist/**",
+];
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct ParsedRepoCodeSearchQuery {
+    language_filters: HashSet<String>,
+    kind_filters: HashSet<String>,
+    search_term: Option<String>,
+}
+
+impl ParsedRepoCodeSearchQuery {
+    fn search_term(&self) -> Option<&str> {
+        self.search_term.as_deref()
+    }
+}
+
+async fn build_knowledge_search_response(
+    studio: &crate::gateway::studio::router::StudioState,
+    query_text: &str,
+    limit: usize,
+    intent: Option<String>,
+) -> Result<SearchResponse, StudioApiError> {
+    let graph_index = studio.graph_index().await?;
+    let projects = studio.configured_projects();
+    let hits = graph_index
+        .execute_search(
+            query_text,
+            limit,
+            &crate::link_graph::LinkGraphSearchOptions::default(),
+        )
+        .into_iter()
+        .map(|hit| {
+            knowledge_graph_hit_to_search_hit(
+                studio.project_root.as_path(),
+                studio.config_root.as_path(),
+                projects.as_slice(),
+                hit,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let selected_mode = if hits.is_empty() {
+        "vector_only".to_string()
+    } else {
+        "graph_fts".to_string()
+    };
+    let graph_confidence_score = if hits.is_empty() { 0.0 } else { 1.0 };
+
+    Ok(SearchResponse {
+        query: query_text.to_string(),
+        hit_count: hits.len(),
+        hits,
+        graph_confidence_score: Some(graph_confidence_score),
+        selected_mode: Some(selected_mode.clone()),
+        intent,
+        intent_confidence: Some(graph_confidence_score),
+        search_mode: Some(selected_mode),
+        partial: false,
+        indexing_state: None,
+        pending_repos: Vec::new(),
+        skipped_repos: Vec::new(),
+    })
+}
+
+fn normalize_source_path(project_root: &Path, path: &str) -> String {
+    let path = Path::new(path);
+    if path.is_absolute() {
+        return path.strip_prefix(project_root).map_or_else(
+            |_| path.to_string_lossy().replace('\\', "/"),
+            |relative| relative.to_string_lossy().replace('\\', "/"),
+        );
+    }
+
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn ast_hit_matches(hit: &AstSearchHit, query: &str) -> bool {
+    let query = query.to_ascii_lowercase();
+    hit.name.to_ascii_lowercase().contains(query.as_str())
+        || hit.signature.to_ascii_lowercase().contains(query.as_str())
+        || hit
+            .owner_title
+            .as_deref()
+            .is_some_and(|owner| owner.to_ascii_lowercase().contains(query.as_str()))
+}
+
+fn enrich_ast_hit(
+    hit: &AstSearchHit,
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
-) -> SymbolSearchHit {
-    let (path, line) = split_location(symbol.location.as_str());
-    let metadata = project_metadata_for_path(project_root, config_root, projects, path.as_str());
-    let navigation_target = symbol_navigation_target(
-        path.as_str(),
-        symbol.crate_or_local(),
-        metadata.project_name.as_deref(),
-        metadata.root_label.as_deref(),
-        line,
+) -> AstSearchHit {
+    let metadata =
+        project_metadata_for_path(project_root, config_root, projects, hit.path.as_str());
+    let mut navigation_target = hit.navigation_target.clone();
+    navigation_target.project_name = metadata.project_name.clone();
+    navigation_target.root_label = metadata.root_label.clone();
+
+    let mut enriched = hit.clone();
+    enriched.project_name = metadata.project_name;
+    enriched.root_label = metadata.root_label;
+    enriched.navigation_target = navigation_target;
+    enriched.score = ast_hit_score(&enriched);
+    enriched
+}
+
+fn ast_hit_score(hit: &AstSearchHit) -> f64 {
+    if hit.language != "markdown" {
+        return 0.95;
+    }
+
+    match hit.node_kind.as_deref() {
+        Some("task") => 0.88,
+        Some("property") | Some("observation") => 0.8,
+        _ => 0.95,
+    }
+}
+
+fn attachment_search_hit(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    hit: crate::link_graph::LinkGraphAttachmentHit,
+) -> AttachmentSearchHit {
+    let metadata = project_metadata_for_path(
+        project_root,
+        config_root,
+        projects,
+        hit.source_path.as_str(),
     );
 
+    AttachmentSearchHit {
+        name: hit.attachment_name.clone(),
+        path: hit.source_path.clone(),
+        navigation_target: StudioNavigationTarget {
+            path: hit.source_path.clone(),
+            category: "doc".to_string(),
+            project_name: metadata.project_name,
+            root_label: metadata.root_label,
+            line: None,
+            line_end: None,
+            column: None,
+        },
+        score: hit.score,
+        source_id: hit.source_id.clone(),
+        source_stem: hit.source_stem,
+        source_title: hit.source_title,
+        source_path: hit.source_path,
+        attachment_id: format!("att://{}/{}", hit.source_id, hit.attachment_path),
+        attachment_path: hit.attachment_path,
+        attachment_name: hit.attachment_name,
+        attachment_ext: hit.attachment_ext,
+        kind: attachment_kind_label(hit.kind).to_string(),
+        vision_snippet: hit.vision_snippet,
+    }
+}
+
+fn attachment_kind_label(kind: LinkGraphAttachmentKind) -> &'static str {
+    match kind {
+        LinkGraphAttachmentKind::Image => "image",
+        LinkGraphAttachmentKind::Pdf => "pdf",
+        LinkGraphAttachmentKind::Gpg => "gpg",
+        LinkGraphAttachmentKind::Document => "document",
+        LinkGraphAttachmentKind::Archive => "archive",
+        LinkGraphAttachmentKind::Audio => "audio",
+        LinkGraphAttachmentKind::Video => "video",
+        LinkGraphAttachmentKind::Other => "other",
+    }
+}
+
+fn symbol_search_hit(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    symbol: crate::unified_symbol::UnifiedSymbol,
+    rank: usize,
+) -> SymbolSearchHit {
+    let (path, line) = parse_symbol_location(symbol.location.as_str());
+    let metadata = project_metadata_for_path(project_root, config_root, projects, path.as_str());
+    let source = if symbol.is_project() {
+        "project".to_string()
+    } else {
+        "external".to_string()
+    };
+    let language = super::support::source_language_label(Path::new(path.as_str()))
+        .unwrap_or("unknown")
+        .to_string();
+
     SymbolSearchHit {
-        name: symbol.name.clone(),
-        kind: symbol.kind.clone(),
+        name: symbol.name,
+        kind: symbol.kind,
         path: path.clone(),
         line,
-        location: symbol.location.clone(),
-        language: source_language_label(Path::new(path.as_str()))
-            .unwrap_or("unknown")
-            .to_string(),
-        crate_name: symbol.crate_or_local().to_string(),
-        project_name: metadata.project_name,
-        root_label: metadata.root_label,
-        navigation_target,
-        source: if symbol.is_project() {
-            SymbolSearchSource::Project
-        } else {
-            SymbolSearchSource::External
+        location: symbol.location,
+        language,
+        source,
+        crate_name: symbol.crate_name,
+        project_name: metadata.project_name.clone(),
+        root_label: metadata.root_label.clone(),
+        navigation_target: StudioNavigationTarget {
+            path,
+            category: "doc".to_string(),
+            project_name: metadata.project_name,
+            root_label: metadata.root_label,
+            line: Some(line),
+            line_end: Some(line),
+            column: None,
         },
-        score: score_symbol(symbol.name.as_str(), path.as_str(), query),
+        score: if rank == usize::MAX { 0.0 } else { 0.95 },
     }
 }
 
-fn ast_navigation_target(hit: &AstSearchHit) -> StudioNavigationTarget {
-    StudioNavigationTarget {
-        path: hit.path.clone(),
-        category: "doc".to_string(),
-        project_name: hit
-            .project_name
-            .clone()
-            .or_else(|| Some(hit.crate_name.clone())),
-        root_label: hit.root_label.clone(),
-        line: Some(hit.line_start),
-        line_end: Some(hit.line_end),
-        column: None,
-    }
-}
-
-fn symbol_navigation_target(
-    path: &str,
-    crate_name: &str,
-    project_name: Option<&str>,
-    root_label: Option<&str>,
-    line: usize,
-) -> StudioNavigationTarget {
-    StudioNavigationTarget {
-        path: path.to_string(),
-        category: "doc".to_string(),
-        project_name: project_name
-            .map(ToString::to_string)
-            .or_else(|| Some(crate_name.to_string())),
-        root_label: root_label.map(ToString::to_string),
-        line: Some(line),
-        line_end: Some(line),
-        column: None,
-    }
-}
-
-struct AutocompleteCollector<'a> {
-    suggestions: Vec<AutocompleteSuggestion>,
-    seen: HashSet<String>,
-    prefix_lc: &'a str,
-    limit: usize,
-}
-
-fn split_location(location: &str) -> (String, usize) {
+fn parse_symbol_location(location: &str) -> (String, usize) {
     match location.rsplit_once(':') {
-        Some((path, line)) => (
-            path.to_string(),
-            line.parse::<usize>().unwrap_or_default().max(1),
-        ),
+        Some((path, line)) => (path.to_string(), line.parse::<usize>().unwrap_or(1)),
         None => (location.to_string(), 1),
     }
 }
 
-fn score_symbol(name: &str, path: &str, query: &str) -> f64 {
-    let name_lc = name.to_ascii_lowercase();
-    let path_lc = path.to_ascii_lowercase();
-    let query_lc = query.to_ascii_lowercase();
+fn is_supported_code_extension(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            CODE_CONTENT_EXTENSIONS
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(ext))
+        })
+}
 
-    if name_lc == query_lc {
-        1.0
-    } else if name_lc.starts_with(query_lc.as_str()) {
-        0.95
-    } else if name_lc.contains(query_lc.as_str()) {
-        0.88
-    } else if path_lc.contains(query_lc.as_str()) {
-        0.72
+#[cfg(test)]
+fn parse_content_search_line(line: &str) -> Option<(String, usize, String)> {
+    let (path, remainder) = line.rsplit_once(':')?;
+    let (path, line_number) = path.rsplit_once(':')?;
+    Some((
+        path.to_string(),
+        line_number.parse().ok()?,
+        remainder.to_string(),
+    ))
+}
+
+fn truncate_content_search_snippet(value: &str, max_chars: usize) -> String {
+    let truncated = value.chars().take(max_chars).collect::<String>();
+    if value.chars().count() > max_chars {
+        format!("{truncated}...")
     } else {
-        0.5
+        truncated
     }
 }
 
-impl<'a> AutocompleteCollector<'a> {
-    fn new(prefix_lc: &'a str, limit: usize) -> Self {
-        Self {
-            suggestions: Vec::with_capacity(limit),
-            seen: HashSet::new(),
-            prefix_lc,
-            limit,
+fn parse_repo_code_search_query(query: &str) -> ParsedRepoCodeSearchQuery {
+    let mut spec = ParsedRepoCodeSearchQuery::default();
+    let mut search_tokens = Vec::new();
+    for token in query.split_whitespace() {
+        if let Some(value) = token.strip_prefix("lang:") {
+            let normalized = value.trim().to_ascii_lowercase();
+            if !normalized.is_empty() {
+                spec.language_filters.insert(normalized);
+            }
+            continue;
         }
+
+        if let Some(value) = token.strip_prefix("kind:") {
+            let normalized = value.trim().to_ascii_lowercase();
+            if matches!(
+                normalized.as_str(),
+                "file" | "symbol" | "function" | "module" | "example"
+            ) {
+                spec.kind_filters.insert(normalized);
+                continue;
+            }
+        }
+
+        search_tokens.push(token.to_string());
     }
 
-    fn add(
-        &mut self,
-        text: &str,
-        path: &str,
-        doc_type: Option<&str>,
-        suggestion_type: AutocompleteSuggestionType,
-    ) {
-        if self.suggestions.len() >= self.limit {
-            return;
-        }
-
-        let normalized_text = text.trim();
-        if normalized_text.is_empty()
-            || !normalized_text
-                .to_ascii_lowercase()
-                .starts_with(self.prefix_lc)
-        {
-            return;
-        }
-
-        let key = format!("{suggestion_type:?}|{normalized_text}|{path}");
-        if !self.seen.insert(key) {
-            return;
-        }
-
-        self.suggestions.push(AutocompleteSuggestion {
-            text: normalized_text.to_string(),
-            suggestion_type,
-            path: Some(path.to_string()),
-            doc_type: doc_type.map(ToString::to_string),
-        });
-    }
+    spec.search_term = (!search_tokens.is_empty()).then(|| search_tokens.join(" "));
+    spec
 }
 
-fn collect_autocomplete_suggestions(
-    prefix: &str,
-    hits: &[LinkGraphDisplayHit],
+fn path_matches_language_filters(path: &str, filters: &HashSet<String>) -> bool {
+    if filters.is_empty() {
+        return true;
+    }
+
+    let extension = Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase());
+    filters.iter().any(|filter| match filter.as_str() {
+        "julia" => matches!(extension.as_deref(), Some("jl" | "julia")),
+        "modelica" => matches!(extension.as_deref(), Some("mo" | "modelica")),
+        other => extension.as_deref() == Some(other),
+    })
+}
+
+fn build_project_glob_matcher(projects: &[UiProjectConfig]) -> Option<GlobSet> {
+    let patterns = projects
+        .iter()
+        .flat_map(|project| project.dirs.iter())
+        .filter(|dir| is_glob_pattern(dir.as_str()))
+        .collect::<Vec<_>>();
+    if patterns.is_empty() {
+        return None;
+    }
+
+    let mut builder = GlobSetBuilder::new();
+    let mut has_pattern = false;
+    for pattern in patterns {
+        let Ok(glob) = Glob::new(pattern.as_str()) else {
+            continue;
+        };
+        builder.add(glob);
+        has_pattern = true;
+    }
+
+    if !has_pattern {
+        return None;
+    }
+
+    builder.build().ok()
+}
+
+fn is_glob_pattern(value: &str) -> bool {
+    value.contains('*') || value.contains('?') || value.contains('[')
+}
+
+fn build_code_search_response(
+    studio: &crate::gateway::studio::router::StudioState,
+    raw_query: String,
+    repo_hint: Option<String>,
     limit: usize,
-) -> Vec<AutocompleteSuggestion> {
-    let prefix_lc = prefix.to_ascii_lowercase();
-    let mut collector = AutocompleteCollector::new(&prefix_lc, limit);
+) -> Result<SearchResponse, StudioApiError> {
+    let parsed = parse_code_search_query(raw_query.as_str(), repo_hint.as_deref());
+    let repositories = if let Some(repo_id) = parsed.repo.as_deref() {
+        vec![configured_repository(studio, repo_id).map_err(map_repo_intelligence_error)?]
+    } else {
+        configured_repositories(studio)
+    };
 
-    for hit in hits {
-        collector.add(
-            &hit.stem,
-            hit.path.as_str(),
-            hit.doc_type.as_deref(),
-            AutocompleteSuggestionType::Stem,
+    if repositories.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "UNKNOWN_REPOSITORY",
+            "No configured repository is available for code search",
+        ));
+    }
+
+    studio
+        .repo_index
+        .ensure_repositories_enqueued(repositories.clone(), false);
+
+    let mut hits = Vec::new();
+    let mut pending_repos = Vec::new();
+    let mut skipped_repos = Vec::new();
+    for repository in repositories {
+        let Some(snapshot) = studio.repo_index.snapshot(repository.id.as_str()) else {
+            let repo_status = studio
+                .repo_index
+                .status_response(Some(repository.id.as_str()));
+            let phase = repo_status.repos.first().map(|status| status.phase);
+            if matches!(
+                phase,
+                Some(RepoIndexPhase::Unsupported | RepoIndexPhase::Failed)
+            ) {
+                skipped_repos.push(repository.id.clone());
+            } else {
+                pending_repos.push(repository.id.clone());
+            }
+            continue;
+        };
+        let symbol_hits = build_symbol_search(
+            &RepoSymbolSearchQuery {
+                repo_id: repository.id.clone(),
+                query: parsed.query.clone(),
+                limit,
+            },
+            snapshot.analysis.as_ref(),
+        )
+        .symbol_hits;
+        let module_hits = build_module_search(
+            &ModuleSearchQuery {
+                repo_id: repository.id.clone(),
+                query: parsed.query.clone(),
+                limit,
+            },
+            snapshot.analysis.as_ref(),
+        )
+        .module_hits;
+        let example_hits = build_example_search(
+            &ExampleSearchQuery {
+                repo_id: repository.id.clone(),
+                query: parsed.query.clone(),
+                limit,
+            },
+            snapshot.analysis.as_ref(),
+        )
+        .example_hits;
+
+        let mut repository_hits = Vec::new();
+        repository_hits.extend(
+            symbol_hits
+                .into_iter()
+                .map(|hit| symbol_search_hit_to_search_hit(&repository.id, hit))
+                .filter(|hit| matches_code_filters(hit, &parsed)),
+        );
+        repository_hits.extend(
+            module_hits
+                .into_iter()
+                .map(|hit| module_search_hit_to_search_hit(&repository.id, hit))
+                .filter(|hit| matches_code_filters(hit, &parsed)),
+        );
+        repository_hits.extend(
+            example_hits
+                .into_iter()
+                .map(|hit| example_search_hit_to_search_hit(&repository.id, hit))
+                .filter(|hit| matches_code_filters(hit, &parsed)),
         );
 
-        if !hit.title.is_empty() {
-            collector.add(
-                &hit.title,
-                hit.path.as_str(),
-                hit.doc_type.as_deref(),
-                AutocompleteSuggestionType::Title,
-            );
+        if repository_hits.is_empty() {
+            repository_hits.extend(build_repo_content_search_hits(
+                snapshot.as_ref(),
+                raw_query.as_str(),
+                limit,
+            ));
         }
 
-        for tag in &hit.tags {
-            collector.add(
-                tag,
-                hit.path.as_str(),
-                hit.doc_type.as_deref(),
-                AutocompleteSuggestionType::Tag,
-            );
+        hits.extend(repository_hits);
+    }
+
+    hits.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.path.cmp(&right.path))
+            .then_with(|| left.stem.cmp(&right.stem))
+    });
+    hits.truncate(limit);
+
+    let hit_count = hits.len();
+    let indexing_state = if pending_repos.is_empty() {
+        "ready".to_string()
+    } else if hit_count == 0 {
+        "indexing".to_string()
+    } else {
+        "partial".to_string()
+    };
+
+    Ok(SearchResponse {
+        query: raw_query,
+        hit_count,
+        hits,
+        graph_confidence_score: None,
+        selected_mode: Some("code_search".to_string()),
+        intent: Some("code_search".to_string()),
+        intent_confidence: Some(1.0),
+        search_mode: Some("code_search".to_string()),
+        partial: !pending_repos.is_empty() || !skipped_repos.is_empty(),
+        indexing_state: Some(indexing_state),
+        pending_repos,
+        skipped_repos,
+    })
+}
+
+fn build_repo_content_search_hits(
+    snapshot: &RepoIndexSnapshot,
+    raw_query: &str,
+    limit: usize,
+) -> Vec<SearchHit> {
+    let parsed = parse_repo_code_search_query(raw_query);
+    let Some(search_term) = parsed.search_term() else {
+        return Vec::new();
+    };
+    if !parsed.kind_filters.is_empty() && !parsed.kind_filters.contains("file") {
+        return Vec::new();
+    }
+
+    let needle = search_term.to_ascii_lowercase();
+    let mut hits = Vec::new();
+
+    for document in snapshot.code_documents.iter() {
+        let relative_path = document.path.as_str();
+        if is_excluded_code_content_path(relative_path) {
+            continue;
+        }
+        if !is_supported_code_extension(relative_path) {
+            continue;
+        }
+        if !path_matches_language_filters(relative_path, &parsed.language_filters) {
+            continue;
         }
 
-        if collector.suggestions.len() >= limit {
+        let Some((line_number, snippet)) =
+            first_matching_line(document.contents.as_ref(), needle.as_str())
+        else {
+            continue;
+        };
+
+        let mut tags = vec![
+            snapshot.repo_id.clone(),
+            "code".to_string(),
+            "file".to_string(),
+            "kind:file".to_string(),
+        ];
+        if let Some(language) = document
+            .language
+            .clone()
+            .or_else(|| infer_code_language(relative_path))
+        {
+            tags.push(language.clone());
+            tags.push(format!("lang:{language}"));
+        }
+
+        let stem = Path::new(relative_path)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or(relative_path)
+            .to_string();
+        let hierarchy = Some(
+            relative_path
+                .split('/')
+                .map(str::to_string)
+                .collect::<Vec<_>>(),
+        );
+
+        hits.push(SearchHit {
+            stem,
+            title: Some(relative_path.to_string()),
+            path: relative_path.to_string(),
+            doc_type: Some("file".to_string()),
+            tags,
+            score: 0.72,
+            best_section: Some(format!(
+                "{line_number}: {}",
+                truncate_content_search_snippet(snippet.as_str(), 140)
+            )),
+            match_reason: Some("repo_content_search".to_string()),
+            hierarchical_uri: None,
+            hierarchy,
+            implicit_backlinks: None,
+            implicit_backlink_items: None,
+            audit_status: None,
+            verification_state: None,
+            saliency_score: None,
+            navigation_target: Some(StudioNavigationTarget {
+                path: format!("{}/{}", snapshot.repo_id, relative_path),
+                category: "repo_code".to_string(),
+                project_name: Some(snapshot.repo_id.clone()),
+                root_label: Some(snapshot.repo_id.clone()),
+                line: Some(line_number),
+                line_end: Some(line_number),
+                column: None,
+            }),
+        });
+
+        if hits.len() >= limit {
             break;
         }
     }
 
-    collector.suggestions
+    hits
+}
+
+fn knowledge_graph_hit_to_search_hit(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    hit: crate::link_graph::LinkGraphHit,
+) -> SearchHit {
+    let metadata =
+        project_metadata_for_path(project_root, config_root, projects, hit.path.as_str());
+    let display_path = studio_display_path(
+        project_root,
+        config_root,
+        projects,
+        &metadata,
+        hit.path.as_str(),
+    );
+    let hierarchy = Some(
+        display_path
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>(),
+    );
+
+    SearchHit {
+        stem: hit.stem.clone(),
+        title: (!hit.title.trim().is_empty()).then_some(hit.title.clone()),
+        path: display_path,
+        doc_type: hit.doc_type.clone(),
+        tags: hit.tags.clone(),
+        score: hit.score,
+        best_section: hit.best_section.clone(),
+        match_reason: hit
+            .match_reason
+            .clone()
+            .or_else(|| Some("link_graph_search".to_string())),
+        hierarchical_uri: None,
+        hierarchy,
+        saliency_score: None,
+        audit_status: None,
+        verification_state: None,
+        implicit_backlinks: None,
+        implicit_backlink_items: None,
+        navigation_target: Some(StudioNavigationTarget {
+            path: hit.path,
+            category: "doc".to_string(),
+            project_name: metadata.project_name,
+            root_label: metadata.root_label,
+            line: None,
+            line_end: None,
+            column: None,
+        }),
+    }
+}
+
+fn studio_display_path(
+    project_root: &Path,
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+    metadata: &super::project_scope::SearchProjectMetadata,
+    path: &str,
+) -> String {
+    let normalized = path.replace('\\', "/");
+    if projects.len() > 1
+        && let Some(project_name) = metadata.project_name.as_deref()
+    {
+        let relative_to_project = projects
+            .iter()
+            .find(|project| project.name == project_name)
+            .and_then(|project| {
+                super::project_scope::resolve_project_root_path(config_root, project.root.as_str())
+            })
+            .and_then(|project_root_path| {
+                let absolute_path = if Path::new(path).is_absolute() {
+                    Path::new(path).to_path_buf()
+                } else {
+                    project_root.join(path)
+                };
+                absolute_path
+                    .strip_prefix(project_root_path)
+                    .ok()
+                    .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+            })
+            .filter(|relative| !relative.is_empty())
+            .unwrap_or_else(|| normalized.clone());
+
+        if !relative_to_project.starts_with(&format!("{project_name}/")) {
+            return format!("{project_name}/{relative_to_project}");
+        }
+    }
+
+    normalized
+}
+
+fn is_excluded_code_content_path(path: &str) -> bool {
+    CODE_CONTENT_EXCLUDE_GLOBS.iter().any(|pattern| {
+        let prefix = pattern.trim_end_matches("/**");
+        path == prefix || path.starts_with(&format!("{prefix}/"))
+    })
+}
+
+fn first_matching_line(contents: &str, needle: &str) -> Option<(usize, String)> {
+    contents
+        .lines()
+        .enumerate()
+        .find_map(|(index, line)| {
+            line.contains(needle)
+                .then(|| (index + 1, line.trim().to_string()))
+        })
+        .or_else(|| {
+            contents.lines().enumerate().find_map(|(index, line)| {
+                line.to_ascii_lowercase()
+                    .contains(needle)
+                    .then(|| (index + 1, line.trim().to_string()))
+            })
+        })
+}
+
+fn parse_code_search_query(query: &str, repo_hint: Option<&str>) -> ParsedCodeSearchQuery {
+    let mut parsed = ParsedCodeSearchQuery {
+        repo: repo_hint
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_ascii_lowercase),
+        ..ParsedCodeSearchQuery::default()
+    };
+    let mut terms = Vec::new();
+
+    for token in query.split_whitespace() {
+        if let Some(value) = token.strip_prefix("lang:") {
+            let normalized = value.trim().to_ascii_lowercase();
+            if !normalized.is_empty() && !parsed.languages.contains(&normalized) {
+                parsed.languages.push(normalized);
+            }
+            continue;
+        }
+        if let Some(value) = token.strip_prefix("kind:") {
+            let normalized = value.trim().to_ascii_lowercase();
+            if !normalized.is_empty() && !parsed.kinds.contains(&normalized) {
+                parsed.kinds.push(normalized);
+            }
+            continue;
+        }
+        if let Some(value) = token.strip_prefix("repo:") {
+            let normalized = value.trim().to_ascii_lowercase();
+            if !normalized.is_empty() {
+                parsed.repo = Some(normalized);
+            }
+            continue;
+        }
+        terms.push(token);
+    }
+
+    parsed.query = terms.join(" ").trim().to_string();
+    parsed
+}
+
+fn matches_code_filters(hit: &SearchHit, parsed: &ParsedCodeSearchQuery) -> bool {
+    if parsed.query.is_empty() {
+        return false;
+    }
+
+    let language = infer_code_language(hit.path.as_str());
+    if !parsed.languages.is_empty()
+        && !language
+            .as_deref()
+            .map(|value| parsed.languages.iter().any(|item| item == value))
+            .unwrap_or(false)
+    {
+        return false;
+    }
+
+    if parsed.kinds.is_empty() {
+        return true;
+    }
+
+    let doc_type = hit
+        .doc_type
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let explicit_kind = hit
+        .tags
+        .iter()
+        .find_map(|tag| tag.strip_prefix("kind:"))
+        .map(str::to_ascii_lowercase);
+
+    parsed.kinds.iter().any(|kind| {
+        kind == &doc_type
+            || explicit_kind
+                .as_deref()
+                .map(|value| value == kind)
+                .unwrap_or(false)
+    })
+}
+
+fn symbol_search_hit_to_search_hit(
+    repo_id: &str,
+    hit: crate::analyzers::SymbolSearchHit,
+) -> SearchHit {
+    let language = infer_code_language(hit.symbol.path.as_str());
+    let kind = symbol_kind_tag(hit.symbol.kind);
+    let mut tags = vec![
+        repo_id.to_string(),
+        "code".to_string(),
+        "symbol".to_string(),
+        format!("kind:{kind}"),
+    ];
+    if let Some(language) = language.as_deref() {
+        tags.push(language.to_string());
+        tags.push(format!("lang:{language}"));
+    }
+    if let Some(status) = hit.audit_status.clone() {
+        tags.push(status);
+    }
+
+    SearchHit {
+        stem: hit.symbol.name.clone(),
+        title: Some(hit.symbol.qualified_name.clone()),
+        path: hit.symbol.path.clone(),
+        doc_type: Some("symbol".to_string()),
+        tags,
+        score: hit.saliency_score.or(hit.score).unwrap_or(0.0),
+        best_section: hit
+            .symbol
+            .signature
+            .clone()
+            .or_else(|| Some(hit.symbol.qualified_name.clone())),
+        match_reason: Some("repo_symbol_search".to_string()),
+        hierarchical_uri: hit.hierarchical_uri,
+        hierarchy: hit.hierarchy,
+        saliency_score: hit.saliency_score,
+        audit_status: hit.audit_status,
+        verification_state: hit.verification_state,
+        implicit_backlinks: hit.implicit_backlinks,
+        implicit_backlink_items: map_backlink_items(hit.implicit_backlink_items),
+        navigation_target: Some(repo_navigation_target(
+            repo_id,
+            hit.symbol.path.as_str(),
+            Some("repo_code".to_string()),
+            hit.symbol.line_start,
+            hit.symbol.line_end,
+        )),
+    }
+}
+
+fn module_search_hit_to_search_hit(
+    repo_id: &str,
+    hit: crate::analyzers::ModuleSearchHit,
+) -> SearchHit {
+    let language = infer_code_language(hit.module.path.as_str());
+    let mut tags = vec![
+        repo_id.to_string(),
+        "code".to_string(),
+        "module".to_string(),
+        "kind:module".to_string(),
+    ];
+    if let Some(language) = language.as_deref() {
+        tags.push(language.to_string());
+        tags.push(format!("lang:{language}"));
+    }
+
+    SearchHit {
+        stem: hit.module.qualified_name.clone(),
+        title: Some(hit.module.qualified_name.clone()),
+        path: hit.module.path.clone(),
+        doc_type: Some("module".to_string()),
+        tags,
+        score: hit.saliency_score.or(hit.score).unwrap_or(0.0),
+        best_section: Some(hit.module.module_id.clone()),
+        match_reason: Some("repo_module_search".to_string()),
+        hierarchical_uri: hit.hierarchical_uri,
+        hierarchy: hit.hierarchy,
+        saliency_score: hit.saliency_score,
+        audit_status: None,
+        verification_state: None,
+        implicit_backlinks: hit.implicit_backlinks,
+        implicit_backlink_items: map_backlink_items(hit.implicit_backlink_items),
+        navigation_target: Some(repo_navigation_target(
+            repo_id,
+            hit.module.path.as_str(),
+            Some("repo_code".to_string()),
+            Some(1),
+            None,
+        )),
+    }
+}
+
+fn example_search_hit_to_search_hit(
+    repo_id: &str,
+    hit: crate::analyzers::ExampleSearchHit,
+) -> SearchHit {
+    let language = infer_code_language(hit.example.path.as_str());
+    let mut tags = vec![
+        repo_id.to_string(),
+        "code".to_string(),
+        "example".to_string(),
+        "kind:example".to_string(),
+    ];
+    if let Some(language) = language.as_deref() {
+        tags.push(language.to_string());
+        tags.push(format!("lang:{language}"));
+    }
+
+    SearchHit {
+        stem: hit.example.title.clone(),
+        title: Some(hit.example.title.clone()),
+        path: hit.example.path.clone(),
+        doc_type: Some("example".to_string()),
+        tags,
+        score: hit.saliency_score.or(hit.score).unwrap_or(0.0),
+        best_section: hit.example.summary.clone(),
+        match_reason: Some("repo_example_search".to_string()),
+        hierarchical_uri: hit.hierarchical_uri,
+        hierarchy: hit.hierarchy,
+        saliency_score: hit.saliency_score,
+        audit_status: None,
+        verification_state: None,
+        implicit_backlinks: hit.implicit_backlinks,
+        implicit_backlink_items: map_backlink_items(hit.implicit_backlink_items),
+        navigation_target: Some(repo_navigation_target(
+            repo_id,
+            hit.example.path.as_str(),
+            Some("repo_code".to_string()),
+            Some(1),
+            None,
+        )),
+    }
+}
+
+fn map_backlink_items(
+    items: Option<Vec<crate::analyzers::RepoBacklinkItem>>,
+) -> Option<Vec<SearchBacklinkItem>> {
+    items.map(|items| {
+        items
+            .into_iter()
+            .map(|item| SearchBacklinkItem {
+                id: item.id,
+                title: item.title,
+                path: item.path,
+                kind: item.kind,
+            })
+            .collect()
+    })
+}
+
+fn repo_navigation_target(
+    repo_id: &str,
+    path: &str,
+    category: Option<String>,
+    line: Option<usize>,
+    line_end: Option<usize>,
+) -> StudioNavigationTarget {
+    let normalized_path = path.replace('\\', "/");
+    let path = if normalized_path.starts_with(&format!("{repo_id}/")) {
+        normalized_path
+    } else {
+        format!("{repo_id}/{normalized_path}")
+    };
+    StudioNavigationTarget {
+        path,
+        category: category.unwrap_or_else(|| "repo_code".to_string()),
+        project_name: Some(repo_id.to_string()),
+        root_label: Some(repo_id.to_string()),
+        line,
+        line_end,
+        column: None,
+    }
+}
+
+fn infer_code_language(path: &str) -> Option<String> {
+    let lower = path.to_ascii_lowercase();
+    if lower.ends_with(".jl") {
+        return Some("julia".to_string());
+    }
+    if lower.ends_with(".mo") {
+        return Some("modelica".to_string());
+    }
+    if lower.ends_with(".rs") {
+        return Some("rust".to_string());
+    }
+    if lower.ends_with(".py") {
+        return Some("python".to_string());
+    }
+    if lower.ends_with(".ts") || lower.ends_with(".tsx") {
+        return Some("typescript".to_string());
+    }
+    None
+}
+
+fn symbol_kind_tag(kind: crate::analyzers::RepoSymbolKind) -> &'static str {
+    match kind {
+        crate::analyzers::RepoSymbolKind::Function => "function",
+        crate::analyzers::RepoSymbolKind::Type => "type",
+        crate::analyzers::RepoSymbolKind::Constant => "constant",
+        crate::analyzers::RepoSymbolKind::ModuleExport => "module_export",
+        crate::analyzers::RepoSymbolKind::Other => "other",
+    }
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/gateway/studio/search.rs"]
-mod tests;
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::sync::Arc;
+
+    #[test]
+    fn parse_code_search_query_extracts_repo_lang_and_kind_filters() {
+        let parsed = parse_code_search_query("repo:sciml lang:julia kind:function reexport", None);
+        assert_eq!(parsed.query, "reexport");
+        assert_eq!(parsed.repo.as_deref(), Some("sciml"));
+        assert_eq!(parsed.languages, vec!["julia".to_string()]);
+        assert_eq!(parsed.kinds, vec!["function".to_string()]);
+    }
+
+    #[test]
+    fn search_query_deserializes_query_alias() {
+        let query: SearchQuery = serde_json::from_value(serde_json::json!({
+            "query": "reexport",
+            "intent": "code_search",
+        }))
+        .expect("query alias should deserialize");
+
+        assert_eq!(query.q.as_deref(), Some("reexport"));
+        assert_eq!(query.intent.as_deref(), Some("code_search"));
+    }
+
+    #[test]
+    fn symbol_search_hit_to_search_hit_preserves_backend_metadata() {
+        let hit = symbol_search_hit_to_search_hit(
+            "sciml",
+            crate::analyzers::SymbolSearchHit {
+                symbol: crate::analyzers::SymbolRecord {
+                    repo_id: "sciml".to_string(),
+                    symbol_id: "symbol:reexport".to_string(),
+                    module_id: Some("module:BaseModelica".to_string()),
+                    name: "reexport".to_string(),
+                    qualified_name: "BaseModelica.reexport".to_string(),
+                    kind: crate::analyzers::RepoSymbolKind::Function,
+                    path: "src/BaseModelica.jl".to_string(),
+                    line_start: Some(7),
+                    line_end: Some(9),
+                    signature: Some("reexport()".to_string()),
+                    audit_status: Some("verified".to_string()),
+                    verification_state: Some("verified".to_string()),
+                    attributes: std::collections::BTreeMap::new(),
+                },
+                score: Some(0.8),
+                rank: Some(1),
+                saliency_score: Some(0.9),
+                hierarchical_uri: Some("repo://sciml/symbol/reexport".to_string()),
+                hierarchy: Some(vec!["src".to_string(), "BaseModelica.jl".to_string()]),
+                implicit_backlinks: Some(vec!["doc:readme".to_string()]),
+                implicit_backlink_items: Some(vec![crate::analyzers::RepoBacklinkItem {
+                    id: "doc:readme".to_string(),
+                    title: Some("README".to_string()),
+                    path: Some("README.md".to_string()),
+                    kind: Some("documents".to_string()),
+                }]),
+                projection_page_ids: Some(vec!["projection:1".to_string()]),
+                audit_status: Some("verified".to_string()),
+                verification_state: Some("verified".to_string()),
+            },
+        );
+
+        assert_eq!(hit.doc_type.as_deref(), Some("symbol"));
+        assert!(hit.tags.iter().any(|tag| tag == "lang:julia"));
+        assert!(hit.tags.iter().any(|tag| tag == "kind:function"));
+        assert_eq!(hit.score, 0.9);
+        assert_eq!(
+            hit.navigation_target.and_then(|target| target.project_name),
+            Some("sciml".to_string())
+        );
+        assert_eq!(hit.audit_status.as_deref(), Some("verified"));
+    }
+
+    #[test]
+    fn repo_content_search_hits_find_matching_julia_source_lines() {
+        let snapshot = RepoIndexSnapshot {
+            repo_id: "sciml".to_string(),
+            analysis: Arc::new(crate::analyzers::RepositoryAnalysisOutput::default()),
+            code_documents: Arc::new(vec![crate::gateway::studio::repo_index::RepoCodeDocument {
+                path: "src/BaseModelica.jl".to_string(),
+                language: Some("julia".to_string()),
+                contents: Arc::<str>::from(
+                    "module BaseModelica\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
+                ),
+            }]),
+        };
+
+        let hits = build_repo_content_search_hits(&snapshot, "lang:julia reexport", 10);
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].doc_type.as_deref(), Some("file"));
+        assert_eq!(hits[0].path, "src/BaseModelica.jl");
+        assert_eq!(hits[0].match_reason.as_deref(), Some("repo_content_search"));
+        assert_eq!(
+            hits[0]
+                .navigation_target
+                .as_ref()
+                .and_then(|target| target.line),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn build_code_search_response_skips_unsupported_repositories_when_searching_all_repos() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let valid_repo = temp.path().join("ValidPkg");
+        fs::create_dir_all(valid_repo.join("src")).expect("create valid src");
+        fs::write(
+            valid_repo.join("Project.toml"),
+            "name = \"ValidPkg\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+        )
+        .expect("write project");
+        fs::write(
+            valid_repo.join("src").join("ValidPkg.jl"),
+            "module ValidPkg\nusing ModelingToolkit\nend\n",
+        )
+        .expect("write valid source");
+
+        let invalid_repo = temp.path().join("DiffEqApproxFun.jl");
+        fs::create_dir_all(invalid_repo.join("src")).expect("create invalid src");
+        fs::write(
+            invalid_repo.join("src").join("DiffEqApproxFun.jl"),
+            "module DiffEqApproxFun\nusing ApproxFun\nend\n",
+        )
+        .expect("write invalid source");
+
+        let studio = crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(
+            Arc::new(crate::analyzers::bootstrap_builtin_registry().expect("bootstrap registry")),
+        );
+        studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+            projects: Vec::new(),
+            repo_projects: vec![
+                crate::gateway::studio::types::UiRepoProjectConfig {
+                    id: "valid".to_string(),
+                    root: Some(valid_repo.display().to_string()),
+                    url: None,
+                    git_ref: None,
+                    refresh: None,
+                    plugins: vec!["julia".to_string()],
+                },
+                crate::gateway::studio::types::UiRepoProjectConfig {
+                    id: "invalid".to_string(),
+                    root: Some(invalid_repo.display().to_string()),
+                    url: None,
+                    git_ref: None,
+                    refresh: None,
+                    plugins: vec!["julia".to_string()],
+                },
+            ],
+        });
+        studio
+            .repo_index
+            .set_snapshot_for_test(Arc::new(RepoIndexSnapshot {
+                repo_id: "valid".to_string(),
+                analysis: Arc::new(crate::analyzers::RepositoryAnalysisOutput::default()),
+                code_documents: Arc::new(vec![
+                    crate::gateway::studio::repo_index::RepoCodeDocument {
+                        path: "src/ValidPkg.jl".to_string(),
+                        language: Some("julia".to_string()),
+                        contents: Arc::<str>::from("module ValidPkg\nusing ModelingToolkit\nend\n"),
+                    },
+                ]),
+            }));
+        studio.repo_index.set_status_for_test(
+            crate::gateway::studio::repo_index::RepoIndexEntryStatus {
+                repo_id: "valid".to_string(),
+                phase: crate::gateway::studio::repo_index::RepoIndexPhase::Ready,
+                last_error: None,
+                last_revision: Some("abc123".to_string()),
+                updated_at: Some("2026-03-21T00:00:00Z".to_string()),
+                attempt_count: 1,
+            },
+        );
+        studio.repo_index.set_status_for_test(
+            crate::gateway::studio::repo_index::RepoIndexEntryStatus {
+                repo_id: "invalid".to_string(),
+                phase: crate::gateway::studio::repo_index::RepoIndexPhase::Unsupported,
+                last_error: Some("missing Project.toml".to_string()),
+                last_revision: None,
+                updated_at: Some("2026-03-21T00:00:00Z".to_string()),
+                attempt_count: 1,
+            },
+        );
+
+        let response = build_code_search_response(&studio, "ValidPkg".to_string(), None, 10)
+            .expect("all-repo code search should skip unsupported repositories");
+
+        assert_eq!(response.query, "ValidPkg");
+        assert_eq!(response.selected_mode.as_deref(), Some("code_search"));
+        assert!(response.partial);
+        assert_eq!(response.skipped_repos, vec!["invalid".to_string()]);
+        assert!(response.hits.iter().all(|hit| {
+            hit.navigation_target
+                .as_ref()
+                .and_then(|target| target.project_name.as_deref())
+                != Some("invalid")
+        }));
+    }
+}

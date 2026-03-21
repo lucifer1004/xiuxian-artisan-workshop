@@ -11,7 +11,7 @@ pub(crate) struct SearchProjectMetadata {
 }
 
 pub(super) fn normalize_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    normalize_pathbuf(path).to_string_lossy().replace('\\', "/")
 }
 
 pub(super) fn normalize_config_path(value: &str) -> Option<String> {
@@ -148,7 +148,20 @@ fn configured_root_label(configured_path: &str, project_name: &str) -> Option<St
 }
 
 fn path_within_scope(path: &Path, scope: &Path) -> bool {
-    path == scope || path.strip_prefix(scope).is_ok()
+    let normalized_path = normalize_pathbuf(path);
+    let normalized_scope = normalize_pathbuf(scope);
+    normalized_path == normalized_scope || normalized_path.strip_prefix(&normalized_scope).is_ok()
+}
+
+fn normalize_pathbuf(path: &Path) -> PathBuf {
+    path.components()
+        .fold(PathBuf::new(), |mut acc, component| {
+            match component {
+                std::path::Component::CurDir => {}
+                other => acc.push(other.as_os_str()),
+            }
+            acc
+        })
 }
 
 fn path_specificity(path: &str) -> usize {
@@ -167,5 +180,33 @@ fn update_best_match(
     match slot {
         Some((current_specificity, _)) if *current_specificity >= specificity => {}
         _ => *slot = Some((specificity, metadata)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::project_metadata_for_path;
+    use crate::gateway::studio::types::UiProjectConfig;
+
+    #[test]
+    fn project_metadata_prefers_more_specific_scope_root_label() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let project_root = temp_dir.path();
+        let packages_root = project_root.join("packages");
+        std::fs::create_dir_all(packages_root.join("rust/crates/demo/src")).expect("packages tree");
+
+        let metadata = project_metadata_for_path(
+            project_root,
+            project_root,
+            &[UiProjectConfig {
+                name: "kernel".to_string(),
+                root: ".".to_string(),
+                dirs: vec![".".to_string(), "packages".to_string()],
+            }],
+            "packages/rust/crates/demo/src/lib.rs",
+        );
+
+        assert_eq!(metadata.project_name.as_deref(), Some("kernel"));
+        assert_eq!(metadata.root_label.as_deref(), Some("packages"));
     }
 }

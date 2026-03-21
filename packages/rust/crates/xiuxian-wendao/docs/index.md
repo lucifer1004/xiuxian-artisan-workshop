@@ -33,6 +33,7 @@ Standardized documentation repository for the Wendao DocOS Kernel, leveraging AS
 - [[03_features/205_semantic_auditor]]: Native sentinel engine.
 - [[03_features/206_openai_semantic_ignition]]: OpenAI-compatible query ignition bridge.
 - [[03_features/207_gateway_openapi_contract_surface]]: Stable gateway OpenAPI contract surface for `rest_docs`.
+- [[03_features/208_performance_gate_v1]]: Feature-gated Wendao performance gate, stress lane, and Criterion analysis layer.
 
 ## 📁 05_research: Theoretical Hardening
 
@@ -50,14 +51,15 @@ Standardized documentation repository for the Wendao DocOS Kernel, leveraging AS
 - [[06_roadmap/402_repo_intelligence_mvp]]: Repo Intelligence common core and plugin API MVP.
 - [[06_roadmap/403_document_projection_and_retrieval_enhancement]]: Document projection and retrieval enhancement on top of Repo Intelligence.
 - [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]]: SciML and MSL repo intelligence architecture and boundary mapping.
+- [[06_roadmap/405_large_rust_modularization]]: Lossless modularization plan for oversized Rust files in `xiuxian-wendao`.
 
 :RELATIONS:
-:LINKS: [[01_core/101_triple_a_protocol]], [[06_roadmap/401_project_sentinel]], [[06_roadmap/402_repo_intelligence_mvp]], [[06_roadmap/403_document_projection_and_retrieval_enhancement]], [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]]
+:LINKS: [[01_core/101_triple_a_protocol]], [[06_roadmap/401_project_sentinel]], [[06_roadmap/402_repo_intelligence_mvp]], [[06_roadmap/403_document_projection_and_retrieval_enhancement]], [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]], [[06_roadmap/405_large_rust_modularization]]
 :END:
 
 ---
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-03-19
+:LAST_SYNC: 2026-03-21
 :END:

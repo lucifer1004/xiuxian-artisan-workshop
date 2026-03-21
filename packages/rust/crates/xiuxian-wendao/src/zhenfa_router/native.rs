@@ -424,6 +424,7 @@ fn match_type_to_string(match_type: MatchType) -> &'static str {
         MatchType::Exact => "exact",
         MatchType::Suffix => "suffix",
         MatchType::TitleSubstring => "title_substring",
+        MatchType::TitleFuzzy => "title_fuzzy",
         MatchType::HashFallback => "hash_fallback",
         MatchType::CaseInsensitive => "case_insensitive",
     }

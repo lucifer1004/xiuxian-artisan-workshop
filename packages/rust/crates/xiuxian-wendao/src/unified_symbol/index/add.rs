@@ -1,4 +1,6 @@
 use super::{UnifiedSymbol, UnifiedSymbolIndex};
+use crate::search::SearchDocument;
+use crate::unified_symbol::symbol::SymbolSource;
 
 impl UnifiedSymbolIndex {
     /// Add a project symbol.
@@ -19,6 +21,32 @@ impl UnifiedSymbolIndex {
         self.add_symbol(symbol);
     }
 
+    /// Add a symbol from repo_intelligence analysis.
+    pub fn add_symbol_record(&mut self, record: &crate::analyzers::SymbolRecord) {
+        let kind_str = match record.kind {
+            crate::analyzers::RepoSymbolKind::Function => "fn",
+            crate::analyzers::RepoSymbolKind::Type => "type",
+            crate::analyzers::RepoSymbolKind::Constant => "const",
+            crate::analyzers::RepoSymbolKind::ModuleExport => "export",
+            crate::analyzers::RepoSymbolKind::Other => "other",
+        };
+
+        let source = if record.repo_id == "stdlib" {
+            SymbolSource::External("stdlib".to_string())
+        } else {
+            SymbolSource::Project
+        };
+
+        let symbol = UnifiedSymbol {
+            name: record.name.clone(),
+            kind: kind_str.to_string(),
+            location: record.path.clone(),
+            source,
+            crate_name: record.repo_id.clone(),
+        };
+        self.add_symbol(symbol);
+    }
+
     /// Record usage of an external symbol in a project file.
     pub fn record_external_usage(
         &mut self,
@@ -26,24 +54,43 @@ impl UnifiedSymbolIndex {
         symbol_name: &str,
         project_file: &str,
     ) {
-        // Record in external_usage: which project locations use this external crate
         self.external_usage
             .entry(crate_name.to_string())
             .or_default()
             .push(project_file.to_string());
 
-        // Record in project_files: which symbols are used in this file
         self.project_files
             .entry(project_file.to_string())
             .or_default()
             .push(symbol_name.to_string());
     }
 
-    fn add_symbol(&mut self, symbol: UnifiedSymbol) {
+    pub(crate) fn add_symbol(&mut self, symbol: UnifiedSymbol) {
+        // 1. In-memory fallback
         let idx = self.symbols.len();
         let key = symbol.name.to_lowercase();
-        self.symbols.push(symbol);
+        self.symbols.push(symbol.clone());
         self.by_name.entry(key).or_default().push(idx);
+
+        // 2. Shared search indexing
+        let source_str = match &symbol.source {
+            SymbolSource::Project => "project",
+            SymbolSource::External(_) => "external",
+        };
+        let _ = self.search_index.add_document(&SearchDocument {
+            id: idx.to_string(),
+            title: symbol.name.clone(),
+            kind: symbol.kind.clone(),
+            path: symbol.location.clone(),
+            scope: source_str.to_string(),
+            namespace: symbol.crate_name.clone(),
+            terms: vec![
+                symbol.crate_name.clone(),
+                symbol.kind.clone(),
+                symbol.location.clone(),
+                source_str.to_string(),
+            ],
+        });
     }
 
     /// Clear all symbols.
@@ -52,5 +99,6 @@ impl UnifiedSymbolIndex {
         self.symbols.clear();
         self.external_usage.clear();
         self.project_files.clear();
+        self.search_index = crate::SearchDocumentIndex::new();
     }
 }

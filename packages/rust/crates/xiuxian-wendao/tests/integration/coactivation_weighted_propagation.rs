@@ -1,11 +1,11 @@
 //! Integration target for weighted write-path coactivation propagation.
 
+use serial_test::serial;
 use std::f64::consts::LN_2;
 use std::fs;
 use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
-use serial_test::serial;
 use xiuxian_wendao::link_graph::{
     LinkGraphSaliencyTouchRequest, set_link_graph_wendao_config_override,
     valkey_saliency_get_with_valkey, valkey_saliency_touch_with_valkey,
@@ -46,7 +46,8 @@ fn test_weighted_coactivation_prioritizes_stronger_structural_neighbors()
             wait_for_saliency("note-out-hot", &prefix)?.ok_or_else(missing_state_error)?;
         let outbound_cold =
             wait_for_saliency("note-out-cold", &prefix)?.ok_or_else(missing_state_error)?;
-        let inbound = wait_for_saliency("note-inbound", &prefix)?.ok_or_else(missing_state_error)?;
+        let inbound =
+            wait_for_saliency("note-inbound", &prefix)?.ok_or_else(missing_state_error)?;
 
         assert!(outbound_hot > outbound_cold);
         assert!(outbound_cold > inbound);

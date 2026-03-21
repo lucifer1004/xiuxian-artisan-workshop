@@ -41,6 +41,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::search::normalized_score;
 use serde::{Deserialize, Serialize};
 
 /// Minimum confidence threshold for suggesting a pattern fix.
@@ -326,53 +327,15 @@ fn bounded_usize_to_f32(value: usize) -> f32 {
     u16::try_from(value).map_or(f32::from(u16::MAX), f32::from)
 }
 
-/// Calculate Levenshtein edit distance between two strings.
-fn levenshtein_distance(a: &str, b: &str) -> usize {
-    let a_chars: Vec<char> = a.chars().collect();
-    let b_chars: Vec<char> = b.chars().collect();
-    let a_len = a_chars.len();
-    let b_len = b_chars.len();
-
-    if a_len == 0 {
-        return b_len;
-    }
-    if b_len == 0 {
-        return a_len;
-    }
-
-    let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
-
-    for (i, row) in matrix.iter_mut().enumerate() {
-        row[0] = i;
-    }
-
-    if let Some(first_row) = matrix.first_mut() {
-        for (j, cell) in first_row.iter_mut().enumerate() {
-            *cell = j;
-        }
-    }
-
-    for (i, a_char) in a_chars.iter().enumerate() {
-        for (j, b_char) in b_chars.iter().enumerate() {
-            let cost = usize::from(a_char != b_char);
-            matrix[i + 1][j + 1] = (matrix[i][j + 1] + 1)
-                .min(matrix[i + 1][j] + 1)
-                .min(matrix[i][j] + cost);
-        }
-    }
-
-    matrix[a_len][b_len]
-}
-
 /// Calculate string similarity based on edit distance.
 fn string_similarity(a: &str, b: &str) -> f32 {
-    let max_len = a.len().max(b.len());
-    if max_len == 0 {
-        return 1.0;
-    }
+    normalized_score(a, b, false)
+}
 
-    let distance = levenshtein_distance(a, b);
-    1.0 - bounded_ratio(distance, max_len)
+/// Preserve the legacy helper shape expected by the unit tests.
+#[cfg(test)]
+fn levenshtein_distance(a: &str, b: &str) -> usize {
+    crate::levenshtein_distance(a, b)
 }
 
 /// Extract the primary capture name from a pattern.

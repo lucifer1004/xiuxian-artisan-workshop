@@ -1,9 +1,11 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
+assertion_line: 9
 expression: value
 ---
 {
   "page": {
+    "doc_id": "repo:gateway-sync:doc:docs/solve.md",
     "doc_ids": [
       "repo:gateway-sync:doc:docs/solve.md"
     ],
@@ -13,9 +15,16 @@ expression: value
     "format_hints": [
       "md"
     ],
+    "keywords": [
+      "docs/solve.md",
+      "md",
+      "repo:gateway-sync:doc:docs/solve.md",
+      "solve"
+    ],
     "kind": "reference",
     "module_ids": [],
     "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+    "path": "docs/solve.md",
     "paths": [
       "docs/solve.md",
       "examples/solve_demo.jl"

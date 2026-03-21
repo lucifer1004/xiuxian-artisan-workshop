@@ -8,4 +8,14 @@
 
 Feature ledger for the `xiuxian-testing` library crate. Track user-facing or system-facing capabilities implemented in this package.
 
-Promote concrete `xiuxian-testing` capabilities into this ledger as feature slices land.
+## Landed Features
+
+1. Contract testing kernel (`contracts::*`) for deterministic rule-pack based audits.
+2. Scenario framework (`scenario::*`) for snapshot-driven fixture verification.
+3. Test policy and structure validation (`policy::*`, `validation::*`) including workspace rule overrides.
+4. Performance gate kernel (`performance::*`, feature-gated) with:
+   - budget model (`PerfBudget`),
+   - run configuration (`PerfRunConfig`),
+   - quantile report (`PerfReport`),
+   - sync/async budget runners,
+   - unified budget assertion and JSON reporting contract.

@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 
 use crate::link_graph::PageIndexNode;
+use crate::search::{FuzzyMatcher, FuzzySearchOptions, LexicalMatcher};
 
 /// A path entry representing a node's position in the document structure.
 #[derive(Debug, Clone)]
@@ -48,6 +49,8 @@ pub enum MatchType {
     Suffix,
     /// Title substring match.
     TitleSubstring,
+    /// Title edit-distance match.
+    TitleFuzzy,
     /// Content hash match (self-healing).
     HashFallback,
     /// Case-insensitive match.
@@ -216,6 +219,17 @@ impl TopologyIndex {
     /// Returns matches sorted by similarity score (highest first).
     #[must_use]
     pub fn fuzzy_resolve(&self, query: &str, max_results: usize) -> Vec<PathMatch> {
+        self.fuzzy_resolve_with_options(query, max_results, FuzzySearchOptions::path_search())
+    }
+
+    /// Fuzzy path matching with explicit fuzzy options.
+    #[must_use]
+    pub fn fuzzy_resolve_with_options(
+        &self,
+        query: &str,
+        max_results: usize,
+        options: FuzzySearchOptions,
+    ) -> Vec<PathMatch> {
         let query_lower = query.to_lowercase();
         let mut matches: Vec<PathMatch> = Vec::new();
 
@@ -267,6 +281,33 @@ impl TopologyIndex {
                         matches.push(scored);
                     }
                 }
+            }
+        }
+
+        // 4. Lexical title fuzzy fallback
+        if matches.is_empty() {
+            fn path_entry_title(entry: &PathEntry) -> &str {
+                entry.title.as_str()
+            }
+
+            let candidates = self
+                .by_doc
+                .values()
+                .flat_map(|entries| entries.iter().cloned())
+                .collect::<Vec<_>>();
+            let matcher = LexicalMatcher::new(candidates.as_slice(), path_entry_title, options);
+            let fuzzy_matches = matcher
+                .search(query, max_results)
+                .expect("lexical matcher is infallible");
+            for fuzzy_match in fuzzy_matches {
+                let entry = fuzzy_match.item;
+                matches.push(PathMatch {
+                    doc_id: entry.doc_id.clone(),
+                    path: entry.path.clone(),
+                    similarity_score: fuzzy_match.score,
+                    entry,
+                    match_type: MatchType::TitleFuzzy,
+                });
             }
         }
 

@@ -101,13 +101,13 @@ To prevent context bloating and "hallucination spirals," all Agents MUST follow 
 
 ## 12. Global Tiered Verification Protocol
 
-- **[TIER-1: PULSE]** (`fmt`, `ruff format`): Background consistency.
+- **[TIER-1: PULSE]** (`fmt`, `ruff format`, `cargo test` with no warnings): Background consistency.
 - **[TIER-2: HEARTBEAT]** (`cargo check`, `pyright`): Primary coding-phase verification.
 - **[TIER-3: GATE]** (`cargo clippy --all-targets --all-features -- -D warnings`, `cargo nextest`): High-energy industrial audit, executed only for `[DONE]`/fully landed features.
 
 # ExecPlans
 
-When writing complex features or significant refactors, use an ExecPlan (as described in .agent/PLANS.md) from design to implementation.
+When writing complex features or significant refactors, use an ExecPlan (as described in `$PRJ_ROOT/.agent/PLANS.md`) from design to implementation.
 
 ## Blueprint Adherence
 
@@ -121,5 +121,5 @@ All structural changes must follow the **Triple-Sync Protocol**:
 
 1.  **Blueprint Check**: Verify if the task falls under an active strategic blueprint.
 2.  **GTD + Package Docs Synchronization**: Update the daily GTD file (`docs/GTD/DAILY_YYYY_MM_DD.md`) and synchronize progress in the corresponding package docs (for example `packages/<scope>/<package>/docs/` or the package `README.md`) so package-level documentation tracks real implementation status.
-3.  **ExecPlan Creation**: Create a formal ExecPlan (`.cache/codex/execplans/<slug>.md`) that explicitly references and adheres to the relevant blueprint.
+3.  **ExecPlan Creation**: Create a formal ExecPlan (`$PRJ_CACHE_HOME/agent/execplans/<slug>.md`) that explicitly references and adheres to the relevant blueprint.
 4.  **Implementation**: Execute implementation and validation steps as defined in the plan.

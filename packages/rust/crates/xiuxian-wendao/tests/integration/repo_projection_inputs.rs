@@ -1,15 +1,14 @@
-//! Integration snapshot for deterministic Repo Intelligence projection inputs.
+//! Integration snapshot for Stage 1 analyzer inputs.
 
 use insta::assert_json_snapshot;
-use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
-    DocRecord, ExampleRecord, ModuleRecord, ProjectionPageKind, RelationKind, RelationRecord,
-    RepoSymbolKind, RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord,
-    build_projection_inputs,
+use std::collections::BTreeMap;
+use xiuxian_wendao::analyzers::{
+    DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind,
+    RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord,
 };
 
 #[test]
-fn builds_projection_inputs_from_stage_one_records() {
+fn generates_correct_repository_analysis_output() {
     let analysis = RepositoryAnalysisOutput {
         repository: Some(RepositoryRecord {
             repo_id: "demo".to_string(),
@@ -35,9 +34,14 @@ fn builds_projection_inputs_from_stage_one_records() {
             qualified_name: "Demo.Controllers.PI".to_string(),
             kind: RepoSymbolKind::Type,
             path: "Controllers/PI.mo".to_string(),
+            line_start: None,
+            line_end: None,
             signature: None,
             audit_status: None,
+            verification_state: None,
+            attributes: BTreeMap::new(),
         }],
+        imports: Vec::new(),
         examples: vec![ExampleRecord {
             repo_id: "demo".to_string(),
             example_id: "repo:demo:example:Controllers/Examples/Step.mo".to_string(),
@@ -45,51 +49,19 @@ fn builds_projection_inputs_from_stage_one_records() {
             path: "Controllers/Examples/Step.mo".to_string(),
             summary: None,
         }],
-        docs: vec![
-            DocRecord {
-                repo_id: "demo".to_string(),
-                doc_id: "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo".to_string(),
-                title: "First Steps".to_string(),
-                path: "Controllers/UsersGuide/Tutorial/FirstSteps.mo".to_string(),
-                format: Some("modelica_users_guide_tutorial".to_string()),
-            },
-            DocRecord {
-                repo_id: "demo".to_string(),
-                doc_id:
-                    "repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-                        .to_string(),
-                title: "Version 4.1.0".to_string(),
-                path: "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0".to_string(),
-                format: Some("modelica_users_guide_release_notes_version".to_string()),
-            },
-            DocRecord {
-                repo_id: "demo".to_string(),
-                doc_id: "repo:demo:doc:Controllers/PI.mo#annotation.documentation".to_string(),
-                title: "PI documentation".to_string(),
-                path: "Controllers/PI.mo#annotation.documentation".to_string(),
-                format: Some("modelica_annotation".to_string()),
-            },
-        ],
+        docs: vec![DocRecord {
+            repo_id: "demo".to_string(),
+            doc_id: "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo".to_string(),
+            title: "First Steps".to_string(),
+            path: "Controllers/UsersGuide/Tutorial/FirstSteps.mo".to_string(),
+            format: Some("modelica_users_guide_tutorial".to_string()),
+        }],
         relations: vec![
             RelationRecord {
                 repo_id: "demo".to_string(),
                 source_id: "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo"
                     .to_string(),
                 target_id: "repo:demo:module:Demo.Controllers".to_string(),
-                kind: RelationKind::Documents,
-            },
-            RelationRecord {
-                repo_id: "demo".to_string(),
-                source_id:
-                    "repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-                        .to_string(),
-                target_id: "repo:demo:module:Demo.Controllers".to_string(),
-                kind: RelationKind::Documents,
-            },
-            RelationRecord {
-                repo_id: "demo".to_string(),
-                source_id: "repo:demo:doc:Controllers/PI.mo#annotation.documentation".to_string(),
-                target_id: "repo:demo:symbol:Demo.Controllers.PI".to_string(),
                 kind: RelationKind::Documents,
             },
             RelationRecord {
@@ -102,27 +74,13 @@ fn builds_projection_inputs_from_stage_one_records() {
         diagnostics: Vec::new(),
     };
 
-    let bundle = build_projection_inputs(&analysis);
-    let payload = json!({
-        "repo_id": bundle.repo_id,
-        "page_count": bundle.pages.len(),
-        "kinds": bundle
-            .pages
-            .iter()
-            .map(|page| match page.kind {
-                ProjectionPageKind::Reference => "reference",
-                ProjectionPageKind::HowTo => "howto",
-                ProjectionPageKind::Tutorial => "tutorial",
-                ProjectionPageKind::Explanation => "explanation",
-            })
-            .collect::<Vec<_>>(),
-        "pages": bundle.pages,
-    });
-
     insta::with_settings!({
         snapshot_path => "../snapshots",
         prepend_module_to_snapshot => false,
     }, {
-        assert_json_snapshot!("repo_projection_inputs__repo_projection_inputs", payload);
+        assert_json_snapshot!(
+            "repo_projection_inputs__repository_analysis_output",
+            analysis
+        );
     });
 }

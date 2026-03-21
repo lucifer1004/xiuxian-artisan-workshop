@@ -1,0 +1,112 @@
+use thiserror::Error;
+
+/// Errors raised by the Repo Intelligence common core.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum RepoIntelligenceError {
+    /// A plugin with the same identifier has already been registered.
+    #[error("repo intelligence plugin `{plugin_id}` is already registered")]
+    DuplicatePlugin {
+        /// The duplicate plugin identifier.
+        plugin_id: String,
+    },
+    /// A plugin required by a repository was not found in the registry.
+    #[error("repo intelligence plugin `{plugin_id}` is not registered")]
+    MissingPlugin {
+        /// The missing plugin identifier.
+        plugin_id: String,
+    },
+    /// A required plugin was not configured for the requested repository.
+    #[error("repo `{repo_id}` requires plugin `{plugin_id}`")]
+    MissingRequiredPlugin {
+        /// The repository identifier.
+        repo_id: String,
+        /// The required plugin identifier.
+        plugin_id: String,
+    },
+    /// A repository id referenced by a query is not registered.
+    #[error("repo intelligence repository `{repo_id}` is not registered")]
+    UnknownRepository {
+        /// The unknown repository identifier.
+        repo_id: String,
+    },
+    /// The repository did not declare a local checkout path.
+    #[error("repo `{repo_id}` does not declare a local path")]
+    MissingRepositoryPath {
+        /// The repository identifier.
+        repo_id: String,
+    },
+    /// The repository did not declare any supported source.
+    #[error("repo `{repo_id}` must declare a local path or upstream url")]
+    MissingRepositorySource {
+        /// The repository identifier.
+        repo_id: String,
+    },
+    /// The configured local repository path is invalid.
+    #[error("repo `{repo_id}` has invalid local path `{path}`: {reason}")]
+    InvalidRepositoryPath {
+        /// The repository identifier.
+        repo_id: String,
+        /// The invalid path.
+        path: String,
+        /// Human-readable validation detail.
+        reason: String,
+    },
+    /// The current analyzer does not support the repository layout.
+    #[error("repo `{repo_id}` has unsupported layout: {message}")]
+    UnsupportedRepositoryLayout {
+        /// The repository identifier.
+        repo_id: String,
+        /// Human-readable unsupported-layout detail.
+        message: String,
+    },
+    /// The repository index has not been materialized yet.
+    #[error("repo `{repo_id}` index is not ready yet")]
+    PendingRepositoryIndex {
+        /// The repository identifier.
+        repo_id: String,
+    },
+    /// A deterministic projected page identifier was not found for the repository.
+    #[error("repo `{repo_id}` does not contain projected page `{page_id}`")]
+    UnknownProjectedPage {
+        /// The repository identifier.
+        repo_id: String,
+        /// The missing projected page identifier.
+        page_id: String,
+    },
+    /// A deterministic projected page-family cluster was not found for the repository.
+    #[error(
+        "repo `{repo_id}` does not contain projected page family `{kind:?}` in page `{page_id}`"
+    )]
+    UnknownProjectedPageFamilyCluster {
+        /// The repository identifier.
+        repo_id: String,
+        /// The owning projected page identifier.
+        page_id: String,
+        /// The missing projected page family.
+        kind: crate::analyzers::projection::ProjectionPageKind,
+    },
+    /// A deterministic projected page-index node identifier was not found for the repository.
+    #[error(
+        "repo `{repo_id}` does not contain projected page-index node `{node_id}` in page `{page_id}`"
+    )]
+    UnknownProjectedPageIndexNode {
+        /// The repository identifier.
+        repo_id: String,
+        /// The owning projected page identifier.
+        page_id: String,
+        /// The missing projected page-index node identifier.
+        node_id: String,
+    },
+    /// Configuration loading or parsing failed.
+    #[error("repo intelligence config load failed: {message}")]
+    ConfigLoad {
+        /// Human-readable configuration error detail.
+        message: String,
+    },
+    /// Analysis failed while processing a file or repository.
+    #[error("repo intelligence analysis failed: {message}")]
+    AnalysisFailed {
+        /// Human-readable error detail.
+        message: String,
+    },
+}

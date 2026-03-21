@@ -3,27 +3,24 @@
 #[path = "../support/repo_intelligence.rs"]
 mod repo_test_support;
 
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
+use repo_test_support::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_wendao::analyzers::{
     ProjectedPageIndexNode, RepoProjectedPageIndexNodeQuery, RepoProjectedPageIndexTreesQuery,
-    repo_projected_page_index_node_from_config, repo_projected_page_index_trees_from_config,
+    build_repo_projected_page_index_node, build_repo_projected_page_index_trees,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn projected_page_index_node_lookup_resolves_one_stable_node() -> TestResult {
-    let temp = tempfile::tempdir()?;
-    let repo_dir = create_sample_julia_repo(temp.path(), "ProjectionPkg", true)?;
-    let config_path = write_repo_config(temp.path(), &repo_dir, "projection-sample")?;
+    let analysis = sample_projection_analysis("projection-sample");
 
-    let trees = repo_projected_page_index_trees_from_config(
+    let trees = build_repo_projected_page_index_trees(
         &RepoProjectedPageIndexTreesQuery {
             repo_id: "projection-sample".to_string(),
         },
-        Some(&config_path),
-        temp.path(),
+        &analysis,
     )?;
 
     let tree = trees
@@ -34,14 +31,13 @@ fn projected_page_index_node_lookup_resolves_one_stable_node() -> TestResult {
     let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
         .expect("expected a projected page-index node titled `Anchors`");
 
-    let result = repo_projected_page_index_node_from_config(
+    let result = build_repo_projected_page_index_node(
         &RepoProjectedPageIndexNodeQuery {
             repo_id: "projection-sample".to_string(),
             page_id: tree.page_id.clone(),
             node_id,
         },
-        Some(&config_path),
-        temp.path(),
+        &analysis,
     )?;
 
     assert_repo_json_snapshot("repo_projected_page_index_node_result", json!(result));

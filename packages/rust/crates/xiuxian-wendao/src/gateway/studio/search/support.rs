@@ -1,7 +1,10 @@
+//! Utility functions for search support operations.
+
 use std::path::{Component, Path};
 
 use crate::dependency_indexer::SymbolKind;
 
+/// Infers the crate name from a relative path by analyzing path components.
 pub(in crate::gateway::studio::search) fn infer_crate_name(relative_path: &Path) -> String {
     let components = relative_path
         .components()
@@ -27,6 +30,7 @@ pub(in crate::gateway::studio::search) fn infer_crate_name(relative_path: &Path)
     }
 }
 
+/// Returns the source language label for a given file path based on extension.
 pub(in crate::gateway::studio::search) fn source_language_label(
     path: &Path,
 ) -> Option<&'static str> {
@@ -37,10 +41,12 @@ pub(in crate::gateway::studio::search) fn source_language_label(
     }
 }
 
+/// Extracts the first line of a signature text, trimmed of whitespace.
 pub(in crate::gateway::studio::search) fn first_signature_line(text: &str) -> &str {
     text.lines().next().map(str::trim).unwrap_or_default()
 }
 
+/// Scores a reference hit based on how well the line text matches the query.
 pub(in crate::gateway::studio::search) fn score_reference_hit(line_text: &str, query: &str) -> f64 {
     let normalized_line = line_text.trim();
     if normalized_line.contains(query) {
@@ -55,6 +61,7 @@ pub(in crate::gateway::studio::search) fn score_reference_hit(line_text: &str, q
     }
 }
 
+/// Returns a human-readable label for a symbol kind.
 pub(in crate::gateway::studio::search) fn symbol_kind_label(kind: &SymbolKind) -> &'static str {
     match kind {
         SymbolKind::Struct => "struct",
@@ -70,4 +77,19 @@ pub(in crate::gateway::studio::search) fn symbol_kind_label(kind: &SymbolKind) -
         SymbolKind::TypeAlias => "type_alias",
         SymbolKind::Unknown => "unknown",
     }
+}
+
+/// Strips the `Some(...)` wrapper from an optional string representation.
+#[cfg(test)]
+pub fn strip_option(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed == "None" {
+        return None;
+    }
+    if trimmed.starts_with("Some(") && trimmed.ends_with(')') {
+        let inner = trimmed[5..trimmed.len() - 1].trim();
+        return (!inner.is_empty()).then(|| inner.to_string());
+    }
+
+    Some(trimmed.to_string())
 }

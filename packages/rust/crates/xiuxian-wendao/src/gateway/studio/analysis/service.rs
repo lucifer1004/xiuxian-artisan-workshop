@@ -1,37 +1,57 @@
-use super::super::router::StudioState;
-use super::super::types::{AnalysisNode, MarkdownAnalysisResponse};
-use super::super::vfs;
-use super::markdown;
+use crate::gateway::studio::router::StudioState;
+use crate::gateway::studio::types::{AnalysisNode, MarkdownAnalysisResponse};
+
+use super::markdown::{CompiledDocument, compile_markdown_ir};
 use super::projection;
 
-#[derive(Debug)]
-pub(crate) enum AnalysisError {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AnalysisError {
     UnsupportedContentType(String),
-    Vfs(vfs::VfsError),
+    Vfs(String),
 }
 
-impl From<vfs::VfsError> for AnalysisError {
-    fn from(value: vfs::VfsError) -> Self {
-        Self::Vfs(value)
+impl std::fmt::Display for AnalysisError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedContentType(content_type) => {
+                write!(f, "unsupported content type: {content_type}")
+            }
+            Self::Vfs(message) => write!(f, "{message}"),
+        }
     }
 }
 
+impl std::error::Error for AnalysisError {}
+
 pub(crate) fn compile_markdown_nodes(path: &str, content: &str) -> Vec<AnalysisNode> {
-    markdown::compile_markdown_ir(path, content).nodes
+    compile_markdown_ir(path, content).nodes
 }
 
 pub(crate) async fn analyze_markdown(
     state: &StudioState,
     path: &str,
 ) -> Result<MarkdownAnalysisResponse, AnalysisError> {
-    let content = vfs::read_content(state, path).await?;
-    if content.content_type != "text/markdown" {
-        return Err(AnalysisError::UnsupportedContentType(content.content_type));
+    if !is_markdown_path(path) {
+        return Err(AnalysisError::UnsupportedContentType(
+            infer_content_type(path).to_string(),
+        ));
     }
 
-    let mut compiled = markdown::compile_markdown_ir(path, content.content.as_str());
-    markdown::enrich_property_drawers(path, content.content.as_str(), &mut compiled);
-    let projections = projection::build_mermaid_projections(path, &compiled.nodes, &compiled.edges);
+    let project_root = state.project_root.clone();
+    let full_path = project_root.join(path);
+
+    let content = std::fs::read_to_string(&full_path)
+        .map_err(|e| AnalysisError::Vfs(format!("Failed to read file: {e}")))?;
+
+    let compiled: CompiledDocument = compile_markdown_ir(path, &content);
+
+    // Optional: add link-graph metadata if index is available
+    let _index = match state.graph_index.read() {
+        Ok(guard) => guard.as_ref().map(std::sync::Arc::clone),
+        Err(_) => None,
+    };
+
+    let projections = projection::build_mermaid_projections(&compiled.nodes, &compiled.edges);
 
     Ok(MarkdownAnalysisResponse {
         path: path.to_string(),
@@ -43,4 +63,18 @@ pub(crate) async fn analyze_markdown(
         projections,
         diagnostics: compiled.diagnostics,
     })
+}
+
+fn is_markdown_path(path: &str) -> bool {
+    path.ends_with(".md") || path.ends_with(".markdown")
+}
+
+fn infer_content_type(path: &str) -> &'static str {
+    if path.ends_with(".rs") {
+        "text/x-rust"
+    } else if is_markdown_path(path) {
+        "text/markdown"
+    } else {
+        "application/octet-stream"
+    }
 }

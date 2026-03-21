@@ -27,7 +27,7 @@ struct EdgeDraft<'a> {
     kind: AnalysisEdgeKind,
     source_id: String,
     target_id: String,
-    label: Option<String>,
+    label: String,
     path: &'a str,
     line_start: usize,
     line_end: usize,
@@ -78,12 +78,11 @@ impl<'a> MarkdownCompiler<'a> {
         for node in root.descendants() {
             match &node.data().value {
                 NodeValue::Heading(heading) => {
-                    self.handle_heading(node, usize::from(heading.level));
+                    self.handle_heading(node, heading.level as usize);
                 }
                 NodeValue::TaskItem(_) => self.handle_task_item(node),
                 NodeValue::CodeBlock(block) => self.handle_code_block(node, block.info.as_str()),
                 NodeValue::Link(link) => self.handle_reference_node(node, link.url.as_str()),
-                NodeValue::WikiLink(link) => self.handle_reference_node(node, link.url.as_str()),
                 _ => {}
             }
         }
@@ -124,7 +123,7 @@ impl<'a> MarkdownCompiler<'a> {
             kind: AnalysisEdgeKind::Contains,
             source_id: parent_id,
             target_id: node_id.clone(),
-            label: Some("contains".to_string()),
+            label: "contains".to_string(),
             path: self.path,
             line_start: line_no,
             line_end: line_no,
@@ -157,7 +156,7 @@ impl<'a> MarkdownCompiler<'a> {
             kind: AnalysisEdgeKind::Contains,
             source_id: parent_id.clone(),
             target_id: node_id.clone(),
-            label: Some("contains".to_string()),
+            label: "contains".to_string(),
             path: self.path,
             line_start: line_no,
             line_end: line_no,
@@ -169,7 +168,7 @@ impl<'a> MarkdownCompiler<'a> {
                 kind: AnalysisEdgeKind::NextStep,
                 source_id: prev_task.clone(),
                 target_id: node_id.clone(),
-                label: Some("next".to_string()),
+                label: "next".to_string(),
                 path: self.path,
                 line_start: line_no,
                 line_end: line_no,
@@ -209,7 +208,7 @@ impl<'a> MarkdownCompiler<'a> {
             kind: AnalysisEdgeKind::Contains,
             source_id: parent_id,
             target_id: node_id,
-            label: Some("contains".to_string()),
+            label: "contains".to_string(),
             path: self.path,
             line_start,
             line_end,
@@ -230,7 +229,7 @@ impl<'a> MarkdownCompiler<'a> {
             kind: AnalysisEdgeKind::References,
             source_id: context_id,
             target_id: reference_id,
-            label: Some(normalized),
+            label: normalized,
             path: self.path,
             line_start: line_no,
             line_end: line_no,
@@ -275,7 +274,6 @@ impl<'a> MarkdownCompiler<'a> {
 
 fn markdown_options() -> Options<'static> {
     let mut options = Options::default();
-    options.extension.wikilinks_title_after_pipe = true;
     options.extension.tasklist = true;
     options
 }
@@ -334,5 +332,5 @@ fn slugify(input: &str) -> String {
 }
 
 fn node_key<'a>(node: &'a AstNode<'a>) -> usize {
-    std::ptr::from_ref(node) as usize
+    node as *const AstNode as usize
 }

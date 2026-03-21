@@ -98,4 +98,4 @@ These subsection docs are only emitted when the nested declaration block exists 
 ## Open Follow-Up
 
 - extend topic recognition only when the subtree naming is stable across real MSL samples
-- feed these format hints directly into second-stage document projection rather than keeping them repo-intelligence-only
+- feed these format hints directly into second-stage document projection rather than keeping them analyzer-inventory-only

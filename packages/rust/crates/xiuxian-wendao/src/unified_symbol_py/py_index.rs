@@ -48,7 +48,7 @@ impl PyUnifiedSymbolIndex {
         self.inner
             .search_unified(pattern, limit)
             .into_iter()
-            .map(|s| PyUnifiedSymbol { inner: s.clone() })
+            .map(|s| PyUnifiedSymbol { inner: s })
             .collect()
     }
 
@@ -58,7 +58,7 @@ impl PyUnifiedSymbolIndex {
         self.inner
             .search_project(pattern, limit)
             .into_iter()
-            .map(|s| PyUnifiedSymbol { inner: s.clone() })
+            .map(|s| PyUnifiedSymbol { inner: s })
             .collect()
     }
 
@@ -68,7 +68,7 @@ impl PyUnifiedSymbolIndex {
         self.inner
             .search_external(pattern, limit)
             .into_iter()
-            .map(|s| PyUnifiedSymbol { inner: s.clone() })
+            .map(|s| PyUnifiedSymbol { inner: s })
             .collect()
     }
 
@@ -78,36 +78,24 @@ impl PyUnifiedSymbolIndex {
         self.inner
             .search_crate(crate_name, pattern, limit)
             .into_iter()
-            .map(|s| PyUnifiedSymbol { inner: s.clone() })
+            .map(|s| PyUnifiedSymbol { inner: s })
             .collect()
     }
 
     /// Find where an external crate's symbols are used in the project.
     #[pyo3(signature = (crate_name))]
     fn find_external_usage(&self, crate_name: &str) -> Vec<String> {
-        self.inner
-            .find_external_usage(crate_name)
-            .into_iter()
-            .map(std::string::ToString::to_string)
-            .collect()
+        self.inner.find_external_usage(crate_name)
     }
 
     /// Get all external crates used in the project.
     fn get_external_crates(&self) -> Vec<String> {
-        self.inner
-            .get_external_crates()
-            .into_iter()
-            .map(std::string::ToString::to_string)
-            .collect()
+        self.inner.get_external_crates()
     }
 
     /// Get all project crates.
     fn get_project_crates(&self) -> Vec<String> {
-        self.inner
-            .get_project_crates()
-            .into_iter()
-            .map(std::string::ToString::to_string)
-            .collect()
+        self.inner.get_project_crates()
     }
 
     /// Get statistics.

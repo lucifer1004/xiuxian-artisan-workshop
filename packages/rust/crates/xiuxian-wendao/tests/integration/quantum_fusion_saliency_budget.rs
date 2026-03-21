@@ -1,9 +1,9 @@
 //! Integration target for saliency-aware Quantum Fusion retrieval budgets.
 
+use serial_test::serial;
 use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use serial_test::serial;
 use xiuxian_wendao::link_graph::{
     LinkGraphRetrievalBudget, LinkGraphSearchOptions, LinkGraphSemanticSearchPolicy,
     QuantumFusionOptions, QuantumSemanticIgnition, QuantumSemanticIgnitionFuture,

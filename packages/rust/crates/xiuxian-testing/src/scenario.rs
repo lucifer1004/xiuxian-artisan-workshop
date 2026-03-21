@@ -845,11 +845,25 @@ impl ScenarioFramework {
     /// Returns an error if no runner is registered for the category or if
     /// any scenario execution fails.
     pub fn run_category(&self, category: &str) -> Result<usize, Box<dyn Error>> {
+        self.run_category_at(category, &scenarios_root())
+    }
+
+    /// Run all scenarios in a category at a specific root directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no runner is registered for the category or if
+    /// any scenario execution fails.
+    pub fn run_category_at(
+        &self,
+        category: &str,
+        scenarios_root: &Path,
+    ) -> Result<usize, Box<dyn Error>> {
         let runner = self.find_runner(category).ok_or_else(|| {
             io::Error::other(format!("No runner registered for category: {category}"))
         })?;
 
-        let scenarios = load_scenarios_at(&scenarios_root())?;
+        let scenarios = load_scenarios_at(scenarios_root)?;
         ensure_unique_scenario_ids(&scenarios)?;
         let mut count = 0;
 

@@ -493,6 +493,54 @@
         }
       }
     },
+    "/api/analysis/code-ast": {
+      "get": {
+        "operationId": "studioCodeAstAnalysis",
+        "tags": ["studio-analysis"],
+        "summary": "Analyze code AST projections",
+        "description": "Return the code AST nodes, edges, and projection summaries for a repository source file in the current studio scope.",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "description": "Repository-relative path to the source file.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Repository identifier registered in the current studio session.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "line",
+            "in": "query",
+            "required": false,
+            "description": "Optional 1-based line hint used to focus one AST node in the response.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Code AST analysis payload with nodes, edges, and projections."
+          },
+          "400": {
+            "description": "Requested code AST input is missing, invalid, or outside the configured studio scope."
+          },
+          "500": {
+            "description": "Gateway failed to analyze the requested code file."
+          }
+        }
+      }
+    },
     "/api/ui/config": {
       "get": {
         "operationId": "studioGetUiConfig",
@@ -1058,9 +1106,7 @@
                       "page_id": "repo:gateway-sync:projection:reference:module:repo:gateway-sync:module:GatewaySyncPkg",
                       "kind": "reference",
                       "title": "GatewaySyncPkg",
-                      "module_ids": [
-                        "repo:gateway-sync:module:GatewaySyncPkg"
-                      ],
+                      "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
                       "symbol_ids": [],
                       "example_ids": [
                         "repo:gateway-sync:example:examples/solve_demo.jl"
@@ -1075,19 +1121,14 @@
                         "examples/solve_demo.jl",
                         "src/GatewaySyncPkg.jl"
                       ],
-                      "format_hints": [
-                        "md"
-                      ],
+                      "format_hints": ["md"],
                       "sections": [
                         {
                           "section_id": "repo:gateway-sync:projection:reference:module:repo:gateway-sync:module:GatewaySyncPkg#overview",
                           "title": "Overview",
                           "level": 1,
                           "body": "Projected reference page for `GatewaySyncPkg`.",
-                          "paths": [
-                            "README.md",
-                            "docs/solve.md"
-                          ]
+                          "paths": ["README.md", "docs/solve.md"]
                         }
                       ]
                     }
@@ -1158,26 +1199,16 @@
                     "example_ids": [
                       "repo:gateway-sync:example:examples/solve_demo.jl"
                     ],
-                    "doc_ids": [
-                      "repo:gateway-sync:doc:docs/solve.md"
-                    ],
-                    "paths": [
-                      "docs/solve.md",
-                      "examples/solve_demo.jl"
-                    ],
-                    "format_hints": [
-                      "md"
-                    ],
+                    "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                    "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                    "format_hints": ["md"],
                     "sections": [
                       {
                         "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
                         "title": "Overview",
                         "level": 1,
                         "body": "Projected reference page for `solve`.",
-                        "paths": [
-                          "docs/solve.md",
-                          "examples/solve_demo.jl"
-                        ]
+                        "paths": ["docs/solve.md", "examples/solve_demo.jl"]
                       }
                     ]
                   }
@@ -1382,26 +1413,16 @@
                       "example_ids": [
                         "repo:gateway-sync:example:examples/solve_demo.jl"
                       ],
-                      "doc_ids": [
-                        "repo:gateway-sync:doc:docs/solve.md"
-                      ],
-                      "paths": [
-                        "docs/solve.md",
-                        "examples/solve_demo.jl"
-                      ],
-                      "format_hints": [
-                        "md"
-                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                      "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                      "format_hints": ["md"],
                       "sections": [
                         {
                           "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
                           "title": "Overview",
                           "level": 1,
                           "body": "Projected reference page for `solve`.",
-                          "paths": [
-                            "docs/solve.md",
-                            "examples/solve_demo.jl"
-                          ]
+                          "paths": ["docs/solve.md", "examples/solve_demo.jl"]
                         }
                       ]
                     },
@@ -1515,26 +1536,16 @@
                       "example_ids": [
                         "repo:gateway-sync:example:examples/solve_demo.jl"
                       ],
-                      "doc_ids": [
-                        "repo:gateway-sync:doc:docs/solve.md"
-                      ],
-                      "paths": [
-                        "docs/solve.md",
-                        "examples/solve_demo.jl"
-                      ],
-                      "format_hints": [
-                        "md"
-                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                      "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                      "format_hints": ["md"],
                       "sections": [
                         {
                           "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
                           "title": "Overview",
                           "level": 1,
                           "body": "Projected reference page for `solve`.",
-                          "paths": [
-                            "docs/solve.md",
-                            "examples/solve_demo.jl"
-                          ]
+                          "paths": ["docs/solve.md", "examples/solve_demo.jl"]
                         }
                       ]
                     },
@@ -1558,9 +1569,7 @@
                       "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
                       "kind": "reference",
                       "title": "GatewaySyncPkg.solve",
-                      "module_ids": [
-                        "repo:gateway-sync:module:GatewaySyncPkg"
-                      ],
+                      "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
                       "symbol_ids": [
                         "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
                       ],
@@ -1576,10 +1585,7 @@
                         "examples/solve_demo.jl",
                         "src/GatewaySyncPkg.jl#symbol:solve"
                       ],
-                      "format_hints": [
-                        "julia_docstring",
-                        "md"
-                      ],
+                      "format_hints": ["julia_docstring", "md"],
                       "sections": []
                     }
                   ],
@@ -1705,25 +1711,16 @@
                     "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
                     "kind": "how_to",
                     "title": "solve_demo.jl",
-                    "module_ids": [
-                      "repo:gateway-sync:module:GatewaySyncPkg"
-                    ],
+                    "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
                     "symbol_ids": [
                       "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
                     ],
                     "example_ids": [
                       "repo:gateway-sync:example:examples/solve_demo.jl"
                     ],
-                    "doc_ids": [
-                      "repo:gateway-sync:doc:docs/solve.md"
-                    ],
-                    "paths": [
-                      "docs/solve.md",
-                      "examples/solve_demo.jl"
-                    ],
-                    "format_hints": [
-                      "md"
-                    ],
+                    "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                    "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                    "format_hints": ["md"],
                     "sections": []
                   },
                   "families": [
@@ -1755,10 +1752,7 @@
                               "examples/solve_demo.jl",
                               "src/GatewaySyncPkg.jl#symbol:solve"
                             ],
-                            "format_hints": [
-                              "julia_docstring",
-                              "md"
-                            ],
+                            "format_hints": ["julia_docstring", "md"],
                             "sections": []
                           }
                         }
@@ -1779,15 +1773,9 @@
                             ],
                             "symbol_ids": [],
                             "example_ids": [],
-                            "doc_ids": [
-                              "repo:gateway-sync:doc:README.md"
-                            ],
-                            "paths": [
-                              "README.md"
-                            ],
-                            "format_hints": [
-                              "md"
-                            ],
+                            "doc_ids": ["repo:gateway-sync:doc:README.md"],
+                            "paths": ["README.md"],
+                            "format_hints": ["md"],
                             "sections": []
                           }
                         }
@@ -1913,26 +1901,16 @@
                         "example_ids": [
                           "repo:gateway-sync:example:examples/solve_demo.jl"
                         ],
-                        "doc_ids": [
-                          "repo:gateway-sync:doc:docs/solve.md"
-                        ],
-                        "paths": [
-                          "docs/solve.md",
-                          "examples/solve_demo.jl"
-                        ],
-                        "format_hints": [
-                          "md"
-                        ],
+                        "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                        "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                        "format_hints": ["md"],
                         "sections": [
                           {
                             "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
                             "title": "Overview",
                             "level": 1,
                             "body": "Projected reference page for `solve`.",
-                            "paths": [
-                              "docs/solve.md",
-                              "examples/solve_demo.jl"
-                            ]
+                            "paths": ["docs/solve.md", "examples/solve_demo.jl"]
                           }
                         ]
                       },
@@ -1963,9 +1941,7 @@
                                   "docs/solve.md",
                                   "examples/solve_demo.jl"
                                 ],
-                                "format_hints": [
-                                  "md"
-                                ],
+                                "format_hints": ["md"],
                                 "sections": []
                               }
                             }
@@ -2076,16 +2052,9 @@
                     "example_ids": [
                       "repo:gateway-sync:example:examples/solve_demo.jl"
                     ],
-                    "doc_ids": [
-                      "repo:gateway-sync:doc:docs/solve.md"
-                    ],
-                    "paths": [
-                      "docs/solve.md",
-                      "examples/solve_demo.jl"
-                    ],
-                    "format_hints": [
-                      "md"
-                    ],
+                    "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                    "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                    "format_hints": ["md"],
                     "sections": []
                   },
                   "family": {
@@ -2107,16 +2076,9 @@
                           "example_ids": [
                             "repo:gateway-sync:example:examples/solve_demo.jl"
                           ],
-                          "doc_ids": [
-                            "repo:gateway-sync:doc:docs/solve.md"
-                          ],
-                          "paths": [
-                            "docs/solve.md",
-                            "examples/solve_demo.jl"
-                          ],
-                          "format_hints": [
-                            "md"
-                          ],
+                          "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                          "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                          "format_hints": ["md"],
                           "sections": []
                         }
                       }
@@ -2256,27 +2218,20 @@
                       "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
                       "kind": "reference",
                       "title": "GatewaySyncPkg.solve",
-                      "module_ids": [
-                        "repo:gateway-sync:module:GatewaySyncPkg"
-                      ],
+                      "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
                       "symbol_ids": [
                         "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
                       ],
                       "example_ids": [
                         "repo:gateway-sync:example:examples/solve_demo.jl"
                       ],
-                      "doc_ids": [
-                        "repo:gateway-sync:doc:docs/solve.md"
-                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
                       "paths": [
                         "docs/solve.md",
                         "examples/solve_demo.jl",
                         "src/GatewaySyncPkg.jl"
                       ],
-                      "format_hints": [
-                        "julia",
-                        "md"
-                      ],
+                      "format_hints": ["julia", "md"],
                       "sections": []
                     },
                     "node": {
@@ -2288,10 +2243,7 @@
                       "doc_id": "repo:gateway-sync:projection-doc:reference/gatewaysyncpkg-solve",
                       "node_id": "reference/gatewaysyncpkg-solve#anchors",
                       "node_title": "Anchors",
-                      "structural_path": [
-                        "GatewaySyncPkg.solve",
-                        "Anchors"
-                      ],
+                      "structural_path": ["GatewaySyncPkg.solve", "Anchors"],
                       "line_range": [4, 8],
                       "text": "- module: GatewaySyncPkg\n- symbol: GatewaySyncPkg.solve"
                     }
@@ -2302,25 +2254,16 @@
                       "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
                       "kind": "how_to",
                       "title": "solve_demo.jl",
-                      "module_ids": [
-                        "repo:gateway-sync:module:GatewaySyncPkg"
-                      ],
+                      "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
                       "symbol_ids": [
                         "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
                       ],
                       "example_ids": [
                         "repo:gateway-sync:example:examples/solve_demo.jl"
                       ],
-                      "doc_ids": [
-                        "repo:gateway-sync:doc:docs/solve.md"
-                      ],
-                      "paths": [
-                        "docs/solve.md",
-                        "examples/solve_demo.jl"
-                      ],
-                      "format_hints": [
-                        "md"
-                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                      "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                      "format_hints": ["md"],
                       "sections": []
                     }
                   ],
@@ -2335,10 +2278,7 @@
                       "doc_id": "repo:gateway-sync:projection-doc:reference/gatewaysyncpkg-solve",
                       "node_id": "reference/gatewaysyncpkg-solve#overview",
                       "node_title": "Overview",
-                      "structural_path": [
-                        "GatewaySyncPkg.solve",
-                        "Overview"
-                      ],
+                      "structural_path": ["GatewaySyncPkg.solve", "Overview"],
                       "line_range": [1, 3],
                       "text": "Projected page for GatewaySyncPkg.solve"
                     },
@@ -2373,16 +2313,9 @@
                           "example_ids": [
                             "repo:gateway-sync:example:examples/solve_demo.jl"
                           ],
-                          "doc_ids": [
-                            "repo:gateway-sync:doc:docs/solve.md"
-                          ],
-                          "paths": [
-                            "docs/solve.md",
-                            "examples/solve_demo.jl"
-                          ],
-                          "format_hints": [
-                            "md"
-                          ],
+                          "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                          "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                          "format_hints": ["md"],
                           "sections": []
                         }
                       }
@@ -2532,11 +2465,21 @@
                             "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
                             "kind": "reference",
                             "title": "GatewaySyncPkg.solve",
-                            "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
-                            "symbol_ids": ["repo:gateway-sync:symbol:GatewaySyncPkg.solve"],
-                            "example_ids": ["repo:gateway-sync:example:examples/solve_demo.jl"],
+                            "module_ids": [
+                              "repo:gateway-sync:module:GatewaySyncPkg"
+                            ],
+                            "symbol_ids": [
+                              "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                            ],
+                            "example_ids": [
+                              "repo:gateway-sync:example:examples/solve_demo.jl"
+                            ],
                             "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
-                            "paths": ["docs/solve.md", "examples/solve_demo.jl", "src/GatewaySyncPkg.jl"],
+                            "paths": [
+                              "docs/solve.md",
+                              "examples/solve_demo.jl",
+                              "src/GatewaySyncPkg.jl"
+                            ],
                             "format_hints": ["julia_docstring", "md"],
                             "sections": []
                           },
@@ -2563,11 +2506,22 @@
                                 "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
                                 "kind": "how_to",
                                 "title": "solve_demo.jl",
-                                "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
-                                "symbol_ids": ["repo:gateway-sync:symbol:GatewaySyncPkg.solve"],
-                                "example_ids": ["repo:gateway-sync:example:examples/solve_demo.jl"],
-                                "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
-                                "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                                "module_ids": [
+                                  "repo:gateway-sync:module:GatewaySyncPkg"
+                                ],
+                                "symbol_ids": [
+                                  "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                                ],
+                                "example_ids": [
+                                  "repo:gateway-sync:example:examples/solve_demo.jl"
+                                ],
+                                "doc_ids": [
+                                  "repo:gateway-sync:doc:docs/solve.md"
+                                ],
+                                "paths": [
+                                  "docs/solve.md",
+                                  "examples/solve_demo.jl"
+                                ],
                                 "format_hints": ["md"],
                                 "sections": []
                               }
@@ -2881,26 +2835,16 @@
                       "example_ids": [
                         "repo:gateway-sync:example:examples/solve_demo.jl"
                       ],
-                      "doc_ids": [
-                        "repo:gateway-sync:doc:docs/solve.md"
-                      ],
-                      "paths": [
-                        "docs/solve.md",
-                        "examples/solve_demo.jl"
-                      ],
-                      "format_hints": [
-                        "md"
-                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                      "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                      "format_hints": ["md"],
                       "sections": [
                         {
                           "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
                           "title": "Overview",
                           "level": 1,
                           "body": "Projected reference page for `solve`.",
-                          "paths": [
-                            "docs/solve.md",
-                            "examples/solve_demo.jl"
-                          ]
+                          "paths": ["docs/solve.md", "examples/solve_demo.jl"]
                         }
                       ]
                     }
@@ -3010,26 +2954,16 @@
                         "example_ids": [
                           "repo:gateway-sync:example:examples/solve_demo.jl"
                         ],
-                        "doc_ids": [
-                          "repo:gateway-sync:doc:docs/solve.md"
-                        ],
-                        "paths": [
-                          "docs/solve.md",
-                          "examples/solve_demo.jl"
-                        ],
-                        "format_hints": [
-                          "md"
-                        ],
+                        "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                        "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                        "format_hints": ["md"],
                         "sections": [
                           {
                             "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
                             "title": "Overview",
                             "level": 1,
                             "body": "Projected reference page for `solve`.",
-                            "paths": [
-                              "docs/solve.md",
-                              "examples/solve_demo.jl"
-                            ]
+                            "paths": ["docs/solve.md", "examples/solve_demo.jl"]
                           }
                         ]
                       },
@@ -3049,26 +2983,16 @@
                         "example_ids": [
                           "repo:gateway-sync:example:examples/solve_demo.jl"
                         ],
-                        "doc_ids": [
-                          "repo:gateway-sync:doc:docs/solve.md"
-                        ],
-                        "paths": [
-                          "docs/solve.md",
-                          "examples/solve_demo.jl"
-                        ],
-                        "format_hints": [
-                          "md"
-                        ],
+                        "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                        "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                        "format_hints": ["md"],
                         "sections": [
                           {
                             "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
                             "title": "Overview",
                             "level": 1,
                             "body": "Projected reference page for `solve`.",
-                            "paths": [
-                              "docs/solve.md",
-                              "examples/solve_demo.jl"
-                            ]
+                            "paths": ["docs/solve.md", "examples/solve_demo.jl"]
                           }
                         ]
                       },
@@ -3161,9 +3085,7 @@
                           "node_id": "reference/gatewaysyncpkg-fb1701217f99#overview",
                           "title": "Overview",
                           "level": 1,
-                          "structural_path": [
-                            "Overview"
-                          ],
+                          "structural_path": ["Overview"],
                           "line_range": [8, 22],
                           "token_count": 31,
                           "is_thinned": false,
@@ -3173,10 +3095,7 @@
                               "node_id": "reference/gatewaysyncpkg-fb1701217f99#anchors",
                               "title": "Anchors",
                               "level": 2,
-                              "structural_path": [
-                                "Overview",
-                                "Anchors"
-                              ],
+                              "structural_path": ["Overview", "Anchors"],
                               "line_range": [23, 29],
                               "token_count": 8,
                               "is_thinned": false,

@@ -1,17 +1,21 @@
 //! Integration tests for deterministic projected page navigation bundles.
 
+#[path = "../support/repo_projection_support.rs"]
+mod repo_test_support;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use git2::{BranchType, IndexAddOption, Repository, Signature, Time, build::CheckoutBuilder};
-use serde::Serialize;
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_wendao::analyzers::{
     ProjectedPageIndexNode, ProjectionPageKind, RepoProjectedPageIndexTreesQuery,
     RepoProjectedPageNavigationQuery, RepoProjectedPagesQuery,
     repo_projected_page_index_trees_from_config, repo_projected_page_navigation_from_config,
     repo_projected_pages_from_config,
 };
+
+use repo_test_support::{assert_repo_json_snapshot, write_repo_config};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -80,35 +84,6 @@ fn find_node_id(nodes: &[ProjectedPageIndexNode], title: &str) -> Option<String>
         }
     }
     None
-}
-
-fn assert_repo_json_snapshot(name: &str, value: impl Serialize) {
-    insta::with_settings!({
-        snapshot_path => "../snapshots/repo_intelligence",
-        prepend_module_to_snapshot => false,
-        sort_maps => true,
-    }, {
-        insta::assert_json_snapshot!(name, value);
-    });
-}
-
-fn write_repo_config(
-    base: &Path,
-    repo_dir: &Path,
-    repo_id: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let config_path = base.join(format!("{repo_id}.wendao.toml"));
-    fs::write(
-        &config_path,
-        format!(
-            r#"[link_graph.projects.{repo_id}]
-root = "{}"
-plugins = ["julia"]
-"#,
-            repo_dir.display()
-        ),
-    )?;
-    Ok(config_path)
 }
 
 fn create_navigation_julia_repo(

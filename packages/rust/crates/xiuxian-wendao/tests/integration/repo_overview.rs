@@ -6,8 +6,8 @@ use std::process::Command;
 
 use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::json;
-use xiuxian_config_core::resolve_cache_home;
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_config_core::resolve_data_home;
+use xiuxian_wendao::analyzers::{
     RepoIntelligenceError, RepoOverviewQuery, RepositoryRefreshPolicy,
     analyze_repository_from_config, bootstrap_builtin_registry, load_repo_intelligence_config,
     repo_overview_from_config,
@@ -363,8 +363,8 @@ fn append_repo_file_and_commit(
 }
 
 fn repo_cache_root(cwd: &Path) -> std::path::PathBuf {
-    resolve_cache_home(Some(cwd))
-        .expect("cache home should resolve for repo overview tests")
+    resolve_data_home(Some(cwd))
+        .expect("data home should resolve for repo overview tests")
         .join("xiuxian-wendao")
         .join("repo-intelligence")
 }

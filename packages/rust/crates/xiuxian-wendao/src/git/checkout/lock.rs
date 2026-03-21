@@ -1,0 +1,140 @@
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::{Duration, Instant};
+
+use chrono::Utc;
+use xiuxian_io::PrjDirs;
+
+use crate::analyzers::config::RegisteredRepository;
+use crate::analyzers::errors::RepoIntelligenceError;
+
+const CHECKOUT_LOCK_RETRY_DELAY: Duration = Duration::from_millis(100);
+const CHECKOUT_LOCK_MAX_WAIT: Duration = Duration::from_secs(5);
+const CHECKOUT_LOCK_STALE_AFTER: Duration = Duration::from_secs(120);
+
+#[derive(Debug)]
+pub(super) struct ManagedCheckoutLock {
+    path: PathBuf,
+    _file: fs::File,
+}
+
+impl Drop for ManagedCheckoutLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+pub(super) fn acquire_managed_checkout_lock(
+    repository: &RegisteredRepository,
+) -> Result<ManagedCheckoutLock, RepoIntelligenceError> {
+    acquire_managed_checkout_lock_with_policy(
+        managed_lock_path_for(repository),
+        CHECKOUT_LOCK_RETRY_DELAY,
+        CHECKOUT_LOCK_MAX_WAIT,
+        CHECKOUT_LOCK_STALE_AFTER,
+    )
+}
+
+pub(super) fn managed_lock_path_for(repository: &RegisteredRepository) -> PathBuf {
+    let intelligence_root = PrjDirs::data_home()
+        .join("xiuxian-wendao")
+        .join("repo-intelligence");
+    let mirrors_root = intelligence_root.join("mirrors");
+    let mirror_root = super::namespace::managed_mirror_root_for(repository);
+    let relative_path = mirror_root
+        .strip_prefix(&mirrors_root)
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|_| PathBuf::from(format!("{}.git", repository.id)));
+
+    intelligence_root
+        .join("locks")
+        .join(relative_path)
+        .with_extension("lock")
+}
+
+pub(super) fn acquire_managed_checkout_lock_with_policy(
+    lock_path: PathBuf,
+    retry_delay: Duration,
+    max_wait: Duration,
+    stale_after: Duration,
+) -> Result<ManagedCheckoutLock, RepoIntelligenceError> {
+    if let Some(parent) = lock_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| RepoIntelligenceError::AnalysisFailed {
+            message: format!(
+                "failed to create managed checkout lock dir `{}`: {error}",
+                parent.display()
+            ),
+        })?;
+    }
+
+    let started_at = Instant::now();
+    loop {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock_path)
+        {
+            Ok(mut file) => {
+                let _ = writeln!(
+                    file,
+                    "pid={} acquired_at={}",
+                    std::process::id(),
+                    Utc::now().to_rfc3339()
+                );
+                return Ok(ManagedCheckoutLock {
+                    path: lock_path,
+                    _file: file,
+                });
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if lockfile_is_stale(&lock_path, stale_after) {
+                    match fs::remove_file(&lock_path) {
+                        Ok(()) => continue,
+                        Err(remove_error)
+                            if remove_error.kind() == std::io::ErrorKind::NotFound =>
+                        {
+                            continue;
+                        }
+                        Err(remove_error) => {
+                            return Err(RepoIntelligenceError::AnalysisFailed {
+                                message: format!(
+                                    "failed to reclaim stale managed checkout lock `{}`: {remove_error}",
+                                    lock_path.display()
+                                ),
+                            });
+                        }
+                    }
+                }
+
+                if started_at.elapsed() >= max_wait {
+                    return Err(RepoIntelligenceError::AnalysisFailed {
+                        message: format!(
+                            "timed out waiting for managed checkout lock `{}`",
+                            lock_path.display()
+                        ),
+                    });
+                }
+
+                thread::sleep(retry_delay);
+            }
+            Err(error) => {
+                return Err(RepoIntelligenceError::AnalysisFailed {
+                    message: format!(
+                        "failed to acquire managed checkout lock `{}`: {error}",
+                        lock_path.display()
+                    ),
+                });
+            }
+        }
+    }
+}
+
+fn lockfile_is_stale(lock_path: &Path, stale_after: Duration) -> bool {
+    fs::metadata(lock_path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|modified_at| modified_at.elapsed().ok())
+        .is_some_and(|elapsed| elapsed >= stale_after)
+}

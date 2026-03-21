@@ -68,10 +68,11 @@ Plugins should return normalized records and relations, not mutate Wendao storag
 1. Extend the explicit `wendao repo sync --repo <id>` control surface beyond the current `ensure`/`refresh`/`status` modes with richer sync policies and remote lifecycle diagnostics instead of keeping all source preparation implicit behind analysis queries.
 2. Replace the current conservative Julia-only doc linker with richer repository-graph linking for docstrings and structured docs.
 3. Deepen the external `xiuxian-wendao-modelica` implementation from conservative package-layout indexing toward richer MSL-aware semantics.
+4. Consolidate fuzzy retrieval into shared Wendao search primitives so lexical edit-distance scoring, fuzzy option contracts, and Tantivy-backed fuzzy querying stop drifting across isolated search call sites.
 
 ## Current Status
 
-- Initial `repo_intelligence` module skeleton has landed in `xiuxian-wendao`.
+- The Repo Intelligence implementation namespace now lives under `xiuxian-wendao::analyzers`; this roadmap keeps "Repo Intelligence" as the product concept, but code references should now point at `src/analyzers/` rather than the retired `src/repo_intelligence/` path.
 - Initial contracts now exist for:
   - repository registration metadata
   - normalized records
@@ -87,8 +88,10 @@ Plugins should return normalized records and relations, not mutate Wendao storag
   - repository records now derive `revision` and fallback `url` metadata from the local git checkout when configuration does not provide them
   - managed checkout refresh behavior is now explicit through `refresh = "fetch" | "manual"` instead of being hardcoded in the service layer
   - managed checkouts now clone from cache-local mirrors instead of cloning directly from upstream URLs every time
+  - `repo.overview` now again merges plugin-provided repository metadata, post-analysis relation enrichment, checkout metadata hydration, and skeptic verification-state backfill before snapshotting or returning analysis results
   - `wendao repo sync --repo <id>` now exposes the common-core source lifecycle directly and returns the resolved source kind, requested sync mode, refresh policy, mirror/check-out lifecycle states, observation time (`checked_at`), last local mirror fetch time (`last_fetched_at`), mirror revision, tracking revision, drift state, high-level `health_state`, freshness-oriented `staleness_state`, a grouped `status_summary`, checkout path, optional mirror path, upstream URL, and active revision without requiring a full analysis pass
   - `wendao repo sync --repo <id> --mode status` now inspects the current managed-source cache state without creating mirrors, creating working checkouts, or triggering network refresh
+  - managed source `status` mode is now again read-only for existing checkouts, while `ensure`/`refresh` correctly advance bare-mirror branch heads before materializing or fast-forwarding managed working copies
   - `repo sync` now also exposes a compact health summary so callers can distinguish `healthy`, `missing_assets`, `needs_refresh`, `has_local_commits`, `diverged`, and `unknown` without reinterpreting the lower-level lifecycle fields themselves
   - `repo sync` now also classifies mirror freshness into `fresh`, `aging`, and `stale` buckets, with `not_applicable` for local checkouts and `unknown` when managed metadata is missing
   - `repo sync` now also groups lifecycle, freshness, and revision state into a nested `status_summary` so agent-side consumers can read one structured object instead of reconstructing those relationships from flat fields
@@ -100,9 +103,9 @@ Plugins should return normalized records and relations, not mutate Wendao storag
   - `repo doc-coverage` is now also exposed through the studio gateway at `GET /api/repo/doc-coverage?repo=<id>&module=<qualified-name>`, returning normalized doc rows plus covered and uncovered symbol counts from the existing Repo Intelligence service path
   - the common core now also exposes registry-aware library entry points for `repo.overview`, `module.search`, `symbol.search`, `example.search`, and `doc.coverage`, so external crates can reuse the same configured query surface with custom plugin registries
   - `xiuxian-wendao` bootstraps the built-in `julia` plugin automatically for this slice
-  - Julia syntax extraction now lives in `xiuxian-ast` behind its `julia` dependency feature, and `repo_intelligence::julia` in `xiuxian-wendao` is now a thin bridge/orchestration layer
+  - Julia syntax extraction now lives in `xiuxian-ast` behind its `julia` dependency feature, and the built-in Julia analyzer now registers through `xiuxian-wendao::analyzers::languages::julia` while the query/runtime orchestration lives under `xiuxian-wendao::analyzers::service`
   - the Julia AST layer now extracts conservative symbol docstrings and literal `include("...")` edges, and the Wendao Julia bridge now walks the root-file include graph before normalizing `DocRecord` inventory plus explicit `RelationKind::Documents` edges
-  - `repo_intelligence::julia/` is split into a feature folder with `mod.rs` as interface-only re-export
+  - the analyzer implementation is now split across `analyzers/` feature folders with interface-only `mod.rs` boundaries instead of keeping the old `repo_intelligence/` path as the live implementation root
   - `wendao repo overview --repo <id>` returns a real `RepoOverviewResult` through the existing `--output json|pretty` surface
   - `wendao repo module-search --repo <id> --query <text>` returns a real `ModuleSearchResult` through the same output surface
   - `wendao repo symbol-search --repo <id> --query <text>` returns a real `SymbolSearchResult` through the same output surface
@@ -111,6 +114,8 @@ Plugins should return normalized records and relations, not mutate Wendao storag
   - structural graph edges now exist for `Contains`, `Declares`, `Uses`, `Documents`, and `ExampleOf` in the Julia MVP slice
   - the first external extension validation slice is now landed as workspace crate `xiuxian-wendao-modelica`, which registers `plugins = ["modelica"]` and conservatively indexes `package.mo`, lightweight `.mo` declarations, `Examples`, `UsersGuide`, and inline `annotation(Documentation(...))` docs through the same common-core query surface
   - the external Modelica walker now skips hidden/VCS paths such as `.git`, so documentation inventory no longer picks up repository internals as false-positive docs
+  - `xiuxian-wendao-modelica` is now realigned to the live `xiuxian-wendao::analyzers` record and import contracts again, so `cargo check -p xiuxian-wendao -p xiuxian-wendao-modelica` and `cargo test -p xiuxian-wendao-modelica` are both green instead of drifting behind stale common-core schemas
+  - `cargo test -p xiuxian-wendao --lib` is now green again after prewarming the repo-analysis cache inside the gateway repo test fixture and splitting the brittle `StudioState::new()` bootstrap threshold from the stricter cached-router latency threshold
   - the external Modelica crate now follows a feature-folder module split, with `lib.rs` reduced to public re-exports and internal responsibilities separated across `plugin/entry.rs`, `plugin/analysis.rs`, `plugin/discovery.rs`, `plugin/relations.rs`, and `plugin/parsing.rs`
   - `module.search` now preserves analyzer order for equal-score matches, allowing language plugins such as `xiuxian-wendao-modelica` to project canonical `package.order` semantics into query results instead of having common-core alphabetical tiebreaks overwrite them
   - `example.search` now also preserves analyzer order for equal-score matches, allowing `xiuxian-wendao-modelica` to project canonical example ordering from `package.order` instead of falling back to title/path alphabetical ordering
@@ -133,6 +138,43 @@ Plugins should return normalized records and relations, not mutate Wendao storag
   - `cargo test -p xiuxian-wendao --test repo_intelligence_registry`
   - `cargo test -p xiuxian-wendao-modelica`
   - `cargo test -p xiuxian-ast --features julia --lib`
+
+## Search Primitive Follow-Up
+
+The next bounded refactor slice should establish a crate-local common fuzzy-search layer inside `xiuxian-wendao` before any wider workspace rollout:
+
+- extract reusable lexical distance and normalized fuzzy-scoring helpers into a shared search module
+- define shared fuzzy option contracts for edit distance, prefix length, and transposition behavior
+- adapt existing Tantivy-backed lookup paths so fuzzy querying is exposed through a reusable matcher boundary instead of feature-local query construction
+- migrate touched callers in Wendao to the common primitive layer first, leaving cross-crate search unification as a later decision
+
+Initial bounded progress for that slice is now landed:
+
+- `xiuxian-wendao` now exposes a shared `search` module with reusable lexical and Tantivy-backed fuzzy matchers
+- `crate::search::tantivy` now also owns a shared `SearchDocumentIndex` and shared search-document schema so new search backends stop rebuilding Tantivy field layouts ad hoc
+- the shared fuzzy hot path now uses a three-row scratch-buffer edit-distance implementation and avoids repeated query lowercasing inside the lexical/Tantivy matcher loops, reducing per-candidate allocation churn
+- the shared fuzzy hot path now also reuses query/candidate char buffers and distance scratch space across lexical/Tantivy matcher loops, while public scoring helpers (`edit_distance`, `normalized_score`, `score_candidate`) now borrow thread-local buffers instead of allocating fresh `Vec<char>` / `Vec<usize>` scratch state on every call
+- Tantivy best-fragment rescoring now also walks borrowed fragment slices directly instead of first materializing a temporary `Vec<String>` candidate list for each stored title, and only allocates the final `matched_text` once the winning fragment is known
+- Tantivy identifier-boundary discovery now also uses a single-pass `Peekable<char_indices()>` state machine instead of collecting every `(byte_idx, char)` pair into a temporary `Vec`, and the splitter semantics are now pinned by direct unit tests for CamelCase, acronym-to-word, and alpha-digit transitions
+- `LexicalMatcher::search` now also uses the shared thread-local fuzzy buffers directly instead of constructing fresh `query_chars`, `candidate_chars`, and `scratch` vectors on every search call, and focused tests now verify consecutive lexical searches clear that reused state correctly
+- prefix gating now also runs inside the shared candidate-lowercasing pass instead of scanning each candidate once for prefix validation and a second time for lowercase collection, and the prefix comparison now treats non-ASCII case pairs through `char::to_lowercase()` equality rather than ASCII-only case folding
+- `FuzzySearchOptions` now also exposes a preparatory `camel_case_symbol()` profile so future Julia/Modelica symbol callers can opt into relaxed prefix gating for CamelCase-style abbreviations without changing the default symbol profile
+- `UnifiedSymbolIndex` now supports option-aware fuzzy lookup through the shared matcher layer and now reuses the shared search-document schema instead of maintaining a feature-local Tantivy schema
+- Repo Intelligence `module.search`, `symbol.search`, and `example.search` now also build shared `SearchDocumentIndex` instances and use an `exact Tantivy -> fuzzy Tantivy -> legacy lexical fallback` ranking pipeline, so the studio repo handlers inherit the shared search primitives without re-scanning every module/symbol/example row first
+- deterministic projected-page search now also uses `build_projected_pages(...)` plus the shared search-document index for exact and fuzzy retrieval before falling back to the existing keyword/path heuristics
+- projected-page family search, navigation search, retrieval context, and projected page-index tree lookup now also resolve against the shared projected-page and projected page-index tree builders instead of re-deriving partial views from raw docs
+- `build_projected_retrieval_hit(...)` now also resolves stable projected `page_id` values through the shared projected-page lookup instead of misreading them as raw stage-one `doc_id` values
+- Tantivy best-fragment rescoring now also expands CamelCase and alpha-digit identifier spans, so symbol-like names get higher-quality secondary matches even before a full custom tokenizer lands
+- LinkGraph topology discovery now has a typo-tolerant lexical title fallback backed by the same shared fuzzy primitives
+- Studio definition resolution, semantic-auditor fuzzy scoring, and graph dedup edit-distance scoring now reuse the shared primitives instead of carrying isolated edit-distance implementations
+- dedicated projection integration targets now validate the shared projected-page search/navigation/retrieval slice through a stable in-memory analysis fixture, avoiding the currently broken built-in Julia plugin bootstrap path while keeping the search-contract assertions in place
+- the `repo_projected_` slice of `xiuxian-testing-gate` is now back to green after updating the stale projection fixtures to the current contracts and accepting the deterministic snapshot drift
+- the `repo_example_search` slice of `xiuxian-testing-gate` now also passes with shared Tantivy-backed typo handling for example-title queries, and the stale CLI JSON snapshot baseline has been refreshed to the current payload shape
+- the filtered `repo_overview` and `repo_sync` slices of `xiuxian-testing-gate` are now green again after restoring overview aggregation semantics and managed-source drift/freshness classification, and the affected overview snapshots have been refreshed to the current symbol/diagnostic payload shape
+- focused lib tests now validate typo-tolerant Repo Intelligence module/symbol retrieval through `analyzers::service::search::tests::*`, which stays runnable even while the broader `xiuxian-testing-gate` target is blocked by unrelated compile failures
+- projected doc-kind inference now also honors the shared doc-format contract for standalone `reference` docs while still upgrading symbol-anchored explanation docs to `Reference`, which unblocked the shared projected-page lib tests and removed one source of repo-sync payload drift
+- the bundled Wendao gateway OpenAPI artifact now also covers `/api/analysis/code-ast`, keeping the route inventory test aligned with the runtime gateway surface
+- `cargo test -p xiuxian-wendao --lib` is now green again after refreshing the affected studio Markdown-analysis and repo-sync snapshot baselines to the current response contracts
 
 ## Open Constraint
 

@@ -1,30 +1,13 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
+source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_projection_support.rs
 expression: value
 ---
 {
   "center": {
-    "kind": "page_index_node",
-    "node": {
-      "doc_id": "reference/projectionpkg-solve-ff4addb9b708",
-      "line_range": [
-        22,
-        31
-      ],
-      "node_id": "reference/projectionpkg-solve-ff4addb9b708#anchors",
-      "node_title": "Anchors",
-      "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.solve",
-      "page_kind": "reference",
-      "page_title": "ProjectionPkg.solve",
-      "path": "reference/projectionpkg-solve-ff4addb9b708.md",
-      "repo_id": "projection-sample",
-      "structural_path": [
-        "Overview",
-        "Anchors"
-      ],
-      "text": ":ID: anchors\n:PATHS: src/ProjectionPkg.jl\n\nModules:\n- `ProjectionPkg` (src/ProjectionPkg.jl)\n\nSymbols:\n- `ProjectionPkg.solve` (src/ProjectionPkg.jl)"
-    },
+    "kind": "page",
+    "node": null,
     "page": {
+      "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
       "doc_ids": [
         "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
         "repo:projection-sample:doc:docs/solve.md"
@@ -36,11 +19,19 @@ expression: value
         "julia_docstring",
         "md"
       ],
+      "keywords": [
+        "ProjectionPkg.solve",
+        "docs/solve.md",
+        "julia_docstring",
+        "md",
+        "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
+      ],
       "kind": "reference",
       "module_ids": [
         "repo:projection-sample:module:ProjectionPkg"
       ],
       "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.solve",
+      "path": "docs/solve.md",
       "paths": [
         "docs/solve.md",
         "examples/solve_demo.jl",
@@ -101,6 +92,7 @@ expression: value
     "pages": [
       {
         "page": {
+          "doc_id": "repo:projection-sample:doc:README.md",
           "doc_ids": [
             "repo:projection-sample:doc:README.md",
             "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
@@ -113,11 +105,19 @@ expression: value
             "julia_docstring",
             "md"
           ],
+          "keywords": [
+            "README.md",
+            "julia_docstring",
+            "md",
+            "repo:projection-sample:doc:README.md",
+            "solve_demo"
+          ],
           "kind": "how_to",
           "module_ids": [
             "repo:projection-sample:module:ProjectionPkg"
           ],
           "page_id": "repo:projection-sample:projection:howto:example:repo:projection-sample:example:examples/solve_demo.jl",
+          "path": "README.md",
           "paths": [
             "README.md",
             "docs/solve.md",
@@ -180,7 +180,7 @@ expression: value
   "node_context": {
     "ancestors": [
       {
-        "doc_id": "reference/projectionpkg-solve-ff4addb9b708",
+        "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
         "line_range": [
           8,
           21
@@ -190,7 +190,7 @@ expression: value
         "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.solve",
         "page_kind": "reference",
         "page_title": "ProjectionPkg.solve",
-        "path": "reference/projectionpkg-solve-ff4addb9b708.md",
+        "path": "docs/solve.md",
         "repo_id": "projection-sample",
         "structural_path": [
           "Overview"
@@ -200,7 +200,7 @@ expression: value
     ],
     "children": [],
     "next_sibling": {
-      "doc_id": "reference/projectionpkg-solve-ff4addb9b708",
+      "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
       "line_range": [
         32,
         39
@@ -210,7 +210,7 @@ expression: value
       "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.solve",
       "page_kind": "reference",
       "page_title": "ProjectionPkg.solve",
-      "path": "reference/projectionpkg-solve-ff4addb9b708.md",
+      "path": "docs/solve.md",
       "repo_id": "projection-sample",
       "structural_path": [
         "Overview",
@@ -222,6 +222,7 @@ expression: value
   },
   "related_pages": [
     {
+      "doc_id": "repo:projection-sample:doc:README.md",
       "doc_ids": [
         "repo:projection-sample:doc:README.md",
         "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
@@ -234,11 +235,19 @@ expression: value
         "julia_docstring",
         "md"
       ],
+      "keywords": [
+        "README.md",
+        "julia_docstring",
+        "md",
+        "repo:projection-sample:doc:README.md",
+        "solve_demo"
+      ],
       "kind": "how_to",
       "module_ids": [
         "repo:projection-sample:module:ProjectionPkg"
       ],
       "page_id": "repo:projection-sample:projection:howto:example:repo:projection-sample:example:examples/solve_demo.jl",
+      "path": "README.md",
       "paths": [
         "README.md",
         "docs/solve.md",
@@ -295,6 +304,7 @@ expression: value
       "title": "solve_demo"
     },
     {
+      "doc_id": "repo:projection-sample:doc:README.md",
       "doc_ids": [
         "repo:projection-sample:doc:README.md",
         "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
@@ -307,11 +317,19 @@ expression: value
         "julia_docstring",
         "md"
       ],
+      "keywords": [
+        "ProjectionPkg",
+        "README.md",
+        "julia_docstring",
+        "md",
+        "repo:projection-sample:doc:README.md"
+      ],
       "kind": "reference",
       "module_ids": [
         "repo:projection-sample:module:ProjectionPkg"
       ],
       "page_id": "repo:projection-sample:projection:reference:module:repo:projection-sample:module:ProjectionPkg",
+      "path": "README.md",
       "paths": [
         "README.md",
         "docs/solve.md",
@@ -368,6 +386,7 @@ expression: value
       "title": "ProjectionPkg"
     },
     {
+      "doc_id": "repo:projection-sample:doc:docs/solve.md",
       "doc_ids": [
         "repo:projection-sample:doc:docs/solve.md"
       ],
@@ -377,9 +396,16 @@ expression: value
       "format_hints": [
         "md"
       ],
+      "keywords": [
+        "docs/solve.md",
+        "md",
+        "repo:projection-sample:doc:docs/solve.md",
+        "solve"
+      ],
       "kind": "reference",
       "module_ids": [],
       "page_id": "repo:projection-sample:projection:reference:doc:repo:projection-sample:doc:docs/solve.md",
+      "path": "docs/solve.md",
       "paths": [
         "docs/solve.md",
         "examples/solve_demo.jl"
@@ -433,6 +459,7 @@ expression: value
   "repo_id": "projection-sample",
   "tree": {
     "doc_id": "reference/projectionpkg-solve-ff4addb9b708",
+    "kind": "reference",
     "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.solve",
     "path": "reference/projectionpkg-solve-ff4addb9b708.md",
     "repo_id": "projection-sample",
@@ -450,6 +477,7 @@ expression: value
         "structural_path": [
           "ProjectionPkg.solve"
         ],
+        "summary": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring, md\n:END:",
         "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring, md\n:END:",
         "title": "ProjectionPkg.solve",
         "token_count": 9
@@ -469,6 +497,7 @@ expression: value
               "Overview",
               "Anchors"
             ],
+            "summary": ":ID: anchors\n:PATHS: src/ProjectionPkg",
             "text": ":ID: anchors\n:PATHS: src/ProjectionPkg.jl\n\nModules:\n- `ProjectionPkg` (src/ProjectionPkg.jl)\n\nSymbols:\n- `ProjectionPkg.solve` (src/ProjectionPkg.jl)",
             "title": "Anchors",
             "token_count": 12
@@ -486,6 +515,7 @@ expression: value
               "Overview",
               "Documentation"
             ],
+            "summary": ":ID: sources\n:PATHS: docs/solve",
             "text": ":ID: sources\n:PATHS: docs/solve.md, src/ProjectionPkg.jl#symbol:solve\n\nDocumentation:\n- `solve` (docs/solve.md)\n- `solve` (src/ProjectionPkg.jl#symbol:solve)",
             "title": "Documentation",
             "token_count": 12
@@ -503,6 +533,7 @@ expression: value
               "Overview",
               "Examples"
             ],
+            "summary": ":ID: examples\n:PATHS: examples/solve_demo",
             "text": ":ID: examples\n:PATHS: examples/solve_demo.jl\n\nExamples:\n- `solve_demo` (examples/solve_demo.jl)",
             "title": "Examples",
             "token_count": 8
@@ -518,6 +549,7 @@ expression: value
         "structural_path": [
           "Overview"
         ],
+        "summary": ":ID: overview\n:PATHS: docs/solve",
         "text": ":ID: overview\n:PATHS: docs/solve.md, examples/solve_demo.jl, src/ProjectionPkg.jl, src/ProjectionPkg.jl#symbol:solve\n\nProjected reference page for `ProjectionPkg.solve`.\nFormat hints:\n- `julia_docstring`\n- `md`\nSource paths:\n- `docs/solve.md`\n- `examples/solve_demo.jl`\n- `src/ProjectionPkg.jl`\n- `src/ProjectionPkg.jl#symbol:solve`",
         "title": "Overview",
         "token_count": 28

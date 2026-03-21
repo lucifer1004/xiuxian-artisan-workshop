@@ -5,9 +5,14 @@ mod repo_test_support;
 
 use std::process::Command;
 
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
+use repo_test_support::{
+    assert_repo_json_snapshot, create_sample_julia_repo, sample_projection_analysis,
+    write_repo_config,
+};
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{ModuleSearchQuery, module_search_from_config};
+use xiuxian_wendao::analyzers::{
+    ModuleSearchQuery, build_module_search, module_search_from_config,
+};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -103,4 +108,26 @@ fn cli_repo_module_search_returns_serialized_result() -> TestResult {
     let payload: serde_json::Value = serde_json::from_slice(&output.stdout)?;
     assert_repo_json_snapshot("repo_module_search_cli_json", payload);
     Ok(())
+}
+
+#[test]
+fn module_search_uses_shared_tantivy_fuzzy_index_for_typos() {
+    let analysis = sample_projection_analysis("module-fuzzy");
+    let result = build_module_search(
+        &ModuleSearchQuery {
+            repo_id: "module-fuzzy".to_string(),
+            query: "ProjectonPkg".to_string(),
+            limit: 10,
+        },
+        &analysis,
+    );
+
+    assert_eq!(result.modules.len(), 1);
+    assert_eq!(result.modules[0].qualified_name, "ProjectionPkg");
+    assert!(
+        result.module_hits[0]
+            .score
+            .expect("shared fuzzy search should emit a score")
+            > 0.0
+    );
 }

@@ -3,31 +3,28 @@
 #[path = "../support/repo_intelligence.rs"]
 mod repo_test_support;
 
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
+use repo_test_support::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedPageIndexTreeSearchQuery,
-    repo_projected_page_index_tree_search_from_config,
+    build_repo_projected_page_index_tree_search,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn projected_page_index_tree_search_matches_section_hits() -> TestResult {
-    let temp = tempfile::tempdir()?;
-    let repo_dir = create_sample_julia_repo(temp.path(), "ProjectionPkg", true)?;
-    let config_path = write_repo_config(temp.path(), &repo_dir, "projection-sample")?;
+    let analysis = sample_projection_analysis("projection-sample");
 
-    let result = repo_projected_page_index_tree_search_from_config(
+    let result = build_repo_projected_page_index_tree_search(
         &RepoProjectedPageIndexTreeSearchQuery {
             repo_id: "projection-sample".to_string(),
             query: "anchors".to_string(),
             kind: Some(ProjectionPageKind::Reference),
             limit: 10,
         },
-        Some(&config_path),
-        temp.path(),
-    )?;
+        &analysis,
+    );
 
     assert_repo_json_snapshot(
         "repo_projected_page_index_tree_search_result",

@@ -1,0 +1,20 @@
+---
+source: packages/rust/crates/xiuxian-testing/src/scenario.rs
+description: "Scenario 003_modelica_package_summary [modelica_parser]: Modelica Package Summary"
+expression: result
+info:
+  id: 003_modelica_package_summary
+  name: Modelica Package Summary
+  category: modelica_parser
+  description: Parse the Modelica Standard Library top-level package into a conservative repository-entry summary
+  input_type: modelica_file_source
+  input_paths:
+    - input
+  expected_output_type: ~
+---
+{
+  "class_name": "Modelica",
+  "documentation": null,
+  "imports": [],
+  "symbols": []
+}

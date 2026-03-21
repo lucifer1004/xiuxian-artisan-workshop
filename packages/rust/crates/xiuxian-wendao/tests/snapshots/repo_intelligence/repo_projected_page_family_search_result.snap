@@ -6,6 +6,7 @@ expression: value
   "hits": [
     {
       "center_page": {
+        "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
         "doc_ids": [
           "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
         ],
@@ -13,9 +14,16 @@ expression: value
         "format_hints": [
           "julia_docstring"
         ],
+        "keywords": [
+          "julia_docstring",
+          "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+          "solve",
+          "src/ProjectionPkg.jl#symbol:solve"
+        ],
         "kind": "reference",
         "module_ids": [],
         "page_id": "repo:projection-sample:projection:reference:doc:repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+        "path": "src/ProjectionPkg.jl#symbol:solve",
         "paths": [
           "src/ProjectionPkg.jl#symbol:solve"
         ],
@@ -60,6 +68,7 @@ expression: value
           "pages": [
             {
               "page": {
+                "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
                 "doc_ids": [
                   "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
                 ],
@@ -67,11 +76,18 @@ expression: value
                 "format_hints": [
                   "julia_docstring"
                 ],
+                "keywords": [
+                  "ProjectionPkg.solve",
+                  "julia_docstring",
+                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+                  "src/ProjectionPkg.jl"
+                ],
                 "kind": "reference",
                 "module_ids": [
                   "repo:projection-sample:module:ProjectionPkg"
                 ],
                 "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.solve",
+                "path": "src/ProjectionPkg.jl",
                 "paths": [
                   "src/ProjectionPkg.jl",
                   "src/ProjectionPkg.jl#symbol:solve"
@@ -116,21 +132,30 @@ expression: value
             },
             {
               "page": {
+                "doc_id": "repo:projection-sample:doc:README.md",
                 "doc_ids": [
                   "repo:projection-sample:doc:README.md",
-                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:Problem",
-                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
+                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:Problem"
                 ],
                 "example_ids": [],
                 "format_hints": [
                   "julia_docstring",
                   "md"
                 ],
+                "keywords": [
+                  "ProjectionPkg",
+                  "README.md",
+                  "julia_docstring",
+                  "md",
+                  "repo:projection-sample:doc:README.md"
+                ],
                 "kind": "reference",
                 "module_ids": [
                   "repo:projection-sample:module:ProjectionPkg"
                 ],
                 "page_id": "repo:projection-sample:projection:reference:module:repo:projection-sample:module:ProjectionPkg",
+                "path": "README.md",
                 "paths": [
                   "README.md",
                   "src/ProjectionPkg.jl",
@@ -183,6 +208,7 @@ expression: value
     },
     {
       "center_page": {
+        "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
         "doc_ids": [
           "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
         ],
@@ -190,11 +216,18 @@ expression: value
         "format_hints": [
           "julia_docstring"
         ],
+        "keywords": [
+          "ProjectionPkg.solve",
+          "julia_docstring",
+          "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+          "src/ProjectionPkg.jl"
+        ],
         "kind": "reference",
         "module_ids": [
           "repo:projection-sample:module:ProjectionPkg"
         ],
         "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.solve",
+        "path": "src/ProjectionPkg.jl",
         "paths": [
           "src/ProjectionPkg.jl",
           "src/ProjectionPkg.jl#symbol:solve"
@@ -241,21 +274,30 @@ expression: value
           "pages": [
             {
               "page": {
+                "doc_id": "repo:projection-sample:doc:README.md",
                 "doc_ids": [
                   "repo:projection-sample:doc:README.md",
-                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:Problem",
-                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
+                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:Problem"
                 ],
                 "example_ids": [],
                 "format_hints": [
                   "julia_docstring",
                   "md"
                 ],
+                "keywords": [
+                  "ProjectionPkg",
+                  "README.md",
+                  "julia_docstring",
+                  "md",
+                  "repo:projection-sample:doc:README.md"
+                ],
                 "kind": "reference",
                 "module_ids": [
                   "repo:projection-sample:module:ProjectionPkg"
                 ],
                 "page_id": "repo:projection-sample:projection:reference:module:repo:projection-sample:module:ProjectionPkg",
+                "path": "README.md",
                 "paths": [
                   "README.md",
                   "src/ProjectionPkg.jl",
@@ -304,6 +346,7 @@ expression: value
             },
             {
               "page": {
+                "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
                 "doc_ids": [
                   "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
                 ],
@@ -311,9 +354,16 @@ expression: value
                 "format_hints": [
                   "julia_docstring"
                 ],
+                "keywords": [
+                  "julia_docstring",
+                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+                  "solve",
+                  "src/ProjectionPkg.jl#symbol:solve"
+                ],
                 "kind": "reference",
                 "module_ids": [],
                 "page_id": "repo:projection-sample:projection:reference:doc:repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+                "path": "src/ProjectionPkg.jl#symbol:solve",
                 "paths": [
                   "src/ProjectionPkg.jl#symbol:solve"
                 ],
@@ -361,6 +411,7 @@ expression: value
           "pages": [
             {
               "page": {
+                "doc_id": "repo:projection-sample:doc:README.md",
                 "doc_ids": [
                   "repo:projection-sample:doc:README.md"
                 ],
@@ -368,11 +419,17 @@ expression: value
                 "format_hints": [
                   "md"
                 ],
+                "keywords": [
+                  "README.md",
+                  "md",
+                  "repo:projection-sample:doc:README.md"
+                ],
                 "kind": "explanation",
                 "module_ids": [
                   "repo:projection-sample:module:ProjectionPkg"
                 ],
                 "page_id": "repo:projection-sample:projection:explanation:doc:repo:projection-sample:doc:README.md",
+                "path": "README.md",
                 "paths": [
                   "README.md"
                 ],
@@ -417,21 +474,30 @@ expression: value
     },
     {
       "center_page": {
+        "doc_id": "repo:projection-sample:doc:README.md",
         "doc_ids": [
           "repo:projection-sample:doc:README.md",
-          "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:Problem",
-          "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
+          "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+          "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:Problem"
         ],
         "example_ids": [],
         "format_hints": [
           "julia_docstring",
           "md"
         ],
+        "keywords": [
+          "ProjectionPkg",
+          "README.md",
+          "julia_docstring",
+          "md",
+          "repo:projection-sample:doc:README.md"
+        ],
         "kind": "reference",
         "module_ids": [
           "repo:projection-sample:module:ProjectionPkg"
         ],
         "page_id": "repo:projection-sample:projection:reference:module:repo:projection-sample:module:ProjectionPkg",
+        "path": "README.md",
         "paths": [
           "README.md",
           "src/ProjectionPkg.jl",
@@ -482,6 +548,7 @@ expression: value
           "pages": [
             {
               "page": {
+                "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:Problem",
                 "doc_ids": [
                   "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:Problem"
                 ],
@@ -489,11 +556,18 @@ expression: value
                 "format_hints": [
                   "julia_docstring"
                 ],
+                "keywords": [
+                  "ProjectionPkg.Problem",
+                  "julia_docstring",
+                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:Problem",
+                  "src/ProjectionPkg.jl"
+                ],
                 "kind": "reference",
                 "module_ids": [
                   "repo:projection-sample:module:ProjectionPkg"
                 ],
                 "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.Problem",
+                "path": "src/ProjectionPkg.jl",
                 "paths": [
                   "src/ProjectionPkg.jl",
                   "src/ProjectionPkg.jl#symbol:Problem"
@@ -538,6 +612,7 @@ expression: value
             },
             {
               "page": {
+                "doc_id": "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
                 "doc_ids": [
                   "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve"
                 ],
@@ -545,11 +620,18 @@ expression: value
                 "format_hints": [
                   "julia_docstring"
                 ],
+                "keywords": [
+                  "ProjectionPkg.solve",
+                  "julia_docstring",
+                  "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
+                  "src/ProjectionPkg.jl"
+                ],
                 "kind": "reference",
                 "module_ids": [
                   "repo:projection-sample:module:ProjectionPkg"
                 ],
                 "page_id": "repo:projection-sample:projection:reference:symbol:repo:projection-sample:symbol:ProjectionPkg.solve",
+                "path": "src/ProjectionPkg.jl",
                 "paths": [
                   "src/ProjectionPkg.jl",
                   "src/ProjectionPkg.jl#symbol:solve"
@@ -599,6 +681,7 @@ expression: value
           "pages": [
             {
               "page": {
+                "doc_id": "repo:projection-sample:doc:README.md",
                 "doc_ids": [
                   "repo:projection-sample:doc:README.md"
                 ],
@@ -606,11 +689,17 @@ expression: value
                 "format_hints": [
                   "md"
                 ],
+                "keywords": [
+                  "README.md",
+                  "md",
+                  "repo:projection-sample:doc:README.md"
+                ],
                 "kind": "explanation",
                 "module_ids": [
                   "repo:projection-sample:module:ProjectionPkg"
                 ],
                 "page_id": "repo:projection-sample:projection:explanation:doc:repo:projection-sample:doc:README.md",
+                "path": "README.md",
                 "paths": [
                   "README.md"
                 ],

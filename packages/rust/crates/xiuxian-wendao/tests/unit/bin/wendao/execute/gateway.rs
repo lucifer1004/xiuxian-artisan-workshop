@@ -26,6 +26,14 @@ fn remove_temp_gateway_config(path: &Path) {
     }
 }
 
+fn app_state(signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>) -> Arc<AppState> {
+    Arc::new(AppState::new(
+        None,
+        signal_tx,
+        build_plugin_registry().expect("bootstrap builtin registry"),
+    ))
+}
+
 #[test]
 fn test_default_port() {
     assert_eq!(DEFAULT_PORT, 9517);
@@ -66,7 +74,7 @@ async fn test_health_endpoint() {
 
 #[tokio::test]
 async fn test_stats_endpoint_no_index() {
-    let state = Arc::new(AppState::new(None, None));
+    let state = app_state(None);
     let result = stats(State(state)).await;
     assert_eq!(result.0["error"], "no index loaded");
 }
@@ -74,14 +82,14 @@ async fn test_stats_endpoint_no_index() {
 #[tokio::test]
 async fn test_notify_status_endpoint() {
     let (tx, _rx) = mpsc::unbounded_channel();
-    let state = Arc::new(AppState::new(None, Some(tx)));
+    let state = app_state(Some(tx));
     let result = notify_status(State(state)).await;
     assert_eq!(result.0["notification_worker"], "active");
 }
 
 #[tokio::test]
 async fn test_notify_status_no_channel() {
-    let state = Arc::new(AppState::new(None, None));
+    let state = app_state(None);
     let result = notify_status(State(state)).await;
     assert_eq!(result.0["notification_worker"], "inactive");
 }
@@ -90,7 +98,7 @@ async fn test_notify_status_no_channel() {
 async fn test_gateway_server_bind() {
     // Test that we can create the router and bind to a port
     let (tx, _rx) = mpsc::unbounded_channel();
-    let app_state = Arc::new(AppState::new(None, Some(tx)));
+    let app_state = app_state(Some(tx));
     let app: Router<Arc<AppState>> = Router::new()
         .route(openapi_paths::API_HEALTH_AXUM_PATH, get(health))
         .route(openapi_paths::API_STATS_AXUM_PATH, get(stats))
@@ -149,6 +157,12 @@ webhook_enabled = false
     remove_temp_gateway_config(&config_path);
 
     assert!(config.is_none());
+}
+
+#[test]
+fn test_build_plugin_registry_bootstraps_builtin_plugins() {
+    let registry = build_plugin_registry().expect("bootstrap builtin registry");
+    assert!(registry.plugin_ids().contains(&"julia"));
 }
 
 #[tokio::test]

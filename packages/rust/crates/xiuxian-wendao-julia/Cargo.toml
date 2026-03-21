@@ -1,0 +1,22 @@
+[package]
+name = "xiuxian-wendao-julia"
+version.workspace = true
+edition.workspace = true
+description = "External Julia Repo Intelligence plugin for xiuxian-wendao"
+authors = ["CyberXiuXian Artisan Studio"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+walkdir = { workspace = true }
+regex = "1"
+toml = "0.8"
+xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false }
+xiuxian-ast = { path = "../xiuxian-ast", features = ["julia"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+insta = { workspace = true }
+
+[lints]
+workspace = true

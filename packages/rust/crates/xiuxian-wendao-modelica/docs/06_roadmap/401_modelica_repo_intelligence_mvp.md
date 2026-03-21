@@ -34,6 +34,7 @@ This roadmap tracks the external Modelica plugin as a first-class package, separ
 - parser-facing `ProjectedMarkdownDocument` and `ProjectedPageIndexDocument` output validated from the external Modelica integration path, so Stage-2 projected pages can reuse the existing markdown parser before page-index ingestion
 - real `ProjectedPageIndexTree` output validated from the external Modelica integration path, so projected Modelica guide pages now carry builder-native page-index hierarchy and thinning signals
 - normalized page titles for file-backed docs
+- external crate contracts are now realigned to the live `xiuxian-wendao::analyzers` record/import schemas again, restoring a green package test lane against the current common core
 
 ## Active Tracking Focus
 

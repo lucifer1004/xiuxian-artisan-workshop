@@ -3,28 +3,25 @@
 #[path = "../support/repo_intelligence.rs"]
 mod repo_test_support;
 
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
+use repo_test_support::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
-    RepoProjectedPageQuery, RepoProjectedPagesQuery, repo_projected_page_from_config,
-    repo_projected_pages_from_config,
+use xiuxian_wendao::analyzers::{
+    RepoProjectedPageQuery, RepoProjectedPagesQuery, build_repo_projected_page,
+    build_repo_projected_pages,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn projected_page_lookup_resolves_one_stable_page() -> TestResult {
-    let temp = tempfile::tempdir()?;
-    let repo_dir = create_sample_julia_repo(temp.path(), "ProjectionPkg", true)?;
-    let config_path = write_repo_config(temp.path(), &repo_dir, "projection-sample")?;
+    let analysis = sample_projection_analysis("projection-sample");
 
-    let pages = repo_projected_pages_from_config(
+    let pages = build_repo_projected_pages(
         &RepoProjectedPagesQuery {
             repo_id: "projection-sample".to_string(),
         },
-        Some(&config_path),
-        temp.path(),
-    )?;
+        &analysis,
+    );
 
     let page_id = pages
         .pages
@@ -33,13 +30,12 @@ fn projected_page_lookup_resolves_one_stable_page() -> TestResult {
         .map(|page| page.page_id.clone())
         .expect("expected a projected page titled `solve`");
 
-    let result = repo_projected_page_from_config(
+    let result = build_repo_projected_page(
         &RepoProjectedPageQuery {
             repo_id: "projection-sample".to_string(),
             page_id,
         },
-        Some(&config_path),
-        temp.path(),
+        &analysis,
     )?;
 
     assert_repo_json_snapshot("repo_projected_page_result", json!(result));

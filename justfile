@@ -1077,6 +1077,21 @@ rust-retrieval-audits:
     @bash scripts/rust/wendao_retrieval_audits.sh
 
 [group('validate')]
+rust-wendao-performance-gate:
+    @echo "Running Wendao performance quick gate via nextest..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate
+
+[group('validate')]
+rust-wendao-performance-stress:
+    @echo "Running Wendao performance stress gate (ignored-only) via nextest..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh nextest run -p xiuxian-wendao --features "performance performance-stress" --test xiuxian-testing-gate --run-ignored ignored-only
+
+[group('validate')]
+rust-wendao-performance-bench:
+    @echo "Compiling Wendao Criterion benches..."
+    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh bench -p xiuxian-wendao --features performance --no-run
+
+[group('validate')]
 telegram-session-isolation-rust:
     @echo "Running Telegram session isolation tests (Rust)..."
     @bash scripts/rust/telegram_session_isolation_rust.sh

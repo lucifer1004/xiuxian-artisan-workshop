@@ -2,7 +2,8 @@
 
 use insta::assert_json_snapshot;
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
+use std::collections::BTreeMap;
+use xiuxian_wendao::analyzers::{
     DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind,
     RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord, build_projected_page_index_documents,
     render_projected_markdown_documents,
@@ -35,9 +36,14 @@ fn builds_projected_page_index_documents_from_stage_one_records() {
             qualified_name: "Demo.Controllers.PI".to_string(),
             kind: RepoSymbolKind::Type,
             path: "Controllers/PI.mo".to_string(),
+            line_start: None,
+            line_end: None,
             signature: None,
             audit_status: None,
+            verification_state: None,
+            attributes: BTreeMap::new(),
         }],
+        imports: Vec::new(),
         examples: vec![ExampleRecord {
             repo_id: "demo".to_string(),
             example_id: "repo:demo:example:Controllers/Examples/Step.mo".to_string(),

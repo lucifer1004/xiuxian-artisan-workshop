@@ -5,7 +5,7 @@ mod repo_test_support;
 
 use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::analyze_repository_from_config;
+use xiuxian_wendao::analyzers::analyze_repository_from_config;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 

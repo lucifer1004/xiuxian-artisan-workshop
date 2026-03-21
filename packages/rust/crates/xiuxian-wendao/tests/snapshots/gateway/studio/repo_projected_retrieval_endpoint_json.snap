@@ -1,5 +1,6 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
+assertion_line: 9
 expression: value
 ---
 {
@@ -8,6 +9,7 @@ expression: value
       "kind": "page",
       "node": null,
       "page": {
+        "doc_id": "repo:gateway-sync:doc:docs/solve.md",
         "doc_ids": [
           "repo:gateway-sync:doc:docs/solve.md"
         ],
@@ -17,9 +19,16 @@ expression: value
         "format_hints": [
           "md"
         ],
+        "keywords": [
+          "docs/solve.md",
+          "md",
+          "repo:gateway-sync:doc:docs/solve.md",
+          "solve"
+        ],
         "kind": "reference",
         "module_ids": [],
         "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+        "path": "docs/solve.md",
         "paths": [
           "docs/solve.md",
           "examples/solve_demo.jl"
@@ -74,6 +83,7 @@ expression: value
       "kind": "page",
       "node": null,
       "page": {
+        "doc_id": "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
         "doc_ids": [
           "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve"
         ],
@@ -83,9 +93,16 @@ expression: value
         "format_hints": [
           "julia_docstring"
         ],
+        "keywords": [
+          "examples/solve_demo.jl",
+          "julia_docstring",
+          "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
+          "solve"
+        ],
         "kind": "reference",
         "module_ids": [],
         "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
+        "path": "examples/solve_demo.jl",
         "paths": [
           "examples/solve_demo.jl",
           "src/GatewaySyncPkg.jl#symbol:solve"
@@ -157,6 +174,7 @@ expression: value
         "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: md\n:END:"
       },
       "page": {
+        "doc_id": "repo:gateway-sync:doc:docs/solve.md",
         "doc_ids": [
           "repo:gateway-sync:doc:docs/solve.md"
         ],
@@ -166,9 +184,16 @@ expression: value
         "format_hints": [
           "md"
         ],
+        "keywords": [
+          "docs/solve.md",
+          "md",
+          "repo:gateway-sync:doc:docs/solve.md",
+          "solve"
+        ],
         "kind": "reference",
         "module_ids": [],
         "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+        "path": "docs/solve.md",
         "paths": [
           "docs/solve.md",
           "examples/solve_demo.jl"
@@ -240,6 +265,7 @@ expression: value
         "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring\n:END:"
       },
       "page": {
+        "doc_id": "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
         "doc_ids": [
           "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve"
         ],
@@ -249,9 +275,16 @@ expression: value
         "format_hints": [
           "julia_docstring"
         ],
+        "keywords": [
+          "examples/solve_demo.jl",
+          "julia_docstring",
+          "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
+          "solve"
+        ],
         "kind": "reference",
         "module_ids": [],
         "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
+        "path": "examples/solve_demo.jl",
         "paths": [
           "examples/solve_demo.jl",
           "src/GatewaySyncPkg.jl#symbol:solve"
@@ -303,9 +336,27 @@ expression: value
       }
     },
     {
-      "kind": "page",
-      "node": null,
+      "kind": "page_index_node",
+      "node": {
+        "doc_id": "reference/gatewaysyncpkg-solve-426791875262",
+        "line_range": [
+          1,
+          7
+        ],
+        "node_id": "reference/gatewaysyncpkg-solve-426791875262#gatewaysyncpkg-solve",
+        "node_title": "GatewaySyncPkg.solve",
+        "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+        "page_kind": "reference",
+        "page_title": "GatewaySyncPkg.solve",
+        "path": "reference/gatewaysyncpkg-solve-426791875262.md",
+        "repo_id": "gateway-sync",
+        "structural_path": [
+          "GatewaySyncPkg.solve"
+        ],
+        "text": ":PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: reference\n:FORMATS: julia_docstring, md\n:END:"
+      },
       "page": {
+        "doc_id": "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
         "doc_ids": [
           "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
           "repo:gateway-sync:doc:docs/solve.md"
@@ -317,11 +368,19 @@ expression: value
           "julia_docstring",
           "md"
         ],
+        "keywords": [
+          "GatewaySyncPkg.solve",
+          "docs/solve.md",
+          "julia_docstring",
+          "md",
+          "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve"
+        ],
         "kind": "reference",
         "module_ids": [
           "repo:gateway-sync:module:GatewaySyncPkg"
         ],
         "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+        "path": "docs/solve.md",
         "paths": [
           "docs/solve.md",
           "examples/solve_demo.jl",

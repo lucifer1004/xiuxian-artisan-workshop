@@ -7,7 +7,7 @@ use std::process::Command;
 
 use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{ExampleSearchQuery, example_search_from_config};
+use xiuxian_wendao::analyzers::{ExampleSearchQuery, example_search_from_config};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -74,6 +74,33 @@ fn example_search_exposes_ranked_hits_for_frontend_sorting() -> TestResult {
             );
         }
     }
+    Ok(())
+}
+
+#[test]
+fn example_search_uses_shared_tantivy_fuzzy_index_for_title_typos() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_julia_repo(temp.path(), "ExampleFuzzyPkg", true)?;
+    let config_path = write_repo_config(temp.path(), &repo_dir, "example-fuzzy-sample")?;
+
+    let result = example_search_from_config(
+        &ExampleSearchQuery {
+            repo_id: "example-fuzzy-sample".to_string(),
+            query: "basci".to_string(),
+            limit: 10,
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+
+    assert_eq!(result.examples.len(), 1);
+    assert_eq!(result.examples[0].title, "basic");
+    assert!(
+        result.example_hits[0]
+            .score
+            .expect("shared fuzzy example search should emit a score")
+            > 0.0
+    );
     Ok(())
 }
 

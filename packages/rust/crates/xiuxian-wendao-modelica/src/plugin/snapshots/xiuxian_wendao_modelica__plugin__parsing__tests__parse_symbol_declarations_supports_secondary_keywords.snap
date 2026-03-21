@@ -6,16 +6,22 @@ expression: payload
   {
     "name": "ControllerState",
     "kind": "Type",
-    "signature": "record ControllerState"
+    "signature": "record ControllerState",
+    "line_start": 2,
+    "equations_count": 0
   },
   {
     "name": "Gain",
     "kind": "Constant",
-    "signature": "parameter Gain = 1;"
+    "signature": "parameter Gain = 1;",
+    "line_start": 5,
+    "equations_count": 0
   },
   {
     "name": "Limiter",
     "kind": "Type",
-    "signature": "block Limiter"
+    "signature": "block Limiter",
+    "line_start": 7,
+    "equations_count": 0
   }
 ]

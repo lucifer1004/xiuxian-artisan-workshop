@@ -7,12 +7,15 @@
 //!
 //! ```text
 //! xiuxian-ast/src/
-//! ├── lib.rs           # Re-exports (entry point)
-//! ├── re_exports.rs    # ast-grep re-exports
-//! ├── lang.rs          # Lang enum and language support
-//! ├── match.rs         # Match struct
-//! ├── scan.rs          # Pattern utilities
-//! └── python.rs        # Python-specific utilities
+//! ├── lib.rs                # Re-exports (entry point)
+//! ├── re_exports.rs         # ast-grep re-exports
+//! ├── lang.rs               # Lang enum and language support
+//! ├── match.rs              # Match struct
+//! ├── scan.rs               # Pattern utilities
+//! ├── python.rs             # Python-specific utilities
+//! ├── python_tree_sitter.rs # Tree-sitter Python parser
+//! ├── julia_tree_sitter.rs  # Tree-sitter Julia parser (feature: julia)
+//! └── modelica_tree_sitter.rs # Tree-sitter Modelica parser (feature: modelica)
 //! ```
 //!
 //! ## Quick Start
@@ -24,6 +27,11 @@
 //! let matches = scan(content, "def $NAME", Lang::Python)
 //!     .unwrap_or_else(|error| panic!("scan failed: {error}"));
 //! ```
+//!
+//! ## Optional Features
+//!
+//! - `julia`: Enable Julia tree-sitter parser
+//! - `modelica`: Enable Modelica tree-sitter parser (runtime-loaded)
 
 // ============================================================================
 // Module Declarations
@@ -88,6 +96,7 @@ pub use julia_tree_sitter::{
 
 #[cfg(feature = "modelica")]
 pub use modelica_tree_sitter::{
-    ModelicaFileSummary, ModelicaImport, ModelicaParseError, ModelicaSymbol, ModelicaSymbolKind,
+    ModelicaComponent, ModelicaComponentKind, ModelicaFileSummary, ModelicaImport,
+    ModelicaParseError, ModelicaSymbol, ModelicaSymbolKind, ModelicaVisibility,
     TreeSitterModelicaParser,
 };

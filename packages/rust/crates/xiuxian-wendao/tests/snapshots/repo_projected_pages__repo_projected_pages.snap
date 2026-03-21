@@ -1,72 +1,11 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/repo_projected_pages.rs
-expression: payload
+source: packages/rust/crates/xiuxian-wendao/tests/integration/repo_projected_pages.rs
+assertion_line: 104
+expression: result
 ---
 {
-  "page_count": 6,
+  "repo_id": "demo",
   "pages": [
-    {
-      "repo_id": "demo",
-      "page_id": "repo:demo:projection:explanation:doc:repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
-      "kind": "explanation",
-      "title": "Version 4.1.0",
-      "module_ids": [
-        "repo:demo:module:Demo.Controllers"
-      ],
-      "symbol_ids": [],
-      "example_ids": [
-        "repo:demo:example:Controllers/Examples/Step.mo"
-      ],
-      "doc_ids": [
-        "repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-      ],
-      "paths": [
-        "Controllers/Examples/Step.mo",
-        "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-      ],
-      "format_hints": [
-        "modelica_users_guide_release_notes_version"
-      ],
-      "sections": [
-        {
-          "section_id": "repo:demo:projection:explanation:doc:repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0#overview",
-          "title": "Overview",
-          "level": 1,
-          "body": "Projected explanation page for `Version 4.1.0`.\nFormat hints:\n- `modelica_users_guide_release_notes_version`\nSource paths:\n- `Controllers/Examples/Step.mo`\n- `Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0`",
-          "paths": [
-            "Controllers/Examples/Step.mo",
-            "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-          ]
-        },
-        {
-          "section_id": "repo:demo:projection:explanation:doc:repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0#anchors",
-          "title": "Anchors",
-          "level": 2,
-          "body": "Modules:\n- `Demo.Controllers` (Controllers/package.mo)",
-          "paths": [
-            "Controllers/package.mo"
-          ]
-        },
-        {
-          "section_id": "repo:demo:projection:explanation:doc:repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0#sources",
-          "title": "Sources",
-          "level": 2,
-          "body": "Documentation:\n- `Version 4.1.0` (Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0)",
-          "paths": [
-            "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-          ]
-        },
-        {
-          "section_id": "repo:demo:projection:explanation:doc:repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0#examples",
-          "title": "Examples",
-          "level": 2,
-          "body": "Examples:\n- `Step` (Controllers/Examples/Step.mo)",
-          "paths": [
-            "Controllers/Examples/Step.mo"
-          ]
-        }
-      ]
-    },
     {
       "repo_id": "demo",
       "page_id": "repo:demo:projection:howto:example:repo:demo:example:Controllers/Examples/Step.mo",
@@ -80,16 +19,13 @@ expression: payload
         "repo:demo:example:Controllers/Examples/Step.mo"
       ],
       "doc_ids": [
-        "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo",
-        "repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
+        "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo"
       ],
       "paths": [
         "Controllers/Examples/Step.mo",
-        "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
         "Controllers/UsersGuide/Tutorial/FirstSteps.mo"
       ],
       "format_hints": [
-        "modelica_users_guide_release_notes_version",
         "modelica_users_guide_tutorial"
       ],
       "sections": [
@@ -97,10 +33,9 @@ expression: payload
           "section_id": "repo:demo:projection:howto:example:repo:demo:example:Controllers/Examples/Step.mo#overview",
           "title": "Overview",
           "level": 1,
-          "body": "Projected how-to page for `Step`.\nFormat hints:\n- `modelica_users_guide_release_notes_version`\n- `modelica_users_guide_tutorial`\nSource paths:\n- `Controllers/Examples/Step.mo`\n- `Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0`\n- `Controllers/UsersGuide/Tutorial/FirstSteps.mo`",
+          "body": "Projected how-to page for `Step`.\nFormat hints:\n- `modelica_users_guide_tutorial`\nSource paths:\n- `Controllers/Examples/Step.mo`\n- `Controllers/UsersGuide/Tutorial/FirstSteps.mo`",
           "paths": [
             "Controllers/Examples/Step.mo",
-            "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
             "Controllers/UsersGuide/Tutorial/FirstSteps.mo"
           ]
         },
@@ -117,10 +52,9 @@ expression: payload
           "section_id": "repo:demo:projection:howto:example:repo:demo:example:Controllers/Examples/Step.mo#sources",
           "title": "Supporting Docs",
           "level": 2,
-          "body": "Documentation:\n- `First Steps` (Controllers/UsersGuide/Tutorial/FirstSteps.mo)\n- `Version 4.1.0` (Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0)",
+          "body": "Documentation:\n- `First Steps` (Controllers/UsersGuide/Tutorial/FirstSteps.mo)",
           "paths": [
-            "Controllers/UsersGuide/Tutorial/FirstSteps.mo",
-            "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
+            "Controllers/UsersGuide/Tutorial/FirstSteps.mo"
           ]
         },
         {
@@ -132,6 +66,14 @@ expression: payload
             "Controllers/Examples/Step.mo"
           ]
         }
+      ],
+      "doc_id": "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo",
+      "path": "Controllers/Examples/Step.mo",
+      "keywords": [
+        "Controllers/Examples/Step.mo",
+        "Step",
+        "modelica_users_guide_tutorial",
+        "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo"
       ]
     },
     {
@@ -148,19 +90,16 @@ expression: payload
       ],
       "doc_ids": [
         "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo",
-        "repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
         "repo:demo:doc:Controllers/PI.mo#annotation.documentation"
       ],
       "paths": [
         "Controllers/Examples/Step.mo",
         "Controllers/PI.mo#annotation.documentation",
-        "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
         "Controllers/UsersGuide/Tutorial/FirstSteps.mo",
         "Controllers/package.mo"
       ],
       "format_hints": [
         "modelica_annotation",
-        "modelica_users_guide_release_notes_version",
         "modelica_users_guide_tutorial"
       ],
       "sections": [
@@ -168,11 +107,10 @@ expression: payload
           "section_id": "repo:demo:projection:reference:module:repo:demo:module:Demo.Controllers#overview",
           "title": "Overview",
           "level": 1,
-          "body": "Projected reference page for `Demo.Controllers`.\nFormat hints:\n- `modelica_annotation`\n- `modelica_users_guide_release_notes_version`\n- `modelica_users_guide_tutorial`\nSource paths:\n- `Controllers/Examples/Step.mo`\n- `Controllers/PI.mo#annotation.documentation`\n- `Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0`\n- `Controllers/UsersGuide/Tutorial/FirstSteps.mo`\n- `Controllers/package.mo`",
+          "body": "Projected reference page for `Demo.Controllers`.\nFormat hints:\n- `modelica_annotation`\n- `modelica_users_guide_tutorial`\nSource paths:\n- `Controllers/Examples/Step.mo`\n- `Controllers/PI.mo#annotation.documentation`\n- `Controllers/UsersGuide/Tutorial/FirstSteps.mo`\n- `Controllers/package.mo`",
           "paths": [
             "Controllers/Examples/Step.mo",
             "Controllers/PI.mo#annotation.documentation",
-            "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
             "Controllers/UsersGuide/Tutorial/FirstSteps.mo",
             "Controllers/package.mo"
           ]
@@ -190,11 +128,10 @@ expression: payload
           "section_id": "repo:demo:projection:reference:module:repo:demo:module:Demo.Controllers#sources",
           "title": "Documentation",
           "level": 2,
-          "body": "Documentation:\n- `First Steps` (Controllers/UsersGuide/Tutorial/FirstSteps.mo)\n- `PI documentation` (Controllers/PI.mo#annotation.documentation)\n- `Version 4.1.0` (Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0)",
+          "body": "Documentation:\n- `First Steps` (Controllers/UsersGuide/Tutorial/FirstSteps.mo)\n- `PI documentation` (Controllers/PI.mo#annotation.documentation)",
           "paths": [
             "Controllers/UsersGuide/Tutorial/FirstSteps.mo",
-            "Controllers/PI.mo#annotation.documentation",
-            "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
+            "Controllers/PI.mo#annotation.documentation"
           ]
         },
         {
@@ -206,6 +143,15 @@ expression: payload
             "Controllers/Examples/Step.mo"
           ]
         }
+      ],
+      "doc_id": "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo",
+      "path": "Controllers/Examples/Step.mo",
+      "keywords": [
+        "Controllers/Examples/Step.mo",
+        "Demo.Controllers",
+        "modelica_annotation",
+        "modelica_users_guide_tutorial",
+        "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo"
       ]
     },
     {
@@ -260,6 +206,14 @@ expression: payload
             "Controllers/PI.mo#annotation.documentation"
           ]
         }
+      ],
+      "doc_id": "repo:demo:doc:Controllers/PI.mo#annotation.documentation",
+      "path": "Controllers/PI.mo",
+      "keywords": [
+        "Controllers/PI.mo",
+        "Demo.Controllers.PI",
+        "modelica_annotation",
+        "repo:demo:doc:Controllers/PI.mo#annotation.documentation"
       ]
     },
     {
@@ -309,6 +263,14 @@ expression: payload
             "Controllers/PI.mo#annotation.documentation"
           ]
         }
+      ],
+      "doc_id": "repo:demo:doc:Controllers/PI.mo#annotation.documentation",
+      "path": "Controllers/PI.mo#annotation.documentation",
+      "keywords": [
+        "Controllers/PI.mo#annotation.documentation",
+        "PI documentation",
+        "modelica_annotation",
+        "repo:demo:doc:Controllers/PI.mo#annotation.documentation"
       ]
     },
     {
@@ -371,6 +333,14 @@ expression: payload
             "Controllers/Examples/Step.mo"
           ]
         }
+      ],
+      "doc_id": "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo",
+      "path": "Controllers/Examples/Step.mo",
+      "keywords": [
+        "Controllers/Examples/Step.mo",
+        "First Steps",
+        "modelica_users_guide_tutorial",
+        "repo:demo:doc:Controllers/UsersGuide/Tutorial/FirstSteps.mo"
       ]
     }
   ]

@@ -17,6 +17,7 @@
 //! ├── integration/         # Integration tests (*.rs, snake_case naming)
 //! │   ├── dependency_indexer.rs
 //! │   └── link_graph.rs
+//! ├── performance/         # Optional performance gates and stress suites
 //! └── scenarios_test.rs    # Scenario test entry point
 //! ```
 //!
@@ -94,6 +95,7 @@ const ALLOWED_DIRS: &[&str] = &[
     "support",
     "unit",
     "integration",
+    "performance",
     "common",
 ];
 
@@ -381,6 +383,11 @@ mod tests {
             "dependency_indexer_integration.rs"
         ));
         assert!(!is_integration_test_file("entity_unit.rs"));
+    }
+
+    #[test]
+    fn test_performance_directory_is_allowed_by_default() {
+        assert!(is_allowed_directory("performance", None));
     }
 
     #[test]

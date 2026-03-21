@@ -1,11 +1,11 @@
 //! Integration target for bounded depth-2 coactivation diffusion.
 
+use serial_test::serial;
 use std::f64::consts::LN_2;
 use std::fs;
 use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
-use serial_test::serial;
 use xiuxian_wendao::link_graph::{
     LinkGraphSaliencyTouchRequest, set_link_graph_wendao_config_override,
     valkey_saliency_get_with_valkey, valkey_saliency_touch_with_valkey,

@@ -1333,33 +1333,35 @@ fn issue_type_to_code(issue_type: &str) -> &'static str {
         "legacy_syntax" => "WARN_LEGACY_SYNTAX",
         "invalid_observation_language" => "ERR_INVALID_OBSERVER_LANG",
         "invalid_observation_pattern" => "ERR_INVALID_OBSERVER_PATTERN",
-        docs_governance::DOC_IDENTITY_PROTOCOL_ISSUE_TYPE => "ERR_DOC_IDENTITY_PROTOCOL",
-        docs_governance::MISSING_PACKAGE_DOCS_TREE_ISSUE_TYPE => "WARN_MISSING_PACKAGE_DOCS_TREE",
-        docs_governance::MISSING_PACKAGE_DOCS_INDEX_ISSUE_TYPE => "ERR_MISSING_PACKAGE_DOCS_INDEX",
-        docs_governance::MISSING_PACKAGE_DOCS_SECTION_LANDING_ISSUE_TYPE => {
-            "WARN_MISSING_PACKAGE_DOCS_SECTION"
+        docs_governance::DOC_IDENTITY_PROTOCOL_ISSUE_TYPE | "doc_identity_protocol" => {
+            "ERR_DOC_IDENTITY_PROTOCOL"
         }
-        docs_governance::MISSING_PACKAGE_DOCS_INDEX_SECTION_LINK_ISSUE_TYPE => {
-            "WARN_MISSING_PACKAGE_DOCS_INDEX_LINK"
+        docs_governance::MISSING_PACKAGE_DOCS_TREE_ISSUE_TYPE | "missing_package_docs_tree" => {
+            "WARN_MISSING_PACKAGE_DOCS_TREE"
         }
-        docs_governance::MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE => {
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_ISSUE_TYPE | "missing_package_docs_index" => {
+            "ERR_MISSING_PACKAGE_DOCS_INDEX"
+        }
+        docs_governance::MISSING_PACKAGE_DOCS_SECTION_LANDING_ISSUE_TYPE
+        | "missing_package_docs_section_landing" => "WARN_MISSING_PACKAGE_DOCS_SECTION",
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_SECTION_LINK_ISSUE_TYPE
+        | "missing_package_docs_index_section_link" => "WARN_MISSING_PACKAGE_DOCS_INDEX_LINK",
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE
+        | "missing_package_docs_index_relations_block" => {
             "WARN_MISSING_PACKAGE_DOCS_RELATIONS_BLOCK"
         }
-        docs_governance::MISSING_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE => {
-            "WARN_MISSING_PACKAGE_DOCS_FOOTER_BLOCK"
-        }
-        docs_governance::INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE => {
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE
+        | "missing_package_docs_index_footer_block" => "WARN_MISSING_PACKAGE_DOCS_FOOTER_BLOCK",
+        docs_governance::INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE
+        | "incomplete_package_docs_index_footer_block" => {
             "WARN_INCOMPLETE_PACKAGE_DOCS_FOOTER_BLOCK"
         }
-        docs_governance::STALE_PACKAGE_DOCS_INDEX_FOOTER_STANDARDS_ISSUE_TYPE => {
-            "WARN_STALE_PACKAGE_DOCS_FOOTER_STANDARDS"
-        }
-        docs_governance::MISSING_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE => {
-            "WARN_MISSING_PACKAGE_DOCS_RELATION_LINK"
-        }
-        docs_governance::STALE_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE => {
-            "WARN_STALE_PACKAGE_DOCS_RELATION_LINK"
-        }
+        docs_governance::STALE_PACKAGE_DOCS_INDEX_FOOTER_STANDARDS_ISSUE_TYPE
+        | "stale_package_docs_index_footer_standards" => "WARN_STALE_PACKAGE_DOCS_FOOTER_STANDARDS",
+        docs_governance::MISSING_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE
+        | "missing_package_docs_index_relation_link" => "WARN_MISSING_PACKAGE_DOCS_RELATION_LINK",
+        docs_governance::STALE_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE
+        | "stale_package_docs_index_relation_link" => "WARN_STALE_PACKAGE_DOCS_RELATION_LINK",
         _ => "UNKNOWN",
     }
 }

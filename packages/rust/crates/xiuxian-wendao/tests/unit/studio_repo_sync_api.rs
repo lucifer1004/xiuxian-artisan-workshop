@@ -12,13 +12,15 @@ use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::Value;
 use tower::util::ServiceExt;
 
-use xiuxian_wendao::gateway::studio::test_support::assert_studio_json_snapshot;
-use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_wendao::analyzers::{
     ProjectedPageIndexNode, ProjectionPageKind, RepoProjectedPageIndexTreesQuery,
-    RepoProjectedPagesQuery, repo_projected_page_index_trees_from_config,
+    RepoProjectedPagesQuery, analyze_registered_repository_with_registry,
+    load_repo_intelligence_config, repo_projected_page_index_trees_from_config,
     repo_projected_pages_from_config,
 };
+use xiuxian_wendao::gateway::studio::repo_index::RepoIndexCoordinator;
+use xiuxian_wendao::gateway::studio::test_support::assert_studio_json_snapshot;
+use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -1060,21 +1062,47 @@ async fn repo_projected_page_navigation_endpoint_returns_not_found_for_unknown_f
 }
 
 fn gateway_state_for_project(project_root: &Path) -> Arc<GatewayState> {
+    let config_root = project_root.to_path_buf();
+    let ui_config =
+        xiuxian_wendao::gateway::studio::router::load_ui_config_from_wendao_toml(&config_root)
+            .unwrap_or_default();
+    let plugin_registry = Arc::new(
+        xiuxian_wendao::analyzers::bootstrap_builtin_registry()
+            .expect("bootstrap builtin plugin registry"),
+    );
+    let repo_index = Arc::new(RepoIndexCoordinator::new(
+        project_root.to_path_buf(),
+        Arc::clone(&plugin_registry),
+    ));
+    repo_index.start();
+    let config_path = config_root.join("wendao.toml");
+    if config_path.exists() {
+        let repo_config = load_repo_intelligence_config(Some(config_path.as_path()), &config_root)
+            .expect("load repo intelligence config for gateway tests");
+        for repository in &repo_config.repos {
+            analyze_registered_repository_with_registry(
+                repository,
+                config_root.as_path(),
+                &plugin_registry,
+            )
+            .expect("prewarm repository analysis cache for gateway tests");
+        }
+    }
+
     Arc::new(GatewayState {
         index: None,
         signal_tx: None,
         studio: Arc::new(StudioState {
             project_root: project_root.to_path_buf(),
-            config_root: project_root.join(".config"),
-            ui_config: Arc::new(RwLock::new(
-                xiuxian_wendao::gateway::studio::types::UiConfig {
-                    projects: Vec::new(),
-                    repo_projects: Vec::new(),
-                },
-            )),
+            config_root,
+            ui_config: Arc::new(RwLock::new(ui_config)),
             graph_index: Arc::new(RwLock::new(None)),
             symbol_index: Arc::new(RwLock::new(None)),
+            symbol_index_build_lock: Arc::new(tokio::sync::Mutex::new(())),
             ast_index: Arc::new(RwLock::new(None)),
+            vfs_scan: Arc::new(RwLock::new(None)),
+            repo_index,
+            plugin_registry,
         }),
     })
 }

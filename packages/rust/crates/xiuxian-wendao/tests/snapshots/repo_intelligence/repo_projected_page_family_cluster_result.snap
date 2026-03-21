@@ -1,9 +1,10 @@
 ---
-source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
+source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_projection_support.rs
 expression: value
 ---
 {
   "center_page": {
+    "doc_id": "repo:projection-sample:doc:docs/solve.md",
     "doc_ids": [
       "repo:projection-sample:doc:docs/solve.md"
     ],
@@ -13,9 +14,16 @@ expression: value
     "format_hints": [
       "md"
     ],
+    "keywords": [
+      "docs/solve.md",
+      "md",
+      "repo:projection-sample:doc:docs/solve.md",
+      "solve"
+    ],
     "kind": "reference",
     "module_ids": [],
     "page_id": "repo:projection-sample:projection:reference:doc:repo:projection-sample:doc:docs/solve.md",
+    "path": "docs/solve.md",
     "paths": [
       "docs/solve.md",
       "examples/solve_demo.jl"
@@ -70,6 +78,7 @@ expression: value
     "pages": [
       {
         "page": {
+          "doc_id": "repo:projection-sample:doc:README.md",
           "doc_ids": [
             "repo:projection-sample:doc:README.md",
             "repo:projection-sample:doc:src/ProjectionPkg.jl#symbol:solve",
@@ -82,11 +91,19 @@ expression: value
             "julia_docstring",
             "md"
           ],
+          "keywords": [
+            "README.md",
+            "julia_docstring",
+            "md",
+            "repo:projection-sample:doc:README.md",
+            "solve_demo"
+          ],
           "kind": "how_to",
           "module_ids": [
             "repo:projection-sample:module:ProjectionPkg"
           ],
           "page_id": "repo:projection-sample:projection:howto:example:repo:projection-sample:example:examples/solve_demo.jl",
+          "path": "README.md",
           "paths": [
             "README.md",
             "docs/solve.md",

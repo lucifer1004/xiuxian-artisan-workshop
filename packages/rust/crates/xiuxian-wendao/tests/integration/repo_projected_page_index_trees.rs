@@ -1,8 +1,8 @@
 //! Integration snapshot for projected page-index trees.
 
 use insta::assert_json_snapshot;
-use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
+use std::collections::BTreeMap;
+use xiuxian_wendao::analyzers::{
     DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind,
     RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord, build_projected_page_index_trees,
 };
@@ -34,9 +34,14 @@ fn builds_projected_page_index_trees_from_stage_one_records() {
             qualified_name: "Demo.Controllers.PI".to_string(),
             kind: RepoSymbolKind::Type,
             path: "Controllers/PI.mo".to_string(),
+            line_start: None,
+            line_end: None,
             signature: None,
             audit_status: None,
+            verification_state: None,
+            attributes: BTreeMap::new(),
         }],
+        imports: Vec::new(),
         examples: vec![ExampleRecord {
             repo_id: "demo".to_string(),
             example_id: "repo:demo:example:Controllers/Examples/Step.mo".to_string(),
@@ -51,15 +56,6 @@ fn builds_projected_page_index_trees_from_stage_one_records() {
                 title: "First Steps".to_string(),
                 path: "Controllers/UsersGuide/Tutorial/FirstSteps.mo".to_string(),
                 format: Some("modelica_users_guide_tutorial".to_string()),
-            },
-            DocRecord {
-                repo_id: "demo".to_string(),
-                doc_id:
-                    "repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-                        .to_string(),
-                title: "Version 4.1.0".to_string(),
-                path: "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0".to_string(),
-                format: Some("modelica_users_guide_release_notes_version".to_string()),
             },
             DocRecord {
                 repo_id: "demo".to_string(),
@@ -79,14 +75,6 @@ fn builds_projected_page_index_trees_from_stage_one_records() {
             },
             RelationRecord {
                 repo_id: "demo".to_string(),
-                source_id:
-                    "repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-                        .to_string(),
-                target_id: "repo:demo:module:Demo.Controllers".to_string(),
-                kind: RelationKind::Documents,
-            },
-            RelationRecord {
-                repo_id: "demo".to_string(),
                 source_id: "repo:demo:doc:Controllers/PI.mo#annotation.documentation".to_string(),
                 target_id: "repo:demo:symbol:Demo.Controllers.PI".to_string(),
                 kind: RelationKind::Documents,
@@ -101,11 +89,7 @@ fn builds_projected_page_index_trees_from_stage_one_records() {
         diagnostics: Vec::new(),
     };
 
-    let trees = build_projected_page_index_trees(&analysis).expect("projected trees");
-    let payload = json!({
-        "tree_count": trees.len(),
-        "trees": trees,
-    });
+    let trees = build_projected_page_index_trees(&analysis).expect("projected trees build");
 
     insta::with_settings!({
         snapshot_path => "../snapshots",
@@ -113,7 +97,7 @@ fn builds_projected_page_index_trees_from_stage_one_records() {
     }, {
         assert_json_snapshot!(
             "repo_projected_page_index_trees__repo_projected_page_index_trees",
-            payload
+            trees
         );
     });
 }

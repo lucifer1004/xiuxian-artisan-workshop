@@ -160,6 +160,18 @@ in
       just rust-retrieval-audits
     '';
 
+    "ci:rust-wendao-performance-gate" = mkRustTask ''
+      just rust-wendao-performance-gate
+    '';
+
+    "ci:rust-wendao-performance-stress" = mkRustTask ''
+      just rust-wendao-performance-stress
+    '';
+
+    "ci:rust-wendao-performance-bench" = mkRustTask ''
+      just rust-wendao-performance-bench
+    '';
+
     "ci:contract-e2e-route-test-json" = mkPythonScriptTask ''
       just contract-e2e-route-test-json
     '';

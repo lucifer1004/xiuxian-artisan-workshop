@@ -5,7 +5,7 @@ mod repo_fixture;
 
 use std::fs;
 
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_wendao::analyzers::{
     AnalysisContext, PluginAnalysisOutput, PluginLinkContext, PluginRegistry, RegisteredRepository,
     RelationRecord, RepoIntelligenceError, RepoIntelligencePlugin, RepoOverviewQuery,
     RepoSourceFile, RepositoryAnalysisOutput, RepositoryPluginConfig, RepositoryRecord,

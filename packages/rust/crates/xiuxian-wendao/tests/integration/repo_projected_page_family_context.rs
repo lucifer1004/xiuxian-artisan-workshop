@@ -5,7 +5,7 @@ mod repo_test_support;
 
 use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
 use serde_json::json;
-use xiuxian_wendao::repo_intelligence::{
+use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedPageFamilyContextQuery, RepoProjectedPagesQuery,
     repo_projected_page_family_context_from_config, repo_projected_pages_from_config,
 };
