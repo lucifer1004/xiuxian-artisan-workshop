@@ -19,6 +19,7 @@ use xiuxian_wendao::analyzers::{
     repo_projected_pages_from_config,
 };
 use xiuxian_wendao::gateway::studio::repo_index::RepoIndexCoordinator;
+use xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexCoordinator;
 use xiuxian_wendao::gateway::studio::test_support::assert_studio_json_snapshot;
 use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
 
@@ -432,7 +433,7 @@ async fn repo_projected_page_family_context_endpoint_returns_family_clusters() -
         .pages
         .iter()
         .find(|page| page.kind == ProjectionPageKind::HowTo)
-        .expect("expected a projected how-to page");
+        .unwrap_or_else(|| panic!("expected a projected how-to page"));
     let router = studio_router(gateway_state_for_project(temp.path()));
 
     let (status, payload) = request_json(
@@ -507,7 +508,11 @@ async fn repo_projected_page_family_cluster_endpoint_returns_family_payload() ->
                 && page.title == "GatewaySyncPkg.solve"
                 && page.page_id.contains(":symbol:")
         })
-        .expect("expected a symbol-backed projected reference page titled `GatewaySyncPkg.solve`");
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `GatewaySyncPkg.solve`"
+            )
+        });
     let router = studio_router(gateway_state_for_project(temp.path()));
 
     let (status, payload) = request_json(
@@ -554,7 +559,11 @@ async fn repo_projected_page_navigation_endpoint_returns_navigation_bundle() -> 
                 && page.title == "GatewaySyncPkg.solve"
                 && page.page_id.contains(":symbol:")
         })
-        .expect("expected a symbol-backed projected reference page titled `GatewaySyncPkg.solve`");
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `GatewaySyncPkg.solve`"
+            )
+        });
     let trees = repo_projected_page_index_trees_from_config(
         &RepoProjectedPageIndexTreesQuery {
             repo_id: "gateway-sync".to_string(),
@@ -566,9 +575,9 @@ async fn repo_projected_page_navigation_endpoint_returns_navigation_bundle() -> 
         .trees
         .iter()
         .find(|tree| tree.page_id == page.page_id)
-        .expect("expected a projected page-index tree for the selected page");
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for the selected page"));
     let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
-        .expect("expected a projected page-index node titled `Anchors`");
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `Anchors`"));
     let encoded_node_id = node_id.replace('#', "%23");
     let router = studio_router(gateway_state_for_project(temp.path()));
 
@@ -994,7 +1003,11 @@ async fn repo_projected_page_family_cluster_endpoint_returns_not_found_for_unkno
                 && page.title == "GatewaySyncPkg.solve"
                 && page.page_id.contains(":symbol:")
         })
-        .expect("expected a symbol-backed projected reference page titled `GatewaySyncPkg.solve`");
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `GatewaySyncPkg.solve`"
+            )
+        });
     let router = studio_router(gateway_state_for_project(temp.path()));
 
     let (status, payload) = request_json(
@@ -1045,7 +1058,11 @@ async fn repo_projected_page_navigation_endpoint_returns_not_found_for_unknown_f
                 && page.title == "GatewaySyncPkg.solve"
                 && page.page_id.contains(":symbol:")
         })
-        .expect("expected a symbol-backed projected reference page titled `GatewaySyncPkg.solve`");
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `GatewaySyncPkg.solve`"
+            )
+        });
     let router = studio_router(gateway_state_for_project(temp.path()));
 
     let (status, payload) = request_json(
@@ -1068,7 +1085,7 @@ fn gateway_state_for_project(project_root: &Path) -> Arc<GatewayState> {
             .unwrap_or_default();
     let plugin_registry = Arc::new(
         xiuxian_wendao::analyzers::bootstrap_builtin_registry()
-            .expect("bootstrap builtin plugin registry"),
+            .unwrap_or_else(|error| panic!("bootstrap builtin plugin registry: {error}")),
     );
     let repo_index = Arc::new(RepoIndexCoordinator::new(
         project_root.to_path_buf(),
@@ -1078,14 +1095,18 @@ fn gateway_state_for_project(project_root: &Path) -> Arc<GatewayState> {
     let config_path = config_root.join("wendao.toml");
     if config_path.exists() {
         let repo_config = load_repo_intelligence_config(Some(config_path.as_path()), &config_root)
-            .expect("load repo intelligence config for gateway tests");
+            .unwrap_or_else(|error| {
+                panic!("load repo intelligence config for gateway tests: {error}")
+            });
         for repository in &repo_config.repos {
             analyze_registered_repository_with_registry(
                 repository,
                 config_root.as_path(),
                 &plugin_registry,
             )
-            .expect("prewarm repository analysis cache for gateway tests");
+            .unwrap_or_else(|error| {
+                panic!("prewarm repository analysis cache for gateway tests: {error}")
+            });
         }
     }
 
@@ -1098,7 +1119,10 @@ fn gateway_state_for_project(project_root: &Path) -> Arc<GatewayState> {
             ui_config: Arc::new(RwLock::new(ui_config)),
             graph_index: Arc::new(RwLock::new(None)),
             symbol_index: Arc::new(RwLock::new(None)),
-            symbol_index_build_lock: Arc::new(tokio::sync::Mutex::new(())),
+            symbol_index_coordinator: Arc::new(SymbolIndexCoordinator::new(
+                project_root.to_path_buf(),
+                project_root.to_path_buf(),
+            )),
             ast_index: Arc::new(RwLock::new(None)),
             vfs_scan: Arc::new(RwLock::new(None)),
             repo_index,

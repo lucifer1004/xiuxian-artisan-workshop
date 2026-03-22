@@ -741,14 +741,14 @@ pub fn build_repo_overview(
     query: &RepoOverviewQuery,
     analysis: &RepositoryAnalysisOutput,
 ) -> RepoOverviewResult {
-    let repository = analysis
-        .repository
-        .as_ref()
-        .expect("repository record is required");
+    let repository = analysis.repository.as_ref();
     RepoOverviewResult {
         repo_id: query.repo_id.clone(),
-        display_name: repository.name.clone(),
-        revision: repository.revision.clone(),
+        display_name: repository.map_or_else(
+            || query.repo_id.clone(),
+            |repository| repository.name.clone(),
+        ),
+        revision: repository.and_then(|repository| repository.revision.clone()),
         module_count: analysis.modules.len(),
         symbol_count: analysis.symbols.len(),
         example_count: analysis.examples.len(),
@@ -813,7 +813,7 @@ pub fn build_module_search(
             let module_path = module.path.clone();
             let (implicit_backlinks, implicit_backlink_items) =
                 backlinks_for(module_id.as_str(), &backlink_lookup);
-            let saliency_score = saliency_map.get(module_id.as_str()).cloned();
+            let saliency_score = saliency_map.get(module_id.as_str()).copied();
 
             ModuleSearchHit {
                 module,
@@ -896,8 +896,7 @@ pub fn build_symbol_search(
             let audit_status = symbol.audit_status.clone();
             let verification_state = symbol.verification_state.clone().or_else(|| {
                 audit_status.as_deref().map(|status| match status {
-                    "verified" => "verified".to_string(),
-                    "approved" => "verified".to_string(),
+                    "verified" | "approved" => "verified".to_string(),
                     _ => "unverified".to_string(),
                 })
             });
@@ -905,7 +904,7 @@ pub fn build_symbol_search(
             let symbol_path = symbol.path.clone();
             let (implicit_backlinks, implicit_backlink_items) =
                 backlinks_for(symbol_id.as_str(), &backlink_lookup);
-            let saliency_score = saliency_map.get(symbol_id.as_str()).cloned();
+            let saliency_score = saliency_map.get(symbol_id.as_str()).copied();
 
             SymbolSearchHit {
                 symbol,
@@ -997,7 +996,7 @@ pub fn build_example_search(
             let example_path = example.path.clone();
             let (implicit_backlinks, implicit_backlink_items) =
                 backlinks_for(example_id.as_str(), &backlink_lookup);
-            let saliency_score = saliency_map.get(example_id.as_str()).cloned();
+            let saliency_score = saliency_map.get(example_id.as_str()).copied();
 
             ExampleSearchHit {
                 example,
@@ -1204,6 +1203,7 @@ mod tests {
         RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord,
     };
 
+    #[allow(clippy::too_many_lines)]
     fn sample_search_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
         let module_id = format!("repo:{repo_id}:module:ProjectionPkg");
         let solve_symbol_id = format!("repo:{repo_id}:symbol:ProjectionPkg.solve");
@@ -1346,7 +1346,7 @@ mod tests {
         assert!(
             result.module_hits[0]
                 .score
-                .expect("shared fuzzy module search should emit a score")
+                .unwrap_or_else(|| panic!("shared fuzzy module search should emit a score"))
                 > 0.0
         );
     }
@@ -1368,7 +1368,7 @@ mod tests {
         assert!(
             result.symbol_hits[0]
                 .score
-                .expect("shared fuzzy symbol search should emit a score")
+                .unwrap_or_else(|| panic!("shared fuzzy symbol search should emit a score"))
                 > 0.0
         );
     }
@@ -1390,7 +1390,7 @@ mod tests {
         assert!(
             result.example_hits[0]
                 .score
-                .expect("shared fuzzy example search should emit a score")
+                .unwrap_or_else(|| panic!("shared fuzzy example search should emit a score"))
                 > 0.0
         );
     }

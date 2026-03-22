@@ -45,8 +45,10 @@ pub(super) fn sync_checkout_head(
                 .ok()
                 .and_then(|head| head.shorthand().map(str::to_string))
                 .filter(|name| !name.is_empty() && name != "HEAD")
-                .map(|name| format!("refs/remotes/origin/{name}"))
-                .unwrap_or_else(|| "refs/remotes/origin/main".to_string()),
+                .map_or_else(
+                    || "refs/remotes/origin/main".to_string(),
+                    |name| format!("refs/remotes/origin/{name}"),
+                ),
             "refs/remotes/origin/main".to_string(),
             "refs/remotes/origin/master".to_string(),
             "refs/heads/main".to_string(),

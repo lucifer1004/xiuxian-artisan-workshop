@@ -9,20 +9,17 @@ use xiuxian_wendao::analyzers::{ImportKind, RepoSymbolKind};
 use super::types::{ParsedDeclaration, ParsedImport};
 
 #[cfg(feature = "tree-sitter")]
-use xiuxian_ast::{
-    ModelicaComponentKind, ModelicaFileSummary, ModelicaSymbolKind, TreeSitterModelicaParser,
-};
+use xiuxian_ast::TreeSitterModelicaParser;
 
 /// Parse the package name from Modelica source.
 pub(crate) fn parse_package_name(contents: &str) -> Option<String> {
     #[cfg(feature = "tree-sitter")]
     {
-        if let Ok(mut parser) = TreeSitterModelicaParser::new() {
-            if let Ok(summary) = parser.parse_file_summary(contents) {
-                if let Some(name) = summary.class_name {
-                    return Some(name);
-                }
-            }
+        if let Ok(mut parser) = TreeSitterModelicaParser::new()
+            && let Ok(summary) = parser.parse_file_summary(contents)
+            && let Some(name) = summary.class_name
+        {
+            return Some(name);
         }
     }
     contents
@@ -39,24 +36,27 @@ pub(crate) fn contains_documentation_annotation(contents: &str) -> bool {
 pub(crate) fn parse_imports(contents: &str) -> Vec<ParsedImport> {
     #[cfg(feature = "tree-sitter")]
     {
-        if let Ok(mut parser) = TreeSitterModelicaParser::new() {
-            if let Ok(summary) = parser.parse_file_summary(contents) {
-                return summary
-                    .imports
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, import)| ParsedImport {
+        if let Ok(mut parser) = TreeSitterModelicaParser::new()
+            && let Ok(summary) = parser.parse_file_summary(contents)
+        {
+            return summary
+                .imports
+                .into_iter()
+                .enumerate()
+                .map(|(index, import)| {
+                    let kind = if import.alias.is_some() {
+                        ImportKind::Module
+                    } else {
+                        ImportKind::Symbol
+                    };
+                    ParsedImport {
                         name: import.name,
                         alias: import.alias,
-                        kind: if import.alias.is_some() {
-                            ImportKind::Module
-                        } else {
-                            ImportKind::Symbol
-                        },
+                        kind,
                         line_start: Some(index + 1),
-                    })
-                    .collect();
-            }
+                    }
+                })
+                .collect();
         }
     }
     parse_imports_fallback(contents)
@@ -110,10 +110,10 @@ fn parse_imports_fallback(contents: &str) -> Vec<ParsedImport> {
 pub(crate) fn parse_symbol_declarations(contents: &str) -> Vec<ParsedDeclaration> {
     #[cfg(feature = "tree-sitter")]
     {
-        if let Ok(mut parser) = TreeSitterModelicaParser::new() {
-            if let Ok(summary) = parser.parse_file_summary(contents) {
-                return summary_to_declarations(summary);
-            }
+        if let Ok(mut parser) = TreeSitterModelicaParser::new()
+            && let Ok(summary) = parser.parse_file_summary(contents)
+        {
+            return summary_to_declarations(summary);
         }
     }
     parse_symbol_declarations_fallback(contents)
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn parse_symbol_declarations_supports_secondary_keywords() {
         let payload = parse_symbol_declarations(
-            r#"
+            r"
 record ControllerState
 end ControllerState;
 
@@ -229,7 +229,7 @@ parameter Gain = 1;
 
 block Limiter
 end Limiter;
-"#,
+",
         )
         .into_iter()
         .map(|declaration| {

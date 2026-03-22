@@ -35,6 +35,7 @@ This roadmap tracks the external Modelica plugin as a first-class package, separ
 - real `ProjectedPageIndexTree` output validated from the external Modelica integration path, so projected Modelica guide pages now carry builder-native page-index hierarchy and thinning signals
 - normalized page titles for file-backed docs
 - external crate contracts are now realigned to the live `xiuxian-wendao::analyzers` record/import schemas again, restoring a green package test lane against the current common core
+- the shared Wendao plus external Modelica slice is now green on the Tier-3 lane (`clippy` plus `nextest`), so follow-up work can move from contract repair back to feature hygiene and bounded semantic growth
 
 ## Active Tracking Focus
 
@@ -55,3 +56,5 @@ Current package-level verification for this roadmap slice:
 
 - `direnv exec . cargo check -p xiuxian-wendao-modelica`
 - `direnv exec . cargo test -p xiuxian-wendao-modelica`
+- `cargo clippy -p xiuxian-wendao -p xiuxian-wendao-modelica --all-targets --all-features -- -D warnings`
+- `cargo nextest run -p xiuxian-wendao -p xiuxian-wendao-modelica --no-fail-fast`

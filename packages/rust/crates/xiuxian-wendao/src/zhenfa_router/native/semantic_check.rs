@@ -12,7 +12,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
 use crate::link_graph::parser::CodeObservation;
@@ -278,6 +278,7 @@ pub fn wendao_semantic_check(
 /// # Errors
 ///
 /// Returns `ZhenfaError` when the link graph index cannot be queried.
+#[allow(clippy::too_many_lines)]
 pub fn run_audit_core(
     ctx: &ZhenfaContext,
     args: &WendaoSemanticCheckArgs,
@@ -1084,15 +1085,11 @@ fn canonicalize_doc_path(doc_path: &str) -> Option<String> {
     path.is_file()
         .then(|| path.canonicalize().ok())
         .flatten()
-        .map(path_buf_to_string)
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
 }
 
 fn normalize_doc_path_key(doc_path: &str) -> String {
     doc_path.replace('\\', "/")
-}
-
-fn path_buf_to_string(path: PathBuf) -> String {
-    path.to_string_lossy().replace('\\', "/")
 }
 
 fn should_prefer_report_path(existing: &str, candidate: &str) -> bool {

@@ -138,6 +138,10 @@ Plugins should return normalized records and relations, not mutate Wendao storag
   - `cargo test -p xiuxian-wendao --test repo_intelligence_registry`
   - `cargo test -p xiuxian-wendao-modelica`
   - `cargo test -p xiuxian-ast --features julia --lib`
+- Tier-3 verification is now green for the current Repo Intelligence and external Modelica slice:
+  - `cargo clippy -p xiuxian-wendao -p xiuxian-wendao-modelica --all-targets --all-features -- -D warnings`
+  - `cargo nextest run -p xiuxian-wendao -p xiuxian-wendao-modelica --no-fail-fast`
+- The current post-gate cleanup priority is no longer endpoint expansion; the stale tracked `src/analyzers/service/mod.rs.bak2` monolith has now been removed after confirming the live `analyzers/service/` leaf modules fully cover that split, so the next cleanup focus can move to the remaining modularization wave instead of backup-file hygiene.
 
 ## Search Primitive Follow-Up
 

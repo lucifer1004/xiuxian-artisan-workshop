@@ -22,6 +22,10 @@ pub struct VfsCatQuery {
 }
 
 /// Lists root VFS entries.
+///
+/// # Errors
+///
+/// This handler currently does not produce handler-local errors.
 pub async fn root_entries(
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<Vec<VfsEntry>>, StudioApiError> {
@@ -30,6 +34,10 @@ pub async fn root_entries(
 }
 
 /// Scans all VFS roots.
+///
+/// # Errors
+///
+/// This handler currently does not produce handler-local errors.
 pub async fn scan(
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<VfsScanResult>, StudioApiError> {
@@ -38,6 +46,11 @@ pub async fn scan(
 }
 
 /// Gets a single VFS entry.
+///
+/// # Errors
+///
+/// Returns an error when the requested VFS entry does not exist or cannot be
+/// resolved.
 pub async fn entry(
     AxumPath(path): AxumPath<String>,
     State(state): State<Arc<GatewayState>>,
@@ -47,6 +60,10 @@ pub async fn entry(
 }
 
 /// Reads file content.
+///
+/// # Errors
+///
+/// Returns an error when `path` is missing or when VFS content loading fails.
 pub async fn cat(
     Query(query): Query<VfsCatQuery>,
     State(state): State<Arc<GatewayState>>,
@@ -62,6 +79,10 @@ pub async fn cat(
 }
 
 /// Resolves a navigation target from a semantic path.
+///
+/// # Errors
+///
+/// Returns an error when `path` is missing.
 pub async fn resolve(
     Query(query): Query<VfsCatQuery>,
     State(state): State<Arc<GatewayState>>,

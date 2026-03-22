@@ -95,6 +95,8 @@ expression: value
       "source": "project"
     }
   ],
+  "indexingState": "ready",
+  "partial": false,
   "query": "alpha",
   "selectedScope": "project"
 }

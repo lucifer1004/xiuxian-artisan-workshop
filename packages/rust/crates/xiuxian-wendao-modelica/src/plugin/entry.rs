@@ -44,6 +44,14 @@ impl RepoIntelligencePlugin for ModelicaRepoIntelligencePlugin {
         Ok(PluginAnalysisOutput::default())
     }
 
+    fn preflight_repository(
+        &self,
+        context: &AnalysisContext,
+        repository_root: &Path,
+    ) -> Result<(), RepoIntelligenceError> {
+        analysis::preflight_repository(context, repository_root)
+    }
+
     fn analyze_repository(
         &self,
         context: &AnalysisContext,

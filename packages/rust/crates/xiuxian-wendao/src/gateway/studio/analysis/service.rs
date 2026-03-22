@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::types::{AnalysisNode, MarkdownAnalysisResponse};
 
@@ -66,15 +68,26 @@ pub(crate) async fn analyze_markdown(
 }
 
 fn is_markdown_path(path: &str) -> bool {
-    path.ends_with(".md") || path.ends_with(".markdown")
+    has_extension(path, &["md", "markdown"])
 }
 
 fn infer_content_type(path: &str) -> &'static str {
-    if path.ends_with(".rs") {
+    if has_extension(path, &["rs"]) {
         "text/x-rust"
     } else if is_markdown_path(path) {
         "text/markdown"
     } else {
         "application/octet-stream"
     }
+}
+
+fn has_extension(path: &str, extensions: &[&str]) -> bool {
+    Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            extensions
+                .iter()
+                .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+        })
 }

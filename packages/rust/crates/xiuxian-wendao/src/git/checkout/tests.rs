@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)]
+
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
@@ -152,6 +154,7 @@ fn managed_repo_paths_support_scp_style_remote_urls() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn resolve_repository_source_overrides_managed_remote_url_from_config() {
     let source_a = tempfile::tempdir().expect("tempdir");
     fs::create_dir_all(source_a.path().join("src")).expect("create src dir");

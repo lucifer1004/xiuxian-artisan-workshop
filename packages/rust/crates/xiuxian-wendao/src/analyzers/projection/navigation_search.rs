@@ -8,6 +8,11 @@ use crate::analyzers::query::{
 };
 
 /// Build repo projected-page navigation hits for a query string.
+///
+/// # Errors
+///
+/// Returns [`crate::analyzers::errors::RepoIntelligenceError`] when building
+/// an individual navigation bundle fails.
 pub fn build_repo_projected_page_navigation_search(
     query: &RepoProjectedPageNavigationSearchQuery,
     analysis: &RepositoryAnalysisOutput,

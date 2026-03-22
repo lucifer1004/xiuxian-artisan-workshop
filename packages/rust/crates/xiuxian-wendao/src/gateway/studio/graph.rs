@@ -78,12 +78,10 @@ pub async fn topology_3d(
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<Topology3dPayload>, StudioApiError> {
     let _index = state.link_graph_index().await?;
-    // LinkGraphIndex currently doesn't have a direct topology_3d(),
-    // it's often built from all nodes/edges or a large neighbor set.
-    // For MVP, we'll return an empty payload or a limited set.
     Ok(Json(Topology3dPayload {
         nodes: Vec::new(),
         links: Vec::new(),
+        clusters: Vec::new(),
     }))
 }
 

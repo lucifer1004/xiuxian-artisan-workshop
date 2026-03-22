@@ -13,6 +13,11 @@ use crate::analyzers::query::{
 };
 
 /// Build retrieval context around a projected page and optional page-index node.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the projected page or requested node
+/// cannot be resolved.
 pub fn build_projected_retrieval_context(
     query: &RepoProjectedRetrievalContextQuery,
     analysis: &RepositoryAnalysisOutput,
@@ -120,9 +125,7 @@ fn find_node_context<'a>(
         if node.node_id == node_id {
             return Some(RawNodeContext {
                 ancestors: ancestors.to_vec(),
-                previous_sibling: (idx as usize)
-                    .checked_sub(1)
-                    .and_then(|left| nodes.get(left)),
+                previous_sibling: idx.checked_sub(1).and_then(|left| nodes.get(left)),
                 next_sibling: nodes.get(idx + 1),
                 children: node.children.iter().collect(),
             });

@@ -11,6 +11,7 @@ use crate::search::{
 use super::pages::build_projected_pages;
 
 /// Build projected-page search results for one repository query.
+#[must_use]
 pub fn build_repo_projected_page_search(
     query: &RepoProjectedPageSearchQuery,
     analysis: &RepositoryAnalysisOutput,
@@ -22,6 +23,7 @@ pub fn build_repo_projected_page_search(
     )
 }
 
+#[must_use]
 pub fn build_repo_projected_page_search_with_options(
     query: &RepoProjectedPageSearchQuery,
     analysis: &RepositoryAnalysisOutput,
@@ -62,10 +64,9 @@ fn ranked_projected_page_matches(
 
     if let Some(indexed_matches) =
         search_indexed_projected_pages(query, kind_filter, pages.as_slice(), limit, options)
+        && !indexed_matches.is_empty()
     {
-        if !indexed_matches.is_empty() {
-            return indexed_matches;
-        }
+        return indexed_matches;
     }
 
     let normalized_query = query.to_ascii_lowercase();
@@ -265,6 +266,10 @@ fn heuristic_projected_page_matches(
     matches
 }
 
+fn projected_page_title(page: &ProjectedPageRecord) -> &str {
+    page.title.as_str()
+}
+
 fn lexical_projected_page_matches(
     query: &str,
     kind_filter: Option<ProjectionPageKind>,
@@ -278,12 +283,9 @@ fn lexical_projected_page_matches(
         .cloned()
         .collect::<Vec<_>>();
 
-    fn projected_page_title(page: &ProjectedPageRecord) -> &str {
-        page.title.as_str()
-    }
-
-    let matcher = LexicalMatcher::new(filtered_pages.as_slice(), projected_page_title, options);
-    let mut matches = matcher
+    let lexical_matcher =
+        LexicalMatcher::new(filtered_pages.as_slice(), projected_page_title, options);
+    let mut ranked_pages = lexical_matcher
         .search(query, limit)
         .expect("lexical matcher is infallible")
         .into_iter()
@@ -298,8 +300,8 @@ fn lexical_projected_page_matches(
             )
         })
         .collect::<Vec<_>>();
-    sort_ranked_pages(&mut matches);
-    matches
+    sort_ranked_pages(&mut ranked_pages);
+    ranked_pages
 }
 
 fn calculate_search_score(page: &ProjectedPageRecord, query: &str) -> u8 {
@@ -361,6 +363,7 @@ fn stable_page_score(page: &ProjectedPageRecord, query: &str, fallback_score: u8
     calculate_search_score(page, query).max(fallback_score)
 }
 
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn fuzzy_match_score(score: f32) -> u8 {
     let bounded = score.clamp(0.0, 1.0);
     let scaled = 45.0 + (bounded * 35.0);

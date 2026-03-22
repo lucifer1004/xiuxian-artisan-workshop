@@ -21,19 +21,31 @@ The goal is to move beyond fuzzy search and give agents a stable, pre-indexed un
 Current 2026-03-21 checkpoint:
 
 - Studio now has a dedicated `gateway/studio/repo_index/` feature folder for repository-intelligence background indexing.
+- Studio now also has a dedicated `gateway/studio/symbol_index/` feature folder for local project symbol indexing.
 - The coordinator owns:
-  - a single-worker queue
+  - a host-derived adaptive bounded worker window
   - per-repo phase tracking
   - snapshot storage
+  - interactive-priority queue promotion for user-targeted repos
   - aggregate `/api/repo/index/status` reporting
 - `code_search` no longer performs request-time repository analysis or checkout-wide source scanning. It reads repo-index snapshots and returns explicit pending metadata through the unified search contract:
   - `partial`
   - `indexingState`
   - `pendingRepos`
   - `skippedRepos`
+- `search_symbols` no longer performs first-hit request-path index construction. It now triggers background local symbol indexing and returns explicit pending metadata through `SymbolSearchResponse`:
+  - `partial`
+  - `indexingState`
+  - `indexError`
 - Repo-intelligence read endpoints now use cached-only analysis lookup so missing snapshots surface as `REPO_INDEX_PENDING` instead of silently triggering cold analysis.
 - Julia repository analysis now performs a cheap preflight before heavy indexing so unsupported layouts settle into `unsupported` state instead of re-triggering hot-path failures.
-- The frontend now separates `repoIndexStatus` from `vfsStatus`, polls `/api/repo/index/status` independently, keeps workspace boot gated only on health/config sync, and surfaces indexing progress in the bottom status bar.
+- Repo-index terminal status writes now avoid `RwLock` re-entry deadlocks. Ready/failed status transitions compute the next attempt count before taking the `statuses` write guard, so one completed repo can no longer freeze the entire single-worker queue in `indexing`.
+- Repo-index scheduling now derives its hard concurrency ceiling from host parallelism and adjusts the live worker window from recent repo-task latency, so the queue is no longer intentionally serialized behind a fixed worker count.
+- The default gateway runtime now also carries the builtin `modelica` analyzer by compiling the external `xiuxian-wendao-modelica` plugin sources into the core crate under the `modelica` feature, closing the previous `mcl` live failure mode where the repo indexer could see the repository but not the registered analyzer.
+- Repo indexing now also performs generation-aware stale-task checks before result publication and during code-document collection, preventing obsolete repo tasks from continuing all the way to snapshot commit after a fingerprint/config change.
+- Adaptive repo scheduling now uses an efficiency-gradient signal (`concurrency / EMA latency`) instead of simple success streak alone, allowing the worker window to shrink when marginal concurrency stops improving throughput and likely indicates IO contention.
+- A bounded analysis timeout remains as a secondary safety net so a genuinely stuck repository analysis is marked `failed` and the queue can continue.
+- The frontend now separates `repoIndexStatus` from `vfsStatus`, polls `/api/repo/index/status` independently, keeps workspace boot gated only on health/config sync, surfaces indexing progress in the bottom status bar, and exposes unsupported/failed repo issue details directly from the status payload so parser/layout gaps can be triaged from live Studio.
 
 This closes the main architectural gap that previously allowed large multi-repo Julia configs to collapse Studio responsiveness under repeated request-time analysis.
 
@@ -288,6 +300,8 @@ Current implementation checkpoint for this transport layer:
 - if a configured repo keeps the same logical id but changes URL in `wendao.toml`, the managed mirror remote is overwritten from config and the checkout is synchronized against that new source of truth
 - managed checkout mutation now uses a dedicated lock path under `PRJ_DATA_HOME/.data/xiuxian-wendao/repo-intelligence/locks/...`
 - `checkout/mod.rs` is now interface-only, with checkout data types in `types.rs` and checkout locking in `lock.rs`
+- the external Modelica analyzer now accepts repositories whose dominant root package lives under a top-level package directory (for example `Modelica/package.mo` in `ModelicaStandardLibrary`) and rewrites indexed record paths back to repository-relative paths so Studio VFS navigation remains clickable
+- repo-index status payloads now include per-repository queue position so Studio can surface which repo is next after interactive promotion instead of forcing operators to infer queue order from aggregate counters alone
 
 The common core now exposes this lifecycle explicitly through `wendao repo sync --repo <id>`, which reports the resolved source kind, requested sync mode, configured refresh policy, mirror/check-out lifecycle states, mirror revision, drift state, checkout path, optional mirror path, upstream URL, and checkout revision before any language-specific analysis runs. `--mode refresh` can force a remote refresh even when the repository is configured with `refresh = "manual"`. `--mode status` is read-only: it inspects the current cache state and returns `missing` lifecycle states when mirror or checkout assets do not exist yet.
 

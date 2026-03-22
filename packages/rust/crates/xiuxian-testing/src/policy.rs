@@ -94,6 +94,11 @@ fn load_structure_policy_from_toml(
 /// overrides.
 ///
 /// This reads `{crate_root}/tests/xiuxian-testings-rules.toml` when present.
+///
+/// # Errors
+///
+/// Returns an error when the workspace test-policy TOML exists but cannot be read
+/// or parsed.
 pub fn validate_crate_test_policy_with_workspace_config(
     crate_root: &Path,
 ) -> Result<CrateTestPolicyReport, String> {
@@ -106,6 +111,11 @@ pub fn validate_crate_test_policy_with_workspace_config(
 
 /// Validate only the test directory structure with
 /// `tests/xiuxian-testings-rules.toml` overrides.
+///
+/// # Errors
+///
+/// Returns an error when the workspace test-policy TOML exists but cannot be read
+/// or parsed.
 pub fn validate_crate_tests_structure_with_workspace_config(
     crate_root: &Path,
 ) -> Result<Vec<StructureViolation>, String> {

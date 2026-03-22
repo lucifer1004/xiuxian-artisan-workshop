@@ -7,6 +7,11 @@ use crate::analyzers::query::{
 };
 
 /// Resolve one projected page-index node hit by page and node identifier.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the projected page or node cannot be
+/// resolved for the requested repository.
 pub fn build_repo_projected_page_index_node(
     query: &RepoProjectedPageIndexNodeQuery,
     analysis: &RepositoryAnalysisOutput,

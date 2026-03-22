@@ -17,6 +17,25 @@ use crate::zhenfa_router::native::semantic_check::{
     CheckType, WendaoSemanticCheckArgs, run_audit_core,
 };
 
+trait PanicExt<T> {
+    fn or_panic(self, context: &str) -> T;
+}
+
+impl<T, E> PanicExt<T> for Result<T, E>
+where
+    E: std::fmt::Display,
+{
+    fn or_panic(self, context: &str) -> T {
+        self.unwrap_or_else(|error| panic!("{context}: {error}"))
+    }
+}
+
+impl<T> PanicExt<T> for Option<T> {
+    fn or_panic(self, context: &str) -> T {
+        self.unwrap_or_else(|| panic!("{context}"))
+    }
+}
+
 #[test]
 fn detects_non_opaque_doc_identity_for_package_local_docs() {
     let content = "# Title\n\n:PROPERTIES:\n:ID: readable-id\n:TYPE: CORE\n:END:\n";
@@ -71,28 +90,28 @@ fn surgical_fixes_repair_non_opaque_doc_identity() {
         result,
         crate::zhenfa_router::native::audit::FixResult::Success
     ));
-    assert!(content.contains(&format!(":ID: {}", derive_opaque_doc_id(&doc_key))));
+    assert!(content.contains(&format!(":ID: {}", derive_opaque_doc_id(doc_key))));
 }
 
 #[test]
 fn detects_missing_package_docs_index_for_workspace_crate_docs() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(&crate_dir).expect("create crate dir");
+    fs::create_dir_all(&crate_dir).or_panic("create crate dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
     let docs_dir = temp.path().join("packages/rust/crates/demo/docs/01_core");
-    fs::create_dir_all(&docs_dir).expect("create docs dir");
+    fs::create_dir_all(&docs_dir).or_panic("create docs dir");
     let doc_path = docs_dir.join("101_intro.md");
     let doc_path_str = doc_path.to_string_lossy().to_string();
     let content = format!(
         "# Intro\n\n:PROPERTIES:\n:ID: {}\n:END:\n\nIntro.\n",
         derive_opaque_doc_id(&doc_path_str)
     );
-    fs::write(&doc_path, content).expect("write doc");
+    fs::write(&doc_path, content).or_panic("write doc");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     assert_eq!(issues.len(), 1);
@@ -102,21 +121,21 @@ fn detects_missing_package_docs_index_for_workspace_crate_docs() {
             .doc
             .ends_with("packages/rust/crates/demo/docs/index.md")
     );
-    let suggestion = issues[0].suggestion.as_ref().expect("suggestion");
+    let suggestion = issues[0].suggestion.as_ref().or_panic("suggestion");
     assert!(suggestion.contains("# demo: Map of Content"));
     assert!(suggestion.contains("[[01_core/101_intro]]"));
 }
 
 #[test]
 fn detects_missing_package_docs_tree_for_workspace_crate() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(&crate_dir).expect("create crate dir");
+    fs::create_dir_all(&crate_dir).or_panic("create crate dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     assert_eq!(issues.len(), 1);
@@ -127,22 +146,22 @@ fn detects_missing_package_docs_tree_for_workspace_crate() {
             .doc
             .ends_with("packages/rust/crates/demo/docs/index.md")
     );
-    let suggestion = issues[0].suggestion.as_ref().expect("suggestion");
+    let suggestion = issues[0].suggestion.as_ref().or_panic("suggestion");
     assert!(suggestion.contains("# demo: Map of Content"));
     assert!(suggestion.contains("Standardized documentation index"));
 }
 
 #[test]
 fn detects_doc_identity_for_workspace_package_docs_tree_files() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
     let core_dir = crate_dir.join("docs/01_core");
-    fs::create_dir_all(&core_dir).expect("create core docs dir");
+    fs::create_dir_all(&core_dir).or_panic("create core docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -153,7 +172,7 @@ fn detects_doc_identity_for_workspace_package_docs_tree_files() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
     let intro_path = core_dir.join("101_intro.md");
     let intro_path_str = intro_path.to_string_lossy().to_string();
@@ -161,7 +180,7 @@ fn detects_doc_identity_for_workspace_package_docs_tree_files() {
         &intro_path,
         "# Intro\n\n:PROPERTIES:\n:ID: readable-intro\n:TYPE: CORE\n:END:\n",
     )
-    .expect("write intro");
+    .or_panic("write intro");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let issue = issues
@@ -169,7 +188,7 @@ fn detects_doc_identity_for_workspace_package_docs_tree_files() {
         .find(|issue| {
             issue.issue_type == DOC_IDENTITY_PROTOCOL_ISSUE_TYPE && issue.doc == intro_path_str
         })
-        .expect("workspace doc identity issue");
+        .or_panic("workspace doc identity issue");
 
     assert_eq!(issue.severity, "error");
     assert_eq!(
@@ -180,15 +199,15 @@ fn detects_doc_identity_for_workspace_package_docs_tree_files() {
 
 #[test]
 fn workspace_doc_identity_scan_respects_explicit_doc_scope() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
     let core_dir = crate_dir.join("docs/01_core");
-    fs::create_dir_all(&core_dir).expect("create core docs dir");
+    fs::create_dir_all(&core_dir).or_panic("create core docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -199,7 +218,7 @@ fn workspace_doc_identity_scan_respects_explicit_doc_scope() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
     let intro_path = core_dir.join("101_intro.md");
     let intro_path_str = intro_path.to_string_lossy().to_string();
@@ -207,14 +226,14 @@ fn workspace_doc_identity_scan_respects_explicit_doc_scope() {
         &intro_path,
         "# Intro\n\n:PROPERTIES:\n:ID: readable-intro\n:TYPE: CORE\n:END:\n",
     )
-    .expect("write intro");
+    .or_panic("write intro");
 
     let contracts_path = core_dir.join("102_contracts.md");
     fs::write(
         &contracts_path,
         "# Contracts\n\n:PROPERTIES:\n:ID: readable-contracts\n:TYPE: CORE\n:END:\n",
     )
-    .expect("write contracts");
+    .or_panic("write contracts");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), Some(&intro_path_str));
     let identity_issues = issues
@@ -226,21 +245,21 @@ fn workspace_doc_identity_scan_respects_explicit_doc_scope() {
     assert_eq!(
         Path::new(&identity_issues[0].doc)
             .canonicalize()
-            .expect("canonical issue path"),
-        intro_path.canonicalize().expect("canonical intro path")
+            .or_panic("canonical issue path"),
+        intro_path.canonicalize().or_panic("canonical intro path")
     );
 }
 
 #[test]
 fn workspace_scope_does_not_match_prefix_sibling_crates() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let wendao_dir = temp.path().join("packages/rust/crates/xiuxian-wendao");
     let modelica_dir = temp
         .path()
         .join("packages/rust/crates/xiuxian-wendao-modelica");
 
     for crate_dir in [&wendao_dir, &modelica_dir] {
-        fs::create_dir_all(crate_dir.join("docs/01_core")).expect("create docs dir");
+        fs::create_dir_all(crate_dir.join("docs/01_core")).or_panic("create docs dir");
         fs::write(
             crate_dir.join("Cargo.toml"),
             format!(
@@ -248,10 +267,10 @@ fn workspace_scope_does_not_match_prefix_sibling_crates() {
                 crate_dir
                     .file_name()
                     .and_then(|name| name.to_str())
-                    .expect("crate name")
+                    .or_panic("crate name")
             ),
         )
-        .expect("write cargo");
+        .or_panic("write cargo");
     }
 
     let wendao_doc = wendao_dir.join("docs/01_core/101_core.md");
@@ -259,14 +278,14 @@ fn workspace_scope_does_not_match_prefix_sibling_crates() {
         &wendao_doc,
         "# Wendao\n\n:PROPERTIES:\n:ID: readable-wendao\n:TYPE: CORE\n:END:\n",
     )
-    .expect("write wendao doc");
+    .or_panic("write wendao doc");
 
     let modelica_doc = modelica_dir.join("docs/01_core/101_core.md");
     fs::write(
         &modelica_doc,
         "# Modelica\n\n:PROPERTIES:\n:ID: readable-modelica\n:TYPE: CORE\n:END:\n",
     )
-    .expect("write modelica doc");
+    .or_panic("write modelica doc");
 
     let issues = collect_workspace_doc_governance_issues(
         temp.path(),
@@ -281,32 +300,34 @@ fn workspace_scope_does_not_match_prefix_sibling_crates() {
     assert_eq!(
         Path::new(&identity_issues[0].doc)
             .canonicalize()
-            .expect("canonical issue path"),
-        modelica_doc.canonicalize().expect("canonical modelica doc")
+            .or_panic("canonical issue path"),
+        modelica_doc
+            .canonicalize()
+            .or_panic("canonical modelica doc")
     );
 }
 
 #[test]
 fn run_audit_core_reports_missing_package_docs_index() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(&crate_dir).expect("create crate dir");
+    fs::create_dir_all(&crate_dir).or_panic("create crate dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
     let docs_dir = temp.path().join("packages/rust/crates/demo/docs/01_core");
-    fs::create_dir_all(&docs_dir).expect("create docs dir");
+    fs::create_dir_all(&docs_dir).or_panic("create docs dir");
     let doc_path = docs_dir.join("101_intro.md");
     let doc_path_str = doc_path.to_string_lossy().to_string();
     let content = format!(
         "# Intro\n\n:PROPERTIES:\n:ID: {}\n:END:\n\nIntro.\n",
         derive_opaque_doc_id(&doc_path_str)
     );
-    fs::write(&doc_path, content).expect("write doc");
+    fs::write(&doc_path, content).or_panic("write doc");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -317,7 +338,7 @@ fn run_audit_core_reports_missing_package_docs_index() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(
         issues
@@ -328,16 +349,16 @@ fn run_audit_core_reports_missing_package_docs_index() {
 
 #[test]
 fn run_audit_core_reports_missing_package_docs_tree() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(&crate_dir).expect("create crate dir");
+    fs::create_dir_all(&crate_dir).or_panic("create crate dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -348,7 +369,7 @@ fn run_audit_core_reports_missing_package_docs_tree() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(
         issues
@@ -359,14 +380,14 @@ fn run_audit_core_reports_missing_package_docs_tree() {
 
 #[test]
 fn detects_missing_standard_section_landings_for_existing_docs_tree() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
     fs::write(
@@ -376,7 +397,7 @@ fn detects_missing_standard_section_landings_for_existing_docs_tree() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let section_issues: Vec<_> = issues
@@ -409,14 +430,14 @@ fn detects_missing_standard_section_landings_for_existing_docs_tree() {
 
 #[test]
 fn run_audit_core_reports_missing_standard_section_landings() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
     fs::write(
@@ -426,9 +447,9 @@ fn run_audit_core_reports_missing_standard_section_landings() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -439,7 +460,7 @@ fn run_audit_core_reports_missing_standard_section_landings() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(issues.iter().any(|issue| {
         issue.issue_type == MISSING_PACKAGE_DOCS_SECTION_LANDING_ISSUE_TYPE
@@ -451,15 +472,15 @@ fn run_audit_core_reports_missing_standard_section_landings() {
 
 #[test]
 fn detects_missing_standard_index_section_links_for_existing_landing_pages() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
     let core_dir = crate_dir.join("docs/01_core");
-    fs::create_dir_all(&core_dir).expect("create core docs dir");
+    fs::create_dir_all(&core_dir).or_panic("create core docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -470,7 +491,7 @@ fn detects_missing_standard_index_section_links_for_existing_landing_pages() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
     let landing_path = core_dir.join("101_demo_core_boundary.md");
     let landing_path_str = landing_path.to_string_lossy().to_string();
@@ -481,13 +502,13 @@ fn detects_missing_standard_index_section_links_for_existing_landing_pages() {
             derive_opaque_doc_id(&landing_path_str)
         ),
     )
-    .expect("write landing");
+    .or_panic("write landing");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let link_issue = issues
         .iter()
         .find(|issue| issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_SECTION_LINK_ISSUE_TYPE)
-        .expect("missing index section-link issue");
+        .or_panic("missing index section-link issue");
     let expected_insert_offset = format!(
         "# Demo\n\n:PROPERTIES:\n:ID: {}\n:END:\n\n## 01_core: Architecture and Foundation\n\n",
         derive_opaque_doc_id(&index_path_str)
@@ -511,15 +532,15 @@ fn detects_missing_standard_index_section_links_for_existing_landing_pages() {
 
 #[test]
 fn detects_missing_standard_index_section_links_before_relations_or_footer_when_heading_missing() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
     let feature_dir = crate_dir.join("docs/03_features");
-    fs::create_dir_all(&feature_dir).expect("create feature docs dir");
+    fs::create_dir_all(&feature_dir).or_panic("create feature docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -527,7 +548,7 @@ fn detects_missing_standard_index_section_links_before_relations_or_footer_when_
         "# Demo\n\n:PROPERTIES:\n:ID: {}\n:END:\n\n## 01_core: Architecture and Foundation\n\n- [[01_core/101_demo_core_boundary]]\n\n:RELATIONS:\n:LINKS: [[01_core/101_demo_core_boundary]]\n:END:\n\n---\n\n:FOOTER:\n:STANDARDS: v2.0\n:LAST_SYNC: 2026-03-20\n:END:\n",
         derive_opaque_doc_id(&index_path_str)
     );
-    fs::write(&index_path, &index_content).expect("write index");
+    fs::write(&index_path, &index_content).or_panic("write index");
 
     let landing_path = feature_dir.join("201_demo_feature_ledger.md");
     let landing_path_str = landing_path.to_string_lossy().to_string();
@@ -538,7 +559,7 @@ fn detects_missing_standard_index_section_links_before_relations_or_footer_when_
             derive_opaque_doc_id(&landing_path_str)
         ),
     )
-    .expect("write landing");
+    .or_panic("write landing");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let link_issue = issues
@@ -547,11 +568,11 @@ fn detects_missing_standard_index_section_links_before_relations_or_footer_when_
             issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_SECTION_LINK_ISSUE_TYPE
                 && issue.message.contains("03_features")
         })
-        .expect("missing feature section-link issue");
+        .or_panic("missing feature section-link issue");
 
     let relations_offset = index_content
         .find(":RELATIONS:")
-        .expect("find relations block");
+        .or_panic("find relations block");
 
     assert_eq!(link_issue.doc, index_path_str);
     assert_eq!(
@@ -569,15 +590,15 @@ fn detects_missing_standard_index_section_links_before_relations_or_footer_when_
 
 #[test]
 fn run_audit_core_reports_missing_standard_index_section_links() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
     let core_dir = crate_dir.join("docs/01_core");
-    fs::create_dir_all(&core_dir).expect("create core docs dir");
+    fs::create_dir_all(&core_dir).or_panic("create core docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -588,7 +609,7 @@ fn run_audit_core_reports_missing_standard_index_section_links() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
     let landing_path = core_dir.join("101_demo_core_boundary.md");
     let landing_path_str = landing_path.to_string_lossy().to_string();
@@ -599,9 +620,9 @@ fn run_audit_core_reports_missing_standard_index_section_links() {
             derive_opaque_doc_id(&landing_path_str)
         ),
     )
-    .expect("write landing");
+    .or_panic("write landing");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -612,7 +633,7 @@ fn run_audit_core_reports_missing_standard_index_section_links() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(issues.iter().any(|issue| {
         issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_SECTION_LINK_ISSUE_TYPE
@@ -624,14 +645,14 @@ fn run_audit_core_reports_missing_standard_index_section_links() {
 
 #[test]
 fn detects_missing_index_relation_links_for_existing_body_links() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -639,13 +660,13 @@ fn detects_missing_index_relation_links_for_existing_body_links() {
         "# Demo\n\n:PROPERTIES:\n:ID: {}\n:END:\n\n## 01_core\n\n- [[01_core/101_demo_core_boundary]]\n- [[01_core/102_demo_contracts]]\n\n:RELATIONS:\n:LINKS: [[01_core/101_demo_core_boundary]]\n:END:\n",
         derive_opaque_doc_id(&index_path_str)
     );
-    fs::write(&index_path, &index_content).expect("write index");
+    fs::write(&index_path, &index_content).or_panic("write index");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let relation_issue = issues
         .iter()
         .find(|issue| issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE)
-        .expect("missing relation-link issue");
+        .or_panic("missing relation-link issue");
 
     assert_eq!(relation_issue.doc, index_path_str);
     assert_eq!(relation_issue.severity, "warning");
@@ -659,12 +680,12 @@ fn detects_missing_index_relation_links_for_existing_body_links() {
         Some("[[01_core/101_demo_core_boundary]], [[01_core/102_demo_contracts]]")
     );
     let links_value = "[[01_core/101_demo_core_boundary]]";
-    let links_line_start = index_content.find(":LINKS: ").expect("find links line");
+    let links_line_start = index_content.find(":LINKS: ").or_panic("find links line");
     let value_start = links_line_start
         + ":LINKS: ".len()
         + index_content[links_line_start + ":LINKS: ".len()..]
             .find(links_value)
-            .expect("find relation links value");
+            .or_panic("find relation links value");
     let value_end = value_start + links_value.len();
     assert_eq!(
         relation_issue
@@ -677,14 +698,14 @@ fn detects_missing_index_relation_links_for_existing_body_links() {
 
 #[test]
 fn detects_missing_index_relations_block_for_existing_body_links() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -692,13 +713,13 @@ fn detects_missing_index_relations_block_for_existing_body_links() {
         "# Demo\n\n:PROPERTIES:\n:ID: {}\n:END:\n\n## 01_core\n\n- [[01_core/101_demo_core_boundary]]\n\n---\n\n:FOOTER:\n:STANDARDS: v2.0\n:END:\n",
         derive_opaque_doc_id(&index_path_str)
     );
-    fs::write(&index_path, &index_content).expect("write index");
+    fs::write(&index_path, &index_content).or_panic("write index");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let block_issue = issues
         .iter()
         .find(|issue| issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE)
-        .expect("missing relations-block issue");
+        .or_panic("missing relations-block issue");
 
     assert_eq!(block_issue.doc, index_path_str);
     assert_eq!(block_issue.severity, "warning");
@@ -711,7 +732,7 @@ fn detects_missing_index_relations_block_for_existing_body_links() {
         block_issue.suggestion.as_deref(),
         Some(":RELATIONS:\n:LINKS: [[01_core/101_demo_core_boundary]]\n:END:\n\n")
     );
-    let insert_offset = index_content.find("---").expect("find footer separator");
+    let insert_offset = index_content.find("---").or_panic("find footer separator");
     assert_eq!(
         block_issue
             .location
@@ -723,14 +744,14 @@ fn detects_missing_index_relations_block_for_existing_body_links() {
 
 #[test]
 fn detects_missing_index_footer_block_for_existing_relations_block() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -738,13 +759,13 @@ fn detects_missing_index_footer_block_for_existing_relations_block() {
         "# Demo\n\n:PROPERTIES:\n:ID: {}\n:END:\n\n## 01_core\n\n- [[01_core/101_demo_core_boundary]]\n\n:RELATIONS:\n:LINKS: [[01_core/101_demo_core_boundary]]\n:END:\n",
         derive_opaque_doc_id(&index_path_str)
     );
-    fs::write(&index_path, &index_content).expect("write index");
+    fs::write(&index_path, &index_content).or_panic("write index");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let footer_issue = issues
         .iter()
         .find(|issue| issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE)
-        .expect("missing footer-block issue");
+        .or_panic("missing footer-block issue");
 
     assert_eq!(footer_issue.doc, index_path_str);
     assert_eq!(footer_issue.severity, "warning");
@@ -764,14 +785,14 @@ fn detects_missing_index_footer_block_for_existing_relations_block() {
 
 #[test]
 fn detects_incomplete_index_footer_block_for_existing_footer() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -780,15 +801,15 @@ fn detects_incomplete_index_footer_block_for_existing_footer() {
         "# Demo\n\n:PROPERTIES:\n:ID: {}\n:END:\n\n## 01_core\n\n- [[01_core/101_demo_core_boundary]]\n\n:RELATIONS:\n:LINKS: [[01_core/101_demo_core_boundary]]\n:END:\n\n---\n\n{footer_block}",
         derive_opaque_doc_id(&index_path_str)
     );
-    fs::write(&index_path, &index_content).expect("write index");
+    fs::write(&index_path, &index_content).or_panic("write index");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let footer_issue = issues
         .iter()
         .find(|issue| issue.issue_type == INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE)
-        .expect("missing incomplete footer-block issue");
+        .or_panic("missing incomplete footer-block issue");
 
-    let footer_start = index_content.find(":FOOTER:").expect("find footer start");
+    let footer_start = index_content.find(":FOOTER:").or_panic("find footer start");
     let footer_end = footer_start + footer_block.len();
 
     assert_eq!(footer_issue.doc, index_path_str);
@@ -809,14 +830,14 @@ fn detects_incomplete_index_footer_block_for_existing_footer() {
 
 #[test]
 fn detects_stale_index_footer_standards_for_existing_footer() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -825,15 +846,15 @@ fn detects_stale_index_footer_standards_for_existing_footer() {
         "# Demo\n\n:PROPERTIES:\n:ID: {}\n:END:\n\n## 01_core\n\n- [[01_core/101_demo_core_boundary]]\n\n:RELATIONS:\n:LINKS: [[01_core/101_demo_core_boundary]]\n:END:\n\n---\n\n{footer_block}",
         derive_opaque_doc_id(&index_path_str)
     );
-    fs::write(&index_path, &index_content).expect("write index");
+    fs::write(&index_path, &index_content).or_panic("write index");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let footer_issue = issues
         .iter()
         .find(|issue| issue.issue_type == STALE_PACKAGE_DOCS_INDEX_FOOTER_STANDARDS_ISSUE_TYPE)
-        .expect("missing stale footer-standards issue");
+        .or_panic("missing stale footer-standards issue");
 
-    let footer_start = index_content.find(":FOOTER:").expect("find footer start");
+    let footer_start = index_content.find(":FOOTER:").or_panic("find footer start");
     let footer_end = footer_start + footer_block.len();
 
     assert_eq!(footer_issue.doc, index_path_str);
@@ -854,14 +875,14 @@ fn detects_stale_index_footer_standards_for_existing_footer() {
 
 #[test]
 fn run_audit_core_reports_missing_index_relation_links() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -872,9 +893,9 @@ fn run_audit_core_reports_missing_index_relation_links() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -885,7 +906,7 @@ fn run_audit_core_reports_missing_index_relation_links() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(issues.iter().any(|issue| {
         issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE
@@ -897,14 +918,14 @@ fn run_audit_core_reports_missing_index_relation_links() {
 
 #[test]
 fn detects_stale_index_relation_links_without_missing_links() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -912,13 +933,13 @@ fn detects_stale_index_relation_links_without_missing_links() {
         "# Demo\n\n:PROPERTIES:\n:ID: {}\n:END:\n\n## 01_core\n\n- [[01_core/101_demo_core_boundary]]\n\n:RELATIONS:\n:LINKS: [[01_core/101_demo_core_boundary]], [[01_core/999_stale]]\n:END:\n",
         derive_opaque_doc_id(&index_path_str)
     );
-    fs::write(&index_path, &index_content).expect("write index");
+    fs::write(&index_path, &index_content).or_panic("write index");
 
     let issues = collect_workspace_doc_governance_issues(temp.path(), None);
     let stale_issue = issues
         .iter()
         .find(|issue| issue.issue_type == STALE_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE)
-        .expect("missing stale relation-link issue");
+        .or_panic("missing stale relation-link issue");
 
     assert_eq!(stale_issue.doc, index_path_str);
     assert_eq!(stale_issue.severity, "warning");
@@ -928,12 +949,12 @@ fn detects_stale_index_relation_links_without_missing_links() {
         Some("[[01_core/101_demo_core_boundary]]")
     );
     let relation_value = "[[01_core/101_demo_core_boundary]], [[01_core/999_stale]]";
-    let links_line_start = index_content.find(":LINKS: ").expect("find links line");
+    let links_line_start = index_content.find(":LINKS: ").or_panic("find links line");
     let value_start = links_line_start
         + ":LINKS: ".len()
         + index_content[links_line_start + ":LINKS: ".len()..]
             .find(relation_value)
-            .expect("find stale relation links value");
+            .or_panic("find stale relation links value");
     let value_end = value_start + relation_value.len();
     assert_eq!(
         stale_issue
@@ -946,14 +967,14 @@ fn detects_stale_index_relation_links_without_missing_links() {
 
 #[test]
 fn run_audit_core_reports_stale_index_relation_links() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -964,9 +985,9 @@ fn run_audit_core_reports_stale_index_relation_links() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -977,7 +998,7 @@ fn run_audit_core_reports_stale_index_relation_links() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(issues.iter().any(|issue| {
         issue.issue_type == STALE_PACKAGE_DOCS_INDEX_RELATION_LINK_ISSUE_TYPE
@@ -989,14 +1010,14 @@ fn run_audit_core_reports_stale_index_relation_links() {
 
 #[test]
 fn run_audit_core_reports_missing_index_footer_block() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -1007,9 +1028,9 @@ fn run_audit_core_reports_missing_index_footer_block() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -1020,7 +1041,7 @@ fn run_audit_core_reports_missing_index_footer_block() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(issues.iter().any(|issue| {
         issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE
@@ -1032,14 +1053,14 @@ fn run_audit_core_reports_missing_index_footer_block() {
 
 #[test]
 fn run_audit_core_reports_incomplete_index_footer_block() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -1050,9 +1071,9 @@ fn run_audit_core_reports_incomplete_index_footer_block() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -1063,7 +1084,7 @@ fn run_audit_core_reports_incomplete_index_footer_block() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(issues.iter().any(|issue| {
         issue.issue_type == INCOMPLETE_PACKAGE_DOCS_INDEX_FOOTER_BLOCK_ISSUE_TYPE
@@ -1075,14 +1096,14 @@ fn run_audit_core_reports_incomplete_index_footer_block() {
 
 #[test]
 fn run_audit_core_reports_stale_index_footer_standards() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -1093,9 +1114,9 @@ fn run_audit_core_reports_stale_index_footer_standards() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -1106,7 +1127,7 @@ fn run_audit_core_reports_stale_index_footer_standards() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(issues.iter().any(|issue| {
         issue.issue_type == STALE_PACKAGE_DOCS_INDEX_FOOTER_STANDARDS_ISSUE_TYPE
@@ -1118,14 +1139,14 @@ fn run_audit_core_reports_stale_index_footer_standards() {
 
 #[test]
 fn run_audit_core_loads_explicit_workspace_doc_file_for_fix_generation() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -1136,9 +1157,9 @@ fn run_audit_core_loads_explicit_workspace_doc_file_for_fix_generation() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -1149,11 +1170,11 @@ fn run_audit_core_loads_explicit_workspace_doc_file_for_fix_generation() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (_issues, file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (_issues, file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(file_contents.contains_key(&index_path_str));
 
-    let content = file_contents.get(&index_path_str).unwrap();
+    let content = file_contents.get(&index_path_str).or_panic("missing value");
     let issues = collect_stale_index_footer_standards(&index_path_str, content);
     assert_eq!(issues.len(), 1);
 
@@ -1167,14 +1188,14 @@ fn run_audit_core_loads_explicit_workspace_doc_file_for_fix_generation() {
 
 #[test]
 fn run_audit_core_reports_doc_identity_for_explicit_workspace_doc_file() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -1182,9 +1203,9 @@ fn run_audit_core_reports_doc_identity_for_explicit_workspace_doc_file() {
         &index_path,
         "# Demo\n\n:PROPERTIES:\n:ID: readable-demo-index\n:TYPE: INDEX\n:END:\n",
     )
-    .expect("write index");
+    .or_panic("write index");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -1195,15 +1216,15 @@ fn run_audit_core_reports_doc_identity_for_explicit_workspace_doc_file() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     let issue = issues
         .iter()
         .find(|issue| issue.issue_type == DOC_IDENTITY_PROTOCOL_ISSUE_TYPE)
-        .expect("doc identity issue");
+        .or_panic("doc identity issue");
     let canonical_index_path = index_path
         .canonicalize()
-        .expect("canonical index path")
+        .or_panic("canonical index path")
         .to_string_lossy()
         .to_string();
     let expected_id = derive_opaque_doc_id(&canonical_index_path);
@@ -1214,15 +1235,15 @@ fn run_audit_core_reports_doc_identity_for_explicit_workspace_doc_file() {
 
 #[test]
 fn run_audit_core_seeds_workspace_doc_identity_issue_files_for_fix_generation() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
     let core_dir = crate_dir.join("docs/01_core");
-    fs::create_dir_all(&core_dir).expect("create core docs dir");
+    fs::create_dir_all(&core_dir).or_panic("create core docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -1233,16 +1254,16 @@ fn run_audit_core_seeds_workspace_doc_identity_issue_files_for_fix_generation() 
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
     let intro_path = core_dir.join("101_intro.md");
     fs::write(
         &intro_path,
         "# Intro\n\n:PROPERTIES:\n:ID: readable-intro\n:TYPE: CORE\n:END:\n",
     )
-    .expect("write intro");
+    .or_panic("write intro");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -1254,10 +1275,10 @@ fn run_audit_core_seeds_workspace_doc_identity_issue_files_for_fix_generation() 
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
     let canonical_intro_path = intro_path
         .canonicalize()
-        .expect("canonical intro path")
+        .or_panic("canonical intro path")
         .to_string_lossy()
         .to_string();
 
@@ -1267,28 +1288,28 @@ fn run_audit_core_seeds_workspace_doc_identity_issue_files_for_fix_generation() 
             issue.issue_type == DOC_IDENTITY_PROTOCOL_ISSUE_TYPE
                 && issue.doc == canonical_intro_path
         })
-        .expect("workspace doc identity issue");
+        .or_panic("workspace doc identity issue");
 
     assert!(file_contents.contains_key(&canonical_intro_path));
 
-    let fixes = generate_surgical_fixes(&[identity_issue.clone()], &file_contents);
+    let fixes = generate_surgical_fixes(std::slice::from_ref(identity_issue), &file_contents);
     assert_eq!(fixes.len(), 1);
     assert_eq!(fixes[0].issue_type, DOC_IDENTITY_PROTOCOL_ISSUE_TYPE);
 }
 
 #[test]
 fn package_docs_directory_scope_fix_rewrites_doc_identity_issues_end_to_end() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
     let core_dir = crate_dir.join("docs/01_core");
     let feature_dir = crate_dir.join("docs/03_features");
-    fs::create_dir_all(&core_dir).expect("create core docs dir");
-    fs::create_dir_all(&feature_dir).expect("create feature docs dir");
+    fs::create_dir_all(&core_dir).or_panic("create core docs dir");
+    fs::create_dir_all(&feature_dir).or_panic("create feature docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -1299,7 +1320,7 @@ fn package_docs_directory_scope_fix_rewrites_doc_identity_issues_end_to_end() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
     let core_doc = core_dir.join("101_intro.md");
     let core_doc_str = core_doc.to_string_lossy().to_string();
@@ -1307,7 +1328,7 @@ fn package_docs_directory_scope_fix_rewrites_doc_identity_issues_end_to_end() {
         &core_doc,
         "# Intro\n\n:PROPERTIES:\n:ID: readable-intro\n:TYPE: CORE\n:END:\n",
     )
-    .expect("write core doc");
+    .or_panic("write core doc");
 
     let feature_doc = feature_dir.join("201_feature_ledger.md");
     let feature_doc_str = feature_doc.to_string_lossy().to_string();
@@ -1315,9 +1336,9 @@ fn package_docs_directory_scope_fix_rewrites_doc_identity_issues_end_to_end() {
         &feature_doc,
         "# Feature Ledger\n\n:PROPERTIES:\n:ID: readable-feature-ledger\n:TYPE: FEATURE\n:END:\n",
     )
-    .expect("write feature doc");
+    .or_panic("write feature doc");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -1328,7 +1349,7 @@ fn package_docs_directory_scope_fix_rewrites_doc_identity_issues_end_to_end() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     let doc_identity_issues = issues
         .iter()
@@ -1343,10 +1364,10 @@ fn package_docs_directory_scope_fix_rewrites_doc_identity_issues_end_to_end() {
     let report = AtomicFixBatch::new(fixes).apply_all();
     assert!(report.is_success(), "{}", report.summary());
 
-    let core_doc_content = fs::read_to_string(&core_doc).expect("read core doc");
+    let core_doc_content = fs::read_to_string(&core_doc).or_panic("read core doc");
     assert!(core_doc_content.contains(&format!(":ID: {}", derive_opaque_doc_id(&core_doc_str))));
 
-    let feature_doc_content = fs::read_to_string(&feature_doc).expect("read feature doc");
+    let feature_doc_content = fs::read_to_string(&feature_doc).or_panic("read feature doc");
     assert!(
         feature_doc_content.contains(&format!(":ID: {}", derive_opaque_doc_id(&feature_doc_str)))
     );
@@ -1354,14 +1375,14 @@ fn package_docs_directory_scope_fix_rewrites_doc_identity_issues_end_to_end() {
 
 #[test]
 fn run_audit_core_reports_missing_index_relations_block() {
-    let temp = TempDir::new().expect("tempdir");
+    let temp = TempDir::new().or_panic("tempdir");
     let crate_dir = temp.path().join("packages/rust/crates/demo");
-    fs::create_dir_all(crate_dir.join("docs")).expect("create docs dir");
+    fs::create_dir_all(crate_dir.join("docs")).or_panic("create docs dir");
     fs::write(
         crate_dir.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
-    .expect("write cargo");
+    .or_panic("write cargo");
 
     let index_path = crate_dir.join("docs/index.md");
     let index_path_str = index_path.to_string_lossy().to_string();
@@ -1372,9 +1393,9 @@ fn run_audit_core_reports_missing_index_relations_block() {
             derive_opaque_doc_id(&index_path_str)
         ),
     )
-    .expect("write index");
+    .or_panic("write index");
 
-    let index = LinkGraphIndex::build(temp.path()).expect("build index");
+    let index = LinkGraphIndex::build(temp.path()).or_panic("build index");
     let mut ctx = ZhenfaContext::default();
     ctx.insert_extension(index);
 
@@ -1385,7 +1406,7 @@ fn run_audit_core_reports_missing_index_relations_block() {
         source_paths: None,
         fuzzy_confidence_threshold: None,
     };
-    let (issues, _file_contents) = run_audit_core(&ctx, &args).expect("audit");
+    let (issues, _file_contents) = run_audit_core(&ctx, &args).or_panic("audit");
 
     assert!(issues.iter().any(|issue| {
         issue.issue_type == MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE

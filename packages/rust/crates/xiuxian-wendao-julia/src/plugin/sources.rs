@@ -65,20 +65,17 @@ pub(crate) fn collect_julia_sources(
             .parent()
             .unwrap_or(repository_root)
             .join(include_literal.as_str());
-        let include_relative = match relative_path_string(repository_root, &include_path) {
-            Ok(path) => path,
-            Err(_) => {
-                diagnostics.push(DiagnosticRecord {
-                    repo_id: repo_id.to_string(),
-                    path: include_literal.clone(),
-                    line: 0,
-                    message: format!(
-                        "ignored include `{include_literal}` because it resolves outside repository root"
-                    ),
-                    severity: "warning".to_string(),
-                });
-                continue;
-            }
+        let Ok(include_relative) = relative_path_string(repository_root, &include_path) else {
+            diagnostics.push(DiagnosticRecord {
+                repo_id: repo_id.to_string(),
+                path: include_literal.clone(),
+                line: 0,
+                message: format!(
+                    "ignored include `{include_literal}` because it resolves outside repository root"
+                ),
+                severity: "warning".to_string(),
+            });
+            continue;
         };
 
         if !include_path.is_file() {

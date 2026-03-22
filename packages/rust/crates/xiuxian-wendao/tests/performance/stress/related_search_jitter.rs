@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use xiuxian_testing::{PerfBudget, PerfRunConfig, assert_perf_budget, run_async_budget};
 
-use super::support::{
+use crate::performance::support::{
     RELATED_LIMIT, RELATED_MAX_DISTANCE, build_index, default_ppr_options, env_f64, env_u64,
     env_usize, seed_set,
 };

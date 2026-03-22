@@ -5,11 +5,13 @@ use crate::search::{FuzzyMatcher, FuzzySearchOptions, LexicalMatcher, SearchDocu
 
 impl UnifiedSymbolIndex {
     /// Search for project symbols.
+    #[must_use]
     pub fn search_project(&self, query: &str, limit: usize) -> Vec<UnifiedSymbol> {
         self.search_project_with_options(query, limit, FuzzySearchOptions::symbol_search())
     }
 
     /// Search for project symbols with explicit fuzzy options.
+    #[must_use]
     pub fn search_project_with_options(
         &self,
         query: &str,
@@ -20,11 +22,13 @@ impl UnifiedSymbolIndex {
     }
 
     /// Search for external symbols.
+    #[must_use]
     pub fn search_external(&self, query: &str, limit: usize) -> Vec<UnifiedSymbol> {
         self.search_external_with_options(query, limit, FuzzySearchOptions::symbol_search())
     }
 
     /// Search for external symbols with explicit fuzzy options.
+    #[must_use]
     pub fn search_external_with_options(
         &self,
         query: &str,
@@ -35,6 +39,7 @@ impl UnifiedSymbolIndex {
     }
 
     /// Search for symbols within a specific crate.
+    #[must_use]
     pub fn search_crate(&self, crate_name: &str, query: &str, limit: usize) -> Vec<UnifiedSymbol> {
         self.search_crate_with_options(
             crate_name,
@@ -45,6 +50,7 @@ impl UnifiedSymbolIndex {
     }
 
     /// Search for symbols within a specific crate with explicit fuzzy options.
+    #[must_use]
     pub fn search_crate_with_options(
         &self,
         crate_name: &str,
@@ -61,11 +67,13 @@ impl UnifiedSymbolIndex {
     }
 
     /// Search across both project and external symbols.
+    #[must_use]
     pub fn search_unified(&self, query_str: &str, limit: usize) -> Vec<UnifiedSymbol> {
         self.search_unified_with_options(query_str, limit, FuzzySearchOptions::symbol_search())
     }
 
     /// Search across both project and external symbols with explicit fuzzy options.
+    #[must_use]
     pub fn search_unified_with_options(
         &self,
         query_str: &str,
@@ -89,12 +97,11 @@ impl UnifiedSymbolIndex {
             push_unique_symbols(&mut results, &mut seen, exact_results, limit);
         }
 
-        if results.len() < limit {
-            if let Some(fuzzy_results) =
+        if results.len() < limit
+            && let Some(fuzzy_results) =
                 self.search_tantivy_fuzzy(query_str, limit, source_filter, options)
-            {
-                push_unique_symbols(&mut results, &mut seen, fuzzy_results, limit);
-            }
+        {
+            push_unique_symbols(&mut results, &mut seen, fuzzy_results, limit);
         }
 
         if results.len() < limit {
@@ -112,12 +119,11 @@ impl UnifiedSymbolIndex {
         limit: usize,
         source_filter: Option<&str>,
     ) -> Option<Vec<UnifiedSymbol>> {
-        let records = match self
+        let Ok(records) = self
             .search_index
             .search_exact(query_str, limit.saturating_mul(2))
-        {
-            Ok(records) => records,
-            Err(_) => return None,
+        else {
+            return None;
         };
         Some(self.symbols_from_search_documents(records, limit, source_filter))
     }
@@ -129,14 +135,12 @@ impl UnifiedSymbolIndex {
         source_filter: Option<&str>,
         options: FuzzySearchOptions,
     ) -> Option<Vec<UnifiedSymbol>> {
-        let matches =
-            match self
-                .search_index
+        let Ok(matches) =
+            self.search_index
                 .search_fuzzy(query_str, limit.saturating_mul(2), options)
-            {
-                Ok(matches) => matches,
-                Err(_) => return None,
-            };
+        else {
+            return None;
+        };
 
         let mut results = Vec::new();
         for fuzzy_match in matches {
@@ -166,7 +170,7 @@ impl UnifiedSymbolIndex {
 
         for &idx in self.by_name.get(&query_lower).unwrap_or(&Vec::new()) {
             let s = &self.symbols[idx];
-            if self.matches_filter(s, source_filter) {
+            if Self::matches_filter(s, source_filter) {
                 results.push(s.clone());
             }
         }
@@ -178,7 +182,7 @@ impl UnifiedSymbolIndex {
             if name != &query_lower && name.starts_with(&query_lower) {
                 for &idx in indices {
                     let s = &self.symbols[idx];
-                    if self.matches_filter(s, source_filter) {
+                    if Self::matches_filter(s, source_filter) {
                         results.push(s.clone());
                     }
                     if results.len() >= limit {
@@ -196,13 +200,9 @@ impl UnifiedSymbolIndex {
         let filtered_symbols = self
             .symbols
             .iter()
-            .filter(|symbol| self.matches_filter(symbol, source_filter))
+            .filter(|symbol| Self::matches_filter(symbol, source_filter))
             .cloned()
             .collect::<Vec<_>>();
-        fn unified_symbol_name(symbol: &UnifiedSymbol) -> &str {
-            symbol.name.as_str()
-        }
-
         let matcher =
             LexicalMatcher::new(filtered_symbols.as_slice(), unified_symbol_name, options);
         let fuzzy_matches = matcher
@@ -218,7 +218,7 @@ impl UnifiedSymbolIndex {
         results
     }
 
-    fn matches_filter(&self, symbol: &UnifiedSymbol, filter: Option<&str>) -> bool {
+    fn matches_filter(symbol: &UnifiedSymbol, filter: Option<&str>) -> bool {
         match filter {
             None => true,
             Some("project") => symbol.source == SymbolSource::Project,
@@ -228,6 +228,7 @@ impl UnifiedSymbolIndex {
     }
 
     /// Find all external symbol usages for a given crate.
+    #[must_use]
     pub fn find_external_usage(&self, crate_name: &str) -> Vec<String> {
         self.external_usage
             .get(crate_name)
@@ -236,6 +237,7 @@ impl UnifiedSymbolIndex {
     }
 
     /// Find all symbols defined in a given project file.
+    #[must_use]
     pub fn find_symbols_in_file(&self, file_path: &str) -> Vec<String> {
         self.project_files
             .get(file_path)
@@ -268,9 +270,12 @@ impl UnifiedSymbolIndex {
     ) -> Option<UnifiedSymbol> {
         let idx = search_id.parse::<usize>().ok()?;
         let symbol = self.symbols.get(idx)?;
-        self.matches_filter(symbol, source_filter)
-            .then(|| symbol.clone())
+        Self::matches_filter(symbol, source_filter).then(|| symbol.clone())
     }
+}
+
+fn unified_symbol_name(symbol: &UnifiedSymbol) -> &str {
+    symbol.name.as_str()
 }
 
 fn push_unique_symbols(

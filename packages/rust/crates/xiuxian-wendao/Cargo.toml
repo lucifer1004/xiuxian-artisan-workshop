@@ -9,10 +9,11 @@ publish = false
 default-run = "wendao"
 
 [features]
-default = ["zhenfa-router", "julia"]
+default = ["zhenfa-router", "julia", "modelica"]
 zhenfa-router = ["dep:axum"]
 julia = []
 modelica = []
+tree-sitter = ["modelica", "xiuxian-ast/modelica"]
 performance = ["xiuxian-testing/performance"]
 performance-stress = ["performance"]
 

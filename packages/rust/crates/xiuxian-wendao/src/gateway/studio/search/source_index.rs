@@ -25,7 +25,7 @@ pub(super) fn build_ast_index(
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
-) -> Result<Vec<AstSearchHit>, String> {
+) -> Vec<AstSearchHit> {
     let mut hits = Vec::new();
     let mut seen = HashSet::new();
 
@@ -34,10 +34,7 @@ pub(super) fn build_ast_index(
             .into_iter()
             .filter_entry(|entry| !should_skip_entry(entry))
         {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+            let Ok(entry) = entry else { continue };
             if !entry.file_type().is_file() {
                 continue;
             }
@@ -120,14 +117,14 @@ pub(super) fn build_ast_index(
         }
     }
 
-    Ok(hits)
+    hits
 }
 
 pub(super) fn build_symbol_index(
     project_root: &Path,
     config_root: &Path,
     projects: &[UiProjectConfig],
-) -> Result<UnifiedSymbolIndex, String> {
+) -> UnifiedSymbolIndex {
     let mut index = UnifiedSymbolIndex::new();
 
     // 1. Scan regular project roots
@@ -136,10 +133,7 @@ pub(super) fn build_symbol_index(
             .into_iter()
             .filter_entry(|entry| !should_skip_entry(entry))
         {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+            let Ok(entry) = entry else { continue };
             if !entry.file_type().is_file() {
                 continue;
             }
@@ -164,7 +158,7 @@ pub(super) fn build_symbol_index(
         }
     }
 
-    Ok(index)
+    index
 }
 
 pub(super) fn build_reference_hits(
@@ -192,10 +186,7 @@ pub(super) fn build_reference_hits(
             .into_iter()
             .filter_entry(|entry| !should_skip_entry(entry))
         {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+            let Ok(entry) = entry else { continue };
             if !entry.file_type().is_file() {
                 continue;
             }

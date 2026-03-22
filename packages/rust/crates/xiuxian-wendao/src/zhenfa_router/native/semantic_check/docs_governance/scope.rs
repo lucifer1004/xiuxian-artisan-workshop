@@ -100,20 +100,20 @@ fn path_scope_matches(scope: &str, target: &Path) -> bool {
 
 fn path_scope_candidates(scope: &str) -> Vec<PathBuf> {
     let mut candidates = vec![PathBuf::from(scope)];
-    if let Ok(canonical) = Path::new(scope).canonicalize() {
-        if !candidates.iter().any(|candidate| candidate == &canonical) {
-            candidates.push(canonical);
-        }
+    if let Ok(canonical) = Path::new(scope).canonicalize()
+        && !candidates.iter().any(|candidate| candidate == &canonical)
+    {
+        candidates.push(canonical);
     }
     candidates
 }
 
 fn path_match_candidates(path: &Path) -> Vec<PathBuf> {
     let mut candidates = vec![path.to_path_buf()];
-    if let Ok(canonical) = path.canonicalize() {
-        if !candidates.iter().any(|candidate| candidate == &canonical) {
-            candidates.push(canonical);
-        }
+    if let Ok(canonical) = path.canonicalize()
+        && !candidates.iter().any(|candidate| candidate == &canonical)
+    {
+        candidates.push(canonical);
     }
     candidates
 }

@@ -16,6 +16,7 @@ pub enum AuditResult {
 
 impl AuditResult {
     /// Returns the string representation of the audit result.
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Verified => "verified",
@@ -121,7 +122,12 @@ mod tests {
         }];
 
         let results = audit_symbols(&symbols, &docs, &relations);
-        assert_eq!(results.get("sym1").unwrap(), "verified");
+        assert_eq!(
+            results
+                .get("sym1")
+                .unwrap_or_else(|| panic!("sym1 audit result should be present")),
+            "verified"
+        );
     }
 
     #[test]
@@ -158,6 +164,11 @@ mod tests {
         }];
 
         let results = audit_symbols(&symbols, &docs, &relations);
-        assert_eq!(results.get("sym1").unwrap(), "unverified");
+        assert_eq!(
+            results
+                .get("sym1")
+                .unwrap_or_else(|| panic!("sym1 audit result should be present")),
+            "unverified"
+        );
     }
 }

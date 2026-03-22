@@ -394,7 +394,9 @@ fn test_generate_surgical_fixes_supports_missing_package_docs_index_relation_lin
     file_contents.insert(doc_path.clone(), file_content.clone());
 
     let relation_value = "[[01_core/101_demo_core_boundary]]";
-    let value_start = file_content.find(relation_value).expect("find links value");
+    let value_start = file_content
+        .find(relation_value)
+        .unwrap_or_else(|| panic!("find links value"));
     let value_end = value_start + relation_value.len();
 
     let issues = vec![SemanticIssue {
@@ -436,7 +438,9 @@ fn test_generate_surgical_fixes_supports_missing_package_docs_index_relations_bl
     let mut file_contents = std::collections::HashMap::new();
     file_contents.insert(doc_path.clone(), file_content.clone());
 
-    let insert_offset = file_content.find("---").expect("find footer separator");
+    let insert_offset = file_content
+        .find("---")
+        .unwrap_or_else(|| panic!("find footer separator"));
     let issues = vec![SemanticIssue {
         severity: "warning".to_string(),
         issue_type: MISSING_PACKAGE_DOCS_INDEX_RELATIONS_BLOCK_ISSUE_TYPE.to_string(),
@@ -627,7 +631,9 @@ fn test_generate_surgical_fixes_supports_stale_package_docs_index_relation_link(
     file_contents.insert(doc_path.clone(), file_content.clone());
 
     let relation_value = "[[01_core/101_demo_core_boundary]], [[01_core/999_stale]]";
-    let value_start = file_content.find(relation_value).expect("find links value");
+    let value_start = file_content
+        .find(relation_value)
+        .unwrap_or_else(|| panic!("find links value"));
     let value_end = value_start + relation_value.len();
 
     let issues = vec![SemanticIssue {

@@ -18,6 +18,7 @@ use xiuxian_wendao_modelica::register_into;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn modelica_plugin_supports_registry_aware_repo_queries() -> TestResult {
     let temp = tempfile::tempdir()?;
     let repo_dir = create_modelica_repo(temp.path())?;
@@ -151,6 +152,7 @@ plugins = ["modelica"]
     Ok(config_path)
 }
 
+#[allow(clippy::too_many_lines)]
 fn create_modelica_repo(base: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let repo_dir = base.join("demolib");
     fs::create_dir_all(repo_dir.join("Controllers").join("Examples"))?;

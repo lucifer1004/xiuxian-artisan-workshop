@@ -9,10 +9,8 @@ use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedPageSearchQuery, build_repo_projected_page_search,
 };
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
-
 #[test]
-fn projected_page_search_matches_reference_pages() -> TestResult {
+fn projected_page_search_matches_reference_pages() {
     let analysis = sample_projection_analysis("projection-sample");
     let result = build_repo_projected_page_search(
         &RepoProjectedPageSearchQuery {
@@ -25,5 +23,4 @@ fn projected_page_search_matches_reference_pages() -> TestResult {
     );
 
     assert_repo_json_snapshot("repo_projected_page_search_result", json!(result));
-    Ok(())
 }

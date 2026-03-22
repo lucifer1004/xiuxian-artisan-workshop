@@ -34,7 +34,7 @@ impl From<&RegisteredRepository> for RepositoryRecord {
             path: reg
                 .path
                 .as_ref()
-                .map_or_else(|| String::new(), |p| p.to_string_lossy().to_string()),
+                .map_or_else(String::new, |p| p.to_string_lossy().to_string()),
             url: reg.url.clone(),
             ..Self::default()
         }

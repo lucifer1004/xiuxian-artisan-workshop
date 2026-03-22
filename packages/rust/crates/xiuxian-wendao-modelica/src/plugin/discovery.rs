@@ -149,9 +149,8 @@ pub(crate) fn collect_symbol_records(
         if !path.is_file() || path.extension().and_then(std::ffi::OsStr::to_str) != Some("mo") {
             continue;
         }
-        let relative = match relative_path(repository_root, &path) {
-            Some(relative) => relative,
-            None => continue,
+        let Some(relative) = relative_path(repository_root, &path) else {
+            continue;
         };
         if repository_surface(relative.as_str()) != RepositorySurface::Api {
             continue;
@@ -219,9 +218,8 @@ pub(crate) fn collect_import_records(
         if !path.is_file() || path.extension().and_then(std::ffi::OsStr::to_str) != Some("mo") {
             continue;
         }
-        let relative = match relative_path(repository_root, &path) {
-            Some(relative) => relative,
-            None => continue,
+        let Some(relative) = relative_path(repository_root, &path) else {
+            continue;
         };
         if repository_surface(relative.as_str()) == RepositorySurface::Support {
             continue;
@@ -231,10 +229,10 @@ pub(crate) fn collect_import_records(
         else {
             continue;
         };
-        let source_module_id = modules
-            .get(module_qualified_name.as_str())
-            .map(|module| module.module_id.clone())
-            .unwrap_or_else(|| module_id(repo_id, module_qualified_name.as_str()));
+        let source_module_id = modules.get(module_qualified_name.as_str()).map_or_else(
+            || module_id(repo_id, module_qualified_name.as_str()),
+            |module| module.module_id.clone(),
+        );
 
         let contents =
             fs::read_to_string(&path).map_err(|error| RepoIntelligenceError::AnalysisFailed {
@@ -298,7 +296,7 @@ pub(crate) fn collect_example_records(
     repo_id: &str,
     repository_root: &Path,
     package_orders: &BTreeMap<String, Vec<String>>,
-) -> Result<Vec<ExampleRecord>, RepoIntelligenceError> {
+) -> Vec<ExampleRecord> {
     let mut examples = Vec::new();
     for path in repository_file_paths(repository_root) {
         if !path.is_file() || path.extension().and_then(std::ffi::OsStr::to_str) != Some("mo") {
@@ -332,18 +330,15 @@ pub(crate) fn collect_example_records(
             .then_with(|| left.title.cmp(&right.title))
             .then_with(|| left.path.cmp(&right.path))
     });
-    Ok(examples)
+    examples
 }
 
 fn repository_surface(relative_path: &str) -> RepositorySurface {
     let components = path_components(relative_path);
-    if components
-        .iter()
-        .any(|component| *component == "UsersGuide")
-    {
+    if components.contains(&"UsersGuide") {
         return RepositorySurface::Documentation;
     }
-    if components.iter().any(|component| *component == "Internal") {
+    if components.contains(&"Internal") {
         return RepositorySurface::Support;
     }
     if let Some(examples_index) = components
@@ -381,7 +376,7 @@ fn users_guide_doc_format(relative_path: &str, is_annotation: bool) -> String {
         .file_stem()
         .and_then(std::ffi::OsStr::to_str)
         .unwrap_or_default();
-    let base = if components.iter().any(|component| *component == "Tutorial") {
+    let base = if components.contains(&"Tutorial") {
         "modelica_users_guide_tutorial"
     } else if file_stem.eq_ignore_ascii_case("Conventions") {
         "modelica_users_guide_conventions"
@@ -393,20 +388,12 @@ fn users_guide_doc_format(relative_path: &str, is_annotation: bool) -> String {
         "modelica_users_guide_revision_history"
     } else if file_stem.eq_ignore_ascii_case("VersionManagement") {
         "modelica_users_guide_version_management"
-    } else if components.iter().any(|component| *component == "Overview")
-        || file_stem.eq_ignore_ascii_case("Overview")
-    {
+    } else if components.contains(&"Overview") || file_stem.eq_ignore_ascii_case("Overview") {
         "modelica_users_guide_overview"
-    } else if components
-        .iter()
-        .any(|component| *component == "ReleaseNotes")
-        || file_stem.eq_ignore_ascii_case("ReleaseNotes")
+    } else if components.contains(&"ReleaseNotes") || file_stem.eq_ignore_ascii_case("ReleaseNotes")
     {
         "modelica_users_guide_release_notes"
-    } else if components
-        .iter()
-        .any(|component| *component == "References")
-        || matches!(file_stem, "References" | "Literature")
+    } else if components.contains(&"References") || matches!(file_stem, "References" | "Literature")
     {
         "modelica_users_guide_reference"
     } else if file_stem.eq_ignore_ascii_case("Contact") {
@@ -481,8 +468,7 @@ pub(crate) fn collect_doc_records(
         let is_readme = path
             .file_name()
             .and_then(std::ffi::OsStr::to_str)
-            .map(|name| name.to_ascii_lowercase().starts_with("readme"))
-            .unwrap_or(false);
+            .is_some_and(|name| name.to_ascii_lowercase().starts_with("readme"));
         let surface = repository_surface(relative.as_str());
         let is_users_guide_doc =
             surface == RepositorySurface::Documentation && is_supported_users_guide_doc_path(&path);
@@ -526,7 +512,7 @@ pub(crate) fn collect_doc_records(
         let Some(contents) = modelica_contents.as_deref() else {
             continue;
         };
-        if !contains_documentation_annotation(&contents) {
+        if !contains_documentation_annotation(contents) {
             continue;
         }
         let target_ids = doc_targets_for_annotation_doc(
@@ -861,7 +847,7 @@ fn repository_file_paths(repository_root: &Path) -> Vec<PathBuf> {
         .into_iter()
         .filter_entry(|entry| !should_skip_walk_entry(entry))
         .filter_map(Result::ok)
-        .map(|entry| entry.into_path())
+        .map(walkdir::DirEntry::into_path)
         .filter(|path| path.is_file())
         .collect::<Vec<_>>();
     files.sort();
@@ -996,6 +982,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn infers_users_guide_doc_formats() {
         let payload = json!([
             {

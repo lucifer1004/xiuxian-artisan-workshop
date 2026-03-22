@@ -33,6 +33,10 @@ pub struct CodeAstAnalysisQuery {
 }
 
 /// Analyzes markdown file structure.
+///
+/// # Errors
+///
+/// Returns an error when `path` is missing or when markdown analysis fails.
 pub async fn markdown(
     State(state): State<Arc<GatewayState>>,
     Query(query): Query<MarkdownAnalysisQuery>,
@@ -52,6 +56,11 @@ pub async fn markdown(
 }
 
 /// Analyzes code file AST and projections.
+///
+/// # Errors
+///
+/// Returns an error when `repo` or `path` is missing, when repository analysis
+/// fails, or when the background analysis task panics.
 pub async fn code_ast(
     State(state): State<Arc<GatewayState>>,
     Query(query): Query<CodeAstAnalysisQuery>,

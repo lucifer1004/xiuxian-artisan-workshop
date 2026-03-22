@@ -224,16 +224,16 @@ pub fn collect_index_body_links(lines: &[LineSlice<'_>]) -> Vec<String> {
         .position(|line| line.trimmed == ":RELATIONS:")
         .unwrap_or(lines.len());
 
-    let mut links = Vec::new();
+    let mut body_links = Vec::new();
     for line in &lines[..relations_start] {
         if !line.trimmed.starts_with("- ") {
             continue;
         }
         for link in extract_wikilinks(line.without_newline) {
-            if !links.iter().any(|existing| existing == &link) {
-                links.push(link);
+            if !body_links.iter().any(|existing| existing == &link) {
+                body_links.push(link);
             }
         }
     }
-    links
+    body_links
 }

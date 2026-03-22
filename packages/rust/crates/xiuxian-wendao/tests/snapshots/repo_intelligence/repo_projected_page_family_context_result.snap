@@ -1,17 +1,25 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
+assertion_line: 32
 expression: value
 ---
 {
   "center_page": {
+    "doc_id": "",
     "doc_ids": [],
     "example_ids": [
       "repo:projection-sample:example:examples/basic.jl"
     ],
     "format_hints": [],
+    "keywords": [
+      "",
+      "basic",
+      "examples/basic.jl"
+    ],
     "kind": "how_to",
     "module_ids": [],
     "page_id": "repo:projection-sample:projection:howto:example:repo:projection-sample:example:examples/basic.jl",
+    "path": "examples/basic.jl",
     "paths": [
       "examples/basic.jl"
     ],

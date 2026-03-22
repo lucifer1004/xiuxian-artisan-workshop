@@ -74,8 +74,7 @@ fn remote_namespace_segments(remote_url: &str) -> Option<Vec<String>> {
 
     let host = remote
         .rsplit_once('@')
-        .map(|(_, host)| host)
-        .unwrap_or(remote)
+        .map_or(remote, |(_, host)| host)
         .trim();
     if host.is_empty() {
         return None;
@@ -105,12 +104,11 @@ fn sanitize_namespace_segment(segment: &str) -> String {
 }
 
 fn trim_git_suffix(segments: &mut [String]) {
-    if let Some(last) = segments.last_mut() {
-        if let Some(stripped) = last.strip_suffix(".git") {
-            if !stripped.is_empty() {
-                *last = stripped.to_string();
-            }
-        }
+    if let Some(last) = segments.last_mut()
+        && let Some(stripped) = last.strip_suffix(".git")
+        && !stripped.is_empty()
+    {
+        *last = stripped.to_string();
     }
 }
 

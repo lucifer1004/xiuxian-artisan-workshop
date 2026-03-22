@@ -622,6 +622,7 @@ pub trait AuditBridge: Send + std::fmt::Debug {
 pub struct DefaultAuditBridge;
 
 impl AuditBridge for DefaultAuditBridge {
+    #[allow(clippy::too_many_lines)]
     fn generate_fixes(&self, issues: &[SemanticIssue]) -> Vec<BatchFix> {
         issues
             .iter()
@@ -766,6 +767,7 @@ pub fn generate_batch_fixes(issues: &[SemanticIssue]) -> Vec<BatchFix> {
 ///
 /// A list of surgical `BatchFix` operations with byte precision
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn generate_surgical_fixes<S: BuildHasher>(
     issues: &[SemanticIssue],
     file_contents: &HashMap<String, String, S>,

@@ -10,6 +10,11 @@ use crate::analyzers::config::RegisteredRepository;
 use crate::analyzers::errors::RepoIntelligenceError;
 
 /// Resolves the source for a registered repository.
+///
+/// # Errors
+///
+/// Returns an error when the repository has no usable local path or remote
+/// source, or when the selected source cannot be resolved.
 pub fn resolve_repository_source(
     repository: &RegisteredRepository,
     cwd: &Path,

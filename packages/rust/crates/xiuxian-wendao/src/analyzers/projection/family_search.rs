@@ -8,6 +8,7 @@ use crate::analyzers::query::{
 };
 
 /// Build repo projected-page family search hits from scored projected pages.
+#[must_use]
 pub fn build_repo_projected_page_family_search(
     query: &RepoProjectedPageFamilySearchQuery,
     analysis: &RepositoryAnalysisOutput,
@@ -32,7 +33,7 @@ pub fn build_repo_projected_page_family_search(
         hits: matches
             .into_iter()
             .take(limit)
-            .map(|(_, page)| {
+            .filter_map(|(_, page)| {
                 let context = build_projected_page_family_context(
                     &crate::analyzers::query::RepoProjectedPageFamilyContextQuery {
                         repo_id: query.repo_id.clone(),
@@ -41,12 +42,12 @@ pub fn build_repo_projected_page_family_search(
                     },
                     analysis,
                 )
-                .expect("projected page family context build");
+                .ok()?;
 
-                ProjectedPageFamilySearchHit {
+                Some(ProjectedPageFamilySearchHit {
                     center_page: page,
                     families: context.families,
-                }
+                })
             })
             .collect(),
     }

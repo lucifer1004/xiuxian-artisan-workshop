@@ -1,5 +1,6 @@
 ---
 source: packages/rust/crates/xiuxian-wendao-modelica/src/plugin/relations.rs
+assertion_line: 405
 expression: payload
 ---
 [

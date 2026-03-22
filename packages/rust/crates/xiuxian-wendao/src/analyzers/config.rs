@@ -50,6 +50,7 @@ pub enum RepositoryRef {
 
 impl RepositoryRef {
     /// Returns the string representation of the reference.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Branch(s) | Self::Tag(s) | Self::Commit(s) => s.as_str(),
@@ -114,8 +115,7 @@ impl RepositoryPluginConfig {
     #[must_use]
     pub fn id(&self) -> &str {
         match self {
-            Self::Id(id) => id.as_str(),
-            Self::Config { id, .. } => id.as_str(),
+            Self::Id(id) | Self::Config { id, .. } => id.as_str(),
         }
     }
 }
@@ -129,9 +129,7 @@ pub fn load_repo_intelligence_config(
     config_path: Option<&Path>,
     cwd: &Path,
 ) -> Result<RepoIntelligenceConfig, RepoIntelligenceError> {
-    let config_path = config_path
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| cwd.join("wendao.toml"));
+    let config_path = config_path.map_or_else(|| cwd.join("wendao.toml"), Path::to_path_buf);
     let contents =
         fs::read_to_string(&config_path).map_err(|error| RepoIntelligenceError::ConfigLoad {
             message: format!("failed to read `{}`: {error}", config_path.display()),
@@ -143,8 +141,7 @@ pub fn load_repo_intelligence_config(
 
     let config_root = config_path
         .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| cwd.to_path_buf());
+        .map_or_else(|| cwd.to_path_buf(), Path::to_path_buf);
 
     let repos = parsed
         .link_graph
@@ -170,9 +167,9 @@ pub fn load_repo_intelligence_config(
                 .map(PathBuf::from)
                 .map(|path| {
                     if path.is_absolute() {
-                        normalize_path(path)
+                        normalize_path(path.as_path())
                     } else {
-                        normalize_path(config_root.join(path))
+                        normalize_path(config_root.join(path).as_path())
                     }
                 });
             let url = project
@@ -219,7 +216,7 @@ fn parse_refresh_policy(value: Option<&str>) -> RepositoryRefreshPolicy {
     }
 }
 
-fn normalize_path(path: PathBuf) -> PathBuf {
+fn normalize_path(path: &Path) -> PathBuf {
     let mut normalized = PathBuf::new();
 
     for component in path.components() {

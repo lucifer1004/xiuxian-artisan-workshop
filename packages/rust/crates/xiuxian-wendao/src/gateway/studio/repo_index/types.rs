@@ -36,6 +36,9 @@ pub struct RepoIndexEntryStatus {
     /// Current lifecycle phase for the repository.
     pub phase: RepoIndexPhase,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Current queue position when the repository is still pending.
+    pub queue_position: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     /// Most recent indexing error when the phase is `Failed`.
     pub last_error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -54,6 +57,8 @@ pub struct RepoIndexEntryStatus {
 pub struct RepoIndexStatusResponse {
     /// Total number of repositories in the response.
     pub total: usize,
+    /// Number of repositories currently active across all phases.
+    pub active: usize,
     /// Number of repositories currently queued.
     pub queued: usize,
     /// Number of repositories currently being validated.
@@ -68,9 +73,16 @@ pub struct RepoIndexStatusResponse {
     pub unsupported: usize,
     /// Number of repositories whose latest indexing attempt failed.
     pub failed: usize,
+    /// Current adaptive target concurrency for repo indexing.
+    pub target_concurrency: usize,
+    /// Maximum concurrency ceiling derived from host parallelism.
+    pub max_concurrency: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     /// Repository currently being processed, when known.
     pub current_repo_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Active repositories currently in progress.
+    pub active_repo_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     /// Per-repository status rows included in the response.
     pub repos: Vec<RepoIndexEntryStatus>,

@@ -1,8 +1,10 @@
+//! Criterion microbenchmarks for xiuxian-wendao performance trend analysis.
+
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, Throughput, black_box};
 use tempfile::{TempDir, tempdir};
 use xiuxian_wendao::{
     LinkGraphHit, LinkGraphIndex, LinkGraphPprSubgraphMode, LinkGraphRelatedPprOptions,
@@ -103,9 +105,10 @@ fn bench_related_ppr(c: &mut Criterion) {
                 RELATED_LIMIT,
                 Some(&ppr),
             );
-            if rows.is_empty() || diagnostics.is_none() {
-                panic!("benchmark fixture produced empty or diagnostics-free result");
-            }
+            assert!(
+                !(rows.is_empty() || diagnostics.is_none()),
+                "benchmark fixture produced empty or diagnostics-free result"
+            );
             black_box(rows.len())
         });
     });
@@ -139,5 +142,9 @@ fn bench_narration_fusion(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(wendao_perf, bench_related_ppr, bench_narration_fusion);
-criterion_main!(wendao_perf);
+fn main() {
+    let mut criterion = Criterion::default().configure_from_args();
+    bench_related_ppr(&mut criterion);
+    bench_narration_fusion(&mut criterion);
+    criterion.final_summary();
+}

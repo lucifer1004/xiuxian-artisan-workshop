@@ -223,6 +223,11 @@ impl TopologyIndex {
     }
 
     /// Fuzzy path matching with explicit fuzzy options.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the lexical matcher unexpectedly returns an error. The current
+    /// in-memory matcher implementation is designed to be infallible.
     #[must_use]
     pub fn fuzzy_resolve_with_options(
         &self,
@@ -295,8 +300,9 @@ impl TopologyIndex {
                 .values()
                 .flat_map(|entries| entries.iter().cloned())
                 .collect::<Vec<_>>();
-            let matcher = LexicalMatcher::new(candidates.as_slice(), path_entry_title, options);
-            let fuzzy_matches = matcher
+            let lexical_matcher =
+                LexicalMatcher::new(candidates.as_slice(), path_entry_title, options);
+            let fuzzy_matches = lexical_matcher
                 .search(query, max_results)
                 .expect("lexical matcher is infallible");
             for fuzzy_match in fuzzy_matches {

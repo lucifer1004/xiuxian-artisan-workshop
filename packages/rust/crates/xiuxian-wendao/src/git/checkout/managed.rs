@@ -10,6 +10,7 @@ use super::{
 use crate::analyzers::config::{RegisteredRepository, RepositoryRefreshPolicy};
 use crate::analyzers::errors::RepoIntelligenceError;
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn resolve_managed_checkout(
     repository: &RegisteredRepository,
     mode: RepositorySyncMode,

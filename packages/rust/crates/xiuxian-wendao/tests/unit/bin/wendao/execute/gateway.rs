@@ -27,11 +27,11 @@ fn remove_temp_gateway_config(path: &Path) {
 }
 
 fn app_state(signal_tx: Option<tokio::sync::mpsc::UnboundedSender<ZhenfaSignal>>) -> Arc<AppState> {
-    Arc::new(AppState::new(
-        None,
-        signal_tx,
-        build_plugin_registry().expect("bootstrap builtin registry"),
-    ))
+    Arc::new(AppState::new(None, signal_tx, bootstrap_builtin_registry()))
+}
+
+fn bootstrap_builtin_registry() -> Arc<xiuxian_wendao::analyzers::PluginRegistry> {
+    build_plugin_registry().unwrap_or_else(|error| panic!("bootstrap builtin registry: {error}"))
 }
 
 #[test]
@@ -161,8 +161,9 @@ webhook_enabled = false
 
 #[test]
 fn test_build_plugin_registry_bootstraps_builtin_plugins() {
-    let registry = build_plugin_registry().expect("bootstrap builtin registry");
+    let registry = bootstrap_builtin_registry();
     assert!(registry.plugin_ids().contains(&"julia"));
+    assert!(registry.plugin_ids().contains(&"modelica"));
 }
 
 #[tokio::test]

@@ -15,6 +15,8 @@ pub mod router;
 #[cfg(feature = "zhenfa-router")]
 mod search;
 #[cfg(feature = "zhenfa-router")]
+pub mod symbol_index;
+#[cfg(feature = "zhenfa-router")]
 mod vfs;
 
 #[cfg(feature = "zhenfa-router")]

@@ -29,7 +29,7 @@ fn projected_page_family_context_lookup_groups_related_pages_by_family() -> Test
         .pages
         .iter()
         .find(|page| page.kind == ProjectionPageKind::HowTo)
-        .expect("expected a projected how-to page");
+        .unwrap_or_else(|| panic!("expected a projected how-to page"));
 
     let result = repo_projected_page_family_context_from_config(
         &RepoProjectedPageFamilyContextQuery {

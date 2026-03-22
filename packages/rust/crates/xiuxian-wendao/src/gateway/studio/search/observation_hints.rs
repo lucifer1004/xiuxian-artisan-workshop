@@ -75,10 +75,10 @@ fn hints_from_analysis(
         if seen_languages.insert(observation.language.clone()) {
             languages.push(observation.language);
         }
-        if let Some(scope) = observation.scope {
-            if seen_scopes.insert(scope.clone()) {
-                scope_patterns.push(scope);
-            }
+        if let Some(scope) = observation.scope
+            && seen_scopes.insert(scope.clone())
+        {
+            scope_patterns.push(scope);
         }
     }
 

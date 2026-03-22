@@ -1,5 +1,6 @@
 ---
 source: packages/rust/crates/xiuxian-wendao-modelica/src/plugin/parsing.rs
+assertion_line: 246
 expression: payload
 ---
 [

@@ -8,11 +8,20 @@ use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::gateway::studio::types::UiConfig;
 
 /// Gets the current UI configuration.
+///
+/// # Errors
+///
+/// This handler currently does not produce handler-local errors.
 pub async fn get(State(state): State<Arc<GatewayState>>) -> Result<Json<UiConfig>, StudioApiError> {
     Ok(Json(state.studio.ui_config()))
 }
 
 /// Sets and persists the UI configuration.
+///
+/// # Errors
+///
+/// Returns an error when persisting the updated configuration into
+/// `wendao.toml` fails.
 pub async fn set(
     State(state): State<Arc<GatewayState>>,
     Json(config_value): Json<UiConfig>,

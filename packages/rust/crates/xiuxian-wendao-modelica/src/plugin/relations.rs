@@ -24,19 +24,19 @@ pub(crate) fn collect_relation_records(
         if module.qualified_name == root_package_name {
             continue;
         }
-        if let Some((parent, _)) = module.qualified_name.rsplit_once('.') {
-            if let Some(parent_module) = module_lookup.get(parent) {
-                push_relation(
-                    &mut relations,
-                    &mut relation_keys,
-                    RelationRecord {
-                        repo_id: repo_id.to_string(),
-                        source_id: parent_module.module_id.clone(),
-                        target_id: module.module_id.clone(),
-                        kind: RelationKind::Contains,
-                    },
-                );
-            }
+        if let Some((parent, _)) = module.qualified_name.rsplit_once('.')
+            && let Some(parent_module) = module_lookup.get(parent)
+        {
+            push_relation(
+                &mut relations,
+                &mut relation_keys,
+                RelationRecord {
+                    repo_id: repo_id.to_string(),
+                    source_id: parent_module.module_id.clone(),
+                    target_id: module.module_id.clone(),
+                    kind: RelationKind::Contains,
+                },
+            );
         }
     }
 
@@ -135,8 +135,7 @@ pub(crate) fn doc_targets_for_file_doc(
     let is_readme = Path::new(relative_path)
         .file_name()
         .and_then(std::ffi::OsStr::to_str)
-        .map(|name| name.to_ascii_lowercase().starts_with("readme"))
-        .unwrap_or(false);
+        .is_some_and(|name| name.to_ascii_lowercase().starts_with("readme"));
     if is_readme {
         let mut target_ids = BTreeSet::new();
         if let Some(root_module_id) = root_module_id {
@@ -193,22 +192,19 @@ pub(crate) fn doc_targets_for_annotation_doc(
     let file_stem = Path::new(relative_path)
         .file_stem()
         .and_then(std::ffi::OsStr::to_str);
-    if let Some(file_stem) = file_stem {
-        if let Some(symbol) = symbols
+    if let Some(file_stem) = file_stem
+        && let Some(symbol) = symbols
             .iter()
             .find(|symbol| symbol.path == relative_path && symbol.name == file_stem)
-        {
-            target_ids.insert(symbol.symbol_id.clone());
-        }
+    {
+        target_ids.insert(symbol.symbol_id.clone());
     }
-    if target_ids.is_empty() {
-        if let Some(module_qualified_name) =
+    if target_ids.is_empty()
+        && let Some(module_qualified_name) =
             containing_module_name(root_package_name, relative_path)
-        {
-            if let Some(module) = module_lookup.get(module_qualified_name.as_str()) {
-                target_ids.insert(module.module_id.clone());
-            }
-        }
+        && let Some(module) = module_lookup.get(module_qualified_name.as_str())
+    {
+        target_ids.insert(module.module_id.clone());
     }
     target_ids.into_iter().collect()
 }
@@ -235,8 +231,7 @@ pub(crate) fn annotation_doc_title(relative_path: &str, symbols: &[SymbolRecord]
     let title = symbols
         .iter()
         .find(|symbol| symbol.path == source_path && symbol.name == file_stem)
-        .map(|symbol| symbol.name.as_str())
-        .unwrap_or(file_stem);
+        .map_or(file_stem, |symbol| symbol.name.as_str());
     format!("{title} documentation")
 }
 
@@ -286,18 +281,16 @@ fn users_guide_target_ids(
             users_guide_module_name.as_str(),
         );
     }
-    if target_ids.is_empty() {
-        if let Some(root_module_id) = root_module_id {
-            target_ids.insert(root_module_id.to_string());
-        }
+    if target_ids.is_empty()
+        && let Some(root_module_id) = root_module_id
+    {
+        target_ids.insert(root_module_id.to_string());
     }
     target_ids
 }
 
 fn is_users_guide_path(relative_path: &str) -> bool {
-    path_components(relative_path)
-        .iter()
-        .any(|component| *component == "UsersGuide")
+    path_components(relative_path).contains(&"UsersGuide")
 }
 
 fn users_guide_hierarchy_module_names(relative_path: &str, root_package_name: &str) -> Vec<String> {

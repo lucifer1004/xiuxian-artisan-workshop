@@ -9,10 +9,8 @@ use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedPageFamilySearchQuery, build_repo_projected_page_family_search,
 };
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
-
 #[test]
-fn projected_page_family_search_matches_reference_family_clusters() -> TestResult {
+fn projected_page_family_search_matches_reference_family_clusters() {
     let analysis = sample_projection_analysis("projection-sample");
     let result = build_repo_projected_page_family_search(
         &RepoProjectedPageFamilySearchQuery {
@@ -26,5 +24,4 @@ fn projected_page_family_search_matches_reference_family_clusters() -> TestResul
     );
 
     assert_repo_json_snapshot("repo_projected_page_family_search_result", json!(result));
-    Ok(())
 }

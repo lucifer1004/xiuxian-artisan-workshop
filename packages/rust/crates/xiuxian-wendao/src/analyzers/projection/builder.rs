@@ -24,6 +24,7 @@ struct SourceAssociations {
 
 /// Build deterministic projection inputs from Stage-1 Repo Intelligence output.
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn build_projection_inputs(analysis: &RepositoryAnalysisOutput) -> ProjectionInputBundle {
     let repo_id = projection_repo_id(analysis);
     let symbol_ids_by_module = symbol_ids_by_module(analysis);

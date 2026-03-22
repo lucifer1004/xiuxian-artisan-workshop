@@ -1,0 +1,186 @@
+use std::sync::Arc;
+
+use axum::{
+    Router,
+    routing::{get, post},
+};
+
+use crate::gateway::openapi::paths as openapi_paths;
+use crate::gateway::studio::search;
+
+use super::handlers;
+use super::state::GatewayState;
+
+/// Create the Studio API router with all endpoints.
+#[allow(clippy::too_many_lines)]
+pub fn studio_routes() -> Router<Arc<GatewayState>> {
+    Router::new()
+        .route(
+            openapi_paths::API_VFS_ROOT_AXUM_PATH,
+            get(handlers::vfs_root_entries),
+        )
+        .route(
+            openapi_paths::API_VFS_SCAN_AXUM_PATH,
+            get(handlers::vfs_scan),
+        )
+        .route(openapi_paths::API_VFS_CAT_AXUM_PATH, get(handlers::vfs_cat))
+        .route("/api/vfs/resolve", get(handlers::vfs_resolve))
+        .route(
+            openapi_paths::API_VFS_ENTRY_AXUM_PATH,
+            get(handlers::vfs_entry),
+        )
+        .route(
+            openapi_paths::API_NEIGHBORS_AXUM_PATH,
+            get(handlers::node_neighbors),
+        )
+        .route(
+            openapi_paths::API_GRAPH_NEIGHBORS_AXUM_PATH,
+            get(handlers::graph_neighbors),
+        )
+        .route(
+            openapi_paths::API_TOPOLOGY_3D_AXUM_PATH,
+            get(handlers::topology_3d),
+        )
+        .route(
+            openapi_paths::API_SEARCH_AXUM_PATH,
+            get(search::search_knowledge),
+        )
+        .route(
+            openapi_paths::API_SEARCH_INTENT_AXUM_PATH,
+            get(search::search_intent),
+        )
+        .route(
+            openapi_paths::API_SEARCH_ATTACHMENTS_AXUM_PATH,
+            get(search::search_attachments),
+        )
+        .route(
+            openapi_paths::API_SEARCH_AST_AXUM_PATH,
+            get(search::search_ast),
+        )
+        .route(
+            openapi_paths::API_SEARCH_DEFINITION_AXUM_PATH,
+            get(search::search_definition),
+        )
+        .route(
+            openapi_paths::API_SEARCH_REFERENCES_AXUM_PATH,
+            get(search::search_references),
+        )
+        .route(
+            openapi_paths::API_SEARCH_SYMBOLS_AXUM_PATH,
+            get(search::search_symbols),
+        )
+        .route(
+            openapi_paths::API_SEARCH_AUTOCOMPLETE_AXUM_PATH,
+            get(search::search_autocomplete),
+        )
+        .route(
+            openapi_paths::API_ANALYSIS_MARKDOWN_AXUM_PATH,
+            get(handlers::markdown),
+        )
+        .route(
+            openapi_paths::API_ANALYSIS_CODE_AST_AXUM_PATH,
+            get(handlers::code_ast),
+        )
+        .route(
+            openapi_paths::API_UI_CONFIG_AXUM_PATH,
+            get(handlers::get_ui_config).post(handlers::set_ui_config),
+        )
+        .route(
+            "/api/analysis/refine-doc",
+            post(handlers::refine_entity_doc),
+        )
+        .route(
+            openapi_paths::API_REPO_OVERVIEW_AXUM_PATH,
+            get(handlers::overview),
+        )
+        .route(
+            openapi_paths::API_REPO_MODULE_SEARCH_AXUM_PATH,
+            get(handlers::module_search),
+        )
+        .route(
+            openapi_paths::API_REPO_SYMBOL_SEARCH_AXUM_PATH,
+            get(handlers::symbol_search),
+        )
+        .route(
+            openapi_paths::API_REPO_EXAMPLE_SEARCH_AXUM_PATH,
+            get(handlers::example_search),
+        )
+        .route(
+            openapi_paths::API_REPO_DOC_COVERAGE_AXUM_PATH,
+            get(handlers::doc_coverage),
+        )
+        .route(
+            openapi_paths::API_REPO_INDEX_STATUS_AXUM_PATH,
+            get(handlers::repo_index_status),
+        )
+        .route(
+            openapi_paths::API_REPO_INDEX_AXUM_PATH,
+            post(handlers::repo_index),
+        )
+        .route(openapi_paths::API_REPO_SYNC_AXUM_PATH, get(handlers::sync))
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGES_AXUM_PATH,
+            get(handlers::projected_pages),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_AXUM_PATH,
+            get(handlers::projected_page),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_INDEX_NODE_AXUM_PATH,
+            get(handlers::repo::projected_page_index_node),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_RETRIEVAL_HIT_AXUM_PATH,
+            get(handlers::repo::projected_retrieval_hit),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_RETRIEVAL_CONTEXT_AXUM_PATH,
+            get(handlers::repo::projected_retrieval_context),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_FAMILY_CONTEXT_AXUM_PATH,
+            get(handlers::repo::projected_page_family_context),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_FAMILY_SEARCH_AXUM_PATH,
+            get(handlers::repo::projected_page_family_search),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_FAMILY_CLUSTER_AXUM_PATH,
+            get(handlers::repo::projected_page_family_cluster),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_NAVIGATION_AXUM_PATH,
+            get(handlers::repo::projected_page_navigation),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_NAVIGATION_SEARCH_AXUM_PATH,
+            get(handlers::repo::projected_page_navigation_search),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_INDEX_TREE_AXUM_PATH,
+            get(handlers::repo::projected_page_index_tree),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_INDEX_TREE_SEARCH_AXUM_PATH,
+            get(handlers::repo::projected_page_index_tree_search),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_SEARCH_AXUM_PATH,
+            get(handlers::repo::projected_page_search),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_RETRIEVAL_AXUM_PATH,
+            get(handlers::repo::projected_retrieval),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_PAGE_INDEX_TREES_AXUM_PATH,
+            get(handlers::repo::projected_page_index_trees),
+        )
+}
+
+/// Create the Studio API router with state already attached.
+pub fn studio_router(state: Arc<GatewayState>) -> Router {
+    studio_routes().with_state(state)
+}

@@ -83,6 +83,7 @@ pub fn collect_doc_governance_issues(doc_path: &str, content: &str) -> Vec<Seman
 }
 
 /// Collects workspace-wide doc governance issues.
+#[allow(clippy::too_many_lines)]
 pub fn collect_workspace_doc_governance_issues(
     root: &Path,
     scope: Option<&str>,
@@ -94,22 +95,22 @@ pub fn collect_workspace_doc_governance_issues(
 
     let mut issues = Vec::new();
     for entry in entries.flatten() {
-        let crate_dir = entry.path();
-        if !is_workspace_crate_dir(&crate_dir) {
+        let package_dir = entry.path();
+        if !is_workspace_crate_dir(&package_dir) {
             continue;
         }
 
-        let docs_dir = crate_dir.join("docs");
+        let docs_dir = package_dir.join("docs");
         let index_path = docs_dir.join("index.md");
 
-        let crate_name = crate_dir
+        let crate_name = package_dir
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown");
 
         // First check if docs directory exists
         if !docs_dir.is_dir() {
-            if scope_matches(scope, &crate_dir, &docs_dir, &index_path) {
+            if scope_matches(scope, &package_dir, &docs_dir, &index_path) {
                 issues.push(SemanticIssue {
                     severity: "warning".to_string(),
                     issue_type: MISSING_PACKAGE_DOCS_TREE_ISSUE_TYPE.to_string(),
@@ -134,7 +135,7 @@ pub fn collect_workspace_doc_governance_issues(
         for doc_entry in WalkDir::new(&docs_dir).into_iter().flatten() {
             let path = doc_entry.path();
             if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("md") {
-                if !scope_matches_doc(scope, &crate_dir, &docs_dir, path) {
+                if !scope_matches_doc(scope, &package_dir, &docs_dir, path) {
                     continue;
                 }
                 if let Ok(content) = fs::read_to_string(path) {
@@ -146,7 +147,7 @@ pub fn collect_workspace_doc_governance_issues(
             }
         }
 
-        if !scope_matches(scope, &crate_dir, &docs_dir, &index_path) {
+        if !scope_matches(scope, &package_dir, &docs_dir, &index_path) {
             continue;
         }
 
@@ -261,7 +262,7 @@ pub fn collect_workspace_doc_governance_issues(
             let section_dir = docs_dir.join(spec.section_name);
             let section_path = docs_dir.join(&spec.relative_path);
 
-            if !scope_matches_doc(scope, &crate_dir, &docs_dir, &section_path) {
+            if !scope_matches_doc(scope, &package_dir, &docs_dir, &section_path) {
                 continue;
             }
 
@@ -278,7 +279,7 @@ pub fn collect_workspace_doc_governance_issues(
                     location: None,
                     suggestion: Some(render_section_landing_page(
                         crate_name,
-                        &crate_dir,
+                        &package_dir,
                         &section_path.to_string_lossy(),
                         spec,
                     )),

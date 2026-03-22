@@ -7,19 +7,19 @@ expression: payload
   "markdown": [
     {
       "repo_id": "demo",
-      "page_id": "repo:demo:projection:explanation:doc:repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
-      "kind": "explanation",
-      "path": "explanation/version-4-1-0-5432deae8ef8.md",
-      "title": "Version 4.1.0",
-      "markdown": "# Version 4.1.0\n:PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: explanation\n:FORMATS: modelica_users_guide_release_notes_version\n:END:\n\n# Overview\n:ID: overview\n:PATHS: Controllers/Examples/Step.mo, Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0\n\nProjected explanation page for `Version 4.1.0`.\nFormat hints:\n- `modelica_users_guide_release_notes_version`\nSource paths:\n- `Controllers/Examples/Step.mo`\n- `Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0`\n\n## Anchors\n:ID: anchors\n:PATHS: Controllers/package.mo\n\nModules:\n- `Demo.Controllers` (Controllers/package.mo)\n\n## Sources\n:ID: sources\n:PATHS: Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0\n\nDocumentation:\n- `Version 4.1.0` (Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0)\n\n## Examples\n:ID: examples\n:PATHS: Controllers/Examples/Step.mo\n\nExamples:\n- `Step` (Controllers/Examples/Step.mo)\n"
-    },
-    {
-      "repo_id": "demo",
       "page_id": "repo:demo:projection:howto:example:repo:demo:example:Controllers/Examples/Step.mo",
       "kind": "how_to",
       "path": "howto/step-358f907cbd83.md",
       "title": "Step",
       "markdown": "# Step\n:PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: howto\n:FORMATS: modelica_users_guide_release_notes_version, modelica_users_guide_tutorial\n:END:\n\n# Overview\n:ID: overview\n:PATHS: Controllers/Examples/Step.mo, Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0, Controllers/UsersGuide/Tutorial/FirstSteps.mo\n\nProjected how-to page for `Step`.\nFormat hints:\n- `modelica_users_guide_release_notes_version`\n- `modelica_users_guide_tutorial`\nSource paths:\n- `Controllers/Examples/Step.mo`\n- `Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0`\n- `Controllers/UsersGuide/Tutorial/FirstSteps.mo`\n\n## Anchors\n:ID: anchors\n:PATHS: Controllers/package.mo\n\nModules:\n- `Demo.Controllers` (Controllers/package.mo)\n\n## Supporting Docs\n:ID: sources\n:PATHS: Controllers/UsersGuide/Tutorial/FirstSteps.mo, Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0\n\nDocumentation:\n- `First Steps` (Controllers/UsersGuide/Tutorial/FirstSteps.mo)\n- `Version 4.1.0` (Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0)\n\n## Examples\n:ID: examples\n:PATHS: Controllers/Examples/Step.mo\n\nExamples:\n- `Step` (Controllers/Examples/Step.mo)\n"
+    },
+    {
+      "repo_id": "demo",
+      "page_id": "repo:demo:projection:howto:doc:repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
+      "kind": "how_to",
+      "path": "howto/version-4-1-0-265743ade96c.md",
+      "title": "Version 4.1.0",
+      "markdown": "# Version 4.1.0\n:PROPERTIES:\n:TYPE: PROJECTED_PAGE\n:KIND: howto\n:FORMATS: modelica_users_guide_release_notes_version\n:END:\n\n# Overview\n:ID: overview\n:PATHS: Controllers/Examples/Step.mo, Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0\n\nProjected how-to page for `Version 4.1.0`.\nFormat hints:\n- `modelica_users_guide_release_notes_version`\nSource paths:\n- `Controllers/Examples/Step.mo`\n- `Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0`\n\n## Anchors\n:ID: anchors\n:PATHS: Controllers/package.mo\n\nModules:\n- `Demo.Controllers` (Controllers/package.mo)\n\n## Supporting Docs\n:ID: sources\n:PATHS: Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0\n\nDocumentation:\n- `Version 4.1.0` (Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0)\n\n## Examples\n:ID: examples\n:PATHS: Controllers/Examples/Step.mo\n\nExamples:\n- `Step` (Controllers/Examples/Step.mo)\n"
     },
     {
       "repo_id": "demo",
@@ -55,114 +55,6 @@ expression: payload
     }
   ],
   "parsed": [
-    {
-      "repo_id": "demo",
-      "page_id": "repo:demo:projection:explanation:doc:repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
-      "path": "explanation/version-4-1-0-5432deae8ef8.md",
-      "doc_id": "explanation/version-4-1-0-5432deae8ef8",
-      "title": "Version 4.1.0",
-      "sections": [
-        {
-          "heading_path": "Version 4.1.0",
-          "title": "Version 4.1.0",
-          "level": 1,
-          "line_range": [
-            1,
-            7
-          ],
-          "attributes": [
-            [
-              "FORMATS",
-              "modelica_users_guide_release_notes_version"
-            ],
-            [
-              "KIND",
-              "explanation"
-            ],
-            [
-              "TYPE",
-              "PROJECTED_PAGE"
-            ]
-          ]
-        },
-        {
-          "heading_path": "Overview",
-          "title": "Overview",
-          "level": 1,
-          "line_range": [
-            8,
-            18
-          ],
-          "attributes": [
-            [
-              "ID",
-              "overview"
-            ],
-            [
-              "PATHS",
-              "Controllers/Examples/Step.mo, Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-            ]
-          ]
-        },
-        {
-          "heading_path": "Overview / Anchors",
-          "title": "Anchors",
-          "level": 2,
-          "line_range": [
-            19,
-            25
-          ],
-          "attributes": [
-            [
-              "ID",
-              "anchors"
-            ],
-            [
-              "PATHS",
-              "Controllers/package.mo"
-            ]
-          ]
-        },
-        {
-          "heading_path": "Overview / Sources",
-          "title": "Sources",
-          "level": 2,
-          "line_range": [
-            26,
-            32
-          ],
-          "attributes": [
-            [
-              "ID",
-              "sources"
-            ],
-            [
-              "PATHS",
-              "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
-            ]
-          ]
-        },
-        {
-          "heading_path": "Overview / Examples",
-          "title": "Examples",
-          "level": 2,
-          "line_range": [
-            33,
-            38
-          ],
-          "attributes": [
-            [
-              "ID",
-              "examples"
-            ],
-            [
-              "PATHS",
-              "Controllers/Examples/Step.mo"
-            ]
-          ]
-        }
-      ]
-    },
     {
       "repo_id": "demo",
       "page_id": "repo:demo:projection:howto:example:repo:demo:example:Controllers/Examples/Step.mo",
@@ -257,6 +149,114 @@ expression: payload
           "line_range": [
             36,
             41
+          ],
+          "attributes": [
+            [
+              "ID",
+              "examples"
+            ],
+            [
+              "PATHS",
+              "Controllers/Examples/Step.mo"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "repo_id": "demo",
+      "page_id": "repo:demo:projection:howto:doc:repo:demo:doc:Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0",
+      "path": "howto/version-4-1-0-265743ade96c.md",
+      "doc_id": "howto/version-4-1-0-265743ade96c",
+      "title": "Version 4.1.0",
+      "sections": [
+        {
+          "heading_path": "Version 4.1.0",
+          "title": "Version 4.1.0",
+          "level": 1,
+          "line_range": [
+            1,
+            7
+          ],
+          "attributes": [
+            [
+              "FORMATS",
+              "modelica_users_guide_release_notes_version"
+            ],
+            [
+              "KIND",
+              "howto"
+            ],
+            [
+              "TYPE",
+              "PROJECTED_PAGE"
+            ]
+          ]
+        },
+        {
+          "heading_path": "Overview",
+          "title": "Overview",
+          "level": 1,
+          "line_range": [
+            8,
+            18
+          ],
+          "attributes": [
+            [
+              "ID",
+              "overview"
+            ],
+            [
+              "PATHS",
+              "Controllers/Examples/Step.mo, Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
+            ]
+          ]
+        },
+        {
+          "heading_path": "Overview / Anchors",
+          "title": "Anchors",
+          "level": 2,
+          "line_range": [
+            19,
+            25
+          ],
+          "attributes": [
+            [
+              "ID",
+              "anchors"
+            ],
+            [
+              "PATHS",
+              "Controllers/package.mo"
+            ]
+          ]
+        },
+        {
+          "heading_path": "Overview / Supporting Docs",
+          "title": "Supporting Docs",
+          "level": 2,
+          "line_range": [
+            26,
+            32
+          ],
+          "attributes": [
+            [
+              "ID",
+              "sources"
+            ],
+            [
+              "PATHS",
+              "Controllers/UsersGuide/ReleaseNotes.mo#section.Version_4_1_0"
+            ]
+          ]
+        },
+        {
+          "heading_path": "Overview / Examples",
+          "title": "Examples",
+          "level": 2,
+          "line_range": [
+            33,
+            38
           ],
           "attributes": [
             [

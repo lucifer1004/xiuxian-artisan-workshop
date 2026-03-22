@@ -77,7 +77,7 @@ pub(crate) fn scan_all_roots(state: &StudioState) -> VfsScanResult {
         entries,
         file_count: counters.files,
         dir_count: counters.dirs,
-        scan_duration_ms: start.elapsed().as_millis() as u64,
+        scan_duration_ms: elapsed_millis_u64(start),
     }
 }
 
@@ -127,7 +127,7 @@ pub(crate) fn list_root_entries(state: &StudioState) -> Vec<VfsEntry> {
                 .clone()
                 .or_else(|| root.project_name.clone())
                 .unwrap_or_else(|| root.request_root.clone()),
-            is_dir: metadata.as_ref().map_or(true, fs::Metadata::is_dir),
+            is_dir: metadata.as_ref().is_none_or(fs::Metadata::is_dir),
             size: metadata.as_ref().map_or(0, fs::Metadata::len),
             modified,
             content_type: None,
@@ -170,9 +170,9 @@ fn resolve_all_vfs_roots(state: &StudioState) -> Vec<VfsRoot> {
 
     for project in projects {
         let project_name = Some(project.name.clone());
-        let project_root = match resolve_path_like(&state.config_root, project.root.as_str()) {
-            Some(p) => p,
-            None => continue,
+        let Some(project_root) = resolve_path_like(&state.config_root, project.root.as_str())
+        else {
+            continue;
         };
 
         let file_filters = compile_project_filters(&project_root, &project.dirs);
@@ -236,6 +236,18 @@ fn compile_project_filters(root: &Path, dirs: &[String]) -> Vec<ProjectFileFilte
         root: root.to_path_buf(),
         allowed_subdirs,
     }]
+}
+
+fn elapsed_millis_u64(start: Instant) -> u64 {
+    u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn unix_timestamp_secs(metadata: &fs::Metadata) -> u64 {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |duration| duration.as_secs())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -311,7 +323,7 @@ fn guess_category(path: &Path) -> VfsCategory {
         return VfsCategory::Folder;
     }
     match path.extension().and_then(|e| e.to_str()) {
-        Some("md") | Some("markdown") => VfsCategory::Doc,
+        Some("md" | "markdown") => VfsCategory::Doc,
         Some("skill") => VfsCategory::Skill,
         _ => VfsCategory::Other,
     }
@@ -332,12 +344,7 @@ pub(crate) fn get_entry(state: &StudioState, path: &str) -> Result<VfsEntry, Vfs
             .to_string(),
         is_dir: metadata.is_dir(),
         size: metadata.len(),
-        modified: metadata
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-            .unwrap_or(0),
+        modified: unix_timestamp_secs(&metadata),
         content_type: None,
         project_name: None,
         root_label: None,
@@ -346,6 +353,7 @@ pub(crate) fn get_entry(state: &StudioState, path: &str) -> Result<VfsEntry, Vfs
     })
 }
 
+#[allow(clippy::unused_async)]
 pub(crate) async fn read_content(
     state: &StudioState,
     path: &str,
@@ -360,12 +368,7 @@ pub(crate) async fn read_content(
         path: path.to_string(),
         content_type: "text/plain".to_string(),
         content,
-        modified: metadata
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-            .unwrap_or(0),
+        modified: unix_timestamp_secs(&metadata),
     })
 }
 
@@ -405,37 +408,46 @@ mod tests {
     use crate::git::checkout::{RepositorySyncMode, resolve_repository_source};
 
     fn init_git_repository(root: &Path) {
-        let repository = Repository::init(root).expect("init repository");
+        let repository =
+            Repository::init(root).unwrap_or_else(|error| panic!("init repository: {error}"));
         fs::write(
             root.join("Project.toml"),
             "name = \"BaseModelica\"\nversion = \"0.1.0\"\n",
         )
-        .expect("write project file");
-        fs::create_dir_all(root.join("src")).expect("create src dir");
+        .unwrap_or_else(|error| panic!("write project file: {error}"));
+        fs::create_dir_all(root.join("src"))
+            .unwrap_or_else(|error| panic!("create src dir: {error}"));
         fs::write(
             root.join("src").join("BaseModelica.jl"),
             "module BaseModelica\nend\n",
         )
-        .expect("write julia source");
+        .unwrap_or_else(|error| panic!("write julia source: {error}"));
 
-        let mut index = repository.index().expect("open index");
+        let mut index = repository
+            .index()
+            .unwrap_or_else(|error| panic!("open index: {error}"));
         index
             .add_path(Path::new("Project.toml"))
-            .expect("stage project file");
+            .unwrap_or_else(|error| panic!("stage project file: {error}"));
         index
             .add_path(Path::new("src/BaseModelica.jl"))
-            .expect("stage source file");
-        let tree_id = index.write_tree().expect("write tree");
-        let tree = repository.find_tree(tree_id).expect("find tree");
-        let signature = Signature::now("vfs-test", "vfs-test@example.com").expect("signature");
+            .unwrap_or_else(|error| panic!("stage source file: {error}"));
+        let tree_id = index
+            .write_tree()
+            .unwrap_or_else(|error| panic!("write tree: {error}"));
+        let tree = repository
+            .find_tree(tree_id)
+            .unwrap_or_else(|error| panic!("find tree: {error}"));
+        let signature = Signature::now("vfs-test", "vfs-test@example.com")
+            .unwrap_or_else(|error| panic!("signature: {error}"));
         repository
             .commit(Some("HEAD"), &signature, &signature, "init", &tree, &[])
-            .expect("commit");
+            .unwrap_or_else(|error| panic!("commit: {error}"));
     }
 
     #[test]
     fn scan_all_roots_includes_repo_project_checkout_entries() {
-        let source = tempfile::tempdir().expect("tempdir");
+        let source = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
         init_git_repository(source.path());
         let repo_id = format!("repo-vfs-{}", Uuid::new_v4());
         let state = StudioState::new();
@@ -451,13 +463,15 @@ mod tests {
             }],
         });
         let repositories = configured_repositories(&state);
-        let repository = repositories.first().expect("configured repository");
+        let repository = repositories
+            .first()
+            .unwrap_or_else(|| panic!("configured repository"));
         resolve_repository_source(
             repository,
             state.config_root.as_path(),
             RepositorySyncMode::Ensure,
         )
-        .expect("materialize checkout before scan");
+        .unwrap_or_else(|error| panic!("materialize checkout before scan: {error}"));
 
         let result = scan_all_roots(&state);
 
@@ -470,14 +484,15 @@ mod tests {
 
         for root in resolve_all_vfs_roots(&state) {
             if root.request_root == repo_id && root.full_path.exists() {
-                fs::remove_dir_all(root.full_path).expect("cleanup managed checkout");
+                fs::remove_dir_all(root.full_path)
+                    .unwrap_or_else(|error| panic!("cleanup managed checkout: {error}"));
             }
         }
     }
 
     #[test]
     fn resolve_vfs_path_supports_repo_project_checkout_files() {
-        let source = tempfile::tempdir().expect("tempdir");
+        let source = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
         init_git_repository(source.path());
         let repo_id = format!("repo-vfs-resolve-{}", Uuid::new_v4());
         let state = StudioState::new();
@@ -493,33 +508,37 @@ mod tests {
             }],
         });
         let repositories = configured_repositories(&state);
-        let repository = repositories.first().expect("configured repository");
+        let repository = repositories
+            .first()
+            .unwrap_or_else(|| panic!("configured repository"));
         resolve_repository_source(
             repository,
             state.config_root.as_path(),
             RepositorySyncMode::Ensure,
         )
-        .expect("materialize checkout before resolving");
+        .unwrap_or_else(|error| panic!("materialize checkout before resolving: {error}"));
 
         let resolved = resolve_vfs_path(&state, format!("{repo_id}/src/BaseModelica.jl").as_str())
-            .expect("resolve repo vfs path");
+            .unwrap_or_else(|error| panic!("resolve repo vfs path: {error:?}"));
 
         assert!(resolved.full_path.is_file());
 
         for root in resolve_all_vfs_roots(&state) {
             if root.request_root == repo_id && root.full_path.exists() {
-                fs::remove_dir_all(root.full_path).expect("cleanup managed checkout");
+                fs::remove_dir_all(root.full_path)
+                    .unwrap_or_else(|error| panic!("cleanup managed checkout: {error}"));
             }
         }
     }
 
     #[test]
     fn scan_roots_reuses_cached_entries_until_ui_config_changes() {
-        let temp = tempfile::tempdir().expect("tempdir");
+        let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
         let project_root = temp.path().join("workspace");
         let docs_dir = project_root.join("docs");
-        fs::create_dir_all(&docs_dir).expect("create docs dir");
-        fs::write(docs_dir.join("guide.md"), "# guide\n").expect("write guide");
+        fs::create_dir_all(&docs_dir).unwrap_or_else(|error| panic!("create docs dir: {error}"));
+        fs::write(docs_dir.join("guide.md"), "# guide\n")
+            .unwrap_or_else(|error| panic!("write guide: {error}"));
 
         let state = StudioState::new();
         state.set_ui_config(UiConfig {
@@ -538,13 +557,15 @@ mod tests {
                 .iter()
                 .any(|entry| entry.path == "kernel/docs/guide.md")
         );
-        fs::remove_file(docs_dir.join("guide.md")).expect("remove guide");
+        fs::remove_file(docs_dir.join("guide.md"))
+            .unwrap_or_else(|error| panic!("remove guide: {error}"));
         let cached = scan_roots(&state);
         assert_eq!(cached.entries, first.entries);
 
         let notes_dir = project_root.join("notes");
-        fs::create_dir_all(&notes_dir).expect("create notes dir");
-        fs::write(notes_dir.join("todo.md"), "# todo\n").expect("write note");
+        fs::create_dir_all(&notes_dir).unwrap_or_else(|error| panic!("create notes dir: {error}"));
+        fs::write(notes_dir.join("todo.md"), "# todo\n")
+            .unwrap_or_else(|error| panic!("write note: {error}"));
 
         state.set_ui_config(UiConfig {
             projects: vec![crate::gateway::studio::types::UiProjectConfig {

@@ -9,10 +9,8 @@ use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedRetrievalQuery, build_repo_projected_retrieval,
 };
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
-
 #[test]
-fn projected_retrieval_merges_page_and_node_hits() -> TestResult {
+fn projected_retrieval_merges_page_and_node_hits() {
     let analysis = sample_projection_analysis("projection-sample");
     let result = build_repo_projected_retrieval(
         &RepoProjectedRetrievalQuery {
@@ -25,5 +23,4 @@ fn projected_retrieval_merges_page_and_node_hits() -> TestResult {
     );
 
     assert_repo_json_snapshot("repo_projected_retrieval_result", json!(result));
-    Ok(())
 }

@@ -99,7 +99,7 @@ mod tests {
         };
 
         let resolved = resolve_path_like(Path::new("/tmp/studio"), "~/workspace/docs")
-            .expect("tilde-prefixed path should resolve");
+            .unwrap_or_else(|| panic!("tilde-prefixed path should resolve"));
 
         assert_eq!(resolved, home.join("workspace/docs"));
     }
@@ -107,7 +107,7 @@ mod tests {
     #[test]
     fn resolve_path_like_keeps_relative_paths_rooted_at_base() {
         let resolved = resolve_path_like(Path::new("/tmp/studio"), "docs")
-            .expect("relative path should resolve");
+            .unwrap_or_else(|| panic!("relative path should resolve"));
 
         assert_eq!(resolved, std::path::PathBuf::from("/tmp/studio/docs"));
     }

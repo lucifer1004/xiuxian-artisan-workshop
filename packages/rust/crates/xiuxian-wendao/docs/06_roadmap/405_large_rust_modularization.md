@@ -30,6 +30,10 @@ The canonical per-file execution plan lives in `[[.cache/codex/execplans/wendao-
 
 ## Delivery Waves
 
+Priority override:
+
+- `gateway/studio/search/handlers.rs` is the first implementation target and should be split before the numbered waves.
+
 ### Wave 1: Contracts and Helpers
 
 - `gateway/studio/types.rs`
@@ -83,7 +87,22 @@ The canonical per-file execution plan lives in `[[.cache/codex/execplans/wendao-
 
 - [PLANNED] Inventory completed for all 35 oversized files.
 - [PLANNED] Each file now has a proposed feature-folder or leaf-module split in the canonical execplan.
-- [NOT STARTED] No Rust module paths have been moved yet.
+- [DONE] `gateway/studio/search/handlers.rs` is split into `gateway/studio/search/handlers/` with interface-only `mod.rs`, preserved public exports, and a green `cargo test -p xiuxian-wendao gateway::studio::search:: --lib` gate.
+- [DONE] `gateway/studio/types.rs` is split into `gateway/studio/types/` with interface-only `mod.rs`, grouped DTO leaf modules, preserved public type names, and the same `studio_type_collection()` façade.
+- [DONE] `analyzers/query.rs` is split into `analyzers/query/` with interface-only `mod.rs`, query-family leaf modules, and preserved `crate::analyzers::query::*` re-exports.
+- [DONE] `search/fuzzy.rs` is split into `search/fuzzy/` with interface-only `mod.rs`, focused helper leaf modules, preserved `search::fuzzy::*` exports, and the crate-visible scoring bridge retained for Tantivy integration.
+- [DONE] `search/tantivy.rs` is split into `search/tantivy/` with interface-only `mod.rs`, focused document/index/matcher helper modules, preserved `search::tantivy::*` exports, and unchanged analyzer-facing shared search contracts.
+- [DONE] `analyzers/service/mod.rs` is now interface-only, with orchestration logic moved into focused leaf modules while preserving `crate::analyzers::service::*` exports and sibling `super::*` call sites.
+- [DONE] The stale tracked `analyzers/service/mod.rs.bak2` monolith is removed after confirming the live `analyzers/service/` leaf modules cover the split, so the service folder no longer carries a shadow copy of the pre-modularization implementation.
+- [DONE] `gateway/studio/router/mod.rs` is now interface-only, with Studio state, configured-repository derivation, API error mapping, route assembly, and router-local tests moved into focused leaf modules while preserving `crate::gateway::studio::router::*` exports and the existing `code_ast`, `config`, `handlers`, and `sanitization` child modules.
+- [DONE] `cargo check -p xiuxian-wendao --lib --keep-going` remains green in the current worktree after the first six modularization slices.
+- [DONE] `cargo test -p xiuxian-wendao analyzers::service:: --lib`, `cargo test -p xiuxian-wendao repo_sync_endpoint_returns_repo_status_payload --lib`, and `cargo test -p xiuxian-wendao --bin wendao test_build_plugin_registry_bootstraps_builtin_plugins` are green after the `analyzers/service/mod.rs` split.
+- [DONE] `cargo check -p xiuxian-wendao`, `cargo test -p xiuxian-wendao gateway::studio::router:: --lib`, `cargo test -p xiuxian-wendao --lib studio_repo_sync_api -- --nocapture`, and `cargo test -p xiuxian-wendao --bin wendao test_gateway_server_bind -- --nocapture` are green after the `gateway/studio/router/mod.rs` split.
+- [DONE] `gateway/studio/repo_index/state.rs` is now a feature folder with interface-only `state/mod.rs`, while task-queue control, coordination logic, fingerprinting, code-document collection, status filtering, language inference, and repo-index tests live in focused leaf modules without changing the `RepoIndexCoordinator` surface.
+- [DONE] `cargo fmt -p xiuxian-wendao`, `cargo check -p xiuxian-wendao --lib --keep-going`, `cargo test -p xiuxian-wendao gateway::studio::repo_index:: --lib`, `cargo test -p xiuxian-wendao gateway::studio::search:: --lib`, and `cargo test -p xiuxian-wendao repo_sync_endpoint_returns_repo_status_payload --lib` are green after the `gateway/studio/repo_index/state.rs` split.
+- [DONE] `gateway/studio/router/handlers/repo.rs` is now a feature folder with interface-only `repo/mod.rs`, while `query.rs`, `parse.rs`, `shared.rs`, `analysis.rs`, `index.rs`, `pages.rs`, `retrieval.rs`, `family.rs`, and `refine.rs` carry the handler families without changing the existing repo handler names.
+- [DONE] `cargo fmt -p xiuxian-wendao`, `cargo check -p xiuxian-wendao --lib --keep-going`, `cargo test -p xiuxian-wendao gateway::studio::studio_repo_sync_api_tests:: --lib`, `cargo test -p xiuxian-wendao gateway::studio::router:: --lib`, and `cargo test -p xiuxian-wendao gateway::studio::repo_index:: --lib` are green after the `gateway/studio/router/handlers/repo.rs` split.
+- [IN-PROGRESS] `gateway/studio/vfs.rs` is the next bounded facade slice under the active execplan.
 
 ## Local Constraints
 
@@ -99,5 +118,5 @@ The canonical per-file execution plan lives in `[[.cache/codex/execplans/wendao-
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-03-21
+:LAST_SYNC: 2026-03-22
 :END:

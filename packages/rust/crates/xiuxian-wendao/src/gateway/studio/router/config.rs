@@ -59,11 +59,13 @@ struct WendaoTomlProjectConfig {
 }
 
 /// Returns the path to `wendao.toml` for the given config root.
+#[must_use]
 pub fn studio_wendao_toml_path(config_root: &Path) -> PathBuf {
     config_root.join("wendao.toml")
 }
 
 /// Loads UI config from `wendao.toml` if it exists.
+#[must_use]
 pub fn load_ui_config_from_wendao_toml(config_root: &Path) -> Option<UiConfig> {
     let config_path = studio_wendao_toml_path(config_root);
     let contents = fs::read_to_string(config_path).ok()?;
@@ -179,10 +181,10 @@ pub fn persist_ui_config_to_wendao_toml(
         if let Some(root) = repo.root.clone() {
             entry.root = Some(root);
         }
-        entry.url = repo.url.clone();
-        entry.git_ref = repo.git_ref.clone();
-        entry.refresh = repo.refresh.clone();
-        entry.plugins = repo.plugins.clone();
+        entry.url.clone_from(&repo.url);
+        entry.git_ref.clone_from(&repo.git_ref);
+        entry.refresh.clone_from(&repo.refresh);
+        entry.plugins.clone_from(&repo.plugins);
     }
     parsed.link_graph.projects = projects;
 
@@ -209,6 +211,7 @@ pub fn persist_ui_config_to_wendao_toml(
 }
 
 /// Resolves the studio config root directory.
+#[must_use]
 pub fn resolve_studio_config_root(project_root: &Path) -> PathBuf {
     let candidate = PrjDirs::data_home().join("wendao-frontend");
     if candidate.exists() {

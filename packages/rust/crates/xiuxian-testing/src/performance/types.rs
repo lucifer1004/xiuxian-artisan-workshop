@@ -77,6 +77,7 @@ impl PerfRunConfig {
 
 /// Aggregated latency quantiles in milliseconds.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[allow(clippy::struct_field_names)]
 pub struct PerfQuantiles {
     /// Minimum measured latency.
     pub min_ms: f64,

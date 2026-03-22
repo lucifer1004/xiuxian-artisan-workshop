@@ -8,6 +8,11 @@ use crate::analyzers::query::{
 };
 
 /// Build one retrieval hit for a projected page or page-index node.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the projected page or requested node
+/// cannot be resolved.
 pub fn build_projected_retrieval_hit(
     query: &RepoProjectedRetrievalHitQuery,
     analysis: &RepositoryAnalysisOutput,

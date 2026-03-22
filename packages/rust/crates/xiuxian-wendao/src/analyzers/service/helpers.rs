@@ -10,6 +10,7 @@ use crate::analyzers::records::{
 };
 
 /// Returns a human-readable label for a relation kind.
+#[must_use]
 pub fn relation_kind_label(kind: RelationKind) -> &'static str {
     match kind {
         RelationKind::Contains => "contains",
@@ -84,20 +85,20 @@ pub(crate) fn documents_backlink_lookup(
         if source_id.is_empty() || target_id.is_empty() {
             continue;
         }
-        let item = doc_lookup
-            .get(source_id)
-            .map(|doc| RepoBacklinkItem {
-                id: doc.doc_id.clone(),
-                title: Some(doc.title.clone()).filter(|title| !title.trim().is_empty()),
-                path: Some(doc.path.clone()).filter(|path| !path.trim().is_empty()),
-                kind: Some("documents".to_string()),
-            })
-            .unwrap_or_else(|| RepoBacklinkItem {
+        let item = doc_lookup.get(source_id).map_or_else(
+            || RepoBacklinkItem {
                 id: source_id.to_string(),
                 title: None,
                 path: None,
                 kind: Some("documents".to_string()),
-            });
+            },
+            |doc| RepoBacklinkItem {
+                id: doc.doc_id.clone(),
+                title: Some(doc.title.clone()).filter(|title| !title.trim().is_empty()),
+                path: Some(doc.path.clone()).filter(|path| !path.trim().is_empty()),
+                kind: Some("documents".to_string()),
+            },
+        );
         lookup
             .entry(target_id.to_string())
             .or_default()

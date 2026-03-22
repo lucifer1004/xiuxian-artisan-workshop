@@ -21,7 +21,7 @@ impl UnifiedSymbolIndex {
         self.add_symbol(symbol);
     }
 
-    /// Add a symbol from repo_intelligence analysis.
+    /// Add a symbol from `repo_intelligence` analysis.
     pub fn add_symbol_record(&mut self, record: &crate::analyzers::SymbolRecord) {
         let kind_str = match record.kind {
             crate::analyzers::RepoSymbolKind::Function => "fn",
@@ -69,25 +69,26 @@ impl UnifiedSymbolIndex {
         // 1. In-memory fallback
         let idx = self.symbols.len();
         let key = symbol.name.to_lowercase();
-        self.symbols.push(symbol.clone());
+        self.symbols.push(symbol);
         self.by_name.entry(key).or_default().push(idx);
 
         // 2. Shared search indexing
-        let source_str = match &symbol.source {
+        let stored = &self.symbols[idx];
+        let source_str = match &stored.source {
             SymbolSource::Project => "project",
             SymbolSource::External(_) => "external",
         };
         let _ = self.search_index.add_document(&SearchDocument {
             id: idx.to_string(),
-            title: symbol.name.clone(),
-            kind: symbol.kind.clone(),
-            path: symbol.location.clone(),
+            title: stored.name.clone(),
+            kind: stored.kind.clone(),
+            path: stored.location.clone(),
             scope: source_str.to_string(),
-            namespace: symbol.crate_name.clone(),
+            namespace: stored.crate_name.clone(),
             terms: vec![
-                symbol.crate_name.clone(),
-                symbol.kind.clone(),
-                symbol.location.clone(),
+                stored.crate_name.clone(),
+                stored.kind.clone(),
+                stored.location.clone(),
                 source_str.to_string(),
             ],
         });

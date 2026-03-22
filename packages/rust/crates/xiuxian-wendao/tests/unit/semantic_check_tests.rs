@@ -256,20 +256,23 @@ fn test_build_file_reports() {
 
 #[test]
 fn test_build_file_reports_deduplicates_alias_doc_paths() {
-    let cwd = std::env::current_dir().expect("cwd");
-    let temp = tempfile::tempdir_in(&cwd).expect("tempdir");
+    let cwd = std::env::current_dir().unwrap_or_else(|error| panic!("cwd: {error}"));
+    let temp = tempfile::tempdir_in(&cwd).unwrap_or_else(|error| panic!("tempdir: {error}"));
     let doc_path = temp.path().join("docs/index.md");
-    std::fs::create_dir_all(doc_path.parent().expect("parent")).expect("create dir");
-    std::fs::write(&doc_path, "# Demo\n").expect("write doc");
+    let parent = doc_path
+        .parent()
+        .unwrap_or_else(|| panic!("parent directory should exist"));
+    std::fs::create_dir_all(parent).unwrap_or_else(|error| panic!("create dir: {error}"));
+    std::fs::write(&doc_path, "# Demo\n").unwrap_or_else(|error| panic!("write doc: {error}"));
 
     let absolute_path = doc_path
         .canonicalize()
-        .expect("canonicalize")
+        .unwrap_or_else(|error| panic!("canonicalize: {error}"))
         .to_string_lossy()
         .to_string();
     let relative_path = doc_path
         .strip_prefix(&cwd)
-        .expect("strip prefix")
+        .unwrap_or_else(|error| panic!("strip prefix: {error}"))
         .to_string_lossy()
         .to_string();
 

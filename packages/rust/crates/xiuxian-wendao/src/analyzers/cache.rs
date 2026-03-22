@@ -34,6 +34,7 @@ fn repository_analysis_cache() -> &'static Mutex<RepositoryAnalysisCache> {
 }
 
 /// Builds a cache key from repository configuration and resolved source.
+#[must_use]
 pub fn build_repository_analysis_cache_key(
     repository: &RegisteredRepository,
     source: &ResolvedRepositorySource,
@@ -58,6 +59,10 @@ pub fn build_repository_analysis_cache_key(
 }
 
 /// Loads a cached analysis result if available.
+///
+/// # Errors
+///
+/// Returns an error when the in-memory cache lock is poisoned.
 pub fn load_cached_repository_analysis(
     key: &RepositoryAnalysisCacheKey,
 ) -> Result<Option<RepositoryAnalysisOutput>, RepoIntelligenceError> {
@@ -70,6 +75,10 @@ pub fn load_cached_repository_analysis(
 }
 
 /// Stores an analysis result in the cache.
+///
+/// # Errors
+///
+/// Returns an error when the in-memory cache lock is poisoned.
 pub fn store_cached_repository_analysis(
     key: RepositoryAnalysisCacheKey,
     output: &RepositoryAnalysisOutput,
@@ -92,11 +101,21 @@ pub struct ValkeyAnalysisCache {
 
 impl ValkeyAnalysisCache {
     /// Creates a new Valkey cache client if configured.
+    ///
+    /// # Errors
+    ///
+    /// This placeholder implementation does not currently fail.
+    #[allow(clippy::unnecessary_wraps)]
     pub fn new() -> Result<Option<Self>, RepoIntelligenceError> {
         Ok(None)
     }
 
     /// Retrieves a cached analysis result.
+    ///
+    /// # Errors
+    ///
+    /// This placeholder implementation does not currently fail.
+    #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
     pub fn get(
         &self,
         _repository: &RegisteredRepository,
@@ -106,6 +125,11 @@ impl ValkeyAnalysisCache {
     }
 
     /// Stores an analysis result in the cache.
+    ///
+    /// # Errors
+    ///
+    /// This placeholder implementation does not currently fail.
+    #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
     pub fn set(
         &self,
         _repository: &RegisteredRepository,

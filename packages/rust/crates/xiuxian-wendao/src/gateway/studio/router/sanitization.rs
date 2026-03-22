@@ -8,6 +8,7 @@ use crate::gateway::studio::types::{UiProjectConfig, UiRepoProjectConfig};
 /// Sanitizes a list of project configurations.
 ///
 /// Removes duplicates, empty names, and invalid paths.
+#[must_use]
 pub fn sanitize_projects(raw: Vec<UiProjectConfig>) -> Vec<UiProjectConfig> {
     let mut seen = HashSet::<String>::new();
     let mut out = Vec::new();
@@ -36,6 +37,7 @@ pub fn sanitize_projects(raw: Vec<UiProjectConfig>) -> Vec<UiProjectConfig> {
 /// Sanitizes a list of path strings.
 ///
 /// Normalizes paths and removes duplicates.
+#[must_use]
 pub fn sanitize_path_list(raw: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::<String>::new();
     let mut out = Vec::new();
@@ -53,6 +55,7 @@ pub fn sanitize_path_list(raw: Vec<String>) -> Vec<String> {
 /// Sanitizes a list of repo project configurations.
 ///
 /// Validates required fields, removes duplicates, and normalizes paths.
+#[must_use]
 pub fn sanitize_repo_projects(raw: Vec<UiRepoProjectConfig>) -> Vec<UiRepoProjectConfig> {
     let mut seen = HashSet::<String>::new();
     let mut out = Vec::new();
@@ -111,6 +114,7 @@ pub fn sanitize_repo_projects(raw: Vec<UiRepoProjectConfig>) -> Vec<UiRepoProjec
 }
 
 /// Sanitizes a single path-like string.
+#[must_use]
 pub fn sanitize_path_like(raw: &str) -> Option<String> {
     pathing::normalize_path_like(raw)
 }
@@ -123,7 +127,7 @@ mod tests {
     fn sanitize_projects_removes_empty_names() {
         let input = vec![
             UiProjectConfig {
-                name: "".to_string(),
+                name: String::new(),
                 root: ".".to_string(),
                 dirs: vec!["src".to_string()],
             },

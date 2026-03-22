@@ -332,5 +332,5 @@ fn slugify(input: &str) -> String {
 }
 
 fn node_key<'a>(node: &'a AstNode<'a>) -> usize {
-    node as *const AstNode as usize
+    std::ptr::from_ref(node) as usize
 }

@@ -1,5 +1,6 @@
 //! Template rendering utilities for docs governance.
 
+use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
@@ -12,15 +13,17 @@ pub fn render_package_docs_index(crate_name: &str, doc_path: &str, docs_dir: &Pa
     let section_links = collect_section_links(docs_dir);
     let mut rendered = String::new();
 
-    rendered.push_str(&format!("# {crate_name}: Map of Content\n\n"));
+    let _ = writeln!(rendered, "# {crate_name}: Map of Content");
+    rendered.push('\n');
     rendered.push_str(":PROPERTIES:\n");
-    rendered.push_str(&format!(":ID: {}\n", derive_opaque_doc_id(doc_path)));
+    let _ = writeln!(rendered, ":ID: {}", derive_opaque_doc_id(doc_path));
     rendered.push_str(":TYPE: INDEX\n");
     rendered.push_str(":STATUS: ACTIVE\n");
     rendered.push_str(":END:\n\n");
-    rendered.push_str(&format!(
-        "Standardized documentation index for the `{crate_name}` package.\n\n"
-    ));
+    let _ = writeln!(
+        rendered,
+        "Standardized documentation index for the `{crate_name}` package.\n"
+    );
 
     if section_links.is_empty() {
         rendered.push_str(
@@ -32,9 +35,9 @@ pub fn render_package_docs_index(crate_name: &str, doc_path: &str, docs_dir: &Pa
     }
 
     for (section, links) in &section_links {
-        rendered.push_str(&format!("## {section}\n\n"));
+        let _ = writeln!(rendered, "## {section}\n");
         for link in links {
-            rendered.push_str(&format!("- [[{link}]]\n"));
+            let _ = writeln!(rendered, "- [[{link}]]");
         }
         rendered.push('\n');
     }
@@ -63,17 +66,18 @@ pub fn render_section_landing_page(
     spec: &SectionSpec,
 ) -> String {
     let mut rendered = String::new();
-    rendered.push_str(&format!("# {}\n\n", spec.title));
+    let _ = writeln!(rendered, "# {}\n", spec.title);
     rendered.push_str(":PROPERTIES:\n");
-    rendered.push_str(&format!(":ID: {}\n", derive_opaque_doc_id(doc_path)));
-    rendered.push_str(&format!(":TYPE: {}\n", spec.doc_type));
+    let _ = writeln!(rendered, ":ID: {}", derive_opaque_doc_id(doc_path));
+    let _ = writeln!(rendered, ":TYPE: {}", spec.doc_type);
     rendered.push_str(":STATUS: DRAFT\n");
     rendered.push_str(":END:\n\n");
-    rendered.push_str(&format!(
-        "{}\n\n",
+    let _ = writeln!(
+        rendered,
+        "{}\n",
         render_section_summary(crate_name, crate_dir, spec)
-    ));
-    rendered.push_str(&format!("{}\n", render_section_prompt(crate_name, spec)));
+    );
+    let _ = writeln!(rendered, "{}", render_section_prompt(crate_name, spec));
     rendered
 }
 
@@ -227,9 +231,7 @@ pub fn plan_index_relations_block_insertion(
         .iter()
         .find(|line| line.trimmed == "---" || line.trimmed == ":FOOTER:");
     let insert_offset = insertion_line.map_or(index_content.len(), |line| line.start_offset);
-    let prefix = if insert_offset == 0 {
-        ""
-    } else if index_content[..insert_offset].ends_with("\n\n") {
+    let prefix = if insert_offset == 0 || index_content[..insert_offset].ends_with("\n\n") {
         ""
     } else if index_content[..insert_offset].ends_with('\n') {
         "\n"
@@ -260,9 +262,7 @@ pub fn plan_index_relations_block_insertion(
 pub fn plan_index_footer_block_insertion(index_content: &str) -> (IssueLocation, String) {
     let lines = super::parsing::collect_lines(index_content);
     let insert_offset = index_content.len();
-    let prefix = if index_content.is_empty() {
-        ""
-    } else if index_content.ends_with("\n\n") {
+    let prefix = if index_content.is_empty() || index_content.ends_with("\n\n") {
         ""
     } else if index_content.ends_with('\n') {
         "\n"
@@ -340,9 +340,9 @@ pub fn plan_index_section_link_insertion(
         line.trimmed == ":RELATIONS:" || line.trimmed == "---" || line.trimmed == ":FOOTER:"
     });
     let insert_offset = insertion_line.map_or(index_content.len(), |line| line.start_offset);
-    let prefix = if index_content.is_empty() {
-        ""
-    } else if insert_offset > 0 && index_content[..insert_offset].ends_with("\n\n") {
+    let prefix = if index_content.is_empty()
+        || (insert_offset > 0 && index_content[..insert_offset].ends_with("\n\n"))
+    {
         ""
     } else if insert_offset > 0 && index_content[..insert_offset].ends_with('\n') {
         "\n"

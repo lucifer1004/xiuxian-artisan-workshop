@@ -5,6 +5,11 @@ use crate::analyzers::query::{RepoProjectedPageIndexTreeQuery, RepoProjectedPage
 use super::markdown::build_projected_page_index_trees;
 
 /// Resolve one projected page-index tree by projected page identifier.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError`] when the projected page cannot be
+/// resolved into a page-index tree.
 pub fn build_projected_page_index_tree(
     query: &RepoProjectedPageIndexTreeQuery,
     analysis: &RepositoryAnalysisOutput,

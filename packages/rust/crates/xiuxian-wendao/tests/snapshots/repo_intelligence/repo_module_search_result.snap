@@ -1,11 +1,12 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/tests/integration/../support/repo_intelligence.rs
+assertion_line: 32
 expression: value
 ---
 {
   "module_hits": [
     {
-      "hierarchical_uri": "repo://module-sample/module/repo:module-sample:module:ModulePkg",
+      "hierarchical_uri": "wendao://repo/unknown/module-sample/api/src:ModulePkg.jl/repo:module-sample:module:ModulePkg",
       "hierarchy": [
         "src",
         "ModulePkg.jl"
@@ -34,7 +35,7 @@ expression: value
         "repo:module-sample:projection:reference:symbol:repo:module-sample:symbol:ModulePkg.solve"
       ],
       "rank": 1,
-      "saliency_score": 1.0,
+      "saliency_score": 0.5,
       "score": 1.0
     }
   ],

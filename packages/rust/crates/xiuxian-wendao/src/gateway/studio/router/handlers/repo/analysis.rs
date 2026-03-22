@@ -1,0 +1,200 @@
+use std::sync::Arc;
+
+use axum::{
+    Json,
+    extract::{Query, State},
+};
+
+use crate::analyzers::{
+    DocCoverageQuery, ExampleSearchQuery, ModuleSearchQuery, RepoOverviewQuery, RepoSyncQuery,
+    SymbolSearchQuery, build_doc_coverage, build_example_search, build_module_search,
+    build_repo_overview, build_symbol_search, repo_sync_for_registered_repository,
+};
+use crate::gateway::studio::router::{GatewayState, StudioApiError};
+
+use super::parse::{parse_repo_sync_mode, required_repo_id, required_search_query};
+use super::query::{RepoApiQuery, RepoDocCoverageApiQuery, RepoSearchApiQuery, RepoSyncApiQuery};
+use super::shared::{with_repo_analysis, with_repository};
+
+/// Repository overview endpoint.
+///
+/// # Errors
+///
+/// Returns an error when `repo` is missing, repository lookup fails, repository
+/// analysis fails, or the background task panics.
+pub async fn overview(
+    Query(query): Query<RepoApiQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Json<crate::analyzers::RepoOverviewResult>, StudioApiError> {
+    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let result = with_repo_analysis(
+        Arc::clone(&state),
+        repo_id.clone(),
+        "REPO_OVERVIEW_PANIC",
+        "Repo overview task failed unexpectedly",
+        move |analysis| {
+            Ok::<_, crate::analyzers::RepoIntelligenceError>(build_repo_overview(
+                &RepoOverviewQuery { repo_id },
+                &analysis,
+            ))
+        },
+    )
+    .await?;
+    Ok(Json(result))
+}
+
+/// Module search endpoint.
+///
+/// # Errors
+///
+/// Returns an error when `repo` or `query` is missing, repository lookup or
+/// analysis fails, or the background task panics.
+pub async fn module_search(
+    Query(query): Query<RepoSearchApiQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Json<crate::analyzers::ModuleSearchResult>, StudioApiError> {
+    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let search_query = required_search_query(query.query.as_deref())?;
+    let limit = query.limit.unwrap_or(10).max(1);
+    let result = with_repo_analysis(
+        Arc::clone(&state),
+        repo_id.clone(),
+        "REPO_MODULE_SEARCH_PANIC",
+        "Repo module search task failed unexpectedly",
+        move |analysis| {
+            Ok::<_, crate::analyzers::RepoIntelligenceError>(build_module_search(
+                &ModuleSearchQuery {
+                    repo_id,
+                    query: search_query,
+                    limit,
+                },
+                &analysis,
+            ))
+        },
+    )
+    .await?;
+    Ok(Json(result))
+}
+
+/// Symbol search endpoint.
+///
+/// # Errors
+///
+/// Returns an error when `repo` or `query` is missing, repository lookup or
+/// analysis fails, or the background task panics.
+pub async fn symbol_search(
+    Query(query): Query<RepoSearchApiQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Json<crate::analyzers::SymbolSearchResult>, StudioApiError> {
+    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let search_query = required_search_query(query.query.as_deref())?;
+    let limit = query.limit.unwrap_or(10).max(1);
+    let result = with_repo_analysis(
+        Arc::clone(&state),
+        repo_id.clone(),
+        "REPO_SYMBOL_SEARCH_PANIC",
+        "Repo symbol search task failed unexpectedly",
+        move |analysis| {
+            Ok::<_, crate::analyzers::RepoIntelligenceError>(build_symbol_search(
+                &SymbolSearchQuery {
+                    repo_id,
+                    query: search_query,
+                    limit,
+                },
+                &analysis,
+            ))
+        },
+    )
+    .await?;
+    Ok(Json(result))
+}
+
+/// Example search endpoint.
+///
+/// # Errors
+///
+/// Returns an error when `repo` or `query` is missing, repository lookup or
+/// analysis fails, or the background task panics.
+pub async fn example_search(
+    Query(query): Query<RepoSearchApiQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Json<crate::analyzers::ExampleSearchResult>, StudioApiError> {
+    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let search_query = required_search_query(query.query.as_deref())?;
+    let limit = query.limit.unwrap_or(10).max(1);
+    let result = with_repo_analysis(
+        Arc::clone(&state),
+        repo_id.clone(),
+        "REPO_EXAMPLE_SEARCH_PANIC",
+        "Repo example search task failed unexpectedly",
+        move |analysis| {
+            Ok::<_, crate::analyzers::RepoIntelligenceError>(build_example_search(
+                &ExampleSearchQuery {
+                    repo_id,
+                    query: search_query,
+                    limit,
+                },
+                &analysis,
+            ))
+        },
+    )
+    .await?;
+    Ok(Json(result))
+}
+
+/// Doc coverage endpoint.
+///
+/// # Errors
+///
+/// Returns an error when `repo` is missing, repository lookup or analysis
+/// fails, or the background task panics.
+pub async fn doc_coverage(
+    Query(query): Query<RepoDocCoverageApiQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Json<crate::analyzers::DocCoverageResult>, StudioApiError> {
+    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let module_id = query.module_id;
+    let result = with_repo_analysis(
+        Arc::clone(&state),
+        repo_id.clone(),
+        "REPO_DOC_COVERAGE_PANIC",
+        "Repo doc coverage task failed unexpectedly",
+        move |analysis| {
+            Ok::<_, crate::analyzers::RepoIntelligenceError>(build_doc_coverage(
+                &DocCoverageQuery { repo_id, module_id },
+                &analysis,
+            ))
+        },
+    )
+    .await?;
+    Ok(Json(result))
+}
+
+/// Repo sync endpoint.
+///
+/// # Errors
+///
+/// Returns an error when `repo` is missing, the sync mode is invalid,
+/// repository lookup fails, syncing fails, or the background task panics.
+pub async fn sync(
+    Query(query): Query<RepoSyncApiQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Json<crate::analyzers::RepoSyncResult>, StudioApiError> {
+    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let mode = parse_repo_sync_mode(query.mode.as_deref())?;
+    let result = with_repository(
+        Arc::clone(&state),
+        repo_id.clone(),
+        "REPO_SYNC_PANIC",
+        "Repo sync task failed unexpectedly",
+        move |repository, cwd| {
+            repo_sync_for_registered_repository(
+                &RepoSyncQuery { repo_id, mode },
+                &repository,
+                cwd.as_path(),
+            )
+        },
+    )
+    .await?;
+    Ok(Json(result))
+}

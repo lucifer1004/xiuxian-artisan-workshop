@@ -38,7 +38,7 @@ fn projected_page_family_cluster_lookup_resolves_how_to_cluster_for_reference_pa
                 && page.title == "solve"
                 && page.page_id.contains(":doc:")
         })
-        .expect("expected a doc-backed projected reference page titled `solve`");
+        .unwrap_or_else(|| panic!("expected a doc-backed projected reference page titled `solve`"));
 
     let result = repo_projected_page_family_cluster_from_config(
         &RepoProjectedPageFamilyClusterQuery {

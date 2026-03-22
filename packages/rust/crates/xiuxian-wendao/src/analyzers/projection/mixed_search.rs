@@ -75,13 +75,9 @@ pub fn build_projected_retrieval(
 fn retrieval_hit_title(hit: &ProjectedRetrievalHit) -> &str {
     hit.node
         .as_ref()
-        .map(|node| node.node_title.as_str())
-        .unwrap_or(hit.page.title.as_str())
+        .map_or(hit.page.title.as_str(), |node| node.node_title.as_str())
 }
 
 fn retrieval_hit_node_id(hit: &ProjectedRetrievalHit) -> &str {
-    hit.node
-        .as_ref()
-        .map(|node| node.node_id.as_str())
-        .unwrap_or("")
+    hit.node.as_ref().map_or("", |node| node.node_id.as_str())
 }

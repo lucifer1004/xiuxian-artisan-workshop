@@ -36,6 +36,7 @@ impl UnifiedSymbolIndex {
     }
 
     /// Returns list of all unique external crate names in the index.
+    #[must_use]
     pub fn get_external_crates(&self) -> Vec<String> {
         let mut crates = Vec::new();
         for symbol in &self.symbols {
@@ -49,6 +50,7 @@ impl UnifiedSymbolIndex {
     }
 
     /// Returns list of all unique project-local crate names in the index.
+    #[must_use]
     pub fn get_project_crates(&self) -> Vec<String> {
         let mut crates = Vec::new();
         for symbol in &self.symbols {
@@ -59,6 +61,12 @@ impl UnifiedSymbolIndex {
         crates.sort();
         crates.dedup();
         crates
+    }
+}
+
+impl Default for UnifiedSymbolIndex {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -78,6 +86,6 @@ impl std::fmt::Debug for UnifiedSymbolIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UnifiedSymbolIndex")
             .field("symbol_count", &self.symbols.len())
-            .finish()
+            .finish_non_exhaustive()
     }
 }

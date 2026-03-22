@@ -72,6 +72,7 @@ pub fn resolve_best_definition(
     .next()
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn resolve_definition_candidates(
     query_str: &str,
     ast_hits: &[AstSearchHit],
@@ -100,10 +101,10 @@ pub(crate) fn resolve_definition_candidates(
     let filtered_hits = ast_hits
         .iter()
         .filter(|hit| {
-            if let Some(langs) = &options.languages {
-                if !langs.contains(&hit.language) {
-                    return false;
-                }
+            if let Some(langs) = &options.languages
+                && !langs.contains(&hit.language)
+            {
+                return false;
             }
             if !options.include_markdown && hit.language == "markdown" {
                 return false;
@@ -177,7 +178,7 @@ pub(crate) fn resolve_definition_candidates(
         );
         let fuzzy_matches = matcher
             .search(query, options.limit)
-            .expect("lexical matcher is infallible");
+            .unwrap_or_else(|error| panic!("lexical matcher is infallible: {error}"));
         candidates = fuzzy_matches
             .into_iter()
             .map(|fuzzy_match| {
@@ -228,8 +229,12 @@ fn definition_hit_from_ast(
     let metadata =
         project_metadata_for_path(project_root, config_root, projects, hit.path.as_str());
     let mut navigation_target = hit.navigation_target;
-    navigation_target.project_name = metadata.project_name.clone();
-    navigation_target.root_label = metadata.root_label.clone();
+    navigation_target
+        .project_name
+        .clone_from(&metadata.project_name);
+    navigation_target
+        .root_label
+        .clone_from(&metadata.root_label);
 
     DefinitionSearchHit {
         name: hit.name,
@@ -350,7 +355,7 @@ mod tests {
             &[],
             &DefinitionResolveOptions::default(),
         )
-        .expect("definition should resolve through fuzzy fallback");
+        .unwrap_or_else(|| panic!("definition should resolve through fuzzy fallback"));
 
         assert_eq!(result.name, "spawn_local");
         assert!(result.score < 1.0);

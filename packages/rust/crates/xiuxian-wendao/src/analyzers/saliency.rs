@@ -25,10 +25,9 @@ pub fn compute_repository_saliency(analysis: &RepositoryAnalysisOutput) -> HashM
     }
 
     for id in entity_ids {
-        if !nodes.contains_key(&id) {
-            let idx = graph.add_node(id.clone());
-            nodes.insert(id, idx);
-        }
+        nodes
+            .entry(id.clone())
+            .or_insert_with(|| graph.add_node(id));
     }
 
     // 2. Add edges from relations
@@ -61,12 +60,13 @@ pub fn compute_repository_saliency(analysis: &RepositoryAnalysisOutput) -> HashM
 
         // Saliency = normalized (in_degree * 2 + out_degree)
         // Hubs (like base types or common solvers) will have many incoming edges (Uses/Implements).
-        let raw_score = (in_degree as f64 * 2.0) + (out_degree as f64 * 0.5);
+        let raw_score =
+            (bounded_usize_to_f64(in_degree) * 2.0) + (bounded_usize_to_f64(out_degree) * 0.5);
         scores.insert(id, raw_score);
     }
 
     // 4. Normalize scores to 0.0 - 1.0
-    let max_score = scores.values().cloned().fold(0.0, f64::max);
+    let max_score = scores.values().copied().fold(0.0, f64::max);
     if max_score > 0.0 {
         for score in scores.values_mut() {
             *score /= max_score;
@@ -74,6 +74,10 @@ pub fn compute_repository_saliency(analysis: &RepositoryAnalysisOutput) -> HashM
     }
 
     scores
+}
+
+fn bounded_usize_to_f64(value: usize) -> f64 {
+    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
 }
 
 #[cfg(test)]
@@ -127,7 +131,13 @@ mod tests {
         // raw_score(mod1) = 0*2 + 1*0.5 = 0.5
         // raw_score(sym1) = 1*2 + 0*0.5 = 2.0
         // Normalized: sym1 should be 1.0, mod1 should be 0.25
-        assert_eq!(*scores.get("sym1").unwrap(), 1.0);
-        assert_eq!(*scores.get("mod1").unwrap(), 0.25);
+        let sym1_score = *scores
+            .get("sym1")
+            .unwrap_or_else(|| panic!("sym1 score should be present"));
+        let mod1_score = *scores
+            .get("mod1")
+            .unwrap_or_else(|| panic!("mod1 score should be present"));
+        assert!((sym1_score - 1.0).abs() < f64::EPSILON);
+        assert!((mod1_score - 0.25).abs() < f64::EPSILON);
     }
 }

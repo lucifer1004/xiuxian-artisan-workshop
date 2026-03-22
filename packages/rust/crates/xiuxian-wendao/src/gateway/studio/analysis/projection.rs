@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use crate::gateway::studio::types::{
     AnalysisEdge, AnalysisEdgeKind, AnalysisNode, AnalysisNodeKind, MermaidProjection,
     MermaidViewKind,
@@ -20,7 +22,7 @@ fn build_outline_projection(nodes: &[AnalysisNode], edges: &[AnalysisEdge]) -> M
 
     for node in nodes {
         if matches!(node.kind, AnalysisNodeKind::Section) {
-            source.push_str(&format!("  {}[\"{}\"]\n", escape_id(&node.id), node.label));
+            let _ = writeln!(source, "  {}[\"{}\"]", escape_id(&node.id), node.label);
             node_count += 1;
         }
     }
@@ -33,7 +35,7 @@ fn build_outline_projection(nodes: &[AnalysisNode], edges: &[AnalysisEdge]) -> M
             let s_id = escape_id(&edge.source_id);
             let t_id = escape_id(&edge.target_id);
             // Rough check if nodes are in this projection
-            source.push_str(&format!("  {} --> {}\n", s_id, t_id));
+            let _ = writeln!(source, "  {s_id} --> {t_id}");
             edge_count += 1;
         }
     }
@@ -53,18 +55,19 @@ fn build_task_projection(nodes: &[AnalysisNode], edges: &[AnalysisEdge]) -> Merm
 
     for node in nodes {
         if matches!(node.kind, AnalysisNodeKind::Task) {
-            source.push_str(&format!("  {}[\"{}\"]\n", escape_id(&node.id), node.label));
+            let _ = writeln!(source, "  {}[\"{}\"]", escape_id(&node.id), node.label);
             node_count += 1;
         }
     }
 
     for edge in edges {
         if matches!(edge.kind, AnalysisEdgeKind::NextStep) {
-            source.push_str(&format!(
-                "  {} --> {}\n",
+            let _ = writeln!(
+                source,
+                "  {} --> {}",
                 escape_id(&edge.source_id),
                 escape_id(&edge.target_id)
-            ));
+            );
             edge_count += 1;
         }
     }
@@ -78,5 +81,5 @@ fn build_task_projection(nodes: &[AnalysisNode], edges: &[AnalysisEdge]) -> Merm
 }
 
 fn escape_id(id: &str) -> String {
-    id.replace(':', "_").replace('.', "_").replace('-', "_")
+    id.replace([':', '.', '-'], "_")
 }

@@ -1061,6 +1061,20 @@ async fn search_symbols_returns_payload() {
             "# alpha\n\nThis markdown file should not affect symbol search.\n",
         ),
     ]);
+    let warmed_index = xiuxian_wendao::gateway::studio::search::build_symbol_index(
+        fixture.state.studio.project_root.as_path(),
+        fixture.state.studio.config_root.as_path(),
+        fixture.state.studio.configured_projects().as_slice(),
+    );
+    fixture
+        .state
+        .studio
+        .symbol_index_coordinator
+        .set_ready_index_for_test(
+            fixture.state.studio.configured_projects().as_slice(),
+            Arc::clone(&fixture.state.studio.symbol_index),
+            warmed_index,
+        );
 
     let result = search_symbols(
         State(fixture.state),
@@ -1081,6 +1095,8 @@ async fn search_symbols_returns_payload() {
             "query": response.0.query,
             "hitCount": response.0.hit_count,
             "selectedScope": response.0.selected_scope,
+            "partial": response.0.partial,
+            "indexingState": response.0.indexing_state,
             "hits": response.0.hits.into_iter().map(|hit| {
                 json!({
                     "name": hit.name,
@@ -1110,6 +1126,45 @@ async fn search_symbols_returns_payload() {
 }
 
 #[tokio::test]
+async fn search_symbols_returns_pending_payload_while_index_is_warming() {
+    let fixture = make_state_with_docs(vec![(
+        "packages/rust/crates/demo/src/lib.rs",
+        "pub struct PendingSymbolIndex;\n",
+    )]);
+    let projects = fixture.state.studio.configured_projects();
+    fixture
+        .state
+        .studio
+        .symbol_index_coordinator
+        .set_status_for_test(
+            projects.as_slice(),
+            xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexStatus {
+                phase: xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexPhase::Indexing,
+                last_error: None,
+                updated_at: Some("2026-03-21T00:00:00Z".to_string()),
+            },
+        );
+
+    let result = search_symbols(
+        State(Arc::clone(&fixture.state)),
+        Query(SymbolSearchQuery {
+            q: Some("pending".to_string()),
+            limit: Some(10),
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected pending symbol search request to succeed");
+    };
+
+    assert_eq!(response.0.hit_count, 0);
+    assert!(response.0.partial);
+    assert_eq!(response.0.indexing_state.as_deref(), Some("indexing"));
+    assert!(response.0.hits.is_empty());
+}
+
+#[tokio::test]
 async fn search_symbols_respects_glob_dir_filters() {
     let fixture = make_state_with_docs(vec![
         (
@@ -1130,6 +1185,20 @@ async fn search_symbols_respects_glob_dir_filters() {
         }],
         repo_projects: Vec::new(),
     });
+    let warmed_index = xiuxian_wendao::gateway::studio::search::build_symbol_index(
+        fixture.state.studio.project_root.as_path(),
+        fixture.state.studio.config_root.as_path(),
+        fixture.state.studio.configured_projects().as_slice(),
+    );
+    fixture
+        .state
+        .studio
+        .symbol_index_coordinator
+        .set_ready_index_for_test(
+            fixture.state.studio.configured_projects().as_slice(),
+            Arc::clone(&fixture.state.studio.symbol_index),
+            warmed_index,
+        );
 
     let result = search_symbols(
         State(Arc::clone(&fixture.state)),

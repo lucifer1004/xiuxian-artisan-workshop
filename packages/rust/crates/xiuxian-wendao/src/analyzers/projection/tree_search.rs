@@ -8,6 +8,7 @@ use crate::analyzers::query::{
 use super::markdown::build_projected_page_index_trees;
 
 /// Search projected page-index nodes across projected page trees.
+#[must_use]
 pub fn build_repo_projected_page_index_tree_search(
     query: &RepoProjectedPageIndexTreeSearchQuery,
     analysis: &RepositoryAnalysisOutput,
@@ -45,10 +46,10 @@ pub fn scored_projected_page_index_node_hits(
         return hits;
     };
     for tree in trees {
-        if let Some(kind) = kind_filter {
-            if tree.kind != kind {
-                continue;
-            }
+        if let Some(kind) = kind_filter
+            && tree.kind != kind
+        {
+            continue;
         }
 
         collect_matching_nodes(&tree, tree.roots.as_slice(), query, &mut hits);

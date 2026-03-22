@@ -40,7 +40,9 @@ fn projected_page_navigation_bundle_resolves_tree_context_and_family_cluster() -
                 && page.title == "ProjectionPkg.solve"
                 && page.page_id.contains(":symbol:")
         })
-        .expect("expected a symbol-backed projected reference page titled `ProjectionPkg.solve`");
+        .unwrap_or_else(|| {
+            panic!("expected a symbol-backed projected reference page titled `ProjectionPkg.solve`")
+        });
 
     let trees = repo_projected_page_index_trees_from_config(
         &RepoProjectedPageIndexTreesQuery {
@@ -53,9 +55,9 @@ fn projected_page_navigation_bundle_resolves_tree_context_and_family_cluster() -
         .trees
         .iter()
         .find(|tree| tree.page_id == page.page_id)
-        .expect("expected a projected page-index tree for the selected page");
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for the selected page"));
     let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
-        .expect("expected a projected page-index node titled `Anchors`");
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `Anchors`"));
 
     let result = repo_projected_page_navigation_from_config(
         &RepoProjectedPageNavigationQuery {

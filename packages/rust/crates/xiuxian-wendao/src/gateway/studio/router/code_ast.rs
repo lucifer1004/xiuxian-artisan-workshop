@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::analyzers::{RepoSymbolKind, RepositoryAnalysisOutput};
 use crate::gateway::studio::types::{
     CodeAstAnalysisResponse, CodeAstEdge, CodeAstEdgeKind, CodeAstNode, CodeAstNodeKind,
@@ -5,6 +7,8 @@ use crate::gateway::studio::types::{
 };
 
 /// Build the code-AST response payload for one repository-relative source path.
+#[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn build_code_ast_analysis_response(
     repo_id: String,
     path: String,
@@ -83,7 +87,7 @@ pub fn build_code_ast_analysis_response(
         });
     }
 
-    let language = if path.ends_with(".jl") {
+    let language = if path_has_extension(path.as_str(), "jl") {
         "julia"
     } else {
         "modelica"
@@ -141,6 +145,11 @@ pub fn build_code_ast_analysis_response(
 }
 
 /// Resolve the repository context and normalized repository-relative path for code-AST queries.
+///
+/// # Errors
+///
+/// Returns [`crate::gateway::studio::router::StudioApiError`] when the
+/// repository cannot be resolved from the explicit repo id or path prefix.
 pub fn resolve_code_ast_repository_and_path<'a>(
     repositories: &'a [crate::analyzers::RegisteredRepository],
     repo_id: Option<&str>,
@@ -174,5 +183,11 @@ pub fn resolve_code_ast_repository_and_path<'a>(
 }
 
 fn repo_relative_path_matches(path: &str, target: &str) -> bool {
-    path == target || path.ends_with(&format!("/{}", target))
+    path == target || path.ends_with(&format!("/{target}"))
+}
+
+fn path_has_extension(path: &str, extension: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case(extension))
 }

@@ -247,6 +247,7 @@ impl AtomicFixBatch {
     /// Returns a `FixReport` even on errors - check `report.is_success()`
     /// and `report.errors` for details.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn apply_all(&self) -> FixReport {
         let mut report = FixReport::default();
         let filtered = self.filter_by_confidence();

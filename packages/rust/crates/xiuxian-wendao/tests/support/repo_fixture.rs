@@ -3,9 +3,12 @@ use std::path::{Path, PathBuf};
 
 use git2::{BranchType, IndexAddOption, Repository, Signature, Time, build::CheckoutBuilder};
 
+#[allow(dead_code)]
 pub type TestResult = Result<(), Box<dyn std::error::Error>>;
+#[allow(dead_code)]
 pub type TestResultPath = Result<PathBuf, Box<dyn std::error::Error>>;
 
+#[allow(dead_code)]
 pub fn create_sample_julia_repo(
     base: &Path,
     package_name: &str,
@@ -113,6 +116,7 @@ end
     Ok(repo_dir)
 }
 
+#[allow(dead_code)]
 fn initialize_git_repository(repo_dir: &Path, remote_url: &str) -> TestResult {
     let repository = Repository::init(repo_dir)?;
     repository.remote("origin", remote_url)?;
@@ -121,6 +125,7 @@ fn initialize_git_repository(repo_dir: &Path, remote_url: &str) -> TestResult {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn commit_all(repository: &Repository, message: &str) -> Result<git2::Oid, git2::Error> {
     let mut index = repository.index()?;
     index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
@@ -150,6 +155,7 @@ fn commit_all(repository: &Repository, message: &str) -> Result<git2::Oid, git2:
     )
 }
 
+#[allow(dead_code)]
 fn ensure_branch_main(repository: &Repository, commit_id: git2::Oid) -> Result<(), git2::Error> {
     let commit = repository.find_commit(commit_id)?;
     match repository.find_branch("main", BranchType::Local) {

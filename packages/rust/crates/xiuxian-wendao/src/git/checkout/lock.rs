@@ -42,11 +42,11 @@ pub(super) fn managed_lock_path_for(repository: &RegisteredRepository) -> PathBu
         .join("xiuxian-wendao")
         .join("repo-intelligence");
     let mirrors_root = intelligence_root.join("mirrors");
-    let mirror_root = super::namespace::managed_mirror_root_for(repository);
-    let relative_path = mirror_root
-        .strip_prefix(&mirrors_root)
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|_| PathBuf::from(format!("{}.git", repository.id)));
+    let managed_mirror_root = super::namespace::managed_mirror_root_for(repository);
+    let relative_path = managed_mirror_root.strip_prefix(&mirrors_root).map_or_else(
+        |_| PathBuf::from(format!("{}.git", repository.id)),
+        Path::to_path_buf,
+    );
 
     intelligence_root
         .join("locks")

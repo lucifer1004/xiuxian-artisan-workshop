@@ -183,6 +183,7 @@ fn repo_sync_staleness_state(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn repo_sync_status_summary(
     source_kind: RepoSourceKind,
     mirror_state: RepoSyncState,

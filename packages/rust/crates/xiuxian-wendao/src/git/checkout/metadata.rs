@@ -11,6 +11,7 @@ use crate::analyzers::query::RepoSyncDriftState;
 use super::LocalCheckoutMetadata;
 
 /// Discovers metadata from a local checkout path.
+#[must_use]
 pub fn discover_checkout_metadata(path: &Path) -> Option<LocalCheckoutMetadata> {
     if !path.is_dir() {
         return None;

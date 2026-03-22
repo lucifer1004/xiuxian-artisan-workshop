@@ -381,6 +381,23 @@ After this stage, Wendao should support:
 - retrieval that understands both repository structure and page structure
 - a clean path toward deep wiki generation without depending on raw LLM improvisation
 
+## Current Validation Status
+
+The deterministic Stage-2 projection and retrieval slice is now operating on a
+green Tier-3 lane for the active Wendao plus external Modelica scope:
+
+- `cargo clippy -p xiuxian-wendao -p xiuxian-wendao-modelica --all-targets --all-features -- -D warnings`
+- `cargo nextest run -p xiuxian-wendao -p xiuxian-wendao-modelica --no-fail-fast`
+
+That shifts the next bounded step away from more surface expansion and toward
+post-gate hygiene:
+
+- remove clearly disposable backup/debris files from `xiuxian-wendao/src/`
+- the stale tracked `src/analyzers/service/mod.rs.bak2` monolith is now gone,
+  so projection work no longer carries that service-layer refactor artifact
+- keep package docs and execution records aligned with the live analyzer and
+  Stage-2 projection contracts
+
 ## Why This Split Matters
 
 Separating this stage from Repo Intelligence MVP prevents three common failures:

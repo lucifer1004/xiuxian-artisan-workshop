@@ -101,7 +101,9 @@ mod tests {
     #[test]
     fn test_plugin_registration() {
         let mut registry = PluginRegistry::new();
-        registry.register(MockPlugin("test-plugin")).unwrap();
+        registry
+            .register(MockPlugin("test-plugin"))
+            .unwrap_or_else(|error| panic!("plugin registration should succeed: {error}"));
 
         assert!(registry.get("test-plugin").is_some());
         assert_eq!(registry.plugin_ids(), vec!["test-plugin"]);
@@ -117,8 +119,12 @@ mod tests {
     #[test]
     fn test_resolve_for_repository() {
         let mut registry = PluginRegistry::new();
-        registry.register(MockPlugin("p1")).unwrap();
-        registry.register(MockPlugin("p2")).unwrap();
+        registry
+            .register(MockPlugin("p1"))
+            .unwrap_or_else(|error| panic!("plugin registration should succeed: {error}"));
+        registry
+            .register(MockPlugin("p2"))
+            .unwrap_or_else(|error| panic!("plugin registration should succeed: {error}"));
 
         let repo = RegisteredRepository {
             id: "repo1".to_string(),
@@ -129,7 +135,9 @@ mod tests {
             ..RegisteredRepository::default()
         };
 
-        let resolved = registry.resolve_for_repository(&repo).unwrap();
+        let resolved = registry
+            .resolve_for_repository(&repo)
+            .unwrap_or_else(|error| panic!("plugin resolution should succeed: {error}"));
         assert_eq!(resolved.len(), 2);
         assert_eq!(resolved[0].id(), "p1");
         assert_eq!(resolved[1].id(), "p2");

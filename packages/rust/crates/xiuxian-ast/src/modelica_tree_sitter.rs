@@ -98,7 +98,7 @@ pub struct ModelicaSymbol {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line_end: Option<usize>,
     /// Visibility modifier.
-    #[serde(default, skip_serializing_if = "ModelicaVisibility::is_default")]
+    #[serde(default, skip_serializing_if = "ModelicaVisibility::is_default_ref")]
     pub visibility: ModelicaVisibility,
     /// Components (parameters, variables) within this symbol.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -158,18 +158,26 @@ pub struct ModelicaFileSummary {
 impl ModelicaVisibility {
     /// Check if this is the default visibility.
     #[must_use]
-    pub const fn is_default(&self) -> bool {
+    pub const fn is_default(self) -> bool {
         matches!(self, Self::Public)
+    }
+
+    /// Check if a referenced visibility is the default value.
+    #[must_use]
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    pub const fn is_default_ref(value: &Self) -> bool {
+        value.is_default()
     }
 }
 
 /// Returns the expected library filename for the current platform.
 fn library_name() -> &'static str {
-    match OS {
-        "macos" => "libtree-sitter-modelica.dylib",
-        "linux" => "libtree-sitter-modelica.so",
-        "windows" => "tree-sitter-modelica.dll",
-        _ => "libtree-sitter-modelica.so",
+    if OS == "macos" {
+        "libtree-sitter-modelica.dylib"
+    } else if OS == "windows" {
+        "tree-sitter-modelica.dll"
+    } else {
+        "libtree-sitter-modelica.so"
     }
 }
 
@@ -183,9 +191,8 @@ fn find_library_path() -> Result<PathBuf, ModelicaParseError> {
     }
 
     let lib_name = library_name();
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."));
+    let manifest_dir =
+        std::env::var("CARGO_MANIFEST_DIR").map_or_else(|_| PathBuf::from("."), PathBuf::from);
 
     let resource_path = manifest_dir.join("resources").join(lib_name);
     if resource_path.exists() {
@@ -210,6 +217,12 @@ pub struct TreeSitterModelicaParser {
 }
 
 impl TreeSitterModelicaParser {
+    /// Create a runtime-loaded Modelica parser backed by tree-sitter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the Modelica grammar shared library cannot be
+    /// found, loaded, or initialized.
     pub fn new() -> Result<Self, ModelicaParseError> {
         let lib_path = find_library_path()?;
 
@@ -235,6 +248,12 @@ impl TreeSitterModelicaParser {
         }
     }
 
+    /// Parse one Modelica source file into a conservative summary.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when tree-sitter cannot parse the provided source or
+    /// the runtime grammar cannot produce a syntax tree.
     pub fn parse_file_summary(
         &mut self,
         code: &str,
@@ -278,15 +297,15 @@ fn collect_summary(
         if class_name.is_none() && depth < 4 {
             *class_name = extract_class_name_from_definition(node, code);
         }
-        if depth >= 3 {
-            if let Some(symbol) = extract_symbol_from_definition(node, code) {
-                symbols.push(symbol);
-            }
+        if depth >= 3
+            && let Some(symbol) = extract_symbol_from_definition(node, code)
+        {
+            symbols.push(symbol);
         }
-    } else if node.kind() == "import_clause" {
-        if let Some(import) = extract_import_from_clause(node, code) {
-            imports.push(import);
-        }
+    } else if node.kind() == "import_clause"
+        && let Some(import) = extract_import_from_clause(node, code)
+    {
+        imports.push(import);
     }
 
     let mut cursor = node.walk();
@@ -334,7 +353,6 @@ fn extract_symbol_from_definition(node: Node<'_>, code: &str) -> Option<Modelica
     let visibility = extract_visibility_from_prefix(&prefix);
     let kind = match prefix.as_str() {
         "package" => ModelicaSymbolKind::Package,
-        "model" | "block" | "record" => ModelicaSymbolKind::Class,
         "connector" | "expandable connector" => ModelicaSymbolKind::Connector,
         "type" => ModelicaSymbolKind::Type,
         "function" => ModelicaSymbolKind::Function,
@@ -479,12 +497,12 @@ fn collect_equations(node: Node<'_>, code: &str, equations: &mut Vec<String>) {
     if node.kind() == "equation_section" {
         let mut cursor = node.walk();
         for child in node.named_children(&mut cursor) {
-            if child.kind() == "equation" {
-                if let Ok(text) = child.utf8_text(code.as_bytes()) {
-                    let trimmed = text.trim().to_string();
-                    if !trimmed.is_empty() {
-                        equations.push(trimmed);
-                    }
+            if child.kind() == "equation"
+                && let Ok(text) = child.utf8_text(code.as_bytes())
+            {
+                let trimmed = text.trim().to_string();
+                if !trimmed.is_empty() {
+                    equations.push(trimmed);
                 }
             }
         }
