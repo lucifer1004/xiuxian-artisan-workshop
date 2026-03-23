@@ -18,7 +18,7 @@ pub(super) fn normalize_config_path(value: &str) -> Option<String> {
     pathing::normalize_project_dir_root(value)
 }
 
-pub(super) fn configured_project_scan_roots(
+pub(crate) fn configured_project_scan_roots(
     config_root: &Path,
     projects: &[UiProjectConfig],
 ) -> Vec<PathBuf> {
@@ -47,7 +47,7 @@ pub(super) fn configured_project_scan_roots(
     roots
 }
 
-pub(super) fn resolve_project_root_path(
+pub(crate) fn resolve_project_root_path(
     config_root: &Path,
     configured_root: &str,
 ) -> Option<PathBuf> {
@@ -63,7 +63,7 @@ pub(super) fn resolve_project_scope_path(
     pathing::resolve_path_like(project_base.as_path(), configured_path)
 }
 
-pub(super) fn index_path_for_entry(project_root: &Path, path: &Path) -> String {
+pub(crate) fn index_path_for_entry(project_root: &Path, path: &Path) -> String {
     path.strip_prefix(project_root)
         .map_or_else(|_| normalize_path(path), normalize_path)
 }

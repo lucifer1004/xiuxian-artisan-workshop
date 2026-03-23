@@ -24,11 +24,14 @@ pub async fn search_ast(
     }
 
     let limit = query.limit.unwrap_or(20).max(1);
-    let ast_index = state.studio.ast_index().await?;
+    state.studio.ensure_local_symbol_index_started()?;
+    let ast_hits = state
+        .studio
+        .search_local_symbol_hits(query_text, limit)
+        .await?;
     let projects = state.studio.configured_projects();
-    let mut hits = ast_index
+    let mut hits = ast_hits
         .iter()
-        .filter(|hit| ast_hit_matches(hit, query_text))
         .map(|hit| {
             enrich_ast_hit(
                 hit,
@@ -57,16 +60,6 @@ pub async fn search_ast(
     }))
 }
 
-fn ast_hit_matches(hit: &AstSearchHit, query: &str) -> bool {
-    let query = query.to_ascii_lowercase();
-    hit.name.to_ascii_lowercase().contains(query.as_str())
-        || hit.signature.to_ascii_lowercase().contains(query.as_str())
-        || hit
-            .owner_title
-            .as_deref()
-            .is_some_and(|owner| owner.to_ascii_lowercase().contains(query.as_str()))
-}
-
 fn enrich_ast_hit(
     hit: &AstSearchHit,
     project_root: &Path,
@@ -87,7 +80,9 @@ fn enrich_ast_hit(
     enriched.project_name = metadata.project_name;
     enriched.root_label = metadata.root_label;
     enriched.navigation_target = navigation_target;
-    enriched.score = ast_hit_score(&enriched);
+    if enriched.score <= 0.0 {
+        enriched.score = ast_hit_score(&enriched);
+    }
     enriched
 }
 

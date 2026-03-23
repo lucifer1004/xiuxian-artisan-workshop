@@ -9,7 +9,9 @@ use lance::deps::arrow_array::{
 };
 use lance::deps::arrow_schema::{DataType, Field, Schema};
 use std::sync::Arc;
-use xiuxian_vector::{MigrateResult, OMNI_SCHEMA_VERSION, VectorStore, schema_version_from_schema};
+use xiuxian_vector::{
+    MigrateResult, VectorStore, XIUXIAN_SCHEMA_VERSION, schema_version_from_schema,
+};
 
 fn dict_from_strings(values: &[String]) -> Result<DictionaryArray<Int32Type>> {
     let uniq: Vec<String> = values.to_vec();
@@ -131,6 +133,9 @@ async fn migration_check_and_migrate_v1_to_v2() -> Result<()> {
         .await?;
     let arrow_schema = Arc::new(lance::deps::arrow_schema::Schema::from(dataset.schema()));
     let version = schema_version_from_schema(arrow_schema.as_ref());
-    assert_eq!(version, OMNI_SCHEMA_VERSION, "schema is v2 after migrate");
+    assert_eq!(
+        version, XIUXIAN_SCHEMA_VERSION,
+        "schema is v2 after migrate"
+    );
     Ok(())
 }

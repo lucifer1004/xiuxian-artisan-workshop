@@ -52,7 +52,7 @@ fn build_string_dictionary(
 }
 
 /// Current target schema version. New tables are created at this version.
-pub const OMNI_SCHEMA_VERSION: u32 = 2;
+pub const XIUXIAN_SCHEMA_VERSION: u32 = 2;
 
 /// One migration step (`from_version` → `to_version`).
 #[derive(Debug, Clone, serde::Serialize)]
@@ -171,7 +171,7 @@ fn migrate_batch_v1_to_v2(
 }
 
 impl crate::VectorStore {
-    /// List pending migrations for a table (based on current schema version vs `OMNI_SCHEMA_VERSION`).
+    /// List pending migrations for a table (based on current schema version vs `XIUXIAN_SCHEMA_VERSION`).
     ///
     /// # Errors
     ///
@@ -195,7 +195,7 @@ impl crate::VectorStore {
         let current = schema_version_from_schema(arrow_schema.as_ref());
         let mut out = Vec::new();
         let mut v = current;
-        while v < OMNI_SCHEMA_VERSION {
+        while v < XIUXIAN_SCHEMA_VERSION {
             let next = v + 1;
             let description = match (v, next) {
                 (1, 2) => "TOOL_NAME Utf8 → Dictionary".to_string(),

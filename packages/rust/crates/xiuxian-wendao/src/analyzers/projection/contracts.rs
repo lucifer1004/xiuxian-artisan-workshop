@@ -5,7 +5,9 @@ use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::records::DocRecord;
 
 /// Deterministic projected page family derived from Stage-1 repository truth.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema, Default,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectionPageKind {
     /// Reference-oriented projected page.

@@ -40,7 +40,7 @@ Priority override:
 - `analyzers/query.rs`
 - `analyzers/service/helpers.rs`
 - `enhancer/markdown_config.rs`
-- `skill_vfs/internal_manifest.rs`
+- `link_graph/addressing/mod.rs`
 - `link_graph/models/records/markdown_block.rs`
 
 ### Wave 2: Search and Projection
@@ -76,8 +76,6 @@ Priority override:
 ### Wave 5: Link-Graph and Remaining Infrastructure
 
 - `link_graph/addressing/mod.rs`
-- `link_graph/index.rs`
-- `link_graph/parser/code_observation.rs`
 - `link_graph/parser/sections.rs`
 - `link_graph/saliency/store/write.rs`
 - `ingress/spider.rs`
@@ -102,7 +100,22 @@ Priority override:
 - [DONE] `cargo fmt -p xiuxian-wendao`, `cargo check -p xiuxian-wendao --lib --keep-going`, `cargo test -p xiuxian-wendao gateway::studio::repo_index:: --lib`, `cargo test -p xiuxian-wendao gateway::studio::search:: --lib`, and `cargo test -p xiuxian-wendao repo_sync_endpoint_returns_repo_status_payload --lib` are green after the `gateway/studio/repo_index/state.rs` split.
 - [DONE] `gateway/studio/router/handlers/repo.rs` is now a feature folder with interface-only `repo/mod.rs`, while `query.rs`, `parse.rs`, `shared.rs`, `analysis.rs`, `index.rs`, `pages.rs`, `retrieval.rs`, `family.rs`, and `refine.rs` carry the handler families without changing the existing repo handler names.
 - [DONE] `cargo fmt -p xiuxian-wendao`, `cargo check -p xiuxian-wendao --lib --keep-going`, `cargo test -p xiuxian-wendao gateway::studio::studio_repo_sync_api_tests:: --lib`, `cargo test -p xiuxian-wendao gateway::studio::router:: --lib`, and `cargo test -p xiuxian-wendao gateway::studio::repo_index:: --lib` are green after the `gateway/studio/router/handlers/repo.rs` split.
-- [IN-PROGRESS] `gateway/studio/vfs.rs` is the next bounded facade slice under the active execplan.
+- [DONE] `gateway/studio/vfs.rs` is now a feature folder with interface-only `vfs/mod.rs`, while `filters.rs`, `roots.rs`, `scan.rs`, `navigation.rs`, `content.rs`, `categories.rs`, and `tests.rs` carry VFS scanning, root resolution, navigation, and content reads without changing the active Studio VFS entry points.
+- [DONE] `cargo fmt -p xiuxian-wendao`, `cargo check -p xiuxian-wendao --lib --keep-going`, and `cargo test -p xiuxian-wendao gateway::studio:: --lib` are green after the `gateway/studio/vfs.rs` split.
+- [DONE] `gateway/openapi/paths.rs` is now a feature folder with interface-only `paths/mod.rs`, while `analysis.rs`, `graph.rs`, `repo.rs`, `search.rs`, `shared.rs`, `ui.rs`, and `vfs.rs` carry the route constants and route inventory without changing `crate::gateway::openapi::paths::*`, `RouteContract`, or `WENDAO_GATEWAY_ROUTE_CONTRACTS`.
+- [DONE] Public constant-surface parity against the pre-split index version, route-inventory count parity, file-local `rustfmt`, standalone `rustc` re-export compilation, and `git diff --check` are green for the `gateway/openapi/paths.rs` slice.
+- [DONE] `gateway/studio/search/source_index.rs` is now a feature folder with interface-only `source_index/mod.rs`, while `ast.rs`, `symbols.rs`, `markdown.rs`, `navigation.rs`, and `filters.rs` carry the index build, markdown-hit synthesis, navigation payload assembly, and scan filtering logic without changing the existing `build_ast_index` / `build_symbol_index` call path.
+- [DONE] `cargo fmt -p xiuxian-wendao`, `cargo check -p xiuxian-wendao --lib --keep-going`, `cargo test -p xiuxian-wendao gateway::studio::search:: --lib`, and `git diff --check` are green after the `gateway/studio/search/source_index.rs` split.
+- [DONE] `analyzers/service/search.rs` is now a feature folder with interface-only `search/mod.rs`, while `documents.rs`, `legacy.rs`, `indexed_exact.rs`, `indexed_fuzzy.rs`, `ranking.rs`, `overview.rs`, `module.rs`, `symbol.rs`, `example.rs`, `imports.rs`, `coverage.rs`, and `tests.rs` carry the repo overview, ranked search, import search, and doc-coverage logic without changing the existing `crate::analyzers::service::*` search APIs.
+- [DONE] `analyzers/service/projection.rs` is now a feature folder with interface-only `projection/mod.rs`, while `gap.rs`, `pages.rs`, `page.rs`, `family.rs`, `navigation.rs`, `search.rs`, `index_tree.rs`, `retrieval.rs`, `registry.rs`, and `tests.rs` carry the projected-page, family, navigation, tree, retrieval, and gap-report wrappers without changing the existing `crate::analyzers::service::*` projection APIs.
+- [DONE] `analyzers/service/helpers.rs` is now a feature folder with interface-only `helpers/mod.rs`, while `uri.rs`, `ecosystem.rs`, `path.rs`, `ranking.rs`, `backlinks.rs`, `projection_lookup.rs`, `example_relations.rs`, `scope.rs`, and `tests.rs` carry the URI, ecosystem, path, ranking, backlink, projection lookup, example relation, and scope helpers without changing the existing analyzer-service call sites.
+- [DONE] `enhancer/markdown_config.rs` is now a feature folder with interface-only `markdown_config/mod.rs`, while `types.rs`, `index.rs`, `blocks.rs`, `links.rs`, and `tests.rs` carry markdown config block parsing, link-target extraction, and memory-index helpers without changing the `resource_registry` and enhancer API surface.
+- [DONE] `skill_vfs/internal_manifest.rs` is now a feature folder with interface-only `internal_manifest/mod.rs`, while `types.rs`, `load.rs`, `authority.rs`, and `tests.rs` carry internal skill manifest parsing, authority resolution, and workflow-type helpers without changing `skill_vfs::internal_manifest::*`.
+- [DONE] `link_graph/addressing/mod.rs` is now a feature folder with interface-only `mod.rs`, while `address.rs`, `resolve.rs`, `indices.rs`, `node_lookup.rs`, `mutation.rs`, `errors.rs`, and `tests.rs` preserve the registry, topology, skeleton-rerank, and structural-transaction child modules.
+- [DONE] `link_graph/index.rs` is now a feature folder with interface-only `mod.rs`, while `constants.rs`, `types.rs`, `lookup.rs`, `symbol_cache.rs`, and the preserved `build/`, `search/`, `ids.rs`, `page_indices.rs`, `passages.rs`, `ppr.rs`, `rank.rs`, `scoring.rs`, `semantic_documents.rs`, `shared.rs`, and `traversal.rs` child namespaces keep the public `link_graph::index::*` surface stable.
+- [DONE] `link_graph/parser/code_observation.rs` is now a feature folder with interface-only `mod.rs`, while `types.rs`, `glob.rs`, `extract.rs`, `format.rs`, and the preserved tests fixture carry code-observation parsing, glob matching, formatting, and extraction logic without changing `link_graph::parser::code_observation::*`.
+- [DONE] `cargo fmt -p xiuxian-wendao`, `cargo check -p xiuxian-wendao --lib --keep-going`, `cargo test -p xiuxian-wendao skill_vfs::internal_manifest::tests:: --lib`, `cargo test -p xiuxian-wendao link_graph::addressing:: --lib`, `cargo test -p xiuxian-wendao link_graph::index:: --lib`, `cargo test -p xiuxian-wendao link_graph::parser::code_observation:: --lib`, and `git diff --check` are green after the `skill_vfs/internal_manifest.rs`, `link_graph/addressing/mod.rs`, `link_graph/index.rs`, and `link_graph/parser/code_observation.rs` splits.
+- [IN-PROGRESS] `link_graph/parser/sections.rs` is the next bounded facade slice under the active execplan.
 
 ## Local Constraints
 

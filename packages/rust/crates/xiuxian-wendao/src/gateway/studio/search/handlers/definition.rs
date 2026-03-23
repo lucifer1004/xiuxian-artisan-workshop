@@ -37,7 +37,11 @@ pub async fn search_definition(
         .filter(|paths| !paths.is_empty());
     let observation_hints =
         definition_observation_hints(state.as_ref(), source_paths, query.line, query_text).await;
-    let ast_index = state.studio.ast_index().await?;
+    state.studio.ensure_local_symbol_index_started()?;
+    let ast_hits = state
+        .studio
+        .search_local_symbol_hits(query_text, 256)
+        .await?;
     let projects = state.studio.configured_projects();
     let options = DefinitionResolveOptions {
         scope_patterns: observation_hints.as_ref().and_then(|hints| {
@@ -53,7 +57,7 @@ pub async fn search_definition(
     };
     let candidates = resolve_definition_candidates(
         query_text,
-        ast_index.as_slice(),
+        ast_hits.as_slice(),
         state.studio.project_root.as_path(),
         state.studio.config_root.as_path(),
         projects.as_slice(),
@@ -61,7 +65,7 @@ pub async fn search_definition(
     );
     let Some(definition) = resolve_best_definition(
         query_text,
-        ast_index.as_slice(),
+        ast_hits.as_slice(),
         state.studio.project_root.as_path(),
         state.studio.config_root.as_path(),
         projects.as_slice(),

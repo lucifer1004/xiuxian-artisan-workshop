@@ -1,8 +1,6 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use crate::analyzers::{RegisteredRepository, RepoIntelligenceError};
-use crate::gateway::studio::repo_index::types::RepoIndexSnapshot;
 
 pub(super) const REPO_INDEX_ANALYSIS_TIMEOUT: Duration = Duration::from_secs(45);
 
@@ -153,7 +151,6 @@ impl AdaptiveConcurrencyController {
 pub(super) enum RepoTaskOutcome {
     Success {
         revision: Option<String>,
-        snapshot: Arc<RepoIndexSnapshot>,
     },
     Failure {
         revision: Option<String>,

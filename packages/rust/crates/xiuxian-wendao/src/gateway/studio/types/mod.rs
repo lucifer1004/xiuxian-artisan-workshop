@@ -12,6 +12,7 @@ mod error;
 mod graph;
 mod navigation;
 mod search;
+mod search_index;
 mod symbols;
 mod vfs;
 
@@ -39,6 +40,10 @@ pub use graph::{
 pub use navigation::StudioNavigationTarget;
 pub use search::{
     IntentSearchHit, KnowledgeSearchHit, SearchBacklinkItem, SearchHit, SearchResponse,
+};
+pub use search_index::{
+    SearchCorpusIndexStatus, SearchIndexMaintenanceStatus, SearchIndexPhase,
+    SearchIndexStatusResponse,
 };
 pub use symbols::{
     AutocompleteHit, AutocompleteResponse, AutocompleteSuggestion, SymbolSearchHit,

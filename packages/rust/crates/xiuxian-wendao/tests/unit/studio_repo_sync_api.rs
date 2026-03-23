@@ -22,6 +22,7 @@ use xiuxian_wendao::gateway::studio::repo_index::RepoIndexCoordinator;
 use xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexCoordinator;
 use xiuxian_wendao::gateway::studio::test_support::assert_studio_json_snapshot;
 use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
+use xiuxian_wendao::search_plane::SearchPlaneService;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -176,6 +177,531 @@ async fn repo_projected_pages_endpoint_returns_projection_payload() -> TestResul
         request_json(router, "/api/repo/projected-pages?repo=gateway-sync").await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_projected_pages_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn repo_projected_gap_report_endpoint_returns_projection_gap_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) =
+        request_json(router, "/api/repo/projected-gap-report?repo=gateway-sync").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("repo_projected_gap_report_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_projected_gap_report_endpoint_returns_projection_gap_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) =
+        request_json(router, "/api/docs/projected-gap-report?repo=gateway-sync").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_projected_gap_report_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_planner_item_endpoint_returns_gap_bundle() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("orphan.md"), "# orphan\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/planner-item?repo=gateway-sync&gap_id=repo:gateway-sync:projection-gap:documentation_page_without_anchor:repo:gateway-sync:doc:docs/orphan.md&related_limit=3&family_limit=2",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_planner_item_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_planner_search_endpoint_returns_gap_hits() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("orphan.md"), "# orphan\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/planner-search?repo=gateway-sync&query=orphan&page_kind=explanation&limit=5",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_planner_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_planner_queue_endpoint_returns_grouped_gap_backlog() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve, explain\nsolve() = nothing\nexplain() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("orphan_demo.jl"),
+        "println(\"detached example\")\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("orphan.md"), "# orphan\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/planner-queue?repo=gateway-sync&per_kind_limit=2",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_planner_queue_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_planner_rank_endpoint_returns_priority_sorted_gaps() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve, explain\nsolve() = nothing\nexplain() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("orphan_demo.jl"),
+        "println(\"detached example\")\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("orphan.md"), "# orphan\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) =
+        request_json(router, "/api/docs/planner-rank?repo=gateway-sync&limit=4").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_planner_rank_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_planner_workset_endpoint_returns_opened_gap_batch() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve, explain\nsolve() = nothing\nexplain() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("orphan_demo.jl"),
+        "println(\"detached example\")\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("orphan.md"), "# orphan\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/planner-workset?repo=gateway-sync&per_kind_limit=2&limit=2&family_limit=2",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_planner_workset_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_search_endpoint_returns_projection_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/search?repo=gateway-sync&query=solve&kind=reference&limit=5",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_retrieval_endpoint_returns_mixed_hits() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/retrieval?repo=gateway-sync&query=solve&kind=reference&limit=5",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_retrieval_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_retrieval_context_endpoint_returns_node_context_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/retrieval-context?repo=gateway-sync&page_id=repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md&node_id=reference/solve-69592caeddee%23anchors&related_limit=3",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_retrieval_context_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_retrieval_hit_endpoint_returns_hit_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/retrieval-hit?repo=gateway-sync&page_id=repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_retrieval_hit_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_page_endpoint_returns_projection_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/page?repo=gateway-sync&page_id=repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_page_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_family_context_endpoint_returns_family_context() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "gateway-sync".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| page.kind == ProjectionPageKind::HowTo)
+        .unwrap_or_else(|| panic!("expected a projected how-to page"));
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/family-context?repo=gateway-sync&page_id={}&per_kind_limit=2",
+            page.page_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_family_context_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_family_search_endpoint_returns_family_clusters() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/family-search?repo=gateway-sync&query=solve&kind=reference&limit=5&per_kind_limit=2",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_family_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_family_cluster_endpoint_returns_requested_cluster() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "gateway-sync".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| page.kind == ProjectionPageKind::HowTo)
+        .unwrap_or_else(|| panic!("expected a projected how-to page"));
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/family-cluster?repo=gateway-sync&page_id={}&kind=reference&limit=2",
+            page.page_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_family_cluster_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_navigation_endpoint_returns_navigation_bundle() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "gateway-sync".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "GatewaySyncPkg.solve"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `GatewaySyncPkg.solve`"
+            )
+        });
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: "gateway-sync".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.page_id == page.page_id)
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for the selected page"));
+    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `Anchors`"));
+    let encoded_node_id = node_id.replace('#', "%23");
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/navigation?repo=gateway-sync&page_id={}&node_id={}&family_kind=how_to&related_limit=3&family_limit=2",
+            page.page_id, encoded_node_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_navigation_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn docs_navigation_search_endpoint_returns_navigation_hits() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("docs"))?;
+    fs::write(repo_dir.join("docs").join("solve.md"), "# solve\n")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/navigation-search?repo=gateway-sync&query=solve&kind=reference&family_kind=how_to&limit=5&related_limit=3&family_limit=2",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("docs_navigation_search_endpoint_json", payload);
     Ok(())
 }
 
@@ -1090,6 +1616,7 @@ fn gateway_state_for_project(project_root: &Path) -> Arc<GatewayState> {
     let repo_index = Arc::new(RepoIndexCoordinator::new(
         project_root.to_path_buf(),
         Arc::clone(&plugin_registry),
+        xiuxian_wendao::search_plane::SearchPlaneService::new(project_root.to_path_buf()),
     ));
     repo_index.start();
     let config_path = config_root.join("wendao.toml");
@@ -1123,7 +1650,7 @@ fn gateway_state_for_project(project_root: &Path) -> Arc<GatewayState> {
                 project_root.to_path_buf(),
                 project_root.to_path_buf(),
             )),
-            ast_index: Arc::new(RwLock::new(None)),
+            search_plane: SearchPlaneService::new(project_root.to_path_buf()),
             vfs_scan: Arc::new(RwLock::new(None)),
             repo_index,
             plugin_registry,

@@ -6,11 +6,11 @@ use axum::{
 };
 
 use crate::analyzers::{
-    RepoProjectedPageIndexNodeQuery, RepoProjectedPageIndexTreeQuery,
+    RepoProjectedGapReportQuery, RepoProjectedPageIndexNodeQuery, RepoProjectedPageIndexTreeQuery,
     RepoProjectedPageIndexTreesQuery, RepoProjectedPageQuery, RepoProjectedPagesQuery,
-    build_repo_projected_page, build_repo_projected_page_index_node,
-    build_repo_projected_page_index_tree, build_repo_projected_page_index_trees,
-    build_repo_projected_pages,
+    build_repo_projected_gap_report, build_repo_projected_page,
+    build_repo_projected_page_index_node, build_repo_projected_page_index_tree,
+    build_repo_projected_page_index_trees, build_repo_projected_pages,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
@@ -37,6 +37,33 @@ pub async fn projected_pages(
         move |analysis| {
             Ok::<_, crate::analyzers::RepoIntelligenceError>(build_repo_projected_pages(
                 &RepoProjectedPagesQuery { repo_id },
+                &analysis,
+            ))
+        },
+    )
+    .await?;
+    Ok(Json(result))
+}
+
+/// Projected gap report endpoint.
+///
+/// # Errors
+///
+/// Returns an error when `repo` is missing, repository lookup or analysis
+/// fails, or the background task panics.
+pub async fn projected_gap_report(
+    Query(query): Query<RepoApiQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Result<Json<crate::analyzers::RepoProjectedGapReportResult>, StudioApiError> {
+    let repo_id = required_repo_id(query.repo.as_deref())?;
+    let result = with_repo_analysis(
+        Arc::clone(&state),
+        repo_id.clone(),
+        "REPO_PROJECTED_GAP_REPORT_PANIC",
+        "Repo projected gap report task failed unexpectedly",
+        move |analysis| {
+            Ok::<_, crate::analyzers::RepoIntelligenceError>(build_repo_projected_gap_report(
+                &RepoProjectedGapReportQuery { repo_id },
                 &analysis,
             ))
         },

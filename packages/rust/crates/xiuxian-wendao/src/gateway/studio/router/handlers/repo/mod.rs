@@ -8,7 +8,7 @@ mod parse;
 mod query;
 mod refine;
 mod retrieval;
-mod shared;
+pub(super) mod shared;
 
 pub use analysis::{doc_coverage, example_search, module_search, overview, symbol_search, sync};
 pub use family::{
@@ -17,8 +17,12 @@ pub use family::{
 };
 pub use index::{repo_index, repo_index_status};
 pub use pages::{
-    projected_page, projected_page_index_node, projected_page_index_tree,
+    projected_gap_report, projected_page, projected_page_index_node, projected_page_index_tree,
     projected_page_index_trees, projected_pages,
+};
+pub(crate) use parse::{
+    parse_projected_gap_kind, parse_projection_page_kind, required_gap_id, required_page_id,
+    required_projection_page_kind, required_repo_id, required_search_query,
 };
 pub use query::{
     RepoApiQuery, RepoDocCoverageApiQuery, RepoIndexStatusApiQuery, RepoProjectedPageApiQuery,

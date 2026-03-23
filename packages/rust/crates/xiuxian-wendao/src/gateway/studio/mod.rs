@@ -13,7 +13,7 @@ pub mod repo_index;
 #[cfg(feature = "zhenfa-router")]
 pub mod router;
 #[cfg(feature = "zhenfa-router")]
-mod search;
+pub(crate) mod search;
 #[cfg(feature = "zhenfa-router")]
 pub mod symbol_index;
 #[cfg(feature = "zhenfa-router")]
@@ -21,6 +21,8 @@ mod vfs;
 
 #[cfg(feature = "zhenfa-router")]
 pub use router::{GatewayState, StudioState, studio_router, studio_routes};
+#[cfg(feature = "zhenfa-router")]
+pub(crate) use search::build_ast_index;
 
 #[cfg(test)]
 pub(crate) mod test_support;

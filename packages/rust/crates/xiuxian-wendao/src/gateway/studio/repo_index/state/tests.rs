@@ -26,8 +26,11 @@ fn repo(id: &str, path: &str) -> RegisteredRepository {
 
 #[test]
 fn sync_repositories_only_enqueues_new_or_changed_repositories() {
-    let coordinator =
-        RepoIndexCoordinator::new(PathBuf::from("."), Arc::new(PluginRegistry::new()));
+    let coordinator = RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        crate::search_plane::SearchPlaneService::new(PathBuf::from(".")),
+    );
 
     let first = coordinator.sync_repositories(vec![repo("sciml", "./sciml")]);
     let second = coordinator.sync_repositories(vec![repo("sciml", "./sciml")]);
@@ -40,8 +43,11 @@ fn sync_repositories_only_enqueues_new_or_changed_repositories() {
 
 #[test]
 fn status_response_counts_each_phase() {
-    let coordinator =
-        RepoIndexCoordinator::new(PathBuf::from("."), Arc::new(PluginRegistry::new()));
+    let coordinator = RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        crate::search_plane::SearchPlaneService::new(PathBuf::from(".")),
+    );
     coordinator.set_status_for_test(RepoIndexEntryStatus {
         repo_id: "queued".to_string(),
         phase: RepoIndexPhase::Queued,
@@ -72,8 +78,11 @@ fn status_response_counts_each_phase() {
 
 #[test]
 fn status_response_filters_case_insensitively_from_cached_snapshot() {
-    let coordinator =
-        RepoIndexCoordinator::new(PathBuf::from("."), Arc::new(PluginRegistry::new()));
+    let coordinator = RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        crate::search_plane::SearchPlaneService::new(PathBuf::from(".")),
+    );
     coordinator.set_status_for_test(RepoIndexEntryStatus {
         repo_id: "DifferentialEquations.jl".to_string(),
         phase: RepoIndexPhase::Indexing,
@@ -117,8 +126,11 @@ async fn await_analysis_completion_returns_timeout_error_for_stuck_analysis() {
 
 #[test]
 fn record_repo_status_advances_attempt_count_without_lock_reentrancy() {
-    let coordinator =
-        RepoIndexCoordinator::new(PathBuf::from("."), Arc::new(PluginRegistry::new()));
+    let coordinator = RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        crate::search_plane::SearchPlaneService::new(PathBuf::from(".")),
+    );
     coordinator.set_status_for_test(RepoIndexEntryStatus {
         repo_id: "ADTypes.jl".to_string(),
         phase: RepoIndexPhase::Indexing,
@@ -143,8 +155,11 @@ fn record_repo_status_advances_attempt_count_without_lock_reentrancy() {
 
 #[test]
 fn interactive_enqueue_promotes_pending_repository_to_front() {
-    let coordinator =
-        RepoIndexCoordinator::new(PathBuf::from("."), Arc::new(PluginRegistry::new()));
+    let coordinator = RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        crate::search_plane::SearchPlaneService::new(PathBuf::from(".")),
+    );
     let first_repo = repo("ADTypes.jl", "./ADTypes.jl");
     let second_repo = repo("DifferentialEquations.jl", "./DifferentialEquations.jl");
     let first_fingerprint = fingerprint(&first_repo);
@@ -234,8 +249,11 @@ fn adaptive_controller_contracts_when_efficiency_collapses() {
 
 #[test]
 fn status_response_exposes_active_repos_and_concurrency_metadata() {
-    let coordinator =
-        RepoIndexCoordinator::new(PathBuf::from("."), Arc::new(PluginRegistry::new()));
+    let coordinator = RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        crate::search_plane::SearchPlaneService::new(PathBuf::from(".")),
+    );
     coordinator.set_concurrency_for_test(AdaptiveConcurrencyController::new_for_test(8));
     coordinator.set_status_for_test(RepoIndexEntryStatus {
         repo_id: "ADTypes.jl".to_string(),

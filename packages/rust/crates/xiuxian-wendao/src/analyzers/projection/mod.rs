@@ -3,6 +3,7 @@ mod contracts;
 mod family_context;
 mod family_lookup;
 mod family_search;
+mod gap_report;
 mod lookup;
 mod markdown;
 mod mixed_search;
@@ -26,6 +27,7 @@ pub use contracts::{
 pub use family_context::build_projected_page_family_context;
 pub use family_lookup::build_projected_page_family_cluster;
 pub use family_search::build_repo_projected_page_family_search as build_projected_page_family_search;
+pub use gap_report::build_projected_gap_report;
 pub use lookup::build_projected_page;
 pub use markdown::{
     build_projected_page_index_documents, build_projected_page_index_trees,

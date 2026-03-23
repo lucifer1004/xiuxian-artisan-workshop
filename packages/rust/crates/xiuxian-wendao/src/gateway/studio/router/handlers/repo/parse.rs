@@ -1,14 +1,14 @@
-use crate::analyzers::{ProjectionPageKind, RepoSyncMode};
+use crate::analyzers::{ProjectedGapKind, ProjectionPageKind, RepoSyncMode};
 use crate::gateway::studio::router::StudioApiError;
 
-pub(super) fn required_repo_id(repo: Option<&str>) -> Result<String, StudioApiError> {
+pub(crate) fn required_repo_id(repo: Option<&str>) -> Result<String, StudioApiError> {
     repo.map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .ok_or_else(|| StudioApiError::bad_request("MISSING_REPO", "`repo` is required"))
 }
 
-pub(super) fn required_search_query(query: Option<&str>) -> Result<String, StudioApiError> {
+pub(crate) fn required_search_query(query: Option<&str>) -> Result<String, StudioApiError> {
     query
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -16,12 +16,20 @@ pub(super) fn required_search_query(query: Option<&str>) -> Result<String, Studi
         .ok_or_else(|| StudioApiError::bad_request("MISSING_QUERY", "`query` is required"))
 }
 
-pub(super) fn required_page_id(page_id: Option<&str>) -> Result<String, StudioApiError> {
+pub(crate) fn required_page_id(page_id: Option<&str>) -> Result<String, StudioApiError> {
     page_id
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .ok_or_else(|| StudioApiError::bad_request("MISSING_PAGE_ID", "`page_id` is required"))
+}
+
+pub(crate) fn required_gap_id(gap_id: Option<&str>) -> Result<String, StudioApiError> {
+    gap_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| StudioApiError::bad_request("MISSING_GAP_ID", "`gap_id` is required"))
 }
 
 pub(super) fn required_node_id(node_id: Option<&str>) -> Result<String, StudioApiError> {
@@ -48,7 +56,7 @@ pub(super) fn parse_repo_sync_mode(mode: Option<&str>) -> Result<RepoSyncMode, S
     }
 }
 
-pub(super) fn parse_projection_page_kind(
+pub(crate) fn parse_projection_page_kind(
     kind: Option<&str>,
 ) -> Result<Option<ProjectionPageKind>, StudioApiError> {
     match kind.map(str::trim).filter(|value| !value.is_empty()) {
@@ -64,9 +72,36 @@ pub(super) fn parse_projection_page_kind(
     }
 }
 
-pub(super) fn required_projection_page_kind(
+pub(crate) fn required_projection_page_kind(
     kind: Option<&str>,
 ) -> Result<ProjectionPageKind, StudioApiError> {
     parse_projection_page_kind(kind)?
         .ok_or_else(|| StudioApiError::bad_request("MISSING_KIND", "`kind` is required"))
+}
+
+pub(crate) fn parse_projected_gap_kind(
+    kind: Option<&str>,
+) -> Result<Option<ProjectedGapKind>, StudioApiError> {
+    match kind.map(str::trim).filter(|value| !value.is_empty()) {
+        None => Ok(None),
+        Some("module_reference_without_documentation") => {
+            Ok(Some(ProjectedGapKind::ModuleReferenceWithoutDocumentation))
+        }
+        Some("symbol_reference_without_documentation") => {
+            Ok(Some(ProjectedGapKind::SymbolReferenceWithoutDocumentation))
+        }
+        Some("symbol_reference_unverified") => {
+            Ok(Some(ProjectedGapKind::SymbolReferenceUnverified))
+        }
+        Some("example_how_to_without_anchor") | Some("example_howto_without_anchor") => {
+            Ok(Some(ProjectedGapKind::ExampleHowToWithoutAnchor))
+        }
+        Some("documentation_page_without_anchor") => {
+            Ok(Some(ProjectedGapKind::DocumentationPageWithoutAnchor))
+        }
+        Some(other) => Err(StudioApiError::bad_request(
+            "INVALID_GAP_KIND",
+            format!("unsupported projected gap kind `{other}`"),
+        )),
+    }
 }

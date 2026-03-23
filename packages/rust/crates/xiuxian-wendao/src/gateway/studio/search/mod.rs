@@ -9,5 +9,6 @@ pub mod support;
 
 pub use handlers::{
     build_ast_index, build_symbol_index, search_ast, search_attachments, search_autocomplete,
-    search_definition, search_intent, search_knowledge, search_references, search_symbols,
+    search_definition, search_index_status, search_intent, search_knowledge, search_references,
+    search_symbols,
 };

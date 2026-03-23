@@ -342,6 +342,22 @@
         }
       }
     },
+    "/api/search/index/status": {
+      "get": {
+        "operationId": "studioSearchIndexStatus",
+        "tags": ["studio-search"],
+        "summary": "Inspect search-plane indexing status",
+        "description": "Return aggregated corpus build status for the Studio search plane.",
+        "responses": {
+          "200": {
+            "description": "Current search-plane index status across all corpora."
+          },
+          "500": {
+            "description": "The gateway failed while computing the search-plane index status."
+          }
+        }
+      }
+    },
     "/api/search/ast": {
       "get": {
         "operationId": "studioSearchAst",
@@ -1150,6 +1166,2755 @@
           },
           "500": {
             "description": "The gateway failed while executing the projected-pages task."
+          }
+        }
+      }
+    },
+    "/api/docs/projected-gap-report": {
+      "get": {
+        "operationId": "studioDocsProjectedGapReport",
+        "tags": ["docs"],
+        "summary": "Inspect deterministic projected deep-wiki gaps through the docs surface",
+        "description": "Run the Wendao deterministic deep-wiki planning flow for one configured repository and return the docs-facing projected gap report without introducing any generated wiki content.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing projected deep-wiki gap report with deterministic summary and gap rows.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "summary": {
+                    "page_count": 6,
+                    "gap_count": 0,
+                    "by_kind": []
+                  },
+                  "gaps": []
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs projected-gap-report request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "MISSING_REPO",
+                  "message": "`repo` is required"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs projected-gap-report task."
+          }
+        }
+      }
+    },
+    "/api/docs/planner-item": {
+      "get": {
+        "operationId": "studioDocsPlannerItem",
+        "tags": ["docs"],
+        "summary": "Open one deterministic deep-wiki planner item",
+        "description": "Run the Wendao deterministic deep-wiki planner flow through the docs namespace for one configured repository and return one stable projected gap together with its mixed retrieval hit and page-centric navigation bundle.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gap_id",
+            "in": "query",
+            "required": true,
+            "description": "Stable projected gap identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "family_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family to include as a deterministic cluster in the navigation bundle.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "related_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return. Defaults to 5.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "family_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return in the requested family cluster. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One docs-facing deterministic planner item bundle.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "gap": {
+                    "repo_id": "gateway-sync",
+                    "gap_id": "repo:gateway-sync:projection-gap:documentation_page_without_anchor:repo:gateway-sync:doc:docs/orphan.md",
+                    "kind": "documentation_page_without_anchor",
+                    "page_kind": "reference",
+                    "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/orphan.md",
+                    "entity_id": "repo:gateway-sync:doc:docs/orphan.md",
+                    "title": "orphan",
+                    "path": "docs/orphan.md",
+                    "module_ids": [],
+                    "symbol_ids": [],
+                    "example_ids": [],
+                    "doc_ids": ["repo:gateway-sync:doc:docs/orphan.md"],
+                    "format_hints": ["md"]
+                  },
+                  "hit": {
+                    "kind": "page",
+                    "page": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/orphan.md",
+                      "kind": "reference",
+                      "title": "orphan",
+                      "module_ids": [],
+                      "symbol_ids": [],
+                      "example_ids": [],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/orphan.md"],
+                      "paths": ["docs/orphan.md"],
+                      "format_hints": ["md"],
+                      "sections": []
+                    },
+                    "node": null
+                  },
+                  "navigation": {
+                    "repo_id": "gateway-sync",
+                    "center": {
+                      "kind": "page",
+                      "page": {
+                        "repo_id": "gateway-sync",
+                        "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/orphan.md",
+                        "kind": "reference",
+                        "title": "orphan",
+                        "module_ids": [],
+                        "symbol_ids": [],
+                        "example_ids": [],
+                        "doc_ids": ["repo:gateway-sync:doc:docs/orphan.md"],
+                        "paths": ["docs/orphan.md"],
+                        "format_hints": ["md"],
+                        "sections": []
+                      },
+                      "node": null
+                    },
+                    "related_pages": [],
+                    "node_context": null,
+                    "tree": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/orphan.md",
+                      "root": {
+                        "doc_id": "reference/orphan.md",
+                        "id": "reference/orphan#orphan",
+                        "title": "orphan",
+                        "level": 1,
+                        "summary": ":PROPERTIES:",
+                        "line_range": [1, 14],
+                        "children": []
+                      }
+                    },
+                    "family_cluster": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs planner-item request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingGapId": {
+                    "value": {
+                      "code": "MISSING_GAP_ID",
+                      "message": "`gap_id` is required"
+                    }
+                  },
+                  "invalidKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested projected gap or owning projected page identifiers were not present for the configured repository.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "NOT_FOUND",
+                  "message": "repo `gateway-sync` does not contain projected gap `repo:gateway-sync:projection-gap:documentation_page_without_anchor:repo:gateway-sync:doc:docs/missing.md`"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs planner-item task."
+          }
+        }
+      }
+    },
+    "/api/docs/planner-search": {
+      "get": {
+        "operationId": "studioDocsPlannerSearch",
+        "tags": ["docs"],
+        "summary": "Search deterministic deep-wiki planner gaps",
+        "description": "Run the Wendao deterministic deep-wiki planner discovery flow through the docs namespace for one configured repository and return stable projected gaps ranked by explicit planner evidence.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "Planner search string matched against gap title, path, entity id, identifiers, and stable kind tokens.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gap_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected gap kind filter.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "module_reference_without_documentation",
+                "symbol_reference_without_documentation",
+                "symbol_reference_unverified",
+                "example_how_to_without_anchor",
+                "documentation_page_without_anchor"
+              ]
+            }
+          },
+          {
+            "name": "page_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family filter.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of planner hits to return. Defaults to 10.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic planner search hits.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "hits": [
+                    {
+                      "search_score": 90,
+                      "gap": {
+                        "repo_id": "gateway-sync",
+                        "gap_id": "repo:gateway-sync:projection-gap:documentation_page_without_anchor:repo:gateway-sync:doc:docs/orphan.md",
+                        "kind": "documentation_page_without_anchor",
+                        "page_kind": "explanation",
+                        "page_id": "repo:gateway-sync:projection:explanation:doc:repo:gateway-sync:doc:docs/orphan.md",
+                        "entity_id": "repo:gateway-sync:doc:docs/orphan.md",
+                        "title": "orphan",
+                        "path": "docs/orphan.md",
+                        "module_ids": [],
+                        "symbol_ids": [],
+                        "example_ids": [],
+                        "doc_ids": ["repo:gateway-sync:doc:docs/orphan.md"],
+                        "format_hints": ["md"]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs planner-search request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingQuery": {
+                    "value": {
+                      "code": "MISSING_QUERY",
+                      "message": "`query` is required"
+                    }
+                  },
+                  "invalidGapKind": {
+                    "value": {
+                      "code": "INVALID_GAP_KIND",
+                      "message": "unsupported projected gap kind `bogus`"
+                    }
+                  },
+                  "invalidPageKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs planner-search task."
+          }
+        }
+      }
+    },
+    "/api/docs/planner-queue": {
+      "get": {
+        "operationId": "studioDocsPlannerQueue",
+        "tags": ["docs"],
+        "summary": "Open deterministic deep-wiki planner queue groups",
+        "description": "Run the Wendao deterministic deep-wiki planner queue flow through the docs namespace for one configured repository and return grouped projected gaps previewed by stable gap kind.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gap_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected gap kind filter.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "module_reference_without_documentation",
+                "symbol_reference_without_documentation",
+                "symbol_reference_unverified",
+                "example_how_to_without_anchor",
+                "documentation_page_without_anchor"
+              ]
+            }
+          },
+          {
+            "name": "page_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family filter.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "per_kind_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of preview gaps to return for each gap kind. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic planner queue groups.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "page_count": 6,
+                  "total_gap_count": 4,
+                  "groups": [
+                    {
+                      "kind": "symbol_reference_without_documentation",
+                      "count": 2,
+                      "gaps": [
+                        {
+                          "repo_id": "gateway-sync",
+                          "gap_id": "repo:gateway-sync:projection-gap:symbol_reference_without_documentation:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                          "kind": "symbol_reference_without_documentation",
+                          "page_kind": "reference",
+                          "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                          "entity_id": "repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                          "title": "GatewaySyncPkg.explain",
+                          "path": "src/GatewaySyncPkg.jl",
+                          "module_ids": [
+                            "repo:gateway-sync:module:GatewaySyncPkg"
+                          ],
+                          "symbol_ids": [
+                            "repo:gateway-sync:symbol:GatewaySyncPkg.explain"
+                          ],
+                          "example_ids": [],
+                          "doc_ids": [],
+                          "format_hints": []
+                        },
+                        {
+                          "repo_id": "gateway-sync",
+                          "gap_id": "repo:gateway-sync:projection-gap:symbol_reference_without_documentation:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                          "kind": "symbol_reference_without_documentation",
+                          "page_kind": "reference",
+                          "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                          "entity_id": "repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                          "title": "GatewaySyncPkg.solve",
+                          "path": "src/GatewaySyncPkg.jl",
+                          "module_ids": [
+                            "repo:gateway-sync:module:GatewaySyncPkg"
+                          ],
+                          "symbol_ids": [
+                            "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                          ],
+                          "example_ids": [],
+                          "doc_ids": [],
+                          "format_hints": []
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "documentation_page_without_anchor",
+                      "count": 1,
+                      "gaps": [
+                        {
+                          "repo_id": "gateway-sync",
+                          "gap_id": "repo:gateway-sync:projection-gap:documentation_page_without_anchor:repo:gateway-sync:doc:docs/orphan.md",
+                          "kind": "documentation_page_without_anchor",
+                          "page_kind": "explanation",
+                          "page_id": "repo:gateway-sync:projection:explanation:doc:repo:gateway-sync:doc:docs/orphan.md",
+                          "entity_id": "repo:gateway-sync:doc:docs/orphan.md",
+                          "title": "orphan",
+                          "path": "docs/orphan.md",
+                          "module_ids": [],
+                          "symbol_ids": [],
+                          "example_ids": [],
+                          "doc_ids": ["repo:gateway-sync:doc:docs/orphan.md"],
+                          "format_hints": ["md"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs planner-queue request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "invalidGapKind": {
+                    "value": {
+                      "code": "INVALID_GAP_KIND",
+                      "message": "unsupported projected gap kind `bogus`"
+                    }
+                  },
+                  "invalidPageKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs planner-queue task."
+          }
+        }
+      }
+    },
+    "/api/docs/planner-rank": {
+      "get": {
+        "operationId": "studioDocsPlannerRank",
+        "tags": ["docs"],
+        "summary": "Open deterministic deep-wiki planner rank hits",
+        "description": "Run the Wendao deterministic deep-wiki planner rank flow through the docs namespace for one configured repository and return stable projected gaps ordered by deterministic planner priority evidence.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gap_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected gap kind filter.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "module_reference_without_documentation",
+                "symbol_reference_without_documentation",
+                "symbol_reference_unverified",
+                "example_how_to_without_anchor",
+                "documentation_page_without_anchor"
+              ]
+            }
+          },
+          {
+            "name": "page_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family filter.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of ranked planner gaps to return. Defaults to 10.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic planner rank hits.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "hits": [
+                    {
+                      "priority_score": 96,
+                      "reasons": [
+                        {
+                          "code": "gap_kind_base",
+                          "points": 92,
+                          "detail": "base priority from projected gap kind `symbol_reference_without_documentation`"
+                        },
+                        {
+                          "code": "reference_page_bonus",
+                          "points": 2,
+                          "detail": "reference page bonus"
+                        },
+                        {
+                          "code": "module_anchor_bonus",
+                          "points": 1,
+                          "detail": "1 attached module anchor(s)"
+                        },
+                        {
+                          "code": "symbol_anchor_bonus",
+                          "points": 1,
+                          "detail": "1 attached symbol anchor(s)"
+                        }
+                      ],
+                      "gap": {
+                        "repo_id": "gateway-sync",
+                        "gap_id": "repo:gateway-sync:projection-gap:symbol_reference_without_documentation:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                        "kind": "symbol_reference_without_documentation",
+                        "page_kind": "reference",
+                        "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                        "entity_id": "repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                        "title": "GatewaySyncPkg.explain",
+                        "path": "src/GatewaySyncPkg.jl",
+                        "module_ids": [
+                          "repo:gateway-sync:module:GatewaySyncPkg"
+                        ],
+                        "symbol_ids": [
+                          "repo:gateway-sync:symbol:GatewaySyncPkg.explain"
+                        ],
+                        "example_ids": [],
+                        "doc_ids": [],
+                        "format_hints": []
+                      }
+                    },
+                    {
+                      "priority_score": 90,
+                      "reasons": [
+                        {
+                          "code": "gap_kind_base",
+                          "points": 88,
+                          "detail": "base priority from projected gap kind `documentation_page_without_anchor`"
+                        },
+                        {
+                          "code": "explanation_page_bonus",
+                          "points": 1,
+                          "detail": "explanation page bonus"
+                        },
+                        {
+                          "code": "doc_anchor_bonus",
+                          "points": 1,
+                          "detail": "1 attached documentation anchor(s)"
+                        }
+                      ],
+                      "gap": {
+                        "repo_id": "gateway-sync",
+                        "gap_id": "repo:gateway-sync:projection-gap:documentation_page_without_anchor:repo:gateway-sync:doc:docs/orphan.md",
+                        "kind": "documentation_page_without_anchor",
+                        "page_kind": "explanation",
+                        "page_id": "repo:gateway-sync:projection:explanation:doc:repo:gateway-sync:doc:docs/orphan.md",
+                        "entity_id": "repo:gateway-sync:doc:docs/orphan.md",
+                        "title": "orphan",
+                        "path": "docs/orphan.md",
+                        "module_ids": [],
+                        "symbol_ids": [],
+                        "example_ids": [],
+                        "doc_ids": ["repo:gateway-sync:doc:docs/orphan.md"],
+                        "format_hints": ["md"]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs planner-rank request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "invalidGapKind": {
+                    "value": {
+                      "code": "INVALID_GAP_KIND",
+                      "message": "unsupported projected gap kind `bogus`"
+                    }
+                  },
+                  "invalidPageKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs planner-rank task."
+          }
+        }
+      }
+    },
+    "/api/docs/planner-workset": {
+      "get": {
+        "operationId": "studioDocsPlannerWorkset",
+        "tags": ["docs"],
+        "summary": "Open deterministic deep-wiki planner workset bundles",
+        "description": "Run the Wendao deterministic deep-wiki planner workset flow through the docs namespace for one configured repository, keep the grouped queue preview, rank matching projected gaps deterministically, group the selected ranked hits by gap kind and page family, and open a bounded batch of planner-item bundles from that ranked selection.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gap_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected gap kind filter.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "module_reference_without_documentation",
+                "symbol_reference_without_documentation",
+                "symbol_reference_unverified",
+                "example_how_to_without_anchor",
+                "documentation_page_without_anchor"
+              ]
+            }
+          },
+          {
+            "name": "page_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family filter.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "per_kind_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of preview gaps to keep for each gap kind before batch opening. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of planner items to open across the queue preview. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "family_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family to include as a deterministic cluster in each navigation bundle.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "related_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return for each opened planner item. Defaults to 5.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "family_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return in the requested family cluster. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic planner workset bundles.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "queue": {
+                    "repo_id": "gateway-sync",
+                    "page_count": 6,
+                    "total_gap_count": 4,
+                    "groups": [
+                      {
+                        "kind": "symbol_reference_without_documentation",
+                        "count": 2,
+                        "gaps": [
+                          {
+                            "repo_id": "gateway-sync",
+                            "gap_id": "repo:gateway-sync:projection-gap:symbol_reference_without_documentation:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                            "kind": "symbol_reference_without_documentation",
+                            "page_kind": "reference",
+                            "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                            "entity_id": "repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                            "title": "GatewaySyncPkg.explain",
+                            "path": "src/GatewaySyncPkg.jl",
+                            "module_ids": [
+                              "repo:gateway-sync:module:GatewaySyncPkg"
+                            ],
+                            "symbol_ids": [
+                              "repo:gateway-sync:symbol:GatewaySyncPkg.explain"
+                            ],
+                            "example_ids": [],
+                            "doc_ids": [],
+                            "format_hints": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "ranked_hits": [
+                    {
+                      "priority_score": 96,
+                      "reasons": [
+                        {
+                          "code": "gap_kind_base",
+                          "points": 92,
+                          "detail": "base priority from projected gap kind `symbol_reference_without_documentation`"
+                        },
+                        {
+                          "code": "reference_page_bonus",
+                          "points": 2,
+                          "detail": "reference page bonus"
+                        },
+                        {
+                          "code": "module_anchor_bonus",
+                          "points": 1,
+                          "detail": "1 attached module anchor(s)"
+                        },
+                        {
+                          "code": "symbol_anchor_bonus",
+                          "points": 1,
+                          "detail": "1 attached symbol anchor(s)"
+                        }
+                      ],
+                      "gap": {
+                        "repo_id": "gateway-sync",
+                        "gap_id": "repo:gateway-sync:projection-gap:symbol_reference_without_documentation:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                        "kind": "symbol_reference_without_documentation",
+                        "page_kind": "reference",
+                        "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                        "entity_id": "repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                        "title": "GatewaySyncPkg.explain",
+                        "path": "src/GatewaySyncPkg.jl",
+                        "module_ids": [
+                          "repo:gateway-sync:module:GatewaySyncPkg"
+                        ],
+                        "symbol_ids": [
+                          "repo:gateway-sync:symbol:GatewaySyncPkg.explain"
+                        ],
+                        "example_ids": [],
+                        "doc_ids": [],
+                        "format_hints": []
+                      }
+                    },
+                    {
+                      "priority_score": 96,
+                      "reasons": [
+                        {
+                          "code": "gap_kind_base",
+                          "points": 92,
+                          "detail": "base priority from projected gap kind `symbol_reference_without_documentation`"
+                        },
+                        {
+                          "code": "reference_page_bonus",
+                          "points": 2,
+                          "detail": "reference page bonus"
+                        },
+                        {
+                          "code": "module_anchor_bonus",
+                          "points": 1,
+                          "detail": "1 attached module anchor(s)"
+                        },
+                        {
+                          "code": "symbol_anchor_bonus",
+                          "points": 1,
+                          "detail": "1 attached symbol anchor(s)"
+                        }
+                      ],
+                      "gap": {
+                        "repo_id": "gateway-sync",
+                        "gap_id": "repo:gateway-sync:projection-gap:symbol_reference_without_documentation:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                        "kind": "symbol_reference_without_documentation",
+                        "page_kind": "reference",
+                        "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                        "entity_id": "repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                        "title": "GatewaySyncPkg.solve",
+                        "path": "src/GatewaySyncPkg.jl",
+                        "module_ids": [
+                          "repo:gateway-sync:module:GatewaySyncPkg"
+                        ],
+                        "symbol_ids": [
+                          "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                        ],
+                        "example_ids": [],
+                        "doc_ids": [],
+                        "format_hints": []
+                      }
+                    }
+                  ],
+                  "groups": [
+                    {
+                      "kind": "symbol_reference_without_documentation",
+                      "selected_count": 2,
+                      "families": [
+                        {
+                          "kind": "reference",
+                          "selected_count": 2,
+                          "ranked_hits": [],
+                          "items": []
+                        }
+                      ],
+                      "ranked_hits": [],
+                      "items": []
+                    }
+                  ],
+                  "items": [
+                    {
+                      "repo_id": "gateway-sync",
+                      "gap": {
+                        "repo_id": "gateway-sync",
+                        "gap_id": "repo:gateway-sync:projection-gap:symbol_reference_without_documentation:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                        "kind": "symbol_reference_without_documentation",
+                        "page_kind": "reference",
+                        "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                        "entity_id": "repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                        "title": "GatewaySyncPkg.explain",
+                        "path": "src/GatewaySyncPkg.jl",
+                        "module_ids": [
+                          "repo:gateway-sync:module:GatewaySyncPkg"
+                        ],
+                        "symbol_ids": [
+                          "repo:gateway-sync:symbol:GatewaySyncPkg.explain"
+                        ],
+                        "example_ids": [],
+                        "doc_ids": [],
+                        "format_hints": []
+                      },
+                      "hit": {
+                        "kind": "page",
+                        "page": {
+                          "repo_id": "gateway-sync",
+                          "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                          "kind": "reference",
+                          "title": "GatewaySyncPkg.explain",
+                          "module_ids": [
+                            "repo:gateway-sync:module:GatewaySyncPkg"
+                          ],
+                          "symbol_ids": [
+                            "repo:gateway-sync:symbol:GatewaySyncPkg.explain"
+                          ],
+                          "example_ids": [],
+                          "doc_ids": [],
+                          "paths": ["src/GatewaySyncPkg.jl"],
+                          "format_hints": [],
+                          "sections": []
+                        },
+                        "node": null
+                      },
+                      "navigation": {
+                        "repo_id": "gateway-sync",
+                        "center": {
+                          "kind": "page",
+                          "page": {
+                            "repo_id": "gateway-sync",
+                            "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                            "kind": "reference",
+                            "title": "GatewaySyncPkg.explain",
+                            "module_ids": [
+                              "repo:gateway-sync:module:GatewaySyncPkg"
+                            ],
+                            "symbol_ids": [
+                              "repo:gateway-sync:symbol:GatewaySyncPkg.explain"
+                            ],
+                            "example_ids": [],
+                            "doc_ids": [],
+                            "paths": ["src/GatewaySyncPkg.jl"],
+                            "format_hints": [],
+                            "sections": []
+                          },
+                          "node": null
+                        },
+                        "related_pages": [],
+                        "node_context": null,
+                        "tree": {
+                          "repo_id": "gateway-sync",
+                          "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.explain",
+                          "root": {
+                            "doc_id": "reference/GatewaySyncPkg.explain.md",
+                            "id": "reference/GatewaySyncPkg.explain#gatewaysyncpkgexplain",
+                            "title": "GatewaySyncPkg.explain",
+                            "level": 1,
+                            "summary": ":PROPERTIES:",
+                            "line_range": [1, 12],
+                            "children": []
+                          }
+                        },
+                        "family_cluster": null
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs planner-workset request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "invalidGapKind": {
+                    "value": {
+                      "code": "INVALID_GAP_KIND",
+                      "message": "unsupported projected gap kind `bogus`"
+                    }
+                  },
+                  "invalidPageKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "One selected projected gap or owning projected page identifiers were not present for the configured repository."
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs planner-workset task."
+          }
+        }
+      }
+    },
+    "/api/docs/search": {
+      "get": {
+        "operationId": "studioDocsSearch",
+        "tags": ["docs"],
+        "summary": "Search deterministic projected docs pages",
+        "description": "Run the Wendao deterministic projected-page retrieval flow through the docs namespace for one configured repository and return matching projected page records, optionally filtered by page family.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "Projected-page search string.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family filter.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of projected pages to return. Defaults to 10.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic projected page search payload.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "pages": [
+                    {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                      "kind": "reference",
+                      "title": "solve",
+                      "module_ids": [],
+                      "symbol_ids": [
+                        "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                      ],
+                      "example_ids": [
+                        "repo:gateway-sync:example:examples/solve_demo.jl"
+                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                      "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                      "format_hints": ["md"],
+                      "sections": [
+                        {
+                          "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
+                          "title": "Overview",
+                          "level": 1,
+                          "body": "Projected reference page for `solve`.",
+                          "paths": ["docs/solve.md", "examples/solve_demo.jl"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs search request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingQuery": {
+                    "value": {
+                      "code": "MISSING_QUERY",
+                      "message": "`query` is required"
+                    }
+                  },
+                  "invalidKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs search task."
+          }
+        }
+      }
+    },
+    "/api/docs/retrieval": {
+      "get": {
+        "operationId": "studioDocsRetrieval",
+        "tags": ["docs"],
+        "summary": "Search deterministic mixed docs retrieval hits",
+        "description": "Run the Wendao deterministic projected mixed-retrieval flow through the docs namespace for one configured repository and return matching projected page hits together with builder-native projected page-index node hits, optionally filtered by page family.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "Mixed docs retrieval search string.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family filter.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of mixed retrieval hits to return. Defaults to 10.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing mixed retrieval payload with deterministic projected-page and page-index-node hits.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "hits": [
+                    {
+                      "kind": "page",
+                      "page": {
+                        "repo_id": "gateway-sync",
+                        "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                        "kind": "reference",
+                        "title": "solve",
+                        "module_ids": [],
+                        "symbol_ids": [
+                          "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                        ],
+                        "example_ids": [
+                          "repo:gateway-sync:example:examples/solve_demo.jl"
+                        ],
+                        "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                        "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                        "format_hints": ["md"],
+                        "sections": [
+                          {
+                            "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
+                            "title": "Overview",
+                            "level": 1,
+                            "body": "Projected reference page for `solve`.",
+                            "paths": ["docs/solve.md", "examples/solve_demo.jl"]
+                          }
+                        ]
+                      },
+                      "node": null
+                    },
+                    {
+                      "kind": "page_index_node",
+                      "page": {
+                        "repo_id": "gateway-sync",
+                        "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                        "kind": "reference",
+                        "title": "solve",
+                        "module_ids": [],
+                        "symbol_ids": [
+                          "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                        ],
+                        "example_ids": [
+                          "repo:gateway-sync:example:examples/solve_demo.jl"
+                        ],
+                        "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                        "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                        "format_hints": ["md"],
+                        "sections": [
+                          {
+                            "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
+                            "title": "Overview",
+                            "level": 1,
+                            "body": "Projected reference page for `solve`.",
+                            "paths": ["docs/solve.md", "examples/solve_demo.jl"]
+                          }
+                        ]
+                      },
+                      "node": {
+                        "repo_id": "gateway-sync",
+                        "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                        "page_title": "solve",
+                        "page_kind": "reference",
+                        "path": "reference/solve-9b65f0f06f3d.md",
+                        "doc_id": "auto::reference/solve-9b65f0f06f3d.md",
+                        "node_id": "reference/solve-9b65f0f06f3d#anchors",
+                        "node_title": "Anchors",
+                        "structural_path": ["Overview", "Anchors"],
+                        "line_range": [19, 25],
+                        "text": ":ID: anchors\n:PATHS: src/GatewaySyncPkg.jl\n\nSymbols:\n- `GatewaySyncPkg.solve` (src/GatewaySyncPkg.jl)"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs retrieval request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingQuery": {
+                    "value": {
+                      "code": "MISSING_QUERY",
+                      "message": "`query` is required"
+                    }
+                  },
+                  "invalidKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs retrieval task."
+          }
+        }
+      }
+    },
+    "/api/docs/retrieval-context": {
+      "get": {
+        "operationId": "studioDocsRetrievalContext",
+        "tags": ["docs"],
+        "summary": "Open one deterministic mixed docs retrieval context",
+        "description": "Run the Wendao deterministic projected mixed-retrieval-context flow through the docs namespace for one configured repository and return the center mixed hit plus related projected pages and optional builder-native node neighborhood.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "Stable projected page identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_id",
+            "in": "query",
+            "required": false,
+            "description": "Optional stable projected page-index node identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "related_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return. Defaults to 5.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing mixed retrieval-context payload for one stable center hit.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "center": {
+                    "kind": "page_index_node",
+                    "page": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                      "kind": "reference",
+                      "title": "solve",
+                      "module_ids": [],
+                      "symbol_ids": [
+                        "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                      ],
+                      "example_ids": [
+                        "repo:gateway-sync:example:examples/solve_demo.jl"
+                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                      "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                      "format_hints": ["md"],
+                      "sections": []
+                    },
+                    "node": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                      "page_title": "solve",
+                      "page_kind": "reference",
+                      "path": "reference/solve-69592caeddee.md",
+                      "doc_id": "reference/solve-69592caeddee",
+                      "node_id": "reference/solve-69592caeddee#anchors",
+                      "node_title": "Anchors",
+                      "structural_path": ["solve", "Anchors"],
+                      "line_range": [9, 14],
+                      "text": "Symbols:\n- `GatewaySyncPkg.solve` (src/GatewaySyncPkg.jl)"
+                    }
+                  },
+                  "related_pages": [
+                    {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                      "kind": "reference",
+                      "title": "GatewaySyncPkg.solve",
+                      "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
+                      "symbol_ids": [
+                        "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                      ],
+                      "example_ids": [
+                        "repo:gateway-sync:example:examples/solve_demo.jl"
+                      ],
+                      "doc_ids": [
+                        "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
+                        "repo:gateway-sync:doc:docs/solve.md"
+                      ],
+                      "paths": [
+                        "docs/solve.md",
+                        "examples/solve_demo.jl",
+                        "src/GatewaySyncPkg.jl",
+                        "src/GatewaySyncPkg.jl#symbol:solve"
+                      ],
+                      "format_hints": ["julia_docstring", "md"],
+                      "sections": []
+                    }
+                  ],
+                  "node_context": {
+                    "ancestors": [
+                      {
+                        "repo_id": "gateway-sync",
+                        "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                        "page_title": "solve",
+                        "page_kind": "reference",
+                        "path": "reference/solve-69592caeddee.md",
+                        "doc_id": "reference/solve-69592caeddee",
+                        "node_id": "reference/solve-69592caeddee#solve",
+                        "node_title": "solve",
+                        "structural_path": ["solve"],
+                        "line_range": [1, 14],
+                        "text": ":PROPERTIES:"
+                      }
+                    ],
+                    "previous_sibling": null,
+                    "next_sibling": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                      "page_title": "solve",
+                      "page_kind": "reference",
+                      "path": "reference/solve-69592caeddee.md",
+                      "doc_id": "reference/solve-69592caeddee",
+                      "node_id": "reference/solve-69592caeddee#documentation",
+                      "node_title": "Documentation",
+                      "structural_path": ["solve", "Documentation"],
+                      "line_range": [15, 18],
+                      "text": "Documentation:\n- `solve` (docs/solve.md)"
+                    },
+                    "children": []
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs retrieval-context request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingPageId": {
+                    "value": {
+                      "code": "MISSING_PAGE_ID",
+                      "message": "`page_id` is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested projected hit identifiers were not present for the configured repository.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "NOT_FOUND",
+                  "message": "repo `gateway-sync` does not contain projected page-index node `reference/solve-69592caeddee#missing` in page `repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md`"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs retrieval-context task."
+          }
+        }
+      }
+    },
+    "/api/docs/retrieval-hit": {
+      "get": {
+        "operationId": "studioDocsRetrievalHit",
+        "tags": ["docs"],
+        "summary": "Open one deterministic mixed docs retrieval hit",
+        "description": "Run the Wendao deterministic projected mixed-retrieval-hit flow through the docs namespace for one configured repository and return one projected page hit or one builder-native projected page-index node hit by stable identifiers.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "Stable projected page identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_id",
+            "in": "query",
+            "required": false,
+            "description": "Optional stable page-index node identifier. When omitted, the endpoint returns a page-level hit.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One docs-facing deterministic mixed retrieval hit.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "hit": {
+                    "kind": "page",
+                    "page": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                      "kind": "reference",
+                      "title": "solve",
+                      "module_ids": [],
+                      "symbol_ids": [
+                        "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                      ],
+                      "example_ids": [
+                        "repo:gateway-sync:example:examples/solve_demo.jl"
+                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                      "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                      "format_hints": ["md"],
+                      "sections": [
+                        {
+                          "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
+                          "title": "Overview",
+                          "level": 1,
+                          "body": "Projected reference page for `solve`.",
+                          "paths": ["docs/solve.md", "examples/solve_demo.jl"]
+                        }
+                      ]
+                    },
+                    "node": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs retrieval-hit request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingPageId": {
+                    "value": {
+                      "code": "MISSING_PAGE_ID",
+                      "message": "`page_id` is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested projected page or page-index node identifier was not present for the configured repository.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "NOT_FOUND",
+                  "message": "repo `gateway-sync` does not contain projected page-index node `reference/solve-69592caeddee#missing` in page `repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md`"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs retrieval-hit task."
+          }
+        }
+      }
+    },
+    "/api/docs/page": {
+      "get": {
+        "operationId": "studioDocsPage",
+        "tags": ["docs"],
+        "summary": "Open one deterministic projected docs page",
+        "description": "Run the Wendao deterministic projected-page lookup flow through the docs namespace for one configured repository and return one projected page record by stable page identifier.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "Stable projected page identifier.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One docs-facing deterministic projected page record.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "page": {
+                    "repo_id": "gateway-sync",
+                    "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                    "kind": "reference",
+                    "title": "solve",
+                    "module_ids": [],
+                    "symbol_ids": [
+                      "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                    ],
+                    "example_ids": [
+                      "repo:gateway-sync:example:examples/solve_demo.jl"
+                    ],
+                    "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                    "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                    "format_hints": ["md"],
+                    "sections": [
+                      {
+                        "section_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md#overview",
+                        "title": "Overview",
+                        "level": 1,
+                        "body": "Projected reference page for `solve`.",
+                        "paths": ["docs/solve.md", "examples/solve_demo.jl"]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs page request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingPageId": {
+                    "value": {
+                      "code": "MISSING_PAGE_ID",
+                      "message": "`page_id` is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested projected page identifier was not present for the configured repository.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "NOT_FOUND",
+                  "message": "repo `gateway-sync` does not contain projected page `repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/missing.md`"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs page task."
+          }
+        }
+      }
+    },
+    "/api/docs/family-context": {
+      "get": {
+        "operationId": "studioDocsFamilyContext",
+        "tags": ["docs"],
+        "summary": "Inspect deterministic projected docs family context",
+        "description": "Run the Wendao deterministic projected-page family-context flow through the docs namespace for one configured repository and return one stable center page together with related projected pages grouped by page family and ranked by shared-anchor evidence.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "Stable projected page identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "per_kind_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return for each page family. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic projected page-family context payload grouped by page family.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "center_page": {
+                    "repo_id": "gateway-sync",
+                    "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
+                    "kind": "how_to",
+                    "title": "solve_demo.jl",
+                    "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
+                    "symbol_ids": [
+                      "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                    ],
+                    "example_ids": [
+                      "repo:gateway-sync:example:examples/solve_demo.jl"
+                    ],
+                    "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                    "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                    "format_hints": ["md"],
+                    "sections": []
+                  },
+                  "families": [
+                    {
+                      "kind": "reference",
+                      "pages": [
+                        {
+                          "shared_anchor_score": 2,
+                          "page": {
+                            "repo_id": "gateway-sync",
+                            "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                            "kind": "reference",
+                            "title": "GatewaySyncPkg.solve",
+                            "module_ids": [
+                              "repo:gateway-sync:module:GatewaySyncPkg"
+                            ],
+                            "symbol_ids": [
+                              "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                            ],
+                            "example_ids": [
+                              "repo:gateway-sync:example:examples/solve_demo.jl"
+                            ],
+                            "doc_ids": [
+                              "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
+                              "repo:gateway-sync:doc:docs/solve.md"
+                            ],
+                            "paths": [
+                              "docs/solve.md",
+                              "examples/solve_demo.jl",
+                              "src/GatewaySyncPkg.jl#symbol:solve"
+                            ],
+                            "format_hints": ["julia_docstring", "md"],
+                            "sections": []
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "explanation",
+                      "pages": [
+                        {
+                          "shared_anchor_score": 1,
+                          "page": {
+                            "repo_id": "gateway-sync",
+                            "page_id": "repo:gateway-sync:projection:explanation:doc:repo:gateway-sync:doc:README.md",
+                            "kind": "explanation",
+                            "title": "README.md",
+                            "module_ids": [
+                              "repo:gateway-sync:module:GatewaySyncPkg"
+                            ],
+                            "symbol_ids": [],
+                            "example_ids": [],
+                            "doc_ids": ["repo:gateway-sync:doc:README.md"],
+                            "paths": ["README.md"],
+                            "format_hints": ["md"],
+                            "sections": []
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs family-context request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingPageId": {
+                    "value": {
+                      "code": "MISSING_PAGE_ID",
+                      "message": "`page_id` is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested projected page identifier was not present for the configured repository.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "NOT_FOUND",
+                  "message": "repo `gateway-sync` does not contain projected page `repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/missing.md`"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs family-context task."
+          }
+        }
+      }
+    },
+    "/api/docs/family-search": {
+      "get": {
+        "operationId": "studioDocsFamilySearch",
+        "tags": ["docs"],
+        "summary": "Search deterministic projected docs family clusters",
+        "description": "Run the Wendao deterministic projected-page family-search flow through the docs namespace for one configured repository and return matching center pages with grouped family clusters ranked by shared-anchor evidence.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "Projected-page search string for center pages.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family filter applied to center pages.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of center-page hits to return. Defaults to 10.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "per_kind_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return for each page family. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic projected page-family search payload with grouped family clusters per matched center page.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "hits": [
+                    {
+                      "center_page": {
+                        "repo_id": "gateway-sync",
+                        "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                        "kind": "reference",
+                        "title": "solve",
+                        "module_ids": [],
+                        "symbol_ids": [
+                          "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                        ],
+                        "example_ids": [
+                          "repo:gateway-sync:example:examples/solve_demo.jl"
+                        ],
+                        "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                        "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                        "format_hints": ["md"],
+                        "sections": []
+                      },
+                      "families": [
+                        {
+                          "kind": "reference",
+                          "pages": [
+                            {
+                              "shared_anchor_score": 3,
+                              "page": {
+                                "repo_id": "gateway-sync",
+                                "page_id": "repo:gateway-sync:projection:reference:module:repo:gateway-sync:module:GatewaySyncPkg",
+                                "kind": "reference",
+                                "title": "GatewaySyncPkg",
+                                "module_ids": [
+                                  "repo:gateway-sync:module:GatewaySyncPkg"
+                                ],
+                                "symbol_ids": [],
+                                "example_ids": [
+                                  "repo:gateway-sync:example:examples/solve_demo.jl"
+                                ],
+                                "doc_ids": [
+                                  "repo:gateway-sync:doc:README.md",
+                                  "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
+                                  "repo:gateway-sync:doc:docs/solve.md"
+                                ],
+                                "paths": [
+                                  "README.md",
+                                  "docs/solve.md",
+                                  "examples/solve_demo.jl",
+                                  "src/GatewaySyncPkg.jl",
+                                  "src/GatewaySyncPkg.jl#symbol:solve"
+                                ],
+                                "format_hints": ["julia_docstring", "md"],
+                                "sections": []
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "how_to",
+                          "pages": [
+                            {
+                              "shared_anchor_score": 2,
+                              "page": {
+                                "repo_id": "gateway-sync",
+                                "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
+                                "kind": "how_to",
+                                "title": "solve_demo",
+                                "module_ids": [
+                                  "repo:gateway-sync:module:GatewaySyncPkg"
+                                ],
+                                "symbol_ids": [
+                                  "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                                ],
+                                "example_ids": [
+                                  "repo:gateway-sync:example:examples/solve_demo.jl"
+                                ],
+                                "doc_ids": [
+                                  "repo:gateway-sync:doc:README.md",
+                                  "repo:gateway-sync:doc:src/GatewaySyncPkg.jl#symbol:solve",
+                                  "repo:gateway-sync:doc:docs/solve.md"
+                                ],
+                                "paths": [
+                                  "README.md",
+                                  "docs/solve.md",
+                                  "examples/solve_demo.jl",
+                                  "src/GatewaySyncPkg.jl#symbol:solve"
+                                ],
+                                "format_hints": ["julia_docstring", "md"],
+                                "sections": []
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs family-search request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingQuery": {
+                    "value": {
+                      "code": "MISSING_QUERY",
+                      "message": "`query` is required"
+                    }
+                  },
+                  "invalidKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs family-search task."
+          }
+        }
+      }
+    },
+    "/api/docs/family-cluster": {
+      "get": {
+        "operationId": "studioDocsFamilyCluster",
+        "tags": ["docs"],
+        "summary": "Open one deterministic projected docs family cluster",
+        "description": "Run the Wendao deterministic projected-page family-cluster flow through the docs namespace for one configured repository and return one grouped page-family cluster for a stable center page plus one required projected-page family.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "Stable projected page identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "description": "Required projected-page family for the returned cluster.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return in the requested family cluster. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic projected page-family cluster payload for one stable center page and one required page family.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "center_page": {
+                    "repo_id": "gateway-sync",
+                    "page_id": "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md",
+                    "kind": "reference",
+                    "title": "solve",
+                    "module_ids": [],
+                    "symbol_ids": [
+                      "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                    ],
+                    "example_ids": [
+                      "repo:gateway-sync:example:examples/solve_demo.jl"
+                    ],
+                    "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                    "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                    "format_hints": ["md"],
+                    "sections": []
+                  },
+                  "family": {
+                    "kind": "how_to",
+                    "pages": [
+                      {
+                        "shared_anchor_score": 2,
+                        "page": {
+                          "repo_id": "gateway-sync",
+                          "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
+                          "kind": "how_to",
+                          "title": "solve_demo.jl",
+                          "module_ids": [
+                            "repo:gateway-sync:module:GatewaySyncPkg"
+                          ],
+                          "symbol_ids": [
+                            "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                          ],
+                          "example_ids": [
+                            "repo:gateway-sync:example:examples/solve_demo.jl"
+                          ],
+                          "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                          "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                          "format_hints": ["md"],
+                          "sections": []
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs family-cluster request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingPageId": {
+                    "value": {
+                      "code": "MISSING_PAGE_ID",
+                      "message": "`page_id` is required"
+                    }
+                  },
+                  "missingKind": {
+                    "value": {
+                      "code": "MISSING_KIND",
+                      "message": "`kind` is required"
+                    }
+                  },
+                  "invalidKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested projected page family was not present for the configured repository and center page.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "NOT_FOUND",
+                  "message": "repo `gateway-sync` does not contain projected page family `Tutorial` in page `repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md`"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs family-cluster task."
+          }
+        }
+      }
+    },
+    "/api/docs/navigation": {
+      "get": {
+        "operationId": "studioDocsNavigation",
+        "tags": ["docs"],
+        "summary": "Open one deterministic projected docs navigation bundle",
+        "description": "Run the Wendao deterministic projected-page navigation flow through the docs namespace for one configured repository and return one page-centric navigation bundle, including the center mixed hit, related projected pages, the full projected page-index tree, optional local node context, and an optional requested page-family cluster.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "Stable projected page identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_id",
+            "in": "query",
+            "required": false,
+            "description": "Optional stable projected page-index node identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "family_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family to include as a deterministic cluster in the navigation bundle.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "related_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return. Defaults to 5.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "family_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return in the requested family cluster. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic projected page navigation bundle for one stable projected page.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "center": {
+                    "kind": "page",
+                    "score": 4,
+                    "page": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                      "kind": "reference",
+                      "title": "GatewaySyncPkg.solve",
+                      "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
+                      "symbol_ids": [
+                        "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                      ],
+                      "example_ids": [
+                        "repo:gateway-sync:example:examples/solve_demo.jl"
+                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                      "paths": [
+                        "docs/solve.md",
+                        "examples/solve_demo.jl",
+                        "src/GatewaySyncPkg.jl"
+                      ],
+                      "format_hints": ["julia", "md"],
+                      "sections": []
+                    },
+                    "node": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                      "page_title": "GatewaySyncPkg.solve",
+                      "page_kind": "reference",
+                      "path": "repo-intelligence/projected/reference/gatewaysyncpkg-solve.md",
+                      "doc_id": "repo:gateway-sync:projection-doc:reference/gatewaysyncpkg-solve",
+                      "node_id": "reference/gatewaysyncpkg-solve#anchors",
+                      "node_title": "Anchors",
+                      "structural_path": ["GatewaySyncPkg.solve", "Anchors"],
+                      "line_range": [4, 8],
+                      "text": "- module: GatewaySyncPkg\n- symbol: GatewaySyncPkg.solve"
+                    }
+                  },
+                  "related_pages": [
+                    {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
+                      "kind": "how_to",
+                      "title": "solve_demo.jl",
+                      "module_ids": ["repo:gateway-sync:module:GatewaySyncPkg"],
+                      "symbol_ids": [
+                        "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                      ],
+                      "example_ids": [
+                        "repo:gateway-sync:example:examples/solve_demo.jl"
+                      ],
+                      "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                      "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                      "format_hints": ["md"],
+                      "sections": []
+                    }
+                  ],
+                  "node_context": {
+                    "ancestors": [],
+                    "previous_sibling": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                      "page_title": "GatewaySyncPkg.solve",
+                      "page_kind": "reference",
+                      "path": "repo-intelligence/projected/reference/gatewaysyncpkg-solve.md",
+                      "doc_id": "repo:gateway-sync:projection-doc:reference/gatewaysyncpkg-solve",
+                      "node_id": "reference/gatewaysyncpkg-solve#overview",
+                      "node_title": "Overview",
+                      "structural_path": ["GatewaySyncPkg.solve", "Overview"],
+                      "line_range": [1, 3],
+                      "text": "Projected reference page for `GatewaySyncPkg.solve`."
+                    },
+                    "next_sibling": {
+                      "repo_id": "gateway-sync",
+                      "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                      "page_title": "GatewaySyncPkg.solve",
+                      "page_kind": "reference",
+                      "path": "repo-intelligence/projected/reference/gatewaysyncpkg-solve.md",
+                      "doc_id": "repo:gateway-sync:projection-doc:reference/gatewaysyncpkg-solve",
+                      "node_id": "reference/gatewaysyncpkg-solve#sources",
+                      "node_title": "Documentation",
+                      "structural_path": [
+                        "GatewaySyncPkg.solve",
+                        "Documentation"
+                      ],
+                      "line_range": [9, 12],
+                      "text": "- docs: solve (docs/solve.md)"
+                    },
+                    "children": []
+                  },
+                  "tree": {
+                    "repo_id": "gateway-sync",
+                    "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                    "page_title": "GatewaySyncPkg.solve",
+                    "page_kind": "reference",
+                    "path": "repo-intelligence/projected/reference/gatewaysyncpkg-solve.md",
+                    "doc_id": "repo:gateway-sync:projection-doc:reference/gatewaysyncpkg-solve",
+                    "roots": []
+                  },
+                  "family_cluster": {
+                    "kind": "how_to",
+                    "pages": [
+                      {
+                        "shared_anchor_score": 2,
+                        "page": {
+                          "repo_id": "gateway-sync",
+                          "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
+                          "kind": "how_to",
+                          "title": "solve_demo.jl",
+                          "module_ids": [
+                            "repo:gateway-sync:module:GatewaySyncPkg"
+                          ],
+                          "symbol_ids": [
+                            "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                          ],
+                          "example_ids": [
+                            "repo:gateway-sync:example:examples/solve_demo.jl"
+                          ],
+                          "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                          "paths": ["docs/solve.md", "examples/solve_demo.jl"],
+                          "format_hints": ["md"],
+                          "sections": []
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs navigation request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingPageId": {
+                    "value": {
+                      "code": "MISSING_PAGE_ID",
+                      "message": "`page_id` is required"
+                    }
+                  },
+                  "invalidKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested projected page, node, or family cluster was not present for the configured repository.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "NOT_FOUND",
+                  "message": "repo `gateway-sync` does not contain projected page `repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/missing.md`"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs navigation task."
+          }
+        }
+      }
+    },
+    "/api/docs/navigation-search": {
+      "get": {
+        "operationId": "studioDocsNavigationSearch",
+        "tags": ["docs"],
+        "summary": "Search deterministic projected docs navigation bundles",
+        "description": "Run the Wendao deterministic projected-page navigation search flow through the docs namespace for one configured repository and expand each matched center page into a page-centric navigation bundle. Optional family_kind clusters are included only for hits that can resolve the requested family.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "Projected-page search string for center pages.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family filter applied to center pages.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "family_kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional projected-page family to include as a deterministic cluster for each hit.",
+            "schema": {
+              "type": "string",
+              "enum": ["reference", "how_to", "tutorial", "explanation"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of matched center pages to expand. Defaults to 10.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "related_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return for each navigation bundle. Defaults to 5.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "family_limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of related projected pages to return in the requested family cluster. Defaults to 3.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Docs-facing deterministic projected page navigation search payload with navigation bundles per matched center page.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "hits": [
+                    {
+                      "search_score": 0,
+                      "navigation": {
+                        "repo_id": "gateway-sync",
+                        "center": {
+                          "kind": "page",
+                          "score": 0,
+                          "page": {
+                            "repo_id": "gateway-sync",
+                            "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                            "kind": "reference",
+                            "title": "GatewaySyncPkg.solve",
+                            "module_ids": [
+                              "repo:gateway-sync:module:GatewaySyncPkg"
+                            ],
+                            "symbol_ids": [
+                              "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                            ],
+                            "example_ids": [
+                              "repo:gateway-sync:example:examples/solve_demo.jl"
+                            ],
+                            "doc_ids": ["repo:gateway-sync:doc:docs/solve.md"],
+                            "paths": [
+                              "docs/solve.md",
+                              "examples/solve_demo.jl",
+                              "src/GatewaySyncPkg.jl"
+                            ],
+                            "format_hints": ["julia_docstring", "md"],
+                            "sections": []
+                          },
+                          "node": null
+                        },
+                        "related_pages": [],
+                        "node_context": null,
+                        "tree": {
+                          "repo_id": "gateway-sync",
+                          "page_id": "repo:gateway-sync:projection:reference:symbol:repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                          "title": "GatewaySyncPkg.solve",
+                          "path": "repo-intelligence/projected/reference/gatewaysyncpkg-solve.md",
+                          "doc_id": "repo:gateway-sync:projection-doc:reference/gatewaysyncpkg-solve",
+                          "roots": [],
+                          "thinned": false
+                        },
+                        "family_cluster": {
+                          "kind": "how_to",
+                          "pages": [
+                            {
+                              "shared_anchor_score": 2,
+                              "page": {
+                                "repo_id": "gateway-sync",
+                                "page_id": "repo:gateway-sync:projection:howto:example:repo:gateway-sync:example:examples/solve_demo.jl",
+                                "kind": "how_to",
+                                "title": "solve_demo.jl",
+                                "module_ids": [
+                                  "repo:gateway-sync:module:GatewaySyncPkg"
+                                ],
+                                "symbol_ids": [
+                                  "repo:gateway-sync:symbol:GatewaySyncPkg.solve"
+                                ],
+                                "example_ids": [
+                                  "repo:gateway-sync:example:examples/solve_demo.jl"
+                                ],
+                                "doc_ids": [
+                                  "repo:gateway-sync:doc:docs/solve.md"
+                                ],
+                                "paths": [
+                                  "docs/solve.md",
+                                  "examples/solve_demo.jl"
+                                ],
+                                "format_hints": ["md"],
+                                "sections": []
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The docs navigation-search request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingQuery": {
+                    "value": {
+                      "code": "MISSING_QUERY",
+                      "message": "`query` is required"
+                    }
+                  },
+                  "invalidKind": {
+                    "value": {
+                      "code": "INVALID_KIND",
+                      "message": "unsupported projected page kind `bogus`"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the docs navigation-search task."
+          }
+        }
+      }
+    },
+    "/api/repo/projected-gap-report": {
+      "get": {
+        "operationId": "studioRepoProjectedGapReport",
+        "tags": ["repo-intelligence"],
+        "summary": "Inspect deterministic projected deep-wiki gaps",
+        "description": "Run the Wendao Repo Intelligence Stage-2 deterministic projection gap flow for one configured repository and return the planner-facing projected gap report.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Projected deep-wiki gap report with deterministic summary and gap rows.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "repo_id": "gateway-sync",
+                  "summary": {
+                    "page_count": 6,
+                    "gap_count": 0,
+                    "by_kind": []
+                  },
+                  "gaps": []
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The projected-gap-report request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "MISSING_REPO",
+                  "message": "`repo` is required"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the projected-gap-report task."
           }
         }
       }

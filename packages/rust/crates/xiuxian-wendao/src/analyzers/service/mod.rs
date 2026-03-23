@@ -18,6 +18,33 @@ pub use analysis::{
 pub use bootstrap::bootstrap_builtin_registry;
 pub use cached::analyze_registered_repository_cached_with_registry;
 pub use helpers::relation_kind_label;
+pub(crate) use helpers::{
+    backlinks_for, documents_backlink_lookup, example_match_score, example_relation_lookup,
+    hierarchy_segments_from_path, infer_ecosystem, module_match_score, normalized_rank_score,
+    projection_page_lookup, projection_pages_for, record_hierarchical_uri,
+    related_modules_for_example, related_symbols_for_example, symbol_match_score,
+};
+
+#[doc(hidden)]
+const _: () = {
+    let _ = (
+        backlinks_for,
+        documents_backlink_lookup,
+        example_match_score,
+        example_relation_lookup,
+        hierarchy_segments_from_path,
+        infer_ecosystem,
+        module_match_score,
+        normalized_rank_score,
+        projection_page_lookup,
+        projection_pages_for,
+        record_hierarchical_uri,
+        related_modules_for_example,
+        related_symbols_for_example,
+        symbol_match_score,
+    );
+};
+
 pub use projection::*;
 pub use registry::load_registered_repository;
 pub use search::*;

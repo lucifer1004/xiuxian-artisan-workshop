@@ -74,12 +74,80 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(search::search_autocomplete),
         )
         .route(
+            openapi_paths::API_SEARCH_INDEX_STATUS_AXUM_PATH,
+            get(search::search_index_status),
+        )
+        .route(
             openapi_paths::API_ANALYSIS_MARKDOWN_AXUM_PATH,
             get(handlers::markdown),
         )
         .route(
             openapi_paths::API_ANALYSIS_CODE_AST_AXUM_PATH,
             get(handlers::code_ast),
+        )
+        .route(
+            openapi_paths::API_DOCS_PROJECTED_GAP_REPORT_AXUM_PATH,
+            get(handlers::docs_projected_gap_report),
+        )
+        .route(
+            openapi_paths::API_DOCS_PLANNER_ITEM_AXUM_PATH,
+            get(handlers::docs_planner_item),
+        )
+        .route(
+            openapi_paths::API_DOCS_PLANNER_SEARCH_AXUM_PATH,
+            get(handlers::docs_planner_search),
+        )
+        .route(
+            openapi_paths::API_DOCS_PLANNER_QUEUE_AXUM_PATH,
+            get(handlers::docs_planner_queue),
+        )
+        .route(
+            openapi_paths::API_DOCS_PLANNER_RANK_AXUM_PATH,
+            get(handlers::docs_planner_rank),
+        )
+        .route(
+            openapi_paths::API_DOCS_PLANNER_WORKSET_AXUM_PATH,
+            get(handlers::docs_planner_workset),
+        )
+        .route(
+            openapi_paths::API_DOCS_SEARCH_AXUM_PATH,
+            get(handlers::docs_search),
+        )
+        .route(
+            openapi_paths::API_DOCS_RETRIEVAL_AXUM_PATH,
+            get(handlers::docs_retrieval),
+        )
+        .route(
+            openapi_paths::API_DOCS_RETRIEVAL_CONTEXT_AXUM_PATH,
+            get(handlers::docs_retrieval_context),
+        )
+        .route(
+            openapi_paths::API_DOCS_RETRIEVAL_HIT_AXUM_PATH,
+            get(handlers::docs_retrieval_hit),
+        )
+        .route(
+            openapi_paths::API_DOCS_PAGE_AXUM_PATH,
+            get(handlers::docs_page),
+        )
+        .route(
+            openapi_paths::API_DOCS_FAMILY_CONTEXT_AXUM_PATH,
+            get(handlers::docs_family_context),
+        )
+        .route(
+            openapi_paths::API_DOCS_FAMILY_SEARCH_AXUM_PATH,
+            get(handlers::docs_family_search),
+        )
+        .route(
+            openapi_paths::API_DOCS_FAMILY_CLUSTER_AXUM_PATH,
+            get(handlers::docs_family_cluster),
+        )
+        .route(
+            openapi_paths::API_DOCS_NAVIGATION_AXUM_PATH,
+            get(handlers::docs_navigation),
+        )
+        .route(
+            openapi_paths::API_DOCS_NAVIGATION_SEARCH_AXUM_PATH,
+            get(handlers::docs_navigation_search),
         )
         .route(
             openapi_paths::API_UI_CONFIG_AXUM_PATH,
@@ -121,6 +189,10 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
         .route(
             openapi_paths::API_REPO_PROJECTED_PAGES_AXUM_PATH,
             get(handlers::projected_pages),
+        )
+        .route(
+            openapi_paths::API_REPO_PROJECTED_GAP_REPORT_AXUM_PATH,
+            get(handlers::repo::projected_gap_report),
         )
         .route(
             openapi_paths::API_REPO_PROJECTED_PAGE_AXUM_PATH,

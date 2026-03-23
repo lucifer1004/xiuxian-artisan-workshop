@@ -13,10 +13,12 @@ use crate::analyzers::{
     RegisteredRepository, RepoIntelligenceError, RepoSyncMode, RepoSyncQuery,
     analyze_registered_repository_with_registry, repo_sync_for_registered_repository,
 };
+#[cfg(test)]
+use crate::gateway::studio::repo_index::types::RepoIndexSnapshot;
 use crate::gateway::studio::repo_index::types::{
-    RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot,
-    RepoIndexStatusResponse,
+    RepoCodeDocument, RepoIndexEntryStatus, RepoIndexPhase, RepoIndexStatusResponse,
 };
+use crate::search_plane::SearchPlaneService;
 
 use super::collect::{await_analysis_completion, collect_code_documents};
 use super::filters::{aggregate_status_response, filter_status_response};
@@ -29,8 +31,8 @@ use super::task::{
 pub(crate) struct RepoIndexCoordinator {
     project_root: PathBuf,
     plugin_registry: Arc<PluginRegistry>,
+    search_plane: SearchPlaneService,
     statuses: Arc<RwLock<BTreeMap<String, RepoIndexEntryStatus>>>,
-    snapshots: Arc<RwLock<BTreeMap<String, Arc<RepoIndexSnapshot>>>>,
     fingerprints: Arc<RwLock<HashMap<String, String>>>,
     queued_or_active: Arc<RwLock<HashSet<String>>>,
     active_repo_ids: Arc<RwLock<Vec<String>>>,
@@ -43,12 +45,16 @@ pub(crate) struct RepoIndexCoordinator {
 
 impl RepoIndexCoordinator {
     #[must_use]
-    pub(crate) fn new(project_root: PathBuf, plugin_registry: Arc<PluginRegistry>) -> Self {
+    pub(crate) fn new(
+        project_root: PathBuf,
+        plugin_registry: Arc<PluginRegistry>,
+        search_plane: SearchPlaneService,
+    ) -> Self {
         Self {
             project_root,
             plugin_registry,
+            search_plane,
             statuses: Arc::new(RwLock::new(BTreeMap::new())),
-            snapshots: Arc::new(RwLock::new(BTreeMap::new())),
             fingerprints: Arc::new(RwLock::new(HashMap::new())),
             queued_or_active: Arc::new(RwLock::new(HashSet::new())),
             active_repo_ids: Arc::new(RwLock::new(Vec::new())),
@@ -89,10 +95,6 @@ impl RepoIndexCoordinator {
                 .get(&repository.id)
                 .cloned();
             if existing.as_deref() != Some(repo_fingerprint.as_str()) {
-                self.snapshots
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(&repository.id);
                 if self.enqueue_repository(
                     repository,
                     false,
@@ -129,14 +131,6 @@ impl RepoIndexCoordinator {
         enqueued
     }
 
-    pub(crate) fn snapshot(&self, repo_id: &str) -> Option<Arc<RepoIndexSnapshot>> {
-        self.snapshots
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(repo_id)
-            .cloned()
-    }
-
     pub(crate) fn status_response(&self, repo_id: Option<&str>) -> RepoIndexStatusResponse {
         let snapshot = self
             .status_snapshot
@@ -147,11 +141,15 @@ impl RepoIndexCoordinator {
     }
 
     fn prune_removed(&self, active_ids: &BTreeSet<String>) {
-        self.statuses
-            .write()
+        let removed_repo_ids = self
+            .statuses
+            .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain(|repo_id, _| active_ids.contains(repo_id));
-        self.snapshots
+            .keys()
+            .filter(|repo_id| !active_ids.contains(*repo_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        self.statuses
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .retain(|repo_id, _| active_ids.contains(repo_id));
@@ -171,6 +169,9 @@ impl RepoIndexCoordinator {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .retain(|task| active_ids.contains(&task.repository.id));
+        for repo_id in removed_repo_ids {
+            self.search_plane.clear_repo_publications(repo_id.as_str());
+        }
         self.refresh_status_snapshot();
     }
 
@@ -221,10 +222,6 @@ impl RepoIndexCoordinator {
                     || matches!(priority, RepoIndexTaskPriority::Interactive)
                         && !matches!(task.priority, RepoIndexTaskPriority::Interactive);
                 if fingerprint_changed {
-                    self.snapshots
-                        .write()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .remove(&repo_id);
                     self.fingerprints
                         .write()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -380,11 +377,7 @@ impl RepoIndexCoordinator {
         };
 
         match feedback.outcome {
-            RepoTaskOutcome::Success { revision, snapshot } => {
-                self.snapshots
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(feedback.repo_id.clone(), snapshot);
+            RepoTaskOutcome::Success { revision } => {
                 self.record_repo_status(
                     feedback.repo_id.as_str(),
                     RepoIndexPhase::Ready,
@@ -518,16 +511,61 @@ impl RepoIndexCoordinator {
                     };
                 }
 
+                if let Err(error) = self
+                    .search_plane
+                    .publish_repo_entities_with_revision(
+                        repo_id.as_str(),
+                        &analysis,
+                        sync_result.revision.as_deref(),
+                    )
+                    .await
+                {
+                    let failed_repo_id = repo_id.clone();
+                    return RepoTaskFeedback {
+                        repo_id,
+                        elapsed: started_at.elapsed(),
+                        outcome: RepoTaskOutcome::Failure {
+                            revision: sync_result.revision,
+                            error: RepoIntelligenceError::AnalysisFailed {
+                                message: format!(
+                                    "repo `{}` repo-entity publish failed: {error}",
+                                    failed_repo_id
+                                ),
+                            },
+                        },
+                    };
+                }
+
+                if let Err(error) = self
+                    .search_plane
+                    .publish_repo_content_chunks_with_revision(
+                        repo_id.as_str(),
+                        &code_documents,
+                        sync_result.revision.as_deref(),
+                    )
+                    .await
+                {
+                    let failed_repo_id = repo_id.clone();
+                    return RepoTaskFeedback {
+                        repo_id,
+                        elapsed: started_at.elapsed(),
+                        outcome: RepoTaskOutcome::Failure {
+                            revision: sync_result.revision,
+                            error: RepoIntelligenceError::AnalysisFailed {
+                                message: format!(
+                                    "repo `{}` repo-content chunk publish failed: {error}",
+                                    failed_repo_id
+                                ),
+                            },
+                        },
+                    };
+                }
+
                 RepoTaskFeedback {
                     repo_id: repo_id.clone(),
                     elapsed: started_at.elapsed(),
                     outcome: RepoTaskOutcome::Success {
                         revision: sync_result.revision,
-                        snapshot: Arc::new(RepoIndexSnapshot {
-                            repo_id,
-                            code_documents: Arc::new(code_documents),
-                            analysis: Arc::new(analysis),
-                        }),
                     },
                 }
             }
@@ -561,12 +599,7 @@ impl RepoIndexCoordinator {
     }
 
     #[cfg(test)]
-    pub(crate) fn set_snapshot_for_test(&self, snapshot: Arc<RepoIndexSnapshot>) {
-        self.snapshots
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(snapshot.repo_id.clone(), snapshot);
-    }
+    pub(crate) fn set_snapshot_for_test(&self, _snapshot: Arc<RepoIndexSnapshot>) {}
 
     #[cfg(test)]
     pub(crate) fn set_status_for_test(&self, status: RepoIndexEntryStatus) {
@@ -725,10 +758,6 @@ impl RepoIndexCoordinator {
         error: &RepoIntelligenceError,
         last_revision: Option<String>,
     ) {
-        self.snapshots
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(repo_id);
         let phase = if matches!(
             error,
             RepoIntelligenceError::UnsupportedRepositoryLayout { .. }

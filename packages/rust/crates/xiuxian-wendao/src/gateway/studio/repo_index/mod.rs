@@ -4,7 +4,7 @@ mod state;
 mod types;
 
 pub(crate) use state::RepoIndexCoordinator;
-#[cfg(test)]
 pub(crate) use types::RepoCodeDocument;
+#[cfg(test)]
 pub(crate) use types::RepoIndexSnapshot;
 pub use types::{RepoIndexEntryStatus, RepoIndexPhase, RepoIndexRequest, RepoIndexStatusResponse};

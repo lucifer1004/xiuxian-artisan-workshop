@@ -46,8 +46,19 @@ downstream proof.
 - The gateway inventory now also includes `GET /api/repo/sync`,
   `GET /api/repo/overview`, `GET /api/repo/module-search`, and
   `GET /api/repo/symbol-search`, `GET /api/repo/example-search`, and
-  `GET /api/repo/doc-coverage`, plus `GET /api/repo/projected-pages`,
+  `GET /api/repo/doc-coverage`, plus `GET /api/docs/projected-gap-report`,
+  `GET /api/docs/planner-item`, `GET /api/docs/planner-search`,
+  `GET /api/docs/planner-queue`, `GET /api/docs/planner-rank`,
+  `GET /api/docs/planner-workset`,
+  `GET /api/docs/search`, `GET /api/docs/retrieval`,
+  `GET /api/docs/retrieval-context`, `GET /api/docs/retrieval-hit`,
+  `GET /api/docs/page`,
+  `GET /api/docs/family-context`, `GET /api/docs/family-search`,
+  `GET /api/docs/family-cluster`,
+  `GET /api/docs/navigation`, `GET /api/docs/navigation-search`,
+  `GET /api/repo/projected-pages`,
   `GET /api/repo/projected-page`, `GET /api/repo/projected-page-index-node`,
+  `GET /api/repo/projected-gap-report`,
   `GET /api/repo/projected-retrieval-hit`,
   `GET /api/repo/projected-retrieval-context`,
   `GET /api/repo/projected-page-family-context`,
@@ -62,9 +73,23 @@ downstream proof.
   `GET /api/repo/projected-page-index-trees`, which expose the Wendao Repo
   Intelligence source lifecycle, normalized repository overview, normalized
   module lookup, normalized symbol lookup, normalized example lookup,
-  documentation coverage, deterministic Stage-2 projected page records,
+  documentation coverage, deterministic docs-facing projected gap planning
+  lookup, deterministic docs-facing planner-item opening, deterministic
+  docs-facing planner gap discovery, deterministic docs-facing planner queue
+  shaping, deterministic docs-facing planner priority ranking, deterministic
+  docs-facing projected page search, deterministic docs-facing mixed retrieval
+  lookup, deterministic docs-facing mixed retrieval-context lookup,
+  deterministic docs-facing singular mixed-hit lookup, deterministic
+  docs-facing projected page lookup, deterministic
+  docs-facing projected page family-context lookup,
+  deterministic docs-facing projected page family-search lookup,
+  deterministic docs-facing projected page family-cluster lookup,
+  deterministic docs-facing projected page navigation lookup, deterministic
+  docs-facing projected page navigation search,
+  deterministic Stage-2 projected page records,
   deterministic Stage-2 projected page lookup, deterministic Stage-2 projected
-  page-index node lookup, deterministic singular mixed Stage-2 hit lookup,
+  page-index node lookup, deterministic deep-wiki projected gap planning
+  lookup, deterministic singular mixed Stage-2 hit lookup,
   deterministic singular mixed Stage-2 context lookup, deterministic
   projected-page family context lookup, deterministic singular projected-page
   family cluster lookup, deterministic page-centric projected navigation
@@ -87,6 +112,95 @@ downstream proof.
 - `POST /api/ui/config` keeps an explicit JSON example in the bundled document,
   and the bundled gateway routes now include documented error responses so the
   real artifact stays clean under `REST-R003`.
+- The bundled artifact also now explicitly carries `GET /api/search/index/status`
+  again, so the checked-in OpenAPI document stays aligned with the runtime route
+  inventory instead of silently dropping a live search-status path.
+- The first docs namespace route intentionally reuses the same projected gap
+  payload as the repo inspection lane, so the docs surface starts as a naming
+  and navigation boundary instead of splitting deterministic deep-wiki planning
+  into two competing schemas.
+- The next docs namespace planner route follows the same rule:
+  `GET /api/docs/planner-item` composes the existing projected gap, retrieval-hit,
+  and navigation contracts into one deterministic work-item opener instead of
+  inventing a docs-only planner schema, so deep-wiki planning can open one
+  stable gap into a concrete page bundle without starting materialized wiki
+  storage or LLM generation.
+- The next docs namespace planner discovery route follows the same rule:
+  `GET /api/docs/planner-search` reuses stable projected gap records and ranks
+  them by deterministic planner evidence instead of inventing a docs-only
+  planner backlog schema, so deep-wiki planning can discover candidate work
+  items before opening them through `planner-item`.
+- The next docs namespace planner backlog route follows the same rule:
+  `GET /api/docs/planner-queue` groups stable projected gap records by
+  deterministic gap kind instead of inventing a second planner entity schema,
+  so deep-wiki planning can shape a backlog preview without leaving the stable
+  projected-gap contract family.
+- The next docs namespace planner ranking route follows the same rule:
+  `GET /api/docs/planner-rank` reuses stable projected gap records and adds
+  only deterministic priority scoring instead of inventing a second planner
+  ranking entity schema, so deep-wiki planning can order candidate work items
+  before opening them through `planner-item` or `planner-workset`.
+- The next docs namespace planner ranking explanation refinement follows the
+  same rule: `GET /api/docs/planner-rank` now carries machine-readable
+  priority-reason entries alongside the deterministic priority score instead of
+  inventing a second planner-explanation schema, so planners and UIs can show
+  why one gap outranks another without reverse-engineering score math.
+- The next docs namespace planner batch-opening route follows the same rule:
+  `GET /api/docs/planner-workset` now composes the deterministic planner queue,
+  deterministic planner-rank selection, and existing `planner-item` bundles
+  instead of inventing a second workset entity model, so deep-wiki planning can
+  preserve backlog shape, show why a workset was chosen, group the selected
+  ranked hits by gap kind, nest those grouped hits by projected page family,
+  and open a bounded batch of stable work items without leaving the
+  projected-gap and navigation contract family.
+- The next docs namespace route follows the same rule: `GET /api/docs/search`
+  reuses the repo projected-page search payload instead of introducing a
+  docs-only search schema, so the early deep-wiki surface stays contract-thin
+  and planner-facing.
+- The next docs namespace mixed retrieval route follows the same rule:
+  `GET /api/docs/retrieval` reuses the repo projected mixed-retrieval payload
+  instead of introducing a docs-only retrieval schema, so planner-facing docs
+  discovery can span both projected pages and builder-native anchors without
+  forking contracts.
+- The next docs namespace mixed retrieval-context route follows the same rule:
+  `GET /api/docs/retrieval-context` reuses the repo projected
+  mixed-retrieval-context payload instead of introducing a docs-only
+  retrieval-context schema, so planner-facing docs opening can expand one mixed
+  hit into local related pages and optional node neighborhood without forking
+  contracts.
+- The next docs namespace singular mixed-hit route follows the same rule:
+  `GET /api/docs/retrieval-hit` reuses the repo projected mixed-retrieval-hit
+  payload instead of introducing a docs-only retrieval-hit schema, so
+  planner-facing docs search and retrieval-context flows can reopen one stable
+  mixed hit directly without dropping back to repo-prefixed inspection routes.
+- The next docs namespace opening route follows the same rule:
+  `GET /api/docs/page` reuses the repo projected-page lookup payload instead of
+  introducing a docs-only page schema, so docs search and docs page can compose
+  around one stable Stage-2 page contract.
+- The next docs namespace family route follows the same rule:
+  `GET /api/docs/family-context` reuses the repo projected-page family-context
+  payload instead of introducing a docs-only grouped-family schema, so docs
+  page opening can expand into planner-facing family groupings without leaving
+  the deterministic Stage-2 contract family.
+- The next docs namespace family discovery route follows the same rule:
+  `GET /api/docs/family-search` reuses the repo projected-page family-search
+  payload instead of introducing a docs-only grouped-family search schema, so
+  docs discovery can return planner-facing family clusters without leaving the
+  deterministic Stage-2 contract family.
+- The next docs namespace family opening route follows the same rule:
+  `GET /api/docs/family-cluster` reuses the repo projected-page family-cluster
+  payload instead of introducing a docs-only grouped-family cluster schema, so
+  docs discovery can reopen one requested family cluster without leaving the
+  deterministic Stage-2 contract family.
+- The next docs namespace context route follows the same rule:
+  `GET /api/docs/navigation` reuses the repo projected-page navigation payload
+  instead of introducing a docs-only navigation schema, so docs search, docs
+  page, and docs navigation stay on one deterministic Stage-2 contract family.
+- The next docs namespace discovery route follows the same rule:
+  `GET /api/docs/navigation-search` reuses the repo projected-page navigation
+  search payload instead of introducing a docs-only navigation-search schema,
+  so docs discovery and docs opening can stay on one deterministic Stage-2
+  contract family.
 - The persisted downstream proof intentionally removes the `POST /api/ui/config`
   example from a temporary artifact copy so `REST-R007` produces one stable
   warning entry that can be persisted end-to-end through the Qianji sink path.

@@ -73,6 +73,14 @@ pub enum RepoIntelligenceError {
         /// The missing projected page identifier.
         page_id: String,
     },
+    /// A deterministic projected gap identifier was not found for the repository.
+    #[error("repo `{repo_id}` does not contain projected gap `{gap_id}`")]
+    UnknownProjectedGap {
+        /// The repository identifier.
+        repo_id: String,
+        /// The missing projected gap identifier.
+        gap_id: String,
+    },
     /// A deterministic projected page-family cluster was not found for the repository.
     #[error(
         "repo `{repo_id}` does not contain projected page family `{kind:?}` in page `{page_id}`"

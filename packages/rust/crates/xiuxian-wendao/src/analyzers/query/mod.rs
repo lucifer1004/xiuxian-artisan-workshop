@@ -3,6 +3,7 @@
 mod docs;
 mod example;
 mod family;
+mod gaps;
 mod imports;
 mod index_tree;
 mod module;
@@ -14,13 +15,31 @@ mod retrieval;
 mod symbol;
 mod sync;
 
-pub use docs::{DocCoverageQuery, DocCoverageResult};
+pub use docs::{
+    DocCoverageQuery, DocCoverageResult, DocsFamilyClusterQuery, DocsFamilyClusterResult,
+    DocsFamilyContextQuery, DocsFamilyContextResult, DocsFamilySearchQuery, DocsFamilySearchResult,
+    DocsNavigationQuery, DocsNavigationResult, DocsNavigationSearchQuery,
+    DocsNavigationSearchResult, DocsPageQuery, DocsPageResult, DocsPlannerItemQuery,
+    DocsPlannerItemResult, DocsPlannerQueueGroup, DocsPlannerQueueQuery, DocsPlannerQueueResult,
+    DocsPlannerRankHit, DocsPlannerRankQuery, DocsPlannerRankReason, DocsPlannerRankReasonCode,
+    DocsPlannerRankResult, DocsPlannerSearchHit, DocsPlannerSearchQuery, DocsPlannerSearchResult,
+    DocsPlannerWorksetBalance, DocsPlannerWorksetFamilyBalanceEntry, DocsPlannerWorksetFamilyGroup,
+    DocsPlannerWorksetGapKindBalanceEntry, DocsPlannerWorksetGroup, DocsPlannerWorksetQuery,
+    DocsPlannerWorksetResult, DocsProjectedGapReportQuery, DocsProjectedGapReportResult,
+    DocsRetrievalContextQuery, DocsRetrievalContextResult, DocsRetrievalHitQuery,
+    DocsRetrievalHitResult, DocsRetrievalQuery, DocsRetrievalResult, DocsSearchQuery,
+    DocsSearchResult,
+};
 pub use example::{ExampleSearchHit, ExampleSearchQuery, ExampleSearchResult};
 pub use family::{
     ProjectedPageFamilyCluster, ProjectedPageFamilyContextEntry, ProjectedPageFamilySearchHit,
     RepoProjectedPageFamilyClusterQuery, RepoProjectedPageFamilyClusterResult,
     RepoProjectedPageFamilyContextQuery, RepoProjectedPageFamilyContextResult,
     RepoProjectedPageFamilySearchQuery, RepoProjectedPageFamilySearchResult,
+};
+pub use gaps::{
+    ProjectedGapKind, ProjectedGapRecord, ProjectedGapSummary, ProjectedGapSummaryEntry,
+    RepoProjectedGapReportQuery, RepoProjectedGapReportResult,
 };
 pub use imports::{ImportSearchHit, ImportSearchQuery, ImportSearchResult};
 pub use index_tree::{

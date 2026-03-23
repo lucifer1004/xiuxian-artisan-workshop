@@ -94,7 +94,7 @@ rayon = "1.11"
 # Unicode normalization for entity deduplication
 unicode-normalization = "0.1"
 
-arrow = "54"
+arrow = { workspace = true }
 
 # Graph algorithms
 petgraph = { workspace = true }

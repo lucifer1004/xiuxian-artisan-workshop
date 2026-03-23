@@ -9,6 +9,7 @@ mod index;
 mod knowledge;
 mod queries;
 mod references;
+mod status;
 mod symbols;
 
 #[cfg(test)]
@@ -23,6 +24,7 @@ pub use definition::search_definition;
 pub use index::{build_ast_index, build_symbol_index};
 pub use knowledge::{search_intent, search_knowledge};
 pub use references::search_references;
+pub use status::search_index_status;
 pub use symbols::search_symbols;
 
 #[cfg(test)]

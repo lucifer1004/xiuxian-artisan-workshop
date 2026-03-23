@@ -55,6 +55,8 @@ pub mod link_graph;
 pub mod link_graph_py;
 pub mod schemas;
 pub mod search;
+/// Lance/Arrow/Valkey-backed search-plane domain for Studio search corpora.
+pub mod search_plane;
 pub mod storage;
 pub mod sync;
 mod types;

@@ -214,6 +214,206 @@ the requested `family_kind`. That gives downstream Stage-2 consumers one search
 surface that opens page-level context, page-index trees, related pages, and an
 optional family cluster without a second round trip per hit.
 
+The first deep-wiki planning surface above those Stage-2 page kernels should
+also stay deterministic:
+
+- `GET /api/repo/projected-gap-report?repo=<id>`
+
+This route should expose the analyzer-native `RepoProjectedGapReportResult`
+through the existing repo inspection surface so downstream consumers can plan
+documentation work from stable coverage gaps before any docs namespace,
+materialized wiki corpus, or Qianji-backed generation loop exists.
+
+The initial gap kinds should stay planner-facing and grounded in indexed truth:
+
+- module reference without documentation
+- symbol reference without documentation
+- symbol reference marked `unverified`
+- example how-to without anchors
+- documentation page without anchors
+
+The next docs-facing refinement above that repo inspection lane should also stay
+deterministic:
+
+- `GET /api/docs/projected-gap-report?repo=<id>`
+
+This route should reuse the same `RepoProjectedGapReportResult` payload instead
+of inventing a second gap schema, so the first docs namespace surface starts as
+semantic re-framing, not contract duplication.
+
+The next docs-facing discovery refinement above that initial gap surface should
+stay equally deterministic:
+
+- `GET /api/docs/search?repo=<id>&query=<text>&kind=<family>&limit=<n>`
+
+This route should reuse the same `RepoProjectedPageSearchResult` payload as the
+repo inspection lane instead of creating a second docs-search schema. The docs
+namespace should therefore grow by re-framing stable Stage-2 contracts for
+planning and navigation, not by forking search behavior before a materialized
+wiki corpus exists.
+
+The next docs-facing mixed-retrieval refinement above docs search should also
+stay deterministic:
+
+- `GET /api/docs/retrieval?repo=<id>&query=<text>&kind=<family>&limit=<n>`
+
+This route should reuse the same `RepoProjectedRetrievalResult` payload as the
+repo inspection lane instead of creating a second docs-retrieval schema. The
+docs namespace should therefore be able to search both projected pages and
+builder-native projected page-index node hits without leaving the stable
+Stage-2 contract family.
+
+The next docs-facing mixed-retrieval context refinement above docs retrieval
+should also stay deterministic:
+
+- `GET /api/docs/retrieval-context?repo=<id>&page_id=<stable-id>&node_id=<stable-node-id?>&related_limit=<n>`
+
+This route should reuse the same `RepoProjectedRetrievalContextResult` payload
+as the repo inspection lane instead of creating a second
+docs-retrieval-context schema. The docs namespace should therefore be able to
+reopen one mixed hit with its related projected pages and optional builder-native
+node neighborhood without leaving the stable Stage-2 contract family.
+
+The next docs-facing singular mixed-hit refinement above docs retrieval-context
+should also stay deterministic:
+
+- `GET /api/docs/retrieval-hit?repo=<id>&page_id=<stable-id>&node_id=<stable-node-id?>`
+
+This route should reuse the same `RepoProjectedRetrievalHitResult` payload as
+the repo inspection lane instead of creating a second docs-retrieval-hit
+schema. The docs namespace should therefore be able to reopen one stable mixed
+hit directly before expanding into page, family, or retrieval-context flows.
+
+The next docs-facing planner refinement above docs retrieval-hit should also
+stay deterministic:
+
+- `GET /api/docs/planner-item?repo=<id>&gap_id=<stable-gap-id>&family_kind=<family?>&related_limit=<n>&family_limit=<n>`
+
+This route should compose the existing deterministic `RepoProjectedGapReport`,
+`RepoProjectedRetrievalHitResult`, and `RepoProjectedPageNavigationResult`
+contracts into one docs-facing work-item opener instead of creating a second
+planner-only schema. The docs namespace should therefore be able to reopen one
+stable projected gap into its concrete page hit and navigation neighborhood
+before any materialized wiki corpus or Qianji-backed generation loop exists.
+
+The next docs-facing planner discovery refinement above planner-item should
+also stay deterministic:
+
+- `GET /api/docs/planner-search?repo=<id>&query=<text>&gap_kind=<gap?>&page_kind=<family?>&limit=<n>`
+
+This route should reuse the same projected gap records already emitted by the
+deterministic gap report and rank them by explicit title/path/entity/kind
+evidence instead of creating a second planner backlog schema. The docs
+namespace should therefore be able to discover candidate deep-wiki work items
+before opening one concrete gap through `planner-item`.
+
+The next docs-facing planner backlog refinement above planner-search should
+also stay deterministic:
+
+- `GET /api/docs/planner-queue?repo=<id>&gap_kind=<gap?>&page_kind=<family?>&per_kind_limit=<n>`
+
+This route should keep reusing the same projected gap records already emitted
+by the deterministic gap report, but group them into stable backlog lanes by
+projected gap kind instead of inventing a second planner queue entity model.
+The docs namespace should therefore be able to shape candidate deep-wiki work
+items into deterministic queue groups before opening one concrete gap through
+`planner-item`.
+
+The next docs-facing planner ranking refinement above planner-queue should
+also stay deterministic:
+
+- `GET /api/docs/planner-rank?repo=<id>&gap_kind=<gap?>&page_kind=<family?>&limit=<n>`
+
+This route should keep reusing the same projected gap records already emitted
+by the deterministic gap report, but order them by explicit gap-kind,
+page-family, and anchor-density evidence instead of inventing a second planner
+ranking entity model. The docs namespace should therefore be able to rank
+candidate deep-wiki work items before opening a concrete gap through
+`planner-item` or a bounded batch through `planner-workset`.
+
+The next explanation refinement on top of that same deterministic ranking lane
+should still avoid schema sprawl:
+
+- `GET /api/docs/planner-rank?repo=<id>&gap_kind=<gap?>&page_kind=<family?>&limit=<n>`
+
+This route should keep the same ranked gap shape, but carry machine-readable
+priority reasons alongside the stable score so planners and UIs can explain
+why one work item outranks another without recreating hidden ranking logic.
+
+The next docs-facing planner batch-opening refinement above planner-rank
+should also stay deterministic:
+
+- `GET /api/docs/planner-workset?repo=<id>&gap_kind=<gap?>&page_kind=<family?>&per_kind_limit=<n>&limit=<n>&family_kind=<family?>&related_limit=<n>&family_limit=<n>`
+
+This route should compose the deterministic planner queue, deterministic
+planner-rank selection, and the existing `planner-item` opener instead of
+inventing a second batch-work schema. The docs namespace should therefore be
+able to keep a filtered queue preview, expose the ranked gap selection chosen
+for the workset, group that ranked selection by stable projected gap kind, and
+nest those grouped selections by projected page family before reopening the
+first stable `N` ranked gaps as concrete planner bundles before any
+materialized wiki corpus or Qianji-backed generation loop exists.
+
+The next docs-facing opening refinement above docs search should also stay
+deterministic:
+
+- `GET /api/docs/page?repo=<id>&page_id=<stable-id>`
+
+This route should reuse the same `RepoProjectedPageResult` payload as the repo
+inspection lane, so docs search hits can open one stable projected page without
+introducing a second docs-page schema or depending on repo-prefixed
+navigation-only consumers.
+
+The next docs-facing family refinement above docs page should also stay
+deterministic:
+
+- `GET /api/docs/family-context?repo=<id>&page_id=<stable-id>&per_kind_limit=<n>`
+
+This route should reuse the same `RepoProjectedPageFamilyContextResult` payload
+as the repo inspection lane, so the docs namespace can open one stable page and
+inspect all related page families grouped by shared-anchor evidence without
+introducing a docs-only family-context schema.
+
+The next docs-facing family discovery refinement above docs family context
+should also stay deterministic:
+
+- `GET /api/docs/family-search?repo=<id>&query=<text>&kind=<family>&limit=<n>&per_kind_limit=<n>`
+
+This route should reuse the same `RepoProjectedPageFamilySearchResult` payload
+as the repo inspection lane, so the docs namespace can search stable center
+pages and receive grouped family clusters without introducing a docs-only
+family-search schema.
+
+The next docs-facing family opening refinement above docs family search should
+also stay deterministic:
+
+- `GET /api/docs/family-cluster?repo=<id>&page_id=<stable-id>&kind=<family>&limit=<n>`
+
+This route should reuse the same `RepoProjectedPageFamilyClusterResult` payload
+as the repo inspection lane, so the docs namespace can reopen one stable center
+page with one required family cluster without introducing a docs-only
+family-cluster schema.
+
+The next docs-facing context refinement above docs page should also stay
+deterministic:
+
+- `GET /api/docs/navigation?repo=<id>&page_id=<stable-id>&node_id=<stable-node-id?>&family_kind=<family?>&related_limit=<n>&family_limit=<n>`
+
+This route should reuse the same `RepoProjectedPageNavigationResult` payload as
+the repo inspection lane, so the docs namespace can open one stable page with
+its related pages, projected page-index tree, optional node context, and
+optional family cluster without introducing a docs-only navigation schema.
+
+The next docs-facing discovery refinement above docs navigation should also stay
+deterministic:
+
+- `GET /api/docs/navigation-search?repo=<id>&query=<text>&kind=<family>&family_kind=<family?>&limit=<n>&related_limit=<n>&family_limit=<n>`
+
+This route should reuse the same `RepoProjectedPageNavigationSearchResult`
+payload as the repo inspection lane, so the docs namespace can search stable
+center pages and receive full page-centric navigation bundles without
+introducing a docs-only navigation-search schema.
+
 ### Projection Rules
 
 The initial projection rules should stay deterministic:
@@ -350,6 +550,26 @@ Examples:
 
 This coverage signal should become a first-class input for future wiki expansion and auditing.
 
+The first deterministic gap slice is now landed inside the analyzer kernel through
+`RepoProjectedGapReportQuery -> RepoProjectedGapReportResult`.
+
+The current landed gap kinds are intentionally narrow and planner-facing:
+
+- module reference page without documentation evidence
+- symbol reference page without documentation evidence
+- symbol reference page marked `unverified`
+- example how-to page without stable module/symbol anchors
+- documentation-backed projected page without stable module/symbol anchors
+
+This slice stays inside `xiuxian-wendao::analyzers`:
+
+- no new gateway route yet
+- no LLM/Qianji refinement
+- no materialized wiki corpus
+
+That gives Stage 2 its first deterministic expansion signal without coupling
+gap planning to generation.
+
 ## Qianji Boundary
 
 Qianji should remain outside the deterministic projection kernel.
@@ -390,13 +610,16 @@ green Tier-3 lane for the active Wendao plus external Modelica scope:
 - `cargo nextest run -p xiuxian-wendao -p xiuxian-wendao-modelica --no-fail-fast`
 
 That shifts the next bounded step away from more surface expansion and toward
-post-gate hygiene:
+post-gate hygiene and deep-wiki planning:
 
 - remove clearly disposable backup/debris files from `xiuxian-wendao/src/`
 - the stale tracked `src/analyzers/service/mod.rs.bak2` monolith is now gone,
   so projection work no longer carries that service-layer refactor artifact
 - keep package docs and execution records aligned with the live analyzer and
   Stage-2 projection contracts
+- extend the new deterministic docs gap surface into broader docs navigation,
+  page opening, or search routes only after the planner-level contract proves
+  stable
 
 ## Why This Split Matters
 

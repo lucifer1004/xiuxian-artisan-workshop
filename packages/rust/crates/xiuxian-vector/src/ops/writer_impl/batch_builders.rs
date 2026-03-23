@@ -1,5 +1,5 @@
 impl VectorStore {
-    fn derive_routing_keywords(tool: &OmniToolRecord) -> Vec<String> {
+    fn derive_routing_keywords(tool: &ToolRecord) -> Vec<String> {
         let skill_token = tool.skill_name.trim();
         let tool_token = tool.tool_name.split('.').next_back().map_or("", str::trim);
         let full_tool = tool.tool_name.trim();

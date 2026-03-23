@@ -2,10 +2,69 @@ use std::fs;
 use std::sync::Arc;
 
 use super::code_search::{
-    build_code_search_response, build_repo_content_search_hits, parse_code_search_query,
-    symbol_search_hit_to_search_hit,
+    build_code_search_response, build_repo_content_search_hits, build_repo_entity_search_hits,
+    parse_code_search_query, symbol_search_hit_to_search_hit,
 };
+use super::knowledge::build_intent_search_response;
 use super::*;
+
+async fn publish_repo_content_chunk_index(
+    studio: &crate::gateway::studio::router::StudioState,
+    repo_id: &str,
+    documents: Vec<crate::gateway::studio::repo_index::RepoCodeDocument>,
+) {
+    studio
+        .search_plane
+        .publish_repo_content_chunks_with_revision(repo_id, &documents, None)
+        .await
+        .unwrap_or_else(|error| panic!("publish repo content chunks: {error}"));
+}
+
+async fn publish_repo_entity_index(
+    studio: &crate::gateway::studio::router::StudioState,
+    repo_id: &str,
+    analysis: &crate::analyzers::RepositoryAnalysisOutput,
+) {
+    studio
+        .search_plane
+        .publish_repo_entities_with_revision(repo_id, analysis, None)
+        .await
+        .unwrap_or_else(|error| panic!("publish repo entities: {error}"));
+}
+
+fn sample_repo_analysis(repo_id: &str) -> crate::analyzers::RepositoryAnalysisOutput {
+    crate::analyzers::RepositoryAnalysisOutput {
+        modules: vec![crate::analyzers::ModuleRecord {
+            repo_id: repo_id.to_string(),
+            module_id: "module:BaseModelica".to_string(),
+            qualified_name: "BaseModelica".to_string(),
+            path: "src/BaseModelica.jl".to_string(),
+        }],
+        symbols: vec![crate::analyzers::SymbolRecord {
+            repo_id: repo_id.to_string(),
+            symbol_id: "symbol:reexport".to_string(),
+            module_id: Some("module:BaseModelica".to_string()),
+            name: "reexport".to_string(),
+            qualified_name: "BaseModelica.reexport".to_string(),
+            kind: crate::analyzers::RepoSymbolKind::Function,
+            path: "src/BaseModelica.jl".to_string(),
+            line_start: Some(7),
+            line_end: Some(9),
+            signature: Some("reexport()".to_string()),
+            audit_status: Some("verified".to_string()),
+            verification_state: Some("verified".to_string()),
+            attributes: std::collections::BTreeMap::new(),
+        }],
+        examples: vec![crate::analyzers::ExampleRecord {
+            repo_id: repo_id.to_string(),
+            example_id: "example:reexport".to_string(),
+            title: "Reexport example".to_string(),
+            path: "examples/reexport.jl".to_string(),
+            summary: Some("Shows how to reexport ModelingToolkit".to_string()),
+        }],
+        ..crate::analyzers::RepositoryAnalysisOutput::default()
+    }
+}
 
 #[test]
 fn parse_code_search_query_extracts_repo_lang_and_kind_filters() {
@@ -88,21 +147,29 @@ fn symbol_search_hit_to_search_hit_preserves_backend_metadata() {
     assert_eq!(hit.audit_status.as_deref(), Some("verified"));
 }
 
-#[test]
-fn repo_content_search_hits_find_matching_julia_source_lines() {
-    let snapshot = RepoIndexSnapshot {
-        repo_id: "sciml".to_string(),
-        analysis: Arc::new(crate::analyzers::RepositoryAnalysisOutput::default()),
-        code_documents: Arc::new(vec![crate::gateway::studio::repo_index::RepoCodeDocument {
+#[tokio::test]
+async fn repo_content_search_hits_find_matching_julia_source_lines() {
+    let studio =
+        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
+            crate::analyzers::bootstrap_builtin_registry()
+                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
+        ));
+    publish_repo_content_chunk_index(
+        &studio,
+        "sciml",
+        vec![crate::gateway::studio::repo_index::RepoCodeDocument {
             path: "src/BaseModelica.jl".to_string(),
             language: Some("julia".to_string()),
             contents: Arc::<str>::from(
                 "module BaseModelica\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
             ),
-        }]),
-    };
+        }],
+    )
+    .await;
 
-    let hits = build_repo_content_search_hits(&snapshot, "lang:julia reexport", 10);
+    let hits = build_repo_content_search_hits(&studio, "sciml", "lang:julia reexport", 10)
+        .await
+        .unwrap_or_else(|error| panic!("repo content search hits: {error:?}"));
 
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].doc_type.as_deref(), Some("file"));
@@ -117,8 +184,81 @@ fn repo_content_search_hits_find_matching_julia_source_lines() {
     );
 }
 
-#[test]
-fn build_code_search_response_skips_unsupported_repositories_when_searching_all_repos() {
+#[tokio::test]
+async fn build_code_search_response_returns_repo_entity_hits_from_search_plane() {
+    let studio =
+        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
+            crate::analyzers::bootstrap_builtin_registry()
+                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
+        ));
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "valid".to_string(),
+            root: Some(".".to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["julia".to_string()],
+        }],
+    });
+    let analysis = sample_repo_analysis("valid");
+    publish_repo_entity_index(&studio, "valid", &analysis).await;
+    studio
+        .repo_index
+        .set_snapshot_for_test(Arc::new(RepoIndexSnapshot {
+            repo_id: "valid".to_string(),
+            analysis: Arc::new(analysis),
+        }));
+    studio.repo_index.set_status_for_test(
+        crate::gateway::studio::repo_index::RepoIndexEntryStatus {
+            repo_id: "valid".to_string(),
+            phase: crate::gateway::studio::repo_index::RepoIndexPhase::Ready,
+            queue_position: None,
+            last_error: None,
+            last_revision: Some("abc123".to_string()),
+            updated_at: Some("2026-03-22T00:00:00Z".to_string()),
+            attempt_count: 1,
+        },
+    );
+
+    let direct_hits = build_repo_entity_search_hits(&studio, "valid", "reexport", 10)
+        .await
+        .unwrap_or_else(|error| panic!("direct repo entity search hits: {error:?}"));
+    assert!(
+        direct_hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("symbol")
+                && hit.path == "src/BaseModelica.jl"),
+        "expected direct repo entity symbol hit: {:?}",
+        direct_hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type))
+            .collect::<Vec<_>>()
+    );
+
+    let response = build_code_search_response(&studio, "reexport".to_string(), Some("valid"), 10)
+        .await
+        .unwrap_or_else(|error| panic!("code search response: {error:?}"));
+
+    assert_eq!(response.selected_mode.as_deref(), Some("code_search"));
+    assert!(
+        response
+            .hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("symbol")
+                && hit.path == "src/BaseModelica.jl"),
+        "expected repo entity hit in code search response: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn build_code_search_response_skips_unsupported_repositories_when_searching_all_repos() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let valid_repo = temp.path().join("ValidPkg");
     fs::create_dir_all(valid_repo.join("src"))
@@ -174,12 +314,17 @@ fn build_code_search_response_skips_unsupported_repositories_when_searching_all_
         .set_snapshot_for_test(Arc::new(RepoIndexSnapshot {
             repo_id: "valid".to_string(),
             analysis: Arc::new(crate::analyzers::RepositoryAnalysisOutput::default()),
-            code_documents: Arc::new(vec![crate::gateway::studio::repo_index::RepoCodeDocument {
-                path: "src/ValidPkg.jl".to_string(),
-                language: Some("julia".to_string()),
-                contents: Arc::<str>::from("module ValidPkg\nusing ModelingToolkit\nend\n"),
-            }]),
         }));
+    publish_repo_content_chunk_index(
+        &studio,
+        "valid",
+        vec![crate::gateway::studio::repo_index::RepoCodeDocument {
+            path: "src/ValidPkg.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from("module ValidPkg\nusing ModelingToolkit\nend\n"),
+        }],
+    )
+    .await;
     studio.repo_index.set_status_for_test(
         crate::gateway::studio::repo_index::RepoIndexEntryStatus {
             repo_id: "valid".to_string(),
@@ -204,6 +349,7 @@ fn build_code_search_response_skips_unsupported_repositories_when_searching_all_
     );
 
     let response = build_code_search_response(&studio, "ValidPkg".to_string(), None, 10)
+        .await
         .unwrap_or_else(|error| {
             panic!("all-repo code search should skip unsupported repositories: {error:?}")
         });
@@ -220,8 +366,8 @@ fn build_code_search_response_skips_unsupported_repositories_when_searching_all_
     }));
 }
 
-#[test]
-fn build_code_search_response_returns_pending_payload_for_explicit_repo_without_snapshot() {
+#[tokio::test]
+async fn build_code_search_response_returns_pending_payload_for_explicit_repo_without_snapshot() {
     let studio =
         crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
             crate::analyzers::bootstrap_builtin_registry()
@@ -256,6 +402,7 @@ fn build_code_search_response_returns_pending_payload_for_explicit_repo_without_
         Some("DifferentialEquations.jl"),
         5,
     )
+    .await
     .unwrap_or_else(|error| panic!("repo-specific pending search should not block: {error:?}"));
 
     assert!(response.hits.is_empty());
@@ -266,4 +413,225 @@ fn build_code_search_response_returns_pending_payload_for_explicit_repo_without_
         vec!["DifferentialEquations.jl".to_string()]
     );
     assert!(response.skipped_repos.is_empty());
+}
+
+#[tokio::test]
+async fn build_intent_search_response_includes_repo_content_hits_for_debug_lookup() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let valid_repo = temp.path().join("ValidPkg");
+    fs::create_dir_all(valid_repo.join("src"))
+        .unwrap_or_else(|error| panic!("create valid src: {error}"));
+    fs::write(
+        valid_repo.join("Project.toml"),
+        "name = \"ValidPkg\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+    )
+    .unwrap_or_else(|error| panic!("write project: {error}"));
+
+    let studio =
+        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
+            crate::analyzers::bootstrap_builtin_registry()
+                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
+        ));
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "valid".to_string(),
+            root: Some(valid_repo.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["julia".to_string()],
+        }],
+    });
+    let snapshot = Arc::new(RepoIndexSnapshot {
+        repo_id: "valid".to_string(),
+        analysis: Arc::new(crate::analyzers::RepositoryAnalysisOutput::default()),
+    });
+    publish_repo_content_chunk_index(
+        &studio,
+        "valid",
+        vec![crate::gateway::studio::repo_index::RepoCodeDocument {
+            path: "src/ValidPkg.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(
+                "module ValidPkg\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
+            ),
+        }],
+    )
+    .await;
+    studio
+        .repo_index
+        .set_snapshot_for_test(Arc::clone(&snapshot));
+    studio.repo_index.set_status_for_test(
+        crate::gateway::studio::repo_index::RepoIndexEntryStatus {
+            repo_id: "valid".to_string(),
+            phase: crate::gateway::studio::repo_index::RepoIndexPhase::Ready,
+            queue_position: None,
+            last_error: None,
+            last_revision: Some("abc123".to_string()),
+            updated_at: Some("2026-03-22T00:00:00Z".to_string()),
+            attempt_count: 1,
+        },
+    );
+    let direct_hits = build_repo_content_search_hits(&studio, "valid", "lang:julia reexport", 10)
+        .await
+        .unwrap_or_else(|error| panic!("direct repo content search hits: {error:?}"));
+    assert_eq!(direct_hits.len(), 1);
+    assert_eq!(direct_hits[0].path, "src/ValidPkg.jl");
+
+    let response = build_intent_search_response(
+        &studio,
+        "lang:julia reexport",
+        "lang:julia reexport",
+        Some("valid"),
+        10,
+        Some("debug_lookup".to_string()),
+    )
+    .await
+    .unwrap_or_else(|error| panic!("intent search response: {error:?}"));
+
+    assert_eq!(response.selected_mode.as_deref(), Some("intent_hybrid"));
+    assert_eq!(response.graph_confidence_score, Some(0.0));
+    assert!(
+        response
+            .hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("file") && hit.path == "src/ValidPkg.jl"),
+        "expected repo content hit in hybrid intent response: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn build_intent_search_response_includes_repo_entity_hits_for_debug_lookup() {
+    let studio =
+        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
+            crate::analyzers::bootstrap_builtin_registry()
+                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
+        ));
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "valid".to_string(),
+            root: Some(".".to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["julia".to_string()],
+        }],
+    });
+    let analysis = sample_repo_analysis("valid");
+    publish_repo_entity_index(&studio, "valid", &analysis).await;
+    studio
+        .repo_index
+        .set_snapshot_for_test(Arc::new(RepoIndexSnapshot {
+            repo_id: "valid".to_string(),
+            analysis: Arc::new(analysis),
+        }));
+    studio.repo_index.set_status_for_test(
+        crate::gateway::studio::repo_index::RepoIndexEntryStatus {
+            repo_id: "valid".to_string(),
+            phase: crate::gateway::studio::repo_index::RepoIndexPhase::Ready,
+            queue_position: None,
+            last_error: None,
+            last_revision: Some("abc123".to_string()),
+            updated_at: Some("2026-03-22T00:00:00Z".to_string()),
+            attempt_count: 1,
+        },
+    );
+
+    let response = build_intent_search_response(
+        &studio,
+        "reexport",
+        "reexport",
+        Some("valid"),
+        10,
+        Some("debug_lookup".to_string()),
+    )
+    .await
+    .unwrap_or_else(|error| panic!("intent search response: {error:?}"));
+
+    assert_eq!(response.selected_mode.as_deref(), Some("intent_hybrid"));
+    assert!(
+        response
+            .hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("symbol")
+                && hit.path == "src/BaseModelica.jl"),
+        "expected repo entity hit in hybrid intent response: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn build_code_search_response_uses_published_repo_tables_while_repo_refreshes() {
+    let studio =
+        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
+            crate::analyzers::bootstrap_builtin_registry()
+                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
+        ));
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "valid".to_string(),
+            root: Some(".".to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["julia".to_string()],
+        }],
+    });
+    publish_repo_entity_index(&studio, "valid", &sample_repo_analysis("valid")).await;
+    publish_repo_content_chunk_index(
+        &studio,
+        "valid",
+        vec![crate::gateway::studio::repo_index::RepoCodeDocument {
+            path: "src/BaseModelica.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(
+                "module BaseModelica\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
+            ),
+        }],
+    )
+    .await;
+    studio.repo_index.set_status_for_test(
+        crate::gateway::studio::repo_index::RepoIndexEntryStatus {
+            repo_id: "valid".to_string(),
+            phase: crate::gateway::studio::repo_index::RepoIndexPhase::Indexing,
+            queue_position: None,
+            last_error: None,
+            last_revision: Some("def456".to_string()),
+            updated_at: Some("2026-03-23T00:00:00Z".to_string()),
+            attempt_count: 2,
+        },
+    );
+
+    let response = build_code_search_response(&studio, "reexport".to_string(), Some("valid"), 10)
+        .await
+        .unwrap_or_else(|error| {
+            panic!("refreshing repo should still serve published hits: {error:?}")
+        });
+
+    assert!(
+        response
+            .hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("symbol")
+                && hit.path == "src/BaseModelica.jl"),
+        "expected published repo entity hit while repo refreshes: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type))
+            .collect::<Vec<_>>()
+    );
+    assert!(response.pending_repos.is_empty());
 }

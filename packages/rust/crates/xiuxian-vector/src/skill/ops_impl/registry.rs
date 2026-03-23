@@ -1,5 +1,3 @@
-use arrow::array::Array as _;
-
 impl VectorStore {
     /// Load the tool registry from a table.
     ///

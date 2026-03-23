@@ -8,12 +8,12 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-# LanceDB core (2.0: v2 manifest, scalar/FTS improvements)
+# LanceDB core
 lance = { workspace = true }
-lance-arrow = "2.0"
-lance-file = "2.0"
-lance-index = "2.0"
-lance-linalg = "2.0"
+lance-arrow = { workspace = true }
+lance-file = { workspace = true }
+lance-index = { workspace = true }
+lance-linalg = { workspace = true }
 
 # Tantivy - Rust Lucene for BM25/Sparse Retrieval
 tantivy = "0.25"

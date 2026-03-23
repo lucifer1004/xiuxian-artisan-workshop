@@ -1,4 +1,5 @@
 use crate::gateway::studio::router::StudioState;
+use crate::gateway::studio::types::UiProjectConfig;
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -10,11 +11,12 @@ pub fn resolve_path_like(base: &Path, input: &str) -> Option<PathBuf> {
 
     let expanded = expand_home_path_like(trimmed)?;
     let path = expanded.as_path();
-    if path.is_absolute() {
-        Some(path.to_path_buf())
+    let joined = if path.is_absolute() {
+        path.to_path_buf()
     } else {
-        Some(base.join(path))
-    }
+        base.join(path)
+    };
+    normalize_path_buf_like(joined.as_path())
 }
 
 pub fn normalize_project_dir_root(dir: &str) -> Option<String> {
@@ -46,12 +48,83 @@ pub fn normalize_path_like(raw: &str) -> Option<String> {
 }
 
 pub fn studio_display_path(state: &StudioState, internal_path: &str) -> String {
-    // Current MVP implementation: try to strip project root
-    if let Ok(relative) = Path::new(internal_path).strip_prefix(&state.project_root) {
-        relative.to_string_lossy().to_string()
-    } else {
-        internal_path.to_string()
+    let fallback = normalize_path_like(internal_path)
+        .unwrap_or_else(|| internal_path.trim().trim_start_matches('/').to_string());
+
+    let projects = state.configured_projects();
+    if projects.is_empty() {
+        return fallback;
     }
+
+    if projects.iter().any(|project| {
+        fallback == project.name || fallback.starts_with(format!("{}/", project.name).as_str())
+    }) {
+        return fallback;
+    }
+
+    for project in &projects {
+        if let Some(scoped_path) = project_scoped_display_path(state, project, fallback.as_str()) {
+            return scoped_path;
+        }
+    }
+
+    fallback
+}
+
+fn project_scoped_display_path(
+    state: &StudioState,
+    project: &UiProjectConfig,
+    normalized_path: &str,
+) -> Option<String> {
+    let project_root = resolve_path_like(state.config_root.as_path(), project.root.as_str())?;
+    let project_root_relative = project_root
+        .strip_prefix(state.project_root.as_path())
+        .ok()
+        .and_then(|relative| {
+            normalize_path_like(relative.to_string_lossy().as_ref())
+                .filter(|value| !value.is_empty() && value != ".")
+        });
+    let relative_path = if Path::new(normalized_path).is_absolute() {
+        let stripped = Path::new(normalized_path).strip_prefix(project_root).ok()?;
+        normalize_path_like(stripped.to_string_lossy().as_ref())?
+    } else {
+        if let Some(relative_root) = project_root_relative.as_deref() {
+            if normalized_path == relative_root {
+                normalized_path.to_string()
+            } else if normalized_path.starts_with(format!("{relative_root}/").as_str()) {
+                let prefix = format!("{relative_root}/");
+                normalized_path
+                    .strip_prefix(prefix.as_str())
+                    .map_or_else(|| normalized_path.to_string(), |value| value.to_string())
+            } else {
+                return None;
+            }
+        } else {
+            normalized_path.to_string()
+        }
+    };
+
+    if !project_allows_relative_path(project, relative_path.as_str()) {
+        return None;
+    }
+
+    Some(format!("{}/{}", project.name, relative_path))
+}
+
+fn project_allows_relative_path(project: &UiProjectConfig, relative_path: &str) -> bool {
+    if project.dirs.is_empty() {
+        return true;
+    }
+
+    project
+        .dirs
+        .iter()
+        .filter_map(|dir| normalize_project_dir_root(dir))
+        .any(|dir| {
+            dir == "."
+                || relative_path == dir
+                || relative_path.starts_with(format!("{dir}/").as_str())
+        })
 }
 
 fn is_windows_drive_root(value: &str) -> bool {
@@ -74,6 +147,27 @@ fn expand_home_path_like(input: &str) -> Option<PathBuf> {
     Some(PathBuf::from(input))
 }
 
+fn normalize_path_buf_like(path: &Path) -> Option<PathBuf> {
+    use std::path::Component;
+
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => continue,
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+
+    if normalized.as_os_str().is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
 fn home_dir() -> Option<PathBuf> {
     env::var_os("HOME")
         .map(PathBuf::from)
@@ -89,7 +183,9 @@ fn home_dir() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_path_like;
+    use super::{resolve_path_like, studio_display_path};
+    use crate::gateway::studio::router::StudioState;
+    use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
     use std::path::Path;
 
     #[test]
@@ -110,5 +206,108 @@ mod tests {
             .unwrap_or_else(|| panic!("relative path should resolve"));
 
         assert_eq!(resolved, std::path::PathBuf::from("/tmp/studio/docs"));
+    }
+
+    #[test]
+    fn resolve_path_like_normalizes_current_dir_segments() {
+        let resolved = resolve_path_like(Path::new("/tmp/studio"), ".")
+            .unwrap_or_else(|| panic!("current-dir path should resolve"));
+
+        assert_eq!(resolved, std::path::PathBuf::from("/tmp/studio"));
+    }
+
+    #[test]
+    fn studio_display_path_prefixes_configured_project_for_relative_paths() {
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+        let mut state = StudioState::new();
+        state.project_root = temp_dir.path().to_path_buf();
+        state.config_root = temp_dir.path().to_path_buf();
+        state.set_ui_config(UiConfig {
+            projects: vec![UiProjectConfig {
+                name: "main".to_string(),
+                root: ".".to_string(),
+                dirs: vec!["docs".to_string(), "internal_skills".to_string()],
+            }],
+            repo_projects: Vec::new(),
+        });
+
+        assert_eq!(
+            studio_display_path(&state, "docs/index.md"),
+            "main/docs/index.md"
+        );
+    }
+
+    #[test]
+    fn studio_display_path_keeps_existing_project_prefixes() {
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+        let mut state = StudioState::new();
+        state.project_root = temp_dir.path().to_path_buf();
+        state.config_root = temp_dir.path().to_path_buf();
+        state.set_ui_config(UiConfig {
+            projects: vec![UiProjectConfig {
+                name: "main".to_string(),
+                root: ".".to_string(),
+                dirs: vec!["docs".to_string()],
+            }],
+            repo_projects: Vec::new(),
+        });
+
+        assert_eq!(
+            studio_display_path(&state, "main/docs/index.md"),
+            "main/docs/index.md"
+        );
+    }
+
+    #[test]
+    fn studio_display_path_strips_relative_project_root_prefixes() {
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+        let mut state = StudioState::new();
+        state.project_root = temp_dir.path().to_path_buf();
+        state.config_root = temp_dir.path().to_path_buf();
+        state.set_ui_config(UiConfig {
+            projects: vec![UiProjectConfig {
+                name: "kernel".to_string(),
+                root: "frontend".to_string(),
+                dirs: vec!["docs".to_string()],
+            }],
+            repo_projects: Vec::new(),
+        });
+
+        assert_eq!(
+            studio_display_path(&state, "frontend/docs/index.md"),
+            "kernel/docs/index.md"
+        );
+    }
+
+    #[test]
+    fn studio_display_path_prefers_project_root_relative_prefix_for_kernel_docs() {
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+        let mut state = StudioState::new();
+        state.project_root = temp_dir.path().to_path_buf();
+        state.config_root = temp_dir.path().join(".data/wendao-frontend");
+        state.set_ui_config(UiConfig {
+            projects: vec![
+                UiProjectConfig {
+                    name: "kernel".to_string(),
+                    root: ".".to_string(),
+                    dirs: vec!["docs".to_string()],
+                },
+                UiProjectConfig {
+                    name: "main".to_string(),
+                    root: temp_dir.path().to_path_buf().to_string_lossy().to_string(),
+                    dirs: vec!["docs".to_string(), "internal_skills".to_string()],
+                },
+            ],
+            repo_projects: Vec::new(),
+        });
+
+        assert_eq!(
+            studio_display_path(&state, ".data/wendao-frontend/docs/index.md"),
+            "kernel/docs/index.md"
+        );
+        assert_eq!(
+            studio_display_path(&state, "docs/index.md"),
+            "main/docs/index.md"
+        );
     }
 }

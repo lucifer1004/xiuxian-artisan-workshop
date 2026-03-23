@@ -3,6 +3,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+#[cfg(test)]
 use crate::analyzers::RepositoryAnalysisOutput;
 
 /// Lifecycle phase for one background repo-index task.
@@ -107,9 +108,12 @@ pub(crate) struct RepoCodeDocument {
     pub contents: Arc<str>,
 }
 
+#[cfg(test)]
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) struct RepoIndexSnapshot {
+    #[allow(dead_code)]
     pub repo_id: String,
+    #[allow(dead_code)]
     pub analysis: Arc<RepositoryAnalysisOutput>,
-    pub code_documents: Arc<Vec<RepoCodeDocument>>,
 }

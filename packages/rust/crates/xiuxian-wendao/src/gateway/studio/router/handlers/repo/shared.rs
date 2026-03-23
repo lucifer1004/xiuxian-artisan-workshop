@@ -16,7 +16,7 @@ pub(super) fn resolve_repository(
     configured_repository(&state.studio, repo_id).map_err(map_repo_intelligence_error)
 }
 
-pub(super) async fn with_repo_analysis<T, F>(
+pub(crate) async fn with_repo_analysis<T, F>(
     state: Arc<GatewayState>,
     repo_id: String,
     panic_code: &'static str,

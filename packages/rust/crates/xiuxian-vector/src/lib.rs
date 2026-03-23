@@ -16,6 +16,16 @@ use ops::DatasetCacheConfig;
 // Re-exports from xiuxian-lance
 // ============================================================================
 
+pub use arrow::array::StringBuilder as LanceStringBuilder;
+pub use lance::deps::arrow_array::{
+    Array as LanceArray, ArrayRef as LanceArrayRef, BooleanArray as LanceBooleanArray,
+    Float64Array as LanceFloat64Array, Int32Array as LanceInt32Array,
+    RecordBatch as LanceRecordBatch, StringArray as LanceStringArray,
+    UInt32Array as LanceUInt32Array, UInt64Array as LanceUInt64Array,
+};
+pub use lance::deps::arrow_schema::{
+    DataType as LanceDataType, Field as LanceField, Schema as LanceSchema,
+};
 pub use xiuxian_lance::{
     CATEGORY_COLUMN, CONTENT_COLUMN, DEFAULT_DIMENSION, FILE_PATH_COLUMN, ID_COLUMN,
     INTENTS_COLUMN, METADATA_COLUMN, ROUTING_KEYWORDS_COLUMN, SKILL_NAME_COLUMN, THREAD_ID_COLUMN,
@@ -28,8 +38,8 @@ pub use xiuxian_lance::{
 // ============================================================================
 
 pub use xiuxian_skills::skills::{
-    ResourceRecord, ResourceScanner, SkillMetadata as OmniSkillMetadata, SkillScanner,
-    ToolAnnotations, ToolRecord as OmniToolRecord, ToolRecord, ToolsScanner,
+    ResourceRecord, ResourceScanner, SkillMetadata as XiuxianSkillMetadata, SkillScanner,
+    ToolAnnotations, ToolRecord as XiuxianToolRecord, ToolRecord, ToolsScanner,
 };
 
 // ============================================================================
@@ -42,10 +52,11 @@ pub use keyword::{
     apply_rrf, apply_weighted_rrf, distance_to_score, rrf_term, rrf_term_batch,
 };
 pub use ops::{
-    AgenticSearchConfig, CompactionStats, FragmentInfo, IndexBuildProgress, IndexStats,
-    IndexStatus, IndexThresholds, MergeInsertStats, MigrateResult, MigrationItem,
-    OMNI_SCHEMA_VERSION, QueryIntent, Recommendation, TableColumnAlteration, TableColumnType,
-    TableHealthReport, TableInfo, TableNewColumn, TableVersionInfo, schema_version_from_schema,
+    AgenticSearchConfig, ColumnarScanOptions, CompactionStats, FragmentInfo, IndexBuildProgress,
+    IndexStats, IndexStatus, IndexThresholds, MergeInsertStats, MigrateResult, MigrationItem,
+    QueryIntent, Recommendation, TableColumnAlteration, TableColumnType, TableHealthReport,
+    TableInfo, TableNewColumn, TableVersionInfo, XIUXIAN_SCHEMA_VERSION,
+    schema_version_from_schema,
 };
 pub use search::SearchOptions;
 pub use search_impl::json_to_lance_where;

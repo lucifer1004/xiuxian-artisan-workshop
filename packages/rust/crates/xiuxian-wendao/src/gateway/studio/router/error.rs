@@ -73,6 +73,15 @@ impl StudioApiError {
             },
         }
     }
+
+    /// Creates a standard index-not-ready error for search corpora.
+    pub fn index_not_ready(corpus: &str) -> Self {
+        Self::conflict(
+            "INDEX_NOT_READY",
+            format!("search corpus `{corpus}` has not published an index epoch yet"),
+            Some(corpus.to_string()),
+        )
+    }
 }
 
 impl IntoResponse for StudioApiError {
@@ -127,6 +136,11 @@ pub fn map_repo_intelligence_error(error: RepoIntelligenceError) -> StudioApiErr
         RepoIntelligenceError::UnknownProjectedPage { repo_id, page_id } => {
             StudioApiError::not_found(format!(
                 "repo `{repo_id}` does not contain projected page `{page_id}`"
+            ))
+        }
+        RepoIntelligenceError::UnknownProjectedGap { repo_id, gap_id } => {
+            StudioApiError::not_found(format!(
+                "repo `{repo_id}` does not contain projected gap `{gap_id}`"
             ))
         }
         RepoIntelligenceError::UnknownProjectedPageFamilyCluster {

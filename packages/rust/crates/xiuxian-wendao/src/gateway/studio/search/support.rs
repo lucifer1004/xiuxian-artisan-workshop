@@ -5,7 +5,7 @@ use std::path::{Component, Path};
 use crate::dependency_indexer::SymbolKind;
 
 /// Infers the crate name from a relative path by analyzing path components.
-pub(in crate::gateway::studio::search) fn infer_crate_name(relative_path: &Path) -> String {
+pub(crate) fn infer_crate_name(relative_path: &Path) -> String {
     let components = relative_path
         .components()
         .filter_map(|component| match component {
@@ -47,7 +47,7 @@ pub(in crate::gateway::studio::search) fn first_signature_line(text: &str) -> &s
 }
 
 /// Scores a reference hit based on how well the line text matches the query.
-pub(in crate::gateway::studio::search) fn score_reference_hit(line_text: &str, query: &str) -> f64 {
+pub(crate) fn score_reference_hit(line_text: &str, query: &str) -> f64 {
     let normalized_line = line_text.trim();
     if normalized_line.contains(query) {
         0.9

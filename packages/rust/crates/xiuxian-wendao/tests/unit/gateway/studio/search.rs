@@ -1,8 +1,11 @@
 use super::*;
+use crate::gateway::studio::build_ast_index;
+use crate::gateway::studio::repo_index::{RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot};
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::search::support::strip_option;
 use crate::gateway::studio::test_support::{assert_studio_json_snapshot, round_f64};
-use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
+use crate::gateway::studio::types::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
+use crate::search_plane::SearchPlaneService;
 use serde_json::json;
 use tempfile::tempdir;
 
@@ -36,9 +39,13 @@ fn make_state_with_docs(docs: Vec<(&str, &str)>) -> StudioStateFixture {
         write_doc(temp_dir.path(), name, content);
     }
 
-    let mut studio_state = StudioState::new();
+    let mut studio_state = StudioState::new_with_bootstrap_ui_config(Arc::new(
+        crate::analyzers::bootstrap_builtin_registry()
+            .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
+    ));
     studio_state.project_root = temp_dir.path().to_path_buf();
     studio_state.config_root = temp_dir.path().to_path_buf();
+    studio_state.search_plane = SearchPlaneService::new(temp_dir.path().to_path_buf());
     studio_state.set_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
             name: "kernel".to_string(),
@@ -61,6 +68,131 @@ fn make_state_with_docs(docs: Vec<(&str, &str)>) -> StudioStateFixture {
         }),
         _temp_dir: temp_dir,
     }
+}
+
+async fn publish_local_symbol_index(state: &Arc<GatewayState>) {
+    let projects = state.studio.configured_projects();
+    let hits = build_ast_index(
+        state.studio.project_root.as_path(),
+        state.studio.config_root.as_path(),
+        &projects,
+    );
+    let fingerprint = format!(
+        "test:{}",
+        blake3::hash(
+            format!(
+                "{}:{}:{}",
+                state.studio.project_root.display(),
+                state.studio.config_root.display(),
+                hits.len()
+            )
+            .as_bytes()
+        )
+        .to_hex()
+    );
+    state
+        .studio
+        .search_plane
+        .publish_local_symbol_hits(fingerprint.as_str(), &hits)
+        .await
+        .expect("publish local symbol epoch");
+}
+
+async fn publish_reference_occurrence_index(state: &Arc<GatewayState>) {
+    let projects = state.studio.configured_projects();
+    let fingerprint = format!(
+        "test:reference:{}",
+        blake3::hash(
+            format!(
+                "{}:{}:{}",
+                state.studio.project_root.display(),
+                state.studio.config_root.display(),
+                projects.len()
+            )
+            .as_bytes()
+        )
+        .to_hex()
+    );
+    state
+        .studio
+        .search_plane
+        .publish_reference_occurrences_from_projects(
+            state.studio.project_root.as_path(),
+            state.studio.config_root.as_path(),
+            &projects,
+            fingerprint.as_str(),
+        )
+        .await
+        .expect("publish reference occurrence epoch");
+}
+
+async fn publish_attachment_index(state: &Arc<GatewayState>) {
+    let projects = state.studio.configured_projects();
+    let fingerprint = format!(
+        "test:attachment:{}",
+        blake3::hash(
+            format!(
+                "{}:{}:{}",
+                state.studio.project_root.display(),
+                state.studio.config_root.display(),
+                projects.len()
+            )
+            .as_bytes()
+        )
+        .to_hex()
+    );
+    state
+        .studio
+        .search_plane
+        .publish_attachments_from_projects(
+            state.studio.project_root.as_path(),
+            state.studio.config_root.as_path(),
+            &projects,
+            fingerprint.as_str(),
+        )
+        .await
+        .expect("publish attachment epoch");
+}
+
+async fn publish_knowledge_section_index(state: &Arc<GatewayState>) {
+    let projects = state.studio.configured_projects();
+    let fingerprint = format!(
+        "test:knowledge:{}",
+        blake3::hash(
+            format!(
+                "{}:{}:{}",
+                state.studio.project_root.display(),
+                state.studio.config_root.display(),
+                projects.len()
+            )
+            .as_bytes()
+        )
+        .to_hex()
+    );
+    state
+        .studio
+        .search_plane
+        .publish_knowledge_sections_from_projects(
+            state.studio.project_root.as_path(),
+            state.studio.config_root.as_path(),
+            &projects,
+            fingerprint.as_str(),
+        )
+        .await
+        .expect("publish knowledge section epoch");
+}
+
+async fn publish_repo_content_chunk_index(
+    state: &Arc<GatewayState>,
+    repo_id: &str,
+    documents: Vec<crate::gateway::studio::repo_index::RepoCodeDocument>,
+) {
+    state
+        .studio
+        .search_plane
+        .publish_repo_content_chunks_with_revision(repo_id, &documents, None)
+        .await
+        .expect("publish repo content chunks");
 }
 
 #[test]
@@ -128,6 +260,7 @@ async fn search_knowledge_returns_payload() {
             "# Beta\n\nAnother note mentions wendao in text.\n",
         ),
     ]);
+    publish_knowledge_section_index(&fixture.state).await;
 
     let result = search_knowledge(
         State(fixture.state),
@@ -178,15 +311,23 @@ async fn search_knowledge_returns_payload() {
 
 #[tokio::test]
 async fn search_intent_returns_payload() {
-    let fixture = make_state_with_docs(vec![(
-        "alpha.md",
-        "# Alpha\n\nIntent search keyword: wendao.\n",
-    )]);
+    let fixture = make_state_with_docs(vec![
+        (
+            "alpha.md",
+            "# Alpha\n\nIntent search keyword: alpha_handler.\n",
+        ),
+        (
+            "packages/rust/crates/demo/src/lib.rs",
+            "pub fn alpha_handler() {}\n",
+        ),
+    ]);
+    publish_knowledge_section_index(&fixture.state).await;
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = search_intent(
         State(fixture.state),
         Query(SearchQuery {
-            q: Some("wendao".to_string()),
+            q: Some("alpha_handler".to_string()),
             limit: Some(5),
             intent: Some("debug_lookup".to_string()),
             repo: None,
@@ -208,7 +349,108 @@ async fn search_intent_returns_payload() {
             "intent": response.0.intent,
             "intentConfidence": response.0.intent_confidence.map(round_f64),
             "graphConfidenceScore": response.0.graph_confidence_score.map(round_f64),
+            "hits": response.0.hits.into_iter().map(|hit| {
+                json!({
+                    "stem": hit.stem,
+                    "title": hit.title,
+                    "path": hit.path,
+                    "docType": hit.doc_type,
+                    "score": round_f64(hit.score),
+                    "bestSection": hit.best_section,
+                    "matchReason": hit.match_reason,
+                })
+            }).collect::<Vec<_>>(),
         }),
+    );
+}
+
+#[tokio::test]
+async fn search_intent_includes_repo_content_hits_for_code_biased_intent() {
+    let fixture = make_state_with_docs(Vec::new());
+    let repo_root = fixture._temp_dir.path().join("ValidPkg");
+    std::fs::create_dir_all(repo_root.join("src"))
+        .unwrap_or_else(|error| panic!("create repo src: {error}"));
+    std::fs::write(
+        repo_root.join("Project.toml"),
+        "name = \"ValidPkg\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+    )
+    .unwrap_or_else(|error| panic!("write project file: {error}"));
+
+    fixture.state.studio.set_ui_config(UiConfig {
+        projects: fixture.state.studio.configured_projects(),
+        repo_projects: vec![UiRepoProjectConfig {
+            id: "valid".to_string(),
+            root: Some(repo_root.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["julia".to_string()],
+        }],
+    });
+    let snapshot = Arc::new(RepoIndexSnapshot {
+        repo_id: "valid".to_string(),
+        analysis: Arc::new(crate::analyzers::RepositoryAnalysisOutput::default()),
+    });
+    publish_repo_content_chunk_index(
+        &fixture.state,
+        "valid",
+        vec![crate::gateway::studio::repo_index::RepoCodeDocument {
+            path: "src/ValidPkg.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(
+                "module ValidPkg\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
+            ),
+        }],
+    )
+    .await;
+    fixture
+        .state
+        .studio
+        .repo_index
+        .set_snapshot_for_test(Arc::clone(&snapshot));
+    fixture
+        .state
+        .studio
+        .repo_index
+        .set_status_for_test(RepoIndexEntryStatus {
+            repo_id: "valid".to_string(),
+            phase: RepoIndexPhase::Ready,
+            queue_position: None,
+            last_error: None,
+            last_revision: Some("abc123".to_string()),
+            updated_at: Some("2026-03-22T00:00:00Z".to_string()),
+            attempt_count: 1,
+        });
+
+    let result = search_intent(
+        State(Arc::clone(&fixture.state)),
+        Query(SearchQuery {
+            q: Some("lang:julia reexport".to_string()),
+            limit: Some(5),
+            intent: Some("debug_lookup".to_string()),
+            repo: Some("valid".to_string()),
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected repo-backed intent search request to succeed");
+    };
+
+    assert_eq!(response.0.selected_mode.as_deref(), Some("intent_hybrid"));
+    assert!(
+        response
+            .0
+            .hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("file") && hit.path == "src/ValidPkg.jl"),
+        "expected repo content hit in intent response: {:?}",
+        response
+            .0
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type))
+            .collect::<Vec<_>>()
     );
 }
 
@@ -224,6 +466,7 @@ async fn search_knowledge_uses_studio_display_paths() {
             "# Beta\n\nAnother note mentions wendao in text.\n",
         ),
     ]);
+    publish_knowledge_section_index(&fixture.state).await;
 
     let result = search_knowledge(
         State(Arc::clone(&fixture.state)),
@@ -304,6 +547,7 @@ async fn search_knowledge_uses_project_scoped_display_paths_for_duplicate_roots(
         ],
         repo_projects: Vec::new(),
     });
+    publish_knowledge_section_index(&fixture.state).await;
 
     let result = search_knowledge(
         State(Arc::clone(&fixture.state)),
@@ -377,6 +621,7 @@ async fn search_attachments_returns_payload() {
         }],
         repo_projects: Vec::new(),
     });
+    publish_attachment_index(&fixture.state).await;
 
     let result = search_attachments(
         State(Arc::clone(&fixture.state)),
@@ -434,6 +679,7 @@ async fn search_attachments_respects_extension_and_kind_filters() {
         }],
         repo_projects: Vec::new(),
     });
+    publish_attachment_index(&fixture.state).await;
 
     let result = search_attachments(
         State(Arc::clone(&fixture.state)),
@@ -466,6 +712,7 @@ async fn autocomplete_limits_and_filters_prefix() {
         ),
         ("note.md", "# Search Notes\n\nTaggable text.\n"),
     ]);
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = search_autocomplete(
         State(fixture.state),
@@ -506,6 +753,7 @@ async fn autocomplete_includes_code_symbols() {
             "class AlphaClient:\n    pass\n\ndef alpha_helper():\n    return None\n",
         ),
     ]);
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = search_autocomplete(
         State(fixture.state),
@@ -575,6 +823,7 @@ async fn search_ast_returns_payload() {
             "alpha should stay outside AST search fixtures.\n",
         ),
     ]);
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = search_ast(
         State(fixture.state),
@@ -638,6 +887,7 @@ async fn search_ast_includes_markdown_outline_hits() {
         }],
         repo_projects: Vec::new(),
     });
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = search_ast(
         State(Arc::clone(&fixture.state)),
@@ -701,6 +951,7 @@ async fn search_ast_includes_markdown_property_drawer_hits() {
         }],
         repo_projects: Vec::new(),
     });
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = search_ast(
         State(Arc::clone(&fixture.state)),
@@ -788,6 +1039,7 @@ async fn search_definition_returns_best_payload() {
             "pub struct AlphaService;\n",
         ),
     ]);
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = search_definition(
         State(fixture.state),
@@ -852,6 +1104,7 @@ async fn search_definition_accepts_absolute_source_paths() {
             "pub struct AlphaService;\n",
         ),
     ]);
+    publish_local_symbol_index(&fixture.state).await;
     let absolute_source_path = fixture
         .state
         .studio
@@ -896,6 +1149,7 @@ async fn search_definition_uses_markdown_observe_hints() {
             "class AlphaService:\n    pass\n",
         ),
     ]);
+    publish_local_symbol_index(&fixture.state).await;
 
     let result = search_definition(
         State(Arc::clone(&fixture.state)),
@@ -977,6 +1231,7 @@ async fn search_references_returns_payload() {
             "class AlphaClient:\n    pass\n\ndef alpha_helper(client: AlphaClient):\n    return client\n",
         ),
     ]);
+    publish_reference_occurrence_index(&fixture.state).await;
 
     let result = search_references(
         State(fixture.state),

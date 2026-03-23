@@ -7,7 +7,7 @@ impl VectorStore {
     pub async fn add(
         &self,
         table_name: &str,
-        tools: Vec<OmniToolRecord>,
+        tools: Vec<ToolRecord>,
     ) -> Result<(), VectorStoreError> {
         if tools.is_empty() {
             return Ok(());

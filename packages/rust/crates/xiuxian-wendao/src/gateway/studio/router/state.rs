@@ -6,10 +6,13 @@ use xiuxian_zhenfa::ZhenfaSignal;
 use crate::analyzers::registry::PluginRegistry;
 use crate::gateway::studio::pathing;
 use crate::gateway::studio::repo_index::RepoIndexCoordinator;
-use crate::gateway::studio::search;
 use crate::gateway::studio::symbol_index::{SymbolIndexCoordinator, SymbolIndexStatus};
-use crate::gateway::studio::types::{AstSearchHit, UiConfig, UiProjectConfig, VfsScanResult};
+use crate::gateway::studio::types::{
+    AstSearchHit, AttachmentSearchHit, AutocompleteSuggestion, ReferenceSearchHit, SearchHit,
+    SearchIndexStatusResponse, UiConfig, UiProjectConfig, VfsScanResult,
+};
 use crate::link_graph::LinkGraphIndex;
+use crate::search_plane::SearchPlaneService;
 use crate::unified_symbol::UnifiedSymbolIndex;
 
 use super::config::resolve_studio_config_root;
@@ -27,7 +30,7 @@ pub struct StudioState {
     pub(crate) graph_index: Arc<RwLock<Option<Arc<LinkGraphIndex>>>>,
     pub(crate) symbol_index: Arc<RwLock<Option<Arc<UnifiedSymbolIndex>>>>,
     pub(crate) symbol_index_coordinator: Arc<SymbolIndexCoordinator>,
-    pub(crate) ast_index: Arc<RwLock<Option<Arc<Vec<AstSearchHit>>>>>,
+    pub(crate) search_plane: SearchPlaneService,
     pub(crate) vfs_scan: Arc<RwLock<Option<VfsScanResult>>>,
     pub(crate) repo_index: Arc<RepoIndexCoordinator>,
     /// Registry of repository intelligence plugins.
@@ -77,9 +80,11 @@ impl StudioState {
     pub fn new_with_bootstrap_ui_config(plugin_registry: Arc<PluginRegistry>) -> Self {
         let project_root = xiuxian_io::PrjDirs::project_root();
         let config_root = resolve_studio_config_root(project_root.as_path());
+        let search_plane = SearchPlaneService::new(project_root.clone());
         let repo_index = Arc::new(RepoIndexCoordinator::new(
             project_root.clone(),
             Arc::clone(&plugin_registry),
+            search_plane.clone(),
         ));
         let symbol_index_coordinator = Arc::new(SymbolIndexCoordinator::new(
             project_root.clone(),
@@ -95,7 +100,7 @@ impl StudioState {
             graph_index: Arc::new(RwLock::new(None)),
             symbol_index: Arc::new(RwLock::new(None)),
             symbol_index_coordinator,
-            ast_index: Arc::new(RwLock::new(None)),
+            search_plane,
             vfs_scan: Arc::new(RwLock::new(None)),
             repo_index,
             plugin_registry,
@@ -144,12 +149,6 @@ impl StudioState {
         *symbol_guard = None;
         drop(symbol_guard);
 
-        let mut ast_guard = self
-            .ast_index
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *ast_guard = None;
-
         let mut vfs_guard = self
             .vfs_scan
             .write()
@@ -192,15 +191,6 @@ impl StudioState {
     }
 
     pub(crate) async fn graph_index(&self) -> Result<Arc<LinkGraphIndex>, StudioApiError> {
-        if let Some(index) = self
-            .graph_index
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-        {
-            return Ok(Arc::clone(index));
-        }
-
         let project_root = self.project_root.clone();
         let config_root = self.config_root.clone();
         let configured_projects = self.configured_projects();
@@ -223,7 +213,15 @@ impl StudioState {
                         .to_string(),
                 )
             } else {
-                LinkGraphIndex::build_with_filters(project_root.as_path(), &include_dirs, &[])
+                LinkGraphIndex::build_with_cache_with_meta(
+                    project_root.as_path(),
+                    &include_dirs,
+                    &[],
+                )
+                .map(|(index, _meta)| index)
+                .or_else(|_| {
+                    LinkGraphIndex::build_with_filters(project_root.as_path(), &include_dirs, &[])
+                })
             }
         })
         .await
@@ -241,15 +239,6 @@ impl StudioState {
                 Some(error),
             )
         })?);
-
-        let mut guard = self
-            .graph_index
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(existing) = guard.as_ref() {
-            return Ok(Arc::clone(existing));
-        }
-        *guard = Some(Arc::clone(&index));
         Ok(index)
     }
 
@@ -276,9 +265,16 @@ impl StudioState {
         Ok(self.symbol_index_coordinator.status())
     }
 
-    pub(crate) async fn ast_index(&self) -> Result<Arc<Vec<AstSearchHit>>, StudioApiError> {
-        let project_root = self.project_root.clone();
-        let config_root = self.config_root.clone();
+    pub(crate) async fn search_index_status(&self) -> SearchIndexStatusResponse {
+        let repo_status = self.repo_index.status_response(None);
+        let snapshot = self
+            .search_plane
+            .status_with_repo_content(&repo_status)
+            .await;
+        SearchIndexStatusResponse::from(&snapshot)
+    }
+
+    pub(crate) fn ensure_local_symbol_index_started(&self) -> Result<(), StudioApiError> {
         let configured_projects = self.configured_projects();
         if configured_projects.is_empty() {
             return Err(StudioApiError::bad_request(
@@ -286,42 +282,169 @@ impl StudioState {
                 "Studio AST search requires configured link_graph.projects",
             ));
         }
+        self.search_plane.ensure_local_symbol_index_started(
+            self.project_root.as_path(),
+            self.config_root.as_path(),
+            configured_projects.as_slice(),
+        );
+        Ok(())
+    }
 
-        if let Some(index) = self
-            .ast_index
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
+    pub(crate) fn ensure_knowledge_section_index_started(&self) -> Result<(), StudioApiError> {
+        let configured_projects = self.configured_projects();
+        if configured_projects.is_empty() {
+            return Err(StudioApiError::bad_request(
+                "UI_CONFIG_REQUIRED",
+                "Studio knowledge search requires configured link_graph.projects",
+            ));
+        }
+        self.search_plane.ensure_knowledge_section_index_started(
+            self.project_root.as_path(),
+            self.config_root.as_path(),
+            configured_projects.as_slice(),
+        );
+        Ok(())
+    }
+
+    pub(crate) async fn search_knowledge_sections(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<SearchHit>, StudioApiError> {
+        match self
+            .search_plane
+            .search_knowledge_sections(query, limit)
+            .await
         {
-            return Ok(Arc::clone(index));
-        }
-
-        let build = tokio::task::spawn_blocking(move || {
-            search::build_ast_index(
-                project_root.as_path(),
-                config_root.as_path(),
-                &configured_projects,
-            )
-        })
-        .await
-        .map_err(|error: tokio::task::JoinError| {
-            StudioApiError::internal(
-                "AST_INDEX_BUILD_PANIC",
-                "Failed to build studio AST index",
+            Ok(hits) => Ok(hits),
+            Err(crate::search_plane::KnowledgeSectionSearchError::NotReady) => {
+                Err(StudioApiError::index_not_ready("knowledge_section"))
+            }
+            Err(error) => Err(StudioApiError::internal(
+                "KNOWLEDGE_SECTION_SEARCH_FAILED",
+                "Failed to query knowledge section search plane",
                 Some(error.to_string()),
-            )
-        })?;
-        let index = Arc::new(build);
-
-        let mut guard = self
-            .ast_index
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(existing) = guard.as_ref() {
-            return Ok(Arc::clone(existing));
+            )),
         }
-        *guard = Some(Arc::clone(&index));
-        Ok(index)
+    }
+
+    pub(crate) async fn search_local_symbol_hits(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<AstSearchHit>, StudioApiError> {
+        match self.search_plane.search_local_symbols(query, limit).await {
+            Ok(hits) => Ok(hits),
+            Err(crate::search_plane::LocalSymbolSearchError::NotReady) => {
+                Err(StudioApiError::index_not_ready("local_symbol"))
+            }
+            Err(error) => Err(StudioApiError::internal(
+                "LOCAL_SYMBOL_SEARCH_FAILED",
+                "Failed to query local symbol search plane",
+                Some(error.to_string()),
+            )),
+        }
+    }
+
+    pub(crate) async fn autocomplete_local_symbols(
+        &self,
+        prefix: &str,
+        limit: usize,
+    ) -> Result<Vec<AutocompleteSuggestion>, StudioApiError> {
+        match self
+            .search_plane
+            .autocomplete_local_symbols(prefix, limit)
+            .await
+        {
+            Ok(suggestions) => Ok(suggestions),
+            Err(crate::search_plane::LocalSymbolSearchError::NotReady) => {
+                Err(StudioApiError::index_not_ready("local_symbol"))
+            }
+            Err(error) => Err(StudioApiError::internal(
+                "LOCAL_SYMBOL_AUTOCOMPLETE_FAILED",
+                "Failed to query local symbol autocomplete search plane",
+                Some(error.to_string()),
+            )),
+        }
+    }
+
+    pub(crate) fn ensure_attachment_index_started(&self) -> Result<(), StudioApiError> {
+        let configured_projects = self.configured_projects();
+        if configured_projects.is_empty() {
+            return Err(StudioApiError::bad_request(
+                "UI_CONFIG_REQUIRED",
+                "Studio attachment search requires configured link_graph.projects",
+            ));
+        }
+        self.search_plane.ensure_attachment_index_started(
+            self.project_root.as_path(),
+            self.config_root.as_path(),
+            configured_projects.as_slice(),
+        );
+        Ok(())
+    }
+
+    pub(crate) async fn search_attachment_hits(
+        &self,
+        query: &str,
+        limit: usize,
+        extensions: &[String],
+        kinds: &[crate::link_graph::LinkGraphAttachmentKind],
+        case_sensitive: bool,
+    ) -> Result<Vec<AttachmentSearchHit>, StudioApiError> {
+        match self
+            .search_plane
+            .search_attachment_hits(query, limit, extensions, kinds, case_sensitive)
+            .await
+        {
+            Ok(hits) => Ok(hits),
+            Err(crate::search_plane::AttachmentSearchError::NotReady) => {
+                Err(StudioApiError::index_not_ready("attachment"))
+            }
+            Err(error) => Err(StudioApiError::internal(
+                "ATTACHMENT_SEARCH_FAILED",
+                "Failed to query attachment search plane",
+                Some(error.to_string()),
+            )),
+        }
+    }
+
+    pub(crate) fn ensure_reference_occurrence_index_started(&self) -> Result<(), StudioApiError> {
+        let configured_projects = self.configured_projects();
+        if configured_projects.is_empty() {
+            return Err(StudioApiError::bad_request(
+                "UI_CONFIG_REQUIRED",
+                "Studio reference search requires configured link_graph.projects",
+            ));
+        }
+        self.search_plane.ensure_reference_occurrence_index_started(
+            self.project_root.as_path(),
+            self.config_root.as_path(),
+            configured_projects.as_slice(),
+        );
+        Ok(())
+    }
+
+    pub(crate) async fn search_reference_occurrences(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<ReferenceSearchHit>, StudioApiError> {
+        match self
+            .search_plane
+            .search_reference_occurrences(query, limit)
+            .await
+        {
+            Ok(hits) => Ok(hits),
+            Err(crate::search_plane::ReferenceOccurrenceSearchError::NotReady) => {
+                Err(StudioApiError::index_not_ready("reference_occurrence"))
+            }
+            Err(error) => Err(StudioApiError::internal(
+                "REFERENCE_OCCURRENCE_SEARCH_FAILED",
+                "Failed to query reference occurrence search plane",
+                Some(error.to_string()),
+            )),
+        }
     }
 }
 
