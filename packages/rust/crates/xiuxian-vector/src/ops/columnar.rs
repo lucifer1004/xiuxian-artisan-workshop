@@ -42,13 +42,13 @@ fn default_columnar_write_params() -> WriteParams {
 fn reader_from_batches(
     schema: Arc<Schema>,
     batches: Vec<RecordBatch>,
-) -> Box<RecordBatchIterator<std::vec::IntoIter<Result<RecordBatch, ArrowError>>>> {
+) -> RecordBatchIterator<std::vec::IntoIter<Result<RecordBatch, ArrowError>>> {
     let rows = if batches.is_empty() {
         vec![Ok(RecordBatch::new_empty(schema.clone()))]
     } else {
         batches.into_iter().map(Ok).collect()
     };
-    Box::new(RecordBatchIterator::new(rows.into_iter(), schema))
+    RecordBatchIterator::new(rows.into_iter(), schema)
 }
 
 async fn append_batches(
@@ -119,13 +119,13 @@ impl VectorStore {
         let (mut dataset, created) = self
             .get_or_create_dataset(table_name, false, Some((schema.clone(), first.clone())))
             .await?;
-        if !created {
+        if created {
+            append_batches(&mut dataset, schema, batches).await?;
+        } else {
             let mut all_batches = Vec::with_capacity(batches.len() + 1);
             all_batches.push(first);
             all_batches.extend(batches);
             append_batches(&mut dataset, schema, all_batches).await?;
-        } else {
-            append_batches(&mut dataset, schema, batches).await?;
         }
         {
             let mut cache = self.datasets.write().await;
@@ -211,12 +211,17 @@ impl VectorStore {
     /// # Errors
     ///
     /// Returns an error when the table cannot be opened or the scan fails.
-    pub async fn scan_record_batches(
+    pub async fn scan_record_batches_streaming<E, F>(
         &self,
         table_name: &str,
         options: ColumnarScanOptions,
-    ) -> Result<Vec<RecordBatch>, VectorStoreError> {
-        let dataset = self.open_table_or_err(table_name).await?;
+        mut on_batch: F,
+    ) -> Result<(), E>
+    where
+        E: From<VectorStoreError>,
+        F: FnMut(RecordBatch) -> Result<(), E>,
+    {
+        let dataset = self.open_table_or_err(table_name).await.map_err(E::from)?;
         let mut scanner = dataset.scan();
         if !options.projected_columns.is_empty() {
             let columns = options
@@ -224,7 +229,10 @@ impl VectorStore {
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>();
-            scanner.project(&columns)?;
+            scanner
+                .project(&columns)
+                .map_err(VectorStoreError::from)
+                .map_err(E::from)?;
         }
         if let Some(filter) = options
             .where_filter
@@ -232,7 +240,10 @@ impl VectorStore {
             .map(str::trim)
             .filter(|value| !value.is_empty())
         {
-            scanner.filter(filter)?;
+            scanner
+                .filter(filter)
+                .map_err(VectorStoreError::from)
+                .map_err(E::from)?;
         }
         if let Some(batch_size) = options.batch_size {
             scanner.batch_size(batch_size);
@@ -244,15 +255,128 @@ impl VectorStore {
             scanner.batch_readahead(batch_readahead);
         }
         if let Some(limit) = options.limit {
-            scanner.limit(Some(i64::try_from(limit).unwrap_or(i64::MAX)), None)?;
+            scanner
+                .limit(Some(i64::try_from(limit).unwrap_or(i64::MAX)), None)
+                .map_err(VectorStoreError::from)
+                .map_err(E::from)?;
         }
 
-        let mut stream = scanner.try_into_stream().await?;
-        let mut batches = Vec::new();
-        while let Some(batch) = stream.try_next().await? {
-            batches.push(batch);
+        let mut stream = scanner
+            .try_into_stream()
+            .await
+            .map_err(VectorStoreError::from)
+            .map_err(E::from)?;
+        while let Some(batch) = stream
+            .try_next()
+            .await
+            .map_err(VectorStoreError::from)
+            .map_err(E::from)?
+        {
+            on_batch(batch)?;
         }
+        Ok(())
+    }
+
+    /// Scan a columnar table and return Arrow batches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the table cannot be opened or the scan fails.
+    pub async fn scan_record_batches(
+        &self,
+        table_name: &str,
+        options: ColumnarScanOptions,
+    ) -> Result<Vec<RecordBatch>, VectorStoreError> {
+        let mut batches = Vec::new();
+        self.scan_record_batches_streaming(
+            table_name,
+            options,
+            |batch| -> Result<(), VectorStoreError> {
+                batches.push(batch);
+                Ok(())
+            },
+        )
+        .await?;
         Ok(batches)
+    }
+
+    /// Run a native Lance full-text search and return projected Arrow batches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the table cannot be opened or the FTS scan fails.
+    pub async fn search_fts_batches_streaming<E, F>(
+        &self,
+        table_name: &str,
+        query: &str,
+        options: ColumnarScanOptions,
+        mut on_batch: F,
+    ) -> Result<(), E>
+    where
+        E: From<VectorStoreError>,
+        F: FnMut(RecordBatch) -> Result<(), E>,
+    {
+        if query.trim().is_empty() {
+            return Ok(());
+        }
+        let dataset = self.open_table_or_err(table_name).await.map_err(E::from)?;
+        let mut scanner = dataset.scan();
+        if !options.projected_columns.is_empty() {
+            let columns = options
+                .projected_columns
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            scanner
+                .project(&columns)
+                .map_err(VectorStoreError::from)
+                .map_err(E::from)?;
+        }
+        scanner
+            .full_text_search(FullTextSearchQuery::new(query.trim().to_string()))
+            .map_err(VectorStoreError::from)
+            .map_err(E::from)?;
+        if let Some(filter) = options
+            .where_filter
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            scanner
+                .filter(filter)
+                .map_err(VectorStoreError::from)
+                .map_err(E::from)?;
+        }
+        if let Some(batch_size) = options.batch_size {
+            scanner.batch_size(batch_size);
+        }
+        if let Some(fragment_readahead) = options.fragment_readahead {
+            scanner.fragment_readahead(fragment_readahead);
+        }
+        if let Some(batch_readahead) = options.batch_readahead {
+            scanner.batch_readahead(batch_readahead);
+        }
+        if let Some(limit) = options.limit {
+            scanner
+                .limit(Some(i64::try_from(limit).unwrap_or(i64::MAX)), None)
+                .map_err(VectorStoreError::from)
+                .map_err(E::from)?;
+        }
+
+        let mut stream = scanner
+            .try_into_stream()
+            .await
+            .map_err(VectorStoreError::from)
+            .map_err(E::from)?;
+        while let Some(batch) = stream
+            .try_next()
+            .await
+            .map_err(VectorStoreError::from)
+            .map_err(E::from)?
+        {
+            on_batch(batch)?;
+        }
+        Ok(())
     }
 
     /// Run a native Lance full-text search and return projected Arrow batches.
@@ -266,46 +390,17 @@ impl VectorStore {
         query: &str,
         options: ColumnarScanOptions,
     ) -> Result<Vec<RecordBatch>, VectorStoreError> {
-        if query.trim().is_empty() {
-            return Ok(Vec::new());
-        }
-        let dataset = self.open_table_or_err(table_name).await?;
-        let mut scanner = dataset.scan();
-        if !options.projected_columns.is_empty() {
-            let columns = options
-                .projected_columns
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>();
-            scanner.project(&columns)?;
-        }
-        scanner.full_text_search(FullTextSearchQuery::new(query.trim().to_string()))?;
-        if let Some(filter) = options
-            .where_filter
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            scanner.filter(filter)?;
-        }
-        if let Some(batch_size) = options.batch_size {
-            scanner.batch_size(batch_size);
-        }
-        if let Some(fragment_readahead) = options.fragment_readahead {
-            scanner.fragment_readahead(fragment_readahead);
-        }
-        if let Some(batch_readahead) = options.batch_readahead {
-            scanner.batch_readahead(batch_readahead);
-        }
-        if let Some(limit) = options.limit {
-            scanner.limit(Some(i64::try_from(limit).unwrap_or(i64::MAX)), None)?;
-        }
-
-        let mut stream = scanner.try_into_stream().await?;
         let mut batches = Vec::new();
-        while let Some(batch) = stream.try_next().await? {
-            batches.push(batch);
-        }
+        self.search_fts_batches_streaming(
+            table_name,
+            query,
+            options,
+            |batch| -> Result<(), VectorStoreError> {
+                batches.push(batch);
+                Ok(())
+            },
+        )
+        .await?;
         Ok(batches)
     }
 

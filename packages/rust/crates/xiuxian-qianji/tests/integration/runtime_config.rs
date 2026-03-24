@@ -119,6 +119,52 @@ api_key_env = "USER_API_KEY"
 }
 
 #[test]
+fn runtime_config_explicit_file_supports_imports() {
+    let tmp = TempDir::new()
+        .unwrap_or_else(|err| panic!("failed to create temp dir for runtime config test: {err}"));
+    let project_root = tmp.path().join("project");
+    let config_home = project_root.join(".config");
+    let explicit_config = project_root.join("custom-qianji.toml");
+    let shared_config = project_root.join("qianji.shared.toml");
+
+    write_file(
+        &shared_config,
+        r#"
+[llm]
+base_url = "http://shared.local/v1"
+api_key_env = "SHARED_API_KEY"
+"#,
+    );
+    write_file(
+        &explicit_config,
+        r#"
+imports = ["qianji.shared.toml"]
+
+[llm]
+model = "imported-model"
+"#,
+    );
+
+    let cfg = resolve(&QianjiRuntimeEnv {
+        prj_root: Some(project_root),
+        prj_config_home: Some(config_home),
+        qianji_config_path: Some(explicit_config),
+        extra_env: vec![
+            ("QIANJI_LLM_MODEL".to_string(), String::new()),
+            ("OPENAI_API_BASE".to_string(), String::new()),
+            ("OPENAI_API_KEY".to_string(), String::new()),
+            ("SHARED_API_KEY".to_string(), "shared-secret".to_string()),
+        ],
+        ..QianjiRuntimeEnv::default()
+    });
+
+    assert_eq!(cfg.model, "imported-model");
+    assert_eq!(cfg.base_url, "http://shared.local/v1");
+    assert_eq!(cfg.api_key_env, "SHARED_API_KEY");
+    assert_eq!(cfg.api_key, "shared-secret");
+}
+
+#[test]
 fn runtime_config_explicit_path_overrides_user_and_system() {
     let tmp = TempDir::new()
         .unwrap_or_else(|err| panic!("failed to create temp dir for runtime config test: {err}"));

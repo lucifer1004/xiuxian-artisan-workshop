@@ -6,6 +6,7 @@
 mod analysis;
 mod attachments;
 mod code_ast;
+mod collection;
 mod config;
 mod definitions;
 mod error;
@@ -16,8 +17,6 @@ mod search_index;
 mod symbols;
 mod vfs;
 
-use specta::TypeCollection;
-
 pub use analysis::{
     AnalysisEdge, AnalysisEdgeKind, AnalysisEvidence, AnalysisNode, AnalysisNodeKind,
     MarkdownAnalysisResponse, MermaidProjection, MermaidViewKind,
@@ -27,7 +26,8 @@ pub use code_ast::{
     CodeAstAnalysisResponse, CodeAstEdge, CodeAstEdgeKind, CodeAstNode, CodeAstNodeKind,
     CodeAstProjection, CodeAstProjectionKind,
 };
-pub use config::{UiConfig, UiProjectConfig, UiRepoProjectConfig};
+pub use collection::studio_type_collection;
+pub use config::{UiCapabilities, UiConfig, UiProjectConfig, UiRepoProjectConfig};
 pub use definitions::{
     AstSearchHit, AstSearchResponse, DefinitionResolveResponse, DefinitionSearchHit,
     ObservationHint, ReferenceSearchHit, ReferenceSearchResponse,
@@ -50,9 +50,3 @@ pub use symbols::{
     SymbolSearchResponse,
 };
 pub use vfs::{VfsCategory, VfsContentResponse, VfsEntry, VfsScanEntry, VfsScanResult};
-
-/// Build the Studio Specta type collection used by `export_types`.
-#[must_use]
-pub fn studio_type_collection() -> TypeCollection {
-    TypeCollection::default()
-}

@@ -8,6 +8,8 @@ pub mod types;
 mod analysis;
 #[cfg(feature = "zhenfa-router")]
 mod pathing;
+#[cfg(all(feature = "zhenfa-router", feature = "performance"))]
+pub mod perf_support;
 #[cfg(feature = "zhenfa-router")]
 pub mod repo_index;
 #[cfg(feature = "zhenfa-router")]
@@ -34,3 +36,7 @@ mod studio_vfs_performance_tests;
 #[cfg(all(test, feature = "zhenfa-router"))]
 #[path = "../../../tests/unit/studio_repo_sync_api.rs"]
 mod studio_repo_sync_api_tests;
+
+#[cfg(all(test, feature = "zhenfa-router", feature = "performance"))]
+#[path = "../../../tests/unit/studio_gateway_search_perf.rs"]
+mod studio_gateway_search_perf_tests;

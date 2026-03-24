@@ -354,6 +354,30 @@ nest those grouped selections by projected page family before reopening the
 first stable `N` ranked gaps as concrete planner bundles before any
 materialized wiki corpus or Qianji-backed generation loop exists.
 
+The next balancing refinement on top of that same deterministic workset lane
+should still avoid schema sprawl:
+
+- `GET /api/docs/planner-workset?repo=<id>&gap_kind=<gap?>&page_kind=<family?>&per_kind_limit=<n>&limit=<n>&family_kind=<family?>&related_limit=<n>&family_limit=<n>`
+
+This route should keep the same queue, rank, group, family, and planner-item
+shapes, but add deterministic quota-band evidence for populated gap-kind groups
+and populated page-family groups. The docs namespace should therefore be able
+to explain batch balance through stable floor/ceiling target counts and
+per-group `within_target_band` markers instead of introducing a separate
+planner-balancing surface.
+
+The next grouped-quota refinement on top of that same deterministic workset
+lane should still avoid schema sprawl:
+
+- `GET /api/docs/planner-workset?repo=<id>&gap_kind=<gap?>&page_kind=<family?>&per_kind_limit=<n>&limit=<n>&family_kind=<family?>&related_limit=<n>&family_limit=<n>`
+
+This route should keep the same queue, rank, balance, family, and planner-item
+shapes, but carry explicit `quota` hints on each grouped gap-kind lane and
+each nested page-family lane. The docs namespace should therefore be able to
+show per-group quota expectations directly where grouped execution happens
+instead of forcing planner consumers to reconstruct those hints from the
+top-level balance summary.
+
 The next docs-facing opening refinement above docs search should also stay
 deterministic:
 

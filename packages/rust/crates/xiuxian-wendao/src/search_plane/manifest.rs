@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{SearchCorpusKind, SearchCorpusStatus};
+use crate::gateway::studio::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
 
 /// Valkey key namespace for search-plane manifests, leases, and caches.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,14 +30,20 @@ impl SearchManifestKeyspace {
         format!("{}:manifest:{corpus}", self.namespace)
     }
 
-    /// Key that stores the published manifest for one repo-backed corpus rowset.
+    /// Key that stores the combined repo-backed corpus record for one repo/corpus pair.
     #[must_use]
-    pub fn repo_corpus_manifest_key(&self, corpus: SearchCorpusKind, repo_id: &str) -> String {
+    pub fn repo_corpus_record_key(&self, corpus: SearchCorpusKind, repo_id: &str) -> String {
         format!(
-            "{}:manifest:{corpus}:repo:{}",
+            "{}:repo-corpus:{corpus}:repo:{}",
             self.namespace,
             blake3::hash(repo_id.as_bytes()).to_hex()
         )
+    }
+
+    /// Key that stores the latest full combined repo-backed corpus snapshot.
+    #[must_use]
+    pub fn repo_corpus_snapshot_key(&self) -> String {
+        format!("{}:repo-corpus:snapshot", self.namespace)
     }
 
     /// Lease key used to enforce single-flight indexing for one corpus.
@@ -99,13 +106,16 @@ impl SearchManifestRecord {
     }
 }
 
-/// Materialized manifest row for one published repo-backed corpus table.
+/// Materialized publication row for one published repo-backed corpus table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SearchRepoManifestRecord {
+pub struct SearchRepoPublicationRecord {
     /// Repo-backed corpus this manifest row belongs to.
     pub corpus: SearchCorpusKind,
     /// Stable repository identifier.
     pub repo_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Stable epoch token for the currently readable repo-backed publication.
+    pub active_epoch: Option<u64>,
     /// Explicit publication token for the currently readable repo-backed table.
     pub publication_id: String,
     /// Table name that currently serves reads for this repo-backed corpus.
@@ -124,45 +134,39 @@ pub struct SearchRepoManifestRecord {
     pub published_at: String,
 }
 
-impl SearchRepoManifestRecord {
-    /// Construct a repo publication manifest from one published table snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SearchRepoPublicationInput {
+    pub(crate) table_name: String,
+    pub(crate) schema_version: u32,
+    pub(crate) source_revision: Option<String>,
+    pub(crate) table_version_id: u64,
+    pub(crate) row_count: u64,
+    pub(crate) fragment_count: u64,
+    pub(crate) published_at: String,
+}
+
+impl SearchRepoPublicationRecord {
+    /// Construct repo publication metadata from one published table snapshot.
     #[must_use]
-    pub fn new(
+    pub(crate) fn new(
         corpus: SearchCorpusKind,
         repo_id: impl Into<String>,
-        table_name: impl Into<String>,
-        schema_version: u32,
-        source_revision: Option<&str>,
-        table_version_id: u64,
-        row_count: u64,
-        fragment_count: u64,
-        published_at: impl Into<String>,
+        input: SearchRepoPublicationInput,
     ) -> Self {
         let repo_id = repo_id.into();
-        let table_name = table_name.into();
-        let published_at = published_at.into();
-        let source_revision = source_revision.map(str::to_string);
+        let publication_id = build_repo_publication_id(corpus, repo_id.as_str(), &input);
         Self {
             corpus,
-            publication_id: build_repo_publication_id(
-                corpus,
-                repo_id.as_str(),
-                table_name.as_str(),
-                schema_version,
-                source_revision.as_deref(),
-                table_version_id,
-                row_count,
-                fragment_count,
-                published_at.as_str(),
-            ),
+            active_epoch: Some(build_repo_publication_epoch(publication_id.as_str())),
+            publication_id,
             repo_id,
-            table_name,
-            table_version_id,
-            schema_version,
-            source_revision,
-            row_count,
-            fragment_count,
-            published_at,
+            table_name: input.table_name,
+            table_version_id: input.table_version_id,
+            schema_version: input.schema_version,
+            source_revision: input.source_revision,
+            row_count: input.row_count,
+            fragment_count: input.fragment_count,
+            published_at: input.published_at,
         }
     }
 
@@ -177,30 +181,111 @@ impl SearchRepoManifestRecord {
             self.publication_id
         )
     }
+
+    /// Stable epoch token for the readable repo-backed publication.
+    #[must_use]
+    pub fn active_epoch_value(&self) -> u64 {
+        self.active_epoch
+            .unwrap_or_else(|| build_repo_publication_epoch(self.publication_id.as_str()))
+    }
+}
+
+/// Materialized runtime row for one repository's indexing/search readiness state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchRepoRuntimeRecord {
+    /// Stable repository identifier.
+    pub repo_id: String,
+    /// Latest repo indexing phase observed by the producer-side coordinator.
+    pub phase: RepoIndexPhase,
+    /// Latest source revision observed by repo indexing, when known.
+    pub last_revision: Option<String>,
+    /// Latest repo indexing error surfaced by the producer, when known.
+    pub last_error: Option<String>,
+    /// RFC3339 timestamp associated with the latest runtime snapshot, when known.
+    pub updated_at: Option<String>,
+}
+
+impl SearchRepoRuntimeRecord {
+    /// Project a persisted runtime row from one repo-index status entry.
+    #[must_use]
+    pub fn from_status(status: &RepoIndexEntryStatus) -> Self {
+        Self {
+            repo_id: status.repo_id.clone(),
+            phase: status.phase,
+            last_revision: status.last_revision.clone(),
+            last_error: status.last_error.clone(),
+            updated_at: status.updated_at.clone(),
+        }
+    }
+}
+
+/// Combined repo-backed corpus record that folds runtime and publication into one row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchRepoCorpusRecord {
+    /// Repo-backed corpus this row belongs to.
+    pub corpus: SearchCorpusKind,
+    /// Stable repository identifier.
+    pub repo_id: String,
+    /// Latest repo runtime state known to the search plane, when available.
+    pub runtime: Option<SearchRepoRuntimeRecord>,
+    /// Latest readable publication for this repo-backed corpus, when available.
+    pub publication: Option<SearchRepoPublicationRecord>,
+}
+
+impl SearchRepoCorpusRecord {
+    /// Construct one combined repo-backed corpus record.
+    #[must_use]
+    pub fn new(
+        corpus: SearchCorpusKind,
+        repo_id: impl Into<String>,
+        runtime: Option<SearchRepoRuntimeRecord>,
+        publication: Option<SearchRepoPublicationRecord>,
+    ) -> Self {
+        Self {
+            corpus,
+            repo_id: repo_id.into(),
+            runtime,
+            publication,
+        }
+    }
+}
+
+/// Full combined repo-backed corpus snapshot owned by the search plane.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchRepoCorpusSnapshotRecord {
+    /// Combined repo-backed corpus rows across all tracked repos and corpora.
+    pub records: Vec<SearchRepoCorpusRecord>,
 }
 
 fn build_repo_publication_id(
     corpus: SearchCorpusKind,
     repo_id: &str,
-    table_name: &str,
-    schema_version: u32,
-    source_revision: Option<&str>,
-    table_version_id: u64,
-    row_count: u64,
-    fragment_count: u64,
-    published_at: &str,
+    input: &SearchRepoPublicationInput,
 ) -> String {
     let payload = format!(
         "{corpus}|{}|{}|{schema_version}|{}|{table_version_id}|{row_count}|{fragment_count}|{}",
         repo_id.trim().to_ascii_lowercase(),
-        table_name.trim().to_ascii_lowercase(),
-        source_revision
+        input.table_name.trim().to_ascii_lowercase(),
+        input
+            .source_revision
+            .as_deref()
             .map(str::trim)
             .unwrap_or_default()
             .to_ascii_lowercase(),
-        published_at.trim().to_ascii_lowercase()
+        input.published_at.trim().to_ascii_lowercase(),
+        schema_version = input.schema_version,
+        table_version_id = input.table_version_id,
+        row_count = input.row_count,
+        fragment_count = input.fragment_count,
     );
     blake3::hash(payload.as_bytes()).to_hex().to_string()
+}
+
+fn build_repo_publication_epoch(publication_id: &str) -> u64 {
+    let hash = blake3::hash(publication_id.trim().as_bytes());
+    let mut bytes = [0_u8; 8];
+    bytes.copy_from_slice(&hash.as_bytes()[..8]);
+    u64::from_be_bytes(bytes)
 }
 
 /// Stable file-level fingerprint payload for incremental manifest updates.
@@ -225,89 +310,126 @@ mod tests {
     use super::*;
 
     #[test]
-    fn repo_manifest_publication_id_changes_when_table_version_changes() {
-        let first = SearchRepoManifestRecord::new(
+    fn repo_publication_id_changes_when_table_version_changes() {
+        let first = SearchRepoPublicationRecord::new(
             SearchCorpusKind::RepoEntity,
             "alpha/repo",
-            "repo_entity_repo_alpha",
-            1,
-            Some("rev-1"),
-            7,
-            10,
-            2,
-            "2026-03-23T12:00:00Z",
+            SearchRepoPublicationInput {
+                table_name: "repo_entity_repo_alpha".to_string(),
+                schema_version: 1,
+                source_revision: Some("rev-1".to_string()),
+                table_version_id: 7,
+                row_count: 10,
+                fragment_count: 2,
+                published_at: "2026-03-23T12:00:00Z".to_string(),
+            },
         );
-        let second = SearchRepoManifestRecord::new(
+        let second = SearchRepoPublicationRecord::new(
             SearchCorpusKind::RepoEntity,
             "alpha/repo",
-            "repo_entity_repo_alpha",
-            1,
-            Some("rev-1"),
-            8,
-            10,
-            2,
-            "2026-03-23T12:00:00Z",
+            SearchRepoPublicationInput {
+                table_name: "repo_entity_repo_alpha".to_string(),
+                schema_version: 1,
+                source_revision: Some("rev-1".to_string()),
+                table_version_id: 8,
+                row_count: 10,
+                fragment_count: 2,
+                published_at: "2026-03-23T12:00:00Z".to_string(),
+            },
         );
 
         assert_ne!(first.publication_id, second.publication_id);
+        assert_ne!(first.active_epoch_value(), second.active_epoch_value());
         assert_ne!(first.cache_version(), second.cache_version());
     }
 
     #[test]
-    fn repo_manifest_cache_version_is_stable_for_same_publication() {
-        let first = SearchRepoManifestRecord::new(
+    fn repo_publication_cache_version_is_stable_for_same_publication() {
+        let first = SearchRepoPublicationRecord::new(
             SearchCorpusKind::RepoContentChunk,
             "alpha/repo",
-            "repo_content_chunk_repo_alpha",
-            1,
-            Some("rev-7"),
-            3,
-            42,
-            1,
-            "2026-03-23T12:00:00Z",
+            SearchRepoPublicationInput {
+                table_name: "repo_content_chunk_repo_alpha".to_string(),
+                schema_version: 1,
+                source_revision: Some("rev-7".to_string()),
+                table_version_id: 3,
+                row_count: 42,
+                fragment_count: 1,
+                published_at: "2026-03-23T12:00:00Z".to_string(),
+            },
         );
-        let second = SearchRepoManifestRecord::new(
+        let second = SearchRepoPublicationRecord::new(
             SearchCorpusKind::RepoContentChunk,
             "alpha/repo",
-            "repo_content_chunk_repo_alpha",
-            1,
-            Some("rev-7"),
-            3,
-            42,
-            1,
-            "2026-03-23T12:00:00Z",
+            SearchRepoPublicationInput {
+                table_name: "repo_content_chunk_repo_alpha".to_string(),
+                schema_version: 1,
+                source_revision: Some("rev-7".to_string()),
+                table_version_id: 3,
+                row_count: 42,
+                fragment_count: 1,
+                published_at: "2026-03-23T12:00:00Z".to_string(),
+            },
         );
 
         assert_eq!(first.publication_id, second.publication_id);
+        assert_eq!(first.active_epoch_value(), second.active_epoch_value());
         assert_eq!(first.cache_version(), second.cache_version());
     }
 
     #[test]
-    fn repo_manifest_publication_id_changes_when_source_revision_changes() {
-        let first = SearchRepoManifestRecord::new(
+    fn repo_publication_id_changes_when_source_revision_changes() {
+        let first = SearchRepoPublicationRecord::new(
             SearchCorpusKind::RepoContentChunk,
             "alpha/repo",
-            "repo_content_chunk_repo_alpha",
-            1,
-            Some("rev-1"),
-            3,
-            42,
-            1,
-            "2026-03-23T12:00:00Z",
+            SearchRepoPublicationInput {
+                table_name: "repo_content_chunk_repo_alpha".to_string(),
+                schema_version: 1,
+                source_revision: Some("rev-1".to_string()),
+                table_version_id: 3,
+                row_count: 42,
+                fragment_count: 1,
+                published_at: "2026-03-23T12:00:00Z".to_string(),
+            },
         );
-        let second = SearchRepoManifestRecord::new(
+        let second = SearchRepoPublicationRecord::new(
             SearchCorpusKind::RepoContentChunk,
             "alpha/repo",
-            "repo_content_chunk_repo_alpha",
-            1,
-            Some("rev-2"),
-            3,
-            42,
-            1,
-            "2026-03-23T12:00:00Z",
+            SearchRepoPublicationInput {
+                table_name: "repo_content_chunk_repo_alpha".to_string(),
+                schema_version: 1,
+                source_revision: Some("rev-2".to_string()),
+                table_version_id: 3,
+                row_count: 42,
+                fragment_count: 1,
+                published_at: "2026-03-23T12:00:00Z".to_string(),
+            },
         );
 
         assert_ne!(first.publication_id, second.publication_id);
+        assert_ne!(first.active_epoch_value(), second.active_epoch_value());
         assert_ne!(first.cache_version(), second.cache_version());
+    }
+
+    #[test]
+    fn repo_publication_active_epoch_falls_back_for_legacy_payloads() {
+        let legacy = SearchRepoPublicationRecord {
+            corpus: SearchCorpusKind::RepoEntity,
+            repo_id: "alpha/repo".to_string(),
+            active_epoch: None,
+            publication_id: "legacy-publication".to_string(),
+            table_name: "repo_entity_repo_alpha".to_string(),
+            table_version_id: 7,
+            schema_version: 1,
+            source_revision: Some("rev-1".to_string()),
+            row_count: 10,
+            fragment_count: 2,
+            published_at: "2026-03-23T12:00:00Z".to_string(),
+        };
+
+        assert_eq!(
+            legacy.active_epoch_value(),
+            build_repo_publication_epoch("legacy-publication")
+        );
     }
 }

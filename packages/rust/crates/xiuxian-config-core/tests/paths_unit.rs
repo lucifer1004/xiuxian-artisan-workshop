@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use xiuxian_config_core::test_support::resolve_home_from_value;
+use xiuxian_config_core::resolve_home_from_value;
 
 #[test]
 fn resolve_data_home_uses_project_default_when_env_missing() {

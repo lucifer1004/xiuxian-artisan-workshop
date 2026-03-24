@@ -153,6 +153,18 @@ downstream proof.
   ranked hits by gap kind, nest those grouped hits by projected page family,
   and open a bounded batch of stable work items without leaving the
   projected-gap and navigation contract family.
+- The next planner balancing refinement stays inside that same workset
+  contract: `GET /api/docs/planner-workset` now also carries deterministic
+  quota-band evidence for both populated gap-kind groups and populated
+  page-family groups, including floor/ceiling target counts and
+  `within_target_band` markers, so planner UIs can explain why one selected
+  batch is considered balanced without inventing a second balancing schema.
+- The next grouped-quota refinement also stays inside that same workset
+  contract: `GET /api/docs/planner-workset` now carries explicit `quota` hints
+  on each gap-kind lane and nested page-family lane, so planners can read
+  stable per-group quota expectations directly from the grouped execution
+  structure instead of joining the top-level balance summary back onto the
+  lanes themselves.
 - The next docs namespace route follows the same rule: `GET /api/docs/search`
   reuses the repo projected-page search payload instead of introducing a
   docs-only search schema, so the early deep-wiki surface stays contract-thin

@@ -18,14 +18,16 @@
 //! │   ├── dependency_indexer.rs
 //! │   └── link_graph.rs
 //! ├── performance/         # Optional performance gates and stress suites
-//! └── scenarios_test.rs    # Scenario test entry point
+//! ├── scenarios_test.rs    # Scenario test entry point
+//! └── xiuxian-testing-gate.rs # Unified test-policy and integration mount gate
 //! ```
 //!
 //! # Naming Conventions
 //!
 //! - **Unit tests**: `tests/unit/{module}.rs` (e.g., `entity.rs`, `storage.rs`)
 //! - **Integration tests**: `tests/integration/{feature}.rs`
-//! - **Test entry points**: `tests/{name}_test.rs` (e.g., `scenarios_test.rs`)
+//! - **Test entry points**: Explicit root gate files only
+//!   (for example `scenarios_test.rs`, `xiuxian-testing-gate.rs`)
 //!
 //! # Forbidden Patterns
 //!
@@ -99,7 +101,7 @@ const ALLOWED_DIRS: &[&str] = &[
     "common",
 ];
 
-/// Allowed file patterns in tests/ root (entry points).
+/// Allowed root file names in tests/ (entry points and explicit gateways).
 const ALLOWED_ROOT_FILE_PATTERNS: &[&str] = &[
     "mod.rs",
     "lib.rs",
@@ -109,11 +111,7 @@ const ALLOWED_ROOT_FILE_PATTERNS: &[&str] = &[
 
 /// Check if a file name matches an allowed root file pattern.
 fn is_allowed_root_file(name: &str, policy: Option<&TestsStructurePolicy>) -> bool {
-    // Allow entry points like *_test.rs
-    if name.ends_with("_test.rs") {
-        return true;
-    }
-    // Allow specific patterns
+    // Allow explicit root file names and policy overrides only.
     ALLOWED_ROOT_FILE_PATTERNS.contains(&name)
         || policy.is_some_and(|config| config.allowed_root_files.iter().any(|entry| entry == name))
 }
@@ -352,7 +350,7 @@ mod tests {
         assert!(is_allowed_root_file("mod.rs", None));
         assert!(is_allowed_root_file("scenarios_test.rs", None));
         assert!(is_allowed_root_file("xiuxian-testing-gate.rs", None));
-        assert!(is_allowed_root_file("my_test.rs", None));
+        assert!(!is_allowed_root_file("my_test.rs", None));
         assert!(!is_allowed_root_file("test_entity.rs", None));
         assert!(!is_allowed_root_file("entity_unit.rs", None));
     }

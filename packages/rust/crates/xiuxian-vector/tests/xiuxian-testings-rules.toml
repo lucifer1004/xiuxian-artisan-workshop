@@ -5,6 +5,7 @@ allowed_root_files = [
   "keyword_fusion_kernels.rs",
   "keyword_fusion_match_util_unit.rs",
   "search_impl_unit.rs",
+  "test_columnar_tables.rs",
   "ops_column_read.rs",
   "test_data_layer_snapshots.rs",
   "test_drop_table.rs",

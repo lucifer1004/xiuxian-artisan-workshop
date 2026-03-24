@@ -15,6 +15,11 @@ pub struct ConfigCascadeSpec<'a> {
     pub namespace: &'a str,
     /// Embedded baseline TOML payload bundled in the crate binary.
     pub embedded_toml: &'a str,
+    /// Optional absolute source path for the embedded TOML payload.
+    ///
+    /// When present, relative `imports` inside `embedded_toml` are resolved
+    /// against this path's parent directory.
+    pub embedded_source_path: Option<&'a str>,
     /// Optional standalone/orphan config filename (for example `orphan.toml`).
     pub orphan_file: &'a str,
     /// Strategy for merging TOML arrays.
@@ -28,8 +33,18 @@ impl<'a> ConfigCascadeSpec<'a> {
         Self {
             namespace,
             embedded_toml,
+            embedded_source_path: None,
             orphan_file,
             array_merge_strategy: ArrayMergeStrategy::Overwrite,
+        }
+    }
+
+    /// Attach the physical source path for the embedded TOML payload.
+    #[must_use]
+    pub const fn with_embedded_source_path(self, embedded_source_path: &'a str) -> Self {
+        Self {
+            embedded_source_path: Some(embedded_source_path),
+            ..self
         }
     }
 

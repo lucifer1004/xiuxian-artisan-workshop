@@ -39,6 +39,7 @@ xiuxian-logging = { path = "../xiuxian-logging" }
 xiuxian-llm = { path = "../xiuxian-llm", optional = true }
 xiuxian-window = { path = "../xiuxian-window" }
 xiuxian-testing = { path = "../xiuxian-testing" }
+xiuxian-config-core = { path = "../xiuxian-config-core" }
 pyo3 = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 
@@ -74,6 +75,10 @@ required-features = ["llm"]
 name = "llm_multi_tenancy"
 path = "tests/integration/llm_multi_tenancy.rs"
 required-features = ["llm"]
+
+[[test]]
+name = "runtime_config"
+path = "tests/integration/runtime_config.rs"
 
 [[test]]
 name = "formal_audit_advisory_llm"

@@ -1,6 +1,6 @@
-use super::{UnifiedSymbol, UnifiedSymbolIndex};
 use crate::search::SearchDocument;
 use crate::unified_symbol::symbol::SymbolSource;
+use crate::unified_symbol::{UnifiedSymbol, UnifiedSymbolIndex};
 
 impl UnifiedSymbolIndex {
     /// Add a project symbol.

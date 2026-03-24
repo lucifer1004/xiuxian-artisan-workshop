@@ -180,6 +180,90 @@ Initial bounded progress for that slice is now landed:
 - the bundled Wendao gateway OpenAPI artifact now also covers `/api/analysis/code-ast`, keeping the route inventory test aligned with the runtime gateway surface
 - `cargo test -p xiuxian-wendao --lib` is now green again after refreshing the affected studio Markdown-analysis and repo-sync snapshot baselines to the current response contracts
 
+## Gateway-Driven Tantivy Performance Landing
+
+The next bounded repo-intelligence performance slice is now active under `[[.cache/codex/execplans/wendao-gateway-tantivy-performance-landing.md]]`.
+
+Its execution contract is:
+
+- keep repo gateway search on the current analyzer path for this slice instead of migrating onto `search_plane`
+- add reusable analyzer-derived `RepositorySearchArtifacts` and per-endpoint query caches so `/api/repo/module-search`, `/api/repo/symbol-search`, `/api/repo/example-search`, and `/api/repo/projected-page-search` stop rebuilding Tantivy indexes per request
+- upgrade the shared Tantivy search layer toward multi-field exact/prefix/fuzzy recall, code-aware tokenization, lightweight hit rehydration, and bounded rescoring
+- preserve the current repo gateway HTTP contracts and Studio `/api/search/intent?intent=code_search` behavior while aligning them with the upgraded shared search assumptions
+- finish with a gateway-level async performance suite that exercises the four repo-search endpoints plus Studio code search in warm-cache steady state
+
+Initial execution for that slice is now landed:
+
+- shared Tantivy search documents now split `title/path/namespace` into
+  `*_exact` and `*_text` fields, and `terms` now participates in the shared
+  full-text/fuzzy query layer instead of leaving `title` as the only fuzzy
+  recall field
+- the shared Tantivy layer now registers a code-aware tokenizer for
+  camelCase, snake_case, acronym, and alpha-digit boundaries, and the search
+  API now returns lightweight hit records that are rehydrated through local
+  lookup maps instead of eagerly materializing full `SearchDocument` payloads
+- repo gateway `module.search`, `symbol.search`, `example.search`, and
+  `projected-page.search` now build immutable analyzer-derived
+  `RepositorySearchArtifacts` once per cached analysis identity and then reuse
+  those search indexes plus a second-layer query-result cache for repeated
+  requests
+- Studio `/api/search/intent?intent=code_search` stayed on the current
+  `search_plane` path, but the gateway perf suite now exercises it alongside
+  the four repo-search endpoints so the warm-cache steady-state contract is
+  recorded in the same place
+- the blocking modularity regressions in
+  `src/search_plane/service/tests/mod.rs` and
+  `src/zhenfa_router/native/semantic_check/docs_governance/tests/mod.rs` were
+  cleaned up by moving helper logic into dedicated `support.rs` modules and
+  keeping `mod.rs` interface-only
+- the gateway perf suite now uses recorded per-case warm-cache budgets instead
+  of placeholder thresholds, with the current active lib baselines fixed at:
+  - `repo_module_search`: `p95 <= 2.0ms`, `qps >= 1101`
+  - `repo_symbol_search`: `p95 <= 2.0ms`, `qps >= 964`
+  - `repo_example_search`: `p95 <= 2.5ms`, `qps >= 650`
+  - `repo_projected_page_search`: `p95 <= 2.0ms`, `qps >= 650`
+  - `studio_code_search`: `p95 <= 13.0ms`, `qps >= 95`
+  - `search_index_status`: active status/telemetry warm-cache gate
+  - only the aggregate `gateway_search_perf_suite_reports_warm_cache_latency`
+    smoke suite remains ignored for explicit full-bundle validation
+- the stable gateway warm-cache suite is now also formalized under the
+  `performance` feature. `src/gateway/studio/perf_support.rs` exposes a narrow
+  gateway fixture surface, and `tests/performance/gateway_search.rs` mounts six
+  serialized formal cases for `repo_module_search`, `repo_symbol_search`,
+  `repo_example_search`, `repo_projected_page_search`, `studio_code_search`,
+  and `search_index_status`
+- the gateway perf lane now selects those defaults through `RUNNER_OS`
+  profiles and supports explicit
+  `XIUXIAN_WENDAO_GATEWAY_PERF_<CASE>_<METRIC>` overrides, so the quick gate
+  can carry one named case inventory across local and CI runners without
+  forking the test wiring
+- the quick perf entrypoint `just rust-wendao-performance-gate` now exports
+  `RUNNER_OS` into the gateway perf lib lane, and the stale empty perf module
+  mounts that resurfaced during validation were removed so `nextest` and
+  `clippy` stay green
+- focused verification now covers the full default Wendao lib surface, the
+  `xiuxian-testing-gate` contract target, and the full default feature-gated
+  gateway perf suite:
+  - `cargo test -p xiuxian-wendao --lib`
+  - `cargo test -p xiuxian-wendao --test xiuxian-testing-gate`
+  - `cargo check -p xiuxian-wendao --features performance --tests`
+  - `cargo test -p xiuxian-wendao --features performance gateway::studio::studio_gateway_search_perf_tests --lib`
+  - `cargo test -p xiuxian-wendao --features performance --test xiuxian-testing-gate -- --list`
+  - `cargo nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate -E 'test(performance::gateway_search::studio_code_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::search_index_status_perf_gate_reports_query_telemetry_summary_formal_gate)'`
+  - `just rust-wendao-performance-gate`
+  - `cargo nextest run -p xiuxian-wendao`
+- Tier-3 closure is now green for the touched Wendao scope:
+  - `cargo clippy -p xiuxian-wendao --all-targets --all-features -- -D warnings`
+- the residual repo-gateway verification caveat is no longer `clippy`; it is
+  now the need to capture a dedicated `ubuntu-latest` baseline and decide
+  whether the runner-aware profile should keep sharing the current local/linux
+  defaults or split them into stricter per-runner constants
+- `tests/unit/studio_vfs_performance.rs::studio_state_creation_is_fast` now
+  measures a warmed best-of-five `StudioState::new()` sample window instead of
+  a single wall-clock sample, which keeps `cargo test --lib` and
+  `cargo nextest` stable under normal concurrent test scheduling while still
+  enforcing the bootstrap budget
+
 ## Open Constraint
 
 The repository-level AGENTS reference points at `[[.data/blueprints/project_anchor_semantic_addressing.md]]`, but that file is not currently present in the workspace. The Repo Intelligence MVP should therefore treat this roadmap note plus the paired ExecPlan as the immediate execution guide until the canonical semantic-addressing blueprint is restored or replaced.

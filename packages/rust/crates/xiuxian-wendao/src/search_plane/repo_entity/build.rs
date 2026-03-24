@@ -15,7 +15,7 @@ pub(crate) async fn publish_repo_entities(
     source_revision: Option<&str>,
 ) -> Result<(), VectorStoreError> {
     let store = service.open_store(SearchCorpusKind::RepoEntity).await?;
-    let table_name = service.repo_entity_table_name(repo_id);
+    let table_name = SearchPlaneService::repo_entity_table_name(repo_id);
     let rows = rows_from_analysis(repo_id, analysis)?;
     store
         .replace_record_batches(

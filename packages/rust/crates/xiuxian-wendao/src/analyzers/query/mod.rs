@@ -25,10 +25,12 @@ pub use docs::{
     DocsPlannerRankResult, DocsPlannerSearchHit, DocsPlannerSearchQuery, DocsPlannerSearchResult,
     DocsPlannerWorksetBalance, DocsPlannerWorksetFamilyBalanceEntry, DocsPlannerWorksetFamilyGroup,
     DocsPlannerWorksetGapKindBalanceEntry, DocsPlannerWorksetGroup, DocsPlannerWorksetQuery,
-    DocsPlannerWorksetResult, DocsProjectedGapReportQuery, DocsProjectedGapReportResult,
-    DocsRetrievalContextQuery, DocsRetrievalContextResult, DocsRetrievalHitQuery,
-    DocsRetrievalHitResult, DocsRetrievalQuery, DocsRetrievalResult, DocsSearchQuery,
-    DocsSearchResult,
+    DocsPlannerWorksetQuotaHint, DocsPlannerWorksetResult, DocsPlannerWorksetStrategy,
+    DocsPlannerWorksetStrategyCode, DocsPlannerWorksetStrategyReason,
+    DocsPlannerWorksetStrategyReasonCode, DocsProjectedGapReportQuery,
+    DocsProjectedGapReportResult, DocsRetrievalContextQuery, DocsRetrievalContextResult,
+    DocsRetrievalHitQuery, DocsRetrievalHitResult, DocsRetrievalQuery, DocsRetrievalResult,
+    DocsSearchQuery, DocsSearchResult,
 };
 pub use example::{ExampleSearchHit, ExampleSearchQuery, ExampleSearchResult};
 pub use family::{

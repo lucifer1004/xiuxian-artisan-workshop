@@ -21,11 +21,11 @@ pub enum SearchIndexPhase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchIndexIssueCode {
-    /// A repo reported ready but no published manifest exists for this corpus.
+    /// A repo reported ready but no published state exists for this corpus.
     PublishedManifestMissing,
-    /// A published manifest exists, but it does not record the source revision.
+    /// Published state exists, but it does not record the source revision.
     PublishedRevisionMissing,
-    /// A published manifest exists, but it points at a different source revision.
+    /// Published state exists, but it points at a different source revision.
     PublishedRevisionMismatch,
     /// Repo indexing failed while the corpus status was synthesized.
     RepoIndexFailed,
@@ -35,7 +35,7 @@ pub enum SearchIndexIssueCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchIndexIssueFamily {
-    /// Issues around missing or malformed published manifests.
+    /// Issues around missing or malformed published state.
     Manifest,
     /// Issues where the published revision no longer matches the repo revision.
     Revision,
@@ -114,15 +114,17 @@ pub enum SearchIndexStatusReasonCode {
     WarmingUp,
     /// The corpus is refreshing while an older publication remains readable.
     Refreshing,
+    /// Background compaction is actively running for the readable publication.
+    Compacting,
     /// Background compaction has been scheduled for the readable publication.
     CompactionPending,
     /// The latest build failed.
     BuildFailed,
-    /// A repo reported ready but no published manifest exists for this corpus.
+    /// A repo reported ready but no published state exists for this corpus.
     PublishedManifestMissing,
-    /// A published manifest exists, but it does not record the source revision.
+    /// Published state exists, but it does not record the source revision.
     PublishedRevisionMissing,
-    /// A published manifest exists, but it points at a different source revision.
+    /// Published state exists, but it points at a different source revision.
     PublishedRevisionMismatch,
     /// Repo indexing failed while the corpus status was synthesized.
     RepoIndexFailed,
@@ -164,6 +166,8 @@ pub struct SearchIndexAggregateStatusReason {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchIndexMaintenanceStatus {
+    /// Whether the corpus is actively being compacted in the background.
+    pub compaction_running: bool,
     /// Whether the corpus should be compacted in the background.
     pub compaction_pending: bool,
     /// Number of publishes since the last compact.
@@ -174,6 +178,93 @@ pub struct SearchIndexMaintenanceStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     /// Reason recorded for the latest compaction.
     pub last_compaction_reason: Option<String>,
+}
+
+/// Source path used by the most recent bounded streaming query for one corpus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchIndexQueryTelemetrySource {
+    /// The query streamed batches from a regular projected scan only.
+    Scan,
+    /// The query streamed batches from FTS only.
+    Fts,
+    /// The query attempted FTS first and then fell back to a regular projected scan.
+    FtsFallbackScan,
+}
+
+/// Recent bounded-rerank telemetry recorded for one corpus query lane.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchIndexQueryTelemetry {
+    /// RFC3339 timestamp when the telemetry record was captured.
+    pub captured_at: String,
+    /// Optional scope hint such as a repo identifier for repo-backed queries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    /// Streaming source used by the query.
+    pub source: SearchIndexQueryTelemetrySource,
+    /// Number of streamed batches consumed by the query.
+    pub batch_count: u64,
+    /// Total number of rows scanned across all streamed batches.
+    pub rows_scanned: u64,
+    /// Number of rows that matched the lexical predicate before bounded trimming.
+    pub matched_rows: u64,
+    /// Final number of retained results returned to the caller.
+    pub result_count: u64,
+    /// Batch row limit used for projected scan requests, when configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_row_limit: Option<u64>,
+    /// Recall limit pushed into the Lance scan/FTS layer, when configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recall_limit_rows: Option<u64>,
+    /// Soft in-memory working-set budget expressed as retained candidate rows.
+    pub working_set_budget_rows: u64,
+    /// Trim threshold that triggers bounded compaction of the working set.
+    pub trim_threshold_rows: u64,
+    /// Largest candidate/path working set observed during the query.
+    pub peak_working_set_rows: u64,
+    /// Number of times the working set had to be trimmed.
+    pub trim_count: u64,
+    /// Number of candidates/paths dropped by bounded trimming.
+    pub dropped_candidate_count: u64,
+}
+
+/// Response-level summary derived from the most recent per-corpus query telemetry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchIndexAggregateQueryTelemetry {
+    /// Number of corpora contributing recent query telemetry.
+    pub corpus_count: usize,
+    /// RFC3339 timestamp of the most recent telemetry record in the response.
+    pub latest_captured_at: String,
+    /// Number of corpora whose most recent query used a projected scan only.
+    pub scan_count: usize,
+    /// Number of corpora whose most recent query used FTS only.
+    pub fts_count: usize,
+    /// Number of corpora whose most recent query fell back from FTS to projected scan.
+    pub fts_fallback_scan_count: usize,
+    /// Total rows scanned across the retained telemetry set.
+    pub total_rows_scanned: u64,
+    /// Total lexical matches observed before bounded trimming.
+    pub total_matched_rows: u64,
+    /// Total retained results returned by the recorded queries.
+    pub total_result_count: u64,
+    /// Maximum batch row limit observed across the retained telemetry set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_batch_row_limit: Option<u64>,
+    /// Maximum recall limit observed across the retained telemetry set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_recall_limit_rows: Option<u64>,
+    /// Largest working-set budget observed across the retained telemetry set.
+    pub max_working_set_budget_rows: u64,
+    /// Largest trim threshold observed across the retained telemetry set.
+    pub max_trim_threshold_rows: u64,
+    /// Largest observed peak working set across the retained telemetry set.
+    pub max_peak_working_set_rows: u64,
+    /// Total number of trim events observed across the retained telemetry set.
+    pub total_trim_count: u64,
+    /// Total number of dropped candidates/paths observed across the retained telemetry set.
+    pub total_dropped_candidate_count: u64,
 }
 
 /// Current search-plane status for one corpus.
@@ -225,6 +316,9 @@ pub struct SearchCorpusIndexStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     /// Compact status reason that folds phase and issues into one UI-friendly decision.
     pub status_reason: Option<SearchIndexStatusReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Recent bounded-rerank telemetry captured from the last successful query on this corpus.
+    pub last_query_telemetry: Option<SearchIndexQueryTelemetry>,
     /// Maintenance view for the corpus.
     pub maintenance: SearchIndexMaintenanceStatus,
 }
@@ -250,6 +344,9 @@ pub struct SearchIndexStatusResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     /// Response-level dominant status reason derived from per-corpus status reasons.
     pub status_reason: Option<SearchIndexAggregateStatusReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Response-level rollup derived from recent per-corpus bounded query telemetry.
+    pub query_telemetry_summary: Option<SearchIndexAggregateQueryTelemetry>,
     /// Ordered per-corpus status rows.
     pub corpora: Vec<SearchCorpusIndexStatus>,
 }
@@ -344,6 +441,7 @@ impl From<crate::search_plane::SearchCorpusStatusReasonCode> for SearchIndexStat
         match value {
             crate::search_plane::SearchCorpusStatusReasonCode::WarmingUp => Self::WarmingUp,
             crate::search_plane::SearchCorpusStatusReasonCode::Refreshing => Self::Refreshing,
+            crate::search_plane::SearchCorpusStatusReasonCode::Compacting => Self::Compacting,
             crate::search_plane::SearchCorpusStatusReasonCode::CompactionPending => {
                 Self::CompactionPending
             }
@@ -378,10 +476,44 @@ impl From<&crate::search_plane::SearchCorpusStatusReason> for SearchIndexStatusR
 impl From<&crate::search_plane::SearchMaintenanceStatus> for SearchIndexMaintenanceStatus {
     fn from(value: &crate::search_plane::SearchMaintenanceStatus) -> Self {
         Self {
+            compaction_running: value.compaction_running,
             compaction_pending: value.compaction_pending,
             publish_count_since_compaction: value.publish_count_since_compaction,
             last_compacted_at: value.last_compacted_at.clone(),
             last_compaction_reason: value.last_compaction_reason.clone(),
+        }
+    }
+}
+
+impl From<crate::search_plane::SearchQueryTelemetrySource> for SearchIndexQueryTelemetrySource {
+    fn from(value: crate::search_plane::SearchQueryTelemetrySource) -> Self {
+        match value {
+            crate::search_plane::SearchQueryTelemetrySource::Scan => Self::Scan,
+            crate::search_plane::SearchQueryTelemetrySource::Fts => Self::Fts,
+            crate::search_plane::SearchQueryTelemetrySource::FtsFallbackScan => {
+                Self::FtsFallbackScan
+            }
+        }
+    }
+}
+
+impl From<&crate::search_plane::SearchQueryTelemetry> for SearchIndexQueryTelemetry {
+    fn from(value: &crate::search_plane::SearchQueryTelemetry) -> Self {
+        Self {
+            captured_at: value.captured_at.clone(),
+            scope: value.scope.clone(),
+            source: value.source.into(),
+            batch_count: value.batch_count,
+            rows_scanned: value.rows_scanned,
+            matched_rows: value.matched_rows,
+            result_count: value.result_count,
+            batch_row_limit: value.batch_row_limit,
+            recall_limit_rows: value.recall_limit_rows,
+            working_set_budget_rows: value.working_set_budget_rows,
+            trim_threshold_rows: value.trim_threshold_rows,
+            peak_working_set_rows: value.peak_working_set_rows,
+            trim_count: value.trim_count,
+            dropped_candidate_count: value.dropped_candidate_count,
         }
     }
 }
@@ -411,6 +543,10 @@ impl From<&crate::search_plane::SearchCorpusStatus> for SearchCorpusIndexStatus 
                 .status_reason
                 .as_ref()
                 .map(SearchIndexStatusReason::from),
+            last_query_telemetry: value
+                .last_query_telemetry
+                .as_ref()
+                .map(SearchIndexQueryTelemetry::from),
             maintenance: SearchIndexMaintenanceStatus::from(&value.maintenance),
         }
     }
@@ -449,6 +585,7 @@ impl From<&crate::search_plane::SearchPlaneStatusSnapshot> for SearchIndexStatus
             .filter(|status| status.maintenance.compaction_pending)
             .count();
         let status_reason = summarize_response_status_reason(&corpora);
+        let query_telemetry_summary = summarize_response_query_telemetry(&corpora);
         Self {
             total,
             idle,
@@ -458,6 +595,7 @@ impl From<&crate::search_plane::SearchPlaneStatusSnapshot> for SearchIndexStatus
             failed,
             compaction_pending,
             status_reason,
+            query_telemetry_summary,
             corpora,
         }
     }
@@ -496,6 +634,94 @@ fn summarize_response_status_reason(
     })
 }
 
+fn summarize_response_query_telemetry(
+    corpora: &[SearchCorpusIndexStatus],
+) -> Option<SearchIndexAggregateQueryTelemetry> {
+    let telemetry = corpora
+        .iter()
+        .filter_map(|status| status.last_query_telemetry.as_ref())
+        .collect::<Vec<_>>();
+    if telemetry.is_empty() {
+        return None;
+    }
+
+    let latest_captured_at = telemetry
+        .iter()
+        .map(|entry| entry.captured_at.as_str())
+        .max()
+        .unwrap_or_default()
+        .to_string();
+
+    let mut summary = SearchIndexAggregateQueryTelemetry {
+        corpus_count: telemetry.len(),
+        latest_captured_at,
+        scan_count: 0,
+        fts_count: 0,
+        fts_fallback_scan_count: 0,
+        total_rows_scanned: 0,
+        total_matched_rows: 0,
+        total_result_count: 0,
+        max_batch_row_limit: None,
+        max_recall_limit_rows: None,
+        max_working_set_budget_rows: 0,
+        max_trim_threshold_rows: 0,
+        max_peak_working_set_rows: 0,
+        total_trim_count: 0,
+        total_dropped_candidate_count: 0,
+    };
+
+    for entry in telemetry {
+        match entry.source {
+            SearchIndexQueryTelemetrySource::Scan => {
+                summary.scan_count = summary.scan_count.saturating_add(1);
+            }
+            SearchIndexQueryTelemetrySource::Fts => {
+                summary.fts_count = summary.fts_count.saturating_add(1);
+            }
+            SearchIndexQueryTelemetrySource::FtsFallbackScan => {
+                summary.fts_fallback_scan_count = summary.fts_fallback_scan_count.saturating_add(1);
+            }
+        }
+        summary.total_rows_scanned = summary
+            .total_rows_scanned
+            .saturating_add(entry.rows_scanned);
+        summary.total_matched_rows = summary
+            .total_matched_rows
+            .saturating_add(entry.matched_rows);
+        summary.total_result_count = summary
+            .total_result_count
+            .saturating_add(entry.result_count);
+        summary.max_batch_row_limit =
+            max_optional_u64(summary.max_batch_row_limit, entry.batch_row_limit);
+        summary.max_recall_limit_rows =
+            max_optional_u64(summary.max_recall_limit_rows, entry.recall_limit_rows);
+        summary.max_working_set_budget_rows = summary
+            .max_working_set_budget_rows
+            .max(entry.working_set_budget_rows);
+        summary.max_trim_threshold_rows = summary
+            .max_trim_threshold_rows
+            .max(entry.trim_threshold_rows);
+        summary.max_peak_working_set_rows = summary
+            .max_peak_working_set_rows
+            .max(entry.peak_working_set_rows);
+        summary.total_trim_count = summary.total_trim_count.saturating_add(entry.trim_count);
+        summary.total_dropped_candidate_count = summary
+            .total_dropped_candidate_count
+            .saturating_add(entry.dropped_candidate_count);
+    }
+
+    Some(summary)
+}
+
+fn max_optional_u64(left: Option<u64>, right: Option<u64>) -> Option<u64> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }
+}
+
 fn response_reason_severity_priority(severity: SearchIndexStatusSeverity) -> u8 {
     match severity {
         SearchIndexStatusSeverity::Error => 0,
@@ -513,7 +739,8 @@ fn response_reason_code_priority(code: SearchIndexStatusReasonCode) -> u8 {
         SearchIndexStatusReasonCode::RepoIndexFailed => 4,
         SearchIndexStatusReasonCode::WarmingUp => 5,
         SearchIndexStatusReasonCode::Refreshing => 6,
-        SearchIndexStatusReasonCode::CompactionPending => 7,
+        SearchIndexStatusReasonCode::Compacting => 7,
+        SearchIndexStatusReasonCode::CompactionPending => 8,
     }
 }
 
@@ -523,33 +750,67 @@ mod tests {
         SearchCorpusIssue, SearchCorpusIssueCode, SearchCorpusIssueFamily, SearchCorpusKind,
         SearchCorpusStatus, SearchCorpusStatusAction, SearchCorpusStatusReason,
         SearchCorpusStatusReasonCode, SearchCorpusStatusSeverity, SearchMaintenanceStatus,
-        SearchPlanePhase, SearchPlaneStatusSnapshot,
+        SearchPlanePhase, SearchPlaneStatusSnapshot, SearchQueryTelemetry,
+        SearchQueryTelemetrySource,
     };
 
     use super::{
-        SearchIndexIssueCode, SearchIndexIssueFamily, SearchIndexPhase, SearchIndexStatusAction,
-        SearchIndexStatusReasonCode, SearchIndexStatusResponse, SearchIndexStatusSeverity,
+        SearchIndexIssueCode, SearchIndexIssueFamily, SearchIndexPhase,
+        SearchIndexQueryTelemetrySource, SearchIndexStatusAction, SearchIndexStatusReasonCode,
+        SearchIndexStatusResponse, SearchIndexStatusSeverity,
     };
 
-    #[test]
-    fn response_counts_track_phase_and_compaction_state() {
+    fn status_reason(
+        response: &SearchIndexStatusResponse,
+    ) -> &super::SearchIndexAggregateStatusReason {
+        response
+            .status_reason
+            .as_ref()
+            .unwrap_or_else(|| panic!("aggregate status reason should be present"))
+    }
+
+    fn corpus_status_reason(
+        response: &SearchIndexStatusResponse,
+        index: usize,
+    ) -> &super::SearchIndexStatusReason {
+        response.corpora[index]
+            .status_reason
+            .as_ref()
+            .unwrap_or_else(|| panic!("status reason should be present"))
+    }
+
+    fn corpus_issue_summary(
+        response: &SearchIndexStatusResponse,
+        index: usize,
+    ) -> &super::SearchIndexIssueSummary {
+        response.corpora[index]
+            .issue_summary
+            .as_ref()
+            .unwrap_or_else(|| panic!("issue summary should be present"))
+    }
+
+    fn compacting_local_symbol_status() -> SearchCorpusStatus {
         let mut local_symbol = SearchCorpusStatus::new(SearchCorpusKind::LocalSymbol);
         local_symbol.phase = SearchPlanePhase::Ready;
         local_symbol.active_epoch = Some(3);
         local_symbol.row_count = Some(10);
         local_symbol.maintenance = SearchMaintenanceStatus {
+            compaction_running: true,
             compaction_pending: true,
             publish_count_since_compaction: 3,
             last_compacted_at: None,
             last_compaction_reason: None,
         };
         local_symbol.status_reason = Some(SearchCorpusStatusReason {
-            code: SearchCorpusStatusReasonCode::CompactionPending,
+            code: SearchCorpusStatusReasonCode::Compacting,
             severity: SearchCorpusStatusSeverity::Info,
             action: SearchCorpusStatusAction::Wait,
             readable: true,
         });
+        local_symbol
+    }
 
+    fn degraded_repo_entity_status() -> SearchCorpusStatus {
         let mut repo_entity = SearchCorpusStatus::new(SearchCorpusKind::RepoEntity);
         repo_entity.phase = SearchPlanePhase::Degraded;
         repo_entity.issues.push(SearchCorpusIssue {
@@ -572,22 +833,74 @@ mod tests {
             action: SearchCorpusStatusAction::ResyncRepo,
             readable: true,
         });
+        repo_entity
+    }
 
+    fn telemetry_attachment_status() -> SearchCorpusStatus {
+        let mut attachment = SearchCorpusStatus::new(SearchCorpusKind::Attachment);
+        attachment.phase = SearchPlanePhase::Ready;
+        attachment.active_epoch = Some(9);
+        attachment.last_query_telemetry = Some(SearchQueryTelemetry {
+            captured_at: "2026-03-23T22:05:00Z".to_string(),
+            scope: Some("alpha/repo".to_string()),
+            source: SearchQueryTelemetrySource::FtsFallbackScan,
+            batch_count: 4,
+            rows_scanned: 96,
+            matched_rows: 19,
+            result_count: 8,
+            batch_row_limit: Some(32),
+            recall_limit_rows: Some(64),
+            working_set_budget_rows: 24,
+            trim_threshold_rows: 48,
+            peak_working_set_rows: 41,
+            trim_count: 2,
+            dropped_candidate_count: 11,
+        });
+        attachment
+    }
+
+    fn telemetry_knowledge_status() -> SearchCorpusStatus {
+        let mut knowledge = SearchCorpusStatus::new(SearchCorpusKind::KnowledgeSection);
+        knowledge.phase = SearchPlanePhase::Ready;
+        knowledge.active_epoch = Some(4);
+        knowledge.last_query_telemetry = Some(SearchQueryTelemetry {
+            captured_at: "2026-03-23T22:07:00Z".to_string(),
+            scope: None,
+            source: SearchQueryTelemetrySource::Fts,
+            batch_count: 2,
+            rows_scanned: 70,
+            matched_rows: 14,
+            result_count: 6,
+            batch_row_limit: Some(16),
+            recall_limit_rows: Some(40),
+            working_set_budget_rows: 12,
+            trim_threshold_rows: 24,
+            peak_working_set_rows: 18,
+            trim_count: 1,
+            dropped_candidate_count: 5,
+        });
+        knowledge
+    }
+
+    #[test]
+    fn response_counts_track_phase_and_compaction_state() {
         let response = SearchIndexStatusResponse::from(&SearchPlaneStatusSnapshot {
-            corpora: vec![local_symbol, repo_entity],
+            corpora: vec![
+                compacting_local_symbol_status(),
+                degraded_repo_entity_status(),
+                telemetry_attachment_status(),
+                telemetry_knowledge_status(),
+            ],
         });
 
-        assert_eq!(response.total, 2);
+        assert_eq!(response.total, 4);
         assert_eq!(response.idle, 0);
         assert_eq!(response.indexing, 0);
-        assert_eq!(response.ready, 1);
+        assert_eq!(response.ready, 3);
         assert_eq!(response.degraded, 1);
         assert_eq!(response.failed, 0);
         assert_eq!(response.compaction_pending, 1);
-        let aggregate_reason = response
-            .status_reason
-            .as_ref()
-            .expect("aggregate status reason should be present");
+        let aggregate_reason = status_reason(&response);
         assert_eq!(
             aggregate_reason.code,
             SearchIndexStatusReasonCode::PublishedRevisionMismatch
@@ -601,26 +914,18 @@ mod tests {
         assert_eq!(aggregate_reason.readable_corpus_count, 2);
         assert_eq!(aggregate_reason.blocking_corpus_count, 0);
         assert_eq!(response.corpora[0].phase, SearchIndexPhase::Ready);
-        let local_reason = response.corpora[0]
-            .status_reason
-            .as_ref()
-            .expect("local status reason should be present");
-        assert_eq!(
-            local_reason.code,
-            SearchIndexStatusReasonCode::CompactionPending
-        );
+        let local_reason = corpus_status_reason(&response, 0);
+        assert_eq!(local_reason.code, SearchIndexStatusReasonCode::Compacting);
         assert_eq!(local_reason.severity, SearchIndexStatusSeverity::Info);
         assert_eq!(local_reason.action, SearchIndexStatusAction::Wait);
         assert!(local_reason.readable);
+        assert!(response.corpora[0].maintenance.compaction_running);
         assert_eq!(response.corpora[1].issues.len(), 1);
         assert_eq!(
             response.corpora[1].issues[0].code,
             SearchIndexIssueCode::PublishedRevisionMismatch
         );
-        let summary = response.corpora[1]
-            .issue_summary
-            .as_ref()
-            .expect("issue summary should be present");
+        let summary = corpus_issue_summary(&response, 1);
         assert_eq!(summary.family, SearchIndexIssueFamily::Revision);
         assert_eq!(
             summary.primary_code,
@@ -628,10 +933,7 @@ mod tests {
         );
         assert_eq!(summary.issue_count, 1);
         assert_eq!(summary.readable_issue_count, 1);
-        let reason = response.corpora[1]
-            .status_reason
-            .as_ref()
-            .expect("status reason should be present");
+        let reason = corpus_status_reason(&response, 1);
         assert_eq!(
             reason.code,
             SearchIndexStatusReasonCode::PublishedRevisionMismatch
@@ -639,6 +941,45 @@ mod tests {
         assert_eq!(reason.severity, SearchIndexStatusSeverity::Warning);
         assert_eq!(reason.action, SearchIndexStatusAction::ResyncRepo);
         assert!(reason.readable);
+        let telemetry = response.corpora[2]
+            .last_query_telemetry
+            .as_ref()
+            .unwrap_or_else(|| panic!("telemetry should be present"));
+        assert_eq!(
+            telemetry.source,
+            super::SearchIndexQueryTelemetrySource::FtsFallbackScan
+        );
+        assert_eq!(telemetry.scope.as_deref(), Some("alpha/repo"));
+        assert_eq!(telemetry.batch_count, 4);
+        assert_eq!(telemetry.rows_scanned, 96);
+        assert_eq!(telemetry.matched_rows, 19);
+        assert_eq!(telemetry.result_count, 8);
+        assert_eq!(telemetry.batch_row_limit, Some(32));
+        assert_eq!(telemetry.recall_limit_rows, Some(64));
+        assert_eq!(telemetry.working_set_budget_rows, 24);
+        assert_eq!(telemetry.trim_threshold_rows, 48);
+        assert_eq!(telemetry.peak_working_set_rows, 41);
+        assert_eq!(telemetry.trim_count, 2);
+        assert_eq!(telemetry.dropped_candidate_count, 11);
+        let telemetry_summary = response
+            .query_telemetry_summary
+            .as_ref()
+            .unwrap_or_else(|| panic!("query telemetry summary should be present"));
+        assert_eq!(telemetry_summary.corpus_count, 2);
+        assert_eq!(telemetry_summary.latest_captured_at, "2026-03-23T22:07:00Z");
+        assert_eq!(telemetry_summary.scan_count, 0);
+        assert_eq!(telemetry_summary.fts_count, 1);
+        assert_eq!(telemetry_summary.fts_fallback_scan_count, 1);
+        assert_eq!(telemetry_summary.total_rows_scanned, 166);
+        assert_eq!(telemetry_summary.total_matched_rows, 33);
+        assert_eq!(telemetry_summary.total_result_count, 14);
+        assert_eq!(telemetry_summary.max_batch_row_limit, Some(32));
+        assert_eq!(telemetry_summary.max_recall_limit_rows, Some(64));
+        assert_eq!(telemetry_summary.max_working_set_budget_rows, 24);
+        assert_eq!(telemetry_summary.max_trim_threshold_rows, 48);
+        assert_eq!(telemetry_summary.max_peak_working_set_rows, 41);
+        assert_eq!(telemetry_summary.total_trim_count, 3);
+        assert_eq!(telemetry_summary.total_dropped_candidate_count, 16);
     }
 
     #[test]
@@ -655,6 +996,7 @@ mod tests {
         let mut knowledge = SearchCorpusStatus::new(SearchCorpusKind::KnowledgeSection);
         knowledge.phase = SearchPlanePhase::Ready;
         knowledge.maintenance = SearchMaintenanceStatus {
+            compaction_running: false,
             compaction_pending: true,
             publish_count_since_compaction: 2,
             last_compacted_at: None,
@@ -680,10 +1022,7 @@ mod tests {
             corpora: vec![local_symbol, knowledge, repo_entity],
         });
 
-        let aggregate_reason = response
-            .status_reason
-            .as_ref()
-            .expect("aggregate status reason should be present");
+        let aggregate_reason = status_reason(&response);
         assert_eq!(
             aggregate_reason.code,
             SearchIndexStatusReasonCode::BuildFailed
@@ -693,5 +1032,90 @@ mod tests {
         assert_eq!(aggregate_reason.affected_corpus_count, 3);
         assert_eq!(aggregate_reason.readable_corpus_count, 2);
         assert_eq!(aggregate_reason.blocking_corpus_count, 1);
+    }
+
+    #[test]
+    fn response_status_reason_prefers_compacting_over_compaction_pending() {
+        let mut local_symbol = SearchCorpusStatus::new(SearchCorpusKind::LocalSymbol);
+        local_symbol.phase = SearchPlanePhase::Ready;
+        local_symbol.maintenance = SearchMaintenanceStatus {
+            compaction_running: true,
+            compaction_pending: true,
+            publish_count_since_compaction: 4,
+            last_compacted_at: None,
+            last_compaction_reason: None,
+        };
+        local_symbol.status_reason = Some(SearchCorpusStatusReason {
+            code: SearchCorpusStatusReasonCode::Compacting,
+            severity: SearchCorpusStatusSeverity::Info,
+            action: SearchCorpusStatusAction::Wait,
+            readable: true,
+        });
+
+        let mut knowledge = SearchCorpusStatus::new(SearchCorpusKind::KnowledgeSection);
+        knowledge.phase = SearchPlanePhase::Ready;
+        knowledge.maintenance = SearchMaintenanceStatus {
+            compaction_running: false,
+            compaction_pending: true,
+            publish_count_since_compaction: 1,
+            last_compacted_at: None,
+            last_compaction_reason: None,
+        };
+        knowledge.status_reason = Some(SearchCorpusStatusReason {
+            code: SearchCorpusStatusReasonCode::CompactionPending,
+            severity: SearchCorpusStatusSeverity::Info,
+            action: SearchCorpusStatusAction::Wait,
+            readable: true,
+        });
+
+        let response = SearchIndexStatusResponse::from(&SearchPlaneStatusSnapshot {
+            corpora: vec![local_symbol, knowledge],
+        });
+
+        let aggregate_reason = status_reason(&response);
+        assert_eq!(
+            aggregate_reason.code,
+            SearchIndexStatusReasonCode::Compacting
+        );
+        assert_eq!(aggregate_reason.severity, SearchIndexStatusSeverity::Info);
+        assert_eq!(aggregate_reason.action, SearchIndexStatusAction::Wait);
+        assert_eq!(aggregate_reason.affected_corpus_count, 2);
+        assert_eq!(aggregate_reason.readable_corpus_count, 2);
+        assert_eq!(aggregate_reason.blocking_corpus_count, 0);
+        assert!(response.query_telemetry_summary.is_none());
+    }
+
+    #[test]
+    fn response_query_telemetry_summary_remains_empty_without_corpus_telemetry() {
+        let response = SearchIndexStatusResponse::from(&SearchPlaneStatusSnapshot {
+            corpora: vec![
+                SearchCorpusStatus::new(SearchCorpusKind::LocalSymbol),
+                SearchCorpusStatus::new(SearchCorpusKind::Attachment),
+            ],
+        });
+
+        assert!(response.query_telemetry_summary.is_none());
+    }
+
+    #[test]
+    fn response_query_telemetry_summary_preserves_source_mapping() {
+        let response = SearchIndexStatusResponse::from(&SearchPlaneStatusSnapshot {
+            corpora: vec![telemetry_attachment_status()],
+        });
+
+        let summary = response
+            .query_telemetry_summary
+            .as_ref()
+            .unwrap_or_else(|| panic!("query telemetry summary should be present"));
+        assert_eq!(summary.scan_count, 0);
+        assert_eq!(summary.fts_count, 0);
+        assert_eq!(summary.fts_fallback_scan_count, 1);
+        assert_eq!(
+            response.corpora[0]
+                .last_query_telemetry
+                .as_ref()
+                .map(|telemetry| telemetry.source),
+            Some(SearchIndexQueryTelemetrySource::FtsFallbackScan)
+        );
     }
 }

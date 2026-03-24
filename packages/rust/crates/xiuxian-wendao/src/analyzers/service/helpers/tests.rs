@@ -16,6 +16,10 @@ use super::{
     symbol_match_score, symbols_in_scope,
 };
 
+fn some_or_panic<T>(value: Option<T>, context: &str) -> T {
+    value.unwrap_or_else(|| panic!("{context}"))
+}
+
 fn repository_record(repo_id: &str) -> RepositoryRecord {
     RepositoryRecord {
         repo_id: repo_id.to_string(),
@@ -216,8 +220,8 @@ fn ecosystem_and_path_helpers_cover_common_inputs() {
 
 #[test]
 fn ranking_helpers_distinguish_common_match_shapes() {
-    assert_eq!(normalized_rank_score(0, 3), 1.0);
-    assert_eq!(normalized_rank_score(3, 3), 0.25);
+    assert!((normalized_rank_score(0, 3) - 1.0).abs() < f64::EPSILON);
+    assert!((normalized_rank_score(3, 3) - 0.25).abs() < f64::EPSILON);
     assert_eq!(
         module_match_score("alpha", "alpha.beta", "src/alpha/beta.rs"),
         Some(1)
@@ -285,13 +289,17 @@ fn backlinks_and_example_relations_are_deduplicated_and_trimmed() {
 #[test]
 fn scope_helpers_filter_docs_symbols_and_modules() {
     let analysis = analysis_fixture();
-    let scoped_module = resolve_module_scope(Some("alpha.beta"), &analysis.modules)
-        .expect("module scope should resolve by qualified name");
+    let scoped_module = some_or_panic(
+        resolve_module_scope(Some("alpha.beta"), &analysis.modules),
+        "module scope should resolve by qualified name",
+    );
     assert_eq!(scoped_module.module_id, "mod-a");
     assert_eq!(
-        resolve_module_scope(Some("src/alpha/beta.rs"), &analysis.modules)
-            .expect("module scope should resolve by path")
-            .module_id,
+        some_or_panic(
+            resolve_module_scope(Some("src/alpha/beta.rs"), &analysis.modules),
+            "module scope should resolve by path",
+        )
+        .module_id,
         "mod-a"
     );
 

@@ -136,9 +136,9 @@ pub fn build_docs_retrieval_hit(
 ) -> Result<DocsRetrievalHitResult, RepoIntelligenceError> {
     build_repo_projected_retrieval_hit(
         &RepoProjectedRetrievalHitQuery {
-            repo_id: query.repo_id.clone(),
-            page_id: query.page_id.clone(),
-            node_id: query.node_id.clone(),
+            repo_id: query.repo.clone(),
+            page_id: query.page.clone(),
+            node_id: query.node.clone(),
         },
         analysis,
     )
@@ -157,7 +157,7 @@ pub fn docs_retrieval_hit_from_config_with_registry(
     cwd: &Path,
     registry: &PluginRegistry,
 ) -> Result<DocsRetrievalHitResult, RepoIntelligenceError> {
-    with_repository_analysis(&query.repo_id, config_path, cwd, registry, |analysis| {
+    with_repository_analysis(&query.repo, config_path, cwd, registry, |analysis| {
         build_docs_retrieval_hit(query, analysis)
     })
 }
@@ -174,7 +174,7 @@ pub fn docs_retrieval_hit_from_config(
     config_path: Option<&Path>,
     cwd: &Path,
 ) -> Result<DocsRetrievalHitResult, RepoIntelligenceError> {
-    with_bootstrapped_repository_analysis(&query.repo_id, config_path, cwd, |analysis| {
+    with_bootstrapped_repository_analysis(&query.repo, config_path, cwd, |analysis| {
         build_docs_retrieval_hit(query, analysis)
     })
 }

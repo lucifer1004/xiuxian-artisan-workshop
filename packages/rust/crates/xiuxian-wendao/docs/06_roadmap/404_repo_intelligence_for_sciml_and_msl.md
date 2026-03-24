@@ -46,6 +46,7 @@ Current 2026-03-21 checkpoint:
 - Adaptive repo scheduling now uses an efficiency-gradient signal (`concurrency / EMA latency`) instead of simple success streak alone, allowing the worker window to shrink when marginal concurrency stops improving throughput and likely indicates IO contention.
 - A bounded analysis timeout remains as a secondary safety net so a genuinely stuck repository analysis is marked `failed` and the queue can continue.
 - The frontend now separates `repoIndexStatus` from `vfsStatus`, polls `/api/repo/index/status` independently, keeps workspace boot gated only on health/config sync, surfaces indexing progress in the bottom status bar, and exposes unsupported/failed repo issue details directly from the status payload so parser/layout gaps can be triaged from live Studio.
+- SearchBar `lang:` autocomplete now consumes the gateway-reported supported-language list from `/api/ui/capabilities` rather than deriving languages from frontend `wendao.toml` plugin inference. The gateway registry is now the source of truth for available code-language suggestions.
 
 This closes the main architectural gap that previously allowed large multi-repo Julia configs to collapse Studio responsiveness under repeated request-time analysis.
 
@@ -325,6 +326,10 @@ The intended flow is:
 3. **Phase 3 (Documentation Projection)**: implement Diataxis-oriented deep wiki projection on top of the indexed repository graph
 
 Phase 2 is now started and minimally landed through the first conservative `xiuxian-wendao-modelica` crate plus registry-aware query validation.
+
+### Gateway-Reported Capability Surface
+
+The `lang:` autocomplete surface is now meant to consume the gateway-reported supported-language list from `/api/ui/capabilities` rather than deriving language candidates from frontend TOML plugin inference. The gateway plugin registry is the source of truth for active code-language suggestions, which keeps the autocomplete surface aligned with the runtime analyzer set.
 
 ## Why Better
 

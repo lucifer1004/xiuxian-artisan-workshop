@@ -33,7 +33,7 @@ pub(crate) async fn search_local_symbols(
     };
 
     let store = service.open_store(SearchCorpusKind::LocalSymbol).await?;
-    let table_name = service.table_name(SearchCorpusKind::LocalSymbol, active_epoch);
+    let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, active_epoch);
     let mut columns = projected_columns()
         .into_iter()
         .map(str::to_string)
@@ -97,7 +97,7 @@ pub(crate) async fn autocomplete_local_symbols(
     }
 
     let store = service.open_store(SearchCorpusKind::LocalSymbol).await?;
-    let table_name = service.table_name(SearchCorpusKind::LocalSymbol, active_epoch);
+    let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, active_epoch);
     let batches = store
         .scan_record_batches(
             table_name.as_str(),
@@ -162,10 +162,11 @@ fn collect_candidates(
             query_lower,
             name_folded.value(row),
             signature.value(row),
-            owner_title
-                .is_null(row)
-                .then_some("")
-                .unwrap_or_else(|| owner_title.value(row)),
+            if owner_title.is_null(row) {
+                ""
+            } else {
+                owner_title.value(row)
+            },
         );
         if score <= 0.0 {
             continue;
@@ -288,7 +289,7 @@ fn u64_column<'a>(
         .ok_or_else(|| LocalSymbolSearchError::Decode(format!("missing u64 column `{name}`")))
 }
 
-fn nullable_string_value<'a>(array: &'a LanceStringArray, row: usize) -> Option<&'a str> {
+fn nullable_string_value(array: &LanceStringArray, row: usize) -> Option<&str> {
     (!array.is_null(row)).then(|| array.value(row))
 }
 
@@ -402,7 +403,7 @@ mod tests {
 
     #[tokio::test]
     async fn local_symbol_query_reads_hits_from_published_epoch() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
         let service = fixture_service(&temp_dir);
         let lease = match service.coordinator().begin_build(
             SearchCorpusKind::LocalSymbol,
@@ -419,23 +420,23 @@ mod tests {
         let store = service
             .open_store(SearchCorpusKind::LocalSymbol)
             .await
-            .expect("open store");
-        let table_name = service.table_name(SearchCorpusKind::LocalSymbol, lease.epoch);
+            .unwrap_or_else(|error| panic!("open store: {error}"));
+        let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, lease.epoch);
         store
             .replace_record_batches(
                 table_name.as_str(),
                 local_symbol_schema(),
-                local_symbol_batches(&hits).expect("batches"),
+                local_symbol_batches(&hits).unwrap_or_else(|error| panic!("batches: {error}")),
             )
             .await
-            .expect("replace record batches");
+            .unwrap_or_else(|error| panic!("replace record batches: {error}"));
         service
             .coordinator()
             .publish_ready(&lease, hits.len() as u64, 1);
 
         let results = search_local_symbols(&service, "alpha", 5)
             .await
-            .expect("query should succeed");
+            .unwrap_or_else(|error| panic!("query should succeed: {error}"));
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "AlphaSymbol");
         assert!(results[0].score > 0.0);
@@ -443,7 +444,7 @@ mod tests {
 
     #[tokio::test]
     async fn local_symbol_autocomplete_reads_suggestions_from_published_epoch() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
         let service = fixture_service(&temp_dir);
         let lease = match service.coordinator().begin_build(
             SearchCorpusKind::LocalSymbol,
@@ -461,23 +462,23 @@ mod tests {
         let store = service
             .open_store(SearchCorpusKind::LocalSymbol)
             .await
-            .expect("open store");
-        let table_name = service.table_name(SearchCorpusKind::LocalSymbol, lease.epoch);
+            .unwrap_or_else(|error| panic!("open store: {error}"));
+        let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, lease.epoch);
         store
             .replace_record_batches(
                 table_name.as_str(),
                 local_symbol_schema(),
-                local_symbol_batches(&hits).expect("batches"),
+                local_symbol_batches(&hits).unwrap_or_else(|error| panic!("batches: {error}")),
             )
             .await
-            .expect("replace record batches");
+            .unwrap_or_else(|error| panic!("replace record batches: {error}"));
         service
             .coordinator()
             .publish_ready(&lease, hits.len() as u64, 1);
 
         let results = autocomplete_local_symbols(&service, "se", 5)
             .await
-            .expect("autocomplete should succeed");
+            .unwrap_or_else(|error| panic!("autocomplete should succeed: {error}"));
 
         assert_eq!(
             results

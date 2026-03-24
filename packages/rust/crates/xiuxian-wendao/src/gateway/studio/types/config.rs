@@ -11,6 +11,21 @@ pub struct UiConfig {
     pub repo_projects: Vec<UiRepoProjectConfig>,
 }
 
+/// Gateway-reported studio capabilities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UiCapabilities {
+    /// Supported language identifiers reported by the gateway plugin registry.
+    #[serde(rename = "supportedLanguages")]
+    pub languages: Vec<String>,
+    /// Supported repository identifiers reported by the gateway UI config.
+    #[serde(rename = "supportedRepositories")]
+    pub repositories: Vec<String>,
+    /// Supported code filter kinds reported by the gateway capability surface.
+    #[serde(rename = "supportedKinds")]
+    pub kinds: Vec<String>,
+}
+
 /// Configuration for a local project root.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

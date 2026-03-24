@@ -97,7 +97,7 @@ async fn write_local_symbol_epoch(
     hits: &[crate::gateway::studio::types::AstSearchHit],
 ) -> Result<(), VectorStoreError> {
     let store = service.open_store(SearchCorpusKind::LocalSymbol).await?;
-    let table_name = service.table_name(SearchCorpusKind::LocalSymbol, lease.epoch);
+    let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, lease.epoch);
     let schema = local_symbol_schema();
     let batches = local_symbol_batches(hits)?;
     store

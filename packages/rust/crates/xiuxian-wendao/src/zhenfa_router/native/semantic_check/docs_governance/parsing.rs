@@ -7,6 +7,7 @@ use sha1::{Digest, Sha1};
 use super::types::{FooterBlock, IdLine, LineSlice, LinksLine, TopPropertiesDrawer};
 
 /// Derives an opaque document ID from a doc path.
+#[must_use]
 pub fn derive_opaque_doc_id(doc_path: &str) -> String {
     let mut hasher = Sha1::new();
     hasher.update(normalize_doc_path(doc_path).as_bytes());
@@ -14,6 +15,7 @@ pub fn derive_opaque_doc_id(doc_path: &str) -> String {
 }
 
 /// Checks if a value is a valid opaque document ID.
+#[must_use]
 pub fn is_opaque_doc_id(value: &str) -> bool {
     value.len() == 40
         && value
@@ -29,6 +31,7 @@ fn normalize_doc_path(doc_path: &str) -> String {
 }
 
 /// Checks if a doc path is a package-local crate doc.
+#[must_use]
 pub fn is_package_local_crate_doc(doc_path: &str) -> bool {
     let path = Path::new(doc_path);
     if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
@@ -49,6 +52,7 @@ pub fn is_package_local_crate_doc(doc_path: &str) -> bool {
 }
 
 /// Collects line slices from content.
+#[must_use]
 pub fn collect_lines(content: &str) -> Vec<LineSlice<'_>> {
     let mut lines = Vec::new();
     let mut offset = 0usize;
@@ -90,6 +94,7 @@ pub fn collect_lines(content: &str) -> Vec<LineSlice<'_>> {
 }
 
 /// Parses the top properties drawer from content.
+#[must_use]
 pub fn parse_top_properties_drawer(content: &str) -> Option<TopPropertiesDrawer<'_>> {
     let lines = collect_lines(content);
 
@@ -141,6 +146,7 @@ pub fn parse_top_properties_drawer(content: &str) -> Option<TopPropertiesDrawer<
 }
 
 /// Parses the :LINKS: line from a relations block.
+#[must_use]
 pub fn parse_relations_links_line<'a>(lines: &'a [LineSlice<'a>]) -> Option<LinksLine<'a>> {
     let relations_idx = lines
         .iter()
@@ -167,6 +173,7 @@ pub fn parse_relations_links_line<'a>(lines: &'a [LineSlice<'a>]) -> Option<Link
 }
 
 /// Parses the :FOOTER: block from lines.
+#[must_use]
 pub fn parse_footer_block<'a>(lines: &'a [LineSlice<'a>]) -> Option<FooterBlock<'a>> {
     let footer_idx = lines.iter().position(|line| line.trimmed == ":FOOTER:")?;
     let footer_line = &lines[footer_idx];
@@ -198,6 +205,7 @@ pub fn parse_footer_block<'a>(lines: &'a [LineSlice<'a>]) -> Option<FooterBlock<
 }
 
 /// Extracts wikilinks from content.
+#[must_use]
 pub fn extract_wikilinks(content: &str) -> Vec<String> {
     let mut links = Vec::new();
     let mut remaining = content;
@@ -218,6 +226,7 @@ pub fn extract_wikilinks(content: &str) -> Vec<String> {
 }
 
 /// Collects body links from an index document.
+#[must_use]
 pub fn collect_index_body_links(lines: &[LineSlice<'_>]) -> Vec<String> {
     let relations_start = lines
         .iter()

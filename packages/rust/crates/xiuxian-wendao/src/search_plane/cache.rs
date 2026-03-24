@@ -1,10 +1,18 @@
+#[cfg(test)]
+use std::collections::BTreeMap;
+#[cfg(test)]
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use redis::{AsyncCommands, AsyncConnectionConfig};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use super::{SearchCorpusKind, SearchManifestKeyspace, SearchRepoManifestRecord};
+use super::{
+    SearchCorpusKind, SearchManifestKeyspace, SearchRepoCorpusRecord,
+    SearchRepoCorpusSnapshotRecord,
+};
+use crate::valkey_common::resolve_optional_client_from_env;
 
 const SEARCH_PLANE_VALKEY_URL_ENV: &str = "XIUXIAN_WENDAO_SEARCH_PLANE_VALKEY_URL";
 const KNOWLEDGE_VALKEY_URL_ENV: &str = "XIUXIAN_WENDAO_KNOWLEDGE_VALKEY_URL";
@@ -79,6 +87,15 @@ pub(crate) struct SearchPlaneCache {
     client: Option<redis::Client>,
     config: SearchPlaneCacheConfig,
     keyspace: SearchManifestKeyspace,
+    #[cfg(test)]
+    shadow: Arc<RwLock<TestCacheShadow>>,
+}
+
+#[cfg(test)]
+#[derive(Debug, Default)]
+struct TestCacheShadow {
+    repo_corpus_records: BTreeMap<(SearchCorpusKind, String), SearchRepoCorpusRecord>,
+    repo_corpus_snapshot: Option<SearchRepoCorpusSnapshotRecord>,
 }
 
 impl SearchPlaneCache {
@@ -94,6 +111,35 @@ impl SearchPlaneCache {
         Self::new(None, SearchPlaneCacheConfig::default(), keyspace)
     }
 
+    #[cfg(test)]
+    pub(crate) fn for_tests(keyspace: SearchManifestKeyspace) -> Self {
+        Self::new(
+            Some(
+                redis::Client::open("redis://127.0.0.1/")
+                    .unwrap_or_else(|error| panic!("client: {error}")),
+            ),
+            SearchPlaneCacheConfig::default(),
+            keyspace,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn clear_repo_shadow_for_tests(&self, repo_id: &str) {
+        let mut shadow = self
+            .shadow
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        shadow
+            .repo_corpus_records
+            .retain(|(_, candidate_repo_id), _| candidate_repo_id != repo_id);
+        if let Some(snapshot) = shadow.repo_corpus_snapshot.as_mut() {
+            snapshot.records.retain(|record| record.repo_id != repo_id);
+            if snapshot.records.is_empty() {
+                shadow.repo_corpus_snapshot = None;
+            }
+        }
+    }
+
     fn new(
         client: Option<redis::Client>,
         config: SearchPlaneCacheConfig,
@@ -103,6 +149,8 @@ impl SearchPlaneCache {
             client,
             config,
             keyspace,
+            #[cfg(test)]
+            shadow: Arc::new(RwLock::new(TestCacheShadow::default())),
         }
     }
 
@@ -189,12 +237,38 @@ impl SearchPlaneCache {
         serde_json::from_str(payload?.as_str()).ok()
     }
 
-    pub(crate) async fn get_repo_manifest(
+    pub(crate) async fn get_repo_corpus_record(
         &self,
         corpus: SearchCorpusKind,
         repo_id: &str,
-    ) -> Option<SearchRepoManifestRecord> {
-        let key = self.keyspace.repo_corpus_manifest_key(corpus, repo_id);
+    ) -> Option<SearchRepoCorpusRecord> {
+        #[cfg(test)]
+        if let Some(record) = self
+            .shadow
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .repo_corpus_records
+            .get(&(corpus, repo_id.to_string()))
+            .cloned()
+        {
+            return Some(record);
+        }
+        let key = self.keyspace.repo_corpus_record_key(corpus, repo_id);
+        self.get_json(key.as_str()).await
+    }
+
+    pub(crate) async fn get_repo_corpus_snapshot(&self) -> Option<SearchRepoCorpusSnapshotRecord> {
+        #[cfg(test)]
+        if let Some(record) = self
+            .shadow
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .repo_corpus_snapshot
+            .clone()
+        {
+            return Some(record);
+        }
+        let key = self.keyspace.repo_corpus_snapshot_key();
         self.get_json(key.as_str()).await
     }
 
@@ -221,7 +295,13 @@ impl SearchPlaneCache {
         let _: redis::RedisResult<()> = connection.set_ex(key, payload, ttl_seconds).await;
     }
 
-    pub(crate) async fn set_repo_manifest(&self, record: &SearchRepoManifestRecord) {
+    pub(crate) async fn set_repo_corpus_record(&self, record: &SearchRepoCorpusRecord) {
+        #[cfg(test)]
+        self.shadow
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .repo_corpus_records
+            .insert((record.corpus, record.repo_id.clone()), record.clone());
         let Some(client) = self.client.as_ref() else {
             return;
         };
@@ -230,7 +310,7 @@ impl SearchPlaneCache {
         };
         let key = self
             .keyspace
-            .repo_corpus_manifest_key(record.corpus, record.repo_id.as_str());
+            .repo_corpus_record_key(record.corpus, record.repo_id.as_str());
         let Ok(mut connection) = client
             .get_multiplexed_async_connection_with_config(&self.async_connection_config())
             .await
@@ -240,11 +320,62 @@ impl SearchPlaneCache {
         let _: redis::RedisResult<()> = connection.set(key, payload).await;
     }
 
-    pub(crate) async fn delete_repo_manifest(&self, corpus: SearchCorpusKind, repo_id: &str) {
+    pub(crate) async fn set_repo_corpus_snapshot(&self, record: &SearchRepoCorpusSnapshotRecord) {
+        #[cfg(test)]
+        {
+            self.shadow
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .repo_corpus_snapshot = Some(record.clone());
+        }
         let Some(client) = self.client.as_ref() else {
             return;
         };
-        let key = self.keyspace.repo_corpus_manifest_key(corpus, repo_id);
+        let Ok(payload) = serde_json::to_string(record) else {
+            return;
+        };
+        let key = self.keyspace.repo_corpus_snapshot_key();
+        let Ok(mut connection) = client
+            .get_multiplexed_async_connection_with_config(&self.async_connection_config())
+            .await
+        else {
+            return;
+        };
+        let _: redis::RedisResult<()> = connection.set(key, payload).await;
+    }
+
+    pub(crate) async fn delete_repo_corpus_record(&self, corpus: SearchCorpusKind, repo_id: &str) {
+        #[cfg(test)]
+        self.shadow
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .repo_corpus_records
+            .remove(&(corpus, repo_id.to_string()));
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let key = self.keyspace.repo_corpus_record_key(corpus, repo_id);
+        let Ok(mut connection) = client
+            .get_multiplexed_async_connection_with_config(&self.async_connection_config())
+            .await
+        else {
+            return;
+        };
+        let _: redis::RedisResult<()> = connection.del(key).await;
+    }
+
+    pub(crate) async fn delete_repo_corpus_snapshot(&self) {
+        #[cfg(test)]
+        {
+            self.shadow
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .repo_corpus_snapshot = None;
+        }
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let key = self.keyspace.repo_corpus_snapshot_key();
         let Ok(mut connection) = client
             .get_multiplexed_async_connection_with_config(&self.async_connection_config())
             .await
@@ -282,19 +413,12 @@ where
 }
 
 fn resolve_valkey_client() -> Option<redis::Client> {
-    let valkey_url = [
+    resolve_optional_client_from_env(&[
         SEARCH_PLANE_VALKEY_URL_ENV,
         KNOWLEDGE_VALKEY_URL_ENV,
         VALKEY_URL_ENV,
         REDIS_URL_ENV,
-    ]
-    .into_iter()
-    .find_map(|name| {
-        std::env::var(name)
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-    })?;
-    redis::Client::open(valkey_url).ok()
+    ])
 }
 
 fn parse_env_u64(name: &str) -> Option<u64> {
@@ -307,39 +431,42 @@ fn parse_env_u64(name: &str) -> Option<u64> {
 mod tests {
     use super::*;
 
+    fn required_cache_key(key: Option<String>, context: &str) -> String {
+        key.unwrap_or_else(|| panic!("{context}"))
+    }
+
     fn cache_for_tests() -> SearchPlaneCache {
-        SearchPlaneCache::new(
-            Some(redis::Client::open("redis://127.0.0.1/").expect("client")),
-            SearchPlaneCacheConfig::default(),
-            SearchManifestKeyspace::new("xiuxian:test:search_plane"),
-        )
+        SearchPlaneCache::for_tests(SearchManifestKeyspace::new("xiuxian:test:search_plane"))
     }
 
     #[test]
     fn autocomplete_key_is_stable_for_epoch_prefix_and_limit() {
         let cache = cache_for_tests();
-        let key = cache
-            .autocomplete_cache_key(" Alpha Handler ", 8, 7)
-            .expect("key");
+        let key = required_cache_key(
+            cache.autocomplete_cache_key(" Alpha Handler ", 8, 7),
+            "autocomplete key",
+        );
         assert_eq!(
             key,
-            cache
-                .autocomplete_cache_key("alpha    handler", 8, 7)
-                .expect("same key")
+            required_cache_key(
+                cache.autocomplete_cache_key("alpha    handler", 8, 7),
+                "stable autocomplete key",
+            )
         );
         assert_ne!(
             key,
-            cache
-                .autocomplete_cache_key("alpha handler", 8, 8)
-                .expect("epoch-specific key")
+            required_cache_key(
+                cache.autocomplete_cache_key("alpha handler", 8, 8),
+                "epoch-specific autocomplete key",
+            )
         );
     }
 
     #[test]
     fn search_query_key_tracks_scope_epochs_and_query_shape() {
         let cache = cache_for_tests();
-        let key = cache
-            .search_query_cache_key(
+        let key = required_cache_key(
+            cache.search_query_cache_key(
                 "intent",
                 &[
                     (SearchCorpusKind::KnowledgeSection, 3),
@@ -349,12 +476,13 @@ mod tests {
                 10,
                 Some("semantic_lookup"),
                 None,
-            )
-            .expect("key");
+            ),
+            "search query key",
+        );
         assert_eq!(
             key,
-            cache
-                .search_query_cache_key(
+            required_cache_key(
+                cache.search_query_cache_key(
                     "intent",
                     &[
                         (SearchCorpusKind::KnowledgeSection, 3),
@@ -364,13 +492,14 @@ mod tests {
                     10,
                     Some("semantic_lookup"),
                     None,
-                )
-                .expect("stable key")
+                ),
+                "stable search query key",
+            )
         );
         assert_ne!(
             key,
-            cache
-                .search_query_cache_key(
+            required_cache_key(
+                cache.search_query_cache_key(
                     "intent",
                     &[
                         (SearchCorpusKind::KnowledgeSection, 3),
@@ -380,16 +509,17 @@ mod tests {
                     10,
                     Some("semantic_lookup"),
                     None,
-                )
-                .expect("epoch-specific key")
+                ),
+                "epoch-specific search query key",
+            )
         );
     }
 
     #[test]
     fn search_query_key_tracks_repo_versions_and_sorts_components() {
         let cache = cache_for_tests();
-        let key = cache
-            .search_query_cache_key_from_versions(
+        let key = required_cache_key(
+            cache.search_query_cache_key_from_versions(
                 "intent_code",
                 &[
                     "repo_entity:schema:1:repo:alpha:phase:ready:revision:abc:updated:2026-03-23t08:00:00z"
@@ -402,12 +532,13 @@ mod tests {
                 10,
                 Some("debug_lookup"),
                 Some("alpha"),
-            )
-            .expect("key");
+            ),
+            "repo search query key",
+        );
         assert_eq!(
             key,
-            cache
-                .search_query_cache_key_from_versions(
+            required_cache_key(
+                cache.search_query_cache_key_from_versions(
                     "intent_code",
                     &[
                         "repo_content_chunk:schema:1:repo:alpha:phase:ready:revision:abc:updated:2026-03-23t08:00:00z"
@@ -420,13 +551,14 @@ mod tests {
                     10,
                     Some("debug_lookup"),
                     Some("alpha"),
-                )
-                .expect("stable key")
+                ),
+                "stable repo search query key",
+            )
         );
         assert_ne!(
             key,
-            cache
-                .search_query_cache_key_from_versions(
+            required_cache_key(
+                cache.search_query_cache_key_from_versions(
                     "intent_code",
                     &[
                         "repo_entity:schema:1:repo:alpha:phase:ready:revision:def:updated:2026-03-23t09:00:00z"
@@ -439,8 +571,9 @@ mod tests {
                     10,
                     Some("debug_lookup"),
                     Some("alpha"),
-                )
-                .expect("repo-specific key")
+                ),
+                "repo-specific search query key",
+            )
         );
     }
 

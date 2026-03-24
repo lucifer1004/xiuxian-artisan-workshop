@@ -45,4 +45,18 @@ pub enum ConfigCoreError {
         /// Deserialization error.
         source: toml::de::Error,
     },
+    /// TOML imports reference a cycle.
+    #[error("cyclic config import detected: {chain}")]
+    ImportCycle {
+        /// Human-readable import chain.
+        chain: String,
+    },
+    /// An `imports` key had an invalid shape.
+    #[error("invalid imports declaration in {path}: {message}")]
+    InvalidImports {
+        /// File or embedded source path where the declaration was found.
+        path: String,
+        /// Validation message.
+        message: String,
+    },
 }

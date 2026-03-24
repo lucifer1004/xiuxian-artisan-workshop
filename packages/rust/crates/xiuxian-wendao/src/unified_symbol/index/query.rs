@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
-use super::{SymbolSource, UnifiedSymbol, UnifiedSymbolIndex};
 use crate::search::{FuzzyMatcher, FuzzySearchOptions, LexicalMatcher, SearchDocument};
+use crate::unified_symbol::symbol::SymbolSource;
+use crate::unified_symbol::{UnifiedSymbol, UnifiedSymbolIndex};
 
 impl UnifiedSymbolIndex {
     /// Search for project symbols.

@@ -1,5 +1,5 @@
 //! Repository search functions (overview, module, symbol, example, import, doc coverage).
-
+mod artifacts;
 mod coverage;
 mod documents;
 mod example;
@@ -21,3 +21,6 @@ pub use imports::*;
 pub use module::*;
 pub use overview::*;
 pub use symbol::*;
+
+pub(crate) use artifacts::repository_search_artifacts;
+pub(crate) use documents::ExampleSearchMetadata;

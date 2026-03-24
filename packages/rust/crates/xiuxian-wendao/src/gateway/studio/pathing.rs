@@ -87,21 +87,20 @@ fn project_scoped_display_path(
     let relative_path = if Path::new(normalized_path).is_absolute() {
         let stripped = Path::new(normalized_path).strip_prefix(project_root).ok()?;
         normalize_path_like(stripped.to_string_lossy().as_ref())?
-    } else {
-        if let Some(relative_root) = project_root_relative.as_deref() {
-            if normalized_path == relative_root {
-                normalized_path.to_string()
-            } else if normalized_path.starts_with(format!("{relative_root}/").as_str()) {
-                let prefix = format!("{relative_root}/");
-                normalized_path
-                    .strip_prefix(prefix.as_str())
-                    .map_or_else(|| normalized_path.to_string(), |value| value.to_string())
-            } else {
-                return None;
-            }
-        } else {
+    } else if let Some(relative_root) = project_root_relative.as_deref() {
+        if normalized_path == relative_root {
             normalized_path.to_string()
+        } else if normalized_path.starts_with(format!("{relative_root}/").as_str()) {
+            let prefix = format!("{relative_root}/");
+            normalized_path.strip_prefix(prefix.as_str()).map_or_else(
+                || normalized_path.to_string(),
+                std::string::ToString::to_string,
+            )
+        } else {
+            return None;
         }
+    } else {
+        normalized_path.to_string()
     };
 
     if !project_allows_relative_path(project, relative_path.as_str()) {
@@ -153,7 +152,7 @@ fn normalize_path_buf_like(path: &Path) -> Option<PathBuf> {
     let mut normalized = PathBuf::new();
     for component in path.components() {
         match component {
-            Component::CurDir => continue,
+            Component::CurDir => {}
             Component::ParentDir => {
                 normalized.pop();
             }

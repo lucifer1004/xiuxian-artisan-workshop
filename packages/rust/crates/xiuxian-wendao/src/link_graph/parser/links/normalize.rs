@@ -170,7 +170,7 @@ fn resolve_relative_target(
     source_path: &std::path::Path,
     root: &std::path::Path,
 ) -> Option<String> {
-    let normalized_target = crate::link_graph::parser::normalize_slashes(target.trim());
+    let normalized_target = crate::link_graph::parser::paths::normalize_slashes(target.trim());
     if normalized_target.is_empty() {
         return None;
     }
@@ -187,7 +187,8 @@ fn resolve_relative_target(
     let relative_path = resolved_path
         .strip_prefix(root)
         .unwrap_or(resolved_path.as_path());
-    let relative = crate::link_graph::parser::normalize_slashes(&relative_path.to_string_lossy());
+    let relative =
+        crate::link_graph::parser::paths::normalize_slashes(&relative_path.to_string_lossy());
     (!relative.is_empty()).then_some(relative)
 }
 
@@ -209,6 +210,12 @@ pub(super) fn normalize_attachment_target(
     root: &std::path::Path,
 ) -> Option<String> {
     resolve_relative_target(target, source_path, root)
+}
+
+pub(super) fn normalize_wikilink_note_target(raw: &str) -> Option<String> {
+    let stem = raw.split_once('|').map_or(raw, |(s, _)| s);
+    let stem = stem.split_once('#').map_or(stem, |(s, _)| s);
+    (!stem.is_empty()).then(|| crate::link_graph::parser::normalize_alias(stem))
 }
 
 #[cfg(test)]
@@ -234,10 +241,4 @@ mod tests {
 
         assert_eq!(resolved.as_deref(), Some("docs/assets/diagram.svg"));
     }
-}
-
-pub(super) fn normalize_wikilink_note_target(raw: &str) -> Option<String> {
-    let stem = raw.split_once('|').map_or(raw, |(s, _)| s);
-    let stem = stem.split_once('#').map_or(stem, |(s, _)| s);
-    (!stem.is_empty()).then(|| crate::link_graph::parser::normalize_alias(stem))
 }

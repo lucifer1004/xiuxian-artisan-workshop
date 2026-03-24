@@ -60,6 +60,7 @@ pub mod search_plane;
 pub mod storage;
 pub mod sync;
 mod types;
+mod valkey_common;
 
 // ---------------------------------------------------------------------------
 // PyO3 binding modules (one per domain)

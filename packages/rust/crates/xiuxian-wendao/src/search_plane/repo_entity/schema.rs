@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -12,7 +13,10 @@ use crate::analyzers::service::{
     hierarchy_segments_from_path, infer_ecosystem, record_hierarchical_uri,
     related_modules_for_example, related_symbols_for_example,
 };
-use crate::analyzers::{RepoBacklinkItem, RepoSymbolKind, RepositoryAnalysisOutput};
+use crate::analyzers::{
+    ExampleRecord, ModuleRecord, RepoBacklinkItem, RepoSymbolKind, RepositoryAnalysisOutput,
+    SymbolRecord,
+};
 use crate::gateway::studio::types::{SearchBacklinkItem, SearchHit, StudioNavigationTarget};
 
 const CHUNK_SIZE: usize = 1_000;
@@ -83,224 +87,282 @@ pub(super) fn rows_from_analysis(
     repo_id: &str,
     analysis: &RepositoryAnalysisOutput,
 ) -> Result<Vec<RepoEntityRow>, VectorStoreError> {
-    let backlink_lookup = documents_backlink_lookup(&analysis.relations, &analysis.docs);
-    let saliency_map = compute_repository_saliency(analysis);
-    let example_relations = example_relation_lookup(&analysis.relations);
-    let ecosystem = infer_ecosystem(repo_id);
+    let context = RepoEntityContext::new(repo_id, analysis);
     let mut rows = Vec::new();
 
     for module in &analysis.modules {
-        let module_id = module.module_id.clone();
-        let path = module.path.clone();
-        let (implicit_backlinks, implicit_backlink_items) =
-            backlinks_for(module_id.as_str(), &backlink_lookup);
-        let saliency_score = saliency_map.get(module_id.as_str()).copied().unwrap_or(0.0);
-        let hit = SearchHit {
-            stem: module.qualified_name.clone(),
-            title: Some(module.qualified_name.clone()),
-            path: path.clone(),
-            doc_type: Some(ENTITY_KIND_MODULE.to_string()),
-            tags: repo_entity_tags(
-                repo_id,
-                ENTITY_KIND_MODULE,
-                infer_code_language(path.as_str()),
-                Some("module"),
-                None,
-            ),
-            score: saliency_score,
-            best_section: Some(module.module_id.clone()),
-            match_reason: Some("repo_module_search".to_string()),
-            hierarchical_uri: Some(record_hierarchical_uri(
-                repo_id,
-                ecosystem,
-                "api",
-                path.as_str(),
-                module_id.as_str(),
-            )),
-            hierarchy: hierarchy_segments_from_path(path.as_str()),
-            saliency_score: Some(saliency_score),
-            audit_status: None,
-            verification_state: None,
-            implicit_backlinks,
-            implicit_backlink_items: map_backlink_items(implicit_backlink_items),
-            navigation_target: Some(repo_navigation_target(
-                repo_id,
-                path.as_str(),
-                Some(1),
-                None,
-            )),
-        };
-        rows.push(RepoEntityRow {
-            id: module_id,
-            entity_kind: ENTITY_KIND_MODULE.to_string(),
-            name: module.qualified_name.clone(),
-            name_folded: module.qualified_name.to_ascii_lowercase(),
-            qualified_name_folded: module.qualified_name.to_ascii_lowercase(),
-            path: path.clone(),
-            path_folded: path.to_ascii_lowercase(),
-            language: infer_code_language(path.as_str()).unwrap_or_default(),
-            symbol_kind: "module".to_string(),
-            signature_folded: String::new(),
-            summary_folded: String::new(),
-            related_symbols_folded: String::new(),
-            related_modules_folded: String::new(),
-            saliency_score,
-            search_text: [module.qualified_name.as_str(), path.as_str()].join(" "),
-            hit_json: serialize_hit_json(&hit)?,
-        });
+        rows.push(build_module_row(&context, module)?);
     }
 
     for symbol in &analysis.symbols {
-        let symbol_id = symbol.symbol_id.clone();
-        let path = symbol.path.clone();
-        let signature = symbol.signature.clone().unwrap_or_default();
-        let symbol_kind = symbol_kind_tag(symbol.kind).to_string();
-        let (implicit_backlinks, implicit_backlink_items) =
-            backlinks_for(symbol_id.as_str(), &backlink_lookup);
-        let saliency_score = saliency_map.get(symbol_id.as_str()).copied().unwrap_or(0.0);
-        let hit = SearchHit {
-            stem: symbol.name.clone(),
-            title: Some(symbol.qualified_name.clone()),
-            path: path.clone(),
-            doc_type: Some(ENTITY_KIND_SYMBOL.to_string()),
-            tags: repo_entity_tags(
-                repo_id,
-                ENTITY_KIND_SYMBOL,
-                infer_code_language(path.as_str()),
-                Some(symbol_kind.as_str()),
-                symbol.audit_status.as_deref(),
-            ),
-            score: saliency_score,
-            best_section: symbol
-                .signature
-                .clone()
-                .or_else(|| Some(symbol.qualified_name.clone())),
-            match_reason: Some("repo_symbol_search".to_string()),
-            hierarchical_uri: Some(record_hierarchical_uri(
-                repo_id,
-                ecosystem,
-                "api",
-                path.as_str(),
-                symbol_id.as_str(),
-            )),
-            hierarchy: hierarchy_segments_from_path(path.as_str()),
-            saliency_score: Some(saliency_score),
-            audit_status: symbol.audit_status.clone(),
-            verification_state: symbol.verification_state.clone(),
-            implicit_backlinks,
-            implicit_backlink_items: map_backlink_items(implicit_backlink_items),
-            navigation_target: Some(repo_navigation_target(
-                repo_id,
-                path.as_str(),
-                symbol.line_start,
-                symbol.line_end,
-            )),
-        };
-        rows.push(RepoEntityRow {
-            id: symbol_id,
-            entity_kind: ENTITY_KIND_SYMBOL.to_string(),
-            name: symbol.name.clone(),
-            name_folded: symbol.name.to_ascii_lowercase(),
-            qualified_name_folded: symbol.qualified_name.to_ascii_lowercase(),
-            path: path.clone(),
-            path_folded: path.to_ascii_lowercase(),
-            language: infer_code_language(path.as_str()).unwrap_or_default(),
-            symbol_kind,
-            signature_folded: signature.to_ascii_lowercase(),
-            summary_folded: String::new(),
-            related_symbols_folded: String::new(),
-            related_modules_folded: String::new(),
-            saliency_score,
-            search_text: [
-                symbol.name.as_str(),
-                symbol.qualified_name.as_str(),
-                signature.as_str(),
-                path.as_str(),
-            ]
-            .join(" "),
-            hit_json: serialize_hit_json(&hit)?,
-        });
+        rows.push(build_symbol_row(&context, symbol)?);
     }
 
     for example in &analysis.examples {
-        let example_id = example.example_id.clone();
-        let path = example.path.clone();
-        let summary = example.summary.clone().unwrap_or_default();
-        let related_symbols =
-            related_symbols_for_example(example_id.as_str(), &example_relations, &analysis.symbols);
-        let related_modules =
-            related_modules_for_example(example_id.as_str(), &example_relations, &analysis.modules);
-        let related_symbols_text = related_symbols.join(" ");
-        let related_modules_text = related_modules.join(" ");
-        let (implicit_backlinks, implicit_backlink_items) =
-            backlinks_for(example_id.as_str(), &backlink_lookup);
-        let saliency_score = saliency_map
-            .get(example_id.as_str())
-            .copied()
-            .unwrap_or(0.0);
-        let hit = SearchHit {
-            stem: example.title.clone(),
-            title: Some(example.title.clone()),
-            path: path.clone(),
-            doc_type: Some(ENTITY_KIND_EXAMPLE.to_string()),
-            tags: repo_entity_tags(
-                repo_id,
-                ENTITY_KIND_EXAMPLE,
-                infer_code_language(path.as_str()),
-                Some("example"),
-                None,
-            ),
-            score: saliency_score,
-            best_section: example.summary.clone(),
-            match_reason: Some("repo_example_search".to_string()),
-            hierarchical_uri: Some(record_hierarchical_uri(
-                repo_id,
-                ecosystem,
-                "examples",
-                path.as_str(),
-                example_id.as_str(),
-            )),
-            hierarchy: hierarchy_segments_from_path(path.as_str()),
-            saliency_score: Some(saliency_score),
-            audit_status: None,
-            verification_state: None,
-            implicit_backlinks,
-            implicit_backlink_items: map_backlink_items(implicit_backlink_items),
-            navigation_target: Some(repo_navigation_target(
-                repo_id,
-                path.as_str(),
-                Some(1),
-                None,
-            )),
-        };
-        rows.push(RepoEntityRow {
-            id: example_id,
-            entity_kind: ENTITY_KIND_EXAMPLE.to_string(),
-            name: example.title.clone(),
-            name_folded: example.title.to_ascii_lowercase(),
-            qualified_name_folded: example.title.to_ascii_lowercase(),
-            path: path.clone(),
-            path_folded: path.to_ascii_lowercase(),
-            language: infer_code_language(path.as_str()).unwrap_or_default(),
-            symbol_kind: "example".to_string(),
-            signature_folded: String::new(),
-            summary_folded: summary.to_ascii_lowercase(),
-            related_symbols_folded: related_symbols.join("\n"),
-            related_modules_folded: related_modules.join("\n"),
-            saliency_score,
-            search_text: [
-                example.title.as_str(),
-                summary.as_str(),
-                related_symbols_text.as_str(),
-                related_modules_text.as_str(),
-                path.as_str(),
-            ]
-            .join(" "),
-            hit_json: serialize_hit_json(&hit)?,
-        });
+        rows.push(build_example_row(&context, example)?);
     }
 
     Ok(rows)
+}
+
+struct RepoEntityContext<'a> {
+    repo_id: &'a str,
+    analysis: &'a RepositoryAnalysisOutput,
+    backlink_lookup: BTreeMap<String, Vec<RepoBacklinkItem>>,
+    saliency_map: HashMap<String, f64>,
+    example_relations: BTreeSet<(String, String)>,
+    ecosystem: &'static str,
+}
+
+impl<'a> RepoEntityContext<'a> {
+    fn new(repo_id: &'a str, analysis: &'a RepositoryAnalysisOutput) -> Self {
+        Self {
+            repo_id,
+            analysis,
+            backlink_lookup: documents_backlink_lookup(&analysis.relations, &analysis.docs),
+            saliency_map: compute_repository_saliency(analysis),
+            example_relations: example_relation_lookup(&analysis.relations),
+            ecosystem: infer_ecosystem(repo_id),
+        }
+    }
+}
+
+fn build_module_row(
+    context: &RepoEntityContext<'_>,
+    module: &ModuleRecord,
+) -> Result<RepoEntityRow, VectorStoreError> {
+    let module_id = module.module_id.clone();
+    let path = module.path.clone();
+    let language = infer_code_language(path.as_str());
+    let (implicit_backlinks, implicit_backlink_items) =
+        backlinks_for(module_id.as_str(), &context.backlink_lookup);
+    let saliency_score = context
+        .saliency_map
+        .get(module_id.as_str())
+        .copied()
+        .unwrap_or(0.0);
+    let hit = SearchHit {
+        stem: module.qualified_name.clone(),
+        title: Some(module.qualified_name.clone()),
+        path: path.clone(),
+        doc_type: Some(ENTITY_KIND_MODULE.to_string()),
+        tags: repo_entity_tags(
+            context.repo_id,
+            ENTITY_KIND_MODULE,
+            language.clone(),
+            Some("module"),
+            None,
+        ),
+        score: saliency_score,
+        best_section: Some(module.module_id.clone()),
+        match_reason: Some("repo_module_search".to_string()),
+        hierarchical_uri: Some(record_hierarchical_uri(
+            context.repo_id,
+            context.ecosystem,
+            "api",
+            path.as_str(),
+            module_id.as_str(),
+        )),
+        hierarchy: hierarchy_segments_from_path(path.as_str()),
+        saliency_score: Some(saliency_score),
+        audit_status: None,
+        verification_state: None,
+        implicit_backlinks,
+        implicit_backlink_items: map_backlink_items(implicit_backlink_items),
+        navigation_target: Some(repo_navigation_target(
+            context.repo_id,
+            path.as_str(),
+            Some(1),
+            None,
+        )),
+    };
+    Ok(RepoEntityRow {
+        id: module_id,
+        entity_kind: ENTITY_KIND_MODULE.to_string(),
+        name: module.qualified_name.clone(),
+        name_folded: module.qualified_name.to_ascii_lowercase(),
+        qualified_name_folded: module.qualified_name.to_ascii_lowercase(),
+        path: path.clone(),
+        path_folded: path.to_ascii_lowercase(),
+        language: language.unwrap_or_default(),
+        symbol_kind: "module".to_string(),
+        signature_folded: String::new(),
+        summary_folded: String::new(),
+        related_symbols_folded: String::new(),
+        related_modules_folded: String::new(),
+        saliency_score,
+        search_text: [module.qualified_name.as_str(), path.as_str()].join(" "),
+        hit_json: serialize_hit_json(&hit)?,
+    })
+}
+
+fn build_symbol_row(
+    context: &RepoEntityContext<'_>,
+    symbol: &SymbolRecord,
+) -> Result<RepoEntityRow, VectorStoreError> {
+    let symbol_id = symbol.symbol_id.clone();
+    let path = symbol.path.clone();
+    let language = infer_code_language(path.as_str());
+    let signature = symbol.signature.clone().unwrap_or_default();
+    let symbol_kind = symbol_kind_tag(symbol.kind).to_string();
+    let (implicit_backlinks, implicit_backlink_items) =
+        backlinks_for(symbol_id.as_str(), &context.backlink_lookup);
+    let saliency_score = context
+        .saliency_map
+        .get(symbol_id.as_str())
+        .copied()
+        .unwrap_or(0.0);
+    let hit = SearchHit {
+        stem: symbol.name.clone(),
+        title: Some(symbol.qualified_name.clone()),
+        path: path.clone(),
+        doc_type: Some(ENTITY_KIND_SYMBOL.to_string()),
+        tags: repo_entity_tags(
+            context.repo_id,
+            ENTITY_KIND_SYMBOL,
+            language.clone(),
+            Some(symbol_kind.as_str()),
+            symbol.audit_status.as_deref(),
+        ),
+        score: saliency_score,
+        best_section: symbol
+            .signature
+            .clone()
+            .or_else(|| Some(symbol.qualified_name.clone())),
+        match_reason: Some("repo_symbol_search".to_string()),
+        hierarchical_uri: Some(record_hierarchical_uri(
+            context.repo_id,
+            context.ecosystem,
+            "api",
+            path.as_str(),
+            symbol_id.as_str(),
+        )),
+        hierarchy: hierarchy_segments_from_path(path.as_str()),
+        saliency_score: Some(saliency_score),
+        audit_status: symbol.audit_status.clone(),
+        verification_state: symbol.verification_state.clone(),
+        implicit_backlinks,
+        implicit_backlink_items: map_backlink_items(implicit_backlink_items),
+        navigation_target: Some(repo_navigation_target(
+            context.repo_id,
+            path.as_str(),
+            symbol.line_start,
+            symbol.line_end,
+        )),
+    };
+    Ok(RepoEntityRow {
+        id: symbol_id,
+        entity_kind: ENTITY_KIND_SYMBOL.to_string(),
+        name: symbol.name.clone(),
+        name_folded: symbol.name.to_ascii_lowercase(),
+        qualified_name_folded: symbol.qualified_name.to_ascii_lowercase(),
+        path: path.clone(),
+        path_folded: path.to_ascii_lowercase(),
+        language: language.unwrap_or_default(),
+        symbol_kind,
+        signature_folded: signature.to_ascii_lowercase(),
+        summary_folded: String::new(),
+        related_symbols_folded: String::new(),
+        related_modules_folded: String::new(),
+        saliency_score,
+        search_text: [
+            symbol.name.as_str(),
+            symbol.qualified_name.as_str(),
+            signature.as_str(),
+            path.as_str(),
+        ]
+        .join(" "),
+        hit_json: serialize_hit_json(&hit)?,
+    })
+}
+
+fn build_example_row(
+    context: &RepoEntityContext<'_>,
+    example: &ExampleRecord,
+) -> Result<RepoEntityRow, VectorStoreError> {
+    let example_id = example.example_id.clone();
+    let path = example.path.clone();
+    let language = infer_code_language(path.as_str());
+    let summary = example.summary.clone().unwrap_or_default();
+    let related_symbols = related_symbols_for_example(
+        example_id.as_str(),
+        &context.example_relations,
+        &context.analysis.symbols,
+    );
+    let related_modules = related_modules_for_example(
+        example_id.as_str(),
+        &context.example_relations,
+        &context.analysis.modules,
+    );
+    let related_symbols_text = related_symbols.join(" ");
+    let related_modules_text = related_modules.join(" ");
+    let (implicit_backlinks, implicit_backlink_items) =
+        backlinks_for(example_id.as_str(), &context.backlink_lookup);
+    let saliency_score = context
+        .saliency_map
+        .get(example_id.as_str())
+        .copied()
+        .unwrap_or(0.0);
+    let hit = SearchHit {
+        stem: example.title.clone(),
+        title: Some(example.title.clone()),
+        path: path.clone(),
+        doc_type: Some(ENTITY_KIND_EXAMPLE.to_string()),
+        tags: repo_entity_tags(
+            context.repo_id,
+            ENTITY_KIND_EXAMPLE,
+            language.clone(),
+            Some("example"),
+            None,
+        ),
+        score: saliency_score,
+        best_section: example.summary.clone(),
+        match_reason: Some("repo_example_search".to_string()),
+        hierarchical_uri: Some(record_hierarchical_uri(
+            context.repo_id,
+            context.ecosystem,
+            "examples",
+            path.as_str(),
+            example_id.as_str(),
+        )),
+        hierarchy: hierarchy_segments_from_path(path.as_str()),
+        saliency_score: Some(saliency_score),
+        audit_status: None,
+        verification_state: None,
+        implicit_backlinks,
+        implicit_backlink_items: map_backlink_items(implicit_backlink_items),
+        navigation_target: Some(repo_navigation_target(
+            context.repo_id,
+            path.as_str(),
+            Some(1),
+            None,
+        )),
+    };
+    Ok(RepoEntityRow {
+        id: example_id,
+        entity_kind: ENTITY_KIND_EXAMPLE.to_string(),
+        name: example.title.clone(),
+        name_folded: example.title.to_ascii_lowercase(),
+        qualified_name_folded: example.title.to_ascii_lowercase(),
+        path: path.clone(),
+        path_folded: path.to_ascii_lowercase(),
+        language: language.unwrap_or_default(),
+        symbol_kind: "example".to_string(),
+        signature_folded: String::new(),
+        summary_folded: summary.to_ascii_lowercase(),
+        related_symbols_folded: related_symbols.join("\n"),
+        related_modules_folded: related_modules.join("\n"),
+        saliency_score,
+        search_text: [
+            example.title.as_str(),
+            summary.as_str(),
+            related_symbols_text.as_str(),
+            related_modules_text.as_str(),
+            path.as_str(),
+        ]
+        .join(" "),
+        hit_json: serialize_hit_json(&hit)?,
+    })
 }
 
 pub(super) fn repo_entity_batches(

@@ -1,3 +1,4 @@
+use super::test_prelude::*;
 use super::*;
 use crate::gateway::studio::build_ast_index;
 use crate::gateway::studio::repo_index::{RepoIndexEntryStatus, RepoIndexPhase, RepoIndexSnapshot};
@@ -11,13 +12,20 @@ use tempfile::tempdir;
 
 struct StudioStateFixture {
     state: Arc<GatewayState>,
-    _temp_dir: tempfile::TempDir,
+    temp_dir: tempfile::TempDir,
 }
 
 fn create_temp_dir() -> tempfile::TempDir {
     match tempdir() {
         Ok(temp_dir) => temp_dir,
         Err(err) => panic!("failed to create temp dir fixture: {err}"),
+    }
+}
+
+fn ok_or_panic<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> T {
+    match result {
+        Ok(value) => value,
+        Err(error) => panic!("{context}: {error}"),
     }
 }
 
@@ -66,7 +74,7 @@ fn make_state_with_docs(docs: Vec<(&str, &str)>) -> StudioStateFixture {
             signal_tx: None,
             studio: Arc::new(studio_state),
         }),
-        _temp_dir: temp_dir,
+        temp_dir,
     }
 }
 
@@ -90,12 +98,14 @@ async fn publish_local_symbol_index(state: &Arc<GatewayState>) {
         )
         .to_hex()
     );
-    state
-        .studio
-        .search_plane
-        .publish_local_symbol_hits(fingerprint.as_str(), &hits)
-        .await
-        .expect("publish local symbol epoch");
+    ok_or_panic(
+        state
+            .studio
+            .search_plane
+            .publish_local_symbol_hits(fingerprint.as_str(), &hits)
+            .await,
+        "publish local symbol epoch",
+    );
 }
 
 async fn publish_reference_occurrence_index(state: &Arc<GatewayState>) {
@@ -113,17 +123,19 @@ async fn publish_reference_occurrence_index(state: &Arc<GatewayState>) {
         )
         .to_hex()
     );
-    state
-        .studio
-        .search_plane
-        .publish_reference_occurrences_from_projects(
-            state.studio.project_root.as_path(),
-            state.studio.config_root.as_path(),
-            &projects,
-            fingerprint.as_str(),
-        )
-        .await
-        .expect("publish reference occurrence epoch");
+    ok_or_panic(
+        state
+            .studio
+            .search_plane
+            .publish_reference_occurrences_from_projects(
+                state.studio.project_root.as_path(),
+                state.studio.config_root.as_path(),
+                &projects,
+                fingerprint.as_str(),
+            )
+            .await,
+        "publish reference occurrence epoch",
+    );
 }
 
 async fn publish_attachment_index(state: &Arc<GatewayState>) {
@@ -141,17 +153,19 @@ async fn publish_attachment_index(state: &Arc<GatewayState>) {
         )
         .to_hex()
     );
-    state
-        .studio
-        .search_plane
-        .publish_attachments_from_projects(
-            state.studio.project_root.as_path(),
-            state.studio.config_root.as_path(),
-            &projects,
-            fingerprint.as_str(),
-        )
-        .await
-        .expect("publish attachment epoch");
+    ok_or_panic(
+        state
+            .studio
+            .search_plane
+            .publish_attachments_from_projects(
+                state.studio.project_root.as_path(),
+                state.studio.config_root.as_path(),
+                &projects,
+                fingerprint.as_str(),
+            )
+            .await,
+        "publish attachment epoch",
+    );
 }
 
 async fn publish_knowledge_section_index(state: &Arc<GatewayState>) {
@@ -169,17 +183,19 @@ async fn publish_knowledge_section_index(state: &Arc<GatewayState>) {
         )
         .to_hex()
     );
-    state
-        .studio
-        .search_plane
-        .publish_knowledge_sections_from_projects(
-            state.studio.project_root.as_path(),
-            state.studio.config_root.as_path(),
-            &projects,
-            fingerprint.as_str(),
-        )
-        .await
-        .expect("publish knowledge section epoch");
+    ok_or_panic(
+        state
+            .studio
+            .search_plane
+            .publish_knowledge_sections_from_projects(
+                state.studio.project_root.as_path(),
+                state.studio.config_root.as_path(),
+                &projects,
+                fingerprint.as_str(),
+            )
+            .await,
+        "publish knowledge section epoch",
+    );
 }
 
 async fn publish_repo_content_chunk_index(
@@ -187,12 +203,14 @@ async fn publish_repo_content_chunk_index(
     repo_id: &str,
     documents: Vec<crate::gateway::studio::repo_index::RepoCodeDocument>,
 ) {
-    state
-        .studio
-        .search_plane
-        .publish_repo_content_chunks_with_revision(repo_id, &documents, None)
-        .await
-        .expect("publish repo content chunks");
+    ok_or_panic(
+        state
+            .studio
+            .search_plane
+            .publish_repo_content_chunks_with_revision(repo_id, &documents, None)
+            .await,
+        "publish repo content chunks",
+    );
 }
 
 #[test]
@@ -367,7 +385,7 @@ async fn search_intent_returns_payload() {
 #[tokio::test]
 async fn search_intent_includes_repo_content_hits_for_code_biased_intent() {
     let fixture = make_state_with_docs(Vec::new());
-    let repo_root = fixture._temp_dir.path().join("ValidPkg");
+    let repo_root = fixture.temp_dir.path().join("ValidPkg");
     std::fs::create_dir_all(repo_root.join("src"))
         .unwrap_or_else(|error| panic!("create repo src: {error}"));
     std::fs::write(
@@ -407,7 +425,7 @@ async fn search_intent_includes_repo_content_hits_for_code_biased_intent() {
         .state
         .studio
         .repo_index
-        .set_snapshot_for_test(Arc::clone(&snapshot));
+        .set_snapshot_for_test(&snapshot);
     fixture
         .state
         .studio

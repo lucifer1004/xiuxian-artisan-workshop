@@ -6,7 +6,26 @@ use super::code_search::{
     parse_code_search_query, symbol_search_hit_to_search_hit,
 };
 use super::knowledge::build_intent_search_response;
-use super::*;
+use super::test_prelude::*;
+
+fn test_studio_state() -> crate::gateway::studio::router::StudioState {
+    let nonce = format!(
+        "search-plane-handlers-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|error| panic!("system time before unix epoch: {error}"))
+            .as_nanos()
+    );
+    let search_plane_root = std::env::temp_dir().join(nonce);
+    crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config_and_search_plane_root(
+        Arc::new(
+            crate::analyzers::bootstrap_builtin_registry()
+                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
+        ),
+        search_plane_root,
+    )
+}
 
 async fn publish_repo_content_chunk_index(
     studio: &crate::gateway::studio::router::StudioState,
@@ -149,11 +168,7 @@ fn symbol_search_hit_to_search_hit_preserves_backend_metadata() {
 
 #[tokio::test]
 async fn repo_content_search_hits_find_matching_julia_source_lines() {
-    let studio =
-        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
-            crate::analyzers::bootstrap_builtin_registry()
-                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
-        ));
+    let studio = test_studio_state();
     publish_repo_content_chunk_index(
         &studio,
         "sciml",
@@ -186,11 +201,7 @@ async fn repo_content_search_hits_find_matching_julia_source_lines() {
 
 #[tokio::test]
 async fn build_code_search_response_returns_repo_entity_hits_from_search_plane() {
-    let studio =
-        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
-            crate::analyzers::bootstrap_builtin_registry()
-                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
-        ));
+    let studio = test_studio_state();
     studio.set_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
@@ -206,7 +217,7 @@ async fn build_code_search_response_returns_repo_entity_hits_from_search_plane()
     publish_repo_entity_index(&studio, "valid", &analysis).await;
     studio
         .repo_index
-        .set_snapshot_for_test(Arc::new(RepoIndexSnapshot {
+        .set_snapshot_for_test(&Arc::new(RepoIndexSnapshot {
             repo_id: "valid".to_string(),
             analysis: Arc::new(analysis),
         }));
@@ -283,11 +294,7 @@ async fn build_code_search_response_skips_unsupported_repositories_when_searchin
     )
     .unwrap_or_else(|error| panic!("write invalid source: {error}"));
 
-    let studio =
-        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
-            crate::analyzers::bootstrap_builtin_registry()
-                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
-        ));
+    let studio = test_studio_state();
     studio.set_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![
@@ -311,7 +318,7 @@ async fn build_code_search_response_skips_unsupported_repositories_when_searchin
     });
     studio
         .repo_index
-        .set_snapshot_for_test(Arc::new(RepoIndexSnapshot {
+        .set_snapshot_for_test(&Arc::new(RepoIndexSnapshot {
             repo_id: "valid".to_string(),
             analysis: Arc::new(crate::analyzers::RepositoryAnalysisOutput::default()),
         }));
@@ -368,11 +375,7 @@ async fn build_code_search_response_skips_unsupported_repositories_when_searchin
 
 #[tokio::test]
 async fn build_code_search_response_returns_pending_payload_for_explicit_repo_without_snapshot() {
-    let studio =
-        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
-            crate::analyzers::bootstrap_builtin_registry()
-                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
-        ));
+    let studio = test_studio_state();
     studio.set_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
@@ -427,11 +430,7 @@ async fn build_intent_search_response_includes_repo_content_hits_for_debug_looku
     )
     .unwrap_or_else(|error| panic!("write project: {error}"));
 
-    let studio =
-        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
-            crate::analyzers::bootstrap_builtin_registry()
-                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
-        ));
+    let studio = test_studio_state();
     studio.set_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
@@ -459,9 +458,7 @@ async fn build_intent_search_response_includes_repo_content_hits_for_debug_looku
         }],
     )
     .await;
-    studio
-        .repo_index
-        .set_snapshot_for_test(Arc::clone(&snapshot));
+    studio.repo_index.set_snapshot_for_test(&snapshot);
     studio.repo_index.set_status_for_test(
         crate::gateway::studio::repo_index::RepoIndexEntryStatus {
             repo_id: "valid".to_string(),
@@ -508,11 +505,7 @@ async fn build_intent_search_response_includes_repo_content_hits_for_debug_looku
 
 #[tokio::test]
 async fn build_intent_search_response_includes_repo_entity_hits_for_debug_lookup() {
-    let studio =
-        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
-            crate::analyzers::bootstrap_builtin_registry()
-                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
-        ));
+    let studio = test_studio_state();
     studio.set_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
@@ -528,7 +521,7 @@ async fn build_intent_search_response_includes_repo_entity_hits_for_debug_lookup
     publish_repo_entity_index(&studio, "valid", &analysis).await;
     studio
         .repo_index
-        .set_snapshot_for_test(Arc::new(RepoIndexSnapshot {
+        .set_snapshot_for_test(&Arc::new(RepoIndexSnapshot {
             repo_id: "valid".to_string(),
             analysis: Arc::new(analysis),
         }));
@@ -573,11 +566,7 @@ async fn build_intent_search_response_includes_repo_entity_hits_for_debug_lookup
 
 #[tokio::test]
 async fn build_code_search_response_uses_published_repo_tables_while_repo_refreshes() {
-    let studio =
-        crate::gateway::studio::router::StudioState::new_with_bootstrap_ui_config(Arc::new(
-            crate::analyzers::bootstrap_builtin_registry()
-                .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
-        ));
+    let studio = test_studio_state();
     studio.set_ui_config(crate::gateway::studio::types::UiConfig {
         projects: Vec::new(),
         repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {

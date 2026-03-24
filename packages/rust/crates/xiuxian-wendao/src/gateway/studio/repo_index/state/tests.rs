@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use crate::analyzers::registry::PluginRegistry;
 use crate::analyzers::{
-    RegisteredRepository, RepoIntelligenceError, RepositoryPluginConfig, RepositoryRefreshPolicy,
+    ModuleRecord, RegisteredRepository, RepoIntelligenceError, RepositoryAnalysisOutput,
+    RepositoryPluginConfig, RepositoryRefreshPolicy,
 };
 use crate::gateway::studio::repo_index::types::{RepoIndexEntryStatus, RepoIndexPhase};
 
@@ -272,6 +273,130 @@ fn status_response_exposes_active_repos_and_concurrency_metadata() {
     assert_eq!(status.active_repo_ids, vec!["ADTypes.jl".to_string()]);
     assert_eq!(status.target_concurrency, 1);
     assert_eq!(status.max_concurrency, 8);
+}
+
+#[tokio::test]
+async fn refresh_status_snapshot_synchronizes_search_plane_runtime() {
+    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let search_plane = crate::search_plane::SearchPlaneService::with_paths(
+        PathBuf::from("."),
+        temp_dir.path().join("search-plane"),
+        crate::search_plane::SearchManifestKeyspace::new("xiuxian:test:repo-runtime-sync"),
+        crate::search_plane::SearchMaintenancePolicy::default(),
+    );
+    let coordinator = RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        search_plane.clone(),
+    );
+    coordinator.set_status_for_test(RepoIndexEntryStatus {
+        repo_id: "pending".to_string(),
+        phase: RepoIndexPhase::Queued,
+        queue_position: None,
+        last_error: None,
+        last_revision: None,
+        updated_at: Some(timestamp_now()),
+        attempt_count: 1,
+    });
+    coordinator.set_status_for_test(RepoIndexEntryStatus {
+        repo_id: "skipped".to_string(),
+        phase: RepoIndexPhase::Failed,
+        queue_position: None,
+        last_error: Some("boom".to_string()),
+        last_revision: None,
+        updated_at: Some(timestamp_now()),
+        attempt_count: 1,
+    });
+
+    let pending = search_plane.repo_search_publication_state("pending").await;
+    let skipped = search_plane.repo_search_publication_state("skipped").await;
+
+    assert_eq!(
+        pending.availability,
+        crate::search_plane::RepoSearchAvailability::Pending
+    );
+    assert_eq!(
+        skipped.availability,
+        crate::search_plane::RepoSearchAvailability::Skipped
+    );
+}
+
+#[tokio::test]
+async fn refresh_status_snapshot_synchronizes_repo_backed_corpus_statuses() {
+    let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let search_plane = crate::search_plane::SearchPlaneService::with_paths(
+        PathBuf::from("."),
+        temp_dir.path().join("search-plane"),
+        crate::search_plane::SearchManifestKeyspace::new("xiuxian:test:repo-status-sync"),
+        crate::search_plane::SearchMaintenancePolicy::default(),
+    );
+    let documents = vec![
+        crate::gateway::studio::repo_index::types::RepoCodeDocument {
+            path: "src/lib.rs".to_string(),
+            language: Some("rust".to_string()),
+            contents: Arc::<str>::from("fn alpha() {}\n"),
+        },
+    ];
+    search_plane
+        .publish_repo_entities_with_revision(
+            "alpha/repo",
+            &RepositoryAnalysisOutput {
+                modules: vec![ModuleRecord {
+                    repo_id: "alpha/repo".to_string(),
+                    module_id: "module:alpha".to_string(),
+                    qualified_name: "Alpha".to_string(),
+                    path: "src/lib.rs".to_string(),
+                }],
+                ..RepositoryAnalysisOutput::default()
+            },
+            Some("rev-1"),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("publish repo entities: {error}"));
+    search_plane
+        .publish_repo_content_chunks_with_revision("alpha/repo", &documents, Some("rev-1"))
+        .await
+        .unwrap_or_else(|error| panic!("publish repo content chunks: {error}"));
+    let coordinator = RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        search_plane.clone(),
+    );
+    coordinator.set_status_for_test(RepoIndexEntryStatus {
+        repo_id: "alpha/repo".to_string(),
+        phase: RepoIndexPhase::Ready,
+        queue_position: None,
+        last_error: None,
+        last_revision: Some("rev-1".to_string()),
+        updated_at: Some(timestamp_now()),
+        attempt_count: 1,
+    });
+
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            let snapshot = search_plane.status();
+            let Some(repo_entity) = snapshot
+                .corpora
+                .iter()
+                .find(|entry| entry.corpus == crate::search_plane::SearchCorpusKind::RepoEntity)
+            else {
+                panic!("repo entity row");
+            };
+            let Some(repo_content) = snapshot.corpora.iter().find(|entry| {
+                entry.corpus == crate::search_plane::SearchCorpusKind::RepoContentChunk
+            }) else {
+                panic!("repo content row");
+            };
+            if repo_entity.phase == crate::search_plane::SearchPlanePhase::Ready
+                && repo_content.phase == crate::search_plane::SearchPlanePhase::Ready
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap_or_else(|error| panic!("repo-backed corpus status should synchronize: {error}"));
 }
 
 #[test]

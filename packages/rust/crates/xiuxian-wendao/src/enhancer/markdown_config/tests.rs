@@ -37,7 +37,10 @@ name = "agent"
     let mut index = MarkdownConfigMemoryIndex::from_markdown(markdown);
     assert_eq!(index.len(), 2);
     assert_eq!(
-        index.get("template-config").unwrap().heading,
+        index
+            .get("template-config")
+            .unwrap_or_else(|| panic!("template-config should exist"))
+            .heading,
         "Template Config"
     );
 
@@ -55,7 +58,7 @@ name = "agent"
 
 #[test]
 fn markdown_config_link_targets_are_normalized_and_deduplicated() {
-    let markdown = r#"
+    let markdown = r"
 # Link Config
 <!-- id: link-config, type: template -->
 
@@ -64,7 +67,7 @@ fn markdown_config_link_targets_are_normalized_and_deduplicated() {
 ![Diagram](../assets/diagram.png)
 [[wendao://repo/sciml/repo-a/resources/notes#persona]]
 [External](https://example.com)
-"#;
+";
 
     let links = extract_markdown_config_link_targets_by_id(markdown, "notes/section/page.md");
     assert_eq!(

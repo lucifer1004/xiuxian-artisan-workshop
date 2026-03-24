@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use xiuxian_vector::{
     ColumnarScanOptions, LanceDataType, LanceField, LanceRecordBatch, LanceSchema,
-    LanceStringArray, LanceUInt64Array, VectorStore,
+    LanceStringArray, LanceUInt64Array, VectorStore, VectorStoreError,
 };
 
 fn local_symbol_schema() -> Arc<LanceSchema> {
@@ -150,6 +150,59 @@ async fn test_columnar_table_replace_merge_scan_and_delete() -> Result<()> {
         .collect::<Vec<_>>();
 
     assert_eq!(ids, vec!["sym-2".to_string(), "sym-3".to_string()]);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_columnar_table_streaming_scan_respects_limit() -> Result<()> {
+    let temp_dir = tempfile::Builder::new()
+        .prefix("xiuxian_vector_columnar_stream_")
+        .tempdir()?;
+    let store_root = temp_dir.path().join("columnar_store");
+    let store = VectorStore::new(store_root.to_string_lossy().as_ref(), None).await?;
+    let schema = local_symbol_schema();
+
+    store
+        .replace_record_batches(
+            "local_symbol",
+            schema.clone(),
+            vec![local_symbol_batch(
+                &[
+                    ("sym-1", "AlphaSymbol", 10),
+                    ("sym-2", "BetaSymbol", 20),
+                    ("sym-3", "GammaSymbol", 30),
+                ],
+                schema.clone(),
+            )?],
+        )
+        .await?;
+
+    let mut batches = Vec::new();
+    store
+        .scan_record_batches_streaming(
+            "local_symbol",
+            ColumnarScanOptions {
+                projected_columns: vec!["id".to_string(), "line".to_string()],
+                batch_size: Some(1),
+                limit: Some(2),
+                ..ColumnarScanOptions::default()
+            },
+            |batch| -> Result<(), VectorStoreError> {
+                batches.push(batch);
+                Ok(())
+            },
+        )
+        .await?;
+
+    assert_eq!(
+        batches
+            .iter()
+            .map(LanceRecordBatch::num_rows)
+            .sum::<usize>(),
+        2
+    );
+    assert!(batches.iter().all(|batch| batch.num_columns() == 2));
 
     Ok(())
 }

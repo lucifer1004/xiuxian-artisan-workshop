@@ -172,6 +172,10 @@ in
       just rust-wendao-performance-bench
     '';
 
+    "ci:rust-wendao-performance-bench-fast" = mkRustTask ''
+      just rust-wendao-performance-bench-fast
+    '';
+
     "ci:contract-e2e-route-test-json" = mkPythonScriptTask ''
       just contract-e2e-route-test-json
     '';

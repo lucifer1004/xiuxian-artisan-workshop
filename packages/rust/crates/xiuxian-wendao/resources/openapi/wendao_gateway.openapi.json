@@ -613,6 +613,31 @@
         }
       }
     },
+    "/api/ui/capabilities": {
+      "get": {
+        "operationId": "studioGetUiCapabilities",
+        "tags": ["studio-config"],
+        "summary": "Read studio UI capabilities",
+        "description": "Return the gateway-reported capability catalog for the current studio runtime, including supported code language identifiers.",
+        "responses": {
+          "200": {
+            "description": "Current studio UI capabilities.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "supportedLanguages": ["julia", "modelica"],
+                  "supportedRepositories": ["sciml", "mcl"],
+                  "supportedKinds": ["function", "method", "module"]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Gateway failed to read the current studio UI capabilities."
+          }
+        }
+      }
+    },
     "/api/repo/overview": {
       "get": {
         "operationId": "studioRepoOverview",
@@ -1881,7 +1906,7 @@
         "operationId": "studioDocsPlannerWorkset",
         "tags": ["docs"],
         "summary": "Open deterministic deep-wiki planner workset bundles",
-        "description": "Run the Wendao deterministic deep-wiki planner workset flow through the docs namespace for one configured repository, keep the grouped queue preview, rank matching projected gaps deterministically, group the selected ranked hits by gap kind and page family, and open a bounded batch of planner-item bundles from that ranked selection.",
+        "description": "Run the Wendao deterministic deep-wiki planner workset flow through the docs namespace for one configured repository, keep the grouped queue preview, rank matching projected gaps deterministically, expose quota-band balancing evidence across gap kinds and page families, carry explicit quota hints on each grouped gap-kind lane and nested page-family lane, and open a bounded batch of planner-item bundles from that ranked selection.",
         "parameters": [
           {
             "name": "repo",
@@ -2098,6 +2123,33 @@
                       }
                     }
                   ],
+                  "balance": {
+                    "selection_count": 2,
+                    "gap_kind_group_count": 1,
+                    "family_group_count": 1,
+                    "gap_kind_target_floor_count": 2,
+                    "gap_kind_target_ceiling_count": 2,
+                    "family_target_floor_count": 2,
+                    "family_target_ceiling_count": 2,
+                    "gap_kind_distribution": [
+                      {
+                        "kind": "symbol_reference_without_documentation",
+                        "selected_count": 2,
+                        "within_target_band": true
+                      }
+                    ],
+                    "family_distribution": [
+                      {
+                        "kind": "reference",
+                        "selected_count": 2,
+                        "within_target_band": true
+                      }
+                    ],
+                    "gap_kind_spread": 0,
+                    "family_spread": 0,
+                    "gap_kind_balanced": true,
+                    "family_balanced": true
+                  },
                   "groups": [
                     {
                       "kind": "symbol_reference_without_documentation",
@@ -2106,10 +2158,20 @@
                         {
                           "kind": "reference",
                           "selected_count": 2,
+                          "quota": {
+                            "target_floor_count": 2,
+                            "target_ceiling_count": 2,
+                            "within_target_band": true
+                          },
                           "ranked_hits": [],
                           "items": []
                         }
                       ],
+                      "quota": {
+                        "target_floor_count": 2,
+                        "target_ceiling_count": 2,
+                        "within_target_band": true
+                      },
                       "ranked_hits": [],
                       "items": []
                     }

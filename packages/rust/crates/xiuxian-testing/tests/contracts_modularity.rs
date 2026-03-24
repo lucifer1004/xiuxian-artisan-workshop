@@ -145,3 +145,36 @@ pub(crate) struct InternalState {
     let findings = evaluate_fixture("demo", &temp_dir);
     assert!(findings.is_empty());
 }
+
+#[test]
+fn modularity_pack_accepts_multiline_interface_exports_in_mod_rs() {
+    let temp_dir = must_ok(TempDir::new(), "should create temp dir");
+    let src_root = crate_src_root(&temp_dir, "demo");
+    write_rust_file(
+        &src_root,
+        "feature/mod.rs",
+        r#"
+#![allow(dead_code)]
+mod parser;
+mod scanner;
+
+pub use self::{
+    parser::Parser,
+    scanner::Scanner,
+};
+pub(super) use self::parser::Parser as InternalParser;
+"#,
+    );
+    write_rust_file(&src_root, "feature/parser.rs", "pub(crate) struct Parser;");
+    write_rust_file(
+        &src_root,
+        "feature/scanner.rs",
+        "pub(crate) struct Scanner;",
+    );
+
+    let findings = evaluate_fixture("demo", &temp_dir);
+    assert!(
+        findings.iter().all(|finding| finding.rule_id != "MOD-R001"),
+        "expected no MOD-R001 finding, got {findings:#?}"
+    );
+}

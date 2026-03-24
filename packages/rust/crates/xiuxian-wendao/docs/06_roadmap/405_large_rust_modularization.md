@@ -66,10 +66,8 @@ Priority override:
 
 - `zhenfa_router/native.rs`
 - `zhenfa_router/native/sentinel.rs`
-- `zhenfa_router/native/semantic_check.rs`
 - `zhenfa_router/native/semantic_check/docs_governance/collection.rs`
 - `zhenfa_router/native/semantic_check/docs_governance/tests.rs`
-- `zhenfa_router/native/audit/audit_bridge.rs`
 - `zhenfa_router/native/audit/fuzzy_suggest.rs`
 - `zhenfa_router/native/audit/fix.rs`
 
@@ -86,6 +84,8 @@ Priority override:
 - [PLANNED] Inventory completed for all 35 oversized files.
 - [PLANNED] Each file now has a proposed feature-folder or leaf-module split in the canonical execplan.
 - [DONE] `gateway/studio/search/handlers.rs` is split into `gateway/studio/search/handlers/` with interface-only `mod.rs`, preserved public exports, and a green `cargo test -p xiuxian-wendao gateway::studio::search:: --lib` gate.
+- [DONE] `gateway/studio/search/handlers/knowledge.rs` is further split into `gateway/studio/search/handlers/knowledge/` with interface-only `mod.rs`, separate `search.rs`, `intent.rs`, `merge.rs`, and `helpers.rs` leaf modules, preserved handler exports, and the existing test-only `build_intent_search_response` entrypoint.
+- [DONE] `search_plane/service/core.rs` is split into `search_plane/service/core/` with interface-only `mod.rs`, shared `types.rs`, and a retained `core_impl.rs` implementation leaf, preserving `SearchPlaneService` and the crate-visible repo publication/runtime state helpers.
 - [DONE] `gateway/studio/types.rs` is split into `gateway/studio/types/` with interface-only `mod.rs`, grouped DTO leaf modules, preserved public type names, and the same `studio_type_collection()` façade.
 - [DONE] `analyzers/query.rs` is split into `analyzers/query/` with interface-only `mod.rs`, query-family leaf modules, and preserved `crate::analyzers::query::*` re-exports.
 - [DONE] `search/fuzzy.rs` is split into `search/fuzzy/` with interface-only `mod.rs`, focused helper leaf modules, preserved `search::fuzzy::*` exports, and the crate-visible scoring bridge retained for Tantivy integration.
@@ -115,7 +115,20 @@ Priority override:
 - [DONE] `link_graph/index.rs` is now a feature folder with interface-only `mod.rs`, while `constants.rs`, `types.rs`, `lookup.rs`, `symbol_cache.rs`, and the preserved `build/`, `search/`, `ids.rs`, `page_indices.rs`, `passages.rs`, `ppr.rs`, `rank.rs`, `scoring.rs`, `semantic_documents.rs`, `shared.rs`, and `traversal.rs` child namespaces keep the public `link_graph::index::*` surface stable.
 - [DONE] `link_graph/parser/code_observation.rs` is now a feature folder with interface-only `mod.rs`, while `types.rs`, `glob.rs`, `extract.rs`, `format.rs`, and the preserved tests fixture carry code-observation parsing, glob matching, formatting, and extraction logic without changing `link_graph::parser::code_observation::*`.
 - [DONE] `cargo fmt -p xiuxian-wendao`, `cargo check -p xiuxian-wendao --lib --keep-going`, `cargo test -p xiuxian-wendao skill_vfs::internal_manifest::tests:: --lib`, `cargo test -p xiuxian-wendao link_graph::addressing:: --lib`, `cargo test -p xiuxian-wendao link_graph::index:: --lib`, `cargo test -p xiuxian-wendao link_graph::parser::code_observation:: --lib`, and `git diff --check` are green after the `skill_vfs/internal_manifest.rs`, `link_graph/addressing/mod.rs`, `link_graph/index.rs`, and `link_graph/parser/code_observation.rs` splits.
-- [IN-PROGRESS] `link_graph/parser/sections.rs` is the next bounded facade slice under the active execplan.
+- [DONE] `link_graph/parser/sections.rs` is split into `link_graph/parser/sections/` with interface-only `mod.rs`, property-drawer parsing, logbook parsing, and section extraction leaf modules, plus the preserved tests fixture.
+- [DONE] `link_graph/saliency/store/write.rs` is split into `link_graph/saliency/store/write/` with interface-only `mod.rs`, `types.rs`, `edge_updates.rs`, `coactivation.rs`, `touch.rs`, `valkey.rs`, `time.rs`, and `tests.rs`, while preserving the saliency write API surface and the coactivation propagation behavior.
+- [DONE] `cargo fmt -p xiuxian-wendao`, `cargo check -p xiuxian-wendao --lib --keep-going`, `cargo test -p xiuxian-wendao link_graph::parser::sections:: --lib`, `cargo test -p xiuxian-wendao link_graph::saliency::store::write::tests:: --lib`, `cargo test -p xiuxian-wendao --test xiuxian-testing-gate saliency`, `cargo test -p xiuxian-wendao --test xiuxian-testing-gate coactivation`, and `git diff --check` are green after the `link_graph/parser/sections.rs` and `link_graph/saliency/store/write.rs` splits.
+- [DONE] `zhenfa_router/native/semantic_check.rs` is split into `zhenfa_router/native/semantic_check/` with interface-only `mod.rs`, `checks.rs`, `core.rs`, `parsing.rs`, `report.rs`, `types.rs`, and `test_api.rs`, while preserving the existing `docs_governance/` child folder.
+- [DONE] `zhenfa_router/native/audit/audit_bridge.rs` is split into `zhenfa_router/native/audit/audit_bridge/` with interface-only `mod.rs`, `types.rs`, `helpers.rs`, `batch_fix.rs`, `bridge.rs`, and `surgical.rs`, while preserving the existing unit-test fixture and the public audit bridge surface.
+- [DONE] `zhenfa_router/native/semantic_check/docs_governance/collection.rs` is split into `zhenfa_router/native/semantic_check/docs_governance/collection/` with interface-only `mod.rs`, `workspace.rs`, `footer.rs`, `relations.rs`, and `package_docs.rs`, while preserving the existing docs-governance issue collectors and the external test coverage.
+- [DONE] `zhenfa_router/native.rs` is split into `zhenfa_router/native/` with interface-only `mod.rs`, `context.rs`, `search.rs`, `semantic_read.rs`, `semantic_edit.rs`, and the preserved `agentic_nav`, `audit`, `forwarder`, `remediation`, `section_create`, `semantic_check`, `sentinel`, and `xml_lite` child modules while preserving `zhenfa_router::native::*`.
+- [DONE] `zhenfa_router/native/audit/fuzzy_suggest.rs` is split into `zhenfa_router/native/audit/fuzzy_suggest/` with interface-only `mod.rs`, `cache.rs`, `format.rs`, `pattern.rs`, `search.rs`, `similarity.rs`, `sources.rs`, and `types.rs`, while preserving the external unit-test fixture and the public fuzzy-suggestion API surface.
+- [DONE] `zhenfa_router/native/audit/fix.rs` is split into `zhenfa_router/native/audit/fix/` with interface-only `mod.rs`, `batch.rs`, `format.rs`, `hashing.rs`, `preview.rs`, `report.rs`, and `tests.rs`, while preserving `AtomicFixBatch`, `FixPreview`, `FixReport`, `format_fix_preview`, and the audit-fix write-back semantics.
+- [DONE] `zhenfa_router/native/semantic_check/docs_governance/tests.rs` is split into `zhenfa_router/native/semantic_check/docs_governance/tests/` with interface-only `mod.rs`, `doc_identity.rs`, `fixes.rs`, `index_links.rs`, `package_docs.rs`, `scope.rs`, `standard_sections.rs`, and `workspace.rs`, while preserving the docs-governance test coverage and the existing `run_audit_core` / surgical-fix assertions.
+- [DONE] `skill_vfs/zhixing/resources.rs` is split into `skill_vfs/zhixing/resources/` with interface-only `mod.rs`, `paths.rs`, `mounts.rs`, `text.rs`, `registry.rs`, `discovery.rs`, and `tests.rs`, preserving the embedded skill-resource registry and discovery surface. The embedded `zhixing` tree is vendored under `packages/rust/crates/xiuxian-wendao/resources/zhixing` and injected through `build.rs`, so downstream builds no longer depend on the sibling `xiuxian-zhixing` crate path.
+- [DONE] `analyzers/projection/builder.rs` is split into `analyzers/projection/builder/` with interface-only `mod.rs`, `anchors.rs`, `sources.rs`, `kinds.rs`, `assemble.rs`, `helpers.rs`, and `tests.rs`, preserving `build_projection_inputs` and the builder test surface.
+- [DONE] `analyzers/projection/search.rs` is split into `analyzers/projection/search/` with interface-only `mod.rs`, `indexed.rs`, `heuristic.rs`, `lexical.rs`, `mapping.rs`, `ranking.rs`, `sort.rs`, `options.rs`, and `tests.rs`, preserving the projected-page search API and `scored_projected_page_matches`.
+- [DONE] The modularization plan is complete; the remaining compile noise in the worktree comes from unrelated `search_plane/cache.rs` and `search_plane/service/core.rs` drift.
 
 ## Local Constraints
 
@@ -131,5 +144,5 @@ Priority override:
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-03-22
+:LAST_SYNC: 2026-03-23
 :END:

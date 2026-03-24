@@ -94,16 +94,16 @@ impl RepoIndexCoordinator {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .get(&repository.id)
                 .cloned();
-            if existing.as_deref() != Some(repo_fingerprint.as_str()) {
-                if self.enqueue_repository(
+            if existing.as_deref() != Some(repo_fingerprint.as_str())
+                && self.enqueue_repository(
                     repository,
                     false,
                     true,
                     repo_fingerprint.clone(),
                     RepoIndexTaskPriority::Background,
-                ) {
-                    enqueued.push(fingerprint_id(&repo_fingerprint));
-                }
+                )
+            {
+                enqueued.push(fingerprint_id(&repo_fingerprint));
             }
         }
 
@@ -528,8 +528,7 @@ impl RepoIndexCoordinator {
                             revision: sync_result.revision,
                             error: RepoIntelligenceError::AnalysisFailed {
                                 message: format!(
-                                    "repo `{}` repo-entity publish failed: {error}",
-                                    failed_repo_id
+                                    "repo `{failed_repo_id}` repo-entity publish failed: {error}"
                                 ),
                             },
                         },
@@ -553,8 +552,7 @@ impl RepoIndexCoordinator {
                             revision: sync_result.revision,
                             error: RepoIntelligenceError::AnalysisFailed {
                                 message: format!(
-                                    "repo `{}` repo-content chunk publish failed: {error}",
-                                    failed_repo_id
+                                    "repo `{failed_repo_id}` repo-content chunk publish failed: {error}"
                                 ),
                             },
                         },
@@ -599,7 +597,9 @@ impl RepoIndexCoordinator {
     }
 
     #[cfg(test)]
-    pub(crate) fn set_snapshot_for_test(&self, _snapshot: Arc<RepoIndexSnapshot>) {}
+    pub(crate) fn set_snapshot_for_test(&self, _snapshot: &Arc<RepoIndexSnapshot>) {
+        let _ = &self.status_snapshot;
+    }
 
     #[cfg(test)]
     pub(crate) fn set_status_for_test(&self, status: RepoIndexEntryStatus) {
@@ -803,10 +803,11 @@ impl RepoIndexCoordinator {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .snapshot();
+        let snapshot = aggregate_status_response(repos, active_repo_ids, concurrency);
+        self.search_plane.synchronize_repo_runtime(&snapshot);
         *self
             .status_snapshot
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            aggregate_status_response(repos, active_repo_ids, concurrency);
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = snapshot;
     }
 }

@@ -16,142 +16,29 @@ pub fn build_projected_gap_report(
     analysis: &RepositoryAnalysisOutput,
 ) -> RepoProjectedGapReportResult {
     let pages = build_projected_pages(analysis);
-    let module_pages = module_page_lookup(pages.as_slice());
-    let symbol_pages = symbol_page_lookup(pages.as_slice());
-    let example_pages = example_page_lookup(pages.as_slice());
-    let doc_pages = doc_page_lookup(pages.as_slice());
+    let lookup = ProjectedGapLookup::from_pages(pages.as_slice());
     let mut gaps = Vec::new();
 
-    for module in &analysis.modules {
-        let Some(page) = module_pages.get(module.module_id.as_str()) else {
-            continue;
-        };
-        if page.doc_ids.is_empty() {
-            gaps.push(ProjectedGapRecord {
-                repo_id: query.repo_id.clone(),
-                gap_id: gap_id(
-                    query.repo_id.as_str(),
-                    ProjectedGapKind::ModuleReferenceWithoutDocumentation,
-                    module.module_id.as_str(),
-                ),
-                kind: ProjectedGapKind::ModuleReferenceWithoutDocumentation,
-                page_kind: ProjectionPageKind::Reference,
-                page_id: page.page_id.clone(),
-                entity_id: module.module_id.clone(),
-                title: page.title.clone(),
-                path: page.path.clone(),
-                module_ids: page.module_ids.clone(),
-                symbol_ids: page.symbol_ids.clone(),
-                example_ids: page.example_ids.clone(),
-                doc_ids: page.doc_ids.clone(),
-                format_hints: page.format_hints.clone(),
-            });
-        }
-    }
-
-    for symbol in &analysis.symbols {
-        let Some(page) = symbol_pages.get(symbol.symbol_id.as_str()) else {
-            continue;
-        };
-        if page.doc_ids.is_empty() {
-            gaps.push(ProjectedGapRecord {
-                repo_id: query.repo_id.clone(),
-                gap_id: gap_id(
-                    query.repo_id.as_str(),
-                    ProjectedGapKind::SymbolReferenceWithoutDocumentation,
-                    symbol.symbol_id.as_str(),
-                ),
-                kind: ProjectedGapKind::SymbolReferenceWithoutDocumentation,
-                page_kind: ProjectionPageKind::Reference,
-                page_id: page.page_id.clone(),
-                entity_id: symbol.symbol_id.clone(),
-                title: page.title.clone(),
-                path: page.path.clone(),
-                module_ids: page.module_ids.clone(),
-                symbol_ids: page.symbol_ids.clone(),
-                example_ids: page.example_ids.clone(),
-                doc_ids: page.doc_ids.clone(),
-                format_hints: page.format_hints.clone(),
-            });
-            continue;
-        }
-
-        if symbol.verification_state.as_deref() == Some("unverified") {
-            gaps.push(ProjectedGapRecord {
-                repo_id: query.repo_id.clone(),
-                gap_id: gap_id(
-                    query.repo_id.as_str(),
-                    ProjectedGapKind::SymbolReferenceUnverified,
-                    symbol.symbol_id.as_str(),
-                ),
-                kind: ProjectedGapKind::SymbolReferenceUnverified,
-                page_kind: ProjectionPageKind::Reference,
-                page_id: page.page_id.clone(),
-                entity_id: symbol.symbol_id.clone(),
-                title: page.title.clone(),
-                path: page.path.clone(),
-                module_ids: page.module_ids.clone(),
-                symbol_ids: page.symbol_ids.clone(),
-                example_ids: page.example_ids.clone(),
-                doc_ids: page.doc_ids.clone(),
-                format_hints: page.format_hints.clone(),
-            });
-        }
-    }
-
-    for example in &analysis.examples {
-        let Some(page) = example_pages.get(example.example_id.as_str()) else {
-            continue;
-        };
-        if page.module_ids.is_empty() && page.symbol_ids.is_empty() {
-            gaps.push(ProjectedGapRecord {
-                repo_id: query.repo_id.clone(),
-                gap_id: gap_id(
-                    query.repo_id.as_str(),
-                    ProjectedGapKind::ExampleHowToWithoutAnchor,
-                    example.example_id.as_str(),
-                ),
-                kind: ProjectedGapKind::ExampleHowToWithoutAnchor,
-                page_kind: ProjectionPageKind::HowTo,
-                page_id: page.page_id.clone(),
-                entity_id: example.example_id.clone(),
-                title: page.title.clone(),
-                path: page.path.clone(),
-                module_ids: page.module_ids.clone(),
-                symbol_ids: page.symbol_ids.clone(),
-                example_ids: page.example_ids.clone(),
-                doc_ids: page.doc_ids.clone(),
-                format_hints: page.format_hints.clone(),
-            });
-        }
-    }
-
-    for doc in &analysis.docs {
-        let Some(page) = doc_pages.get(doc.doc_id.as_str()) else {
-            continue;
-        };
-        if page.module_ids.is_empty() && page.symbol_ids.is_empty() {
-            gaps.push(ProjectedGapRecord {
-                repo_id: query.repo_id.clone(),
-                gap_id: gap_id(
-                    query.repo_id.as_str(),
-                    ProjectedGapKind::DocumentationPageWithoutAnchor,
-                    doc.doc_id.as_str(),
-                ),
-                kind: ProjectedGapKind::DocumentationPageWithoutAnchor,
-                page_kind: page.kind,
-                page_id: page.page_id.clone(),
-                entity_id: doc.doc_id.clone(),
-                title: page.title.clone(),
-                path: page.path.clone(),
-                module_ids: page.module_ids.clone(),
-                symbol_ids: page.symbol_ids.clone(),
-                example_ids: page.example_ids.clone(),
-                doc_ids: page.doc_ids.clone(),
-                format_hints: page.format_hints.clone(),
-            });
-        }
-    }
+    gaps.extend(module_gap_records(
+        query.repo_id.as_str(),
+        analysis,
+        &lookup,
+    ));
+    gaps.extend(symbol_gap_records(
+        query.repo_id.as_str(),
+        analysis,
+        &lookup,
+    ));
+    gaps.extend(example_gap_records(
+        query.repo_id.as_str(),
+        analysis,
+        &lookup,
+    ));
+    gaps.extend(documentation_gap_records(
+        query.repo_id.as_str(),
+        analysis,
+        &lookup,
+    ));
 
     gaps.sort_by(|left, right| {
         left.kind
@@ -165,6 +52,154 @@ pub fn build_projected_gap_report(
         repo_id: query.repo_id.clone(),
         summary: build_gap_summary(gaps.as_slice(), pages.len()),
         gaps,
+    }
+}
+
+struct ProjectedGapLookup {
+    modules: BTreeMap<String, ProjectedPageRecord>,
+    symbols: BTreeMap<String, ProjectedPageRecord>,
+    examples: BTreeMap<String, ProjectedPageRecord>,
+    docs: BTreeMap<String, ProjectedPageRecord>,
+}
+
+impl ProjectedGapLookup {
+    fn from_pages(pages: &[ProjectedPageRecord]) -> Self {
+        Self {
+            modules: module_page_lookup(pages),
+            symbols: symbol_page_lookup(pages),
+            examples: example_page_lookup(pages),
+            docs: doc_page_lookup(pages),
+        }
+    }
+}
+
+struct GapRecordInput<'a> {
+    repo_id: &'a str,
+    kind: ProjectedGapKind,
+    page_kind: ProjectionPageKind,
+    page: &'a ProjectedPageRecord,
+    entity_id: &'a str,
+}
+
+fn module_gap_records(
+    repo_id: &str,
+    analysis: &RepositoryAnalysisOutput,
+    lookup: &ProjectedGapLookup,
+) -> Vec<ProjectedGapRecord> {
+    analysis
+        .modules
+        .iter()
+        .filter_map(|module| {
+            let page = lookup.modules.get(module.module_id.as_str())?;
+            page.doc_ids.is_empty().then(|| {
+                build_gap_record(&GapRecordInput {
+                    repo_id,
+                    kind: ProjectedGapKind::ModuleReferenceWithoutDocumentation,
+                    page_kind: ProjectionPageKind::Reference,
+                    page,
+                    entity_id: module.module_id.as_str(),
+                })
+            })
+        })
+        .collect()
+}
+
+fn symbol_gap_records(
+    repo_id: &str,
+    analysis: &RepositoryAnalysisOutput,
+    lookup: &ProjectedGapLookup,
+) -> Vec<ProjectedGapRecord> {
+    let mut gaps = Vec::new();
+
+    for symbol in &analysis.symbols {
+        let Some(page) = lookup.symbols.get(symbol.symbol_id.as_str()) else {
+            continue;
+        };
+        if page.doc_ids.is_empty() {
+            gaps.push(build_gap_record(&GapRecordInput {
+                repo_id,
+                kind: ProjectedGapKind::SymbolReferenceWithoutDocumentation,
+                page_kind: ProjectionPageKind::Reference,
+                page,
+                entity_id: symbol.symbol_id.as_str(),
+            }));
+            continue;
+        }
+        if symbol.verification_state.as_deref() == Some("unverified") {
+            gaps.push(build_gap_record(&GapRecordInput {
+                repo_id,
+                kind: ProjectedGapKind::SymbolReferenceUnverified,
+                page_kind: ProjectionPageKind::Reference,
+                page,
+                entity_id: symbol.symbol_id.as_str(),
+            }));
+        }
+    }
+
+    gaps
+}
+
+fn example_gap_records(
+    repo_id: &str,
+    analysis: &RepositoryAnalysisOutput,
+    lookup: &ProjectedGapLookup,
+) -> Vec<ProjectedGapRecord> {
+    analysis
+        .examples
+        .iter()
+        .filter_map(|example| {
+            let page = lookup.examples.get(example.example_id.as_str())?;
+            (page.module_ids.is_empty() && page.symbol_ids.is_empty()).then(|| {
+                build_gap_record(&GapRecordInput {
+                    repo_id,
+                    kind: ProjectedGapKind::ExampleHowToWithoutAnchor,
+                    page_kind: ProjectionPageKind::HowTo,
+                    page,
+                    entity_id: example.example_id.as_str(),
+                })
+            })
+        })
+        .collect()
+}
+
+fn documentation_gap_records(
+    repo_id: &str,
+    analysis: &RepositoryAnalysisOutput,
+    lookup: &ProjectedGapLookup,
+) -> Vec<ProjectedGapRecord> {
+    analysis
+        .docs
+        .iter()
+        .filter_map(|doc| {
+            let page = lookup.docs.get(doc.doc_id.as_str())?;
+            (page.module_ids.is_empty() && page.symbol_ids.is_empty()).then(|| {
+                build_gap_record(&GapRecordInput {
+                    repo_id,
+                    kind: ProjectedGapKind::DocumentationPageWithoutAnchor,
+                    page_kind: page.kind,
+                    page,
+                    entity_id: doc.doc_id.as_str(),
+                })
+            })
+        })
+        .collect()
+}
+
+fn build_gap_record(input: &GapRecordInput<'_>) -> ProjectedGapRecord {
+    ProjectedGapRecord {
+        repo_id: input.repo_id.to_owned(),
+        gap_id: gap_id(input.repo_id, input.kind, input.entity_id),
+        kind: input.kind,
+        page_kind: input.page_kind,
+        page_id: input.page.page_id.clone(),
+        entity_id: input.entity_id.to_owned(),
+        title: input.page.title.clone(),
+        path: input.page.path.clone(),
+        module_ids: input.page.module_ids.clone(),
+        symbol_ids: input.page.symbol_ids.clone(),
+        example_ids: input.page.example_ids.clone(),
+        doc_ids: input.page.doc_ids.clone(),
+        format_hints: input.page.format_hints.clone(),
     }
 }
 

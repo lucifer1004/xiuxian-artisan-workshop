@@ -5,14 +5,22 @@ use axum::{
     extract::{Query, State},
 };
 
+use crate::analyzers::cache::{
+    RepositorySearchQueryCacheKey, load_cached_repository_search_result,
+    store_cached_repository_search_result,
+};
+use crate::analyzers::service::{
+    build_repo_projected_page_search_with_artifacts, repository_search_artifacts,
+};
 use crate::analyzers::{
     RepoProjectedPageIndexTreeSearchQuery, RepoProjectedPageSearchQuery,
     RepoProjectedRetrievalContextQuery, RepoProjectedRetrievalHitQuery,
     RepoProjectedRetrievalQuery, build_repo_projected_page_index_tree_search,
-    build_repo_projected_page_search, build_repo_projected_retrieval,
-    build_repo_projected_retrieval_context, build_repo_projected_retrieval_hit,
+    build_repo_projected_retrieval, build_repo_projected_retrieval_context,
+    build_repo_projected_retrieval_hit,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
+use crate::search::FuzzySearchOptions;
 
 use super::parse::{
     parse_projection_page_kind, required_page_id, required_repo_id, required_search_query,
@@ -21,7 +29,7 @@ use super::query::{
     RepoProjectedPageSearchApiQuery, RepoProjectedRetrievalContextApiQuery,
     RepoProjectedRetrievalHitApiQuery,
 };
-use super::shared::with_repo_analysis;
+use super::shared::{with_repo_analysis, with_repo_cached_analysis_bundle};
 
 /// Projected retrieval hit endpoint.
 ///
@@ -145,21 +153,41 @@ pub async fn projected_page_search(
     let search_query = required_search_query(query.query.as_deref())?;
     let kind = parse_projection_page_kind(query.kind.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);
-    let result = with_repo_analysis(
+    let result = with_repo_cached_analysis_bundle(
         Arc::clone(&state),
         repo_id.clone(),
         "REPO_PROJECTED_PAGE_SEARCH_PANIC",
         "Repo projected page search task failed unexpectedly",
-        move |analysis| {
-            Ok::<_, crate::analyzers::RepoIntelligenceError>(build_repo_projected_page_search(
-                &RepoProjectedPageSearchQuery {
-                    repo_id,
-                    query: search_query,
-                    kind,
-                    limit,
-                },
-                &analysis,
-            ))
+        move |cached| {
+            let query = RepoProjectedPageSearchQuery {
+                repo_id,
+                query: search_query,
+                kind,
+                limit,
+            };
+            let filter = query
+                .kind
+                .map(|kind| format!("{kind:?}").to_ascii_lowercase());
+            let cache_key = RepositorySearchQueryCacheKey::new(
+                &cached.cache_key,
+                "repo.projected-page-search",
+                query.query.as_str(),
+                filter,
+                FuzzySearchOptions::document_search(),
+                query.limit,
+            );
+            if let Some(result) = load_cached_repository_search_result(&cache_key)? {
+                return Ok(result);
+            }
+
+            let artifacts = repository_search_artifacts(&cached.cache_key, &cached.analysis)?;
+            let result = build_repo_projected_page_search_with_artifacts(
+                &query,
+                &cached.analysis,
+                artifacts.as_ref(),
+            );
+            store_cached_repository_search_result(cache_key, &result)?;
+            Ok::<_, crate::analyzers::RepoIntelligenceError>(result)
         },
     )
     .await?;

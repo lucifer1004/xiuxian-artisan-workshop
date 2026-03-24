@@ -17,7 +17,7 @@ pub(crate) async fn publish_repo_content_chunks(
     let store = service
         .open_store(SearchCorpusKind::RepoContentChunk)
         .await?;
-    let table_name = service.repo_content_chunk_table_name(repo_id);
+    let table_name = SearchPlaneService::repo_content_chunk_table_name(repo_id);
     let rows = rows_from_documents(documents);
     store
         .replace_record_batches(

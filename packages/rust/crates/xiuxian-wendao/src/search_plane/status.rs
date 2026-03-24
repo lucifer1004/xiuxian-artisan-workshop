@@ -23,11 +23,11 @@ pub enum SearchPlanePhase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchCorpusIssueCode {
-    /// A repo reported ready but no published manifest exists for this corpus.
+    /// A repo reported ready but no published state exists for this corpus.
     PublishedManifestMissing,
-    /// A published manifest exists, but it does not record the source revision.
+    /// Published state exists, but it does not record the source revision.
     PublishedRevisionMissing,
-    /// A published manifest exists, but it points at a different source revision.
+    /// Published state exists, but it points at a different source revision.
     PublishedRevisionMismatch,
     /// Repo indexing failed while the corpus status was synthesized.
     RepoIndexFailed,
@@ -37,7 +37,7 @@ pub enum SearchCorpusIssueCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchCorpusIssueFamily {
-    /// Issues around missing or malformed published manifests.
+    /// Issues around missing or malformed published state.
     Manifest,
     /// Issues where the published revision no longer matches the repo revision.
     Revision,
@@ -111,15 +111,17 @@ pub enum SearchCorpusStatusReasonCode {
     WarmingUp,
     /// The corpus is refreshing while an older publication remains readable.
     Refreshing,
+    /// Background compaction is actively running for the readable publication.
+    Compacting,
     /// Background compaction has been scheduled for the readable publication.
     CompactionPending,
     /// The latest build failed.
     BuildFailed,
-    /// A repo reported ready but no published manifest exists for this corpus.
+    /// A repo reported ready but no published state exists for this corpus.
     PublishedManifestMissing,
-    /// A published manifest exists, but it does not record the source revision.
+    /// Published state exists, but it does not record the source revision.
     PublishedRevisionMissing,
-    /// A published manifest exists, but it points at a different source revision.
+    /// Published state exists, but it points at a different source revision.
     PublishedRevisionMismatch,
     /// Repo indexing failed while the corpus status was synthesized.
     RepoIndexFailed,
@@ -165,8 +167,10 @@ impl SearchMaintenancePolicy {
                 .then_some(super::coordinator::SearchCompactionReason::RowDeltaRatio);
         }
         let delta = previous_row_count.abs_diff(next_row_count);
-        let delta_ratio = (delta as f64) / (previous_row_count as f64);
-        (delta_ratio >= f64::from(self.row_delta_ratio_threshold))
+        let (threshold_numerator, threshold_denominator) =
+            ratio_threshold_parts(self.row_delta_ratio_threshold);
+        (u128::from(delta) * threshold_denominator
+            >= u128::from(previous_row_count) * threshold_numerator)
             .then_some(super::coordinator::SearchCompactionReason::RowDeltaRatio)
     }
 
@@ -196,9 +200,40 @@ impl Default for SearchMaintenancePolicy {
     }
 }
 
+fn ratio_threshold_parts(threshold: f32) -> (u128, u128) {
+    let normalized = if threshold.is_sign_negative() {
+        String::from("0")
+    } else {
+        format!("{threshold:.6}")
+    };
+    let trimmed = normalized.trim_end_matches('0').trim_end_matches('.');
+    let (whole_part, fractional_part) = match trimmed.split_once('.') {
+        Some((whole_part, fractional_part)) => (whole_part, fractional_part),
+        None => (trimmed, ""),
+    };
+    let whole_value = whole_part.parse::<u128>().ok().unwrap_or_default();
+    if fractional_part.is_empty() {
+        return (whole_value, 1);
+    }
+    let denominator = 10_u128.pow(
+        u32::try_from(fractional_part.len())
+            .ok()
+            .unwrap_or_default(),
+    );
+    let fractional_value = fractional_part.parse::<u128>().ok().unwrap_or_default();
+    (
+        whole_value
+            .saturating_mul(denominator)
+            .saturating_add(fractional_value),
+        denominator,
+    )
+}
+
 /// Background maintenance state derived from publish/compaction history.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchMaintenanceStatus {
+    /// Whether a compaction task is actively running for the readable publication.
+    pub compaction_running: bool,
     /// Whether the coordinator should schedule a compact/optimize run.
     pub compaction_pending: bool,
     /// Number of publishes observed since the last successful compaction.
@@ -207,6 +242,51 @@ pub struct SearchMaintenanceStatus {
     pub last_compacted_at: Option<String>,
     /// Human-readable reason for the most recent compaction.
     pub last_compaction_reason: Option<String>,
+}
+
+/// Source path used by the most recent bounded streaming query for one corpus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchQueryTelemetrySource {
+    /// The query streamed batches from a regular projected scan only.
+    Scan,
+    /// The query streamed batches from FTS only.
+    Fts,
+    /// The query attempted FTS first and then fell back to a regular projected scan.
+    FtsFallbackScan,
+}
+
+/// Recent bounded-rerank telemetry recorded for one corpus query lane.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchQueryTelemetry {
+    /// RFC3339 timestamp when the telemetry record was captured.
+    pub captured_at: String,
+    /// Optional scope hint such as a repo identifier for repo-backed queries.
+    pub scope: Option<String>,
+    /// Streaming source used by the query.
+    pub source: SearchQueryTelemetrySource,
+    /// Number of streamed batches consumed by the query.
+    pub batch_count: u64,
+    /// Total number of rows scanned across all streamed batches.
+    pub rows_scanned: u64,
+    /// Number of rows that matched the lexical predicate before bounded trimming.
+    pub matched_rows: u64,
+    /// Final number of retained results returned to the caller.
+    pub result_count: u64,
+    /// Batch row limit used for projected scan requests, when configured.
+    pub batch_row_limit: Option<u64>,
+    /// Recall limit pushed into the Lance scan/FTS layer, when configured.
+    pub recall_limit_rows: Option<u64>,
+    /// Soft in-memory working-set budget expressed as retained candidate rows.
+    pub working_set_budget_rows: u64,
+    /// Trim threshold that triggers bounded compaction of the working set.
+    pub trim_threshold_rows: u64,
+    /// Largest candidate/path working set observed during the query.
+    pub peak_working_set_rows: u64,
+    /// Number of times the working set had to be trimmed.
+    pub trim_count: u64,
+    /// Number of candidates/paths dropped by bounded trimming.
+    pub dropped_candidate_count: u64,
 }
 
 /// Per-corpus status snapshot for API and orchestration layers.
@@ -244,6 +324,8 @@ pub struct SearchCorpusStatus {
     pub issue_summary: Option<SearchCorpusIssueSummary>,
     /// Compact status reason that folds phase and issues into one UI-friendly decision.
     pub status_reason: Option<SearchCorpusStatusReason>,
+    /// Recent bounded-rerank telemetry captured from the last successful query on this corpus.
+    pub last_query_telemetry: Option<SearchQueryTelemetry>,
     /// Background maintenance state for the corpus.
     pub maintenance: SearchMaintenanceStatus,
 }
@@ -269,6 +351,7 @@ impl SearchCorpusStatus {
             issues: Vec::new(),
             issue_summary: None,
             status_reason: None,
+            last_query_telemetry: None,
             maintenance: SearchMaintenanceStatus::default(),
         }
     }
@@ -279,4 +362,32 @@ impl SearchCorpusStatus {
 pub struct SearchPlaneStatusSnapshot {
     /// Ordered status rows for every search-plane corpus.
     pub corpora: Vec<SearchCorpusStatus>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SearchMaintenancePolicy, ratio_threshold_parts};
+    use crate::search_plane::coordinator::SearchCompactionReason;
+
+    #[test]
+    fn ratio_threshold_parts_preserves_decimal_thresholds() {
+        assert_eq!(ratio_threshold_parts(0.25), (25, 100));
+        assert_eq!(ratio_threshold_parts(0.9), (9, 10));
+        assert_eq!(ratio_threshold_parts(1.0), (1, 1));
+        assert_eq!(ratio_threshold_parts(-1.0), (0, 1));
+    }
+
+    #[test]
+    fn compaction_reason_uses_fixed_precision_ratio_comparison() {
+        let policy = SearchMaintenancePolicy {
+            publish_count_threshold: 99,
+            row_delta_ratio_threshold: 0.25,
+        };
+
+        assert_eq!(policy.compaction_reason(0, Some(100), 124), None);
+        assert_eq!(
+            policy.compaction_reason(0, Some(100), 125),
+            Some(SearchCompactionReason::RowDeltaRatio)
+        );
+    }
 }

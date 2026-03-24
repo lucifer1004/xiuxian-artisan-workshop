@@ -3,6 +3,7 @@ use crate::link_graph::runtime_config::{
     DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX, resolve_link_graph_cache_runtime,
 };
 use crate::schemas::LINK_GRAPH_QUANTUM_CONTEXT_SNAPSHOT_V1;
+use crate::valkey_common::{normalize_key_prefix, open_client};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -121,12 +122,17 @@ fn snapshot_cache_key(snapshot_id: &str, key_prefix: &str) -> String {
 
 fn resolve_snapshot_runtime() -> Result<(String, String), String> {
     let runtime = resolve_link_graph_cache_runtime()?;
-    let key_prefix = if runtime.key_prefix.trim().is_empty() {
-        DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX.to_string()
-    } else {
-        runtime.key_prefix
-    };
+    let key_prefix = normalize_snapshot_key_prefix(runtime.key_prefix.as_str());
     Ok((runtime.valkey_url, key_prefix))
+}
+
+fn normalize_snapshot_key_prefix(candidate: &str) -> String {
+    normalize_key_prefix(candidate, DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX)
+}
+
+fn snapshot_redis_client(valkey_url: &str) -> Result<redis::Client, String> {
+    open_client(valkey_url)
+        .map_err(|err| format!("invalid valkey url for link_graph snapshot store: {err}"))
 }
 
 fn decode_snapshot_payload(raw: &str, snapshot_id: &str) -> Option<QuantumContextSnapshot> {
@@ -172,14 +178,13 @@ pub fn valkey_quantum_context_snapshot_get_with_valkey(
     if valkey_url.trim().is_empty() {
         return Err("link_graph snapshot valkey_url must be non-empty".to_string());
     }
-    let prefix = key_prefix
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX);
-    let cache_key = snapshot_cache_key(trimmed, prefix);
+    let prefix = key_prefix.map(str::trim).map_or_else(
+        || DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX.to_string(),
+        normalize_snapshot_key_prefix,
+    );
+    let cache_key = snapshot_cache_key(trimmed, &prefix);
 
-    let client = redis::Client::open(valkey_url)
-        .map_err(|err| format!("invalid valkey url for link_graph snapshot store: {err}"))?;
+    let client = snapshot_redis_client(valkey_url)?;
     let mut conn = client
         .get_connection()
         .map_err(|err| format!("failed to connect valkey for link_graph snapshot store: {err}"))?;
@@ -228,16 +233,15 @@ pub fn valkey_quantum_context_snapshot_save_with_valkey(
     if valkey_url.trim().is_empty() {
         return Err("link_graph snapshot valkey_url must be non-empty".to_string());
     }
-    let prefix = key_prefix
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX);
-    let cache_key = snapshot_cache_key(snapshot_id, prefix);
+    let prefix = key_prefix.map(str::trim).map_or_else(
+        || DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX.to_string(),
+        normalize_snapshot_key_prefix,
+    );
+    let cache_key = snapshot_cache_key(snapshot_id, &prefix);
     let encoded = serde_json::to_string(snapshot)
         .map_err(|err| format!("failed to serialize link_graph snapshot: {err}"))?;
 
-    let client = redis::Client::open(valkey_url)
-        .map_err(|err| format!("invalid valkey url for link_graph snapshot store: {err}"))?;
+    let client = snapshot_redis_client(valkey_url)?;
     let mut conn = client
         .get_connection()
         .map_err(|err| format!("failed to connect valkey for link_graph snapshot store: {err}"))?;
@@ -262,8 +266,7 @@ pub fn valkey_quantum_context_snapshot_drop(snapshot_id: &str) -> Result<(), Str
     }
     let cache_key = snapshot_cache_key(trimmed, &key_prefix);
 
-    let client = redis::Client::open(valkey_url.as_str())
-        .map_err(|err| format!("invalid valkey url for link_graph snapshot store: {err}"))?;
+    let client = snapshot_redis_client(valkey_url.as_str())?;
     let mut conn = client
         .get_connection()
         .map_err(|err| format!("failed to connect valkey for link_graph snapshot store: {err}"))?;
@@ -304,4 +307,40 @@ pub fn valkey_quantum_context_snapshot_rollback_with_valkey(
         valkey_quantum_context_snapshot_get_with_valkey(snapshot_id, valkey_url, key_prefix)?
             .map(|snapshot| snapshot.contexts),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_snapshot_key_prefix, snapshot_redis_client};
+    use crate::link_graph::runtime_config::DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX;
+
+    #[test]
+    fn normalize_snapshot_key_prefix_falls_back_for_blank_input() {
+        assert_eq!(
+            normalize_snapshot_key_prefix("   "),
+            DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX.to_string()
+        );
+    }
+
+    #[test]
+    fn normalize_snapshot_key_prefix_trims_non_blank_input() {
+        assert_eq!(
+            normalize_snapshot_key_prefix("  xiuxian:snapshot  "),
+            "xiuxian:snapshot".to_string()
+        );
+    }
+
+    #[test]
+    fn snapshot_redis_client_opens_trimmed_valid_url() {
+        let client = snapshot_redis_client(" redis://127.0.0.1/ ");
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn snapshot_redis_client_preserves_snapshot_error_context() {
+        let Err(error) = snapshot_redis_client("  ") else {
+            panic!("blank URL should fail");
+        };
+        assert!(error.contains("link_graph snapshot store"));
+    }
 }

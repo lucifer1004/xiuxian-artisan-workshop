@@ -1,6 +1,6 @@
-//! Tests for omni-macros.
+//! Tests for xiuxian-macros.
 
-use omni_macros::{
+use xiuxian_macros::{
     assert_timing, bench_case, env_non_empty, patterns, project_config_paths, py_from,
     string_first_non_empty, temp_dir, topics,
 };

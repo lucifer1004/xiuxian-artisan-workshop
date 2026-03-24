@@ -1,4 +1,4 @@
-//! # omni-macros
+//! # xiuxian-macros
 //!
 //! Common procedural macros for omni Rust crates.
 //!
@@ -11,6 +11,7 @@
 //! - [`env_non_empty!`] - Read a trimmed non-empty environment variable as `Option<String>`
 //! - [`string_first_non_empty!`] - Resolve the first non-empty string candidate
 //! - [`project_config_paths!`] - Build system/user/env layered config candidate paths
+//! - [`crate_resources_dir!`] - Embed the calling crate's local `resources/` tree
 //!
 //! ### Testing Utilities
 //! - [`temp_dir!`] - Create a temporary directory for tests
@@ -220,6 +221,36 @@ pub fn string_first_non_empty(input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Embed the calling crate's local `resources/` directory.
+///
+/// # Panics
+///
+/// Panics when `CARGO_MANIFEST_DIR` is unavailable while expanding the macro.
+#[proc_macro]
+pub fn crate_resources_dir(input: TokenStream) -> TokenStream {
+    if !input.is_empty() {
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "crate_resources_dir! takes no arguments",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .unwrap_or_else(|error| panic!("failed to resolve CARGO_MANIFEST_DIR: {error}"));
+    let resources_dir = std::path::Path::new(&manifest_dir).join("resources");
+    let dir_literal = syn::LitStr::new(
+        resources_dir.to_string_lossy().as_ref(),
+        proc_macro2::Span::call_site(),
+    );
+
+    quote! {
+        ::include_dir::include_dir!(#dir_literal)
+    }
+    .into()
+}
+
 /// Build layered config candidate paths for a config filename.
 ///
 /// Input: `project_config_paths!("qianji.toml", "QIANJI_CONFIG_PATH")`
@@ -334,7 +365,7 @@ pub fn project_config_paths(input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// let temp_path = omni_macros::temp_dir!();
+/// let temp_path = xiuxian_macros::temp_dir!();
 /// std::fs::write(temp_path.join("test.txt"), "hello")
 ///     .expect("temporary write should succeed");
 /// assert!(temp_path.exists());
@@ -358,7 +389,7 @@ pub fn temp_dir(_input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// let _elapsed = omni_macros::assert_timing!(100.0, {
+/// let _elapsed = xiuxian_macros::assert_timing!(100.0, {
 ///     std::thread::sleep(std::time::Duration::from_millis(1));
 /// });
 /// ```
@@ -405,7 +436,7 @@ pub fn assert_timing(input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// let elapsed = omni_macros::bench_case!(|| {
+/// let elapsed = xiuxian_macros::bench_case!(|| {
 ///     let value = 1 + 1;
 ///     assert_eq!(value, 2);
 /// });

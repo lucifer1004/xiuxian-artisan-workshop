@@ -37,10 +37,19 @@ fn test_modular_wendao_fallback() -> TestResult {
     fs::create_dir_all(&user_base)?;
 
     fs::write(
-        user_base.join("wendao.toml"),
+        user_base.join("wendao.shared.toml"),
         r#"
 [zhixing]
 notebook_path = "/modular/fallback"
+"#,
+    )?;
+    fs::write(
+        user_base.join("wendao.toml"),
+        r#"
+imports = ["wendao.shared.toml"]
+
+[zhixing]
+# notebook_path is sourced from wendao.shared.toml
 "#,
     )?;
 

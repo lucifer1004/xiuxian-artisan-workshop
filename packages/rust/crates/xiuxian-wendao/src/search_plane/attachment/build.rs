@@ -135,8 +135,8 @@ fn build_attachment_hits(
             );
             hits.extend(attachment_hits_for_parsed_note(
                 &parsed,
-                metadata.project_name,
-                metadata.root_label,
+                metadata.project_name.as_deref(),
+                metadata.root_label.as_deref(),
             ));
         }
     }
@@ -150,7 +150,7 @@ async fn write_attachment_epoch(
     hits: &[AttachmentSearchHit],
 ) -> Result<(), VectorStoreError> {
     let store = service.open_store(SearchCorpusKind::Attachment).await?;
-    let table_name = service.table_name(SearchCorpusKind::Attachment, lease.epoch);
+    let table_name = SearchPlaneService::table_name(SearchCorpusKind::Attachment, lease.epoch);
     store
         .replace_record_batches(
             table_name.as_str(),
@@ -219,8 +219,8 @@ pub(crate) async fn publish_attachments_from_projects(
 
 fn attachment_hits_for_parsed_note(
     parsed: &crate::link_graph::parser::ParsedNote,
-    project_name: Option<String>,
-    root_label: Option<String>,
+    project_name: Option<&str>,
+    root_label: Option<&str>,
 ) -> Vec<AttachmentSearchHit> {
     let mut seen = HashSet::<String>::new();
     let mut hits = parsed
@@ -248,8 +248,8 @@ fn attachment_hits_for_parsed_note(
                 navigation_target: StudioNavigationTarget {
                     path: parsed.doc.path.clone(),
                     category: "doc".to_string(),
-                    project_name: project_name.clone(),
-                    root_label: root_label.clone(),
+                    project_name: project_name.map(ToString::to_string),
+                    root_label: root_label.map(ToString::to_string),
                     line: None,
                     line_end: None,
                     column: None,

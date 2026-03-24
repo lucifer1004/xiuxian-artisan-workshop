@@ -1,11 +1,23 @@
 use std::collections::BTreeMap;
 
-use super::{build_example_search, build_module_search, build_symbol_search};
+use super::{
+    build_example_search, build_example_search_with_artifacts, build_module_search,
+    build_module_search_with_artifacts, build_symbol_search, build_symbol_search_with_artifacts,
+    repository_search_artifacts,
+};
+use crate::analyzers::cache::RepositoryAnalysisCacheKey;
 use crate::analyzers::query::{ExampleSearchQuery, ModuleSearchQuery, SymbolSearchQuery};
 use crate::analyzers::{
     DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind,
     RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord,
 };
+
+fn ok_or_panic<T, E>(result: Result<T, E>, context: &str) -> T
+where
+    E: std::fmt::Display,
+{
+    result.unwrap_or_else(|error| panic!("{context}: {error}"))
+}
 
 #[allow(clippy::too_many_lines)]
 fn sample_search_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
@@ -196,5 +208,73 @@ fn example_search_uses_shared_tantivy_fuzzy_index_for_related_symbol_typos() {
             .score
             .unwrap_or_else(|| panic!("shared fuzzy example search should emit a score"))
             > 0.0
+    );
+}
+
+fn sample_cache_key(repo_id: &str) -> RepositoryAnalysisCacheKey {
+    RepositoryAnalysisCacheKey {
+        repo_id: repo_id.to_string(),
+        checkout_root: format!("/virtual/repos/{repo_id}"),
+        checkout_revision: Some("fixture".to_string()),
+        mirror_revision: Some("fixture".to_string()),
+        tracking_revision: Some("fixture".to_string()),
+        plugin_ids: vec!["fixture-plugin".to_string()],
+    }
+}
+
+#[test]
+fn module_search_with_artifacts_matches_direct_search() {
+    let analysis = sample_search_analysis("module-artifacts");
+    let query = ModuleSearchQuery {
+        repo_id: "module-artifacts".to_string(),
+        query: "ProjectonPkg".to_string(),
+        limit: 10,
+    };
+    let artifacts = ok_or_panic(
+        repository_search_artifacts(&sample_cache_key("module-artifacts"), &analysis),
+        "artifacts should build",
+    );
+
+    assert_eq!(
+        build_module_search(&query, &analysis),
+        build_module_search_with_artifacts(&query, &analysis, artifacts.as_ref())
+    );
+}
+
+#[test]
+fn symbol_search_with_artifacts_matches_direct_search() {
+    let analysis = sample_search_analysis("symbol-artifacts");
+    let query = SymbolSearchQuery {
+        repo_id: "symbol-artifacts".to_string(),
+        query: "slove".to_string(),
+        limit: 10,
+    };
+    let artifacts = ok_or_panic(
+        repository_search_artifacts(&sample_cache_key("symbol-artifacts"), &analysis),
+        "artifacts should build",
+    );
+
+    assert_eq!(
+        build_symbol_search(&query, &analysis),
+        build_symbol_search_with_artifacts(&query, &analysis, artifacts.as_ref())
+    );
+}
+
+#[test]
+fn example_search_with_artifacts_matches_direct_search() {
+    let analysis = sample_search_analysis("example-artifacts");
+    let query = ExampleSearchQuery {
+        repo_id: "example-artifacts".to_string(),
+        query: "slove".to_string(),
+        limit: 10,
+    };
+    let artifacts = ok_or_panic(
+        repository_search_artifacts(&sample_cache_key("example-artifacts"), &analysis),
+        "artifacts should build",
+    );
+
+    assert_eq!(
+        build_example_search(&query, &analysis),
+        build_example_search_with_artifacts(&query, &analysis, artifacts.as_ref())
     );
 }

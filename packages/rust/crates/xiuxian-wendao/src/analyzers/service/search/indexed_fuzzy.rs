@@ -13,11 +13,11 @@ pub(super) fn indexed_module_fuzzy_matches(
     limit: usize,
 ) -> Vec<RankedSearchRecord<ModuleRecord>> {
     let mut matches = index
-        .search_fuzzy(query, limit, FuzzySearchOptions::path_search())
+        .search_fuzzy_hits(query, limit, FuzzySearchOptions::path_search())
         .unwrap_or_default()
         .into_iter()
         .filter_map(|hit| {
-            let module = lookup.get(hit.item.id.as_str())?.clone();
+            let module = lookup.get(hit.id.as_str())?.clone();
             Some((f64::from(hit.score), hit.distance, module))
         })
         .collect::<Vec<_>>();
@@ -49,11 +49,11 @@ pub(super) fn indexed_symbol_fuzzy_matches(
     limit: usize,
 ) -> Vec<RankedSearchRecord<SymbolRecord>> {
     let mut matches = index
-        .search_fuzzy(query, limit, FuzzySearchOptions::symbol_search())
+        .search_fuzzy_hits(query, limit, FuzzySearchOptions::symbol_search())
         .unwrap_or_default()
         .into_iter()
         .filter_map(|hit| {
-            let symbol = lookup.get(hit.item.id.as_str())?.clone();
+            let symbol = lookup.get(hit.id.as_str())?.clone();
             Some((f64::from(hit.score), hit.distance, symbol))
         })
         .collect::<Vec<_>>();
@@ -86,11 +86,11 @@ pub(super) fn indexed_example_fuzzy_matches(
     limit: usize,
 ) -> Vec<RankedSearchRecord<ExampleRecord>> {
     let mut matches = index
-        .search_fuzzy(query, limit, FuzzySearchOptions::document_search())
+        .search_fuzzy_hits(query, limit, FuzzySearchOptions::document_search())
         .unwrap_or_default()
         .into_iter()
         .filter_map(|hit| {
-            let example = lookup.get(hit.item.id.as_str())?.clone();
+            let example = lookup.get(hit.id.as_str())?.clone();
             Some((f64::from(hit.score), hit.distance, example))
         })
         .collect::<Vec<_>>();

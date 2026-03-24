@@ -12,6 +12,14 @@ use crate::git::checkout::{
     CheckoutSyncMode, discover_checkout_metadata, resolve_repository_source,
 };
 
+/// Ready cached repository analysis plus its stable cache identity.
+pub struct CachedRepositoryAnalysis {
+    /// Stable cache identity for the resolved repository snapshot.
+    pub cache_key: crate::analyzers::cache::RepositoryAnalysisCacheKey,
+    /// Cached repository analysis output.
+    pub analysis: RepositoryAnalysisOutput,
+}
+
 /// Load repository analysis from ready caches only.
 ///
 /// # Errors
@@ -22,6 +30,20 @@ pub fn analyze_registered_repository_cached_with_registry(
     cwd: &Path,
     registry: &PluginRegistry,
 ) -> Result<RepositoryAnalysisOutput, RepoIntelligenceError> {
+    analyze_registered_repository_cached_bundle_with_registry(repository, cwd, registry)
+        .map(|cached| cached.analysis)
+}
+
+/// Load repository analysis from ready caches only and preserve the stable cache key.
+///
+/// # Errors
+///
+/// Returns [`RepoIntelligenceError::PendingRepositoryIndex`] when no ready cache exists yet.
+pub fn analyze_registered_repository_cached_bundle_with_registry(
+    repository: &RegisteredRepository,
+    cwd: &Path,
+    registry: &PluginRegistry,
+) -> Result<CachedRepositoryAnalysis, RepoIntelligenceError> {
     if repository.plugins.is_empty() {
         return Err(RepoIntelligenceError::MissingRequiredPlugin {
             repo_id: repository.id.clone(),
@@ -46,7 +68,10 @@ pub fn analyze_registered_repository_cached_with_registry(
         checkout_metadata.as_ref(),
     );
     if let Some(cached) = load_cached_repository_analysis(&cache_key)? {
-        return Ok(cached);
+        return Ok(CachedRepositoryAnalysis {
+            cache_key,
+            analysis: cached,
+        });
     }
 
     let revision = cache_key
@@ -59,8 +84,11 @@ pub fn analyze_registered_repository_cached_with_registry(
         if let Some(ref cache) = valkey_cache
             && let Some(cached) = cache.get(repository, revision)?
         {
-            store_cached_repository_analysis(cache_key, &cached)?;
-            return Ok(cached);
+            store_cached_repository_analysis(cache_key.clone(), &cached)?;
+            return Ok(CachedRepositoryAnalysis {
+                cache_key,
+                analysis: cached,
+            });
         }
     }
 

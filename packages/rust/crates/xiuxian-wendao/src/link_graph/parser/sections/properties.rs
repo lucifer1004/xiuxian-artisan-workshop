@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-pub(super) fn parse_property_drawer(line: &str) -> Option<(String, String)> {
+pub(crate) fn parse_property_drawer(line: &str) -> Option<(String, String)> {
     let trimmed = line.trim();
     if !trimmed.starts_with(':') {
         return None;
@@ -22,7 +22,7 @@ pub(super) fn parse_property_drawer(line: &str) -> Option<(String, String)> {
     Some((key, value))
 }
 
-pub(super) fn extract_property_drawers(lines: &[String]) -> HashMap<String, String> {
+pub(crate) fn extract_property_drawers(lines: &[String]) -> HashMap<String, String> {
     let mut attributes = HashMap::new();
     let mut in_properties_block = false;
     let mut block_ended = false;

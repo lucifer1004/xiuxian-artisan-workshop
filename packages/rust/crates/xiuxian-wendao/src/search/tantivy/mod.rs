@@ -7,8 +7,9 @@ mod fragments;
 mod identifier;
 mod index;
 mod matcher;
+mod tokenizer;
 
-pub use document::SearchDocument;
+pub use document::{SearchDocument, SearchDocumentHit, SearchDocumentMatchField};
 pub use fields::SearchDocumentFields;
 pub use index::SearchDocumentIndex;
 pub use matcher::{TantivyDocumentMatch, TantivyMatcher};

@@ -9,9 +9,9 @@ pub(crate) use extract::extract_sections;
 pub use types::{LogbookEntry, ParsedSection};
 
 #[cfg(test)]
-use logbook::{extract_logbook_entries, parse_logbook_entry};
+pub(crate) use logbook::{extract_logbook_entries, parse_logbook_entry};
 #[cfg(test)]
-use properties::{extract_property_drawers, parse_property_drawer};
+pub(crate) use properties::{extract_property_drawers, parse_property_drawer};
 
 #[cfg(test)]
 #[path = "../../../../tests/unit/link_graph/parser/sections.rs"]

@@ -31,10 +31,3 @@ pub(super) fn orphan_candidates(config_home: Option<&Path>, orphan_file: &str) -
 pub(super) fn existing_config_files(paths: Vec<PathBuf>) -> Vec<PathBuf> {
     paths.into_iter().filter(|path| path.is_file()).collect()
 }
-
-pub(super) fn tracked_files(global_paths: &[PathBuf], orphan_paths: &[PathBuf]) -> Vec<PathBuf> {
-    let mut files = Vec::with_capacity(global_paths.len() + orphan_paths.len());
-    files.extend(global_paths.iter().cloned());
-    files.extend(orphan_paths.iter().cloned());
-    files
-}

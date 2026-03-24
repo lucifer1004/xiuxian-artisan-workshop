@@ -1,10 +1,14 @@
 use std::collections::HashSet;
 
 use xiuxian_vector::{
-    ColumnarScanOptions, LanceArray, LanceRecordBatch, LanceStringArray, VectorStoreError,
+    ColumnarScanOptions, LanceArray, LanceRecordBatch, LanceStringArray, VectorStore,
+    VectorStoreError,
 };
 
 use crate::gateway::studio::types::AttachmentSearchHit;
+use crate::search_plane::ranking::{
+    RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry, sort_by_rank, trim_ranked_vec,
+};
 use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
 
 use super::build::attachment_kind_label;
@@ -12,6 +16,9 @@ use super::schema::{
     attachment_ext_column, attachment_name_column, attachment_name_folded_column, hit_json_column,
     kind_column, projected_columns_with_hit_json,
 };
+
+const MIN_RETAINED_ATTACHMENTS: usize = 32;
+const RETAINED_ATTACHMENT_MULTIPLIER: usize = 2;
 
 #[cfg(test)]
 use super::schema::{attachment_batches, attachment_schema, search_text_column};
@@ -46,86 +53,56 @@ pub(crate) async fn search_attachment_hits(
         return Ok(Vec::new());
     }
 
-    let normalized_extensions = extensions
-        .iter()
-        .map(|value| value.trim().trim_start_matches('.').to_ascii_lowercase())
-        .filter(|value| !value.is_empty())
-        .collect::<HashSet<_>>();
-    let normalized_kinds = kinds
-        .iter()
-        .copied()
-        .map(attachment_kind_label)
-        .map(ToString::to_string)
-        .collect::<HashSet<_>>();
+    let normalized_extensions = normalize_extension_filters(extensions);
+    let normalized_kinds = normalize_kind_filters(kinds);
 
     let store = service.open_store(SearchCorpusKind::Attachment).await?;
-    let table_name = service.table_name(SearchCorpusKind::Attachment, active_epoch);
-    let options = ColumnarScanOptions {
-        where_filter: filter_expression(&normalized_extensions, &normalized_kinds),
-        projected_columns: projected_columns_with_hit_json()
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
-        batch_size: Some(256),
-        limit: if case_sensitive || !should_use_fts(query_text) {
-            None
-        } else {
-            Some(limit.saturating_mul(32).max(128))
-        },
-        ..ColumnarScanOptions::default()
-    };
-    let batches = if case_sensitive || !should_use_fts(query_text) {
-        store
-            .scan_record_batches(table_name.as_str(), options)
-            .await?
+    let table_name = SearchPlaneService::table_name(SearchCorpusKind::Attachment, active_epoch);
+    let options = build_attachment_scan_options(
+        query_text,
+        limit,
+        case_sensitive,
+        &normalized_extensions,
+        &normalized_kinds,
+    );
+    let normalized_query = if case_sensitive {
+        query_text.to_string()
     } else {
-        let batches = store
-            .search_fts_batches(table_name.as_str(), query_text, options.clone())
-            .await?;
-        if batches.is_empty() {
-            store
-                .scan_record_batches(table_name.as_str(), options)
-                .await?
-        } else {
-            batches
-        }
+        query_text.to_ascii_lowercase()
     };
-
-    let mut candidates = Vec::new();
-    for batch in &batches {
-        collect_candidates(
-            batch,
-            query_text,
-            case_sensitive,
-            &normalized_extensions,
-            &normalized_kinds,
-            limit,
-            &mut candidates,
-        )?;
-    }
-
-    candidates.sort_by(|left, right| {
-        right
-            .score
-            .partial_cmp(&left.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.attachment_path.cmp(&right.attachment_path))
-            .then_with(|| left.source_path.cmp(&right.source_path))
-    });
+    let query_tokens = build_query_tokens(normalized_query.as_str());
+    let candidate_query = AttachmentCandidateQuery {
+        case_sensitive,
+        normalized_query: normalized_query.as_str(),
+        query_tokens: query_tokens.as_slice(),
+        extensions: &normalized_extensions,
+        kinds: &normalized_kinds,
+        window: retained_window(limit),
+    };
+    let fts_eligible = !case_sensitive && should_use_fts(query_text);
+    let execution = execute_attachment_search(
+        &store,
+        table_name.as_str(),
+        query_text,
+        options,
+        &candidate_query,
+        fts_eligible,
+    )
+    .await?;
+    let mut candidates = execution.candidates;
+    sort_by_rank(&mut candidates, compare_candidates);
     candidates.truncate(limit);
-
-    candidates
-        .into_iter()
-        .map(|candidate| {
-            let mut hit: AttachmentSearchHit = serde_json::from_str(candidate.hit_json.as_str())
-                .map_err(|error| AttachmentSearchError::Decode(error.to_string()))?;
-            hit.score = candidate.score;
-            Ok(hit)
-        })
-        .collect()
+    let hits = decode_attachment_hits(candidates)?;
+    service.record_query_telemetry(
+        SearchCorpusKind::Attachment,
+        execution
+            .telemetry
+            .finish(execution.source, None, hits.len()),
+    );
+    Ok(hits)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct AttachmentCandidate {
     score: f64,
     source_path: String,
@@ -133,15 +110,81 @@ struct AttachmentCandidate {
     hit_json: String,
 }
 
+struct AttachmentCandidateQuery<'a> {
+    case_sensitive: bool,
+    normalized_query: &'a str,
+    query_tokens: &'a [String],
+    extensions: &'a HashSet<String>,
+    kinds: &'a HashSet<String>,
+    window: RetainedWindow,
+}
+
+struct AttachmentSearchExecution {
+    candidates: Vec<AttachmentCandidate>,
+    telemetry: StreamingRerankTelemetry,
+    source: StreamingRerankSource,
+}
+
+async fn execute_attachment_search(
+    store: &VectorStore,
+    table_name: &str,
+    query_text: &str,
+    options: ColumnarScanOptions,
+    candidate_query: &AttachmentCandidateQuery<'_>,
+    fts_eligible: bool,
+) -> Result<AttachmentSearchExecution, AttachmentSearchError> {
+    let mut telemetry =
+        StreamingRerankTelemetry::new(candidate_query.window, options.batch_size, options.limit);
+    let mut candidates = Vec::with_capacity(candidate_query.window.target);
+    let mut saw_fts_batch = false;
+    let mut fell_back_to_scan = false;
+
+    if fts_eligible {
+        match store
+            .search_fts_batches_streaming(table_name, query_text, options.clone(), |batch| {
+                saw_fts_batch = true;
+                collect_candidates(&batch, candidate_query, &mut candidates, &mut telemetry)
+            })
+            .await
+        {
+            Ok(()) if saw_fts_batch => {}
+            Ok(()) => {
+                fell_back_to_scan = true;
+                candidates.clear();
+                store
+                    .scan_record_batches_streaming(table_name, options, |batch| {
+                        collect_candidates(&batch, candidate_query, &mut candidates, &mut telemetry)
+                    })
+                    .await?;
+            }
+            Err(error) => return Err(error),
+        }
+    } else {
+        store
+            .scan_record_batches_streaming(table_name, options, |batch| {
+                collect_candidates(&batch, candidate_query, &mut candidates, &mut telemetry)
+            })
+            .await?;
+    }
+
+    Ok(AttachmentSearchExecution {
+        candidates,
+        telemetry,
+        source: match (fts_eligible, fell_back_to_scan) {
+            (true, true) => StreamingRerankSource::FtsFallbackScan,
+            (true, false) => StreamingRerankSource::Fts,
+            (false, _) => StreamingRerankSource::Scan,
+        },
+    })
+}
+
 fn collect_candidates(
     batch: &LanceRecordBatch,
-    query: &str,
-    case_sensitive: bool,
-    extensions: &HashSet<String>,
-    kinds: &HashSet<String>,
-    limit: usize,
+    query: &AttachmentCandidateQuery<'_>,
     candidates: &mut Vec<AttachmentCandidate>,
+    telemetry: &mut StreamingRerankTelemetry,
 ) -> Result<(), AttachmentSearchError> {
+    telemetry.observe_batch(batch.num_rows());
     let source_path = string_column(batch, "source_path")?;
     let source_title = string_column(batch, "source_title")?;
     let source_stem = string_column(batch, "source_stem")?;
@@ -155,25 +198,16 @@ fn collect_candidates(
     let attachment_path_folded = string_column(batch, "attachment_path_folded")?;
     let attachment_name_folded = string_column(batch, attachment_name_folded_column())?;
     let hit_json = string_column(batch, hit_json_column())?;
-    let normalized_query = if case_sensitive {
-        query.trim().to_string()
-    } else {
-        query.trim().to_ascii_lowercase()
-    };
-    let query_tokens = normalized_query
-        .split_whitespace()
-        .filter(|token| !token.is_empty())
-        .collect::<Vec<_>>();
 
     for row in 0..batch.num_rows() {
-        if !extensions.is_empty() && !extensions.contains(attachment_ext.value(row)) {
+        if !query.extensions.is_empty() && !query.extensions.contains(attachment_ext.value(row)) {
             continue;
         }
-        if !kinds.is_empty() && !kinds.contains(kind.value(row)) {
+        if !query.kinds.is_empty() && !query.kinds.contains(kind.value(row)) {
             continue;
         }
 
-        let fields = if case_sensitive {
+        let fields = if query.case_sensitive {
             [
                 attachment_path.value(row),
                 attachment_name.value(row),
@@ -190,34 +224,112 @@ fn collect_candidates(
                 source_stem_folded.value(row),
             ]
         };
-        let score = candidate_score(normalized_query.as_str(), &query_tokens, &fields);
+        let score = candidate_score(query.normalized_query, query.query_tokens, &fields);
         if score <= 0.0 {
             continue;
         }
 
+        telemetry.observe_match();
         candidates.push(AttachmentCandidate {
             score,
             source_path: source_path.value(row).to_string(),
             attachment_path: attachment_path.value(row).to_string(),
             hit_json: hit_json.value(row).to_string(),
         });
-        if candidates.len() > limit.saturating_mul(4).max(64) {
-            candidates.sort_by(|left, right| {
-                right
-                    .score
-                    .partial_cmp(&left.score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| left.attachment_path.cmp(&right.attachment_path))
-                    .then_with(|| left.source_path.cmp(&right.source_path))
-            });
-            candidates.truncate(limit.saturating_mul(2).max(32));
+        telemetry.observe_working_set(candidates.len());
+        if candidates.len() > query.window.threshold {
+            let before_len = candidates.len();
+            trim_ranked_vec(candidates, query.window.target, compare_candidates);
+            telemetry.observe_trim(before_len, candidates.len());
         }
     }
 
     Ok(())
 }
 
-fn candidate_score(normalized_query: &str, query_tokens: &[&str], fields: &[&str; 5]) -> f64 {
+fn normalize_extension_filters(extensions: &[String]) -> HashSet<String> {
+    extensions
+        .iter()
+        .map(|value| value.trim().trim_start_matches('.').to_ascii_lowercase())
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
+fn normalize_kind_filters(kinds: &[crate::link_graph::LinkGraphAttachmentKind]) -> HashSet<String> {
+    kinds
+        .iter()
+        .copied()
+        .map(attachment_kind_label)
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn build_attachment_scan_options(
+    query_text: &str,
+    limit: usize,
+    case_sensitive: bool,
+    normalized_extensions: &HashSet<String>,
+    normalized_kinds: &HashSet<String>,
+) -> ColumnarScanOptions {
+    ColumnarScanOptions {
+        where_filter: filter_expression(normalized_extensions, normalized_kinds),
+        projected_columns: projected_columns_with_hit_json()
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        batch_size: Some(256),
+        limit: if case_sensitive || !should_use_fts(query_text) {
+            None
+        } else {
+            Some(limit.saturating_mul(32).max(128))
+        },
+        ..ColumnarScanOptions::default()
+    }
+}
+
+fn build_query_tokens(normalized_query: &str) -> Vec<String> {
+    normalized_query
+        .split_whitespace()
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn decode_attachment_hits(
+    candidates: Vec<AttachmentCandidate>,
+) -> Result<Vec<AttachmentSearchHit>, AttachmentSearchError> {
+    candidates
+        .into_iter()
+        .map(|candidate| {
+            let mut hit: AttachmentSearchHit = serde_json::from_str(candidate.hit_json.as_str())
+                .map_err(|error| AttachmentSearchError::Decode(error.to_string()))?;
+            hit.score = candidate.score;
+            Ok(hit)
+        })
+        .collect()
+}
+
+fn retained_window(limit: usize) -> RetainedWindow {
+    RetainedWindow::new(
+        limit,
+        RETAINED_ATTACHMENT_MULTIPLIER,
+        MIN_RETAINED_ATTACHMENTS,
+    )
+}
+
+fn compare_candidates(
+    left: &AttachmentCandidate,
+    right: &AttachmentCandidate,
+) -> std::cmp::Ordering {
+    right
+        .score
+        .partial_cmp(&left.score)
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then_with(|| left.attachment_path.cmp(&right.attachment_path))
+        .then_with(|| left.source_path.cmp(&right.source_path))
+}
+
+fn candidate_score(normalized_query: &str, query_tokens: &[String], fields: &[&str; 5]) -> f64 {
     if normalized_query.is_empty() {
         return 1.0;
     }
@@ -225,7 +337,7 @@ fn candidate_score(normalized_query: &str, query_tokens: &[&str], fields: &[&str
     let query_hit = fields.iter().any(|value| value.contains(normalized_query));
     let token_hit_count = query_tokens
         .iter()
-        .filter(|token| fields.iter().any(|value| value.contains(**token)))
+        .filter(|token| fields.iter().any(|value| value.contains(token.as_str())))
         .count();
     if !query_hit && token_hit_count == 0 {
         return 0.0;
@@ -310,6 +422,44 @@ mod tests {
     };
 
     use super::*;
+    use crate::search_plane::ranking::trim_ranked_vec;
+
+    #[test]
+    fn trim_candidates_keeps_highest_ranked_attachment_hits() {
+        let mut candidates = vec![
+            AttachmentCandidate {
+                score: 0.4,
+                source_path: "docs/zeta.md".to_string(),
+                attachment_path: "assets/zeta.png".to_string(),
+                hit_json: "{}".to_string(),
+            },
+            AttachmentCandidate {
+                score: 0.9,
+                source_path: "docs/beta.md".to_string(),
+                attachment_path: "assets/beta.png".to_string(),
+                hit_json: "{}".to_string(),
+            },
+            AttachmentCandidate {
+                score: 0.9,
+                source_path: "docs/alpha.md".to_string(),
+                attachment_path: "assets/alpha.png".to_string(),
+                hit_json: "{}".to_string(),
+            },
+        ];
+
+        trim_ranked_vec(&mut candidates, 2, compare_candidates);
+
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].attachment_path, "assets/alpha.png");
+        assert_eq!(candidates[1].attachment_path, "assets/beta.png");
+    }
+
+    #[test]
+    fn retained_window_scales_with_limit() {
+        assert_eq!(retained_window(0).target, 32);
+        assert_eq!(retained_window(8).target, 32);
+        assert_eq!(retained_window(32).target, 64);
+    }
 
     fn fixture_service(temp_dir: &tempfile::TempDir) -> SearchPlaneService {
         SearchPlaneService::with_paths(
@@ -358,7 +508,7 @@ mod tests {
 
     #[tokio::test]
     async fn attachment_query_reads_hits_from_published_epoch() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
         let service = fixture_service(&temp_dir);
         let lease = match service.coordinator().begin_build(
             SearchCorpusKind::Attachment,
@@ -380,27 +530,27 @@ mod tests {
         let store = service
             .open_store(SearchCorpusKind::Attachment)
             .await
-            .expect("open store");
-        let table_name = service.table_name(SearchCorpusKind::Attachment, lease.epoch);
+            .unwrap_or_else(|error| panic!("open store: {error}"));
+        let table_name = SearchPlaneService::table_name(SearchCorpusKind::Attachment, lease.epoch);
         store
             .replace_record_batches(
                 table_name.as_str(),
                 attachment_schema(),
-                attachment_batches(&hits).expect("batches"),
+                attachment_batches(&hits).unwrap_or_else(|error| panic!("batches: {error}")),
             )
             .await
-            .expect("replace record batches");
+            .unwrap_or_else(|error| panic!("replace record batches: {error}"));
         store
             .create_inverted_index(table_name.as_str(), search_text_column(), None)
             .await
-            .expect("create inverted index");
+            .unwrap_or_else(|error| panic!("create inverted index: {error}"));
         service
             .coordinator()
             .publish_ready(&lease, hits.len() as u64, 1);
 
         let results = search_attachment_hits(&service, "topology", 5, &[], &[], false)
             .await
-            .expect("query should succeed");
+            .unwrap_or_else(|error| panic!("query should succeed: {error}"));
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].attachment_name, "topology.png");
         assert!(results[0].score > 0.0);

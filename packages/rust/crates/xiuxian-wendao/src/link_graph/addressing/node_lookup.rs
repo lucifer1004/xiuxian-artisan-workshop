@@ -76,14 +76,14 @@ where
             section_path,
             block_addr,
         } => {
-            if let Some(node) = find_by_path(nodes, section_path) {
-                if find_block_in_node(&node, block_addr).is_some() {
-                    return Some(ResolvedNode {
-                        node,
-                        doc_id: doc_id.to_string(),
-                        migrated_from: None,
-                    });
-                }
+            if let Some(node) = find_by_path(nodes, section_path)
+                && find_block_in_node(&node, block_addr).is_some()
+            {
+                return Some(ResolvedNode {
+                    node,
+                    doc_id: doc_id.to_string(),
+                    migrated_from: None,
+                });
             }
             None
         }

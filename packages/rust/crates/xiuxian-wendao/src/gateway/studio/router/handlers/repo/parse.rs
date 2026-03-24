@@ -93,7 +93,7 @@ pub(crate) fn parse_projected_gap_kind(
         Some("symbol_reference_unverified") => {
             Ok(Some(ProjectedGapKind::SymbolReferenceUnverified))
         }
-        Some("example_how_to_without_anchor") | Some("example_howto_without_anchor") => {
+        Some("example_how_to_without_anchor" | "example_howto_without_anchor") => {
             Ok(Some(ProjectedGapKind::ExampleHowToWithoutAnchor))
         }
         Some("documentation_page_without_anchor") => {

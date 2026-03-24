@@ -1,8 +1,12 @@
 use std::path::Path;
 
+use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
-use crate::analyzers::projection::build_projected_page_search;
+use crate::analyzers::projection::{
+    build_projected_page_search,
+    build_repo_projected_page_search_with_artifacts as build_projected_page_search_with_artifacts,
+};
 use crate::analyzers::query::{
     DocsSearchQuery, DocsSearchResult, RepoProjectedPageSearchQuery, RepoProjectedPageSearchResult,
 };
@@ -65,6 +69,15 @@ pub fn build_repo_projected_page_search(
     analysis: &RepositoryAnalysisOutput,
 ) -> RepoProjectedPageSearchResult {
     build_projected_page_search(query, analysis)
+}
+
+#[must_use]
+pub(crate) fn build_repo_projected_page_search_with_artifacts(
+    query: &RepoProjectedPageSearchQuery,
+    analysis: &RepositoryAnalysisOutput,
+    artifacts: &RepositorySearchArtifacts,
+) -> RepoProjectedPageSearchResult {
+    build_projected_page_search_with_artifacts(query, analysis, artifacts)
 }
 
 /// Load configuration, analyze one repository, and return deterministic projected-page search results.

@@ -4,7 +4,6 @@ use std::path::Path;
 
 #[cfg(test)]
 use crate::analyzers::{RepoBacklinkItem, RepoSymbolKind};
-use crate::gateway::studio::repo_index::RepoIndexPhase;
 use crate::gateway::studio::router::{
     StudioApiError, StudioState, configured_repositories, configured_repository,
     map_repo_intelligence_error,
@@ -12,7 +11,9 @@ use crate::gateway::studio::router::{
 #[cfg(test)]
 use crate::gateway::studio::types::{SearchBacklinkItem, StudioNavigationTarget};
 use crate::gateway::studio::types::{SearchHit, SearchResponse};
-use crate::search_plane::{SearchCorpusKind, SearchPlaneCacheTtl};
+use crate::search_plane::{
+    RepoSearchAvailability, RepoSearchQueryCacheKeyInput, SearchCorpusKind, SearchPlaneCacheTtl,
+};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(super) struct ParsedCodeSearchQuery {
@@ -25,7 +26,7 @@ pub(super) struct ParsedCodeSearchQuery {
 #[cfg(test)]
 pub(super) const CODE_CONTENT_EXTENSIONS: [&str; 4] = ["jl", "julia", "mo", "modelica"];
 #[cfg(test)]
-pub(super) const CODE_CONTENT_EXCLUDE_GLOBS: [&str; 7] = [
+pub(crate) const CODE_CONTENT_EXCLUDE_GLOBS: [&str; 7] = [
     ".git/**",
     ".cache/**",
     ".devenv/**",
@@ -72,23 +73,21 @@ pub(super) async fn build_code_search_response(
         .iter()
         .map(|repository| repository.id.clone())
         .collect::<Vec<_>>();
-    let repo_status = studio.repo_index.status_response(parsed.repo.as_deref());
     let cache_key = studio
         .search_plane
-        .repo_search_query_cache_key(
-            "code_search",
-            &[],
-            &[
+        .repo_search_query_cache_key(RepoSearchQueryCacheKeyInput {
+            scope: "code_search",
+            corpora: &[],
+            repo_corpora: &[
                 SearchCorpusKind::RepoEntity,
                 SearchCorpusKind::RepoContentChunk,
             ],
-            &repo_status,
-            repo_ids.as_slice(),
-            raw_query.as_str(),
+            repo_ids: repo_ids.as_slice(),
+            query: raw_query.as_str(),
             limit,
-            Some("code_search"),
-            parsed.repo.as_deref(),
-        )
+            intent: Some("code_search"),
+            repo_hint: parsed.repo.as_deref(),
+        })
         .await;
     if let Some(cache_key) = cache_key.as_ref()
         && let Some(cached) = studio
@@ -98,44 +97,34 @@ pub(super) async fn build_code_search_response(
     {
         return Ok(cached);
     }
-    let repo_phase_lookup = repo_status
-        .repos
-        .iter()
-        .map(|status| (status.repo_id.as_str(), status.phase))
-        .collect::<std::collections::HashMap<_, _>>();
-
     let mut hits = Vec::new();
     let mut pending_repos = Vec::new();
     let mut skipped_repos = Vec::new();
     for repository in repositories {
-        let has_repo_entity_publication = studio
+        let publication_state = studio
             .search_plane
-            .has_published_repo_corpus(SearchCorpusKind::RepoEntity, repository.id.as_str())
+            .repo_search_publication_state(repository.id.as_str())
             .await;
-        let has_repo_content_publication = studio
-            .search_plane
-            .has_published_repo_corpus(SearchCorpusKind::RepoContentChunk, repository.id.as_str())
-            .await;
-        if !has_repo_entity_publication && !has_repo_content_publication {
-            let phase = repo_phase_lookup.get(repository.id.as_str()).copied();
-            if matches!(
-                phase,
-                Some(RepoIndexPhase::Unsupported | RepoIndexPhase::Failed)
-            ) {
-                skipped_repos.push(repository.id.clone());
-            } else {
-                pending_repos.push(repository.id.clone());
+        if !publication_state.is_searchable() {
+            match publication_state.availability {
+                RepoSearchAvailability::Skipped => {
+                    skipped_repos.push(repository.id.clone());
+                }
+                RepoSearchAvailability::Pending => {
+                    pending_repos.push(repository.id.clone());
+                }
+                RepoSearchAvailability::Searchable => {}
             }
             continue;
         }
-        let mut repository_hits = if has_repo_entity_publication {
+        let mut repository_hits = if publication_state.entity_published {
             build_repo_entity_search_hits(studio, repository.id.as_str(), raw_query.as_str(), limit)
                 .await?
         } else {
             Vec::new()
         };
 
-        if repository_hits.is_empty() && has_repo_content_publication {
+        if repository_hits.is_empty() && publication_state.content_published {
             repository_hits.extend(
                 build_repo_content_search_hits(
                     studio,
@@ -250,7 +239,7 @@ pub(super) async fn build_repo_content_search_hits(
 }
 
 #[cfg(test)]
-pub(super) fn parse_content_search_line(line: &str) -> Option<(String, usize, String)> {
+pub(crate) fn parse_content_search_line(line: &str) -> Option<(String, usize, String)> {
     let (path, remainder) = line.rsplit_once(':')?;
     let (path, line_number) = path.rsplit_once(':')?;
     Some((
@@ -261,7 +250,7 @@ pub(super) fn parse_content_search_line(line: &str) -> Option<(String, usize, St
 }
 
 #[cfg(test)]
-pub(super) fn truncate_content_search_snippet(value: &str, max_chars: usize) -> String {
+pub(crate) fn truncate_content_search_snippet(value: &str, max_chars: usize) -> String {
     let truncated = value.chars().take(max_chars).collect::<String>();
     if value.chars().count() > max_chars {
         format!("{truncated}...")
@@ -270,7 +259,7 @@ pub(super) fn truncate_content_search_snippet(value: &str, max_chars: usize) -> 
     }
 }
 
-pub(super) fn parse_repo_code_search_query(query: &str) -> ParsedRepoCodeSearchQuery {
+pub(crate) fn parse_repo_code_search_query(query: &str) -> ParsedRepoCodeSearchQuery {
     let mut spec = ParsedRepoCodeSearchQuery::default();
     let mut search_tokens = Vec::new();
     for token in query.split_whitespace() {
@@ -301,7 +290,7 @@ pub(super) fn parse_repo_code_search_query(query: &str) -> ParsedRepoCodeSearchQ
 }
 
 #[cfg(test)]
-pub(super) fn path_matches_language_filters(path: &str, filters: &HashSet<String>) -> bool {
+pub(crate) fn path_matches_language_filters(path: &str, filters: &HashSet<String>) -> bool {
     if filters.is_empty() {
         return true;
     }
@@ -426,7 +415,7 @@ fn map_backlink_items(items: Option<Vec<RepoBacklinkItem>>) -> Option<Vec<Search
 }
 
 #[cfg(test)]
-pub(super) fn repo_navigation_target(
+pub(crate) fn repo_navigation_target(
     repo_id: &str,
     path: &str,
     category: Option<String>,
@@ -490,7 +479,7 @@ fn symbol_kind_tag(kind: RepoSymbolKind) -> &'static str {
 }
 
 #[cfg(test)]
-pub(super) fn is_supported_code_extension(path: &str) -> bool {
+pub(crate) fn is_supported_code_extension(path: &str) -> bool {
     Path::new(path)
         .extension()
         .and_then(|ext| ext.to_str())

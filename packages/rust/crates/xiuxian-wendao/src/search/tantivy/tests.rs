@@ -3,7 +3,9 @@ use crate::search::fuzzy::FuzzySearchOptions;
 use super::compare::{best_match_candidate, collect_lowercase_chars};
 use super::fragments::for_each_candidate_fragment;
 use super::identifier::populate_identifier_boundaries;
+use super::tokenizer::{CodeTokenizer, collect_search_tokens};
 use super::*;
+use tantivy::tokenizer::{TokenStream, Tokenizer};
 
 fn adjacent_identifier_fragments(value: &str) -> Vec<&str> {
     let mut boundaries = Vec::new();
@@ -37,6 +39,29 @@ fn search_document_index_supports_exact_lookup() {
 }
 
 #[test]
+fn search_document_index_exposes_lightweight_exact_hits() {
+    let index = SearchDocumentIndex::new();
+    index
+        .add_documents(vec![SearchDocument {
+            id: "module:1".to_string(),
+            title: "DifferentialEquations".to_string(),
+            kind: "module".to_string(),
+            path: "src/DifferentialEquations.jl".to_string(),
+            scope: "repo".to_string(),
+            namespace: "SciML".to_string(),
+            terms: vec!["DiffEq".to_string()],
+        }])
+        .unwrap_or_else(|error| panic!("shared document indexing succeeds: {error}"));
+
+    let hits = index
+        .search_exact_hits("DiffEq", 10)
+        .unwrap_or_else(|error| panic!("exact hit search succeeds: {error}"));
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].id, "module:1");
+    assert_eq!(hits[0].matched_field, None);
+}
+
+#[test]
 fn tantivy_matcher_uses_best_fragment_for_fuzzy_titles() {
     let index = SearchDocumentIndex::new();
     index
@@ -57,6 +82,79 @@ fn tantivy_matcher_uses_best_fragment_for_fuzzy_titles() {
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].item.id, "page:1");
     assert_eq!(results[0].matched_text, "Solve");
+}
+
+#[test]
+fn search_document_index_supports_multifield_fuzzy_hits() {
+    let index = SearchDocumentIndex::new();
+    index
+        .add_documents(vec![SearchDocument {
+            id: "symbol:1".to_string(),
+            title: "OrdinaryDiffEq".to_string(),
+            kind: "module".to_string(),
+            path: "src/solvers/ordinary.jl".to_string(),
+            scope: "repo".to_string(),
+            namespace: "DifferentialEquations".to_string(),
+            terms: vec!["solve_linear_system".to_string()],
+        }])
+        .unwrap_or_else(|error| panic!("shared document indexing succeeds: {error}"));
+
+    let hits = index
+        .search_fuzzy_hits("sysem", 10, FuzzySearchOptions::document_search())
+        .unwrap_or_else(|error| panic!("fuzzy hit search succeeds: {error}"));
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].id, "symbol:1");
+    assert_eq!(hits[0].matched_field, Some(SearchDocumentMatchField::Terms));
+    assert_eq!(hits[0].matched_text.as_deref(), Some("system"));
+}
+
+#[test]
+fn search_document_index_supports_phrase_prefix_hits() {
+    let index = SearchDocumentIndex::new();
+    index
+        .add_documents(vec![SearchDocument {
+            id: "page:2".to_string(),
+            title: "Solve Linear Systems".to_string(),
+            kind: "reference".to_string(),
+            path: "docs/linear/solve.md".to_string(),
+            scope: "repo".to_string(),
+            namespace: "linear-guide".to_string(),
+            terms: vec!["linear algebra".to_string()],
+        }])
+        .unwrap_or_else(|error| panic!("shared document indexing succeeds: {error}"));
+
+    let hits = index
+        .search_prefix_hits("solve linear sy", 10)
+        .unwrap_or_else(|error| panic!("prefix hit search succeeds: {error}"));
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].id, "page:2");
+}
+
+#[test]
+fn code_tokenizer_splits_camel_snake_and_digit_boundaries() {
+    let index = SearchDocumentIndex::new();
+    let tokens = collect_search_tokens(&index.index, "solveLinear_system2D HTTPRequest");
+    assert_eq!(
+        tokens,
+        vec![
+            "solve".to_string(),
+            "linear".to_string(),
+            "system".to_string(),
+            "2".to_string(),
+            "d".to_string(),
+            "http".to_string(),
+            "request".to_string()
+        ]
+    );
+}
+
+#[test]
+fn code_tokenizer_streams_unicode_prefix_terms() {
+    let mut tokenizer = CodeTokenizer;
+    let mut stream = tokenizer.token_stream("ÄpfelÜber");
+    let mut tokens = Vec::new();
+    stream.process(&mut |token| tokens.push(token.text.clone()));
+    assert_eq!(tokens, vec!["Äpfel".to_string(), "Über".to_string()]);
 }
 
 #[test]

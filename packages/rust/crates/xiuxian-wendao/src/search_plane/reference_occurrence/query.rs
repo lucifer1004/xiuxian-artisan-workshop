@@ -42,7 +42,8 @@ pub(crate) async fn search_reference_occurrences(
     let store = service
         .open_store(SearchCorpusKind::ReferenceOccurrence)
         .await?;
-    let table_name = service.table_name(SearchCorpusKind::ReferenceOccurrence, active_epoch);
+    let table_name =
+        SearchPlaneService::table_name(SearchCorpusKind::ReferenceOccurrence, active_epoch);
     let batches = store
         .scan_record_batches(
             table_name.as_str(),
@@ -197,7 +198,7 @@ mod tests {
 
     #[tokio::test]
     async fn reference_occurrence_query_reads_hits_from_published_epoch() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
         let service = fixture_service(&temp_dir);
         let lease = match service.coordinator().begin_build(
             SearchCorpusKind::ReferenceOccurrence,
@@ -214,23 +215,25 @@ mod tests {
         let store = service
             .open_store(SearchCorpusKind::ReferenceOccurrence)
             .await
-            .expect("open store");
-        let table_name = service.table_name(SearchCorpusKind::ReferenceOccurrence, lease.epoch);
+            .unwrap_or_else(|error| panic!("open store: {error}"));
+        let table_name =
+            SearchPlaneService::table_name(SearchCorpusKind::ReferenceOccurrence, lease.epoch);
         store
             .replace_record_batches(
                 table_name.as_str(),
                 reference_occurrence_schema(),
-                reference_occurrence_batches(&hits).expect("batches"),
+                reference_occurrence_batches(&hits)
+                    .unwrap_or_else(|error| panic!("batches: {error}")),
             )
             .await
-            .expect("replace record batches");
+            .unwrap_or_else(|error| panic!("replace record batches: {error}"));
         service
             .coordinator()
             .publish_ready(&lease, hits.len() as u64, 1);
 
         let results = search_reference_occurrences(&service, "AlphaService", 5)
             .await
-            .expect("query should succeed");
+            .unwrap_or_else(|error| panic!("query should succeed: {error}"));
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "AlphaService");
         assert!(results[0].score > 0.0);

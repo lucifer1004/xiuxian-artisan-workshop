@@ -160,8 +160,26 @@ impl SearchPlaneCoordinator {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&corpus)
-            .map(|runtime| runtime.status.clone())
-            .unwrap_or_else(|| SearchCorpusStatus::new(corpus))
+            .map_or_else(
+                || SearchCorpusStatus::new(corpus),
+                |runtime| runtime.status.clone(),
+            )
+    }
+
+    /// Replace the runtime status for a corpus from an external publisher.
+    pub fn replace_status(&self, status: SearchCorpusStatus) {
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let runtime = state
+            .entry(status.corpus)
+            .or_insert_with(|| SearchCorpusRuntime::new(status.corpus));
+        runtime.next_epoch = runtime
+            .next_epoch
+            .max(status.active_epoch.unwrap_or_default().saturating_add(1))
+            .max(status.staging_epoch.unwrap_or_default().saturating_add(1));
+        runtime.status = status;
     }
 
     /// Attempt to start a new staging build for a corpus fingerprint.
@@ -182,8 +200,8 @@ impl SearchPlaneCoordinator {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let runtime = state
-            .get_mut(&corpus)
-            .expect("all search corpora must exist in coordinator state");
+            .entry(corpus)
+            .or_insert_with(|| SearchCorpusRuntime::new(corpus));
         let schema_matches = runtime.status.schema_version == schema_version;
         if runtime.status.fingerprint.as_deref() == Some(fingerprint.as_str()) && schema_matches {
             if matches!(runtime.status.phase, SearchPlanePhase::Ready)
@@ -492,5 +510,29 @@ mod tests {
             status.maintenance.last_compaction_reason.as_deref(),
             Some("publish_threshold")
         );
+    }
+
+    #[test]
+    fn replace_status_updates_runtime_snapshot() {
+        let coordinator = coordinator_with_policy(SearchMaintenancePolicy::default());
+        let mut status = SearchCorpusStatus::new(SearchCorpusKind::RepoEntity);
+        status.phase = SearchPlanePhase::Ready;
+        status.active_epoch = Some(77);
+        status.staging_epoch = Some(79);
+        status.row_count = Some(42);
+        status.fingerprint = Some("repo-fingerprint".to_string());
+
+        coordinator.replace_status(status.clone());
+
+        assert_eq!(coordinator.status_for(SearchCorpusKind::RepoEntity), status);
+        let snapshot = coordinator.status();
+        let stored = snapshot
+            .corpora
+            .iter()
+            .find(|entry| entry.corpus == SearchCorpusKind::RepoEntity)
+            .unwrap_or_else(|| panic!("repo entity status should be present"));
+        assert_eq!(stored.active_epoch, Some(77));
+        assert_eq!(stored.staging_epoch, Some(79));
+        assert_eq!(stored.fingerprint.as_deref(), Some("repo-fingerprint"));
     }
 }

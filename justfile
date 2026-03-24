@@ -1080,6 +1080,8 @@ rust-retrieval-audits:
 rust-wendao-performance-gate:
     @echo "Running Wendao performance quick gate via nextest..."
     @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate
+    @echo "Running Wendao gateway warm-cache perf cases..."
+    @RUNNER_OS="{{xiuxian_wendao_runner_os}}" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh test -p xiuxian-wendao --features performance gateway::studio::studio_gateway_search_perf_tests:: --lib
 
 [group('validate')]
 rust-wendao-performance-stress:
@@ -1088,8 +1090,17 @@ rust-wendao-performance-stress:
 
 [group('validate')]
 rust-wendao-performance-bench:
-    @echo "Compiling Wendao Criterion benches..."
-    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh bench -p xiuxian-wendao --features performance --no-run
+    @echo "Compiling Wendao Criterion benches (CI default: fast lane)..."
+    @just rust-wendao-performance-bench-fast
+
+[group('validate')]
+rust-wendao-performance-bench-fast:
+    @echo "Compiling Wendao Criterion benches (fast profile overrides)..."
+    @CARGO_PROFILE_BENCH_LTO="${CARGO_PROFILE_BENCH_LTO:-off}" \
+      CARGO_PROFILE_BENCH_CODEGEN_UNITS="${CARGO_PROFILE_BENCH_CODEGEN_UNITS:-16}" \
+      CARGO_PROFILE_BENCH_DEBUG="${CARGO_PROFILE_BENCH_DEBUG:-0}" \
+      CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" \
+      scripts/rust/cargo_exec.sh bench -p xiuxian-wendao --features performance --bench wendao_performance --no-run
 
 [group('validate')]
 telegram-session-isolation-rust:

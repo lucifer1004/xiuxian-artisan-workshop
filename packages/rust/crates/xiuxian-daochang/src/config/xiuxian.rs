@@ -5,7 +5,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use xiuxian_config_core::resolve_project_root_or_cwd;
+use xiuxian_config_core::{load_toml_value_with_imports, resolve_project_root_or_cwd};
 
 use super::settings::RuntimeSettings;
 
@@ -230,24 +230,13 @@ fn read_toml_value(path: &Path) -> Option<toml::Value> {
     if !path.is_file() {
         return None;
     }
-    let raw = match std::fs::read_to_string(path) {
-        Ok(raw) => raw,
-        Err(error) => {
-            tracing::warn!(
-                path = %path.display(),
-                error = %error,
-                "failed to read xiuxian config; ignoring"
-            );
-            return None;
-        }
-    };
-    match toml::from_str::<toml::Value>(&raw) {
+    match load_toml_value_with_imports(path) {
         Ok(value) => Some(value),
         Err(error) => {
             tracing::warn!(
                 path = %path.display(),
                 error = %error,
-                "failed to parse xiuxian config; ignoring"
+                "failed to load xiuxian config; ignoring"
             );
             None
         }
@@ -294,8 +283,8 @@ fn apply_modular_wendao_fallback(config: &mut XiuxianConfig, system_base: &Path,
         system_wendao_path
     };
 
-    if let Ok(content) = std::fs::read_to_string(&wendao_path)
-        && let Ok(wendao_only) = toml::from_str::<WendaoConfig>(&content)
+    if let Some(value) = read_toml_value(&wendao_path)
+        && let Ok(wendao_only) = value.try_into::<WendaoConfig>()
     {
         config.wendao = wendao_only;
         tracing::info!(

@@ -1,5 +1,5 @@
 /// Shared fuzzy-search configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FuzzySearchOptions {
     /// Maximum edit distance allowed for a match.
     pub max_distance: u8,

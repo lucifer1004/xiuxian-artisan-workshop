@@ -75,6 +75,7 @@ impl StudioApiError {
     }
 
     /// Creates a standard index-not-ready error for search corpora.
+    #[must_use]
     pub fn index_not_ready(corpus: &str) -> Self {
         Self::conflict(
             "INDEX_NOT_READY",

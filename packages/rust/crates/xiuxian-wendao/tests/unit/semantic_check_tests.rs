@@ -115,11 +115,14 @@ fn test_xml_escape() {
 
 #[test]
 fn test_node_status_parsing() {
-    assert_eq!(NodeStatus::from_str("STABLE"), NodeStatus::Stable);
-    assert_eq!(NodeStatus::from_str("stable"), NodeStatus::Stable);
-    assert_eq!(NodeStatus::from_str("DRAFT"), NodeStatus::Draft);
-    assert_eq!(NodeStatus::from_str("DEPRECATED"), NodeStatus::Deprecated);
-    assert_eq!(NodeStatus::from_str("UNKNOWN"), NodeStatus::Stable);
+    assert_eq!(NodeStatus::parse_lossy("STABLE"), NodeStatus::Stable);
+    assert_eq!(NodeStatus::parse_lossy("stable"), NodeStatus::Stable);
+    assert_eq!(NodeStatus::parse_lossy("DRAFT"), NodeStatus::Draft);
+    assert_eq!(
+        NodeStatus::parse_lossy("DEPRECATED"),
+        NodeStatus::Deprecated
+    );
+    assert_eq!(NodeStatus::parse_lossy("UNKNOWN"), NodeStatus::Stable);
 }
 
 #[test]

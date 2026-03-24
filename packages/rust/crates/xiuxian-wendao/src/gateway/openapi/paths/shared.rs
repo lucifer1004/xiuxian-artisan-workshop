@@ -67,7 +67,10 @@ use super::{
         API_SEARCH_REFERENCES_AXUM_PATH, API_SEARCH_REFERENCES_OPENAPI_PATH,
         API_SEARCH_SYMBOLS_AXUM_PATH, API_SEARCH_SYMBOLS_OPENAPI_PATH,
     },
-    ui::{API_UI_CONFIG_AXUM_PATH, API_UI_CONFIG_OPENAPI_PATH},
+    ui::{
+        API_UI_CAPABILITIES_AXUM_PATH, API_UI_CAPABILITIES_OPENAPI_PATH, API_UI_CONFIG_AXUM_PATH,
+        API_UI_CONFIG_OPENAPI_PATH,
+    },
     vfs::{
         API_VFS_CAT_AXUM_PATH, API_VFS_CAT_OPENAPI_PATH, API_VFS_ENTRY_AXUM_PATH,
         API_VFS_ENTRY_OPENAPI_PATH, API_VFS_ROOT_AXUM_PATH, API_VFS_ROOT_OPENAPI_PATH,
@@ -329,6 +332,12 @@ pub const WENDAO_GATEWAY_ROUTE_CONTRACTS: &[RouteContract] = &[
         axum_path: API_UI_CONFIG_AXUM_PATH,
         openapi_path: API_UI_CONFIG_OPENAPI_PATH,
         methods: &["get", "post"],
+        path_params: &[],
+    },
+    RouteContract {
+        axum_path: API_UI_CAPABILITIES_AXUM_PATH,
+        openapi_path: API_UI_CAPABILITIES_OPENAPI_PATH,
+        methods: &["get"],
         path_params: &[],
     },
     RouteContract {

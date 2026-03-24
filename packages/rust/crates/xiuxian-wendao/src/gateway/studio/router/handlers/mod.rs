@@ -1,6 +1,7 @@
 //! Studio API endpoint handlers.
 
 pub mod analysis;
+pub mod capabilities;
 /// Docs-facing deep-wiki planning handlers.
 pub mod docs;
 pub mod graph;
@@ -9,6 +10,7 @@ pub mod ui_config;
 pub mod vfs;
 
 pub use analysis::{code_ast, markdown};
+pub use capabilities::get as get_ui_capabilities;
 pub use docs::{
     family_cluster as docs_family_cluster, family_context as docs_family_context,
     family_search as docs_family_search, navigation as docs_navigation,

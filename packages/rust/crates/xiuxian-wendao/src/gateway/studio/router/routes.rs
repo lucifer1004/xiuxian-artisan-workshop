@@ -154,6 +154,10 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::get_ui_config).post(handlers::set_ui_config),
         )
         .route(
+            openapi_paths::API_UI_CAPABILITIES_AXUM_PATH,
+            get(handlers::get_ui_capabilities),
+        )
+        .route(
             "/api/analysis/refine-doc",
             post(handlers::refine_entity_doc),
         )

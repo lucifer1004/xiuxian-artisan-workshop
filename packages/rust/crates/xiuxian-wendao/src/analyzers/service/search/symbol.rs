@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::query::{SymbolSearchHit, SymbolSearchQuery, SymbolSearchResult};
@@ -11,7 +12,9 @@ use super::super::helpers::{
     projection_page_lookup, projection_pages_for, record_hierarchical_uri,
 };
 use super::super::{analyze_repository_from_config_with_registry, bootstrap_builtin_registry};
-use super::ranking::ranked_symbol_matches;
+use super::ranking::{
+    RankedSearchRecord, ranked_symbol_matches, ranked_symbol_matches_with_artifacts,
+};
 
 /// Build a symbol search result from normalized analysis records.
 #[must_use]
@@ -19,11 +22,40 @@ pub fn build_symbol_search(
     query: &SymbolSearchQuery,
     analysis: &RepositoryAnalysisOutput,
 ) -> SymbolSearchResult {
-    let limit = query.limit.max(1);
+    symbol_search_result_from_selected(
+        query,
+        analysis,
+        ranked_symbol_matches(query.query.as_str(), &analysis.symbols, query.limit.max(1)),
+    )
+}
+
+#[must_use]
+pub(crate) fn build_symbol_search_with_artifacts(
+    query: &SymbolSearchQuery,
+    analysis: &RepositoryAnalysisOutput,
+    artifacts: &RepositorySearchArtifacts,
+) -> SymbolSearchResult {
+    symbol_search_result_from_selected(
+        query,
+        analysis,
+        ranked_symbol_matches_with_artifacts(
+            query.query.as_str(),
+            &analysis.symbols,
+            &artifacts.symbols_by_id,
+            &artifacts.symbol_index,
+            query.limit.max(1),
+        ),
+    )
+}
+
+fn symbol_search_result_from_selected(
+    query: &SymbolSearchQuery,
+    analysis: &RepositoryAnalysisOutput,
+    selected: Vec<RankedSearchRecord<crate::analyzers::SymbolRecord>>,
+) -> SymbolSearchResult {
     let backlink_lookup = documents_backlink_lookup(&analysis.relations, &analysis.docs);
     let projection_lookup = projection_page_lookup(analysis);
     let saliency_map = compute_repository_saliency(analysis);
-    let selected = ranked_symbol_matches(query.query.as_str(), &analysis.symbols, limit);
     let symbols = selected
         .iter()
         .map(|candidate| candidate.item.clone())

@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::query::{ExampleSearchHit, ExampleSearchQuery, ExampleSearchResult};
@@ -12,7 +13,9 @@ use super::super::helpers::{
 };
 use super::super::{analyze_repository_from_config_with_registry, bootstrap_builtin_registry};
 use super::documents::build_example_metadata_lookup;
-use super::ranking::ranked_example_matches;
+use super::ranking::{
+    RankedSearchRecord, ranked_example_matches, ranked_example_matches_with_artifacts,
+};
 
 /// Build an example search result from normalized analysis records.
 #[must_use]
@@ -20,17 +23,47 @@ pub fn build_example_search(
     query: &ExampleSearchQuery,
     analysis: &RepositoryAnalysisOutput,
 ) -> ExampleSearchResult {
-    let limit = query.limit.max(1);
+    let metadata_lookup = build_example_metadata_lookup(analysis);
+    example_search_result_from_selected(
+        query,
+        analysis,
+        ranked_example_matches(
+            query.query.as_str(),
+            &analysis.examples,
+            &metadata_lookup,
+            query.limit.max(1),
+        ),
+    )
+}
+
+#[must_use]
+pub(crate) fn build_example_search_with_artifacts(
+    query: &ExampleSearchQuery,
+    analysis: &RepositoryAnalysisOutput,
+    artifacts: &RepositorySearchArtifacts,
+) -> ExampleSearchResult {
+    example_search_result_from_selected(
+        query,
+        analysis,
+        ranked_example_matches_with_artifacts(
+            query.query.as_str(),
+            &analysis.examples,
+            &artifacts.example_metadata,
+            &artifacts.examples_by_id,
+            &artifacts.example_index,
+            query.limit.max(1),
+        ),
+    )
+}
+
+fn example_search_result_from_selected(
+    query: &ExampleSearchQuery,
+    analysis: &RepositoryAnalysisOutput,
+    selected: Vec<RankedSearchRecord<crate::analyzers::ExampleRecord>>,
+) -> ExampleSearchResult {
     let backlink_lookup = documents_backlink_lookup(&analysis.relations, &analysis.docs);
     let projection_lookup = projection_page_lookup(analysis);
-    let metadata_lookup = build_example_metadata_lookup(analysis);
     let saliency_map = compute_repository_saliency(analysis);
-    let selected = ranked_example_matches(
-        query.query.as_str(),
-        &analysis.examples,
-        &metadata_lookup,
-        limit,
-    );
     let examples = selected
         .iter()
         .map(|candidate| candidate.item.clone())

@@ -145,12 +145,7 @@ fn check_mod_interface_only(path: &Path, text: &str) -> Vec<ContractFinding> {
         return Vec::new();
     }
 
-    for (index, line) in text.lines().enumerate() {
-        let trimmed = line.trim();
-        if is_ignorable_line(trimmed) || is_interface_only_line(trimmed) {
-            continue;
-        }
-
+    if let Some((line_number, evidence_message)) = first_non_interface_mod_line(text) {
         let mut finding = base_finding(
             MOD_R001,
             FindingSeverity::Error,
@@ -159,7 +154,7 @@ fn check_mod_interface_only(path: &Path, text: &str) -> Vec<ContractFinding> {
             format!(
                 "`{}` contains implementation logic at line {}.",
                 display_path(path),
-                index + 1
+                line_number
             ),
         );
         finding.why_it_matters =
@@ -175,8 +170,8 @@ fn check_mod_interface_only(path: &Path, text: &str) -> Vec<ContractFinding> {
             .push("`mod.rs` defines business functions or concrete state.".to_string());
         finding.evidence.push(FindingEvidenceEntry::source_span(
             path,
-            index + 1,
-            "Non-interface statement found in `mod.rs`.".to_string(),
+            line_number,
+            evidence_message,
         ));
         return vec![finding];
     }
@@ -315,17 +310,56 @@ fn is_ignorable_line(line: &str) -> bool {
         || line.starts_with('*')
         || line.starts_with("*/")
         || line.starts_with("#[")
+        || line.starts_with("#![")
 }
 
-fn is_interface_only_line(line: &str) -> bool {
-    if !line.ends_with(';') {
-        return false;
+fn first_non_interface_mod_line(text: &str) -> Option<(usize, String)> {
+    let mut inside_interface_statement = false;
+
+    for (line_index, line) in text.lines().enumerate() {
+        let trimmed = line.trim();
+        if is_ignorable_line(trimmed) {
+            continue;
+        }
+
+        if inside_interface_statement {
+            if trimmed.ends_with(';') {
+                inside_interface_statement = false;
+            }
+            continue;
+        }
+
+        if is_interface_statement_start(trimmed) {
+            if !trimmed.ends_with(';') {
+                inside_interface_statement = true;
+            }
+            continue;
+        }
+
+        return Some((
+            line_index + 1,
+            "Non-interface statement found in `mod.rs`.".to_string(),
+        ));
     }
+
+    None
+}
+
+fn is_interface_statement_start(line: &str) -> bool {
     line.starts_with("mod ")
         || line.starts_with("pub mod ")
         || line.starts_with("pub(crate) mod ")
         || line.starts_with("pub use ")
         || line.starts_with("pub(crate) use ")
+        || is_restricted_pub_interface_statement_start(line)
+}
+
+fn is_restricted_pub_interface_statement_start(line: &str) -> bool {
+    line.starts_with("pub(")
+        && (line.contains(") mod ")
+            || line.contains(") use ")
+            || line.starts_with("pub(self) mod ")
+            || line.starts_with("pub(self) use "))
 }
 
 fn is_broad_public_item(line: &str) -> bool {

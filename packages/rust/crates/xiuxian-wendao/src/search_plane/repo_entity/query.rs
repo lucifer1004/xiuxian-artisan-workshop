@@ -2,13 +2,16 @@ use std::collections::HashSet;
 
 use xiuxian_vector::{
     ColumnarScanOptions, LanceArray, LanceFloat64Array, LanceRecordBatch, LanceStringArray,
-    VectorStoreError,
+    VectorStore, VectorStoreError,
 };
 
 use crate::analyzers::service::{
     example_match_score, module_match_score, normalized_rank_score, symbol_match_score,
 };
 use crate::gateway::studio::types::SearchHit;
+use crate::search_plane::ranking::{
+    RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry, sort_by_rank, trim_ranked_vec,
+};
 use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
 
 use super::schema::{hit_json_column, projected_columns};
@@ -16,6 +19,8 @@ use super::schema::{hit_json_column, projected_columns};
 const MODULE_BUCKETS: u8 = 3;
 const SYMBOL_BUCKETS: u8 = 7;
 const EXAMPLE_BUCKETS: u8 = 10;
+const MIN_RECALL_CANDIDATES: usize = 256;
+const RECALL_TRIM_MULTIPLIER: usize = 8;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum RepoEntitySearchError {
@@ -37,7 +42,7 @@ pub(crate) async fn search_repo_entities(
     let query_lower = trimmed.to_ascii_lowercase();
 
     let store = service.open_store(SearchCorpusKind::RepoEntity).await?;
-    let table_name = service.repo_entity_table_name(repo_id);
+    let table_name = SearchPlaneService::repo_entity_table_name(repo_id);
     if !store.table_path(table_name.as_str()).exists() {
         return Ok(Vec::new());
     }
@@ -47,9 +52,38 @@ pub(crate) async fn search_repo_entities(
         .map(str::to_string)
         .collect::<Vec<_>>();
     columns.push(hit_json_column().to_string());
-    let options = ColumnarScanOptions {
+    let options = build_repo_entity_scan_options(language_filters, trimmed, limit, columns);
+    let query = RepoEntityQuery {
+        query_text: trimmed,
+        query_lower: query_lower.as_str(),
+        language_filters,
+        kind_filters,
+        window: retained_window(limit),
+    };
+    let execution =
+        execute_repo_entity_search(&store, table_name.as_str(), options, &query).await?;
+    let mut candidates = execution.candidates;
+    sort_by_rank(&mut candidates, compare_candidates);
+    candidates.truncate(limit);
+    let hits = decode_repo_entity_hits(candidates)?;
+    service.record_query_telemetry(
+        SearchCorpusKind::RepoEntity,
+        execution
+            .telemetry
+            .finish(execution.source, Some(repo_id.to_string()), hits.len()),
+    );
+    Ok(hits)
+}
+
+fn build_repo_entity_scan_options(
+    language_filters: &HashSet<String>,
+    trimmed: &str,
+    limit: usize,
+    projected_columns: Vec<String>,
+) -> ColumnarScanOptions {
+    ColumnarScanOptions {
         where_filter: filter_expression(language_filters),
-        projected_columns: columns,
+        projected_columns,
         batch_size: Some(512),
         limit: if should_use_fts(trimmed) {
             Some(limit.saturating_mul(32).max(128))
@@ -57,69 +91,10 @@ pub(crate) async fn search_repo_entities(
             None
         },
         ..ColumnarScanOptions::default()
-    };
-
-    let batches = if should_use_fts(trimmed) {
-        match store
-            .search_fts_batches(table_name.as_str(), trimmed, options.clone())
-            .await
-        {
-            Ok(batches) if !batches.is_empty() => batches,
-            Ok(_) => {
-                store
-                    .scan_record_batches(table_name.as_str(), options)
-                    .await?
-            }
-            Err(VectorStoreError::LanceDB(_)) => {
-                store
-                    .scan_record_batches(table_name.as_str(), options)
-                    .await?
-            }
-            Err(error) => return Err(RepoEntitySearchError::Storage(error)),
-        }
-    } else {
-        store
-            .scan_record_batches(table_name.as_str(), options)
-            .await?
-    };
-
-    let mut candidates = Vec::new();
-    for batch in &batches {
-        collect_candidates(
-            batch,
-            &query_lower,
-            language_filters,
-            kind_filters,
-            &mut candidates,
-        )?;
     }
-
-    candidates.sort_by(|left, right| {
-        right
-            .score
-            .partial_cmp(&left.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| {
-                candidate_kind_priority(right.entity_kind.as_str())
-                    .cmp(&candidate_kind_priority(left.entity_kind.as_str()))
-            })
-            .then_with(|| left.path.cmp(&right.path))
-            .then_with(|| left.name.cmp(&right.name))
-    });
-    candidates.truncate(limit);
-
-    candidates
-        .into_iter()
-        .map(|candidate| {
-            let mut hit: SearchHit = serde_json::from_str(candidate.hit_json.as_str())
-                .map_err(|error| RepoEntitySearchError::Decode(error.to_string()))?;
-            hit.score = candidate.score;
-            Ok(hit)
-        })
-        .collect()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct RepoEntityCandidate {
     score: f64,
     entity_kind: String,
@@ -128,13 +103,79 @@ struct RepoEntityCandidate {
     hit_json: String,
 }
 
+struct RepoEntityQuery<'a> {
+    query_text: &'a str,
+    query_lower: &'a str,
+    language_filters: &'a HashSet<String>,
+    kind_filters: &'a HashSet<String>,
+    window: RetainedWindow,
+}
+
+struct RepoEntitySearchExecution {
+    candidates: Vec<RepoEntityCandidate>,
+    telemetry: StreamingRerankTelemetry,
+    source: StreamingRerankSource,
+}
+
+async fn execute_repo_entity_search(
+    store: &VectorStore,
+    table_name: &str,
+    options: ColumnarScanOptions,
+    query: &RepoEntityQuery<'_>,
+) -> Result<RepoEntitySearchExecution, RepoEntitySearchError> {
+    let fts_eligible = should_use_fts(query.query_text);
+    let mut telemetry =
+        StreamingRerankTelemetry::new(query.window, options.batch_size, options.limit);
+    let mut candidates = Vec::with_capacity(query.window.target);
+    let mut saw_fts_batch = false;
+    let mut fell_back_to_scan = false;
+
+    if fts_eligible {
+        match store
+            .search_fts_batches_streaming(table_name, query.query_text, options.clone(), |batch| {
+                saw_fts_batch = true;
+                collect_candidates(&batch, query, &mut candidates, &mut telemetry)
+            })
+            .await
+        {
+            Ok(()) if saw_fts_batch => {}
+            Ok(()) | Err(RepoEntitySearchError::Storage(VectorStoreError::LanceDB(_))) => {
+                fell_back_to_scan = true;
+                candidates.clear();
+                store
+                    .scan_record_batches_streaming(table_name, options, |batch| {
+                        collect_candidates(&batch, query, &mut candidates, &mut telemetry)
+                    })
+                    .await?;
+            }
+            Err(error) => return Err(error),
+        }
+    } else {
+        store
+            .scan_record_batches_streaming(table_name, options, |batch| {
+                collect_candidates(&batch, query, &mut candidates, &mut telemetry)
+            })
+            .await?;
+    }
+
+    Ok(RepoEntitySearchExecution {
+        candidates,
+        telemetry,
+        source: match (fts_eligible, fell_back_to_scan) {
+            (true, true) => StreamingRerankSource::FtsFallbackScan,
+            (true, false) => StreamingRerankSource::Fts,
+            (false, _) => StreamingRerankSource::Scan,
+        },
+    })
+}
+
 fn collect_candidates(
     batch: &LanceRecordBatch,
-    query_lower: &str,
-    language_filters: &HashSet<String>,
-    kind_filters: &HashSet<String>,
+    query: &RepoEntityQuery<'_>,
     candidates: &mut Vec<RepoEntityCandidate>,
+    telemetry: &mut StreamingRerankTelemetry,
 ) -> Result<(), RepoEntitySearchError> {
+    telemetry.observe_batch(batch.num_rows());
     let entity_kind = string_column(batch, "entity_kind")?;
     let name = string_column(batch, "name")?;
     let name_folded = string_column(batch, "name_folded")?;
@@ -154,15 +195,15 @@ fn collect_candidates(
         let entity_kind_value = entity_kind.value(row);
         let language_value = language.value(row);
         let symbol_kind_value = symbol_kind.value(row);
-        if !matches_language_filters(language_filters, language_value) {
+        if !matches_language_filters(query.language_filters, language_value) {
             continue;
         }
-        if !matches_kind_filters(kind_filters, entity_kind_value, symbol_kind_value) {
+        if !matches_kind_filters(query.kind_filters, entity_kind_value, symbol_kind_value) {
             continue;
         }
 
         let Some(normalized) = candidate_score(
-            query_lower,
+            query.query_lower,
             entity_kind_value,
             name_folded.value(row),
             qualified_name_folded.value(row),
@@ -175,6 +216,7 @@ fn collect_candidates(
             continue;
         };
 
+        telemetry.observe_match();
         let score = normalized.max(saliency_score.value(row)).clamp(0.0, 1.0);
         candidates.push(RepoEntityCandidate {
             score,
@@ -183,24 +225,49 @@ fn collect_candidates(
             path: path.value(row).to_string(),
             hit_json: hit_json.value(row).to_string(),
         });
-        if candidates.len() > 512 {
-            candidates.sort_by(|left, right| {
-                right
-                    .score
-                    .partial_cmp(&left.score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| {
-                        candidate_kind_priority(right.entity_kind.as_str())
-                            .cmp(&candidate_kind_priority(left.entity_kind.as_str()))
-                    })
-                    .then_with(|| left.path.cmp(&right.path))
-                    .then_with(|| left.name.cmp(&right.name))
-            });
-            candidates.truncate(256);
+        telemetry.observe_working_set(candidates.len());
+        if candidates.len() > query.window.threshold {
+            let before_len = candidates.len();
+            trim_ranked_vec(candidates, query.window.target, compare_candidates);
+            telemetry.observe_trim(before_len, candidates.len());
         }
     }
 
     Ok(())
+}
+
+fn retained_window(limit: usize) -> RetainedWindow {
+    RetainedWindow::new(limit, RECALL_TRIM_MULTIPLIER, MIN_RECALL_CANDIDATES)
+}
+
+fn decode_repo_entity_hits(
+    candidates: Vec<RepoEntityCandidate>,
+) -> Result<Vec<SearchHit>, RepoEntitySearchError> {
+    candidates
+        .into_iter()
+        .map(|candidate| {
+            let mut hit: SearchHit = serde_json::from_str(candidate.hit_json.as_str())
+                .map_err(|error| RepoEntitySearchError::Decode(error.to_string()))?;
+            hit.score = candidate.score;
+            Ok(hit)
+        })
+        .collect()
+}
+
+fn compare_candidates(
+    left: &RepoEntityCandidate,
+    right: &RepoEntityCandidate,
+) -> std::cmp::Ordering {
+    right
+        .score
+        .partial_cmp(&left.score)
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then_with(|| {
+            candidate_kind_priority(right.entity_kind.as_str())
+                .cmp(&candidate_kind_priority(left.entity_kind.as_str()))
+        })
+        .then_with(|| left.path.cmp(&right.path))
+        .then_with(|| left.name.cmp(&right.name))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -215,7 +282,7 @@ fn candidate_score(
     related_symbols_folded: &str,
     related_modules_folded: &str,
 ) -> Option<f64> {
-    let raw_score = match entity_kind {
+    match entity_kind {
         "module" => module_match_score(query_lower, qualified_name_folded, path_folded)
             .map(|score| normalized_rank_score(score, MODULE_BUCKETS)),
         "symbol" => symbol_match_score(
@@ -240,8 +307,7 @@ fn candidate_score(
             .map(|score| normalized_rank_score(score, EXAMPLE_BUCKETS))
         }
         _ => None,
-    };
-    raw_score
+    }
 }
 
 fn split_folded_values(value: &str) -> Vec<String> {
@@ -287,7 +353,7 @@ fn candidate_kind_priority(entity_kind: &str) -> u8 {
 }
 
 fn should_use_fts(query: &str) -> bool {
-    query.chars().any(|value| value.is_alphanumeric()) && query.len() >= 2
+    query.chars().any(char::is_alphanumeric) && query.len() >= 2
 }
 
 fn filter_expression(language_filters: &HashSet<String>) -> Option<String> {
@@ -324,4 +390,55 @@ fn float64_column<'a>(
         .column_by_name(name)
         .and_then(|array| array.as_any().downcast_ref::<LanceFloat64Array>())
         .ok_or_else(|| RepoEntitySearchError::Decode(format!("missing f64 column `{name}`")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RepoEntityCandidate, compare_candidates, retained_window};
+    use crate::search_plane::ranking::trim_ranked_vec;
+
+    #[test]
+    fn trim_candidates_keeps_highest_ranked_entries() {
+        let mut candidates = vec![
+            RepoEntityCandidate {
+                score: 0.50,
+                entity_kind: "example".to_string(),
+                name: "zeta".to_string(),
+                path: "src/zeta.rs".to_string(),
+                hit_json: "{}".to_string(),
+            },
+            RepoEntityCandidate {
+                score: 0.93,
+                entity_kind: "symbol".to_string(),
+                name: "beta".to_string(),
+                path: "src/beta.rs".to_string(),
+                hit_json: "{}".to_string(),
+            },
+            RepoEntityCandidate {
+                score: 0.93,
+                entity_kind: "module".to_string(),
+                name: "alpha".to_string(),
+                path: "src/alpha.rs".to_string(),
+                hit_json: "{}".to_string(),
+            },
+        ];
+
+        trim_ranked_vec(&mut candidates, 2, compare_candidates);
+
+        assert_eq!(candidates.len(), 2);
+        assert!(
+            candidates
+                .windows(2)
+                .all(|pair| compare_candidates(&pair[0], &pair[1]).is_le())
+        );
+        assert_eq!(candidates[0].entity_kind, "symbol");
+        assert_eq!(candidates[1].entity_kind, "module");
+    }
+
+    #[test]
+    fn retained_window_scales_with_limit() {
+        assert_eq!(retained_window(0).target, 256);
+        assert_eq!(retained_window(4).target, 256);
+        assert_eq!(retained_window(64).target, 512);
+    }
 }

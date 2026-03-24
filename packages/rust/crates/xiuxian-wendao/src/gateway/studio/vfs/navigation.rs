@@ -32,7 +32,10 @@ mod tests {
 
     #[test]
     fn resolve_navigation_target_prefixes_configured_project_for_relative_docs_path() {
-        let state = StudioState::new();
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("temp dir: {error}"));
+        let mut state = StudioState::new();
+        state.project_root = temp_dir.path().to_path_buf();
+        state.config_root = temp_dir.path().to_path_buf();
         state.set_ui_config(UiConfig {
             projects: vec![UiProjectConfig {
                 name: "main".to_string(),

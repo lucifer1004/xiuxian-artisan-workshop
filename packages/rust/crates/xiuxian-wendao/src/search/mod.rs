@@ -10,5 +10,6 @@ pub use fuzzy::{
     levenshtein_distance, normalized_score, passes_prefix_requirement, shared_prefix_len,
 };
 pub use tantivy::{
-    SearchDocument, SearchDocumentFields, SearchDocumentIndex, TantivyDocumentMatch, TantivyMatcher,
+    SearchDocument, SearchDocumentFields, SearchDocumentHit, SearchDocumentIndex,
+    SearchDocumentMatchField, TantivyDocumentMatch, TantivyMatcher,
 };

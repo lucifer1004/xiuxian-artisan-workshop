@@ -1,6 +1,6 @@
 use super::types::LogbookEntry;
 
-pub(super) fn parse_logbook_entry(line: &str, line_number: usize) -> Option<LogbookEntry> {
+pub(crate) fn parse_logbook_entry(line: &str, line_number: usize) -> Option<LogbookEntry> {
     let trimmed = line.trim();
 
     if !trimmed.starts_with('-') {
@@ -33,7 +33,7 @@ pub(super) fn parse_logbook_entry(line: &str, line_number: usize) -> Option<Logb
     })
 }
 
-pub(super) fn extract_logbook_entries(lines: &[String], start_line: usize) -> Vec<LogbookEntry> {
+pub(crate) fn extract_logbook_entries(lines: &[String], start_line: usize) -> Vec<LogbookEntry> {
     let mut entries = Vec::new();
     let mut in_logbook_block = false;
 

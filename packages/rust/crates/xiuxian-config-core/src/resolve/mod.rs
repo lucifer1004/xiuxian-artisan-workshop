@@ -1,17 +1,23 @@
-use crate::cache::{build_file_stamps, cache_key, store_cached_merged, try_get_cached_merged};
-use crate::{ArrayMergeStrategy, ConfigCascadeSpec, ConfigCoreError};
+use crate::{ConfigCascadeSpec, ConfigCoreError};
 use serde::de::DeserializeOwned;
 use std::path::{Path, PathBuf};
+
+mod discover;
+mod imports;
+mod merge;
+
+use self::discover::{existing_config_files, global_candidates, orphan_candidates};
+use self::merge::merge_values;
+
+pub use imports::load_toml_value_with_imports;
 
 /// Resolve layered files and return merged TOML value.
 ///
 /// Merge order:
 /// 1. Embedded defaults (`spec.embedded_toml`) as base.
-/// 2. If any `xiuxian.toml` exists in `PRJ_CONFIG_HOME`, merge `[spec.namespace]` from each candidate.
+/// 2. If any `xiuxian.toml` exists in `PRJ_CONFIG_HOME`, merge `[spec.namespace]`
+///    from each candidate after resolving recursive `imports`.
 /// 3. If no `xiuxian.toml` exists, merge standalone orphan file(s) as fallback.
-///
-/// This resolver uses an internal read-through cache keyed by namespace/spec/path
-/// and invalidated by file metadata stamps.
 ///
 /// # Errors
 ///
@@ -59,34 +65,29 @@ pub fn resolve_and_merge_toml_with_paths(
         });
     }
 
-    let tracked_files = tracked_files(&global_paths, &orphan_paths);
-    let file_stamps = build_file_stamps(tracked_files.as_slice());
-    let key = cache_key(spec, resolved_config_home.as_deref());
-    if let Some(cached) = try_get_cached_merged(&key, file_stamps.as_slice()) {
-        return Ok(cached);
-    }
-
-    let mut merged: toml::Value =
-        toml::from_str(spec.embedded_toml).map_err(|source| ConfigCoreError::ParseEmbedded {
-            namespace: spec.namespace.to_string(),
-            source,
-        })?;
+    let embedded_source_path = spec.embedded_source_path.map(Path::new);
+    let mut merged = imports::load_embedded_with_imports(
+        spec.namespace,
+        spec.embedded_toml,
+        embedded_source_path,
+        spec.array_merge_strategy,
+    )?;
 
     if global_paths.is_empty() {
         for orphan_path in orphan_paths {
-            let orphan_value = read_toml(orphan_path.as_path())?;
+            let orphan_value =
+                imports::load_file_with_imports(orphan_path.as_path(), spec.array_merge_strategy)?;
             merge_values(&mut merged, orphan_value, spec.array_merge_strategy);
         }
     } else {
         for path in global_paths {
-            let global_root = read_toml(path.as_path())?;
+            let global_root =
+                imports::load_file_with_imports(path.as_path(), spec.array_merge_strategy)?;
             if let Some(namespace_value) = get_nested_value(&global_root, spec.namespace) {
                 merge_values(&mut merged, namespace_value, spec.array_merge_strategy);
             }
         }
     }
-
-    store_cached_merged(key, file_stamps, &merged);
     Ok(merged)
 }
 
@@ -130,22 +131,15 @@ where
         })
 }
 
-fn read_toml(path: &Path) -> Result<toml::Value, ConfigCoreError> {
-    let content = std::fs::read_to_string(path).map_err(|source| ConfigCoreError::ReadFile {
-        path: path.display().to_string(),
-        source,
-    })?;
-    toml::from_str::<toml::Value>(&content).map_err(|source| ConfigCoreError::ParseFile {
-        path: path.display().to_string(),
-        source,
-    })
-}
-
 /// Traverse a dotted path in a TOML value to get a nested value.
 ///
 /// For example, `get_nested_value(&value, "llm.vision.deepseek")` will traverse
 /// `value["llm"]["vision"]["deepseek"]`.
 fn get_nested_value(value: &toml::Value, dotted_path: &str) -> Option<toml::Value> {
+    if dotted_path.trim().is_empty() {
+        return Some(value.clone());
+    }
+
     let mut current = value;
     for key in dotted_path.split('.') {
         match current {
@@ -156,28 +150,6 @@ fn get_nested_value(value: &toml::Value, dotted_path: &str) -> Option<toml::Valu
         }
     }
     Some(current.clone())
-}
-
-fn merge_values(dst: &mut toml::Value, src: toml::Value, array_strategy: ArrayMergeStrategy) {
-    match (dst, src) {
-        (toml::Value::Table(dst_table), toml::Value::Table(src_table)) => {
-            for (key, src_value) in src_table {
-                if let Some(dst_value) = dst_table.get_mut(&key) {
-                    merge_values(dst_value, src_value, array_strategy);
-                } else {
-                    dst_table.insert(key, src_value);
-                }
-            }
-        }
-        (toml::Value::Array(dst_array), toml::Value::Array(src_array))
-            if matches!(array_strategy, ArrayMergeStrategy::Append) =>
-        {
-            dst_array.extend(src_array);
-        }
-        (dst_value, src_value) => {
-            *dst_value = src_value;
-        }
-    }
 }
 
 fn resolve_project_root() -> Option<PathBuf> {
@@ -235,43 +207,4 @@ fn normalize_config_home(
         Some(path) => project_root.map(|root| root.join(path)),
         None => project_root.map(|root| root.join(".config")),
     }
-}
-
-fn global_candidates(config_home: Option<&Path>) -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(config_home) = config_home {
-        candidates.push(
-            config_home
-                .join("xiuxian-artisan-workshop")
-                .join("xiuxian.toml"),
-        );
-    }
-    candidates
-}
-
-fn orphan_candidates(config_home: Option<&Path>, orphan_file: &str) -> Vec<PathBuf> {
-    if orphan_file.trim().is_empty() {
-        return Vec::new();
-    }
-
-    let mut candidates = Vec::new();
-    if let Some(config_home) = config_home {
-        candidates.push(
-            config_home
-                .join("xiuxian-artisan-workshop")
-                .join(orphan_file),
-        );
-    }
-    candidates
-}
-
-fn existing_config_files(paths: Vec<PathBuf>) -> Vec<PathBuf> {
-    paths.into_iter().filter(|path| path.is_file()).collect()
-}
-
-fn tracked_files(global_paths: &[PathBuf], orphan_paths: &[PathBuf]) -> Vec<PathBuf> {
-    let mut files = Vec::with_capacity(global_paths.len() + orphan_paths.len());
-    files.extend(global_paths.iter().cloned());
-    files.extend(orphan_paths.iter().cloned());
-    files
 }

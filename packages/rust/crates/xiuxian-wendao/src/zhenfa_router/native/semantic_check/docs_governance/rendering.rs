@@ -9,6 +9,7 @@ use super::types::SectionSpec;
 use crate::zhenfa_router::native::semantic_check::IssueLocation;
 
 /// Renders a package docs index template.
+#[must_use]
 pub fn render_package_docs_index(crate_name: &str, doc_path: &str, docs_dir: &Path) -> String {
     let section_links = collect_section_links(docs_dir);
     let mut rendered = String::new();
@@ -59,6 +60,7 @@ pub fn render_package_docs_index(crate_name: &str, doc_path: &str, docs_dir: &Pa
 }
 
 /// Renders a section landing page template.
+#[must_use]
 pub fn render_section_landing_page(
     crate_name: &str,
     crate_dir: &Path,
@@ -85,10 +87,14 @@ fn render_index_footer() -> String {
     render_index_footer_with_values("v2.0", "pending")
 }
 
+/// Render a normalized index `:FOOTER:` block with explicit standards and sync values.
+#[must_use]
 pub fn render_index_footer_with_values(standards: &str, last_sync: &str) -> String {
     format!(":FOOTER:\n:STANDARDS: {standards}\n:LAST_SYNC: {last_sync}\n:END:\n")
 }
 
+/// Convert a relative markdown path into a wikilink target without the `.md` suffix.
+#[must_use]
 pub fn link_target(relative_path: &str) -> String {
     relative_path
         .strip_suffix(".md")
@@ -141,6 +147,8 @@ fn collect_section_links(docs_dir: &Path) -> Vec<(String, Vec<String>)> {
     section_links
 }
 
+/// Return the canonical package-doc section layout expected for one crate.
+#[must_use]
 pub fn standard_section_specs(crate_name: &str) -> Vec<SectionSpec> {
     let slug = crate_slug(crate_name);
     vec![
@@ -222,6 +230,8 @@ fn render_section_prompt(crate_name: &str, spec: &SectionSpec) -> String {
     }
 }
 
+/// Plan the insertion patch for a missing `:RELATIONS:` block in an index document.
+#[must_use]
 pub fn plan_index_relations_block_insertion(
     index_content: &str,
     body_links: &[String],
@@ -259,6 +269,8 @@ pub fn plan_index_relations_block_insertion(
     )
 }
 
+/// Plan the insertion patch for a missing index footer block.
+#[must_use]
 pub fn plan_index_footer_block_insertion(index_content: &str) -> (IssueLocation, String) {
     let lines = super::parsing::collect_lines(index_content);
     let insert_offset = index_content.len();
@@ -280,6 +292,8 @@ pub fn plan_index_footer_block_insertion(index_content: &str) -> (IssueLocation,
     )
 }
 
+/// Plan the insertion patch for a missing section landing-page link in the package index.
+#[must_use]
 pub fn plan_index_section_link_insertion(
     index_content: &str,
     spec: &SectionSpec,

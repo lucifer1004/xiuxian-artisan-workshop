@@ -7,6 +7,10 @@ use crate::link_graph::runtime_config::settings::{
     first_non_empty, get_setting_string, merged_wendao_settings, parse_positive_u64,
 };
 
+/// Resolve runtime cache configuration from merged settings and environment.
+///
+/// # Errors
+/// Returns an error when no Valkey URL can be resolved from config/env.
 pub fn resolve_link_graph_cache_runtime() -> Result<LinkGraphCacheRuntimeConfig, String> {
     let settings = merged_wendao_settings();
 

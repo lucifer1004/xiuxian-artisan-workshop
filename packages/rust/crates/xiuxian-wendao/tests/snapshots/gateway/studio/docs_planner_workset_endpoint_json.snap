@@ -3,6 +3,33 @@ source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
 expression: value
 ---
 {
+  "balance": {
+    "family_balanced": true,
+    "family_distribution": [
+      {
+        "kind": "reference",
+        "selected_count": 2,
+        "within_target_band": true
+      }
+    ],
+    "family_group_count": 1,
+    "family_spread": 0,
+    "family_target_ceiling_count": 2,
+    "family_target_floor_count": 2,
+    "gap_kind_balanced": true,
+    "gap_kind_distribution": [
+      {
+        "kind": "symbol_reference_without_documentation",
+        "selected_count": 2,
+        "within_target_band": true
+      }
+    ],
+    "gap_kind_group_count": 1,
+    "gap_kind_spread": 0,
+    "gap_kind_target_ceiling_count": 2,
+    "gap_kind_target_floor_count": 2,
+    "selection_count": 2
+  },
   "groups": [
     {
       "families": [
@@ -712,6 +739,11 @@ expression: value
             }
           ],
           "kind": "reference",
+          "quota": {
+            "target_ceiling_count": 2,
+            "target_floor_count": 2,
+            "within_target_band": true
+          },
           "ranked_hits": [
             {
               "gap": {
@@ -1510,6 +1542,11 @@ expression: value
         }
       ],
       "kind": "symbol_reference_without_documentation",
+      "quota": {
+        "target_ceiling_count": 2,
+        "target_floor_count": 2,
+        "within_target_band": true
+      },
       "ranked_hits": [
         {
           "gap": {
@@ -2496,5 +2533,28 @@ expression: value
       ]
     }
   ],
-  "repo_id": "gateway-sync"
+  "repo_id": "gateway-sync",
+  "strategy": {
+    "code": "single_lane_focus",
+    "family_group_count": 1,
+    "gap_kind_group_count": 1,
+    "reasons": [
+      {
+        "code": "single_gap_kind",
+        "detail": "1 populated gap-kind group(s) contribute to the workset"
+      },
+      {
+        "code": "single_family",
+        "detail": "1 populated page-family group(s) contribute to the workset"
+      },
+      {
+        "code": "gap_kind_balanced",
+        "detail": "gap-kind groups stay within the deterministic balance band"
+      },
+      {
+        "code": "family_balanced",
+        "detail": "page-family groups stay within the deterministic balance band"
+      }
+    ]
+  }
 }

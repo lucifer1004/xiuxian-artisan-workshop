@@ -456,9 +456,9 @@ pub async fn retrieval_hit(
         move |analysis| {
             crate::analyzers::build_docs_retrieval_hit(
                 &crate::analyzers::DocsRetrievalHitQuery {
-                    repo_id,
-                    page_id,
-                    node_id,
+                    repo: repo_id,
+                    page: page_id,
+                    node: node_id,
                 },
                 &analysis,
             )

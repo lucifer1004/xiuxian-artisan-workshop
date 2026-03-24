@@ -10,7 +10,7 @@ use crate::gateway::studio::search::project_scope::{
     resolve_project_root_path,
 };
 use crate::gateway::studio::types::{SearchHit, StudioNavigationTarget, UiProjectConfig};
-use crate::link_graph::parser::{ParsedNote, is_supported_note, parse_note};
+use crate::link_graph::parser::{ParsedNote, ParsedSection, is_supported_note, parse_note};
 use crate::search_plane::{
     BeginBuildDecision, SearchBuildLease, SearchCorpusKind, SearchPlaneService,
 };
@@ -156,7 +156,8 @@ async fn write_knowledge_section_epoch(
     let store = service
         .open_store(SearchCorpusKind::KnowledgeSection)
         .await?;
-    let table_name = service.table_name(SearchCorpusKind::KnowledgeSection, lease.epoch);
+    let table_name =
+        SearchPlaneService::table_name(SearchCorpusKind::KnowledgeSection, lease.epoch);
     store
         .replace_record_batches(
             table_name.as_str(),
@@ -276,53 +277,78 @@ fn knowledge_rows_for_note(
                 ]
             })),
     );
-    let mut rows = vec![KnowledgeSectionRow {
-        id: format!("{}:_doc", display_path),
-        path: display_path.clone(),
+    let mut rows = vec![doc_row_for_note(&display_path, &doc_hit, doc_search_text)];
+    rows.extend(parsed.sections.iter().map(|section| {
+        section_row_for_note(
+            &display_path,
+            parsed,
+            section,
+            &tags,
+            hierarchy.clone(),
+            navigation_target.clone(),
+        )
+    }));
+
+    rows
+}
+
+fn doc_row_for_note(
+    display_path: &str,
+    doc_hit: &SearchHit,
+    doc_search_text: String,
+) -> KnowledgeSectionRow {
+    KnowledgeSectionRow {
+        id: format!("{display_path}:_doc"),
+        path: display_path.to_string(),
         stem: doc_hit.stem.clone(),
         title: doc_hit.title.clone(),
         best_section: None,
         search_text: doc_search_text,
-        hit_json: serialize_hit(&doc_hit),
-    }];
+        hit_json: serialize_hit(doc_hit),
+    }
+}
 
-    rows.extend(parsed.sections.iter().map(|section| {
-        let hit = SearchHit {
-            stem: parsed.doc.stem.clone(),
-            title: Some(parsed.doc.title.clone()),
-            path: display_path.clone(),
-            doc_type: parsed.doc.doc_type.clone(),
-            tags: tags.clone(),
-            score: 0.0,
-            best_section: Some(section.heading_path.clone()),
-            match_reason: Some("knowledge_section_search".to_string()),
-            hierarchical_uri: None,
-            hierarchy: hierarchy.clone(),
-            saliency_score: None,
-            audit_status: None,
-            verification_state: None,
-            implicit_backlinks: None,
-            implicit_backlink_items: None,
-            navigation_target: navigation_target.clone(),
-        };
-        KnowledgeSectionRow {
-            id: format!("{}:{}", display_path, section.heading_path),
-            path: display_path.clone(),
-            stem: parsed.doc.stem.clone(),
-            title: Some(parsed.doc.title.clone()),
-            best_section: Some(section.heading_path.clone()),
-            search_text: normalize_search_text([
-                parsed.doc.title.as_str(),
-                parsed.doc.stem.as_str(),
-                section.heading_title.as_str(),
-                section.heading_path.as_str(),
-                section.section_text.as_str(),
-            ]),
-            hit_json: serialize_hit(&hit),
-        }
-    }));
-
-    rows
+fn section_row_for_note(
+    display_path: &str,
+    parsed: &ParsedNote,
+    section: &ParsedSection,
+    tags: &[String],
+    hierarchy: Option<Vec<String>>,
+    navigation_target: Option<StudioNavigationTarget>,
+) -> KnowledgeSectionRow {
+    let hit = SearchHit {
+        stem: parsed.doc.stem.clone(),
+        title: Some(parsed.doc.title.clone()),
+        path: display_path.to_string(),
+        doc_type: parsed.doc.doc_type.clone(),
+        tags: tags.to_vec(),
+        score: 0.0,
+        best_section: Some(section.heading_path.clone()),
+        match_reason: Some("knowledge_section_search".to_string()),
+        hierarchical_uri: None,
+        hierarchy,
+        saliency_score: None,
+        audit_status: None,
+        verification_state: None,
+        implicit_backlinks: None,
+        implicit_backlink_items: None,
+        navigation_target,
+    };
+    KnowledgeSectionRow {
+        id: format!("{display_path}:{}", section.heading_path),
+        path: display_path.to_string(),
+        stem: parsed.doc.stem.clone(),
+        title: Some(parsed.doc.title.clone()),
+        best_section: Some(section.heading_path.clone()),
+        search_text: normalize_search_text([
+            parsed.doc.title.as_str(),
+            parsed.doc.stem.as_str(),
+            section.heading_title.as_str(),
+            section.heading_path.as_str(),
+            section.section_text.as_str(),
+        ]),
+        hit_json: serialize_hit(&hit),
+    }
 }
 
 fn serialize_hit(hit: &SearchHit) -> String {

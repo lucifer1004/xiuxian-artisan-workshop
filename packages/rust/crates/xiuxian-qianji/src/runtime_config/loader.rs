@@ -2,9 +2,9 @@ use super::env_vars::env_var_or_override;
 use super::model::QianjiRuntimeEnv;
 use super::pathing::runtime_env_has_path_overrides;
 use super::toml_config::{QianjiToml, apply_llm_overlay, apply_memory_promotion_overlay};
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use xiuxian_config_core::load_toml_value_with_imports;
 use xiuxian_macros::project_config_paths;
 
 pub(super) fn load_qianji_toml(
@@ -45,13 +45,13 @@ pub(super) fn load_qianji_toml(
 }
 
 fn read_qianji_toml_file(path: &Path) -> io::Result<QianjiToml> {
-    let raw = fs::read_to_string(path).map_err(|e| {
+    let value = load_toml_value_with_imports(path).map_err(|e| {
         io::Error::other(format!(
-            "failed to read qianji config {}: {e}",
+            "failed to load qianji config {}: {e}",
             path.display()
         ))
     })?;
-    toml::from_str::<QianjiToml>(&raw).map_err(|e| {
+    value.try_into::<QianjiToml>().map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("failed to parse qianji config {}: {e}", path.display()),

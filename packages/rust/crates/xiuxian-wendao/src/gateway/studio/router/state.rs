@@ -9,10 +9,12 @@ use crate::gateway::studio::repo_index::RepoIndexCoordinator;
 use crate::gateway::studio::symbol_index::{SymbolIndexCoordinator, SymbolIndexStatus};
 use crate::gateway::studio::types::{
     AstSearchHit, AttachmentSearchHit, AutocompleteSuggestion, ReferenceSearchHit, SearchHit,
-    SearchIndexStatusResponse, UiConfig, UiProjectConfig, VfsScanResult,
+    SearchIndexStatusResponse, UiCapabilities, UiConfig, UiProjectConfig, VfsScanResult,
 };
 use crate::link_graph::LinkGraphIndex;
 use crate::search_plane::SearchPlaneService;
+#[cfg(test)]
+use crate::search_plane::{SearchMaintenancePolicy, SearchManifestKeyspace};
 use crate::unified_symbol::UnifiedSymbolIndex;
 
 use super::config::resolve_studio_config_root;
@@ -114,11 +116,85 @@ impl StudioState {
         state
     }
 
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn new_with_bootstrap_ui_config_and_search_plane_root(
+        plugin_registry: Arc<PluginRegistry>,
+        search_plane_root: std::path::PathBuf,
+    ) -> Self {
+        let project_root = xiuxian_io::PrjDirs::project_root();
+        let config_root = resolve_studio_config_root(project_root.as_path());
+        let manifest_keyspace = SearchManifestKeyspace::new(format!(
+            "xiuxian:test:search_plane:{}",
+            blake3::hash(search_plane_root.to_string_lossy().as_bytes()).to_hex()
+        ));
+        let search_plane = SearchPlaneService::with_paths(
+            project_root.clone(),
+            search_plane_root,
+            manifest_keyspace,
+            SearchMaintenancePolicy::default(),
+        );
+        let repo_index = Arc::new(RepoIndexCoordinator::new(
+            project_root.clone(),
+            Arc::clone(&plugin_registry),
+            search_plane.clone(),
+        ));
+        let symbol_index_coordinator = Arc::new(SymbolIndexCoordinator::new(
+            project_root.clone(),
+            config_root.clone(),
+        ));
+        let state = Self {
+            project_root,
+            config_root,
+            ui_config: Arc::new(RwLock::new(UiConfig {
+                projects: Vec::new(),
+                repo_projects: Vec::new(),
+            })),
+            graph_index: Arc::new(RwLock::new(None)),
+            symbol_index: Arc::new(RwLock::new(None)),
+            symbol_index_coordinator,
+            search_plane,
+            vfs_scan: Arc::new(RwLock::new(None)),
+            repo_index,
+            plugin_registry,
+        };
+        state.repo_index.start();
+        state
+    }
+
     pub(crate) fn ui_config(&self) -> UiConfig {
         self.ui_config
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    pub(crate) fn ui_capabilities(&self) -> UiCapabilities {
+        let ui_config = self.ui_config();
+        let mut seen_repositories = HashSet::new();
+        let supported_repositories = ui_config
+            .repo_projects
+            .into_iter()
+            .filter_map(|project| {
+                let repository_id = project.id.trim().to_string();
+                if repository_id.is_empty() || !seen_repositories.insert(repository_id.clone()) {
+                    return None;
+                }
+                Some(repository_id)
+            })
+            .collect();
+        let supported_languages = self
+            .plugin_registry
+            .plugin_ids()
+            .into_iter()
+            .map(ToOwned::to_owned)
+            .collect();
+
+        UiCapabilities {
+            languages: supported_languages,
+            repositories: supported_repositories,
+            kinds: supported_code_kinds(),
+        }
     }
 
     pub(crate) fn set_ui_config(&self, config: UiConfig) {
@@ -266,11 +342,7 @@ impl StudioState {
     }
 
     pub(crate) async fn search_index_status(&self) -> SearchIndexStatusResponse {
-        let repo_status = self.repo_index.status_response(None);
-        let snapshot = self
-            .search_plane
-            .status_with_repo_content(&repo_status)
-            .await;
+        let snapshot = self.search_plane.status_with_repo_runtime().await;
         SearchIndexStatusResponse::from(&snapshot)
     }
 
@@ -446,6 +518,29 @@ impl StudioState {
             )),
         }
     }
+}
+
+pub(crate) fn supported_code_kinds() -> Vec<String> {
+    [
+        "function",
+        "method",
+        "struct",
+        "module",
+        "class",
+        "trait",
+        "interface",
+        "enum",
+        "constant",
+        "const",
+        "macro",
+        "type",
+        "example",
+        "doc",
+        "reference",
+    ]
+    .into_iter()
+    .map(ToOwned::to_owned)
+    .collect()
 }
 
 impl Default for StudioState {

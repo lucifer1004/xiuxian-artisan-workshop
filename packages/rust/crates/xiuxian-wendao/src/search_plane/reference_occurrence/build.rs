@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use regex::Regex;
 use tokio::runtime::Handle;
@@ -18,6 +19,12 @@ use crate::search_plane::{
 };
 
 use super::schema::{filter_column, reference_occurrence_batches, reference_occurrence_schema};
+
+static REFERENCE_TOKEN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").unwrap_or_else(|error| {
+        panic!("reference token regex must compile: {error}");
+    })
+});
 
 #[cfg(test)]
 #[derive(Debug, thiserror::Error)]
@@ -114,9 +121,6 @@ fn build_reference_occurrences(
             )
         })
         .collect::<HashSet<_>>();
-    let token_pattern =
-        Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").expect("reference token regex must compile");
-
     let mut hits = Vec::new();
     for root in configured_project_scan_roots(config_root, projects) {
         for entry in WalkDir::new(&root)
@@ -145,7 +149,7 @@ fn build_reference_occurrences(
                 for (line_idx, line_text) in content.lines().enumerate() {
                     let line_number = line_idx + 1;
                     let mut seen_tokens = HashSet::new();
-                    for mat in token_pattern.find_iter(line_text) {
+                    for mat in REFERENCE_TOKEN_PATTERN.find_iter(line_text) {
                         let token = mat.as_str();
                         let token_folded = token.to_ascii_lowercase();
                         if !seen_tokens.insert(token_folded.clone()) {
@@ -197,7 +201,8 @@ async fn write_reference_occurrence_epoch(
     let store = service
         .open_store(SearchCorpusKind::ReferenceOccurrence)
         .await?;
-    let table_name = service.table_name(SearchCorpusKind::ReferenceOccurrence, lease.epoch);
+    let table_name =
+        SearchPlaneService::table_name(SearchCorpusKind::ReferenceOccurrence, lease.epoch);
     let schema = reference_occurrence_schema();
     let batches = reference_occurrence_batches(hits)?;
     store
