@@ -125,7 +125,10 @@ fn test_node_status_parsing() {
     assert_eq!(NodeStatus::parse_lossy("STABLE"), NodeStatus::Stable);
     assert_eq!(NodeStatus::parse_lossy("stable"), NodeStatus::Stable);
     assert_eq!(NodeStatus::parse_lossy("DRAFT"), NodeStatus::Draft);
-    assert_eq!(NodeStatus::parse_lossy("DEPRECATED"), NodeStatus::Deprecated);
+    assert_eq!(
+        NodeStatus::parse_lossy("DEPRECATED"),
+        NodeStatus::Deprecated
+    );
     assert_eq!(NodeStatus::parse_lossy("UNKNOWN"), NodeStatus::Stable);
 }
 

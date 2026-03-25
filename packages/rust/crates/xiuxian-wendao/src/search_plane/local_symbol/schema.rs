@@ -143,3 +143,7 @@ pub(super) const fn suggestion_columns() -> [&'static str; 4] {
 pub(super) const fn hit_json_column() -> &'static str {
     COLUMN_HIT_JSON
 }
+
+pub(super) const fn path_column() -> &'static str {
+    COLUMN_PATH
+}

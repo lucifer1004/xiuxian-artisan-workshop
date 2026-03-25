@@ -1,3 +1,5 @@
+#![cfg(feature = "mistral.rs")]
+
 //! Mistral runtime probing and URL derivation tests.
 
 use anyhow::{Context, Result};

@@ -5,11 +5,14 @@ mod corpus;
 mod knowledge_section;
 mod local_symbol;
 mod manifest;
+mod project_fingerprint;
 mod ranking;
 mod reference_occurrence;
 mod repo_content_chunk;
 mod repo_entity;
+mod repo_staging;
 mod service;
+mod staged_mutation;
 mod status;
 
 pub(crate) use attachment::AttachmentSearchError;
@@ -23,10 +26,21 @@ pub use manifest::{
     SearchFileFingerprint, SearchManifestKeyspace, SearchManifestRecord, SearchRepoCorpusRecord,
     SearchRepoCorpusSnapshotRecord, SearchRepoPublicationRecord, SearchRepoRuntimeRecord,
 };
+#[allow(unused_imports)]
+pub(crate) use project_fingerprint::{
+    ProjectScannedFile, fingerprint_note_projects, fingerprint_source_projects,
+    fingerprint_symbol_projects, scan_note_project_files, scan_source_project_files,
+    scan_symbol_project_files,
+};
 pub(crate) use reference_occurrence::ReferenceOccurrenceSearchError;
+pub(crate) use repo_staging::{
+    RepoStagedMutationAction, RepoStagedMutationPlan, plan_repo_staged_mutation,
+};
 pub(crate) use service::RepoSearchAvailability;
+pub(crate) use service::RepoSearchPublicationState;
 pub(crate) use service::RepoSearchQueryCacheKeyInput;
 pub use service::SearchPlaneService;
+pub(crate) use staged_mutation::delete_paths_from_table;
 pub use status::{
     SearchCorpusIssue, SearchCorpusIssueCode, SearchCorpusIssueFamily, SearchCorpusIssueSummary,
     SearchCorpusStatus, SearchCorpusStatusAction, SearchCorpusStatusReason,

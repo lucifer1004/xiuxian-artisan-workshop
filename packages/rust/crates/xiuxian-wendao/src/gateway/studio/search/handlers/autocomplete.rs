@@ -18,7 +18,7 @@ pub async fn search_autocomplete(
     let suggestions = if prefix.is_empty() {
         Vec::new()
     } else {
-        state.studio.ensure_local_symbol_index_started()?;
+        state.studio.ensure_local_symbol_index_ready().await?;
         let cache_key = state
             .studio
             .search_plane

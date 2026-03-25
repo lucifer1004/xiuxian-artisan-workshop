@@ -1,0 +1,37 @@
+ARG VALKEY_IMAGE=valkey/valkey:9.0-alpine
+FROM ${VALKEY_IMAGE}
+
+USER root
+
+RUN apk add --no-cache bash
+
+COPY scripts/channel/valkey-common.sh /usr/local/bin/valkey-common.sh
+COPY scripts/channel/valkey-runtime.sh /usr/local/bin/valkey-runtime.sh
+COPY scripts/channel/valkey-launch.sh /usr/local/bin/valkey-launch.sh
+COPY scripts/channel/valkey-healthcheck.sh /usr/local/bin/valkey-healthcheck.sh
+
+RUN chmod 0755 \
+    /usr/local/bin/valkey-common.sh \
+    /usr/local/bin/valkey-runtime.sh \
+    /usr/local/bin/valkey-launch.sh \
+    /usr/local/bin/valkey-healthcheck.sh && \
+    mkdir -p /data/valkey /run/valkey && \
+    chown -R valkey:valkey /data/valkey /run/valkey
+
+WORKDIR /data/valkey
+
+ENV VALKEY_BIND=0.0.0.0 \
+    VALKEY_HOST=127.0.0.1 \
+    VALKEY_PORT=6379 \
+    VALKEY_DB=0 \
+    VALKEY_RUNTIME_DIR=/run/valkey \
+    VALKEY_DATA_DIR=/data/valkey \
+    VALKEY_PIDFILE=/run/valkey/valkey.pid \
+    VALKEY_PROTECTED_MODE=no \
+    VALKEY_DAEMONIZE=no
+
+EXPOSE 6379
+
+USER valkey
+ENTRYPOINT ["/usr/local/bin/valkey-launch.sh"]
+HEALTHCHECK --interval=5s --timeout=3s --start-period=15s --retries=10 CMD ["/usr/local/bin/valkey-healthcheck.sh"]

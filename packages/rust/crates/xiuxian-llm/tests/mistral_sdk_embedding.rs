@@ -1,3 +1,5 @@
+#![cfg(feature = "mistral.rs")]
+
 //! Mistral SDK embedding configuration and fallback tests.
 
 use std::path::PathBuf;

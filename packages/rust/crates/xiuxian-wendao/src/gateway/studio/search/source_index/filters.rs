@@ -2,7 +2,7 @@ use std::path::Path;
 
 use walkdir::DirEntry;
 
-pub(super) fn should_skip_entry(entry: &DirEntry) -> bool {
+pub(crate) fn should_skip_entry(entry: &DirEntry) -> bool {
     if !entry.file_type().is_dir() {
         return false;
     }
@@ -22,7 +22,7 @@ pub(super) fn should_skip_entry(entry: &DirEntry) -> bool {
     )
 }
 
-pub(super) fn is_markdown_path(path: &Path) -> bool {
+pub(crate) fn is_markdown_path(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"))

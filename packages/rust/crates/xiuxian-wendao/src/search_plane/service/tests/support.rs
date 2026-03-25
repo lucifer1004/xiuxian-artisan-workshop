@@ -78,7 +78,12 @@ pub(super) async fn publish_repo_bundle(
 ) {
     ok_or_panic(
         service
-            .publish_repo_entities_with_revision(repo_id, &sample_repo_analysis(), revision)
+            .publish_repo_entities_with_revision(
+                repo_id,
+                &sample_repo_analysis(),
+                documents,
+                revision,
+            )
             .await,
         "publish repo entities",
     );
@@ -148,6 +153,27 @@ pub(super) fn sample_repo_analysis() -> RepositoryAnalysisOutput {
         }],
         ..RepositoryAnalysisOutput::default()
     }
+}
+
+pub(super) fn sample_repo_documents() -> Vec<RepoCodeDocument> {
+    vec![
+        RepoCodeDocument {
+            path: "src/BaseModelica.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(
+                "module BaseModelica\nexport reexport\nreexport() = nothing\nend\n",
+            ),
+            size_bytes: 61,
+            modified_unix_ms: 10,
+        },
+        RepoCodeDocument {
+            path: "examples/reexport.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from("using BaseModelica\nreexport()\n"),
+            size_bytes: 29,
+            modified_unix_ms: 10,
+        },
+    ]
 }
 
 pub(super) fn repo_status_entry(repo_id: &str, phase: RepoIndexPhase) -> RepoIndexEntryStatus {

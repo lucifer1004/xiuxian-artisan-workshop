@@ -26,6 +26,7 @@ xiuxian-lance = { path = "../xiuxian-lance" }
 # Arrow IPC for search result batch (same version as lance's arrow for IPC compatibility)
 arrow = { workspace = true }
 arrow-ipc = { workspace = true }
+arrow-string = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }

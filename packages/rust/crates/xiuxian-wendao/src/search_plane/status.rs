@@ -109,6 +109,8 @@ pub enum SearchCorpusStatusAction {
 pub enum SearchCorpusStatusReasonCode {
     /// The corpus is indexing for the first time and has no readable publication yet.
     WarmingUp,
+    /// The corpus is indexing for the first time, and the staging epoch has already been prewarmed.
+    Prewarming,
     /// The corpus is refreshing while an older publication remains readable.
     Refreshing,
     /// Background compaction is actively running for the readable publication.
@@ -232,16 +234,41 @@ fn ratio_threshold_parts(threshold: f32) -> (u128, u128) {
 /// Background maintenance state derived from publish/compaction history.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchMaintenanceStatus {
+    #[serde(default)]
+    /// Whether a staging-table prewarm task is actively running.
+    pub prewarm_running: bool,
+    #[serde(default)]
+    /// Number of queued prewarm tasks currently waiting behind the active worker.
+    pub prewarm_queue_depth: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// One-based queue position for this corpus when its prewarm is queued in repo maintenance.
+    pub prewarm_queue_position: Option<u32>,
     /// Whether a compaction task is actively running for the readable publication.
     pub compaction_running: bool,
+    #[serde(default)]
+    /// Number of queued compaction tasks currently waiting behind the active worker.
+    pub compaction_queue_depth: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// One-based queue position for this corpus when its compaction is queued locally.
+    pub compaction_queue_position: Option<u32>,
+    #[serde(default)]
+    /// Whether enqueue-time fairness aging has already promoted this queued compaction task.
+    pub compaction_queue_aged: bool,
     /// Whether the coordinator should schedule a compact/optimize run.
     pub compaction_pending: bool,
     /// Number of publishes observed since the last successful compaction.
     pub publish_count_since_compaction: u32,
+    /// RFC3339 timestamp of the most recent successful staging-table prewarm.
+    pub last_prewarmed_at: Option<String>,
+    /// Epoch identifier of the most recent successful staging-table prewarm.
+    pub last_prewarmed_epoch: Option<u64>,
     /// RFC3339 timestamp of the most recent successful compaction.
     pub last_compacted_at: Option<String>,
     /// Human-readable reason for the most recent compaction.
     pub last_compaction_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Row count observed when compaction most recently completed.
+    pub last_compacted_row_count: Option<u64>,
 }
 
 /// Source path used by the most recent bounded streaming query for one corpus.

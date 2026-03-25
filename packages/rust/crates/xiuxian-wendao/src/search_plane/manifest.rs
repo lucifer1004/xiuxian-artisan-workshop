@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{SearchCorpusKind, SearchCorpusStatus};
+use super::{SearchCorpusKind, SearchCorpusStatus, SearchMaintenanceStatus};
 use crate::gateway::studio::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
 
 /// Valkey key namespace for search-plane manifests, leases, and caches.
@@ -28,6 +28,26 @@ impl SearchManifestKeyspace {
     #[must_use]
     pub fn corpus_manifest_key(&self, corpus: SearchCorpusKind) -> String {
         format!("{}:manifest:{corpus}", self.namespace)
+    }
+
+    /// Key that stores file-level fingerprints for one corpus.
+    #[must_use]
+    pub fn corpus_file_fingerprints_key(&self, corpus: SearchCorpusKind) -> String {
+        format!("{}:file-fingerprints:{corpus}", self.namespace)
+    }
+
+    /// Key that stores repo-scoped file-level fingerprints for one repo-backed corpus.
+    #[must_use]
+    pub fn repo_corpus_file_fingerprints_key(
+        &self,
+        corpus: SearchCorpusKind,
+        repo_id: &str,
+    ) -> String {
+        format!(
+            "{}:repo-file-fingerprints:{corpus}:repo:{}",
+            self.namespace,
+            blake3::hash(repo_id.as_bytes()).to_hex()
+        )
     }
 
     /// Key that stores the combined repo-backed corpus record for one repo/corpus pair.
@@ -230,6 +250,9 @@ pub struct SearchRepoCorpusRecord {
     pub runtime: Option<SearchRepoRuntimeRecord>,
     /// Latest readable publication for this repo-backed corpus, when available.
     pub publication: Option<SearchRepoPublicationRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Latest repo-backed maintenance metadata known to the search plane.
+    pub maintenance: Option<SearchMaintenanceStatus>,
 }
 
 impl SearchRepoCorpusRecord {
@@ -246,7 +269,15 @@ impl SearchRepoCorpusRecord {
             repo_id: repo_id.into(),
             runtime,
             publication,
+            maintenance: None,
         }
+    }
+
+    /// Attach the latest repo-backed maintenance metadata to this combined row.
+    #[must_use]
+    pub fn with_maintenance(mut self, maintenance: Option<SearchMaintenanceStatus>) -> Self {
+        self.maintenance = maintenance;
+        self
     }
 }
 
@@ -293,6 +324,9 @@ fn build_repo_publication_epoch(publication_id: &str) -> u64 {
 pub struct SearchFileFingerprint {
     /// Repo-relative path for the source file.
     pub relative_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Optional local partition identifier used to route incremental updates.
+    pub partition_id: Option<String>,
     /// File size captured during manifest generation.
     pub size_bytes: u64,
     /// Modification time expressed as unix milliseconds.

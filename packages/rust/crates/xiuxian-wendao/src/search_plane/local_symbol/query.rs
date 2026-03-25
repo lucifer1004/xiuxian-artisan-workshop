@@ -2,13 +2,21 @@ use std::collections::HashSet;
 
 use xiuxian_vector::{
     ColumnarScanOptions, LanceArray, LanceRecordBatch, LanceStringArray, LanceUInt64Array,
-    VectorStoreError,
+    VectorStore, VectorStoreError,
 };
 
 use crate::gateway::studio::types::{AstSearchHit, AutocompleteSuggestion};
+use crate::search_plane::ranking::{
+    RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry, sort_by_rank, trim_ranked_vec,
+};
 use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
 
 use super::schema::{hit_json_column, projected_columns, suggestion_columns};
+
+const MIN_RETAINED_LOCAL_SYMBOLS: usize = 64;
+const RETAINED_LOCAL_SYMBOL_MULTIPLIER: usize = 4;
+const MIN_RETAINED_AUTOCOMPLETE_SUGGESTIONS: usize = 16;
+const RETAINED_AUTOCOMPLETE_MULTIPLIER: usize = 2;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum LocalSymbolSearchError {
@@ -31,43 +39,96 @@ pub(crate) async fn search_local_symbols(
     let Some(active_epoch) = status.active_epoch else {
         return Err(LocalSymbolSearchError::NotReady);
     };
+    let query_lower = query.trim().to_ascii_lowercase();
+    if query_lower.is_empty() {
+        return Ok(Vec::new());
+    }
 
     let store = service.open_store(SearchCorpusKind::LocalSymbol).await?;
-    let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, active_epoch);
+    let table_names =
+        service.local_epoch_table_names_for_reads(SearchCorpusKind::LocalSymbol, active_epoch);
+    if table_names.is_empty() {
+        return Ok(Vec::new());
+    }
     let mut columns = projected_columns()
         .into_iter()
         .map(str::to_string)
         .collect::<Vec<_>>();
     columns.push(hit_json_column().to_string());
-    let batches = store
-        .scan_record_batches(
-            table_name.as_str(),
-            ColumnarScanOptions {
-                projected_columns: columns,
-                batch_size: Some(256),
-                limit: Some(limit.saturating_mul(32).max(128)),
-                ..ColumnarScanOptions::default()
-            },
-        )
-        .await?;
-
-    let query_lower = query.trim().to_ascii_lowercase();
-    let mut candidates = Vec::new();
-    for batch in &batches {
-        collect_candidates(batch, query_lower.as_str(), limit, &mut candidates)?;
-    }
-
-    candidates.sort_by(|left, right| {
-        right
-            .score
-            .partial_cmp(&left.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.name.cmp(&right.name))
-            .then_with(|| left.path.cmp(&right.path))
-            .then_with(|| left.line_start.cmp(&right.line_start))
-    });
+    let window = retained_window(limit);
+    let execution = execute_local_symbol_search(
+        &store,
+        table_names.as_slice(),
+        query_lower.as_str(),
+        ColumnarScanOptions {
+            projected_columns: columns,
+            batch_size: Some(256),
+            limit: Some(limit.saturating_mul(32).max(128)),
+            ..ColumnarScanOptions::default()
+        },
+        window,
+    )
+    .await?;
+    let mut candidates = execution.candidates;
+    sort_by_rank(&mut candidates, compare_candidates);
     candidates.truncate(limit);
+    let hits = decode_local_symbol_hits(candidates)?;
+    service.record_query_telemetry(
+        SearchCorpusKind::LocalSymbol,
+        execution
+            .telemetry
+            .finish(execution.source, Some("search".to_string()), hits.len()),
+    );
+    Ok(hits)
+}
 
+#[derive(Debug)]
+struct LocalSymbolSearchExecution {
+    candidates: Vec<LocalSymbolCandidate>,
+    telemetry: StreamingRerankTelemetry,
+    source: StreamingRerankSource,
+}
+
+async fn execute_local_symbol_search(
+    store: &VectorStore,
+    table_names: &[String],
+    query_lower: &str,
+    options: ColumnarScanOptions,
+    window: RetainedWindow,
+) -> Result<LocalSymbolSearchExecution, LocalSymbolSearchError> {
+    let mut telemetry = StreamingRerankTelemetry::new(window, options.batch_size, options.limit);
+    let mut candidates = Vec::with_capacity(window.target);
+    store
+        .scan_record_batches_streaming_across_tables(table_names, options, |_table_name, batch| {
+            collect_candidates(&batch, query_lower, &mut candidates, window, &mut telemetry)
+        })
+        .await?;
+    Ok(LocalSymbolSearchExecution {
+        candidates,
+        telemetry,
+        source: StreamingRerankSource::Scan,
+    })
+}
+
+fn retained_window(limit: usize) -> RetainedWindow {
+    RetainedWindow::new(
+        limit,
+        RETAINED_LOCAL_SYMBOL_MULTIPLIER,
+        MIN_RETAINED_LOCAL_SYMBOLS,
+    )
+}
+
+fn suggestion_window(limit: usize) -> RetainedWindow {
+    RetainedWindow::new(
+        limit,
+        RETAINED_AUTOCOMPLETE_MULTIPLIER,
+        MIN_RETAINED_AUTOCOMPLETE_SUGGESTIONS,
+    )
+}
+
+fn decode_local_symbol_hits(
+    candidates: Vec<LocalSymbolCandidate>,
+) -> Result<Vec<AstSearchHit>, LocalSymbolSearchError> {
     candidates
         .into_iter()
         .map(|candidate| {
@@ -97,41 +158,74 @@ pub(crate) async fn autocomplete_local_symbols(
     }
 
     let store = service.open_store(SearchCorpusKind::LocalSymbol).await?;
-    let table_name = SearchPlaneService::table_name(SearchCorpusKind::LocalSymbol, active_epoch);
-    let batches = store
-        .scan_record_batches(
-            table_name.as_str(),
-            ColumnarScanOptions {
-                projected_columns: suggestion_columns()
-                    .into_iter()
-                    .map(str::to_string)
-                    .collect(),
-                batch_size: Some(256),
-                limit: Some(limit.saturating_mul(64).max(256)),
-                ..ColumnarScanOptions::default()
-            },
-        )
-        .await?;
-
-    let mut suggestions = Vec::new();
-    let mut seen = HashSet::new();
-    for batch in &batches {
-        collect_suggestions(
-            batch,
-            normalized_prefix.as_str(),
-            limit,
-            &mut suggestions,
-            &mut seen,
-        )?;
+    let table_names =
+        service.local_epoch_table_names_for_reads(SearchCorpusKind::LocalSymbol, active_epoch);
+    if table_names.is_empty() {
+        return Ok(Vec::new());
     }
-
-    suggestions.sort_by(|left, right| {
-        suggestion_rank(left)
-            .cmp(&suggestion_rank(right))
-            .then_with(|| left.text.cmp(&right.text))
-    });
+    let execution = execute_local_symbol_autocomplete(
+        &store,
+        table_names.as_slice(),
+        normalized_prefix.as_str(),
+        ColumnarScanOptions {
+            projected_columns: suggestion_columns()
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            batch_size: Some(256),
+            limit: Some(limit.saturating_mul(64).max(256)),
+            ..ColumnarScanOptions::default()
+        },
+        suggestion_window(limit),
+    )
+    .await?;
+    let mut suggestions = execution.suggestions;
+    suggestions.sort_by(|left, right| compare_suggestions(left, right));
     suggestions.truncate(limit);
+    service.record_query_telemetry(
+        SearchCorpusKind::LocalSymbol,
+        execution.telemetry.finish(
+            execution.source,
+            Some("autocomplete".to_string()),
+            suggestions.len(),
+        ),
+    );
     Ok(suggestions)
+}
+
+struct LocalSymbolAutocompleteExecution {
+    suggestions: Vec<AutocompleteSuggestion>,
+    telemetry: StreamingRerankTelemetry,
+    source: StreamingRerankSource,
+}
+
+async fn execute_local_symbol_autocomplete(
+    store: &VectorStore,
+    table_names: &[String],
+    normalized_prefix: &str,
+    options: ColumnarScanOptions,
+    window: RetainedWindow,
+) -> Result<LocalSymbolAutocompleteExecution, LocalSymbolSearchError> {
+    let mut telemetry = StreamingRerankTelemetry::new(window, options.batch_size, options.limit);
+    let mut suggestions = Vec::with_capacity(window.target);
+    let mut seen = HashSet::new();
+    store
+        .scan_record_batches_streaming_across_tables(table_names, options, |_table_name, batch| {
+            collect_suggestions(
+                &batch,
+                normalized_prefix,
+                &mut suggestions,
+                &mut seen,
+                window,
+                &mut telemetry,
+            )
+        })
+        .await?;
+    Ok(LocalSymbolAutocompleteExecution {
+        suggestions,
+        telemetry,
+        source: StreamingRerankSource::Scan,
+    })
 }
 
 #[derive(Debug)]
@@ -146,9 +240,11 @@ struct LocalSymbolCandidate {
 fn collect_candidates(
     batch: &LanceRecordBatch,
     query_lower: &str,
-    limit: usize,
     candidates: &mut Vec<LocalSymbolCandidate>,
+    window: RetainedWindow,
+    telemetry: &mut StreamingRerankTelemetry,
 ) -> Result<(), LocalSymbolSearchError> {
+    telemetry.observe_batch(batch.num_rows());
     let name = string_column(batch, "name")?;
     let name_folded = string_column(batch, "name_folded")?;
     let signature = string_column(batch, "signature")?;
@@ -172,6 +268,7 @@ fn collect_candidates(
             continue;
         }
 
+        telemetry.observe_match();
         candidates.push(LocalSymbolCandidate {
             score,
             name: name.value(row).to_string(),
@@ -179,30 +276,39 @@ fn collect_candidates(
             line_start: usize::try_from(line_start.value(row)).unwrap_or(usize::MAX),
             hit_json: hit_json.value(row).to_string(),
         });
-        if candidates.len() > limit.saturating_mul(4).max(64) {
-            candidates.sort_by(|left, right| {
-                right
-                    .score
-                    .partial_cmp(&left.score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| left.name.cmp(&right.name))
-                    .then_with(|| left.path.cmp(&right.path))
-                    .then_with(|| left.line_start.cmp(&right.line_start))
-            });
-            candidates.truncate(limit.saturating_mul(2).max(32));
+        telemetry.observe_working_set(candidates.len());
+        if candidates.len() > window.threshold {
+            let before_len = candidates.len();
+            trim_ranked_vec(candidates, window.target, compare_candidates);
+            telemetry.observe_trim(before_len, candidates.len());
         }
     }
 
     Ok(())
 }
 
+fn compare_candidates(
+    left: &LocalSymbolCandidate,
+    right: &LocalSymbolCandidate,
+) -> std::cmp::Ordering {
+    right
+        .score
+        .partial_cmp(&left.score)
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then_with(|| left.name.cmp(&right.name))
+        .then_with(|| left.path.cmp(&right.path))
+        .then_with(|| left.line_start.cmp(&right.line_start))
+}
+
 fn collect_suggestions(
     batch: &LanceRecordBatch,
     normalized_prefix: &str,
-    limit: usize,
     suggestions: &mut Vec<AutocompleteSuggestion>,
     seen: &mut HashSet<String>,
+    window: RetainedWindow,
+    telemetry: &mut StreamingRerankTelemetry,
 ) -> Result<(), LocalSymbolSearchError> {
+    telemetry.observe_batch(batch.num_rows());
     let name = string_column(batch, "name")?;
     let name_folded = string_column(batch, "name_folded")?;
     let language = string_column(batch, "language")?;
@@ -221,6 +327,7 @@ fn collect_suggestions(
             continue;
         }
 
+        telemetry.observe_match();
         suggestions.push(AutocompleteSuggestion {
             text: text.to_string(),
             suggestion_type: autocomplete_suggestion_type(
@@ -229,17 +336,24 @@ fn collect_suggestions(
             )
             .to_string(),
         });
-        if suggestions.len() > limit.saturating_mul(4).max(32) {
-            suggestions.sort_by(|left, right| {
-                suggestion_rank(left)
-                    .cmp(&suggestion_rank(right))
-                    .then_with(|| left.text.cmp(&right.text))
-            });
-            suggestions.truncate(limit.saturating_mul(2).max(16));
+        telemetry.observe_working_set(suggestions.len());
+        if suggestions.len() > window.threshold {
+            let before_len = suggestions.len();
+            trim_ranked_vec(suggestions, window.target, compare_suggestions);
+            telemetry.observe_trim(before_len, suggestions.len());
         }
     }
 
     Ok(())
+}
+
+fn compare_suggestions(
+    left: &AutocompleteSuggestion,
+    right: &AutocompleteSuggestion,
+) -> std::cmp::Ordering {
+    suggestion_rank(left)
+        .cmp(&suggestion_rank(right))
+        .then_with(|| left.text.cmp(&right.text))
 }
 
 fn candidate_score(
@@ -440,6 +554,80 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "AlphaSymbol");
         assert!(results[0].score > 0.0);
+
+        let snapshot = service.status();
+        let corpus = snapshot
+            .corpora
+            .iter()
+            .find(|entry| entry.corpus == SearchCorpusKind::LocalSymbol)
+            .unwrap_or_else(|| panic!("local symbol corpus row should exist"));
+        let telemetry = corpus
+            .last_query_telemetry
+            .as_ref()
+            .unwrap_or_else(|| panic!("local symbol telemetry should be present"));
+        assert_eq!(
+            telemetry.source,
+            crate::search_plane::SearchQueryTelemetrySource::Scan
+        );
+        assert_eq!(telemetry.scope.as_deref(), Some("search"));
+        assert!(telemetry.rows_scanned >= 1);
+        assert!(telemetry.matched_rows >= 1);
+    }
+
+    #[tokio::test]
+    async fn local_symbol_query_can_rerank_across_multiple_tables() {
+        let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+        let service = fixture_service(&temp_dir);
+        let store = service
+            .open_store(SearchCorpusKind::LocalSymbol)
+            .await
+            .unwrap_or_else(|error| panic!("open store: {error}"));
+        let hits_a = vec![sample_hit("AlphaSymbol", "src/lib.rs", 10)];
+        let hits_b = vec![sample_hit("BetaAlphaHelper", "src/beta.rs", 20)];
+
+        store
+            .replace_record_batches(
+                "local_symbol_project_a",
+                local_symbol_schema(),
+                local_symbol_batches(&hits_a).unwrap_or_else(|error| panic!("batches a: {error}")),
+            )
+            .await
+            .unwrap_or_else(|error| panic!("replace record batches a: {error}"));
+        store
+            .replace_record_batches(
+                "local_symbol_project_b",
+                local_symbol_schema(),
+                local_symbol_batches(&hits_b).unwrap_or_else(|error| panic!("batches b: {error}")),
+            )
+            .await
+            .unwrap_or_else(|error| panic!("replace record batches b: {error}"));
+
+        let execution = execute_local_symbol_search(
+            &store,
+            &[
+                "local_symbol_project_a".to_string(),
+                "local_symbol_project_b".to_string(),
+            ],
+            "alpha",
+            ColumnarScanOptions {
+                projected_columns: projected_columns()
+                    .into_iter()
+                    .map(str::to_string)
+                    .chain(std::iter::once(hit_json_column().to_string()))
+                    .collect(),
+                batch_size: Some(64),
+                ..ColumnarScanOptions::default()
+            },
+            retained_window(5),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("multi-table query should succeed: {error}"));
+
+        let hits = decode_local_symbol_hits(execution.candidates)
+            .unwrap_or_else(|error| panic!("decode hits should succeed: {error}"));
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].name, "AlphaSymbol");
+        assert_eq!(hits[1].name, "BetaAlphaHelper");
     }
 
     #[tokio::test]
@@ -490,5 +678,23 @@ mod tests {
                 ("Search Metadata".to_string(), "metadata".to_string()),
             ]
         );
+
+        let snapshot = service.status();
+        let corpus = snapshot
+            .corpora
+            .iter()
+            .find(|entry| entry.corpus == SearchCorpusKind::LocalSymbol)
+            .unwrap_or_else(|| panic!("local symbol corpus row should exist"));
+        let telemetry = corpus
+            .last_query_telemetry
+            .as_ref()
+            .unwrap_or_else(|| panic!("autocomplete telemetry should be present"));
+        assert_eq!(
+            telemetry.source,
+            crate::search_plane::SearchQueryTelemetrySource::Scan
+        );
+        assert_eq!(telemetry.scope.as_deref(), Some("autocomplete"));
+        assert!(telemetry.rows_scanned >= 1);
+        assert!(telemetry.matched_rows >= 2);
     }
 }

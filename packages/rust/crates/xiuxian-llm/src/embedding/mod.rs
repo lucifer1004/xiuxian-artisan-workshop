@@ -6,5 +6,6 @@ pub mod backend;
 pub mod openai_compat;
 /// Memory embedding runtime guard (timeout/cooldown/dimension repair).
 pub mod runtime;
-/// In-process `mistralrs` embedding runtime utilities.
+/// In-process `mistralrs` embedding runtime utilities behind the `local-llm` -> `mistral.rs` stack.
+#[cfg(feature = "mistral.rs")]
 pub mod sdk;

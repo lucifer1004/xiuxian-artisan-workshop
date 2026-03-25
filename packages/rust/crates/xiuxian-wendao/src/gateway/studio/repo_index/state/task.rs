@@ -3,9 +3,45 @@ use std::time::Duration;
 use crate::analyzers::{RegisteredRepository, RepoIntelligenceError};
 
 pub(super) const REPO_INDEX_ANALYSIS_TIMEOUT: Duration = Duration::from_secs(45);
+const DEFAULT_REPO_INDEX_SYNC_CONCURRENCY: usize = 1;
+const REPO_INDEX_SYNC_CONCURRENCY_ENV: &str = "XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY";
+const MAX_REPO_INDEX_SYNC_REQUEUE_ATTEMPTS: usize = 1;
 
 fn bounded_usize_to_f64(value: usize) -> f64 {
     f64::from(u32::try_from(value).unwrap_or(u32::MAX))
+}
+
+pub(super) fn repo_index_sync_concurrency_limit() -> usize {
+    repo_index_sync_concurrency_limit_with_lookup(&|key| std::env::var(key).ok())
+}
+
+fn repo_index_sync_concurrency_limit_with_lookup(lookup: &dyn Fn(&str) -> Option<String>) -> usize {
+    lookup(REPO_INDEX_SYNC_CONCURRENCY_ENV)
+        .and_then(|raw| raw.trim().parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_REPO_INDEX_SYNC_CONCURRENCY)
+}
+
+pub(super) fn should_retry_sync_failure(error: &RepoIntelligenceError, retry_count: usize) -> bool {
+    retry_count < MAX_REPO_INDEX_SYNC_REQUEUE_ATTEMPTS && is_retryable_sync_failure(error)
+}
+
+fn is_retryable_sync_failure(error: &RepoIntelligenceError) -> bool {
+    let RepoIntelligenceError::AnalysisFailed { message } = error else {
+        return false;
+    };
+    let message = message.to_ascii_lowercase();
+    [
+        "can't assign requested address",
+        "failed to connect to github.com",
+        "connection reset by peer",
+        "temporary failure in name resolution",
+        "resource temporarily unavailable",
+        "operation timed out",
+        "timed out",
+    ]
+    .iter()
+    .any(|needle| message.contains(needle))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,6 +56,7 @@ pub(super) struct RepoIndexTask {
     pub(super) refresh: bool,
     pub(super) fingerprint: String,
     pub(super) priority: RepoIndexTaskPriority,
+    pub(super) retry_count: usize,
 }
 
 #[derive(Debug)]
@@ -156,6 +193,10 @@ pub(super) enum RepoTaskOutcome {
         revision: Option<String>,
         error: RepoIntelligenceError,
     },
+    Requeued {
+        task: RepoIndexTask,
+        error: RepoIntelligenceError,
+    },
     Skipped,
 }
 
@@ -164,4 +205,61 @@ pub(super) struct RepoTaskFeedback {
     pub(super) repo_id: String,
     pub(super) elapsed: Duration,
     pub(super) outcome: RepoTaskOutcome,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        DEFAULT_REPO_INDEX_SYNC_CONCURRENCY, repo_index_sync_concurrency_limit_with_lookup,
+        should_retry_sync_failure,
+    };
+    use crate::analyzers::RepoIntelligenceError;
+
+    #[test]
+    fn repo_index_sync_concurrency_limit_defaults_when_env_is_missing() {
+        let limit = repo_index_sync_concurrency_limit_with_lookup(&|_| None);
+        assert_eq!(limit, DEFAULT_REPO_INDEX_SYNC_CONCURRENCY);
+    }
+
+    #[test]
+    fn repo_index_sync_concurrency_limit_uses_positive_override() {
+        let limit = repo_index_sync_concurrency_limit_with_lookup(&|key| {
+            (key == "XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY").then(|| "3".to_string())
+        });
+        assert_eq!(limit, 3);
+    }
+
+    #[test]
+    fn repo_index_sync_concurrency_limit_ignores_invalid_override() {
+        let limit = repo_index_sync_concurrency_limit_with_lookup(&|key| {
+            (key == "XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY").then(|| "invalid".to_string())
+        });
+        assert_eq!(limit, DEFAULT_REPO_INDEX_SYNC_CONCURRENCY);
+    }
+
+    #[test]
+    fn retryable_sync_failure_matches_transient_network_transport_errors() {
+        let error = RepoIntelligenceError::AnalysisFailed {
+            message: "failed to refresh managed mirror `DifferentialEquations.jl` from `https://github.com/SciML/DifferentialEquations.jl.git`: failed to connect to github.com: Can't assign requested address; class=Os (2)".to_string(),
+        };
+        assert!(should_retry_sync_failure(&error, 0));
+    }
+
+    #[test]
+    fn retryable_sync_failure_stops_after_retry_budget_is_exhausted() {
+        let error = RepoIntelligenceError::AnalysisFailed {
+            message:
+                "failed to refresh managed mirror `DifferentialEquations.jl`: operation timed out"
+                    .to_string(),
+        };
+        assert!(!should_retry_sync_failure(&error, 1));
+    }
+
+    #[test]
+    fn retryable_sync_failure_rejects_non_transport_errors() {
+        let error = RepoIntelligenceError::MissingRepositorySource {
+            repo_id: "DifferentialEquations.jl".to_string(),
+        };
+        assert!(!should_retry_sync_failure(&error, 0));
+    }
 }

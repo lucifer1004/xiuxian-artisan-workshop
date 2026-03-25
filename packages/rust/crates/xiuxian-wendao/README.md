@@ -102,6 +102,16 @@ let engine = WendaoEngine::builder()
     .await?;
 ```
 
+### Optional Python Bindings
+
+Enable the PyO3 surface only when you need Python interop:
+
+```bash
+cargo build -p xiuxian-wendao --features pybindings
+```
+
+This keeps the default build free of PyO3 and the Python-specific modules.
+
 ---
 
 ## 🛡️ License

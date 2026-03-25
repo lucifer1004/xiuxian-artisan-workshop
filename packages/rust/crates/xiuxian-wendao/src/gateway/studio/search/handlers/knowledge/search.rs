@@ -41,7 +41,7 @@ async fn build_knowledge_search_response(
     limit: usize,
     intent: Option<String>,
 ) -> Result<SearchResponse, StudioApiError> {
-    studio.ensure_knowledge_section_index_started()?;
+    studio.ensure_knowledge_section_index_ready().await?;
     let cache_key = studio.search_plane.search_query_cache_key(
         "knowledge",
         &[SearchCorpusKind::KnowledgeSection],

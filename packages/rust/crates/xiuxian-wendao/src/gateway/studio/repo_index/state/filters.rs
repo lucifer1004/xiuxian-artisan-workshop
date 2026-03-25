@@ -28,6 +28,7 @@ pub(super) fn filter_status_response(
             current_limit: snapshot.target_concurrency,
             max_limit: snapshot.max_concurrency,
         },
+        snapshot.sync_concurrency_limit,
     )
 }
 
@@ -35,12 +36,14 @@ pub(super) fn aggregate_status_response(
     repos: Vec<RepoIndexEntryStatus>,
     active_repo_ids: Vec<String>,
     concurrency: AdaptiveConcurrencySnapshot,
+    sync_concurrency_limit: usize,
 ) -> RepoIndexStatusResponse {
     let mut response = RepoIndexStatusResponse {
         total: repos.len(),
         active: active_repo_ids.len(),
         target_concurrency: concurrency.current_limit,
         max_concurrency: concurrency.max_limit,
+        sync_concurrency_limit,
         current_repo_id: active_repo_ids.first().cloned(),
         active_repo_ids,
         repos,

@@ -10,6 +10,7 @@ default-run = "wendao"
 
 [features]
 default = ["zhenfa-router", "julia", "modelica"]
+pybindings = ["pyo3"]
 zhenfa-router = ["dep:axum"]
 julia = []
 modelica = []
@@ -65,8 +66,8 @@ xiuxian-testing = { path = "../xiuxian-testing" }
 # Macro utilities
 xiuxian-macros = { path = "../xiuxian-macros" }
 
-# Python bindings
-pyo3 = { workspace = true }
+# Optional Python bindings
+pyo3 = { workspace = true, optional = true }
 
 # Fast hash for sync (5-10x faster than MD5)
 xxhash-rust = "0.8"

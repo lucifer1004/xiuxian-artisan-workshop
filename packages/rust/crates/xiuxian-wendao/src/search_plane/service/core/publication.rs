@@ -48,12 +48,14 @@ impl SearchPlaneService {
         &self,
         repo_id: &str,
         analysis: &crate::analyzers::RepositoryAnalysisOutput,
+        documents: &[crate::gateway::studio::repo_index::RepoCodeDocument],
         source_revision: Option<&str>,
     ) -> Result<(), xiuxian_vector::VectorStoreError> {
         crate::search_plane::repo_entity::publish_repo_entities(
             self,
             repo_id,
             analysis,
+            documents,
             source_revision,
         )
         .await
@@ -67,6 +69,14 @@ impl SearchPlaneService {
         source_revision: Option<&str>,
         table_info: &TableInfo,
     ) {
+        let previous_record = self
+            .repo_corpus_records
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&(corpus, repo_id.to_string()))
+            .cloned();
+        let maintenance =
+            self.next_repo_publication_maintenance(previous_record.as_ref(), table_info.num_rows);
         let record = SearchRepoPublicationRecord::new(
             corpus,
             repo_id,
@@ -84,7 +94,8 @@ impl SearchPlaneService {
             .repo_runtime_state(repo_id)
             .map(|state| Self::runtime_record_from_state(repo_id, &state));
         let corpus_record =
-            SearchRepoCorpusRecord::new(corpus, repo_id.to_string(), runtime, Some(record));
+            SearchRepoCorpusRecord::new(corpus, repo_id.to_string(), runtime, Some(record))
+                .with_maintenance(Some(maintenance));
         self.repo_corpus_records
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -92,6 +103,8 @@ impl SearchPlaneService {
         self.cache.set_repo_corpus_record(&corpus_record).await;
         self.cache
             .set_repo_corpus_snapshot(&self.current_repo_corpus_snapshot_record())
+            .await;
+        self.schedule_repo_compaction_if_needed(&corpus_record)
             .await;
     }
 
@@ -105,6 +118,7 @@ impl SearchPlaneService {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .remove(&(corpus, repo_id.to_string()));
         }
+        self.clear_repo_maintenance_for_repo(repo_id);
         #[cfg(test)]
         self.cache.clear_repo_shadow_for_tests(repo_id);
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
@@ -117,6 +131,18 @@ impl SearchPlaneService {
                     .await;
                 cache
                     .delete_repo_corpus_record(SearchCorpusKind::RepoContentChunk, repo_id.as_str())
+                    .await;
+                cache
+                    .delete_repo_corpus_file_fingerprints(
+                        SearchCorpusKind::RepoEntity,
+                        repo_id.as_str(),
+                    )
+                    .await;
+                cache
+                    .delete_repo_corpus_file_fingerprints(
+                        SearchCorpusKind::RepoContentChunk,
+                        repo_id.as_str(),
+                    )
                     .await;
                 if corpus_snapshot.records.is_empty() {
                     cache.delete_repo_corpus_snapshot().await;

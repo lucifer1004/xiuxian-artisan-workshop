@@ -9,6 +9,7 @@ mod migration;
 mod observability;
 mod partitioning;
 mod scalar;
+mod string_match;
 mod types;
 mod vector_index;
 
@@ -20,6 +21,7 @@ pub use columnar::ColumnarScanOptions;
 pub use migration::{
     MigrateResult, MigrationItem, XIUXIAN_SCHEMA_VERSION, schema_version_from_schema,
 };
+pub use string_match::string_contains_mask;
 pub use types::{
     CompactionStats, DocumentRow, FragmentInfo, IndexBuildProgress, IndexCacheStats, IndexStats,
     IndexStatus, IndexThresholds, MergeInsertStats, QueryMetrics, Recommendation,

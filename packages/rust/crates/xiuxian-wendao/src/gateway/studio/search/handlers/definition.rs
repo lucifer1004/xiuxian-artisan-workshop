@@ -8,8 +8,7 @@ use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::gateway::studio::types::DefinitionResolveResponse;
 
 use super::super::definition::{
-    DefinitionMatchMode, DefinitionResolveOptions, resolve_best_definition,
-    resolve_definition_candidates,
+    DefinitionResolveOptions, resolve_best_definition, resolve_definition_candidates,
 };
 use super::super::observation_hints::definition_observation_hints;
 use super::queries::DefinitionResolveQuery;
@@ -37,7 +36,7 @@ pub async fn search_definition(
         .filter(|paths| !paths.is_empty());
     let observation_hints =
         definition_observation_hints(state.as_ref(), source_paths, query.line, query_text).await;
-    state.studio.ensure_local_symbol_index_started()?;
+    state.studio.ensure_local_symbol_index_ready().await?;
     let ast_hits = state
         .studio
         .search_local_symbol_hits(query_text, 256)
@@ -51,8 +50,6 @@ pub async fn search_definition(
             .as_ref()
             .and_then(|hints| (!hints.languages.is_empty()).then_some(hints.languages.clone())),
         preferred_source_path: source_path.clone(),
-        match_mode: DefinitionMatchMode::ExactOnly,
-        include_markdown: false,
         ..DefinitionResolveOptions::default()
     };
     let candidates = resolve_definition_candidates(

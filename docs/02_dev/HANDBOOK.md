@@ -538,6 +538,7 @@ Settings are read from `packages/conf/settings.yaml` when env vars are not set.
 
 1. Start Valkey: `just valkey-start`
    The local daemon keeps `pid`/`log` files under `.run/valkey` and writes `dump.rdb` under `.cache/valkey`.
+   For OCI images, use `scripts/channel/valkey-launch.sh` as the startup entrypoint and `scripts/channel/valkey-healthcheck.sh` as the healthcheck; the checked-in example lives at `oci/valkey/Containerfile`, and the `just` wrappers remain host-side convenience layers.
 2. Expose webhook (e.g. nginx → `http://127.0.0.1:18081`)
 3. Set webhook: `curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://your-domain.com/telegram/webhook"`
 4. Run agent:

@@ -42,7 +42,11 @@ pub(crate) async fn search_repo_entities(
     let query_lower = trimmed.to_ascii_lowercase();
 
     let store = service.open_store(SearchCorpusKind::RepoEntity).await?;
-    let table_name = SearchPlaneService::repo_entity_table_name(repo_id);
+    let table_name = service
+        .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, repo_id)
+        .await
+        .and_then(|record| record.publication.map(|publication| publication.table_name))
+        .unwrap_or_else(|| SearchPlaneService::repo_entity_table_name(repo_id));
     if !store.table_path(table_name.as_str()).exists() {
         return Ok(Vec::new());
     }

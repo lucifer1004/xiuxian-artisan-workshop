@@ -11,7 +11,8 @@ use crate::analyzers::config::RegisteredRepository;
 use crate::analyzers::errors::RepoIntelligenceError;
 
 const CHECKOUT_LOCK_RETRY_DELAY: Duration = Duration::from_millis(100);
-const CHECKOUT_LOCK_MAX_WAIT: Duration = Duration::from_secs(5);
+const CHECKOUT_LOCK_MAX_WAIT_ENV: &str = "XIUXIAN_WENDAO_CHECKOUT_LOCK_MAX_WAIT_SECS";
+const DEFAULT_CHECKOUT_LOCK_MAX_WAIT_SECS: u64 = 20;
 const CHECKOUT_LOCK_STALE_AFTER: Duration = Duration::from_secs(120);
 
 #[derive(Debug)]
@@ -32,9 +33,22 @@ pub(super) fn acquire_managed_checkout_lock(
     acquire_managed_checkout_lock_with_policy(
         managed_lock_path_for(repository),
         CHECKOUT_LOCK_RETRY_DELAY,
-        CHECKOUT_LOCK_MAX_WAIT,
+        checkout_lock_max_wait(),
         CHECKOUT_LOCK_STALE_AFTER,
     )
+}
+
+fn checkout_lock_max_wait() -> Duration {
+    checkout_lock_max_wait_with_lookup(&|key| std::env::var(key).ok())
+}
+
+pub(super) fn checkout_lock_max_wait_with_lookup(
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> Duration {
+    let parsed = lookup(CHECKOUT_LOCK_MAX_WAIT_ENV)
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0);
+    Duration::from_secs(parsed.unwrap_or(DEFAULT_CHECKOUT_LOCK_MAX_WAIT_SECS))
 }
 
 pub(super) fn managed_lock_path_for(repository: &RegisteredRepository) -> PathBuf {

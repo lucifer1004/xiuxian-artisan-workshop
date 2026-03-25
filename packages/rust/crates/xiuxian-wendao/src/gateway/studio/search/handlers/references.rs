@@ -20,7 +20,10 @@ pub async fn search_references(
             "Reference search requires a non-empty query",
         ));
     }
-    state.studio.ensure_reference_occurrence_index_started()?;
+    state
+        .studio
+        .ensure_reference_occurrence_index_ready()
+        .await?;
     let hits = state
         .studio
         .search_reference_occurrences(query_text, query.limit.unwrap_or(20).max(1))

@@ -1,6 +1,9 @@
 use super::deepseek_cache::{DeepseekCacheKeyInput, DeepseekCacheTestFacade};
 use crate::llm::vision::PreparedVisionImage;
+#[cfg(feature = "vision-dots")]
 use crate::llm::vision::deepseek::build_cache_key_with_for_tests;
+#[cfg(not(feature = "vision-dots"))]
+use sha2::{Digest, Sha256};
 
 /// Build `DeepSeek` OCR cache key for test assertions.
 #[must_use]
@@ -19,15 +22,37 @@ pub fn build_deepseek_cache_key_from_prepared_for_tests(
     crop_mode: bool,
     max_new_tokens: u32,
 ) -> String {
-    build_cache_key_with_for_tests(
-        model_root,
-        prepared,
-        prompt,
-        base_size,
-        image_size,
-        crop_mode,
-        usize::try_from(max_new_tokens).unwrap_or(usize::MAX),
-    )
+    #[cfg(feature = "vision-dots")]
+    {
+        build_cache_key_with_for_tests(
+            model_root,
+            prepared,
+            prompt,
+            base_size,
+            image_size,
+            crop_mode,
+            usize::try_from(max_new_tokens).unwrap_or(usize::MAX),
+        )
+    }
+
+    #[cfg(not(feature = "vision-dots"))]
+    {
+        let mut hasher = Sha256::new();
+        hasher.update(model_root.as_bytes());
+        hasher.update([0]);
+        hasher.update(prompt.as_bytes());
+        hasher.update([0]);
+        hasher.update(prepared.mode.as_str().as_bytes());
+        hasher.update(prepared.width.to_le_bytes());
+        hasher.update(prepared.height.to_le_bytes());
+        hasher.update(base_size.to_le_bytes());
+        hasher.update(image_size.to_le_bytes());
+        hasher.update([u8::from(crop_mode)]);
+        hasher.update(max_new_tokens.to_le_bytes());
+        hasher.update(prepared.original.as_ref());
+        hasher.update(prepared.engine_input.as_ref());
+        format!("{:x}", hasher.finalize())
+    }
 }
 
 /// Evaluate `DeepSeek` Valkey GET path with explicit cache settings for tests.

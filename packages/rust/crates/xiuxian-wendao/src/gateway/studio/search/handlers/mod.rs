@@ -18,7 +18,9 @@ pub use ast::search_ast;
 pub use attachments::search_attachments;
 pub use autocomplete::search_autocomplete;
 pub use definition::search_definition;
-pub use index::{build_ast_index, build_symbol_index};
+#[cfg(test)]
+pub use index::build_ast_index;
+pub use index::build_symbol_index;
 pub use knowledge::{search_intent, search_knowledge};
 pub use references::search_references;
 pub use status::search_index_status;

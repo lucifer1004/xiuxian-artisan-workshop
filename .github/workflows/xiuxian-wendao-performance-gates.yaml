@@ -33,8 +33,26 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
-      - name: Run Wendao performance quick gate
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-wendao-performance-gate
+      - name: Run Wendao performance quick target
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-wendao-performance-quick
+
+      - name: Run Wendao formal gateway performance proof
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-wendao-performance-gateway-formal
+
+      - name: Render Wendao gateway perf summary
+        if: ${{ always() }}
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-gateway-perf-summary
+
+      - name: Wendao gateway perf summary (step summary)
+        if: ${{ always() }}
+        run: |
+          summary_md=".run/reports/xiuxian-wendao/perf-gateway/gateway_perf_summary.md"
+          echo "## Wendao Gateway Perf (${RUNNER_OS})" >> "${GITHUB_STEP_SUMMARY}"
+          if [ -f "${summary_md}" ]; then
+            cat "${summary_md}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "- summary markdown missing: \`${summary_md}\`" >> "${GITHUB_STEP_SUMMARY}"
+          fi
 
       - name: Upload Wendao performance quick reports
         if: ${{ always() }}
@@ -63,8 +81,26 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
-      - name: Run Wendao performance quick gate
-        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-wendao-performance-gate
+      - name: Run Wendao performance quick target
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-wendao-performance-quick
+
+      - name: Run Wendao formal gateway performance proof
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-wendao-performance-gateway-formal
+
+      - name: Render Wendao gateway perf summary
+        if: ${{ always() }}
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:wendao-gateway-perf-summary
+
+      - name: Wendao gateway perf summary (step summary)
+        if: ${{ always() }}
+        run: |
+          summary_md=".run/reports/xiuxian-wendao/perf-gateway/gateway_perf_summary.md"
+          echo "## Wendao Gateway Perf (${RUNNER_OS})" >> "${GITHUB_STEP_SUMMARY}"
+          if [ -f "${summary_md}" ]; then
+            cat "${summary_md}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "- summary markdown missing: \`${summary_md}\`" >> "${GITHUB_STEP_SUMMARY}"
+          fi
 
       - name: Run Wendao performance stress gate
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-wendao-performance-stress

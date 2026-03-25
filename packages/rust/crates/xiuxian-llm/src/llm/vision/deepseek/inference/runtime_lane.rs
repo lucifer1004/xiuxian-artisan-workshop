@@ -1,5 +1,6 @@
 use crate::llm::error::LlmResult;
 use crate::llm::vision::PreparedVisionImage;
+#[cfg(feature = "vision-dots")]
 use crate::llm::vision::deepseek::native;
 use crate::llm::vision::deepseek::runtime::DeepseekRuntime;
 

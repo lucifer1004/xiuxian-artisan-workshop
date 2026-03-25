@@ -8,6 +8,7 @@ pub(in crate::llm::vision::deepseek) enum VisionModelKind {
 impl VisionModelKind {
     pub(in crate::llm::vision::deepseek) const DEFAULT: Self = Self::DotsOcr;
 
+    #[cfg(feature = "vision-dots")]
     pub(in crate::llm::vision::deepseek) const fn as_str(self) -> &'static str {
         match self {
             Self::Deepseek => "deepseek",

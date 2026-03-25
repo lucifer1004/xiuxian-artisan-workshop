@@ -8,6 +8,11 @@
 
 Standardized documentation repository for `xiuxian-llm`, with the current emphasis on DeepSeek OCR runtime parity, Metal guard profiles, and model-side memory investigation.
 
+Default feature topology keeps only `provider-litellm` enabled. `local-llm` is the opt-in
+umbrella for local inference, with `mistral.rs` and the `vision-dots` DeepSeek OCR stack
+classified under that local feature family. The effective child layout is
+`local-llm = ["mistral.rs", "vision-dots"]`.
+
 ## 01_core: Architecture and Foundation
 
 :PROPERTIES:
@@ -46,5 +51,5 @@ Standardized documentation repository for `xiuxian-llm`, with the current emphas
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-03-16
+:LAST_SYNC: 2026-03-24
 :END:

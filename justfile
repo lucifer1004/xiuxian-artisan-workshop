@@ -43,6 +43,9 @@ xiuxian_wendao_rollout_remote_workflow_file := env_var_or_default("XIUXIAN_WENDA
 xiuxian_wendao_rollout_remote_artifact_name := env_var_or_default("XIUXIAN_WENDAO_ROLLOUT_REMOTE_ARTIFACT_NAME", "")
 xiuxian_wendao_rollout_remote_run_status := env_var_or_default("XIUXIAN_WENDAO_ROLLOUT_REMOTE_RUN_STATUS", "completed")
 xiuxian_wendao_runner_os := env_var_or_default("RUNNER_OS", "local")
+xiuxian_wendao_gateway_formal_filter := "test(performance::gateway_search::repo_module_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_symbol_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_example_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_projected_page_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::studio_code_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::search_index_status_perf_gate_reports_query_telemetry_summary_formal_gate)"
+xiuxian_wendao_gateway_perf_report_dir := env_var_or_default("XIUXIAN_WENDAO_GATEWAY_PERF_REPORT_DIR", ".run/reports/xiuxian-wendao/perf-gateway")
+xiuxian_wendao_gateway_real_workspace_perf_report_dir := env_var_or_default("XIUXIAN_WENDAO_GATEWAY_REAL_WORKSPACE_PERF_REPORT_DIR", ".run/reports/xiuxian-wendao/perf-gateway-real-workspace")
 
 # ==============================================================================
 # Core Commands
@@ -1077,11 +1080,44 @@ rust-retrieval-audits:
     @bash scripts/rust/wendao_retrieval_audits.sh
 
 [group('validate')]
-rust-wendao-performance-gate:
+rust-wendao-performance-quick:
     @echo "Running Wendao performance quick gate via nextest..."
-    @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate
-    @echo "Running Wendao gateway warm-cache perf cases..."
-    @RUNNER_OS="{{xiuxian_wendao_runner_os}}" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh test -p xiuxian-wendao --features performance gateway::studio::studio_gateway_search_perf_tests:: --lib
+    @RUNNER_OS="{{xiuxian_wendao_runner_os}}" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate -E "not ({{xiuxian_wendao_gateway_formal_filter}})"
+
+[group('validate')]
+rust-wendao-performance-gateway-formal:
+    @echo "Running Wendao formal gateway warm-cache perf cases..."
+    @RUNNER_OS="{{xiuxian_wendao_runner_os}}" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate -E "{{xiuxian_wendao_gateway_formal_filter}}"
+
+[group('validate')]
+wendao-gateway-perf-summary:
+    @uv run python scripts/render_wendao_gateway_perf_summary.py \
+      --report-dir "{{xiuxian_wendao_gateway_perf_report_dir}}" \
+      --real-workspace-report-dir "{{xiuxian_wendao_gateway_real_workspace_perf_report_dir}}" \
+      --runner-os "{{xiuxian_wendao_runner_os}}" \
+      --output-json "{{xiuxian_wendao_gateway_perf_report_dir}}/gateway_perf_summary.json" \
+      --output-markdown "{{xiuxian_wendao_gateway_perf_report_dir}}/gateway_perf_summary.md"
+
+[group('validate')]
+wendao-gateway-perf-summary-real-workspace:
+    @uv run python scripts/render_wendao_gateway_perf_summary.py \
+      --report-dir "{{xiuxian_wendao_gateway_perf_report_dir}}" \
+      --real-workspace-report-dir "{{xiuxian_wendao_gateway_real_workspace_perf_report_dir}}" \
+      --runner-os "{{xiuxian_wendao_runner_os}}" \
+      --output-json "{{xiuxian_wendao_gateway_perf_report_dir}}/gateway_perf_summary.json" \
+      --output-markdown "{{xiuxian_wendao_gateway_perf_report_dir}}/gateway_perf_summary.md" \
+      --mirror-output-dir "{{xiuxian_wendao_gateway_real_workspace_perf_report_dir}}"
+
+[group('validate')]
+rust-wendao-performance-gateway-real-workspace:
+    @echo "Running Wendao manual real-workspace gateway perf samples..."
+    @RUNNER_OS="{{xiuxian_wendao_runner_os}}" XIUXIAN_WENDAO_GATEWAY_PERF_WORKSPACE_ROOT="${XIUXIAN_WENDAO_GATEWAY_PERF_WORKSPACE_ROOT:-.data/wendao-frontend}" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/cargo_exec.sh test -p xiuxian-wendao --features performance --test xiuxian-testing-gate real_workspace -- --ignored --nocapture
+    @just wendao-gateway-perf-summary-real-workspace
+
+[group('validate')]
+rust-wendao-performance-gate:
+    @just rust-wendao-performance-quick
+    @just rust-wendao-performance-gateway-formal
 
 [group('validate')]
 rust-wendao-performance-stress:

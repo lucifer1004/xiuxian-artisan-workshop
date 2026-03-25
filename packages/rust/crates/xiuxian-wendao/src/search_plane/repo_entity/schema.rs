@@ -43,7 +43,7 @@ const ENTITY_KIND_MODULE: &str = "module";
 const ENTITY_KIND_EXAMPLE: &str = "example";
 
 #[derive(Debug, Clone)]
-pub(crate) struct RepoEntityRow {
+pub(super) struct RepoEntityRow {
     id: String,
     entity_kind: String,
     name: String,
@@ -60,6 +60,33 @@ pub(crate) struct RepoEntityRow {
     saliency_score: f64,
     search_text: String,
     hit_json: String,
+}
+
+impl RepoEntityRow {
+    pub(super) fn path(&self) -> &str {
+        self.path.as_str()
+    }
+
+    pub(super) fn fingerprint_token(&self) -> String {
+        format!(
+            "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{:.12}|{}|{}",
+            self.id,
+            self.entity_kind,
+            self.name_folded,
+            self.qualified_name_folded,
+            self.path_folded,
+            self.language,
+            self.symbol_kind,
+            self.signature_folded,
+            self.summary_folded,
+            self.related_symbols_folded,
+            self.related_modules_folded,
+            self.search_text,
+            self.saliency_score,
+            self.hit_json,
+            self.name,
+        )
+    }
 }
 
 pub(super) fn repo_entity_schema() -> Arc<LanceSchema> {
@@ -483,6 +510,10 @@ pub(super) const fn search_text_column() -> &'static str {
 
 pub(super) const fn language_column() -> &'static str {
     COLUMN_LANGUAGE
+}
+
+pub(super) const fn path_column() -> &'static str {
+    COLUMN_PATH
 }
 
 pub(super) const fn entity_kind_column() -> &'static str {

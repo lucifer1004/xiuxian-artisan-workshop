@@ -41,6 +41,7 @@ mod tests {
         load_bundled_wendao_gateway_openapi_document,
     };
     use crate::gateway::openapi::paths::{
+        API_ANALYSIS_CODE_AST_OPENAPI_PATH, API_ANALYSIS_MARKDOWN_OPENAPI_PATH,
         API_UI_CONFIG_OPENAPI_PATH, WENDAO_GATEWAY_ROUTE_CONTRACTS,
     };
 
@@ -174,6 +175,41 @@ mod tests {
         assert!(
             post["requestBody"]["content"]["application/json"]["example"].is_object(),
             "POST /api/ui/config should include an example request body"
+        );
+    }
+
+    fn has_required_query_param(operation: &Value, name: &str) -> bool {
+        operation
+            .get("parameters")
+            .and_then(Value::as_array)
+            .is_some_and(|parameters| {
+                parameters.iter().any(|parameter| {
+                    parameter.get("name").and_then(Value::as_str) == Some(name)
+                        && parameter.get("in").and_then(Value::as_str) == Some("query")
+                        && parameter.get("required").and_then(Value::as_bool) == Some(true)
+                })
+            })
+    }
+
+    #[test]
+    fn bundled_gateway_openapi_document_declares_required_markdown_analysis_query_params() {
+        let document = load_bundled_wendao_gateway_openapi_document()
+            .unwrap_or_else(|error| panic!("bundled gateway OpenAPI should parse: {error}"));
+
+        let markdown_get = &document["paths"][API_ANALYSIS_MARKDOWN_OPENAPI_PATH]["get"];
+        assert!(
+            has_required_query_param(markdown_get, "path"),
+            "GET /api/analysis/markdown should declare required query parameter `path`"
+        );
+
+        let code_ast_get = &document["paths"][API_ANALYSIS_CODE_AST_OPENAPI_PATH]["get"];
+        assert!(
+            has_required_query_param(code_ast_get, "path"),
+            "GET /api/analysis/code-ast should declare required query parameter `path`"
+        );
+        assert!(
+            has_required_query_param(code_ast_get, "repo"),
+            "GET /api/analysis/code-ast should declare required query parameter `repo`"
         );
     }
 }

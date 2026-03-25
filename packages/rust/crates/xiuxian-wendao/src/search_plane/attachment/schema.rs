@@ -189,3 +189,7 @@ pub(super) const fn attachment_name_column() -> &'static str {
 pub(super) const fn attachment_name_folded_column() -> &'static str {
     COLUMN_ATTACHMENT_NAME_FOLDED
 }
+
+pub(super) const fn source_path_column() -> &'static str {
+    COLUMN_SOURCE_PATH
+}

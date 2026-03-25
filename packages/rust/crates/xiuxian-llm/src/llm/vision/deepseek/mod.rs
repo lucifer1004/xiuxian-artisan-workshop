@@ -1,4 +1,5 @@
 mod config;
+#[cfg(feature = "vision-dots")]
 mod dsq_alignment;
 mod inference;
 mod model_kind;

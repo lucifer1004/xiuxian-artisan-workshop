@@ -8,6 +8,37 @@ use crate::search_plane::{
 };
 
 impl SearchPlaneService {
+    fn repo_search_publication_state_from_records(
+        entity_record: Option<&SearchRepoCorpusRecord>,
+        content_record: Option<&SearchRepoCorpusRecord>,
+    ) -> super::types::RepoSearchPublicationState {
+        let entity_published = entity_record
+            .and_then(|record| record.publication.as_ref())
+            .is_some();
+        let content_published = content_record
+            .and_then(|record| record.publication.as_ref())
+            .is_some();
+        let runtime = entity_record
+            .and_then(|record| record.runtime.as_ref())
+            .or_else(|| content_record.and_then(|record| record.runtime.as_ref()))
+            .map(RepoRuntimeState::from_record);
+        let availability = if entity_published || content_published {
+            super::types::RepoSearchAvailability::Searchable
+        } else if matches!(
+            runtime.as_ref().map(|state| state.phase),
+            Some(RepoIndexPhase::Unsupported | RepoIndexPhase::Failed)
+        ) {
+            super::types::RepoSearchAvailability::Skipped
+        } else {
+            super::types::RepoSearchAvailability::Pending
+        };
+        super::types::RepoSearchPublicationState {
+            entity_published,
+            content_published,
+            availability,
+        }
+    }
+
     pub(crate) fn synchronize_repo_runtime(&self, repo_status: &RepoIndexStatusResponse) {
         let runtime_records = Self::repo_runtime_records(repo_status);
         let next_runtime = Self::next_repo_runtime_states(repo_status);
@@ -163,13 +194,23 @@ impl SearchPlaneService {
                 SearchCorpusKind::RepoEntity,
                 SearchCorpusKind::RepoContentChunk,
             ] {
-                let publication = self.cached_repo_publication(corpus, runtime.repo_id.as_str());
+                let existing_record = self
+                    .repo_corpus_record_for_reads(corpus, runtime.repo_id.as_str())
+                    .await;
+                let publication = existing_record
+                    .as_ref()
+                    .and_then(|record| record.publication.clone())
+                    .or_else(|| self.cached_repo_publication(corpus, runtime.repo_id.as_str()));
+                let maintenance = existing_record
+                    .as_ref()
+                    .and_then(|record| record.maintenance.clone());
                 let record = SearchRepoCorpusRecord::new(
                     corpus,
                     runtime.repo_id.clone(),
                     Some(runtime.clone()),
                     publication,
-                );
+                )
+                .with_maintenance(maintenance);
                 self.repo_corpus_records
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -188,6 +229,7 @@ impl SearchPlaneService {
         }
     }
 
+    #[cfg(test)]
     pub(crate) async fn repo_search_publication_state(
         &self,
         repo_id: &str,
@@ -198,38 +240,29 @@ impl SearchPlaneService {
         let content_record = self
             .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, repo_id)
             .await;
-        let entity_published = entity_record
-            .as_ref()
-            .and_then(|record| record.publication.as_ref())
-            .is_some();
-        let content_published = content_record
-            .as_ref()
-            .and_then(|record| record.publication.as_ref())
-            .is_some();
-        let runtime = entity_record
-            .as_ref()
-            .and_then(|record| record.runtime.as_ref())
-            .or_else(|| {
-                content_record
-                    .as_ref()
-                    .and_then(|record| record.runtime.as_ref())
+        Self::repo_search_publication_state_from_records(
+            entity_record.as_ref(),
+            content_record.as_ref(),
+        )
+    }
+
+    pub(crate) async fn repo_search_publication_states(
+        &self,
+        repo_ids: &[String],
+    ) -> BTreeMap<String, super::types::RepoSearchPublicationState> {
+        let records = self.repo_corpus_snapshot_for_reads().await;
+        repo_ids
+            .iter()
+            .map(|repo_id| {
+                let entity_record = records.get(&(SearchCorpusKind::RepoEntity, repo_id.clone()));
+                let content_record =
+                    records.get(&(SearchCorpusKind::RepoContentChunk, repo_id.clone()));
+                (
+                    repo_id.clone(),
+                    Self::repo_search_publication_state_from_records(entity_record, content_record),
+                )
             })
-            .map(RepoRuntimeState::from_record);
-        let availability = if entity_published || content_published {
-            super::types::RepoSearchAvailability::Searchable
-        } else if matches!(
-            runtime.as_ref().map(|state| state.phase),
-            Some(RepoIndexPhase::Unsupported | RepoIndexPhase::Failed)
-        ) {
-            super::types::RepoSearchAvailability::Skipped
-        } else {
-            super::types::RepoSearchAvailability::Pending
-        };
-        super::types::RepoSearchPublicationState {
-            entity_published,
-            content_published,
-            availability,
-        }
+            .collect()
     }
 
     pub(crate) fn repo_runtime_state(&self, repo_id: &str) -> Option<RepoRuntimeState> {

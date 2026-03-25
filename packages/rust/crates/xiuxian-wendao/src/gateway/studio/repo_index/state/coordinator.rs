@@ -5,9 +5,10 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 
 use tokio::runtime::Handle;
-use tokio::sync::Notify;
-use tokio::task::JoinSet;
+use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
+use tokio::task::{JoinHandle, JoinSet};
 
+use crate::analyzers::query::RepoSyncResult;
 use crate::analyzers::registry::PluginRegistry;
 use crate::analyzers::{
     RegisteredRepository, RepoIntelligenceError, RepoSyncMode, RepoSyncQuery,
@@ -25,7 +26,8 @@ use super::filters::{aggregate_status_response, filter_status_response};
 use super::fingerprint::{fingerprint, fingerprint_id, timestamp_now};
 use super::task::{
     AdaptiveConcurrencyController, REPO_INDEX_ANALYSIS_TIMEOUT, RepoIndexTask,
-    RepoIndexTaskPriority, RepoTaskFeedback, RepoTaskOutcome,
+    RepoIndexTaskPriority, RepoTaskFeedback, RepoTaskOutcome, repo_index_sync_concurrency_limit,
+    should_retry_sync_failure,
 };
 
 pub(crate) struct RepoIndexCoordinator {
@@ -40,7 +42,11 @@ pub(crate) struct RepoIndexCoordinator {
     pending: Arc<Mutex<VecDeque<RepoIndexTask>>>,
     notify: Arc<Notify>,
     concurrency: Arc<Mutex<AdaptiveConcurrencyController>>,
+    sync_concurrency_limit: usize,
+    sync_permits: Arc<Semaphore>,
     started: AtomicBool,
+    shutdown_requested: AtomicBool,
+    run_task: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl RepoIndexCoordinator {
@@ -50,6 +56,7 @@ impl RepoIndexCoordinator {
         plugin_registry: Arc<PluginRegistry>,
         search_plane: SearchPlaneService,
     ) -> Self {
+        let sync_concurrency_limit = repo_index_sync_concurrency_limit();
         Self {
             project_root,
             plugin_registry,
@@ -62,7 +69,11 @@ impl RepoIndexCoordinator {
             pending: Arc::new(Mutex::new(VecDeque::new())),
             notify: Arc::new(Notify::new()),
             concurrency: Arc::new(Mutex::new(AdaptiveConcurrencyController::new())),
+            sync_concurrency_limit,
+            sync_permits: Arc::new(Semaphore::new(sync_concurrency_limit)),
             started: AtomicBool::new(false),
+            shutdown_requested: AtomicBool::new(false),
+            run_task: Mutex::new(None),
         }
     }
 
@@ -70,11 +81,29 @@ impl RepoIndexCoordinator {
         if self.started.swap(true, Ordering::SeqCst) {
             return;
         }
+        self.shutdown_requested.store(false, Ordering::SeqCst);
         if let Ok(handle) = Handle::try_current() {
             let coordinator = Arc::clone(self);
-            handle.spawn(async move {
+            let run_task = handle.spawn(async move {
                 coordinator.run().await;
             });
+            *self
+                .run_task
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(run_task);
+        }
+    }
+
+    pub(crate) fn stop(&self) {
+        self.shutdown_requested.store(true, Ordering::SeqCst);
+        self.notify.notify_waiters();
+        if let Some(run_task) = self
+            .run_task
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            run_task.abort();
         }
     }
 
@@ -140,6 +169,20 @@ impl RepoIndexCoordinator {
         filter_status_response(snapshot, repo_id)
     }
 
+    pub(crate) async fn acquire_sync_permit(
+        &self,
+        repo_id: &str,
+    ) -> Result<OwnedSemaphorePermit, RepoIntelligenceError> {
+        Arc::clone(&self.sync_permits)
+            .acquire_owned()
+            .await
+            .map_err(|_| RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo `{repo_id}` sync semaphore was closed while waiting to start remote sync"
+                ),
+            })
+    }
+
     fn prune_removed(&self, active_ids: &BTreeSet<String>) {
         let removed_repo_ids = self
             .statuses
@@ -184,7 +227,26 @@ impl RepoIndexCoordinator {
         repo_fingerprint: String,
         priority: RepoIndexTaskPriority,
     ) -> bool {
-        let repo_id = repository.id.clone();
+        self.enqueue_task(
+            RepoIndexTask {
+                repository,
+                refresh,
+                fingerprint: repo_fingerprint,
+                priority,
+                retry_count: 0,
+            },
+            force,
+        )
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn enqueue_task(&self, task: RepoIndexTask, force: bool) -> bool {
+        let repo_id = task.repository.id.clone();
+        let incoming_priority = task.priority;
+        let incoming_refresh = task.refresh;
+        let incoming_retry_count = task.retry_count;
+        let incoming_repository = task.repository;
+        let incoming_fingerprint = task.fingerprint;
         let existing_status = self
             .statuses
             .read()
@@ -198,7 +260,7 @@ impl RepoIndexCoordinator {
             .get(&repo_id)
             .cloned();
         let is_same_fingerprint =
-            existing_fingerprint.as_deref() == Some(repo_fingerprint.as_str());
+            existing_fingerprint.as_deref() == Some(incoming_fingerprint.as_str());
         let already_queued_or_active = self
             .queued_or_active
             .read()
@@ -216,25 +278,30 @@ impl RepoIndexCoordinator {
                 .position(|task| task.repository.id == repo_id)
                 && let Some(mut task) = pending.remove(index)
             {
-                let fingerprint_changed = task.fingerprint != repo_fingerprint;
+                let fingerprint_changed = task.fingerprint != incoming_fingerprint;
                 updated_existing_task = fingerprint_changed
-                    || refresh
-                    || matches!(priority, RepoIndexTaskPriority::Interactive)
+                    || incoming_refresh
+                    || matches!(incoming_priority, RepoIndexTaskPriority::Interactive)
                         && !matches!(task.priority, RepoIndexTaskPriority::Interactive);
                 if fingerprint_changed {
                     self.fingerprints
                         .write()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .insert(repo_id.clone(), repo_fingerprint.clone());
+                        .insert(repo_id.clone(), incoming_fingerprint.clone());
                 }
-                task.priority = match (task.priority, priority) {
+                task.priority = match (task.priority, incoming_priority) {
                     (RepoIndexTaskPriority::Interactive, _)
                     | (_, RepoIndexTaskPriority::Interactive) => RepoIndexTaskPriority::Interactive,
                     _ => RepoIndexTaskPriority::Background,
                 };
-                task.refresh |= refresh;
-                task.repository = repository;
-                task.fingerprint = repo_fingerprint;
+                task.refresh |= incoming_refresh;
+                task.repository = incoming_repository;
+                task.fingerprint = incoming_fingerprint;
+                task.retry_count = if fingerprint_changed {
+                    0
+                } else {
+                    incoming_retry_count
+                };
                 match task.priority {
                     RepoIndexTaskPriority::Interactive => pending.push_front(task),
                     RepoIndexTaskPriority::Background => pending.push_back(task),
@@ -262,7 +329,7 @@ impl RepoIndexCoordinator {
         self.fingerprints
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(repo_id.clone(), repo_fingerprint.clone());
+            .insert(repo_id.clone(), incoming_fingerprint.clone());
         self.queued_or_active
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -286,10 +353,11 @@ impl RepoIndexCoordinator {
             );
         self.refresh_status_snapshot();
         let task = RepoIndexTask {
-            repository,
-            refresh,
-            fingerprint: repo_fingerprint,
-            priority,
+            repository: incoming_repository,
+            refresh: incoming_refresh,
+            fingerprint: incoming_fingerprint,
+            priority: incoming_priority,
+            retry_count: incoming_retry_count,
         };
         let mut pending = self
             .pending
@@ -307,7 +375,15 @@ impl RepoIndexCoordinator {
     async fn run(self: Arc<Self>) {
         let mut running = JoinSet::new();
         loop {
+            if self.shutdown_requested.load(Ordering::SeqCst) {
+                break;
+            }
+
             self.dispatch_pending_tasks(&mut running);
+
+            if self.shutdown_requested.load(Ordering::SeqCst) {
+                break;
+            }
 
             if running.is_empty() {
                 self.notify.notified().await;
@@ -322,6 +398,9 @@ impl RepoIndexCoordinator {
                 () = self.notify.notified() => {}
             }
         }
+
+        running.abort_all();
+        while running.join_next().await.is_some() {}
     }
 
     fn dispatch_pending_tasks(self: &Arc<Self>, running: &mut JoinSet<RepoTaskFeedback>) {
@@ -402,6 +481,18 @@ impl RepoIndexCoordinator {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .record_failure();
             }
+            RepoTaskOutcome::Requeued { task, error } => {
+                self.concurrency
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .record_failure();
+                self.release_repo(feedback.repo_id.as_str());
+                if !self.enqueue_task(task, true) {
+                    self.record_failure_status(feedback.repo_id.as_str(), &error, None);
+                }
+                self.notify.notify_one();
+                return;
+            }
             RepoTaskOutcome::Skipped => {}
         }
         self.release_repo(feedback.repo_id.as_str());
@@ -421,22 +512,24 @@ impl RepoIndexCoordinator {
         }
 
         self.bump_status(&repo_id, RepoIndexPhase::Checking, None, None);
-        self.bump_status(&repo_id, RepoIndexPhase::Syncing, None, None);
 
-        let sync_result = repo_sync_for_registered_repository(
-            &RepoSyncQuery {
-                repo_id: repo_id.clone(),
-                mode: if task.refresh {
-                    RepoSyncMode::Refresh
-                } else {
-                    RepoSyncMode::Ensure
-                },
-            },
-            &task.repository,
-            self.project_root.as_path(),
-        );
+        let sync_result = self
+            .run_repository_sync(repo_id.as_str(), task.repository.clone(), task.refresh)
+            .await;
         let sync_result = match sync_result {
             Ok(result) => result,
+            Err(error) if should_retry_sync_failure(&error, task.retry_count) => {
+                let mut retry_task = task.clone();
+                retry_task.retry_count = retry_task.retry_count.saturating_add(1);
+                return RepoTaskFeedback {
+                    repo_id,
+                    elapsed: started_at.elapsed(),
+                    outcome: RepoTaskOutcome::Requeued {
+                        task: retry_task,
+                        error,
+                    },
+                };
+            }
             Err(error) => {
                 return RepoTaskFeedback {
                     repo_id,
@@ -516,6 +609,7 @@ impl RepoIndexCoordinator {
                     .publish_repo_entities_with_revision(
                         repo_id.as_str(),
                         &analysis,
+                        &code_documents,
                         sync_result.revision.as_deref(),
                     )
                     .await
@@ -677,6 +771,43 @@ impl RepoIndexCoordinator {
         await_analysis_completion(repo_id.as_str(), task, REPO_INDEX_ANALYSIS_TIMEOUT).await
     }
 
+    async fn run_repository_sync(
+        &self,
+        repo_id: &str,
+        repository: RegisteredRepository,
+        refresh: bool,
+    ) -> Result<RepoSyncResult, RepoIntelligenceError> {
+        let repo_id = repo_id.to_string();
+        let repo_id_for_worker = repo_id.clone();
+        let project_root = self.project_root.clone();
+        let mode = if refresh {
+            RepoSyncMode::Refresh
+        } else {
+            RepoSyncMode::Ensure
+        };
+        let permit = self.acquire_sync_permit(repo_id.as_str()).await?;
+        self.bump_status(repo_id.as_str(), RepoIndexPhase::Syncing, None, None);
+        let task = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            repo_sync_for_registered_repository(
+                &RepoSyncQuery {
+                    repo_id: repo_id_for_worker,
+                    mode,
+                },
+                &repository,
+                project_root.as_path(),
+            )
+        });
+        match task.await {
+            Ok(result) => result,
+            Err(error) => Err(RepoIntelligenceError::AnalysisFailed {
+                message: format!(
+                    "repo sync worker for `{repo_id}` terminated unexpectedly: {error}"
+                ),
+            }),
+        }
+    }
+
     async fn collect_code_documents_for_task(
         &self,
         repo_id: &str,
@@ -803,7 +934,12 @@ impl RepoIndexCoordinator {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .snapshot();
-        let snapshot = aggregate_status_response(repos, active_repo_ids, concurrency);
+        let snapshot = aggregate_status_response(
+            repos,
+            active_repo_ids,
+            concurrency,
+            self.sync_concurrency_limit,
+        );
         self.search_plane.synchronize_repo_runtime(&snapshot);
         *self
             .status_snapshot

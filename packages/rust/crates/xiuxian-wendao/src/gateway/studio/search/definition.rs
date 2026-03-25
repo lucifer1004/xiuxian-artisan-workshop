@@ -12,8 +12,6 @@ use super::project_scope::project_metadata_for_path;
 /// Match mode for definition resolution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DefinitionMatchMode {
-    /// Only allow exact name matches.
-    ExactOnly,
     /// Prefer exact match, fall back to fuzzy if none found.
     ExactThenFuzzy,
 }

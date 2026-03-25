@@ -499,6 +499,17 @@
         "tags": ["studio-analysis"],
         "summary": "Analyze Markdown structure",
         "description": "Return the structural Markdown analysis payload used by the studio explorer and graph views.",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "description": "Repository-relative path to the Markdown file.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Markdown analysis payload with nodes, edges, and projections."
@@ -685,6 +696,140 @@
           },
           "500": {
             "description": "The gateway failed while executing the repo overview task."
+          }
+        }
+      }
+    },
+    "/api/repo/index/status": {
+      "get": {
+        "operationId": "studioRepoIndexStatus",
+        "tags": ["repo-intelligence"],
+        "summary": "Inspect repo index status",
+        "description": "Return the current Studio repo-index queue and aggregate lifecycle counts for all configured repositories, or for one repository when `repo` is provided.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": false,
+            "description": "Optional registered repository identifier to filter one repo row from the current status snapshot.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated repo-index lifecycle status and per-repository snapshot rows.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "total": 177,
+                  "active": 4,
+                  "queued": 150,
+                  "checking": 0,
+                  "syncing": 0,
+                  "indexing": 4,
+                  "ready": 23,
+                  "unsupported": 0,
+                  "failed": 0,
+                  "targetConcurrency": 4,
+                  "maxConcurrency": 15,
+                  "syncConcurrencyLimit": 1,
+                  "currentRepoId": "DataDrivenDiffEq.jl",
+                  "activeRepoIds": [
+                    "DataDrivenDiffEq.jl",
+                    "DataInterpolations.jl",
+                    "DataInterpolationsND.jl",
+                    "DeepEquilibriumNetworks.jl"
+                  ],
+                  "repos": [
+                    {
+                      "repoId": "ADTypes.jl",
+                      "phase": "ready",
+                      "lastRevision": "6cc1c9e4e8c7fb30dbb82062bf1a6ed500c074bc",
+                      "updatedAt": "2026-03-24T07:27:26.963763+00:00",
+                      "attemptCount": 4
+                    },
+                    {
+                      "repoId": "mcl",
+                      "phase": "queued",
+                      "queuePosition": 1,
+                      "updatedAt": "2026-03-24T07:27:22.819024+00:00",
+                      "attemptCount": 0
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while reading the repo-index status snapshot."
+          }
+        }
+      }
+    },
+    "/api/repo/index": {
+      "post": {
+        "operationId": "studioRepoIndexEnqueue",
+        "tags": ["repo-intelligence"],
+        "summary": "Enqueue repo indexing",
+        "description": "Enqueue background repo-index work for all configured repositories, or for one repository when `repo` is provided, and return the current repo-index status snapshot.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "example": {
+                "repo": "mcl",
+                "refresh": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aggregated repo-index status after enqueueing the requested repositories.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "total": 1,
+                  "active": 0,
+                  "queued": 1,
+                  "checking": 0,
+                  "syncing": 0,
+                  "indexing": 0,
+                  "ready": 0,
+                  "unsupported": 0,
+                  "failed": 0,
+                  "targetConcurrency": 1,
+                  "maxConcurrency": 15,
+                  "syncConcurrencyLimit": 1,
+                  "activeRepoIds": [],
+                  "repos": [
+                    {
+                      "repoId": "mcl",
+                      "phase": "queued",
+                      "queuePosition": 1,
+                      "updatedAt": "2026-03-24T07:27:22.819024+00:00",
+                      "attemptCount": 0
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The repo index request was invalid or the requested repository could not be resolved.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNKNOWN_REPOSITORY",
+                  "message": "No configured repository is available for repo indexing"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while enqueueing repo-index work."
           }
         }
       }

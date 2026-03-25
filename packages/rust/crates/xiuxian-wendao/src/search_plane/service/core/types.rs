@@ -1,11 +1,126 @@
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
+use tokio::sync::{Semaphore, oneshot};
+use tokio::task::JoinHandle;
+
 use crate::gateway::studio::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
+use crate::search_plane::coordinator::SearchCompactionReason;
 use crate::search_plane::{
     SearchCorpusKind, SearchManifestKeyspace, SearchPlaneCoordinator, SearchQueryTelemetry,
     SearchRepoCorpusRecord, SearchRepoRuntimeRecord,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum RepoMaintenanceTaskKind {
+    Prewarm,
+    Compaction,
+}
+
+pub(crate) type RepoMaintenanceTaskKey =
+    (SearchCorpusKind, String, String, RepoMaintenanceTaskKind);
+pub(crate) type RepoMaintenanceTaskResult = Result<(), String>;
+
+#[derive(Debug, Clone)]
+pub(crate) struct RepoPrewarmTask {
+    pub(crate) corpus: SearchCorpusKind,
+    pub(crate) repo_id: String,
+    pub(crate) table_name: String,
+    pub(crate) projected_columns: Vec<String>,
+}
+
+impl RepoPrewarmTask {
+    #[must_use]
+    pub(crate) fn task_key(&self) -> RepoMaintenanceTaskKey {
+        (
+            self.corpus,
+            self.repo_id.clone(),
+            self.table_name.clone(),
+            RepoMaintenanceTaskKind::Prewarm,
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RepoCompactionTask {
+    pub(crate) corpus: SearchCorpusKind,
+    pub(crate) repo_id: String,
+    pub(crate) publication_id: String,
+    pub(crate) table_name: String,
+    pub(crate) row_count: u64,
+    pub(crate) reason: SearchCompactionReason,
+}
+
+impl RepoCompactionTask {
+    #[must_use]
+    pub(crate) fn task_key(&self) -> RepoMaintenanceTaskKey {
+        (
+            self.corpus,
+            self.repo_id.clone(),
+            self.publication_id.clone(),
+            RepoMaintenanceTaskKind::Compaction,
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum RepoMaintenanceTask {
+    Prewarm(RepoPrewarmTask),
+    Compaction(RepoCompactionTask),
+}
+
+impl RepoMaintenanceTask {
+    #[must_use]
+    pub(crate) fn task_key(&self) -> RepoMaintenanceTaskKey {
+        match self {
+            Self::Prewarm(task) => task.task_key(),
+            Self::Compaction(task) => task.task_key(),
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn repo_id(&self) -> &str {
+        match self {
+            Self::Prewarm(task) => task.repo_id.as_str(),
+            Self::Compaction(task) => task.repo_id.as_str(),
+        }
+    }
+}
+
+pub(crate) struct QueuedRepoMaintenanceTask {
+    pub(crate) task: RepoMaintenanceTask,
+    pub(crate) enqueue_sequence: u64,
+}
+
+#[derive(Default)]
+pub(crate) struct RepoMaintenanceRuntime {
+    pub(crate) in_flight: BTreeSet<RepoMaintenanceTaskKey>,
+    pub(crate) waiters:
+        BTreeMap<RepoMaintenanceTaskKey, Vec<oneshot::Sender<RepoMaintenanceTaskResult>>>,
+    pub(crate) queue: VecDeque<QueuedRepoMaintenanceTask>,
+    pub(crate) next_enqueue_sequence: u64,
+    pub(crate) shutdown_requested: bool,
+    pub(crate) worker_running: bool,
+    pub(crate) worker_handle: Option<JoinHandle<()>>,
+    pub(crate) active_task: Option<RepoMaintenanceTaskKey>,
+}
+
+pub(crate) struct QueuedLocalCompactionTask {
+    pub(crate) task: crate::search_plane::coordinator::SearchCompactionTask,
+    pub(crate) enqueue_sequence: u64,
+}
+
+#[derive(Default)]
+pub(crate) struct LocalMaintenanceRuntime {
+    pub(crate) running_compactions: BTreeSet<SearchCorpusKind>,
+    pub(crate) shutdown_requested: bool,
+    pub(crate) compaction_queue: VecDeque<QueuedLocalCompactionTask>,
+    pub(crate) next_enqueue_sequence: u64,
+    pub(crate) worker_running: bool,
+    pub(crate) worker_handle: Option<JoinHandle<()>>,
+    pub(crate) active_compaction: Option<SearchCorpusKind>,
+}
 
 /// Project-scoped entrypoint for the search-plane domain.
 #[derive(Clone)]
@@ -15,7 +130,9 @@ pub struct SearchPlaneService {
     pub(super) manifest_keyspace: SearchManifestKeyspace,
     pub(super) coordinator: Arc<SearchPlaneCoordinator>,
     pub(super) cache: crate::search_plane::cache::SearchPlaneCache,
-    pub(crate) maintenance_tasks: Arc<Mutex<std::collections::BTreeSet<SearchCorpusKind>>>,
+    pub(crate) repo_search_read_permits: Arc<Semaphore>,
+    pub(crate) local_maintenance: Arc<Mutex<LocalMaintenanceRuntime>>,
+    pub(crate) repo_maintenance: Arc<Mutex<RepoMaintenanceRuntime>>,
     pub(crate) query_telemetry:
         Arc<RwLock<std::collections::BTreeMap<SearchCorpusKind, SearchQueryTelemetry>>>,
     pub(super) repo_corpus_records:

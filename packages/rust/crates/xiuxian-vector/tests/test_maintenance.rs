@@ -145,6 +145,71 @@ async fn test_compact_returns_stats() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_compact_retains_only_recent_versions() -> Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let db_path = temp_dir.path().join("compact_retain_versions");
+    let db_path_str = db_path.to_string_lossy();
+    let store = VectorStore::new(db_path_str.as_ref(), Some(64)).await?;
+
+    store
+        .add_documents(
+            "t",
+            vec!["tool.a".to_string(), "tool.b".to_string()],
+            vec![vec![0.1; 64], vec![0.2; 64]],
+            vec!["alpha".to_string(), "beta".to_string()],
+            vec![
+                serde_json::json!({"kind":"seed"}).to_string(),
+                serde_json::json!({"kind":"seed"}).to_string(),
+            ],
+        )
+        .await?;
+    store
+        .add_documents(
+            "t",
+            vec!["tool.c".to_string(), "tool.d".to_string()],
+            vec![vec![0.3; 64], vec![0.4; 64]],
+            vec!["gamma".to_string(), "delta".to_string()],
+            vec![
+                serde_json::json!({"kind":"append"}).to_string(),
+                serde_json::json!({"kind":"append"}).to_string(),
+            ],
+        )
+        .await?;
+    store.delete_where("t", "id = 'tool.a'").await?;
+
+    let versions_before = store.list_versions("t").await?;
+    assert!(
+        versions_before.len() > 2,
+        "test setup should create more than two versions before compaction"
+    );
+
+    let version_before = store.get_dataset_version("t").await?;
+    let count_before = store.count("t").await?;
+
+    let stats = store.compact("t").await?;
+    assert!(stats.duration_ms <= 60_000);
+
+    let versions_after = store.list_versions("t").await?;
+    let version_after = store.get_dataset_version("t").await?;
+    let count_after = store.count("t").await?;
+
+    assert!(version_after > version_before);
+    assert!(
+        versions_after.len() <= 2,
+        "compaction cleanup should retain only the most recent versions"
+    );
+    assert!(
+        versions_after
+            .iter()
+            .any(|version| version.version_id == version_after),
+        "the current version must remain visible after cleanup"
+    );
+    assert_eq!(count_after, count_before);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_bounded_cache_eviction() -> Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let db_path = temp_dir.path().join("bounded_cache");

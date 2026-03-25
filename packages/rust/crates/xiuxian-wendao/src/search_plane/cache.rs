@@ -1,4 +1,3 @@
-#[cfg(test)]
 use std::collections::BTreeMap;
 #[cfg(test)]
 use std::sync::{Arc, RwLock};
@@ -9,7 +8,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use super::{
-    SearchCorpusKind, SearchManifestKeyspace, SearchRepoCorpusRecord,
+    SearchCorpusKind, SearchFileFingerprint, SearchManifestKeyspace, SearchRepoCorpusRecord,
     SearchRepoCorpusSnapshotRecord,
 };
 use crate::valkey_common::resolve_optional_client_from_env;
@@ -96,6 +95,9 @@ pub(crate) struct SearchPlaneCache {
 struct TestCacheShadow {
     repo_corpus_records: BTreeMap<(SearchCorpusKind, String), SearchRepoCorpusRecord>,
     repo_corpus_snapshot: Option<SearchRepoCorpusSnapshotRecord>,
+    corpus_file_fingerprints: BTreeMap<SearchCorpusKind, BTreeMap<String, SearchFileFingerprint>>,
+    repo_corpus_file_fingerprints:
+        BTreeMap<(SearchCorpusKind, String), BTreeMap<String, SearchFileFingerprint>>,
 }
 
 impl SearchPlaneCache {
@@ -138,6 +140,9 @@ impl SearchPlaneCache {
                 shadow.repo_corpus_snapshot = None;
             }
         }
+        shadow
+            .repo_corpus_file_fingerprints
+            .retain(|(_, candidate_repo_id), _| candidate_repo_id != repo_id);
     }
 
     fn new(
@@ -272,6 +277,47 @@ impl SearchPlaneCache {
         self.get_json(key.as_str()).await
     }
 
+    pub(crate) async fn get_corpus_file_fingerprints(
+        &self,
+        corpus: SearchCorpusKind,
+    ) -> Option<BTreeMap<String, SearchFileFingerprint>> {
+        #[cfg(test)]
+        if let Some(fingerprints) = self
+            .shadow
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .corpus_file_fingerprints
+            .get(&corpus)
+            .cloned()
+        {
+            return Some(fingerprints);
+        }
+        let key = self.keyspace.corpus_file_fingerprints_key(corpus);
+        self.get_json(key.as_str()).await
+    }
+
+    pub(crate) async fn get_repo_corpus_file_fingerprints(
+        &self,
+        corpus: SearchCorpusKind,
+        repo_id: &str,
+    ) -> Option<BTreeMap<String, SearchFileFingerprint>> {
+        #[cfg(test)]
+        if let Some(fingerprints) = self
+            .shadow
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .repo_corpus_file_fingerprints
+            .get(&(corpus, repo_id.to_string()))
+            .cloned()
+        {
+            return Some(fingerprints);
+        }
+        let key = self
+            .keyspace
+            .repo_corpus_file_fingerprints_key(corpus, repo_id);
+        self.get_json(key.as_str()).await
+    }
+
     pub(crate) async fn set_json<T>(&self, key: &str, ttl: SearchPlaneCacheTtl, value: &T)
     where
         T: Serialize,
@@ -344,6 +390,67 @@ impl SearchPlaneCache {
         let _: redis::RedisResult<()> = connection.set(key, payload).await;
     }
 
+    pub(crate) async fn set_corpus_file_fingerprints(
+        &self,
+        corpus: SearchCorpusKind,
+        fingerprints: &BTreeMap<String, SearchFileFingerprint>,
+    ) {
+        #[cfg(test)]
+        {
+            self.shadow
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .corpus_file_fingerprints
+                .insert(corpus, fingerprints.clone());
+        }
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let Ok(payload) = serde_json::to_string(fingerprints) else {
+            return;
+        };
+        let key = self.keyspace.corpus_file_fingerprints_key(corpus);
+        let Ok(mut connection) = client
+            .get_multiplexed_async_connection_with_config(&self.async_connection_config())
+            .await
+        else {
+            return;
+        };
+        let _: redis::RedisResult<()> = connection.set(key, payload).await;
+    }
+
+    pub(crate) async fn set_repo_corpus_file_fingerprints(
+        &self,
+        corpus: SearchCorpusKind,
+        repo_id: &str,
+        fingerprints: &BTreeMap<String, SearchFileFingerprint>,
+    ) {
+        #[cfg(test)]
+        {
+            self.shadow
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .repo_corpus_file_fingerprints
+                .insert((corpus, repo_id.to_string()), fingerprints.clone());
+        }
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let Ok(payload) = serde_json::to_string(fingerprints) else {
+            return;
+        };
+        let key = self
+            .keyspace
+            .repo_corpus_file_fingerprints_key(corpus, repo_id);
+        let Ok(mut connection) = client
+            .get_multiplexed_async_connection_with_config(&self.async_connection_config())
+            .await
+        else {
+            return;
+        };
+        let _: redis::RedisResult<()> = connection.set(key, payload).await;
+    }
+
     pub(crate) async fn delete_repo_corpus_record(&self, corpus: SearchCorpusKind, repo_id: &str) {
         #[cfg(test)]
         self.shadow
@@ -355,6 +462,32 @@ impl SearchPlaneCache {
             return;
         };
         let key = self.keyspace.repo_corpus_record_key(corpus, repo_id);
+        let Ok(mut connection) = client
+            .get_multiplexed_async_connection_with_config(&self.async_connection_config())
+            .await
+        else {
+            return;
+        };
+        let _: redis::RedisResult<()> = connection.del(key).await;
+    }
+
+    pub(crate) async fn delete_repo_corpus_file_fingerprints(
+        &self,
+        corpus: SearchCorpusKind,
+        repo_id: &str,
+    ) {
+        #[cfg(test)]
+        self.shadow
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .repo_corpus_file_fingerprints
+            .remove(&(corpus, repo_id.to_string()));
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let key = self
+            .keyspace
+            .repo_corpus_file_fingerprints_key(corpus, repo_id);
         let Ok(mut connection) = client
             .get_multiplexed_async_connection_with_config(&self.async_connection_config())
             .await

@@ -15,6 +15,9 @@ bash -n \
   scripts/rust/wendao_retrieval_audits.sh \
   scripts/rust/telegram_session_isolation_rust.sh \
   scripts/channel/valkey_live_gate.sh \
+  scripts/channel/valkey-runtime.sh \
+  scripts/channel/valkey-launch.sh \
+  scripts/channel/valkey-healthcheck.sh \
   scripts/benchmark_skills_tools_ci.sh \
   scripts/gate_wendao_ppr.sh \
   scripts/wendao_ppr_rollout_ci.sh

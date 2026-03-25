@@ -100,3 +100,7 @@ pub(super) const fn projected_columns() -> [&'static str; 6] {
 pub(super) const fn search_text_column() -> &'static str {
     COLUMN_SEARCH_TEXT
 }
+
+pub(super) const fn path_column() -> &'static str {
+    COLUMN_PATH
+}

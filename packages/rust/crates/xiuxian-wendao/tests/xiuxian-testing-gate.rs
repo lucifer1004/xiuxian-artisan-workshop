@@ -150,6 +150,10 @@ mod scenarios;
 #[path = "integration/studio_search_index_api.rs"]
 mod studio_search_index_api;
 
+#[cfg(not(feature = "performance"))]
+#[path = "integration/pybindings_feature_smoke.rs"]
+mod pybindings_feature_smoke;
+
 #[cfg(feature = "performance")]
 #[path = "performance/mod.rs"]
 mod performance;

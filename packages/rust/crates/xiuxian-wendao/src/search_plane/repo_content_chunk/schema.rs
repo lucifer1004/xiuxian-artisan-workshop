@@ -136,3 +136,7 @@ pub(super) const fn search_text_column() -> &'static str {
 pub(super) const fn language_column() -> &'static str {
     COLUMN_LANGUAGE
 }
+
+pub(super) const fn path_column() -> &'static str {
+    COLUMN_PATH
+}

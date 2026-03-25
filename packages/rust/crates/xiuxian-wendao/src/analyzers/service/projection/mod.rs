@@ -6,6 +6,7 @@ mod index_tree;
 mod navigation;
 mod page;
 mod pages;
+#[path = "planner/mod.rs"]
 mod planner;
 mod registry;
 mod retrieval;

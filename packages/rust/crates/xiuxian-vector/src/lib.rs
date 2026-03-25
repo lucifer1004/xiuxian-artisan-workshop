@@ -56,7 +56,7 @@ pub use ops::{
     IndexStats, IndexStatus, IndexThresholds, MergeInsertStats, MigrateResult, MigrationItem,
     QueryIntent, Recommendation, TableColumnAlteration, TableColumnType, TableHealthReport,
     TableInfo, TableNewColumn, TableVersionInfo, XIUXIAN_SCHEMA_VERSION,
-    schema_version_from_schema,
+    schema_version_from_schema, string_contains_mask,
 };
 pub use search::SearchOptions;
 pub use search_impl::json_to_lance_where;

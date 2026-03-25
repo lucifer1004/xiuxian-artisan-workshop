@@ -95,6 +95,17 @@ Plugins should return normalized records and relations, not mutate Wendao storag
   - `repo sync` now also exposes a compact health summary so callers can distinguish `healthy`, `missing_assets`, `needs_refresh`, `has_local_commits`, `diverged`, and `unknown` without reinterpreting the lower-level lifecycle fields themselves
   - `repo sync` now also classifies mirror freshness into `fresh`, `aging`, and `stale` buckets, with `not_applicable` for local checkouts and `unknown` when managed metadata is missing
   - `repo sync` now also groups lifecycle, freshness, and revision state into a nested `status_summary` so agent-side consumers can read one structured object instead of reconstructing those relationships from flat fields
+  - the Studio repo-index background lane now isolates managed remote sync in `spawn_blocking`, caps concurrent remote sync pressure through `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY` (default `2`), retries transient managed mirror transport failures with bounded backoff, and requeues one batch-level retry for retryable sync failures instead of immediately surfacing them as terminal `Failed` rows
+  - bounded real-workspace sampling against the current `.data/wendao-frontend` SciML config now shows the repo-index lane progressing with `0 failed` during the first minute under `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY=1`, while `ready` rises steadily instead of collapsing into the earlier mass `failed to connect to github.com: Can't assign requested address` burst
+  - a direct `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY=1` vs `2` first-minute A/B sample now shows no material throughput regression or failure burst at the default `2` ceiling: `sync=1` reached `46 ready / 3 unsupported / 0 failed` at `t+60s`, while `sync=2` reached `45 ready / 3 unsupported / 0 failed` over the same window
+  - later gateway pressure work exposed one more gap in that model: the request-path repo analysis and repo sync endpoints were still bypassing the repo-index remote-sync semaphore, so managed-remote overview/module/symbol/example/page requests could add extra upstream fetch pressure on top of the background lane
+  - the request path now shares the same remote-sync semaphore through `RepoIndexCoordinator`, so managed-remote repo overview/search/sync traffic and the background repo-index lane are capped by one common concurrency budget instead of two unrelated ones
+  - the default remote-sync ceiling is now aligned with the more conservative real-workspace result: `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY` still overrides the budget, but the default baseline is now `1` rather than `2` to prioritize GitHub transport stability and ready-ratio recovery under heavy mixed gateway load
+  - the remaining three `unsupported` rows (`StokesDiffEq.jl`, `SundialsBuilder`, `TensorFlowDiffEq.jl`) now consistently classify as expected Julia-layout misses with `missing Project.toml`, not transient sync/network failures
+  - the `177` live repo-index total against `.data/wendao-frontend/wendao.toml` is now explained: the config contains `179` `link_graph.projects.*` entries, but `kernel` and `main` are link-graph-only local projects with `plugins = []`, so they are intentionally excluded from repo-index registration
+  - repo-index phase reporting now marks repositories as `Syncing` only after a sync permit is acquired, so `/api/repo/index/status` no longer overstates concurrent remote sync pressure while tasks are still waiting in the coordinator
+  - `/api/repo/index/status` now also exposes `syncConcurrencyLimit`, so Studio and live debugging can distinguish the dedicated remote-sync semaphore from the broader adaptive `targetConcurrency` used for indexing work
+  - the bundled gateway route inventory and `OpenAPI` artifact now explicitly document both `POST /api/repo/index` and `GET /api/repo/index/status`, so repo-index status payload changes no longer sit outside the checked-in contract surface
   - the same `repo sync` payload is now exposed through the studio gateway at `GET /api/repo/sync?repo=<id>&mode=<ensure|refresh|status>`, and the bundled OpenAPI artifact now documents that route for downstream consumers
   - `repo overview` is now also exposed through the studio gateway at `GET /api/repo/overview?repo=<id>`, so external agent callers can consume the normalized overview counts without shelling out to the CLI
   - `repo module-search` is now also exposed through the studio gateway at `GET /api/repo/module-search?repo=<id>&query=<text>&limit=<n>`, returning normalized module rows from the existing Repo Intelligence service path
@@ -216,48 +227,63 @@ Initial execution for that slice is now landed:
   `src/zhenfa_router/native/semantic_check/docs_governance/tests/mod.rs` were
   cleaned up by moving helper logic into dedicated `support.rs` modules and
   keeping `mod.rs` interface-only
-- the gateway perf suite now uses recorded per-case warm-cache budgets instead
-  of placeholder thresholds, with the current active lib baselines fixed at:
-  - `repo_module_search`: `p95 <= 2.0ms`, `qps >= 1101`
-  - `repo_symbol_search`: `p95 <= 2.0ms`, `qps >= 964`
-  - `repo_example_search`: `p95 <= 2.5ms`, `qps >= 650`
-  - `repo_projected_page_search`: `p95 <= 2.0ms`, `qps >= 650`
-  - `studio_code_search`: `p95 <= 13.0ms`, `qps >= 95`
-  - `search_index_status`: active status/telemetry warm-cache gate
-  - only the aggregate `gateway_search_perf_suite_reports_warm_cache_latency`
-    smoke suite remains ignored for explicit full-bundle validation
+- the gateway perf suite now uses runner-aware warm-cache budgets instead of
+  placeholder thresholds. The current workstation-safe local profile is:
+  - `repo_module_search`: `p95 <= 1.25ms`, `qps >= 500`
+  - `repo_symbol_search`: `p95 <= 1.25ms`, `qps >= 700`
+  - `repo_example_search`: `p95 <= 1.5ms`, `qps >= 600`
+  - `repo_projected_page_search`: `p95 <= 1.5ms`, `qps >= 700`
+  - `studio_code_search`: `p95 <= 10.0ms`, `qps >= 100`
+  - `search_index_status`: `p95 <= 0.48ms`, `qps >= 1250`
 - the stable gateway warm-cache suite is now also formalized under the
   `performance` feature. `src/gateway/studio/perf_support.rs` exposes a narrow
   gateway fixture surface, and `tests/performance/gateway_search.rs` mounts six
   serialized formal cases for `repo_module_search`, `repo_symbol_search`,
   `repo_example_search`, `repo_projected_page_search`, `studio_code_search`,
   and `search_index_status`
-- the gateway perf lane now selects those defaults through `RUNNER_OS`
-  profiles and supports explicit
-  `XIUXIAN_WENDAO_GATEWAY_PERF_<CASE>_<METRIC>` overrides, so the quick gate
-  can carry one named case inventory across local and CI runners without
-  forking the test wiring
-- the quick perf entrypoint `just rust-wendao-performance-gate` now exports
-  `RUNNER_OS` into the gateway perf lib lane, and the stale empty perf module
-  mounts that resurfaced during validation were removed so `nextest` and
-  `clippy` stay green
+- the formal gateway lane now owns the calibration knobs directly. It resolves
+  runner-specific defaults through `RUNNER_OS` and accepts explicit
+  `XIUXIAN_WENDAO_GATEWAY_PERF_<CASE>_<METRIC>` overrides without reviving a
+  duplicate in-crate calibration suite
+- the local workstation can now also exercise a real large-corpus gateway lane
+  against `.data/wendao-frontend` via
+  `just rust-wendao-performance-gateway-real-workspace`; that ignored sample
+  now reuses a single fixture, bootstraps the `179` configured repositories
+  until the workspace is query-ready, and then records cross-repo
+  `code_search` plus `repo/index/status` latency without turning that heavy
+  scenario into the default blocking gate
+  - the latest local sample reports `studio_code_search_real_workspace_sample`
+    at `p95 = 142.719ms` and `repo_index_status_real_workspace_sample` at
+    `p95 = 1.331ms`
+- the execution entrypoints are now explicit too. `just
+  rust-wendao-performance-gate` expands into
+  `rust-wendao-performance-quick` and
+  `rust-wendao-performance-gateway-formal`. The quick lane stays on `nextest`
+  but explicitly excludes the six `gateway_search` cases, while the formal
+  gateway proof runs through
+  `just rust-wendao-performance-gateway-formal`, which now drives the same
+  focused `cargo nextest ... -E <formal-filter>` bundle used by direct
+  validation instead of a separate `cargo test formal_gate` process
+- the old lib-only gateway perf calibration lane is now removed, so the quick
+  perf entrypoint no longer depends on a duplicate in-crate gateway suite to
+  keep `nextest` and `clippy` green
 - focused verification now covers the full default Wendao lib surface, the
   `xiuxian-testing-gate` contract target, and the full default feature-gated
   gateway perf suite:
   - `cargo test -p xiuxian-wendao --lib`
   - `cargo test -p xiuxian-wendao --test xiuxian-testing-gate`
   - `cargo check -p xiuxian-wendao --features performance --tests`
-  - `cargo test -p xiuxian-wendao --features performance gateway::studio::studio_gateway_search_perf_tests --lib`
   - `cargo test -p xiuxian-wendao --features performance --test xiuxian-testing-gate -- --list`
-  - `cargo nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate -E 'test(performance::gateway_search::studio_code_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::search_index_status_perf_gate_reports_query_telemetry_summary_formal_gate)'`
+  - `cargo nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate -E "not (test(performance::gateway_search::repo_module_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_symbol_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_example_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_projected_page_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::studio_code_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::search_index_status_perf_gate_reports_query_telemetry_summary_formal_gate))"`
+  - `just rust-wendao-performance-gateway-formal`
   - `just rust-wendao-performance-gate`
   - `cargo nextest run -p xiuxian-wendao`
 - Tier-3 closure is now green for the touched Wendao scope:
   - `cargo clippy -p xiuxian-wendao --all-targets --all-features -- -D warnings`
 - the residual repo-gateway verification caveat is no longer `clippy`; it is
-  now the need to capture a dedicated `ubuntu-latest` baseline and decide
-  whether the runner-aware profile should keep sharing the current local/linux
-  defaults or split them into stricter per-runner constants
+  now the need to keep the formal gateway six-case proof stable under one
+  shared nextest filter and decide later whether the current Linux/local budget
+  split should become a broader shared helper
 - `tests/unit/studio_vfs_performance.rs::studio_state_creation_is_fast` now
   measures a warmed best-of-five `StudioState::new()` sample window instead of
   a single wall-clock sample, which keeps `cargo test --lib` and

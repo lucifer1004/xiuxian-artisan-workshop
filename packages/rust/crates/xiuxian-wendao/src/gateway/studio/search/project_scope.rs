@@ -10,6 +10,23 @@ pub(crate) struct SearchProjectMetadata {
     pub(crate) root_label: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConfiguredProjectScope {
+    pub(crate) scope_path: PathBuf,
+    pub(crate) normalized_scope: String,
+    pub(crate) project_name: String,
+    pub(crate) root_label: Option<String>,
+}
+
+impl ConfiguredProjectScope {
+    #[must_use]
+    pub(crate) fn partition_id(&self) -> String {
+        blake3::hash(self.normalized_scope.as_bytes())
+            .to_hex()
+            .to_string()
+    }
+}
+
 pub(super) fn normalize_path(path: &Path) -> String {
     normalize_pathbuf(path).to_string_lossy().replace('\\', "/")
 }
@@ -22,24 +39,46 @@ pub(crate) fn configured_project_scan_roots(
     config_root: &Path,
     projects: &[UiProjectConfig],
 ) -> Vec<PathBuf> {
+    configured_project_scopes(config_root, projects)
+        .into_iter()
+        .map(|scope| scope.scope_path)
+        .collect()
+}
+
+pub(crate) fn configured_project_scopes(
+    config_root: &Path,
+    projects: &[UiProjectConfig],
+) -> Vec<ConfiguredProjectScope> {
     let mut roots = Vec::new();
     let mut seen = HashSet::new();
 
     for project in projects {
         for configured_path in &project.dirs {
+            let Some(normalized_configured_path) = normalize_config_path(configured_path.as_str())
+            else {
+                continue;
+            };
             let Some(scope_path) = resolve_project_scope_path(
                 config_root,
                 project.root.as_str(),
-                configured_path.as_str(),
+                normalized_configured_path.as_str(),
             ) else {
                 continue;
             };
             if !scope_path.exists() {
                 continue;
             }
-            let normalized = normalize_path(scope_path.as_path());
-            if seen.insert(normalized) {
-                roots.push(scope_path);
+            let normalized_scope = normalize_path(scope_path.as_path());
+            if seen.insert(normalized_scope.clone()) {
+                roots.push(ConfiguredProjectScope {
+                    scope_path,
+                    normalized_scope,
+                    project_name: project.name.clone(),
+                    root_label: configured_root_label(
+                        normalized_configured_path.as_str(),
+                        project.name.as_str(),
+                    ),
+                });
             }
         }
     }

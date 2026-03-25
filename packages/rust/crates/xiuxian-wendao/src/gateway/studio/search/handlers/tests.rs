@@ -3,10 +3,11 @@ use std::sync::Arc;
 
 use super::code_search::{
     build_code_search_response, build_repo_content_search_hits, build_repo_entity_search_hits,
-    parse_code_search_query, symbol_search_hit_to_search_hit,
+    collect_repo_search_targets, parse_code_search_query, symbol_search_hit_to_search_hit,
 };
 use super::knowledge::build_intent_search_response;
 use super::test_prelude::*;
+use crate::search_plane::{RepoSearchAvailability, RepoSearchPublicationState};
 
 fn test_studio_state() -> crate::gateway::studio::router::StudioState {
     let nonce = format!(
@@ -46,7 +47,7 @@ async fn publish_repo_entity_index(
 ) {
     studio
         .search_plane
-        .publish_repo_entities_with_revision(repo_id, analysis, None)
+        .publish_repo_entities_with_revision(repo_id, analysis, &sample_repo_documents(), None)
         .await
         .unwrap_or_else(|error| panic!("publish repo entities: {error}"));
 }
@@ -85,6 +86,27 @@ fn sample_repo_analysis(repo_id: &str) -> crate::analyzers::RepositoryAnalysisOu
     }
 }
 
+fn sample_repo_documents() -> Vec<crate::gateway::studio::repo_index::RepoCodeDocument> {
+    vec![
+        crate::gateway::studio::repo_index::RepoCodeDocument {
+            path: "src/BaseModelica.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(
+                "module BaseModelica\nexport reexport\nreexport() = nothing\nend\n",
+            ),
+            size_bytes: 61,
+            modified_unix_ms: 10,
+        },
+        crate::gateway::studio::repo_index::RepoCodeDocument {
+            path: "examples/reexport.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from("using BaseModelica\nreexport()\n"),
+            size_bytes: 29,
+            modified_unix_ms: 10,
+        },
+    ]
+}
+
 #[test]
 fn parse_code_search_query_extracts_repo_lang_and_kind_filters() {
     let parsed = parse_code_search_query("repo:sciml lang:julia kind:function reexport", None);
@@ -103,6 +125,60 @@ fn parse_code_search_query_preserves_repo_identifier_case() {
 
     assert_eq!(parsed.query, "using ModelingToolkit");
     assert_eq!(parsed.repo.as_deref(), Some("DifferentialEquations.jl"));
+}
+
+#[test]
+fn collect_repo_search_targets_preserves_repo_order_and_partitions_by_availability() {
+    let publication_states = std::collections::BTreeMap::from([
+        (
+            "ready".to_string(),
+            RepoSearchPublicationState {
+                entity_published: true,
+                content_published: false,
+                availability: RepoSearchAvailability::Searchable,
+            },
+        ),
+        (
+            "pending".to_string(),
+            RepoSearchPublicationState {
+                entity_published: false,
+                content_published: false,
+                availability: RepoSearchAvailability::Pending,
+            },
+        ),
+        (
+            "skipped".to_string(),
+            RepoSearchPublicationState {
+                entity_published: false,
+                content_published: false,
+                availability: RepoSearchAvailability::Skipped,
+            },
+        ),
+    ]);
+
+    let dispatch = collect_repo_search_targets(
+        vec![
+            "ready".to_string(),
+            "pending".to_string(),
+            "skipped".to_string(),
+            "implicit-pending".to_string(),
+        ],
+        &publication_states,
+    );
+
+    assert_eq!(
+        dispatch
+            .searchable_repos
+            .into_iter()
+            .map(|target| target.repo_id)
+            .collect::<Vec<_>>(),
+        vec!["ready".to_string()]
+    );
+    assert_eq!(
+        dispatch.pending_repos,
+        vec!["pending".to_string(), "implicit-pending".to_string()]
+    );
+    assert_eq!(dispatch.skipped_repos, vec!["skipped".to_string()]);
 }
 
 #[test]
@@ -178,6 +254,8 @@ async fn repo_content_search_hits_find_matching_julia_source_lines() {
             contents: Arc::<str>::from(
                 "module BaseModelica\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
             ),
+            size_bytes: 67,
+            modified_unix_ms: 0,
         }],
     )
     .await;
@@ -190,6 +268,39 @@ async fn repo_content_search_hits_find_matching_julia_source_lines() {
     assert_eq!(hits[0].doc_type.as_deref(), Some("file"));
     assert_eq!(hits[0].path, "src/BaseModelica.jl");
     assert_eq!(hits[0].match_reason.as_deref(), Some("repo_content_search"));
+    assert_eq!(
+        hits[0]
+            .navigation_target
+            .as_ref()
+            .and_then(|target| target.line),
+        Some(3)
+    );
+}
+
+#[tokio::test]
+async fn repo_content_search_hits_find_matching_code_punctuation_queries() {
+    let studio = test_studio_state();
+    publish_repo_content_chunk_index(
+        &studio,
+        "sciml",
+        vec![crate::gateway::studio::repo_index::RepoCodeDocument {
+            path: "src/BaseModelica.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(
+                "module BaseModelica\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
+            ),
+            size_bytes: 67,
+            modified_unix_ms: 0,
+        }],
+    )
+    .await;
+
+    let hits = build_repo_content_search_hits(&studio, "sciml", "@reexport", 10)
+        .await
+        .unwrap_or_else(|error| panic!("repo content punctuation search hits: {error:?}"));
+
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].path, "src/BaseModelica.jl");
     assert_eq!(
         hits[0]
             .navigation_target
@@ -329,6 +440,8 @@ async fn build_code_search_response_skips_unsupported_repositories_when_searchin
             path: "src/ValidPkg.jl".to_string(),
             language: Some("julia".to_string()),
             contents: Arc::<str>::from("module ValidPkg\nusing ModelingToolkit\nend\n"),
+            size_bytes: 40,
+            modified_unix_ms: 0,
         }],
     )
     .await;
@@ -455,6 +568,8 @@ async fn build_intent_search_response_includes_repo_content_hits_for_debug_looku
             contents: Arc::<str>::from(
                 "module ValidPkg\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
             ),
+            size_bytes: 62,
+            modified_unix_ms: 0,
         }],
     )
     .await;
@@ -588,6 +703,8 @@ async fn build_code_search_response_uses_published_repo_tables_while_repo_refres
             contents: Arc::<str>::from(
                 "module BaseModelica\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
             ),
+            size_bytes: 67,
+            modified_unix_ms: 0,
         }],
     )
     .await;

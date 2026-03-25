@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+source "${SCRIPT_DIR}/valkey-common.sh"
 
 resolve_valkey_field() {
   uv run python "${PROJECT_ROOT}/scripts/channel/resolve_valkey_endpoint.py" --field "$1"
@@ -33,15 +34,14 @@ PIDFILE="$RUNTIME_DIR/valkey-${PORT}.pid"
 LOGFILE="$RUNTIME_DIR/valkey-${PORT}.log"
 URL="redis://${HOST}:${PORT}/${DB}"
 
-if valkey-cli -u "$URL" ping >/dev/null 2>&1; then
-  echo "Valkey is already reachable at $URL."
+if valkey_listener_matches_pidfile "$PIDFILE" "$URL" && valkey-cli -u "$URL" ping >/dev/null 2>&1; then
+  echo "Valkey already running on ${PORT} (pid $(cat "$PIDFILE"))."
   exit 0
 fi
 
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  echo "Valkey already running on ${PORT} (pid $(cat "$PIDFILE"))."
-  valkey-cli -u "$URL" ping || true
-  exit 0
+if valkey-cli -u "$URL" ping >/dev/null 2>&1; then
+  echo "Error: Valkey is reachable at $URL but pidfile $PIDFILE does not match the listener." >&2
+  exit 1
 fi
 
 echo "Starting Valkey on port ${PORT}..."
@@ -53,6 +53,13 @@ valkey-server \
   --pidfile "$PIDFILE" \
   --logfile "$LOGFILE"
 
-sleep 0.2
-valkey-cli -u "$URL" ping
-echo "Valkey started. pidfile=$PIDFILE logfile=$LOGFILE datadir=$DATA_DIR"
+for _ in $(seq 1 50); do
+  if valkey_listener_matches_pidfile "$PIDFILE" "$URL" && valkey-cli -u "$URL" ping >/dev/null 2>&1; then
+    echo "Valkey started. pidfile=$PIDFILE logfile=$LOGFILE datadir=$DATA_DIR"
+    exit 0
+  fi
+  sleep 0.1
+done
+
+echo "Error: Valkey did not become healthy at $URL." >&2
+exit 1

@@ -101,3 +101,7 @@ pub(super) const fn projected_columns() -> [&'static str; 5] {
 pub(super) const fn filter_column() -> &'static str {
     COLUMN_NAME_FOLDED
 }
+
+pub(super) const fn path_column() -> &'static str {
+    COLUMN_PATH
+}

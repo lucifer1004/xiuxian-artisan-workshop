@@ -15,6 +15,8 @@ async fn status_with_repo_runtime_hydrates_repo_corpus_status_from_snapshot_cach
         path: "src/lib.rs".to_string(),
         language: Some("rust".to_string()),
         contents: Arc::<str>::from("fn alpha() {}\n"),
+        size_bytes: 14,
+        modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "alpha/repo", &documents, Some("rev-1")).await;
     service.synchronize_repo_runtime(&RepoIndexStatusResponse {
@@ -29,6 +31,7 @@ async fn status_with_repo_runtime_hydrates_repo_corpus_status_from_snapshot_cach
         failed: 0,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: None,
         active_repo_ids: Vec::new(),
         repos: vec![repo_status_entry("alpha/repo", RepoIndexPhase::Ready)],
@@ -93,6 +96,7 @@ fn synchronize_repo_runtime_replaces_previous_snapshot_entries() {
         failed: 0,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: None,
         active_repo_ids: Vec::new(),
         repos: vec![
@@ -121,6 +125,7 @@ fn synchronize_repo_runtime_replaces_previous_snapshot_entries() {
         failed: 0,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: None,
         active_repo_ids: Vec::new(),
         repos: vec![repo_status_entry("beta/repo", RepoIndexPhase::Queued)],

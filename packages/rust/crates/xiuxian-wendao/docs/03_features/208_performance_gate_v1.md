@@ -52,28 +52,42 @@ Suite layout:
   `repo_projected_page_search`, `studio_code_search`, and
   `search_index_status`) through the narrow
   `gateway::studio::perf_support` fixture surface.
-- `studio_gateway_search_perf`: the feature-gated lib calibration lane keeps
-  the same six warm-cache cases reportable inside the crate test module, while
-  only the aggregate smoke suite remains `#[ignore]`.
-
 ## Budget Strategy
 
-Default budgets are auditable Rust constants in test code and can be overridden
-by environment variables in CI.
+Default budgets are auditable Rust constants in the formal performance target
+and still support environment overrides in CI.
 
-This supports SLO-driven tightening without changing test wiring.
+This keeps the gateway perf lane explicit and reviewable inside
+`tests/performance/gateway_search.rs`, where per-case budgets stay aligned
+with the formal warm-cache cases instead of drifting behind a separate
+calibration surface.
 
-The gateway warm-cache lane now resolves defaults through `RUNNER_OS` runner
-profiles and accepts per-case overrides via:
+The formal gateway warm-cache lane resolves defaults through `RUNNER_OS`
+runner profiles and accepts per-case overrides via:
 
+- `XIUXIAN_WENDAO_GATEWAY_PERF_<CASE>_P50_MS`
 - `XIUXIAN_WENDAO_GATEWAY_PERF_<CASE>_P95_MS`
+- `XIUXIAN_WENDAO_GATEWAY_PERF_<CASE>_P99_MS`
 - `XIUXIAN_WENDAO_GATEWAY_PERF_<CASE>_MIN_QPS`
 - `XIUXIAN_WENDAO_GATEWAY_PERF_<CASE>_MAX_ERROR_RATE`
 
-`<CASE>` is the uppercase gateway case id such as
-`REPO_MODULE_SEARCH`, `REPO_SYMBOL_SEARCH`, `REPO_EXAMPLE_SEARCH`,
+`<CASE>` is the uppercase formal gateway case id without the `_formal` suffix,
+such as `REPO_MODULE_SEARCH`, `REPO_SYMBOL_SEARCH`, `REPO_EXAMPLE_SEARCH`,
 `REPO_PROJECTED_PAGE_SEARCH`, `STUDIO_CODE_SEARCH`, or
 `STUDIO_SEARCH_INDEX_STATUS`.
+
+`Linux` keeps the stricter CI-oriented baseline constants, while `Local` and
+`Other` use looser defaults for workstation noise without reopening a second
+gateway calibration lane.
+
+Current workstation-safe local defaults are:
+
+- `repo_module_search`: `p95 <= 1.25ms`, `qps >= 500`
+- `repo_symbol_search`: `p95 <= 1.25ms`, `qps >= 700`
+- `repo_example_search`: `p95 <= 1.5ms`, `qps >= 600`
+- `repo_projected_page_search`: `p95 <= 1.5ms`, `qps >= 700`
+- `studio_code_search`: `p95 <= 10.0ms`, `qps >= 100`
+- `search_index_status`: `p95 <= 0.48ms`, `qps >= 1250`
 
 ## Reporting Contract
 
@@ -81,6 +95,8 @@ Each run persists a JSON report under:
 
 - `.run/reports/xiuxian-wendao/perf/*`
 - `.run/reports/xiuxian-wendao/perf/stress/*`
+- `.run/reports/xiuxian-wendao/perf-gateway-real-workspace/*` for the manual
+  large-workspace gateway sample lane
 
 ## Criterion Layer
 
@@ -106,14 +122,24 @@ not used as a PR blocker.
 
 - Preferred quick entrypoint:
   `direnv exec . just rust-wendao-performance-gate`
+- Quick target only:
+  `direnv exec . just rust-wendao-performance-quick`
+- Formal gateway six-case proof:
+  `direnv exec . just rust-wendao-performance-gateway-formal`
+- Manual real-workspace gateway sample:
+  `direnv exec . just rust-wendao-performance-gateway-real-workspace`
+  This ignored lane defaults to `.data/wendao-frontend`, bootstraps the real
+  repo-index until the workspace is query-ready, then samples cross-repo
+  `code_search` and `repo/index/status`. The current local `wendao-frontend`
+  sample covers `179` configured repositories.
+- Direct formal gateway nextest proof:
+  `direnv exec . cargo nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate -E "test(performance::gateway_search::repo_module_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_symbol_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_example_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_projected_page_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::studio_code_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::search_index_status_perf_gate_reports_query_telemetry_summary_formal_gate)"`
 - PR quick gate:
-  `direnv exec . cargo nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate`
+  `direnv exec . cargo nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate -E "not (test(performance::gateway_search::repo_module_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_symbol_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_example_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::repo_projected_page_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::studio_code_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::search_index_status_perf_gate_reports_query_telemetry_summary_formal_gate))"`
 - Formal gateway perf listing:
-  `direnv exec . cargo test -p xiuxian-wendao --features performance --test xiuxian-testing-gate -- --list`
-- Formal gateway targeted proof:
-  `direnv exec . cargo nextest run -p xiuxian-wendao --features performance --test xiuxian-testing-gate -E 'test(performance::gateway_search::studio_code_search_perf_gate_reports_warm_cache_latency_formal_gate) | test(performance::gateway_search::search_index_status_perf_gate_reports_query_telemetry_summary_formal_gate)'`
-- Feature-gated lib perf lane:
-  `direnv exec . cargo test -p xiuxian-wendao --features performance gateway::studio::studio_gateway_search_perf_tests --lib`
+  `direnv exec . cargo nextest list -p xiuxian-wendao --features performance --test xiuxian-testing-gate`
+- Formal gateway six-case proof:
+  `direnv exec . just rust-wendao-performance-gateway-formal`
 - Default integration + structure gate:
   `direnv exec . cargo test -p xiuxian-wendao --test xiuxian-testing-gate`
 - Nightly stress gate:

@@ -238,6 +238,7 @@ pub async fn sync(
         repo_id.clone(),
         "REPO_SYNC_PANIC",
         "Repo sync task failed unexpectedly",
+        !matches!(mode, crate::analyzers::RepoSyncMode::Status),
         move |repository, cwd| {
             repo_sync_for_registered_repository(
                 &RepoSyncQuery { repo_id, mode },

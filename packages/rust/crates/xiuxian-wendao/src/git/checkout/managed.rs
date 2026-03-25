@@ -1,4 +1,6 @@
 use std::fs;
+use std::thread;
+use std::time::Duration;
 
 use chrono::Utc;
 use git2::{AutotagOption, FetchOptions, Repository, build::RepoBuilder};
@@ -9,6 +11,8 @@ use super::{
 };
 use crate::analyzers::config::{RegisteredRepository, RepositoryRefreshPolicy};
 use crate::analyzers::errors::RepoIntelligenceError;
+
+const MANAGED_REMOTE_RETRY_ATTEMPTS: usize = 3;
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn resolve_managed_checkout(
@@ -84,19 +88,19 @@ pub(super) fn resolve_managed_checkout(
             })?
         };
         if remote_updated || should_fetch(repository.refresh, mode) {
-            fetch_origin(&repo).map_err(|error| RepoIntelligenceError::AnalysisFailed {
-                message: format!(
-                    "failed to refresh managed mirror `{}` from `{upstream_url}`: {error}",
-                    repository.id
-                ),
+            fetch_origin_with_retry(&repo).map_err(|error| {
+                RepoIntelligenceError::AnalysisFailed {
+                    message: format!(
+                        "failed to refresh managed mirror `{}` from `{upstream_url}`: {error}",
+                        repository.id
+                    ),
+                }
             })?;
         }
         (repo, remote_updated)
     } else {
-        let mut builder = RepoBuilder::new();
-        builder.bare(true);
         (
-            builder.clone(upstream_url, &mirror_root).map_err(|error| {
+            clone_bare_with_retry(upstream_url, &mirror_root).map_err(|error| {
                 RepoIntelligenceError::AnalysisFailed {
                     message: format!(
                         "failed to clone mirror for repository `{}` from `{upstream_url}`: {error}",
@@ -138,7 +142,7 @@ pub(super) fn resolve_managed_checkout(
             })?
         };
         if remote_updated || mirror_synchronized || should_fetch(repository.refresh, mode) {
-            fetch_origin(&repo).map_err(|error| RepoIntelligenceError::AnalysisFailed {
+            fetch_origin_with_retry(&repo).map_err(|error| RepoIntelligenceError::AnalysisFailed {
                 message: format!(
                     "failed to refresh managed checkout `{}` from mirror `{mirror_origin}`: {error}",
                     repository.id
@@ -199,7 +203,7 @@ fn should_fetch(refresh: RepositoryRefreshPolicy, mode: RepositorySyncMode) -> b
             && matches!(refresh, RepositoryRefreshPolicy::Fetch))
 }
 
-fn fetch_origin(repository: &Repository) -> Result<(), git2::Error> {
+fn fetch_origin_once(repository: &Repository) -> Result<(), git2::Error> {
     let mut remote = repository.find_remote("origin")?;
     let mut options = FetchOptions::new();
     options.download_tags(AutotagOption::All);
@@ -214,6 +218,67 @@ fn fetch_origin(repository: &Repository) -> Result<(), git2::Error> {
     };
     remote.fetch(refspecs, Some(&mut options), None)?;
     Ok(())
+}
+
+fn fetch_origin_with_retry(repository: &Repository) -> Result<(), git2::Error> {
+    retry_remote_operation(|| fetch_origin_once(repository))
+}
+
+fn clone_bare_with_retry(
+    upstream_url: &str,
+    mirror_root: &std::path::Path,
+) -> Result<Repository, git2::Error> {
+    retry_remote_operation(|| {
+        let mut builder = RepoBuilder::new();
+        builder.bare(true);
+        builder.clone(upstream_url, mirror_root)
+    })
+}
+
+fn retry_remote_operation<T>(
+    mut operation: impl FnMut() -> Result<T, git2::Error>,
+) -> Result<T, git2::Error> {
+    let mut attempt = 1;
+    loop {
+        match operation() {
+            Ok(value) => return Ok(value),
+            Err(error) => {
+                if attempt >= MANAGED_REMOTE_RETRY_ATTEMPTS
+                    || !is_retryable_remote_error_message(error.message())
+                {
+                    return Err(error);
+                }
+                thread::sleep(retry_delay_for_attempt(attempt));
+                attempt += 1;
+            }
+        }
+    }
+}
+
+fn retry_delay_for_attempt(attempt: usize) -> Duration {
+    match attempt {
+        0 | 1 => Duration::from_millis(250),
+        2 => Duration::from_millis(500),
+        _ => Duration::from_secs(1),
+    }
+}
+
+fn is_retryable_remote_error_message(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    [
+        "can't assign requested address",
+        "failed to connect",
+        "could not connect",
+        "timed out",
+        "timeout",
+        "temporary failure",
+        "connection reset",
+        "connection refused",
+        "connection aborted",
+        "network is unreachable",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
 }
 
 fn lifecycle_state_for(
@@ -257,4 +322,38 @@ pub(super) fn current_remote_url(repository: &Repository, remote_name: &str) -> 
         .find_remote(remote_name)
         .ok()
         .and_then(|remote| remote.url().map(str::to_string))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_retryable_remote_error_message, retry_delay_for_attempt};
+
+    #[test]
+    fn retryable_remote_error_message_matches_transient_transport_failures() {
+        assert!(is_retryable_remote_error_message(
+            "failed to connect to github.com: Can't assign requested address; class=Os (2)"
+        ));
+        assert!(is_retryable_remote_error_message(
+            "connection reset by peer while fetching packfile"
+        ));
+        assert!(is_retryable_remote_error_message(
+            "operation timed out after 30 seconds"
+        ));
+    }
+
+    #[test]
+    fn retryable_remote_error_message_rejects_non_transient_failures() {
+        assert!(!is_retryable_remote_error_message(
+            "authentication required but no callback set"
+        ));
+        assert!(!is_retryable_remote_error_message("reference not found"));
+    }
+
+    #[test]
+    fn retry_delay_for_attempt_caps_backoff_growth() {
+        assert_eq!(retry_delay_for_attempt(1).as_millis(), 250);
+        assert_eq!(retry_delay_for_attempt(2).as_millis(), 500);
+        assert_eq!(retry_delay_for_attempt(3).as_millis(), 1000);
+        assert_eq!(retry_delay_for_attempt(9).as_millis(), 1000);
+    }
 }

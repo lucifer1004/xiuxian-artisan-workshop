@@ -5,6 +5,8 @@ fn sample_repo_documents() -> Vec<RepoCodeDocument> {
         path: "src/lib.rs".to_string(),
         language: Some("rust".to_string()),
         contents: Arc::<str>::from("fn alpha() {}\nlet beta = alpha();\n"),
+        size_bytes: 34,
+        modified_unix_ms: 0,
     }]
 }
 
@@ -21,6 +23,7 @@ fn ready_repo_status(repo_id: &str) -> RepoIndexStatusResponse {
         failed: 0,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: None,
         active_repo_ids: Vec::new(),
         repos: vec![repo_status_entry(repo_id, RepoIndexPhase::Ready)],
@@ -128,6 +131,8 @@ async fn status_with_repo_content_surfaces_ready_repo_tables() {
         path: "src/lib.rs".to_string(),
         language: Some("rust".to_string()),
         contents: Arc::<str>::from("fn alpha() {}\nlet beta = alpha();\n"),
+        size_bytes: 34,
+        modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "alpha/repo", &documents, Some("rev-1")).await;
 
@@ -144,6 +149,7 @@ async fn status_with_repo_content_surfaces_ready_repo_tables() {
             failed: 0,
             target_concurrency: 1,
             max_concurrency: 1,
+            sync_concurrency_limit: 1,
             current_repo_id: None,
             active_repo_ids: Vec::new(),
             repos: vec![repo_status_entry("alpha/repo", RepoIndexPhase::Ready)],
@@ -200,6 +206,8 @@ async fn status_snapshot_reuses_last_synchronized_repo_corpus_state() {
         path: "src/lib.rs".to_string(),
         language: Some("rust".to_string()),
         contents: Arc::<str>::from("fn alpha() {}\nlet beta = alpha();\n"),
+        size_bytes: 34,
+        modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "alpha/repo", &documents, Some("rev-1")).await;
 
@@ -216,6 +224,7 @@ async fn status_snapshot_reuses_last_synchronized_repo_corpus_state() {
             failed: 0,
             target_concurrency: 1,
             max_concurrency: 1,
+            sync_concurrency_limit: 1,
             current_repo_id: None,
             active_repo_ids: Vec::new(),
             repos: vec![repo_status_entry("alpha/repo", RepoIndexPhase::Ready)],
@@ -317,6 +326,7 @@ async fn status_with_repo_content_reports_indexing_before_publish() {
             failed: 0,
             target_concurrency: 1,
             max_concurrency: 1,
+            sync_concurrency_limit: 1,
             current_repo_id: Some("alpha/repo".to_string()),
             active_repo_ids: vec!["alpha/repo".to_string()],
             repos: vec![repo_status_entry("alpha/repo", RepoIndexPhase::Indexing)],
@@ -385,6 +395,8 @@ async fn status_with_repo_content_keeps_published_metadata_while_repo_refreshes(
         path: "src/lib.rs".to_string(),
         language: Some("rust".to_string()),
         contents: Arc::<str>::from("fn alpha() {}\nlet beta = alpha();\n"),
+        size_bytes: 34,
+        modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "alpha/repo", &documents, Some("rev-0")).await;
 
@@ -401,6 +413,7 @@ async fn status_with_repo_content_keeps_published_metadata_while_repo_refreshes(
             failed: 0,
             target_concurrency: 1,
             max_concurrency: 1,
+            sync_concurrency_limit: 1,
             current_repo_id: Some("alpha/repo".to_string()),
             active_repo_ids: vec!["alpha/repo".to_string()],
             repos: vec![repo_status_entry("alpha/repo", RepoIndexPhase::Indexing)],
@@ -540,6 +553,8 @@ async fn status_with_repo_content_reports_repo_failure_issue_while_rows_remain_r
         path: "src/lib.rs".to_string(),
         language: Some("rust".to_string()),
         contents: Arc::<str>::from("fn alpha() {}\nlet beta = alpha();\n"),
+        size_bytes: 34,
+        modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "alpha/repo", &documents, Some("rev-1")).await;
 
@@ -556,6 +571,7 @@ async fn status_with_repo_content_reports_repo_failure_issue_while_rows_remain_r
             failed: 1,
             target_concurrency: 1,
             max_concurrency: 1,
+            sync_concurrency_limit: 1,
             current_repo_id: None,
             active_repo_ids: Vec::new(),
             repos: vec![RepoIndexEntryStatus {
@@ -624,6 +640,92 @@ fn derive_status_reason_marks_failed_refresh_as_retryable_warning() {
 }
 
 #[test]
+fn status_marks_indexing_corpus_with_running_prewarm_reason() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy::default(),
+    );
+    let lease = match service.coordinator().begin_build(
+        SearchCorpusKind::LocalSymbol,
+        "fp-prewarm-running",
+        SearchCorpusKind::LocalSymbol.schema_version(),
+    ) {
+        crate::search_plane::coordinator::BeginBuildDecision::Started(lease) => lease,
+        other => panic!("unexpected begin result: {other:?}"),
+    };
+
+    assert!(
+        service
+            .coordinator()
+            .mark_prewarm_running(SearchCorpusKind::LocalSymbol, lease.epoch)
+    );
+
+    let snapshot = service.status();
+    let status = corpus_status(
+        &snapshot,
+        SearchCorpusKind::LocalSymbol,
+        "local symbol status should exist",
+    );
+    assert_eq!(status.phase, SearchPlanePhase::Indexing);
+    assert_eq!(status.staging_epoch, Some(lease.epoch));
+    assert!(status.maintenance.prewarm_running);
+    assert_status_reason(
+        status,
+        SearchCorpusStatusReasonCode::Prewarming,
+        SearchCorpusStatusSeverity::Info,
+        SearchCorpusStatusAction::Wait,
+        false,
+    );
+}
+
+#[test]
+fn status_marks_indexing_corpus_with_prewarmed_staging_reason() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy::default(),
+    );
+    let lease = match service.coordinator().begin_build(
+        SearchCorpusKind::LocalSymbol,
+        "fp-prewarmed-staging",
+        SearchCorpusKind::LocalSymbol.schema_version(),
+    ) {
+        crate::search_plane::coordinator::BeginBuildDecision::Started(lease) => lease,
+        other => panic!("unexpected begin result: {other:?}"),
+    };
+
+    assert!(
+        service
+            .coordinator()
+            .mark_prewarm_complete(SearchCorpusKind::LocalSymbol, lease.epoch)
+    );
+
+    let snapshot = service.status();
+    let status = corpus_status(
+        &snapshot,
+        SearchCorpusKind::LocalSymbol,
+        "local symbol status should exist",
+    );
+    assert_eq!(status.phase, SearchPlanePhase::Indexing);
+    assert_eq!(status.staging_epoch, Some(lease.epoch));
+    assert!(!status.maintenance.prewarm_running);
+    assert_eq!(status.maintenance.last_prewarmed_epoch, Some(lease.epoch));
+    assert!(status.maintenance.last_prewarmed_at.is_some());
+    assert_status_reason(
+        status,
+        SearchCorpusStatusReasonCode::Prewarming,
+        SearchCorpusStatusSeverity::Info,
+        SearchCorpusStatusAction::Wait,
+        false,
+    );
+}
+
+#[test]
 fn status_marks_ready_corpus_with_pending_compaction_reason() {
     let temp_dir = temp_dir();
     let service = SearchPlaneService::with_paths(
@@ -687,10 +789,10 @@ fn status_marks_ready_corpus_with_running_compaction_reason() {
 
     assert!(service.publish_ready_and_maintain(&lease, 10, 3));
     service
-        .maintenance_tasks
+        .local_maintenance
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .insert(SearchCorpusKind::LocalSymbol);
+        .active_compaction = Some(SearchCorpusKind::LocalSymbol);
 
     let snapshot = service.status();
     let status = corpus_status(
@@ -700,6 +802,8 @@ fn status_marks_ready_corpus_with_running_compaction_reason() {
     );
     assert_eq!(status.phase, SearchPlanePhase::Ready);
     assert!(status.maintenance.compaction_running);
+    assert_eq!(status.maintenance.compaction_queue_depth, 0);
+    assert_eq!(status.maintenance.compaction_queue_position, None);
     assert!(status.maintenance.compaction_pending);
     assert_status_reason(
         status,
@@ -708,6 +812,144 @@ fn status_marks_ready_corpus_with_running_compaction_reason() {
         SearchCorpusStatusAction::Wait,
         true,
     );
+}
+
+#[test]
+fn status_surfaces_local_compaction_queue_backlog_for_queued_corpus() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy {
+            publish_count_threshold: 1,
+            row_delta_ratio_threshold: 1.0,
+        },
+    );
+    let lease = match service.coordinator().begin_build(
+        SearchCorpusKind::LocalSymbol,
+        "fp-local-queue",
+        SearchCorpusKind::LocalSymbol.schema_version(),
+    ) {
+        crate::search_plane::coordinator::BeginBuildDecision::Started(lease) => lease,
+        other => panic!("unexpected begin result: {other:?}"),
+    };
+
+    assert!(service.publish_ready_and_maintain(&lease, 10, 3));
+    {
+        let mut runtime = service
+            .local_maintenance
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        runtime.compaction_queue.push_back(
+            crate::search_plane::service::core::QueuedLocalCompactionTask {
+                task: crate::search_plane::coordinator::SearchCompactionTask {
+                    corpus: SearchCorpusKind::KnowledgeSection,
+                    active_epoch: 1,
+                    row_count: 8,
+                    reason:
+                        crate::search_plane::coordinator::SearchCompactionReason::PublishThreshold,
+                },
+                enqueue_sequence: 0,
+            },
+        );
+        runtime.compaction_queue.push_back(
+            crate::search_plane::service::core::QueuedLocalCompactionTask {
+                task: crate::search_plane::coordinator::SearchCompactionTask {
+                    corpus: SearchCorpusKind::LocalSymbol,
+                    active_epoch: 1,
+                    row_count: 10,
+                    reason:
+                        crate::search_plane::coordinator::SearchCompactionReason::PublishThreshold,
+                },
+                enqueue_sequence: 1,
+            },
+        );
+        runtime
+            .running_compactions
+            .insert(SearchCorpusKind::KnowledgeSection);
+        runtime
+            .running_compactions
+            .insert(SearchCorpusKind::LocalSymbol);
+        runtime.worker_running = true;
+    }
+
+    let snapshot = service.status();
+    let status = corpus_status(
+        &snapshot,
+        SearchCorpusKind::LocalSymbol,
+        "local symbol status should exist",
+    );
+    assert_eq!(status.phase, SearchPlanePhase::Ready);
+    assert!(!status.maintenance.compaction_running);
+    assert_eq!(status.maintenance.compaction_queue_depth, 2);
+    assert_eq!(status.maintenance.compaction_queue_position, Some(2));
+    assert!(!status.maintenance.compaction_queue_aged);
+    assert!(status.maintenance.compaction_pending);
+    assert_status_reason(
+        status,
+        SearchCorpusStatusReasonCode::CompactionPending,
+        SearchCorpusStatusSeverity::Info,
+        SearchCorpusStatusAction::Wait,
+        true,
+    );
+}
+
+#[test]
+fn status_surfaces_local_compaction_queue_aging_for_aged_row_delta_task() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy {
+            publish_count_threshold: 1,
+            row_delta_ratio_threshold: 1.0,
+        },
+    );
+    let lease = match service.coordinator().begin_build(
+        SearchCorpusKind::LocalSymbol,
+        "fp-local-aged-queue",
+        SearchCorpusKind::LocalSymbol.schema_version(),
+    ) {
+        crate::search_plane::coordinator::BeginBuildDecision::Started(lease) => lease,
+        other => panic!("unexpected begin result: {other:?}"),
+    };
+
+    assert!(service.publish_ready_and_maintain(&lease, 10, 3));
+    {
+        let mut runtime = service
+            .local_maintenance
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        runtime.next_enqueue_sequence = 4;
+        runtime.compaction_queue.push_back(
+            crate::search_plane::service::core::QueuedLocalCompactionTask {
+                task: crate::search_plane::coordinator::SearchCompactionTask {
+                    corpus: SearchCorpusKind::LocalSymbol,
+                    active_epoch: 1,
+                    row_count: 10,
+                    reason: crate::search_plane::coordinator::SearchCompactionReason::RowDeltaRatio,
+                },
+                enqueue_sequence: 0,
+            },
+        );
+        runtime
+            .running_compactions
+            .insert(SearchCorpusKind::LocalSymbol);
+        runtime.worker_running = true;
+    }
+
+    let snapshot = service.status();
+    let status = corpus_status(
+        &snapshot,
+        SearchCorpusKind::LocalSymbol,
+        "local symbol status should exist",
+    );
+    assert_eq!(status.phase, SearchPlanePhase::Ready);
+    assert_eq!(status.maintenance.compaction_queue_depth, 1);
+    assert_eq!(status.maintenance.compaction_queue_position, Some(1));
+    assert!(status.maintenance.compaction_queue_aged);
 }
 
 #[test]

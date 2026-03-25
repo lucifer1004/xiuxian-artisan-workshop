@@ -33,7 +33,7 @@ pub async fn search_attachments(
         .iter()
         .map(|value| LinkGraphAttachmentKind::from_alias(value))
         .collect::<Vec<_>>();
-    state.studio.ensure_attachment_index_started()?;
+    state.studio.ensure_attachment_index_ready().await?;
     let hits = state
         .studio
         .search_attachment_hits(

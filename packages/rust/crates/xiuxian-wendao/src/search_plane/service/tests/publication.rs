@@ -1,3 +1,5 @@
+use crate::search_plane::repo_staging::versioned_repo_table_name;
+use crate::search_plane::service::core::RepoMaintenanceTaskKind;
 use crate::search_plane::service::tests::support::*;
 
 #[tokio::test]
@@ -12,7 +14,12 @@ async fn search_repo_entities_reads_hits_from_published_table() {
 
     ok_or_panic(
         service
-            .publish_repo_entities_with_revision("alpha/repo", &sample_repo_analysis(), None)
+            .publish_repo_entities_with_revision(
+                "alpha/repo",
+                &sample_repo_analysis(),
+                &sample_repo_documents(),
+                None,
+            )
             .await,
         "publish repo entities",
     );
@@ -56,6 +63,7 @@ async fn repo_search_query_cache_key_uses_synchronized_runtime_state() {
         failed: 0,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: None,
         active_repo_ids: Vec::new(),
         repos: vec![repo_status_entry("alpha/repo", RepoIndexPhase::Ready)],
@@ -89,6 +97,7 @@ async fn repo_search_query_cache_key_uses_synchronized_runtime_state() {
         failed: 0,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: Some("alpha/repo".to_string()),
         active_repo_ids: vec!["alpha/repo".to_string()],
         repos: vec![RepoIndexEntryStatus {
@@ -129,6 +138,8 @@ async fn repo_search_publication_state_prefers_publications_over_runtime_phase()
         path: "src/lib.rs".to_string(),
         language: Some("rust".to_string()),
         contents: Arc::<str>::from("fn alpha() {}\n"),
+        size_bytes: 14,
+        modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "searchable/repo", &documents, Some("rev-1")).await;
     service.synchronize_repo_runtime(&RepoIndexStatusResponse {
@@ -143,6 +154,7 @@ async fn repo_search_publication_state_prefers_publications_over_runtime_phase()
         failed: 1,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: Some("searchable/repo".to_string()),
         active_repo_ids: vec!["searchable/repo".to_string()],
         repos: vec![
@@ -173,6 +185,93 @@ async fn repo_search_publication_state_prefers_publications_over_runtime_phase()
 }
 
 #[tokio::test]
+async fn repo_search_publication_states_batches_repo_snapshot_reads() {
+    let temp_dir = temp_dir();
+    let keyspace = unique_test_manifest_keyspace("batch-publication-state");
+    let service = SearchPlaneService::with_runtime(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        keyspace.clone(),
+        SearchMaintenancePolicy::default(),
+        SearchPlaneCache::for_tests(keyspace),
+    );
+    let documents = vec![RepoCodeDocument {
+        path: "src/lib.rs".to_string(),
+        language: Some("rust".to_string()),
+        contents: Arc::<str>::from("fn alpha() {}\n"),
+        size_bytes: 14,
+        modified_unix_ms: 0,
+    }];
+    publish_repo_bundle(&service, "searchable/repo", &documents, Some("rev-1")).await;
+    service.synchronize_repo_runtime(&RepoIndexStatusResponse {
+        total: 3,
+        active: 0,
+        queued: 1,
+        checking: 0,
+        syncing: 0,
+        indexing: 0,
+        ready: 1,
+        unsupported: 0,
+        failed: 1,
+        target_concurrency: 1,
+        max_concurrency: 1,
+        sync_concurrency_limit: 1,
+        current_repo_id: None,
+        active_repo_ids: Vec::new(),
+        repos: vec![
+            repo_status_entry("searchable/repo", RepoIndexPhase::Ready),
+            repo_status_entry("pending/repo", RepoIndexPhase::Queued),
+            repo_status_entry("failed/repo", RepoIndexPhase::Failed),
+        ],
+    });
+    service.clear_all_in_memory_repo_runtime_for_test();
+
+    let repo_ids = vec![
+        "searchable/repo".to_string(),
+        "pending/repo".to_string(),
+        "failed/repo".to_string(),
+    ];
+    let states = ok_or_panic(
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let states = service
+                    .repo_search_publication_states(repo_ids.as_slice())
+                    .await;
+                if states.get("failed/repo").map(|state| state.availability)
+                    == Some(RepoSearchAvailability::Skipped)
+                {
+                    break states;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await,
+        "repo publication states should hydrate",
+    );
+
+    assert_eq!(
+        states
+            .get("searchable/repo")
+            .map(|state| state.availability),
+        Some(RepoSearchAvailability::Searchable)
+    );
+    assert_eq!(
+        states
+            .get("searchable/repo")
+            .map(|state| state.entity_published),
+        Some(true)
+    );
+    assert_eq!(
+        states.get("pending/repo").map(|state| state.availability),
+        Some(RepoSearchAvailability::Pending)
+    );
+    assert_eq!(
+        states.get("failed/repo").map(|state| state.availability),
+        Some(RepoSearchAvailability::Skipped)
+    );
+}
+
+#[tokio::test]
 async fn repo_search_publication_state_hydrates_from_repo_corpus_snapshot_after_memory_miss() {
     let temp_dir = temp_dir();
     let keyspace = unique_test_manifest_keyspace("runtime-hydrate");
@@ -196,6 +295,7 @@ async fn repo_search_publication_state_hydrates_from_repo_corpus_snapshot_after_
         failed: 1,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: None,
         active_repo_ids: Vec::new(),
         repos: vec![repo_status_entry("failed/repo", RepoIndexPhase::Failed)],
@@ -237,6 +337,8 @@ async fn repo_search_publication_state_hydrates_from_repo_corpus_record_after_me
         path: "src/lib.rs".to_string(),
         language: Some("rust".to_string()),
         contents: Arc::<str>::from("fn alpha() {}\n"),
+        size_bytes: 14,
+        modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "searchable/repo", &documents, Some("rev-1")).await;
     service.synchronize_repo_runtime(&RepoIndexStatusResponse {
@@ -251,6 +353,7 @@ async fn repo_search_publication_state_hydrates_from_repo_corpus_record_after_me
         failed: 0,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: None,
         active_repo_ids: Vec::new(),
         repos: vec![repo_status_entry("searchable/repo", RepoIndexPhase::Ready)],
@@ -294,6 +397,8 @@ async fn repo_search_publication_state_does_not_hydrate_from_manifest_without_re
         path: "src/lib.rs".to_string(),
         language: Some("rust".to_string()),
         contents: Arc::<str>::from("fn alpha() {}\n"),
+        size_bytes: 14,
+        modified_unix_ms: 0,
     }];
     publish_repo_bundle(&service, "searchable/repo", &documents, Some("rev-1")).await;
     let ready_status = RepoIndexStatusResponse {
@@ -308,6 +413,7 @@ async fn repo_search_publication_state_does_not_hydrate_from_manifest_without_re
         failed: 0,
         target_concurrency: 1,
         max_concurrency: 1,
+        sync_concurrency_limit: 1,
         current_repo_id: None,
         active_repo_ids: Vec::new(),
         repos: vec![repo_status_entry("searchable/repo", RepoIndexPhase::Ready)],
@@ -339,5 +445,229 @@ async fn repo_search_publication_state_does_not_hydrate_from_manifest_without_re
     assert_eq!(
         repo_phase(&service, "searchable/repo"),
         Some(RepoIndexPhase::Ready)
+    );
+}
+
+#[tokio::test]
+async fn repo_publication_runs_prewarm_via_maintenance_task_and_releases_repo_slot() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy::default(),
+    );
+
+    publish_repo_bundle(
+        &service,
+        "alpha/repo",
+        &sample_repo_documents(),
+        Some("rev-1"),
+    )
+    .await;
+
+    let entity = some_or_panic(
+        service
+            .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, "alpha/repo")
+            .await,
+        "repo entity record should exist",
+    );
+    let content = some_or_panic(
+        service
+            .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, "alpha/repo")
+            .await,
+        "repo content record should exist",
+    );
+    assert!(
+        entity
+            .maintenance
+            .as_ref()
+            .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
+            .is_some()
+    );
+    assert!(
+        !entity
+            .maintenance
+            .as_ref()
+            .map(|maintenance| maintenance.prewarm_running)
+            .unwrap_or(false)
+    );
+    assert!(
+        content
+            .maintenance
+            .as_ref()
+            .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
+            .is_some()
+    );
+    assert!(
+        !content
+            .maintenance
+            .as_ref()
+            .map(|maintenance| maintenance.prewarm_running)
+            .unwrap_or(false)
+    );
+    assert!(
+        service
+            .repo_maintenance
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .in_flight
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn repo_publication_does_not_skip_prewarm_when_slot_is_already_claimed() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy::default(),
+    );
+    let repo_id = "alpha/repo";
+    let revision = Some("rev-1");
+    let documents = sample_repo_documents();
+    let file_fingerprints = documents
+        .iter()
+        .map(|document| {
+            (
+                document.path.clone(),
+                document
+                    .to_file_fingerprint(1, SearchCorpusKind::RepoContentChunk.schema_version()),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let table_name = versioned_repo_table_name(
+        SearchPlaneService::repo_content_chunk_table_name(repo_id).as_str(),
+        repo_id,
+        &file_fingerprints,
+        revision,
+        SearchCorpusKind::RepoContentChunk,
+        1,
+    );
+    service
+        .repo_maintenance
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .in_flight
+        .insert((
+            SearchCorpusKind::RepoContentChunk,
+            repo_id.to_string(),
+            table_name,
+            RepoMaintenanceTaskKind::Prewarm,
+        ));
+
+    ok_or_panic(
+        service
+            .publish_repo_content_chunks_with_revision(repo_id, &documents, revision)
+            .await,
+        "publish repo content chunks",
+    );
+
+    let content = some_or_panic(
+        service
+            .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, repo_id)
+            .await,
+        "repo content record should exist",
+    );
+    assert!(
+        content
+            .maintenance
+            .as_ref()
+            .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
+            .is_some()
+    );
+}
+
+#[tokio::test]
+async fn repo_publication_schedules_compaction_and_resets_repo_maintenance() {
+    let temp_dir = temp_dir();
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy {
+            publish_count_threshold: 1,
+            row_delta_ratio_threshold: 1.0,
+        },
+    );
+
+    publish_repo_bundle(
+        &service,
+        "alpha/repo",
+        &sample_repo_documents(),
+        Some("rev-1"),
+    )
+    .await;
+
+    ok_or_panic(
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let entity = some_or_panic(
+                    service
+                        .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, "alpha/repo")
+                        .await,
+                    "repo entity record should exist",
+                );
+                let content = some_or_panic(
+                    service
+                        .repo_corpus_record_for_reads(
+                            SearchCorpusKind::RepoContentChunk,
+                            "alpha/repo",
+                        )
+                        .await,
+                    "repo content record should exist",
+                );
+                let entity_done = entity
+                    .maintenance
+                    .as_ref()
+                    .and_then(|maintenance| maintenance.last_compacted_at.as_ref())
+                    .is_some();
+                let content_done = content
+                    .maintenance
+                    .as_ref()
+                    .and_then(|maintenance| maintenance.last_compacted_at.as_ref())
+                    .is_some();
+                if entity_done && content_done {
+                    let entity_maintenance =
+                        some_or_panic(entity.maintenance.as_ref(), "entity maintenance");
+                    let content_maintenance =
+                        some_or_panic(content.maintenance.as_ref(), "content maintenance");
+                    assert!(!entity_maintenance.compaction_running);
+                    assert!(!entity_maintenance.compaction_pending);
+                    assert_eq!(entity_maintenance.publish_count_since_compaction, 0);
+                    assert_eq!(
+                        entity_maintenance.last_compaction_reason.as_deref(),
+                        Some("publish_threshold")
+                    );
+                    assert_eq!(
+                        entity_maintenance.last_compacted_row_count,
+                        entity
+                            .publication
+                            .as_ref()
+                            .map(|publication| publication.row_count)
+                    );
+                    assert!(!content_maintenance.compaction_running);
+                    assert!(!content_maintenance.compaction_pending);
+                    assert_eq!(content_maintenance.publish_count_since_compaction, 0);
+                    assert_eq!(
+                        content_maintenance.last_compaction_reason.as_deref(),
+                        Some("publish_threshold")
+                    );
+                    assert_eq!(
+                        content_maintenance.last_compacted_row_count,
+                        content
+                            .publication
+                            .as_ref()
+                            .map(|publication| publication.row_count)
+                    );
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await,
+        "repo compaction should complete",
     );
 }

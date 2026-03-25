@@ -14437,6 +14437,7 @@ dependencies = [
  "anyhow",
  "arrow",
  "arrow-ipc",
+ "arrow-string",
  "async-trait",
  "chrono",
  "dashmap 7.0.0-rc2",

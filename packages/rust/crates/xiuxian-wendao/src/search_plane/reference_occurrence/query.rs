@@ -1,13 +1,19 @@
 use xiuxian_vector::{
     ColumnarScanOptions, LanceArray, LanceRecordBatch, LanceStringArray, LanceUInt64Array,
-    VectorStoreError,
+    VectorStore, VectorStoreError,
 };
 
 use crate::gateway::studio::search::support::score_reference_hit;
 use crate::gateway::studio::types::ReferenceSearchHit;
+use crate::search_plane::ranking::{
+    RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry, sort_by_rank, trim_ranked_vec,
+};
 use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
 
 use super::schema::{filter_column, projected_columns};
+
+const MIN_RETAINED_REFERENCE_OCCURRENCES: usize = 64;
+const RETAINED_REFERENCE_OCCURRENCE_MULTIPLIER: usize = 4;
 
 #[cfg(test)]
 use super::schema::{reference_occurrence_batches, reference_occurrence_schema};
@@ -44,41 +50,77 @@ pub(crate) async fn search_reference_occurrences(
         .await?;
     let table_name =
         SearchPlaneService::table_name(SearchCorpusKind::ReferenceOccurrence, active_epoch);
-    let batches = store
-        .scan_record_batches(
-            table_name.as_str(),
-            ColumnarScanOptions {
-                where_filter: Some(format!(
-                    "{} = '{}'",
-                    filter_column(),
-                    lance_string_literal(normalized_query.as_str())
-                )),
-                projected_columns: projected_columns()
-                    .into_iter()
-                    .map(str::to_string)
-                    .collect(),
-                batch_size: Some(256),
-                ..ColumnarScanOptions::default()
-            },
-        )
-        .await?;
-
-    let mut candidates = Vec::new();
-    for batch in &batches {
-        collect_candidates(batch, query, &mut candidates)?;
-    }
-
-    candidates.sort_by(|left, right| {
-        right
-            .score
-            .partial_cmp(&left.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.path.cmp(&right.path))
-            .then_with(|| left.line.cmp(&right.line))
-            .then_with(|| left.column.cmp(&right.column))
-    });
+    let execution = execute_reference_occurrence_search(
+        &store,
+        table_name.as_str(),
+        query,
+        ColumnarScanOptions {
+            where_filter: Some(format!(
+                "{} = '{}'",
+                filter_column(),
+                lance_string_literal(normalized_query.as_str())
+            )),
+            projected_columns: projected_columns()
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            batch_size: Some(256),
+            ..ColumnarScanOptions::default()
+        },
+        retained_window(limit),
+    )
+    .await?;
+    let mut candidates = execution.candidates;
+    sort_by_rank(&mut candidates, compare_candidates);
     candidates.truncate(limit);
+    let hits = decode_reference_hits(candidates)?;
+    service.record_query_telemetry(
+        SearchCorpusKind::ReferenceOccurrence,
+        execution
+            .telemetry
+            .finish(execution.source, Some("search".to_string()), hits.len()),
+    );
+    Ok(hits)
+}
 
+struct ReferenceOccurrenceSearchExecution {
+    candidates: Vec<ReferenceOccurrenceCandidate>,
+    telemetry: StreamingRerankTelemetry,
+    source: StreamingRerankSource,
+}
+
+async fn execute_reference_occurrence_search(
+    store: &VectorStore,
+    table_name: &str,
+    query: &str,
+    options: ColumnarScanOptions,
+    window: RetainedWindow,
+) -> Result<ReferenceOccurrenceSearchExecution, ReferenceOccurrenceSearchError> {
+    let mut telemetry = StreamingRerankTelemetry::new(window, options.batch_size, options.limit);
+    let mut candidates = Vec::with_capacity(window.target);
+    store
+        .scan_record_batches_streaming(table_name, options, |batch| {
+            collect_candidates(&batch, query, &mut candidates, window, &mut telemetry)
+        })
+        .await?;
+    Ok(ReferenceOccurrenceSearchExecution {
+        candidates,
+        telemetry,
+        source: StreamingRerankSource::Scan,
+    })
+}
+
+fn retained_window(limit: usize) -> RetainedWindow {
+    RetainedWindow::new(
+        limit,
+        RETAINED_REFERENCE_OCCURRENCE_MULTIPLIER,
+        MIN_RETAINED_REFERENCE_OCCURRENCES,
+    )
+}
+
+fn decode_reference_hits(
+    candidates: Vec<ReferenceOccurrenceCandidate>,
+) -> Result<Vec<ReferenceSearchHit>, ReferenceOccurrenceSearchError> {
     candidates
         .into_iter()
         .map(|candidate| {
@@ -103,7 +145,10 @@ fn collect_candidates(
     batch: &LanceRecordBatch,
     query: &str,
     candidates: &mut Vec<ReferenceOccurrenceCandidate>,
+    window: RetainedWindow,
+    telemetry: &mut StreamingRerankTelemetry,
 ) -> Result<(), ReferenceOccurrenceSearchError> {
+    telemetry.observe_batch(batch.num_rows());
     let path = string_column(batch, "path")?;
     let line = u64_column(batch, "line")?;
     let column = u64_column(batch, "column")?;
@@ -111,16 +156,41 @@ fn collect_candidates(
     let hit_json = string_column(batch, "hit_json")?;
 
     for row in 0..batch.num_rows() {
+        let score = score_reference_hit(line_text.value(row), query);
+        if score <= 0.0 {
+            continue;
+        }
+
+        telemetry.observe_match();
         candidates.push(ReferenceOccurrenceCandidate {
-            score: score_reference_hit(line_text.value(row), query),
+            score,
             path: path.value(row).to_string(),
             line: usize::try_from(line.value(row)).unwrap_or(usize::MAX),
             column: usize::try_from(column.value(row)).unwrap_or(usize::MAX),
             hit_json: hit_json.value(row).to_string(),
         });
+        telemetry.observe_working_set(candidates.len());
+        if candidates.len() > window.threshold {
+            let before_len = candidates.len();
+            trim_ranked_vec(candidates, window.target, compare_candidates);
+            telemetry.observe_trim(before_len, candidates.len());
+        }
     }
 
     Ok(())
+}
+
+fn compare_candidates(
+    left: &ReferenceOccurrenceCandidate,
+    right: &ReferenceOccurrenceCandidate,
+) -> std::cmp::Ordering {
+    right
+        .score
+        .partial_cmp(&left.score)
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then_with(|| left.path.cmp(&right.path))
+        .then_with(|| left.line.cmp(&right.line))
+        .then_with(|| left.column.cmp(&right.column))
 }
 
 fn lance_string_literal(value: &str) -> String {
@@ -237,5 +307,23 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "AlphaService");
         assert!(results[0].score > 0.0);
+
+        let snapshot = service.status();
+        let corpus = snapshot
+            .corpora
+            .iter()
+            .find(|entry| entry.corpus == SearchCorpusKind::ReferenceOccurrence)
+            .unwrap_or_else(|| panic!("reference occurrence corpus row should exist"));
+        let telemetry = corpus
+            .last_query_telemetry
+            .as_ref()
+            .unwrap_or_else(|| panic!("reference occurrence telemetry should be present"));
+        assert_eq!(
+            telemetry.source,
+            crate::search_plane::SearchQueryTelemetrySource::Scan
+        );
+        assert_eq!(telemetry.scope.as_deref(), Some("search"));
+        assert!(telemetry.rows_scanned >= 1);
+        assert!(telemetry.matched_rows >= 1);
     }
 }

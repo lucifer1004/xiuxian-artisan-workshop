@@ -3,7 +3,7 @@ use std::path::Path;
 
 use xiuxian_vector::{
     ColumnarScanOptions, LanceArray, LanceRecordBatch, LanceStringArray, LanceUInt64Array,
-    VectorStore, VectorStoreError,
+    VectorStore, VectorStoreError, string_contains_mask,
 };
 
 use crate::gateway::studio::types::{SearchHit, StudioNavigationTarget};
@@ -41,13 +41,18 @@ pub(crate) async fn search_repo_content_chunks(
     let store = service
         .open_store(SearchCorpusKind::RepoContentChunk)
         .await?;
-    let table_name = SearchPlaneService::repo_content_chunk_table_name(repo_id);
+    let table_name = service
+        .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, repo_id)
+        .await
+        .and_then(|record| record.publication.map(|publication| publication.table_name))
+        .unwrap_or_else(|| SearchPlaneService::repo_content_chunk_table_name(repo_id));
     if !store.table_path(table_name.as_str()).exists() {
         return Ok(Vec::new());
     }
 
     let options = build_repo_content_scan_options(language_filters, trimmed, limit);
     let needle = trimmed.to_ascii_lowercase();
+    let _read_permit = service.acquire_repo_search_read_permit().await?;
     let execution = execute_repo_content_search(
         &store,
         table_name.as_str(),
@@ -233,13 +238,13 @@ fn collect_candidates(
     let line_number = u64_column(batch, "line_number")?;
     let line_text = string_column(batch, "line_text")?;
     let line_text_folded = string_column(batch, "line_text_folded")?;
+    let contains_mask = string_contains_mask(line_text_folded, needle)?;
 
-    for row in 0..batch.num_rows() {
-        let exact_match = line_text.value(row).contains(raw_needle);
-        if !exact_match && !line_text_folded.value(row).contains(needle) {
+    for row in 0..contains_mask.len() {
+        if contains_mask.is_null(row) || !contains_mask.value(row) {
             continue;
         }
-
+        let exact_match = line_text.value(row).contains(raw_needle);
         telemetry.observe_match();
         let candidate = RepoContentChunkCandidate {
             path: path.value(row).to_string(),
@@ -344,9 +349,12 @@ fn escape_literal(value: &str) -> String {
 }
 
 fn should_use_fts(query: &str) -> bool {
-    query
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() || ch == '_' || ch == '-')
+    query.chars().any(|ch| ch.is_ascii_alphanumeric())
+        && query.chars().all(|ch| {
+            ch.is_ascii_alphanumeric()
+                || ch.is_ascii_whitespace()
+                || matches!(ch, '_' | '-' | '.' | '/' | ':' | '(' | ')' | '@')
+        })
 }
 
 fn infer_code_language(path: &str) -> Option<String> {
@@ -403,6 +411,7 @@ mod tests {
 
     use super::{
         RepoContentChunkCandidate, candidate_path_key, compare_candidates, retained_window,
+        should_use_fts,
     };
     use crate::search_plane::ranking::trim_ranked_string_map;
 
@@ -458,5 +467,13 @@ mod tests {
         assert_eq!(retained_window(0).target, 128);
         assert_eq!(retained_window(4).target, 128);
         assert_eq!(retained_window(64).target, 512);
+    }
+
+    #[test]
+    fn should_use_fts_allows_common_code_punctuation_queries() {
+        assert!(should_use_fts("@reexport"));
+        assert!(should_use_fts("src/BaseModelica.jl"));
+        assert!(should_use_fts("LinearSolve.solve(x)"));
+        assert!(!should_use_fts("\"quoted\""));
     }
 }

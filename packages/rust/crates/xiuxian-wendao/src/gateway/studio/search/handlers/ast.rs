@@ -24,7 +24,7 @@ pub async fn search_ast(
     }
 
     let limit = query.limit.unwrap_or(20).max(1);
-    state.studio.ensure_local_symbol_index_started()?;
+    state.studio.ensure_local_symbol_index_ready().await?;
     let ast_hits = state
         .studio
         .search_local_symbol_hits(query_text, limit)

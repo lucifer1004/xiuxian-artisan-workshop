@@ -1,6 +1,8 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet, VecDeque};
 #[cfg(test)]
 use std::path::Path;
+
+use tokio::task::JoinSet;
 
 #[cfg(test)]
 use crate::analyzers::{RepoBacklinkItem, RepoSymbolKind};
@@ -12,7 +14,8 @@ use crate::gateway::studio::router::{
 use crate::gateway::studio::types::{SearchBacklinkItem, StudioNavigationTarget};
 use crate::gateway::studio::types::{SearchHit, SearchResponse};
 use crate::search_plane::{
-    RepoSearchAvailability, RepoSearchQueryCacheKeyInput, SearchCorpusKind, SearchPlaneCacheTtl,
+    RepoSearchAvailability, RepoSearchPublicationState, RepoSearchQueryCacheKeyInput,
+    SearchCorpusKind, SearchPlaneCacheTtl, SearchPlaneService,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -43,6 +46,19 @@ pub(super) struct ParsedRepoCodeSearchQuery {
     pub(super) search_term: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct RepoSearchTarget {
+    pub(super) repo_id: String,
+    pub(super) publication_state: RepoSearchPublicationState,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct RepoSearchDispatch {
+    pub(super) searchable_repos: Vec<RepoSearchTarget>,
+    pub(super) pending_repos: Vec<String>,
+    pub(super) skipped_repos: Vec<String>,
+}
+
 impl ParsedRepoCodeSearchQuery {
     pub(super) fn search_term(&self) -> Option<&str> {
         self.search_term.as_deref()
@@ -57,22 +73,25 @@ pub(super) async fn build_code_search_response(
     limit: usize,
 ) -> Result<SearchResponse, StudioApiError> {
     let parsed = parse_code_search_query(raw_query.as_str(), repo_hint);
-    let repositories = if let Some(repo_id) = parsed.repo.as_deref() {
-        vec![configured_repository(studio, repo_id).map_err(map_repo_intelligence_error)?]
+    let repo_ids = if let Some(repo_id) = parsed.repo.as_deref() {
+        vec![
+            configured_repository(studio, repo_id)
+                .map_err(map_repo_intelligence_error)?
+                .id,
+        ]
     } else {
         configured_repositories(studio)
+            .into_iter()
+            .map(|repository| repository.id)
+            .collect::<Vec<_>>()
     };
 
-    if repositories.is_empty() {
+    if repo_ids.is_empty() {
         return Err(StudioApiError::bad_request(
             "UNKNOWN_REPOSITORY",
             "No configured repository is available for code search",
         ));
     }
-    let repo_ids = repositories
-        .iter()
-        .map(|repository| repository.id.clone())
-        .collect::<Vec<_>>();
     let cache_key = studio
         .search_plane
         .repo_search_query_cache_key(RepoSearchQueryCacheKeyInput {
@@ -98,46 +117,22 @@ pub(super) async fn build_code_search_response(
         return Ok(cached);
     }
     let mut hits = Vec::new();
-    let mut pending_repos = Vec::new();
-    let mut skipped_repos = Vec::new();
-    for repository in repositories {
-        let publication_state = studio
-            .search_plane
-            .repo_search_publication_state(repository.id.as_str())
-            .await;
-        if !publication_state.is_searchable() {
-            match publication_state.availability {
-                RepoSearchAvailability::Skipped => {
-                    skipped_repos.push(repository.id.clone());
-                }
-                RepoSearchAvailability::Pending => {
-                    pending_repos.push(repository.id.clone());
-                }
-                RepoSearchAvailability::Searchable => {}
-            }
-            continue;
-        }
-        let mut repository_hits = if publication_state.entity_published {
-            build_repo_entity_search_hits(studio, repository.id.as_str(), raw_query.as_str(), limit)
-                .await?
-        } else {
-            Vec::new()
-        };
-
-        if repository_hits.is_empty() && publication_state.content_published {
-            repository_hits.extend(
-                build_repo_content_search_hits(
-                    studio,
-                    repository.id.as_str(),
-                    raw_query.as_str(),
-                    limit,
-                )
-                .await?,
-            );
-        }
-
-        hits.extend(repository_hits);
-    }
+    let publication_states = studio
+        .search_plane
+        .repo_search_publication_states(repo_ids.as_slice())
+        .await;
+    let dispatch = collect_repo_search_targets(repo_ids, &publication_states);
+    let pending_repos = dispatch.pending_repos;
+    let skipped_repos = dispatch.skipped_repos;
+    hits.extend(
+        search_repo_code_hits_buffered(
+            studio.search_plane.clone(),
+            dispatch.searchable_repos,
+            raw_query.as_str(),
+            limit,
+        )
+        .await?,
+    );
 
     hits.sort_by(|left, right| {
         right
@@ -181,8 +176,8 @@ pub(super) async fn build_code_search_response(
     Ok(response)
 }
 
-pub(super) async fn build_repo_entity_search_hits(
-    studio: &StudioState,
+pub(super) async fn search_repo_entity_hits(
+    search_plane: &SearchPlaneService,
     repo_id: &str,
     raw_query: &str,
     limit: usize,
@@ -191,8 +186,7 @@ pub(super) async fn build_repo_entity_search_hits(
     let Some(search_term) = parsed.search_term() else {
         return Ok(Vec::new());
     };
-    match studio
-        .search_plane
+    match search_plane
         .search_repo_entities(
             repo_id,
             search_term,
@@ -211,8 +205,8 @@ pub(super) async fn build_repo_entity_search_hits(
     }
 }
 
-pub(super) async fn build_repo_content_search_hits(
-    studio: &StudioState,
+pub(super) async fn search_repo_content_hits(
+    search_plane: &SearchPlaneService,
     repo_id: &str,
     raw_query: &str,
     limit: usize,
@@ -224,8 +218,7 @@ pub(super) async fn build_repo_content_search_hits(
     if !parsed.kind_filters.is_empty() && !parsed.kind_filters.contains("file") {
         return Ok(Vec::new());
     }
-    match studio
-        .search_plane
+    match search_plane
         .search_repo_content_chunks(repo_id, search_term, &parsed.language_filters, limit)
         .await
     {
@@ -236,6 +229,151 @@ pub(super) async fn build_repo_content_search_hits(
             Some(error.to_string()),
         )),
     }
+}
+
+#[cfg(test)]
+pub(super) async fn build_repo_entity_search_hits(
+    studio: &StudioState,
+    repo_id: &str,
+    raw_query: &str,
+    limit: usize,
+) -> Result<Vec<SearchHit>, StudioApiError> {
+    search_repo_entity_hits(&studio.search_plane, repo_id, raw_query, limit).await
+}
+
+#[cfg(test)]
+pub(super) async fn build_repo_content_search_hits(
+    studio: &StudioState,
+    repo_id: &str,
+    raw_query: &str,
+    limit: usize,
+) -> Result<Vec<SearchHit>, StudioApiError> {
+    search_repo_content_hits(&studio.search_plane, repo_id, raw_query, limit).await
+}
+
+pub(super) fn collect_repo_search_targets(
+    repo_ids: Vec<String>,
+    publication_states: &BTreeMap<String, RepoSearchPublicationState>,
+) -> RepoSearchDispatch {
+    let mut dispatch = RepoSearchDispatch::default();
+    for repo_id in repo_ids {
+        let publication_state = publication_states.get(repo_id.as_str()).copied().unwrap_or(
+            RepoSearchPublicationState {
+                entity_published: false,
+                content_published: false,
+                availability: RepoSearchAvailability::Pending,
+            },
+        );
+        if publication_state.is_searchable() {
+            dispatch.searchable_repos.push(RepoSearchTarget {
+                repo_id,
+                publication_state,
+            });
+            continue;
+        }
+        match publication_state.availability {
+            RepoSearchAvailability::Skipped => dispatch.skipped_repos.push(repo_id),
+            RepoSearchAvailability::Pending => dispatch.pending_repos.push(repo_id),
+            RepoSearchAvailability::Searchable => {}
+        }
+    }
+    dispatch
+}
+
+pub(super) fn repo_search_parallelism(repo_count: usize) -> usize {
+    if repo_count == 0 {
+        return 1;
+    }
+    std::thread::available_parallelism()
+        .map(std::num::NonZeroUsize::get)
+        .unwrap_or(4)
+        .max(1)
+        .min(repo_count)
+}
+
+async fn search_repo_code_hits_buffered(
+    search_plane: SearchPlaneService,
+    targets: Vec<RepoSearchTarget>,
+    raw_query: &str,
+    limit: usize,
+) -> Result<Vec<SearchHit>, StudioApiError> {
+    if targets.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut queued = VecDeque::from(targets);
+    let mut join_set = JoinSet::new();
+    let raw_query = raw_query.to_string();
+    let parallelism = repo_search_parallelism(queued.len());
+    for _ in 0..parallelism {
+        if let Some(target) = queued.pop_front() {
+            spawn_repo_code_search_task(
+                &mut join_set,
+                search_plane.clone(),
+                target,
+                raw_query.clone(),
+                limit,
+            );
+        }
+    }
+
+    let mut hits = Vec::new();
+    while let Some(result) = join_set.join_next().await {
+        let repository_hits = result.map_err(|error| {
+            StudioApiError::internal(
+                "REPO_CODE_SEARCH_TASK_FAILED",
+                "Repo code-search task failed",
+                Some(error.to_string()),
+            )
+        })??;
+        hits.extend(repository_hits);
+        if let Some(target) = queued.pop_front() {
+            spawn_repo_code_search_task(
+                &mut join_set,
+                search_plane.clone(),
+                target,
+                raw_query.clone(),
+                limit,
+            );
+        }
+    }
+    Ok(hits)
+}
+
+fn spawn_repo_code_search_task(
+    join_set: &mut JoinSet<Result<Vec<SearchHit>, StudioApiError>>,
+    search_plane: SearchPlaneService,
+    target: RepoSearchTarget,
+    raw_query: String,
+    limit: usize,
+) {
+    join_set.spawn(async move {
+        let mut repository_hits = if target.publication_state.entity_published {
+            search_repo_entity_hits(
+                &search_plane,
+                target.repo_id.as_str(),
+                raw_query.as_str(),
+                limit,
+            )
+            .await?
+        } else {
+            Vec::new()
+        };
+
+        if repository_hits.is_empty() && target.publication_state.content_published {
+            repository_hits.extend(
+                search_repo_content_hits(
+                    &search_plane,
+                    target.repo_id.as_str(),
+                    raw_query.as_str(),
+                    limit,
+                )
+                .await?,
+            );
+        }
+
+        Ok(repository_hits)
+    });
 }
 
 #[cfg(test)]

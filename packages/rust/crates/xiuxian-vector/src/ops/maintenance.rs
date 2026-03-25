@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono::Duration as ChronoDuration;
+use lance::dataset::cleanup::CleanupPolicyBuilder;
 use lance::dataset::optimize::{CompactionOptions, compact_files};
 use lance_index::traits::DatasetIndexExt;
 
@@ -15,6 +15,8 @@ use crate::ops::types::{CompactionStats, IndexStats, IndexThresholds};
 use crate::{CATEGORY_COLUMN, SKILL_NAME_COLUMN, VectorStore};
 
 impl VectorStore {
+    const COMPACTION_RETAIN_VERSION_COUNT: usize = 2;
+
     /// Returns true if the table has any vector index (e.g. `IVF_FLAT`, `IVF_PQ`).
     ///
     /// # Errors
@@ -164,12 +166,6 @@ impl VectorStore {
 
         let fragments_before = dataset.get_fragments().len();
 
-        let bytes_freed = dataset
-            .cleanup_old_versions(ChronoDuration::days(7), None, None)
-            .await
-            .map_err(VectorStoreError::LanceDB)
-            .map(|s| s.bytes_removed)?;
-
         let opts = CompactionOptions {
             target_rows_per_fragment: 256 * 1024,
             max_rows_per_group: 1024,
@@ -178,6 +174,17 @@ impl VectorStore {
         let metrics = compact_files(&mut dataset, opts, None)
             .await
             .map_err(VectorStoreError::LanceDB)?;
+
+        let cleanup_policy = CleanupPolicyBuilder::default()
+            .retain_n_versions(&dataset, Self::COMPACTION_RETAIN_VERSION_COUNT)
+            .await
+            .map_err(VectorStoreError::LanceDB)?
+            .build();
+        let bytes_freed = dataset
+            .cleanup_with_policy(cleanup_policy)
+            .await
+            .map_err(VectorStoreError::LanceDB)?
+            .bytes_removed;
 
         let fragments_after = dataset.get_fragments().len();
         let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);

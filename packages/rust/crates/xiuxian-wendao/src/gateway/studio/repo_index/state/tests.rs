@@ -73,6 +73,7 @@ fn status_response_counts_each_phase() {
     assert_eq!(status.total, 2);
     assert_eq!(status.target_concurrency, 1);
     assert_eq!(status.max_concurrency, 6);
+    assert_eq!(status.sync_concurrency_limit, 1);
     assert_eq!(status.queued, 1);
     assert_eq!(status.ready, 1);
 }
@@ -273,6 +274,38 @@ fn status_response_exposes_active_repos_and_concurrency_metadata() {
     assert_eq!(status.active_repo_ids, vec!["ADTypes.jl".to_string()]);
     assert_eq!(status.target_concurrency, 1);
     assert_eq!(status.max_concurrency, 8);
+    assert_eq!(status.sync_concurrency_limit, 1);
+}
+
+#[tokio::test]
+async fn sync_permit_blocks_second_remote_sync_until_first_releases() {
+    let coordinator = RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        crate::search_plane::SearchPlaneService::new(PathBuf::from(".")),
+    );
+
+    let first = coordinator
+        .acquire_sync_permit("alpha/repo")
+        .await
+        .unwrap_or_else(|error| panic!("first permit: {error}"));
+    let blocked = tokio::time::timeout(
+        Duration::from_millis(25),
+        coordinator.acquire_sync_permit("beta/repo"),
+    )
+    .await;
+    assert!(blocked.is_err());
+
+    drop(first);
+
+    let second = tokio::time::timeout(
+        Duration::from_secs(1),
+        coordinator.acquire_sync_permit("beta/repo"),
+    )
+    .await
+    .unwrap_or_else(|error| panic!("second permit should become available: {error}"))
+    .unwrap_or_else(|error| panic!("second permit acquisition failed: {error}"));
+    drop(second);
 }
 
 #[tokio::test]
@@ -322,6 +355,32 @@ async fn refresh_status_snapshot_synchronizes_search_plane_runtime() {
 }
 
 #[tokio::test]
+async fn stop_releases_background_runner_arc() {
+    let coordinator = Arc::new(RepoIndexCoordinator::new(
+        PathBuf::from("."),
+        Arc::new(PluginRegistry::new()),
+        crate::search_plane::SearchPlaneService::new(PathBuf::from(".")),
+    ));
+    let weak = Arc::downgrade(&coordinator);
+
+    coordinator.start();
+    tokio::task::yield_now().await;
+    coordinator.stop();
+    drop(coordinator);
+
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            if weak.upgrade().is_none() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap_or_else(|error| panic!("runner arc should be released after stop: {error}"));
+}
+
+#[tokio::test]
 async fn refresh_status_snapshot_synchronizes_repo_backed_corpus_statuses() {
     let temp_dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let search_plane = crate::search_plane::SearchPlaneService::with_paths(
@@ -335,6 +394,8 @@ async fn refresh_status_snapshot_synchronizes_repo_backed_corpus_statuses() {
             path: "src/lib.rs".to_string(),
             language: Some("rust".to_string()),
             contents: Arc::<str>::from("fn alpha() {}\n"),
+            size_bytes: 14,
+            modified_unix_ms: 0,
         },
     ];
     search_plane
@@ -349,6 +410,7 @@ async fn refresh_status_snapshot_synchronizes_repo_backed_corpus_statuses() {
                 }],
                 ..RepositoryAnalysisOutput::default()
             },
+            &documents,
             Some("rev-1"),
         )
         .await

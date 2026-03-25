@@ -1,3 +1,4 @@
+#[cfg(feature = "vision-dots")]
 use crate::llm::error::{LlmError, sanitize_user_visible};
 
 pub(super) fn non_empty_env(key: &str) -> Option<String> {
@@ -7,12 +8,14 @@ pub(super) fn non_empty_env(key: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+#[cfg(feature = "vision-dots")]
 pub(super) fn internal_error(message: impl Into<String>) -> LlmError {
     LlmError::Internal {
         message: sanitize_user_visible(&message.into()),
     }
 }
 
+#[cfg(feature = "vision-dots")]
 pub(super) fn sanitize_error_string(error: impl std::fmt::Display) -> String {
     sanitize_user_visible(error.to_string().as_str())
 }

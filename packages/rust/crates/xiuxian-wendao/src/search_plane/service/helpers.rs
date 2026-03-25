@@ -95,6 +95,8 @@ pub(super) fn derive_status_reason(
         SearchPlanePhase::Indexing => Some(SearchCorpusStatusReason {
             code: if status_is_readable(status) {
                 SearchCorpusStatusReasonCode::Refreshing
+            } else if status.maintenance.prewarm_running || status_has_prewarmed_staging(status) {
+                SearchCorpusStatusReasonCode::Prewarming
             } else {
                 SearchCorpusStatusReasonCode::WarmingUp
             },
@@ -137,6 +139,13 @@ pub(super) fn derive_status_reason(
         }
         SearchPlanePhase::Idle | SearchPlanePhase::Degraded => None,
     }
+}
+
+fn status_has_prewarmed_staging(status: &SearchCorpusStatus) -> bool {
+    status
+        .staging_epoch
+        .zip(status.maintenance.last_prewarmed_epoch)
+        .is_some_and(|(staging_epoch, prewarmed_epoch)| staging_epoch == prewarmed_epoch)
 }
 
 pub(super) fn summarize_issues(issues: &[SearchCorpusIssue]) -> Option<SearchCorpusIssueSummary> {

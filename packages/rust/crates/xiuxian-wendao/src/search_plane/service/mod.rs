@@ -4,4 +4,6 @@ mod helpers;
 mod tests;
 
 pub use core::SearchPlaneService;
-pub(crate) use core::{RepoSearchAvailability, RepoSearchQueryCacheKeyInput};
+pub(crate) use core::{
+    RepoSearchAvailability, RepoSearchPublicationState, RepoSearchQueryCacheKeyInput,
+};

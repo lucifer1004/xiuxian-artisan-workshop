@@ -328,6 +328,31 @@ async fn search_knowledge_returns_payload() {
 }
 
 #[tokio::test]
+async fn search_knowledge_waits_for_initial_index_publication() {
+    let fixture = make_state_with_docs(vec![(
+        "alpha.md",
+        "# Alpha\n\nThis note contains search target keyword: wendao.\n",
+    )]);
+
+    let result = search_knowledge(
+        State(fixture.state),
+        Query(SearchQuery {
+            q: Some("wendao".to_string()),
+            limit: Some(5),
+            intent: None,
+            repo: None,
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected cold-start knowledge search request to succeed");
+    };
+
+    assert!(response.0.hit_count >= 1);
+}
+
+#[tokio::test]
 async fn search_intent_returns_payload() {
     let fixture = make_state_with_docs(vec![
         (
@@ -418,6 +443,8 @@ async fn search_intent_includes_repo_content_hits_for_code_biased_intent() {
             contents: Arc::<str>::from(
                 "module ValidPkg\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
             ),
+            size_bytes: 62,
+            modified_unix_ms: 0,
         }],
     )
     .await;
@@ -684,6 +711,40 @@ async fn search_attachments_returns_payload() {
 }
 
 #[tokio::test]
+async fn search_attachments_waits_for_initial_index_publication() {
+    let fixture = make_state_with_docs(vec![(
+        "docs/alpha.md",
+        "# Alpha\n\n![Topology](assets/topology.png)\n\n[Spec](files/spec.pdf)\n",
+    )]);
+    fixture.state.studio.set_ui_config(UiConfig {
+        projects: vec![UiProjectConfig {
+            name: "kernel".to_string(),
+            root: ".".to_string(),
+            dirs: vec!["docs".to_string()],
+        }],
+        repo_projects: Vec::new(),
+    });
+
+    let result = search_attachments(
+        State(Arc::clone(&fixture.state)),
+        Query(AttachmentSearchQuery {
+            q: Some("topology".to_string()),
+            limit: Some(10),
+            ext: Vec::new(),
+            kind: Vec::new(),
+            case_sensitive: false,
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected cold-start attachment search request to succeed");
+    };
+
+    assert!(response.0.hit_count >= 1);
+}
+
+#[tokio::test]
 async fn search_attachments_respects_extension_and_kind_filters() {
     let fixture = make_state_with_docs(vec![(
         "docs/alpha.md",
@@ -801,6 +862,35 @@ async fn autocomplete_includes_code_symbols() {
             ("alpha_handler".to_string(), "symbol".to_string()),
             ("alpha_helper".to_string(), "symbol".to_string()),
         ]
+    );
+}
+
+#[tokio::test]
+async fn autocomplete_waits_for_initial_index_publication() {
+    let fixture = make_state_with_docs(vec![(
+        "packages/rust/crates/demo/src/lib.rs",
+        "pub struct AlphaService;\npub fn alpha_handler() {}\n",
+    )]);
+
+    let result = search_autocomplete(
+        State(fixture.state),
+        Query(AutocompleteQuery {
+            prefix: Some("al".to_string()),
+            limit: Some(10),
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected cold-start autocomplete request to succeed");
+    };
+
+    assert!(
+        response
+            .0
+            .suggestions
+            .iter()
+            .any(|suggestion| suggestion.text == "AlphaService")
     );
 }
 
@@ -1020,6 +1110,29 @@ async fn search_ast_includes_markdown_property_drawer_hits() {
 }
 
 #[tokio::test]
+async fn search_ast_waits_for_initial_index_publication() {
+    let fixture = make_state_with_docs(vec![(
+        "packages/rust/crates/demo/src/lib.rs",
+        "pub struct AlphaService {\n    ready: bool,\n}\n\npub fn alpha_handler() {}\n",
+    )]);
+
+    let result = search_ast(
+        State(fixture.state),
+        Query(AstSearchQuery {
+            q: Some("alpha".to_string()),
+            limit: Some(10),
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected cold-start AST search request to succeed");
+    };
+
+    assert!(response.0.hit_count >= 1);
+}
+
+#[tokio::test]
 async fn search_definition_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
@@ -1104,6 +1217,36 @@ async fn search_definition_returns_best_payload() {
             },
         }),
     );
+}
+
+#[tokio::test]
+async fn search_definition_waits_for_initial_index_publication() {
+    let fixture = make_state_with_docs(vec![
+        (
+            "packages/rust/crates/demo/src/lib.rs",
+            "pub fn build_service() {\n    let _service = AlphaService::new();\n}\n",
+        ),
+        (
+            "packages/rust/crates/demo/src/service.rs",
+            "pub struct AlphaService {\n    ready: bool,\n}\n",
+        ),
+    ]);
+
+    let result = search_definition(
+        State(Arc::clone(&fixture.state)),
+        Query(DefinitionResolveQuery {
+            q: Some("AlphaService".to_string()),
+            path: Some("packages/rust/crates/demo/src/lib.rs".to_string()),
+            line: Some(2),
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected cold-start definition resolve request to succeed");
+    };
+
+    assert_eq!(response.0.definition.name, "AlphaService");
 }
 
 #[tokio::test]
@@ -1217,6 +1360,67 @@ async fn search_definition_uses_markdown_observe_hints() {
 }
 
 #[tokio::test]
+async fn search_definition_falls_back_to_fuzzy_symbol_match() {
+    let fixture = make_state_with_docs(vec![
+        (
+            "packages/rust/crates/demo/src/lib.rs",
+            "pub fn build_service() {\n    let _service = AlphaService::new();\n}\n",
+        ),
+        (
+            "packages/rust/crates/demo/src/service.rs",
+            "pub struct AlphaService {\n    ready: bool,\n}\n",
+        ),
+    ]);
+    publish_local_symbol_index(&fixture.state).await;
+
+    let result = search_definition(
+        State(Arc::clone(&fixture.state)),
+        Query(DefinitionResolveQuery {
+            q: Some("AlphaServic".to_string()),
+            path: Some("packages/rust/crates/demo/src/lib.rs".to_string()),
+            line: Some(2),
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected fuzzy definition resolve request to succeed");
+    };
+
+    assert_eq!(
+        response.0.definition.path,
+        "packages/rust/crates/demo/src/service.rs"
+    );
+    assert!(response.0.candidate_count >= 1);
+}
+
+#[tokio::test]
+async fn search_definition_can_resolve_markdown_heading_hits() {
+    let fixture = make_state_with_docs(vec![(
+        "packages/notes/guide.md",
+        "# AlphaService Guide\n\nThis note explains the service.\n",
+    )]);
+    publish_local_symbol_index(&fixture.state).await;
+
+    let result = search_definition(
+        State(Arc::clone(&fixture.state)),
+        Query(DefinitionResolveQuery {
+            q: Some("AlphaService Guide".to_string()),
+            path: Some("packages/notes/guide.md".to_string()),
+            line: Some(1),
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected markdown-backed definition resolve request to succeed");
+    };
+
+    assert_eq!(response.0.definition.language, "markdown");
+    assert_eq!(response.0.definition.path, "packages/notes/guide.md");
+}
+
+#[tokio::test]
 async fn search_references_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
@@ -1295,6 +1499,29 @@ async fn search_references_returns_payload() {
             }).collect::<Vec<_>>(),
         }),
     );
+}
+
+#[tokio::test]
+async fn search_references_waits_for_initial_index_publication() {
+    let fixture = make_state_with_docs(vec![(
+        "packages/rust/crates/demo/src/lib.rs",
+        "pub struct AlphaService {\n    ready: bool,\n}\n\npub fn alpha_handler() {\n    let _service = AlphaService { ready: true };\n}\n",
+    )]);
+
+    let result = search_references(
+        State(Arc::clone(&fixture.state)),
+        Query(ReferenceSearchQuery {
+            q: Some("AlphaService".to_string()),
+            limit: Some(10),
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected cold-start reference search request to succeed");
+    };
+
+    assert!(response.0.hit_count >= 1);
 }
 
 #[tokio::test]

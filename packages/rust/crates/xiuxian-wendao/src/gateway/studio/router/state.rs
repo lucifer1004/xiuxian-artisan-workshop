@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use xiuxian_zhenfa::ZhenfaSignal;
 
@@ -12,7 +13,7 @@ use crate::gateway::studio::types::{
     SearchIndexStatusResponse, UiCapabilities, UiConfig, UiProjectConfig, VfsScanResult,
 };
 use crate::link_graph::LinkGraphIndex;
-use crate::search_plane::SearchPlaneService;
+use crate::search_plane::{SearchCorpusKind, SearchPlanePhase, SearchPlaneService};
 #[cfg(test)]
 use crate::search_plane::{SearchMaintenancePolicy, SearchManifestKeyspace};
 use crate::unified_symbol::UnifiedSymbolIndex;
@@ -21,6 +22,10 @@ use super::config::resolve_studio_config_root;
 use super::error::StudioApiError;
 use super::repository::configured_repositories;
 use super::sanitization::{sanitize_projects, sanitize_repo_projects};
+
+const LOCAL_CORPUS_READY_WAIT_ENV: &str = "XIUXIAN_WENDAO_LOCAL_CORPUS_READY_WAIT_MS";
+const DEFAULT_LOCAL_CORPUS_READY_WAIT_MS: u64 = 15_000;
+const LOCAL_CORPUS_READY_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
 /// Shared state for the Studio API.
 ///
@@ -37,6 +42,12 @@ pub struct StudioState {
     pub(crate) repo_index: Arc<RepoIndexCoordinator>,
     /// Registry of repository intelligence plugins.
     pub(crate) plugin_registry: Arc<PluginRegistry>,
+}
+
+impl Drop for StudioState {
+    fn drop(&mut self) {
+        self.stop_background_services();
+    }
 }
 
 /// Shared state used by the top-level gateway process.
@@ -71,6 +82,37 @@ impl GatewayState {
 }
 
 impl StudioState {
+    async fn wait_for_initial_local_corpus_ready(
+        &self,
+        corpus: SearchCorpusKind,
+    ) -> Result<(), StudioApiError> {
+        let timeout = local_corpus_ready_wait_duration();
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            let status = self.search_plane.coordinator().status_for(corpus);
+            if status.active_epoch.is_some() {
+                return Ok(());
+            }
+            if matches!(status.phase, SearchPlanePhase::Failed) {
+                return Err(StudioApiError::internal(
+                    "SEARCH_INDEX_BUILD_FAILED",
+                    format!("search corpus `{corpus}` failed to publish an index epoch"),
+                    status.last_error.clone(),
+                ));
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Err(StudioApiError::index_not_ready(corpus.as_str()));
+            }
+            tokio::time::sleep(LOCAL_CORPUS_READY_POLL_INTERVAL).await;
+        }
+    }
+
+    pub(crate) fn stop_background_services(&self) {
+        self.repo_index.stop();
+        self.symbol_index_coordinator.stop();
+        self.search_plane.stop_background_maintenance();
+    }
+
     /// Create a new `StudioState` with default configuration.
     #[must_use]
     pub fn new() -> Self {
@@ -362,6 +404,12 @@ impl StudioState {
         Ok(())
     }
 
+    pub(crate) async fn ensure_local_symbol_index_ready(&self) -> Result<(), StudioApiError> {
+        self.ensure_local_symbol_index_started()?;
+        self.wait_for_initial_local_corpus_ready(SearchCorpusKind::LocalSymbol)
+            .await
+    }
+
     pub(crate) fn ensure_knowledge_section_index_started(&self) -> Result<(), StudioApiError> {
         let configured_projects = self.configured_projects();
         if configured_projects.is_empty() {
@@ -376,6 +424,12 @@ impl StudioState {
             configured_projects.as_slice(),
         );
         Ok(())
+    }
+
+    pub(crate) async fn ensure_knowledge_section_index_ready(&self) -> Result<(), StudioApiError> {
+        self.ensure_knowledge_section_index_started()?;
+        self.wait_for_initial_local_corpus_ready(SearchCorpusKind::KnowledgeSection)
+            .await
     }
 
     pub(crate) async fn search_knowledge_sections(
@@ -456,6 +510,12 @@ impl StudioState {
         Ok(())
     }
 
+    pub(crate) async fn ensure_attachment_index_ready(&self) -> Result<(), StudioApiError> {
+        self.ensure_attachment_index_started()?;
+        self.wait_for_initial_local_corpus_ready(SearchCorpusKind::Attachment)
+            .await
+    }
+
     pub(crate) async fn search_attachment_hits(
         &self,
         query: &str,
@@ -495,6 +555,14 @@ impl StudioState {
             configured_projects.as_slice(),
         );
         Ok(())
+    }
+
+    pub(crate) async fn ensure_reference_occurrence_index_ready(
+        &self,
+    ) -> Result<(), StudioApiError> {
+        self.ensure_reference_occurrence_index_started()?;
+        self.wait_for_initial_local_corpus_ready(SearchCorpusKind::ReferenceOccurrence)
+            .await
     }
 
     pub(crate) async fn search_reference_occurrences(
@@ -541,6 +609,14 @@ pub(crate) fn supported_code_kinds() -> Vec<String> {
     .into_iter()
     .map(ToOwned::to_owned)
     .collect()
+}
+
+fn local_corpus_ready_wait_duration() -> Duration {
+    let parsed = std::env::var(LOCAL_CORPUS_READY_WAIT_ENV)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0);
+    Duration::from_millis(parsed.unwrap_or(DEFAULT_LOCAL_CORPUS_READY_WAIT_MS))
 }
 
 impl Default for StudioState {

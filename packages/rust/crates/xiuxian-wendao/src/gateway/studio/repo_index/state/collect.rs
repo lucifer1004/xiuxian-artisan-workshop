@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::UNIX_EPOCH;
 
 use tokio::task::JoinHandle;
 use walkdir::WalkDir;
@@ -57,6 +58,15 @@ pub(super) fn collect_code_documents(
             language: infer_code_language(relative_path.as_str()),
             path: relative_path,
             contents: Arc::<str>::from(contents),
+            size_bytes: entry.metadata().ok().map_or(0, |metadata| metadata.len()),
+            modified_unix_ms: entry
+                .metadata()
+                .ok()
+                .and_then(|metadata| metadata.modified().ok())
+                .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+                .map_or(0, |duration| {
+                    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+                }),
         });
     }
     Some(documents)

@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+#[cfg(feature = "vision-dots")]
+use std::path::Path;
+#[cfg(feature = "vision-dots")]
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 mod model_root;
@@ -46,6 +49,7 @@ impl DeepseekRuntime {
     }
 }
 
+#[cfg(feature = "vision-dots")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum LocalRuntimeSafetyDecision {
     Safe,
@@ -126,50 +130,50 @@ fn resolve_client_url() -> Option<String> {
     })
 }
 
+#[cfg(not(feature = "vision-dots"))]
 fn resolve_local_runtime_safety_reason(model_root: &str) -> Option<String> {
-    #[cfg(not(feature = "vision-dots"))]
-    {
-        let _ = model_root;
-        None
-    }
+    let _ = model_root;
+    None
+}
 
-    #[cfg(feature = "vision-dots")]
-    {
-        let configured_model_kind =
-            non_empty_env("XIUXIAN_VISION_MODEL_KIND").or_else(config::model_kind);
-        let explicit_snapshot_path = non_empty_env("XIUXIAN_VISION_SNAPSHOT_PATH")
-            .or_else(config::snapshot_path)
-            .map(PathBuf::from);
-        let configured_device = non_empty_env("XIUXIAN_VISION_DEVICE").or_else(config::device);
-        let quantized_requirement_disabled = quantized_requirement_explicitly_disabled();
-        let decision = evaluate_local_runtime_safety(
-            configured_model_kind.as_deref(),
-            Path::new(model_root),
-            explicit_snapshot_path.as_deref(),
-            local_runtime_may_use_metal(),
-            quantized_requirement_disabled,
-            configured_device.as_deref(),
+#[cfg(feature = "vision-dots")]
+fn resolve_local_runtime_safety_reason(model_root: &str) -> Option<String> {
+    let configured_model_kind =
+        non_empty_env("XIUXIAN_VISION_MODEL_KIND").or_else(config::model_kind);
+    let explicit_snapshot_path = non_empty_env("XIUXIAN_VISION_SNAPSHOT_PATH")
+        .or_else(config::snapshot_path)
+        .map(PathBuf::from);
+    let configured_device = non_empty_env("XIUXIAN_VISION_DEVICE").or_else(config::device);
+    let quantized_requirement_disabled = quantized_requirement_explicitly_disabled();
+    let decision = evaluate_local_runtime_safety(
+        configured_model_kind.as_deref(),
+        Path::new(model_root),
+        explicit_snapshot_path.as_deref(),
+        local_runtime_may_use_metal(),
+        quantized_requirement_disabled,
+        configured_device.as_deref(),
+    );
+
+    if matches!(
+        decision,
+        LocalRuntimeSafetyDecision::UnsafeAllowedByOverride
+    ) {
+        tracing::warn!(
+            event = "llm.vision.deepseek.runtime.unsafe_unquantized_override",
+            model_root = %model_root,
+            device = configured_device.as_deref().unwrap_or("auto"),
+            "DeepSeek OCR local runtime is using an explicit unquantized override without a usable DSQ snapshot on Metal"
         );
-
-        if matches!(
-            decision,
-            LocalRuntimeSafetyDecision::UnsafeAllowedByOverride
-        ) {
-            tracing::warn!(
-                event = "llm.vision.deepseek.runtime.unsafe_unquantized_override",
-                model_root = %model_root,
-                device = configured_device.as_deref().unwrap_or("auto"),
-                "DeepSeek OCR local runtime is using an explicit unquantized override without a usable DSQ snapshot on Metal"
-            );
-        }
-        match decision {
-            LocalRuntimeSafetyDecision::UnsafeBlocked(reason) => Some(reason),
-            LocalRuntimeSafetyDecision::Safe
-            | LocalRuntimeSafetyDecision::UnsafeAllowedByOverride => None,
+    }
+    match decision {
+        LocalRuntimeSafetyDecision::UnsafeBlocked(reason) => Some(reason),
+        LocalRuntimeSafetyDecision::Safe | LocalRuntimeSafetyDecision::UnsafeAllowedByOverride => {
+            None
         }
     }
 }
 
+#[cfg(feature = "vision-dots")]
 fn evaluate_local_runtime_safety(
     configured_model_kind: Option<&str>,
     model_root: &Path,
@@ -205,6 +209,7 @@ fn evaluate_local_runtime_safety(
     ))
 }
 
+#[cfg(feature = "vision-dots")]
 fn quantized_requirement_explicitly_disabled() -> bool {
     std::env::var("XIUXIAN_VISION_REQUIRE_QUANTIZED")
         .ok()
@@ -212,6 +217,7 @@ fn quantized_requirement_explicitly_disabled() -> bool {
         .is_some_and(|raw| matches!(raw.as_str(), "0" | "false" | "no" | "off"))
 }
 
+#[cfg(feature = "vision-dots")]
 fn resolve_model_kind_for_model_root_with(
     configured_model_kind: Option<&str>,
     model_root: &Path,
@@ -239,6 +245,7 @@ fn parse_model_kind_with(raw: Option<&str>) -> VisionModelKind {
         .unwrap_or(VisionModelKind::DEFAULT)
 }
 
+#[cfg(feature = "vision-dots")]
 fn model_root_looks_like_dots(model_root: &Path) -> bool {
     model_root.join("model.safetensors.index.json").is_file()
         || model_root
@@ -251,20 +258,9 @@ fn model_root_looks_like_dots(model_root: &Path) -> bool {
             .is_some_and(|name| name.to_ascii_lowercase().contains("dots"))
 }
 
+#[cfg(feature = "vision-dots")]
 fn is_usable_quantized_snapshot(path: &Path) -> bool {
-    #[cfg(feature = "vision-dots")]
-    {
-        validate_quantized_snapshot_alignment(path).is_ok()
-    }
-
-    #[cfg(not(feature = "vision-dots"))]
-    {
-        path.is_file()
-            && path
-                .extension()
-                .and_then(|value| value.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("dsq"))
-    }
+    validate_quantized_snapshot_alignment(path).is_ok()
 }
 
 #[cfg(feature = "vision-dots")]

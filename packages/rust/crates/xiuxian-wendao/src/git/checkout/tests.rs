@@ -352,3 +352,19 @@ fn managed_checkout_lock_times_out_for_active_lockfiles() {
 
     fs::remove_file(&lock_path).expect("cleanup active lock");
 }
+
+#[test]
+fn managed_checkout_lock_wait_defaults_to_pressure_tolerant_window() {
+    let wait = super::lock::checkout_lock_max_wait_with_lookup(&|_| None);
+
+    assert_eq!(wait, Duration::from_secs(20));
+}
+
+#[test]
+fn managed_checkout_lock_wait_accepts_positive_env_override() {
+    let wait = super::lock::checkout_lock_max_wait_with_lookup(&|key| {
+        (key == "XIUXIAN_WENDAO_CHECKOUT_LOCK_MAX_WAIT_SECS").then(|| "30".to_string())
+    });
+
+    assert_eq!(wait, Duration::from_secs(30));
+}

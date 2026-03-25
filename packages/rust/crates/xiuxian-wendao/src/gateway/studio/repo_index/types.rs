@@ -5,6 +5,7 @@ use specta::Type;
 
 #[cfg(test)]
 use crate::analyzers::RepositoryAnalysisOutput;
+use crate::search_plane::SearchFileFingerprint;
 
 /// Lifecycle phase for one background repo-index task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -78,6 +79,8 @@ pub struct RepoIndexStatusResponse {
     pub target_concurrency: usize,
     /// Maximum concurrency ceiling derived from host parallelism.
     pub max_concurrency: usize,
+    /// Effective remote-sync concurrency limit enforced by the coordinator.
+    pub sync_concurrency_limit: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     /// Repository currently being processed, when known.
     pub current_repo_id: Option<String>,
@@ -106,6 +109,27 @@ pub(crate) struct RepoCodeDocument {
     pub path: String,
     pub language: Option<String>,
     pub contents: Arc<str>,
+    pub size_bytes: u64,
+    pub modified_unix_ms: u64,
+}
+
+impl RepoCodeDocument {
+    #[must_use]
+    pub(crate) fn to_file_fingerprint(
+        &self,
+        extractor_version: u32,
+        schema_version: u32,
+    ) -> SearchFileFingerprint {
+        SearchFileFingerprint {
+            relative_path: self.path.clone(),
+            partition_id: None,
+            size_bytes: self.size_bytes,
+            modified_unix_ms: self.modified_unix_ms,
+            extractor_version,
+            schema_version,
+            blake3: None,
+        }
+    }
 }
 
 #[cfg(test)]

@@ -3,6 +3,10 @@ let
   gatewayConfig = "packages/rust/crates/xiuxian-wendao/wendao.toml";
   gatewayTargetDir = ".cache/cargo-target/wendao-gateway-process-compose";
   sentinelTargetDir = ".cache/cargo-target/wendao-sentinel-process-compose";
+  valkeyDataDir = ".data/valkey";
+  valkeyPidFile = ".run/valkey/valkey.pid";
+  valkeyRuntimeDir = ".run/valkey";
+  valkeyUrl = "redis://127.0.0.1:6379/0";
 in
 {
   packages = [
@@ -11,12 +15,34 @@ in
   process.manager.implementation = "process-compose";
   processes = {
     valkey = {
-      exec = "valkey-server .config/xiuxian-artisan-workshop/valkey.conf";
+      exec = ''
+        mkdir -p ${valkeyRuntimeDir} ${valkeyDataDir}
+        rm -f ${valkeyPidFile}
+        exec valkey-server .config/xiuxian-artisan-workshop/valkey.conf --tcp-backlog 128 --pidfile ${valkeyPidFile}
+      '';
       process-compose = {
         readiness_probe = {
-          exec.command = "valkey-cli ping";
-          initial_delay_seconds = 1;
+          exec.command = ''
+            PIDFILE=${valkeyPidFile}
+            if [ ! -s "$PIDFILE" ]; then
+              exit 1
+            fi
+
+            EXPECTED_PID="$(cat "$PIDFILE")"
+            ACTUAL_PID="$(
+              valkey-cli -u ${valkeyUrl} info server | awk -F: '/^[[:space:]]*process_id:/ { gsub(/[[:space:]\r]/, "", $2); print $2; exit }'
+            )"
+
+            if [ -z "$ACTUAL_PID" ] || [ "$ACTUAL_PID" != "$EXPECTED_PID" ]; then
+              exit 1
+            fi
+
+            valkey-cli -u ${valkeyUrl} ping
+          '';
+          initial_delay_seconds = 5;
           period_seconds = 2;
+          timeout_seconds = 2;
+          failure_threshold = 30;
         };
       };
     };

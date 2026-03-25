@@ -1,8 +1,10 @@
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use chrono::Utc;
 use tokio::runtime::Handle;
+use tokio::task::JoinHandle;
 
 use crate::gateway::studio::search;
 use crate::gateway::studio::types::UiProjectConfig;
@@ -16,6 +18,8 @@ pub(crate) struct SymbolIndexCoordinator {
     active_fingerprint: Arc<RwLock<Option<String>>>,
     status: Arc<RwLock<SymbolIndexStatus>>,
     spawn_lock: Mutex<()>,
+    shutdown_requested: Arc<AtomicBool>,
+    build_task: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl SymbolIndexCoordinator {
@@ -27,6 +31,32 @@ impl SymbolIndexCoordinator {
             active_fingerprint: Arc::new(RwLock::new(None)),
             status: Arc::new(RwLock::new(SymbolIndexStatus::default())),
             spawn_lock: Mutex::new(()),
+            shutdown_requested: Arc::new(AtomicBool::new(false)),
+            build_task: Mutex::new(None),
+        }
+    }
+
+    pub(crate) fn stop(&self) {
+        self.shutdown_requested.store(true, Ordering::SeqCst);
+        *self
+            .active_fingerprint
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        *self
+            .status
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = SymbolIndexStatus {
+            phase: SymbolIndexPhase::Idle,
+            last_error: None,
+            updated_at: Some(timestamp_now()),
+        };
+        if let Some(build_task) = self
+            .build_task
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            build_task.abort();
         }
     }
 
@@ -155,6 +185,7 @@ impl SymbolIndexCoordinator {
             .active_fingerprint
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(fingerprint.clone());
+        self.shutdown_requested.store(false, Ordering::SeqCst);
         *self
             .status
             .write()
@@ -168,9 +199,10 @@ impl SymbolIndexCoordinator {
         let config_root = self.config_root.clone();
         let active_fingerprint = Arc::clone(&self.active_fingerprint);
         let status = Arc::clone(&self.status);
+        let shutdown_requested = Arc::clone(&self.shutdown_requested);
 
         if let Ok(handle) = Handle::try_current() {
-            handle.spawn(async move {
+            let build_task = handle.spawn(async move {
                 let build = tokio::task::spawn_blocking(move || {
                     search::build_symbol_index(
                         project_root.as_path(),
@@ -184,7 +216,9 @@ impl SymbolIndexCoordinator {
                     .read()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .clone();
-                if latest_fingerprint.as_deref() != Some(fingerprint.as_str()) {
+                if shutdown_requested.load(Ordering::SeqCst)
+                    || latest_fingerprint.as_deref() != Some(fingerprint.as_str())
+                {
                     return;
                 }
 
@@ -220,6 +254,10 @@ impl SymbolIndexCoordinator {
                     }
                 }
             });
+            *self
+                .build_task
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(build_task);
         } else {
             *self
                 .status
@@ -350,5 +388,35 @@ mod tests {
             coordinator.status().phase,
             SymbolIndexPhase::Indexing | SymbolIndexPhase::Ready
         ));
+    }
+
+    #[tokio::test]
+    async fn stop_resets_status_to_idle_after_starting_build() {
+        let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+        std::fs::create_dir_all(temp.path().join("src"))
+            .unwrap_or_else(|error| panic!("create src: {error}"));
+        std::fs::write(
+            temp.path().join("src").join("lib.rs"),
+            "pub struct BackgroundSymbolIndex;\n",
+        )
+        .unwrap_or_else(|error| panic!("write source: {error}"));
+        let coordinator = Arc::new(SymbolIndexCoordinator::new(
+            temp.path().to_path_buf(),
+            temp.path().to_path_buf(),
+        ));
+        let index_cache = Arc::new(RwLock::new(None));
+
+        coordinator.ensure_started(
+            vec![UiProjectConfig {
+                name: "kernel".to_string(),
+                root: ".".to_string(),
+                dirs: vec!["src".to_string()],
+            }],
+            Arc::clone(&index_cache),
+        );
+        coordinator.stop();
+        tokio::task::yield_now().await;
+
+        assert_eq!(coordinator.status().phase, SymbolIndexPhase::Idle);
     }
 }
