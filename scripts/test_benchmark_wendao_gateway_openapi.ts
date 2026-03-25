@@ -36,7 +36,10 @@ plugins = ["repo_intelligence", "semantic"]
 });
 
 test("normalizeCodeSearchQuery strips suffixes and separators", () => {
-  assert.equal(normalizeCodeSearchQuery("JuliaLang/My_Package.jl"), "JuliaLang My Package");
+  assert.equal(
+    normalizeCodeSearchQuery("JuliaLang/My_Package.jl"),
+    "JuliaLang My Package",
+  );
 });
 
 test("parseArgs returns defaults and validates overrides", () => {
@@ -47,7 +50,11 @@ test("parseArgs returns defaults and validates overrides", () => {
   assert.equal(defaults.stressDurationMs, 30_000);
   assert.equal(defaults.help, false);
 
-  const explicit = parseArgs(["--report-path", ".benchmark/custom.toml", "--dry-run"]);
+  const explicit = parseArgs([
+    "--report-path",
+    ".benchmark/custom.toml",
+    "--dry-run",
+  ]);
   assert.equal(explicit.reportPath, ".benchmark/custom.toml");
 
   assert.throws(
@@ -86,9 +93,24 @@ test("summariseSuite counts non-empty hits only when the metric exposes hit coun
 
 test("coverage helpers classify benchmark smoke and skipped operations", () => {
   const operations = [
-    { method: "get" as const, path: "/api/search/intent", operationId: "searchIntent", parameterNames: [] },
-    { method: "get" as const, path: "/api/health", operationId: "health", parameterNames: [] },
-    { method: "post" as const, path: "/api/ui/config", operationId: "setUiConfig", parameterNames: [] },
+    {
+      method: "get" as const,
+      path: "/api/search/intent",
+      operationId: "searchIntent",
+      parameterNames: [],
+    },
+    {
+      method: "get" as const,
+      path: "/api/health",
+      operationId: "health",
+      parameterNames: [],
+    },
+    {
+      method: "post" as const,
+      path: "/api/ui/config",
+      operationId: "setUiConfig",
+      parameterNames: [],
+    },
   ];
 
   assert.equal(determineCoverageMode(operations[0]), "benchmark");
@@ -110,8 +132,18 @@ test("createDryRunReport exposes operation counts and benchmark paths", () => {
     sampledRepoIds: ["ADTypes.jl"],
     plannedSearchCases: [{ repoId: "ADTypes.jl", query: "ADTypes" }],
     openApiOperations: [
-      { method: "get", path: "/api/search/intent", operationId: "searchIntent", parameterNames: [] },
-      { method: "post", path: "/api/ui/config", operationId: "setUiConfig", parameterNames: [] },
+      {
+        method: "get",
+        path: "/api/search/intent",
+        operationId: "searchIntent",
+        parameterNames: [],
+      },
+      {
+        method: "post",
+        path: "/api/ui/config",
+        operationId: "setUiConfig",
+        parameterNames: [],
+      },
     ],
   });
 
@@ -211,6 +243,29 @@ test("buildSmokeRequestPlan supplies markdown path for analysis smoke", () => {
   );
 });
 
+test("buildSmokeRequestPlan uses definitionQuery for definition smoke", () => {
+  const plan = buildSmokeRequestPlan(
+    {
+      method: "get",
+      path: "/api/search/definition",
+      operationId: "studioSearchDefinition",
+      parameterNames: ["q"],
+    },
+    {
+      repoQuery: "ADTypes",
+      definitionQuery: "Search Parameters",
+    },
+    new URL("http://127.0.0.1:9517"),
+    20,
+  );
+
+  assert.ok("url" in plan);
+  assert.equal(
+    plan.url.toString(),
+    "http://127.0.0.1:9517/api/search/definition?q=Search+Parameters",
+  );
+});
+
 test("renderBenchmarkReportToml records coverage, discovery, and failures", () => {
   const toml = renderBenchmarkReportToml(
     {
@@ -271,10 +326,20 @@ test("renderBenchmarkReportToml records coverage, discovery, and failures", () =
         ok: true,
         status: 200,
       },
-      repoIndexSnapshot: { total: 177, ready: 109, failed: 55, unsupported: 13 },
-      searchIndexSnapshot: { total: 6, degraded: 2, statusReasonCode: "repo_index_failed" },
+      repoIndexSnapshot: {
+        total: 177,
+        ready: 109,
+        failed: 55,
+        unsupported: 13,
+      },
+      searchIndexSnapshot: {
+        total: 6,
+        degraded: 2,
+        statusReasonCode: "repo_index_failed",
+      },
       discovery: {
         readyRepoId: "ADTypes.jl",
+        definitionQuery: "Search Parameters",
         markdownFilePath: "README.md",
         pageId: "repo:ADTypes.jl:page:1",
       },
@@ -305,7 +370,8 @@ test("renderBenchmarkReportToml records coverage, discovery, and failures", () =
           operationId: "setUiConfig",
           mode: "skip",
           status: "skipped",
-          skipReason: "mutating OpenAPI operation is intentionally skipped in live benchmark",
+          skipReason:
+            "mutating OpenAPI operation is intentionally skipped in live benchmark",
         },
       ],
       failures: [
@@ -327,6 +393,7 @@ test("renderBenchmarkReportToml records coverage, discovery, and failures", () =
   assert.match(toml, /schema_version = "2"/);
   assert.match(toml, /\[coverage_summary\]/);
   assert.match(toml, /ready_repo_id = "ADTypes\.jl"/);
+  assert.match(toml, /definition_query = "Search Parameters"/);
   assert.match(toml, /markdown_file_path = "README\.md"/);
   assert.match(toml, /\[\[stress_summaries\]\]/);
   assert.match(toml, /stress_concurrency = 48/);

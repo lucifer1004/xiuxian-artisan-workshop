@@ -26,6 +26,16 @@ pub(crate) struct GatewayMaintenancePressureSummary {
     pub aged_compaction_queue_count: u64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct GatewayRepoReadPressureSummary {
+    pub budget: u64,
+    pub in_flight: u64,
+    pub requested_repo_count: Option<u64>,
+    pub searchable_repo_count: Option<u64>,
+    pub parallelism: Option<u64>,
+    pub fanout_capped: bool,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GatewayPerfCaseDiagnostics {
     pub uri: String,
@@ -324,9 +334,48 @@ pub(crate) fn describe_gateway_perf_case_diagnostics(
     message
 }
 
+pub(crate) fn repo_read_pressure(
+    summary: Option<&Value>,
+) -> Option<GatewayRepoReadPressureSummary> {
+    let summary = summary?;
+    Some(GatewayRepoReadPressureSummary {
+        budget: summary["budget"].as_u64()?,
+        in_flight: summary["inFlight"].as_u64()?,
+        requested_repo_count: summary.get("requestedRepoCount").and_then(Value::as_u64),
+        searchable_repo_count: summary.get("searchableRepoCount").and_then(Value::as_u64),
+        parallelism: summary.get("parallelism").and_then(Value::as_u64),
+        fanout_capped: summary["fanoutCapped"].as_bool()?,
+    })
+}
+
+pub(crate) fn describe_repo_read_pressure(summary: Option<&Value>) -> String {
+    let Some(summary) = summary else {
+        return "none".to_string();
+    };
+    let Some(summary) = repo_read_pressure(Some(summary)) else {
+        return "invalid".to_string();
+    };
+    format!(
+        "budget={}, inFlight={}, requested={}, searchable={}, parallelism={}, fanoutCapped={}",
+        summary.budget,
+        summary.in_flight,
+        summary
+            .requested_repo_count
+            .map_or_else(|| "none".to_string(), |value| value.to_string()),
+        summary
+            .searchable_repo_count
+            .map_or_else(|| "none".to_string(), |value| value.to_string()),
+        summary
+            .parallelism
+            .map_or_else(|| "none".to_string(), |value| value.to_string()),
+        summary.fanout_capped
+    )
+}
+
 pub(crate) fn describe_search_index_status_payload(payload: &Value) -> String {
     let status_reason = payload["statusReason"]["code"].as_str().unwrap_or("none");
     let maintenance = describe_maintenance_summary(payload.get("maintenanceSummary"));
+    let repo_read = describe_repo_read_pressure(payload.get("repoReadPressure"));
     let query_summary = payload
         .get("queryTelemetrySummary")
         .filter(|value| !value.is_null())
@@ -340,7 +389,7 @@ pub(crate) fn describe_search_index_status_payload(payload: &Value) -> String {
         })
         .unwrap_or_else(|| "none".to_string());
     format!(
-        "total={} idle={} indexing={} ready={} degraded={} failed={} compactionPending={} statusReason={} maintenance={} queryTelemetry={}",
+        "total={} idle={} indexing={} ready={} degraded={} failed={} compactionPending={} statusReason={} maintenance={} repoRead={} queryTelemetry={}",
         payload["total"].as_u64().unwrap_or_default(),
         payload["idle"].as_u64().unwrap_or_default(),
         payload["indexing"].as_u64().unwrap_or_default(),
@@ -350,6 +399,7 @@ pub(crate) fn describe_search_index_status_payload(payload: &Value) -> String {
         payload["compactionPending"].as_u64().unwrap_or_default(),
         status_reason,
         maintenance,
+        repo_read,
         query_summary
     )
 }
@@ -671,6 +721,24 @@ fn describe_maintenance_summary_formats_aggregate_pressure() {
 }
 
 #[test]
+fn describe_repo_read_pressure_formats_gate_surface() {
+    let summary = serde_json::json!({
+        "budget": 2,
+        "inFlight": 1,
+        "requestedRepoCount": 177,
+        "searchableRepoCount": 96,
+        "parallelism": 2,
+        "fanoutCapped": true
+    });
+
+    assert_eq!(
+        describe_repo_read_pressure(Some(&summary)),
+        "budget=2, inFlight=1, requested=177, searchable=96, parallelism=2, fanoutCapped=true"
+    );
+    assert_eq!(describe_repo_read_pressure(None), "none");
+}
+
+#[test]
 fn describe_search_index_status_payload_formats_aggregate_surface() {
     let payload = serde_json::json!({
         "total": 6,
@@ -693,6 +761,14 @@ fn describe_search_index_status_payload_formats_aggregate_surface() {
             "compactionPendingCount": 1,
             "agedCompactionQueueCount": 0
         },
+        "repoReadPressure": {
+            "budget": 2,
+            "inFlight": 1,
+            "requestedRepoCount": 177,
+            "searchableRepoCount": 96,
+            "parallelism": 2,
+            "fanoutCapped": true
+        },
         "queryTelemetrySummary": {
             "corpusCount": 2,
             "totalRowsScanned": 120,
@@ -704,7 +780,7 @@ fn describe_search_index_status_payload_formats_aggregate_surface() {
 
     assert_eq!(
         describe_search_index_status_payload(&payload),
-        "total=6 idle=1 indexing=2 ready=2 degraded=1 failed=0 compactionPending=1 statusReason=refreshing maintenance=prewarm(running=1, queuedCorpora=0, maxQueueDepth=0), compaction(running=0, queuedCorpora=1, maxQueueDepth=2, pending=1, agedQueued=0) queryTelemetry=corpora=2, scanned=120, scopes=1"
+        "total=6 idle=1 indexing=2 ready=2 degraded=1 failed=0 compactionPending=1 statusReason=refreshing maintenance=prewarm(running=1, queuedCorpora=0, maxQueueDepth=0), compaction(running=0, queuedCorpora=1, maxQueueDepth=2, pending=1, agedQueued=0) repoRead=budget=2, inFlight=1, requested=177, searchable=96, parallelism=2, fanoutCapped=true queryTelemetry=corpora=2, scanned=120, scopes=1"
     );
 }
 
@@ -771,7 +847,7 @@ fn assert_gateway_perf_budget_with_diagnostics_appends_context() {
 fn describe_gateway_perf_case_diagnostics_formats_compact_context() {
     let diagnostics = GatewayPerfCaseDiagnostics {
         uri: "/api/repo/module-search?repo=gateway-sync&query=solve".to_string(),
-        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none queryTelemetry=none".to_string(),
+        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none repoRead=none queryTelemetry=none".to_string(),
         repo_index: "total=1 ready=1 active=0 queued=0 checking=0 syncing=0 indexing=0 unsupported=0 failed=0 currentRepoId=none".to_string(),
         extra: BTreeMap::from([
             (
@@ -787,7 +863,7 @@ fn describe_gateway_perf_case_diagnostics_formats_compact_context() {
 
     assert_eq!(
         describe_gateway_perf_case_diagnostics(&diagnostics),
-        "uri=/api/repo/module-search?repo=gateway-sync&query=solve; searchIndex=total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none queryTelemetry=none; repoIndex=total=1 ready=1 active=0 queued=0 checking=0 syncing=0 indexing=0 unsupported=0 failed=0 currentRepoId=none; maintenancePressure=prewarm(running=0, queuedCorpora=0, maxQueueDepth=0), compaction(running=0, queuedCorpora=0, maxQueueDepth=0, pending=0, agedQueued=0); queryScopePressure=[gateway-sync(corpora=1, scanned=10, matched=3, results=2)]"
+        "uri=/api/repo/module-search?repo=gateway-sync&query=solve; searchIndex=total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none repoRead=none queryTelemetry=none; repoIndex=total=1 ready=1 active=0 queued=0 checking=0 syncing=0 indexing=0 unsupported=0 failed=0 currentRepoId=none; maintenancePressure=prewarm(running=0, queuedCorpora=0, maxQueueDepth=0), compaction(running=0, queuedCorpora=0, maxQueueDepth=0, pending=0, agedQueued=0); queryScopePressure=[gateway-sync(corpora=1, scanned=10, matched=3, results=2)]"
     );
 }
 
@@ -807,7 +883,7 @@ fn attach_gateway_perf_diagnostics_persists_report_metadata() {
     );
     let diagnostics = GatewayPerfCaseDiagnostics {
         uri: "/api/repo/module-search?repo=gateway-sync&query=solve".to_string(),
-        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none queryTelemetry=none".to_string(),
+        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none repoRead=none queryTelemetry=none".to_string(),
         repo_index: "total=1 ready=1 active=0 queued=0 checking=0 syncing=0 indexing=0 unsupported=0 failed=0 currentRepoId=none".to_string(),
         extra: BTreeMap::from([(
             "queryScopePressure".to_string(),
@@ -832,7 +908,7 @@ fn attach_gateway_perf_diagnostics_persists_report_metadata() {
     assert_eq!(
         value["metadata"]["gateway_search_index"].as_str(),
         Some(
-            "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none queryTelemetry=none"
+            "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none repoRead=none queryTelemetry=none"
         )
     );
     assert_eq!(
@@ -863,7 +939,7 @@ fn gateway_perf_diagnostics_from_report_reads_base_fields_and_extras() {
     );
     let diagnostics = GatewayPerfCaseDiagnostics {
         uri: "/api/search/index/status".to_string(),
-        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none queryTelemetry=none".to_string(),
+        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none repoRead=none queryTelemetry=none".to_string(),
         repo_index: "total=1 ready=1 active=0 queued=0 checking=0 syncing=0 indexing=0 unsupported=0 failed=0 currentRepoId=none".to_string(),
         extra: BTreeMap::from([("statusGatePressure".to_string(), "maintenance=none; scopes=[]".to_string())]),
     };
@@ -890,7 +966,7 @@ fn load_gateway_perf_diagnostics_from_report_path_round_trips_persisted_metadata
     );
     let diagnostics = GatewayPerfCaseDiagnostics {
         uri: "/api/repo/index/status".to_string(),
-        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none queryTelemetry=none".to_string(),
+        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none repoRead=none queryTelemetry=none".to_string(),
         repo_index: "total=4 ready=2 active=1 queued=1 checking=0 syncing=0 indexing=0 unsupported=1 failed=0 currentRepoId=gateway-sync".to_string(),
         extra: BTreeMap::from([("minRepos".to_string(), "150".to_string())]),
     };
@@ -922,7 +998,7 @@ fn describe_gateway_perf_report_from_path_formats_persisted_metadata() {
     );
     let diagnostics = GatewayPerfCaseDiagnostics {
         uri: "/api/repo/module-search?repo=gateway-sync&query=solve".to_string(),
-        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none queryTelemetry=none".to_string(),
+        search_index: "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none repoRead=none queryTelemetry=none".to_string(),
         repo_index: "total=1 ready=1 active=0 queued=0 checking=0 syncing=0 indexing=0 unsupported=0 failed=0 currentRepoId=none".to_string(),
         extra: BTreeMap::from([("workspaceQuery".to_string(), "solve".to_string())]),
     };
@@ -937,6 +1013,6 @@ fn describe_gateway_perf_report_from_path_formats_persisted_metadata() {
         .unwrap_or_else(|| panic!("gateway diagnostics summary should be present at {path}"));
     assert_eq!(
         summary,
-        "uri=/api/repo/module-search?repo=gateway-sync&query=solve; searchIndex=total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none queryTelemetry=none; repoIndex=total=1 ready=1 active=0 queued=0 checking=0 syncing=0 indexing=0 unsupported=0 failed=0 currentRepoId=none; workspaceQuery=solve"
+        "uri=/api/repo/module-search?repo=gateway-sync&query=solve; searchIndex=total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none repoRead=none queryTelemetry=none; repoIndex=total=1 ready=1 active=0 queued=0 checking=0 syncing=0 indexing=0 unsupported=0 failed=0 currentRepoId=none; workspaceQuery=solve"
     );
 }

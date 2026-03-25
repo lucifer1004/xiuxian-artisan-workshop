@@ -37,6 +37,10 @@ impl From<&crate::search_plane::SearchPlaneStatusSnapshot> for SearchIndexStatus
         let status_reason = summarize_response_status_reason(&corpora);
         let maintenance_summary = summarize_response_maintenance(&corpora);
         let query_telemetry_summary = summarize_response_query_telemetry(&corpora);
+        let repo_read_pressure = value
+            .repo_read_pressure
+            .as_ref()
+            .map(SearchIndexRepoReadPressure::from);
         Self {
             total,
             idle,
@@ -48,6 +52,7 @@ impl From<&crate::search_plane::SearchPlaneStatusSnapshot> for SearchIndexStatus
             status_reason,
             maintenance_summary,
             query_telemetry_summary,
+            repo_read_pressure,
             corpora,
         }
     }

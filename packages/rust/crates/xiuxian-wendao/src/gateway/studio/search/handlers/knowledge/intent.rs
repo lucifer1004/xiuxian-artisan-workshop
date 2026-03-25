@@ -3,8 +3,6 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Query, State};
 
-use super::super::code_search::build_code_search_response;
-use super::super::queries::SearchQuery;
 use super::helpers::{
     compare_intent_hits, intent_candidate_limit, is_code_biased_intent, is_index_not_ready,
     is_ui_config_required, local_symbol_hit_to_search_hit, repo_content_hit_to_intent_hit,
@@ -14,6 +12,8 @@ use crate::gateway::studio::router::{
     GatewayState, StudioApiError, StudioState, configured_repositories, configured_repository,
     map_repo_intelligence_error,
 };
+use crate::gateway::studio::search::handlers::code_search::search::build_code_search_response;
+use crate::gateway::studio::search::handlers::queries::SearchQuery;
 use crate::gateway::studio::types::{AstSearchHit, SearchHit, SearchResponse};
 use crate::search_plane::{RepoSearchQueryCacheKeyInput, SearchCorpusKind, SearchPlaneCacheTtl};
 

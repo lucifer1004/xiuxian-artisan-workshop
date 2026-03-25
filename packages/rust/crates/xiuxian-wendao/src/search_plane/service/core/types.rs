@@ -122,6 +122,15 @@ pub(crate) struct LocalMaintenanceRuntime {
     pub(crate) active_compaction: Option<SearchCorpusKind>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub(crate) struct RepoSearchDispatchRuntime {
+    pub(crate) captured_at: Option<String>,
+    pub(crate) requested_repo_count: u32,
+    pub(crate) searchable_repo_count: u32,
+    pub(crate) parallelism: u32,
+    pub(crate) fanout_capped: bool,
+}
+
 /// Project-scoped entrypoint for the search-plane domain.
 #[derive(Clone)]
 pub struct SearchPlaneService {
@@ -130,7 +139,9 @@ pub struct SearchPlaneService {
     pub(super) manifest_keyspace: SearchManifestKeyspace,
     pub(super) coordinator: Arc<SearchPlaneCoordinator>,
     pub(super) cache: crate::search_plane::cache::SearchPlaneCache,
+    pub(crate) repo_search_read_concurrency_limit: usize,
     pub(crate) repo_search_read_permits: Arc<Semaphore>,
+    pub(crate) repo_search_dispatch: Arc<Mutex<RepoSearchDispatchRuntime>>,
     pub(crate) local_maintenance: Arc<Mutex<LocalMaintenanceRuntime>>,
     pub(crate) repo_maintenance: Arc<Mutex<RepoMaintenanceRuntime>>,
     pub(crate) query_telemetry:

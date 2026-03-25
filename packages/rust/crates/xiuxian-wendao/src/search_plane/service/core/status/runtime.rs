@@ -3,11 +3,11 @@ use super::helpers::{
 };
 #[cfg(test)]
 use crate::gateway::studio::repo_index::RepoIndexStatusResponse;
-use crate::search_plane::SearchCorpusKind;
 use crate::search_plane::service::core::types::{
     RepoMaintenanceTask, RepoMaintenanceTaskKind, SearchPlaneService,
 };
 use crate::search_plane::service::helpers::annotate_status_reason;
+use crate::search_plane::{SearchCorpusKind, SearchRepoReadPressure};
 
 impl SearchPlaneService {
     /// Snapshot current multi-corpus status.
@@ -38,8 +38,30 @@ impl SearchPlaneService {
         &self,
         snapshot: &mut crate::search_plane::SearchPlaneStatusSnapshot,
     ) {
+        snapshot.repo_read_pressure = Some(self.repo_read_pressure_snapshot());
         for status in &mut snapshot.corpora {
             self.annotate_runtime_status(status);
+        }
+    }
+
+    fn repo_read_pressure_snapshot(&self) -> SearchRepoReadPressure {
+        let dispatch = self
+            .repo_search_dispatch
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let budget = u32::try_from(self.repo_search_read_concurrency_limit).unwrap_or(u32::MAX);
+        let available =
+            u32::try_from(self.repo_search_read_permits.available_permits()).unwrap_or(u32::MAX);
+        let captured_at = dispatch.captured_at.clone();
+        SearchRepoReadPressure {
+            budget,
+            in_flight: budget.saturating_sub(available),
+            captured_at: captured_at.clone(),
+            requested_repo_count: captured_at.as_ref().map(|_| dispatch.requested_repo_count),
+            searchable_repo_count: captured_at.as_ref().map(|_| dispatch.searchable_repo_count),
+            parallelism: captured_at.as_ref().map(|_| dispatch.parallelism),
+            fanout_capped: dispatch.fanout_capped,
         }
     }
 

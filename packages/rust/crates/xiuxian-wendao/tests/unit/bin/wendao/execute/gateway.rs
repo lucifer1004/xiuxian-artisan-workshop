@@ -1,4 +1,6 @@
 use super::*;
+use axum::body::to_bytes;
+use axum::http::StatusCode;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -23,6 +25,37 @@ fn remove_temp_gateway_config(path: &Path) {
         && path.exists()
     {
         panic!("failed to remove temp config at {}: {err}", path.display());
+    }
+}
+
+fn write_temp_gateway_pidfile(contents: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    let path = std::env::temp_dir().join(format!(
+        "wendao-gateway-pidfile-{}-{unique}.pid",
+        std::process::id()
+    ));
+    if let Err(err) = std::fs::write(&path, contents) {
+        panic!("failed to write temp pidfile at {}: {err}", path.display());
+    }
+    path
+}
+
+fn remove_temp_gateway_pidfile(path: &Path) {
+    if let Err(err) = std::fs::remove_file(path)
+        && path.exists()
+    {
+        panic!("failed to remove temp pidfile at {}: {err}", path.display());
+    }
+}
+
+fn mismatched_pid() -> u32 {
+    let current = std::process::id();
+    if current == u32::MAX {
+        current - 1
+    } else {
+        current + 1
     }
 }
 
@@ -66,10 +99,59 @@ port = 18080
     assert_eq!(port, 18080);
 }
 
+#[test]
+fn test_health_endpoint_reports_process_id_header() {
+    let response = gateway_health_response(None);
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let process_id = response
+        .headers()
+        .get("x-wendao-process-id")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_else(|| panic!("health response should include a process id header"));
+    assert_eq!(
+        process_id.parse::<u32>().unwrap_or_else(|error| panic!(
+            "health response header should be a valid process id: {error}"
+        )),
+        std::process::id()
+    );
+}
+
+#[test]
+fn test_health_endpoint_accepts_owned_pidfile() {
+    let pidfile = write_temp_gateway_pidfile(&std::process::id().to_string());
+    let response = gateway_health_response(Some(pidfile.as_path()));
+    remove_temp_gateway_pidfile(&pidfile);
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
 #[tokio::test]
-async fn test_health_endpoint() {
-    let result = health().await;
-    assert_eq!(result.0, "ok");
+async fn test_health_endpoint_rejects_mismatched_pidfile() {
+    let pidfile = write_temp_gateway_pidfile(&mismatched_pid().to_string());
+    let response = gateway_health_response(Some(pidfile.as_path()));
+    remove_temp_gateway_pidfile(&pidfile);
+
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let process_id = response
+        .headers()
+        .get("x-wendao-process-id")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_else(|| panic!("health error response should include a process id header"));
+    assert_eq!(
+        process_id.parse::<u32>().unwrap_or_else(|error| panic!(
+            "health error response header should be a valid process id: {error}"
+        )),
+        std::process::id()
+    );
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap_or_else(|error| panic!("health error response should be readable: {error}"));
+    let payload: serde_json::Value = serde_json::from_slice(&body)
+        .unwrap_or_else(|error| panic!("health error response should be valid json: {error}"));
+    assert_eq!(payload["error"], "gateway is not ready");
+    assert_eq!(payload["expectedPid"], serde_json::json!(mismatched_pid()));
+    assert_eq!(payload["processId"], serde_json::json!(std::process::id()));
 }
 
 #[tokio::test]

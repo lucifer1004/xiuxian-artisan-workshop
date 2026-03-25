@@ -40,7 +40,7 @@ def _report_payload(
     metadata: dict[str, object] = {
         "crate": "xiuxian-wendao",
         "gateway_uri": uri,
-        "gateway_search_index": "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none queryTelemetry=none",
+        "gateway_search_index": "total=6 idle=4 indexing=0 ready=2 degraded=0 failed=0 compactionPending=0 statusReason=none maintenance=none repoRead=budget=2, inFlight=1, requested=177, searchable=96, parallelism=2, fanoutCapped=true queryTelemetry=none",
         "gateway_repo_index": "total=1 ready=1 active=0 queued=0 checking=0 syncing=0 indexing=0 unsupported=0 failed=0 currentRepoId=none",
     }
     for key, value in (extra or {}).items():
@@ -139,7 +139,10 @@ def test_render_gateway_perf_summary_selects_latest_per_case_and_extracts_diagno
             p99_ms=1.33,
             throughput_qps=670.0,
             uri="/api/repo/index/status",
-            extra={"minRepos": "150"},
+            extra={
+                "minRepos": "150",
+                "repoReadPressure": "budget=4, inFlight=2, requested=177, searchable=64, parallelism=4, fanoutCapped=true",
+            },
         )
         | {"suite": "xiuxian-wendao/perf-gateway-real-workspace"},
     )
@@ -163,6 +166,10 @@ def test_render_gateway_perf_summary_selects_latest_per_case_and_extracts_diagno
     assert cases["repo_module_search_formal"]["p95_ms"] == 1.05
     assert cases["repo_module_search_formal"]["throughput_qps"] == 620.0
     assert (
+        cases["repo_module_search_formal"]["repo_read_pressure"]
+        == "budget=2, inFlight=1, requested=177, searchable=96, parallelism=2, fanoutCapped=true"
+    )
+    assert (
         cases["studio_search_index_status_formal"]["extra"]["statusGatePressure"]
         == "maintenance=none; scopes=[gateway-sync(...)]"
     )
@@ -172,6 +179,10 @@ def test_render_gateway_perf_summary_selects_latest_per_case_and_extracts_diagno
     )
     real_cases = {entry["case"]: entry for entry in payload["real_workspace"]["cases"]}
     assert real_cases["repo_index_status_real_workspace_sample"]["extra"]["minRepos"] == "150"
+    assert (
+        real_cases["repo_index_status_real_workspace_sample"]["repo_read_pressure"]
+        == "budget=4, inFlight=2, requested=177, searchable=64, parallelism=4, fanoutCapped=true"
+    )
     assert payload["real_workspace"]["overall"]["expected_case_count"] == len(
         REAL_WORKSPACE_GATEWAY_CASES
     )
@@ -206,6 +217,11 @@ def test_render_gateway_perf_summary_records_errors_and_formats_markdown(
     assert payload["overall"]["ok"] is False
     assert "## Wendao Gateway Perf Summary (local)" in markdown
     assert "| repo_symbol_search_formal | 1.100 | 1.300 | 700.0 | 0.0000 |" in markdown
+    assert "### Formal Repo-Read Pressure" in markdown
+    assert (
+        "- `repo_symbol_search_formal`: budget=2, inFlight=1, requested=177, searchable=96, parallelism=2, fanoutCapped=true"
+        in markdown
+    )
     assert "- Ignored non-formal cases: `none`" in markdown
     assert "- Real-workspace samples not present in this run." in markdown
     assert "`broken.json:parse_error:" in markdown

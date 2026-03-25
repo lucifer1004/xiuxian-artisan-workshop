@@ -70,7 +70,9 @@ def test_valkey_healthcheck_reports_owned_listener(tmp_path: Path) -> None:
     assert result.stdout.strip() == "PONG"
 
 
-def test_valkey_healthcheck_rejects_reachable_listener_without_matching_pidfile(tmp_path: Path) -> None:
+def test_valkey_healthcheck_rejects_reachable_listener_without_matching_pidfile(
+    tmp_path: Path,
+) -> None:
     project_root = Path(__file__).resolve().parents[2]
     script_path = Path(__file__).resolve().with_name("valkey-healthcheck.sh")
     fake_bin = _install_fake_valkey_cli(tmp_path)

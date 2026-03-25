@@ -3,6 +3,7 @@
 mod ast;
 mod attachments;
 mod autocomplete;
+#[path = "code_search/mod.rs"]
 mod code_search;
 mod definition;
 mod index;

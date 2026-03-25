@@ -144,6 +144,20 @@ impl From<&crate::search_plane::SearchMaintenanceStatus> for SearchIndexMaintena
     }
 }
 
+impl From<&crate::search_plane::SearchRepoReadPressure> for SearchIndexRepoReadPressure {
+    fn from(value: &crate::search_plane::SearchRepoReadPressure) -> Self {
+        Self {
+            budget: value.budget,
+            in_flight: value.in_flight,
+            captured_at: value.captured_at.clone(),
+            requested_repo_count: value.requested_repo_count,
+            searchable_repo_count: value.searchable_repo_count,
+            parallelism: value.parallelism,
+            fanout_capped: value.fanout_capped,
+        }
+    }
+}
+
 impl From<crate::search_plane::SearchQueryTelemetrySource> for SearchIndexQueryTelemetrySource {
     fn from(value: crate::search_plane::SearchQueryTelemetrySource) -> Self {
         match value {

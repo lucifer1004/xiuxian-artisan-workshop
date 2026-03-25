@@ -8,6 +8,7 @@ pub mod types;
 mod analysis;
 #[cfg(feature = "zhenfa-router")]
 mod pathing;
+/// Performance fixtures and helpers for Studio gateway benchmarks.
 #[cfg(all(feature = "zhenfa-router", feature = "performance"))]
 pub mod perf_support;
 #[cfg(feature = "zhenfa-router")]

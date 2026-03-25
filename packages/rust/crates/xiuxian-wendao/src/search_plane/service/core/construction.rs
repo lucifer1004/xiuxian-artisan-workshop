@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 
+use chrono::Utc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use xiuxian_vector::{VectorStore, VectorStoreError};
 
@@ -10,9 +11,9 @@ use crate::search_plane::{
     SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneCoordinator,
 };
 
-const DEFAULT_REPO_SEARCH_READ_CONCURRENCY_FALLBACK: usize = 8;
-const MIN_REPO_SEARCH_READ_CONCURRENCY: usize = 4;
-const MAX_REPO_SEARCH_READ_CONCURRENCY: usize = 16;
+const DEFAULT_REPO_SEARCH_READ_CONCURRENCY_FALLBACK: usize = 2;
+const MIN_REPO_SEARCH_READ_CONCURRENCY: usize = 1;
+const MAX_REPO_SEARCH_READ_CONCURRENCY: usize = 4;
 const REPO_SEARCH_READ_CONCURRENCY_ENV: &str = "XIUXIAN_WENDAO_REPO_SEARCH_READ_CONCURRENCY";
 
 impl SearchPlaneService {
@@ -58,6 +59,7 @@ impl SearchPlaneService {
         maintenance_policy: SearchMaintenancePolicy,
         cache: crate::search_plane::cache::SearchPlaneCache,
     ) -> Self {
+        let repo_search_read_concurrency_limit = repo_search_read_concurrency_limit();
         let coordinator = Arc::new(SearchPlaneCoordinator::new(
             project_root.clone(),
             storage_root.clone(),
@@ -70,9 +72,11 @@ impl SearchPlaneService {
             manifest_keyspace,
             coordinator,
             cache,
-            repo_search_read_permits: Arc::new(
-                Semaphore::new(repo_search_read_concurrency_limit()),
-            ),
+            repo_search_read_concurrency_limit,
+            repo_search_read_permits: Arc::new(Semaphore::new(repo_search_read_concurrency_limit)),
+            repo_search_dispatch: Arc::new(Mutex::new(
+                super::types::RepoSearchDispatchRuntime::default(),
+            )),
             local_maintenance: Arc::new(Mutex::new(
                 super::types::LocalMaintenanceRuntime::default(),
             )),
@@ -193,10 +197,36 @@ impl SearchPlaneService {
             .acquire_owned()
             .await
             .map_err(|_| {
-                VectorStoreError::General(
-                    "repo content search read permits are unavailable".to_string(),
-                )
+                VectorStoreError::General("repo search read permits are unavailable".to_string())
             })
+    }
+
+    #[must_use]
+    pub(crate) fn repo_search_parallelism(&self, repo_count: usize) -> usize {
+        if repo_count == 0 {
+            return 1;
+        }
+
+        self.repo_search_read_concurrency_limit
+            .max(1)
+            .min(repo_count)
+    }
+
+    pub(crate) fn record_repo_search_dispatch(
+        &self,
+        requested_repo_count: usize,
+        searchable_repo_count: usize,
+        parallelism: usize,
+    ) {
+        let mut runtime = self
+            .repo_search_dispatch
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        runtime.captured_at = Some(Utc::now().to_rfc3339());
+        runtime.requested_repo_count = u32::try_from(requested_repo_count).unwrap_or(u32::MAX);
+        runtime.searchable_repo_count = u32::try_from(searchable_repo_count).unwrap_or(u32::MAX);
+        runtime.parallelism = u32::try_from(parallelism).unwrap_or(u32::MAX);
+        runtime.fanout_capped = searchable_repo_count > parallelism;
     }
 
     fn repo_table_name(corpus: SearchCorpusKind, repo_id: &str) -> String {
@@ -261,7 +291,7 @@ fn repo_search_read_concurrency_limit_with_lookup(
 fn default_repo_search_read_concurrency_limit(available_parallelism: Option<usize>) -> usize {
     available_parallelism
         .unwrap_or(DEFAULT_REPO_SEARCH_READ_CONCURRENCY_FALLBACK)
-        .div_ceil(2)
+        .div_ceil(5)
         .clamp(
             MIN_REPO_SEARCH_READ_CONCURRENCY,
             MAX_REPO_SEARCH_READ_CONCURRENCY,
@@ -271,11 +301,16 @@ fn default_repo_search_read_concurrency_limit(available_parallelism: Option<usiz
 #[cfg(test)]
 mod tests {
     use super::repo_search_read_concurrency_limit_with_lookup;
+    use crate::search_plane::service::helpers::{
+        default_storage_root, manifest_keyspace_for_project,
+    };
+    use crate::search_plane::{SearchMaintenancePolicy, SearchPlaneService};
+    use std::path::PathBuf;
 
     #[test]
     fn repo_search_read_concurrency_limit_defaults_from_parallelism() {
         let limit = repo_search_read_concurrency_limit_with_lookup(&|_| None, Some(12));
-        assert_eq!(limit, 6);
+        assert_eq!(limit, 3);
     }
 
     #[test]
@@ -296,6 +331,26 @@ mod tests {
             },
             Some(6),
         );
-        assert_eq!(limit, 4);
+        assert_eq!(limit, 2);
+    }
+
+    #[test]
+    fn repo_search_parallelism_reuses_repo_read_budget() {
+        let project_root = PathBuf::from("/tmp/search-plane-service");
+        let storage_root = default_storage_root(project_root.as_path());
+        let manifest_keyspace = manifest_keyspace_for_project(project_root.as_path());
+        let service = SearchPlaneService::with_paths(
+            project_root,
+            storage_root,
+            manifest_keyspace,
+            SearchMaintenancePolicy::default(),
+        );
+
+        assert_eq!(
+            service.repo_search_parallelism(usize::MAX),
+            service.repo_search_read_concurrency_limit
+        );
+        assert_eq!(service.repo_search_parallelism(2), 2);
+        assert_eq!(service.repo_search_parallelism(0), 1);
     }
 }

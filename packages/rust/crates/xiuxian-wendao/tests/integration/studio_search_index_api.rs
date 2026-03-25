@@ -44,6 +44,34 @@ async fn search_index_status_endpoint_returns_idle_corpora_snapshot() -> TestRes
             .get("queryTelemetrySummary")
             .is_none_or(Value::is_null)
     );
+    if let Some(repo_read_pressure) = payload
+        .get("repoReadPressure")
+        .filter(|value| !value.is_null())
+    {
+        assert!(repo_read_pressure["budget"].is_u64());
+        assert!(repo_read_pressure["inFlight"].is_u64());
+        assert!(
+            repo_read_pressure
+                .get("capturedAt")
+                .is_none_or(|value| value.is_null() || value.is_string())
+        );
+        assert!(
+            repo_read_pressure
+                .get("requestedRepoCount")
+                .is_none_or(|value| value.is_null() || value.is_u64())
+        );
+        assert!(
+            repo_read_pressure
+                .get("searchableRepoCount")
+                .is_none_or(|value| value.is_null() || value.is_u64())
+        );
+        assert!(
+            repo_read_pressure
+                .get("parallelism")
+                .is_none_or(|value| value.is_null() || value.is_u64())
+        );
+        assert!(repo_read_pressure["fanoutCapped"].is_boolean());
+    }
     if let Some(status_reason) = payload.get("statusReason").filter(|value| !value.is_null()) {
         assert!(status_reason["code"].is_string());
         assert!(status_reason["severity"].is_string());

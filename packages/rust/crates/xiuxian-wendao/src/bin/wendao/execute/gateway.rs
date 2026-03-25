@@ -15,6 +15,8 @@ use anyhow::Result;
 use axum::{
     Json,
     extract::State,
+    http::{HeaderValue, StatusCode, header::HeaderName},
+    response::{IntoResponse, Response},
     routing::{Router, get},
 };
 use log::info;
@@ -32,6 +34,10 @@ use xiuxian_zhenfa::{NotificationService, WebhookConfig, ZhenfaSignal, notificat
 
 /// Default port for the gateway server.
 const DEFAULT_PORT: u16 = 9517;
+/// Environment variable that points at the pidfile owned by the managed gateway process.
+const GATEWAY_PIDFILE_ENV: &str = "WENDAO_GATEWAY_PIDFILE";
+/// Response header that exposes the current gateway process id to readiness probes.
+const GATEWAY_PROCESS_ID_HEADER: &str = "x-wendao-process-id";
 
 /// Shared state for the gateway server.
 type AppState = GatewayState;
@@ -276,8 +282,66 @@ fn parse_webhook_from_toml(path: &std::path::Path) -> Option<WebhookConfig> {
 }
 
 /// Health check endpoint.
-async fn health() -> Json<&'static str> {
-    Json("ok")
+async fn health() -> Response {
+    gateway_health_response(gateway_pidfile_from_env().as_deref())
+}
+
+fn gateway_pidfile_from_env() -> Option<PathBuf> {
+    std::env::var_os(GATEWAY_PIDFILE_ENV)
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+}
+
+fn gateway_health_response(pidfile: Option<&Path>) -> Response {
+    let process_id = std::process::id();
+    let mut response = match pidfile {
+        Some(pidfile) => match gateway_pidfile_process_id(pidfile) {
+            Ok(expected_process_id) if expected_process_id == process_id => {
+                Json("ok").into_response()
+            }
+            Ok(expected_process_id) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "gateway is not ready",
+                    "pidfile": pidfile.display().to_string(),
+                    "expectedPid": expected_process_id,
+                    "processId": process_id,
+                })),
+            )
+                .into_response(),
+            Err(details) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "gateway is not ready",
+                    "pidfile": pidfile.display().to_string(),
+                    "details": details,
+                    "processId": process_id,
+                })),
+            )
+                .into_response(),
+        },
+        None => Json("ok").into_response(),
+    };
+
+    response.headers_mut().insert(
+        HeaderName::from_static(GATEWAY_PROCESS_ID_HEADER),
+        HeaderValue::from_str(&process_id.to_string()).unwrap_or_else(|error| {
+            panic!("gateway process id should be a valid header value: {error}")
+        }),
+    );
+
+    response
+}
+
+fn gateway_pidfile_process_id(pidfile: &Path) -> Result<u32, String> {
+    let contents = std::fs::read_to_string(pidfile)
+        .map_err(|error| format!("failed to read pidfile {}: {error}", pidfile.display()))?;
+    contents.trim().parse::<u32>().map_err(|error| {
+        format!(
+            "failed to parse pidfile {} as a process id: {error}",
+            pidfile.display()
+        )
+    })
 }
 
 /// Stats endpoint.

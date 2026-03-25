@@ -33,9 +33,22 @@ Replace Studio request-path search hot spots with a background-built search plan
 - non-code `search_intent` now merges `knowledge_section`, `local_symbol`, and repo-content hits into a single hybrid response path instead of treating intent as a pure knowledge lookup
 - code-biased Studio search now queries `repo_entity` before repo-content fallback, and hybrid intent merges repo-entity hits into the same ranked response path
 - `search_plane::cache` now fronts repeat autocomplete, knowledge, non-repo intent, repo-scoped code search, and code-biased hybrid intent requests with corpus-aware Valkey keys and silent fallback to direct Lance reads when Valkey is unavailable
-- `gateway/studio/types/search_index.rs` is now split into `gateway/studio/types/search_index/` with dedicated definitions, conversions, status rollups, and tests, while the public Studio search-index DTO façade remains unchanged
+- `gateway/studio/types/search_index.rs` is now split into `gateway/studio/types/search_index/` with dedicated definitions, conversions, status rollups, and a split `tests/` tree (`counts.rs`, `reason.rs`, `mapping.rs`, `summary.rs`), while the public Studio search-index DTO façade remains unchanged
 - `search_plane/service/core/status.rs` is now split into `search_plane/service/core/status/` with dedicated runtime, compaction, repo-status synthesis, and tests, while the public `SearchPlaneService` surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
+- `search_plane/service/core/repo_runtime.rs` is now split into `search_plane/service/core/repo_runtime/` with dedicated helpers, reads, sync, and tests, while the public `SearchPlaneService` repo-runtime surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
+- `search_plane/cache.rs` is now split into `search_plane/cache/` with dedicated config, construction, key generation, reads, writes, and tests modules, while the public `SearchPlaneCache` surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
+- `search_plane/service/helpers.rs` is now split into `search_plane/service/helpers/` with dedicated paths, status, and cache helpers, while the public `search_plane::service::helpers` surface remains unchanged; the next bounded target is `search_plane/reference_occurrence/build.rs`
+- `search_plane/knowledge_section/build.rs` is now split into `search_plane/knowledge_section/build/` with dedicated orchestration, paths, rows, types, write, and tests modules, while the public knowledge-section build surface remains unchanged; the next bounded target is `search_plane/reference_occurrence/build.rs`
+- `gateway/studio/search/handlers/tests.rs` is now split into `gateway/studio/search/handlers/tests/` with dedicated helper setup, query, repo-content, code-search, and intent test modules, while the handler test surface remains unchanged; the next bounded target is `search_plane/reference_occurrence/build.rs`
+- `search_plane/local_symbol/query.rs` is now split into `search_plane/local_symbol/query/` with dedicated shared, search, autocomplete, and tests modules, while the public local-symbol query surface remains unchanged; the next bounded target is `search_plane/reference_occurrence/build.rs`
+- `search_plane/reference_occurrence/build.rs` is now split into `search_plane/reference_occurrence/build/` with dedicated orchestration, plan, extract, write, types, and tests modules, while the public reference-occurrence build surface remains unchanged; the next bounded target is `search_plane/local_symbol/build.rs`
+- `search_plane/local_symbol/build.rs` is now split into `search_plane/local_symbol/build/` with dedicated orchestration, partitions, plan, write, types, and tests modules, while the public local-symbol build surface remains unchanged; the next bounded target is `search_plane/repo_entity/build.rs`
+- `search_plane/repo_entity/build.rs` is now split into `search_plane/repo_entity/build/` with dedicated orchestration, plan, write, types, and tests modules, while the public repo-entity build surface remains unchanged; the next bounded target is `search_plane/attachment/build.rs`
+- `search_plane/attachment/build.rs` is now split into `search_plane/attachment/build/` with dedicated orchestration, plan, extract, write, types, and tests modules, while the public attachment build surface remains unchanged; the next bounded target is `search_plane/repo_entity/schema.rs`
+- `search_plane/repo_entity/schema.rs` is now split into `search_plane/repo_entity/schema/` with dedicated definitions, columns, helpers, rows, batches, and tests modules, while the public repo-entity schema surface remains unchanged; the next bounded target is `search_plane/coordinator.rs`
+- `search_plane/coordinator.rs` is now split into `search_plane/coordinator/` with dedicated state, build, maintenance, types, and tests modules, while the public coordinator surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/code_search.rs`
 - `analyzers/service/projection/planner.rs` is now split into `analyzers/service/projection/planner/` with dedicated planner API, scoring, workset, and tests modules, while the public planner surface remains unchanged
+- `search_plane/service/tests/status.rs` is now split into `search_plane/service/tests/status/` with dedicated repo-content, maintenance, and issue tests plus shared helpers, while the status test surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
 - search-plane Valkey client resolution now uses the Wendao-local thin helper layer, so the first shared transport primitive is centralized without moving cache keyspace or manifest semantics out of the search-plane domain
 - repo-backed query keys now derive from local corpus state plus repo-index status fragments for `repo_entity` and `repo_content_chunk`, so repo-aware caching no longer has to bypass Valkey just because the response depends on repo publication state
 - `repo_entity` and `repo_content_chunk` now emit explicit publication records after successful table writes, so the search plane can distinguish "published rows that remain readable" from transient repo-index phase churn
@@ -192,8 +205,10 @@ Replace Studio request-path search hot spots with a background-built search plan
 - the bundled gateway OpenAPI contract now accurately declares the required `path` query parameter for `GET /api/analysis/markdown`, and the document test suite now locks both markdown-analysis and code-AST required query params so future drift is caught by tests instead of benchmark failures
 - `search_definition` now inherits the resolver defaults again instead of pinning `ExactOnly` and disabling Markdown hits in the handler, so the endpoint can fall back to fuzzy symbol matches and Markdown heading resolution when exact symbol lookup misses
 - the gateway benchmark-and-audit module now discovers a real local Markdown file for smoke coverage, records that `markdown_file_path` in the TOML report discovery section, and sends a valid `GET /api/analysis/markdown?path=...` request during OpenAPI smoke coverage instead of a guaranteed bad request
+- the gateway benchmark-and-audit module now also discovers a dedicated local-symbol `definition_query` from live `/api/search/ast` hits and records it in the TOML discovery block, so `/api/search/definition` smoke coverage no longer reuses the repo/package query and no longer reports the old false-negative `q=ADTypes` `404`
 - the gateway benchmark transport is now hardened for local loopback pressure runs on this host. The CLI no longer depends on Undici `fetch`, and it explicitly binds `localAddress` for loopback targets when issuing `node:http` / `node:https` requests so repeated benchmark traffic against `127.0.0.1` does not fail with local `EADDRNOTAVAIL`
 - with that transport fix in place, the refreshed `96`-concurrency / `60s` pressure report cleared the old markdown contract failure entirely. The remaining benchmark failures are now all honest `INDEX_NOT_READY` responses for unpublished local corpora rather than malformed smoke requests
+- with the later definition-seed correction in place, the refreshed steady-state `96`-concurrency / `60s` report at `.data/wendao-frontend/.benchmark/wendao_gateway_openapi_2026_03_25T06_21_30_057Z.toml` now records `62 passed / 0 failed / 2 skipped`, which removes the last benchmark-only false negative from the bundled OpenAPI smoke surface
 - local corpus request serving now closes that cold-start gap too. `StudioState` waits for the first successful publish of `local_symbol`, `knowledge_section`, `attachment`, and `reference_occurrence` before AST search, autocomplete, definition resolve, knowledge search, attachment search, and reference search continue, so a fresh gateway restart no longer surfaces transient `INDEX_NOT_READY` errors to the first caller when the build is still in progress
 - targeted gateway tests now pin that contract explicitly. Six cold-start regressions call the handlers without pre-publishing their local corpora and assert success once the background build completes, which protects the exact OpenAPI-facing failure mode that the pressure benchmark exposed
 - the next bounded repo-search pressure slice is now formalized in `.cache/codex/execplans/wendao_repo_content_query_pressure_hardening.md`. It stays intentionally narrow: repo-content query filtering, read-side backpressure, and FTS eligibility only
@@ -201,8 +216,76 @@ Replace Studio request-path search hot spots with a background-built search plan
 - `repo_content_chunk` query filtering now uses that helper against `line_text_folded`, which preserves the exact-match boost logic but only evaluates `line_text.contains(raw_needle)` for rows that already matched the folded batch mask
 - repo-content request-path reads are now also wired to a shared `SearchPlaneService` semaphore with env override `XIUXIAN_WENDAO_REPO_SEARCH_READ_CONCURRENCY`, closing the old gap where concurrent repo code-search scans had no search-plane-owned backpressure surface
 - repo-content FTS eligibility is now widened for common code-search punctuation such as `@`, `.`, `/`, `:`, and `()`, which keeps more real code queries on the cheaper FTS-first lane before scan fallback is attempted
-- full Wendao validation for this slice is temporarily blocked by an unrelated in-progress worktree conflict: `service/core/maintenance.rs` is staged for deletion while a new `service/core/maintenance/` directory is present but not yet reconciled, so Rust currently reports both `maintenance.rs` and `maintenance/mod.rs` as the same module
+- that repo-content pressure slice is now fully validated end to end: the new `xiuxian-vector` helper tests pass, targeted Wendao query/config regressions pass, `cargo check -p xiuxian-vector` passes, and `cargo check -p xiuxian-wendao` passes after the temporary maintenance-module conflict in the shared worktree was reconciled
+- the next live pressure report showed the remaining bottleneck had moved from local corpora to repo-backed FD exhaustion, so the repo-read gate has now been tightened again. `XIUXIAN_WENDAO_REPO_SEARCH_READ_CONCURRENCY` now defaults from `available_parallelism() / 8`, clamps to `1..4`, and falls back to `2`, while request fanout still reuses that exact stored budget
+- `repo_entity` wide-row persistence has now landed its first stage. Repo-entity rows and batches persist structured metadata such as `module_id`, line range, verification fields, `attributes_json`, and `projection_page_ids`; repo-entity reranking hydrates `hit_json` only for final Top-K ids; and repo-entity incremental fingerprints no longer rely on a single giant string-concatenation token
+- repo-backed pressure recovery is now also explicit on the repo-index side: retry classification accepts descriptor-pressure and resolver transport failures from both `AnalysisFailed` and `InvalidRepositoryPath`, which keeps one bounded retry available when managed git setup fails under OS pressure instead of treating every wrapped error as terminal
+- managed checkout bootstrap now also treats descriptor pressure as transient in two places: lock acquisition retries through `EMFILE` inside the existing checkout-lock wait policy, and managed git `open_bare(...)` / `open(...)` calls retry a short bounded number of times when libgit surfaces `Too many open files`
 - persisted gateway diagnostics now also have a workflow-facing summary layer. `scripts/render_wendao_gateway_perf_summary.py` renders the newest saved report for each of the six formal gateway cases into `gateway_perf_summary.json` and `gateway_perf_summary.md`, explicitly ignoring helper/sample artifacts that share the same report directory but are not part of the formal gate surface
 - `just wendao-gateway-perf-summary` is now the stable local/CI entrypoint for that render step, and `.github/workflows/xiuxian-wendao-performance-gates.yaml` appends the generated markdown summary directly to `GITHUB_STEP_SUMMARY` after the formal gateway lane
 - that same summary surface now also folds in the ignored real-workspace gateway samples when they exist. The JSON/Markdown payload keeps formal warm-cache cases and real-workspace samples in separate sections, keeps formal missing cases as the only hard gate, and leaves the real-workspace section advisory/optional so CI and manual large-workspace runs can share one artifact shape
 - the summary renderer now also supports a mirrored output directory. The manual `rust-wendao-performance-gateway-real-workspace` lane uses that to drop the same unified summary into both the canonical `perf-gateway` root and the `perf-gateway-real-workspace` root, so large-workspace sampling leaves behind a self-contained summary surface without a second manual render step
+- repo-backed state reads are now snapshotted per request instead of polled per repository. `code_search` and repo-backed intent merge batch `repo_search_publication_states(...)` once for the full repo set, then partition searchable / pending / skipped repositories from that in-memory snapshot
+- repo-backed hit collection is now bounded fan-out instead of one serial `await` per repository. Both the code-search and repo-intent merge paths dispatch searchable repos through a `JoinSet` with parallelism capped by local `available_parallelism()`, while preserving the original repo ordering in `pending_repos` and `skipped_repos`
+- the repo IO gate now actually covers both repo-backed corpora. `repo_entity` joins `repo_content_chunk` on the shared `repo_search_read_permits` semaphore, and both acquire the permit before `open_store(...)` so search-plane can throttle store-open plus scan pressure instead of only content-scan pressure
+- targeted regressions now lock those two fixes explicitly: one service test proves batched publication-state hydration works after a runtime-memory miss, one handler test proves repo partitioning preserves repo order and availability semantics, and two service tests prove repo-entity and repo-content queries both stall when all repo read permits are exhausted
+- repo request fan-out now reuses that same repo-read budget instead of computing a second independent cap from host parallelism. `SearchPlaneService` persists `repo_search_read_concurrency_limit`, and request-path `repo_search_parallelism(...)` now reads that stored budget directly
+- the repo request path therefore now has one shared concurrency contract: one budget controls both how wide `code_search` / repo-intent merge may fan out at once and how many repo-backed Lance store opens / scans may proceed concurrently
+- repo-wide `code_search` now also has a bounded server-side completion budget. When an all-repo code query exceeds that request budget, Wendao aborts the remaining repo fanout tasks and returns `partial = true` with `indexing_state = partial` instead of letting the client sit until the outer `30s` timeout expires
+- explicit repo-hint code search is intentionally excluded from that new budget, so targeted single-repo debugging keeps the full query path while broad all-repo search degrades gracefully under pressure
+- targeted handler regressions now pin both sides of that contract: one unit test locks the default budget to all-repo search only, and one async test drains the shared repo-read permits and proves that a repo-wide search now returns a successful partial response when the budget expires instead of surfacing a transport timeout
+- the status surface now exposes that repo-read contract directly. `SearchPlaneStatusSnapshot` and Studio `/api/search/index/status` carry top-level `repoReadPressure`, which reports the shared repo-read budget, current in-flight permit count, and the last observed repo dispatch (`requestedRepoCount`, `searchableRepoCount`, `parallelism`, `fanoutCapped`, `capturedAt`)
+- request-path repo fan-out now records those dispatch observations at the moment `code_search` and repo-backed intent merge partition their repo sets, so pressure triage can distinguish “budget is small” from “this specific request was actually capped by the budget”
+- formal gateway perf diagnostics now consume that same surface. The compact `/api/search/index/status` digest embedded into generic gateway perf reports includes `repoReadPressure`, so success-path metadata and budget-failure messages can show whether the shared repo-read gate was actually saturated during the run
+- the dedicated `search_index_status` formal gate now also validates `repoReadPressure` consistency directly: `budget` must stay positive, `inFlight` cannot exceed it, `parallelism` cannot exceed the same budget, and `fanoutCapped` must agree with `searchableRepoCount > parallelism`
+- the case-local `statusGatePressure` extra therefore now rolls three signals into one line: aggregate maintenance pressure, repo-read gate pressure, and query-telemetry scope pressure
+- real-workspace gateway samples now persist the same repo-read gate digest as a first-class case-local extra. Both advisory large-workspace samples append `repoReadPressure` alongside their existing `workspaceQuery` / `minRepos` metadata, so offline comparison between formal and large-workspace reports no longer depends on re-parsing the larger compact status string
+- the gateway perf summary renderer now surfaces that digest explicitly. Every summary case entry carries `repo_read_pressure`, preferring the explicit extra when present and otherwise extracting the same value from the compact search-index status string
+- the rendered markdown summary now includes dedicated repo-read sections for both formal and real-workspace cases, so offline pressure triage can read repo gate saturation directly instead of digging through the larger diagnostics blob
+- repo gateway cached reads are now aligned with that same bounded-read
+  contract. The shared `with_repo_cached_analysis_bundle(...)` helper uses
+  cached-only analyzer loading and no longer falls through to request-path
+  `Ensure`
+- that change removes managed-remote sync permit acquisition from warm-cache
+  repo gateway search endpoints, which means `repo/module-search`,
+  `repo/symbol-search`, `repo/example-search`, and the projected-page cached
+  lane no longer inject remote-sync blocking into the mixed-hotset benchmark
+- the gateway test suite now also pins the cold-cache outcome explicitly:
+  without a prewarmed repo analysis cache, cached repo gateway search endpoints
+  return fast `409 REPO_INDEX_PENDING` instead of hanging into on-demand
+  analysis
+- `repo_entity` wide-row persistence has now landed its typed-query stage.
+  Search Plane reconstructs `ModuleSearchResult`, `SymbolSearchResult`, and
+  `ExampleSearchResult` directly from persisted structured repo-entity columns
+  and Top-K row hydration, so published repos no longer need analyzer-cache
+  payload reconstruction for these three repo gateway endpoints
+- repo gateway handlers now prefer published `repo_entity` tables for
+  `module-search`, `symbol-search`, and `example-search`, while preserving
+  cached-analyzer fallback when repo-entity publication is absent
+- repo-entity FTS execution now defensively falls back to ordinary scan when a
+  Lance FTS batch omits one of the structured projected columns, which closes
+  the typed-query `missing string column entity_kind` failure without relaxing
+  ordinary schema checks
+- the stage-2 repo-entity slice is green under targeted `cargo nextest`,
+  `cargo check -p xiuxian-wendao`, and `git diff --check`
+- repo-wide `code_search` now also trims per-repo work before global reranking.
+  All-repo fanout uses a dedicated local result cap of `min(limit, 12)` for
+  each repo-local entity/content query, while explicit repo-hint searches still
+  use the full requested limit
+- the shared repo-read budget is now slightly less conservative by default.
+  `XIUXIAN_WENDAO_REPO_SEARCH_READ_CONCURRENCY` still honors positive env
+  overrides and the existing clamp, but the fallback heuristic now derives from
+  `available_parallelism() / 5` instead of `/ 8`, which raises the current host
+  class from `budget=2` to `budget=3`
+- targeted regressions now pin both of those tail-latency controls, and the
+  slice is green under targeted `cargo nextest`, `cargo check -p xiuxian-wendao`,
+  and `git diff --check`
+- repo-wide `code_search` now also distinguishes between the lighter
+  `repo_entity` path and the heavier `repo_content_chunk` fallback. All-repo
+  fanout keeps the entity cap at `min(limit, 12)` but lowers repo-content
+  fallback to `min(limit, 4)`, while explicit `repo:` searches still use the
+  full requested limit for both paths
+- handler regressions now also pin that entity-first contract explicitly: when a
+  repo has both published `repo_entity` and `repo_content_chunk` data for the
+  same query, repo-wide code search returns the symbol hit and does not append a
+  redundant file fallback hit from the same repo

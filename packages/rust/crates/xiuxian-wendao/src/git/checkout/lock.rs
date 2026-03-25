@@ -14,6 +14,7 @@ const CHECKOUT_LOCK_RETRY_DELAY: Duration = Duration::from_millis(100);
 const CHECKOUT_LOCK_MAX_WAIT_ENV: &str = "XIUXIAN_WENDAO_CHECKOUT_LOCK_MAX_WAIT_SECS";
 const DEFAULT_CHECKOUT_LOCK_MAX_WAIT_SECS: u64 = 20;
 const CHECKOUT_LOCK_STALE_AFTER: Duration = Duration::from_secs(120);
+const TOO_MANY_OPEN_FILES_OS_ERROR: i32 = 24;
 
 #[derive(Debug)]
 pub(super) struct ManagedCheckoutLock {
@@ -133,6 +134,18 @@ pub(super) fn acquire_managed_checkout_lock_with_policy(
 
                 thread::sleep(retry_delay);
             }
+            Err(error) if is_descriptor_pressure_error(&error) => {
+                if started_at.elapsed() >= max_wait {
+                    return Err(RepoIntelligenceError::AnalysisFailed {
+                        message: format!(
+                            "timed out waiting for managed checkout lock `{}` while file-descriptor pressure persisted: {error}",
+                            lock_path.display()
+                        ),
+                    });
+                }
+
+                thread::sleep(retry_delay);
+            }
             Err(error) => {
                 return Err(RepoIntelligenceError::AnalysisFailed {
                     message: format!(
@@ -151,4 +164,8 @@ fn lockfile_is_stale(lock_path: &Path, stale_after: Duration) -> bool {
         .and_then(|metadata| metadata.modified().ok())
         .and_then(|modified_at| modified_at.elapsed().ok())
         .is_some_and(|elapsed| elapsed >= stale_after)
+}
+
+pub(super) fn is_descriptor_pressure_error(error: &std::io::Error) -> bool {
+    error.raw_os_error() == Some(TOO_MANY_OPEN_FILES_OS_ERROR)
 }

@@ -368,3 +368,19 @@ fn managed_checkout_lock_wait_accepts_positive_env_override() {
 
     assert_eq!(wait, Duration::from_secs(30));
 }
+
+#[test]
+fn managed_checkout_lock_recognizes_descriptor_pressure_errors() {
+    let error = std::io::Error::from_raw_os_error(24);
+    assert!(super::lock::is_descriptor_pressure_error(&error));
+}
+
+#[test]
+fn managed_checkout_git_open_retry_only_retries_descriptor_pressure_messages() {
+    assert!(super::managed::retryable_git_open_error_message(
+        "could not open '/tmp/example.git/config': Too many open files; class=Os (2)"
+    ));
+    assert!(!super::managed::retryable_git_open_error_message(
+        "could not open '/tmp/example.git/config': No such file or directory"
+    ));
+}

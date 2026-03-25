@@ -18,9 +18,9 @@ use crate::performance::support::gateway::{
     STUDIO_SEARCH_INDEX_STATUS_CASE, assert_gateway_perf_budget_with_diagnostics,
     attach_gateway_perf_diagnostics, describe_gateway_perf_case_diagnostics,
     describe_maintenance_summary, describe_query_telemetry_scopes,
-    describe_repo_index_status_payload, describe_search_index_status_payload,
-    formal_gateway_perf_budget, formal_gateway_perf_config, maintenance_summary,
-    query_telemetry_scope,
+    describe_repo_index_status_payload, describe_repo_read_pressure,
+    describe_search_index_status_payload, formal_gateway_perf_budget, formal_gateway_perf_config,
+    maintenance_summary, query_telemetry_scope, repo_read_pressure,
 };
 
 const SUITE: &str = "xiuxian-wendao/perf-gateway";
@@ -153,6 +153,22 @@ async fn collect_gateway_case_diagnostics_with_extra(
     diagnostics
 }
 
+async fn collect_gateway_case_diagnostics_with_repo_read_pressure(
+    fixture: &GatewayPerfFixture,
+    uri: &str,
+    mut extra: BTreeMap<String, String>,
+) -> GatewayPerfCaseDiagnostics {
+    let repo_read = match request_json(fixture.router(), STUDIO_SEARCH_INDEX_STATUS_URI).await {
+        Ok((StatusCode::OK, payload)) => {
+            describe_repo_read_pressure(payload.get("repoReadPressure"))
+        }
+        Ok((status, _)) => format!("status={status}"),
+        Err(error) => format!("error={error}"),
+    };
+    extra.insert("repoReadPressure".to_string(), repo_read);
+    collect_gateway_case_diagnostics_with_extra(fixture, uri, extra).await
+}
+
 async fn assert_real_workspace_repo_index_status_sample(
     fixture: &GatewayPerfFixture,
 ) -> Result<()> {
@@ -191,7 +207,7 @@ async fn assert_real_workspace_repo_index_status_sample(
         },
     )
     .await;
-    let diagnostics = collect_gateway_case_diagnostics_with_extra(
+    let diagnostics = collect_gateway_case_diagnostics_with_repo_read_pressure(
         fixture,
         REPO_INDEX_STATUS_URI,
         BTreeMap::from([("minRepos".to_string(), min_repos.to_string())]),
@@ -236,7 +252,7 @@ async fn assert_real_workspace_code_search_sample(fixture: &GatewayPerfFixture) 
         },
     )
     .await;
-    let diagnostics = collect_gateway_case_diagnostics_with_extra(
+    let diagnostics = collect_gateway_case_diagnostics_with_repo_read_pressure(
         fixture,
         workspace_uri.as_str(),
         BTreeMap::from([("workspaceQuery".to_string(), real_workspace_query())]),
@@ -279,6 +295,36 @@ async fn collect_gateway_case_diagnostics_with_extra_merges_runtime_pressure() -
     assert_eq!(
         diagnostics.extra.get("scope").map(String::as_str),
         Some("gateway-sync")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn collect_gateway_case_diagnostics_with_repo_read_pressure_records_gate_state() -> Result<()>
+{
+    let fixture = prepare_gateway_perf_fixture().await?;
+    fixture
+        .warm_repo_scope_query("gateway-sync", "solve")
+        .await?;
+    let diagnostics = collect_gateway_case_diagnostics_with_repo_read_pressure(
+        &fixture,
+        STUDIO_CODE_SEARCH_URI,
+        BTreeMap::from([("workspaceQuery".to_string(), "solve".to_string())]),
+    )
+    .await;
+
+    assert_eq!(diagnostics.uri, STUDIO_CODE_SEARCH_URI);
+    assert!(diagnostics.search_index.contains("repoRead="));
+    assert!(diagnostics.repo_index.contains("total="));
+    assert_eq!(
+        diagnostics.extra.get("workspaceQuery").map(String::as_str),
+        Some("solve")
+    );
+    assert!(
+        diagnostics
+            .extra
+            .get("repoReadPressure")
+            .is_some_and(|value| value.contains("budget=") && value.contains("fanoutCapped="))
     );
     Ok(())
 }
@@ -331,7 +377,9 @@ async fn search_index_status_perf_gate_reports_query_telemetry_summary_formal_ga
     fixture
         .warm_repo_scope_query("gateway-sync", "solve")
         .await?;
-    let diagnostics = Arc::new(Mutex::new("maintenance=none; scopes=<missing>".to_string()));
+    let diagnostics = Arc::new(Mutex::new(
+        "maintenance=none; repoRead=none; scopes=<missing>".to_string(),
+    ));
 
     let mut report = run_async_budget(
         SUITE,
@@ -352,17 +400,32 @@ async fn search_index_status_perf_gate_reports_query_telemetry_summary_formal_ga
                     payload.get("maintenanceSummary").filter(|value| !value.is_null());
                 let maintenance_pressure =
                     describe_maintenance_summary(maintenance_summary_value);
+                let repo_read_pressure_value =
+                    payload.get("repoReadPressure").filter(|value| !value.is_null());
+                let repo_read_pressure_text =
+                    describe_repo_read_pressure(repo_read_pressure_value);
                 {
                     let mut latest = diagnostics
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    *latest = format!("maintenance={maintenance_pressure}; scopes=<missing>");
+                    *latest = format!(
+                        "maintenance={maintenance_pressure}; repoRead={repo_read_pressure_text}; scopes=<missing>"
+                    );
                 }
                 let maintenance = maintenance_summary_value
                     .map(|summary| {
                         maintenance_summary(summary).ok_or_else(|| {
                             anyhow!(
                                 "maintenanceSummary should be fully populated when present; maintenance={maintenance_pressure}"
+                            )
+                        })
+                    })
+                    .transpose()?;
+                let repo_read = repo_read_pressure_value
+                    .map(|summary| {
+                        repo_read_pressure(Some(summary)).ok_or_else(|| {
+                            anyhow!(
+                                "repoReadPressure should be fully populated when present; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}"
                             )
                         })
                     })
@@ -399,7 +462,7 @@ async fn search_index_status_perf_gate_reports_query_telemetry_summary_formal_ga
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
                     *latest = format!(
-                        "maintenance={maintenance_pressure}; scopes={}",
+                        "maintenance={maintenance_pressure}; repoRead={repo_read_pressure_text}; scopes={}",
                         describe_query_telemetry_scopes(summary)
                     );
                 }
@@ -415,9 +478,42 @@ async fn search_index_status_perf_gate_reports_query_telemetry_summary_formal_ga
                 }
                 if scope_pressure.corpus_count == 0 || scope_pressure.total_rows_scanned == 0 {
                     return Err(anyhow!(
-                        "`gateway-sync` scope bucket should report scanned rows after repo-scoped warmup; scopes={}; maintenance={maintenance_pressure}",
+                        "`gateway-sync` scope bucket should report scanned rows after repo-scoped warmup; scopes={}; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}",
                         describe_query_telemetry_scopes(summary),
                     ));
+                }
+                if let Some(repo_read) = repo_read {
+                    if repo_read.budget == 0 {
+                        return Err(anyhow!(
+                            "repoReadPressure.budget should stay positive; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}"
+                        ));
+                    }
+                    if repo_read.in_flight > repo_read.budget {
+                        return Err(anyhow!(
+                            "repoReadPressure.inFlight cannot exceed budget; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}"
+                        ));
+                    }
+                    if let Some(parallelism) = repo_read.parallelism {
+                        if parallelism == 0 || parallelism > repo_read.budget {
+                            return Err(anyhow!(
+                                "repoReadPressure.parallelism should stay within the shared repo-read budget; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}"
+                            ));
+                        }
+                    }
+                    if let (Some(searchable_repo_count), Some(parallelism)) =
+                        (repo_read.searchable_repo_count, repo_read.parallelism)
+                    {
+                        if searchable_repo_count > parallelism && !repo_read.fanout_capped {
+                            return Err(anyhow!(
+                                "repoReadPressure.fanoutCapped should be true when searchable repos exceed parallelism; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}"
+                            ));
+                        }
+                        if searchable_repo_count <= parallelism && repo_read.fanout_capped {
+                            return Err(anyhow!(
+                                "repoReadPressure.fanoutCapped should stay false when searchable repos fit within parallelism; repoRead={repo_read_pressure_text}; maintenance={maintenance_pressure}"
+                            ));
+                        }
+                    }
                 }
                 if let Some(maintenance) = maintenance {
                     let signal_count = maintenance.prewarm_running_count

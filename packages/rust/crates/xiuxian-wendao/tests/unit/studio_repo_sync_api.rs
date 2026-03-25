@@ -5,6 +5,7 @@ use crate as xiuxian_wendao;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
+use std::time::UNIX_EPOCH;
 
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
@@ -18,11 +19,12 @@ use xiuxian_wendao::analyzers::{
     load_repo_intelligence_config, repo_projected_page_index_trees_from_config,
     repo_projected_pages_from_config,
 };
+use xiuxian_wendao::gateway::studio::repo_index::RepoCodeDocument;
 use xiuxian_wendao::gateway::studio::repo_index::RepoIndexCoordinator;
 use xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexCoordinator;
 use xiuxian_wendao::gateway::studio::test_support::assert_studio_json_snapshot;
 use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
-use xiuxian_wendao::search_plane::SearchPlaneService;
+use xiuxian_wendao::search_plane::{SearchPlaneService, publish_repo_entities};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -113,6 +115,98 @@ async fn repo_example_search_endpoint_returns_example_payload() -> TestResult {
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_example_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn repo_cached_search_endpoints_return_pending_without_ready_analysis_cache() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project_with_options(
+        temp.path(),
+        false,
+        false,
+    ));
+
+    for uri in [
+        "/api/repo/module-search?repo=gateway-sync&query=GatewaySyncPkg&limit=5",
+        "/api/repo/symbol-search?repo=gateway-sync&query=solve&limit=5",
+        "/api/repo/example-search?repo=gateway-sync&query=solve&limit=5",
+    ] {
+        let (status, payload) = request_json(router.clone(), uri).await?;
+        assert_eq!(status, StatusCode::CONFLICT, "{uri}");
+        assert_eq!(payload["code"], "REPO_INDEX_PENDING", "{uri}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn repo_cached_search_endpoints_can_serve_from_published_repo_entity_search_plane()
+-> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\nsolve() = nothing\nend\n",
+    )?;
+    fs::create_dir_all(repo_dir.join("examples"))?;
+    fs::write(
+        repo_dir.join("examples").join("solve_demo.jl"),
+        "using GatewaySyncPkg\nsolve()\n",
+    )?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let state = gateway_state_for_project_with_options(temp.path(), false, false);
+    publish_repo_entity_search_plane(state.as_ref(), temp.path(), "gateway-sync").await?;
+    let router = studio_router(state);
+
+    let (module_status, module_payload) = request_json(
+        router.clone(),
+        "/api/repo/module-search?repo=gateway-sync&query=GatewaySyncPkg&limit=5",
+    )
+    .await?;
+    assert_eq!(module_status, StatusCode::OK);
+    assert_eq!(module_payload["repo_id"], "gateway-sync");
+    assert_eq!(
+        module_payload["modules"][0]["qualified_name"],
+        "GatewaySyncPkg"
+    );
+    assert_eq!(
+        module_payload["module_hits"][0]["module"]["module_id"],
+        "repo:gateway-sync:module:GatewaySyncPkg"
+    );
+
+    let (symbol_status, symbol_payload) = request_json(
+        router.clone(),
+        "/api/repo/symbol-search?repo=gateway-sync&query=solve&limit=5",
+    )
+    .await?;
+    assert_eq!(symbol_status, StatusCode::OK);
+    assert_eq!(symbol_payload["repo_id"], "gateway-sync");
+    assert_eq!(symbol_payload["symbols"][0]["name"], "solve");
+    assert_eq!(
+        symbol_payload["symbol_hits"][0]["audit_status"],
+        "unreviewed"
+    );
+
+    let (example_status, example_payload) = request_json(
+        router,
+        "/api/repo/example-search?repo=gateway-sync&query=solve&limit=5",
+    )
+    .await?;
+    assert_eq!(example_status, StatusCode::OK);
+    assert_eq!(example_payload["repo_id"], "gateway-sync");
+    assert_eq!(example_payload["examples"][0]["title"], "solve_demo");
+    assert_eq!(example_payload["example_hits"][0]["rank"], 1);
     Ok(())
 }
 
@@ -1605,6 +1699,73 @@ async fn repo_projected_page_navigation_endpoint_returns_not_found_for_unknown_f
 }
 
 fn gateway_state_for_project(project_root: &Path) -> Arc<GatewayState> {
+    gateway_state_for_project_with_options(project_root, true, true)
+}
+
+async fn publish_repo_entity_search_plane(
+    state: &GatewayState,
+    project_root: &Path,
+    repo_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = project_root.join("wendao.toml");
+    let repo_config = load_repo_intelligence_config(Some(config_path.as_path()), project_root)?;
+    let repository = repo_config
+        .repos
+        .iter()
+        .find(|repository| repository.id == repo_id)
+        .ok_or_else(|| format!("missing repository `{repo_id}`"))?;
+    let analysis = analyze_registered_repository_with_registry(
+        repository,
+        project_root,
+        &state.studio.plugin_registry,
+    )?;
+    let repository_root = repository
+        .path
+        .as_ref()
+        .ok_or_else(|| format!("repo `{repo_id}` missing path"))?;
+    let documents = repo_code_documents(
+        repository_root.as_path(),
+        &["src/GatewaySyncPkg.jl", "examples/solve_demo.jl"],
+    )?;
+    publish_repo_entities(
+        &state.studio.search_plane,
+        repo_id,
+        &analysis,
+        documents.as_slice(),
+        Some("test-rev"),
+    )
+    .await?;
+    Ok(())
+}
+
+fn repo_code_documents(
+    repo_root: &Path,
+    relative_paths: &[&str],
+) -> Result<Vec<RepoCodeDocument>, Box<dyn std::error::Error>> {
+    let mut documents = Vec::new();
+    for relative_path in relative_paths {
+        let absolute_path = repo_root.join(relative_path);
+        if !absolute_path.exists() {
+            continue;
+        }
+        let metadata = fs::metadata(&absolute_path)?;
+        let modified_unix_ms = metadata.modified()?.duration_since(UNIX_EPOCH)?.as_millis() as u64;
+        documents.push(RepoCodeDocument {
+            path: (*relative_path).to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(fs::read_to_string(&absolute_path)?),
+            size_bytes: metadata.len(),
+            modified_unix_ms,
+        });
+    }
+    Ok(documents)
+}
+
+fn gateway_state_for_project_with_options(
+    project_root: &Path,
+    start_repo_index: bool,
+    prewarm_repo_analysis_cache: bool,
+) -> Arc<GatewayState> {
     let config_root = project_root.to_path_buf();
     let ui_config =
         xiuxian_wendao::gateway::studio::router::load_ui_config_from_wendao_toml(&config_root)
@@ -1618,9 +1779,11 @@ fn gateway_state_for_project(project_root: &Path) -> Arc<GatewayState> {
         Arc::clone(&plugin_registry),
         xiuxian_wendao::search_plane::SearchPlaneService::new(project_root.to_path_buf()),
     ));
-    repo_index.start();
+    if start_repo_index {
+        repo_index.start();
+    }
     let config_path = config_root.join("wendao.toml");
-    if config_path.exists() {
+    if prewarm_repo_analysis_cache && config_path.exists() {
         let repo_config = load_repo_intelligence_config(Some(config_path.as_path()), &config_root)
             .unwrap_or_else(|error| {
                 panic!("load repo intelligence config for gateway tests: {error}")

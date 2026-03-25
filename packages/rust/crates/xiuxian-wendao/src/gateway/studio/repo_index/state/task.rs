@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::analyzers::{RegisteredRepository, RepoIntelligenceError};
 
-pub(super) const REPO_INDEX_ANALYSIS_TIMEOUT: Duration = Duration::from_secs(45);
+pub(crate) const REPO_INDEX_ANALYSIS_TIMEOUT: Duration = Duration::from_secs(45);
 const DEFAULT_REPO_INDEX_SYNC_CONCURRENCY: usize = 1;
 const REPO_INDEX_SYNC_CONCURRENCY_ENV: &str = "XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY";
 const MAX_REPO_INDEX_SYNC_REQUEUE_ATTEMPTS: usize = 1;
@@ -11,7 +11,7 @@ fn bounded_usize_to_f64(value: usize) -> f64 {
     f64::from(u32::try_from(value).unwrap_or(u32::MAX))
 }
 
-pub(super) fn repo_index_sync_concurrency_limit() -> usize {
+pub(crate) fn repo_index_sync_concurrency_limit() -> usize {
     repo_index_sync_concurrency_limit_with_lookup(&|key| std::env::var(key).ok())
 }
 
@@ -22,61 +22,65 @@ fn repo_index_sync_concurrency_limit_with_lookup(lookup: &dyn Fn(&str) -> Option
         .unwrap_or(DEFAULT_REPO_INDEX_SYNC_CONCURRENCY)
 }
 
-pub(super) fn should_retry_sync_failure(error: &RepoIntelligenceError, retry_count: usize) -> bool {
+pub(crate) fn should_retry_sync_failure(error: &RepoIntelligenceError, retry_count: usize) -> bool {
     retry_count < MAX_REPO_INDEX_SYNC_REQUEUE_ATTEMPTS && is_retryable_sync_failure(error)
 }
 
 fn is_retryable_sync_failure(error: &RepoIntelligenceError) -> bool {
-    let RepoIntelligenceError::AnalysisFailed { message } = error else {
-        return false;
-    };
-    let message = message.to_ascii_lowercase();
+    let message = match error {
+        RepoIntelligenceError::AnalysisFailed { message } => message.as_str(),
+        RepoIntelligenceError::InvalidRepositoryPath { reason, .. } => reason.as_str(),
+        _ => return false,
+    }
+    .to_ascii_lowercase();
     [
         "can't assign requested address",
         "failed to connect to github.com",
+        "failed to resolve address",
         "connection reset by peer",
         "temporary failure in name resolution",
         "resource temporarily unavailable",
         "operation timed out",
         "timed out",
+        "too many open files",
     ]
     .iter()
     .any(|needle| message.contains(needle))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RepoIndexTaskPriority {
+pub(crate) enum RepoIndexTaskPriority {
     Background,
     Interactive,
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct RepoIndexTask {
-    pub(super) repository: RegisteredRepository,
-    pub(super) refresh: bool,
-    pub(super) fingerprint: String,
-    pub(super) priority: RepoIndexTaskPriority,
-    pub(super) retry_count: usize,
+pub(crate) struct RepoIndexTask {
+    pub(crate) repository: RegisteredRepository,
+    pub(crate) refresh: bool,
+    pub(crate) fingerprint: String,
+    pub(crate) priority: RepoIndexTaskPriority,
+    pub(crate) retry_count: usize,
 }
 
 #[derive(Debug)]
-pub(super) struct AdaptiveConcurrencyController {
-    pub(super) current_limit: usize,
-    pub(super) max_limit: usize,
-    pub(super) success_streak: usize,
-    pub(super) ema_elapsed_ms: Option<f64>,
-    pub(super) baseline_elapsed_ms: Option<f64>,
-    pub(super) previous_efficiency: Option<f64>,
+pub(crate) struct AdaptiveConcurrencyController {
+    pub(crate) current_limit: usize,
+    pub(crate) max_limit: usize,
+    pub(crate) success_streak: usize,
+    pub(crate) ema_elapsed_ms: Option<f64>,
+    pub(crate) baseline_elapsed_ms: Option<f64>,
+    pub(crate) previous_efficiency: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct AdaptiveConcurrencySnapshot {
-    pub(super) current_limit: usize,
-    pub(super) max_limit: usize,
+pub(crate) struct AdaptiveConcurrencySnapshot {
+    pub(crate) current_limit: usize,
+    pub(crate) max_limit: usize,
 }
 
 impl AdaptiveConcurrencyController {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let max_limit = std::thread::available_parallelism()
             .map(std::num::NonZeroUsize::get)
             .unwrap_or(1)
@@ -103,14 +107,14 @@ impl AdaptiveConcurrencyController {
         }
     }
 
-    pub(super) fn snapshot(&self) -> AdaptiveConcurrencySnapshot {
+    pub(crate) fn snapshot(&self) -> AdaptiveConcurrencySnapshot {
         AdaptiveConcurrencySnapshot {
             current_limit: self.current_limit.max(1).min(self.max_limit.max(1)),
             max_limit: self.max_limit.max(1),
         }
     }
 
-    pub(super) fn target_limit(&mut self, queued: usize, active: usize) -> usize {
+    pub(crate) fn target_limit(&mut self, queued: usize, active: usize) -> usize {
         let demand = queued.saturating_add(active);
         if demand <= 1 {
             self.current_limit = 1;
@@ -125,7 +129,7 @@ impl AdaptiveConcurrencyController {
             .min(demand)
     }
 
-    pub(super) fn record_success(&mut self, elapsed: Duration, queued_remaining: usize) {
+    pub(crate) fn record_success(&mut self, elapsed: Duration, queued_remaining: usize) {
         let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
         let baseline = self.ema_elapsed_ms.unwrap_or(elapsed_ms);
         self.ema_elapsed_ms = Some(if self.ema_elapsed_ms.is_some() {
@@ -177,7 +181,7 @@ impl AdaptiveConcurrencyController {
         self.previous_efficiency = Some(efficiency);
     }
 
-    pub(super) fn record_failure(&mut self) {
+    pub(crate) fn record_failure(&mut self) {
         self.current_limit = (self.current_limit / 2).max(1);
         self.success_streak = 0;
         self.previous_efficiency = None;
@@ -185,7 +189,7 @@ impl AdaptiveConcurrencyController {
 }
 
 #[derive(Debug)]
-pub(super) enum RepoTaskOutcome {
+pub(crate) enum RepoTaskOutcome {
     Success {
         revision: Option<String>,
     },
@@ -201,10 +205,10 @@ pub(super) enum RepoTaskOutcome {
 }
 
 #[derive(Debug)]
-pub(super) struct RepoTaskFeedback {
-    pub(super) repo_id: String,
-    pub(super) elapsed: Duration,
-    pub(super) outcome: RepoTaskOutcome,
+pub(crate) struct RepoTaskFeedback {
+    pub(crate) repo_id: String,
+    pub(crate) elapsed: Duration,
+    pub(crate) outcome: RepoTaskOutcome,
 }
 
 #[cfg(test)]
@@ -261,5 +265,23 @@ mod tests {
             repo_id: "DifferentialEquations.jl".to_string(),
         };
         assert!(!should_retry_sync_failure(&error, 0));
+    }
+
+    #[test]
+    fn retryable_sync_failure_matches_descriptor_pressure_errors() {
+        let error = RepoIntelligenceError::AnalysisFailed {
+            message: "failed to acquire managed checkout lock `/tmp/example.lock`: Too many open files (os error 24)".to_string(),
+        };
+        assert!(should_retry_sync_failure(&error, 0));
+    }
+
+    #[test]
+    fn retryable_sync_failure_matches_retryable_invalid_repository_path_reasons() {
+        let error = RepoIntelligenceError::InvalidRepositoryPath {
+            repo_id: "DifferentialEquations.jl".to_string(),
+            path: "/tmp/example.git".to_string(),
+            reason: "failed to open managed mirror as bare git repository: could not open '/tmp/example.git/config': Too many open files; class=Os (2)".to_string(),
+        };
+        assert!(should_retry_sync_failure(&error, 0));
     }
 }

@@ -2,13 +2,14 @@ use std::collections::VecDeque;
 
 use tokio::task::JoinSet;
 
-use super::super::code_search::{
-    collect_repo_search_targets, repo_search_parallelism, search_repo_content_hits,
-    search_repo_entity_hits,
-};
 use crate::gateway::studio::router::{
     StudioApiError, StudioState, configured_repositories, configured_repository,
     map_repo_intelligence_error,
+};
+use crate::gateway::studio::search::handlers::code_search::{
+    query::{collect_repo_search_targets, repo_search_parallelism},
+    search::{search_repo_content_hits, search_repo_entity_hits},
+    types::RepoSearchTarget,
 };
 use crate::gateway::studio::types::SearchHit;
 use crate::search_plane::SearchPlaneService;
@@ -44,6 +45,13 @@ pub(super) async fn build_repo_intent_merge(
         .repo_search_publication_states(repo_ids.as_slice())
         .await;
     let dispatch = collect_repo_search_targets(repo_ids, &publication_states);
+    studio.search_plane.record_repo_search_dispatch(
+        dispatch.pending_repos.len()
+            + dispatch.skipped_repos.len()
+            + dispatch.searchable_repos.len(),
+        dispatch.searchable_repos.len(),
+        repo_search_parallelism(&studio.search_plane, dispatch.searchable_repos.len()),
+    );
     let merge = RepoIntentMerge {
         hits: search_repo_intent_hits_buffered(
             studio.search_plane.clone(),
@@ -61,7 +69,7 @@ pub(super) async fn build_repo_intent_merge(
 
 async fn search_repo_intent_hits_buffered(
     search_plane: SearchPlaneService,
-    targets: Vec<super::super::code_search::RepoSearchTarget>,
+    targets: Vec<RepoSearchTarget>,
     raw_query: &str,
     limit: usize,
 ) -> Result<Vec<SearchHit>, StudioApiError> {
@@ -72,7 +80,7 @@ async fn search_repo_intent_hits_buffered(
     let mut queued = VecDeque::from(targets);
     let mut join_set = JoinSet::new();
     let raw_query = raw_query.to_string();
-    let parallelism = repo_search_parallelism(queued.len());
+    let parallelism = repo_search_parallelism(&search_plane, queued.len());
     for _ in 0..parallelism {
         if let Some(target) = queued.pop_front() {
             spawn_repo_intent_search_task(
@@ -111,7 +119,7 @@ async fn search_repo_intent_hits_buffered(
 fn spawn_repo_intent_search_task(
     join_set: &mut JoinSet<Result<Vec<SearchHit>, StudioApiError>>,
     search_plane: SearchPlaneService,
-    target: super::super::code_search::RepoSearchTarget,
+    target: RepoSearchTarget,
     raw_query: String,
     limit: usize,
 ) {

@@ -10,7 +10,10 @@ def test_valkey_process_nix_bootstraps_dirs_and_waits_for_readiness() -> None:
     assert "mkdir -p ${valkeyRuntimeDir} ${valkeyDataDir}" in content
     assert "rm -f ${valkeyPidFile}" in content
     assert "--pidfile ${valkeyPidFile}" in content
-    assert "exec valkey-server .config/xiuxian-artisan-workshop/valkey.conf --tcp-backlog 128" in content
+    assert (
+        "exec valkey-server .config/xiuxian-artisan-workshop/valkey.conf --tcp-backlog 128"
+        in content
+    )
     assert "valkey-cli -u ${valkeyUrl} info server" in content
     assert "process_id" in content
     assert "valkey-cli -u ${valkeyUrl} ping" in content

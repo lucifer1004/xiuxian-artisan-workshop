@@ -13,6 +13,8 @@ use crate::analyzers::config::{RegisteredRepository, RepositoryRefreshPolicy};
 use crate::analyzers::errors::RepoIntelligenceError;
 
 const MANAGED_REMOTE_RETRY_ATTEMPTS: usize = 3;
+const MANAGED_GIT_OPEN_RETRY_ATTEMPTS: usize = 5;
+const MANAGED_GIT_OPEN_RETRY_DELAY: Duration = Duration::from_millis(100);
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn resolve_managed_checkout(
@@ -68,7 +70,7 @@ pub(super) fn resolve_managed_checkout(
 
     let mirror_existed = mirror_root.exists();
     let (mirror_repository, mirror_remote_updated) = if mirror_existed {
-        let repo = Repository::open_bare(&mirror_root).map_err(|error| {
+        let repo = open_bare_with_retry(&mirror_root).map_err(|error| {
             RepoIntelligenceError::InvalidRepositoryPath {
                 repo_id: repository.id.clone(),
                 path: mirror_root.display().to_string(),
@@ -122,7 +124,7 @@ pub(super) fn resolve_managed_checkout(
         .display()
         .to_string();
     let repository_handle = if checkout_existed {
-        let repo = Repository::open(&checkout_root).map_err(|error| {
+        let repo = open_checkout_with_retry(&checkout_root).map_err(|error| {
             RepoIntelligenceError::InvalidRepositoryPath {
                 repo_id: repository.id.clone(),
                 path: checkout_root.display().to_string(),
@@ -253,6 +255,37 @@ fn retry_remote_operation<T>(
             }
         }
     }
+}
+
+fn open_bare_with_retry(path: &std::path::Path) -> Result<Repository, git2::Error> {
+    retry_git_open_operation(|| Repository::open_bare(path))
+}
+
+fn open_checkout_with_retry(path: &std::path::Path) -> Result<Repository, git2::Error> {
+    retry_git_open_operation(|| Repository::open(path))
+}
+
+fn retry_git_open_operation<T>(
+    mut operation: impl FnMut() -> Result<T, git2::Error>,
+) -> Result<T, git2::Error> {
+    let mut attempts = 0usize;
+    loop {
+        match operation() {
+            Ok(value) => return Ok(value),
+            Err(error)
+                if attempts + 1 < MANAGED_GIT_OPEN_RETRY_ATTEMPTS
+                    && retryable_git_open_error_message(error.message()) =>
+            {
+                attempts += 1;
+                thread::sleep(MANAGED_GIT_OPEN_RETRY_DELAY);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+pub(super) fn retryable_git_open_error_message(message: &str) -> bool {
+    message.to_ascii_lowercase().contains("too many open files")
 }
 
 fn retry_delay_for_attempt(attempt: usize) -> Duration {

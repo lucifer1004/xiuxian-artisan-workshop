@@ -109,7 +109,10 @@ async fn ui_capabilities_reports_builtin_plugin_languages() {
 
     assert_eq!(response.languages, expected);
     assert_eq!(response.repositories, vec!["kernel", "sciml"]);
-    assert_eq!(response.kinds, super::state::supported_code_kinds());
+    assert_eq!(
+        response.kinds,
+        crate::gateway::studio::router::state::supported_code_kinds()
+    );
 }
 
 #[tokio::test]

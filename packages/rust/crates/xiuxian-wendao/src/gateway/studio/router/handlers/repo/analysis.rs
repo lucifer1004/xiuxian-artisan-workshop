@@ -20,6 +20,10 @@ use crate::analyzers::{
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::search::FuzzySearchOptions;
+use crate::search_plane::{
+    SearchCorpusKind, search_repo_entity_example_results, search_repo_entity_module_results,
+    search_repo_entity_symbol_results,
+};
 
 use super::parse::{parse_repo_sync_mode, required_repo_id, required_search_query};
 use super::query::{RepoApiQuery, RepoDocCoverageApiQuery, RepoSearchApiQuery, RepoSyncApiQuery};
@@ -65,6 +69,16 @@ pub async fn module_search(
     let repo_id = required_repo_id(query.repo.as_deref())?;
     let search_query = required_search_query(query.query.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);
+    if let Some(result) = search_repo_modules_with_search_plane(
+        Arc::clone(&state),
+        repo_id.as_str(),
+        search_query.as_str(),
+        limit,
+    )
+    .await?
+    {
+        return Ok(Json(result));
+    }
     let result = with_repo_cached_analysis_bundle(
         Arc::clone(&state),
         repo_id.clone(),
@@ -112,6 +126,16 @@ pub async fn symbol_search(
     let repo_id = required_repo_id(query.repo.as_deref())?;
     let search_query = required_search_query(query.query.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);
+    if let Some(result) = search_repo_symbols_with_search_plane(
+        Arc::clone(&state),
+        repo_id.as_str(),
+        search_query.as_str(),
+        limit,
+    )
+    .await?
+    {
+        return Ok(Json(result));
+    }
     let result = with_repo_cached_analysis_bundle(
         Arc::clone(&state),
         repo_id.clone(),
@@ -159,6 +183,16 @@ pub async fn example_search(
     let repo_id = required_repo_id(query.repo.as_deref())?;
     let search_query = required_search_query(query.query.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);
+    if let Some(result) = search_repo_examples_with_search_plane(
+        Arc::clone(&state),
+        repo_id.as_str(),
+        search_query.as_str(),
+        limit,
+    )
+    .await?
+    {
+        return Ok(Json(result));
+    }
     let result = with_repo_cached_analysis_bundle(
         Arc::clone(&state),
         repo_id.clone(),
@@ -191,6 +225,79 @@ pub async fn example_search(
     )
     .await?;
     Ok(Json(result))
+}
+
+async fn search_repo_modules_with_search_plane(
+    state: Arc<GatewayState>,
+    repo_id: &str,
+    query: &str,
+    limit: usize,
+) -> Result<Option<crate::analyzers::ModuleSearchResult>, StudioApiError> {
+    if !repo_entity_publication_ready(&state, repo_id).await {
+        return Ok(None);
+    }
+    search_repo_entity_module_results(&state.studio.search_plane, repo_id, query, limit)
+        .await
+        .map(Some)
+        .map_err(|error| {
+            StudioApiError::internal(
+                "REPO_MODULE_SEARCH_FAILED",
+                "Repo module search task failed",
+                Some(error.to_string()),
+            )
+        })
+}
+
+async fn search_repo_symbols_with_search_plane(
+    state: Arc<GatewayState>,
+    repo_id: &str,
+    query: &str,
+    limit: usize,
+) -> Result<Option<crate::analyzers::SymbolSearchResult>, StudioApiError> {
+    if !repo_entity_publication_ready(&state, repo_id).await {
+        return Ok(None);
+    }
+    search_repo_entity_symbol_results(&state.studio.search_plane, repo_id, query, limit)
+        .await
+        .map(Some)
+        .map_err(|error| {
+            StudioApiError::internal(
+                "REPO_SYMBOL_SEARCH_FAILED",
+                "Repo symbol search task failed",
+                Some(error.to_string()),
+            )
+        })
+}
+
+async fn search_repo_examples_with_search_plane(
+    state: Arc<GatewayState>,
+    repo_id: &str,
+    query: &str,
+    limit: usize,
+) -> Result<Option<crate::analyzers::ExampleSearchResult>, StudioApiError> {
+    if !repo_entity_publication_ready(&state, repo_id).await {
+        return Ok(None);
+    }
+    search_repo_entity_example_results(&state.studio.search_plane, repo_id, query, limit)
+        .await
+        .map(Some)
+        .map_err(|error| {
+            StudioApiError::internal(
+                "REPO_EXAMPLE_SEARCH_FAILED",
+                "Repo example search task failed",
+                Some(error.to_string()),
+            )
+        })
+}
+
+async fn repo_entity_publication_ready(state: &Arc<GatewayState>, repo_id: &str) -> bool {
+    state
+        .studio
+        .search_plane
+        .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, repo_id)
+        .await
+        .and_then(|record| record.publication)
+        .is_some()
 }
 
 /// Doc coverage endpoint.

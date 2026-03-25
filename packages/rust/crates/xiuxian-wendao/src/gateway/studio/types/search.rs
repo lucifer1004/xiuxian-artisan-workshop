@@ -113,7 +113,8 @@ pub struct SearchResponse {
     /// Optional backend search mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub search_mode: Option<String>,
-    /// Whether the backend returned partial results because repo indexes are still warming.
+    /// Whether the backend returned partial results because repo indexes are still warming or
+    /// because a repo-wide search exhausted its bounded server-side budget.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub partial: bool,
     /// Optional aggregate indexing state for code search.

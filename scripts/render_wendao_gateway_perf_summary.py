@@ -99,6 +99,24 @@ def _case_diagnostics(metadata: dict[str, Any]) -> tuple[str, str, str, dict[str
     return uri, search_index, repo_index, extra, "; ".join(parts)
 
 
+def _extract_repo_read_pressure(search_index: str, extra: dict[str, str]) -> str:
+    explicit = extra.get("repoReadPressure", "").strip()
+    if explicit:
+        return explicit
+    marker = " repoRead="
+    suffix = " queryTelemetry="
+    start = search_index.find(marker)
+    if start < 0:
+        return "none"
+    start += len(marker)
+    end = search_index.find(suffix, start)
+    if end < 0:
+        extracted = search_index[start:].strip()
+    else:
+        extracted = search_index[start:end].strip()
+    return extracted or "none"
+
+
 def _build_case_summary(report_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     summary = payload.get("summary", {})
     quantiles = payload.get("quantiles", {})
@@ -123,6 +141,7 @@ def _build_case_summary(report_path: Path, payload: dict[str, Any]) -> dict[str,
         "uri": uri,
         "search_index": search_index,
         "repo_index": repo_index,
+        "repo_read_pressure": _extract_repo_read_pressure(search_index, extra),
         "extra": extra,
         "diagnostics": diagnostics,
     }
@@ -306,6 +325,11 @@ def _build_markdown(payload: dict[str, Any]) -> str:
         lines.extend(["", "### Diagnostics", ""])
         for case in cases:
             lines.append(f"- `{case.get('case', 'unknown')}`: {case.get('diagnostics', 'none')}")
+        lines.extend(["", "### Formal Repo-Read Pressure", ""])
+        for case in cases:
+            lines.append(
+                f"- `{case.get('case', 'unknown')}`: {case.get('repo_read_pressure', 'none')}"
+            )
         lines.append("")
     else:
         lines.extend(["- No gateway perf reports found.", ""])
@@ -335,6 +359,11 @@ def _build_markdown(payload: dict[str, Any]) -> str:
             for case in real_cases:
                 lines.append(
                     f"  - `{case.get('case', 'unknown')}`: {case.get('diagnostics', 'none')}"
+                )
+            lines.extend(["", "- Real-workspace repo-read pressure:", ""])
+            for case in real_cases:
+                lines.append(
+                    f"  - `{case.get('case', 'unknown')}`: {case.get('repo_read_pressure', 'none')}"
                 )
             lines.append("")
         else:

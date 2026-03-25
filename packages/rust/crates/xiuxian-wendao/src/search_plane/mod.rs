@@ -33,6 +33,12 @@ pub(crate) use project_fingerprint::{
     scan_symbol_project_files,
 };
 pub(crate) use reference_occurrence::ReferenceOccurrenceSearchError;
+#[cfg(test)]
+pub(crate) use repo_entity::publish_repo_entities;
+pub(crate) use repo_entity::{
+    search_repo_entity_example_results, search_repo_entity_module_results,
+    search_repo_entity_symbol_results,
+};
 pub(crate) use repo_staging::{
     RepoStagedMutationAction, RepoStagedMutationPlan, plan_repo_staged_mutation,
 };
@@ -46,5 +52,5 @@ pub use status::{
     SearchCorpusStatus, SearchCorpusStatusAction, SearchCorpusStatusReason,
     SearchCorpusStatusReasonCode, SearchCorpusStatusSeverity, SearchMaintenancePolicy,
     SearchMaintenanceStatus, SearchPlanePhase, SearchPlaneStatusSnapshot, SearchQueryTelemetry,
-    SearchQueryTelemetrySource,
+    SearchQueryTelemetrySource, SearchRepoReadPressure,
 };

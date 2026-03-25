@@ -43,6 +43,11 @@ downstream proof.
 
 - The bundled artifact is version-controlled and repository-local, so contract
   tests do not depend on runtime schema generation.
+- The `/api/health` response now also carries `X-Wendao-Process-Id`, and the
+  managed startup path writes `WENDAO_GATEWAY_PIDFILE` so process-compose can
+  compare the header against the owned pidfile before treating the gateway as
+  ready. The readiness probe also checks for `HTTP 200`, so a `503` response
+  with the correct header still fails closed.
 - The gateway inventory now also includes `GET /api/repo/sync`,
   `GET /api/repo/overview`, `GET /api/repo/module-search`, and
   `GET /api/repo/symbol-search`, `GET /api/repo/example-search`, and

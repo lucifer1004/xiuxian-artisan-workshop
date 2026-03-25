@@ -52,6 +52,7 @@ Suite layout:
   `repo_projected_page_search`, `studio_code_search`, and
   `search_index_status`) through the narrow
   `gateway::studio::perf_support` fixture surface.
+
 ## Budget Strategy
 
 Default budgets are auditable Rust constants in the formal performance target

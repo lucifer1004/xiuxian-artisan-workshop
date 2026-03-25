@@ -101,6 +101,10 @@ Plugins should return normalized records and relations, not mutate Wendao storag
   - later gateway pressure work exposed one more gap in that model: the request-path repo analysis and repo sync endpoints were still bypassing the repo-index remote-sync semaphore, so managed-remote overview/module/symbol/example/page requests could add extra upstream fetch pressure on top of the background lane
   - the request path now shares the same remote-sync semaphore through `RepoIndexCoordinator`, so managed-remote repo overview/search/sync traffic and the background repo-index lane are capped by one common concurrency budget instead of two unrelated ones
   - the default remote-sync ceiling is now aligned with the more conservative real-workspace result: `XIUXIAN_WENDAO_REPO_INDEX_SYNC_CONCURRENCY` still overrides the budget, but the default baseline is now `1` rather than `2` to prioritize GitHub transport stability and ready-ratio recovery under heavy mixed gateway load
+  - the next live `96`-concurrency gateway pressure run shifted the dominant failure mode again: local-corpus cold starts were largely gone, but repo sync and managed git access started failing with `Too many open files`, `failed to resolve address`, and upstream socket exhaustion instead
+  - repo-index retry classification now treats descriptor pressure and resolver transport failures as retryable even when they arrive through `InvalidRepositoryPath` wrappers, which keeps one bounded retry path available for `Too many open files` and DNS-resolution spikes instead of immediately pinning the repo in `Failed`
+  - managed checkout lock acquisition now treats `EMFILE` / `Too many open files` as transient pressure, waiting within the existing bounded lock window instead of failing immediately when the process briefly exhausts descriptors
+  - managed mirror/opened-checkout bootstrap now also retries `Repository::open_bare(...)` and `Repository::open(...)` for descriptor-pressure failures with a short bounded backoff, which hardens the exact repo-intelligence path that the pressure benchmark surfaced
   - the remaining three `unsupported` rows (`StokesDiffEq.jl`, `SundialsBuilder`, `TensorFlowDiffEq.jl`) now consistently classify as expected Julia-layout misses with `missing Project.toml`, not transient sync/network failures
   - the `177` live repo-index total against `.data/wendao-frontend/wendao.toml` is now explained: the config contains `179` `link_graph.projects.*` entries, but `kernel` and `main` are link-graph-only local projects with `plugins = []`, so they are intentionally excluded from repo-index registration
   - repo-index phase reporting now marks repositories as `Syncing` only after a sync permit is acquired, so `/api/repo/index/status` no longer overstates concurrent remote sync pressure while tasks are still waiting in the coordinator
@@ -256,7 +260,7 @@ Initial execution for that slice is now landed:
     at `p95 = 142.719ms` and `repo_index_status_real_workspace_sample` at
     `p95 = 1.331ms`
 - the execution entrypoints are now explicit too. `just
-  rust-wendao-performance-gate` expands into
+rust-wendao-performance-gate` expands into
   `rust-wendao-performance-quick` and
   `rust-wendao-performance-gateway-formal`. The quick lane stays on `nextest`
   but explicitly excludes the six `gateway_search` cases, while the formal
@@ -280,6 +284,17 @@ Initial execution for that slice is now landed:
   - `cargo nextest run -p xiuxian-wendao`
 - Tier-3 closure is now green for the touched Wendao scope:
   - `cargo clippy -p xiuxian-wendao --all-targets --all-features -- -D warnings`
+- the cached repo gateway search surface is now stricter too. `module.search`,
+  `symbol.search`, `example.search`, and the shared projected-page cached lane
+  now load ready cached analysis only instead of silently falling through to
+  request-path `Ensure`
+- those cached repo gateway endpoints therefore no longer acquire the
+  managed-remote sync permit on the happy path, which removes request-path
+  remote-sync contention from the same mixed-hotset pressure lane that was
+  timing out under steady-state load
+- when a repo has no ready analysis cache yet, those cached repo gateway
+  endpoints now fail fast with `409 REPO_INDEX_PENDING` instead of stalling
+  behind on-demand analysis or remote materialization work
 - the residual repo-gateway verification caveat is no longer `clippy`; it is
   now the need to keep the formal gateway six-case proof stable under one
   shared nextest filter and decide later whether the current Linux/local budget

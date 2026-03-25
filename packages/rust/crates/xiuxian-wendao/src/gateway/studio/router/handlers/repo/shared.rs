@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use tokio::sync::OwnedSemaphorePermit;
 
 use crate::analyzers::service::{
-    CachedRepositoryAnalysis, analyze_registered_repository_bundle_with_registry,
+    CachedRepositoryAnalysis, analyze_registered_repository_cached_bundle_with_registry,
 };
 use crate::analyzers::{
     RegisteredRepository, RepoIntelligenceError, RepositoryAnalysisOutput,
@@ -83,11 +83,9 @@ where
 {
     let cwd = state.studio.project_root.clone();
     let repository = resolve_repository(&state, repo_id.as_str())?;
-    let permit = acquire_managed_remote_sync_permit(&state, &repository).await?;
     let plugin_registry = Arc::clone(&state.studio.plugin_registry);
     tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        let cached = analyze_registered_repository_bundle_with_registry(
+        let cached = analyze_registered_repository_cached_bundle_with_registry(
             &repository,
             cwd.as_path(),
             &plugin_registry,

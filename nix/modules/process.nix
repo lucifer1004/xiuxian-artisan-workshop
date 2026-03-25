@@ -2,6 +2,8 @@
 let
   gatewayConfig = "packages/rust/crates/xiuxian-wendao/wendao.toml";
   gatewayTargetDir = ".cache/cargo-target/wendao-gateway-process-compose";
+  gatewayRuntimeDir = ".run/wendao-gateway";
+  gatewayPidFile = "${gatewayRuntimeDir}/wendao.pid";
   sentinelTargetDir = ".cache/cargo-target/wendao-sentinel-process-compose";
   valkeyDataDir = ".data/valkey";
   valkeyPidFile = ".run/valkey/valkey.pid";
@@ -52,18 +54,43 @@ in
 
     # Wendao Phase 7.6 Integrated Services
     wendao-gateway = {
-      exec = "CARGO_TARGET_DIR=${gatewayTargetDir} VALKEY_URL=redis://127.0.0.1:6379/0 cargo run -p xiuxian-wendao -- --conf ${gatewayConfig} gateway start";
+      exec = ''
+        mkdir -p ${gatewayRuntimeDir}
+        rm -f ${gatewayPidFile}
+        printf '%s\n' "$$" > ${gatewayPidFile}
+        export WENDAO_GATEWAY_PIDFILE=${gatewayPidFile}
+        export CARGO_TARGET_DIR=${gatewayTargetDir}
+        export VALKEY_URL=redis://127.0.0.1:6379/0
+        cargo build -p xiuxian-wendao --bin wendao --locked
+        exec ${gatewayTargetDir}/debug/wendao --conf ${gatewayConfig} gateway start
+      '';
       process-compose = {
         depends_on = {
           valkey.condition = "process_healthy";
         };
         readiness_probe = {
           exec.command = ''
+            PIDFILE=${gatewayPidFile}
+            if [ ! -s "$PIDFILE" ]; then
+              exit 1
+            fi
+
+            EXPECTED_PID="$(cat "$PIDFILE")"
             PORT=$(awk -F= '/^[[:space:]]*port[[:space:]]*=/{gsub(/[[:space:]"]/, "", $2); print $2; exit}' ${gatewayConfig})
             if [ -z "$PORT" ]; then
               PORT=9517
             fi
-            curl -fsS --max-time 2 "http://127.0.0.1:$PORT/api/health"
+
+            RESPONSE="$(
+              curl -sS --max-time 2 -D - -o /dev/null "http://127.0.0.1:$PORT/api/health"
+            )" || exit 1
+
+            HTTP_STATUS="$(printf '%s\n' "$RESPONSE" | awk 'NR == 1 { print $2; exit }')"
+            ACTUAL_PID="$(printf '%s\n' "$RESPONSE" | awk -F': ' 'tolower($1) == "x-wendao-process-id" { gsub(/[[:space:]\r]/, "", $2); print $2; exit }')"
+
+            if [ "$HTTP_STATUS" != "200" ] || [ -z "$ACTUAL_PID" ] || [ "$ACTUAL_PID" != "$EXPECTED_PID" ]; then
+              exit 1
+            fi
           '';
           initial_delay_seconds = 60;
           period_seconds = 5;
