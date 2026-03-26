@@ -116,7 +116,7 @@ expression: value
       "id": "sec:1",
       "kind": "section",
       "label": "Analysis Kernel",
-      "lineEnd": 1,
+      "lineEnd": 2,
       "lineStart": 1,
       "parentId": "doc:0"
     },
@@ -125,7 +125,7 @@ expression: value
       "id": "sec:3",
       "kind": "section",
       "label": "Inputs",
-      "lineEnd": 3,
+      "lineEnd": 6,
       "lineStart": 3,
       "parentId": "sec:1"
     },
@@ -152,7 +152,7 @@ expression: value
       "id": "sec:7",
       "kind": "section",
       "label": "Links",
-      "lineEnd": 7,
+      "lineEnd": 17,
       "lineStart": 7,
       "parentId": "sec:1"
     },

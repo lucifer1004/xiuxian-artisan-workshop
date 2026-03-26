@@ -5,13 +5,13 @@ use axum::Json;
 use axum::extract::{Query, State};
 
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
-use crate::gateway::studio::types::DefinitionResolveResponse;
-
-use super::super::definition::{
-    DefinitionResolveOptions, resolve_best_definition, resolve_definition_candidates,
+use crate::gateway::studio::search::definition::resolve::resolve_definition_candidates;
+use crate::gateway::studio::search::definition::{
+    DefinitionResolveOptions, resolve_best_definition,
 };
-use super::super::observation_hints::definition_observation_hints;
-use super::queries::DefinitionResolveQuery;
+use crate::gateway::studio::search::handlers::queries::DefinitionResolveQuery;
+use crate::gateway::studio::search::observation_hints::definition_observation_hints;
+use crate::gateway::studio::types::DefinitionResolveResponse;
 
 pub async fn search_definition(
     State(state): State<Arc<GatewayState>>,

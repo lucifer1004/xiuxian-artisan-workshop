@@ -9,6 +9,12 @@ def test_wendao_gateway_process_nix_checks_http_status_and_process_id_header() -
 
     assert 'gatewayRuntimeDir = ".run/wendao-gateway";' in content
     assert 'gatewayPidFile = "${gatewayRuntimeDir}/wendao.pid";' in content
+    assert 'gatewayLogDir = ".run/logs";' in content
+    assert 'gatewayStdoutLog = "${gatewayLogDir}/wendao-gateway.stdout.log";' in content
+    assert 'gatewayStderrLog = "${gatewayLogDir}/wendao-gateway.stderr.log";' in content
+    assert 'mkdir -p ${gatewayRuntimeDir} ${gatewayLogDir}' in content
+    assert '> >(tee -a ${gatewayStdoutLog})' in content
+    assert '2> >(tee -a ${gatewayStderrLog} >&2)' in content
     assert "PIDFILE=${gatewayPidFile}" in content
     assert 'curl -sS --max-time 2 -D - -o /dev/null "http://127.0.0.1:$PORT/api/health"' in content
     assert 'HTTP_STATUS="$(printf' in content

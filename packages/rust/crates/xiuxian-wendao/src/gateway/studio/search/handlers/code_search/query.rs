@@ -147,3 +147,58 @@ pub(crate) fn parse_code_search_query(
     parsed.query = terms.join(" ").trim().to_string();
     parsed
 }
+
+pub(crate) fn infer_repo_hint_from_query<'a, I>(
+    parsed: &ParsedCodeSearchQuery,
+    repo_ids: I,
+) -> Option<String>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    if parsed.repo.is_some() {
+        return None;
+    }
+
+    let normalized_query = normalize_repo_search_seed(parsed.query.as_str());
+    if normalized_query.is_empty() {
+        return None;
+    }
+
+    let mut matches = repo_ids
+        .into_iter()
+        .filter(|repo_id| normalize_repo_search_seed(repo_id) == normalized_query);
+    let first = matches.next()?;
+    if matches.next().is_some() {
+        return None;
+    }
+
+    Some(first.to_string())
+}
+
+fn normalize_repo_search_seed(value: &str) -> String {
+    let mut normalized = value.trim().to_ascii_lowercase();
+    if normalized.ends_with(".jl") {
+        normalized.truncate(normalized.len().saturating_sub(3));
+    }
+
+    let mut collapsed = String::with_capacity(normalized.len());
+    let mut in_whitespace = true;
+    for character in normalized.chars() {
+        let mapped = if matches!(character, '_' | '.' | '/' | '-') {
+            ' '
+        } else {
+            character
+        };
+        if mapped.is_ascii_whitespace() {
+            if !in_whitespace {
+                collapsed.push(' ');
+            }
+            in_whitespace = true;
+        } else {
+            collapsed.push(mapped);
+            in_whitespace = false;
+        }
+    }
+
+    collapsed.trim().to_string()
+}

@@ -5,6 +5,7 @@ use axum::{
     extract::{Query, State},
 };
 use serde::Deserialize;
+use std::fs;
 use std::sync::Arc;
 
 use crate::analyzers::analyze_registered_repository_with_registry;
@@ -91,8 +92,18 @@ pub async fn code_ast(
                 cwd.as_path(),
                 &plugin_registry,
             )?;
+            let source_content = repository
+                .path
+                .as_ref()
+                .map(|root| root.join(&repo_path))
+                .filter(|path| path.is_file())
+                .and_then(|path| fs::read_to_string(path).ok());
             Ok(build_code_ast_analysis_response(
-                repo_id, repo_path, line_hint, &analysis,
+                repo_id,
+                repo_path,
+                line_hint,
+                source_content.as_deref(),
+                &analysis,
             ))
         },
     )

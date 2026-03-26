@@ -15,7 +15,10 @@ mod julia;
 mod modelica;
 
 #[cfg(feature = "julia")]
-pub use julia::{JuliaRepoIntelligencePlugin, register_into as register_julia_plugin};
+pub use julia::{
+    JuliaRepoIntelligencePlugin, build_julia_arrow_transport_client,
+    register_into as register_julia_plugin,
+};
 
 #[cfg(feature = "modelica")]
 pub use modelica::{ModelicaRepoIntelligencePlugin, register_into as register_modelica_plugin};

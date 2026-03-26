@@ -695,6 +695,7 @@ impl VectorStore {
             .full_text_search(FullTextSearchQuery::new(query.trim().to_string()))
             .map_err(VectorStoreError::from)
             .map_err(E::from)?;
+        scanner.disable_scoring_autoprojection();
         if let Some(filter) = options
             .where_filter
             .as_deref()

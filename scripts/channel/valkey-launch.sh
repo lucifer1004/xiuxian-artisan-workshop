@@ -3,6 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 source "${SCRIPT_DIR}/valkey-common.sh"
 source "${SCRIPT_DIR}/valkey-runtime.sh"
 
@@ -15,11 +16,14 @@ if ! command -v valkey-cli >/dev/null 2>&1; then
   exit 1
 fi
 
-RUNTIME_DIR="$(valkey_effective_runtime_dir)"
-DATA_DIR="$(valkey_effective_data_dir)"
-PIDFILE="$(valkey_effective_pidfile)"
-LOGFILE="$(valkey_effective_logfile)"
-CONFIG_FILE="$(valkey_effective_config_file)"
+RUNTIME_DIR="$(valkey_resolve_path "$PROJECT_ROOT" "$(valkey_effective_runtime_dir)")"
+DATA_DIR="$(valkey_resolve_path "$PROJECT_ROOT" "$(valkey_effective_data_dir)")"
+PIDFILE="$(valkey_resolve_path "$PROJECT_ROOT" "$(valkey_effective_pidfile)")"
+LOGFILE_VALUE="$(valkey_effective_logfile)"
+LOGFILE=""
+if [ -n "$LOGFILE_VALUE" ]; then
+  LOGFILE="$(valkey_resolve_path "$PROJECT_ROOT" "$LOGFILE_VALUE")"
+fi
 BIND="$(valkey_effective_bind)"
 PROTECTED_MODE="$(valkey_effective_protected_mode)"
 PORT="$(valkey_effective_port)"
@@ -49,15 +53,7 @@ if [ -n "$PROTECTED_MODE" ]; then
   server_args+=(--protected-mode "$PROTECTED_MODE")
 fi
 
-if [ -n "$CONFIG_FILE" ]; then
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: valkey config file not found: $CONFIG_FILE" >&2
-    exit 1
-  fi
-  server_cmd=(valkey-server "$CONFIG_FILE")
-else
-  server_cmd=(valkey-server)
-fi
+server_cmd=(valkey-server)
 
 if [ "$DAEMONIZE" = "yes" ]; then
   "${server_cmd[@]}" "${server_args[@]}" --daemonize yes

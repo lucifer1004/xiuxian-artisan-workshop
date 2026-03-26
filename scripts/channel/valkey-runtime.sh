@@ -12,6 +12,20 @@ valkey_env_or_default() {
   fi
 }
 
+valkey_resolve_path() {
+  local base="$1"
+  local path="$2"
+
+  if [ -z "$path" ]; then
+    return 0
+  fi
+
+  case "$path" in
+    /*) printf '%s' "$path" ;;
+    *) printf '%s/%s' "$base" "$path" ;;
+  esac
+}
+
 valkey_effective_port() {
   valkey_env_or_default VALKEY_PORT 6379
 }
@@ -54,12 +68,6 @@ valkey_effective_pidfile() {
 valkey_effective_logfile() {
   if [ -n "${VALKEY_LOGFILE:-}" ]; then
     printf '%s' "$VALKEY_LOGFILE"
-  fi
-}
-
-valkey_effective_config_file() {
-  if [ -n "${VALKEY_CONFIG_FILE:-}" ]; then
-    printf '%s' "$VALKEY_CONFIG_FILE"
   fi
 }
 

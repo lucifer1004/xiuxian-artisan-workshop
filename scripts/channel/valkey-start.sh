@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 source "${SCRIPT_DIR}/valkey-common.sh"
+source "${SCRIPT_DIR}/valkey-runtime.sh"
 
 resolve_valkey_field() {
   uv run python "${PROJECT_ROOT}/scripts/channel/resolve_valkey_endpoint.py" --field "$1"
@@ -29,6 +30,8 @@ fi
 
 RUNTIME_DIR="${PRJ_RUNTIME_DIR:-.run}/valkey"
 DATA_DIR="${PRJ_CACHE_HOME:-.cache}/valkey"
+RUNTIME_DIR="$(valkey_resolve_path "$PROJECT_ROOT" "$RUNTIME_DIR")"
+DATA_DIR="$(valkey_resolve_path "$PROJECT_ROOT" "$DATA_DIR")"
 mkdir -p "$RUNTIME_DIR" "$DATA_DIR"
 PIDFILE="$RUNTIME_DIR/valkey-${PORT}.pid"
 LOGFILE="$RUNTIME_DIR/valkey-${PORT}.log"
@@ -44,22 +47,14 @@ if valkey-cli -u "$URL" ping >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Starting Valkey on port ${PORT}..."
-valkey-server \
-  --port "$PORT" \
-  --bind "${HOST}" \
-  --daemonize yes \
-  --dir "$DATA_DIR" \
-  --pidfile "$PIDFILE" \
-  --logfile "$LOGFILE"
+export VALKEY_PORT="$PORT"
+export VALKEY_HOST="$HOST"
+export VALKEY_DB="$DB"
+export VALKEY_BIND="$HOST"
+export VALKEY_RUNTIME_DIR="$RUNTIME_DIR"
+export VALKEY_DATA_DIR="$DATA_DIR"
+export VALKEY_PIDFILE="$PIDFILE"
+export VALKEY_LOGFILE="$LOGFILE"
+export VALKEY_DAEMONIZE=yes
 
-for _ in $(seq 1 50); do
-  if valkey_listener_matches_pidfile "$PIDFILE" "$URL" && valkey-cli -u "$URL" ping >/dev/null 2>&1; then
-    echo "Valkey started. pidfile=$PIDFILE logfile=$LOGFILE datadir=$DATA_DIR"
-    exit 0
-  fi
-  sleep 0.1
-done
-
-echo "Error: Valkey did not become healthy at $URL." >&2
-exit 1
+bash "${SCRIPT_DIR}/valkey-launch.sh"

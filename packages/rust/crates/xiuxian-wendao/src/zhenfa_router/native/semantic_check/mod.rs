@@ -28,13 +28,10 @@ pub use types::{
 pub(crate) use test_api::SourceFile;
 
 #[cfg(test)]
-#[allow(unused_imports)]
 pub(crate) use test_api::check_code_observations;
 #[cfg(test)]
-#[allow(unused_imports)]
 pub(crate) use test_api::{build_file_reports, issue_type_to_code, xml_escape};
 #[cfg(test)]
-#[allow(unused_imports)]
 pub(crate) use test_api::{
     extract_function_args, extract_hash_references, extract_id_references, generate_suggested_id,
     validate_contract,

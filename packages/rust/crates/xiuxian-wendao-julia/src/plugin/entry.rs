@@ -20,6 +20,7 @@ use super::discovery::{discover_docs, discover_examples, relative_path_string};
 use super::linking::{build_doc_relations, build_example_relations};
 use super::project::{load_project_metadata, locate_root_module_file};
 use super::sources::{JuliaAnalyzedFile, collect_julia_sources};
+use super::transport::build_julia_arrow_transport_client;
 
 const JULIA_PLUGIN_ID: &str = "julia";
 
@@ -93,6 +94,7 @@ impl RepoIntelligencePlugin for JuliaRepoIntelligencePlugin {
         context: &AnalysisContext,
         repository_root: &Path,
     ) -> Result<(), RepoIntelligenceError> {
+        let _maybe_transport = build_julia_arrow_transport_client(&context.repository)?;
         let metadata = load_project_metadata(&context.repository.id, repository_root)?;
         let mut diagnostics = Vec::new();
         let _ = locate_root_module_file(

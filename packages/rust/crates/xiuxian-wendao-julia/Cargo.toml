@@ -11,8 +11,10 @@ publish = false
 walkdir = { workspace = true }
 regex = "1"
 toml = "0.8"
-xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false }
+serde_json = { workspace = true }
+xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false, features = ["zhenfa-router"] }
 xiuxian-ast = { path = "../xiuxian-ast", features = ["julia"] }
+xiuxian-vector = { path = "../xiuxian-vector" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

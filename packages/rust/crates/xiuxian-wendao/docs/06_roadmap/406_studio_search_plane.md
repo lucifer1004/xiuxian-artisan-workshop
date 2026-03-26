@@ -24,6 +24,14 @@ Replace Studio request-path search hot spots with a background-built search plan
 ## Current Slice
 
 - foundation for corpus status, epoch publication, and single-flight builds is landed
+- `search_plane/service/core/construction.rs` is now split into `search_plane/service/core/construction/` with dedicated runtime, paths, concurrency, and tests modules, while the public `SearchPlaneService` construction surface remains unchanged; the next bounded target is `gateway/studio/router/handlers/repo/analysis/search.rs`
+- `gateway/studio/router/handlers/repo/analysis/search.rs` is now split into `gateway/studio/router/handlers/repo/analysis/search/` with dedicated cache, publication, module, symbol, example, and tests modules, while the repo-analysis handler surface remains unchanged; the next bounded target is `zhenfa_router/native/section_create.rs`
+- `zhenfa_router/native/section_create.rs` is now split into `zhenfa_router/native/section_create/` with dedicated types, insertion, building, and tests modules, while the section-creation surface remains unchanged; the next bounded target is `analyzers/query/docs/planner.rs`
+- `gateway/studio/router/code_ast.rs` is now split into `gateway/studio/router/code_ast/` with dedicated response, resolve, blocks, and atoms modules, while the public code-AST router surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/knowledge/intent.rs`
+- `gateway/studio/search/definition.rs` is now split into `gateway/studio/search/definition/` with dedicated resolve, filters, and tests modules, while the public definition resolution surface remains unchanged; the next bounded target is `analyzers/service/projection/planner/api.rs`
+- `link_graph/index/build/assemble.rs` is now split into `link_graph/index/build/assemble/` with dedicated inputs, notes, edges, virtual-nodes, finalize, and api modules, while the public link-graph index build surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/code_search/search.rs`
+- `gateway/studio/search/handlers/code_search/search.rs` is now split into `gateway/studio/search/handlers/code_search/search/` with dedicated response, repo-search, buffered, and task modules, while the public code-search handler surface remains unchanged; the next bounded target is `link_graph/context_snapshot.rs`
+- `link_graph/context_snapshot.rs` is now split into `link_graph/context_snapshot/` with dedicated types, id, runtime, store, and tests modules, while the public quantum-context snapshot surface remains unchanged; the next bounded target is `link_graph/index/ppr/kernel.rs`
 - `local_symbol` backs `search_ast`, `search_autocomplete`, and `search_definition`
 - `reference_occurrence` now backs `search_references`
 - `attachment` now backs `search_attachments`
@@ -33,6 +41,7 @@ Replace Studio request-path search hot spots with a background-built search plan
 - non-code `search_intent` now merges `knowledge_section`, `local_symbol`, and repo-content hits into a single hybrid response path instead of treating intent as a pure knowledge lookup
 - code-biased Studio search now queries `repo_entity` before repo-content fallback, and hybrid intent merges repo-entity hits into the same ranked response path
 - `search_plane::cache` now fronts repeat autocomplete, knowledge, non-repo intent, repo-scoped code search, and code-biased hybrid intent requests with corpus-aware Valkey keys and silent fallback to direct Lance reads when Valkey is unavailable
+- backend-issued markdown display-math atoms now flow through `gateway/studio/analysis/markdown/compile.rs` into `math:block` retrieval atoms, and the markdown waterfall math-slot path is green
 - `gateway/studio/types/search_index.rs` is now split into `gateway/studio/types/search_index/` with dedicated definitions, conversions, status rollups, and a split `tests/` tree (`counts.rs`, `reason.rs`, `mapping.rs`, `summary.rs`), while the public Studio search-index DTO façade remains unchanged
 - `search_plane/service/core/status.rs` is now split into `search_plane/service/core/status/` with dedicated runtime, compaction, repo-status synthesis, and tests, while the public `SearchPlaneService` surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
 - `search_plane/service/core/repo_runtime.rs` is now split into `search_plane/service/core/repo_runtime/` with dedicated helpers, reads, sync, and tests, while the public `SearchPlaneService` repo-runtime surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
@@ -47,8 +56,19 @@ Replace Studio request-path search hot spots with a background-built search plan
 - `search_plane/attachment/build.rs` is now split into `search_plane/attachment/build/` with dedicated orchestration, plan, extract, write, types, and tests modules, while the public attachment build surface remains unchanged; the next bounded target is `search_plane/repo_entity/schema.rs`
 - `search_plane/repo_entity/schema.rs` is now split into `search_plane/repo_entity/schema/` with dedicated definitions, columns, helpers, rows, batches, and tests modules, while the public repo-entity schema surface remains unchanged; the next bounded target is `search_plane/coordinator.rs`
 - `search_plane/coordinator.rs` is now split into `search_plane/coordinator/` with dedicated state, build, maintenance, types, and tests modules, while the public coordinator surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/code_search.rs`
+- `gateway/studio/repo_index/state/coordinator/runtime.rs` is now split into `gateway/studio/repo_index/state/coordinator/runtime/` with dedicated scheduler, task, repository, and state modules, while the public coordinator runtime surface remains unchanged; the next bounded target is `analyzers/service/projection/planner/workset.rs`
+- `zhenfa_router/native/semantic_check/docs_governance/rendering.rs` is now split into `zhenfa_router/native/semantic_check/docs_governance/rendering/` with dedicated index, landing, footer, links, planning, and shared modules, while the public docs-governance rendering surface remains unchanged; the next bounded target is `skill_vfs/zhixing/indexer/resource_graph.rs`
+- `skill_vfs/zhixing/indexer/resource_graph.rs` is now split into `skill_vfs/zhixing/indexer/resource_graph/` with dedicated helpers, references, and skills modules, while the public zhixing indexer surface remains unchanged; the next bounded target is `search_plane/knowledge_section/query.rs`
+- `search_plane/knowledge_section/query.rs` is now split into `search_plane/knowledge_section/query/` with dedicated errors, ranking, candidates, search, and tests modules, while the public knowledge-section query surface remains unchanged; since then the gateway command slice has also landed, and the next bounded target is `search_plane/service/core/maintenance.rs`
+- `bin/wendao/execute/gateway.rs` is now split into `bin/wendao/execute/gateway/` with `mod.rs`, `command.rs`, `config.rs`, `health.rs`, `registry.rs`, `shared.rs`, and `status.rs`, while preserving the CLI gateway entrypoint and gateway test coverage; the next bounded target is `search_plane/service/core/maintenance.rs`
+- `gateway/studio/router/handlers/repo/analysis.rs` is now split into `gateway/studio/router/handlers/repo/analysis/` with `mod.rs`, `overview.rs`, `search.rs`, `doc_coverage.rs`, `sync.rs`, and `tests.rs`, while preserving the repo overview, repo search, doc coverage, and sync endpoint surfaces; the next bounded target is `search_plane/service/core/construction.rs`
 - `analyzers/service/projection/planner.rs` is now split into `analyzers/service/projection/planner/` with dedicated planner API, scoring, workset, and tests modules, while the public planner surface remains unchanged
+- `analyzers/service/projection/planner/api.rs` is now split into `analyzers/service/projection/planner/api/` with dedicated item, search, queue, and rank modules, while the public planner API surface remains unchanged; the next bounded target is `link_graph/index/build/assemble.rs`
+- `analyzers/service/projection/planner/workset.rs` is now split into `analyzers/service/projection/planner/workset/` with dedicated orchestration, groups, balance, strategy, and math modules, while the public planner workset surface remains unchanged; the next bounded target is `search_plane/repo_entity/query/hydrate.rs`
+- `search_plane/repo_entity/query.rs` is now split into `search_plane/repo_entity/query/` with dedicated execution, hydrate, prepare, search, and types modules, while the public repo-entity query surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/tests/code_search.rs`
 - `search_plane/service/tests/status.rs` is now split into `search_plane/service/tests/status/` with dedicated repo-content, maintenance, and issue tests plus shared helpers, while the status test surface remains unchanged; the next bounded target is `search_plane/service/core/maintenance.rs`
+- `git/checkout/tests.rs` is now split into `git/checkout/tests/` with dedicated materialization, layout, lock, and retry modules, while the public checkout surface remains unchanged; the next bounded target is `zhenfa_router/native/semantic_check/docs_governance/rendering.rs`
+- `zhenfa_router/native/semantic_check/checks.rs` is now split into `zhenfa_router/native/semantic_check/checks/` with dedicated contracts, identity, links, observations, and structure modules, while the public semantic-check surface remains unchanged; the next bounded target is `zhenfa_router/native/semantic_check/docs_governance/rendering.rs`
 - search-plane Valkey client resolution now uses the Wendao-local thin helper layer, so the first shared transport primitive is centralized without moving cache keyspace or manifest semantics out of the search-plane domain
 - repo-backed query keys now derive from local corpus state plus repo-index status fragments for `repo_entity` and `repo_content_chunk`, so repo-aware caching no longer has to bypass Valkey just because the response depends on repo publication state
 - `repo_entity` and `repo_content_chunk` now emit explicit publication records after successful table writes, so the search plane can distinguish "published rows that remain readable" from transient repo-index phase churn
@@ -209,6 +229,8 @@ Replace Studio request-path search hot spots with a background-built search plan
 - the gateway benchmark transport is now hardened for local loopback pressure runs on this host. The CLI no longer depends on Undici `fetch`, and it explicitly binds `localAddress` for loopback targets when issuing `node:http` / `node:https` requests so repeated benchmark traffic against `127.0.0.1` does not fail with local `EADDRNOTAVAIL`
 - with that transport fix in place, the refreshed `96`-concurrency / `60s` pressure report cleared the old markdown contract failure entirely. The remaining benchmark failures are now all honest `INDEX_NOT_READY` responses for unpublished local corpora rather than malformed smoke requests
 - with the later definition-seed correction in place, the refreshed steady-state `96`-concurrency / `60s` report at `.data/wendao-frontend/.benchmark/wendao_gateway_openapi_2026_03_25T06_21_30_057Z.toml` now records `62 passed / 0 failed / 2 skipped`, which removes the last benchmark-only false negative from the bundled OpenAPI smoke surface
+- explicit repo gateway search endpoints now also have repo-aware hot-query caching. `repo/module-search`, `repo/symbol-search`, and `repo/example-search` wrap their typed Search Plane / cached-analyzer result path in a repo publication/runtime keyed `SearchPlaneCacheTtl::HotQuery` cache, so repeated mixed-hotset `(repo, query, limit)` traffic can return without re-reading Lance or rebuilding analyzer artifacts
+- that cache layer only stores successful typed payloads and keeps existing failure semantics unchanged, which means `REPO_INDEX_PENDING` and other gateway errors still bypass caching while steady-state hot queries reuse the cached payload directly
 - local corpus request serving now closes that cold-start gap too. `StudioState` waits for the first successful publish of `local_symbol`, `knowledge_section`, `attachment`, and `reference_occurrence` before AST search, autocomplete, definition resolve, knowledge search, attachment search, and reference search continue, so a fresh gateway restart no longer surfaces transient `INDEX_NOT_READY` errors to the first caller when the build is still in progress
 - targeted gateway tests now pin that contract explicitly. Six cold-start regressions call the handlers without pre-publishing their local corpora and assert success once the background build completes, which protects the exact OpenAPI-facing failure mode that the pressure benchmark exposed
 - the next bounded repo-search pressure slice is now formalized in `.cache/codex/execplans/wendao_repo_content_query_pressure_hardening.md`. It stays intentionally narrow: repo-content query filtering, read-side backpressure, and FTS eligibility only
@@ -289,3 +311,26 @@ Replace Studio request-path search hot spots with a background-built search plan
   repo has both published `repo_entity` and `repo_content_chunk` data for the
   same query, repo-wide code search returns the symbol hit and does not append a
   redundant file fallback hit from the same repo
+- gateway runtime observability is now less fragile during outage triage. The
+  supervised `wendao-gateway` process in `nix/modules/process.nix` still keeps
+  its process-compose-owned `/tmp` logs, but stdout/stderr are now mirrored into
+  `.run/logs/wendao-gateway.stdout.log` and
+  `.run/logs/wendao-gateway.stderr.log`, which restores stable workspace-local
+  evidence when the browser reports a transport-level `NetworkError`
+- the first post-restart stderr sweep on that mirrored log was materially
+  cleaner than before: no panic/error signatures were present, and the main
+  remaining noise source was Lance `_score` autoprojection warnings from
+  explicit FTS projections
+- `xiuxian-vector` now disables Lance scoring autoprojection in the shared FTS
+  streaming wrapper, so Wendao's explicit projected-column searches no longer
+  spam stderr with `_score` deprecation warnings just because they do not read
+  the score column
+- repo-wide `code_search` now also recognizes exact repo-name seed queries
+  before dispatch. When a query such as `SciMLBase` uniquely normalizes to a
+  configured repo id like `SciMLBase.jl`, the handler upgrades it into an
+  effective repo hint and skips all-repo fanout, which removes unrelated
+  pending/skipped repos from the response and targets the remaining steady-state
+  long-tail timeouts without changing explicit `repo:` search semantics
+- handler regressions now pin both sides of that routing rule: unique normalized
+  repo seeds resolve to one repo, while ambiguous normalized seeds continue to
+  avoid inference and stay on the all-repo path

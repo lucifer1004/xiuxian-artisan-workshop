@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 source "${SCRIPT_DIR}/valkey-common.sh"
+source "${SCRIPT_DIR}/valkey-runtime.sh"
 
 resolve_valkey_field() {
   uv run python "${PROJECT_ROOT}/scripts/channel/resolve_valkey_endpoint.py" --field "$1"
@@ -18,7 +19,7 @@ PORT="${1:-${VALKEY_PORT:-${DEFAULT_PORT}}}"
 HOST="${VALKEY_HOST:-${DEFAULT_HOST}}"
 DB="${VALKEY_DB:-${DEFAULT_DB}}"
 
-RUNTIME_DIR="${PRJ_RUNTIME_DIR:-.run}/valkey"
+RUNTIME_DIR="$(valkey_resolve_path "$PROJECT_ROOT" "${PRJ_RUNTIME_DIR:-.run}/valkey")"
 PIDFILE="$RUNTIME_DIR/valkey-${PORT}.pid"
 URL="redis://${HOST}:${PORT}/${DB}"
 

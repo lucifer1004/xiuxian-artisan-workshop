@@ -1,10 +1,9 @@
 use std::path::Path;
 
+use crate::gateway::studio::analysis::markdown::{CompiledDocument, compile_markdown_ir};
+use crate::gateway::studio::analysis::projection;
 use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::types::{AnalysisNode, MarkdownAnalysisResponse};
-
-use super::markdown::{CompiledDocument, compile_markdown_ir};
-use super::projection;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnalysisError {
@@ -63,6 +62,7 @@ pub(crate) async fn analyze_markdown(
         nodes: compiled.nodes,
         edges: compiled.edges,
         projections,
+        retrieval_atoms: compiled.retrieval_atoms,
         diagnostics: compiled.diagnostics,
     })
 }

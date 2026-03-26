@@ -3,6 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 source "${SCRIPT_DIR}/valkey-common.sh"
 source "${SCRIPT_DIR}/valkey-runtime.sh"
 
@@ -11,7 +12,7 @@ if ! command -v valkey-cli >/dev/null 2>&1; then
   exit 1
 fi
 
-PIDFILE="$(valkey_effective_pidfile)"
+PIDFILE="$(valkey_resolve_path "$PROJECT_ROOT" "$(valkey_effective_pidfile)")"
 URL="$(valkey_effective_url)"
 
 if valkey_listener_matches_pidfile "$PIDFILE" "$URL" && valkey-cli -u "$URL" ping >/dev/null 2>&1; then

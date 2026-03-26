@@ -118,8 +118,10 @@ fn embedded_discovery_records() -> Result<&'static [EmbeddedDiscoveryRecord]> {
 
 fn build_embedded_discovery_records() -> std::result::Result<Vec<EmbeddedDiscoveryRecord>, String> {
     let graph = Arc::new(KnowledgeGraph::new());
-    let indexer =
-        super::super::indexer::ZhixingWendaoIndexer::new(Arc::clone(&graph), PathBuf::new());
+    let indexer = crate::skill_vfs::zhixing::indexer::ZhixingWendaoIndexer::new(
+        Arc::clone(&graph),
+        PathBuf::new(),
+    );
     let _ = indexer
         .index_embedded_skill_references_only()
         .map_err(|error: Error| error.to_string())?;

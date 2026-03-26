@@ -2,4 +2,4 @@
 
 mod plugin;
 
-pub use plugin::{JuliaRepoIntelligencePlugin, register_into};
+pub use plugin::{JuliaRepoIntelligencePlugin, build_julia_arrow_transport_client, register_into};

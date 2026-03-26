@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use super::helpers::path_match_suffix;
 use super::*;
+use crate::link_graph::PageIndexNode;
 
 fn make_test_node_with_path(title: &str, path: &[&str], hash: Option<&str>) -> PageIndexNode {
     PageIndexNode {

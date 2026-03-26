@@ -7,7 +7,7 @@ pub(super) const PREWARM_ROW_LIMIT: usize = 32;
 pub(super) const COMPACTION_STARVATION_GUARD_ENQUEUE_LAG: u64 = 3;
 pub(super) const LOCAL_MAINTENANCE_SHUTDOWN_MESSAGE: &str =
     "search-plane local maintenance runtime was stopped before completing task";
-pub(super) const REPO_MAINTENANCE_SHUTDOWN_MESSAGE: &str =
+pub(crate) const REPO_MAINTENANCE_SHUTDOWN_MESSAGE: &str =
     "repo maintenance runtime was stopped before completing task";
 
 pub(super) fn repo_active_epoch(

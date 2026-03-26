@@ -14439,6 +14439,7 @@ dependencies = [
  "arrow-ipc",
  "arrow-string",
  "async-trait",
+ "axum",
  "chrono",
  "dashmap 7.0.0-rc2",
  "futures",
@@ -14454,6 +14455,7 @@ dependencies = [
  "ordered-float 4.6.0",
  "rand 0.8.5",
  "rayon",
+ "reqwest 0.13.2",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -14463,6 +14465,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "toml 0.8.23",
+ "url",
  "xiuxian-io",
  "xiuxian-lance",
  "xiuxian-skills",
@@ -14540,10 +14544,12 @@ version = "0.1.1"
 dependencies = [
  "insta",
  "regex",
+ "serde_json",
  "tempfile",
  "toml 0.8.23",
  "walkdir",
  "xiuxian-ast",
+ "xiuxian-vector",
  "xiuxian-wendao",
 ]
 

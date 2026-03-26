@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use super::retrieval::{RetrievalChunk, RetrievalChunkSurface};
+
 /// Kind of a code-AST node.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -46,6 +48,9 @@ pub enum CodeAstProjectionKind {
     /// Usage projection.
     Uses,
 }
+
+/// Surface kind for a retrieval atom derived from the code-AST response.
+pub type CodeAstRetrievalAtomScope = RetrievalChunkSurface;
 
 /// A single AST node entry for diagram rendering.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -94,6 +99,9 @@ pub struct CodeAstProjection {
     pub edge_count: usize,
 }
 
+/// Shared retrieval chunk used by code-AST analysis surfaces.
+pub type CodeAstRetrievalAtom = RetrievalChunk;
+
 /// Response payload for code AST analysis.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -110,6 +118,9 @@ pub struct CodeAstAnalysisResponse {
     pub edges: Vec<CodeAstEdge>,
     /// Projection summaries.
     pub projections: Vec<CodeAstProjection>,
+    /// Compact retrieval atoms for declaration- and symbol-backed surfaces.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retrieval_atoms: Vec<CodeAstRetrievalAtom>,
     /// Optional node identifier selected by line hint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub focus_node_id: Option<String>,

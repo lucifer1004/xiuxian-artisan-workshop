@@ -48,6 +48,11 @@ downstream proof.
   compare the header against the owned pidfile before treating the gateway as
   ready. The readiness probe also checks for `HTTP 200`, so a `503` response
   with the correct header still fails closed.
+- The Valkey launch contract is shared now: both `process-compose` and the
+  standalone `just valkey-*` path go through `scripts/channel/valkey-launch.sh`,
+  and health checks go through `scripts/channel/valkey-healthcheck.sh`, so the
+  ownership rule stays identical across launchers. The launcher is now fully
+  environment-driven and no longer consumes `.config/xiuxian-artisan-workshop/valkey.conf`.
 - The gateway inventory now also includes `GET /api/repo/sync`,
   `GET /api/repo/overview`, `GET /api/repo/module-search`, and
   `GET /api/repo/symbol-search`, `GET /api/repo/example-search`, and

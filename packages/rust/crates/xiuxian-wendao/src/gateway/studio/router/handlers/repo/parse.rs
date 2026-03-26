@@ -40,7 +40,7 @@ pub(super) fn required_node_id(node_id: Option<&str>) -> Result<String, StudioAp
         .ok_or_else(|| StudioApiError::bad_request("MISSING_NODE_ID", "`node_id` is required"))
 }
 
-pub(super) fn parse_repo_sync_mode(mode: Option<&str>) -> Result<RepoSyncMode, StudioApiError> {
+pub(crate) fn parse_repo_sync_mode(mode: Option<&str>) -> Result<RepoSyncMode, StudioApiError> {
     match mode
         .map(str::trim)
         .filter(|value| !value.is_empty())

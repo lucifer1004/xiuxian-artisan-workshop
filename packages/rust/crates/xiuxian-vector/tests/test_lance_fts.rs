@@ -5,7 +5,9 @@ use std::time::Instant;
 
 use anyhow::{Result, anyhow};
 use serde_json::json;
-use xiuxian_vector::{KeywordSearchBackend, VectorStore};
+use xiuxian_vector::{
+    CONTENT_COLUMN, ColumnarScanOptions, ID_COLUMN, KeywordSearchBackend, VectorStore,
+};
 
 async fn build_store_with_tool_data() -> Result<VectorStore> {
     let temp_dir = tempfile::Builder::new()
@@ -207,6 +209,42 @@ async fn test_hybrid_search_with_lance_keyword_backend() -> Result<()> {
 
     assert!(!results.is_empty());
     assert_eq!(results[0].tool_name, "git.commit");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_streaming_fts_projection_does_not_autoproject_score_column() -> Result<()> {
+    let store = build_store_with_tool_data().await?;
+    let mut batches = Vec::new();
+    store
+        .search_fts_batches_streaming(
+            "tools",
+            "commit",
+            ColumnarScanOptions {
+                projected_columns: vec![ID_COLUMN.to_string(), CONTENT_COLUMN.to_string()],
+                limit: Some(4),
+                ..ColumnarScanOptions::default()
+            },
+            |batch| -> Result<()> {
+                batches.push(batch);
+                Ok(())
+            },
+        )
+        .await?;
+
+    assert!(!batches.is_empty());
+    for batch in batches {
+        let fields = batch.schema_ref().fields();
+        assert!(
+            fields.iter().all(|field| field.name() != "_score"),
+            "unexpected implicit _score projection: {:?}",
+            fields
+                .iter()
+                .map(|field| field.name().clone())
+                .collect::<Vec<_>>()
+        );
+    }
 
     Ok(())
 }

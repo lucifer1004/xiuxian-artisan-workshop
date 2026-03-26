@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use super::retrieval::RetrievalChunk;
+
 /// Kind of an analysis node.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -17,6 +19,10 @@ pub enum AnalysisNodeKind {
     Document,
     /// Code block node.
     CodeBlock,
+    /// Markdown table node.
+    Table,
+    /// Display math node.
+    Math,
     /// Semantic reference site.
     Reference,
     /// Property box node.
@@ -94,6 +100,9 @@ pub struct AnalysisEdge {
     pub evidence: AnalysisEvidence,
 }
 
+/// Shared retrieval chunk used by markdown analysis surfaces.
+pub type MarkdownRetrievalAtom = RetrievalChunk;
+
 /// Full response for Markdown analysis.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -112,6 +121,9 @@ pub struct MarkdownAnalysisResponse {
     pub edges: Vec<AnalysisEdge>,
     /// Mermaid diagram projections.
     pub projections: Vec<MermaidProjection>,
+    /// Compact retrieval atoms for document / section surfaces.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retrieval_atoms: Vec<MarkdownRetrievalAtom>,
     /// Analysis diagnostics.
     pub diagnostics: Vec<String>,
 }

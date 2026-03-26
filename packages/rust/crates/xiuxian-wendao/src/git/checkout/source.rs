@@ -25,7 +25,7 @@ pub fn resolve_repository_source(
     }
 
     if repository.url.is_some() {
-        return super::managed::resolve_managed_checkout(repository, mode);
+        return crate::git::checkout::managed::resolve_managed_checkout(repository, mode);
     }
 
     Err(RepoIntelligenceError::MissingRepositorySource {

@@ -46,6 +46,12 @@ pub use xiuxian_skills::skills::{
 // Module Declarations
 // ============================================================================
 
+pub use arrow_transport::{
+    ARROW_TRANSPORT_CONTENT_TYPE, ARROW_TRANSPORT_DEFAULT_BASE_URL,
+    ARROW_TRANSPORT_DEFAULT_HEALTH_ROUTE, ARROW_TRANSPORT_DEFAULT_ROUTE, ArrowTransportClient,
+    ArrowTransportConfig, ArrowTransportConfigError, ArrowTransportError,
+    decode_record_batches_ipc, encode_record_batch_ipc, encode_record_batches_ipc,
+};
 pub use error::VectorStoreError;
 pub use keyword::{
     HybridSearchResult, KEYWORD_WEIGHT, KeywordIndex, KeywordSearchBackend, RRF_K, SEMANTIC_WEIGHT,
@@ -66,6 +72,7 @@ pub use skill::{ToolSearchOptions, ToolSearchRequest, ToolSearchResult};
 // Module Declarations
 // ============================================================================
 
+pub mod arrow_transport;
 pub mod batch;
 pub mod error;
 pub mod index;

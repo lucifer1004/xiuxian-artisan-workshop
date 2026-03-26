@@ -2,8 +2,8 @@ use crate::analyzers::{RepoBacklinkItem, RepoSymbolKind, SymbolSearchHit};
 use crate::gateway::studio::search::handlers::code_search::{
     helpers::symbol_search_hit_to_search_hit,
     query::{
-        collect_repo_search_targets, parse_code_search_query, repo_search_parallelism,
-        repo_search_result_limits, repo_wide_code_search_timeout,
+        collect_repo_search_targets, infer_repo_hint_from_query, parse_code_search_query,
+        repo_search_parallelism, repo_search_result_limits, repo_wide_code_search_timeout,
     },
 };
 use crate::gateway::studio::search::handlers::test_prelude::SearchQuery;
@@ -61,6 +61,29 @@ fn parse_code_search_query_preserves_repo_identifier_case() {
 
     assert_eq!(parsed.query, "using ModelingToolkit");
     assert_eq!(parsed.repo.as_deref(), Some("DifferentialEquations.jl"));
+}
+
+#[test]
+fn infer_repo_hint_from_query_matches_unique_normalized_repo_seed() {
+    let parsed = parse_code_search_query("SciMLBase", None);
+    let inferred = infer_repo_hint_from_query(
+        &parsed,
+        [
+            "SciMLBase.jl",
+            "DifferentialEquations.jl",
+            "ModelingToolkit.jl",
+        ],
+    );
+
+    assert_eq!(inferred.as_deref(), Some("SciMLBase.jl"));
+}
+
+#[test]
+fn infer_repo_hint_from_query_ignores_ambiguous_normalized_repo_seed() {
+    let parsed = parse_code_search_query("SciMLBase", None);
+    let inferred = infer_repo_hint_from_query(&parsed, ["SciMLBase.jl", "scimlbase"]);
+
+    assert_eq!(inferred, None);
 }
 
 #[test]

@@ -20,6 +20,7 @@ Omni Vector provides vector storage and similarity search capabilities for the O
 - CRUD + merge-insert (upsert) operations
 - Versioning / snapshot (time travel) APIs
 - Schema evolution helpers
+- Generic Arrow IPC codec and Arrow-over-HTTP transport helpers
 
 ## Usage
 
@@ -67,11 +68,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 xiuxian-vector/
 ├── src/lib.rs                # Main exports / module wiring
+├── src/arrow_transport/      # Generic Arrow IPC codec + HTTP client
 ├── src/ops/                  # Core CRUD + admin + writer operations
 ├── src/search/               # search_optimized + hybrid fusion + search_fts
 ├── src/keyword/              # keyword backend abstraction (Tantivy / Lance FTS)
 └── tests/                    # snapshots + data-layer + perf guard
 ```
+
+## Arrow Transport
+
+`xiuxian-vector` now owns the generic Arrow IPC substrate used to speak to
+external processors such as the standalone Julia `WendaoArrow` package. The
+crate exposes:
+
+- `encode_record_batch_ipc` and `decode_record_batches_ipc` for generic Arrow stream handling
+- `ArrowTransportClient` for HTTP roundtrips against a WendaoArrow-compatible endpoint
+- `ArrowTransportConfig::from_toml_str(...)` for `[gateway.arrow_transport]` config loading
 
 ## Integration
 

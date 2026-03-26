@@ -13,7 +13,7 @@ mod audit;
 #[path = "execute/fix.rs"]
 mod fix;
 #[cfg(feature = "zhenfa-router")]
-#[path = "execute/gateway.rs"]
+#[path = "execute/gateway/mod.rs"]
 mod gateway;
 #[path = "execute/graph.rs"]
 mod graph;

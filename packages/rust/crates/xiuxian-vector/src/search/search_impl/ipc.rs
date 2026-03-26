@@ -1,8 +1,5 @@
-use std::io::Cursor;
-
 use arrow::array::{Array, Float32Array, Float64Array, ListBuilder, StringArray, StringBuilder};
 use arrow::datatypes::{DataType, Field, Schema};
-use arrow_ipc::writer::StreamWriter;
 use xiuxian_types::VectorSearchResult;
 
 use super::confidence::{
@@ -168,12 +165,7 @@ fn append_vector_ipc_column(
 }
 
 fn record_batch_to_ipc_bytes(batch: &arrow::record_batch::RecordBatch) -> Result<Vec<u8>, String> {
-    let mut buf = Cursor::new(Vec::new());
-    let mut writer =
-        StreamWriter::try_new(&mut buf, batch.schema().as_ref()).map_err(|e| e.to_string())?;
-    writer.write(batch).map_err(|e| e.to_string())?;
-    writer.finish().map_err(|e| e.to_string())?;
-    Ok(buf.into_inner())
+    crate::arrow_transport::encode_record_batch_ipc(batch).map_err(|error| error.to_string())
 }
 
 /// Encode search results as Arrow IPC stream bytes (single `RecordBatch`).

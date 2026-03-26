@@ -4,11 +4,15 @@ let
   gatewayTargetDir = ".cache/cargo-target/wendao-gateway-process-compose";
   gatewayRuntimeDir = ".run/wendao-gateway";
   gatewayPidFile = "${gatewayRuntimeDir}/wendao.pid";
+  gatewayLogDir = ".run/logs";
+  gatewayStdoutLog = "${gatewayLogDir}/wendao-gateway.stdout.log";
+  gatewayStderrLog = "${gatewayLogDir}/wendao-gateway.stderr.log";
   sentinelTargetDir = ".cache/cargo-target/wendao-sentinel-process-compose";
   valkeyDataDir = ".data/valkey";
-  valkeyPidFile = ".run/valkey/valkey.pid";
   valkeyRuntimeDir = ".run/valkey";
-  valkeyUrl = "redis://127.0.0.1:6379/0";
+  valkeyPidFile = "${valkeyRuntimeDir}/valkey.pid";
+  valkeyPort = 6379;
+  valkeyHost = "127.0.0.1";
 in
 {
   packages = [
@@ -18,28 +22,32 @@ in
   processes = {
     valkey = {
       exec = ''
-        mkdir -p ${valkeyRuntimeDir} ${valkeyDataDir}
-        rm -f ${valkeyPidFile}
-        exec valkey-server .config/xiuxian-artisan-workshop/valkey.conf --tcp-backlog 128 --pidfile ${valkeyPidFile}
+        ROOT_DIR="$PRJ_ROOT"
+        VALKEY_RUNTIME_DIR="$ROOT_DIR/${valkeyRuntimeDir}"
+        VALKEY_DATA_DIR="$ROOT_DIR/${valkeyDataDir}"
+        VALKEY_PIDFILE="$ROOT_DIR/${valkeyPidFile}"
+        mkdir -p "$VALKEY_RUNTIME_DIR" "$VALKEY_DATA_DIR"
+        rm -f "$VALKEY_PIDFILE"
+        export VALKEY_RUNTIME_DIR="$VALKEY_RUNTIME_DIR"
+        export VALKEY_DATA_DIR="$VALKEY_DATA_DIR"
+        export VALKEY_PIDFILE="$VALKEY_PIDFILE"
+        export VALKEY_PORT=${toString valkeyPort}
+        export VALKEY_HOST=${valkeyHost}
+        export VALKEY_BIND=${valkeyHost}
+        export VALKEY_DAEMONIZE=no
+        bash scripts/channel/valkey-launch.sh
       '';
       process-compose = {
         readiness_probe = {
           exec.command = ''
-            PIDFILE=${valkeyPidFile}
-            if [ ! -s "$PIDFILE" ]; then
-              exit 1
-            fi
-
-            EXPECTED_PID="$(cat "$PIDFILE")"
-            ACTUAL_PID="$(
-              valkey-cli -u ${valkeyUrl} info server | awk -F: '/^[[:space:]]*process_id:/ { gsub(/[[:space:]\r]/, "", $2); print $2; exit }'
-            )"
-
-            if [ -z "$ACTUAL_PID" ] || [ "$ACTUAL_PID" != "$EXPECTED_PID" ]; then
-              exit 1
-            fi
-
-            valkey-cli -u ${valkeyUrl} ping
+            ROOT_DIR="$PRJ_ROOT"
+            export VALKEY_RUNTIME_DIR="$ROOT_DIR/${valkeyRuntimeDir}"
+            export VALKEY_DATA_DIR="$ROOT_DIR/${valkeyDataDir}"
+            export VALKEY_PIDFILE="$ROOT_DIR/${valkeyPidFile}"
+            export VALKEY_PORT=${toString valkeyPort}
+            export VALKEY_HOST=${valkeyHost}
+            export VALKEY_BIND=${valkeyHost}
+            bash scripts/channel/valkey-healthcheck.sh >/dev/null
           '';
           initial_delay_seconds = 5;
           period_seconds = 2;
@@ -55,14 +63,16 @@ in
     # Wendao Phase 7.6 Integrated Services
     wendao-gateway = {
       exec = ''
-        mkdir -p ${gatewayRuntimeDir}
+        mkdir -p ${gatewayRuntimeDir} ${gatewayLogDir}
         rm -f ${gatewayPidFile}
         printf '%s\n' "$$" > ${gatewayPidFile}
         export WENDAO_GATEWAY_PIDFILE=${gatewayPidFile}
         export CARGO_TARGET_DIR=${gatewayTargetDir}
         export VALKEY_URL=redis://127.0.0.1:6379/0
         cargo build -p xiuxian-wendao --bin wendao --locked
-        exec ${gatewayTargetDir}/debug/wendao --conf ${gatewayConfig} gateway start
+        exec ${gatewayTargetDir}/debug/wendao --conf ${gatewayConfig} gateway start \
+          > >(tee -a ${gatewayStdoutLog}) \
+          2> >(tee -a ${gatewayStderrLog} >&2)
       '';
       process-compose = {
         depends_on = {

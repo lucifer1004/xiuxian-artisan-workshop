@@ -12,6 +12,7 @@ mod definitions;
 mod error;
 mod graph;
 mod navigation;
+mod retrieval;
 mod search;
 mod search_index;
 mod symbols;
@@ -19,12 +20,12 @@ mod vfs;
 
 pub use analysis::{
     AnalysisEdge, AnalysisEdgeKind, AnalysisEvidence, AnalysisNode, AnalysisNodeKind,
-    MarkdownAnalysisResponse, MermaidProjection, MermaidViewKind,
+    MarkdownAnalysisResponse, MarkdownRetrievalAtom, MermaidProjection, MermaidViewKind,
 };
 pub use attachments::{AttachmentSearchHit, AttachmentSearchResponse};
 pub use code_ast::{
     CodeAstAnalysisResponse, CodeAstEdge, CodeAstEdgeKind, CodeAstNode, CodeAstNodeKind,
-    CodeAstProjection, CodeAstProjectionKind,
+    CodeAstProjection, CodeAstProjectionKind, CodeAstRetrievalAtom, CodeAstRetrievalAtomScope,
 };
 pub use collection::studio_type_collection;
 pub use config::{UiCapabilities, UiConfig, UiProjectConfig, UiRepoProjectConfig};
@@ -38,6 +39,7 @@ pub use graph::{
     TopologyCluster, TopologyLink, TopologyNode,
 };
 pub use navigation::StudioNavigationTarget;
+pub use retrieval::{RetrievalChunk, RetrievalChunkSurface};
 pub use search::{
     IntentSearchHit, KnowledgeSearchHit, SearchBacklinkItem, SearchHit, SearchResponse,
 };
