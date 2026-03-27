@@ -10,7 +10,9 @@ use std::path::PathBuf;
 use xiuxian_zhenfa::{MethodRegistry, ZhenfaRouter};
 
 use super::models::{WendaoSearchHttpResponse, WendaoSearchRequest};
-use super::rpc::{execute_search_async, search_from_rpc_params};
+use super::rpc::{
+    execute_search_async, export_julia_deployment_artifact_from_rpc_params, search_from_rpc_params,
+};
 use crate::link_graph::{
     LinkGraphDirection, LinkGraphDocument, LinkGraphIndex, LinkGraphMetadata, LinkGraphNeighbor,
     LinkGraphPlannedSearchPayload, LinkGraphSearchOptions, LinkGraphStats,
@@ -71,6 +73,9 @@ impl ZhenfaRouter for WendaoZhenfaRouter {
     fn register_methods(&self, registry: &mut MethodRegistry) {
         registry.register_fn("wendao.search", move |params, _meta| async move {
             search_from_rpc_params(params)
+        });
+        registry.register_fn("wendao.julia_deployment_artifact", move |params, _meta| async move {
+            export_julia_deployment_artifact_from_rpc_params(params)
         });
     }
 }

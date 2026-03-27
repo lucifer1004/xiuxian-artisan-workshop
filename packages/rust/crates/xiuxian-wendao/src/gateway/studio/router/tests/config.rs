@@ -1,12 +1,16 @@
 use std::sync::Arc;
 
-use axum::extract::State;
+use axum::body::to_bytes;
+use axum::extract::{Query, State};
 
 use crate::analyzers::bootstrap_builtin_registry;
 use crate::gateway::studio::router::tests::repo_project;
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::types::{UiConfig, UiProjectConfig, VfsScanResult};
+use crate::set_link_graph_wendao_config_override;
 use crate::unified_symbol::UnifiedSymbolIndex;
+use chrono::DateTime;
+use std::fs;
 
 #[test]
 fn set_ui_config_preserves_cached_state_when_effectively_unchanged() {
@@ -86,4 +90,111 @@ async fn ui_capabilities_reports_builtin_plugin_languages() {
         response.kinds,
         crate::gateway::studio::router::state::supported_code_kinds()
     );
+}
+
+#[tokio::test]
+async fn julia_deployment_artifact_handler_returns_resolved_artifact() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(
+        &config_path,
+        r#"[link_graph.retrieval.julia_rerank]
+base_url = "http://127.0.0.1:18080"
+route = "/arrow-ipc"
+schema_version = "v1"
+service_mode = "stream"
+analyzer_strategy = "similarity_only"
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write config: {error}"));
+    let config_path_string = config_path.to_string_lossy().to_string();
+    set_link_graph_wendao_config_override(&config_path_string);
+
+    let state = Arc::new(GatewayState {
+        index: None,
+        signal_tx: None,
+        studio: Arc::new(StudioState::new()),
+    });
+
+    let response = crate::gateway::studio::router::handlers::get_julia_deployment_artifact(
+        State(Arc::clone(&state)),
+        Query(
+            crate::gateway::studio::router::handlers::capabilities::JuliaDeploymentArtifactQuery {
+                format: None,
+            },
+        ),
+    )
+    .await
+    .unwrap_or_else(|error| panic!("deployment artifact handler should resolve: {error:?}"));
+
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap_or_else(|error| panic!("read json body: {error}"));
+    let artifact: crate::gateway::studio::types::UiJuliaDeploymentArtifact =
+        serde_json::from_slice(&body)
+            .unwrap_or_else(|error| panic!("decode artifact json: {error}"));
+
+    assert_eq!(artifact.artifact_schema_version, "v1");
+    DateTime::parse_from_rfc3339(&artifact.generated_at)
+        .unwrap_or_else(|error| panic!("parse artifact generated_at: {error}"));
+    assert_eq!(artifact.base_url.as_deref(), Some("http://127.0.0.1:18080"));
+    assert_eq!(artifact.route.as_deref(), Some("/arrow-ipc"));
+    assert_eq!(artifact.schema_version.as_deref(), Some("v1"));
+    assert_eq!(
+        artifact.launch.launcher_path,
+        ".data/WendaoAnalyzer/scripts/run_analyzer_service.sh"
+    );
+}
+
+#[tokio::test]
+async fn julia_deployment_artifact_handler_returns_toml_when_requested() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(
+        &config_path,
+        r#"[link_graph.retrieval.julia_rerank]
+base_url = "http://127.0.0.1:18080"
+route = "/arrow-ipc"
+schema_version = "v1"
+service_mode = "stream"
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write config: {error}"));
+    let config_path_string = config_path.to_string_lossy().to_string();
+    set_link_graph_wendao_config_override(&config_path_string);
+
+    let state = Arc::new(GatewayState {
+        index: None,
+        signal_tx: None,
+        studio: Arc::new(StudioState::new()),
+    });
+
+    let response = crate::gateway::studio::router::handlers::get_julia_deployment_artifact(
+        State(Arc::clone(&state)),
+        Query(
+            crate::gateway::studio::router::handlers::capabilities::JuliaDeploymentArtifactQuery {
+                format: Some(
+                    crate::zhenfa_router::native::WendaoJuliaDeploymentArtifactOutputFormat::Toml,
+                ),
+            },
+        ),
+    )
+    .await
+    .unwrap_or_else(|error| panic!("deployment artifact toml handler should resolve: {error:?}"));
+
+    let content_type = response
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap_or_else(|error| panic!("read toml body: {error}"));
+    let body_text =
+        String::from_utf8(body.to_vec()).unwrap_or_else(|error| panic!("utf8 toml body: {error}"));
+
+    assert_eq!(content_type, "text/plain; charset=utf-8");
+    assert!(body_text.contains("base_url = \"http://127.0.0.1:18080\""));
+    assert!(body_text.contains("route = \"/arrow-ipc\""));
 }

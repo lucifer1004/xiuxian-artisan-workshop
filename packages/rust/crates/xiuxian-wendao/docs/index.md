@@ -52,6 +52,9 @@ Standardized documentation repository for the Wendao DocOS Kernel, leveraging AS
 - [[06_roadmap/403_document_projection_and_retrieval_enhancement]]: Document projection and retrieval enhancement on top of Repo Intelligence.
 - [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]]: SciML and MSL repo intelligence architecture and boundary mapping.
 - [[06_roadmap/405_large_rust_modularization]]: Lossless modularization plan for oversized Rust files in `xiuxian-wendao`.
+- `docs/rfcs/2026-03-27-wendao-arrow-plugin-flight-rfc.md`: Arrow-first plugin protocol with Flight-first transport and Arrow IPC fallback.
+- `docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md`: Complete migration path from monolithic Wendao ownership toward `core`, `runtime`, and independently published plugin packages.
+- `.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md`: Strategic blueprint for phased execution of the core/runtime/plugin migration.
 
 :RELATIONS:
 :LINKS: [[01_core/101_triple_a_protocol]], [[06_roadmap/401_project_sentinel]], [[06_roadmap/402_repo_intelligence_mvp]], [[06_roadmap/403_document_projection_and_retrieval_enhancement]], [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]], [[06_roadmap/405_large_rust_modularization]]
@@ -61,5 +64,5 @@ Standardized documentation repository for the Wendao DocOS Kernel, leveraging AS
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-03-21
+:LAST_SYNC: 2026-03-27
 :END:

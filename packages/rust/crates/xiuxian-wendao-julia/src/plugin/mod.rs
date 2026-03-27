@@ -4,7 +4,7 @@ mod linking;
 mod project;
 mod sources;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 mod transport;
 
 pub use entry::JuliaRepoIntelligencePlugin;

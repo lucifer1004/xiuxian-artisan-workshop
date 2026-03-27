@@ -58,12 +58,18 @@ The real loopback test does not use an Axum mock for the processor path. It
 spawns `.data/WendaoArrow/scripts/run_stream_scoring_server.sh`, waits for
 `/health`, then posts Arrow IPC batches through
 `xiuxian_vector::ArrowTransportClient` and asserts the Rust side can decode the
-returned Arrow response contract and scoring values.
+returned Arrow response contract and scoring values. Those fixtures now use the
+shared `julia_arrow_request_schema(...)` builder as well, so the official
+example roundtrip receives the full WendaoArrow `v1` request shape instead of a
+test-local reduced schema.
 
 There is also a metadata-aware real loopback that targets
 `.data/WendaoArrow/scripts/run_stream_metadata_server.sh`, sends a request
 whose Arrow schema metadata includes `trace_id`, and asserts the Rust side can
-decode the additive `trace_id` response column.
+decode the additive `trace_id` response column. That path now goes through the
+production `xiuxian_vector::ArrowTransportClient`, so the test verifies request
+schema metadata survives the real transport API instead of only a hand-written
+HTTP fixture.
 
 The corresponding test support is now split under `src/plugin/test_support/`
 into shared child/path helpers and official-example helpers, mirroring the

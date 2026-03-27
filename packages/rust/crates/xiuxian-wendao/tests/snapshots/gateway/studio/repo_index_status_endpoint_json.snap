@@ -1,0 +1,19 @@
+---
+source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
+assertion_line: 9
+expression: value
+---
+{
+  "active": 0,
+  "checking": 0,
+  "failed": 0,
+  "indexing": 0,
+  "maxConcurrency": 0,
+  "queued": 0,
+  "ready": 0,
+  "syncConcurrencyLimit": 0,
+  "syncing": 0,
+  "targetConcurrency": 0,
+  "total": 0,
+  "unsupported": 0
+}

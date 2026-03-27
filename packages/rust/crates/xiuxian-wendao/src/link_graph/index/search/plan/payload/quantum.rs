@@ -19,18 +19,17 @@ use crate::link_graph::{
     VectorStoreSemanticIgnition,
 };
 #[cfg(feature = "julia")]
-use arrow::datatypes::Schema;
-#[cfg(feature = "julia")]
 use arrow::record_batch::RecordBatch;
 #[cfg(feature = "julia")]
 use std::cmp::Ordering;
 #[cfg(feature = "julia")]
 use std::collections::BTreeMap;
-#[cfg(feature = "julia")]
-use std::sync::Arc;
 use xiuxian_vector::VectorStore;
 #[cfg(feature = "julia")]
-use xiuxian_vector::{ArrowTransportClient, ArrowTransportConfig};
+use xiuxian_vector::{
+    ARROW_TRANSPORT_TRACE_ID_METADATA_KEY, ArrowTransportClient, ArrowTransportConfig,
+    attach_record_batch_metadata,
+};
 
 type SemanticIgnitionOutcome = Result<
     (
@@ -597,17 +596,14 @@ fn attach_julia_rerank_request_trace_id(
     batch: RecordBatch,
     query_text: &str,
 ) -> Result<RecordBatch, String> {
-    let mut metadata = batch.schema().metadata().clone();
-    metadata.insert(
-        "trace_id".to_string(),
-        julia_rerank_request_trace_id(query_text),
-    );
-    let schema = Arc::new(Schema::new_with_metadata(
-        batch.schema().fields().clone(),
-        metadata,
-    ));
-    RecordBatch::try_new(schema, batch.columns().to_vec())
-        .map_err(|error| format!("failed to attach Julia rerank trace metadata: {error}"))
+    attach_record_batch_metadata(
+        &batch,
+        [(
+            ARROW_TRANSPORT_TRACE_ID_METADATA_KEY,
+            julia_rerank_request_trace_id(query_text),
+        )],
+    )
+    .map_err(|error| format!("failed to attach Julia rerank trace metadata: {error}"))
 }
 
 #[cfg(feature = "julia")]
@@ -628,7 +624,8 @@ fn julia_rerank_request_trace_id(query_text: &str) -> String {
 mod tests {
     use super::*;
     use arrow::array::StringArray;
-    use arrow::datatypes::{DataType, Field};
+    use arrow::datatypes::{DataType, Field, Schema};
+    use std::sync::Arc;
 
     #[test]
     fn apply_julia_rerank_scores_overwrites_saliency_and_resorts_contexts() {
@@ -694,6 +691,11 @@ mod tests {
             health_route: Some("/healthz".to_string()),
             schema_version: Some("v1".to_string()),
             timeout_secs: Some(15),
+            service_mode: None,
+            analyzer_config_path: None,
+            analyzer_strategy: None,
+            vector_weight: None,
+            similarity_weight: None,
         })
         .expect("config should be valid")
         .expect("base url should enable transport");

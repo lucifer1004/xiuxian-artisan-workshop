@@ -7,6 +7,7 @@ use crate::search_plane::ranking::{
 pub(crate) const MODULE_BUCKETS: u8 = 3;
 pub(crate) const SYMBOL_BUCKETS: u8 = 7;
 pub(crate) const EXAMPLE_BUCKETS: u8 = 10;
+pub(crate) const IMPORT_BUCKETS: u8 = 4;
 pub(crate) const MIN_RECALL_CANDIDATES: usize = 256;
 pub(crate) const RECALL_TRIM_MULTIPLIER: usize = 8;
 
@@ -29,6 +30,8 @@ pub(crate) struct RepoEntityCandidate {
 
 pub(crate) struct RepoEntityQuery<'a> {
     pub(crate) query_lower: &'a str,
+    pub(crate) import_package_filter: Option<&'a str>,
+    pub(crate) import_module_filter: Option<&'a str>,
     pub(crate) language_filters: &'a std::collections::HashSet<String>,
     pub(crate) kind_filters: &'a std::collections::HashSet<String>,
     pub(crate) window: RetainedWindow,

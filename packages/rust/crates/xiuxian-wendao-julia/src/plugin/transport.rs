@@ -8,6 +8,9 @@ use xiuxian_vector::{
 };
 use xiuxian_wendao::analyzers::config::{RegisteredRepository, RepositoryPluginConfig};
 use xiuxian_wendao::analyzers::errors::RepoIntelligenceError;
+use xiuxian_wendao::analyzers::{
+    JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_FINAL_SCORE_COLUMN,
+};
 
 const JULIA_PLUGIN_ID: &str = "julia";
 const ARROW_TRANSPORT_KEY: &str = "arrow_transport";
@@ -189,15 +192,15 @@ pub fn validate_julia_arrow_response_batches(
 
     for batch in batches {
         let doc_id = batch
-            .column_by_name("doc_id")
+            .column_by_name(JULIA_ARROW_DOC_ID_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<StringArray>())
             .ok_or_else(|| contract_error("missing required Utf8 column `doc_id`"))?;
         let analyzer_score = batch
-            .column_by_name("analyzer_score")
+            .column_by_name(JULIA_ARROW_ANALYZER_SCORE_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
             .ok_or_else(|| contract_error("missing required Float64 column `analyzer_score`"))?;
         let final_score = batch
-            .column_by_name("final_score")
+            .column_by_name(JULIA_ARROW_FINAL_SCORE_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
             .ok_or_else(|| contract_error("missing required Float64 column `final_score`"))?;
 
@@ -312,14 +315,8 @@ fn plugin_config_type_error(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::io::Cursor;
-    use std::sync::Arc;
-
     use arrow::array::{Float64Array, StringArray};
-    use arrow::datatypes::{DataType, Field, Schema};
     use arrow::record_batch::RecordBatch;
-    use arrow_ipc::writer::StreamWriter;
     use axum::body::Bytes;
     use axum::http::HeaderValue;
     use axum::http::header::CONTENT_TYPE;
@@ -327,8 +324,10 @@ mod tests {
     use axum::routing::{get, post};
     use axum::{Router, serve};
     use tokio::net::TcpListener;
-    use xiuxian_vector::{
-        ArrowTransportConfig, decode_record_batches_ipc, encode_record_batches_ipc,
+    use xiuxian_vector::{ArrowTransportClient, ArrowTransportConfig, encode_record_batches_ipc};
+    use xiuxian_wendao::analyzers::{
+        JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN,
+        JULIA_ARROW_FINAL_SCORE_COLUMN, JULIA_ARROW_TRACE_ID_COLUMN,
     };
 
     use super::{
@@ -336,9 +335,15 @@ mod tests {
         process_julia_arrow_batches, process_julia_arrow_batches_for_repository,
         validate_julia_arrow_response_batches,
     };
-    use crate::plugin::test_support::official_examples::{
-        reserve_real_service_port, spawn_real_wendaoarrow_metadata_service,
-        spawn_real_wendaoarrow_service, wait_for_health,
+    use crate::julia_plugin_test_support::contract::{
+        invalid_response_missing_analyzer_score_batch, invalid_response_missing_final_batch,
+        request_batch, request_batch_with_trace_id, response_batch, response_batch_with_duplicates,
+        response_batch_without_trace_id,
+    };
+    use crate::julia_plugin_test_support::official_examples::{
+        reserve_real_service_port, spawn_real_wendaoanalyzer_linear_blend_service,
+        spawn_real_wendaoarrow_metadata_service, spawn_real_wendaoarrow_service, wait_for_health,
+        wait_for_health_with_attempts,
     };
     use xiuxian_wendao::analyzers::config::{RegisteredRepository, RepositoryPluginConfig};
 
@@ -443,19 +448,7 @@ mod tests {
 
     #[test]
     fn validate_julia_arrow_response_batches_accepts_v1_shape() {
-        let batch = RecordBatch::try_new(
-            Arc::new(Schema::new(vec![
-                Field::new("doc_id", DataType::Utf8, false),
-                Field::new("analyzer_score", DataType::Float64, false),
-                Field::new("final_score", DataType::Float64, false),
-            ])),
-            vec![
-                Arc::new(StringArray::from(vec!["doc-a", "doc-b"])),
-                Arc::new(Float64Array::from(vec![0.2_f64, 0.7_f64])),
-                Arc::new(Float64Array::from(vec![0.5_f64, 0.9_f64])),
-            ],
-        )
-        .expect("valid response batch");
+        let batch = response_batch_without_trace_id();
 
         let result = validate_julia_arrow_response_batches(&[batch]);
         assert!(result.is_ok(), "expected valid Julia response: {result:?}");
@@ -463,19 +456,7 @@ mod tests {
 
     #[test]
     fn validate_julia_arrow_response_batches_rejects_duplicates_and_missing_columns() {
-        let duplicate_batch = RecordBatch::try_new(
-            Arc::new(Schema::new(vec![
-                Field::new("doc_id", DataType::Utf8, false),
-                Field::new("analyzer_score", DataType::Float64, false),
-                Field::new("final_score", DataType::Float64, false),
-            ])),
-            vec![
-                Arc::new(StringArray::from(vec!["doc-a", "doc-a"])),
-                Arc::new(Float64Array::from(vec![0.2_f64, 0.7_f64])),
-                Arc::new(Float64Array::from(vec![0.5_f64, 0.9_f64])),
-            ],
-        )
-        .expect("duplicate response batch");
+        let duplicate_batch = response_batch_with_duplicates();
 
         let duplicate_error = validate_julia_arrow_response_batches(&[duplicate_batch])
             .expect_err("duplicate doc_id must fail");
@@ -486,17 +467,7 @@ mod tests {
             "unexpected duplicate error: {duplicate_error}"
         );
 
-        let missing_column_batch = RecordBatch::try_new(
-            Arc::new(Schema::new(vec![
-                Field::new("doc_id", DataType::Utf8, false),
-                Field::new("final_score", DataType::Float64, false),
-            ])),
-            vec![
-                Arc::new(StringArray::from(vec!["doc-a"])),
-                Arc::new(Float64Array::from(vec![0.5_f64])),
-            ],
-        )
-        .expect("missing column batch");
+        let missing_column_batch = invalid_response_missing_analyzer_score_batch();
 
         let missing_error = validate_julia_arrow_response_batches(&[missing_column_batch])
             .expect_err("missing analyzer_score must fail");
@@ -616,15 +587,15 @@ mod tests {
         assert_eq!(response_batches.len(), 1);
         let batch = &response_batches[0];
         let doc_id = batch
-            .column_by_name("doc_id")
+            .column_by_name(JULIA_ARROW_DOC_ID_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<StringArray>())
             .expect("doc_id column");
         let analyzer_score = batch
-            .column_by_name("analyzer_score")
+            .column_by_name(JULIA_ARROW_ANALYZER_SCORE_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
             .expect("analyzer_score column");
         let final_score = batch
-            .column_by_name("final_score")
+            .column_by_name(JULIA_ARROW_FINAL_SCORE_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
             .expect("final_score column");
 
@@ -643,51 +614,22 @@ mod tests {
         let port = reserve_real_service_port();
         let base_url = format!("http://127.0.0.1:{port}");
         let mut service = spawn_real_wendaoarrow_metadata_service(port);
-        let client = reqwest::Client::new();
+        let client = ArrowTransportClient::new(ArrowTransportConfig::new(base_url))
+            .expect("build metadata transport client");
 
-        let health_client =
-            xiuxian_vector::ArrowTransportClient::new(ArrowTransportConfig::new(base_url.clone()))
-                .expect("build health client");
-        wait_for_health(&health_client)
+        wait_for_health(&client)
             .await
             .unwrap_or_else(|error| panic!("wait for real WendaoArrow metadata health: {error}"));
 
-        let response = client
-            .post(format!("{base_url}/arrow-ipc"))
-            .header("content-type", "application/vnd.apache.arrow.stream")
-            .header(
-                "x-wendao-schema-version",
-                JULIA_ARROW_RESPONSE_SCHEMA_VERSION,
-            )
-            .body(request_payload_with_trace_id("trace-123"))
-            .send()
+        let batches = client
+            .process_batches(&[request_batch_with_trace_id("trace-123")])
             .await
-            .expect("send metadata roundtrip request");
-
-        assert!(
-            response.status().is_success(),
-            "metadata example should succeed: {}",
-            response.status()
-        );
-        assert_eq!(
-            response
-                .headers()
-                .get("x-wendao-schema-version")
-                .and_then(|value| value.to_str().ok()),
-            Some(JULIA_ARROW_RESPONSE_SCHEMA_VERSION)
-        );
-
-        let payload = response
-            .bytes()
-            .await
-            .expect("read metadata response bytes");
-        let batches =
-            decode_record_batches_ipc(payload.as_ref()).expect("decode metadata response");
+            .expect("metadata transport request");
         assert_eq!(batches.len(), 1);
 
         let batch = &batches[0];
         let trace_id = batch
-            .column_by_name("trace_id")
+            .column_by_name(JULIA_ARROW_TRACE_ID_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<StringArray>())
             .expect("trace_id column");
         assert_eq!(trace_id.value(0), "trace-123");
@@ -696,82 +638,67 @@ mod tests {
         service.kill();
     }
 
-    fn request_batch() -> RecordBatch {
-        RecordBatch::try_new(
-            Arc::new(Schema::new(vec![
-                Field::new("doc_id", DataType::Utf8, false),
-                Field::new("vector_score", DataType::Float64, false),
-            ])),
-            vec![
-                Arc::new(StringArray::from(vec!["doc-a", "doc-b"])),
-                Arc::new(Float64Array::from(vec![0.4_f64, 0.7_f64])),
-            ],
-        )
-        .expect("request batch")
-    }
+    #[tokio::test]
+    async fn real_wendaoanalyzer_linear_blend_roundtrip_emits_expected_scores() {
+        let port = reserve_real_service_port();
+        let base_url = format!("http://127.0.0.1:{port}");
+        let mut service = spawn_real_wendaoanalyzer_linear_blend_service(port);
+        let client = ArrowTransportClient::new(ArrowTransportConfig::new(base_url))
+            .expect("build analyzer transport client");
 
-    fn request_payload_with_trace_id(trace_id: &str) -> Vec<u8> {
-        let schema = Arc::new(Schema::new_with_metadata(
-            vec![
-                Field::new("doc_id", DataType::Utf8, false),
-                Field::new("vector_score", DataType::Float64, false),
-            ],
-            HashMap::from([
-                (
-                    "wendao.schema_version".to_string(),
-                    JULIA_ARROW_RESPONSE_SCHEMA_VERSION.to_string(),
-                ),
-                ("trace_id".to_string(), trace_id.to_string()),
-            ]),
-        ));
-        let batch = RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(StringArray::from(vec!["doc-a", "doc-b"])),
-                Arc::new(Float64Array::from(vec![0.4_f64, 0.7_f64])),
-            ],
-        )
-        .expect("request batch with metadata");
+        wait_for_health_with_attempts(&client, 150)
+            .await
+            .unwrap_or_else(|error| panic!("wait for real WendaoAnalyzer health: {error}"));
 
-        let mut buffer = Cursor::new(Vec::new());
-        {
-            let mut writer =
-                StreamWriter::try_new(&mut buffer, schema.as_ref()).expect("build stream writer");
-            writer.write(&batch).expect("write metadata batch");
-            writer.finish().expect("finish metadata stream");
-        }
-        buffer.into_inner()
+        let batches = client
+            .process_batches(&[request_batch()])
+            .await
+            .expect("linear blend transport request");
+        assert_eq!(batches.len(), 1);
+
+        let batch = &batches[0];
+        let doc_id = batch
+            .column_by_name(JULIA_ARROW_DOC_ID_COLUMN)
+            .and_then(|array| array.as_any().downcast_ref::<StringArray>())
+            .expect("doc_id column");
+        let analyzer_score = batch
+            .column_by_name(JULIA_ARROW_ANALYZER_SCORE_COLUMN)
+            .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
+            .expect("analyzer_score column");
+        let final_score = batch
+            .column_by_name(JULIA_ARROW_FINAL_SCORE_COLUMN)
+            .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
+            .expect("final_score column");
+        let ranking_reason = batch
+            .column_by_name("ranking_reason")
+            .and_then(|array| array.as_any().downcast_ref::<StringArray>())
+            .expect("ranking_reason column");
+
+        assert_eq!(doc_id.value(0), "doc-a");
+        assert_eq!(doc_id.value(1), "doc-b");
+        assert!((analyzer_score.value(0) - 0.92847663).abs() < 1e-8);
+        assert!((analyzer_score.value(1) - 0.97993666).abs() < 1e-8);
+        assert!((final_score.value(0) - 0.7435098105669022).abs() < 1e-12);
+        assert!((final_score.value(1) - 0.8819588285684585).abs() < 1e-12);
+        assert_eq!(
+            ranking_reason.value(0),
+            "final_score=0.35*vector_score+0.65*cosine_similarity"
+        );
+        assert_eq!(
+            ranking_reason.value(1),
+            "final_score=0.35*vector_score+0.65*cosine_similarity"
+        );
+
+        service.kill();
     }
 
     async fn valid_response() -> Response {
-        let batch = RecordBatch::try_new(
-            Arc::new(Schema::new(vec![
-                Field::new("doc_id", DataType::Utf8, false),
-                Field::new("analyzer_score", DataType::Float64, false),
-                Field::new("final_score", DataType::Float64, false),
-            ])),
-            vec![
-                Arc::new(StringArray::from(vec!["doc-a"])),
-                Arc::new(Float64Array::from(vec![0.6_f64])),
-                Arc::new(Float64Array::from(vec![0.9_f64])),
-            ],
-        )
-        .expect("valid response batch");
+        let batch = response_batch();
         arrow_response(&[batch])
     }
 
     async fn invalid_response_missing_final() -> Response {
-        let batch = RecordBatch::try_new(
-            Arc::new(Schema::new(vec![
-                Field::new("doc_id", DataType::Utf8, false),
-                Field::new("analyzer_score", DataType::Float64, false),
-            ])),
-            vec![
-                Arc::new(StringArray::from(vec!["doc-a"])),
-                Arc::new(Float64Array::from(vec![0.6_f64])),
-            ],
-        )
-        .expect("invalid response batch");
+        let batch = invalid_response_missing_final_batch();
         arrow_response(&[batch])
     }
 

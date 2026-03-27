@@ -1,11 +1,9 @@
 #[cfg(feature = "julia")]
 use std::collections::BTreeMap;
-#[cfg(feature = "julia")]
 use std::sync::Arc;
 
 #[cfg(feature = "julia")]
 use arrow::array::{Array, FixedSizeListArray, Float32Array, Float64Array, StringArray};
-#[cfg(feature = "julia")]
 use arrow::datatypes::{DataType, Field, Schema};
 #[cfg(feature = "julia")]
 use arrow::record_batch::RecordBatch;
@@ -16,6 +14,61 @@ use crate::analyzers::config::RegisteredRepository;
 use crate::analyzers::errors::RepoIntelligenceError;
 #[cfg(feature = "julia")]
 use crate::analyzers::languages::process_julia_arrow_batches_for_repository;
+use xiuxian_vector::ARROW_TRANSPORT_TRACE_ID_METADATA_KEY;
+
+/// Canonical WendaoArrow request/response `doc_id` column.
+pub const JULIA_ARROW_DOC_ID_COLUMN: &str = "doc_id";
+/// Canonical WendaoArrow request `vector_score` column.
+pub const JULIA_ARROW_VECTOR_SCORE_COLUMN: &str = "vector_score";
+/// Canonical WendaoArrow request `embedding` column.
+pub const JULIA_ARROW_EMBEDDING_COLUMN: &str = "embedding";
+/// Canonical WendaoArrow request `query_embedding` column.
+pub const JULIA_ARROW_QUERY_EMBEDDING_COLUMN: &str = "query_embedding";
+/// Canonical WendaoArrow response `analyzer_score` column.
+pub const JULIA_ARROW_ANALYZER_SCORE_COLUMN: &str = "analyzer_score";
+/// Canonical WendaoArrow response `final_score` column.
+pub const JULIA_ARROW_FINAL_SCORE_COLUMN: &str = "final_score";
+/// Canonical additive WendaoArrow response `trace_id` column.
+pub const JULIA_ARROW_TRACE_ID_COLUMN: &str = ARROW_TRANSPORT_TRACE_ID_METADATA_KEY;
+
+fn julia_arrow_vector_item_field() -> Arc<Field> {
+    Arc::new(Field::new("item", DataType::Float32, true))
+}
+
+/// Build the canonical WendaoArrow `v1` request schema for one embedding size.
+pub fn julia_arrow_request_schema(vector_dim: i32) -> Arc<Schema> {
+    Arc::new(Schema::new(vec![
+        Field::new(JULIA_ARROW_DOC_ID_COLUMN, DataType::Utf8, false),
+        Field::new(JULIA_ARROW_VECTOR_SCORE_COLUMN, DataType::Float64, false),
+        Field::new(
+            JULIA_ARROW_EMBEDDING_COLUMN,
+            DataType::FixedSizeList(julia_arrow_vector_item_field(), vector_dim),
+            false,
+        ),
+        Field::new(
+            JULIA_ARROW_QUERY_EMBEDDING_COLUMN,
+            DataType::FixedSizeList(julia_arrow_vector_item_field(), vector_dim),
+            false,
+        ),
+    ]))
+}
+
+/// Build the canonical WendaoArrow `v1` response schema.
+pub fn julia_arrow_response_schema(include_trace_id: bool) -> Arc<Schema> {
+    let mut fields = vec![
+        Field::new(JULIA_ARROW_DOC_ID_COLUMN, DataType::Utf8, false),
+        Field::new(JULIA_ARROW_ANALYZER_SCORE_COLUMN, DataType::Float64, false),
+        Field::new(JULIA_ARROW_FINAL_SCORE_COLUMN, DataType::Float64, false),
+    ];
+    if include_trace_id {
+        fields.push(Field::new(
+            JULIA_ARROW_TRACE_ID_COLUMN,
+            DataType::Utf8,
+            false,
+        ));
+    }
+    Arc::new(Schema::new(fields))
+}
 
 /// One typed row materialized from the WendaoArrow Julia response contract.
 #[cfg(feature = "julia")]
@@ -102,36 +155,17 @@ pub fn build_julia_arrow_request_batch(
         query_embedding_values.extend_from_slice(query_vector);
     }
 
-    let schema = Arc::new(Schema::new(vec![
-        Field::new("doc_id", DataType::Utf8, false),
-        Field::new("vector_score", DataType::Float64, false),
-        Field::new(
-            "embedding",
-            DataType::FixedSizeList(
-                Arc::new(Field::new("item", DataType::Float32, true)),
-                vector_dim,
-            ),
-            false,
-        ),
-        Field::new(
-            "query_embedding",
-            DataType::FixedSizeList(
-                Arc::new(Field::new("item", DataType::Float32, true)),
-                vector_dim,
-            ),
-            false,
-        ),
-    ]));
+    let schema = julia_arrow_request_schema(vector_dim);
 
     let embedding = FixedSizeListArray::try_new(
-        Arc::new(Field::new("item", DataType::Float32, true)),
+        julia_arrow_vector_item_field(),
         vector_dim,
         Arc::new(Float32Array::from(embedding_values)),
         None,
     )
     .map_err(|error| contract_request_error(error.to_string()))?;
     let query_embedding = FixedSizeListArray::try_new(
-        Arc::new(Field::new("item", DataType::Float32, true)),
+        julia_arrow_vector_item_field(),
         vector_dim,
         Arc::new(Float32Array::from(query_embedding_values)),
         None,
@@ -164,23 +198,23 @@ pub fn decode_julia_arrow_score_rows(
 
     for batch in batches {
         let doc_id = batch
-            .column_by_name("doc_id")
+            .column_by_name(JULIA_ARROW_DOC_ID_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<StringArray>())
             .ok_or_else(|| contract_decode_error("missing required Utf8 column `doc_id`"))?;
         let analyzer_score = batch
-            .column_by_name("analyzer_score")
+            .column_by_name(JULIA_ARROW_ANALYZER_SCORE_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
             .ok_or_else(|| {
                 contract_decode_error("missing required Float64 column `analyzer_score`")
             })?;
         let final_score = batch
-            .column_by_name("final_score")
+            .column_by_name(JULIA_ARROW_FINAL_SCORE_COLUMN)
             .and_then(|array| array.as_any().downcast_ref::<Float64Array>())
             .ok_or_else(|| {
                 contract_decode_error("missing required Float64 column `final_score`")
             })?;
         let trace_id = batch
-            .column_by_name("trace_id")
+            .column_by_name(JULIA_ARROW_TRACE_ID_COLUMN)
             .map(|array| {
                 array
                     .as_any()
@@ -259,7 +293,6 @@ fn contract_request_error(message: impl Into<String>) -> RepoIntelligenceError {
 
 #[cfg(test)]
 mod tests {
-    use arrow::array::{Float64Array, StringArray};
     use axum::body::Bytes;
     use axum::routing::post;
     use axum::{Router, serve};
@@ -271,6 +304,10 @@ mod tests {
 
     use super::*;
     use crate::analyzers::config::{RepositoryPluginConfig, RepositoryRefreshPolicy};
+    use crate::analyzers::service::julia_transport_tests::fixtures::{
+        invalid_response_missing_analyzer_score_batch, request_batch, response_batch,
+        response_batch_with_trace_ids,
+    };
 
     #[test]
     fn build_julia_arrow_request_batch_uses_contract_columns() {
@@ -292,10 +329,36 @@ mod tests {
         .expect("request batch should build");
 
         assert_eq!(batch.num_rows(), 2);
-        assert_eq!(batch.schema().field(0).name(), "doc_id");
-        assert_eq!(batch.schema().field(1).name(), "vector_score");
-        assert_eq!(batch.schema().field(2).name(), "embedding");
-        assert_eq!(batch.schema().field(3).name(), "query_embedding");
+        assert_eq!(batch.schema().field(0).name(), JULIA_ARROW_DOC_ID_COLUMN);
+        assert_eq!(
+            batch.schema().field(1).name(),
+            JULIA_ARROW_VECTOR_SCORE_COLUMN
+        );
+        assert_eq!(batch.schema().field(2).name(), JULIA_ARROW_EMBEDDING_COLUMN);
+        assert_eq!(
+            batch.schema().field(3).name(),
+            JULIA_ARROW_QUERY_EMBEDDING_COLUMN
+        );
+    }
+
+    #[test]
+    fn julia_arrow_request_schema_uses_contract_columns() {
+        let schema = julia_arrow_request_schema(3);
+
+        assert_eq!(schema.field(0).name(), JULIA_ARROW_DOC_ID_COLUMN);
+        assert_eq!(schema.field(1).name(), JULIA_ARROW_VECTOR_SCORE_COLUMN);
+        assert_eq!(schema.field(2).name(), JULIA_ARROW_EMBEDDING_COLUMN);
+        assert_eq!(schema.field(3).name(), JULIA_ARROW_QUERY_EMBEDDING_COLUMN);
+    }
+
+    #[test]
+    fn julia_arrow_response_schema_optionally_includes_trace_id() {
+        let base = julia_arrow_response_schema(false);
+        let traced = julia_arrow_response_schema(true);
+
+        assert_eq!(base.fields().len(), 3);
+        assert_eq!(traced.fields().len(), 4);
+        assert_eq!(traced.field(3).name(), JULIA_ARROW_TRACE_ID_COLUMN);
     }
 
     #[test]
@@ -358,18 +421,7 @@ mod tests {
 
     #[test]
     fn decode_julia_arrow_score_rows_rejects_missing_columns() {
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("doc_id", DataType::Utf8, false),
-            Field::new("final_score", DataType::Float64, false),
-        ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1"])),
-                Arc::new(Float64Array::from(vec![0.95])),
-            ],
-        )
-        .expect("batch");
+        let batch = invalid_response_missing_analyzer_score_batch();
 
         let error = decode_julia_arrow_score_rows(&[batch]).expect_err("decode should fail");
         assert!(
@@ -426,62 +478,6 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows.get("doc-1").map(|row| row.final_score), Some(0.95));
     }
-
-    fn request_batch() -> RecordBatch {
-        build_julia_arrow_request_batch(
-            &[
-                JuliaArrowRequestRow {
-                    doc_id: "doc-1".to_string(),
-                    vector_score: 0.3,
-                    embedding: vec![1.0, 2.0, 3.0],
-                },
-                JuliaArrowRequestRow {
-                    doc_id: "doc-2".to_string(),
-                    vector_score: 0.4,
-                    embedding: vec![4.0, 5.0, 6.0],
-                },
-            ],
-            &[9.0, 8.0, 7.0],
-        )
-        .expect("request batch")
-    }
-
-    fn response_batch() -> RecordBatch {
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("doc_id", DataType::Utf8, false),
-            Field::new("analyzer_score", DataType::Float64, false),
-            Field::new("final_score", DataType::Float64, false),
-        ]));
-        RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
-                Arc::new(Float64Array::from(vec![0.9, 0.7])),
-                Arc::new(Float64Array::from(vec![0.95, 0.8])),
-            ],
-        )
-        .expect("response batch")
-    }
-
-    fn response_batch_with_trace_ids() -> RecordBatch {
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("doc_id", DataType::Utf8, false),
-            Field::new("analyzer_score", DataType::Float64, false),
-            Field::new("final_score", DataType::Float64, false),
-            Field::new("trace_id", DataType::Utf8, false),
-        ]));
-        RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
-                Arc::new(Float64Array::from(vec![0.9, 0.7])),
-                Arc::new(Float64Array::from(vec![0.95, 0.8])),
-                Arc::new(StringArray::from(vec!["trace-123", "trace-123"])),
-            ],
-        )
-        .expect("response batch")
-    }
-
     async fn spawn_test_server(app: Router) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener");
         let address = listener.local_addr().expect("local addr");

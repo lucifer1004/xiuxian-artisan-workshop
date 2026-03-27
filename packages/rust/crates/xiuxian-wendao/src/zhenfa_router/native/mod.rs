@@ -6,6 +6,7 @@
 mod agentic_nav;
 pub mod audit;
 mod context;
+mod deployment;
 mod forwarder;
 mod remediation;
 mod search;
@@ -19,6 +20,12 @@ mod xml_lite;
 pub use agentic_nav::WendaoAgenticNavTool;
 pub use audit::{audit_search_payload, evaluate_alignment};
 pub use context::WendaoContextExt;
+pub use deployment::{
+    WendaoJuliaDeploymentArtifactArgs, WendaoJuliaDeploymentArtifactOutputFormat,
+    WendaoJuliaDeploymentArtifactTool, export_julia_deployment_artifact,
+    render_julia_deployment_artifact, render_julia_deployment_artifact_json,
+    render_julia_deployment_artifact_toml, wendao_julia_deployment_artifact,
+};
 pub use forwarder::{
     AffectedDocInfo, ForwardNotification, ForwardNotifier, ForwarderConfig, SuggestedAction,
 };

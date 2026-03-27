@@ -14,6 +14,10 @@ pub const API_REPO_SYMBOL_SEARCH_OPENAPI_PATH: &str = "/api/repo/symbol-search";
 pub const API_REPO_EXAMPLE_SEARCH_AXUM_PATH: &str = "/api/repo/example-search";
 /// `OpenAPI` path for the repo example-search endpoint.
 pub const API_REPO_EXAMPLE_SEARCH_OPENAPI_PATH: &str = "/api/repo/example-search";
+/// Axum runtime path for the repo import-search endpoint.
+pub const API_REPO_IMPORT_SEARCH_AXUM_PATH: &str = "/api/repo/import-search";
+/// `OpenAPI` path for the repo import-search endpoint.
+pub const API_REPO_IMPORT_SEARCH_OPENAPI_PATH: &str = "/api/repo/import-search";
 /// Axum runtime path for the repo doc-coverage endpoint.
 pub const API_REPO_DOC_COVERAGE_AXUM_PATH: &str = "/api/repo/doc-coverage";
 /// `OpenAPI` path for the repo doc-coverage endpoint.

@@ -28,7 +28,10 @@ pub use code_ast::{
     CodeAstProjection, CodeAstProjectionKind, CodeAstRetrievalAtom, CodeAstRetrievalAtomScope,
 };
 pub use collection::studio_type_collection;
-pub use config::{UiCapabilities, UiConfig, UiProjectConfig, UiRepoProjectConfig};
+pub use config::{
+    UiCapabilities, UiConfig, UiJuliaAnalyzerLaunchManifest, UiJuliaDeploymentArtifact,
+    UiProjectConfig, UiRepoProjectConfig,
+};
 pub use definitions::{
     AstSearchHit, AstSearchResponse, DefinitionResolveResponse, DefinitionSearchHit,
     ObservationHint, ReferenceSearchHit, ReferenceSearchResponse,

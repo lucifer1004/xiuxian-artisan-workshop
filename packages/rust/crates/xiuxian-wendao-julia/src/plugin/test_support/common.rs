@@ -62,3 +62,18 @@ pub(crate) fn wendaoarrow_script(name: &str) -> PathBuf {
         .canonicalize()
         .unwrap_or_else(|error| panic!("resolve WendaoArrow script `{name}`: {error}"))
 }
+
+pub(crate) fn wendaoanalyzer_package_dir() -> PathBuf {
+    repo_root()
+        .join(".data/WendaoAnalyzer")
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("resolve WendaoAnalyzer package dir: {error}"))
+}
+
+pub(crate) fn wendaoanalyzer_script(name: &str) -> PathBuf {
+    wendaoanalyzer_package_dir()
+        .join("scripts")
+        .join(name)
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("resolve WendaoAnalyzer script `{name}`: {error}"))
+}

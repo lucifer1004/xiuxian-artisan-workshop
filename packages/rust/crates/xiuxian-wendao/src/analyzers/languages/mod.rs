@@ -10,6 +10,9 @@
 #[path = "../../../../xiuxian-wendao-julia/src/plugin/mod.rs"]
 mod julia;
 
+#[cfg(all(test, feature = "julia"))]
+pub(crate) use julia::test_support as julia_plugin_test_support;
+
 #[cfg(feature = "modelica")]
 #[path = "../../../../xiuxian-wendao-modelica/src/plugin/mod.rs"]
 mod modelica;

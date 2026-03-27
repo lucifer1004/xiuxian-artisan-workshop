@@ -89,6 +89,18 @@ crate exposes:
 response header on both `/health` and Arrow IPC responses. A missing or
 mismatched schema header is treated as a protocol error.
 
+The transport test surface now also verifies that request-side Arrow schema
+metadata survives a full `ArrowTransportClient` roundtrip, so additive context
+such as `trace_id` can be forwarded to WendaoArrow-compatible processors
+without changing the core column contract.
+
+For callers that need to add or overwrite request metadata without rebuilding
+Arrow schemas by hand, the transport surface now also exposes
+`attach_record_batch_metadata(...)`, `attach_record_batch_trace_id(...)`, plus
+the canonical metadata key constants
+`ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY` and
+`ARROW_TRANSPORT_TRACE_ID_METADATA_KEY`.
+
 ## Arrow Ownership Boundary
 
 `xiuxian-vector` intentionally has two Arrow surfaces:

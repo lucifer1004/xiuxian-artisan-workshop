@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use crate::{LinkGraphJuliaAnalyzerLaunchManifest, LinkGraphJuliaDeploymentArtifact};
+
 /// Global UI configuration for Studio.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +26,62 @@ pub struct UiCapabilities {
     /// Supported code filter kinds reported by the gateway capability surface.
     #[serde(rename = "supportedKinds")]
     pub kinds: Vec<String>,
+}
+
+/// Studio-visible Julia analyzer launch manifest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UiJuliaAnalyzerLaunchManifest {
+    /// Launcher path relative to the repository root.
+    pub launcher_path: String,
+    /// Ordered analyzer-owned CLI args.
+    pub args: Vec<String>,
+}
+
+impl From<LinkGraphJuliaAnalyzerLaunchManifest> for UiJuliaAnalyzerLaunchManifest {
+    fn from(value: LinkGraphJuliaAnalyzerLaunchManifest) -> Self {
+        Self {
+            launcher_path: value.launcher_path,
+            args: value.args,
+        }
+    }
+}
+
+/// Studio-visible Julia deployment artifact inspection payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UiJuliaDeploymentArtifact {
+    /// Artifact-level schema version for deployment inspection surfaces.
+    pub artifact_schema_version: String,
+    /// RFC3339 timestamp recording when the deployment artifact was rendered.
+    pub generated_at: String,
+    /// Resolved Julia service base URL.
+    pub base_url: Option<String>,
+    /// Arrow IPC route expected by the service.
+    pub route: Option<String>,
+    /// Health-check route expected by the service.
+    pub health_route: Option<String>,
+    /// WendaoArrow schema version expected by Rust.
+    pub schema_version: Option<String>,
+    /// Optional request timeout in seconds.
+    pub timeout_secs: Option<u64>,
+    /// Resolved analyzer launch manifest.
+    pub launch: UiJuliaAnalyzerLaunchManifest,
+}
+
+impl From<LinkGraphJuliaDeploymentArtifact> for UiJuliaDeploymentArtifact {
+    fn from(value: LinkGraphJuliaDeploymentArtifact) -> Self {
+        Self {
+            artifact_schema_version: value.artifact_schema_version,
+            generated_at: value.generated_at,
+            base_url: value.base_url,
+            route: value.route,
+            health_route: value.health_route,
+            schema_version: value.schema_version,
+            timeout_secs: value.timeout_secs,
+            launch: value.launch.into(),
+        }
+    }
 }
 
 /// Configuration for a local project root.

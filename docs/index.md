@@ -25,3 +25,8 @@ This file is the top-level entry for major documentation tracks.
 
 - [Xiuxian-Zhixing-Heyi Feature Plan (2026)](03_features/xiuxian_zhixing_heyi.md)
 - [Xiuxian-Zhixing Theoretical Foundations (2025-2026)](99_llm/xiuxian_zhixing_theory.md)
+
+## Wendao
+
+- [Wendao Arrow Plugin Transport RFC](rfcs/2026-03-27-wendao-arrow-plugin-flight-rfc.md)
+- [Wendao Core Runtime Plugin Migration RFC](rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md)

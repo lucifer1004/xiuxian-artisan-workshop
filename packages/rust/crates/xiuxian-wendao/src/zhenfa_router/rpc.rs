@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use xiuxian_zhenfa::{INTERNAL_ERROR_CODE, JsonRpcErrorObject};
 
 use super::models::{WendaoSearchRequest, WendaoSearchResponseFormat};
+use super::native::{WendaoJuliaDeploymentArtifactArgs, export_julia_deployment_artifact};
 use crate::link_graph::{LinkGraphIndex, LinkGraphPlannedSearchPayload};
 
 pub(super) const DEFAULT_SEARCH_LIMIT: usize = 20;
@@ -22,6 +23,29 @@ pub fn search_from_rpc_params(params: Value) -> Result<String, JsonRpcErrorObjec
             INTERNAL_ERROR_CODE,
             "wendao search failed",
             Some(json!({ "details": error })),
+        )
+    })
+}
+
+/// Execute `wendao.julia_deployment_artifact` from JSON-RPC parameters.
+///
+/// # Errors
+/// Returns JSON-RPC error payloads when params are invalid or export fails.
+pub fn export_julia_deployment_artifact_from_rpc_params(
+    params: Value,
+) -> Result<String, JsonRpcErrorObject> {
+    let request: WendaoJuliaDeploymentArtifactArgs =
+        serde_json::from_value(params).map_err(|error| {
+            JsonRpcErrorObject::invalid_params(format!(
+                "invalid wendao.julia_deployment_artifact params: {error}"
+            ))
+        })?;
+
+    export_julia_deployment_artifact(request).map_err(|error: xiuxian_zhenfa::ZhenfaError| {
+        JsonRpcErrorObject::new(
+            INTERNAL_ERROR_CODE,
+            "wendao julia deployment artifact export failed",
+            Some(json!({ "details": error.to_string() })),
         )
     })
 }

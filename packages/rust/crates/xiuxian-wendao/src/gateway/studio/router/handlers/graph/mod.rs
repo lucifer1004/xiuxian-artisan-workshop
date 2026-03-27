@@ -1,6 +1,7 @@
 //! Graph intelligence and visualization endpoints for Studio API.
 
 mod neighbors;
+mod service;
 mod shared;
 mod topology;
 

@@ -649,6 +649,60 @@
         }
       }
     },
+    "/api/ui/julia-deployment-artifact": {
+      "get": {
+        "operationId": "studioGetJuliaDeploymentArtifact",
+        "tags": ["studio-config"],
+        "summary": "Inspect Julia deployment artifact",
+        "description": "Return the currently resolved Julia rerank deployment artifact used by the studio and link-graph runtime. The default response is structured JSON; pass `format=toml` to inspect the same artifact as a TOML document.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "Optional response format for deployment artifact inspection.",
+            "schema": {
+              "type": "string",
+              "enum": ["json", "toml"],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved Julia deployment artifact in the requested inspection format.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "artifactSchemaVersion": "v1",
+                  "generatedAt": "2026-03-27T16:00:00+00:00",
+                  "baseUrl": "http://127.0.0.1:18080",
+                  "route": "/arrow-ipc",
+                  "healthRoute": "/health",
+                  "schemaVersion": "v1",
+                  "timeoutSecs": 30,
+                  "launch": {
+                    "launcherPath": ".data/WendaoAnalyzer/scripts/run_analyzer_service.sh",
+                    "args": [
+                      "--service-mode",
+                      "stream",
+                      "--analyzer-strategy",
+                      "linear_blend"
+                    ]
+                  }
+                }
+              },
+              "text/plain": {
+                "example": "artifact_schema_version = \"v1\"\ngenerated_at = \"2026-03-27T16:00:00+00:00\"\nbase_url = \"http://127.0.0.1:18080\"\nroute = \"/arrow-ipc\"\nhealth_route = \"/health\"\nschema_version = \"v1\"\ntimeout_secs = 30\n\n[launch]\nlauncher_path = \".data/WendaoAnalyzer/scripts/run_analyzer_service.sh\"\nargs = [\"--service-mode\", \"stream\", \"--analyzer-strategy\", \"linear_blend\"]\n"
+              }
+            }
+          },
+          "500": {
+            "description": "Gateway failed to resolve or render the current Julia deployment artifact."
+          }
+        }
+      }
+    },
     "/api/repo/overview": {
       "get": {
         "operationId": "studioRepoOverview",
@@ -1081,6 +1135,98 @@
           },
           "500": {
             "description": "The gateway failed while executing the example-search task."
+          }
+        }
+      }
+    },
+    "/api/repo/import-search": {
+      "get": {
+        "operationId": "studioRepoImportSearch",
+        "tags": ["repo-intelligence"],
+        "summary": "Search repo imports",
+        "description": "Run the Wendao Repo Intelligence import-search flow for one configured repository and return normalized import records filtered by package name, module-qualified-name, or both.",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "description": "Registered repository identifier from wendao.toml.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "package",
+            "in": "query",
+            "required": false,
+            "description": "Optional package filter. At least one of `package` or `module` is required.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "module",
+            "in": "query",
+            "required": false,
+            "description": "Optional module-qualified-name filter. At least one of `package` or `module` is required.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of import rows to return. Defaults to 10.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import search payload with normalized import rows.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "imports": [
+                    {
+                      "import_id": "repo:gateway-sync:import:src/GatewaySyncPkg.jl:1",
+                      "repo_id": "gateway-sync",
+                      "package": "SciMLBase",
+                      "module": "SciMLBase.solve",
+                      "path": "src/GatewaySyncPkg.jl"
+                    }
+                  ],
+                  "repo_id": "gateway-sync"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The import-search request was invalid or the configured repository could not be analyzed.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "missingRepo": {
+                    "value": {
+                      "code": "MISSING_REPO",
+                      "message": "`repo` is required"
+                    }
+                  },
+                  "missingImportFilter": {
+                    "value": {
+                      "code": "MISSING_IMPORT_FILTER",
+                      "message": "at least one of `package` or `module` is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The gateway failed while executing the import-search task."
           }
         }
       }

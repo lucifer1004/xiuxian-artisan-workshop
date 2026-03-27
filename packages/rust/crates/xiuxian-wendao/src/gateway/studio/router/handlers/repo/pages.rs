@@ -8,15 +8,16 @@ use axum::{
 use crate::analyzers::{
     RepoProjectedGapReportQuery, RepoProjectedPageIndexNodeQuery, RepoProjectedPageIndexTreeQuery,
     RepoProjectedPageIndexTreesQuery, RepoProjectedPageQuery, RepoProjectedPagesQuery,
-    build_repo_projected_gap_report, build_repo_projected_page,
-    build_repo_projected_page_index_node, build_repo_projected_page_index_tree,
-    build_repo_projected_page_index_trees, build_repo_projected_pages,
+};
+use crate::gateway::studio::router::handlers::repo::projected_service::{
+    run_repo_projected_gap_report, run_repo_projected_page, run_repo_projected_page_index_node,
+    run_repo_projected_page_index_tree, run_repo_projected_page_index_trees,
+    run_repo_projected_pages,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
 use super::parse::{required_node_id, required_page_id, required_repo_id};
 use super::query::{RepoApiQuery, RepoProjectedPageApiQuery, RepoProjectedPageIndexNodeApiQuery};
-use super::shared::with_repo_analysis;
 
 /// Projected pages endpoint.
 ///
@@ -29,19 +30,8 @@ pub async fn projected_pages(
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPagesResult>, StudioApiError> {
     let repo_id = required_repo_id(query.repo.as_deref())?;
-    let result = with_repo_analysis(
-        Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGES_PANIC",
-        "Repo projected pages task failed unexpectedly",
-        move |analysis| {
-            Ok::<_, crate::analyzers::RepoIntelligenceError>(build_repo_projected_pages(
-                &RepoProjectedPagesQuery { repo_id },
-                &analysis,
-            ))
-        },
-    )
-    .await?;
+    let result =
+        run_repo_projected_pages(Arc::clone(&state), RepoProjectedPagesQuery { repo_id }).await?;
     Ok(Json(result))
 }
 
@@ -56,19 +46,9 @@ pub async fn projected_gap_report(
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedGapReportResult>, StudioApiError> {
     let repo_id = required_repo_id(query.repo.as_deref())?;
-    let result = with_repo_analysis(
-        Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_GAP_REPORT_PANIC",
-        "Repo projected gap report task failed unexpectedly",
-        move |analysis| {
-            Ok::<_, crate::analyzers::RepoIntelligenceError>(build_repo_projected_gap_report(
-                &RepoProjectedGapReportQuery { repo_id },
-                &analysis,
-            ))
-        },
-    )
-    .await?;
+    let result =
+        run_repo_projected_gap_report(Arc::clone(&state), RepoProjectedGapReportQuery { repo_id })
+            .await?;
     Ok(Json(result))
 }
 
@@ -84,14 +64,9 @@ pub async fn projected_page(
 ) -> Result<Json<crate::analyzers::RepoProjectedPageResult>, StudioApiError> {
     let repo_id = required_repo_id(query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
-    let result = with_repo_analysis(
+    let result = run_repo_projected_page(
         Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGE_PANIC",
-        "Repo projected page task failed unexpectedly",
-        move |analysis| {
-            build_repo_projected_page(&RepoProjectedPageQuery { repo_id, page_id }, &analysis)
-        },
+        RepoProjectedPageQuery { repo_id, page_id },
     )
     .await?;
     Ok(Json(result))
@@ -110,17 +85,9 @@ pub async fn projected_page_index_tree(
 ) -> Result<Json<crate::analyzers::RepoProjectedPageIndexTreeResult>, StudioApiError> {
     let repo_id = required_repo_id(query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
-    let result = with_repo_analysis(
+    let result = run_repo_projected_page_index_tree(
         Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGE_INDEX_TREE_PANIC",
-        "Repo projected page-index tree task failed unexpectedly",
-        move |analysis| {
-            build_repo_projected_page_index_tree(
-                &RepoProjectedPageIndexTreeQuery { repo_id, page_id },
-                &analysis,
-            )
-        },
+        RepoProjectedPageIndexTreeQuery { repo_id, page_id },
     )
     .await?;
     Ok(Json(result))
@@ -140,20 +107,12 @@ pub async fn projected_page_index_node(
     let repo_id = required_repo_id(query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let node_id = required_node_id(query.node_id.as_deref())?;
-    let result = with_repo_analysis(
+    let result = run_repo_projected_page_index_node(
         Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGE_INDEX_NODE_PANIC",
-        "Repo projected page-index node task failed unexpectedly",
-        move |analysis| {
-            build_repo_projected_page_index_node(
-                &RepoProjectedPageIndexNodeQuery {
-                    repo_id,
-                    page_id,
-                    node_id,
-                },
-                &analysis,
-            )
+        RepoProjectedPageIndexNodeQuery {
+            repo_id,
+            page_id,
+            node_id,
         },
     )
     .await?;
@@ -171,17 +130,9 @@ pub async fn projected_page_index_trees(
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<crate::analyzers::RepoProjectedPageIndexTreesResult>, StudioApiError> {
     let repo_id = required_repo_id(query.repo.as_deref())?;
-    let result = with_repo_analysis(
+    let result = run_repo_projected_page_index_trees(
         Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGE_INDEX_TREES_PANIC",
-        "Repo projected page-index trees task failed unexpectedly",
-        move |analysis| {
-            build_repo_projected_page_index_trees(
-                &RepoProjectedPageIndexTreesQuery { repo_id },
-                &analysis,
-            )
-        },
+        RepoProjectedPageIndexTreesQuery { repo_id },
     )
     .await?;
     Ok(Json(result))

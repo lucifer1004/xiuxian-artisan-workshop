@@ -258,6 +258,66 @@ Replace Studio request-path search hot spots with a background-built search plan
 - repo-backed hit collection is now bounded fan-out instead of one serial `await` per repository. Both the code-search and repo-intent merge paths dispatch searchable repos through a `JoinSet` with parallelism capped by local `available_parallelism()`, while preserving the original repo ordering in `pending_repos` and `skipped_repos`
 - the repo IO gate now actually covers both repo-backed corpora. `repo_entity` joins `repo_content_chunk` on the shared `repo_search_read_permits` semaphore, and both acquire the permit before `open_store(...)` so search-plane can throttle store-open plus scan pressure instead of only content-scan pressure
 - targeted regressions now lock those two fixes explicitly: one service test proves batched publication-state hydration works after a runtime-memory miss, one handler test proves repo partitioning preserves repo order and availability semantics, and two service tests prove repo-entity and repo-content queries both stall when all repo read permits are exhausted
+- repo-analysis query-search regression coverage now keeps snapshot baselines at
+  two levels: `tests/snapshots/wendao/` for typed query-core and repo-entity
+  result shapes, and `tests/snapshots/gateway/studio/` for the shared
+  repo-entity fast-path payloads used by module, symbol, and example gateway
+  search flows
+- the active Phase-1 execution model is now milestone-based, and the unified
+  repo-query surface milestone is landed. Repo-analysis fast paths no longer
+  depend on a gateway-local Search Plane helper seam; module, symbol, and
+  example routes now delegate their typed repo-entity fast path into
+  `query_core::service`, which aligns them with the already-landed repo
+  code-search query-core path
+- Phase 2 has now started with one bounded orchestration slice: repo-analysis
+  search handlers no longer each duplicate the same cache + fast-path +
+  analyzer-fallback control flow. That shared orchestration now lives in
+  `gateway/studio/router/handlers/repo/analysis/search/service.rs`, and the
+  shared service now exposes typed `run_repo_module_search(...)`,
+  `run_repo_symbol_search(...)`, and `run_repo_example_search(...)`
+  entrypoints, keeping the route files focused on request decoding and result
+  typing
+- that Phase 2 slice has now landed its next milestone as well: the typed
+  repo-analysis entrypoints are fully owned by the shared service, and
+  `module.rs`, `symbol.rs`, and `example.rs` are now thin route adapters with
+  no route-local fallback-builder closures
+- the same Phase 2 service now also owns a lower-level typed contract for
+  repo-analysis query construction and artifact-backed fallback binding, so the
+  module, symbol, and example flows differ by typed contract metadata rather
+  than three near-identical builder closures
+- that fallback contract has now been pushed beneath the gateway layer too.
+  `analyzers::service::search` owns the module/symbol/example fallback
+  contracts, while the shared repo-analysis gateway service only composes those
+  contracts with query-core fast-path dispatch and gateway error mapping
+- query-core now owns the repo-analysis fast-path contract layer too.
+  `query_core::service` exposes typed repo-entity fast-path contracts for
+  module, symbol, and example result surfaces, and the shared repo-analysis
+  gateway service composes those contracts instead of carrying three dedicated
+  fast-path helpers of its own
+- the same shared Phase-2 repo-analysis surface now also exposes
+  `repo/import-search`. OpenAPI inventory and Studio routes include the import
+  endpoint, analyzer search owns the import fallback contract, gateway request
+  validation now pins `MISSING_REPO` and `MISSING_IMPORT_FILTER`, and accepted
+  snapshot baselines now exist for both analyzer import results and the
+  gateway-facing import payload
+- that import lane has now also landed its cache-identity hardening slice.
+  Canonical import query text now lives inside the analyzer-owned fallback
+  contract and preserves both `package` and `module`, so the shared Phase-2
+  service no longer needs a separate ad-hoc import cache-key helper and
+  combined import filters no longer alias onto one cached query identity
+- that same import lane is now publication-aware too. Repo-entity publication
+  materializes import rows, repo-entity query can reconstruct typed
+  `ImportSearchResult` payloads, and the shared Phase-2 repo-analysis service
+  now prefers a query-core-backed import fast path before falling back to the
+  analyzer-owned import contract
+- the same consolidation style now also extends beyond search endpoints.
+  `repo/overview` and `repo/doc-coverage` no longer keep their own inline
+  `with_repo_analysis(...)` orchestration; both now sit behind one shared
+  non-search repo-analysis service seam
+- the projected retrieval cluster now follows that same pattern too. One shared
+  projected-service seam owns the typed orchestration for projected retrieval
+  hit/context, projected retrieval, projected page-index tree search, and
+  cached projected page search, leaving `retrieval.rs` as a thin route adapter
 - repo request fan-out now reuses that same repo-read budget instead of computing a second independent cap from host parallelism. `SearchPlaneService` persists `repo_search_read_concurrency_limit`, and request-path `repo_search_parallelism(...)` now reads that stored budget directly
 - the repo request path therefore now has one shared concurrency contract: one budget controls both how wide `code_search` / repo-intent merge may fan out at once and how many repo-backed Lance store opens / scans may proceed concurrently
 - repo-wide `code_search` now also has a bounded server-side completion budget. When an all-repo code query exceeds that request budget, Wendao aborts the remaining repo fanout tasks and returns `partial = true` with `indexing_state = partial` instead of letting the client sit until the outer `30s` timeout expires
@@ -338,6 +398,68 @@ Replace Studio request-path search hot spots with a background-built search plan
   effective repo hint and skips all-repo fanout, which removes unrelated
   pending/skipped repos from the response and targets the remaining steady-state
   long-tail timeouts without changing explicit `repo:` search semantics
+- the first Wendao RFC query-core callers are now live behind the unchanged
+  Studio API surface. Repo-scoped `repo_content` and `repo_entity` code search
+  both route through the internal `query_core` service facade before decoding
+  back into legacy `SearchHit` payloads, so the search-plane-backed code search
+  surface now shares one typed internal operator path instead of two separate
+  handler-local search entrypoints
+- graph query-core integration is now live too. `graph_neighbors` and
+  `node_neighbors` both route through `query_core::query_graph_neighbors_projection(...)`.
+  The new `query_core::graph` module now owns graph-neighbor relation decoding,
+  unique-node projection, and internal link assembly, so Studio graph handlers
+  keep the old response shapes without parsing Arrow columns directly
+- the graph handler cluster is now also closed behind one shared service seam.
+  `graph/neighbors.rs` and `graph/topology.rs` are thin route adapters over
+  `gateway/studio/router/handlers/graph/service.rs`, which now owns
+  query-core graph projection execution, center-node resolution, explain
+  summary logging, stable `NodeNeighbors` assembly, and `topology_3d`
+  construction
+- the remaining graph shared-state surface is now split by responsibility too.
+  `graph/shared/query.rs` owns graph-neighbor query parsing and normalization,
+  `graph/shared/render.rs` owns graph-node/path/topology helpers, and
+  `graph/shared/mod.rs` is now interface-only
+- the graph test-support surface now follows the same pattern. `graph/tests/support/`
+  separates fixture runtime, request/response helpers, assertions, and
+  snapshot shaping, so graph regression support no longer depends on one flat
+  `fixtures.rs`
+- the top-level router export seam is now grouped too. `graph_exports.rs`
+  owns the outward-facing graph handler exports, so `handlers/mod.rs` no
+  longer has to flat-export graph routes directly
+- the repo handler cluster now follows the same outward-facing export rule.
+  `repo_exports.rs` owns the outward-facing repo handler exports, so
+  `handlers/mod.rs` no longer has to flat-export the repo route surface
+- analysis handlers now follow that same top-level export rule too.
+  `analysis_exports.rs` owns the outward-facing analysis handler exports, so
+  `handlers/mod.rs` no longer has to flat-export the analysis route surface
+- the remaining top-level handler seams are now closed too.
+  `capabilities_exports.rs`, `ui_config_exports.rs`, and `vfs_exports.rs`
+  own the outward-facing exports for those clusters, so `handlers/mod.rs`
+  no longer has to flat-export any of the remaining simple handler groups
+- the flat analysis handler body is now closed behind a feature folder too.
+  `analysis/types.rs`, `analysis/service.rs`, `analysis/markdown.rs`, and
+  `analysis/code_ast.rs` now separate query types, shared loader logic, and
+  route entrypoints, while `analysis/mod.rs` stays interface-only
+- query-core explain is now partially operational in production code, not only
+  tests. Repo code-search lanes record query-core-derived scan telemetry back
+  into Search Plane status, and graph handlers emit a compact explain summary to
+  internal debug logging so later Qianji or Zhenfa integration can consume one
+  stable summary shape instead of bespoke handler-local diagnostics
+- repo-analysis repo-entity fast paths are now one layer tighter too.
+  `repo/module-search`, `repo/symbol-search`, and `repo/example-search` route
+  through one shared typed repo-analysis service boundary. Repo-entity
+  publication gating, typed error mapping, cache orchestration, and the shared
+  fast-path/fallback envelope no longer live in three separate handlers
+- query-search result auditing now has its first snapshot lane too. The
+  Wendao test suite now writes stable JSON snapshots for query-core repo-code
+  routing, query-core graph projections, and typed repo-entity query results,
+  which gives the new internal query surfaces a higher-signal review diff than
+  field-by-field assertions alone
+- repo-wide `code_search` fanout is now one layer cleaner too. The buffered
+  join-set task scheduler no longer open-codes entity-first/content-fallback
+  behavior; that policy now lives in one repo-scoped `search_repo_code_hits(...)`
+  entrypoint, which keeps the scheduling layer focused on parallelism, timeout,
+  and result collection
 - the whole-search-plane DataFusion refactor now has its first real corpus on
   the new engine. `SearchPlaneService` owns one shared `SearchEngineContext`,
   repo-entity publication writes export a Parquet artifact beside the Lance
@@ -443,3 +565,53 @@ Replace Studio request-path search hot spots with a background-built search plan
   `arrow-string`. That helper now explicitly binds to Arrow-57 compatibility
   crates so the legacy Lance query path remains buildable while the new
   DataFusion engine advances separately
+- the query-core caller boundary is now one step tighter for repo code search.
+  Repo publication gating plus entity-first/content-fallback policy can now be
+  expressed through one query-core service entrypoint, so the buffered repo-wide
+  scheduler no longer needs to duplicate repo-lane selection semantics outside
+  query-core-adjacent code
+- the Phase-1 retrieval path is now materially exercised end-to-end for real
+  repo-scoped callers, not only unit tests. Repo content and repo entity
+  relation helpers now run through `vector_search -> column_mask -> payload_fetch`
+  before gateway decoding, so the narrow-phase and payload-phase operators are
+  now part of the live internal query path
+- the Phase-2 projected retrieval seam is now expanded into a broader
+  projected-service boundary. `retrieval.rs` and `pages.rs` both delegate
+  typed endpoint work into one shared service module, so projected retrieval
+  and projected page lookups no longer own repeated route-local
+  `with_repo_analysis(...)` orchestration
+- that same projected-service boundary now also covers `family.rs`, so the
+  projected family-context, family-search, family-cluster, navigation, and
+  navigation-search endpoints all reuse one shared typed service seam instead
+  of binding route-local repository-analysis orchestration
+- the repo handler closure pass now also covers command-style routes.
+  `index.rs` and `refine.rs` both delegate through one shared repo-command
+  service, so repo-index mutation/status and analysis refine-doc entrypoints no
+  longer bind route-local command orchestration
+- the repo shared-helper audit is now underway as the next structural cleanup
+  slice. `repo/shared.rs` has been split into a `repo/shared/` feature folder
+  with separate repository and execution modules, and the split is now covered
+  by one focused shared-helper unit test plus representative repo handler
+  regressions across analysis, projected retrieval, and sync execution seams
+- the same route-thinning pattern now also covers the docs handler cluster.
+  `gateway/studio/router/handlers/docs/service.rs` now owns typed entrypoints
+  for docs search, retrieval, page, family, and navigation flows, so
+  `search.rs`, `retrieval.rs`, `page.rs`, `family.rs`, and `navigation.rs`
+  stop binding repeated `with_repo_analysis(...)` orchestration directly
+- that same docs-service seam now also covers the remaining docs planner/gap
+  endpoints. `projected_gap.rs` and `planner.rs` now delegate through
+  `docs/service.rs`, so the docs handler cluster is fully closed over one
+  shared typed service boundary
+- the docs shared-state audit is now landed too. The old flat `docs/types.rs`
+  surface has been split into `docs/types/` with separate planner and
+  projected-gap modules, while `types/mod.rs` remains interface-only
+- the docs handler closure audit is now landed too. The flat docs route files
+  now resolve through `docs/projection/` and `docs/planner/`, while
+  `docs/mod.rs` stays interface-only and the router-level re-export surface
+  remains stable
+- the docs service audit is now landed too. The old `docs/service.rs` surface
+  now resolves through `docs/service/{projection,planner,runtime}.rs`, so the
+  service layer matches the route and shared-state feature boundaries
+- the docs router export audit is now landed too. Docs handler re-exports now
+  resolve through `handlers/docs_exports.rs`, so the outward-facing docs symbol
+  boundary is grouped instead of repeated inline in `handlers/mod.rs`

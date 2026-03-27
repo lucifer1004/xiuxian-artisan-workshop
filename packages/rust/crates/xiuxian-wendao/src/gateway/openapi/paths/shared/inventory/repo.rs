@@ -28,6 +28,13 @@ pub(super) const REPO_EXAMPLE_SEARCH: RouteContract = RouteContract {
     path_params: &[],
 };
 
+pub(super) const REPO_IMPORT_SEARCH: RouteContract = RouteContract {
+    axum_path: API_REPO_IMPORT_SEARCH_AXUM_PATH,
+    openapi_path: API_REPO_IMPORT_SEARCH_OPENAPI_PATH,
+    methods: &["get"],
+    path_params: &[],
+};
+
 pub(super) const REPO_DOC_COVERAGE: RouteContract = RouteContract {
     axum_path: API_REPO_DOC_COVERAGE_AXUM_PATH,
     openapi_path: API_REPO_DOC_COVERAGE_OPENAPI_PATH,

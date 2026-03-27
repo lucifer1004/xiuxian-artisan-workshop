@@ -32,6 +32,7 @@ pub(crate) const COLUMN_HIT_JSON: &str = "hit_json";
 pub(crate) const ENTITY_KIND_SYMBOL: &str = "symbol";
 pub(crate) const ENTITY_KIND_MODULE: &str = "module";
 pub(crate) const ENTITY_KIND_EXAMPLE: &str = "example";
+pub(crate) const ENTITY_KIND_IMPORT: &str = "import";
 
 #[derive(Debug, Clone)]
 pub(crate) struct RepoEntityRow {

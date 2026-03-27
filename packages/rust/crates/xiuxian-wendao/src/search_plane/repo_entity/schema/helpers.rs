@@ -3,7 +3,7 @@ use std::path::Path;
 
 use xiuxian_vector::VectorStoreError;
 
-use crate::analyzers::{RepoBacklinkItem, RepoSymbolKind};
+use crate::analyzers::{ImportKind, RepoBacklinkItem, RepoSymbolKind};
 use crate::gateway::studio::types::{SearchBacklinkItem, SearchHit, StudioNavigationTarget};
 
 pub(crate) fn serialize_hit_json(hit: &SearchHit) -> Result<String, VectorStoreError> {
@@ -135,5 +135,13 @@ pub(crate) fn symbol_kind_tag(kind: RepoSymbolKind) -> &'static str {
         RepoSymbolKind::Constant => "constant",
         RepoSymbolKind::ModuleExport => "module_export",
         RepoSymbolKind::Other => "other",
+    }
+}
+
+pub(crate) fn import_kind_tag(kind: ImportKind) -> &'static str {
+    match kind {
+        ImportKind::Symbol => "symbol",
+        ImportKind::Module => "module",
+        ImportKind::Reexport => "reexport",
     }
 }

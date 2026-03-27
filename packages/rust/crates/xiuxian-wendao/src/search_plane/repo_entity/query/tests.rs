@@ -3,15 +3,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::analyzers::{
-    ExampleRecord, ModuleRecord, RepoSymbolKind, RepositoryAnalysisOutput, SymbolRecord,
+    ExampleRecord, ImportKind, ImportRecord, ModuleRecord, RepoSymbolKind,
+    RepositoryAnalysisOutput, SymbolRecord,
 };
 use crate::gateway::studio::repo_index::RepoCodeDocument;
+use crate::gateway::studio::test_support::assert_wendao_json_snapshot;
 use crate::search_plane::ranking::trim_ranked_vec;
 use crate::search_plane::repo_entity::publish_repo_entities;
 use crate::search_plane::repo_entity::query::execution::{compare_candidates, retained_window};
 use crate::search_plane::repo_entity::query::search::{
-    search_repo_entity_example_results, search_repo_entity_module_results,
-    search_repo_entity_symbol_results,
+    search_repo_entity_example_results, search_repo_entity_import_results,
+    search_repo_entity_module_results, search_repo_entity_symbol_results,
 };
 use crate::search_plane::{
     SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
@@ -143,6 +145,29 @@ async fn typed_repo_entity_search_reconstructs_module_symbol_and_example_results
         example_result.examples[0].summary.as_deref(),
         Some("Shows solve")
     );
+    let import_result = search_repo_entity_import_results(
+        &service,
+        &crate::analyzers::ImportSearchQuery {
+            repo_id: "alpha/repo".to_string(),
+            package: Some("SciMLBase".to_string()),
+            module: Some("BaseModelica".to_string()),
+            limit: 5,
+        },
+    )
+    .await
+    .unwrap_or_else(|error| panic!("import result: {error}"));
+    assert_eq!(import_result.imports.len(), 1);
+    assert_eq!(import_result.imports[0].target_package, "SciMLBase");
+    assert_eq!(import_result.imports[0].source_module, "BaseModelica");
+    assert_wendao_json_snapshot(
+        "search_plane_repo_entity_typed_results",
+        serde_json::json!({
+            "module_result": module_result,
+            "symbol_result": symbol_result,
+            "example_result": example_result,
+            "import_result": import_result,
+        }),
+    );
 }
 
 fn sample_analysis(
@@ -180,6 +205,15 @@ fn sample_analysis(
             title: "Solve example".to_string(),
             path: "examples/solve.jl".to_string(),
             summary: Some(example_summary.to_string()),
+        }],
+        imports: vec![ImportRecord {
+            repo_id: repo_id.to_string(),
+            module_id: "module:BaseModelica".to_string(),
+            import_name: "solve".to_string(),
+            target_package: "SciMLBase".to_string(),
+            source_module: "BaseModelica".to_string(),
+            kind: ImportKind::Reexport,
+            resolved_id: Some(format!("symbol:{symbol_name}")),
         }],
         ..RepositoryAnalysisOutput::default()
     }

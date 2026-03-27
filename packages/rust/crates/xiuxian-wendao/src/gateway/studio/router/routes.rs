@@ -186,6 +186,10 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::get_ui_capabilities),
         )
         .route(
+            openapi_paths::API_UI_JULIA_DEPLOYMENT_ARTIFACT_AXUM_PATH,
+            get(handlers::get_julia_deployment_artifact),
+        )
+        .route(
             "/api/analysis/refine-doc",
             post(handlers::refine_entity_doc),
         )
@@ -204,6 +208,10 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
         .route(
             openapi_paths::API_REPO_EXAMPLE_SEARCH_AXUM_PATH,
             get(handlers::example_search),
+        )
+        .route(
+            openapi_paths::API_REPO_IMPORT_SEARCH_AXUM_PATH,
+            get(handlers::import_search),
         )
         .route(
             openapi_paths::API_REPO_DOC_COVERAGE_AXUM_PATH,

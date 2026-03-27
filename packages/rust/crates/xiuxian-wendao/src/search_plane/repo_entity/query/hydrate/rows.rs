@@ -1,11 +1,12 @@
 use std::collections::BTreeMap;
 
 use crate::analyzers::{
-    ExampleRecord, ExampleSearchHit, ExampleSearchResult, ModuleRecord, ModuleSearchHit,
-    ModuleSearchResult, SymbolRecord, SymbolSearchHit, SymbolSearchResult,
+    ExampleRecord, ExampleSearchHit, ExampleSearchResult, ImportRecord, ImportSearchHit,
+    ImportSearchResult, ModuleRecord, ModuleSearchHit, ModuleSearchResult, SymbolRecord,
+    SymbolSearchHit, SymbolSearchResult,
 };
 use crate::search_plane::repo_entity::query::hydrate::{
-    non_empty_vec, parse_attributes_map, parse_backlink_items, parse_symbol_kind,
+    non_empty_vec, parse_attributes_map, parse_backlink_items, parse_import_kind, parse_symbol_kind,
 };
 use crate::search_plane::repo_entity::query::types::{
     HydratedRepoEntityRow, RepoEntityCandidate, RepoEntitySearchError,
@@ -156,5 +157,44 @@ pub(crate) fn build_example_search_result(
         repo_id: repo_id.to_string(),
         examples,
         example_hits,
+    })
+}
+
+pub(crate) fn build_import_search_result(
+    repo_id: &str,
+    candidates: Vec<RepoEntityCandidate>,
+    rows: BTreeMap<String, HydratedRepoEntityRow>,
+) -> Result<ImportSearchResult, RepoEntitySearchError> {
+    let mut imports = Vec::with_capacity(candidates.len());
+    let mut import_hits = Vec::with_capacity(candidates.len());
+    for (index, candidate) in candidates.into_iter().enumerate() {
+        let row = rows.get(candidate.id.as_str()).ok_or_else(|| {
+            RepoEntitySearchError::Decode(format!(
+                "repo entity hydration missing structured row for id `{}`",
+                candidate.id
+            ))
+        })?;
+        let attributes = parse_attributes_map(row.attributes_json.as_deref())?;
+        let import = ImportRecord {
+            repo_id: repo_id.to_string(),
+            module_id: row.module_id.clone().unwrap_or_default(),
+            import_name: row.name.clone(),
+            target_package: row.summary.clone().unwrap_or_default(),
+            source_module: row.signature.clone().unwrap_or_default(),
+            kind: parse_import_kind(row.symbol_kind.as_str()),
+            resolved_id: attributes.get("resolved_id").cloned(),
+        };
+        imports.push(import.clone());
+        import_hits.push(ImportSearchHit {
+            import,
+            score: Some(candidate.score),
+            rank: Some(index + 1),
+        });
+    }
+
+    Ok(ImportSearchResult {
+        repo_id: repo_id.to_string(),
+        imports,
+        import_hits,
     })
 }

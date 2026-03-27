@@ -13,3 +13,10 @@ pub(super) const UI_CAPABILITIES: RouteContract = RouteContract {
     methods: &["get"],
     path_params: &[],
 };
+
+pub(super) const UI_JULIA_DEPLOYMENT_ARTIFACT: RouteContract = RouteContract {
+    axum_path: API_UI_JULIA_DEPLOYMENT_ARTIFACT_AXUM_PATH,
+    openapi_path: API_UI_JULIA_DEPLOYMENT_ARTIFACT_OPENAPI_PATH,
+    methods: &["get"],
+    path_params: &[],
+};

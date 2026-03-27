@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::analyzers::RepoSymbolKind;
 use crate::analyzers::query::RepoBacklinkItem;
+use crate::analyzers::{ImportKind, RepoSymbolKind};
 use crate::search_plane::repo_entity::query::types::RepoEntitySearchError;
 
 pub(crate) fn non_empty_vec(values: Vec<String>) -> Option<Vec<String>> {
@@ -36,5 +36,13 @@ pub(crate) fn parse_symbol_kind(kind: &str) -> RepoSymbolKind {
         "constant" => RepoSymbolKind::Constant,
         "module_export" => RepoSymbolKind::ModuleExport,
         _ => RepoSymbolKind::Other,
+    }
+}
+
+pub(crate) fn parse_import_kind(kind: &str) -> ImportKind {
+    match kind {
+        "module" => ImportKind::Module,
+        "reexport" => ImportKind::Reexport,
+        _ => ImportKind::Symbol,
     }
 }

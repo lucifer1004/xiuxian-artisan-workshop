@@ -5,6 +5,8 @@ mod bootstrap;
 mod cached;
 mod helpers;
 mod julia_transport;
+#[cfg(test)]
+mod julia_transport_tests;
 mod merge;
 mod projection;
 mod registry;
@@ -24,9 +26,15 @@ pub(crate) use cached::{
 pub use helpers::relation_kind_label;
 pub(crate) use helpers::{
     backlinks_for, documents_backlink_lookup, example_match_score, example_relation_lookup,
-    hierarchy_segments_from_path, infer_ecosystem, module_match_score, normalized_rank_score,
-    projection_page_lookup, projection_pages_for, record_hierarchical_uri,
+    hierarchy_segments_from_path, import_match_score, infer_ecosystem, module_match_score,
+    normalized_rank_score, projection_page_lookup, projection_pages_for, record_hierarchical_uri,
     related_modules_for_example, related_symbols_for_example, symbol_match_score,
+};
+pub use julia_transport::{
+    JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_EMBEDDING_COLUMN,
+    JULIA_ARROW_FINAL_SCORE_COLUMN, JULIA_ARROW_QUERY_EMBEDDING_COLUMN,
+    JULIA_ARROW_TRACE_ID_COLUMN, JULIA_ARROW_VECTOR_SCORE_COLUMN, julia_arrow_request_schema,
+    julia_arrow_response_schema,
 };
 #[cfg(feature = "julia")]
 pub use julia_transport::{
@@ -40,10 +48,10 @@ pub use registry::load_registered_repository;
 pub(crate) use search::ExampleSearchMetadata;
 pub use search::*;
 pub(crate) use search::{
-    build_example_search_with_artifacts, build_module_search_with_artifacts,
-    build_symbol_search_with_artifacts, repository_search_artifacts,
+    RepoAnalysisFallbackContract, canonical_import_query_text, example_fallback_contract,
+    import_fallback_contract, module_fallback_contract, repository_search_artifacts,
+    symbol_fallback_contract,
 };
 pub use sync::*;
-
 #[cfg(test)]
 mod tests;

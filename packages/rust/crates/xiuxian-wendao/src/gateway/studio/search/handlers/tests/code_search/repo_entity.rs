@@ -10,6 +10,7 @@ use crate::gateway::studio::search::handlers::tests::{
     publish_repo_content_chunk_index, publish_repo_entity_index, sample_repo_analysis,
     test_studio_state,
 };
+use crate::search_plane::{SearchCorpusKind, SearchQueryTelemetrySource};
 
 #[tokio::test]
 async fn build_code_search_response_returns_repo_entity_hits_from_search_plane() {
@@ -152,5 +153,53 @@ async fn build_code_search_response_prefers_repo_entity_hits_before_repo_content
             .iter()
             .map(|hit| (&hit.path, &hit.doc_type))
             .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn repo_entity_search_hits_record_query_core_telemetry_into_search_plane_status() {
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "valid".to_string(),
+            root: Some(".".to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["julia".to_string()],
+        }],
+    });
+    let analysis = sample_repo_analysis("valid");
+    publish_repo_entity_index(&studio, "valid", &analysis).await;
+
+    let hits = build_repo_entity_search_hits(&studio, "valid", "reexport", 10)
+        .await
+        .unwrap_or_else(|error| panic!("direct repo entity search hits: {error:?}"));
+    assert!(
+        !hits.is_empty(),
+        "repo entity query-core search should return at least one hit"
+    );
+
+    let snapshot = studio.search_plane.status();
+    let repo_entity = snapshot
+        .corpora
+        .iter()
+        .find(|status| status.corpus == SearchCorpusKind::RepoEntity)
+        .unwrap_or_else(|| panic!("repo entity status should be present"));
+    let telemetry = repo_entity
+        .last_query_telemetry
+        .as_ref()
+        .unwrap_or_else(|| panic!("repo entity telemetry should be present"));
+
+    assert_eq!(telemetry.scope.as_deref(), Some("valid"));
+    assert_eq!(telemetry.source, SearchQueryTelemetrySource::Scan);
+    assert_eq!(
+        telemetry.result_count,
+        u64::try_from(hits.len()).unwrap_or(u64::MAX)
+    );
+    assert_eq!(
+        telemetry.matched_rows,
+        u64::try_from(hits.len()).unwrap_or(u64::MAX)
     );
 }

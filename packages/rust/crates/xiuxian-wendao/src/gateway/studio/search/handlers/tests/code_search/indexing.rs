@@ -296,3 +296,64 @@ async fn build_code_search_response_uses_published_repo_tables_while_repo_refres
     );
     assert!(response.pending_repos.is_empty());
 }
+
+#[tokio::test]
+async fn build_code_search_response_falls_back_to_repo_content_when_repo_entity_is_unpublished() {
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "valid".to_string(),
+            root: Some(".".to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["julia".to_string()],
+        }],
+    });
+    publish_repo_content_chunk_index(
+        &studio,
+        "valid",
+        vec![RepoCodeDocument {
+            path: "src/BaseModelica.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(
+                "module BaseModelica\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
+            ),
+            size_bytes: 67,
+            modified_unix_ms: 0,
+        }],
+    )
+    .await;
+    studio.repo_index.set_status_for_test(RepoIndexEntryStatus {
+        repo_id: "valid".to_string(),
+        phase: RepoIndexPhase::Ready,
+        queue_position: None,
+        last_error: None,
+        last_revision: Some("abc123".to_string()),
+        updated_at: Some("2026-03-26T00:00:00Z".to_string()),
+        attempt_count: 1,
+    });
+
+    let response = build_code_search_response(&studio, "@reexport".to_string(), Some("valid"), 10)
+        .await
+        .unwrap_or_else(|error| {
+            panic!(
+                "repo content fallback should succeed when repo entity is unpublished: {error:?}"
+            )
+        });
+
+    assert!(
+        response
+            .hits
+            .iter()
+            .any(|hit| hit.doc_type.as_deref() == Some("file")
+                && hit.path == "src/BaseModelica.jl"),
+        "expected repo content fallback hit: {:?}",
+        response
+            .hits
+            .iter()
+            .map(|hit| (&hit.path, &hit.doc_type))
+            .collect::<Vec<_>>()
+    );
+}

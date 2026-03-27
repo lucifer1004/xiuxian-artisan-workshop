@@ -16,6 +16,10 @@ pub const ARROW_TRANSPORT_DEFAULT_ROUTE: &str = "/arrow-ipc";
 pub const ARROW_TRANSPORT_DEFAULT_HEALTH_ROUTE: &str = "/health";
 /// Default Wendao Arrow schema contract version.
 pub const ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION: &str = "v1";
+/// Canonical Arrow schema metadata key for the Wendao schema version.
+pub const ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY: &str = "wendao.schema_version";
+/// Canonical Arrow schema metadata key for request/response trace identifiers.
+pub const ARROW_TRANSPORT_TRACE_ID_METADATA_KEY: &str = "trace_id";
 const ARROW_TRANSPORT_DEFAULT_TIMEOUT_SECS: u64 = 10;
 
 /// Runtime config for Arrow-over-HTTP transport.

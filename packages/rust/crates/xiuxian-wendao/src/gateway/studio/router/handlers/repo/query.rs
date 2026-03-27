@@ -18,6 +18,19 @@ pub struct RepoSearchApiQuery {
     pub limit: Option<usize>,
 }
 
+/// Query parameters for repository import search.
+#[derive(Debug, Deserialize)]
+pub struct RepoImportSearchApiQuery {
+    /// The repository identifier.
+    pub repo: Option<String>,
+    /// Optional target package filter.
+    pub package: Option<String>,
+    /// Optional source-module filter.
+    pub module: Option<String>,
+    /// Maximum number of hits to return.
+    pub limit: Option<usize>,
+}
+
 /// Query parameters for projected page lookup.
 #[derive(Debug, Deserialize)]
 pub struct RepoProjectedPageApiQuery {

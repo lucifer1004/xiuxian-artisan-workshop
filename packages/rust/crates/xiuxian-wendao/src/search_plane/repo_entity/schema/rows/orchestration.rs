@@ -3,7 +3,7 @@ use xiuxian_vector::VectorStoreError;
 use crate::analyzers::RepositoryAnalysisOutput;
 use crate::search_plane::repo_entity::schema::definitions::RepoEntityRow;
 use crate::search_plane::repo_entity::schema::rows::{
-    RepoEntityContext, build_example_row, build_module_row, build_symbol_row,
+    RepoEntityContext, build_example_row, build_import_row, build_module_row, build_symbol_row,
 };
 
 /// Builds repo-entity rows from repository analysis.
@@ -24,6 +24,10 @@ pub(crate) fn rows_from_analysis(
 
     for example in &analysis.examples {
         rows.push(build_example_row(&context, example)?);
+    }
+
+    for import in &analysis.imports {
+        rows.push(build_import_row(&context, import)?);
     }
 
     Ok(rows)

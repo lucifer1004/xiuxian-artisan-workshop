@@ -8,16 +8,17 @@ use std::sync::{Arc, RwLock};
 use std::time::UNIX_EPOCH;
 
 use axum::body::{Body, to_bytes};
+use axum::http::header::CONTENT_TYPE;
 use axum::http::{Request, StatusCode};
 use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::Value;
 use tower::util::ServiceExt;
 
 use xiuxian_wendao::analyzers::{
-    ProjectedPageIndexNode, ProjectionPageKind, RepoProjectedPageIndexTreesQuery,
-    RepoProjectedPagesQuery, analyze_registered_repository_with_registry,
-    load_repo_intelligence_config, repo_projected_page_index_trees_from_config,
-    repo_projected_pages_from_config,
+    ProjectedPageIndexNode, ProjectionPageKind, RefineEntityDocRequest,
+    RepoProjectedPageIndexTreesQuery, RepoProjectedPagesQuery,
+    analyze_registered_repository_with_registry, load_repo_intelligence_config,
+    repo_projected_page_index_trees_from_config, repo_projected_pages_from_config,
 };
 use xiuxian_wendao::gateway::studio::repo_index::RepoCodeDocument;
 use xiuxian_wendao::gateway::studio::repo_index::RepoIndexCoordinator;
@@ -34,6 +35,26 @@ async fn request_json(
 ) -> Result<(StatusCode, Value), Box<dyn std::error::Error>> {
     let response = router
         .oneshot(Request::builder().uri(uri).body(Body::empty())?)
+        .await?;
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await?;
+    let payload = serde_json::from_slice(&body)?;
+    Ok((status, payload))
+}
+
+async fn request_json_post<T: serde::Serialize>(
+    router: axum::Router,
+    uri: &str,
+    payload: &T,
+) -> Result<(StatusCode, Value), Box<dyn std::error::Error>> {
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(payload)?))?,
+        )
         .await?;
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX).await?;
@@ -231,6 +252,44 @@ async fn repo_doc_coverage_endpoint_returns_coverage_payload() -> TestResult {
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_doc_coverage_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn repo_index_status_endpoint_returns_status_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) =
+        request_json(router, "/api/repo/index/status?repo=gateway-sync").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("repo_index_status_endpoint_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn repo_refine_entity_doc_endpoint_returns_refined_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    fs::write(
+        repo_dir.join("src").join("GatewaySyncPkg.jl"),
+        "module GatewaySyncPkg\nexport solve\n\"\"\"solve docs\"\"\"\nsolve() = nothing\nend\n",
+    )?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let state = gateway_state_for_project_with_options(temp.path(), false, false);
+    publish_repo_entity_search_plane(state.as_ref(), temp.path(), "gateway-sync").await?;
+    let router = studio_router(state);
+
+    let payload = RefineEntityDocRequest {
+        repo_id: "gateway-sync".to_string(),
+        entity_id: "repo:gateway-sync:symbol:GatewaySyncPkg.solve".to_string(),
+        user_hints: Some("Explain how callers should use this entrypoint.".to_string()),
+    };
+    let (status, payload) = request_json_post(router, "/api/analysis/refine-doc", &payload).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_studio_json_snapshot("repo_refine_entity_doc_endpoint_json", payload);
     Ok(())
 }
 

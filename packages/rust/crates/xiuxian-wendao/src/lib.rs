@@ -60,6 +60,8 @@ pub mod link_graph;
 /// Optional Python binding namespace.
 #[cfg(feature = "pybindings")]
 pub mod pybindings;
+/// Internal query-core skeleton for RFC-driven Wendao execution adapters.
+pub mod query_core;
 pub mod schemas;
 pub mod search;
 /// Lance/Arrow/Valkey-backed search-plane domain for Studio search corpora.
@@ -90,6 +92,9 @@ pub mod skill_vfs;
 pub mod unified_symbol;
 /// High-level search router for integrating multiple backends.
 pub mod zhenfa_router;
+
+#[cfg(all(test, feature = "julia"))]
+pub(crate) use analyzers::languages::julia_plugin_test_support;
 
 // ---------------------------------------------------------------------------
 // Public re-exports (crate API)
@@ -150,7 +155,9 @@ pub use link_graph::{
     LinkGraphAgenticWorkerExecution, LinkGraphAgenticWorkerPhase, LinkGraphAgenticWorkerPlan,
     LinkGraphAttachment, LinkGraphAttachmentHit, LinkGraphAttachmentKind, LinkGraphCacheBuildMeta,
     LinkGraphConfidenceLevel, LinkGraphDirection, LinkGraphDisplayHit, LinkGraphDocument,
-    LinkGraphEdgeType, LinkGraphHit, LinkGraphIndex, LinkGraphLinkFilter, LinkGraphMatchStrategy,
+    LinkGraphEdgeType, LinkGraphHit, LinkGraphIndex, LinkGraphJuliaAnalyzerLaunchManifest,
+    LinkGraphJuliaAnalyzerServiceDescriptor, LinkGraphJuliaDeploymentArtifact,
+    LinkGraphJuliaRerankRuntimeConfig, LinkGraphLinkFilter, LinkGraphMatchStrategy,
     LinkGraphMetadata, LinkGraphNeighbor, LinkGraphPassage, LinkGraphPlannedSearchPayload,
     LinkGraphPprSubgraphMode, LinkGraphRefreshMode, LinkGraphRelatedFilter,
     LinkGraphRelatedPprDiagnostics, LinkGraphRelatedPprOptions, LinkGraphRetrievalBudget,
@@ -165,18 +172,20 @@ pub use link_graph::{
     QuantumAnchorHit, QuantumContext, QuantumContextBuildError, QuantumContextSnapshot,
     QuantumFusionOptions, QuantumFusionTelemetry, QuantumSemanticIgnition,
     QuantumSemanticIgnitionError, QuantumSemanticIgnitionFuture, QuantumSemanticSearchRequest,
-    VectorStoreSemanticIgnition, compute_link_graph_saliency, narrate_subgraph, parse_search_query,
+    VectorStoreSemanticIgnition, compute_link_graph_saliency,
+    export_link_graph_julia_deployment_artifact_toml, narrate_subgraph, parse_search_query,
     quantum_context_snapshot_id, resolve_link_graph_index_runtime,
-    set_link_graph_config_home_override, set_link_graph_wendao_config_override,
-    valkey_quantum_context_snapshot_drop, valkey_quantum_context_snapshot_get,
-    valkey_quantum_context_snapshot_get_with_valkey, valkey_quantum_context_snapshot_rollback,
-    valkey_quantum_context_snapshot_rollback_with_valkey, valkey_quantum_context_snapshot_save,
-    valkey_quantum_context_snapshot_save_with_valkey, valkey_saliency_decay_all,
-    valkey_saliency_decay_all_with_valkey, valkey_saliency_del, valkey_saliency_get,
-    valkey_saliency_get_with_valkey, valkey_saliency_touch, valkey_saliency_touch_with_valkey,
-    valkey_suggested_link_decide, valkey_suggested_link_decide_with_valkey,
-    valkey_suggested_link_decisions_recent, valkey_suggested_link_decisions_recent_with_valkey,
-    valkey_suggested_link_log, valkey_suggested_link_log_with_valkey, valkey_suggested_link_recent,
+    resolve_link_graph_julia_deployment_artifact, set_link_graph_config_home_override,
+    set_link_graph_wendao_config_override, valkey_quantum_context_snapshot_drop,
+    valkey_quantum_context_snapshot_get, valkey_quantum_context_snapshot_get_with_valkey,
+    valkey_quantum_context_snapshot_rollback, valkey_quantum_context_snapshot_rollback_with_valkey,
+    valkey_quantum_context_snapshot_save, valkey_quantum_context_snapshot_save_with_valkey,
+    valkey_saliency_decay_all, valkey_saliency_decay_all_with_valkey, valkey_saliency_del,
+    valkey_saliency_get, valkey_saliency_get_with_valkey, valkey_saliency_touch,
+    valkey_saliency_touch_with_valkey, valkey_suggested_link_decide,
+    valkey_suggested_link_decide_with_valkey, valkey_suggested_link_decisions_recent,
+    valkey_suggested_link_decisions_recent_with_valkey, valkey_suggested_link_log,
+    valkey_suggested_link_log_with_valkey, valkey_suggested_link_recent,
     valkey_suggested_link_recent_latest, valkey_suggested_link_recent_latest_with_valkey,
     valkey_suggested_link_recent_with_valkey,
 };

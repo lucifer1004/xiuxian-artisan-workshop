@@ -17,6 +17,7 @@ pub(crate) async fn prepare_repo_entity_search(
 ) -> Result<Option<PreparedRepoEntitySearch>, RepoEntitySearchError> {
     let trimmed = query.trim();
     let query_lower = trimmed.to_ascii_lowercase();
+    let (import_package_filter, import_module_filter) = parse_import_filters(query_lower.as_str());
     let read_permit = service.acquire_repo_search_read_permit().await?;
     let Some(publication) = service
         .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, repo_id)
@@ -48,6 +49,8 @@ pub(crate) async fn prepare_repo_entity_search(
 
     let query = RepoEntityQuery {
         query_lower: query_lower.as_str(),
+        import_package_filter,
+        import_module_filter,
         language_filters,
         kind_filters,
         window: crate::search_plane::repo_entity::query::execution::retained_window(limit),
@@ -69,4 +72,24 @@ pub(crate) async fn prepare_repo_entity_search(
         telemetry: execution.telemetry,
         source: execution.source,
     }))
+}
+
+fn parse_import_filters(query: &str) -> (Option<&str>, Option<&str>) {
+    let mut package = None;
+    let mut module = None;
+    for segment in query.split(';') {
+        let Some((key, value)) = segment.split_once('=') else {
+            continue;
+        };
+        let value = value.trim();
+        if value.is_empty() || value == "*" {
+            continue;
+        }
+        match key.trim() {
+            "package" => package = Some(value),
+            "module" => module = Some(value),
+            _ => {}
+        }
+    }
+    (package, module)
 }

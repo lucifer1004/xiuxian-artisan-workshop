@@ -1,12 +1,14 @@
 use std::path::Path;
 
+use crate::analyzers::cache::RepositorySearchArtifacts;
 use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::query::{ImportSearchHit, ImportSearchQuery, ImportSearchResult};
 use crate::analyzers::registry::PluginRegistry;
-
-use super::super::helpers::{import_match_score, normalized_rank_score};
-use super::super::{analyze_repository_from_config_with_registry, bootstrap_builtin_registry};
+use crate::analyzers::service::helpers::{import_match_score, normalized_rank_score};
+use crate::analyzers::service::{
+    analyze_repository_from_config_with_registry, bootstrap_builtin_registry,
+};
 
 /// Build an import search result from normalized analysis records.
 #[must_use]
@@ -55,6 +57,15 @@ pub fn build_import_search(
         imports,
         import_hits,
     }
+}
+
+#[must_use]
+pub(crate) fn build_import_search_with_artifacts(
+    query: &ImportSearchQuery,
+    analysis: &RepositoryAnalysisOutput,
+    _artifacts: &RepositorySearchArtifacts,
+) -> ImportSearchResult {
+    build_import_search(query, analysis)
 }
 
 /// Load configuration, analyze one repository, and return matching imports.

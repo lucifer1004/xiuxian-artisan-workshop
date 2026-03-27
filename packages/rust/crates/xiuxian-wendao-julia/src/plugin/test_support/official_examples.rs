@@ -4,7 +4,9 @@ use std::time::Duration;
 use tokio::time::sleep;
 use xiuxian_vector::ArrowTransportClient;
 
-use super::common::{ChildGuard, repo_root, reserve_test_port, wendaoarrow_script};
+use super::common::{
+    ChildGuard, repo_root, reserve_test_port, wendaoanalyzer_script, wendaoarrow_script,
+};
 
 pub(crate) fn spawn_real_wendaoarrow_service(port: u16) -> ChildGuard {
     let script = wendaoarrow_script("run_stream_scoring_server.sh");
@@ -14,6 +16,15 @@ pub(crate) fn spawn_real_wendaoarrow_service(port: u16) -> ChildGuard {
 pub(crate) fn spawn_real_wendaoarrow_metadata_service(port: u16) -> ChildGuard {
     let script = wendaoarrow_script("run_stream_metadata_server.sh");
     spawn_example_script(script, port, "spawn real WendaoArrow metadata service")
+}
+
+pub(crate) fn spawn_real_wendaoanalyzer_linear_blend_service(port: u16) -> ChildGuard {
+    let script = wendaoanalyzer_script("run_stream_linear_blend_server.sh");
+    spawn_example_script(
+        script,
+        port,
+        "spawn real WendaoAnalyzer linear blend service",
+    )
 }
 
 fn spawn_example_script(script: std::path::PathBuf, port: u16, error_context: &str) -> ChildGuard {
@@ -30,7 +41,14 @@ fn spawn_example_script(script: std::path::PathBuf, port: u16, error_context: &s
 }
 
 pub(crate) async fn wait_for_health(client: &ArrowTransportClient) -> Result<(), String> {
-    for _ in 0..50 {
+    wait_for_health_with_attempts(client, 50).await
+}
+
+pub(crate) async fn wait_for_health_with_attempts(
+    client: &ArrowTransportClient,
+    attempts: usize,
+) -> Result<(), String> {
+    for _ in 0..attempts {
         if client.check_health().await.is_ok() {
             return Ok(());
         }

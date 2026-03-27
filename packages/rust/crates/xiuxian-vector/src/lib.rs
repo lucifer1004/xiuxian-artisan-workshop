@@ -53,9 +53,11 @@ pub use xiuxian_skills::skills::{
 pub use arrow_transport::{
     ARROW_TRANSPORT_CONTENT_TYPE, ARROW_TRANSPORT_DEFAULT_BASE_URL,
     ARROW_TRANSPORT_DEFAULT_HEALTH_ROUTE, ARROW_TRANSPORT_DEFAULT_ROUTE,
-    ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION, ArrowTransportClient, ArrowTransportConfig,
-    ArrowTransportConfigError, ArrowTransportError, decode_record_batches_ipc,
-    encode_record_batch_ipc, encode_record_batches_ipc,
+    ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION, ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY,
+    ARROW_TRANSPORT_TRACE_ID_METADATA_KEY, ArrowTransportClient, ArrowTransportConfig,
+    ArrowTransportConfigError, ArrowTransportError, attach_record_batch_metadata,
+    attach_record_batch_trace_id, decode_record_batches_ipc, encode_record_batch_ipc,
+    encode_record_batches_ipc,
 };
 pub use error::VectorStoreError;
 pub use keyword::{
@@ -68,6 +70,14 @@ pub use ops::{
     QueryIntent, Recommendation, TableColumnAlteration, TableColumnType, TableHealthReport,
     TableInfo, TableNewColumn, TableVersionInfo, XIUXIAN_SCHEMA_VERSION,
     schema_version_from_schema, string_contains_mask,
+};
+pub use query_support::{
+    RETRIEVAL_BEST_SECTION_COLUMN, RETRIEVAL_DOC_TYPE_COLUMN, RETRIEVAL_ID_COLUMN,
+    RETRIEVAL_LANGUAGE_COLUMN, RETRIEVAL_LINE_COLUMN, RETRIEVAL_MATCH_REASON_COLUMN,
+    RETRIEVAL_PATH_COLUMN, RETRIEVAL_REPO_COLUMN, RETRIEVAL_SCORE_COLUMN, RETRIEVAL_SNIPPET_COLUMN,
+    RETRIEVAL_SOURCE_COLUMN, RETRIEVAL_TITLE_COLUMN, RetrievalRow, payload_fetch_record_batch,
+    retrieval_result_columns, retrieval_result_schema, retrieval_rows_from_record_batch,
+    retrieval_rows_to_record_batch,
 };
 pub use search::SearchOptions;
 pub use search_engine::{
@@ -88,6 +98,8 @@ pub mod error;
 pub mod index;
 pub mod keyword;
 pub mod ops;
+/// Arrow-native retrieval batch helpers used by Wendao query-core adapters.
+pub mod query_support;
 pub mod search;
 pub mod search_cache;
 pub mod search_engine;

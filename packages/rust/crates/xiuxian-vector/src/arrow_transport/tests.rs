@@ -14,10 +14,15 @@ use tokio::net::TcpListener;
 
 use super::client::ArrowTransportClient;
 use super::config::{
-    ARROW_TRANSPORT_CONTENT_TYPE, ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION, ArrowTransportConfig,
+    ARROW_TRANSPORT_CONTENT_TYPE, ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION,
+    ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY, ARROW_TRANSPORT_TRACE_ID_METADATA_KEY,
+    ArrowTransportConfig,
 };
 use super::error::ArrowTransportError;
-use super::{decode_record_batches_ipc, encode_record_batches_ipc};
+use super::{
+    attach_record_batch_metadata, attach_record_batch_trace_id, decode_record_batches_ipc,
+    encode_record_batches_ipc,
+};
 
 #[test]
 fn transport_config_loads_from_toml_section() {
@@ -138,6 +143,120 @@ async fn transport_client_roundtrips_arrow_batches() {
     assert_eq!(response_batches.len(), 1);
     assert_string_column_eq(&request_batch, &response_batches[0], "doc_id");
     assert_float_column_eq(&request_batch, &response_batches[0], "score");
+}
+
+#[tokio::test]
+async fn transport_client_preserves_request_schema_metadata() {
+    let observed_trace_id = Arc::new(Mutex::new(None::<String>));
+    let app = Router::new()
+        .route(
+            "/health",
+            get(|| async {
+                (
+                    [(
+                        "x-wendao-schema-version",
+                        ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION,
+                    )],
+                    r#"{"status":"ok"}"#,
+                )
+            }),
+        )
+        .route(
+            "/arrow-ipc",
+            post({
+                let observed_trace_id = observed_trace_id.clone();
+                move |body: Bytes| {
+                    let observed_trace_id = observed_trace_id.clone();
+                    async move {
+                        let batches = decode_record_batches_ipc(body.as_ref())
+                            .expect("request metadata batches should decode");
+                        let request_trace_id = batches.first().and_then(|batch| {
+                            let schema = batch.schema();
+                            schema.metadata().get("trace_id").cloned()
+                        });
+                        match observed_trace_id.lock() {
+                            Ok(mut guard) => *guard = request_trace_id,
+                            Err(error) => panic!("failed to lock observed trace_id: {error}"),
+                        }
+                        let payload =
+                            encode_record_batches_ipc(batches.as_slice()).expect("encode payload");
+                        let mut response = payload.into_response();
+                        response.headers_mut().insert(
+                            CONTENT_TYPE,
+                            HeaderValue::from_static(ARROW_TRANSPORT_CONTENT_TYPE),
+                        );
+                        response.headers_mut().insert(
+                            "x-wendao-schema-version",
+                            HeaderValue::from_static(ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION),
+                        );
+                        response
+                    }
+                }
+            }),
+        );
+    let base_url = spawn_test_server(app).await;
+    let client = build_test_client(ArrowTransportConfig::new(base_url));
+    let request_batch = sample_batch_with_trace_id("trace-123");
+
+    let response_batches = match client.process_batch(&request_batch).await {
+        Ok(batches) => batches,
+        Err(error) => panic!("Arrow transport metadata roundtrip failed: {error}"),
+    };
+
+    let observed_trace_id = match observed_trace_id.lock() {
+        Ok(guard) => guard.clone(),
+        Err(error) => panic!("failed to inspect observed trace_id: {error}"),
+    };
+    assert_eq!(observed_trace_id.as_deref(), Some("trace-123"));
+    assert_eq!(
+        response_batches[0]
+            .schema()
+            .metadata()
+            .get(ARROW_TRANSPORT_TRACE_ID_METADATA_KEY),
+        Some(&"trace-123".to_string())
+    );
+}
+
+#[test]
+fn attach_record_batch_metadata_merges_existing_entries() {
+    let batch = attach_record_batch_metadata(
+        &sample_batch(),
+        [
+            (
+                ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY,
+                ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION,
+            ),
+            (ARROW_TRANSPORT_TRACE_ID_METADATA_KEY, "trace-123"),
+        ],
+    )
+    .expect("attach metadata");
+    let updated = attach_record_batch_metadata(
+        &batch,
+        [
+            (ARROW_TRANSPORT_TRACE_ID_METADATA_KEY, "trace-456"),
+            ("request_id", "req-1"),
+        ],
+    )
+    .expect("merge metadata");
+
+    assert_eq!(
+        updated
+            .schema()
+            .metadata()
+            .get(ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY),
+        Some(&ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION.to_string())
+    );
+    assert_eq!(
+        updated
+            .schema()
+            .metadata()
+            .get(ARROW_TRANSPORT_TRACE_ID_METADATA_KEY),
+        Some(&"trace-456".to_string())
+    );
+    assert_eq!(
+        updated.schema().metadata().get("request_id"),
+        Some(&"req-1".to_string())
+    );
 }
 
 #[tokio::test]
@@ -370,6 +489,12 @@ fn sample_batch() -> RecordBatch {
         Ok(batch) => batch,
         Err(error) => panic!("failed to build sample batch: {error}"),
     }
+}
+
+fn sample_batch_with_trace_id(trace_id: &str) -> RecordBatch {
+    let batch = sample_batch();
+    attach_record_batch_trace_id(&batch, trace_id)
+        .unwrap_or_else(|error| panic!("failed to attach sample metadata batch: {error}"))
 }
 
 fn assert_string_column_eq(expected: &RecordBatch, actual: &RecordBatch, column: &str) {

@@ -28,4 +28,12 @@ impl<'a> RepoEntityContext<'a> {
             ecosystem: infer_ecosystem(repo_id),
         }
     }
+
+    pub(crate) fn module_path(&self, module_id: &str) -> Option<&str> {
+        self.analysis
+            .modules
+            .iter()
+            .find(|module| module.module_id == module_id)
+            .map(|module| module.path.as_str())
+    }
 }

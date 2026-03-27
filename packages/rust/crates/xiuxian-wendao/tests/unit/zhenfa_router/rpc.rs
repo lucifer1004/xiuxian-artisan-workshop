@@ -7,6 +7,8 @@ use crate::link_graph::{
     LinkGraphConfidenceLevel, LinkGraphJuliaRerankTelemetry, LinkGraphRetrievalMode,
     LinkGraphSemanticIgnitionTelemetry, QuantumContext,
 };
+use crate::set_link_graph_wendao_config_override;
+use std::fs;
 
 #[test]
 fn normalize_limit_clamps_range() {
@@ -93,4 +95,85 @@ fn wendao_search_request_deserializes_query_vector() {
 
     assert_eq!(request.query, "alpha signal");
     assert_eq!(request.query_vector, Some(vec![1.0, 0.0, 0.0]));
+}
+
+#[test]
+fn export_julia_deployment_artifact_from_rpc_params_returns_toml() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(
+        &config_path,
+        r#"[link_graph.retrieval.julia_rerank]
+base_url = "http://127.0.0.1:18080"
+route = "/arrow-ipc"
+schema_version = "v1"
+service_mode = "stream"
+"#,
+    )
+    .expect("write config");
+    let config_path_string = config_path.to_string_lossy().to_string();
+    set_link_graph_wendao_config_override(&config_path_string);
+
+    let rendered = export_julia_deployment_artifact_from_rpc_params(serde_json::json!({}))
+        .expect("export toml");
+    assert!(rendered.contains("artifact_schema_version = \"v1\""));
+    assert!(rendered.contains("generated_at = "));
+    assert!(rendered.contains("base_url = \"http://127.0.0.1:18080\""));
+    assert!(rendered.contains("route = \"/arrow-ipc\""));
+}
+
+#[test]
+fn export_julia_deployment_artifact_from_rpc_params_returns_json() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(
+        &config_path,
+        r#"[link_graph.retrieval.julia_rerank]
+base_url = "http://127.0.0.1:18080"
+route = "/arrow-ipc"
+schema_version = "v1"
+service_mode = "stream"
+"#,
+    )
+    .expect("write config");
+    let config_path_string = config_path.to_string_lossy().to_string();
+    set_link_graph_wendao_config_override(&config_path_string);
+
+    let rendered = export_julia_deployment_artifact_from_rpc_params(
+        serde_json::json!({ "output_format": "json" }),
+    )
+    .expect("export json");
+    assert!(rendered.contains("\"artifact_schema_version\": \"v1\""));
+    assert!(rendered.contains("\"generated_at\": "));
+    assert!(rendered.contains("\"base_url\": \"http://127.0.0.1:18080\""));
+    assert!(rendered.contains("\"route\": \"/arrow-ipc\""));
+}
+
+#[test]
+fn export_julia_deployment_artifact_from_rpc_params_writes_json_file() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(
+        &config_path,
+        r#"[link_graph.retrieval.julia_rerank]
+base_url = "http://127.0.0.1:18080"
+route = "/arrow-ipc"
+schema_version = "v1"
+service_mode = "stream"
+"#,
+    )
+    .expect("write config");
+    let config_path_string = config_path.to_string_lossy().to_string();
+    set_link_graph_wendao_config_override(&config_path_string);
+
+    let output_path = temp.path().join("artifact.json");
+    let rendered = export_julia_deployment_artifact_from_rpc_params(serde_json::json!({
+        "output_format": "json",
+        "output_path": output_path.to_string_lossy().to_string()
+    }))
+    .expect("export json file");
+
+    assert!(rendered.contains("Wrote Julia deployment artifact (json)"));
+    let written = fs::read_to_string(&output_path).expect("read written json");
+    assert!(written.contains("\"base_url\": \"http://127.0.0.1:18080\""));
 }

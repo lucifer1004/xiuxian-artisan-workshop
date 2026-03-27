@@ -7,6 +7,14 @@
 :STATUS: IN-PROGRESS
 :END:
 
+## Active References
+
+- `[[docs/rfcs/2026-03-27-wendao-arrow-plugin-flight-rfc.md]]`
+- `[[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]`
+- `[[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]`
+
+The architecture notes in this roadmap remain useful context, but the current migration direction for `core`, `runtime`, and independently published Arrow-native plugin packages is now governed by the RFC and blueprint above.
+
 ## Core Vision
 
 This roadmap note defines a Wendao-native **Repository Intelligence** architecture for two target ecosystems:

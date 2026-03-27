@@ -16,6 +16,28 @@ pub(crate) fn required_search_query(query: Option<&str>) -> Result<String, Studi
         .ok_or_else(|| StudioApiError::bad_request("MISSING_QUERY", "`query` is required"))
 }
 
+pub(crate) fn optional_search_filter(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+pub(crate) fn required_import_search_filters(
+    package: Option<&str>,
+    module: Option<&str>,
+) -> Result<(Option<String>, Option<String>), StudioApiError> {
+    let package = optional_search_filter(package);
+    let module = optional_search_filter(module);
+    if package.is_none() && module.is_none() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_IMPORT_FILTER",
+            "at least one of `package` or `module` is required",
+        ));
+    }
+    Ok((package, module))
+}
+
 pub(crate) fn required_page_id(page_id: Option<&str>) -> Result<String, StudioApiError> {
     page_id
         .map(str::trim)
@@ -103,5 +125,17 @@ pub(crate) fn parse_projected_gap_kind(
             "INVALID_GAP_KIND",
             format!("unsupported projected gap kind `{other}`"),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::required_import_search_filters;
+
+    #[test]
+    fn import_search_filters_require_package_or_module() {
+        let error = required_import_search_filters(None, None)
+            .expect_err("missing import filters should fail");
+        assert_eq!(error.code(), "MISSING_IMPORT_FILTER");
     }
 }

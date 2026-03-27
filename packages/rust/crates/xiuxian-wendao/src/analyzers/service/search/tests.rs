@@ -1,16 +1,19 @@
 use std::collections::BTreeMap;
 
 use super::{
-    build_example_search, build_example_search_with_artifacts, build_module_search,
-    build_module_search_with_artifacts, build_symbol_search, build_symbol_search_with_artifacts,
-    repository_search_artifacts,
+    build_example_search, build_example_search_with_artifacts, build_import_search,
+    build_import_search_with_artifacts, build_module_search, build_module_search_with_artifacts,
+    build_symbol_search, build_symbol_search_with_artifacts, repository_search_artifacts,
 };
 use crate::analyzers::cache::RepositoryAnalysisCacheKey;
-use crate::analyzers::query::{ExampleSearchQuery, ModuleSearchQuery, SymbolSearchQuery};
-use crate::analyzers::{
-    DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind,
-    RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord,
+use crate::analyzers::query::{
+    ExampleSearchQuery, ImportSearchQuery, ModuleSearchQuery, SymbolSearchQuery,
 };
+use crate::analyzers::{
+    DocRecord, ExampleRecord, ImportKind, ImportRecord, ModuleRecord, RelationKind, RelationRecord,
+    RepoSymbolKind, RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord,
+};
+use crate::gateway::studio::test_support::assert_wendao_json_snapshot;
 
 fn ok_or_panic<T, E>(result: Result<T, E>, context: &str) -> T
 where
@@ -78,7 +81,15 @@ fn sample_search_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
                 attributes: BTreeMap::new(),
             },
         ],
-        imports: Vec::new(),
+        imports: vec![ImportRecord {
+            repo_id: repo_id.to_string(),
+            module_id: module_id.clone(),
+            import_name: "solve".to_string(),
+            target_package: "SciMLBase".to_string(),
+            source_module: "BaseModelica".to_string(),
+            kind: ImportKind::Symbol,
+            resolved_id: Some(solve_symbol_id.clone()),
+        }],
         examples: vec![ExampleRecord {
             repo_id: repo_id.to_string(),
             example_id: example_id.clone(),
@@ -211,6 +222,22 @@ fn example_search_uses_shared_tantivy_fuzzy_index_for_related_symbol_typos() {
     );
 }
 
+#[test]
+fn import_search_snapshot_matches_package_and_module_filters() {
+    let analysis = sample_search_analysis("import-snapshot");
+    let result = build_import_search(
+        &ImportSearchQuery {
+            repo_id: "import-snapshot".to_string(),
+            package: Some("SciMLBase".to_string()),
+            module: Some("BaseModelica".to_string()),
+            limit: 10,
+        },
+        &analysis,
+    );
+
+    assert_wendao_json_snapshot("search_plane_import_search_results", result);
+}
+
 fn sample_cache_key(repo_id: &str) -> RepositoryAnalysisCacheKey {
     RepositoryAnalysisCacheKey {
         repo_id: repo_id.to_string(),
@@ -276,5 +303,25 @@ fn example_search_with_artifacts_matches_direct_search() {
     assert_eq!(
         build_example_search(&query, &analysis),
         build_example_search_with_artifacts(&query, &analysis, artifacts.as_ref())
+    );
+}
+
+#[test]
+fn import_search_with_artifacts_matches_direct_search() {
+    let analysis = sample_search_analysis("import-artifacts");
+    let query = ImportSearchQuery {
+        repo_id: "import-artifacts".to_string(),
+        package: Some("SciMLBase".to_string()),
+        module: Some("BaseModelica".to_string()),
+        limit: 10,
+    };
+    let artifacts = ok_or_panic(
+        repository_search_artifacts(&sample_cache_key("import-artifacts"), &analysis),
+        "artifacts should build",
+    );
+
+    assert_eq!(
+        build_import_search(&query, &analysis),
+        build_import_search_with_artifacts(&query, &analysis, artifacts.as_ref())
     );
 }

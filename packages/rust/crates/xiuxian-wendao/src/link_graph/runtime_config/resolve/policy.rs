@@ -3,10 +3,14 @@ use crate::link_graph::runtime_config::constants::{
     LINK_GRAPH_COACTIVATION_HOP_DECAY_SCALE_ENV, LINK_GRAPH_COACTIVATION_MAX_HOPS_ENV,
     LINK_GRAPH_COACTIVATION_MAX_NEIGHBORS_PER_DIRECTION_ENV,
     LINK_GRAPH_COACTIVATION_MAX_TOTAL_PROPAGATIONS_ENV,
-    LINK_GRAPH_COACTIVATION_TOUCH_QUEUE_DEPTH_ENV, LINK_GRAPH_JULIA_RERANK_BASE_URL_ENV,
+    LINK_GRAPH_COACTIVATION_TOUCH_QUEUE_DEPTH_ENV,
+    LINK_GRAPH_JULIA_RERANK_ANALYZER_CONFIG_PATH_ENV,
+    LINK_GRAPH_JULIA_RERANK_ANALYZER_STRATEGY_ENV, LINK_GRAPH_JULIA_RERANK_BASE_URL_ENV,
     LINK_GRAPH_JULIA_RERANK_HEALTH_ROUTE_ENV, LINK_GRAPH_JULIA_RERANK_ROUTE_ENV,
-    LINK_GRAPH_JULIA_RERANK_SCHEMA_VERSION_ENV, LINK_GRAPH_JULIA_RERANK_TIMEOUT_SECS_ENV,
-    LINK_GRAPH_SEMANTIC_IGNITION_BACKEND_ENV, LINK_GRAPH_SEMANTIC_IGNITION_EMBEDDING_BASE_URL_ENV,
+    LINK_GRAPH_JULIA_RERANK_SCHEMA_VERSION_ENV, LINK_GRAPH_JULIA_RERANK_SERVICE_MODE_ENV,
+    LINK_GRAPH_JULIA_RERANK_SIMILARITY_WEIGHT_ENV, LINK_GRAPH_JULIA_RERANK_TIMEOUT_SECS_ENV,
+    LINK_GRAPH_JULIA_RERANK_VECTOR_WEIGHT_ENV, LINK_GRAPH_SEMANTIC_IGNITION_BACKEND_ENV,
+    LINK_GRAPH_SEMANTIC_IGNITION_EMBEDDING_BASE_URL_ENV,
     LINK_GRAPH_SEMANTIC_IGNITION_EMBEDDING_MODEL_ENV, LINK_GRAPH_SEMANTIC_IGNITION_TABLE_NAME_ENV,
     LINK_GRAPH_SEMANTIC_IGNITION_VECTOR_STORE_PATH_ENV,
 };
@@ -235,6 +239,41 @@ pub(crate) fn resolve_link_graph_retrieval_policy_runtime() -> LinkGraphRetrieva
     .as_deref()
     .and_then(parse_positive_usize)
     .map(|value| value as u64);
+    resolved.julia_rerank.service_mode = normalize_optional_runtime_string(first_non_empty(&[
+        get_setting_string(&settings, "link_graph.retrieval.julia_rerank.service_mode"),
+        std::env::var(LINK_GRAPH_JULIA_RERANK_SERVICE_MODE_ENV).ok(),
+    ]));
+    resolved.julia_rerank.analyzer_config_path =
+        normalize_optional_runtime_string(first_non_empty(&[
+            get_setting_string(
+                &settings,
+                "link_graph.retrieval.julia_rerank.analyzer_config_path",
+            ),
+            std::env::var(LINK_GRAPH_JULIA_RERANK_ANALYZER_CONFIG_PATH_ENV).ok(),
+        ]));
+    resolved.julia_rerank.analyzer_strategy =
+        normalize_optional_runtime_string(first_non_empty(&[
+            get_setting_string(
+                &settings,
+                "link_graph.retrieval.julia_rerank.analyzer_strategy",
+            ),
+            std::env::var(LINK_GRAPH_JULIA_RERANK_ANALYZER_STRATEGY_ENV).ok(),
+        ]));
+    resolved.julia_rerank.vector_weight = first_non_empty(&[
+        get_setting_string(&settings, "link_graph.retrieval.julia_rerank.vector_weight"),
+        std::env::var(LINK_GRAPH_JULIA_RERANK_VECTOR_WEIGHT_ENV).ok(),
+    ])
+    .as_deref()
+    .and_then(parse_positive_f64);
+    resolved.julia_rerank.similarity_weight = first_non_empty(&[
+        get_setting_string(
+            &settings,
+            "link_graph.retrieval.julia_rerank.similarity_weight",
+        ),
+        std::env::var(LINK_GRAPH_JULIA_RERANK_SIMILARITY_WEIGHT_ENV).ok(),
+    ])
+    .as_deref()
+    .and_then(parse_positive_f64);
 
     resolved
 }

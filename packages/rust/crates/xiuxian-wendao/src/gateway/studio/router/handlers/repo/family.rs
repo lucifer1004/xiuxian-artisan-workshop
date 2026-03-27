@@ -8,9 +8,12 @@ use axum::{
 use crate::analyzers::{
     RepoProjectedPageFamilyClusterQuery, RepoProjectedPageFamilyContextQuery,
     RepoProjectedPageFamilySearchQuery, RepoProjectedPageNavigationQuery,
-    RepoProjectedPageNavigationSearchQuery, build_repo_projected_page_family_cluster,
-    build_repo_projected_page_family_context, build_repo_projected_page_family_search,
-    build_repo_projected_page_navigation, build_repo_projected_page_navigation_search,
+    RepoProjectedPageNavigationSearchQuery,
+};
+use crate::gateway::studio::router::handlers::repo::projected_service::{
+    run_repo_projected_page_family_cluster, run_repo_projected_page_family_context,
+    run_repo_projected_page_family_search, run_repo_projected_page_navigation,
+    run_repo_projected_page_navigation_search,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
@@ -23,7 +26,6 @@ use super::query::{
     RepoProjectedPageFamilySearchApiQuery, RepoProjectedPageNavigationApiQuery,
     RepoProjectedPageNavigationSearchApiQuery,
 };
-use super::shared::with_repo_analysis;
 
 /// Projected page family context endpoint.
 ///
@@ -38,20 +40,12 @@ pub async fn projected_page_family_context(
     let repo_id = required_repo_id(query.repo.as_deref())?;
     let page_id = required_page_id(query.page_id.as_deref())?;
     let per_kind_limit = query.per_kind_limit.unwrap_or(3);
-    let result = with_repo_analysis(
+    let result = run_repo_projected_page_family_context(
         Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGE_FAMILY_CONTEXT_PANIC",
-        "Repo projected page-family context task failed unexpectedly",
-        move |analysis| {
-            build_repo_projected_page_family_context(
-                &RepoProjectedPageFamilyContextQuery {
-                    repo_id,
-                    page_id,
-                    per_kind_limit,
-                },
-                &analysis,
-            )
+        RepoProjectedPageFamilyContextQuery {
+            repo_id,
+            page_id,
+            per_kind_limit,
         },
     )
     .await?;
@@ -74,24 +68,14 @@ pub async fn projected_page_family_search(
     let kind = parse_projection_page_kind(query.kind.as_deref())?;
     let limit = query.limit.unwrap_or(10).max(1);
     let per_kind_limit = query.per_kind_limit.unwrap_or(3);
-    let result = with_repo_analysis(
+    let result = run_repo_projected_page_family_search(
         Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGE_FAMILY_SEARCH_PANIC",
-        "Repo projected page-family search task failed unexpectedly",
-        move |analysis| {
-            Ok::<_, crate::analyzers::RepoIntelligenceError>(
-                build_repo_projected_page_family_search(
-                    &RepoProjectedPageFamilySearchQuery {
-                        repo_id,
-                        query: search_query,
-                        kind,
-                        limit,
-                        per_kind_limit,
-                    },
-                    &analysis,
-                ),
-            )
+        RepoProjectedPageFamilySearchQuery {
+            repo_id,
+            query: search_query,
+            kind,
+            limit,
+            per_kind_limit,
         },
     )
     .await?;
@@ -113,21 +97,13 @@ pub async fn projected_page_family_cluster(
     let page_id = required_page_id(query.page_id.as_deref())?;
     let kind = required_projection_page_kind(query.kind.as_deref())?;
     let limit = query.limit.unwrap_or(3).max(1);
-    let result = with_repo_analysis(
+    let result = run_repo_projected_page_family_cluster(
         Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGE_FAMILY_CLUSTER_PANIC",
-        "Repo projected page-family cluster task failed unexpectedly",
-        move |analysis| {
-            build_repo_projected_page_family_cluster(
-                &RepoProjectedPageFamilyClusterQuery {
-                    repo_id,
-                    page_id,
-                    kind,
-                    limit,
-                },
-                &analysis,
-            )
+        RepoProjectedPageFamilyClusterQuery {
+            repo_id,
+            page_id,
+            kind,
+            limit,
         },
     )
     .await?;
@@ -151,23 +127,15 @@ pub async fn projected_page_navigation(
     let family_kind = parse_projection_page_kind(query.family_kind.as_deref())?;
     let related_limit = query.related_limit.unwrap_or(5);
     let family_limit = query.family_limit.unwrap_or(3).max(1);
-    let result = with_repo_analysis(
+    let result = run_repo_projected_page_navigation(
         Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGE_NAVIGATION_PANIC",
-        "Repo projected page navigation task failed unexpectedly",
-        move |analysis| {
-            build_repo_projected_page_navigation(
-                &RepoProjectedPageNavigationQuery {
-                    repo_id,
-                    page_id,
-                    node_id,
-                    family_kind,
-                    related_limit,
-                    family_limit,
-                },
-                &analysis,
-            )
+        RepoProjectedPageNavigationQuery {
+            repo_id,
+            page_id,
+            node_id,
+            family_kind,
+            related_limit,
+            family_limit,
         },
     )
     .await?;
@@ -193,24 +161,16 @@ pub async fn projected_page_navigation_search(
     let limit = query.limit.unwrap_or(10).max(1);
     let related_limit = query.related_limit.unwrap_or(5);
     let family_limit = query.family_limit.unwrap_or(3).max(1);
-    let result = with_repo_analysis(
+    let result = run_repo_projected_page_navigation_search(
         Arc::clone(&state),
-        repo_id.clone(),
-        "REPO_PROJECTED_PAGE_NAVIGATION_SEARCH_PANIC",
-        "Repo projected page navigation search task failed unexpectedly",
-        move |analysis| {
-            build_repo_projected_page_navigation_search(
-                &RepoProjectedPageNavigationSearchQuery {
-                    repo_id,
-                    query: search_query,
-                    kind,
-                    family_kind,
-                    limit,
-                    related_limit,
-                    family_limit,
-                },
-                &analysis,
-            )
+        RepoProjectedPageNavigationSearchQuery {
+            repo_id,
+            query: search_query,
+            kind,
+            family_kind,
+            limit,
+            related_limit,
+            family_limit,
         },
     )
     .await?;

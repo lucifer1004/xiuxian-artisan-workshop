@@ -13,6 +13,7 @@ use crate::git::checkout::{
 };
 
 /// Ready cached repository analysis plus its stable cache identity.
+#[derive(Clone)]
 pub struct CachedRepositoryAnalysis {
     /// Stable cache identity for the resolved repository snapshot.
     pub cache_key: crate::analyzers::cache::RepositoryAnalysisCacheKey,

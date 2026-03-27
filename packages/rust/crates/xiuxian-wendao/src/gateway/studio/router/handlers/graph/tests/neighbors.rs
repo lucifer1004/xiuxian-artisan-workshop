@@ -91,7 +91,7 @@ async fn graph_neighbors_resolves_relative_markdown_links_from_index_pages() {
 }
 
 #[tokio::test]
-async fn node_neighbors_returns_legacy_payload_shape() {
+async fn node_neighbors_returns_stable_payload_shape() {
     let fixture = build_fixture(&[
         ("alpha.md", "# Alpha\n\nSee [[beta]].\n"),
         ("beta.md", "# Beta\n\nBody.\n"),
@@ -102,7 +102,7 @@ async fn node_neighbors_returns_legacy_payload_shape() {
         AxumPath("kernel/alpha.md".to_string()),
     )
     .await
-    .unwrap_or_else(|error| panic!("legacy node neighbors should succeed: {error:?}"))
+    .unwrap_or_else(|error| panic!("node neighbors should succeed: {error:?}"))
     .0;
 
     assert_eq!(response.node_id, "kernel/alpha.md");

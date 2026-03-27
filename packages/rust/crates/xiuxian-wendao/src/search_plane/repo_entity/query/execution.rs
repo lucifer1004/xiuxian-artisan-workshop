@@ -3,7 +3,8 @@ use std::collections::HashSet;
 use xiuxian_vector::{EngineRecordBatch, SearchEngineContext};
 
 use crate::analyzers::service::{
-    example_match_score, module_match_score, normalized_rank_score, symbol_match_score,
+    example_match_score, import_match_score, module_match_score, normalized_rank_score,
+    symbol_match_score,
 };
 use crate::search_plane::ranking::{
     RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry, trim_ranked_vec,
@@ -12,7 +13,7 @@ use crate::search_plane::repo_entity::query::hydrate::{
     engine_float64_column, engine_string_column,
 };
 use crate::search_plane::repo_entity::query::types::{
-    EXAMPLE_BUCKETS, MIN_RECALL_CANDIDATES, MODULE_BUCKETS, RECALL_TRIM_MULTIPLIER,
+    EXAMPLE_BUCKETS, IMPORT_BUCKETS, MIN_RECALL_CANDIDATES, MODULE_BUCKETS, RECALL_TRIM_MULTIPLIER,
     RepoEntityCandidate, RepoEntityQuery, RepoEntitySearchError, RepoEntitySearchExecution,
     SYMBOL_BUCKETS,
 };
@@ -82,6 +83,8 @@ fn collect_candidates(
             summary_folded.value(row),
             related_symbols_folded.value(row),
             related_modules_folded.value(row),
+            query.import_package_filter,
+            query.import_module_filter,
         ) else {
             continue;
         };
@@ -159,6 +162,7 @@ fn kind_filter_expression(kind_filters: &HashSet<String>) -> Option<String> {
         .map(|value| match value.as_str() {
             "module" => "entity_kind = 'module'".to_string(),
             "example" => "entity_kind = 'example'".to_string(),
+            "import" => "entity_kind = 'import'".to_string(),
             "symbol" => "entity_kind = 'symbol'".to_string(),
             other => format!(
                 "(entity_kind = 'symbol' AND symbol_kind = {})",
@@ -207,6 +211,8 @@ fn candidate_score(
     summary_folded: &str,
     related_symbols_folded: &str,
     related_modules_folded: &str,
+    import_package_filter: Option<&str>,
+    import_module_filter: Option<&str>,
 ) -> Option<f64> {
     match entity_kind {
         "module" => module_match_score(query_lower, qualified_name_folded, path_folded)
@@ -231,6 +237,19 @@ fn candidate_score(
                 related_modules.as_slice(),
             )
             .map(|score| normalized_rank_score(score, EXAMPLE_BUCKETS))
+        }
+        "import" => {
+            let import = crate::analyzers::ImportRecord {
+                repo_id: String::new(),
+                module_id: String::new(),
+                import_name: name_folded.to_string(),
+                target_package: summary_folded.to_string(),
+                source_module: signature_folded.to_string(),
+                kind: crate::analyzers::ImportKind::Symbol,
+                resolved_id: None,
+            };
+            import_match_score(import_package_filter, import_module_filter, &import)
+                .map(|score| normalized_rank_score(score, IMPORT_BUCKETS))
         }
         _ => None,
     }
@@ -265,6 +284,7 @@ fn matches_kind_filters(
         }
         "module" => kind_filters.contains("module"),
         "example" => kind_filters.contains("example"),
+        "import" => kind_filters.contains("import"),
         _ => false,
     }
 }
@@ -274,6 +294,7 @@ fn candidate_kind_priority(entity_kind: &str) -> u8 {
         "symbol" => 3,
         "module" => 2,
         "example" => 1,
+        "import" => 1,
         _ => 0,
     }
 }

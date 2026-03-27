@@ -1,5 +1,6 @@
 //! Repository search functions (overview, module, symbol, example, import, doc coverage).
 mod artifacts;
+mod contracts;
 mod coverage;
 mod documents;
 mod example;
@@ -23,4 +24,8 @@ pub use overview::*;
 pub use symbol::*;
 
 pub(crate) use artifacts::repository_search_artifacts;
+pub(crate) use contracts::{
+    RepoAnalysisFallbackContract, canonical_import_query_text, example_fallback_contract,
+    import_fallback_contract, module_fallback_contract, symbol_fallback_contract,
+};
 pub(crate) use documents::ExampleSearchMetadata;

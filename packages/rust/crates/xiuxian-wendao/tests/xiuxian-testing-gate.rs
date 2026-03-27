@@ -43,6 +43,14 @@ mod planned_search_julia_rerank_official_example;
 mod planned_search_julia_rerank_metadata_example;
 
 #[cfg(not(feature = "performance"))]
+#[path = "integration/planned_search_wendaoanalyzer_linear_blend.rs"]
+mod planned_search_wendaoanalyzer_linear_blend;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/planned_search_wendaoanalyzer_similarity_only.rs"]
+mod planned_search_wendaoanalyzer_similarity_only;
+
+#[cfg(not(feature = "performance"))]
 #[path = "integration/ppr_weight_precision.rs"]
 mod ppr_weight_precision;
 
