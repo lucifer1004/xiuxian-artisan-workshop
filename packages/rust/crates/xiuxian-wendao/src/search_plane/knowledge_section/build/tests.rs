@@ -165,6 +165,17 @@ async fn knowledge_section_incremental_refresh_reuses_unchanged_rows() {
         .await
         .unwrap_or_else(|error| panic!("query alpha after refresh: {error}"));
     assert!(alpha.is_empty());
+    let active_epoch = service
+        .coordinator()
+        .status_for(SearchCorpusKind::KnowledgeSection)
+        .active_epoch
+        .unwrap_or_else(|| panic!("knowledge section active epoch"));
+    assert!(
+        service
+            .local_epoch_parquet_path(SearchCorpusKind::KnowledgeSection, active_epoch)
+            .exists(),
+        "missing knowledge section parquet export"
+    );
 }
 
 async fn wait_for_knowledge_section_ready(

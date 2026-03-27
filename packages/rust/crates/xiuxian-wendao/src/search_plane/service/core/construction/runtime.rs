@@ -65,6 +65,7 @@ impl SearchPlaneService {
             storage_root,
             manifest_keyspace,
             coordinator,
+            search_engine: xiuxian_vector::SearchEngineContext::new(),
             cache,
             repo_search_read_concurrency_limit,
             repo_search_read_permits: Arc::new(Semaphore::new(repo_search_read_concurrency_limit)),
@@ -123,6 +124,12 @@ impl SearchPlaneService {
     #[must_use]
     pub fn coordinator(&self) -> Arc<SearchPlaneCoordinator> {
         Arc::clone(&self.coordinator)
+    }
+
+    /// Shared DataFusion search-engine context for Parquet-backed search-plane reads.
+    #[must_use]
+    pub(crate) fn search_engine(&self) -> &xiuxian_vector::SearchEngineContext {
+        &self.search_engine
     }
 
     /// Open the Lance-backed store for one search corpus.

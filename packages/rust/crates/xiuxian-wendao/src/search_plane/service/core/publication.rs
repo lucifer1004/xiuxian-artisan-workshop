@@ -1,14 +1,63 @@
 use std::collections::HashSet;
 
-use xiuxian_vector::TableInfo;
-
 use super::types::SearchPlaneService;
 use crate::search_plane::{
-    SearchCorpusKind, SearchRepoCorpusRecord, SearchRepoPublicationInput,
-    SearchRepoPublicationRecord,
+    SearchCorpusKind, SearchPublicationStorageFormat, SearchRepoCorpusRecord,
+    SearchRepoPublicationInput, SearchRepoPublicationRecord,
 };
 
 impl SearchPlaneService {
+    pub(crate) async fn record_repo_publication_input_with_storage_format(
+        &self,
+        corpus: SearchCorpusKind,
+        repo_id: &str,
+        input: SearchRepoPublicationInput,
+        storage_format: SearchPublicationStorageFormat,
+    ) {
+        let previous_record = self
+            .repo_corpus_records
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&(corpus, repo_id.to_string()))
+            .cloned();
+        let mut maintenance =
+            self.next_repo_publication_maintenance(previous_record.as_ref(), input.row_count);
+        if matches!(storage_format, SearchPublicationStorageFormat::Parquet) {
+            maintenance.compaction_pending = false;
+            maintenance.compaction_running = false;
+            maintenance.publish_count_since_compaction = 0;
+        }
+        let record = match storage_format {
+            SearchPublicationStorageFormat::Lance => {
+                SearchRepoPublicationRecord::new(corpus, repo_id, input)
+            }
+            SearchPublicationStorageFormat::Parquet => {
+                SearchRepoPublicationRecord::new_with_storage_format(
+                    corpus,
+                    repo_id,
+                    input,
+                    SearchPublicationStorageFormat::Parquet,
+                )
+            }
+        };
+        let runtime = self
+            .repo_runtime_state(repo_id)
+            .map(|state| Self::runtime_record_from_state(repo_id, &state));
+        let corpus_record =
+            SearchRepoCorpusRecord::new(corpus, repo_id.to_string(), runtime, Some(record))
+                .with_maintenance(Some(maintenance));
+        self.repo_corpus_records
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert((corpus, repo_id.to_string()), corpus_record.clone());
+        self.cache.set_repo_corpus_record(&corpus_record).await;
+        self.cache
+            .set_repo_corpus_snapshot(&self.current_repo_corpus_snapshot_record())
+            .await;
+        self.schedule_repo_compaction_if_needed(&corpus_record)
+            .await;
+    }
+
     pub(crate) async fn publish_repo_content_chunks_with_revision(
         &self,
         repo_id: &str,
@@ -59,53 +108,6 @@ impl SearchPlaneService {
             source_revision,
         )
         .await
-    }
-
-    pub(crate) async fn record_repo_publication(
-        &self,
-        corpus: SearchCorpusKind,
-        repo_id: &str,
-        table_name: &str,
-        source_revision: Option<&str>,
-        table_info: &TableInfo,
-    ) {
-        let previous_record = self
-            .repo_corpus_records
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&(corpus, repo_id.to_string()))
-            .cloned();
-        let maintenance =
-            self.next_repo_publication_maintenance(previous_record.as_ref(), table_info.num_rows);
-        let record = SearchRepoPublicationRecord::new(
-            corpus,
-            repo_id,
-            SearchRepoPublicationInput {
-                table_name: table_name.to_string(),
-                schema_version: corpus.schema_version(),
-                source_revision: source_revision.map(str::to_string),
-                table_version_id: table_info.version_id,
-                row_count: table_info.num_rows,
-                fragment_count: u64::try_from(table_info.fragment_count).unwrap_or(u64::MAX),
-                published_at: table_info.commit_timestamp.clone(),
-            },
-        );
-        let runtime = self
-            .repo_runtime_state(repo_id)
-            .map(|state| Self::runtime_record_from_state(repo_id, &state));
-        let corpus_record =
-            SearchRepoCorpusRecord::new(corpus, repo_id.to_string(), runtime, Some(record))
-                .with_maintenance(Some(maintenance));
-        self.repo_corpus_records
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert((corpus, repo_id.to_string()), corpus_record.clone());
-        self.cache.set_repo_corpus_record(&corpus_record).await;
-        self.cache
-            .set_repo_corpus_snapshot(&self.current_repo_corpus_snapshot_record())
-            .await;
-        self.schedule_repo_compaction_if_needed(&corpus_record)
-            .await;
     }
 
     pub(crate) fn clear_repo_publications(&self, repo_id: &str) {

@@ -18,6 +18,10 @@ const MAX_SEARCH_LIMIT: usize = 200;
 pub struct WendaoSearchArgs {
     /// User search query text.
     query: String,
+    /// Optional precomputed query embedding used by semantic ignition and
+    /// Julia rerank when the caller already owns the vectorization step.
+    #[serde(default)]
+    query_vector: Option<Vec<f32>>,
     /// Maximum number of hits to return.
     #[serde(default)]
     limit: Option<usize>,
@@ -68,13 +72,24 @@ pub fn wendao_search(ctx: &ZhenfaContext, args: WendaoSearchArgs) -> Result<Stri
     let limit = normalize_limit(args.limit);
 
     // First-pass search
-    let payload = index.search_planned_payload_with_agentic(
-        query,
-        limit,
-        options.clone(),
-        args.include_provisional,
-        args.provisional_limit,
-    );
+    let payload = if let Some(query_vector) = args.query_vector.as_deref() {
+        index.search_planned_payload_with_agentic_query_vector(
+            query,
+            query_vector,
+            limit,
+            options.clone(),
+            args.include_provisional,
+            args.provisional_limit,
+        )
+    } else {
+        index.search_planned_payload_with_agentic(
+            query,
+            limit,
+            options.clone(),
+            args.include_provisional,
+            args.provisional_limit,
+        )
+    };
 
     // Apply CCS audit and compensation loop if anchors provided
     if let Some(anchors) = args.anchors

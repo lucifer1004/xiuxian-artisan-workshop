@@ -120,8 +120,9 @@ fn batch_from_hits(hits: &[AstSearchHit]) -> Result<LanceRecordBatch, VectorStor
     .map_err(VectorStoreError::Arrow)
 }
 
-pub(super) const fn projected_columns() -> [&'static str; 6] {
+pub(super) const fn projected_columns() -> [&'static str; 7] {
     [
+        COLUMN_ID,
         COLUMN_NAME,
         COLUMN_NAME_FOLDED,
         COLUMN_SIGNATURE,
@@ -142,6 +143,10 @@ pub(super) const fn suggestion_columns() -> [&'static str; 4] {
 
 pub(super) const fn hit_json_column() -> &'static str {
     COLUMN_HIT_JSON
+}
+
+pub(super) const fn id_column() -> &'static str {
+    COLUMN_ID
 }
 
 pub(super) const fn path_column() -> &'static str {

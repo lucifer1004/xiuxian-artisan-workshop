@@ -1,11 +1,8 @@
-use xiuxian_vector::ColumnarScanOptions;
-
 use crate::gateway::studio::types::AutocompleteSuggestion;
 use crate::search_plane::local_symbol::query::shared::{
     LocalSymbolSearchError, compare_suggestions, execute_local_symbol_autocomplete,
     suggestion_window,
 };
-use crate::search_plane::local_symbol::schema::suggestion_columns;
 use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
 
 pub(crate) async fn autocomplete_local_symbols(
@@ -25,25 +22,26 @@ pub(crate) async fn autocomplete_local_symbols(
         return Ok(Vec::new());
     }
 
-    let store = service.open_store(SearchCorpusKind::LocalSymbol).await?;
     let table_names =
         service.local_epoch_table_names_for_reads(SearchCorpusKind::LocalSymbol, active_epoch);
     if table_names.is_empty() {
         return Ok(Vec::new());
     }
+    for table_name in &table_names {
+        let parquet_path =
+            service.local_table_parquet_path(SearchCorpusKind::LocalSymbol, table_name.as_str());
+        if !parquet_path.exists() {
+            return Err(LocalSymbolSearchError::NotReady);
+        }
+        service
+            .search_engine()
+            .ensure_parquet_table_registered(table_name.as_str(), parquet_path.as_path(), &[])
+            .await?;
+    }
     let execution = execute_local_symbol_autocomplete(
-        &store,
+        service.search_engine(),
         table_names.as_slice(),
         normalized_prefix.as_str(),
-        ColumnarScanOptions {
-            projected_columns: suggestion_columns()
-                .into_iter()
-                .map(str::to_string)
-                .collect(),
-            batch_size: Some(256),
-            limit: Some(limit.saturating_mul(64).max(256)),
-            ..ColumnarScanOptions::default()
-        },
         suggestion_window(limit),
     )
     .await?;

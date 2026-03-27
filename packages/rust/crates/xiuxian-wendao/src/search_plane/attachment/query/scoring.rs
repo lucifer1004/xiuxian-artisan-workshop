@@ -89,12 +89,6 @@ pub(crate) fn candidate_score(
     (exact_name * 0.5 + path_hit * 0.3 + token_ratio * 0.2).clamp(0.0, 1.0)
 }
 
-pub(crate) fn should_use_fts(query: &str) -> bool {
-    query
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() || ch == '_' || ch == '-')
-}
-
 pub(crate) fn usize_to_f64_saturating(value: usize) -> f64 {
     u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
 }

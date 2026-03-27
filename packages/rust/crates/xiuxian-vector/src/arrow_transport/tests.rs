@@ -13,7 +13,9 @@ use std::sync::Arc as StdArc;
 use tokio::net::TcpListener;
 
 use super::client::ArrowTransportClient;
-use super::config::{ARROW_TRANSPORT_CONTENT_TYPE, ArrowTransportConfig};
+use super::config::{
+    ARROW_TRANSPORT_CONTENT_TYPE, ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION, ArrowTransportConfig,
+};
 use super::error::ArrowTransportError;
 use super::{decode_record_batches_ipc, encode_record_batches_ipc};
 
@@ -52,7 +54,18 @@ fn transport_config_loads_from_toml_section() {
 
 #[tokio::test]
 async fn transport_client_checks_health_endpoint() {
-    let app = Router::new().route("/health", get(|| async { r#"{"status":"ok"}"# }));
+    let app = Router::new().route(
+        "/health",
+        get(|| async {
+            (
+                [(
+                    "x-wendao-schema-version",
+                    ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION,
+                )],
+                r#"{"status":"ok"}"#,
+            )
+        }),
+    );
     let base_url = spawn_test_server(app).await;
     let client = build_test_client(ArrowTransportConfig::new(base_url));
 
@@ -61,16 +74,42 @@ async fn transport_client_checks_health_endpoint() {
 }
 
 #[tokio::test]
+async fn transport_client_rejects_missing_health_schema_version() {
+    let app = Router::new().route("/health", get(|| async { r#"{"status":"ok"}"# }));
+    let base_url = spawn_test_server(app).await;
+    let client = build_test_client(ArrowTransportConfig::new(base_url));
+
+    let error = match client.check_health().await {
+        Ok(_) => panic!("expected missing health schema header to fail"),
+        Err(error) => error,
+    };
+    match error {
+        ArrowTransportError::UnexpectedSchemaVersion { expected, found } => {
+            assert_eq!(expected, ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION);
+            assert_eq!(found, "<missing>");
+        }
+        other => panic!("unexpected error variant: {other}"),
+    }
+}
+
+#[tokio::test]
 async fn transport_client_roundtrips_arrow_batches() {
     let observed_content_type = Arc::new(Mutex::new(None::<String>));
+    let observed_schema_version = Arc::new(Mutex::new(None::<String>));
     let app = Router::new()
         .route("/health", get(|| async { r#"{"status":"ok"}"# }))
         .route(
             "/arrow-ipc",
             post({
                 let observed_content_type = observed_content_type.clone();
+                let observed_schema_version = observed_schema_version.clone();
                 move |headers: HeaderMap, body: Bytes| {
-                    process_arrow_request(observed_content_type.clone(), headers, body)
+                    process_arrow_request(
+                        observed_content_type.clone(),
+                        observed_schema_version.clone(),
+                        headers,
+                        body,
+                    )
                 }
             }),
         );
@@ -86,11 +125,97 @@ async fn transport_client_roundtrips_arrow_batches() {
         Ok(guard) => guard.clone(),
         Err(error) => panic!("failed to inspect observed content-type: {error}"),
     };
+    let schema_version = match observed_schema_version.lock() {
+        Ok(guard) => guard.clone(),
+        Err(error) => panic!("failed to inspect observed schema version: {error}"),
+    };
 
     assert_eq!(content_type.as_deref(), Some(ARROW_TRANSPORT_CONTENT_TYPE));
+    assert_eq!(
+        schema_version.as_deref(),
+        Some(ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION)
+    );
     assert_eq!(response_batches.len(), 1);
     assert_string_column_eq(&request_batch, &response_batches[0], "doc_id");
     assert_float_column_eq(&request_batch, &response_batches[0], "score");
+}
+
+#[tokio::test]
+async fn transport_client_rejects_mismatched_schema_version() {
+    let app = Router::new()
+        .route("/health", get(|| async { r#"{"status":"ok"}"# }))
+        .route(
+            "/arrow-ipc",
+            post(|| async {
+                let payload = encode_record_batches_ipc(&[sample_batch()]).expect("encode sample");
+                let mut response = payload.into_response();
+                response.headers_mut().insert(
+                    CONTENT_TYPE,
+                    HeaderValue::from_static(ARROW_TRANSPORT_CONTENT_TYPE),
+                );
+                response
+                    .headers_mut()
+                    .insert("x-wendao-schema-version", HeaderValue::from_static("v2"));
+                response
+            }),
+        );
+    let base_url = spawn_test_server(app).await;
+    let client = build_test_client(ArrowTransportConfig::new(base_url));
+
+    let error = match client.process_batch(&sample_batch()).await {
+        Ok(_) => panic!("expected schema version mismatch to fail"),
+        Err(error) => error,
+    };
+    match error {
+        ArrowTransportError::UnexpectedSchemaVersion { expected, found } => {
+            assert_eq!(expected, ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION);
+            assert_eq!(found, "v2");
+        }
+        other => panic!("unexpected error variant: {other}"),
+    }
+}
+
+#[tokio::test]
+async fn transport_client_rejects_missing_response_schema_version() {
+    let app = Router::new()
+        .route(
+            "/health",
+            get(|| async {
+                (
+                    [(
+                        "x-wendao-schema-version",
+                        ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION,
+                    )],
+                    r#"{"status":"ok"}"#,
+                )
+            }),
+        )
+        .route(
+            "/arrow-ipc",
+            post(|| async {
+                let payload = encode_record_batches_ipc(&[sample_batch()]).expect("encode sample");
+                let mut response = payload.into_response();
+                response.headers_mut().insert(
+                    CONTENT_TYPE,
+                    HeaderValue::from_static(ARROW_TRANSPORT_CONTENT_TYPE),
+                );
+                response
+            }),
+        );
+    let base_url = spawn_test_server(app).await;
+    let client = build_test_client(ArrowTransportConfig::new(base_url));
+
+    let error = match client.process_batch(&sample_batch()).await {
+        Ok(_) => panic!("expected missing schema version header to fail"),
+        Err(error) => error,
+    };
+    match error {
+        ArrowTransportError::UnexpectedSchemaVersion { expected, found } => {
+            assert_eq!(expected, ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION);
+            assert_eq!(found, "<missing>");
+        }
+        other => panic!("unexpected error variant: {other}"),
+    }
 }
 
 #[tokio::test]
@@ -155,6 +280,7 @@ fn build_test_client(config: ArrowTransportConfig) -> ArrowTransportClient {
 
 async fn process_arrow_request(
     observed_content_type: Arc<Mutex<Option<String>>>,
+    observed_schema_version: Arc<Mutex<Option<String>>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
@@ -167,6 +293,16 @@ async fn process_arrow_request(
             *guard = content_type;
         }
         Err(error) => panic!("failed to lock observed content-type: {error}"),
+    }
+    let schema_version = headers
+        .get("x-wendao-schema-version")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+    match observed_schema_version.lock() {
+        Ok(mut guard) => {
+            *guard = schema_version;
+        }
+        Err(error) => panic!("failed to lock observed schema version: {error}"),
     }
 
     let batches = match decode_record_batches_ipc(body.as_ref()) {
@@ -194,6 +330,10 @@ async fn process_arrow_request(
     response.headers_mut().insert(
         CONTENT_TYPE,
         HeaderValue::from_static(ARROW_TRANSPORT_CONTENT_TYPE),
+    );
+    response.headers_mut().insert(
+        "x-wendao-schema-version",
+        HeaderValue::from_static(ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION),
     );
     response
 }

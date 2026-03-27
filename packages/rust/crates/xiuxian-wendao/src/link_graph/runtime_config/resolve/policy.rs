@@ -3,8 +3,10 @@ use crate::link_graph::runtime_config::constants::{
     LINK_GRAPH_COACTIVATION_HOP_DECAY_SCALE_ENV, LINK_GRAPH_COACTIVATION_MAX_HOPS_ENV,
     LINK_GRAPH_COACTIVATION_MAX_NEIGHBORS_PER_DIRECTION_ENV,
     LINK_GRAPH_COACTIVATION_MAX_TOTAL_PROPAGATIONS_ENV,
-    LINK_GRAPH_COACTIVATION_TOUCH_QUEUE_DEPTH_ENV, LINK_GRAPH_SEMANTIC_IGNITION_BACKEND_ENV,
-    LINK_GRAPH_SEMANTIC_IGNITION_EMBEDDING_BASE_URL_ENV,
+    LINK_GRAPH_COACTIVATION_TOUCH_QUEUE_DEPTH_ENV, LINK_GRAPH_JULIA_RERANK_BASE_URL_ENV,
+    LINK_GRAPH_JULIA_RERANK_HEALTH_ROUTE_ENV, LINK_GRAPH_JULIA_RERANK_ROUTE_ENV,
+    LINK_GRAPH_JULIA_RERANK_SCHEMA_VERSION_ENV, LINK_GRAPH_JULIA_RERANK_TIMEOUT_SECS_ENV,
+    LINK_GRAPH_SEMANTIC_IGNITION_BACKEND_ENV, LINK_GRAPH_SEMANTIC_IGNITION_EMBEDDING_BASE_URL_ENV,
     LINK_GRAPH_SEMANTIC_IGNITION_EMBEDDING_MODEL_ENV, LINK_GRAPH_SEMANTIC_IGNITION_TABLE_NAME_ENV,
     LINK_GRAPH_SEMANTIC_IGNITION_VECTOR_STORE_PATH_ENV,
 };
@@ -206,6 +208,33 @@ pub(crate) fn resolve_link_graph_retrieval_policy_runtime() -> LinkGraphRetrieva
             ),
             std::env::var(LINK_GRAPH_SEMANTIC_IGNITION_EMBEDDING_MODEL_ENV).ok(),
         ]));
+
+    resolved.julia_rerank.base_url = normalize_optional_runtime_string(first_non_empty(&[
+        get_setting_string(&settings, "link_graph.retrieval.julia_rerank.base_url"),
+        std::env::var(LINK_GRAPH_JULIA_RERANK_BASE_URL_ENV).ok(),
+    ]));
+    resolved.julia_rerank.route = normalize_optional_runtime_string(first_non_empty(&[
+        get_setting_string(&settings, "link_graph.retrieval.julia_rerank.route"),
+        std::env::var(LINK_GRAPH_JULIA_RERANK_ROUTE_ENV).ok(),
+    ]));
+    resolved.julia_rerank.health_route = normalize_optional_runtime_string(first_non_empty(&[
+        get_setting_string(&settings, "link_graph.retrieval.julia_rerank.health_route"),
+        std::env::var(LINK_GRAPH_JULIA_RERANK_HEALTH_ROUTE_ENV).ok(),
+    ]));
+    resolved.julia_rerank.schema_version = normalize_optional_runtime_string(first_non_empty(&[
+        get_setting_string(
+            &settings,
+            "link_graph.retrieval.julia_rerank.schema_version",
+        ),
+        std::env::var(LINK_GRAPH_JULIA_RERANK_SCHEMA_VERSION_ENV).ok(),
+    ]));
+    resolved.julia_rerank.timeout_secs = first_non_empty(&[
+        get_setting_string(&settings, "link_graph.retrieval.julia_rerank.timeout_secs"),
+        std::env::var(LINK_GRAPH_JULIA_RERANK_TIMEOUT_SECS_ENV).ok(),
+    ])
+    .as_deref()
+    .and_then(parse_positive_usize)
+    .map(|value| value as u64);
 
     resolved
 }

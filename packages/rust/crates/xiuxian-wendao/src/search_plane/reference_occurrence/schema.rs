@@ -90,11 +90,11 @@ fn batch_from_hits(hits: &[ReferenceSearchHit]) -> Result<LanceRecordBatch, Vect
 
 pub(super) const fn projected_columns() -> [&'static str; 5] {
     [
+        COLUMN_ID,
         COLUMN_PATH,
         COLUMN_LINE,
         COLUMN_COLUMN,
         COLUMN_LINE_TEXT,
-        COLUMN_HIT_JSON,
     ]
 }
 
@@ -104,4 +104,12 @@ pub(super) const fn filter_column() -> &'static str {
 
 pub(super) const fn path_column() -> &'static str {
     COLUMN_PATH
+}
+
+pub(super) const fn id_column() -> &'static str {
+    COLUMN_ID
+}
+
+pub(super) const fn hit_json_column() -> &'static str {
+    COLUMN_HIT_JSON
 }

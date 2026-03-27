@@ -2,12 +2,12 @@ use crate::search_plane::knowledge_section::build::types::{
     KnowledgeSectionBuildPlan, KnowledgeSectionWriteResult,
 };
 use crate::search_plane::knowledge_section::schema::{
-    knowledge_section_batches, knowledge_section_schema, path_column, search_text_column,
+    knowledge_section_batches, knowledge_section_schema, path_column,
 };
 use crate::search_plane::{
     SearchBuildLease, SearchCorpusKind, SearchPlaneService, delete_paths_from_table,
 };
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector::{ColumnarScanOptions, VectorStoreError};
 
 #[cfg(test)]
 use crate::gateway::studio::types::UiProjectConfig;
@@ -64,14 +64,30 @@ pub(super) async fn write_knowledge_section_epoch(
             .replace_record_batches(table_name.as_str(), schema.clone(), changed_batches)
             .await?;
     }
-    store
-        .create_inverted_index(table_name.as_str(), search_text_column(), None)
-        .await?;
+    export_knowledge_section_epoch_parquet(service, lease.epoch).await?;
     let table_info = store.get_table_info(table_name.as_str()).await?;
     Ok(KnowledgeSectionWriteResult {
         row_count: table_info.num_rows,
         fragment_count: u64::try_from(table_info.fragment_count).unwrap_or(u64::MAX),
     })
+}
+
+pub(super) async fn export_knowledge_section_epoch_parquet(
+    service: &SearchPlaneService,
+    epoch: u64,
+) -> Result<(), VectorStoreError> {
+    let store = service
+        .open_store(SearchCorpusKind::KnowledgeSection)
+        .await?;
+    let table_name = SearchPlaneService::table_name(SearchCorpusKind::KnowledgeSection, epoch);
+    let parquet_path = service.local_epoch_parquet_path(SearchCorpusKind::KnowledgeSection, epoch);
+    store
+        .write_vector_store_table_to_parquet_file(
+            table_name.as_str(),
+            parquet_path.as_path(),
+            ColumnarScanOptions::default(),
+        )
+        .await
 }
 
 #[cfg(test)]

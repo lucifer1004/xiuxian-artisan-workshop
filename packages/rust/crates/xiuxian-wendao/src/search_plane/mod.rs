@@ -10,6 +10,7 @@ mod ranking;
 mod reference_occurrence;
 mod repo_content_chunk;
 mod repo_entity;
+mod repo_publication_parquet;
 mod repo_staging;
 mod service;
 mod staged_mutation;
@@ -23,8 +24,9 @@ pub(crate) use knowledge_section::KnowledgeSectionSearchError;
 pub(crate) use local_symbol::LocalSymbolSearchError;
 pub(crate) use manifest::SearchRepoPublicationInput;
 pub use manifest::{
-    SearchFileFingerprint, SearchManifestKeyspace, SearchManifestRecord, SearchRepoCorpusRecord,
-    SearchRepoCorpusSnapshotRecord, SearchRepoPublicationRecord, SearchRepoRuntimeRecord,
+    SearchFileFingerprint, SearchManifestKeyspace, SearchManifestRecord,
+    SearchPublicationStorageFormat, SearchRepoCorpusRecord, SearchRepoCorpusSnapshotRecord,
+    SearchRepoPublicationRecord, SearchRepoRuntimeRecord,
 };
 #[allow(unused_imports)]
 pub(crate) use project_fingerprint::{

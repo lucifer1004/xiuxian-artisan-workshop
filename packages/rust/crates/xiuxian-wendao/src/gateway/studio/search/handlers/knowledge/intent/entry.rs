@@ -57,6 +57,37 @@ pub async fn search_intent(
     Ok(Json(response))
 }
 
+pub(crate) async fn load_intent_search_response(
+    studio: &StudioState,
+    query: SearchQuery,
+) -> Result<SearchResponse, StudioApiError> {
+    let raw_query = query.q.unwrap_or_default();
+    let query_text = raw_query.trim();
+    let intent = query.intent.clone().unwrap_or_default();
+    let limit = query.limit.unwrap_or(10).max(1);
+
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Intent search requires a non-empty query",
+        ));
+    }
+
+    if intent == "code_search" {
+        return build_code_search_response(studio, raw_query, query.repo.as_deref(), limit).await;
+    }
+
+    build_intent_search_response(
+        studio,
+        raw_query.as_str(),
+        query_text,
+        query.repo.as_deref(),
+        limit,
+        (!intent.is_empty()).then_some(intent),
+    )
+    .await
+}
+
 pub async fn build_intent_search_response(
     studio: &StudioState,
     raw_query: &str,

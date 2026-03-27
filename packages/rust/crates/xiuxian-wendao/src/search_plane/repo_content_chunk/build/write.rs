@@ -1,31 +1,33 @@
 use std::collections::BTreeSet;
 
-use xiuxian_vector::{ScalarIndexType, VectorStore, VectorStoreError};
+use xiuxian_vector::VectorStoreError;
 
 use crate::gateway::studio::repo_index::RepoCodeDocument;
 use crate::search_plane::repo_content_chunk::schema::{
-    language_column, path_column, repo_content_chunk_batches, repo_content_chunk_schema,
-    rows_from_documents, search_text_column,
+    path_column, repo_content_chunk_batches, rows_from_documents,
 };
-use crate::search_plane::{SearchCorpusKind, SearchPlaneService, delete_paths_from_table};
+use crate::search_plane::repo_publication_parquet::{
+    ParquetPublicationStats, inspect_repo_publication_parquet, rewrite_repo_publication_parquet,
+};
+use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
 
 pub(crate) async fn write_replaced_table(
     service: &SearchPlaneService,
     table_name: &str,
     documents: &[RepoCodeDocument],
-) -> Result<(), VectorStoreError> {
-    let store = service
-        .open_store(SearchCorpusKind::RepoContentChunk)
-        .await?;
+) -> Result<ParquetPublicationStats, VectorStoreError> {
     let rows = rows_from_documents(documents);
-    store
-        .replace_record_batches(
-            table_name,
-            repo_content_chunk_schema(),
-            repo_content_chunk_batches(&rows)?,
-        )
-        .await?;
-    ensure_repo_content_indexes(&store, table_name).await
+    let changed_batches = repo_content_chunk_batches(&rows)?;
+    rewrite_repo_publication_parquet(
+        service,
+        SearchCorpusKind::RepoContentChunk,
+        None,
+        table_name,
+        path_column(),
+        &BTreeSet::new(),
+        changed_batches.as_slice(),
+    )
+    .await
 }
 
 pub(crate) async fn write_mutated_table(
@@ -34,39 +36,24 @@ pub(crate) async fn write_mutated_table(
     target_table_name: &str,
     replaced_paths: &BTreeSet<String>,
     changed_documents: &[RepoCodeDocument],
-) -> Result<(), VectorStoreError> {
-    let store = service
-        .open_store(SearchCorpusKind::RepoContentChunk)
-        .await?;
-    let schema = repo_content_chunk_schema();
+) -> Result<ParquetPublicationStats, VectorStoreError> {
     let changed_rows = rows_from_documents(changed_documents);
     let changed_batches = repo_content_chunk_batches(&changed_rows)?;
-    store
-        .clone_table(base_table_name, target_table_name, true)
-        .await?;
-    delete_paths_from_table(&store, target_table_name, path_column(), replaced_paths).await?;
-    if !changed_batches.is_empty() {
-        store
-            .merge_insert_record_batches(
-                target_table_name,
-                schema,
-                changed_batches,
-                &["id".to_string()],
-            )
-            .await?;
-    }
-    ensure_repo_content_indexes(&store, target_table_name).await
+    rewrite_repo_publication_parquet(
+        service,
+        SearchCorpusKind::RepoContentChunk,
+        Some(base_table_name),
+        target_table_name,
+        path_column(),
+        replaced_paths,
+        changed_batches.as_slice(),
+    )
+    .await
 }
 
-async fn ensure_repo_content_indexes(
-    store: &VectorStore,
+pub(crate) async fn inspect_repo_content_chunk_parquet(
+    service: &SearchPlaneService,
     table_name: &str,
-) -> Result<(), VectorStoreError> {
-    store
-        .create_inverted_index(table_name, search_text_column(), None)
-        .await?;
-    store
-        .create_column_scalar_index(table_name, language_column(), None, ScalarIndexType::Bitmap)
-        .await?;
-    Ok(())
+) -> Result<ParquetPublicationStats, VectorStoreError> {
+    inspect_repo_publication_parquet(service, SearchCorpusKind::RepoContentChunk, table_name).await
 }

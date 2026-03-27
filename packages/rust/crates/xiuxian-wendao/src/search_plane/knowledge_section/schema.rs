@@ -88,19 +88,23 @@ fn batch_from_hits(rows: &[KnowledgeSectionRow]) -> Result<LanceRecordBatch, Vec
 
 pub(super) const fn projected_columns() -> [&'static str; 6] {
     [
+        COLUMN_ID,
         COLUMN_PATH,
         COLUMN_STEM,
         COLUMN_TITLE,
         COLUMN_BEST_SECTION,
         COLUMN_SEARCH_TEXT_FOLDED,
-        COLUMN_HIT_JSON,
     ]
-}
-
-pub(super) const fn search_text_column() -> &'static str {
-    COLUMN_SEARCH_TEXT
 }
 
 pub(super) const fn path_column() -> &'static str {
     COLUMN_PATH
+}
+
+pub(super) const fn id_column() -> &'static str {
+    COLUMN_ID
+}
+
+pub(super) const fn hit_json_column() -> &'static str {
+    COLUMN_HIT_JSON
 }

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use xiuxian_vector::{ColumnarScanOptions, LanceRecordBatch, VectorStore, VectorStoreError};
+use xiuxian_vector::{EngineRecordBatch, SearchEngineContext};
 
 use crate::analyzers::service::{
     example_match_score, module_match_score, normalized_rank_score, symbol_match_score,
@@ -8,100 +8,58 @@ use crate::analyzers::service::{
 use crate::search_plane::ranking::{
     RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry, trim_ranked_vec,
 };
-use crate::search_plane::repo_entity::query::hydrate::{float64_column, string_column};
+use crate::search_plane::repo_entity::query::hydrate::{
+    engine_float64_column, engine_string_column,
+};
 use crate::search_plane::repo_entity::query::types::{
     EXAMPLE_BUCKETS, MIN_RECALL_CANDIDATES, MODULE_BUCKETS, RECALL_TRIM_MULTIPLIER,
     RepoEntityCandidate, RepoEntityQuery, RepoEntitySearchError, RepoEntitySearchExecution,
     SYMBOL_BUCKETS,
 };
+use crate::search_plane::repo_entity::schema::projected_columns;
 
 pub(crate) async fn execute_repo_entity_search(
-    store: &VectorStore,
+    engine: &SearchEngineContext,
     table_name: &str,
-    options: ColumnarScanOptions,
     query: &RepoEntityQuery<'_>,
 ) -> Result<RepoEntitySearchExecution, RepoEntitySearchError> {
-    let fts_eligible = should_use_fts(query.query_text);
-    let mut telemetry =
-        StreamingRerankTelemetry::new(query.window, options.batch_size, options.limit);
+    let sql = build_repo_entity_stage1_sql(table_name, query.language_filters, query.kind_filters);
+    let batches = engine.sql_batches(sql.as_str()).await?;
+    let mut telemetry = StreamingRerankTelemetry::new(query.window, None, None);
     let mut candidates = Vec::with_capacity(query.window.target);
-    let mut saw_fts_batch = false;
-    let mut fell_back_to_scan = false;
 
-    if fts_eligible {
-        match store
-            .search_fts_batches_streaming(table_name, query.query_text, options.clone(), |batch| {
-                saw_fts_batch = true;
-                collect_candidates(&batch, query, &mut candidates, &mut telemetry)
-            })
-            .await
-        {
-            Ok(()) if saw_fts_batch => {}
-            Ok(()) => {
-                fell_back_to_scan = true;
-                candidates.clear();
-                store
-                    .scan_record_batches_streaming(table_name, options, |batch| {
-                        collect_candidates(&batch, query, &mut candidates, &mut telemetry)
-                    })
-                    .await?;
-            }
-            Err(error)
-                if matches!(
-                    error,
-                    RepoEntitySearchError::Storage(VectorStoreError::LanceDB(_))
-                ) || fts_batch_missing_projected_columns(&error) =>
-            {
-                fell_back_to_scan = true;
-                candidates.clear();
-                store
-                    .scan_record_batches_streaming(table_name, options, |batch| {
-                        collect_candidates(&batch, query, &mut candidates, &mut telemetry)
-                    })
-                    .await?;
-            }
-            Err(error) => return Err(error),
-        }
-    } else {
-        store
-            .scan_record_batches_streaming(table_name, options, |batch| {
-                collect_candidates(&batch, query, &mut candidates, &mut telemetry)
-            })
-            .await?;
+    for batch in batches {
+        collect_candidates(&batch, query, &mut candidates, &mut telemetry)?;
     }
 
     Ok(RepoEntitySearchExecution {
         candidates,
         telemetry,
-        source: match (fts_eligible, fell_back_to_scan) {
-            (true, true) => StreamingRerankSource::FtsFallbackScan,
-            (true, false) => StreamingRerankSource::Fts,
-            (false, _) => StreamingRerankSource::Scan,
-        },
+        source: StreamingRerankSource::Scan,
     })
 }
 
 fn collect_candidates(
-    batch: &LanceRecordBatch,
+    batch: &EngineRecordBatch,
     query: &RepoEntityQuery<'_>,
     candidates: &mut Vec<RepoEntityCandidate>,
     telemetry: &mut StreamingRerankTelemetry,
 ) -> Result<(), RepoEntitySearchError> {
     telemetry.observe_batch(batch.num_rows());
-    let id = string_column(batch, "id")?;
-    let entity_kind = string_column(batch, "entity_kind")?;
-    let name = string_column(batch, "name")?;
-    let name_folded = string_column(batch, "name_folded")?;
-    let qualified_name_folded = string_column(batch, "qualified_name_folded")?;
-    let path = string_column(batch, "path")?;
-    let path_folded = string_column(batch, "path_folded")?;
-    let language = string_column(batch, "language")?;
-    let symbol_kind = string_column(batch, "symbol_kind")?;
-    let signature_folded = string_column(batch, "signature_folded")?;
-    let summary_folded = string_column(batch, "summary_folded")?;
-    let related_symbols_folded = string_column(batch, "related_symbols_folded")?;
-    let related_modules_folded = string_column(batch, "related_modules_folded")?;
-    let saliency_score = float64_column(batch, "saliency_score")?;
+    let id = engine_string_column(batch, "id")?;
+    let entity_kind = engine_string_column(batch, "entity_kind")?;
+    let name = engine_string_column(batch, "name")?;
+    let name_folded = engine_string_column(batch, "name_folded")?;
+    let qualified_name_folded = engine_string_column(batch, "qualified_name_folded")?;
+    let path = engine_string_column(batch, "path")?;
+    let path_folded = engine_string_column(batch, "path_folded")?;
+    let language = engine_string_column(batch, "language")?;
+    let symbol_kind = engine_string_column(batch, "symbol_kind")?;
+    let signature_folded = engine_string_column(batch, "signature_folded")?;
+    let summary_folded = engine_string_column(batch, "summary_folded")?;
+    let related_symbols_folded = engine_string_column(batch, "related_symbols_folded")?;
+    let related_modules_folded = engine_string_column(batch, "related_modules_folded")?;
+    let saliency_score = engine_float64_column(batch, "saliency_score")?;
 
     for row in 0..batch.num_rows() {
         let entity_kind_value = entity_kind.value(row);
@@ -146,6 +104,73 @@ fn collect_candidates(
     }
 
     Ok(())
+}
+
+fn build_repo_entity_stage1_sql(
+    table_name: &str,
+    language_filters: &HashSet<String>,
+    kind_filters: &HashSet<String>,
+) -> String {
+    let projections = projected_columns().join(", ");
+    let filters = [
+        language_filter_expression(language_filters),
+        kind_filter_expression(kind_filters),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
+
+    if filters.is_empty() {
+        return format!("SELECT {projections} FROM {table_name}");
+    }
+
+    format!(
+        "SELECT {projections} FROM {table_name} WHERE {}",
+        filters.join(" AND ")
+    )
+}
+
+fn language_filter_expression(language_filters: &HashSet<String>) -> Option<String> {
+    if language_filters.is_empty() {
+        return None;
+    }
+
+    let mut values = language_filters.iter().cloned().collect::<Vec<_>>();
+    values.sort_unstable();
+    Some(format!(
+        "language IN ({})",
+        values
+            .into_iter()
+            .map(|value| sql_string_literal(value.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
+}
+
+fn kind_filter_expression(kind_filters: &HashSet<String>) -> Option<String> {
+    if kind_filters.is_empty() {
+        return None;
+    }
+
+    let mut filters = kind_filters.iter().cloned().collect::<Vec<_>>();
+    filters.sort_unstable();
+    let clauses = filters
+        .into_iter()
+        .map(|value| match value.as_str() {
+            "module" => "entity_kind = 'module'".to_string(),
+            "example" => "entity_kind = 'example'".to_string(),
+            "symbol" => "entity_kind = 'symbol'".to_string(),
+            other => format!(
+                "(entity_kind = 'symbol' AND symbol_kind = {})",
+                sql_string_literal(other)
+            ),
+        })
+        .collect::<Vec<_>>();
+    Some(format!("({})", clauses.join(" OR ")))
+}
+
+fn sql_string_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 pub(crate) fn retained_window(limit: usize) -> RetainedWindow {
@@ -250,16 +275,5 @@ fn candidate_kind_priority(entity_kind: &str) -> u8 {
         "module" => 2,
         "example" => 1,
         _ => 0,
-    }
-}
-
-fn should_use_fts(query: &str) -> bool {
-    query.chars().any(char::is_alphanumeric) && query.len() >= 2
-}
-
-fn fts_batch_missing_projected_columns(error: &RepoEntitySearchError) -> bool {
-    match error {
-        RepoEntitySearchError::Decode(message) => message.starts_with("missing "),
-        RepoEntitySearchError::Storage(_) => false,
     }
 }

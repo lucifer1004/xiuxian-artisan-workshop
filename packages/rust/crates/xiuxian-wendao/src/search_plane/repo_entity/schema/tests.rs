@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
-use arrow::array::{Array, ListArray};
-use xiuxian_vector::{LanceRecordBatch, LanceStringArray, LanceUInt32Array};
+use xiuxian_vector::{
+    LanceArray, LanceListArray, LanceRecordBatch, LanceStringArray, LanceUInt32Array,
+};
 
 use super::batches::repo_entity_batches;
 use super::definitions::{
@@ -247,7 +248,7 @@ fn uint32_column<'a>(batch: &'a LanceRecordBatch, name: &str) -> &'a LanceUInt32
 fn utf8_list_values(batch: &LanceRecordBatch, name: &str, row: usize) -> Vec<String> {
     let list = batch
         .column_by_name(name)
-        .and_then(|array| array.as_any().downcast_ref::<ListArray>())
+        .and_then(|array| array.as_any().downcast_ref::<LanceListArray>())
         .unwrap();
     let values = list.value(row);
     let strings = values.as_any().downcast_ref::<LanceStringArray>().unwrap();

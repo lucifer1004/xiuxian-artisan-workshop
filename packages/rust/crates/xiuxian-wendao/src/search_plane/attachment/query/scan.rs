@@ -1,105 +1,92 @@
 use std::collections::HashSet;
 
-use xiuxian_vector::{
-    ColumnarScanOptions, LanceArray, LanceRecordBatch, LanceStringArray, VectorStore,
-};
+use arrow::array::{Array, StringArray, StringViewArray};
+use xiuxian_vector::{EngineRecordBatch, SearchEngineContext};
 
-use crate::search_plane::attachment::query::scoring::{
-    candidate_score, compare_candidates, should_use_fts,
-};
+use crate::search_plane::attachment::query::scoring::{candidate_score, compare_candidates};
 use crate::search_plane::attachment::query::types::{
     AttachmentCandidate, AttachmentCandidateQuery, AttachmentSearchError, AttachmentSearchExecution,
 };
 use crate::search_plane::attachment::schema::{
-    attachment_ext_column, attachment_name_column, attachment_name_folded_column, hit_json_column,
-    kind_column, projected_columns_with_hit_json,
+    attachment_ext_column, attachment_name_column, attachment_name_folded_column, id_column,
+    kind_column, projected_columns,
 };
 use crate::search_plane::ranking::{
     StreamingRerankSource, StreamingRerankTelemetry, trim_ranked_vec,
 };
 
-pub(crate) async fn execute_attachment_search(
-    store: &VectorStore,
-    table_name: &str,
-    query_text: &str,
-    options: ColumnarScanOptions,
-    candidate_query: &AttachmentCandidateQuery<'_>,
-    fts_eligible: bool,
-) -> Result<AttachmentSearchExecution, AttachmentSearchError> {
-    let mut telemetry =
-        StreamingRerankTelemetry::new(candidate_query.window, options.batch_size, options.limit);
-    let mut candidates = Vec::with_capacity(candidate_query.window.target);
-    let mut saw_fts_batch = false;
-    let mut fell_back_to_scan = false;
+#[derive(Clone, Copy)]
+enum EngineStringColumn<'a> {
+    Utf8(&'a StringArray),
+    Utf8View(&'a StringViewArray),
+}
 
-    if fts_eligible {
-        match store
-            .search_fts_batches_streaming(table_name, query_text, options.clone(), |batch| {
-                saw_fts_batch = true;
-                collect_candidates(&batch, candidate_query, &mut candidates, &mut telemetry)
-            })
-            .await
-        {
-            Ok(()) if saw_fts_batch => {}
-            Ok(()) => {
-                fell_back_to_scan = true;
-                candidates.clear();
-                store
-                    .scan_record_batches_streaming(table_name, options, |batch| {
-                        collect_candidates(&batch, candidate_query, &mut candidates, &mut telemetry)
-                    })
-                    .await?;
-            }
-            Err(error) => return Err(error),
+impl<'a> EngineStringColumn<'a> {
+    fn value(self, row: usize) -> &'a str {
+        match self {
+            Self::Utf8(column) => column.value(row),
+            Self::Utf8View(column) => column.value(row),
         }
-    } else {
-        store
-            .scan_record_batches_streaming(table_name, options, |batch| {
-                collect_candidates(&batch, candidate_query, &mut candidates, &mut telemetry)
-            })
-            .await?;
+    }
+}
+
+pub(crate) async fn execute_attachment_search(
+    engine: &SearchEngineContext,
+    table_name: &str,
+    candidate_query: &AttachmentCandidateQuery<'_>,
+) -> Result<AttachmentSearchExecution, AttachmentSearchError> {
+    let sql = build_attachment_stage1_sql(
+        table_name,
+        candidate_query.extensions,
+        candidate_query.kinds,
+    );
+    let batches = engine.sql_batches(sql.as_str()).await?;
+    let mut telemetry = StreamingRerankTelemetry::new(candidate_query.window, None, None);
+    let mut candidates = Vec::with_capacity(candidate_query.window.target);
+
+    for batch in batches {
+        collect_candidates(&batch, candidate_query, &mut candidates, &mut telemetry)?;
     }
 
     Ok(AttachmentSearchExecution {
         candidates,
         telemetry,
-        source: match (fts_eligible, fell_back_to_scan) {
-            (true, true) => StreamingRerankSource::FtsFallbackScan,
-            (true, false) => StreamingRerankSource::Fts,
-            (false, _) => StreamingRerankSource::Scan,
-        },
+        source: StreamingRerankSource::Scan,
     })
 }
 
+pub(crate) fn build_attachment_stage1_sql(
+    table_name: &str,
+    normalized_extensions: &HashSet<String>,
+    normalized_kinds: &HashSet<String>,
+) -> String {
+    let projections = projected_columns().join(", ");
+    match filter_expression(normalized_extensions, normalized_kinds) {
+        Some(filter) => format!("SELECT {projections} FROM {table_name} WHERE {filter}"),
+        None => format!("SELECT {projections} FROM {table_name}"),
+    }
+}
+
 fn collect_candidates(
-    batch: &LanceRecordBatch,
+    batch: &EngineRecordBatch,
     query: &AttachmentCandidateQuery<'_>,
     candidates: &mut Vec<AttachmentCandidate>,
     telemetry: &mut StreamingRerankTelemetry,
 ) -> Result<(), AttachmentSearchError> {
     telemetry.observe_batch(batch.num_rows());
+    let id = string_column(batch, id_column())?;
     let source_path = string_column(batch, "source_path")?;
     let source_title = string_column(batch, "source_title")?;
     let source_stem = string_column(batch, "source_stem")?;
     let attachment_path = string_column(batch, "attachment_path")?;
     let attachment_name = string_column(batch, attachment_name_column())?;
-    let attachment_ext = string_column(batch, attachment_ext_column())?;
-    let kind = string_column(batch, kind_column())?;
     let source_path_folded = string_column(batch, "source_path_folded")?;
     let source_title_folded = string_column(batch, "source_title_folded")?;
     let source_stem_folded = string_column(batch, "source_stem_folded")?;
     let attachment_path_folded = string_column(batch, "attachment_path_folded")?;
     let attachment_name_folded = string_column(batch, attachment_name_folded_column())?;
-    let hit_json = string_column(batch, hit_json_column())?;
 
     for row in 0..batch.num_rows() {
-        if !query.extensions.is_empty() && !query.extensions.contains(attachment_ext.value(row)) {
-            continue;
-        }
-        if !query.kinds.is_empty() && !query.kinds.contains(kind.value(row)) {
-            continue;
-        }
-
         let fields = if query.case_sensitive {
             [
                 attachment_path.value(row),
@@ -124,10 +111,10 @@ fn collect_candidates(
 
         telemetry.observe_match();
         candidates.push(AttachmentCandidate {
+            id: id.value(row).to_string(),
             score,
             source_path: source_path.value(row).to_string(),
             attachment_path: attachment_path.value(row).to_string(),
-            hit_json: hit_json.value(row).to_string(),
         });
         telemetry.observe_working_set(candidates.len());
         if candidates.len() > query.window.threshold {
@@ -138,29 +125,6 @@ fn collect_candidates(
     }
 
     Ok(())
-}
-
-pub(crate) fn build_attachment_scan_options(
-    query_text: &str,
-    limit: usize,
-    case_sensitive: bool,
-    normalized_extensions: &HashSet<String>,
-    normalized_kinds: &HashSet<String>,
-) -> ColumnarScanOptions {
-    ColumnarScanOptions {
-        where_filter: filter_expression(normalized_extensions, normalized_kinds),
-        projected_columns: projected_columns_with_hit_json()
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
-        batch_size: Some(256),
-        limit: if case_sensitive || !should_use_fts(query_text) {
-            None
-        } else {
-            Some(limit.saturating_mul(32).max(128))
-        },
-        ..ColumnarScanOptions::default()
-    }
 }
 
 fn filter_expression(extensions: &HashSet<String>, kinds: &HashSet<String>) -> Option<String> {
@@ -180,25 +144,34 @@ fn disjunction(column: &str, values: &HashSet<String>) -> Option<String> {
 
     let mut sorted = values.iter().cloned().collect::<Vec<_>>();
     sorted.sort_unstable();
-    Some(
+    Some(format!(
+        "{column} IN ({})",
         sorted
             .into_iter()
-            .map(|value| format!("{column} = '{}'", lance_string_literal(value.as_str())))
+            .map(|value| sql_string_literal(value.as_str()))
             .collect::<Vec<_>>()
-            .join(" OR "),
-    )
+            .join(", ")
+    ))
 }
 
-fn lance_string_literal(value: &str) -> String {
-    value.replace('\'', "''")
+fn sql_string_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 fn string_column<'a>(
-    batch: &'a LanceRecordBatch,
+    batch: &'a EngineRecordBatch,
     name: &str,
-) -> Result<&'a LanceStringArray, AttachmentSearchError> {
-    batch
-        .column_by_name(name)
-        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-        .ok_or_else(|| AttachmentSearchError::Decode(format!("missing string column `{name}`")))
+) -> Result<EngineStringColumn<'a>, AttachmentSearchError> {
+    let column = batch.column_by_name(name).ok_or_else(|| {
+        AttachmentSearchError::Decode(format!("missing engine string column `{name}`"))
+    })?;
+    if let Some(array) = column.as_any().downcast_ref::<StringArray>() {
+        return Ok(EngineStringColumn::Utf8(array));
+    }
+    if let Some(array) = column.as_any().downcast_ref::<StringViewArray>() {
+        return Ok(EngineStringColumn::Utf8View(array));
+    }
+    Err(AttachmentSearchError::Decode(format!(
+        "engine column `{name}` is not utf8-like"
+    )))
 }

@@ -170,6 +170,17 @@ async fn attachment_incremental_refresh_reuses_unchanged_rows() {
     .await
     .unwrap_or_else(|error| panic!("query topology after refresh: {error}"));
     assert!(topology.is_empty());
+    let active_epoch = service
+        .coordinator()
+        .status_for(SearchCorpusKind::Attachment)
+        .active_epoch
+        .unwrap_or_else(|| panic!("attachment active epoch"));
+    assert!(
+        service
+            .local_epoch_parquet_path(SearchCorpusKind::Attachment, active_epoch)
+            .exists(),
+        "missing attachment parquet export"
+    );
 }
 
 async fn wait_for_attachment_ready(service: &SearchPlaneService, previous_epoch: Option<u64>) {

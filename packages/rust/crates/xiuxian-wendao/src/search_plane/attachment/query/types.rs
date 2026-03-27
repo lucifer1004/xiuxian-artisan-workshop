@@ -20,10 +20,10 @@ pub(crate) enum AttachmentSearchError {
 
 #[derive(Debug, Clone)]
 pub(crate) struct AttachmentCandidate {
+    pub(crate) id: String,
     pub(crate) score: f64,
     pub(crate) source_path: String,
     pub(crate) attachment_path: String,
-    pub(crate) hit_json: String,
 }
 
 pub(crate) struct AttachmentCandidateQuery<'a> {

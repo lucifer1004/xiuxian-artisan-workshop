@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use arrow::array::builder::{ListBuilder, StringBuilder};
 use xiuxian_vector::{
-    LanceFloat64Array, LanceRecordBatch, LanceStringArray, LanceUInt32Array, VectorStoreError,
+    LanceFloat64Array, LanceListArray, LanceListBuilder, LanceRecordBatch, LanceStringArray,
+    LanceStringBuilder, LanceUInt32Array, VectorStoreError,
 };
 
 use crate::search_plane::repo_entity::schema::definitions::RepoEntityRow;
@@ -170,8 +170,8 @@ fn batch_from_rows(rows: &[RepoEntityRow]) -> Result<LanceRecordBatch, VectorSto
     .map_err(VectorStoreError::Arrow)
 }
 
-fn build_utf8_list_array(rows: &[&[String]]) -> arrow::array::ListArray {
-    let mut builder = ListBuilder::new(StringBuilder::new());
+fn build_utf8_list_array(rows: &[&[String]]) -> LanceListArray {
+    let mut builder = LanceListBuilder::new(LanceStringBuilder::new());
     for row in rows {
         for value in *row {
             builder.values().append_value(value);

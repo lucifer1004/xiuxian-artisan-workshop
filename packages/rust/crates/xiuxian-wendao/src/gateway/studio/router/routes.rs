@@ -50,12 +50,24 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(search::search_intent),
         )
         .route(
+            "/api/search/intent/hits-arrow",
+            get(search::search_intent_hits_arrow),
+        )
+        .route(
             openapi_paths::API_SEARCH_ATTACHMENTS_AXUM_PATH,
             get(search::search_attachments),
         )
         .route(
+            "/api/search/attachments/hits-arrow",
+            get(search::search_attachments_hits_arrow),
+        )
+        .route(
             openapi_paths::API_SEARCH_AST_AXUM_PATH,
             get(search::search_ast),
+        )
+        .route(
+            "/api/search/ast/hits-arrow",
+            get(search::search_ast_hits_arrow),
         )
         .route(
             openapi_paths::API_SEARCH_DEFINITION_AXUM_PATH,
@@ -66,8 +78,16 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(search::search_references),
         )
         .route(
+            "/api/search/references/hits-arrow",
+            get(search::search_references_hits_arrow),
+        )
+        .route(
             openapi_paths::API_SEARCH_SYMBOLS_AXUM_PATH,
             get(search::search_symbols),
+        )
+        .route(
+            "/api/search/symbols/hits-arrow",
+            get(search::search_symbols_hits_arrow),
         )
         .route(
             openapi_paths::API_SEARCH_AUTOCOMPLETE_AXUM_PATH,
@@ -82,8 +102,16 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::markdown),
         )
         .route(
+            "/api/analysis/markdown/retrieval-arrow",
+            get(handlers::markdown_retrieval_arrow),
+        )
+        .route(
             openapi_paths::API_ANALYSIS_CODE_AST_AXUM_PATH,
             get(handlers::code_ast),
+        )
+        .route(
+            "/api/analysis/code-ast/retrieval-arrow",
+            get(handlers::code_ast_retrieval_arrow),
         )
         .route(
             openapi_paths::API_DOCS_PROJECTED_GAP_REPORT_AXUM_PATH,

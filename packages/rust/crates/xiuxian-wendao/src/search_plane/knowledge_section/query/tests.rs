@@ -14,28 +14,28 @@ fn trim_best_by_path_keeps_highest_ranked_hits() {
         (
             "notes/zeta.md".to_string(),
             KnowledgeCandidate {
+                id: "zeta".to_string(),
                 path: "notes/zeta.md".to_string(),
                 stem: "zeta".to_string(),
                 score: 0.82,
-                hit_json: "{}".to_string(),
             },
         ),
         (
             "notes/beta.md".to_string(),
             KnowledgeCandidate {
+                id: "beta".to_string(),
                 path: "notes/beta.md".to_string(),
                 stem: "beta".to_string(),
                 score: 0.95,
-                hit_json: "{}".to_string(),
             },
         ),
         (
             "notes/alpha.md".to_string(),
             KnowledgeCandidate {
+                id: "alpha".to_string(),
                 path: "notes/alpha.md".to_string(),
                 stem: "alpha".to_string(),
                 score: 0.95,
-                hit_json: "{}".to_string(),
             },
         ),
     ]);

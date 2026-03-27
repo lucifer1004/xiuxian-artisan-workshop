@@ -1,4 +1,4 @@
-use xiuxian_vector::VectorStoreError;
+use xiuxian_vector::{ColumnarScanOptions, VectorStoreError};
 
 use crate::search_plane::local_symbol::build::{LocalSymbolBuildPlan, LocalSymbolWriteResult};
 use crate::search_plane::local_symbol::schema::{
@@ -69,11 +69,15 @@ pub(crate) async fn write_local_symbol_epoch(
         }
 
         let table_info = store.get_table_info(table_name.as_str()).await?;
-        if table_info.num_rows > 0 {
-            store
-                .create_inverted_index(table_name.as_str(), "search_text", None)
-                .await?;
-        }
+        store
+            .write_vector_store_table_to_parquet_file(
+                table_name.as_str(),
+                service
+                    .local_table_parquet_path(SearchCorpusKind::LocalSymbol, table_name.as_str())
+                    .as_path(),
+                ColumnarScanOptions::default(),
+            )
+            .await?;
         row_count = row_count.saturating_add(table_info.num_rows);
         fragment_count = fragment_count
             .saturating_add(u64::try_from(table_info.fragment_count).unwrap_or(u64::MAX));

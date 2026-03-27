@@ -11,6 +11,7 @@ use crate::search_plane::{
     SearchCorpusKind, SearchManifestKeyspace, SearchPlaneCoordinator, SearchQueryTelemetry,
     SearchRepoCorpusRecord, SearchRepoRuntimeRecord,
 };
+use xiuxian_vector::SearchEngineContext;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum RepoMaintenanceTaskKind {
@@ -138,6 +139,7 @@ pub struct SearchPlaneService {
     pub(super) storage_root: PathBuf,
     pub(super) manifest_keyspace: SearchManifestKeyspace,
     pub(super) coordinator: Arc<SearchPlaneCoordinator>,
+    pub(super) search_engine: SearchEngineContext,
     pub(super) cache: crate::search_plane::cache::SearchPlaneCache,
     pub(crate) repo_search_read_concurrency_limit: usize,
     pub(crate) repo_search_read_permits: Arc<Semaphore>,

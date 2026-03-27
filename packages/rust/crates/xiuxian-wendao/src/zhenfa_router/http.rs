@@ -80,6 +80,8 @@ impl ZhenfaRouter for WendaoZhenfaRouter {
 struct WendaoSearchPlannedRequest {
     query: String,
     #[serde(default)]
+    query_vector: Option<Vec<f32>>,
+    #[serde(default)]
     limit: Option<usize>,
     #[serde(default)]
     root_dir: Option<String>,
@@ -156,8 +158,9 @@ async fn search_planned_http(
         parse_search_options(body.options).map_err(|error| bad_request(error.as_str()))?;
 
     let payload = index
-        .search_planned_payload_with_agentic_async(
+        .search_planned_payload_with_agentic_async_with_query_vector(
             query,
+            body.query_vector.as_deref().unwrap_or(&[]),
             limit,
             base_options,
             body.include_provisional,

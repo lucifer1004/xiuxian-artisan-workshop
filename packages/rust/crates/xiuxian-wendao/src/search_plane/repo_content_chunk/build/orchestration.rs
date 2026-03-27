@@ -6,10 +6,13 @@ use crate::gateway::studio::repo_index::RepoCodeDocument;
 use crate::search_plane::repo_content_chunk::build::plan::plan_repo_content_chunk_build;
 use crate::search_plane::repo_content_chunk::build::types::RepoContentChunkBuildAction;
 use crate::search_plane::repo_content_chunk::build::write::{
-    write_mutated_table, write_replaced_table,
+    inspect_repo_content_chunk_parquet, write_mutated_table, write_replaced_table,
 };
 use crate::search_plane::repo_content_chunk::schema::projected_columns;
-use crate::search_plane::{SearchCorpusKind, SearchFileFingerprint, SearchPlaneService};
+use crate::search_plane::{
+    SearchCorpusKind, SearchFileFingerprint, SearchPlaneService, SearchPublicationStorageFormat,
+    SearchRepoPublicationInput,
+};
 
 pub(crate) async fn publish_repo_content_chunks(
     service: &SearchPlaneService,
@@ -45,17 +48,22 @@ pub(crate) async fn publish_repo_content_chunks(
             Ok(())
         }
         RepoContentChunkBuildAction::RefreshPublication { table_name } => {
-            let store = service
-                .open_store(SearchCorpusKind::RepoContentChunk)
-                .await?;
-            let table_info = store.get_table_info(table_name.as_str()).await?;
+            let parquet_stats =
+                inspect_repo_content_chunk_parquet(service, table_name.as_str()).await?;
             service
-                .record_repo_publication(
+                .record_repo_publication_input_with_storage_format(
                     SearchCorpusKind::RepoContentChunk,
                     repo_id,
-                    table_name.as_str(),
-                    source_revision,
-                    &table_info,
+                    SearchRepoPublicationInput {
+                        table_name: table_name.clone(),
+                        schema_version: SearchCorpusKind::RepoContentChunk.schema_version(),
+                        source_revision: source_revision.map(str::to_string),
+                        table_version_id: parquet_stats.table_version_id,
+                        row_count: parquet_stats.row_count,
+                        fragment_count: parquet_stats.fragment_count,
+                        published_at: parquet_stats.published_at,
+                    },
+                    SearchPublicationStorageFormat::Parquet,
                 )
                 .await;
             service
@@ -71,12 +79,14 @@ pub(crate) async fn publish_repo_content_chunks(
             table_name,
             payload: documents,
         } => {
-            write_replaced_table(service, table_name.as_str(), documents).await?;
+            let parquet_stats =
+                write_replaced_table(service, table_name.as_str(), documents).await?;
             finalize_repo_content_publication(
                 service,
                 repo_id,
                 table_name.as_str(),
                 source_revision,
+                parquet_stats,
                 &plan.file_fingerprints,
             )
             .await
@@ -87,7 +97,7 @@ pub(crate) async fn publish_repo_content_chunks(
             replaced_paths,
             changed_payload: changed_documents,
         } => {
-            write_mutated_table(
+            let parquet_stats = write_mutated_table(
                 service,
                 base_table_name.as_str(),
                 target_table_name.as_str(),
@@ -100,6 +110,7 @@ pub(crate) async fn publish_repo_content_chunks(
                 repo_id,
                 target_table_name.as_str(),
                 source_revision,
+                parquet_stats,
                 &plan.file_fingerprints,
             )
             .await
@@ -112,6 +123,7 @@ async fn finalize_repo_content_publication(
     repo_id: &str,
     table_name: &str,
     source_revision: Option<&str>,
+    parquet_stats: crate::search_plane::repo_publication_parquet::ParquetPublicationStats,
     file_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
 ) -> Result<(), VectorStoreError> {
     let prewarm_columns = projected_columns();
@@ -123,17 +135,20 @@ async fn finalize_repo_content_publication(
             &prewarm_columns,
         )
         .await?;
-    let store = service
-        .open_store(SearchCorpusKind::RepoContentChunk)
-        .await?;
-    let table_info = store.get_table_info(table_name).await?;
     service
-        .record_repo_publication(
+        .record_repo_publication_input_with_storage_format(
             SearchCorpusKind::RepoContentChunk,
             repo_id,
-            table_name,
-            source_revision,
-            &table_info,
+            SearchRepoPublicationInput {
+                table_name: table_name.to_string(),
+                schema_version: SearchCorpusKind::RepoContentChunk.schema_version(),
+                source_revision: source_revision.map(str::to_string),
+                table_version_id: parquet_stats.table_version_id,
+                row_count: parquet_stats.row_count,
+                fragment_count: parquet_stats.fragment_count,
+                published_at: parquet_stats.published_at,
+            },
+            SearchPublicationStorageFormat::Parquet,
         )
         .await;
     service

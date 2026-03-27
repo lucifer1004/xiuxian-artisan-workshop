@@ -5,6 +5,8 @@ use super::error::ArrowTransportError;
 use super::{decode_record_batches_ipc, encode_record_batches_ipc};
 use arrow::record_batch::RecordBatch;
 
+const WENDAO_SCHEMA_VERSION_HEADER: &str = "x-wendao-schema-version";
+
 /// HTTP client for Arrow IPC roundtrips against a WendaoArrow-compatible service.
 #[derive(Clone)]
 pub struct ArrowTransportClient {
@@ -62,7 +64,8 @@ impl ArrowTransportClient {
             .send()
             .await
             .map_err(ArrowTransportError::Http)?;
-        ensure_success(response).await?;
+        let response = ensure_success(response).await?;
+        ensure_schema_version(response.headers(), self.config.schema_version())?;
         Ok(())
     }
 
@@ -98,6 +101,7 @@ impl ArrowTransportClient {
             .client
             .post(self.config.endpoint_url()?)
             .header(CONTENT_TYPE, self.config.content_type())
+            .header(WENDAO_SCHEMA_VERSION_HEADER, self.config.schema_version())
             .body(payload)
             .send()
             .await
@@ -116,6 +120,8 @@ impl ArrowTransportClient {
             });
         }
 
+        ensure_schema_version(response.headers(), self.config.schema_version())?;
+
         let body = response.bytes().await.map_err(ArrowTransportError::Http)?;
         decode_record_batches_ipc(body.as_ref()).map_err(ArrowTransportError::Decode)
     }
@@ -131,4 +137,22 @@ async fn ensure_success(
 
     let body = response.text().await.map_err(ArrowTransportError::Http)?;
     Err(ArrowTransportError::UnexpectedStatus { status, body })
+}
+
+fn ensure_schema_version(
+    headers: &reqwest::header::HeaderMap,
+    expected_schema_version: &str,
+) -> Result<(), ArrowTransportError> {
+    let observed = headers
+        .get(WENDAO_SCHEMA_VERSION_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("<missing>");
+    if observed == expected_schema_version {
+        return Ok(());
+    }
+
+    Err(ArrowTransportError::UnexpectedSchemaVersion {
+        expected: expected_schema_version.to_string(),
+        found: observed.to_string(),
+    })
 }

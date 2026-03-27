@@ -4,10 +4,15 @@ use crate::search_plane::repo_entity::build::plan_repo_entity_build;
 use crate::search_plane::repo_entity::schema::{
     hit_json_column, projected_columns, rows_from_analysis,
 };
-use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
+use crate::search_plane::{
+    SearchCorpusKind, SearchPlaneService, SearchPublicationStorageFormat,
+    SearchRepoPublicationInput,
+};
 
 use crate::search_plane::repo_entity::build::RepoEntityBuildAction;
-use crate::search_plane::repo_entity::build::write::{write_mutated_table, write_replaced_table};
+use crate::search_plane::repo_entity::build::write::{
+    inspect_repo_entity_parquet, write_mutated_table, write_replaced_table,
+};
 
 use std::collections::BTreeMap;
 use xiuxian_vector::VectorStoreError;
@@ -49,15 +54,21 @@ pub(crate) async fn publish_repo_entities(
             Ok(())
         }
         RepoEntityBuildAction::RefreshPublication { table_name } => {
-            let store = service.open_store(SearchCorpusKind::RepoEntity).await?;
-            let table_info = store.get_table_info(table_name.as_str()).await?;
+            let parquet_stats = inspect_repo_entity_parquet(service, table_name.as_str()).await?;
             service
-                .record_repo_publication(
+                .record_repo_publication_input_with_storage_format(
                     SearchCorpusKind::RepoEntity,
                     repo_id,
-                    table_name.as_str(),
-                    source_revision,
-                    &table_info,
+                    SearchRepoPublicationInput {
+                        table_name: table_name.clone(),
+                        schema_version: SearchCorpusKind::RepoEntity.schema_version(),
+                        source_revision: source_revision.map(str::to_string),
+                        table_version_id: parquet_stats.table_version_id,
+                        row_count: parquet_stats.row_count,
+                        fragment_count: parquet_stats.fragment_count,
+                        published_at: parquet_stats.published_at,
+                    },
+                    SearchPublicationStorageFormat::Parquet,
                 )
                 .await;
             service
@@ -73,12 +84,13 @@ pub(crate) async fn publish_repo_entities(
             table_name,
             payload: rows,
         } => {
-            write_replaced_table(service, table_name.as_str(), rows).await?;
+            let parquet_stats = write_replaced_table(service, table_name.as_str(), rows).await?;
             finalize_repo_entity_publication(
                 service,
                 repo_id,
                 table_name.as_str(),
                 source_revision,
+                parquet_stats,
                 &plan.file_fingerprints,
             )
             .await
@@ -89,7 +101,7 @@ pub(crate) async fn publish_repo_entities(
             replaced_paths,
             changed_payload: changed_rows,
         } => {
-            write_mutated_table(
+            let parquet_stats = write_mutated_table(
                 service,
                 base_table_name.as_str(),
                 target_table_name.as_str(),
@@ -102,6 +114,7 @@ pub(crate) async fn publish_repo_entities(
                 repo_id,
                 target_table_name.as_str(),
                 source_revision,
+                parquet_stats,
                 &plan.file_fingerprints,
             )
             .await
@@ -114,6 +127,7 @@ async fn finalize_repo_entity_publication(
     repo_id: &str,
     table_name: &str,
     source_revision: Option<&str>,
+    parquet_stats: crate::search_plane::repo_publication_parquet::ParquetPublicationStats,
     file_fingerprints: &BTreeMap<String, crate::search_plane::SearchFileFingerprint>,
 ) -> Result<(), VectorStoreError> {
     let mut prewarm_columns = projected_columns().to_vec();
@@ -126,15 +140,20 @@ async fn finalize_repo_entity_publication(
             &prewarm_columns,
         )
         .await?;
-    let store = service.open_store(SearchCorpusKind::RepoEntity).await?;
-    let table_info = store.get_table_info(table_name).await?;
     service
-        .record_repo_publication(
+        .record_repo_publication_input_with_storage_format(
             SearchCorpusKind::RepoEntity,
             repo_id,
-            table_name,
-            source_revision,
-            &table_info,
+            SearchRepoPublicationInput {
+                table_name: table_name.to_string(),
+                schema_version: SearchCorpusKind::RepoEntity.schema_version(),
+                source_revision: source_revision.map(str::to_string),
+                table_version_id: parquet_stats.table_version_id,
+                row_count: parquet_stats.row_count,
+                fragment_count: parquet_stats.fragment_count,
+                published_at: parquet_stats.published_at,
+            },
+            SearchPublicationStorageFormat::Parquet,
         )
         .await;
     service

@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use super::{
-    RepoContentChunkCandidate, candidate_path_key, compare_candidates, retained_window,
-    should_use_fts,
-};
+use super::{RepoContentChunkCandidate, candidate_path_key, compare_candidates, retained_window};
 use crate::search_plane::ranking::trim_ranked_string_map;
 
 #[test]
@@ -58,12 +55,4 @@ fn retained_window_scales_with_limit() {
     assert_eq!(retained_window(0).target, 128);
     assert_eq!(retained_window(4).target, 128);
     assert_eq!(retained_window(64).target, 512);
-}
-
-#[test]
-fn should_use_fts_allows_common_code_punctuation_queries() {
-    assert!(should_use_fts("@reexport"));
-    assert!(should_use_fts("src/BaseModelica.jl"));
-    assert!(should_use_fts("LinearSolve.solve(x)"));
-    assert!(!should_use_fts("\"quoted\""));
 }

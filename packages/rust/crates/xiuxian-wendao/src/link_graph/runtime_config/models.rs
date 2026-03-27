@@ -104,6 +104,7 @@ pub struct LinkGraphRetrievalPolicyRuntimeConfig {
     pub hybrid_min_top_score: f64,
     pub graph_rows_per_source: usize,
     pub semantic_ignition: LinkGraphSemanticIgnitionRuntimeConfig,
+    pub julia_rerank: LinkGraphJuliaRerankRuntimeConfig,
 }
 
 impl Default for LinkGraphRetrievalPolicyRuntimeConfig {
@@ -117,6 +118,7 @@ impl Default for LinkGraphRetrievalPolicyRuntimeConfig {
             hybrid_min_top_score: DEFAULT_LINK_GRAPH_HYBRID_MIN_TOP_SCORE,
             graph_rows_per_source: DEFAULT_LINK_GRAPH_ROWS_PER_SOURCE,
             semantic_ignition: LinkGraphSemanticIgnitionRuntimeConfig::default(),
+            julia_rerank: LinkGraphJuliaRerankRuntimeConfig::default(),
         }
     }
 }
@@ -179,6 +181,21 @@ impl Default for LinkGraphSemanticIgnitionRuntimeConfig {
             embedding_model: None,
         }
     }
+}
+
+/// Runtime knobs for remote Julia rerank over Arrow IPC.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkGraphJuliaRerankRuntimeConfig {
+    /// Base URL for the WendaoArrow-compatible Julia service.
+    pub base_url: Option<String>,
+    /// Arrow IPC request route.
+    pub route: Option<String>,
+    /// Health-check route.
+    pub health_route: Option<String>,
+    /// WendaoArrow schema version expected by the runtime.
+    pub schema_version: Option<String>,
+    /// Optional request timeout in seconds.
+    pub timeout_secs: Option<u64>,
 }
 
 #[derive(Debug, Clone)]

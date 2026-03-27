@@ -8,6 +8,7 @@ pub mod config;
 mod error;
 pub mod handlers;
 mod repository;
+pub(crate) mod retrieval_arrow;
 mod routes;
 pub mod sanitization;
 mod state;
@@ -19,17 +20,18 @@ pub use config::{
 };
 pub use error::{StudioApiError, map_repo_intelligence_error};
 pub use handlers::{
-    code_ast, doc_coverage, docs_family_cluster, docs_family_context, docs_family_search,
-    docs_navigation, docs_navigation_search, docs_page, docs_planner_item, docs_planner_queue,
-    docs_planner_rank, docs_planner_search, docs_planner_workset, docs_projected_gap_report,
-    docs_retrieval, docs_retrieval_context, docs_retrieval_hit, docs_search, example_search,
-    get_ui_config, graph_neighbors, markdown, module_search, node_neighbors, overview,
-    projected_page, projected_page_family_cluster, projected_page_family_context,
-    projected_page_family_search, projected_page_index_node, projected_page_index_tree,
-    projected_page_index_tree_search, projected_page_index_trees, projected_page_navigation,
-    projected_page_navigation_search, projected_page_search, projected_pages, projected_retrieval,
-    projected_retrieval_context, projected_retrieval_hit, refine_entity_doc, set_ui_config,
-    symbol_search, sync, topology_3d, vfs_cat, vfs_entry, vfs_resolve, vfs_root_entries, vfs_scan,
+    code_ast, code_ast_retrieval_arrow, doc_coverage, docs_family_cluster, docs_family_context,
+    docs_family_search, docs_navigation, docs_navigation_search, docs_page, docs_planner_item,
+    docs_planner_queue, docs_planner_rank, docs_planner_search, docs_planner_workset,
+    docs_projected_gap_report, docs_retrieval, docs_retrieval_context, docs_retrieval_hit,
+    docs_search, example_search, get_ui_config, graph_neighbors, markdown,
+    markdown_retrieval_arrow, module_search, node_neighbors, overview, projected_page,
+    projected_page_family_cluster, projected_page_family_context, projected_page_family_search,
+    projected_page_index_node, projected_page_index_tree, projected_page_index_tree_search,
+    projected_page_index_trees, projected_page_navigation, projected_page_navigation_search,
+    projected_page_search, projected_pages, projected_retrieval, projected_retrieval_context,
+    projected_retrieval_hit, refine_entity_doc, set_ui_config, symbol_search, sync, topology_3d,
+    vfs_cat, vfs_entry, vfs_resolve, vfs_root_entries, vfs_scan,
 };
 pub use repository::{configured_repositories, configured_repository};
 pub use routes::{studio_router, studio_routes};

@@ -12,6 +12,7 @@ use crate::search_plane::{
 };
 
 use crate::search_plane::local_symbol::schema::{local_symbol_batches, local_symbol_schema};
+use xiuxian_vector::ColumnarScanOptions;
 
 fn fixture_service(temp_dir: &tempfile::TempDir) -> SearchPlaneService {
     SearchPlaneService::with_paths(
@@ -107,6 +108,16 @@ async fn local_symbol_query_reads_hits_from_published_epoch() {
         )
         .await
         .unwrap_or_else(|error| panic!("replace record batches: {error}"));
+    store
+        .write_vector_store_table_to_parquet_file(
+            table_name.as_str(),
+            service
+                .local_epoch_parquet_path(SearchCorpusKind::LocalSymbol, lease.epoch)
+                .as_path(),
+            ColumnarScanOptions::default(),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("export parquet: {error}"));
     service
         .coordinator()
         .publish_ready(&lease, hits.len() as u64, 1);
@@ -164,31 +175,63 @@ async fn local_symbol_query_can_rerank_across_multiple_tables() {
         )
         .await
         .unwrap_or_else(|error| panic!("replace record batches b: {error}"));
+    store
+        .write_vector_store_table_to_parquet_file(
+            "local_symbol_project_a",
+            service
+                .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_a")
+                .as_path(),
+            ColumnarScanOptions::default(),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("export parquet a: {error}"));
+    store
+        .write_vector_store_table_to_parquet_file(
+            "local_symbol_project_b",
+            service
+                .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_b")
+                .as_path(),
+            ColumnarScanOptions::default(),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("export parquet b: {error}"));
+    service
+        .search_engine()
+        .ensure_parquet_table_registered(
+            "local_symbol_project_a",
+            service
+                .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_a")
+                .as_path(),
+            &[],
+        )
+        .await
+        .unwrap_or_else(|error| panic!("register parquet a: {error}"));
+    service
+        .search_engine()
+        .ensure_parquet_table_registered(
+            "local_symbol_project_b",
+            service
+                .local_table_parquet_path(SearchCorpusKind::LocalSymbol, "local_symbol_project_b")
+                .as_path(),
+            &[],
+        )
+        .await
+        .unwrap_or_else(|error| panic!("register parquet b: {error}"));
 
     let execution = execute_local_symbol_search(
-        &store,
+        service.search_engine(),
         &[
             "local_symbol_project_a".to_string(),
             "local_symbol_project_b".to_string(),
         ],
         "alpha",
-        xiuxian_vector::ColumnarScanOptions {
-            projected_columns: crate::search_plane::local_symbol::schema::projected_columns()
-                .into_iter()
-                .map(str::to_string)
-                .chain(std::iter::once(
-                    crate::search_plane::local_symbol::schema::hit_json_column().to_string(),
-                ))
-                .collect(),
-            batch_size: Some(64),
-            ..xiuxian_vector::ColumnarScanOptions::default()
-        },
         retained_window(5),
     )
     .await
     .unwrap_or_else(|error| panic!("multi-table query should succeed: {error}"));
 
-    let hits = decode_local_symbol_hits(execution.candidates)
+    let hits = decode_local_symbol_hits(service.search_engine(), execution.candidates)
+        .await
         .unwrap_or_else(|error| panic!("decode hits should succeed: {error}"));
     assert_eq!(hits.len(), 2);
     assert_eq!(hits[0].name, "AlphaSymbol");
@@ -225,6 +268,16 @@ async fn local_symbol_autocomplete_reads_suggestions_from_published_epoch() {
         )
         .await
         .unwrap_or_else(|error| panic!("replace record batches: {error}"));
+    store
+        .write_vector_store_table_to_parquet_file(
+            table_name.as_str(),
+            service
+                .local_epoch_parquet_path(SearchCorpusKind::LocalSymbol, lease.epoch)
+                .as_path(),
+            ColumnarScanOptions::default(),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("export parquet: {error}"));
     service
         .coordinator()
         .publish_ready(&lease, hits.len() as u64, 1);

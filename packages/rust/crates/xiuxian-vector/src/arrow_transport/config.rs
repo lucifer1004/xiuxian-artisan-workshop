@@ -14,6 +14,8 @@ pub const ARROW_TRANSPORT_DEFAULT_BASE_URL: &str = "http://127.0.0.1:8080";
 pub const ARROW_TRANSPORT_DEFAULT_ROUTE: &str = "/arrow-ipc";
 /// Default health route for Arrow transport probing.
 pub const ARROW_TRANSPORT_DEFAULT_HEALTH_ROUTE: &str = "/health";
+/// Default Wendao Arrow schema contract version.
+pub const ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION: &str = "v1";
 const ARROW_TRANSPORT_DEFAULT_TIMEOUT_SECS: u64 = 10;
 
 /// Runtime config for Arrow-over-HTTP transport.
@@ -23,6 +25,7 @@ pub struct ArrowTransportConfig {
     route: String,
     health_route: String,
     content_type: String,
+    schema_version: String,
     timeout_secs: u64,
 }
 
@@ -33,6 +36,7 @@ impl Default for ArrowTransportConfig {
             route: ARROW_TRANSPORT_DEFAULT_ROUTE.to_string(),
             health_route: ARROW_TRANSPORT_DEFAULT_HEALTH_ROUTE.to_string(),
             content_type: ARROW_TRANSPORT_CONTENT_TYPE.to_string(),
+            schema_version: ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION.to_string(),
             timeout_secs: ARROW_TRANSPORT_DEFAULT_TIMEOUT_SECS,
         }
     }
@@ -72,6 +76,12 @@ impl ArrowTransportConfig {
         self.content_type.as_str()
     }
 
+    /// Return the configured Arrow schema contract version.
+    #[must_use]
+    pub fn schema_version(&self) -> &str {
+        self.schema_version.as_str()
+    }
+
     /// Return the configured request timeout.
     #[must_use]
     pub fn timeout(&self) -> Duration {
@@ -97,6 +107,24 @@ impl ArrowTransportConfig {
     pub fn with_content_type(mut self, content_type: impl Into<String>) -> Self {
         self.content_type = content_type.into();
         self
+    }
+
+    /// Override the Arrow schema contract version.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ArrowTransportConfigError::InvalidSchemaVersion`] when the
+    /// provided version is blank.
+    pub fn with_schema_version(
+        mut self,
+        schema_version: impl Into<String>,
+    ) -> Result<Self, ArrowTransportConfigError> {
+        let schema_version = schema_version.into();
+        if schema_version.trim().is_empty() {
+            return Err(ArrowTransportConfigError::InvalidSchemaVersion);
+        }
+        self.schema_version = schema_version;
+        Ok(self)
     }
 
     /// Override the request timeout in seconds.
@@ -178,6 +206,9 @@ impl ArrowTransportConfig {
         if let Some(content_type) = partial.content_type {
             config.content_type = content_type;
         }
+        if let Some(schema_version) = partial.schema_version {
+            config = config.with_schema_version(schema_version)?;
+        }
         if let Some(timeout_secs) = partial.timeout_secs {
             config = config.with_timeout_secs(timeout_secs)?;
         }
@@ -215,6 +246,9 @@ pub enum ArrowTransportConfigError {
     /// Timeout must be greater than zero.
     #[error("Arrow transport timeout_secs must be greater than zero")]
     InvalidTimeoutSecs,
+    /// Schema version must not be blank.
+    #[error("Arrow transport schema_version must not be blank")]
+    InvalidSchemaVersion,
 }
 
 #[derive(Debug, Deserialize)]
@@ -233,6 +267,7 @@ struct ArrowTransportTomlSection {
     route: Option<String>,
     health_route: Option<String>,
     content_type: Option<String>,
+    schema_version: Option<String>,
     timeout_secs: Option<u64>,
 }
 

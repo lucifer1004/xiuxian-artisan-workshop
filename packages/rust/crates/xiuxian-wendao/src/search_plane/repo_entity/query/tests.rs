@@ -13,7 +13,10 @@ use crate::search_plane::repo_entity::query::search::{
     search_repo_entity_example_results, search_repo_entity_module_results,
     search_repo_entity_symbol_results,
 };
-use crate::search_plane::{SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService};
+use crate::search_plane::{
+    SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
+    SearchPublicationStorageFormat,
+};
 
 use crate::search_plane::repo_entity::query::types::RepoEntityCandidate;
 
@@ -76,6 +79,25 @@ async fn typed_repo_entity_search_reconstructs_module_symbol_and_example_results
     publish_repo_entities(&service, "alpha/repo", &analysis, &documents, Some("rev-1"))
         .await
         .unwrap_or_else(|error| panic!("publish repo entities: {error}"));
+    let record = service
+        .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, "alpha/repo")
+        .await
+        .unwrap_or_else(|| panic!("repo entity record"));
+    let publication = record
+        .publication
+        .unwrap_or_else(|| panic!("repo entity publication"));
+    assert_eq!(
+        publication.storage_format,
+        SearchPublicationStorageFormat::Parquet
+    );
+    assert!(
+        service
+            .repo_publication_parquet_path(
+                SearchCorpusKind::RepoEntity,
+                publication.table_name.as_str(),
+            )
+            .exists()
+    );
 
     let module_result =
         search_repo_entity_module_results(&service, "alpha/repo", "BaseModelica", 5)

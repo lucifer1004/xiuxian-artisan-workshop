@@ -4,6 +4,17 @@ use crate::gateway::studio::repo_index::{RepoIndexEntryStatus, RepoIndexPhase};
 use crate::search_plane::manifest::SearchRepoPublicationInput;
 use crate::search_plane::{SearchCorpusKind, SearchCorpusStatus, SearchMaintenanceStatus};
 
+/// Persisted storage format for a published search-plane dataset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchPublicationStorageFormat {
+    /// Legacy Lance-backed publication.
+    #[default]
+    Lance,
+    /// DataFusion-readable Parquet publication.
+    Parquet,
+}
+
 /// Materialized manifest row persisted to Valkey for one corpus.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchManifestRecord {
@@ -13,6 +24,9 @@ pub struct SearchManifestRecord {
     pub active_epoch: Option<u64>,
     /// Schema version associated with the active epoch.
     pub schema_version: u32,
+    #[serde(default)]
+    /// Storage format associated with the active publication.
+    pub storage_format: SearchPublicationStorageFormat,
     /// Current published or in-flight fingerprint.
     pub fingerprint: Option<String>,
     /// RFC3339 time when the manifest was updated.
@@ -27,6 +41,7 @@ impl SearchManifestRecord {
             corpus: status.corpus,
             active_epoch: status.active_epoch,
             schema_version: status.schema_version,
+            storage_format: SearchPublicationStorageFormat::Lance,
             fingerprint: status.fingerprint.clone(),
             updated_at: status.updated_at.clone(),
         }
@@ -51,6 +66,9 @@ pub struct SearchRepoPublicationRecord {
     pub table_version_id: u64,
     /// Schema version associated with the published table.
     pub schema_version: u32,
+    #[serde(default)]
+    /// Storage format associated with the published table.
+    pub storage_format: SearchPublicationStorageFormat,
     /// Source revision that produced the published table, when known.
     pub source_revision: Option<String>,
     /// Logical row count for the published table.
@@ -69,8 +87,25 @@ impl SearchRepoPublicationRecord {
         repo_id: impl Into<String>,
         input: SearchRepoPublicationInput,
     ) -> Self {
+        Self::new_with_storage_format(
+            corpus,
+            repo_id,
+            input,
+            SearchPublicationStorageFormat::Lance,
+        )
+    }
+
+    /// Construct repo publication metadata for an explicit storage format.
+    #[must_use]
+    pub(crate) fn new_with_storage_format(
+        corpus: SearchCorpusKind,
+        repo_id: impl Into<String>,
+        input: SearchRepoPublicationInput,
+        storage_format: SearchPublicationStorageFormat,
+    ) -> Self {
         let repo_id = repo_id.into();
-        let publication_id = build_repo_publication_id(corpus, repo_id.as_str(), &input);
+        let publication_id =
+            build_repo_publication_id(corpus, repo_id.as_str(), &input, storage_format);
         Self {
             corpus,
             active_epoch: Some(build_repo_publication_epoch(publication_id.as_str())),
@@ -79,6 +114,7 @@ impl SearchRepoPublicationRecord {
             table_name: input.table_name,
             table_version_id: input.table_version_id,
             schema_version: input.schema_version,
+            storage_format,
             source_revision: input.source_revision,
             row_count: input.row_count,
             fragment_count: input.fragment_count,
@@ -103,6 +139,12 @@ impl SearchRepoPublicationRecord {
     pub fn active_epoch_value(&self) -> u64 {
         self.active_epoch
             .unwrap_or_else(|| build_repo_publication_epoch(self.publication_id.as_str()))
+    }
+
+    /// Whether this publication is readable by the new DataFusion execution engine.
+    #[must_use]
+    pub fn is_datafusion_readable(&self) -> bool {
+        matches!(self.storage_format, SearchPublicationStorageFormat::Parquet)
     }
 }
 
@@ -188,9 +230,10 @@ fn build_repo_publication_id(
     corpus: SearchCorpusKind,
     repo_id: &str,
     input: &SearchRepoPublicationInput,
+    storage_format: SearchPublicationStorageFormat,
 ) -> String {
     let payload = format!(
-        "{corpus}|{}|{}|{schema_version}|{}|{table_version_id}|{row_count}|{fragment_count}|{}",
+        "{corpus}|{}|{}|{schema_version}|{}|{table_version_id}|{row_count}|{fragment_count}|{}|{storage_format:?}",
         repo_id.trim().to_ascii_lowercase(),
         input.table_name.trim().to_ascii_lowercase(),
         input

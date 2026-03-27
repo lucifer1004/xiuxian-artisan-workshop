@@ -35,13 +35,24 @@ pub fn execute_search(request: &WendaoSearchRequest) -> Result<String, String> {
         validate_search_request(request)?;
     let index = LinkGraphIndex::build(&root)
         .map_err(|error| format!("failed to build LinkGraph index at `{root_dir}`: {error}"))?;
-    let payload = index.search_planned_payload_with_agentic(
-        query,
-        limit,
-        base_options,
-        request.include_provisional,
-        request.provisional_limit,
-    );
+    let payload = if let Some(query_vector) = request.query_vector.as_deref() {
+        index.search_planned_payload_with_agentic_query_vector(
+            query,
+            query_vector,
+            limit,
+            base_options,
+            request.include_provisional,
+            request.provisional_limit,
+        )
+    } else {
+        index.search_planned_payload_with_agentic(
+            query,
+            limit,
+            base_options,
+            request.include_provisional,
+            request.provisional_limit,
+        )
+    };
     render_payload(&payload, response_format)
 }
 
@@ -56,8 +67,9 @@ pub async fn execute_search_async(request: &WendaoSearchRequest) -> Result<Strin
     let index = LinkGraphIndex::build(&root)
         .map_err(|error| format!("failed to build LinkGraph index at `{root_dir}`: {error}"))?;
     let payload = index
-        .search_planned_payload_with_agentic_async(
+        .search_planned_payload_with_agentic_async_with_query_vector(
             query,
+            request.query_vector.as_deref().unwrap_or(&[]),
             limit,
             base_options,
             request.include_provisional,

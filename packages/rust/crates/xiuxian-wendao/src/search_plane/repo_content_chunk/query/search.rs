@@ -8,7 +8,6 @@ use super::RepoContentChunkSearchError;
 use super::compare_candidates;
 use super::execution::execute_repo_content_search;
 use super::retained_window;
-use super::scan::build_repo_content_scan_options;
 
 pub(crate) async fn search_repo_content_chunks(
     service: &SearchPlaneService,
@@ -23,26 +22,38 @@ pub(crate) async fn search_repo_content_chunks(
     }
 
     let _read_permit = service.acquire_repo_search_read_permit().await?;
-    let store = service
-        .open_store(SearchCorpusKind::RepoContentChunk)
-        .await?;
-    let table_name = service
+    let Some(publication) = service
         .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, repo_id)
         .await
-        .and_then(|record| record.publication.map(|publication| publication.table_name))
-        .unwrap_or_else(|| SearchPlaneService::repo_content_chunk_table_name(repo_id));
-    if !store.table_path(table_name.as_str()).exists() {
+        .and_then(|record| record.publication)
+    else {
+        return Ok(Vec::new());
+    };
+    if !publication.is_datafusion_readable() {
         return Ok(Vec::new());
     }
 
-    let options = build_repo_content_scan_options(language_filters, trimmed, limit);
-    let needle = trimmed.to_ascii_lowercase();
+    let parquet_path = service.repo_publication_parquet_path(
+        SearchCorpusKind::RepoContentChunk,
+        publication.table_name.as_str(),
+    );
+    if !parquet_path.exists() {
+        return Ok(Vec::new());
+    }
+    let engine_table_name = SearchPlaneService::repo_publication_engine_table_name(
+        SearchCorpusKind::RepoContentChunk,
+        publication.publication_id.as_str(),
+    );
+    service
+        .search_engine()
+        .ensure_parquet_table_registered(engine_table_name.as_str(), parquet_path.as_path(), &[])
+        .await?;
+
     let execution = execute_repo_content_search(
-        &store,
-        table_name.as_str(),
+        service.search_engine(),
+        engine_table_name.as_str(),
         trimmed,
-        needle.as_str(),
-        options,
+        language_filters,
         retained_window(limit),
     )
     .await?;

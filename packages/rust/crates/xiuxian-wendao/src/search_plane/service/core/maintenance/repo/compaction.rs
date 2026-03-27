@@ -42,6 +42,9 @@ impl SearchPlaneService {
 
     fn repo_compaction_task(&self, record: &SearchRepoCorpusRecord) -> Option<RepoCompactionTask> {
         let publication = record.publication.as_ref()?;
+        if publication.is_datafusion_readable() {
+            return None;
+        }
         let maintenance = record.maintenance.as_ref()?;
         if !maintenance.compaction_pending {
             return None;

@@ -16,7 +16,11 @@ use ops::DatasetCacheConfig;
 // Re-exports from xiuxian-lance
 // ============================================================================
 
-pub use arrow::array::StringBuilder as LanceStringBuilder;
+pub use arrow::record_batch::RecordBatch as EngineRecordBatch;
+pub use lance::deps::arrow_array::ListArray as LanceListArray;
+pub use lance::deps::arrow_array::builder::{
+    ListBuilder as LanceListBuilder, StringBuilder as LanceStringBuilder,
+};
 pub use lance::deps::arrow_array::{
     Array as LanceArray, ArrayRef as LanceArrayRef, BooleanArray as LanceBooleanArray,
     Float64Array as LanceFloat64Array, Int32Array as LanceInt32Array,
@@ -48,9 +52,10 @@ pub use xiuxian_skills::skills::{
 
 pub use arrow_transport::{
     ARROW_TRANSPORT_CONTENT_TYPE, ARROW_TRANSPORT_DEFAULT_BASE_URL,
-    ARROW_TRANSPORT_DEFAULT_HEALTH_ROUTE, ARROW_TRANSPORT_DEFAULT_ROUTE, ArrowTransportClient,
-    ArrowTransportConfig, ArrowTransportConfigError, ArrowTransportError,
-    decode_record_batches_ipc, encode_record_batch_ipc, encode_record_batches_ipc,
+    ARROW_TRANSPORT_DEFAULT_HEALTH_ROUTE, ARROW_TRANSPORT_DEFAULT_ROUTE,
+    ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION, ArrowTransportClient, ArrowTransportConfig,
+    ArrowTransportConfigError, ArrowTransportError, decode_record_batches_ipc,
+    encode_record_batch_ipc, encode_record_batches_ipc,
 };
 pub use error::VectorStoreError;
 pub use keyword::{
@@ -65,6 +70,11 @@ pub use ops::{
     schema_version_from_schema, string_contains_mask,
 };
 pub use search::SearchOptions;
+pub use search_engine::{
+    SearchEngineContext, SearchEnginePartitionColumn, engine_batch_to_lance_batch,
+    engine_batches_to_lance_batches, lance_batch_to_engine_batch, lance_batches_to_engine_batches,
+    write_engine_batches_to_parquet_file, write_lance_batches_to_parquet_file,
+};
 pub use search_impl::json_to_lance_where;
 pub use skill::{ToolSearchOptions, ToolSearchRequest, ToolSearchResult};
 
@@ -80,6 +90,7 @@ pub mod keyword;
 pub mod ops;
 pub mod search;
 pub mod search_cache;
+pub mod search_engine;
 pub mod skill;
 pub mod test_support;
 

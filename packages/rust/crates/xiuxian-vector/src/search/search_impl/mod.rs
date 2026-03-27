@@ -12,6 +12,7 @@ use crate::{
 
 mod boost_ops;
 mod confidence;
+mod fetch_ops;
 mod filter;
 mod hybrid_ops;
 mod ipc;

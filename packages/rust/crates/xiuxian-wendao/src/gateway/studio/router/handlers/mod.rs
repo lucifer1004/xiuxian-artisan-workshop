@@ -10,7 +10,7 @@ pub mod repo;
 pub mod ui_config;
 pub mod vfs;
 
-pub use analysis::{code_ast, markdown};
+pub use analysis::{code_ast, code_ast_retrieval_arrow, markdown, markdown_retrieval_arrow};
 pub use capabilities::get as get_ui_capabilities;
 pub use docs::family::{
     family_cluster as docs_family_cluster, family_context as docs_family_context,

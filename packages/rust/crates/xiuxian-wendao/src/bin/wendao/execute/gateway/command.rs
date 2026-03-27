@@ -2,11 +2,16 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
+use axum::Json;
+use axum::error_handling::HandleErrorLayer;
+use axum::http::StatusCode;
 use axum::routing::{Router, get};
 use log::info;
 use tokio::sync::mpsc;
+use tower::{BoxError, ServiceBuilder};
 
 use crate::execute::gateway::{
     config::{resolve_config_path, resolve_port, resolve_webhook_config},
@@ -19,6 +24,21 @@ use crate::types::{Cli, GatewayArgs, GatewayCommand, GatewayStartArgs};
 use xiuxian_wendao::LinkGraphIndex;
 use xiuxian_wendao::gateway::{openapi::paths as openapi_paths, studio::studio_routes};
 use xiuxian_zhenfa::{NotificationService, ZhenfaSignal, notification_worker};
+
+const GATEWAY_LISTEN_BACKLOG_ENV: &str = "XIUXIAN_WENDAO_GATEWAY_LISTEN_BACKLOG";
+const GATEWAY_STUDIO_CONCURRENCY_LIMIT_ENV: &str =
+    "XIUXIAN_WENDAO_GATEWAY_STUDIO_CONCURRENCY_LIMIT";
+const GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS_ENV: &str =
+    "XIUXIAN_WENDAO_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS";
+const DEFAULT_GATEWAY_LISTEN_BACKLOG: u32 = 2048;
+const MIN_GATEWAY_LISTEN_BACKLOG: u32 = 128;
+const MAX_GATEWAY_LISTEN_BACKLOG: u32 = 8192;
+const DEFAULT_GATEWAY_STUDIO_CONCURRENCY_FALLBACK: usize = 8;
+const MIN_GATEWAY_STUDIO_CONCURRENCY_LIMIT: usize = 32;
+const MAX_GATEWAY_STUDIO_CONCURRENCY_LIMIT: usize = 128;
+const DEFAULT_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 15;
+const MIN_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 5;
+const MAX_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 60;
 
 /// Handle the gateway command.
 pub(crate) async fn handle(
@@ -71,17 +91,32 @@ async fn handle_start(
         build_plugin_registry()?,
     ));
 
+    let listen_backlog = gateway_listen_backlog();
+    let studio_concurrency_limit = gateway_studio_concurrency_limit();
+    let studio_request_timeout = gateway_studio_request_timeout();
+
     // 3. Build the Axum router
+    let studio_app = studio_routes().layer(
+        ServiceBuilder::new()
+            .layer(HandleErrorLayer::new(handle_gateway_service_error))
+            .load_shed()
+            .timeout(studio_request_timeout)
+            .concurrency_limit(studio_concurrency_limit),
+    );
     let app = Router::new()
         .route(openapi_paths::API_HEALTH_AXUM_PATH, get(health))
         .route(openapi_paths::API_STATS_AXUM_PATH, get(stats))
         .route(openapi_paths::API_NOTIFY_AXUM_PATH, get(notify_status))
-        .merge(studio_routes())
+        .merge(studio_app)
         .with_state(app_state);
 
     // 4. Start the server
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     info!("Starting Wendao Gateway on port {port}");
+    info!(
+        "Gateway listener backlog={listen_backlog}, studio concurrency limit={studio_concurrency_limit}, studio request timeout={}s",
+        studio_request_timeout.as_secs()
+    );
     info!("Endpoints:");
     info!(
         "  - GET {}  - Health check",
@@ -96,6 +131,94 @@ async fn handle_start(
         openapi_paths::API_NOTIFY_AXUM_PATH
     );
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let socket = tokio::net::TcpSocket::new_v4()?;
+    socket.set_reuseaddr(true)?;
+    socket.bind(addr)?;
+    let listener = socket.listen(listen_backlog)?;
     Ok(axum::serve(listener, app).await?)
+}
+
+async fn handle_gateway_service_error(error: BoxError) -> (StatusCode, Json<serde_json::Value>) {
+    if error.is::<tower::timeout::error::Elapsed>() {
+        log::warn!("Gateway studio router timed out: {error}");
+        return (
+            StatusCode::GATEWAY_TIMEOUT,
+            Json(serde_json::json!({
+                "error": "gateway request timed out",
+                "code": "GATEWAY_TIMEOUT",
+            })),
+        );
+    }
+    log::warn!("Gateway studio router overloaded: {error}");
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(serde_json::json!({
+            "error": "gateway is overloaded",
+            "code": "GATEWAY_OVERLOADED",
+        })),
+    )
+}
+
+pub(crate) fn gateway_listen_backlog() -> u32 {
+    gateway_listen_backlog_with_lookup(&|key| std::env::var(key).ok())
+}
+
+pub(crate) fn gateway_listen_backlog_with_lookup(lookup: &dyn Fn(&str) -> Option<String>) -> u32 {
+    lookup(GATEWAY_LISTEN_BACKLOG_ENV)
+        .and_then(|raw| raw.trim().parse::<u32>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_GATEWAY_LISTEN_BACKLOG)
+        .clamp(MIN_GATEWAY_LISTEN_BACKLOG, MAX_GATEWAY_LISTEN_BACKLOG)
+}
+
+pub(crate) fn gateway_studio_concurrency_limit() -> usize {
+    gateway_studio_concurrency_limit_with_lookup(
+        &|key| std::env::var(key).ok(),
+        std::thread::available_parallelism()
+            .ok()
+            .map(std::num::NonZeroUsize::get),
+    )
+}
+
+pub(crate) fn gateway_studio_concurrency_limit_with_lookup(
+    lookup: &dyn Fn(&str) -> Option<String>,
+    available_parallelism: Option<usize>,
+) -> usize {
+    lookup(GATEWAY_STUDIO_CONCURRENCY_LIMIT_ENV)
+        .and_then(|raw| raw.trim().parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or_else(|| default_gateway_studio_concurrency_limit(available_parallelism))
+        .clamp(
+            MIN_GATEWAY_STUDIO_CONCURRENCY_LIMIT,
+            MAX_GATEWAY_STUDIO_CONCURRENCY_LIMIT,
+        )
+}
+
+fn default_gateway_studio_concurrency_limit(available_parallelism: Option<usize>) -> usize {
+    available_parallelism
+        .unwrap_or(DEFAULT_GATEWAY_STUDIO_CONCURRENCY_FALLBACK)
+        .saturating_mul(4)
+        .clamp(
+            MIN_GATEWAY_STUDIO_CONCURRENCY_LIMIT,
+            MAX_GATEWAY_STUDIO_CONCURRENCY_LIMIT,
+        )
+}
+
+pub(crate) fn gateway_studio_request_timeout() -> Duration {
+    Duration::from_secs(gateway_studio_request_timeout_secs_with_lookup(&|key| {
+        std::env::var(key).ok()
+    }))
+}
+
+pub(crate) fn gateway_studio_request_timeout_secs_with_lookup(
+    lookup: &dyn Fn(&str) -> Option<String>,
+) -> u64 {
+    lookup(GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS_ENV)
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS)
+        .clamp(
+            MIN_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS,
+            MAX_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS,
+        )
 }

@@ -1,4 +1,4 @@
-use arrow_string::like;
+use arrow_string_compat::like;
 
 use crate::{LanceBooleanArray, LanceStringArray, VectorStoreError};
 

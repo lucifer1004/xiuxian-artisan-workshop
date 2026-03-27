@@ -1,10 +1,16 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use arrow::array::{ArrayRef, Float64Array, StringArray, UInt64Array};
+use arrow::datatypes::{DataType, Field, Schema};
 use axum::Json;
 use axum::extract::{Query, State};
+use axum::response::Response;
 
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
+use crate::gateway::studio::search::handlers::arrow_transport::{
+    arrow_payload_response, build_arrow_search_ipc, encode_json,
+};
 use crate::gateway::studio::types::{AstSearchHit, AstSearchResponse, UiProjectConfig};
 
 use super::super::project_scope::project_metadata_for_path;
@@ -14,6 +20,23 @@ pub async fn search_ast(
     State(state): State<Arc<GatewayState>>,
     Query(query): Query<AstSearchQuery>,
 ) -> Result<Json<AstSearchResponse>, StudioApiError> {
+    let response = load_ast_search_response(state.as_ref(), query).await?;
+    Ok(Json(response))
+}
+
+pub async fn search_ast_hits_arrow(
+    State(state): State<Arc<GatewayState>>,
+    Query(query): Query<AstSearchQuery>,
+) -> Result<Response, StudioApiError> {
+    let response = load_ast_search_response(state.as_ref(), query).await?;
+    ast_hits_arrow_response(&response.hits)
+        .map_err(|error| StudioApiError::internal("SEARCH_AST_HITS_ARROW_FAILED", error, None))
+}
+
+pub(crate) async fn load_ast_search_response(
+    state: &GatewayState,
+    query: AstSearchQuery,
+) -> Result<AstSearchResponse, StudioApiError> {
     let raw_query = query.q.unwrap_or_default();
     let query_text = raw_query.trim();
     if query_text.is_empty() {
@@ -52,12 +75,82 @@ pub async fn search_ast(
     });
     hits.truncate(limit);
 
-    Ok(Json(AstSearchResponse {
+    Ok(AstSearchResponse {
         query: query_text.to_string(),
         hit_count: hits.len(),
         hits,
         selected_scope: "definitions".to_string(),
-    }))
+    })
+}
+
+pub(crate) fn ast_hits_arrow_response(hits: &[AstSearchHit]) -> Result<Response, String> {
+    encode_ast_hits_ipc(hits).map(arrow_payload_response)
+}
+
+fn encode_ast_hits_ipc(hits: &[AstSearchHit]) -> Result<Vec<u8>, String> {
+    let names: Vec<&str> = hits.iter().map(|hit| hit.name.as_str()).collect();
+    let signatures: Vec<&str> = hits.iter().map(|hit| hit.signature.as_str()).collect();
+    let paths: Vec<&str> = hits.iter().map(|hit| hit.path.as_str()).collect();
+    let languages: Vec<&str> = hits.iter().map(|hit| hit.language.as_str()).collect();
+    let crate_names: Vec<&str> = hits.iter().map(|hit| hit.crate_name.as_str()).collect();
+    let project_names: Vec<Option<&str>> =
+        hits.iter().map(|hit| hit.project_name.as_deref()).collect();
+    let root_labels: Vec<Option<&str>> = hits.iter().map(|hit| hit.root_label.as_deref()).collect();
+    let node_kinds: Vec<Option<&str>> = hits.iter().map(|hit| hit.node_kind.as_deref()).collect();
+    let owner_titles: Vec<Option<&str>> =
+        hits.iter().map(|hit| hit.owner_title.as_deref()).collect();
+    let navigation_targets_json: Vec<String> = hits
+        .iter()
+        .map(|hit| encode_json(&hit.navigation_target))
+        .collect::<Result<_, _>>()?;
+
+    let schema = Schema::new(vec![
+        Field::new("name", DataType::Utf8, false),
+        Field::new("signature", DataType::Utf8, false),
+        Field::new("path", DataType::Utf8, false),
+        Field::new("language", DataType::Utf8, false),
+        Field::new("crateName", DataType::Utf8, false),
+        Field::new("projectName", DataType::Utf8, true),
+        Field::new("rootLabel", DataType::Utf8, true),
+        Field::new("nodeKind", DataType::Utf8, true),
+        Field::new("ownerTitle", DataType::Utf8, true),
+        Field::new("navigationTargetJson", DataType::Utf8, false),
+        Field::new("lineStart", DataType::UInt64, false),
+        Field::new("lineEnd", DataType::UInt64, false),
+        Field::new("score", DataType::Float64, false),
+    ]);
+
+    let columns: Vec<ArrayRef> = vec![
+        Arc::new(StringArray::from(names)),
+        Arc::new(StringArray::from(signatures)),
+        Arc::new(StringArray::from(paths)),
+        Arc::new(StringArray::from(languages)),
+        Arc::new(StringArray::from(crate_names)),
+        Arc::new(StringArray::from(project_names)),
+        Arc::new(StringArray::from(root_labels)),
+        Arc::new(StringArray::from(node_kinds)),
+        Arc::new(StringArray::from(owner_titles)),
+        Arc::new(StringArray::from(
+            navigation_targets_json
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        )),
+        Arc::new(UInt64Array::from(
+            hits.iter()
+                .map(|hit| hit.line_start as u64)
+                .collect::<Vec<_>>(),
+        )),
+        Arc::new(UInt64Array::from(
+            hits.iter()
+                .map(|hit| hit.line_end as u64)
+                .collect::<Vec<_>>(),
+        )),
+        Arc::new(Float64Array::from(
+            hits.iter().map(|hit| hit.score).collect::<Vec<_>>(),
+        )),
+    ];
+    build_arrow_search_ipc(schema, columns)
 }
 
 fn enrich_ast_hit(
@@ -95,5 +188,54 @@ fn ast_hit_score(hit: &AstSearchHit) -> f64 {
         Some("task") => 0.88,
         Some("property" | "observation") => 0.8,
         _ => 0.95,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    use crate::gateway::studio::types::StudioNavigationTarget;
+    use arrow::ipc::reader::StreamReader;
+
+    #[test]
+    fn search_ast_arrow_roundtrip_preserves_markdown_fields() {
+        let hits = vec![AstSearchHit {
+            name: "IndexTask".to_string(),
+            signature: "- [ ] IndexTask".to_string(),
+            path: "docs/index.md".to_string(),
+            language: "markdown".to_string(),
+            crate_name: "kernel".to_string(),
+            project_name: Some("kernel".to_string()),
+            root_label: Some("kernel".to_string()),
+            node_kind: Some("task".to_string()),
+            owner_title: Some("Index".to_string()),
+            navigation_target: StudioNavigationTarget {
+                path: "kernel/docs/index.md".to_string(),
+                category: "knowledge".to_string(),
+                project_name: Some("kernel".to_string()),
+                root_label: Some("kernel".to_string()),
+                line: Some(12),
+                line_end: Some(14),
+                column: Some(1),
+            },
+            line_start: 12,
+            line_end: 14,
+            score: 0.88,
+        }];
+
+        let encoded = encode_ast_hits_ipc(&hits).expect("ast hit arrow encoding should succeed");
+        let reader = StreamReader::try_new(Cursor::new(encoded), None)
+            .expect("ast hit stream reader should open");
+        let batches = reader
+            .collect::<Result<Vec<_>, _>>()
+            .expect("ast hit stream should decode");
+        assert_eq!(batches.len(), 1);
+        let batch = &batches[0];
+        assert_eq!(batch.num_rows(), 1);
+        assert!(batch.column_by_name("nodeKind").is_some());
+        assert!(batch.column_by_name("ownerTitle").is_some());
+        assert!(batch.column_by_name("navigationTargetJson").is_some());
     }
 }

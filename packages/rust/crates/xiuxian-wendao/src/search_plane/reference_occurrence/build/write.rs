@@ -1,10 +1,10 @@
-use xiuxian_vector::{ScalarIndexType, VectorStoreError};
+use xiuxian_vector::{ColumnarScanOptions, VectorStoreError};
 
 use crate::search_plane::reference_occurrence::build::{
     ReferenceOccurrenceBuildPlan, ReferenceOccurrenceWriteResult,
 };
 use crate::search_plane::reference_occurrence::schema::{
-    filter_column, path_column, reference_occurrence_batches, reference_occurrence_schema,
+    path_column, reference_occurrence_batches, reference_occurrence_schema,
 };
 use crate::search_plane::{
     SearchBuildLease, SearchCorpusKind, SearchPlaneService, delete_paths_from_table,
@@ -50,17 +50,29 @@ pub(crate) async fn write_reference_occurrence_epoch(
             .replace_record_batches(table_name.as_str(), schema.clone(), changed_batches)
             .await?;
     }
-    store
-        .create_column_scalar_index(
-            table_name.as_str(),
-            filter_column(),
-            None,
-            ScalarIndexType::BTree,
-        )
-        .await?;
+    export_reference_occurrence_epoch_parquet(service, lease.epoch).await?;
     let table_info = store.get_table_info(table_name.as_str()).await?;
     Ok(ReferenceOccurrenceWriteResult {
         row_count: table_info.num_rows,
         fragment_count: u64::try_from(table_info.fragment_count).unwrap_or(u64::MAX),
     })
+}
+
+pub(super) async fn export_reference_occurrence_epoch_parquet(
+    service: &SearchPlaneService,
+    epoch: u64,
+) -> Result<(), VectorStoreError> {
+    let store = service
+        .open_store(SearchCorpusKind::ReferenceOccurrence)
+        .await?;
+    let table_name = SearchPlaneService::table_name(SearchCorpusKind::ReferenceOccurrence, epoch);
+    let parquet_path =
+        service.local_epoch_parquet_path(SearchCorpusKind::ReferenceOccurrence, epoch);
+    store
+        .write_vector_store_table_to_parquet_file(
+            table_name.as_str(),
+            parquet_path.as_path(),
+            ColumnarScanOptions::default(),
+        )
+        .await
 }

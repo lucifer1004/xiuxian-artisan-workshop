@@ -81,6 +81,43 @@ graph_rows_per_source = 4
         runtime.semantic_ignition.embedding_model.as_deref(),
         Some("glm-5")
     );
+    assert!(runtime.julia_rerank.base_url.is_none());
+
+    Ok(())
+}
+
+#[test]
+fn test_retrieval_runtime_resolves_julia_rerank_config() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(
+        &config_path,
+        r#"[link_graph.retrieval]
+mode = "hybrid"
+
+[link_graph.retrieval.julia_rerank]
+base_url = "http://127.0.0.1:8088"
+route = "/arrow-ipc"
+health_route = "/healthz"
+schema_version = "v1"
+timeout_secs = 15
+"#,
+    )?;
+    let config_path_string = config_path.to_string_lossy().to_string();
+    set_link_graph_wendao_config_override(&config_path_string);
+
+    let runtime = resolve_link_graph_retrieval_policy_runtime();
+    assert_eq!(
+        runtime.julia_rerank.base_url.as_deref(),
+        Some("http://127.0.0.1:8088")
+    );
+    assert_eq!(runtime.julia_rerank.route.as_deref(), Some("/arrow-ipc"));
+    assert_eq!(
+        runtime.julia_rerank.health_route.as_deref(),
+        Some("/healthz")
+    );
+    assert_eq!(runtime.julia_rerank.schema_version.as_deref(), Some("v1"));
+    assert_eq!(runtime.julia_rerank.timeout_secs, Some(15));
 
     Ok(())
 }

@@ -9,6 +9,6 @@ mod tests;
 
 pub(crate) use candidates::RepoContentChunkCandidate;
 pub(crate) use error::RepoContentChunkSearchError;
-pub(crate) use helpers::{candidate_path_key, compare_candidates, should_use_fts};
+pub(crate) use helpers::{candidate_path_key, compare_candidates};
 pub(crate) use scan::retained_window;
 pub(crate) use search::search_repo_content_chunks;

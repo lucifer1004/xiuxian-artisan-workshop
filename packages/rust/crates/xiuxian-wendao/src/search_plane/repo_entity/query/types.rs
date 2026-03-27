@@ -3,7 +3,6 @@ use tokio::sync::OwnedSemaphorePermit;
 use crate::search_plane::ranking::{
     RetainedWindow, StreamingRerankSource, StreamingRerankTelemetry,
 };
-use xiuxian_vector::VectorStore;
 
 pub(crate) const MODULE_BUCKETS: u8 = 3;
 pub(crate) const SYMBOL_BUCKETS: u8 = 7;
@@ -29,7 +28,6 @@ pub(crate) struct RepoEntityCandidate {
 }
 
 pub(crate) struct RepoEntityQuery<'a> {
-    pub(crate) query_text: &'a str,
     pub(crate) query_lower: &'a str,
     pub(crate) language_filters: &'a std::collections::HashSet<String>,
     pub(crate) kind_filters: &'a std::collections::HashSet<String>,
@@ -44,8 +42,7 @@ pub(crate) struct RepoEntitySearchExecution {
 
 pub(crate) struct PreparedRepoEntitySearch {
     pub(crate) _read_permit: OwnedSemaphorePermit,
-    pub(crate) store: VectorStore,
-    pub(crate) table_name: String,
+    pub(crate) engine_table_name: String,
     pub(crate) candidates: Vec<RepoEntityCandidate>,
     pub(crate) telemetry: StreamingRerankTelemetry,
     pub(crate) source: StreamingRerankSource,

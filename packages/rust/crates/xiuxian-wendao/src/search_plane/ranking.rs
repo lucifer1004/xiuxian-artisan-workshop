@@ -21,16 +21,12 @@ impl RetainedWindow {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StreamingRerankSource {
     Scan,
-    Fts,
-    FtsFallbackScan,
 }
 
 impl From<StreamingRerankSource> for SearchQueryTelemetrySource {
     fn from(value: StreamingRerankSource) -> Self {
         match value {
             StreamingRerankSource::Scan => Self::Scan,
-            StreamingRerankSource::Fts => Self::Fts,
-            StreamingRerankSource::FtsFallbackScan => Self::FtsFallbackScan,
         }
     }
 }
@@ -275,7 +271,7 @@ mod tests {
         telemetry.observe_trim(18, 16);
 
         let record = telemetry.finish(
-            StreamingRerankSource::FtsFallbackScan,
+            StreamingRerankSource::Scan,
             Some("alpha/repo".to_string()),
             8,
         );
@@ -283,7 +279,7 @@ mod tests {
         assert_eq!(record.scope.as_deref(), Some("alpha/repo"));
         assert_eq!(
             record.source,
-            crate::search_plane::SearchQueryTelemetrySource::FtsFallbackScan
+            crate::search_plane::SearchQueryTelemetrySource::Scan
         );
         assert_eq!(record.batch_count, 1);
         assert_eq!(record.rows_scanned, 64);

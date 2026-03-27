@@ -148,8 +148,27 @@ fn batch_from_hits(hits: &[AttachmentSearchHit]) -> Result<LanceRecordBatch, Vec
     .map_err(VectorStoreError::Arrow)
 }
 
-pub(super) const fn projected_columns_with_hit_json() -> [&'static str; 13] {
+pub(super) const fn projected_columns() -> [&'static str; 13] {
     [
+        COLUMN_ID,
+        COLUMN_SOURCE_PATH,
+        COLUMN_SOURCE_TITLE,
+        COLUMN_SOURCE_STEM,
+        COLUMN_ATTACHMENT_PATH,
+        COLUMN_ATTACHMENT_NAME,
+        COLUMN_ATTACHMENT_EXT,
+        COLUMN_KIND,
+        COLUMN_SOURCE_PATH_FOLDED,
+        COLUMN_SOURCE_TITLE_FOLDED,
+        COLUMN_SOURCE_STEM_FOLDED,
+        COLUMN_ATTACHMENT_PATH_FOLDED,
+        COLUMN_ATTACHMENT_NAME_FOLDED,
+    ]
+}
+
+pub(super) const fn projected_columns_with_hit_json() -> [&'static str; 14] {
+    [
+        COLUMN_ID,
         COLUMN_SOURCE_PATH,
         COLUMN_SOURCE_TITLE,
         COLUMN_SOURCE_STEM,
@@ -166,12 +185,17 @@ pub(super) const fn projected_columns_with_hit_json() -> [&'static str; 13] {
     ]
 }
 
+#[cfg(test)]
 pub(super) const fn search_text_column() -> &'static str {
     COLUMN_SEARCH_TEXT
 }
 
 pub(super) const fn attachment_ext_column() -> &'static str {
     COLUMN_ATTACHMENT_EXT
+}
+
+pub(super) const fn id_column() -> &'static str {
+    COLUMN_ID
 }
 
 pub(super) const fn kind_column() -> &'static str {

@@ -67,6 +67,38 @@ impl SearchPlaneService {
         table_name: &str,
         projected_columns: &[&str],
     ) -> Result<(), VectorStoreError> {
+        let parquet_path = self.named_table_parquet_path(corpus, table_name);
+        if parquet_path.exists() {
+            if (!corpus.is_repo_backed() && self.local_maintenance_shutdown_requested())
+                || (corpus.is_repo_backed() && self.repo_maintenance_shutdown_requested())
+            {
+                return Err(VectorStoreError::General(if corpus.is_repo_backed() {
+                    crate::search_plane::service::core::maintenance::helpers::REPO_MAINTENANCE_SHUTDOWN_MESSAGE.to_string()
+                } else {
+                    LOCAL_MAINTENANCE_SHUTDOWN_MESSAGE.to_string()
+                }));
+            }
+            let engine_table_name = Self::maintenance_engine_table_name(corpus, table_name);
+            self.search_engine
+                .ensure_parquet_table_registered(
+                    engine_table_name.as_str(),
+                    parquet_path.as_path(),
+                    &[],
+                )
+                .await?;
+            let projection = if projected_columns.is_empty() {
+                "*".to_string()
+            } else {
+                projected_columns.join(", ")
+            };
+            let query = format!(
+                "SELECT {projection} FROM {} LIMIT {}",
+                engine_table_name, PREWARM_ROW_LIMIT
+            );
+            let _ = self.search_engine.sql_batches(query.as_str()).await?;
+            return Ok(());
+        }
+
         let store = self.open_store(corpus).await?;
         store
             .scan_record_batches_streaming_async(

@@ -17,22 +17,22 @@ use crate::search_plane::{
 fn trim_candidates_keeps_highest_ranked_attachment_hits() {
     let mut candidates = vec![
         AttachmentCandidate {
+            id: "zeta".to_string(),
             score: 0.4,
             source_path: "docs/zeta.md".to_string(),
             attachment_path: "assets/zeta.png".to_string(),
-            hit_json: "{}".to_string(),
         },
         AttachmentCandidate {
+            id: "beta".to_string(),
             score: 0.9,
             source_path: "docs/beta.md".to_string(),
             attachment_path: "assets/beta.png".to_string(),
-            hit_json: "{}".to_string(),
         },
         AttachmentCandidate {
+            id: "alpha".to_string(),
             score: 0.9,
             source_path: "docs/alpha.md".to_string(),
             attachment_path: "assets/alpha.png".to_string(),
-            hit_json: "{}".to_string(),
         },
     ];
 
@@ -133,6 +133,9 @@ async fn attachment_query_reads_hits_from_published_epoch() {
         .create_inverted_index(table_name.as_str(), search_text_column(), None)
         .await
         .unwrap_or_else(|error| panic!("create inverted index: {error}"));
+    crate::search_plane::attachment::build::export_attachment_epoch_parquet(&service, lease.epoch)
+        .await
+        .unwrap_or_else(|error| panic!("export attachment parquet: {error}"));
     service
         .coordinator()
         .publish_ready(&lease, hits.len() as u64, 1);

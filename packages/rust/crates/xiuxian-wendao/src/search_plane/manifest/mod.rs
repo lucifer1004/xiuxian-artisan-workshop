@@ -20,6 +20,6 @@ pub use keyspace::SearchManifestKeyspace;
 #[cfg(test)]
 pub(crate) use records::build_repo_publication_epoch;
 pub use records::{
-    SearchManifestRecord, SearchRepoCorpusRecord, SearchRepoCorpusSnapshotRecord,
-    SearchRepoPublicationRecord, SearchRepoRuntimeRecord,
+    SearchManifestRecord, SearchPublicationStorageFormat, SearchRepoCorpusRecord,
+    SearchRepoCorpusSnapshotRecord, SearchRepoPublicationRecord, SearchRepoRuntimeRecord,
 };

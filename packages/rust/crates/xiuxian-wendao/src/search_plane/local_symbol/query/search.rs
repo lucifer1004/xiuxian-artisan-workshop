@@ -1,11 +1,8 @@
-use xiuxian_vector::ColumnarScanOptions;
-
 use crate::gateway::studio::types::AstSearchHit;
 use crate::search_plane::local_symbol::query::shared::{
     LocalSymbolSearchError, compare_candidates, decode_local_symbol_hits,
     execute_local_symbol_search, retained_window,
 };
-use crate::search_plane::local_symbol::schema::{hit_json_column, projected_columns};
 use crate::search_plane::ranking::sort_by_rank;
 use crate::search_plane::{SearchCorpusKind, SearchPlaneService};
 
@@ -25,35 +22,34 @@ pub(crate) async fn search_local_symbols(
         return Ok(Vec::new());
     }
 
-    let store = service.open_store(SearchCorpusKind::LocalSymbol).await?;
     let table_names =
         service.local_epoch_table_names_for_reads(SearchCorpusKind::LocalSymbol, active_epoch);
     if table_names.is_empty() {
         return Ok(Vec::new());
     }
-    let mut columns = projected_columns()
-        .into_iter()
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    columns.push(hit_json_column().to_string());
+    for table_name in &table_names {
+        let parquet_path =
+            service.local_table_parquet_path(SearchCorpusKind::LocalSymbol, table_name.as_str());
+        if !parquet_path.exists() {
+            return Err(LocalSymbolSearchError::NotReady);
+        }
+        service
+            .search_engine()
+            .ensure_parquet_table_registered(table_name.as_str(), parquet_path.as_path(), &[])
+            .await?;
+    }
     let window = retained_window(limit);
     let execution = execute_local_symbol_search(
-        &store,
+        service.search_engine(),
         table_names.as_slice(),
         query_lower.as_str(),
-        ColumnarScanOptions {
-            projected_columns: columns,
-            batch_size: Some(256),
-            limit: Some(limit.saturating_mul(32).max(128)),
-            ..ColumnarScanOptions::default()
-        },
         window,
     )
     .await?;
     let mut candidates = execution.candidates;
     sort_by_rank(&mut candidates, compare_candidates);
     candidates.truncate(limit);
-    let hits = decode_local_symbol_hits(candidates)?;
+    let hits = decode_local_symbol_hits(service.search_engine(), candidates).await?;
     service.record_query_telemetry(
         SearchCorpusKind::LocalSymbol,
         execution

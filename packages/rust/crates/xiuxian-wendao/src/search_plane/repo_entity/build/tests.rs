@@ -228,6 +228,13 @@ async fn repo_entity_incremental_refresh_reuses_unchanged_rows() {
         .table_name
         .clone();
     assert!(
+        !service
+            .corpus_root(SearchCorpusKind::RepoEntity)
+            .join(format!("{first_table_name}.lance"))
+            .exists(),
+        "repo entity publication should no longer create a Lance table"
+    );
+    assert!(
         first_record
             .maintenance
             .as_ref()
@@ -256,6 +263,13 @@ async fn repo_entity_incremental_refresh_reuses_unchanged_rows() {
         .as_ref()
         .unwrap_or_else(|| panic!("second publication"));
     assert_ne!(second_publication.table_name, first_table_name);
+    assert!(
+        !service
+            .corpus_root(SearchCorpusKind::RepoEntity)
+            .join(format!("{}.lance", second_publication.table_name))
+            .exists(),
+        "repo entity incremental publication should stay parquet-only"
+    );
     assert_eq!(second_publication.source_revision.as_deref(), Some("rev-2"));
     assert!(
         second_record

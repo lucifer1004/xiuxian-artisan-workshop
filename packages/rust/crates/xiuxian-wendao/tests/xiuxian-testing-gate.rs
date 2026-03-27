@@ -11,6 +11,10 @@ use xiuxian_testing::{
 };
 
 #[cfg(not(feature = "performance"))]
+#[path = "integration/support/mod.rs"]
+mod support;
+
+#[cfg(not(feature = "performance"))]
 #[path = "integration/coactivation_multihop_diffusion.rs"]
 mod coactivation_multihop_diffusion;
 
@@ -21,6 +25,22 @@ mod coactivation_weighted_propagation;
 #[cfg(not(feature = "performance"))]
 #[path = "integration/planned_search_semantic_ignition.rs"]
 mod planned_search_semantic_ignition;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/planned_search_julia_rerank.rs"]
+mod planned_search_julia_rerank;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/planned_search_julia_rerank_vector_store.rs"]
+mod planned_search_julia_rerank_vector_store;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/planned_search_julia_rerank_official_example.rs"]
+mod planned_search_julia_rerank_official_example;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/planned_search_julia_rerank_metadata_example.rs"]
+mod planned_search_julia_rerank_metadata_example;
 
 #[cfg(not(feature = "performance"))]
 #[path = "integration/ppr_weight_precision.rs"]

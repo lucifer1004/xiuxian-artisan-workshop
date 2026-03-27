@@ -135,7 +135,7 @@ async fn repo_publication_does_not_skip_prewarm_when_slot_is_already_claimed() {
 }
 
 #[tokio::test]
-async fn repo_publication_schedules_compaction_and_resets_repo_maintenance() {
+async fn repo_publication_keeps_compaction_disabled_for_parquet_publications() {
     let temp_dir = temp_dir();
     let service = SearchPlaneService::with_paths(
         PathBuf::from("/tmp/project"),
@@ -154,74 +154,30 @@ async fn repo_publication_schedules_compaction_and_resets_repo_maintenance() {
         Some("rev-1"),
     )
     .await;
-
-    ok_or_panic(
-        tokio::time::timeout(Duration::from_secs(5), async {
-            loop {
-                let entity = some_or_panic(
-                    service
-                        .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, "alpha/repo")
-                        .await,
-                    "repo entity record should exist",
-                );
-                let content = some_or_panic(
-                    service
-                        .repo_corpus_record_for_reads(
-                            SearchCorpusKind::RepoContentChunk,
-                            "alpha/repo",
-                        )
-                        .await,
-                    "repo content record should exist",
-                );
-                let entity_done = entity
-                    .maintenance
-                    .as_ref()
-                    .and_then(|maintenance| maintenance.last_compacted_at.as_ref())
-                    .is_some();
-                let content_done = content
-                    .maintenance
-                    .as_ref()
-                    .and_then(|maintenance| maintenance.last_compacted_at.as_ref())
-                    .is_some();
-                if entity_done && content_done {
-                    let entity_maintenance =
-                        some_or_panic(entity.maintenance.as_ref(), "entity maintenance");
-                    let content_maintenance =
-                        some_or_panic(content.maintenance.as_ref(), "content maintenance");
-                    assert!(!entity_maintenance.compaction_running);
-                    assert!(!entity_maintenance.compaction_pending);
-                    assert_eq!(entity_maintenance.publish_count_since_compaction, 0);
-                    assert_eq!(
-                        entity_maintenance.last_compaction_reason.as_deref(),
-                        Some("publish_threshold")
-                    );
-                    assert_eq!(
-                        entity_maintenance.last_compacted_row_count,
-                        entity
-                            .publication
-                            .as_ref()
-                            .map(|publication| publication.row_count)
-                    );
-                    assert!(!content_maintenance.compaction_running);
-                    assert!(!content_maintenance.compaction_pending);
-                    assert_eq!(content_maintenance.publish_count_since_compaction, 0);
-                    assert_eq!(
-                        content_maintenance.last_compaction_reason.as_deref(),
-                        Some("publish_threshold")
-                    );
-                    assert_eq!(
-                        content_maintenance.last_compacted_row_count,
-                        content
-                            .publication
-                            .as_ref()
-                            .map(|publication| publication.row_count)
-                    );
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-        })
-        .await,
-        "repo compaction should complete",
+    let entity = some_or_panic(
+        service
+            .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, "alpha/repo")
+            .await,
+        "repo entity record should exist",
     );
+    let content = some_or_panic(
+        service
+            .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, "alpha/repo")
+            .await,
+        "repo content record should exist",
+    );
+    let entity_maintenance = some_or_panic(entity.maintenance.as_ref(), "entity maintenance");
+    let content_maintenance = some_or_panic(content.maintenance.as_ref(), "content maintenance");
+    assert!(!entity_maintenance.compaction_running);
+    assert!(!entity_maintenance.compaction_pending);
+    assert_eq!(entity_maintenance.publish_count_since_compaction, 0);
+    assert!(entity_maintenance.last_compacted_at.is_none());
+    assert!(entity_maintenance.last_compaction_reason.is_none());
+    assert!(entity_maintenance.last_compacted_row_count.is_none());
+    assert!(!content_maintenance.compaction_running);
+    assert!(!content_maintenance.compaction_pending);
+    assert_eq!(content_maintenance.publish_count_since_compaction, 0);
+    assert!(content_maintenance.last_compacted_at.is_none());
+    assert!(content_maintenance.last_compaction_reason.is_none());
+    assert!(content_maintenance.last_compacted_row_count.is_none());
 }

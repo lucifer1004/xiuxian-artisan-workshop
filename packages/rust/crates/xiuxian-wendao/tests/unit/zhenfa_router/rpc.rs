@@ -1,10 +1,11 @@
 //! Unit tests for `zhenfa_router/rpc` module.
 
 use super::*;
+use crate::zhenfa_router::models::WendaoSearchRequest;
 
 use crate::link_graph::{
-    LinkGraphConfidenceLevel, LinkGraphRetrievalMode, LinkGraphSemanticIgnitionTelemetry,
-    QuantumContext,
+    LinkGraphConfidenceLevel, LinkGraphJuliaRerankTelemetry, LinkGraphRetrievalMode,
+    LinkGraphSemanticIgnitionTelemetry, QuantumContext,
 };
 
 #[test]
@@ -49,6 +50,13 @@ fn render_markdown_includes_hits() {
             context_count: 1,
             error: None,
         }),
+        julia_rerank: Some(LinkGraphJuliaRerankTelemetry {
+            applied: false,
+            response_row_count: 0,
+            trace_ids: Vec::new(),
+            error: Some("not configured".to_string()),
+        }),
+        query_vector: None,
         quantum_contexts: vec![QuantumContext {
             anchor_id: "alpha".to_string(),
             doc_id: "alpha".to_string(),
@@ -73,4 +81,16 @@ fn render_markdown_includes_hits() {
     assert!(rendered.contains("section: Design"));
     assert!(rendered.contains("semantic_ignition: openai-compatible+xiuxian-vector"));
     assert!(rendered.contains("Quantum Contexts"));
+}
+
+#[test]
+fn wendao_search_request_deserializes_query_vector() {
+    let request: WendaoSearchRequest = serde_json::from_value(serde_json::json!({
+        "query": "alpha signal",
+        "query_vector": [1.0, 0.0, 0.0]
+    }))
+    .expect("request should deserialize");
+
+    assert_eq!(request.query, "alpha signal");
+    assert_eq!(request.query_vector, Some(vec![1.0, 0.0, 0.0]));
 }

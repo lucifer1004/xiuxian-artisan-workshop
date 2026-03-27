@@ -30,8 +30,8 @@ pub(crate) async fn search_repo_entities(
         return Ok(Vec::new());
     };
     let hits: Vec<SearchHit> = hydrate_repo_entity_hits(
-        &prepared.store,
-        prepared.table_name.as_str(),
+        service.search_engine(),
+        prepared.engine_table_name.as_str(),
         prepared.candidates,
     )
     .await?;
@@ -74,8 +74,8 @@ pub(crate) async fn search_repo_entity_module_results(
         repo_id,
         prepared.candidates,
         load_hydrated_rows_by_id(
-            &prepared.store,
-            prepared.table_name.as_str(),
+            service.search_engine(),
+            prepared.engine_table_name.as_str(),
             ids.as_slice(),
             typed_repo_entity_columns().as_slice(),
         )
@@ -122,8 +122,8 @@ pub(crate) async fn search_repo_entity_symbol_results(
         repo_id,
         prepared.candidates,
         load_hydrated_rows_by_id(
-            &prepared.store,
-            prepared.table_name.as_str(),
+            service.search_engine(),
+            prepared.engine_table_name.as_str(),
             ids.as_slice(),
             typed_repo_entity_columns().as_slice(),
         )
@@ -170,8 +170,8 @@ pub(crate) async fn search_repo_entity_example_results(
         repo_id,
         prepared.candidates,
         load_hydrated_rows_by_id(
-            &prepared.store,
-            prepared.table_name.as_str(),
+            service.search_engine(),
+            prepared.engine_table_name.as_str(),
             ids.as_slice(),
             typed_repo_entity_columns().as_slice(),
         )

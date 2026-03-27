@@ -1,0 +1,70 @@
+# xiuxian-wendao-julia
+
+`xiuxian-wendao-julia` is the external Julia Repo Intelligence plugin crate for `xiuxian-wendao`.
+
+## Ownership Boundary
+
+- `xiuxian-vector` owns the reusable Arrow IPC transport substrate in `src/arrow_transport/`.
+- `xiuxian-wendao-julia` owns Julia-specific interpretation of repository plugin options and builds a transport client from them.
+- `xiuxian-wendao` hosts the analyzer registry and loads repository config, but it does not own a second Arrow transport implementation.
+
+## Public Surface
+
+- `JuliaRepoIntelligencePlugin`
+- `register_into`
+- `build_julia_arrow_transport_client`
+- `process_julia_arrow_batches`
+- `validate_julia_arrow_response_batches`
+
+The transport builder consumes repository plugin entries that resolve to:
+
+```toml
+[link_graph.projects.sample]
+root = "/path/to/repo"
+plugins = [
+  "julia",
+  { id = "julia", arrow_transport = { base_url = "http://127.0.0.1:8080", route = "/arrow-ipc", health_route = "/health", timeout_secs = 15 } }
+]
+```
+
+The inline object is materialized by `xiuxian-wendao` as `RepositoryPluginConfig::Config`, then interpreted here to construct `xiuxian_vector::ArrowTransportClient`.
+
+The transport client now sends `x-wendao-schema-version` and defaults to the
+`v1` WendaoArrow contract unless the repository plugin config overrides
+`schema_version`.
+
+`validate_julia_arrow_response_batches` enforces the current `v1` response
+shape before a future gateway integration accepts analyzer output:
+
+- required columns: `doc_id`, `analyzer_score`, `final_score`
+- `doc_id` must be unique and non-null
+- `final_score` must be finite
+
+`process_julia_arrow_batches` is the thin runtime hook for future gateway
+integration. It performs:
+
+- Arrow IPC HTTP roundtrip via `xiuxian_vector::ArrowTransportClient`
+- response schema-version enforcement
+- `v1` Julia response validation before returning decoded record batches
+
+## Validation
+
+- `direnv exec . cargo test -p xiuxian-wendao-julia transport --lib`
+- `direnv exec . cargo test -p xiuxian-wendao-julia process_julia_arrow_batches_against_real_wendaoarrow_service --lib`
+- `direnv exec . cargo test -p xiuxian-wendao-julia real_wendaoarrow_metadata_example_roundtrip_decodes_trace_id_column --lib`
+- `direnv exec . cargo check -p xiuxian-wendao-julia --lib`
+
+The real loopback test does not use an Axum mock for the processor path. It
+spawns `.data/WendaoArrow/scripts/run_stream_scoring_server.sh`, waits for
+`/health`, then posts Arrow IPC batches through
+`xiuxian_vector::ArrowTransportClient` and asserts the Rust side can decode the
+returned Arrow response contract and scoring values.
+
+There is also a metadata-aware real loopback that targets
+`.data/WendaoArrow/scripts/run_stream_metadata_server.sh`, sends a request
+whose Arrow schema metadata includes `trace_id`, and asserts the Rust side can
+decode the additive `trace_id` response column.
+
+The corresponding test support is now split under `src/plugin/test_support/`
+into shared child/path helpers and official-example helpers, mirroring the
+same semantic split used by `xiuxian-wendao` integration support.

@@ -85,6 +85,19 @@ crate exposes:
 - `ArrowTransportClient` for HTTP roundtrips against a WendaoArrow-compatible endpoint
 - `ArrowTransportConfig::from_toml_str(...)` for `[gateway.arrow_transport]` config loading
 
+`ArrowTransportClient` now treats `x-wendao-schema-version` as a required
+response header on both `/health` and Arrow IPC responses. A missing or
+mismatched schema header is treated as a protocol error.
+
+## Arrow Ownership Boundary
+
+`xiuxian-vector` intentionally has two Arrow surfaces:
+
+- Lance-facing storage, mutation, and repo-hydration paths must use Lance's Arrow-57 types re-exported from `lance::deps`.
+- DataFusion/search-engine execution and generic Arrow-over-HTTP transport continue to use the workspace Arrow surface.
+
+Do not pass workspace Arrow arrays into `LanceRecordBatch` construction or downcast Lance batches using workspace Arrow collection types. Use the Lance-prefixed re-exports from `xiuxian-vector` for any code that touches Lance-owned schemas or arrays.
+
 ## Integration
 
 Used by:

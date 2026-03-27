@@ -745,6 +745,92 @@ async fn search_attachments_waits_for_initial_index_publication() {
 }
 
 #[tokio::test]
+async fn search_attachments_hits_arrow_returns_arrow_payload() {
+    let fixture = make_state_with_docs(vec![(
+        "docs/alpha.md",
+        "# Alpha\n\n![Topology](assets/topology.png)\n\n[Spec](files/spec.pdf)\n",
+    )]);
+    fixture.state.studio.set_ui_config(UiConfig {
+        projects: vec![UiProjectConfig {
+            name: "kernel".to_string(),
+            root: ".".to_string(),
+            dirs: vec!["docs".to_string()],
+        }],
+        repo_projects: Vec::new(),
+    });
+    publish_attachment_index(&fixture.state).await;
+
+    let result = search_attachments_hits_arrow(
+        State(Arc::clone(&fixture.state)),
+        Query(AttachmentSearchQuery {
+            q: Some("topology".to_string()),
+            limit: Some(10),
+            ext: vec!["png".to_string()],
+            kind: vec!["image".to_string()],
+            case_sensitive: false,
+        }),
+    )
+    .await;
+
+    let Ok(response) = result else {
+        panic!("expected attachment Arrow search request to succeed");
+    };
+
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get(axum::http::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
+        Some(crate::gateway::studio::router::retrieval_arrow::RETRIEVAL_ARROW_CONTENT_TYPE),
+    );
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("attachment Arrow response body should decode");
+    let reader =
+        arrow::ipc::reader::StreamReader::try_new(std::io::Cursor::new(body.to_vec()), None)
+            .expect("attachment Arrow stream reader should open");
+    let batches = reader
+        .collect::<Result<Vec<_>, _>>()
+        .expect("attachment Arrow stream should decode");
+    assert_eq!(batches.len(), 1);
+    let batch = &batches[0];
+    assert_eq!(batch.num_rows(), 1);
+
+    let attachment_names = batch
+        .column_by_name("attachmentName")
+        .expect("attachmentName column")
+        .as_any()
+        .downcast_ref::<arrow::array::StringArray>()
+        .expect("attachmentName should be utf8");
+    assert_eq!(attachment_names.value(0), "topology.png");
+
+    let names = batch
+        .column_by_name("name")
+        .expect("name column")
+        .as_any()
+        .downcast_ref::<arrow::array::StringArray>()
+        .expect("name should be utf8");
+    assert_eq!(names.value(0), "topology.png");
+
+    let navigation_targets = batch
+        .column_by_name("navigationTargetJson")
+        .expect("navigationTargetJson column")
+        .as_any()
+        .downcast_ref::<arrow::array::StringArray>()
+        .expect("navigationTargetJson should be utf8");
+    let parsed_navigation: serde_json::Value = serde_json::from_str(navigation_targets.value(0))
+        .expect("navigation target json should parse");
+    assert_eq!(
+        parsed_navigation
+            .get("path")
+            .and_then(serde_json::Value::as_str),
+        Some("docs/alpha.md"),
+    );
+}
+
+#[tokio::test]
 async fn search_attachments_respects_extension_and_kind_filters() {
     let fixture = make_state_with_docs(vec![(
         "docs/alpha.md",

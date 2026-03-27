@@ -2,12 +2,35 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::path::Path;
 
-use xiuxian_vector::{LanceRecordBatch, LanceStringArray, LanceUInt64Array};
+use arrow::array::{Array, StringArray, StringViewArray, UInt64Array};
+use xiuxian_vector::EngineRecordBatch;
 
 use crate::search_plane::repo_content_chunk::schema::{language_column, projected_columns};
 
 use super::RepoContentChunkCandidate;
 use super::RepoContentChunkSearchError;
+
+#[derive(Clone, Copy)]
+pub(crate) enum EngineStringColumn<'a> {
+    Utf8(&'a StringArray),
+    Utf8View(&'a StringViewArray),
+}
+
+impl<'a> EngineStringColumn<'a> {
+    pub(crate) fn value(self, row: usize) -> &'a str {
+        match self {
+            Self::Utf8(column) => column.value(row),
+            Self::Utf8View(column) => column.value(row),
+        }
+    }
+
+    pub(crate) fn is_null(self, row: usize) -> bool {
+        match self {
+            Self::Utf8(column) => column.is_null(row),
+            Self::Utf8View(column) => column.is_null(row),
+        }
+    }
+}
 
 pub(crate) fn compare_candidates(
     left: &RepoContentChunkCandidate,
@@ -23,41 +46,6 @@ pub(crate) fn compare_candidates(
 
 pub(crate) fn candidate_path_key(candidate: &RepoContentChunkCandidate) -> String {
     candidate.path.clone()
-}
-
-pub(crate) fn filter_expression(language_filters: &HashSet<String>) -> Option<String> {
-    if language_filters.is_empty() {
-        return None;
-    }
-
-    let mut sorted = language_filters.iter().cloned().collect::<Vec<_>>();
-    sorted.sort_unstable();
-    Some(
-        sorted
-            .into_iter()
-            .map(|value| {
-                format!(
-                    "{column} = '{}'",
-                    escape_literal(value.as_str()),
-                    column = language_column()
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(" OR "),
-    )
-}
-
-fn escape_literal(value: &str) -> String {
-    value.replace('\'', "''")
-}
-
-pub(crate) fn should_use_fts(query: &str) -> bool {
-    query.chars().any(|ch| ch.is_ascii_alphanumeric())
-        && query.chars().all(|ch| {
-            ch.is_ascii_alphanumeric()
-                || ch.is_ascii_whitespace()
-                || matches!(ch, '_' | '-' | '.' | '/' | ':' | '(' | ')' | '@')
-        })
 }
 
 pub(crate) fn infer_code_language(path: &str) -> Option<String> {
@@ -86,26 +74,36 @@ pub(crate) fn truncate_content_search_snippet(value: &str, max_chars: usize) -> 
     }
 }
 
-pub(crate) fn string_column<'a>(
-    batch: &'a LanceRecordBatch,
+pub(crate) fn engine_string_column<'a>(
+    batch: &'a EngineRecordBatch,
     name: &str,
-) -> Result<&'a LanceStringArray, RepoContentChunkSearchError> {
-    batch
-        .column_by_name(name)
-        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-        .ok_or_else(|| {
-            RepoContentChunkSearchError::Decode(format!("missing string column `{name}`"))
-        })
+) -> Result<EngineStringColumn<'a>, RepoContentChunkSearchError> {
+    let column = batch.column_by_name(name).ok_or_else(|| {
+        RepoContentChunkSearchError::Decode(format!("missing engine string column `{name}`"))
+    })?;
+
+    if let Some(array) = column.as_any().downcast_ref::<StringArray>() {
+        return Ok(EngineStringColumn::Utf8(array));
+    }
+    if let Some(array) = column.as_any().downcast_ref::<StringViewArray>() {
+        return Ok(EngineStringColumn::Utf8View(array));
+    }
+
+    Err(RepoContentChunkSearchError::Decode(format!(
+        "engine column `{name}` is not utf8-like"
+    )))
 }
 
-pub(crate) fn u64_column<'a>(
-    batch: &'a LanceRecordBatch,
+pub(crate) fn engine_u64_column<'a>(
+    batch: &'a EngineRecordBatch,
     name: &str,
-) -> Result<&'a LanceUInt64Array, RepoContentChunkSearchError> {
+) -> Result<&'a UInt64Array, RepoContentChunkSearchError> {
     batch
         .column_by_name(name)
-        .and_then(|column| column.as_any().downcast_ref::<LanceUInt64Array>())
-        .ok_or_else(|| RepoContentChunkSearchError::Decode(format!("missing u64 column `{name}`")))
+        .and_then(|column| column.as_any().downcast_ref::<UInt64Array>())
+        .ok_or_else(|| {
+            RepoContentChunkSearchError::Decode(format!("missing engine u64 column `{name}`"))
+        })
 }
 
 pub(crate) fn projected_repo_content_columns() -> Vec<String> {
@@ -113,4 +111,26 @@ pub(crate) fn projected_repo_content_columns() -> Vec<String> {
         .into_iter()
         .map(str::to_string)
         .collect()
+}
+
+pub(crate) fn sql_string_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+pub(crate) fn language_filter_expression(language_filters: &HashSet<String>) -> Option<String> {
+    if language_filters.is_empty() {
+        return None;
+    }
+
+    let mut sorted = language_filters.iter().cloned().collect::<Vec<_>>();
+    sorted.sort_unstable();
+    Some(format!(
+        "{column} IN ({values})",
+        column = language_column(),
+        values = sorted
+            .into_iter()
+            .map(|value| sql_string_literal(value.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
 }

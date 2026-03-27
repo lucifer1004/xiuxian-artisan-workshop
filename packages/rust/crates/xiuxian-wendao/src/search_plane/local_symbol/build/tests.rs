@@ -161,6 +161,25 @@ async fn local_symbol_incremental_refresh_reuses_unchanged_rows() {
         .await
         .unwrap_or_else(|error| panic!("query alpha after refresh: {error}"));
     assert!(alpha.is_empty());
+    let active_epoch = service
+        .coordinator()
+        .status_for(SearchCorpusKind::LocalSymbol)
+        .active_epoch
+        .unwrap_or_else(|| panic!("local symbol active epoch"));
+    let table_names =
+        service.local_epoch_table_names_for_reads(SearchCorpusKind::LocalSymbol, active_epoch);
+    assert!(
+        !table_names.is_empty(),
+        "expected local symbol partition tables"
+    );
+    for table_name in table_names {
+        assert!(
+            service
+                .local_table_parquet_path(SearchCorpusKind::LocalSymbol, table_name.as_str())
+                .exists(),
+            "missing local symbol parquet export for {table_name}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -210,6 +229,14 @@ async fn local_symbol_build_writes_partitioned_epoch_tables_for_multiple_scopes(
     let table_names =
         service.local_epoch_table_names_for_reads(SearchCorpusKind::LocalSymbol, active_epoch);
     assert_eq!(table_names.len(), 2);
+    for table_name in &table_names {
+        assert!(
+            service
+                .local_table_parquet_path(SearchCorpusKind::LocalSymbol, table_name.as_str())
+                .exists(),
+            "missing local symbol parquet export for {table_name}"
+        );
+    }
 
     let alpha = search_local_symbols(&service, "alpha", 10)
         .await

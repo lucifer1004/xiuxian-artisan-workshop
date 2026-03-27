@@ -3,6 +3,7 @@
 use axum::{
     Json,
     extract::{Query, State},
+    response::Response,
 };
 use serde::Deserialize;
 use std::fs;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 
 use crate::analyzers::analyze_registered_repository_with_registry;
 use crate::gateway::studio::router::code_ast::build_code_ast_analysis_response;
+use crate::gateway::studio::router::retrieval_arrow::retrieval_chunks_arrow_response;
 use crate::gateway::studio::router::{
     GatewayState, StudioApiError, configured_repository, map_repo_intelligence_error,
 };
@@ -47,13 +49,28 @@ pub async fn markdown(
         .as_deref()
         .ok_or_else(|| StudioApiError::bad_request("MISSING_PATH", "`path` is required"))?;
 
-    let response = crate::gateway::studio::analysis::analyze_markdown(state.studio.as_ref(), path)
-        .await
-        .map_err(|error| {
-            StudioApiError::internal("MARKDOWN_ANALYSIS_FAILED", error.to_string(), None)
-        })?;
+    let response = load_markdown_analysis_response(state.as_ref(), path).await?;
 
     Ok(Json(response))
+}
+
+/// Returns shared retrieval chunks for markdown analysis as Arrow IPC.
+///
+/// # Errors
+///
+/// Returns an error when `path` is missing, markdown analysis fails, or Arrow
+/// IPC encoding fails.
+pub async fn markdown_retrieval_arrow(
+    State(state): State<Arc<GatewayState>>,
+    Query(query): Query<MarkdownAnalysisQuery>,
+) -> Result<Response, StudioApiError> {
+    let path = query
+        .path
+        .as_deref()
+        .ok_or_else(|| StudioApiError::bad_request("MISSING_PATH", "`path` is required"))?;
+    let response = load_markdown_analysis_response(state.as_ref(), path).await?;
+    retrieval_chunks_arrow_response(&response.retrieval_atoms)
+        .map_err(|error| StudioApiError::internal("MARKDOWN_RETRIEVAL_ARROW_FAILED", error, None))
 }
 
 /// Analyzes code file AST and projections.
@@ -76,7 +93,53 @@ pub async fn code_ast(
         .as_deref()
         .ok_or_else(|| StudioApiError::bad_request("MISSING_REPO", "`repo` is required"))?;
 
-    let line_hint = query.line;
+    let payload =
+        load_code_ast_analysis_response(state.as_ref(), path, repo_id, query.line).await?;
+
+    Ok(Json(payload))
+}
+
+/// Returns shared retrieval chunks for code AST analysis as Arrow IPC.
+///
+/// # Errors
+///
+/// Returns an error when `repo` or `path` is missing, repository analysis
+/// fails, or Arrow IPC encoding fails.
+pub async fn code_ast_retrieval_arrow(
+    State(state): State<Arc<GatewayState>>,
+    Query(query): Query<CodeAstAnalysisQuery>,
+) -> Result<Response, StudioApiError> {
+    let path = query
+        .path
+        .as_deref()
+        .ok_or_else(|| StudioApiError::bad_request("MISSING_PATH", "`path` is required"))?;
+    let repo_id = query
+        .repo
+        .as_deref()
+        .ok_or_else(|| StudioApiError::bad_request("MISSING_REPO", "`repo` is required"))?;
+    let payload =
+        load_code_ast_analysis_response(state.as_ref(), path, repo_id, query.line).await?;
+    retrieval_chunks_arrow_response(&payload.retrieval_atoms)
+        .map_err(|error| StudioApiError::internal("CODE_AST_RETRIEVAL_ARROW_FAILED", error, None))
+}
+
+async fn load_markdown_analysis_response(
+    state: &GatewayState,
+    path: &str,
+) -> Result<MarkdownAnalysisResponse, StudioApiError> {
+    crate::gateway::studio::analysis::analyze_markdown(state.studio.as_ref(), path)
+        .await
+        .map_err(|error| {
+            StudioApiError::internal("MARKDOWN_ANALYSIS_FAILED", error.to_string(), None)
+        })
+}
+
+async fn load_code_ast_analysis_response(
+    state: &GatewayState,
+    path: &str,
+    repo_id: &str,
+    line_hint: Option<usize>,
+) -> Result<CodeAstAnalysisResponse, StudioApiError> {
     let cwd = state.studio.project_root.clone();
     let repository =
         configured_repository(&state.studio, repo_id).map_err(map_repo_intelligence_error)?;
@@ -85,7 +148,7 @@ pub async fn code_ast(
     let repo_id = repo_id.to_string();
     let repo_path = path.to_string();
 
-    let payload = tokio::task::spawn_blocking(
+    tokio::task::spawn_blocking(
         move || -> Result<CodeAstAnalysisResponse, crate::analyzers::RepoIntelligenceError> {
             let analysis = analyze_registered_repository_with_registry(
                 &repository,
@@ -115,7 +178,5 @@ pub async fn code_ast(
             Some(error.to_string()),
         )
     })?
-    .map_err(map_repo_intelligence_error)?;
-
-    Ok(Json(payload))
+    .map_err(map_repo_intelligence_error)
 }

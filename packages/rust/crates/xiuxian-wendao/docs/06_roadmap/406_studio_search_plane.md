@@ -24,6 +24,10 @@ Replace Studio request-path search hot spots with a background-built search plan
 ## Current Slice
 
 - foundation for corpus status, epoch publication, and single-flight builds is landed
+- `analyzers/config.rs` is now split into `analyzers/config/` with dedicated types, TOML schema, parse, load, and tests modules, while the repo-intelligence config surface remains unchanged; the next bounded target is `search/tantivy/index.rs`
+- `search/tantivy/index.rs` is now split into `search/tantivy/index/` with dedicated core, exact, prefix, fuzzy, and helper modules, while the shared Tantivy search surface remains unchanged; the next bounded target is `analyzers/service/helpers/tests.rs`
+- `analyzers/service/helpers/tests.rs` is now split into `analyzers/service/helpers/tests/` with dedicated fixture and themed assertion modules, while the helpers test surface remains unchanged; the next bounded target is `search_plane/local_symbol/query/shared.rs`
+- `search_plane/reference_occurrence/query.rs` is now split into `search_plane/reference_occurrence/query/` with dedicated search, candidates, decode, and tests modules, while the reference-occurrence search surface remains unchanged; the next bounded target is `search_plane/repo_entity/build/tests.rs`
 - `search_plane/service/core/construction.rs` is now split into `search_plane/service/core/construction/` with dedicated runtime, paths, concurrency, and tests modules, while the public `SearchPlaneService` construction surface remains unchanged; the next bounded target is `gateway/studio/router/handlers/repo/analysis/search.rs`
 - `gateway/studio/router/handlers/repo/analysis/search.rs` is now split into `gateway/studio/router/handlers/repo/analysis/search/` with dedicated cache, publication, module, symbol, example, and tests modules, while the repo-analysis handler surface remains unchanged; the next bounded target is `zhenfa_router/native/section_create.rs`
 - `zhenfa_router/native/section_create.rs` is now split into `zhenfa_router/native/section_create/` with dedicated types, insertion, building, and tests modules, while the section-creation surface remains unchanged; the next bounded target is `analyzers/query/docs/planner.rs`
@@ -31,7 +35,8 @@ Replace Studio request-path search hot spots with a background-built search plan
 - `gateway/studio/search/definition.rs` is now split into `gateway/studio/search/definition/` with dedicated resolve, filters, and tests modules, while the public definition resolution surface remains unchanged; the next bounded target is `analyzers/service/projection/planner/api.rs`
 - `link_graph/index/build/assemble.rs` is now split into `link_graph/index/build/assemble/` with dedicated inputs, notes, edges, virtual-nodes, finalize, and api modules, while the public link-graph index build surface remains unchanged; the next bounded target is `gateway/studio/search/handlers/code_search/search.rs`
 - `gateway/studio/search/handlers/code_search/search.rs` is now split into `gateway/studio/search/handlers/code_search/search/` with dedicated response, repo-search, buffered, and task modules, while the public code-search handler surface remains unchanged; the next bounded target is `link_graph/context_snapshot.rs`
-- `link_graph/context_snapshot.rs` is now split into `link_graph/context_snapshot/` with dedicated types, id, runtime, store, and tests modules, while the public quantum-context snapshot surface remains unchanged; the next bounded target is `link_graph/index/ppr/kernel.rs`
+- `link_graph/context_snapshot.rs` is now split into `link_graph/context_snapshot/` with dedicated types, id, runtime, store, and tests modules, while the public quantum-context snapshot surface remains unchanged; the next bounded target is `gateway/studio/router/config.rs`
+- `link_graph/index/ppr/kernel.rs` is now split into `link_graph/index/ppr/kernel/` with dedicated types, adjacency, iteration, runtime, and tests modules, while preserving the related-PPR kernel surface; the next bounded target is `gateway/studio/router/config.rs`
 - `local_symbol` backs `search_ast`, `search_autocomplete`, and `search_definition`
 - `reference_occurrence` now backs `search_references`
 - `attachment` now backs `search_attachments`
@@ -70,6 +75,8 @@ Replace Studio request-path search hot spots with a background-built search plan
 - `git/checkout/tests.rs` is now split into `git/checkout/tests/` with dedicated materialization, layout, lock, and retry modules, while the public checkout surface remains unchanged; the next bounded target is `zhenfa_router/native/semantic_check/docs_governance/rendering.rs`
 - `zhenfa_router/native/semantic_check/checks.rs` is now split into `zhenfa_router/native/semantic_check/checks/` with dedicated contracts, identity, links, observations, and structure modules, while the public semantic-check surface remains unchanged; the next bounded target is `zhenfa_router/native/semantic_check/docs_governance/rendering.rs`
 - search-plane Valkey client resolution now uses the Wendao-local thin helper layer, so the first shared transport primitive is centralized without moving cache keyspace or manifest semantics out of the search-plane domain
+- the whole-search-plane DataFusion refactor plan is now tightened around a mandatory two-stage query rule: narrow filter/ranking columns are scanned first, and wide payload columns are hydrated only for bounded Top-K identities
+- that same DataFusion plan now treats statistics-aware pruning as selective rather than universal; Parquet writers should preserve statistics on contract-safe scalar quality columns, but cross-corpus join views and DataFusion runtime-priority scheduling remain deferred until after single-corpus parity is landed
 - repo-backed query keys now derive from local corpus state plus repo-index status fragments for `repo_entity` and `repo_content_chunk`, so repo-aware caching no longer has to bypass Valkey just because the response depends on repo publication state
 - `repo_entity` and `repo_content_chunk` now emit explicit publication records after successful table writes, so the search plane can distinguish "published rows that remain readable" from transient repo-index phase churn
 - repo publication manifests now also carry `source_revision`, and repo indexing threads `sync_result.revision` into both repo-backed publish paths so published tables are pinned to the exact source revision that produced them
@@ -331,6 +338,108 @@ Replace Studio request-path search hot spots with a background-built search plan
   effective repo hint and skips all-repo fanout, which removes unrelated
   pending/skipped repos from the response and targets the remaining steady-state
   long-tail timeouts without changing explicit `repo:` search semantics
+- the whole-search-plane DataFusion refactor now has its first real corpus on
+  the new engine. `SearchPlaneService` owns one shared `SearchEngineContext`,
+  repo-entity publication writes export a Parquet artifact beside the Lance
+  table and record `storage_format = parquet`, and repo-entity query plus
+  typed hydration now execute as a two-stage DataFusion read: narrow projected
+  scan first, then Top-K payload hydration by `id`
+- the second corpus cutover now lands the text-heavy `repo_content_chunk`
+  path on the same engine boundary: publication writes export Parquet beside
+  the Lance table, repo-content publications record `storage_format = parquet`,
+  and repo-content search now reads narrow projected columns through
+  DataFusion instead of Wendao-side Lance FTS/scan orchestration
+- the third corpus cutover now moves `knowledge_section` onto the same
+  DataFusion execution model. Local epoch writes export a Parquet artifact
+  beside the Lance table, knowledge search requires that Parquet artifact for
+  active-epoch reads, and the query path now does narrow ranking-column scans
+  first before hydrating `hit_json` by `id`
+- the fourth corpus cutover now moves `attachment` onto the same local-epoch
+  DataFusion model. Attachment writes export a Parquet artifact beside the
+  Lance table, attachment search now executes as a narrow ranking-column scan
+  plus `hit_json` hydration by `id`, and the internal bounded-rerank source
+  enum is reduced to the scan path that the refactor still emits
+- the fifth corpus cutover now moves `reference_occurrence` onto that same
+  local-epoch DataFusion model. Reference-occurrence writes export a Parquet
+  artifact beside the Lance table, stage-1 query scans now project only `id`
+  plus the exact-match ranking columns, and the query path hydrates `hit_json`
+  by `id` from the active epoch's Parquet-backed engine table instead of
+  scanning the active Lance table directly
+- the targeted regression slice for `reference_occurrence` is green under
+  `cargo check -p xiuxian-wendao --lib`, focused `cargo nextest`, and
+  `git diff --check`, and build coverage now also proves the epoch-level
+  Parquet export exists after a successful incremental refresh
+- the sixth corpus cutover now moves `local_symbol` onto the same partition-
+  aware DataFusion model. Each local-symbol partition table now exports a
+  sibling parquet artifact, active reads register each partition parquet into
+  the shared search engine, and both local-symbol search and autocomplete now
+  execute as narrow stage-1 scans across active partitions followed by payload
+  hydration keyed by `(table_name, id)`
+- `local_symbol` schema version is now `3`, so old Lance-only active epochs are
+  treated as stale and rebuilt instead of being read by the new engine-backed
+  path
+- the targeted regression slice for `local_symbol` is green under
+  `cargo check -p xiuxian-wendao --lib`, focused `cargo nextest`, and
+  `git diff --check`, and build coverage now proves parquet export exists for
+  every active local-symbol partition after incremental refresh
+- direct runtime triage also confirmed a separate transport-layer fault under
+  gateway pressure: `127.0.0.1:9517` could remain in `LISTEN` while lightweight
+  health probes intermittently failed with immediate connect refusal, even
+  though the gateway process stayed alive and mirrored stderr showed no panic
+- the current gateway entrypoint is now hardened at the accept boundary. It
+  binds through `tokio::net::TcpSocket` with an env-configurable listen backlog
+  and wraps the merged studio router in load shedding plus a global concurrency
+  cap, while leaving `/api/health`, `/api/stats`, and `/api/notify` outside the
+  overload layer so supervisor probes retain a lightweight path during studio
+  saturation
+- targeted gateway execution regressions now pin both env parsers and the bind
+  path for that hardening slice under focused `cargo nextest`
+- direct runtime triage now also ties a large part of the post-restart startup
+  pressure to legacy Lance secondary-index builds that survived the read-path
+  DataFusion cutover. All six cutover corpora now declare that they no longer
+  require those legacy inverted/scalar indices, and their publication writes
+  stop after table mutation plus parquet export instead of also building unused
+  Lance read-side indices
+- the targeted regression slice for that cleanup is green under
+  `cargo check -p xiuxian-wendao --lib`, focused `cargo nextest`, and
+  `git diff --check`, which closes the write-path mismatch between the
+  DataFusion read architecture and the previous Lance-index publication cost
+- the repo-backed half of the cutover now also drops the remaining Lance table
+  creation itself. `repo_entity` and `repo_content_chunk` publish directly to
+  parquet, refresh publication metadata from parquet inspection, prewarm via
+  parquet registration, and skip repo compaction once the publication format is
+  parquet. This removes the last repo-backed dependence on Lance mutation and
+  compact from the normal gateway startup path
+- repo-backed regression coverage now proves the published parquet artifacts are
+  enough for repo gateway search and code-search hydration, and that fresh repo
+  publications no longer create sibling `.lance` tables
+- direct post-restart health probes still reproduced intermittent same-process
+  connect refusal even after the repo-backed parquet-only cutover, but the new
+  stderr slice showed no fresh repo-backed Lance publication writes. The next
+  hardening slice therefore tightened gateway-side backpressure itself instead
+  of search-plane persistence again
+- the gateway now caps studio concurrency much more aggressively by default
+  (`4 x available_parallelism`, clamped to `32..128`) and applies a studio-only
+  request timeout (`XIUXIAN_WENDAO_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS`,
+  default `15s`, clamped to `5..60s`). Heavy studio routes now shed as
+  `503 GATEWAY_OVERLOADED` or `504 GATEWAY_TIMEOUT` earlier, while health,
+  stats, and notify endpoints remain outside that envelope
+- focused gateway execution regressions now cover both the tightened
+  concurrency clamp and the new studio timeout parser, alongside the existing
+  bind/listener checks
 - handler regressions now pin both sides of that routing rule: unique normalized
   repo seeds resolve to one repo, while ambiguous normalized seeds continue to
   avoid inference and stay on the all-repo path
+- the DataFusion cutover now has a validated `xiuxian-vector` foundation slice.
+  `src/search_engine/` provides a project-scoped `SearchEngineContext`,
+  Parquet registration/collection helpers, Arrow-57 <-> Arrow-58 IPC batch
+  conversion, and Parquet export helpers for existing Lance-backed tables
+- the first bridge integration proves the intended migration shape directly:
+  a Lance/Arrow-57 batch can be converted into an Arrow-58 engine batch, then
+  exported to Parquet and queried back through DataFusion without changing the
+  Wendao-side typed hydration layer yet
+- Arrow/DataFusion uplift exposed one concrete mixed-version fault line in the
+  existing code: `ops/string_match.rs` was implicitly using workspace
+  `arrow-string`. That helper now explicitly binds to Arrow-57 compatibility
+  crates so the legacy Lance query path remains buildable while the new
+  DataFusion engine advances separately

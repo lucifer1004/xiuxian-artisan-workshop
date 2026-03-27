@@ -12,6 +12,10 @@ use xiuxian_wendao::gateway::openapi::paths as openapi_paths;
 use xiuxian_zhenfa::ZhenfaSignal;
 
 use crate::execute::gateway::{
+    command::{
+        gateway_listen_backlog_with_lookup, gateway_studio_concurrency_limit_with_lookup,
+        gateway_studio_request_timeout_secs_with_lookup,
+    },
     config::{get_webhook_from_config, resolve_port, resolve_webhook_config},
     health::{gateway_health_response, health},
     registry::build_plugin_registry,
@@ -83,6 +87,117 @@ fn bootstrap_builtin_registry() -> Arc<xiuxian_wendao::analyzers::PluginRegistry
 #[test]
 fn test_default_port() {
     assert_eq!(DEFAULT_PORT, 9517);
+}
+
+#[test]
+fn test_gateway_listen_backlog_defaults_when_env_missing() {
+    let backlog = gateway_listen_backlog_with_lookup(&|_| None);
+    assert_eq!(backlog, 2048);
+}
+
+#[test]
+fn test_gateway_listen_backlog_accepts_positive_override() {
+    let backlog = gateway_listen_backlog_with_lookup(&|key| {
+        if key == "XIUXIAN_WENDAO_GATEWAY_LISTEN_BACKLOG" {
+            Some("4096".to_string())
+        } else {
+            None
+        }
+    });
+    assert_eq!(backlog, 4096);
+}
+
+#[test]
+fn test_gateway_listen_backlog_clamps_invalid_override() {
+    let backlog = gateway_listen_backlog_with_lookup(&|key| {
+        if key == "XIUXIAN_WENDAO_GATEWAY_LISTEN_BACKLOG" {
+            Some("0".to_string())
+        } else {
+            None
+        }
+    });
+    assert_eq!(backlog, 2048);
+}
+
+#[test]
+fn test_gateway_studio_concurrency_limit_defaults_from_parallelism() {
+    let limit = gateway_studio_concurrency_limit_with_lookup(&|_| None, Some(8));
+    assert_eq!(limit, 32);
+}
+
+#[test]
+fn test_gateway_studio_concurrency_limit_accepts_positive_override() {
+    let limit = gateway_studio_concurrency_limit_with_lookup(
+        &|key| {
+            if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_CONCURRENCY_LIMIT" {
+                Some("96".to_string())
+            } else {
+                None
+            }
+        },
+        Some(8),
+    );
+    assert_eq!(limit, 96);
+}
+
+#[test]
+fn test_gateway_studio_concurrency_limit_ignores_invalid_override() {
+    let limit = gateway_studio_concurrency_limit_with_lookup(
+        &|key| {
+            if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_CONCURRENCY_LIMIT" {
+                Some("-1".to_string())
+            } else {
+                None
+            }
+        },
+        Some(8),
+    );
+    assert_eq!(limit, 32);
+}
+
+#[test]
+fn test_gateway_studio_concurrency_limit_clamps_large_override() {
+    let limit = gateway_studio_concurrency_limit_with_lookup(
+        &|key| {
+            if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_CONCURRENCY_LIMIT" {
+                Some("320".to_string())
+            } else {
+                None
+            }
+        },
+        Some(8),
+    );
+    assert_eq!(limit, 128);
+}
+
+#[test]
+fn test_gateway_studio_request_timeout_defaults_when_env_missing() {
+    let timeout = gateway_studio_request_timeout_secs_with_lookup(&|_| None);
+    assert_eq!(timeout, 15);
+}
+
+#[test]
+fn test_gateway_studio_request_timeout_accepts_positive_override() {
+    let timeout = gateway_studio_request_timeout_secs_with_lookup(&|key| {
+        if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS" {
+            Some("25".to_string())
+        } else {
+            None
+        }
+    });
+    assert_eq!(timeout, 25);
+}
+
+#[test]
+fn test_gateway_studio_request_timeout_clamps_invalid_override() {
+    let timeout = gateway_studio_request_timeout_secs_with_lookup(&|key| {
+        if key == "XIUXIAN_WENDAO_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS" {
+            Some("0".to_string())
+        } else {
+            None
+        }
+    });
+    assert_eq!(timeout, 15);
 }
 
 #[test]

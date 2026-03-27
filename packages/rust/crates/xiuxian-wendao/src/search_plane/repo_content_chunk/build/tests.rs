@@ -12,7 +12,7 @@ use crate::search_plane::repo_content_chunk::build::types::{
 };
 use crate::search_plane::{
     SearchCorpusKind, SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
-    SearchRepoPublicationInput, SearchRepoPublicationRecord,
+    SearchPublicationStorageFormat, SearchRepoPublicationInput, SearchRepoPublicationRecord,
 };
 
 fn repo_document(
@@ -181,6 +181,13 @@ async fn repo_content_chunk_incremental_refresh_reuses_unchanged_rows() {
         .table_name
         .clone();
     assert!(
+        !service
+            .corpus_root(SearchCorpusKind::RepoContentChunk)
+            .join(format!("{first_table_name}.lance"))
+            .exists(),
+        "repo content publication should no longer create a Lance table"
+    );
+    assert!(
         first_record
             .maintenance
             .as_ref()
@@ -205,7 +212,18 @@ async fn repo_content_chunk_incremental_refresh_reuses_unchanged_rows() {
         .as_ref()
         .unwrap_or_else(|| panic!("second publication"));
     assert_ne!(second_publication.table_name, first_table_name);
+    assert!(
+        !service
+            .corpus_root(SearchCorpusKind::RepoContentChunk)
+            .join(format!("{}.lance", second_publication.table_name))
+            .exists(),
+        "repo content incremental publication should stay parquet-only"
+    );
     assert_eq!(second_publication.source_revision.as_deref(), Some("rev-2"));
+    assert_eq!(
+        second_publication.storage_format,
+        SearchPublicationStorageFormat::Parquet
+    );
     assert!(
         second_record
             .maintenance
@@ -213,6 +231,11 @@ async fn repo_content_chunk_incremental_refresh_reuses_unchanged_rows() {
             .and_then(|maintenance| maintenance.last_prewarmed_at.as_ref())
             .is_some()
     );
+    let parquet_path = service.repo_publication_parquet_path(
+        SearchCorpusKind::RepoContentChunk,
+        second_publication.table_name.as_str(),
+    );
+    assert!(parquet_path.exists(), "missing repo content parquet export");
 
     let beta_hits = service
         .search_repo_content_chunks("alpha/repo", "beta", &Default::default(), 5)

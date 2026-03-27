@@ -32,6 +32,14 @@ pub enum ArrowTransportError {
         /// Observed content-type or placeholder.
         found: String,
     },
+    /// The endpoint returned an incompatible schema version header.
+    #[error("Arrow transport response schema version must be `{expected}`, found `{found}`")]
+    UnexpectedSchemaVersion {
+        /// Expected schema version.
+        expected: String,
+        /// Observed schema version or placeholder.
+        found: String,
+    },
     /// The caller supplied no request batches.
     #[error("Arrow transport request batches cannot be empty")]
     EmptyRequest,

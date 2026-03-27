@@ -4,6 +4,7 @@ mod analysis;
 mod bootstrap;
 mod cached;
 mod helpers;
+mod julia_transport;
 mod merge;
 mod projection;
 mod registry;
@@ -26,6 +27,11 @@ pub(crate) use helpers::{
     hierarchy_segments_from_path, infer_ecosystem, module_match_score, normalized_rank_score,
     projection_page_lookup, projection_pages_for, record_hierarchical_uri,
     related_modules_for_example, related_symbols_for_example, symbol_match_score,
+};
+#[cfg(feature = "julia")]
+pub use julia_transport::{
+    JuliaArrowRequestRow, JuliaArrowScoreRow, build_julia_arrow_request_batch,
+    decode_julia_arrow_score_rows, fetch_julia_arrow_score_rows_for_repository,
 };
 
 pub(crate) use projection::build_repo_projected_page_search_with_artifacts;

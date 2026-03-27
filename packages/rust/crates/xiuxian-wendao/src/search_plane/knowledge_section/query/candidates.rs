@@ -2,26 +2,26 @@ use std::collections::HashMap;
 
 use crate::search_plane::knowledge_section::query::errors::KnowledgeSectionSearchError;
 use crate::search_plane::knowledge_section::query::ranking::{
-    candidate_path_key, compare_candidates, nullable_value, score_candidate, string_column,
+    candidate_path_key, compare_candidates, engine_string_column, nullable_value, score_candidate,
 };
 use crate::search_plane::ranking::{
     RetainedWindow, StreamingRerankTelemetry, trim_ranked_string_map,
 };
-use xiuxian_vector::LanceRecordBatch;
+use xiuxian_vector::EngineRecordBatch;
 
 const MIN_RETAINED_PATHS: usize = 128;
 const RETAINED_PATH_MULTIPLIER: usize = 8;
 
 #[derive(Debug, Clone)]
 pub(crate) struct KnowledgeCandidate {
+    pub(crate) id: String,
     pub(crate) path: String,
     pub(crate) stem: String,
     pub(crate) score: f64,
-    pub(crate) hit_json: String,
 }
 
 pub(crate) fn collect_candidates(
-    batch: &LanceRecordBatch,
+    batch: &EngineRecordBatch,
     query_text: &str,
     query_lower: &str,
     best_by_path: &mut HashMap<String, KnowledgeCandidate>,
@@ -29,12 +29,12 @@ pub(crate) fn collect_candidates(
     telemetry: &mut StreamingRerankTelemetry,
 ) -> Result<(), KnowledgeSectionSearchError> {
     telemetry.observe_batch(batch.num_rows());
-    let path = string_column(batch, "path")?;
-    let stem = string_column(batch, "stem")?;
-    let title = string_column(batch, "title")?;
-    let best_section = string_column(batch, "best_section")?;
-    let search_text_folded = string_column(batch, "search_text_folded")?;
-    let hit_json = string_column(batch, "hit_json")?;
+    let id = engine_string_column(batch, "id")?;
+    let path = engine_string_column(batch, "path")?;
+    let stem = engine_string_column(batch, "stem")?;
+    let title = engine_string_column(batch, "title")?;
+    let best_section = engine_string_column(batch, "best_section")?;
+    let search_text_folded = engine_string_column(batch, "search_text_folded")?;
 
     for row in 0..batch.num_rows() {
         let score = score_candidate(
@@ -51,10 +51,10 @@ pub(crate) fn collect_candidates(
 
         telemetry.observe_match();
         let candidate = KnowledgeCandidate {
+            id: id.value(row).to_string(),
             path: path.value(row).to_string(),
             stem: stem.value(row).to_string(),
             score,
-            hit_json: hit_json.value(row).to_string(),
         };
         match best_by_path.get(candidate.path.as_str()) {
             Some(existing) if existing.score >= candidate.score => {}

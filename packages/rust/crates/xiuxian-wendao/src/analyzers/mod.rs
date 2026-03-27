@@ -99,6 +99,11 @@ pub use records::{
     RelationKind, RelationRecord, RepoSymbolKind, RepositoryRecord, SymbolRecord,
 };
 pub use registry::PluginRegistry;
+#[cfg(feature = "julia")]
+pub use service::{
+    JuliaArrowRequestRow, JuliaArrowScoreRow, build_julia_arrow_request_batch,
+    decode_julia_arrow_score_rows, fetch_julia_arrow_score_rows_for_repository,
+};
 pub use service::{
     analyze_registered_repository, analyze_registered_repository_cached_with_registry,
     analyze_registered_repository_with_registry, analyze_repository_from_config,

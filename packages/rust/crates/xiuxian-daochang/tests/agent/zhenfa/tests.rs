@@ -188,6 +188,37 @@ async fn call_tool_dispatches_wendao_search_natively() {
 }
 
 #[tokio::test]
+async fn call_tool_dispatches_wendao_search_with_query_vector_natively() {
+    let (notebook, index) = build_wendao_index_fixture();
+    let mut config = XiuxianConfig::default();
+    config.wendao.zhixing.notebook_path = Some(notebook.path().to_string_lossy().to_string());
+    let deps = ZhenfaRuntimeDeps {
+        manifestation_manager: None,
+        link_graph_index: Some(index),
+        skill_vfs_resolver: None,
+        memory_store: None,
+    };
+    let bridge = ZhenfaToolBridge::from_xiuxian_config(&config, &deps)
+        .unwrap_or_else(|| panic!("bridge should be enabled"));
+
+    let output = bridge
+        .call_tool(
+            Some("telegram:12345"),
+            "wendao.search",
+            Some(json!({
+                "query": "native zhenfa",
+                "query_vector": [1.0, 0.0, 0.0],
+                "limit": 5
+            })),
+        )
+        .await
+        .unwrap_or_else(|error| {
+            panic!("zhenfa native tool call with query_vector should succeed: {error}")
+        });
+    assert!(output.contains("<hit id=\"alpha.md\""));
+}
+
+#[tokio::test]
 async fn call_tool_dispatches_qianhuan_reload_natively() {
     let mut config = XiuxianConfig::default();
     config.zhenfa.enabled_tools = Some(vec!["qianhuan.reload".to_string()]);

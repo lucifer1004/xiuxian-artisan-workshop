@@ -1,6 +1,7 @@
 use crate::search_plane::SearchCorpusKind;
 use crate::search_plane::manifest::{
-    SearchRepoPublicationInput, SearchRepoPublicationRecord, build_repo_publication_epoch,
+    SearchPublicationStorageFormat, SearchRepoPublicationInput, SearchRepoPublicationRecord,
+    build_repo_publication_epoch,
 };
 
 #[test]
@@ -115,6 +116,7 @@ fn repo_publication_active_epoch_falls_back_for_legacy_payloads() {
         table_name: "repo_entity_repo_alpha".to_string(),
         table_version_id: 7,
         schema_version: 1,
+        storage_format: SearchPublicationStorageFormat::Lance,
         source_revision: Some("rev-1".to_string()),
         row_count: 10,
         fragment_count: 2,
@@ -125,4 +127,61 @@ fn repo_publication_active_epoch_falls_back_for_legacy_payloads() {
         legacy.active_epoch_value(),
         build_repo_publication_epoch("legacy-publication")
     );
+}
+
+#[test]
+fn repo_publication_id_changes_when_storage_format_changes() {
+    let lance = SearchRepoPublicationRecord::new(
+        SearchCorpusKind::RepoEntity,
+        "alpha/repo",
+        SearchRepoPublicationInput {
+            table_name: "repo_entity_repo_alpha".to_string(),
+            schema_version: 1,
+            source_revision: Some("rev-1".to_string()),
+            table_version_id: 7,
+            row_count: 10,
+            fragment_count: 2,
+            published_at: "2026-03-23T12:00:00Z".to_string(),
+        },
+    );
+    let parquet = SearchRepoPublicationRecord::new_with_storage_format(
+        SearchCorpusKind::RepoEntity,
+        "alpha/repo",
+        SearchRepoPublicationInput {
+            table_name: "repo_entity_repo_alpha".to_string(),
+            schema_version: 1,
+            source_revision: Some("rev-1".to_string()),
+            table_version_id: 7,
+            row_count: 10,
+            fragment_count: 2,
+            published_at: "2026-03-23T12:00:00Z".to_string(),
+        },
+        SearchPublicationStorageFormat::Parquet,
+    );
+
+    assert_ne!(lance.publication_id, parquet.publication_id);
+    assert!(parquet.is_datafusion_readable());
+    assert!(!lance.is_datafusion_readable());
+}
+
+#[test]
+fn repo_publication_defaults_legacy_storage_format_when_field_is_missing() {
+    let legacy_payload = serde_json::json!({
+        "corpus": "repo_entity",
+        "repo_id": "alpha/repo",
+        "active_epoch": 11,
+        "publication_id": "legacy-publication",
+        "table_name": "repo_entity_repo_alpha",
+        "table_version_id": 7,
+        "schema_version": 1,
+        "source_revision": "rev-1",
+        "row_count": 10,
+        "fragment_count": 2,
+        "published_at": "2026-03-23T12:00:00Z"
+    });
+
+    let record: SearchRepoPublicationRecord =
+        serde_json::from_value(legacy_payload).expect("legacy payload should deserialize");
+
+    assert_eq!(record.storage_format, SearchPublicationStorageFormat::Lance);
 }

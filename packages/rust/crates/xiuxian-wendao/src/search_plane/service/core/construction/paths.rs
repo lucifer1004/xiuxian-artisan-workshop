@@ -42,6 +42,57 @@ impl SearchPlaneService {
     }
 
     #[must_use]
+    pub(crate) fn local_epoch_engine_table_name(corpus: SearchCorpusKind, epoch: u64) -> String {
+        format!("{}_epoch_publication_{epoch}", corpus.as_str())
+    }
+
+    #[must_use]
+    pub(crate) fn local_epoch_parquet_path(
+        &self,
+        corpus: SearchCorpusKind,
+        epoch: u64,
+    ) -> std::path::PathBuf {
+        let table_name = Self::table_name(corpus, epoch);
+        self.local_table_parquet_path(corpus, table_name.as_str())
+    }
+
+    #[must_use]
+    pub(crate) fn local_table_parquet_path(
+        &self,
+        corpus: SearchCorpusKind,
+        table_name: &str,
+    ) -> std::path::PathBuf {
+        self.corpus_root(corpus)
+            .join("parquet")
+            .join(format!("{table_name}.parquet"))
+    }
+
+    #[must_use]
+    pub(crate) fn named_table_parquet_path(
+        &self,
+        corpus: SearchCorpusKind,
+        table_name: &str,
+    ) -> std::path::PathBuf {
+        if corpus.is_repo_backed() {
+            self.repo_publication_parquet_path(corpus, table_name)
+        } else {
+            self.local_table_parquet_path(corpus, table_name)
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn maintenance_engine_table_name(
+        corpus: SearchCorpusKind,
+        table_name: &str,
+    ) -> String {
+        format!(
+            "{}_maintenance_{}",
+            corpus.as_str(),
+            blake3::hash(table_name.as_bytes()).to_hex()
+        )
+    }
+
+    #[must_use]
     pub(crate) fn local_epoch_has_partition_tables(
         &self,
         corpus: SearchCorpusKind,
@@ -67,6 +118,25 @@ impl SearchPlaneService {
     #[must_use]
     pub(crate) fn repo_entity_table_name(repo_id: &str) -> String {
         Self::repo_table_name(SearchCorpusKind::RepoEntity, repo_id)
+    }
+
+    #[must_use]
+    pub(crate) fn repo_publication_engine_table_name(
+        corpus: SearchCorpusKind,
+        publication_id: &str,
+    ) -> String {
+        format!("{}_publication_{publication_id}", corpus.as_str())
+    }
+
+    #[must_use]
+    pub(crate) fn repo_publication_parquet_path(
+        &self,
+        corpus: SearchCorpusKind,
+        table_name: &str,
+    ) -> std::path::PathBuf {
+        self.corpus_root(corpus)
+            .join("parquet")
+            .join(format!("{table_name}.parquet"))
     }
 
     fn repo_table_name(corpus: SearchCorpusKind, repo_id: &str) -> String {
