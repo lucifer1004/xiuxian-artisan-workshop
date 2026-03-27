@@ -75,6 +75,71 @@ Qianji will leverage the **Unified Streaming Parser** from Zhenfa:
 - **Streaming Telemetry**: As Wendao executes query plans and agents consume the returned relations, Qianji will emit `ZhenfaStreamingEvents` showing the "Data Funnel" in the UI (e.g., "Scanning 1M lines... 500 potential matches... LLM refining...").
 - **Thought Separation**: Intercepting the `Thinking Process` of agents during the handoff, allowing the **Cognitive Supervisor** to halt workflows if the reasoning logic diverges from the data schema.
 
+## 5.1 Qianji-Wendao Orchestration Bridge
+
+This section defines the bridge between Qianji workflow orchestration and the Wendao query engine.
+
+### 5.1.1 Invocation boundary
+
+Qianji should invoke Wendao through typed query requests or typed operator requests.
+
+Qianji must not:
+
+1. own Wendao planner internals
+2. rewrite Wendao storage policy
+3. re-implement retrieval or graph operators locally
+
+Qianji may:
+
+1. request a relation from Wendao
+2. request graph context from Wendao
+3. request truth relations for audit
+4. consume explain and telemetry streams emitted by Wendao
+
+### 5.1.2 Minimal bridge interface
+
+The bridge should be able to express at least four operations:
+
+1. `run_query(request) -> relation`
+2. `run_operator(request) -> relation`
+3. `explain(request) -> explain_stream`
+4. `telemetry(request) -> telemetry_stream`
+
+The exact Rust API may evolve, but the ownership rule should remain fixed: Qianji asks; Wendao resolves.
+
+### 5.1.3 Workflow state relation
+
+Qianji should maintain workflow state as Arrow-native relations rather than opaque JSON envelopes wherever practical.
+
+The minimal state relation should include fields such as:
+
+1. `workflow_id`
+2. `step_id`
+3. `stage_kind`
+4. `input_relation_id`
+5. `output_relation_id`
+6. `status`
+7. `assigned_agent`
+8. `audit_state`
+9. `started_at`
+10. `updated_at`
+
+This relation is owned by Qianji. It is not a substitute for Wendao query outputs.
+
+### 5.1.4 Explain and telemetry flow
+
+The flow of observability should be:
+
+1. Wendao emits explain-plan and execution telemetry for query and operator execution
+2. Qianji binds those signals to workflow stages
+3. Zhenfa renders the unified execution narrative
+
+This preserves causal clarity:
+
+1. Wendao explains why a relation exists
+2. Qianji explains why a workflow step ran
+3. Zhenfa renders both in a single user-facing stream
+
 ## 6. Implementation Phases
 
 ### Phase 1: Arrow Interface Handoff
