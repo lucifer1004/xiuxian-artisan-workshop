@@ -22,16 +22,6 @@ if rg -q "litellm-rs v" "${no_default_tree}"; then
   exit 1
 fi
 
-if ! rg -q "xiuxian-mcp v" "${default_tree}"; then
-  echo "xiuxian-daochang default profile must include xiuxian-mcp but it was not found."
-  exit 1
-fi
-
-if ! rg -q "xiuxian-mcp v" "${no_default_tree}"; then
-  echo "xiuxian-daochang --no-default-features must include xiuxian-mcp but it was not found."
-  exit 1
-fi
-
 if ! rg -q 'rmcp v0\.16\.' "${default_tree}"; then
   echo "xiuxian-daochang default profile must include rmcp 0.16.x but it was not found."
   exit 1

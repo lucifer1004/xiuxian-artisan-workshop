@@ -11,8 +11,7 @@ def _read(path: str) -> str:
 
 def test_core_modules_use_get_running_loop() -> None:
     files = [
-        "packages/python/core/src/omni/core/router/indexer.py",
-        "packages/python/core/src/omni/core/skills/runtime/xiuxian_cell.py",
+        "packages/python/foundation/src/xiuxian_tracer/async_utils.py",
     ]
 
     for file_path in files:

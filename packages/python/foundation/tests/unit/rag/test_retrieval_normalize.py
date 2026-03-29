@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from omni.rag.retrieval.interface import RetrievalResult
-from omni.rag.retrieval.normalize import normalize_ranked_results
+from xiuxian_rag.retrieval.interface import RetrievalResult
+from xiuxian_rag.retrieval.normalize import normalize_ranked_results
 
 
 def test_normalize_ranked_results_deduplicates_and_sorts() -> None:

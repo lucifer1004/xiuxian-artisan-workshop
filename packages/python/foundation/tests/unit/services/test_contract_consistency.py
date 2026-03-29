@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
-from omni.test_kit.fixtures.vector import (
+from xiuxian_test_kit.fixtures.vector import (
     ROUTE_TEST_SCHEMA_V1,
     make_db_search_hybrid_result_list,
     make_db_search_vector_result_list,
@@ -26,9 +26,9 @@ from omni.test_kit.fixtures.vector import (
     make_vector_payload,
 )
 
-from omni.foundation.api.schema_locator import resolve_schema_file_path
-from omni.foundation.runtime.gitops import get_project_root
-from omni.foundation.services.vector_schema import (
+from xiuxian_foundation.api.schema_locator import resolve_schema_file_path
+from xiuxian_foundation.runtime.gitops import get_project_root
+from xiuxian_foundation.services.vector_schema import (
     parse_hybrid_payload,
     parse_tool_search_payload,
     parse_vector_payload,
@@ -59,7 +59,7 @@ def _strip_ansi(text: str) -> str:
 
 
 def test_route_test_cli_json_validates_against_schema():
-    """E2E: Run `omni route test --json`, parse stdout, validate against omni.router.route_test.v1.
+    """E2E: Run `omni route test --json`, parse stdout, validate against xiuxian.router.route_test.v1.
 
     Single-command CI gate: Rust output -> Python parse -> CLI JSON must match schema.
     Skips on timeout (e.g. no embedding/index) or non-zero exit.
@@ -90,10 +90,10 @@ def test_route_test_cli_json_validates_against_schema():
     if not json_str or not json_str.startswith("{"):
         pytest.skip("omni route test stdout did not contain JSON; check CLI --json behavior")
     payload = json.loads(json_str)
-    schema = _load_schema("omni.router.route_test.v1.schema.json")
+    schema = _load_schema("xiuxian.router.route_test.v1.schema.json")
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(payload))
-    assert not errors, "CLI JSON must match omni.router.route_test.v1 schema: " + "; ".join(
+    assert not errors, "CLI JSON must match xiuxian.router.route_test.v1 schema: " + "; ".join(
         e.message for e in errors
     )
     assert payload.get("schema") == ROUTE_TEST_SCHEMA_V1
@@ -134,9 +134,9 @@ def test_route_test_canonical_snapshot_validates_against_schema():
 
     This snapshot is the single source of truth for the full algorithm output shape; lock before Python changes.
     """
-    schema = _load_schema("omni.router.route_test.v1.schema.json")
+    schema = _load_schema("xiuxian.router.route_test.v1.schema.json")
     schema_path = resolve_schema_file_path(
-        "omni.router.route_test.v1.schema.json",
+        "xiuxian.router.route_test.v1.schema.json",
         preferred_crates=("xiuxian-daochang",),
     )
     canonical_path = schema_path.parent / "snapshots" / "route_test_canonical_v1.json"
@@ -145,7 +145,7 @@ def test_route_test_canonical_snapshot_validates_against_schema():
     payload = json.loads(canonical_path.read_text(encoding="utf-8"))
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(payload))
-    assert not errors, "Canonical snapshot must match omni.router.route_test.v1: " + "; ".join(
+    assert not errors, "Canonical snapshot must match xiuxian.router.route_test.v1: " + "; ".join(
         e.message for e in errors
     )
     assert payload.get("schema") == ROUTE_TEST_SCHEMA_V1
@@ -204,8 +204,8 @@ def test_route_test_snapshot_matches_factory_output():
 
 
 def test_db_search_vector_list_built_from_factory_validates_against_schema():
-    """Db search vector result list from test-kit conforms to omni.vector.search.v1."""
-    schema = _load_schema("omni.vector.search.v1.schema.json")
+    """Db search vector result list from test-kit conforms to xiuxian.vector.search.v1."""
+    schema = _load_schema("xiuxian.vector.search.v1.schema.json")
     items = make_db_search_vector_result_list()
     _validate_items_against_schema(items, schema)
     for item in items:
@@ -213,8 +213,8 @@ def test_db_search_vector_list_built_from_factory_validates_against_schema():
 
 
 def test_db_search_hybrid_list_built_from_factory_validates_against_schema():
-    """Db search hybrid result list from test-kit conforms to omni.vector.hybrid.v1."""
-    schema = _load_schema("omni.vector.hybrid.v1.schema.json")
+    """Db search hybrid result list from test-kit conforms to xiuxian.vector.hybrid.v1."""
+    schema = _load_schema("xiuxian.vector.hybrid.v1.schema.json")
     items = make_db_search_hybrid_result_list()
     _validate_items_against_schema(items, schema)
     for item in items:

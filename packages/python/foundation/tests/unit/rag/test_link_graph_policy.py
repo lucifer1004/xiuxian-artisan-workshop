@@ -7,10 +7,10 @@ from typing import Any
 
 import pytest
 
-import omni.rag.link_graph.policy as link_graph_policy
-from omni.foundation.api.link_graph_policy_schema import get_reason_enum
-from omni.rag.link_graph.models import LinkGraphHit
-from omni.rag.link_graph.policy import (
+import xiuxian_rag.link_graph.policy as link_graph_policy
+from xiuxian_foundation.api.link_graph_policy_schema import get_reason_enum
+from xiuxian_rag.link_graph.models import LinkGraphHit
+from xiuxian_rag.link_graph.policy import (
     LinkGraphPolicyConfig,
     LinkGraphSourceHint,
     fetch_graph_rows_by_policy,
@@ -149,7 +149,7 @@ async def test_plan_link_graph_retrieval_hybrid_prefers_graph_when_sufficient() 
     assert plan.budget.candidate_limit == 9
     assert plan.budget.max_sources == 4
     assert plan.budget.rows_per_source == 6
-    assert plan.to_record()["schema"] == "omni.link_graph.retrieval_plan.v1"
+    assert plan.to_record()["schema"] == "xiuxian_wendao.link_graph.retrieval_plan.v1"
     assert backend.calls[0] == ("retrieval policy", 9, "fts")
 
 
@@ -722,13 +722,13 @@ def test_serialize_link_graph_retrieval_plan_supports_plain_objects() -> None:
     )()
     payload = serialize_link_graph_retrieval_plan(plan)
     assert payload is not None
-    assert payload["schema"] == "omni.link_graph.retrieval_plan.v1"
+    assert payload["schema"] == "xiuxian_wendao.link_graph.retrieval_plan.v1"
     assert payload["selected_mode"] == "vector_only"
 
 
 def test_get_link_graph_retrieval_plan_schema_id() -> None:
     schema_id = get_link_graph_retrieval_plan_schema_id()
-    assert schema_id.endswith("/omni.link_graph.retrieval_plan.v1.schema.json")
+    assert schema_id.endswith("/xiuxian_wendao.link_graph.retrieval_plan.v1.schema.json")
 
 
 def test_link_graph_policy_reason_vocab_matches_schema_enum() -> None:

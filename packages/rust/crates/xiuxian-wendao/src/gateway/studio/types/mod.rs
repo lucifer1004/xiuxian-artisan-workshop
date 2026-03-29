@@ -7,7 +7,7 @@ mod analysis;
 mod attachments;
 mod code_ast;
 mod collection;
-mod config;
+pub(crate) mod config;
 mod definitions;
 mod error;
 mod graph;
@@ -29,8 +29,8 @@ pub use code_ast::{
 };
 pub use collection::studio_type_collection;
 pub use config::{
-    UiCapabilities, UiConfig, UiJuliaAnalyzerLaunchManifest, UiJuliaDeploymentArtifact,
-    UiProjectConfig, UiRepoProjectConfig,
+    UiCapabilities, UiConfig, UiPluginArtifact, UiPluginLaunchSpec, UiProjectConfig,
+    UiRepoProjectConfig,
 };
 pub use definitions::{
     AstSearchHit, AstSearchResponse, DefinitionResolveResponse, DefinitionSearchHit,

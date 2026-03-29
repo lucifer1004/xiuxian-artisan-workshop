@@ -1,5 +1,5 @@
 """
-Benchmark tests for omni.rag.chunking module.
+Benchmark tests for xiuxian_rag.chunking module.
 
 These tests measure the performance of text chunking operations.
 """
@@ -39,7 +39,7 @@ class TestChunkingPerformance:
 
     def test_sentence_chunker_performance(self, sample_text):
         """Test sentence chunker performance."""
-        from omni.rag.chunking import SentenceChunker
+        from xiuxian_rag.chunking import SentenceChunker
 
         chunker = SentenceChunker(chunk_target_tokens=512, overlap_tokens=50)
 
@@ -57,7 +57,7 @@ class TestChunkingPerformance:
 
     def test_paragraph_chunker_performance(self, sample_text):
         """Test paragraph chunker performance."""
-        from omni.rag.chunking import ParagraphChunker
+        from xiuxian_rag.chunking import ParagraphChunker
 
         chunker = ParagraphChunker(max_chars=2000, min_chars=50)
 
@@ -74,7 +74,7 @@ class TestChunkingPerformance:
 
     def test_sliding_window_chunker_performance(self, large_text):
         """Test sliding window chunker performance."""
-        from omni.rag.chunking import SlidingWindowChunker
+        from xiuxian_rag.chunking import SlidingWindowChunker
 
         chunker = SlidingWindowChunker(window_size=512, step_size=256)
 
@@ -91,7 +91,7 @@ class TestChunkingPerformance:
 
     def test_batch_chunker_performance(self, sample_text):
         """Test batch chunking performance."""
-        from omni.rag.chunking import SentenceChunker
+        from xiuxian_rag.chunking import SentenceChunker
 
         chunker = SentenceChunker(chunk_target_tokens=512, overlap_tokens=50)
 
@@ -115,7 +115,7 @@ class TestChunkingPerformance:
 
     def test_repeated_chunker_creation(self, sample_text):
         """Test performance of creating and using multiple chunkers."""
-        from omni.rag.chunking import ParagraphChunker, SentenceChunker, SlidingWindowChunker
+        from xiuxian_rag.chunking import ParagraphChunker, SentenceChunker, SlidingWindowChunker
 
         # Create chunkers once
         sentence_chunker = SentenceChunker()
@@ -144,7 +144,7 @@ class TestChunkingPerformance:
 
     def test_empty_text_chunker_performance(self):
         """Test chunking empty/short text performance."""
-        from omni.rag.chunking import SentenceChunker
+        from xiuxian_rag.chunking import SentenceChunker
 
         chunker = SentenceChunker()
 
@@ -167,7 +167,7 @@ class TestChunkingPerformance:
 
     def test_very_large_text_chunker_performance(self):
         """Test chunking very large text."""
-        from omni.rag.chunking import SlidingWindowChunker
+        from xiuxian_rag.chunking import SlidingWindowChunker
 
         # Create 1MB of text
         base = "This is test data for chunking performance. " * 100
@@ -192,7 +192,7 @@ class TestTokenEstimationPerformance:
 
     def test_token_count_estimation_performance(self):
         """Test token count estimation performance."""
-        from omni.rag.chunking import SentenceChunker
+        from xiuxian_rag.chunking import SentenceChunker
 
         # Large text for testing
         text = "word " * 10000

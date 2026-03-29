@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from omni.rag.retrieval.interface import RetrievalConfig
+from xiuxian_rag.retrieval.interface import RetrievalConfig
 
 
 def test_retrieval_config_to_vector_search_kwargs_shape() -> None:

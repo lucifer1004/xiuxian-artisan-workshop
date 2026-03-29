@@ -1,0 +1,196 @@
+#![allow(
+    missing_docs,
+    unused_imports,
+    dead_code,
+    clippy::doc_markdown,
+    clippy::uninlined_format_args,
+    clippy::float_cmp,
+    clippy::field_reassign_with_default,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::unnecessary_literal_bound,
+    clippy::needless_pass_by_value,
+    clippy::struct_field_names,
+    clippy::similar_names
+)]
+
+//! External tool pool reconnect smoke tests for xiuxian-daochang tool facade.
+//!
+//! Detailed reconnect/cache/fallback behavior is covered in the lower-level
+//! tool-runtime transport test slice.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use axum::Router;
+use rmcp::ServerHandler;
+use rmcp::model::{
+    CallToolRequestParams, CallToolResult, Content, ErrorData, ListToolsResult,
+    PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
+};
+use rmcp::service::{RequestContext, RoleServer};
+use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
+use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
+use xiuxian_daochang::{ToolPoolConnectConfig, connect_tool_pool};
+
+#[derive(Clone, Default)]
+struct MockToolServer;
+
+impl MockToolServer {
+    fn mock_tool() -> Tool {
+        let input_schema = serde_json::json!({
+            "type": "object",
+            "properties": { "message": { "type": "string" } },
+        });
+        let map = input_schema.as_object().cloned().unwrap_or_default();
+        Tool {
+            name: "mock_echo".into(),
+            title: Some("Mock Echo".into()),
+            description: Some("Echo for reconnect smoke test".into()),
+            input_schema: Arc::new(map),
+            output_schema: None,
+            annotations: None,
+            execution: None,
+            icons: None,
+            meta: None,
+        }
+    }
+}
+
+impl ServerHandler for MockToolServer {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo {
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            ..Default::default()
+        }
+    }
+
+    fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> impl std::future::Future<Output = Result<ListToolsResult, ErrorData>> + Send + '_ {
+        std::future::ready(Ok(ListToolsResult::with_all_items(vec![Self::mock_tool()])))
+    }
+
+    fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> impl std::future::Future<Output = Result<CallToolResult, ErrorData>> + Send + '_ {
+        let msg = request
+            .arguments
+            .as_ref()
+            .and_then(|m| m.get("message"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("ok");
+        let content = CallToolResult::success(vec![Content::text(format!("echo: {msg}"))]);
+        std::future::ready(Ok(content))
+    }
+}
+
+async fn spawn_mock_server(addr: std::net::SocketAddr) -> tokio::task::JoinHandle<()> {
+    let service: StreamableHttpService<MockToolServer, LocalSessionManager> =
+        StreamableHttpService::new(
+            || Ok(MockToolServer),
+            Arc::new(LocalSessionManager::default()),
+            StreamableHttpServerConfig {
+                stateful_mode: true,
+                sse_keep_alive: None,
+                ..Default::default()
+            },
+        );
+    let router = Router::new().nest_service("/sse", service);
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(error) => panic!("bind mock tool listener: {error}"),
+    };
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, router).await;
+    })
+}
+
+fn reconnect_test_config() -> ToolPoolConnectConfig {
+    ToolPoolConnectConfig {
+        pool_size: 1,
+        handshake_timeout_secs: 1,
+        connect_retries: 6,
+        connect_retry_backoff_ms: 100,
+        tool_timeout_secs: 10,
+        list_tools_cache_ttl_ms: 1_000,
+    }
+}
+
+async fn reserve_local_addr() -> std::net::SocketAddr {
+    let probe = match tokio::net::TcpListener::bind("127.0.0.1:0").await {
+        Ok(listener) => listener,
+        Err(error) => panic!("reserve local addr: {error}"),
+    };
+    let addr = match probe.local_addr() {
+        Ok(addr) => addr,
+        Err(error) => panic!("read reserved local addr: {error}"),
+    };
+    drop(probe);
+    addr
+}
+
+#[tokio::test]
+async fn tool_pool_call_tool_recovers_after_server_restart() {
+    let addr = reserve_local_addr().await;
+    let handle_1 = spawn_mock_server(addr).await;
+    let url = format!("http://{addr}/sse");
+    let pool = connect_tool_pool(&url, reconnect_test_config()).await;
+    let pool = match pool {
+        Ok(pool) => pool,
+        Err(error) => panic!("connect pool: {error}"),
+    };
+
+    let initial = pool
+        .call_tool(
+            "mock_echo".to_string(),
+            Some(serde_json::json!({ "message": "first" })),
+        )
+        .await;
+    let initial = match initial {
+        Ok(initial) => initial,
+        Err(error) => panic!("initial call_tool: {error}"),
+    };
+    assert_eq!(initial.content.len(), 1);
+
+    handle_1.abort();
+    let _ = handle_1.await;
+
+    let (restart_tx, restart_rx) = tokio::sync::oneshot::channel();
+    let restart = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let handle = spawn_mock_server(addr).await;
+        let _ = restart_tx.send(handle);
+    });
+
+    let recovered = pool
+        .call_tool(
+            "mock_echo".to_string(),
+            Some(serde_json::json!({ "message": "second" })),
+        )
+        .await;
+    let recovered = match recovered {
+        Ok(recovered) => recovered,
+        Err(error) => panic!("call_tool should recover after reconnect: {error}"),
+    };
+    assert_eq!(recovered.content.len(), 1);
+
+    if let Err(error) = restart.await {
+        panic!("restart task join: {error}");
+    }
+    let handle_2 = match restart_rx.await {
+        Ok(handle_2) => handle_2,
+        Err(error) => panic!("restart handle receive: {error}"),
+    };
+    handle_2.abort();
+    let _ = handle_2.await;
+}

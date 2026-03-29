@@ -40,8 +40,8 @@ metadata:
 
 ## 2. Non-Goals
 
-- Rewriting all MCP tools in Rust now.
-- Breaking MCP `tools/list` and `tools/call` contracts.
+- Rewriting every remaining external tool adapter in one pass.
+- Reintroducing any external tool protocol as a central runtime architecture.
 - Introducing a second runtime orchestration loop.
 
 ## 3. Layer Boundaries
@@ -78,7 +78,7 @@ metadata:
 - Short-term memory lifecycle, 3-in-1 revalidation, purge/promotion policy, and state transitions belong to Rust-only memory package(s):
   - primary: `packages/rust/crates/xiuxian-memory-engine`
   - optional split (if needed): `xiuxian-memory-engine-lifecycle`, `xiuxian-memory-engine-reflection`
-- `knowledge` skill remains MCP-facing long-term knowledge interface and is not the runtime short-term memory engine.
+- `knowledge` remains the long-term knowledge interface and is not the runtime short-term memory engine.
 
 ## 3.2 Memory Exposure Model (Core + Tool Facade)
 
@@ -86,8 +86,8 @@ metadata:
   - lifecycle state machine
   - 3-in-1 (ReAct+Graph+Omega) revalidation
   - purge/promotion decisions
-- `skill memory` remains useful and should be kept as an MCP-facing tool facade:
-  - callable from any MCP-compatible client
+- `skill memory` remains useful and should be kept as a thin external tool facade:
+  - callable from legacy external clients when compatibility is still required
   - implemented as thin adapter via bindings/bridge to Rust memory core
   - must not duplicate memory policy logic
 - Rule:
@@ -104,8 +104,8 @@ This architecture replaces earlier ambiguous interpretations:
   - Correct: `knowledge` is durable curated knowledge; `memory` is transient runtime context.
 - Misconception: memory policy can live in agent runtime modules.
   - Correct: memory policy/state transitions live in Rust memory core package(s); `xiuxian-daochang` is orchestration-only.
-- Misconception: MCP memory tools own memory policy.
-  - Correct: MCP memory tools are facade/interop surface; policy remains in Rust core.
+- Misconception: external memory tool facades own memory policy.
+  - Correct: tool facades are compatibility/interop surface; policy remains in Rust core.
 
 ## 3.4 Data Plane Boundaries (Mandatory)
 

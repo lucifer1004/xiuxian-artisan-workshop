@@ -1,12 +1,10 @@
 [project]
 name = "xiuxian-wendao-py"
 version = "0.1.0"
-description = "Standalone Python bindings package for the xiuxian-wendao Rust engine"
+description = "Transport-first Python client package for the xiuxian-wendao Rust runtime"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "xiuxian-core-rs",
-]
+dependencies = []
 
 [dependency-groups]
 test = [

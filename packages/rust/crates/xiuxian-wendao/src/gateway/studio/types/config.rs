@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
-
-use crate::{LinkGraphJuliaAnalyzerLaunchManifest, LinkGraphJuliaDeploymentArtifact};
+use xiuxian_wendao_core::artifacts::{PluginArtifactPayload, PluginLaunchSpec};
 
 /// Global UI configuration for Studio.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
@@ -28,18 +27,18 @@ pub struct UiCapabilities {
     pub kinds: Vec<String>,
 }
 
-/// Studio-visible Julia analyzer launch manifest.
+/// Studio-visible generic plugin launch manifest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct UiJuliaAnalyzerLaunchManifest {
+pub struct UiPluginLaunchSpec {
     /// Launcher path relative to the repository root.
     pub launcher_path: String,
-    /// Ordered analyzer-owned CLI args.
+    /// Ordered provider-owned CLI args.
     pub args: Vec<String>,
 }
 
-impl From<LinkGraphJuliaAnalyzerLaunchManifest> for UiJuliaAnalyzerLaunchManifest {
-    fn from(value: LinkGraphJuliaAnalyzerLaunchManifest) -> Self {
+impl From<PluginLaunchSpec> for UiPluginLaunchSpec {
+    fn from(value: PluginLaunchSpec) -> Self {
         Self {
             launcher_path: value.launcher_path,
             args: value.args,
@@ -47,40 +46,105 @@ impl From<LinkGraphJuliaAnalyzerLaunchManifest> for UiJuliaAnalyzerLaunchManifes
     }
 }
 
-/// Studio-visible Julia deployment artifact inspection payload.
+/// Studio-visible generic plugin artifact inspection payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct UiJuliaDeploymentArtifact {
-    /// Artifact-level schema version for deployment inspection surfaces.
+pub struct UiPluginArtifact {
+    /// Owner plugin id.
+    pub plugin_id: String,
+    /// Artifact kind id.
+    pub artifact_id: String,
+    /// Artifact-level schema version for inspection surfaces.
     pub artifact_schema_version: String,
-    /// RFC3339 timestamp recording when the deployment artifact was rendered.
+    /// RFC3339 timestamp recording when the artifact was rendered.
     pub generated_at: String,
-    /// Resolved Julia service base URL.
+    /// Resolved provider service base URL.
     pub base_url: Option<String>,
-    /// Arrow IPC route expected by the service.
+    /// Request route expected by the provider.
     pub route: Option<String>,
-    /// Health-check route expected by the service.
+    /// Health-check route expected by the provider.
     pub health_route: Option<String>,
-    /// WendaoArrow schema version expected by Rust.
-    pub schema_version: Option<String>,
     /// Optional request timeout in seconds.
     pub timeout_secs: Option<u64>,
-    /// Resolved analyzer launch manifest.
-    pub launch: UiJuliaAnalyzerLaunchManifest,
+    /// Optional provider schema version.
+    pub schema_version: Option<String>,
+    /// Optional launch manifest for managed providers.
+    pub launch: Option<UiPluginLaunchSpec>,
 }
 
-impl From<LinkGraphJuliaDeploymentArtifact> for UiJuliaDeploymentArtifact {
-    fn from(value: LinkGraphJuliaDeploymentArtifact) -> Self {
+impl From<PluginArtifactPayload> for UiPluginArtifact {
+    fn from(value: PluginArtifactPayload) -> Self {
+        let endpoint = value.endpoint;
         Self {
-            artifact_schema_version: value.artifact_schema_version,
+            plugin_id: value.plugin_id.0,
+            artifact_id: value.artifact_id.0,
+            artifact_schema_version: value.artifact_schema_version.0,
             generated_at: value.generated_at,
-            base_url: value.base_url,
-            route: value.route,
-            health_route: value.health_route,
+            base_url: endpoint
+                .as_ref()
+                .and_then(|endpoint| endpoint.base_url.clone()),
+            route: endpoint
+                .as_ref()
+                .and_then(|endpoint| endpoint.route.clone()),
+            health_route: endpoint
+                .as_ref()
+                .and_then(|endpoint| endpoint.health_route.clone()),
+            timeout_secs: endpoint.as_ref().and_then(|endpoint| endpoint.timeout_secs),
             schema_version: value.schema_version,
-            timeout_secs: value.timeout_secs,
-            launch: value.launch.into(),
+            launch: value.launch.map(Into::into),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{UiPluginArtifact, UiPluginLaunchSpec};
+    use xiuxian_wendao_core::{
+        artifacts::{PluginArtifactPayload, PluginLaunchSpec},
+        capabilities::ContractVersion,
+        ids::{ArtifactId, PluginId},
+        transport::PluginTransportEndpoint,
+    };
+    use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH;
+
+    #[test]
+    fn generic_ui_artifact_builds_from_plugin_artifact_payload() {
+        let payload = PluginArtifactPayload {
+            plugin_id: PluginId("xiuxian-wendao-julia".to_string()),
+            artifact_id: ArtifactId("deployment".to_string()),
+            artifact_schema_version: ContractVersion("v1".to_string()),
+            generated_at: "2026-03-27T12:00:00Z".to_string(),
+            endpoint: Some(PluginTransportEndpoint {
+                base_url: Some("http://127.0.0.1:8088".to_string()),
+                route: Some("/arrow-ipc".to_string()),
+                health_route: Some("/healthz".to_string()),
+                timeout_secs: Some(15),
+            }),
+            schema_version: Some("v1".to_string()),
+            launch: Some(PluginLaunchSpec {
+                launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
+                args: vec!["--service-mode".to_string(), "stream".to_string()],
+            }),
+        };
+
+        assert_eq!(
+            UiPluginArtifact::from(payload),
+            UiPluginArtifact {
+                plugin_id: "xiuxian-wendao-julia".to_string(),
+                artifact_id: "deployment".to_string(),
+                artifact_schema_version: "v1".to_string(),
+                generated_at: "2026-03-27T12:00:00Z".to_string(),
+                base_url: Some("http://127.0.0.1:8088".to_string()),
+                route: Some("/arrow-ipc".to_string()),
+                health_route: Some("/healthz".to_string()),
+                timeout_secs: Some(15),
+                schema_version: Some("v1".to_string()),
+                launch: Some(UiPluginLaunchSpec {
+                    launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
+                    args: vec!["--service-mode".to_string(), "stream".to_string()],
+                }),
+            }
+        );
     }
 }
 

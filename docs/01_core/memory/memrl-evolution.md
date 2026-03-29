@@ -62,7 +62,7 @@ flowchart LR
   subgraph AgentCore["Agent Core"]
     Turn["run_turn()"]
     Recall["Adaptive Memory Recall Planner\n(k1/k2/lambda + feedback bias)"]
-    LLM["LLM + MCP Tool Calls"]
+    LLM["LLM + External Tool Calls"]
     Persist["Episode + Q-value persistence"]
     StreamPublish["Publish stream event\nmemory.events"]
   end
@@ -109,21 +109,21 @@ flowchart TD
 sequenceDiagram
   participant User
   participant Agent
-  participant MCP as MCP/Embedding
+  participant ToolRuntime as Tool Runtime / Embedding
   participant Valkey
   participant Consumer as Memory Stream Consumer
 
   User->>Agent: request
-  Agent->>MCP: tool/embed call
+  Agent->>ToolRuntime: tool/embed call
   alt Success path
-    MCP-->>Agent: result
+    ToolRuntime-->>Agent: result
     Agent->>Valkey: persist episode + q_table update
     Agent->>Valkey: XADD memory.events(kind=turn_stored)
     Valkey-->>Consumer: XREADGROUP event
     Consumer->>Valkey: XACK + metrics update
     Agent-->>User: response
   else Failure path
-    MCP--xAgent: error/timeout
+    ToolRuntime--xAgent: error/timeout
     Agent->>Agent: classify failure and adjust bias/reward
     Agent->>Valkey: persist failure state
     Agent->>Valkey: XADD memory.events(kind=turn_store_failed)
@@ -233,7 +233,7 @@ just test-xiuxian-daochang-memory-slo-report \
 
 ### Black-box acceptance workflow
 
-1. Start Valkey + MCP + channel runtime with production-like settings.
+1. Start Valkey + external tool runtime + channel runtime with production-like settings.
 2. Run multi-session/multi-group concurrency suite (mixed normal turns + `/session` commands).
 3. Run memory evolution suite (complex DAG scenarios, explicit failure injection).
 4. Verify stream consumer metrics converge (published events ~= processed/acked events).

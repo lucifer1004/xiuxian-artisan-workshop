@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from omni.tracer.async_utils import DispatchMode, dispatch_coroutine
+from xiuxian_tracer.async_utils import DispatchMode, dispatch_coroutine
 
 
 def test_dispatch_coroutine_runs_without_running_loop() -> None:
@@ -32,7 +32,7 @@ def test_dispatch_coroutine_background_mode_uses_thread(monkeypatch) -> None:
             called["thread_started"] = True
             self._target(*self._args)
 
-    import omni.tracer.async_utils as module
+    import xiuxian_tracer.async_utils as module
 
     monkeypatch.setattr(module.threading, "Thread", _FakeThread)
 

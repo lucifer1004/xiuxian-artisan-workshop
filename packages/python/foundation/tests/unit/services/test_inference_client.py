@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from omni.foundation.services.llm.client import InferenceClient
+from xiuxian_foundation.services.llm.client import InferenceClient
 
 
 class TestInferenceClientHTTPBackend:
@@ -19,8 +19,8 @@ class TestInferenceClientHTTPBackend:
     def test_backend_module_loaded(self):
         """Test that compatibility backend is loaded on initialization."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.anthropic.com",
@@ -37,8 +37,8 @@ class TestInferenceClientHTTPBackend:
     def test_minimax_uses_auth_token(self):
         """Test that MiniMax API configuration is loaded."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.minimax.chat/v1",
@@ -79,8 +79,8 @@ class TestInferenceClientMessageFormat:
     async def test_complete_sends_messages_via_backend(self):
         """Test that complete() sends messages via backend.acompletion."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.anthropic.com",
@@ -142,8 +142,8 @@ class TestToolCallParsingHTTPBackend:
     async def test_tool_call_extraction_simple(self):
         """Test simple [TOOL_CALL: skill.command] extraction."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.minimax.chat/v1",
@@ -175,8 +175,8 @@ class TestToolCallParsingHTTPBackend:
     async def test_tool_call_in_thinking_block_filtered(self):
         """Test that [TOOL_CALL: ...] in thinking blocks are NOT extracted."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.minimax.chat/v1",
@@ -216,8 +216,8 @@ class TestToolCallParsingHTTPBackend:
     async def test_no_tool_calls_text_response_only(self):
         """Test that plain text response has no tool calls."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.anthropic.com",
@@ -250,8 +250,8 @@ class TestErrorHandlingHTTPBackend:
     async def test_exception_returns_error(self):
         """Test that exceptions are handled gracefully."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.anthropic.com",
@@ -280,8 +280,8 @@ class TestErrorHandlingHTTPBackend:
     async def test_timeout_returns_error(self):
         """Test that timeout errors are handled gracefully."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.anthropic.com",
@@ -313,8 +313,8 @@ class TestRetryLogicHTTPBackend:
     async def test_retry_on_failure(self):
         """Test that retry logic works on failures (manual implementation)."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.anthropic.com",
@@ -374,8 +374,8 @@ class TestBuildSystemPrompt:
     def test_prompt_from_role_and_name(self):
         """Test prompt building from role and name."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.return_value = "https://api.anthropic.com"
             mock_key.return_value = "test-key"
@@ -391,8 +391,8 @@ class TestBuildSystemPrompt:
     def test_prompt_from_prompt_parameter(self):
         """Test that prompt parameter takes precedence."""
         with (
-            patch("omni.foundation.services.llm.client.get_setting") as mock_get,
-            patch("omni.foundation.services.llm.client.get_anthropic_api_key") as mock_key,
+            patch("xiuxian_foundation.services.llm.client.get_setting") as mock_get,
+            patch("xiuxian_foundation.services.llm.client.get_anthropic_api_key") as mock_key,
         ):
             mock_get.return_value = "https://api.anthropic.com"
             mock_key.return_value = "test-key"

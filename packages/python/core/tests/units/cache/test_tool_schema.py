@@ -1,5 +1,5 @@
 """
-Tests for omni.core.cache.tool_schema
+Tests for xiuxian_core.cache.tool_schema
 """
 
 import time
@@ -10,7 +10,7 @@ class TestToolSchemaCache:
 
     def test_basic_get_set(self):
         """Test basic get and set operations."""
-        from omni.core.cache.tool_schema import ToolSchemaCache
+        from xiuxian_core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache(ttl_seconds=300)
         schema = {"name": "test_tool", "input_schema": {}}
@@ -23,7 +23,7 @@ class TestToolSchemaCache:
 
     def test_get_nonexistent(self):
         """Test getting nonexistent key returns None."""
-        from omni.core.cache.tool_schema import ToolSchemaCache
+        from xiuxian_core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache()
         result = cache.get("nonexistent.tool")
@@ -32,7 +32,7 @@ class TestToolSchemaCache:
 
     def test_expiration(self):
         """Test that entries expire after TTL."""
-        from omni.core.cache.tool_schema import ToolSchemaCache
+        from xiuxian_core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache(ttl_seconds=1)  # 1 second TTL
         schema = {"name": "expired_tool"}
@@ -48,7 +48,7 @@ class TestToolSchemaCache:
 
     def test_invalidate_specific(self):
         """Test invalidating specific entry."""
-        from omni.core.cache.tool_schema import ToolSchemaCache
+        from xiuxian_core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache()
         cache.set("tool1", {"name": "tool1"})
@@ -64,7 +64,7 @@ class TestToolSchemaCache:
 
     def test_invalidate_all(self):
         """Test invalidating all entries."""
-        from omni.core.cache.tool_schema import ToolSchemaCache
+        from xiuxian_core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache()
         cache.set("tool1", {"name": "tool1"})
@@ -81,7 +81,7 @@ class TestToolSchemaCache:
 
     def test_cleanup_expired(self):
         """Test cleaning up expired entries."""
-        from omni.core.cache.tool_schema import ToolSchemaCache
+        from xiuxian_core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache(ttl_seconds=1)
         cache.set("tool1", {"name": "tool1"})
@@ -99,7 +99,7 @@ class TestToolSchemaCache:
         """Test thread-safe operations."""
         import threading
 
-        from omni.core.cache.tool_schema import ToolSchemaCache
+        from xiuxian_core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache()
         errors = []
@@ -131,14 +131,14 @@ class TestToolSchemaCache:
 
     def test_get_ttl(self):
         """Test getting TTL value."""
-        from omni.core.cache.tool_schema import ToolSchemaCache
+        from xiuxian_core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache(ttl_seconds=600)
         assert cache.get_ttl() == 600
 
     def test_set_ttl(self):
         """Test setting TTL value."""
-        from omni.core.cache.tool_schema import ToolSchemaCache
+        from xiuxian_core.cache.tool_schema import ToolSchemaCache
 
         cache = ToolSchemaCache(ttl_seconds=300)
         cache.set_ttl(600)
@@ -150,7 +150,7 @@ class TestGetSchemaCache:
 
     def test_singleton_behavior(self):
         """Test that cache is a singleton."""
-        from omni.core.cache.tool_schema import get_schema_cache, reset_cache
+        from xiuxian_core.cache.tool_schema import get_schema_cache, reset_cache
 
         reset_cache()
 
@@ -161,7 +161,7 @@ class TestGetSchemaCache:
 
     def test_resets_on_reset(self):
         """Test that reset clears the singleton."""
-        from omni.core.cache.tool_schema import get_schema_cache, reset_cache
+        from xiuxian_core.cache.tool_schema import get_schema_cache, reset_cache
 
         reset_cache()
 
@@ -179,7 +179,7 @@ class TestGetCachedSchema:
 
     def test_cache_hit(self):
         """Test cache hit returns cached value."""
-        from omni.core.cache.tool_schema import get_cached_schema, reset_cache
+        from xiuxian_core.cache.tool_schema import get_cached_schema, reset_cache
 
         reset_cache()
 
@@ -199,7 +199,7 @@ class TestGetCachedSchema:
 
     def test_cache_miss(self):
         """Test cache miss calls extractor."""
-        from omni.core.cache.tool_schema import get_cached_schema, reset_cache
+        from xiuxian_core.cache.tool_schema import get_cached_schema, reset_cache
 
         reset_cache()
 

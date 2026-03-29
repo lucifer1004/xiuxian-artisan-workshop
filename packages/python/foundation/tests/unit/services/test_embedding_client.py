@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from omni.foundation.embedding_client import EmbeddingClient
+from xiuxian_foundation.embedding_client import EmbeddingClient
 
 
 class _FakeHTTPResponse:

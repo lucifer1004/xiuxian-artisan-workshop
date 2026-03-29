@@ -37,36 +37,26 @@ def _read_tree(project_root: Path, relative_dir: str) -> str:
     return "\n".join(parts)
 
 
-def test_link_graph_python_backend_contract_is_planned_only(project_root: Path) -> None:
-    """Python backend protocol must keep planned-search as the only search entrypoint."""
-    source = _read(project_root, "packages/python/foundation/src/omni/rag/link_graph/backend.py")
-    assert "async def search_planned(" in source
-    assert "async def search(" not in source
+def test_link_graph_python_backend_host_surface_is_deleted(project_root: Path) -> None:
+    """Python must not carry a local link-graph backend host surface."""
+    path = project_root / "packages/python/foundation/src/xiuxian_rag/link_graph/backend.py"
+    assert path.exists() is False
 
 
-def test_link_graph_rust_py_binding_contract_is_planned_only(project_root: Path) -> None:
-    """Rust PyO3 binding must expose planned-search only (no legacy search methods)."""
-    source = _read_any(
-        project_root,
-        (
-            "packages/rust/crates/xiuxian-wendao/src/link_graph_py.rs",
-            "packages/rust/crates/xiuxian-wendao/src/link_graph_py/engine/mod.rs",
-        ),
+def test_link_graph_rust_py_binding_surface_is_deleted(project_root: Path) -> None:
+    """Rust must not carry the deleted Python binding facade for link-graph search."""
+    paths = (
+        project_root / "packages/rust/crates/xiuxian-wendao/src/link_graph_py.rs",
+        project_root / "packages/rust/crates/xiuxian-wendao/src/link_graph_py/engine/mod.rs",
     )
-    assert "fn search_planned(" in source
-    assert re.search(r"(?m)^\s*fn\s+search\s*\(", source) is None
-    assert re.search(r"(?m)^\s*fn\s+search_with_options\s*\(", source) is None
-    assert re.search(r"(?m)^\s*fn\s+run_search\s*\(", source) is None
+    assert all(path.exists() is False for path in paths)
 
 
 def test_link_graph_rust_index_contract_is_planned_only(project_root: Path) -> None:
-    """Rust index public API must not reintroduce legacy search methods."""
-    source = "\n".join(
-        [
-            _read(project_root, "packages/rust/crates/xiuxian-wendao/src/link_graph/index.rs"),
-            _read_tree(project_root, "packages/rust/crates/xiuxian-wendao/src/link_graph/index"),
-        ]
-    )
+    """Rust index public API must stay under the modularized index tree only."""
+    flat_index = project_root / "packages/rust/crates/xiuxian-wendao/src/link_graph/index.rs"
+    assert flat_index.exists() is False
+    source = _read_tree(project_root, "packages/rust/crates/xiuxian-wendao/src/link_graph/index")
     assert "pub fn search_planned(" in source
     assert re.search(r"(?m)^\s*pub\s+fn\s+search\s*\(", source) is None
     assert re.search(r"(?m)^\s*pub\s+fn\s+search_with_query\s*\(", source) is None
@@ -82,7 +72,7 @@ def test_link_graph_reason_vocab_contract_matches_schema(project_root: Path) -> 
     schema = json.loads(
         _read(
             project_root,
-            "packages/rust/crates/xiuxian-wendao/resources/omni.link_graph.retrieval_plan.v1.schema.json",
+            "packages/rust/crates/xiuxian-wendao/resources/xiuxian_wendao.link_graph.retrieval_plan.v1.schema.json",
         )
     )
     rust_reasons = sorted(

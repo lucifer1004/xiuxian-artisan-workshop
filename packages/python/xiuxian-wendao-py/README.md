@@ -6,36 +6,41 @@ metadata:
 
 # xiuxian-wendao-py
 
-`xiuxian-wendao-py` is a standalone Python package for the `xiuxian-wendao` Rust bindings.
+`xiuxian-wendao-py` is the transport-first Python package for the
+`xiuxian-wendao` Rust runtime.
 
-It provides a Python API over `xiuxian-core-rs`, so Python users can directly use the
-Rust LinkGraph engine without depending on the full Omni runtime stack.
+It exists to give Python consumers a stable `xiuxian_*` entrypoint while the
+repository retires the old `omni.*` package family.
+
+The default architecture is:
+
+1. Rust owns execution and state.
+2. Python prefers Arrow Flight transport.
+3. Python falls back to Arrow IPC.
+4. Python does not depend on in-process Rust bindings.
 
 ## Quick Start
 
 ```python
-from xiuxian_wendao_py import WendaoBackend, WendaoRuntimeConfig
-
-config = WendaoRuntimeConfig(
-    root_dir=".",
-    include_dirs=["docs"],
-    include_dirs_auto=False,
-    include_dirs_auto_candidates=[],
-    exclude_dirs=[".git", ".cache", ".devenv", ".run", ".venv", "target", "node_modules"],
-    stats_persistent_cache_ttl_sec=120.0,
-    delta_full_rebuild_threshold=256,
-    cache_valkey_url="redis://127.0.0.1:6379/0",
-    cache_key_prefix=None,
-    cache_ttl_seconds=None,
+from xiuxian_wendao_py import (
+    WendaoTransportClient,
+    WendaoTransportConfig,
+    WendaoTransportEndpoint,
 )
 
-backend = WendaoBackend(notebook_dir=".", runtime_config=config)
-result = await backend.search_planned("link graph", limit=20, options={"match_strategy": "fts"})
-print(result)
+config = WendaoTransportConfig(
+    endpoint=WendaoTransportEndpoint(host="127.0.0.1", port=50051),
+)
+client = WendaoTransportClient(config)
+print(client.preferred_modes())
+print(client.flight_authority())
 ```
 
 ## Scope
 
-- Bindings-first package (no binary subprocess wrapper).
-- Standalone backend runtime (`WendaoBackend`) for search/refresh/stats flows.
-- Rust remains the single source of truth for search/index logic.
+- Transport-first package with explicit Flight and Arrow IPC connection models.
+- `xiuxian_*` canonical Python entrypoint for Wendao transport consumers.
+- Narrow `compat/` exports for high-traffic legacy config helpers while
+  `xiuxian_foundation.*` is retired.
+- Rust remains the single source of truth for search/index logic and runtime
+  semantics.

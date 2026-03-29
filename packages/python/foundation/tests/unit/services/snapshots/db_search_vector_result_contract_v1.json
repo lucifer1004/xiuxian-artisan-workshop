@@ -1,6 +1,6 @@
 [
   {
-    "schema": "omni.vector.search.v1",
+    "schema": "xiuxian.vector.search.v1",
     "id": "doc-1",
     "content": "hello",
     "metadata": { "k": "v" },

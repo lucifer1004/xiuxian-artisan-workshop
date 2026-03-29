@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from omni.rag.link_graph.models import LinkGraphNote
-from omni.rag.link_graph_enhancer import (
+from xiuxian_rag.link_graph.models import LinkGraphNote
+from xiuxian_rag.link_graph_enhancer import (
     LinkGraphEnhancer,
     _extract_entity_refs_py,
     _parse_frontmatter,
@@ -116,7 +116,7 @@ class TestLinkGraphEnhancer:
     """Tests for the LinkGraphEnhancer secondary analysis pipeline."""
 
     def test_enhance_note_basic(self) -> None:
-        enhancer = LinkGraphEnhancer(graph=None)  # No graph, Python-only mode
+        enhancer = LinkGraphEnhancer()
         note = _make_note(content="# Hello\n\nSome content about [[Python]]")
         result = enhancer.enhance_note(note)
 
@@ -125,7 +125,7 @@ class TestLinkGraphEnhancer:
         assert result.entity_refs[0].name == "Python"
 
     def test_enhance_note_with_frontmatter(self) -> None:
-        enhancer = LinkGraphEnhancer(graph=None)
+        enhancer = LinkGraphEnhancer()
         content = "---\ntitle: Guide\ntags:\n  - tutorial\n---\n# Guide\n\nContent with [[Rust]]"
         note = _make_note(content=content)
         result = enhancer.enhance_note(note)
@@ -135,7 +135,7 @@ class TestLinkGraphEnhancer:
         assert len(result.entity_refs) == 1
 
     def test_enhance_note_infers_relations(self) -> None:
-        enhancer = LinkGraphEnhancer(graph=None)
+        enhancer = LinkGraphEnhancer()
         content = "---\ntags:\n  - search\n---\nReferences [[LanceDB]] and [[Tantivy]]"
         note = _make_note(title="Hybrid Search", content=content)
         result = enhancer.enhance_note(note)
@@ -147,7 +147,7 @@ class TestLinkGraphEnhancer:
         assert len(tag_rels) == 1  # search
 
     def test_enhance_skill_note(self) -> None:
-        enhancer = LinkGraphEnhancer(graph=None)
+        enhancer = LinkGraphEnhancer()
         content = "---\nname: git\ndescription: Git ops\n---\n# SKILL"
         note = _make_note(
             title="Git Skill",
@@ -161,7 +161,7 @@ class TestLinkGraphEnhancer:
         assert contains_rels[0]["source"] == "git"
 
     def test_enhance_batch(self) -> None:
-        enhancer = LinkGraphEnhancer(graph=None)
+        enhancer = LinkGraphEnhancer()
         notes = [
             _make_note(title="A", content="About [[X]]"),
             _make_note(title="B", content="About [[Y]] and [[Z]]"),
@@ -172,7 +172,7 @@ class TestLinkGraphEnhancer:
         assert len(results[1].entity_refs) == 2
 
     def test_ref_stats(self) -> None:
-        enhancer = LinkGraphEnhancer(graph=None)
+        enhancer = LinkGraphEnhancer()
         content = "Links: [[A#tool]], [[B#tool]], [[C#concept]]"
         note = _make_note(content=content)
         result = enhancer.enhance_note(note)
@@ -181,7 +181,7 @@ class TestLinkGraphEnhancer:
         assert result.ref_stats["unique_entities"] == 3
 
     def test_no_content(self) -> None:
-        enhancer = LinkGraphEnhancer(graph=None)
+        enhancer = LinkGraphEnhancer()
         note = _make_note(content="")
         result = enhancer.enhance_note(note)
 

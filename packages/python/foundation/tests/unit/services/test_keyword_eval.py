@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from omni.foundation.services import keyword_eval
+from xiuxian_foundation.services import keyword_eval
 
 
 class _FakeProvider:

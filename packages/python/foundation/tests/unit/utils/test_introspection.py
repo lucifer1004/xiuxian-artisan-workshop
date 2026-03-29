@@ -11,7 +11,7 @@ class TestInputSchemaExtractionFramework:
 
     def test_input_schema_basic_types(self):
         """Test schema extraction with basic types."""
-        from omni.foundation.api.decorators import _generate_tool_schema
+        from xiuxian_foundation.api.decorators import _generate_tool_schema
 
         def basic_func(message: str, count: int):
             pass
@@ -30,7 +30,7 @@ class TestInputSchemaExtractionFramework:
 
     def test_input_schema_with_defaults(self):
         """Test schema extraction with default values."""
-        from omni.foundation.api.decorators import _generate_tool_schema
+        from xiuxian_foundation.api.decorators import _generate_tool_schema
 
         def func_with_default(message: str, count: int = 10):
             pass
@@ -49,7 +49,7 @@ class TestInputSchemaExtractionFramework:
 
     def test_input_schema_with_optional_params(self):
         """Test schema extraction with optional parameters."""
-        from omni.foundation.api.decorators import _generate_tool_schema
+        from xiuxian_foundation.api.decorators import _generate_tool_schema
 
         def func_with_optional(path: str, encoding: str = "utf-8"):
             pass
@@ -61,7 +61,7 @@ class TestInputSchemaExtractionFramework:
 
     def test_input_schema_complex_types(self):
         """Test schema extraction with complex types."""
-        from omni.foundation.api.decorators import _generate_tool_schema
+        from xiuxian_foundation.api.decorators import _generate_tool_schema
 
         def complex_func(name: str, tags: list[str], count: int, enabled: bool = True):
             pass
@@ -79,7 +79,7 @@ class TestSkillScriptConfig:
 
     def test_skill_command_decorator_attaches_config(self):
         """@skill_command decorator should attach _skill_config."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(category="test")
         def test_func():
@@ -96,7 +96,7 @@ class TestSkillCommandDecorator:
 
     def test_skill_command_generates_input_schema(self):
         """@skill_command should generate input_schema using Pydantic V2."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(category="test")
         def test_func(message: str, count: int = 5):
@@ -121,7 +121,7 @@ class TestSkillCommandDecorator:
 
     def test_skill_command_description_from_docstring(self):
         """@skill_command should extract description from docstring."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(category="test")
         def test_func():
@@ -133,7 +133,7 @@ class TestSkillCommandDecorator:
 
     def test_skill_command_excludes_injected_params(self):
         """@skill_command should exclude injected params from schema."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(inject_root=True)
         def test_func(message: str):
@@ -148,7 +148,7 @@ class TestSkillCommandDecorator:
     def test_skill_command_with_complex_types(self):
         """@skill_command should handle complex types in schema."""
 
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(category="test")
         def test_func(

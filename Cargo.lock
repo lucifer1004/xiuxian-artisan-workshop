@@ -15142,7 +15142,6 @@ dependencies = [
  "xiuxian-llm",
  "xiuxian-logging",
  "xiuxian-macros",
- "xiuxian-mcp",
  "xiuxian-memory-engine",
  "xiuxian-qianhuan",
  "xiuxian-qianji",
@@ -15290,23 +15289,6 @@ dependencies = [
  "toml 0.8.23",
  "uuid 1.22.0",
  "xiuxian-config-core",
-]
-
-[[package]]
-name = "xiuxian-mcp"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "axum",
- "reqwest 0.13.2",
- "rmcp",
- "schemars 1.2.0",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
 ]
 
 [[package]]
@@ -15647,8 +15629,23 @@ dependencies = [
  "xiuxian-testing",
  "xiuxian-types",
  "xiuxian-vector",
+ "xiuxian-wendao-core",
+ "xiuxian-wendao-julia",
+ "xiuxian-wendao-runtime",
  "xiuxian-zhenfa",
  "xxhash-rust",
+]
+
+[[package]]
+name = "xiuxian-wendao-core"
+version = "0.1.1"
+dependencies = [
+ "arrow 58.1.0",
+ "schemars 1.2.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -15658,9 +15655,11 @@ dependencies = [
  "arrow 58.1.0",
  "arrow-ipc 58.1.0",
  "axum",
+ "chrono",
  "insta",
  "regex",
  "reqwest 0.13.2",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
@@ -15668,7 +15667,7 @@ dependencies = [
  "walkdir",
  "xiuxian-ast",
  "xiuxian-vector",
- "xiuxian-wendao",
+ "xiuxian-wendao-core",
 ]
 
 [[package]]
@@ -15682,6 +15681,21 @@ dependencies = [
  "walkdir",
  "xiuxian-ast",
  "xiuxian-wendao",
+]
+
+[[package]]
+name = "xiuxian-wendao-runtime"
+version = "0.1.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "serial_test",
+ "tempfile",
+ "toml 0.8.23",
+ "xiuxian-config-core",
+ "xiuxian-vector",
+ "xiuxian-wendao-core",
 ]
 
 [[package]]

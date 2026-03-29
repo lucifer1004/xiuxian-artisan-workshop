@@ -1,10 +1,10 @@
-"""Tests for file fixtures in omni.test_kit."""
+"""Tests for file fixtures in xiuxian_test_kit."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from omni.test_kit.fixtures.files import temp_yaml_file as _temp_yaml_fixture
+from xiuxian_test_kit.fixtures.files import temp_yaml_file as _temp_yaml_fixture
 
 
 def test_temp_yaml_file_factory_creates_file(tmp_path: Path) -> None:

@@ -14,10 +14,10 @@ use tokio::sync::RwLock;
 use xiuxian_memory_engine::{EpisodeStore, StoreConfig};
 
 impl Agent {
-    /// Build agent from config. Connects to first MCP server that has a URL.
+    /// Build agent from config. Connects to configured external tool servers when present.
     ///
     /// # Errors
-    /// Returns an error if session, MCP, or memory backends fail to initialize.
+    /// Returns an error if session, external tool, or memory backends fail to initialize.
     pub async fn from_config(config: AgentConfig) -> Result<Self> {
         let api_key = config.resolve_api_key();
         let llm = LlmClient::new(config.inference_url.clone(), config.model.clone(), api_key);
@@ -35,7 +35,7 @@ impl Agent {
 
     #[doc(hidden)]
     /// # Errors
-    /// Returns an error if session, MCP, or memory backends fail to initialize.
+    /// Returns an error if session, external tool, or memory backends fail to initialize.
     pub async fn from_config_with_session_backends_for_test(
         config: AgentConfig,
         session: SessionStore,
@@ -52,7 +52,7 @@ impl Agent {
         session: SessionStore,
         bounded_session: Option<BoundedSessionStore>,
     ) -> Result<Self> {
-        let mcp_client = super::mcp_startup::connect_mcp_pool_if_configured(&config).await?;
+        let tool_runtime = super::tool_startup::connect_tool_pool_if_configured(&config).await?;
         let (memory_store, memory_state_backend, memory_state_load_status) =
             init_memory_backends(&config)?;
 
@@ -117,7 +117,7 @@ impl Agent {
             memory_embed_timeout_cooldown,
             memory_embed_timeout_cooldown_until_ms: AtomicU64::new(0),
             llm,
-            mcp: mcp_client,
+            tool_runtime,
             memory_stream_consumer_task,
         })
     }

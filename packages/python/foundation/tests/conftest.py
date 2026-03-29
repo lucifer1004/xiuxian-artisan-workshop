@@ -1,7 +1,7 @@
 """
 Foundation Test Configuration
 
-Shared fixtures for omni.foundation tests.
+Shared fixtures for xiuxian_foundation tests.
 """
 
 import sys
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-# Ensure omni.foundation is importable if running independently
+# Ensure xiuxian_foundation is importable if running independently
 _foundation_path = Path(__file__).parent.parent.parent
 if str(_foundation_path) not in sys.path:
     sys.path.insert(0, str(_foundation_path))
@@ -18,7 +18,7 @@ if str(_foundation_path) not in sys.path:
 @pytest.fixture(scope="session")
 def project_root():
     """Get project root directory."""
-    from omni.foundation.runtime.gitops import get_project_root
+    from xiuxian_foundation.runtime.gitops import get_project_root
 
     return get_project_root()
 
@@ -26,9 +26,9 @@ def project_root():
 @pytest.fixture(scope="session")
 def skills_dir(project_root):
     """Get skills directory."""
-    from omni.foundation.config.skills import SKILLS_DIR
+    from xiuxian_foundation.config.dirs import get_skills_dir
 
-    return SKILLS_DIR()
+    return get_skills_dir()
 
 
 @pytest.fixture
@@ -53,9 +53,7 @@ def temp_config_dir(tmp_path):
 def mock_embedding_for_search():
     """Mock embedding so search tests don't need a real embedding server.
 
-    Patches both:
-    - embedding_client (used by run_semantic_search)
-    - embedding service (used by run_hybrid_search)
+    Patches the embedding HTTP/client helpers used by retained search helpers.
     """
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -71,11 +69,11 @@ def mock_embedding_for_search():
 
     with (
         patch(
-            "omni.foundation.embedding_client.get_embedding_client",
+            "xiuxian_foundation.embedding_client.get_embedding_client",
             return_value=mock_client,
         ),
         patch(
-            "omni.foundation.services.vector.hybrid.get_embedding_service",
+            "xiuxian_foundation.services.embedding.get_embedding_service",
             return_value=mock_embed_svc,
         ),
     ):

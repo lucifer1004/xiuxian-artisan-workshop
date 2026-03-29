@@ -1,11 +1,11 @@
-"""Tests for omni.foundation.api.link_graph_policy_schema."""
+"""Tests for xiuxian_foundation.api.link_graph_policy_schema."""
 
 from __future__ import annotations
 
 import pytest
 
-import omni.foundation.api.link_graph_policy_schema as link_graph_policy_schema
-from omni.foundation.api.link_graph_policy_schema import (
+import xiuxian_foundation.api.link_graph_policy_schema as link_graph_policy_schema
+from xiuxian_foundation.api.link_graph_policy_schema import (
     build_plan_record,
     get_reason_enum,
     get_schema_id,
@@ -28,13 +28,13 @@ def test_build_plan_record_roundtrip() -> None:
         budget_rows_per_source=8,
     )
     validate(payload)
-    assert payload["schema"] == "omni.link_graph.retrieval_plan.v1"
+    assert payload["schema"] == "xiuxian_wendao.link_graph.retrieval_plan.v1"
     assert payload["budget"]["candidate_limit"] == 20
 
 
 def test_get_schema_id() -> None:
     schema_id = get_schema_id()
-    assert schema_id.endswith("/omni.link_graph.retrieval_plan.v1.schema.json")
+    assert schema_id.endswith("/xiuxian_wendao.link_graph.retrieval_plan.v1.schema.json")
 
 
 def test_get_reason_enum_contains_graph_sufficient() -> None:

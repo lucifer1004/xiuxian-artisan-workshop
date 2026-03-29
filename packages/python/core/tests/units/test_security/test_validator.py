@@ -2,7 +2,7 @@
 
 import pytest
 
-from omni.core.security import SecurityError, SecurityValidator
+from xiuxian_core.security import SecurityError, SecurityValidator
 
 
 class TestSecurityValidator:

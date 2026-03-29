@@ -25,7 +25,7 @@ Use **only** the project’s knowledge pipeline: ingest the PDF, then recall wit
 
 ### Step 1: Ingest the paper
 
-**MCP** (recommended):
+**Tool runtime** (recommended):
 
 ```text
 knowledge.ingest_document(file_path="https://arxiv.org/pdf/2602.12108")
@@ -44,7 +44,7 @@ uv run omni skill run knowledge.ingest_document '{"file_path":"https://arxiv.org
 
 **Default behavior** is the chunked workflow: preview → fetch full chunks → split into batches. The model reads each batch in memory in turn.
 
-**MCP**:
+**Tool runtime**:
 
 ```text
 knowledge.recall(query="Pensieve StateLM stateful context memory tools context pruning document indexing note-taking long document")
@@ -127,7 +127,7 @@ We already give the model “long content in slices” and consume it in memory.
 | **1. Memory tools in skill surface**          | Add skills or extend existing ones: e.g. `memory.context_prune` (summarize/drop low-value content), `memory.add_to_index` (update running doc index), `memory.take_note` (persist key fact). Agent uses them **during** chunked recall (after each batch or at end of read).                         |
 | **2. “Reading index” for long doc**           | When the user (or agent) starts a “research this paper” flow, create a transient or persistent “reading index” (key points, sections, decisions). Update it as the model processes each batch from `knowledge.recall`.                                                                               |
 | **3. Optional summarization between batches** | After feeding batch N, optionally call a summarization step and pass a short “summary so far” into the next turn so context stays bounded while preserving important content (soft form of “context pruning”).                                                                                       |
-| **4. Document “Pensieve alignment”**          | In `docs/how-to/knowledge-mcp-query-paper.md` or a new doc, state that our long-content design is compatible with “model-managed context”: we provide chunked recall and in-memory consumption; future work can add StateLM-style tools so the model holds the “wand” (prune / index / note-taking). |
+| **4. Document “Pensieve alignment”**          | In a dedicated long-content how-to or a new doc, state that our long-content design is compatible with “model-managed context”: we provide chunked recall and in-memory consumption; future work can add StateLM-style tools so the model holds the “wand” (prune / index / note-taking). |
 
 ---
 

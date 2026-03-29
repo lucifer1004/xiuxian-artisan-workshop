@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from omni.foundation.runtime.skill_optimization import (
+from xiuxian_foundation.runtime.skill_optimization import (
     BALANCED_PROFILE,
     LATENCY_PROFILE,
     build_preview_rows,
@@ -73,7 +73,7 @@ def test_resolve_optional_int_from_setting_prefers_explicit_and_falls_back(
         return None
 
     monkeypatch.setattr(
-        "omni.foundation.config.settings.get_setting",
+        "xiuxian_foundation.config.settings.get_setting",
         _fake_get_setting,
     )
 
@@ -95,7 +95,7 @@ def test_resolve_typed_values_from_setting(monkeypatch) -> None:
         return default
 
     monkeypatch.setattr(
-        "omni.foundation.config.settings.get_setting",
+        "xiuxian_foundation.config.settings.get_setting",
         _fake_get_setting,
     )
 

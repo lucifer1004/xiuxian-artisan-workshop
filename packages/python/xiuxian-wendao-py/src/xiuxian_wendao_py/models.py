@@ -1,4 +1,4 @@
-"""Data models for the xiuxian-wendao Python backend core."""
+"""Data models for the xiuxian-wendao Python transport/runtime client."""
 
 from __future__ import annotations
 
@@ -19,13 +19,13 @@ DEFAULT_EXCLUDED_ADDITIONAL_DIRS: tuple[str, ...] = (
 LINK_GRAPH_CACHE_VALKEY_URL_ENV: str = "VALKEY_URL"
 LINK_GRAPH_VALKEY_KEY_PREFIX_ENV: str = "OMNI_LINK_GRAPH_VALKEY_KEY_PREFIX"
 LINK_GRAPH_VALKEY_TTL_SECONDS_ENV: str = "OMNI_LINK_GRAPH_VALKEY_TTL_SECONDS"
-LINK_GRAPH_VALKEY_CACHE_SCHEMA_VERSION: str = "omni.link_graph.valkey_cache_snapshot.v1"
-LINK_GRAPH_STATS_CACHE_SCHEMA_VERSION: str = "omni.link_graph.stats.cache.v1"
+LINK_GRAPH_VALKEY_CACHE_SCHEMA_VERSION: str = "xiuxian_wendao.link_graph.valkey_cache_snapshot.v1"
+LINK_GRAPH_STATS_CACHE_SCHEMA_VERSION: str = "xiuxian_wendao.link_graph.stats.cache.v1"
 
 
 @dataclass(frozen=True, slots=True)
 class WendaoRuntimeConfig:
-    """Runtime config consumed by the standalone backend core."""
+    """Runtime config consumed by the transport/runtime client surface."""
 
     root_dir: str | None
     include_dirs: list[str]

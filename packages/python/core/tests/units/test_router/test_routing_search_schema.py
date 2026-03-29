@@ -13,13 +13,13 @@ from pathlib import Path
 
 import pytest
 
-from omni.foundation.api.schema_locator import resolve_schema_file_path
+from xiuxian_foundation.api.schema_locator import resolve_schema_file_path
 
 
 def _path_to_canonical() -> Path:
     """Path to routing search canonical snapshot, if present."""
     schema_path = resolve_schema_file_path(
-        "omni.router.routing_search.v1.schema.json",
+        "xiuxian.router.routing_search.v1.schema.json",
         preferred_crates=("xiuxian-daochang",),
     )
     candidates = [schema_path.parent / "snapshots" / "routing_search_canonical_v1.json"]
@@ -40,7 +40,7 @@ def canonical():
 
 
 def test_canonical_has_schema_id(canonical):
-    assert canonical.get("schema") == "omni.router.routing_search.v1"
+    assert canonical.get("schema") == "xiuxian.router.routing_search.v1"
 
 
 def test_canonical_keyword_boosts_match_rust_contract(canonical):

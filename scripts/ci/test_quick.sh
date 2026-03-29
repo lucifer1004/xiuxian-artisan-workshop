@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/agent/tests/unit/cli/ -q --tb=short
+uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ -q --tb=short
 
 uv run pytest \
   scripts/test_render_wendao_ppr_rollout_status.py \
@@ -21,11 +21,3 @@ uv run pytest \
   scripts/rust/test_resolve_libpython_path.py \
   packages/ncl/scripts/test_print_skill_summary.py \
   -q --tb=short
-
-(
-  cd packages/python/mcp-server
-  uv run pytest tests/ -q --tb=short --ignore=tests/integration/test_sse.py \
-    --ignore=tests/unit/test_interfaces.py \
-    --ignore=tests/unit/test_types.py \
-    --ignore=tests/unit/test_transport/test_sse.py
-)

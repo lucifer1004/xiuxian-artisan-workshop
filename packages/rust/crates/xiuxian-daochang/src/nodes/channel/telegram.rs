@@ -27,7 +27,7 @@ struct TelegramChannelRunRequest {
     allowed_users: Vec<String>,
     allowed_groups: Vec<String>,
     control_command_policy: TelegramControlCommandPolicy,
-    mcp_config_path: PathBuf,
+    tool_config_path: PathBuf,
     mode: TelegramChannelMode,
     webhook_bind: String,
     webhook_path: String,
@@ -41,7 +41,7 @@ pub(super) async fn run_telegram_channel_command(
 ) -> anyhow::Result<()> {
     let ChannelCommandRequest {
         bot_token,
-        mcp_config,
+        tool_config,
         mode,
         webhook_bind,
         webhook_path,
@@ -125,7 +125,7 @@ pub(super) async fn run_telegram_channel_command(
             allowed_users: acl_overrides.allowed_users,
             allowed_groups: acl_overrides.allowed_groups,
             control_command_policy,
-            mcp_config_path: mcp_config,
+            tool_config_path: tool_config,
             mode: channel_mode,
             webhook_bind: webhook_bind_addr,
             webhook_path: webhook_route_path,
@@ -159,7 +159,7 @@ async fn run_telegram_channel_mode(
         allowed_users,
         allowed_groups,
         control_command_policy,
-        mcp_config_path,
+        tool_config_path,
         mode,
         webhook_bind,
         webhook_path,
@@ -169,7 +169,7 @@ async fn run_telegram_channel_mode(
 
     let effective_runtime_settings =
         apply_channel_embedding_memory_guard(runtime_settings, "telegram");
-    let agent = Arc::new(build_agent(&mcp_config_path, &effective_runtime_settings).await?);
+    let agent = Arc::new(build_agent(&tool_config_path, &effective_runtime_settings).await?);
     if allowed_users.is_empty() && allowed_groups.is_empty() {
         tracing::warn!(
             "Telegram ACL allowlist is empty; all inbound will be rejected. \

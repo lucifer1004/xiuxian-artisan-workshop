@@ -27,7 +27,7 @@ class TestDualLayerConfig:
         # Mock environment and project root
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
             # Re-initialize settings (clean_settings fixture handles cleanup)
             # We need to manually trigger load because clean_settings gives us an already initialized empty one?
@@ -35,7 +35,7 @@ class TestDualLayerConfig:
             # We need to re-init AFTER patching env.
 
             # Reset again inside the patch context
-            from omni.foundation.config.settings import Settings
+            from xiuxian_foundation.config.settings import Settings
 
             Settings._instance = None
             Settings._loaded = False
@@ -62,9 +62,9 @@ class TestDualLayerConfig:
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
-            from omni.foundation.config.settings import Settings
+            from xiuxian_foundation.config.settings import Settings
 
             Settings._instance = None
             Settings._loaded = False
@@ -90,9 +90,9 @@ class TestDualLayerConfig:
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
-            from omni.foundation.config.settings import Settings
+            from xiuxian_foundation.config.settings import Settings
 
             Settings._instance = None
             Settings._loaded = False
@@ -119,9 +119,9 @@ class TestDualLayerConfig:
 
         with (
             patch.object(sys, "argv", test_args),
-            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
-            from omni.foundation.config.settings import Settings
+            from xiuxian_foundation.config.settings import Settings
 
             Settings._instance = None
             Settings._loaded = False
@@ -158,9 +158,9 @@ class TestDualLayerConfig:
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(env_conf)}),
             patch.object(sys, "argv", test_args),
-            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
-            from omni.foundation.config.settings import Settings
+            from xiuxian_foundation.config.settings import Settings
 
             Settings._instance = None
             Settings._loaded = False
@@ -191,9 +191,9 @@ class TestDualLayerConfig:
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
-            from omni.foundation.config.settings import Settings
+            from xiuxian_foundation.config.settings import Settings
 
             Settings._instance = None
             Settings._loaded = False
@@ -236,9 +236,9 @@ class TestDualLayerConfig:
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
-            from omni.foundation.config.settings import Settings
+            from xiuxian_foundation.config.settings import Settings
 
             Settings._instance = None
             Settings._loaded = False

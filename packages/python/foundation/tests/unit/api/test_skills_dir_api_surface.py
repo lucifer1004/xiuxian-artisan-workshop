@@ -1,19 +1,16 @@
-"""API surface tests for skills path utilities."""
+"""API surface tests for retained skill directory helpers."""
 
 from __future__ import annotations
 
-import pytest
+from importlib.util import find_spec
 
-from omni.foundation.config.skills import SKILLS_DIR
-
-
-def test_skills_dir_is_explicit_call_api() -> None:
-    """SKILLS_DIR should be used as callable, not dynamic attributes."""
-    path = SKILLS_DIR(skill="git")
-    assert path.name == "git"
+from xiuxian_foundation.config.dirs import get_skills_dir
 
 
-def test_skills_dir_rejects_dynamic_attribute_access() -> None:
-    """Dynamic attribute access is intentionally unsupported."""
-    with pytest.raises(AttributeError):
-        _ = SKILLS_DIR.git  # type: ignore[attr-defined]
+def test_skills_dir_uses_function_api() -> None:
+    path = get_skills_dir()
+    assert path.name == "skills"
+
+
+def test_legacy_skills_module_is_removed() -> None:
+    assert find_spec("xiuxian_foundation.config.skills") is None

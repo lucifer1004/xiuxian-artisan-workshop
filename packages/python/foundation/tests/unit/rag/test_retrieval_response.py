@@ -1,8 +1,8 @@
-"""Tests for omni.rag.retrieval.response helpers."""
+"""Tests for xiuxian_rag.retrieval.response helpers."""
 
 from __future__ import annotations
 
-from omni.rag.retrieval import (
+from xiuxian_rag.retrieval import (
     build_recall_chunked_response,
     build_recall_error_response,
     build_recall_search_response,

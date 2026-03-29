@@ -8,8 +8,6 @@ just rust-test-layout
 just rust-check "${timeout_secs}"
 just rust-clippy
 just rust-nextest
-just rust-xiuxian-llm-mcp
-just rust-xiuxian-daochang-mcp-facade-smoke
 just rust-xiuxian-daochang-backend-role-contracts
 just rust-xiuxian-qianji-scenario-audit-contracts
 if ! command -v cargo-nextest >/dev/null 2>&1; then

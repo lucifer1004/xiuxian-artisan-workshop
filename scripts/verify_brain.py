@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import time
 
-from omni.foundation.config.prj import get_runtime_dir
 from omni.foundation.workflow_state import (
     delete_workflow_state,
     get_checkpointer,
@@ -17,6 +16,7 @@ from omni.foundation.workflow_state import (
     load_workflow_state,
     save_workflow_state,
 )
+from xiuxian_wendao_py.compat.config import get_runtime_dir
 
 
 def _print_test_header(name: str) -> None:

@@ -6,7 +6,7 @@ import time
 import urllib.request
 import urllib.error
 
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
+from xiuxian_wendao_py.compat.runtime import prepare_cargo_subprocess_env
 
 
 async def main():

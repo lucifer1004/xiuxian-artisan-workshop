@@ -335,9 +335,6 @@ def test_full_fix_loop():
 uv run pytest assets/skills/testing/tests/test_qa_skills.py -v
 uv run pytest assets/skills/filesystem/tests/test_filesystem_io.py -v
 
-# Run integration tests
-uv run pytest packages/python/agent/tests/scenarios/ -v
-
 # Run full test suite
 uv run pytest packages/python/ -v
 ```

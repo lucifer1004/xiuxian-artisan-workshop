@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from omni.test_kit.knowledge_snapshot import (
+from xiuxian_test_kit.knowledge_snapshot import (
     build_knowledge_snapshot_payload,
     detect_knowledge_snapshot_anomalies,
     load_knowledge_snapshot,

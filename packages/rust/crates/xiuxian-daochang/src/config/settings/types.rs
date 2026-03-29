@@ -11,9 +11,9 @@ pub struct RuntimeSettings {
     /// Inference provider settings.
     #[serde(default)]
     pub inference: InferenceSettings,
-    /// MCP integration settings.
+    /// External tool runtime settings.
     #[serde(default)]
-    pub mcp: McpSettings,
+    pub tool_runtime: ToolRuntimeSettings,
     /// Telegram channel runtime settings.
     #[serde(default)]
     pub telegram: TelegramSettings,
@@ -324,16 +324,16 @@ pub struct DiscordAclSlashSettings {
     pub background_submit: Option<DiscordAclPrincipalSettings>,
 }
 
-/// MCP runtime settings section.
+/// External tool runtime settings section.
 #[derive(Debug, Clone, Default, Deserialize)]
-pub struct McpSettings {
-    /// MCP client pool size.
+pub struct ToolRuntimeSettings {
+    /// External tool client pool size.
     pub pool_size: Option<usize>,
-    /// MCP handshake timeout in seconds.
+    /// External tool handshake timeout in seconds.
     pub handshake_timeout_secs: Option<u64>,
-    /// Retry attempts for MCP connection establishment.
+    /// Retry attempts for external tool connection establishment.
     pub connect_retries: Option<u32>,
-    /// Require strict startup success for MCP endpoints.
+    /// Require strict startup success for external tool endpoints.
     pub strict_startup: Option<bool>,
     /// Backoff between connect retries in milliseconds.
     pub connect_retry_backoff_ms: Option<u64>,

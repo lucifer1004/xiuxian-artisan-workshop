@@ -11,6 +11,14 @@
 
 This roadmap note tracks a lossless modularization pass over oversized Rust source files in `xiuxian-wendao`.
 
+Active migration references:
+
+- `[[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]]`
+- `[[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]`
+- `[[06_roadmap/409_core_runtime_plugin_surface_inventory]]`
+
+This modularization lane is now part of the active `core` / `runtime` / plugin-package migration discipline. It should no longer be treated as optional cleanup work that can lag behind boundary extraction.
+
 Inventory date: `2026-03-21`
 
 Inventory scope:

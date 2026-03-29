@@ -1,16 +1,17 @@
-"""Tests for omni.rag.retrieval.executor helpers."""
+"""Tests for xiuxian_rag.retrieval.executor helpers."""
 
 from __future__ import annotations
 
 import json
+import sys
 import time
 from types import SimpleNamespace
 
 import pytest
 
-import omni.rag.retrieval.executor as retrieval_executor
-from omni.foundation.services.embedding import EmbeddingUnavailableError
-from omni.rag.retrieval import (
+import xiuxian_rag.retrieval.executor as retrieval_executor
+from xiuxian_foundation.services.embedding import EmbeddingUnavailableError
+from xiuxian_rag.retrieval import (
     run_recall_hybrid_rows,
     run_recall_query_rows,
     run_recall_semantic_rows,
@@ -130,11 +131,14 @@ async def test_run_recall_hybrid_rows_embeds_and_parses(monkeypatch: pytest.Monk
     vector_store = _VectorStore(store)
     errors: list[str] = []
 
-    import omni.foundation.services.embedding as embedding_module
-    import omni.foundation.services.vector as vector_module
+    import xiuxian_foundation.services.embedding as embedding_module
 
     monkeypatch.setattr(embedding_module, "get_embedding_service", lambda: _EmbeddingService())
-    monkeypatch.setattr(vector_module, "_search_embed_timeout", lambda: 1.0)
+    monkeypatch.setitem(
+        sys.modules,
+        "xiuxian_foundation.services.vector.search",
+        SimpleNamespace(search_embed_timeout=lambda: 1.0),
+    )
 
     rows = await run_recall_hybrid_rows(
         vector_store=vector_store,
@@ -213,11 +217,14 @@ async def test_run_recall_hybrid_rows_caps_rows_when_backend_overfetches(
             assert collection == "knowledge_chunks"
             return self._store
 
-    import omni.foundation.services.embedding as embedding_module
-    import omni.foundation.services.vector as vector_module
+    import xiuxian_foundation.services.embedding as embedding_module
 
     monkeypatch.setattr(embedding_module, "get_embedding_service", lambda: _EmbeddingService())
-    monkeypatch.setattr(vector_module, "_search_embed_timeout", lambda: 1.0)
+    monkeypatch.setitem(
+        sys.modules,
+        "xiuxian_foundation.services.vector.search",
+        SimpleNamespace(search_embed_timeout=lambda: 1.0),
+    )
 
     rows = await run_recall_hybrid_rows(
         vector_store=_VectorStore(_Store()),
@@ -240,11 +247,14 @@ async def test_run_recall_hybrid_rows_raises_timeout(monkeypatch: pytest.MonkeyP
         def get_store_for_collection(self, _collection: str):
             return None
 
-    import omni.foundation.services.embedding as embedding_module
-    import omni.foundation.services.vector as vector_module
+    import xiuxian_foundation.services.embedding as embedding_module
 
     monkeypatch.setattr(embedding_module, "get_embedding_service", lambda: _SlowEmbeddingService())
-    monkeypatch.setattr(vector_module, "_search_embed_timeout", lambda: 0.001)
+    monkeypatch.setitem(
+        sys.modules,
+        "xiuxian_foundation.services.vector.search",
+        SimpleNamespace(search_embed_timeout=lambda: 0.001),
+    )
 
     with pytest.raises(EmbeddingUnavailableError, match=r"timed out.*for recall"):
         await run_recall_hybrid_rows(
@@ -328,49 +338,3 @@ async def test_run_recall_query_rows_caps_dispatched_rows(monkeypatch: pytest.Mo
 
     assert [row["content"] for row in hybrid_rows] == ["hybrid-1", "hybrid-2"]
     assert [row["content"] for row in semantic_rows] == ["semantic-1"]
-
-
-@pytest.mark.asyncio
-async def test_run_recall_query_rows_records_query_phase_with_memory(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def _fake_semantic(**_kwargs):
-        return [{"content": "semantic-1"}]
-
-    recorded: list[tuple[str, float, float | None, float | None, dict[str, object]]] = []
-
-    monkeypatch.setattr(retrieval_executor, "run_recall_semantic_rows", _fake_semantic)
-    monkeypatch.setattr(retrieval_executor, "start_phase_sample", lambda: (1.0, 100.0, 120.0))
-
-    def _capture(
-        phase: str,
-        started_at: float,
-        rss_before: float | None,
-        rss_peak_before: float | None,
-        **extra: object,
-    ) -> None:
-        recorded.append((phase, started_at, rss_before, rss_peak_before, dict(extra)))
-
-    monkeypatch.setattr(retrieval_executor, "record_phase_with_memory", _capture)
-
-    rows = await run_recall_query_rows(
-        vector_store=object(),
-        query="q",
-        keywords=[],
-        collection="knowledge_chunks",
-        fetch_limit=1,
-    )
-
-    assert rows == [{"content": "semantic-1"}]
-    assert len(recorded) == 1
-    phase, started_at, rss_before, rss_peak_before, extra = recorded[0]
-    assert phase == "retrieval.rows.query"
-    assert started_at == 1.0
-    assert rss_before == 100.0
-    assert rss_peak_before == 120.0
-    assert extra["mode"] == "semantic"
-    assert extra["collection"] == "knowledge_chunks"
-    assert extra["fetch_limit"] == 1
-    assert extra["rows_input"] == 1
-    assert extra["rows_returned"] == 1
-    assert extra["rows_capped"] == 0

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from omni.test_kit.skills_snapshot import (
+from xiuxian_test_kit.skills_snapshot import (
     build_skills_snapshot_payload,
     detect_skills_snapshot_anomalies,
     load_skills_snapshot,

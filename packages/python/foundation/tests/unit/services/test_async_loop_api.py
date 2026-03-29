@@ -11,8 +11,7 @@ def _read(path: str) -> str:
 
 def test_foundation_services_use_get_running_loop() -> None:
     files = [
-        "packages/python/foundation/src/omni/foundation/bridge/rust_vector.py",
-        "packages/python/foundation/src/omni/foundation/services/llm/provider.py",
+        "packages/python/foundation/src/xiuxian_foundation/services/llm/provider.py",
     ]
 
     for file_path in files:

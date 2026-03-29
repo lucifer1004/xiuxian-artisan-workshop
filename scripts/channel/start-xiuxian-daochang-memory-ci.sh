@@ -15,9 +15,6 @@ Options:
   --python-bin <path>            Python interpreter (default: .devenv/state/venv/bin/python3 or python3)
   --agent-bin <path>             Prebuilt xiuxian-daochang binary path (default: auto-detect target/debug/xiuxian-daochang)
   --no-agent-bin-default         Do not auto-attach --agent-bin even when target/debug/xiuxian-daochang exists
-  --ensure-mcp                   Ensure configured MCP SSE server is healthy before launching gate
-  --mcp-host <host>              MCP SSE host for health/restart checks (default: resolved from settings)
-  --mcp-port <port>              MCP SSE port for health/restart checks (default: resolve from settings)
   --foreground                   Run in foreground (block until gate exits)
   --log-file <path>              Background log file path
   --latest-failure-json <path>   Aggregated latest failure JSON path
@@ -38,18 +35,6 @@ resolve_path() {
   else
     printf '%s/%s' "$PROJECT_ROOT" "$path"
   fi
-}
-
-resolve_mcp_port_from_settings() {
-  "$PYTHON_BIN" scripts/channel/resolve_mcp_port_from_settings.py
-}
-
-resolve_mcp_host_from_settings() {
-  "$PYTHON_BIN" scripts/channel/resolve_mcp_endpoint.py --field host
-}
-
-mcp_health_ok() {
-  "$PYTHON_BIN" scripts/channel/check_mcp_health.py --host "$1" --port "$2" --timeout-secs 2.0
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -74,9 +59,6 @@ fi
 
 AUTO_AGENT_BIN="true"
 AGENT_BIN=""
-ENSURE_MCP="false"
-MCP_HOST=""
-MCP_PORT=""
 PROFILE=""
 PROFILE_TITLE=""
 RUN_FOREGROUND="false"
@@ -111,18 +93,6 @@ while [[ $# -gt 0 ]]; do
     AUTO_AGENT_BIN="false"
     AGENT_BIN=""
     shift
-    ;;
-  --ensure-mcp)
-    ENSURE_MCP="true"
-    shift
-    ;;
-  --mcp-host)
-    MCP_HOST="$2"
-    shift 2
-    ;;
-  --mcp-port)
-    MCP_PORT="$2"
-    shift 2
     ;;
   --foreground)
     RUN_FOREGROUND="true"
@@ -200,36 +170,6 @@ if [[ -n $AGENT_BIN && ! -x $AGENT_BIN ]]; then
 fi
 
 mkdir -p "$REPORTS_DIR" "$LOGS_DIR" "$STATE_DIR" "$(dirname "$LATEST_FAILURE_JSON")" "$(dirname "$LATEST_FAILURE_MD")" "$(dirname "$LATEST_RUN_JSON")" "$(dirname "$PID_FILE")" "$(dirname "$LOG_FILE")"
-
-if [[ -z $MCP_PORT ]]; then
-  MCP_PORT="$(resolve_mcp_port_from_settings)"
-fi
-if [[ -z $MCP_HOST ]]; then
-  MCP_HOST="$(resolve_mcp_host_from_settings)"
-fi
-if [[ -n $MCP_PORT ]]; then
-  if ! [[ $MCP_PORT =~ ^[0-9]+$ ]] || ((MCP_PORT < 1 || MCP_PORT > 65535)); then
-    echo "Invalid --mcp-port: ${MCP_PORT}" >&2
-    exit 2
-  fi
-fi
-if [[ $ENSURE_MCP == "true" ]]; then
-  if [[ -z $MCP_PORT ]]; then
-    echo "Cannot resolve MCP port from settings. Set mcp.preferred_embed_port or embedding.client_url, or pass --mcp-port." >&2
-    exit 2
-  fi
-  if mcp_health_ok "$MCP_HOST" "$MCP_PORT"; then
-    echo "MCP already healthy at http://${MCP_HOST}:${MCP_PORT}/health"
-  else
-    MCP_PID_FILE="${RUNTIME_DIR}/xiuxian-mcp-sse-${MCP_PORT}.pid"
-    MCP_LOG_FILE="${LOGS_DIR}/xiuxian-mcp-sse-${MCP_PORT}.log"
-    "${SCRIPT_DIR}/restart-xiuxian-mcp.sh" \
-      --host "$MCP_HOST" \
-      --port "$MCP_PORT" \
-      --pid-file "$MCP_PID_FILE" \
-      --log-file "$MCP_LOG_FILE"
-  fi
-fi
 
 GATE_CMD=(
   "$PYTHON_BIN"

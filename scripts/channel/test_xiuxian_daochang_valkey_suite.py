@@ -21,7 +21,7 @@ import sys
 import time
 from dataclasses import dataclass
 
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
+from xiuxian_wendao_py.compat.runtime import prepare_cargo_subprocess_env
 
 DEFAULT_LOCAL_HOST = os.environ.get("XIUXIAN_WENDAO_LOCAL_HOST", "localhost").strip() or "localhost"
 DEFAULT_VALKEY_URL = f"redis://{DEFAULT_LOCAL_HOST}:6379/0"

@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from omni.rag import RetrievalResult
-from omni.tracer import RetrievalToolInvoker
+from xiuxian_rag import RetrievalResult
+from xiuxian_tracer.retrieval_invoker import RetrievalToolInvoker
 
 
 class _StaticBackend:
@@ -170,7 +170,19 @@ async def test_retrieval_invoker_rejects_legacy_backend_aliases():
 
 def test_retrieval_invoker_rejects_invalid_default_backend():
     with pytest.raises(ValueError, match="Unsupported retrieval default backend"):
-        RetrievalToolInvoker(default_backend="vector")
+        RetrievalToolInvoker(default_backend="lance")
+
+
+@pytest.mark.asyncio
+async def test_retrieval_invoker_requires_explicit_vector_backend():
+    invoker = RetrievalToolInvoker()
+    with pytest.raises(RuntimeError, match="Arrow Flight retrieval"):
+        await invoker.invoke(
+            server="retriever",
+            tool="search",
+            payload={"query": "typed"},
+            state={},
+        )
 
 
 @pytest.mark.asyncio

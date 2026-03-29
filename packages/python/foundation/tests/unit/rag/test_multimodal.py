@@ -5,7 +5,7 @@ Tests image processing, table extraction, and formula parsing.
 
 import pytest
 
-from omni.rag.multimodal import (
+from xiuxian_rag.multimodal import (
     CONTENT_TYPE_FORMULA,
     CONTENT_TYPE_IMAGE,
     CONTENT_TYPE_TABLE,

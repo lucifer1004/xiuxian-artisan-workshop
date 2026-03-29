@@ -1,25 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+pub use xiuxian_wendao_core::repo_intelligence::ProjectionPageKind;
 
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 use crate::analyzers::records::DocRecord;
-
-/// Deterministic projected page family derived from Stage-1 repository truth.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema, Default,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ProjectionPageKind {
-    /// Reference-oriented projected page.
-    #[default]
-    Reference,
-    /// How-to oriented projected page.
-    HowTo,
-    /// Tutorial-oriented projected page.
-    Tutorial,
-    /// Explanation-oriented projected page.
-    Explanation,
-}
 
 /// Seed used to generate one projected page record.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]

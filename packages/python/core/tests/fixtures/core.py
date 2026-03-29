@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from omni.foundation.config.skills import SKILLS_DIR
-from omni.foundation.runtime.gitops import get_project_root
+from xiuxian_foundation.config.dirs import get_skills_dir
+from xiuxian_foundation.runtime.gitops import get_project_root
 
 _PROJECT_ROOT = get_project_root()
 
@@ -26,7 +26,7 @@ def fixtures_core_project_paths() -> dict:
     """Session-scoped paths - computed once per test session."""
     return {
         "root": _PROJECT_ROOT,
-        "skills": SKILLS_DIR(),
+        "skills": get_skills_dir(),
     }
 
 
@@ -39,7 +39,7 @@ def fixtures_core_project_root() -> Path:
 @pytest.fixture(scope="session")
 def fixtures_core_skills_path() -> Path:
     """Return the skills directory path (session-scoped)."""
-    return SKILLS_DIR()
+    return get_skills_dir()
 
 
 @pytest.fixture

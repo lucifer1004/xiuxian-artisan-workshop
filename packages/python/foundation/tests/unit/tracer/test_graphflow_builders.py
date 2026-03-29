@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from omni.tracer.graphflow.builders import (
+from xiuxian_tracer.graphflow.builders import (
     apply_parameter_overrides,
     create_initial_state,
     default_parameters_for_scenario,

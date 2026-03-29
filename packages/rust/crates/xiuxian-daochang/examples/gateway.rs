@@ -1,6 +1,6 @@
 //! Example: run the agent as HTTP gateway or stdio.
 //!
-//! MCP servers from **mcp.json** only (default `.mcp.json`). Use `--mcp-config <path>` to override.
+//! External tool servers from **tool.json** only (default `.tool.json`). Use `--tool-config <path>` to override.
 //!
 //! Subcommands:
 //!   gateway  — HTTP server (POST /message). Default: --bind 0.0.0.0:8080
@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 
 use xiuxian_daochang::{
-    Agent, AgentConfig, DEFAULT_STDIO_SESSION_ID, load_mcp_config, run_http, run_stdio,
+    Agent, AgentConfig, DEFAULT_STDIO_SESSION_ID, load_tool_config, run_http, run_stdio,
 };
 
 #[tokio::main]
@@ -23,17 +23,17 @@ async fn main() -> anyhow::Result<()> {
         .split_first()
         .map_or(("gateway", &[][..]), |(m, r)| (m.as_str(), r));
     if mode == "stdio" {
-        let (session_id, mcp_config_path) = parse_stdio_args(rest);
-        Box::pin(run_stdio_mode(session_id, mcp_config_path)).await
+        let (session_id, tool_config_path) = parse_stdio_args(rest);
+        Box::pin(run_stdio_mode(session_id, tool_config_path)).await
     } else {
-        let (bind_addr, mcp_config_path) = parse_gateway_args(rest);
-        Box::pin(run_gateway(bind_addr, mcp_config_path)).await
+        let (bind_addr, tool_config_path) = parse_gateway_args(rest);
+        Box::pin(run_gateway(bind_addr, tool_config_path)).await
     }
 }
 
 fn parse_gateway_args(args: &[String]) -> (String, PathBuf) {
     let mut bind = "0.0.0.0:8080".to_string();
-    let mut mcp_config = PathBuf::from(".mcp.json");
+    let mut tool_config = PathBuf::from(".tool.json");
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--bind" && i + 1 < args.len() {
@@ -41,19 +41,19 @@ fn parse_gateway_args(args: &[String]) -> (String, PathBuf) {
             i += 2;
             continue;
         }
-        if args[i] == "--mcp-config" && i + 1 < args.len() {
-            mcp_config = PathBuf::from(&args[i + 1]);
+        if args[i] == "--tool-config" && i + 1 < args.len() {
+            tool_config = PathBuf::from(&args[i + 1]);
             i += 2;
             continue;
         }
         i += 1;
     }
-    (bind, mcp_config)
+    (bind, tool_config)
 }
 
 fn parse_stdio_args(args: &[String]) -> (String, PathBuf) {
     let mut session_id = DEFAULT_STDIO_SESSION_ID.to_string();
-    let mut mcp_config = PathBuf::from(".mcp.json");
+    let mut tool_config = PathBuf::from(".tool.json");
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--session-id" && i + 1 < args.len() {
@@ -61,24 +61,24 @@ fn parse_stdio_args(args: &[String]) -> (String, PathBuf) {
             i += 2;
             continue;
         }
-        if args[i] == "--mcp-config" && i + 1 < args.len() {
-            mcp_config = PathBuf::from(&args[i + 1]);
+        if args[i] == "--tool-config" && i + 1 < args.len() {
+            tool_config = PathBuf::from(&args[i + 1]);
             i += 2;
             continue;
         }
         i += 1;
     }
-    (session_id, mcp_config)
+    (session_id, tool_config)
 }
 
-async fn run_gateway(bind_addr: String, mcp_config_path: PathBuf) -> anyhow::Result<()> {
-    let mcp_servers = load_mcp_config(&mcp_config_path)?;
+async fn run_gateway(bind_addr: String, tool_config_path: PathBuf) -> anyhow::Result<()> {
+    let tool_servers = load_tool_config(&tool_config_path)?;
     let config = AgentConfig {
         inference_url: std::env::var("LITELLM_PROXY_URL")
             .unwrap_or_else(|_| AgentConfig::default().inference_url),
         model: std::env::var("OMNI_AGENT_MODEL").unwrap_or_else(|_| AgentConfig::default().model),
         api_key: None,
-        mcp_servers,
+        tool_servers,
         max_tool_rounds: 10,
         ..AgentConfig::default()
     };
@@ -86,14 +86,14 @@ async fn run_gateway(bind_addr: String, mcp_config_path: PathBuf) -> anyhow::Res
     Box::pin(run_http(agent, &bind_addr, None, None)).await
 }
 
-async fn run_stdio_mode(session_id: String, mcp_config_path: PathBuf) -> anyhow::Result<()> {
-    let mcp_servers = load_mcp_config(&mcp_config_path)?;
+async fn run_stdio_mode(session_id: String, tool_config_path: PathBuf) -> anyhow::Result<()> {
+    let tool_servers = load_tool_config(&tool_config_path)?;
     let config = AgentConfig {
         inference_url: std::env::var("LITELLM_PROXY_URL")
             .unwrap_or_else(|_| AgentConfig::default().inference_url),
         model: std::env::var("OMNI_AGENT_MODEL").unwrap_or_else(|_| AgentConfig::default().model),
         api_key: None,
-        mcp_servers,
+        tool_servers,
         max_tool_rounds: 10,
         ..AgentConfig::default()
     };

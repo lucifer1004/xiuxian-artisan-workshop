@@ -1,6 +1,6 @@
 ---
 type: knowledge
-title: "How to Query and Locate Ingested Papers via MCP"
+title: "How to Query and Locate Ingested Papers"
 category: "how-to"
 tags:
   - how-to
@@ -8,12 +8,12 @@ tags:
 saliency_base: 6.0
 decay_rate: 0.05
 metadata:
-  title: "How to Query and Locate Ingested Papers via MCP"
+  title: "How to Query and Locate Ingested Papers"
 ---
 
-# How to Query and Locate Ingested Papers via MCP
+# How to Query and Locate Ingested Papers
 
-This guide describes the end-to-end flow: user asks for papers (e.g. "RAG Anything" or "ing-related papers"), and the agent uses MCP knowledge tools to find and cite them.
+This guide describes the end-to-end flow: user asks for papers (e.g. "RAG Anything" or "ing-related papers"), and the agent uses knowledge tools or CLI flows to find and cite them.
 
 ---
 
@@ -23,7 +23,7 @@ This guide describes the end-to-end flow: user asks for papers (e.g. "RAG Anythi
 User: "Find me papers about RAG Anything / ingest-related papers"
         │
         ▼
-Agent calls MCP knowledge tools (no CLI)
+Agent calls knowledge tools or CLI helpers
         │
         ├── knowledge.recall(query="RAG Anything document parsing paper", limit=5)
         │   → Returns chunks with content, source, score from vector store
@@ -39,7 +39,7 @@ Agent interprets results and answers user
 
 ---
 
-## MCP Tools to Use
+## Knowledge Tools to Use
 
 | Tool                 | When to use                                                                                  | Example                                                     |
 | -------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -48,9 +48,9 @@ Agent interprets results and answers user
 
 Both can surface content from an ingested PDF. Recall returns `content`, `source`, `score`; search returns merged results with `source` and reasoning.
 
-### Action-based recall (avoids MCP timeout)
+### Action-based recall
 
-For long content, a single `knowledge.recall` with default `chunked=True` runs preview → fetch → all batches in one call, which can time out and cause memory accumulation. Use **one step per MCP call** like `git.smart_commit`:
+For long content, a single `knowledge.recall` with default `chunked=True` runs preview → fetch → all batches in one call, which can time out and cause memory accumulation. Use one step per tool call:
 
 1. **start** – `knowledge.recall(query="...", chunked=True, action="start")` → preview only, returns `session_id` and `batch_count` (no full fetch; avoids memory spike).
 2. **batch** – `knowledge.recall(session_id="<from start>", action="batch", batch_index=0)` … then `batch_index=1`, etc. → each call lazy-fetches and returns one batch (no full state in memory).
@@ -75,11 +75,11 @@ So "locating" the paper means: run recall/search with a natural-language query a
 
 1. **User**: "帮我找寻 RAG Anything 或 ing 相关的论文" (or: "Find me papers about RAG Anything or ingest-related work.")
 
-2. **Agent** calls MCP:
+2. **Agent** calls knowledge tools:
    - `knowledge.recall(query="RAG Anything document parsing or ingest pipeline paper", limit=5)`
    - Optionally: `knowledge.search(query="RAG anything ing paper", mode="hybrid")`
 
-3. **MCP returns** (example):
+3. **Tool call returns** (example):
    - Chunks such as: "Figure 1: Overview of our proposed universal RAG framework RAG-Anything." with high score.
    - Other snippets about multimodal analysis, RAG pipelines, etc.
 
@@ -90,24 +90,24 @@ So "locating" the paper means: run recall/search with a natural-language query a
 
 ## Prerequisites
 
-- The target paper (or its PDF) must already be **ingested** via `knowledge.ingest_document` (e.g. after downloading the PDF to a local path). MCP does not ingest from URL; download first, then ingest.
-- Vector store must be available (e.g. after `omni sync knowledge` or ingest_document); then recall/search work via MCP without running CLI commands.
+- The target paper (or its PDF) must already be **ingested** via `knowledge.ingest_document` (e.g. after downloading the PDF to a local path). Download first, then ingest.
+- Vector store must be available (e.g. after `omni sync knowledge` or `knowledge.ingest_document`); then recall/search work without extra runtime setup.
 
-## Prefer MCP over CLI (Cursor)
+## Prefer Built-In Tooling
 
-When MCP is enabled in Cursor, **prefer calling skill tools via MCP** (e.g. `knowledge.ingest_document`, `knowledge.recall`) instead of `omni skill run ...`. If the AI reports it does not see MCP tools, check: (1) MCP server is connected in Cursor settings; (2) the Composer/Agent session was started after MCP connected so the tool list is injected. **Fallback**: use CLI `omni skill run knowledge.ingest_document '{"file_path":"..."}'` or `omni knowledge recall "query"`.
+Prefer direct tool calls or CLI paths such as `omni skill run ...` and `omni knowledge recall ...`. Do not assume a separate external tool server is available.
 
 ## CLI: Fast path vs full skill
 
 - **Fast path (recommended for CLI)**: `omni knowledge recall "query" [--limit N] [--json]`  
   Uses only the foundation vector store and embedding; **typically under 2s**. No kernel/skill stack.
 - **Full skill**: `omni skill run knowledge.recall '{"query":"..."}'`  
-  Loads full kernel and all skills (30–45s cold start); use for MCP or when you need fusion boost (LinkGraph, KG).
+  Loads full kernel and all skills (30–45s cold start); use when you need fusion boost (LinkGraph, KG).
 
 ## Timeouts (knowledge.recall)
 
-- **Embedding**: Query embedding is limited by `knowledge.recall_embed_timeout_seconds` (default **18**). If the embedding service is slow or unreachable, recall falls back to a hash-based vector so the request returns within the limit (with potentially lower relevance) instead of hitting MCP client timeout.
-- **Tool execution**: MCP tool calls use `mcp.timeout` from settings (default **1800** seconds / 30 min). If recall still times out at the client, use CLI `omni knowledge recall "your query" --limit 5` or increase `knowledge.recall_embed_timeout_seconds` (e.g. 25) and/or `mcp.timeout`.
+- **Embedding**: Query embedding is limited by `knowledge.recall_embed_timeout_seconds` (default **18**). If the embedding service is slow or unreachable, recall falls back to a hash-based vector so the request returns within the limit (with potentially lower relevance) instead of hitting a client-side timeout.
+- **Tool execution**: If recall still times out, use CLI `omni knowledge recall "your query" --limit 5` or increase `knowledge.recall_embed_timeout_seconds` (e.g. 25).
 
 ---
 
@@ -123,7 +123,7 @@ To **research or analyze** any long ingested content (paper, manual, long doc):
 
 1. **Default (chunked)**: Call `knowledge.recall(query="…")` → get `preview_results`, `batches`, `results`; use preview to confirm accuracy, then feed `batches[i]` to the LLM one batch per turn.
 2. **Single-call**: `knowledge.recall(query="…", chunked=False, limit=N)` for one batch of full chunks (no workflow).
-3. **If MCP recall times out**: Run `omni knowledge recall "…" --json` locally, or increase `knowledge.recall_embed_timeout_seconds`.
+3. **If recall times out**: Run `omni knowledge recall "…" --json` locally, or increase `knowledge.recall_embed_timeout_seconds`.
 
 ---
 
@@ -131,7 +131,7 @@ To **research or analyze** any long ingested content (paper, manual, long doc):
 
 - **Query**: Use natural-language queries with `knowledge.recall` or `knowledge.search` (hybrid).
 - **Locate**: Use returned content + metadata (and, when available, document path) to tell the user which paper the snippets came from.
-- **End-to-end**: Ingest PDF → User asks for papers → Agent uses MCP knowledge tools → Agent returns snippets and paper identity (path/arxiv id).
+- **End-to-end**: Ingest PDF → User asks for papers → Agent uses knowledge tools → Agent returns snippets and paper identity (path/arxiv id).
 
 ---
 
@@ -148,7 +148,7 @@ tags:
 
 # Run the Rust Agent (修仙道场)
 
-> Verification checklist for xiuxian-daochang: gateway, stdio, repl, MCP, memory, and session window. Use this to confirm feature parity with Nanobot/ZeroClaw.
+> Verification checklist for xiuxian-daochang: gateway, stdio, repl, memory, and session window.
 
 **Quick start**: After `cargo build -p xiuxian-daochang`, use `omni agent --rust` or `omni gateway --rust` to run the Rust agent from the main CLI.
 
@@ -160,19 +160,18 @@ tags:
 | ------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | 1. Build            | `cargo build -p xiuxian-daochang`                                                           | ✅                                                     |
 | 2. Unit tests       | `cargo nextest run -p xiuxian-daochang`                                                     | ✅                                                     |
-| 3. Gateway + LLM    | Start MCP + gateway; `curl POST /message`                                                   | Manual (needs `OPENAI_API_KEY` or `LITELLM_PROXY_URL`) |
+| 3. Gateway + LLM    | Start gateway; `curl POST /message`                                                         | Manual (needs `OPENAI_API_KEY` or `LITELLM_PROXY_URL`) |
 | 4. Stdio            | `echo "msg" \| cargo run -p xiuxian-daochang -- stdio`                                      | Manual                                                 |
 | 5. REPL             | `omni agent --rust` or `cargo run -p xiuxian-daochang -- repl`                              | Manual                                                 |
-| 6. Integration test | `cargo nextest run -p xiuxian-daochang --test agent_integration --run-ignored ignored-only` | Manual (needs API key + MCP)                           |
+| 6. Integration test | `cargo nextest run -p xiuxian-daochang --test agent_integration --run-ignored ignored-only` | Manual (needs API key)                                 |
 
-**Full E2E (Rust agent + Python MCP + LiteLLM)**: See §3 Gateway and §9 Integration test. Run `omni mcp --transport sse --port 3002` in one terminal, then `omni gateway --rust --webhook-port 8080`, then `curl` or run the integration test.
+**Full E2E (Rust agent + LiteLLM)**: See §3 Gateway and §9 Integration test. Run `omni gateway --rust --webhook-port 8080`, then `curl` or run the integration test.
 
 ---
 
 ## Prerequisites
 
 - **LLM**: `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY` for Claude), or LiteLLM proxy (`LITELLM_PROXY_URL`, `XIUXIAN_DAOCHANG_MODEL`)
-- **MCP** (optional): `omni mcp --transport sse --port 3002` running; add to `.mcp.json` (see below)
 - **Valkey** (when `memory.persistence_backend=valkey`): configure `session.valkey_url` or set `VALKEY_URL`
 
 ---
@@ -258,38 +257,13 @@ Or run the full test pipeline (includes xiuxian-daochang):
 just test
 ```
 
-**Expected**: Build succeeds; all non-ignored tests pass (config, session, MCP config, gateway validation, gateway HTTP 400/404, agent summarisation).
-
----
-
-## 2. MCP config (.mcp.json)
-
-Create or edit `.mcp.json` in project root:
-
-```json
-{
-  "mcpServers": {
-    "omniAgent": {
-      "type": "http",
-      "url": "http://127.0.0.1:3002"
-    }
-  }
-}
-```
-
-If MCP server uses SSE at `/sse`, the agent appends it. Override path with `--mcp-config /path/to/mcp.json`.
+**Expected**: Build succeeds; all non-ignored tests pass (config, session, gateway validation, gateway HTTP 400/404, agent summarisation).
 
 ---
 
 ## 3. Gateway (HTTP)
 
-**Terminal 1** — start MCP (optional):
-
-```bash
-omni mcp --transport sse --port 3002
-```
-
-**Terminal 2** — start gateway:
+**Terminal 1** — start gateway:
 
 ```bash
 # Via omni CLI (after cargo build -p xiuxian-daochang)
@@ -299,7 +273,7 @@ omni gateway --rust --webhook-port 8080 --webhook-host 0.0.0.0
 cargo run -p xiuxian-daochang -- gateway --bind 0.0.0.0:8080
 ```
 
-**Terminal 3** — send a message:
+**Terminal 2** — send a message:
 
 ```bash
 curl -X POST http://127.0.0.1:8080/message \
@@ -431,9 +405,9 @@ Environment overrides:
 
 ---
 
-## 10. Integration test (real LLM + MCP)
+## 10. Integration test (real LLM + external tools)
 
-Requires `OPENAI_API_KEY` and optional MCP on port 3002:
+Requires `OPENAI_API_KEY` and any optional external tool or embedding runtime your scenario depends on:
 
 ```bash
 cargo nextest run -p xiuxian-daochang --test agent_integration --run-ignored ignored-only
@@ -635,13 +609,12 @@ Notes:
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `OPENAI_API_KEY`         | API key for OpenAI-compatible endpoint                                                                                                                    |
 | `ANTHROPIC_API_KEY`      | For Claude endpoints                                                                                                                                      |
-| `LITELLM_PROXY_URL`      | **Recommended.** Chat completions URL (e.g. `http://127.0.0.1:4000/v1/chat/completions`). If unset, agent may infer from MCP URL, which is usually wrong. |
+| `LITELLM_PROXY_URL`      | **Recommended.** Chat completions URL (e.g. `http://127.0.0.1:4000/v1/chat/completions`). |
 | `XIUXIAN_DAOCHANG_MODEL` | Model id (e.g. `gpt-4o-mini`)                                                                                                                             |
-| `OMNI_MCP_URL`           | Override MCP URL for one_turn example (otherwise from mcp.json)                                                                                           |
 | `TELEGRAM_BOT_TOKEN`     | Telegram bot token for `xiuxian-daochang channel`                                                                                                         |
 | `VALKEY_URL`             | Fallback Valkey/Redis URL when `session.valkey_url` is not configured                                                                                     |
 
-**First-time setup**: Set `LITELLM_PROXY_URL` (or run LiteLLM and point to it) and `OPENAI_API_KEY` before starting the agent. The MCP server URL in `.mcp.json` is for tools only, not chat.
+**First-time setup**: Set `LITELLM_PROXY_URL` (or run LiteLLM and point to it) and `OPENAI_API_KEY` before starting the agent.
 
 ---
 
@@ -655,7 +628,7 @@ xiuxian-daochang channel --help
 xiuxian-daochang schedule --help
 ```
 
-**Gateway options**: `--bind`, `--turn-timeout`, `--max-concurrent`, `--mcp-config`
+**Gateway options**: `--bind`, `--turn-timeout`, `--max-concurrent`
 
 ## **Channel options**: `--bot-token`, `--mode` (polling|webhook), `--webhook-bind`, `--webhook-path`, `--webhook-secret-token`, `--webhook-dedup-backend` (memory|valkey), `--valkey-url`, `--webhook-dedup-ttl-secs`, `--webhook-dedup-key-prefix`, `-v`/`--verbose` (show user messages and bot replies in logs)
 
@@ -679,7 +652,7 @@ tags:
 ## Prerequisites
 
 - LLM configured (`OPENAI_API_KEY` or `LITELLM_PROXY_URL`)
-- MCP optional (`.mcp.json` if using tools)
+- external tool setup is no longer required for the default runtime path
 
 ---
 
@@ -697,7 +670,7 @@ cargo run -p xiuxian-daochang -- repl --query "What's my favorite number?" --ses
 
 **Expected**: Turn 2 reply includes "42" (recalled from Turn 1).
 
-**Embedding**: When the embedding HTTP server is running (e.g. `omni mcp` with embedding on port 18501), xiuxian-daochang uses it for semantic encoding. Otherwise it falls back to hash-based encoder (identical wording required). Set `OMNI_EMBEDDING_URL` to override the default `http://127.0.0.1:18501`.
+**Embedding**: When an embedding HTTP server is running on the configured endpoint, xiuxian-daochang uses it for semantic encoding. Otherwise it falls back to hash-based encoder. Set `OMNI_EMBEDDING_URL` to override the default `http://127.0.0.1:18501`.
 
 ### macOS Apple Silicon: `mistralrs` Metal build notes
 
@@ -826,7 +799,7 @@ The benchmark `--user-id` must map to an admin-capable Telegram identity in runt
 **REPL** (with embedding server for semantic recall):
 
 ```bash
-# With embedding server (omni mcp or embedding on 18501): semantic recall works
+# With embedding server on 18501: semantic recall works
 cargo run -p xiuxian-daochang -- repl --query "Remember: my favorite number is 42." --session-id mem-test
 cargo run -p xiuxian-daochang -- repl --query "What's my favorite number?" --session-id mem-test
 

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from omni.foundation.runtime.gitops import get_project_root
+from xiuxian_wendao_py.compat.runtime import get_project_root
 
 if TYPE_CHECKING:
     from types import ModuleType

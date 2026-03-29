@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from omni.foundation.services.keyword_eval import evaluate_keyword_backends_with_llm
-from omni.foundation.services.llm.provider import get_llm_provider
+from xiuxian_foundation.services.keyword_eval import evaluate_keyword_backends_with_llm
+from xiuxian_foundation.services.llm.provider import get_llm_provider
 
 
 @pytest.mark.slow

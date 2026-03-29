@@ -1,9 +1,11 @@
-"""API forwarding tests for omni.foundation.config.dirs."""
+"""API forwarding tests for xiuxian_foundation.config.dirs."""
 
 from __future__ import annotations
 
-from omni.foundation.config import database, harvested, prj
-from omni.foundation.config import dirs as dirs_mod
+from importlib.util import find_spec
+
+from xiuxian_foundation.config import prj
+from xiuxian_foundation.config import dirs as dirs_mod
 
 
 def test_dirs_forwards_prj_symbols() -> None:
@@ -20,8 +22,10 @@ def test_dirs_forwards_prj_symbols() -> None:
     assert dirs_mod.get_skills_dir is prj.get_skills_dir
 
 
-def test_dirs_forwards_database_and_harvested_symbols() -> None:
-    assert dirs_mod.get_vector_db_path is database.get_vector_db_path
-    assert dirs_mod.get_memory_db_path is database.get_memory_db_path
-    assert dirs_mod.get_harvest_dir is harvested.get_harvest_dir
-    assert dirs_mod.get_harvest_file is harvested.get_harvest_file
+def test_dirs_no_longer_forward_removed_symbols() -> None:
+    assert find_spec("xiuxian_foundation.config.database") is None
+    assert find_spec("xiuxian_foundation.config.harvested") is None
+    assert not hasattr(dirs_mod, "get_vector_db_path")
+    assert not hasattr(dirs_mod, "get_memory_db_path")
+    assert not hasattr(dirs_mod, "get_harvest_dir")
+    assert not hasattr(dirs_mod, "get_harvest_file")

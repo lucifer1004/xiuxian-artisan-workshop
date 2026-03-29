@@ -4,7 +4,7 @@ test_errors.py - Unit tests for error code system
 Tests for OmniError exception and CoreErrorCode enum.
 """
 
-from omni.core.errors import (
+from xiuxian_core.errors import (
     CoreErrorCode,
     ErrorCategory,
     OmniCellError,

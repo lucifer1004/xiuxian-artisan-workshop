@@ -18,7 +18,7 @@ use rmcp::transport::streamable_http_server::session::local::LocalSessionManager
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 use tokio::time::sleep;
 use xiuxian_daochang::{
-    Agent, AgentConfig, McpServerEntry, MemoryConfig, SessionStore, set_config_home_override,
+    Agent, AgentConfig, MemoryConfig, SessionStore, ToolServerEntry, set_config_home_override,
 };
 use xiuxian_qianhuan::InjectionPolicy;
 
@@ -366,7 +366,7 @@ async fn spawn_mock_bridge_server(
     let router = Router::new().nest_service("/sse", service);
     let listener = require_ok(
         tokio::net::TcpListener::bind(addr).await,
-        "bind mock mcp listener",
+        "bind mock tool listener",
     );
 
     (
@@ -428,22 +428,22 @@ fn ensure_http_llm_backend_for_tests() {
     set_config_home_override(path.clone());
 }
 
-fn base_config(inference_url: String, mcp_url: String) -> AgentConfig {
+fn base_config(inference_url: String, tool_url: String) -> AgentConfig {
     ensure_http_llm_backend_for_tests();
     AgentConfig {
         inference_url,
         model: "test-model".to_string(),
-        mcp_servers: vec![McpServerEntry {
+        tool_servers: vec![ToolServerEntry {
             name: "mock".to_string(),
-            url: Some(mcp_url),
+            url: Some(tool_url),
             command: None,
             args: None,
         }],
-        mcp_handshake_timeout_secs: 2,
-        mcp_connect_retries: 2,
-        mcp_connect_retry_backoff_ms: 50,
-        mcp_tool_timeout_secs: 15,
-        mcp_list_tools_cache_ttl_ms: 100,
+        tool_handshake_timeout_secs: 2,
+        tool_connect_retries: 2,
+        tool_connect_retry_backoff_ms: 50,
+        tool_timeout_secs: 15,
+        tool_list_cache_ttl_ms: 100,
         max_tool_rounds: 3,
         ..AgentConfig::default()
     }
@@ -514,16 +514,16 @@ fn find_tool_message(payload: &serde_json::Value) -> Option<&serde_json::Value> 
 }
 
 #[tokio::test]
-async fn react_loop_tool_call_roundtrip_with_mock_llm_and_mcp() -> Result<()> {
-    let mcp_addr = reserve_local_addr().await;
-    let (mcp_server, recorded_arguments) = spawn_mock_bridge_server(mcp_addr).await;
+async fn react_loop_tool_call_roundtrip_with_mock_llm_and_tool_runtime() -> Result<()> {
+    let tool_addr = reserve_local_addr().await;
+    let (tool_server, recorded_arguments) = spawn_mock_bridge_server(tool_addr).await;
     let llm_addr = reserve_local_addr().await;
     let (llm_server, llm_requests) =
         spawn_mock_llm_server(llm_addr, MockLlmScenario::ValidToolArguments).await;
-    let mcp_url = format!("http://{mcp_addr}/sse");
+    let tool_url = format!("http://{tool_addr}/sse");
     let inference_url = format!("http://{llm_addr}/v1/chat/completions");
 
-    let agent = Agent::from_config(base_config(inference_url, mcp_url)).await?;
+    let agent = Agent::from_config(base_config(inference_url, tool_url)).await?;
     let output = agent
         .run_turn(
             "telegram:-100200:42",
@@ -537,11 +537,7 @@ async fn react_loop_tool_call_roundtrip_with_mock_llm_and_mcp() -> Result<()> {
         "recorded arguments lock poisoned",
     )
     .clone();
-    assert_eq!(
-        captured.len(),
-        1,
-        "react flow should issue one MCP tool call"
-    );
+    assert_eq!(captured.len(), 1, "react flow should issue one tool call");
     assert_eq!(captured[0]["task"], "react-loop");
 
     let llm_payloads = require_ok(llm_requests.lock(), "mock llm requests lock poisoned").clone();
@@ -573,8 +569,8 @@ async fn react_loop_tool_call_roundtrip_with_mock_llm_and_mcp() -> Result<()> {
         "tool result message should preserve original tool_call_id"
     );
 
-    mcp_server.abort();
-    let _ = mcp_server.await;
+    tool_server.abort();
+    let _ = tool_server.await;
     llm_server.abort();
     let _ = llm_server.await;
     Ok(())
@@ -582,15 +578,15 @@ async fn react_loop_tool_call_roundtrip_with_mock_llm_and_mcp() -> Result<()> {
 
 #[tokio::test]
 async fn react_shortcut_strips_prefix_before_llm_prompt() -> Result<()> {
-    let mcp_addr = reserve_local_addr().await;
-    let (mcp_server, _recorded_arguments) = spawn_mock_bridge_server(mcp_addr).await;
+    let tool_addr = reserve_local_addr().await;
+    let (tool_server, _recorded_arguments) = spawn_mock_bridge_server(tool_addr).await;
     let llm_addr = reserve_local_addr().await;
     let (llm_server, llm_requests) =
         spawn_mock_llm_server(llm_addr, MockLlmScenario::ValidToolArguments).await;
-    let mcp_url = format!("http://{mcp_addr}/sse");
+    let tool_url = format!("http://{tool_addr}/sse");
     let inference_url = format!("http://{llm_addr}/v1/chat/completions");
 
-    let agent = Agent::from_config(base_config(inference_url, mcp_url)).await?;
+    let agent = Agent::from_config(base_config(inference_url, tool_url)).await?;
     let output = agent
         .run_turn(
             "telegram:-100300:7",
@@ -616,8 +612,8 @@ async fn react_shortcut_strips_prefix_before_llm_prompt() -> Result<()> {
         "`!react` prefix should be removed before sending prompt to LLM"
     );
 
-    mcp_server.abort();
-    let _ = mcp_server.await;
+    tool_server.abort();
+    let _ = tool_server.await;
     llm_server.abort();
     let _ = llm_server.await;
     Ok(())
@@ -625,15 +621,15 @@ async fn react_shortcut_strips_prefix_before_llm_prompt() -> Result<()> {
 
 #[tokio::test]
 async fn react_loop_malformed_tool_arguments_fall_back_to_empty_object() -> Result<()> {
-    let mcp_addr = reserve_local_addr().await;
-    let (mcp_server, recorded_arguments) = spawn_mock_bridge_server(mcp_addr).await;
+    let tool_addr = reserve_local_addr().await;
+    let (tool_server, recorded_arguments) = spawn_mock_bridge_server(tool_addr).await;
     let llm_addr = reserve_local_addr().await;
     let (llm_server, _llm_requests) =
         spawn_mock_llm_server(llm_addr, MockLlmScenario::MalformedToolArguments).await;
-    let mcp_url = format!("http://{mcp_addr}/sse");
+    let tool_url = format!("http://{tool_addr}/sse");
     let inference_url = format!("http://{llm_addr}/v1/chat/completions");
 
-    let mut config = base_config(inference_url, mcp_url);
+    let mut config = base_config(inference_url, tool_url);
     let temp_dir = tempfile::tempdir()?;
     config.memory = Some(MemoryConfig {
         path: temp_dir.path().join("memory").to_string_lossy().to_string(),
@@ -662,25 +658,25 @@ async fn react_loop_malformed_tool_arguments_fall_back_to_empty_object() -> Resu
         "invalid JSON tool arguments should degrade to empty object"
     );
 
-    mcp_server.abort();
-    let _ = mcp_server.await;
+    tool_server.abort();
+    let _ = tool_server.await;
     llm_server.abort();
     let _ = llm_server.await;
     Ok(())
 }
 
 #[tokio::test]
-async fn react_loop_mcp_timeout_is_ko_and_turn_continues() -> Result<()> {
-    let mcp_addr = reserve_local_addr().await;
-    let (mcp_server, recorded_arguments) = spawn_mock_bridge_server(mcp_addr).await;
+async fn react_loop_tool_timeout_is_ko_and_turn_continues() -> Result<()> {
+    let tool_addr = reserve_local_addr().await;
+    let (tool_server, recorded_arguments) = spawn_mock_bridge_server(tool_addr).await;
     let llm_addr = reserve_local_addr().await;
     let (llm_server, llm_requests) =
         spawn_mock_llm_server(llm_addr, MockLlmScenario::ToolTimeoutRecovery).await;
-    let mcp_url = format!("http://{mcp_addr}/sse");
+    let tool_url = format!("http://{tool_addr}/sse");
     let inference_url = format!("http://{llm_addr}/v1/chat/completions");
 
-    let mut config = base_config(inference_url, mcp_url);
-    config.mcp_tool_timeout_secs = 1;
+    let mut config = base_config(inference_url, tool_url);
+    config.tool_timeout_secs = 1;
     let agent = Agent::from_config(config).await?;
 
     let started = Instant::now();
@@ -736,8 +732,8 @@ async fn react_loop_mcp_timeout_is_ko_and_turn_continues() -> Result<()> {
         "tool message should identify the timed-out tool"
     );
 
-    mcp_server.abort();
-    let _ = mcp_server.await;
+    tool_server.abort();
+    let _ = tool_server.await;
     llm_server.abort();
     let _ = llm_server.await;
     Ok(())
@@ -752,12 +748,12 @@ async fn graph_shortcut_publishes_route_trace_to_route_events_stream() -> Result
 
     let addr = reserve_local_addr().await;
     let (server_handle, _recorded_arguments) = spawn_mock_bridge_server(addr).await;
-    let mcp_url = format!("http://{addr}/sse");
+    let tool_url = format!("http://{addr}/sse");
     let key_prefix = unique_key_prefix("xiuxian-daochang-route-trace");
 
     let config = base_config(
         "http://127.0.0.1:4000/v1/chat/completions".to_string(),
-        mcp_url,
+        tool_url,
     );
     let session =
         SessionStore::new_with_redis(redis_url.clone(), Some(key_prefix.clone()), Some(120))?;
@@ -844,14 +840,14 @@ async fn graph_shortcut_publishes_route_trace_to_route_events_stream() -> Result
 
 #[tokio::test]
 async fn react_failure_reflection_injects_next_turn_hint_and_recovers() -> Result<()> {
-    let mcp_addr = reserve_local_addr().await;
-    let (mcp_server, recorded_arguments) = spawn_mock_bridge_server(mcp_addr).await;
+    let tool_addr = reserve_local_addr().await;
+    let (tool_server, recorded_arguments) = spawn_mock_bridge_server(tool_addr).await;
     let llm_addr = reserve_local_addr().await;
     let (llm_server, llm_requests) =
         spawn_mock_llm_server(llm_addr, MockLlmScenario::ReflectionHintRecovery).await;
-    let mcp_url = format!("http://{mcp_addr}/sse");
+    let tool_url = format!("http://{tool_addr}/sse");
     let inference_url = format!("http://{llm_addr}/v1/chat/completions");
-    let agent = Agent::from_config(base_config(inference_url, mcp_url)).await?;
+    let agent = Agent::from_config(base_config(inference_url, tool_url)).await?;
     let session_id = "telegram:-100500:10";
 
     let first_attempt = agent
@@ -904,8 +900,8 @@ async fn react_failure_reflection_injects_next_turn_hint_and_recovers() -> Resul
     );
     assert_eq!(captured[1]["task"], "corrected-by-next-turn-hint");
 
-    mcp_server.abort();
-    let _ = mcp_server.await;
+    tool_server.abort();
+    let _ = tool_server.await;
     llm_server.abort();
     let _ = llm_server.await;
     Ok(())
@@ -914,15 +910,15 @@ async fn react_failure_reflection_injects_next_turn_hint_and_recovers() -> Resul
 #[tokio::test]
 async fn react_budget_pressure_truncates_tool_payload_and_keeps_core_injection_anchor() -> Result<()>
 {
-    let mcp_addr = reserve_local_addr().await;
-    let (mcp_server, _recorded_arguments) = spawn_mock_bridge_server(mcp_addr).await;
+    let tool_addr = reserve_local_addr().await;
+    let (tool_server, _recorded_arguments) = spawn_mock_bridge_server(tool_addr).await;
     let llm_addr = reserve_local_addr().await;
     let (llm_server, llm_requests) =
         spawn_mock_llm_server(llm_addr, MockLlmScenario::LargePayloadBudgetPressure).await;
-    let mcp_url = format!("http://{mcp_addr}/sse");
+    let tool_url = format!("http://{tool_addr}/sse");
     let inference_url = format!("http://{llm_addr}/v1/chat/completions");
 
-    let mut config = base_config(inference_url, mcp_url);
+    let mut config = base_config(inference_url, tool_url);
     config.context_budget_tokens = Some(140);
     config.context_budget_reserve_tokens = 20;
     let agent = Agent::from_config(config).await?;
@@ -995,8 +991,8 @@ async fn react_budget_pressure_truncates_tool_payload_and_keeps_core_injection_a
         "budget pressure scenario should drop/truncate context tokens"
     );
 
-    mcp_server.abort();
-    let _ = mcp_server.await;
+    tool_server.abort();
+    let _ = tool_server.await;
     llm_server.abort();
     let _ = llm_server.await;
     Ok(())
@@ -1004,14 +1000,14 @@ async fn react_budget_pressure_truncates_tool_payload_and_keeps_core_injection_a
 
 #[tokio::test]
 async fn react_role_mix_switches_from_recovery_back_to_normal_after_failure_cycle() -> Result<()> {
-    let mcp_addr = reserve_local_addr().await;
-    let (mcp_server, recorded_arguments) = spawn_mock_bridge_server(mcp_addr).await;
+    let tool_addr = reserve_local_addr().await;
+    let (tool_server, recorded_arguments) = spawn_mock_bridge_server(tool_addr).await;
     let llm_addr = reserve_local_addr().await;
     let (llm_server, llm_requests) =
         spawn_mock_llm_server(llm_addr, MockLlmScenario::RoleMixSwitch).await;
-    let mcp_url = format!("http://{mcp_addr}/sse");
+    let tool_url = format!("http://{tool_addr}/sse");
     let inference_url = format!("http://{llm_addr}/v1/chat/completions");
-    let agent = Agent::from_config(base_config(inference_url, mcp_url)).await?;
+    let agent = Agent::from_config(base_config(inference_url, tool_url)).await?;
     let session_id = "telegram:-100500:12";
 
     let first_attempt = agent.run_turn(session_id, "trigger role mix failure").await;
@@ -1061,8 +1057,8 @@ async fn react_role_mix_switches_from_recovery_back_to_normal_after_failure_cycl
     );
     assert_eq!(captured[1]["task"], "role-mix-recovery");
 
-    mcp_server.abort();
-    let _ = mcp_server.await;
+    tool_server.abort();
+    let _ = tool_server.await;
     llm_server.abort();
     let _ = llm_server.await;
     Ok(())

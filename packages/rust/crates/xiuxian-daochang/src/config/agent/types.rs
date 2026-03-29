@@ -2,18 +2,18 @@ use serde::{Deserialize, Serialize};
 
 use super::{agent_defaults, memory_defaults};
 
-/// One MCP server entry (e.g. SSE URL or stdio command).
+/// One external tool server entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpServerEntry {
+pub struct ToolServerEntry {
     /// Display name for logging.
     pub name: String,
     /// For Streamable HTTP: full URL (e.g. `http://localhost:3002/sse`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
-    /// For stdio: command to spawn (e.g. `omni` with args `["mcp", "--transport", "stdio"]`).
+    /// For stdio: command to spawn.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
-    /// For stdio: arguments to the command (e.g. `["mcp", "--transport", "stdio"]`).
+    /// For stdio: arguments to the command.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub args: Option<Vec<String>>,
 }
@@ -153,7 +153,7 @@ pub struct MemoryConfig {
     pub stream_consumer_block_ms: u64,
 }
 
-/// Agent config: inference API + MCP server list + optional memory.
+/// Agent config: inference API + external tool server list + optional memory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
     /// Chat completions endpoint (e.g. `https://api.openai.com/v1/chat/completions` or `LiteLLM`).
@@ -163,31 +163,31 @@ pub struct AgentConfig {
     /// API key; if None, read from env `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` depending on URL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
-    /// MCP servers to connect to (tools from all are merged).
+    /// External tool servers to connect to (tools from all are merged).
     #[serde(default)]
-    pub mcp_servers: Vec<McpServerEntry>,
-    /// MCP pool size for concurrent tool calls.
-    #[serde(default = "agent_defaults::default_mcp_pool_size")]
-    pub mcp_pool_size: usize,
-    /// MCP handshake timeout per connect attempt, in seconds.
-    #[serde(default = "agent_defaults::default_mcp_handshake_timeout_secs")]
-    pub mcp_handshake_timeout_secs: u64,
-    /// MCP connect retries before failing startup.
-    #[serde(default = "agent_defaults::default_mcp_connect_retries")]
-    pub mcp_connect_retries: u32,
-    /// If true, MCP startup/connect failures abort agent startup.
-    /// If false, agent starts without MCP and degrades tool execution gracefully.
-    #[serde(default = "agent_defaults::default_mcp_strict_startup")]
-    pub mcp_strict_startup: bool,
-    /// Initial backoff between MCP connect retries, in milliseconds.
-    #[serde(default = "agent_defaults::default_mcp_connect_retry_backoff_ms")]
-    pub mcp_connect_retry_backoff_ms: u64,
-    /// MCP tool call timeout, in seconds.
-    #[serde(default = "agent_defaults::default_mcp_tool_timeout_secs")]
-    pub mcp_tool_timeout_secs: u64,
-    /// MCP tools/list snapshot cache TTL (milliseconds) on the Rust client side.
-    #[serde(default = "agent_defaults::default_mcp_list_tools_cache_ttl_ms")]
-    pub mcp_list_tools_cache_ttl_ms: u64,
+    pub tool_servers: Vec<ToolServerEntry>,
+    /// External tool client-pool size for concurrent tool calls.
+    #[serde(default = "agent_defaults::default_tool_pool_size")]
+    pub tool_pool_size: usize,
+    /// External tool handshake timeout per connect attempt, in seconds.
+    #[serde(default = "agent_defaults::default_tool_handshake_timeout_secs")]
+    pub tool_handshake_timeout_secs: u64,
+    /// External tool connect retries before failing startup.
+    #[serde(default = "agent_defaults::default_tool_connect_retries")]
+    pub tool_connect_retries: u32,
+    /// If true, external tool startup/connect failures abort agent startup.
+    /// If false, agent starts without external tools and degrades tool execution gracefully.
+    #[serde(default = "agent_defaults::default_tool_strict_startup")]
+    pub tool_strict_startup: bool,
+    /// Initial backoff between external tool connect retries, in milliseconds.
+    #[serde(default = "agent_defaults::default_tool_connect_retry_backoff_ms")]
+    pub tool_connect_retry_backoff_ms: u64,
+    /// External tool call timeout, in seconds.
+    #[serde(default = "agent_defaults::default_tool_timeout_secs")]
+    pub tool_timeout_secs: u64,
+    /// External tool `tools/list` snapshot cache TTL (milliseconds) on the Rust client side.
+    #[serde(default = "agent_defaults::default_tool_list_cache_ttl_ms")]
+    pub tool_list_cache_ttl_ms: u64,
     /// Max tool-call rounds per user turn (avoid infinite loops).
     #[serde(default = "agent_defaults::default_max_tool_rounds")]
     pub max_tool_rounds: u32,

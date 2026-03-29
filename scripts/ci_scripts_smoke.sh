@@ -7,11 +7,9 @@ bash -n \
   scripts/rust/check_lint_inheritance.sh \
   scripts/rust/xiuxian_daochang_profiles_check.sh \
   scripts/rust/xiuxian_daochang_dependency_assertions.sh \
-  scripts/rust/xiuxian_daochang_mcp_facade_smoke.sh \
   scripts/rust/xiuxian_daochang_backend_role_contracts.sh \
   scripts/rust/xiuxian_qianji_scenario_audit_contracts.sh \
   scripts/rust/xiuxian_wendao_contract_feedback_consumer.sh \
-  scripts/rust/xiuxian_llm_mcp_check.sh \
   scripts/rust/wendao_retrieval_audits.sh \
   scripts/rust/telegram_session_isolation_rust.sh \
   scripts/channel/valkey_live_gate.sh \
@@ -24,12 +22,10 @@ bash -n \
 
 just --dry-run rust-xiuxian-daochang-profiles >/dev/null
 just --dry-run rust-xiuxian-daochang-dependency-assertions >/dev/null
-just --dry-run rust-xiuxian-daochang-mcp-facade-smoke >/dev/null
 just --dry-run rust-xiuxian-daochang-backend-role-contracts >/dev/null
 just --dry-run rust-xiuxian-qianji-scenario-audit-contracts >/dev/null
 just --dry-run rust-xiuxian-wendao-contract-feedback-consumer >/dev/null
 just --dry-run rust-xiuxian-daochang-embedding-role-perf-smoke >/dev/null
-just --dry-run rust-xiuxian-llm-mcp >/dev/null
 just --dry-run rust-retrieval-audits >/dev/null
 just --dry-run gate-wendao-ppr >/dev/null
 just --dry-run validate-wendao-ppr-reports >/dev/null
@@ -39,4 +35,3 @@ just --dry-run valkey-live >/dev/null
 just --dry-run memory-gate-nightly >/dev/null
 just --dry-run agent-channel-discord-ingress-stress >/dev/null
 just --dry-run verify-native-runtime >/dev/null
-just --dry-run benchmark-mcp-tools-list-sweep >/dev/null

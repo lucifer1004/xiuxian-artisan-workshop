@@ -44,7 +44,6 @@ This replaces the removed legacy LanceDB checkpoint backend.
 
 from typing import TypedDict
 
-from omni.core.skills.state import GraphState
 from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.logging import get_logger
 from omni.foundation.workflow_state import save_workflow_state

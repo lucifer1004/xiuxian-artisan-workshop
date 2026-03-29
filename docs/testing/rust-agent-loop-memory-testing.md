@@ -19,7 +19,7 @@ metadata:
 
 ### Reference behaviour (Nanobot, ZeroClaw)
 
-- **Nanobot**: One `AgentLoop`; each message → session (by `channel:chat_id`) → context (history + memory window) → **LLM → tools → repeat** until done → publish. MCP tools in same registry as built-in tools.
+- **Nanobot**: One `AgentLoop`; each message → session (by `channel:chat_id`) → context (history + memory window) → **LLM → tools → repeat** until done → publish. External tools live in the same effective registry as built-in tools.
 - **ZeroClaw**: Rust, one agent loop; gateway/daemon/service are modes of the same runtime; trait-based Provider/Channel/Memory/Tool.
 
 ### Our loop (xiuxian-daochang)
@@ -29,7 +29,7 @@ One **ReAct cycle** per user turn is implemented in `Agent::run_turn`:
 1. **Optional recall**: If memory is enabled, run `two_phase_recall(intent)` and inject "Relevant past experiences" as first system message.
 2. **Build messages**: Session history + user message (and recall context when present).
 3. **LLM**: Call OpenAI-compatible `/v1/chat/completions` with optional `tools`.
-4. **Tool round**: If the LLM returns `tool_calls`, call each via MCP `tools/call`, append results to messages, then go back to step 3 (up to `max_tool_rounds`).
+4. **Tool round**: If the LLM returns `tool_calls`, call each via the external tool runtime, append results to messages, then go back to step 3 (up to `max_tool_rounds`).
 5. **Final reply**: When the LLM returns no `tool_calls`, append the turn to session and, if memory is enabled, **store_episode** (intent + experience + outcome).
 
 So: **one `run_turn` = one Nanobot-style “process message”** (session + optional recall → LLM ↔ tools loop → store). Gateway/stdio only differ by transport; the loop is the same.
@@ -39,7 +39,7 @@ So: **one `run_turn` = one Nanobot-style “process message”** (session + opti
 | Layer           | What                                                                           | Where                                                               |
 | --------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
 | **Unit**        | Config, session, qualify/parse, agent `from_config` with memory                | `config_and_session`, `multiple_mcp`, `config_mcp`, `gateway_stdio` |
-| **Integration** | One turn with real LLM; one turn with LLM + MCP (ReAct); two turns with memory | `agent_integration`                                                 |
+| **Integration** | One turn with real LLM; one turn with LLM + external tools (ReAct); two turns with memory | `agent_integration`                                                 |
 
 ### What each test covers
 
@@ -48,12 +48,12 @@ So: **one `run_turn` = one Nanobot-style “process message”** (session + opti
 | `config_and_session`                      | —          | —                            | `from_config` with `MemoryConfig` |
 | `agent_from_config_with_memory_succeeds`  | —          | —                            | Agent builds with memory          |
 | `test_agent_one_turn_with_llm_and_mcp`    | ✓          | ✓ (if model uses a tool)     | —                                 |
-| `test_agent_one_turn_litellm_project_mcp` | ✓          | ✓ (if MCP + model uses tool) | —                                 |
+| `test_agent_one_turn_litellm_project_mcp` | ✓          | ✓ (if an external tool + model uses tool) | —                                 |
 | **`test_agent_react_flow_tool_used`**     | ✓          | **✓ (required)**             | —                                 |
 | `test_agent_two_turns_memory_stored`      | ✓          | optional                     | ✓ (episode count ≥ 2)             |
 
 - **Loop**: Any integration test that calls `run_turn` and gets a non-empty reply exercises the loop (LLM call, optional tool rounds, final reply).
-- **ReAct (same as Nanobot/ZeroClaw)**: `test_agent_react_flow_tool_used` **requires** the model to use a tool: it sends a prompt that asks the model to call the echo (demo) tool with a fixed string; the test asserts the final reply contains that string, proving the path **LLM → tool_calls → MCP tools/call → LLM → final reply** ran. This is the same flow as Nanobot’s “LLM + tools” and ZeroClaw’s tool execution in the loop.
+- **ReAct (same as Nanobot/ZeroClaw)**: `test_agent_react_flow_tool_used` **requires** the model to use a tool: it sends a prompt that asks the model to call the echo (demo) tool with a fixed string; the test asserts the final reply contains that string, proving the path **LLM → tool_calls → tool execution → LLM → final reply** ran.
 - **Memory**: Unit test ensures the agent builds with memory; `test_agent_two_turns_memory_stored` runs two turns and asserts `test_episode_count() >= 2`.
 
 ## 3. Running the tests
@@ -67,17 +67,15 @@ cargo test -p xiuxian-daochang --test config_mcp
 cargo test -p xiuxian-daochang --test gateway_stdio
 ```
 
-### Integration tests (real LLM and/or MCP; run with `--ignored`)
+### Integration tests (real LLM and/or external tools; run with `--ignored`)
 
-Require env (and optionally a running MCP server):
+Require env:
 
 - `LITELLM_PROXY_URL` or `XIUXIAN_DAOCHANG_INFERENCE_URL` (inference endpoint)
 - `XIUXIAN_DAOCHANG_MODEL` (model name)
 - `OPENAI_API_KEY` or `XIUXIAN_DAOCHANG_INFERENCE_API_KEY` (unless inference is local)
-- For project MCP: `.mcp.json` in project root or `MCP_CONFIG_PATH` / `PRJ_ROOT`
-
 ```bash
-# One turn (loop; ReAct if MCP + model use a tool)
+# One turn (loop; ReAct if a tool-enabled model uses a tool)
 cargo test -p xiuxian-daochang --test agent_integration test_agent_one_turn_litellm_project_mcp -- --ignored
 
 # ReAct flow: model must use a tool (loop + tool roundtrip, like Nanobot/ZeroClaw)
@@ -97,8 +95,8 @@ cargo test -p xiuxian-daochang --test agent_integration -- --ignored
 
 To approximate Nanobot/ZeroClaw behaviour in one go:
 
-1. **Unit**: All unit tests above (config, session, MCP qualify/parse, gateway/stdio, agent with memory from_config).
-2. **Loop + ReAct**: Run **`test_agent_react_flow_tool_used`** — this explicitly requires the model to call an MCP tool (echo) and asserts the reply contains the tool result, matching the Nanobot/ZeroClaw “model uses tool” flow.
+1. **Unit**: All unit tests above (config, session, gateway/stdio, agent with memory from_config).
+2. **Loop + ReAct**: Run **`test_agent_react_flow_tool_used`** — this explicitly requires the model to call a tool (echo) and asserts the reply contains the tool result, matching the Nanobot/ZeroClaw “model uses tool” flow.
 3. **Memory**: `test_agent_two_turns_memory_stored` (two turns, then assert episode count ≥ 2).
 
 Together these cover: **loop**, **ReAct (tool roundtrip, same as reference projects)**, and **memory (recall + store)** in a single test suite.

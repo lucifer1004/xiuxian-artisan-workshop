@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from omni.rag import RetrievalConfig, RetrievalResult, create_hybrid_node, create_retriever_node
+from xiuxian_rag import RetrievalConfig, RetrievalResult, create_hybrid_node, create_retriever_node
 
 
 class _Backend:

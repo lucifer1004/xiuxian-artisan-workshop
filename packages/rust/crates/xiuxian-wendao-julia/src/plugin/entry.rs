@@ -5,13 +5,9 @@ use xiuxian_ast::{
     JuliaDocAttachment, JuliaDocTargetKind, JuliaImport, JuliaParseError, JuliaSourceSummary,
     JuliaSymbol, JuliaSymbolKind as AstJuliaSymbolKind, TreeSitterJuliaParser,
 };
-use xiuxian_wendao::analyzers::config::RegisteredRepository;
-use xiuxian_wendao::analyzers::errors::RepoIntelligenceError;
-use xiuxian_wendao::analyzers::plugin::{
+use xiuxian_wendao_core::repo_intelligence::{
     AnalysisContext, PluginAnalysisOutput, PluginLinkContext, RepoIntelligencePlugin,
-    RepoSourceFile, RepositoryAnalysisOutput,
-};
-use xiuxian_wendao::analyzers::records::{
+    RepoIntelligenceError, RepoSourceFile, RepositoryAnalysisOutput, RegisteredRepository,
     DocRecord, ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind, RepositoryRecord,
     SymbolRecord,
 };
@@ -35,7 +31,7 @@ pub struct JuliaRepoIntelligencePlugin;
 /// Returns [`RepoIntelligenceError`] when the registry already contains a
 /// plugin with the `julia` identifier.
 pub fn register_into(
-    registry: &mut xiuxian_wendao::analyzers::registry::PluginRegistry,
+    registry: &mut xiuxian_wendao_core::repo_intelligence::PluginRegistry,
 ) -> Result<(), RepoIntelligenceError> {
     registry.register(JuliaRepoIntelligencePlugin)
 }
@@ -307,7 +303,7 @@ fn build_structural_relations(
     repo_id: &str,
     modules: &[ModuleRecord],
     symbols: &[SymbolRecord],
-    examples: &[xiuxian_wendao::analyzers::records::ExampleRecord],
+    examples: &[xiuxian_wendao_core::repo_intelligence::ExampleRecord],
     docs: &[DocRecord],
 ) -> Vec<RelationRecord> {
     let repository_node_id = format!("repo:{repo_id}");

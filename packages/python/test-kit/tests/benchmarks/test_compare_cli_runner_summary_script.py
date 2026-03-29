@@ -7,7 +7,7 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
-from omni.foundation.runtime.gitops import get_project_root
+from xiuxian_wendao_py.compat.runtime import get_project_root
 
 if TYPE_CHECKING:
     from pathlib import Path

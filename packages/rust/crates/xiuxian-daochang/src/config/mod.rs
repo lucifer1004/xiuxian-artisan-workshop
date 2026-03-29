@@ -1,23 +1,23 @@
-//! Config namespace: agent config and MCP config loading.
+//! Config namespace: agent config and external tool config loading.
 
 mod agent;
-mod mcp;
 mod settings;
+mod tools;
 mod xiuxian;
 
 pub use agent::{
-    AgentConfig, ContextBudgetStrategy, LITELLM_DEFAULT_URL, McpServerEntry, MemoryConfig,
+    AgentConfig, ContextBudgetStrategy, LITELLM_DEFAULT_URL, MemoryConfig, ToolServerEntry,
 };
-pub use mcp::{McpConfigFile, McpServerEntryFile, load_mcp_config};
 pub use settings::{
     DiscordAclAllowSettings, DiscordAclControlSettings, DiscordAclPrincipalSettings,
-    DiscordAclSettings, DiscordAclSlashSettings, DiscordSettings, EmbeddingSettings, McpSettings,
+    DiscordAclSettings, DiscordAclSlashSettings, DiscordSettings, EmbeddingSettings,
     MemorySettings, RuntimeSettings, SessionSettings, TelegramAclAllowSettings,
     TelegramAclControlSettings, TelegramAclPrincipalSettings, TelegramAclSettings,
     TelegramAclSlashSettings, TelegramGroupSettings, TelegramSettings, TelegramTopicSettings,
-    load_runtime_settings, load_runtime_settings_from_paths, runtime_settings_paths,
-    set_config_home_override,
+    ToolRuntimeSettings, load_runtime_settings, load_runtime_settings_from_paths,
+    runtime_settings_paths, set_config_home_override,
 };
+pub use tools::{ToolConfigFile, ToolServerEntryFile, load_tool_config};
 pub use xiuxian::{
     XiuxianConfig, load_xiuxian_config, load_xiuxian_config_from_bases,
     load_xiuxian_config_from_paths,

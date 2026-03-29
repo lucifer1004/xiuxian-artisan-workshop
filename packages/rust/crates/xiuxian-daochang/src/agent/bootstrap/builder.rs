@@ -6,9 +6,9 @@ use super::super::zhenfa::{
     build_global_link_graph_index, build_skill_vfs_resolver, init_zhenfa_tool_bridge,
 };
 use super::super::zhixing::{init_zhixing_runtime, mount_zhixing_services, resolve_project_root};
-use super::mcp::init_mcp_client_and_mount;
 use super::native_tools::mount_native_tool_cauldron;
 use super::session::{build_bounded_session_store, resolve_session_reset_idle_timeout_ms};
+use super::tool_dispatch::init_tool_client_and_mount;
 use crate::agent::Agent;
 use crate::agent::zhenfa::ZhenfaRuntimeDeps;
 use crate::config::{AgentConfig, load_runtime_settings, load_xiuxian_config};
@@ -24,7 +24,7 @@ impl Agent {
     /// Build agent from config.
     ///
     /// # Errors
-    /// Returns an error when session backends, MCP startup, or memory backends
+    /// Returns an error when session backends, external tool startup, or memory backends
     /// fail to initialize.
     pub async fn from_config(config: AgentConfig) -> Result<Self> {
         let api_key = config.resolve_api_key();
@@ -52,7 +52,7 @@ impl Agent {
         bounded_session: Option<crate::session::BoundedSessionStore>,
     ) -> Result<Self> {
         let mut service_mounts = ServiceMountCatalog::new();
-        let mcp_client = init_mcp_client_and_mount(&config, &mut service_mounts).await?;
+        let tool_runtime = init_tool_client_and_mount(&config, &mut service_mounts).await?;
 
         let runtime_settings = load_runtime_settings();
         let session_reset_idle_timeout_ms =
@@ -135,7 +135,7 @@ impl Agent {
             downstream_admission_metrics:
                 super::super::super::admission::DownstreamAdmissionMetrics::default(),
             llm,
-            mcp: mcp_client,
+            tool_runtime,
             heyi,
             native_tools: Arc::new(native_tools),
             zhenfa_tools,

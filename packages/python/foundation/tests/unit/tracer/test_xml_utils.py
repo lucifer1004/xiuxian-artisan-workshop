@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from omni.tracer.xml import escape_xml, extract_attr, extract_tag
+from xiuxian_tracer.xml import escape_xml, extract_attr, extract_tag
 
 
 def test_escape_xml_escapes_special_chars():

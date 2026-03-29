@@ -1,4 +1,4 @@
-"""Tests for omni.core.router.cache module."""
+"""Tests for xiuxian_core.router.cache module."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from omni.core.router.cache import SearchCache
+from xiuxian_core.router.cache import SearchCache
 
 
 class TestSearchCache:

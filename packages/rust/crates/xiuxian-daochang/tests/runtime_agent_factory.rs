@@ -1,7 +1,7 @@
 //! Runtime-agent factory integration harness.
 
 use xiuxian_daochang::{
-    LITELLM_DEFAULT_URL, McpServerEntry, RuntimeSettings,
+    LITELLM_DEFAULT_URL, RuntimeSettings, ToolServerEntry,
     test_support::{
         parse_embedding_backend_mode, resolve_inference_url,
         resolve_runtime_embedding_backend_mode, resolve_runtime_embedding_base_url,

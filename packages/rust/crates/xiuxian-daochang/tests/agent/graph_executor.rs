@@ -11,7 +11,7 @@ use rmcp::service::{RequestContext, RoleServer};
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 
-use crate::config::{AgentConfig, McpServerEntry};
+use crate::config::{AgentConfig, ToolServerEntry};
 use crate::contracts::{
     GraphExecutionPlan, GraphPlanStep, GraphPlanStepKind, GraphWorkflowMode, OmegaDecision,
     OmegaFallbackPolicy, OmegaRiskLevel, OmegaRoute, OmegaToolTrustClass,
@@ -137,7 +137,7 @@ async fn spawn_mock_bridge_server(
     let router = Router::new().nest_service("/sse", service);
     let listener = tokio::net::TcpListener::bind(addr)
         .await
-        .expect("bind mock mcp listener");
+        .expect("bind mock tool listener");
 
     (
         tokio::spawn(async move {
@@ -147,21 +147,21 @@ async fn spawn_mock_bridge_server(
     )
 }
 
-fn base_config(mcp_url: String) -> AgentConfig {
+fn base_config(tool_url: String) -> AgentConfig {
     AgentConfig {
         inference_url: "http://127.0.0.1:4000/v1/chat/completions".to_string(),
         model: "test-model".to_string(),
-        mcp_servers: vec![McpServerEntry {
+        tool_servers: vec![ToolServerEntry {
             name: "mock".to_string(),
-            url: Some(mcp_url),
+            url: Some(tool_url),
             command: None,
             args: None,
         }],
-        mcp_handshake_timeout_secs: 2,
-        mcp_connect_retries: 2,
-        mcp_connect_retry_backoff_ms: 50,
-        mcp_tool_timeout_secs: 15,
-        mcp_list_tools_cache_ttl_ms: 100,
+        tool_handshake_timeout_secs: 2,
+        tool_connect_retries: 2,
+        tool_connect_retry_backoff_ms: 50,
+        tool_timeout_secs: 15,
+        tool_list_cache_ttl_ms: 100,
         max_tool_rounds: 3,
         ..AgentConfig::default()
     }
@@ -223,9 +223,9 @@ async fn execute_graph_shortcut_plan_uses_plan_route_to_react_even_when_policy_i
 -> Result<()> {
     let addr = reserve_local_addr().await;
     let (server_handle, recorded_arguments) = spawn_mock_bridge_server(addr).await;
-    let mcp_url = format!("http://{addr}/sse");
+    let tool_url = format!("http://{addr}/sse");
 
-    let agent = crate::agent::Agent::from_config(base_config(mcp_url)).await?;
+    let agent = crate::agent::Agent::from_config(base_config(tool_url)).await?;
     let decision = build_decision(OmegaFallbackPolicy::SwitchToGraph);
     let plan = build_plan(OmegaFallbackPolicy::SwitchToGraph, "route_to_react");
 
@@ -278,9 +278,9 @@ async fn execute_graph_shortcut_plan_uses_plan_route_to_react_even_when_policy_i
 async fn execute_graph_shortcut_plan_uses_plan_retry_even_when_policy_is_abort() -> Result<()> {
     let addr = reserve_local_addr().await;
     let (server_handle, recorded_arguments) = spawn_mock_bridge_server(addr).await;
-    let mcp_url = format!("http://{addr}/sse");
+    let tool_url = format!("http://{addr}/sse");
 
-    let agent = crate::agent::Agent::from_config(base_config(mcp_url)).await?;
+    let agent = crate::agent::Agent::from_config(base_config(tool_url)).await?;
     let decision = build_decision(OmegaFallbackPolicy::Abort);
     let plan = build_plan(OmegaFallbackPolicy::Abort, "retry_bridge_without_metadata");
 

@@ -6,8 +6,9 @@
 use serial_test::serial;
 use std::fs;
 use xiuxian_vector::VectorStore;
+use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH;
 use xiuxian_wendao::{
-    LinkGraphIndex, LinkGraphJuliaRerankRuntimeConfig, LinkGraphSearchOptions,
+    LinkGraphCompatRerankRuntimeConfig, LinkGraphIndex, LinkGraphSearchOptions,
     set_link_graph_wendao_config_override,
 };
 
@@ -66,23 +67,22 @@ route = "/arrow-ipc"
 schema_version = "v1"
 timeout_secs = 10
 service_mode = "stream"
-analyzer_config_path = ".data/WendaoAnalyzer/config/analyzer.example.toml"
+analyzer_config_path = "{}"
 analyzer_strategy = "similarity_only"
 "#,
             vector_store_path.to_string_lossy(),
+            DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH,
         ),
     )?;
     let config_path_string = config_path.to_string_lossy().to_string();
     set_link_graph_wendao_config_override(&config_path_string);
 
     let analyzer_runtime =
-        wendaoanalyzer_deployment_artifact_from_runtime(&LinkGraphJuliaRerankRuntimeConfig {
+        wendaoanalyzer_deployment_artifact_from_runtime(&LinkGraphCompatRerankRuntimeConfig {
             service_mode: Some("stream".to_string()),
-            analyzer_config_path: Some(
-                ".data/WendaoAnalyzer/config/analyzer.example.toml".to_string(),
-            ),
+            analyzer_config_path: Some(DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH.to_string()),
             analyzer_strategy: Some("similarity_only".to_string()),
-            ..LinkGraphJuliaRerankRuntimeConfig::default()
+            ..LinkGraphCompatRerankRuntimeConfig::default()
         });
     let (server_base_url, mut server_guard) = runtime.block_on(
         spawn_wendaoanalyzer_service_from_artifact(&analyzer_runtime),
@@ -108,11 +108,12 @@ route = "/arrow-ipc"
 schema_version = "v1"
 timeout_secs = 10
 service_mode = "stream"
-analyzer_config_path = ".data/WendaoAnalyzer/config/analyzer.example.toml"
+analyzer_config_path = "{}"
 analyzer_strategy = "similarity_only"
 "#,
             vector_store_path.to_string_lossy(),
             server_base_url,
+            DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH,
         ),
     )?;
     set_link_graph_wendao_config_override(&config_path_string);

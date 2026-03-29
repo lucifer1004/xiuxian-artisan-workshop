@@ -1,14 +1,14 @@
-"""Test RAG fixtures integration with omni.test_kit.
+"""Test RAG fixtures integration with xiuxian_test_kit.
 
 This file demonstrates how to use RAG fixtures for testing.
 """
 
 import pytest
 
-pytest_plugins = ["omni.test_kit.fixtures.rag"]
+pytest_plugins = ["xiuxian_test_kit.fixtures.rag"]
 
 # Import RagTestHelper directly since it's a class, not a fixture
-from omni.test_kit.fixtures.rag import RagTestHelper
+from xiuxian_test_kit.fixtures.rag import RagTestHelper
 
 
 class TestRAGFixturesDemo:
@@ -94,7 +94,7 @@ class TestRAGAssertions:
 
     def test_assert_entities_equal(self):
         """Test entity assertion helper."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         # Create test entities
         entities = [
@@ -111,7 +111,7 @@ class TestRAGAssertions:
 
     def test_assert_chunks_valid(self):
         """Test chunk validation assertion."""
-        from omni.rag.chunking import Chunk
+        from xiuxian_rag.chunking import Chunk
 
         chunks = [
             Chunk(text="This is a test sentence." * 5, index=0),
@@ -126,7 +126,7 @@ class TestRAGAssertions:
 
     def test_assert_no_overlap(self):
         """Test chunk overlap assertion."""
-        from omni.rag.chunking import Chunk
+        from xiuxian_rag.chunking import Chunk
 
         chunks = [
             Chunk(text="First chunk of text." * 10, index=0),
@@ -139,11 +139,10 @@ class TestRAGAssertions:
 class TestRAGIntegrationWithExistingFixtures:
     """Test RAG fixtures work with existing test-kit fixtures."""
 
-    def test_rag_with_core_fixtures(self, rag_config_fixture, project_root, skills_root):
+    def test_rag_with_core_fixtures(self, rag_config_fixture, project_root):
         """RAG fixtures work with core fixtures."""
         assert rag_config_fixture is not None
         assert project_root is not None
-        assert skills_root is not None
 
     def test_rag_with_mock_llm_and_chunker(self, mock_llm_for_extraction, rag_sentence_chunker):
         """Mock LLM and chunker work together."""

@@ -32,7 +32,6 @@ pub struct EmbeddingInFlightSnapshot {
 pub struct EmbeddingClient {
     client: reqwest::Client,
     base_url: String,
-    mcp_url: Option<String>,
     cache: EmbeddingCache,
     backend_mode: EmbeddingBackendMode,
     backend_source: &'static str,
@@ -54,7 +53,6 @@ pub struct EmbeddingClient {
 struct EmbeddingDispatchRuntime {
     client: reqwest::Client,
     base_url: String,
-    mcp_url: Option<String>,
     backend_mode: EmbeddingBackendMode,
     backend_source: &'static str,
     #[cfg(feature = "agent-provider-litellm")]

@@ -13,7 +13,7 @@ use crate::cli::{
 pub(crate) struct ChannelCommandRequest {
     pub(crate) provider: ChannelProvider,
     pub(crate) bot_token: Option<String>,
-    pub(crate) mcp_config: PathBuf,
+    pub(crate) tool_config: PathBuf,
     pub(crate) mode: Option<TelegramChannelMode>,
     pub(crate) webhook_bind: Option<String>,
     pub(crate) webhook_path: Option<String>,

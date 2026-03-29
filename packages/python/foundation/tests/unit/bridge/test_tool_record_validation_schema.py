@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from omni.foundation.bridge.tool_record_validation import (
+from xiuxian_foundation.bridge.tool_record_validation import (
     COMMAND_INDEX_SCHEMA_V1,
     ToolRecordValidationError,
     validate_scanned_tool_record,

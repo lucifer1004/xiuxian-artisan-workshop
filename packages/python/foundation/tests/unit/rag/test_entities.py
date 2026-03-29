@@ -1,5 +1,5 @@
 """
-Tests for omni.rag.entities module.
+Tests for xiuxian_rag.entities module.
 """
 
 
@@ -8,7 +8,7 @@ class TestEntity:
 
     def test_entity_creation(self):
         """Test basic entity creation."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         entity = Entity(
             name="Claude Code",
@@ -26,7 +26,7 @@ class TestEntity:
 
     def test_entity_with_aliases(self):
         """Test entity with aliases."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         entity = Entity(
             name="Python",
@@ -41,7 +41,7 @@ class TestEntity:
 
     def test_entity_id_generation(self):
         """Test entity ID generation."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         entity = Entity(
             name="Claude Code",
@@ -54,7 +54,7 @@ class TestEntity:
 
     def test_entity_hash(self):
         """Test entity hashing."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         entity1 = Entity(
             name="Test Entity",
@@ -74,7 +74,7 @@ class TestEntity:
 
     def test_entity_equality(self):
         """Test entity equality."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         entity1 = Entity(
             name="Test Entity",
@@ -102,7 +102,7 @@ class TestEntity:
 
     def test_entity_to_dict(self):
         """Test entity serialization to dict."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         entity = Entity(
             name="Claude Code",
@@ -123,7 +123,7 @@ class TestEntity:
 
     def test_entity_from_dict(self):
         """Test entity deserialization from dict."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         data = {
             "name": "Test Entity",
@@ -146,7 +146,7 @@ class TestRelation:
 
     def test_relation_creation(self):
         """Test basic relation creation."""
-        from omni.rag.entities import Relation
+        from xiuxian_rag.entities import Relation
 
         relation = Relation(
             source="John Doe",
@@ -163,7 +163,7 @@ class TestRelation:
 
     def test_relation_id_generation(self):
         """Test relation ID generation."""
-        from omni.rag.entities import Relation
+        from xiuxian_rag.entities import Relation
 
         relation = Relation(
             source="John Doe",
@@ -178,7 +178,7 @@ class TestRelation:
 
     def test_relation_equality(self):
         """Test relation equality."""
-        from omni.rag.entities import Relation
+        from xiuxian_rag.entities import Relation
 
         rel1 = Relation(
             source="A",
@@ -206,7 +206,7 @@ class TestRelation:
 
     def test_relation_to_dict(self):
         """Test relation serialization."""
-        from omni.rag.entities import Relation
+        from xiuxian_rag.entities import Relation
 
         relation = Relation(
             source="Python",
@@ -229,7 +229,7 @@ class TestEntityConstants:
 
     def test_entity_types(self):
         """Test entity type constants."""
-        from omni.rag.entities import EntityType
+        from xiuxian_rag.entities import EntityType
 
         assert EntityType.PERSON == "PERSON"
         assert EntityType.ORGANIZATION == "ORGANIZATION"
@@ -240,7 +240,7 @@ class TestEntityConstants:
 
     def test_relation_types(self):
         """Test relation type constants."""
-        from omni.rag.entities import RelationType
+        from xiuxian_rag.entities import RelationType
 
         assert RelationType.WORKS_FOR == "WORKS_FOR"
         assert RelationType.PART_OF == "PART_OF"
@@ -254,7 +254,7 @@ class TestExtractedChunk:
 
     def test_extracted_chunk_creation(self):
         """Test extracted chunk creation."""
-        from omni.rag.entities import Entity, ExtractedChunk, Relation
+        from xiuxian_rag.entities import Entity, ExtractedChunk, Relation
 
         entities = [
             Entity(
@@ -288,7 +288,7 @@ class TestExtractedChunk:
 
     def test_extracted_chunk_to_dict(self):
         """Test chunk serialization."""
-        from omni.rag.entities import ExtractedChunk
+        from xiuxian_rag.entities import ExtractedChunk
 
         chunk = ExtractedChunk(
             chunk_id="chunk-0",

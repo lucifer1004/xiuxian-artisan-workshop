@@ -1,24 +1,15 @@
 //! Language-specific Repo Intelligence plugins bundled into the Wendao runtime.
 //!
-//! The canonical Julia plugin implementation still lives in the sibling
-//! workspace crate, but the gateway runtime needs that analyzer in the default
-//! binary build. To avoid a cargo dependency cycle, we compile the source
-//! modules into the core crate and register them through the builtin registry
-//! surface.
-
-#[cfg(feature = "julia")]
-#[path = "../../../../xiuxian-wendao-julia/src/plugin/mod.rs"]
-mod julia;
-
-#[cfg(all(test, feature = "julia"))]
-pub(crate) use julia::test_support as julia_plugin_test_support;
+//! The Julia plugin now enters the host through a normal crate dependency.
+//! The remaining path-inclusion seam is currently Modelica-specific and is
+//! tracked separately under `M4`.
 
 #[cfg(feature = "modelica")]
 #[path = "../../../../xiuxian-wendao-modelica/src/plugin/mod.rs"]
 mod modelica;
 
 #[cfg(feature = "julia")]
-pub use julia::{
+pub use xiuxian_wendao_julia::{
     JULIA_ARROW_RESPONSE_SCHEMA_VERSION, JuliaRepoIntelligencePlugin,
     build_julia_arrow_transport_client, process_julia_arrow_batches,
     process_julia_arrow_batches_for_repository, register_into as register_julia_plugin,

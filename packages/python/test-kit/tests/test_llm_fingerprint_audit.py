@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 
-from omni.foundation.runtime.gitops import get_project_root
+from xiuxian_wendao_py.compat.runtime import get_project_root
 
 
 def _load_module():

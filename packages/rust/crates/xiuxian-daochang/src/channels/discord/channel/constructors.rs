@@ -39,7 +39,7 @@ pub(super) async fn run_discord_channel_command(
         slash_job_allow_from,
         slash_jobs_allow_from,
         slash_bg_allow_from,
-        mcp_config,
+        tool_config,
         session_partition,
         inbound_queue_capacity,
         turn_timeout_secs,
@@ -172,7 +172,7 @@ pub(super) async fn run_discord_channel_command(
         slash_job_allow_from,
         slash_jobs_allow_from,
         slash_bg_allow_from,
-        mcp_config,
+        tool_config,
         session_partition,
         inbound_queue_capacity,
         turn_timeout_secs,
@@ -196,13 +196,13 @@ async fn run_discord_channel_mode(
     slash_job_allow_from: Option<String>,
     slash_jobs_allow_from: Option<String>,
     slash_bg_allow_from: Option<String>,
-    mcp_config_path: std::path::PathBuf,
+    tool_config_path: std::path::PathBuf,
     session_partition: DiscordSessionPartition,
     inbound_queue_capacity: usize,
     turn_timeout_secs: u64,
     runtime_settings: &RuntimeSettings,
 ) -> anyhow::Result<()> {
-    let agent = Arc::new(build_agent(&mcp_config_path, runtime_settings).await?);
+    let agent = Arc::new(build_agent(&tool_config_path, runtime_settings).await?);
     let users = parse_comma_separated_entries(&allowed_users);
     let guilds = parse_comma_separated_entries(&allowed_guilds);
     let admins = parse_comma_separated_entries(&admin_users);

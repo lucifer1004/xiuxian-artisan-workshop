@@ -148,11 +148,12 @@ selection fields:
 These fields are additive. They do not change the Arrow transport contract, and
 they are currently validated through main integration coverage against the
 analyzer-owned test server surface. `LinkGraphJuliaRerankRuntimeConfig` now
-also exposes `analyzer_service_descriptor()` so Rust-side code can derive the
-analyzer-owned launch contract without repeating field mapping. The same runtime
-surface now also exposes `analyzer_launch_manifest()`, which resolves the
-generic analyzer launcher path and ordered Julia CLI args into one crate-owned
-manifest.
+comes from the Julia-owned compatibility surface, while `xiuxian-wendao`
+keeps only the re-export seam. That runtime record also exposes
+`analyzer_service_descriptor()` so Rust-side code can derive the analyzer-owned
+launch contract without repeating field mapping. The same runtime surface now
+also exposes `analyzer_launch_manifest()`, which resolves the generic analyzer
+launcher path and ordered Julia CLI args into one Julia-owned manifest.
 
 For analyzer-owned deployments, the current service contract is intentionally
 split:
@@ -178,16 +179,36 @@ repeating serialization or file-write conventions outside `xiuxian-wendao`.
 The deployment artifact now also carries artifact-level inspection metadata:
 `artifact_schema_version` identifies the artifact contract itself, while
 `generated_at` records when a concrete JSON/TOML export instance was rendered.
-On top of that, `xiuxian-wendao` now exposes
-`resolve_link_graph_julia_deployment_artifact()` and
-`export_link_graph_julia_deployment_artifact_toml()`, so callers can consume
-the current resolved Julia deployment contract without reaching into the
-internal retrieval-policy runtime resolver.
+On top of that, `xiuxian-wendao` now exposes the Julia deployment helpers only
+through the explicit compatibility namespace, so callers can consume the
+current resolved Julia deployment contract without reaching into the internal
+retrieval-policy runtime resolver.
+
+For downstream Rust imports, the crate now provides an explicit public
+compatibility namespace:
+
+- prefer `xiuxian_wendao::compatibility::link_graph::*` for compat-first
+  runtime-config DTO imports and deployment helpers such as
+  `LinkGraphCompatRerankRuntimeConfig` and
+  `resolve_link_graph_compat_deployment_artifact`
+- treat this namespaced compatibility module as the only supported public
+  migration path for compat-first runtime-config DTOs and deployment helpers
+
+```rust
+use xiuxian_wendao::compatibility::link_graph::{
+    LinkGraphCompatDeploymentArtifact, LinkGraphCompatRerankRuntimeConfig,
+    resolve_link_graph_compat_deployment_artifact,
+};
+
+let _ = core::mem::size_of::<LinkGraphCompatRerankRuntimeConfig>();
+let _resolver: fn() -> LinkGraphCompatDeploymentArtifact =
+    resolve_link_graph_compat_deployment_artifact;
+```
 
 For inspection surfaces, the same export is now visible through
-`zhenfa_router` as `wendao.julia_deployment_artifact`, which returns the
+`zhenfa_router` as `wendao.compat_deployment_artifact`, which returns the
 resolved deployment artifact over the existing native/RPC tool boundary. The
-tool defaults to TOML and now also supports a structured JSON variant via
+tool defaults to TOML and also supports a structured JSON variant via
 `output_format = "json"`.
 The same tool now also accepts an optional `output_path`, which persists the
 resolved artifact directly to disk as TOML or JSON instead of only returning
@@ -333,6 +354,9 @@ The currently landed Phase-1 slice is no longer only a skeleton:
 - the analysis handler body is now closed too. `analysis/` separates markdown
   routes, code-AST routes, shared loader logic, and query types, while
   `analysis/mod.rs` stays interface-only
+- the capabilities handler body now follows the same pattern. `capabilities/`
+  separates UI-capabilities routes, deployment-artifact routes, and query
+  types, while `capabilities/mod.rs` stays interface-only
 - repo-analysis search handlers now route their repo-entity fast path through
   `query_core::service`, and the repeated cache plus fast-path plus analyzer
   fallback control flow is now centralized in one shared repo-analysis search

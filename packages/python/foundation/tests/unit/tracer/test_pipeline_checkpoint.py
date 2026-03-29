@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from omni.tracer.pipeline_checkpoint import compile_workflow
+from xiuxian_tracer.pipeline_checkpoint import compile_workflow
 
 
 class _FakeWorkflow:
@@ -39,7 +39,7 @@ def test_compile_workflow_uses_memory_saver_when_requested(monkeypatch) -> None:
     def _fake_create():
         return expected
 
-    import omni.tracer.pipeline_checkpoint as module
+    import xiuxian_tracer.pipeline_checkpoint as module
 
     monkeypatch.setattr(module, "create_in_memory_checkpointer", _fake_create)
     out = module.compile_workflow(wf, use_memory_saver=True)

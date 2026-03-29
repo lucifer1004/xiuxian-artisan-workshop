@@ -127,9 +127,3 @@ def test_launcher_foreground_invalid_gate_arg_writes_fallback_failure_payload(
     assert "repro_commands" in failure_payload
 
     assert latest_failure_md.exists()
-
-
-def test_launcher_rejects_invalid_mcp_port(tmp_path: Path) -> None:
-    result = run_launcher_args_only(tmp_path, "--ensure-mcp", "--mcp-port", "abc")
-    assert result.returncode != 0
-    assert "Invalid --mcp-port" in result.stderr

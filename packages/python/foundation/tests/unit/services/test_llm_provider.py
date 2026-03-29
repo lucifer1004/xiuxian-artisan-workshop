@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from omni.foundation.config.settings import get_setting
-from omni.foundation.services.llm.provider import (
+from xiuxian_foundation.config.settings import get_setting
+from xiuxian_foundation.services.llm.provider import (
     RustLLMProvider,
     LLMConfig,
     NoOpProvider,
@@ -79,7 +79,7 @@ class TestRustLLMProvider:
 
     def test_provider_without_api_key(self):
         """Test RustLLMProvider handles missing API key gracefully."""
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": "sonnet",
@@ -95,7 +95,7 @@ class TestRustLLMProvider:
 
     def test_provider_with_api_key(self):
         """Test RustLLMProvider initializes with API key."""
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": "sonnet",
@@ -113,7 +113,7 @@ class TestRustLLMProvider:
 
     def test_provider_minimax_base_url(self):
         """Test RustLLMProvider uses MiniMax Anthropic-compatible base_url."""
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": DEFAULT_MODEL,
@@ -131,7 +131,7 @@ class TestRustLLMProvider:
 
     def test_provider_custom_settings(self):
         """Test RustLLMProvider loads custom settings."""
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": "claude-opus-4-20250514",
@@ -149,7 +149,7 @@ class TestRustLLMProvider:
 
     def test_provider_passes_api_key_to_completion(self):
         """Test RustLLMProvider passes API key correctly to backend."""
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": DEFAULT_MODEL,
@@ -166,7 +166,7 @@ class TestRustLLMProvider:
     @pytest.mark.asyncio
     async def test_minimax_passes_cased_model_to_backend(self):
         """MiniMax model is normalised with _minimax_model_casing before call."""
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "minimax",
                 "inference.model": "MiniMax-M2.1",
@@ -218,7 +218,7 @@ class TestNoOpProvider:
         async def run_test():
             # Mock embed_batch to raise exception to trigger fallback
             with patch(
-                "omni.foundation.services.embedding.embed_batch",
+                "xiuxian_foundation.services.embedding.embed_batch",
                 side_effect=Exception("Embedding failed"),
             ):
                 return await provider.embed(["text1", "text2"])
@@ -242,7 +242,7 @@ class TestProviderRegistry:
         """Test get_llm_provider returns RustLLMProvider when API key is set."""
         reset_provider()  # Clear cache
 
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": "sonnet",
@@ -261,7 +261,7 @@ class TestProviderRegistry:
         """Test get_llm_provider returns NoOpProvider when API key is missing."""
         reset_provider()  # Clear cache
 
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": "sonnet",
@@ -280,7 +280,7 @@ class TestProviderRegistry:
         """Test that provider is cached after first call."""
         reset_provider()  # Clear cache
 
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": "sonnet",
@@ -298,7 +298,7 @@ class TestProviderRegistry:
         """Test that reset_provider clears the cache."""
         reset_provider()  # Clear cache
 
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": "sonnet",
@@ -322,7 +322,7 @@ class TestProviderConfig:
         """Test that config is loaded from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml)."""
         reset_provider()
 
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
                 "inference.model": "claude-opus-4-20250514",
@@ -345,7 +345,7 @@ class TestProviderConfig:
             timeout=30,
         )
 
-        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+        with patch("xiuxian_foundation.config.settings.get_setting") as mock_setting:
             mock_setting.return_value = "claude-sonnet-4-20250514"  # Different from custom
 
             with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):

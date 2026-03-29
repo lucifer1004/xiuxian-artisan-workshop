@@ -1,5 +1,5 @@
 """
-Benchmark tests for omni.rag.graph module.
+Benchmark tests for xiuxian_rag.graph module.
 
 These tests measure the performance of knowledge graph operations.
 """
@@ -14,7 +14,7 @@ class TestExtractedChunkPerformance:
 
     def test_chunk_creation_performance(self):
         """Test ExtractedChunk creation performance."""
-        from omni.rag.entities import Entity, ExtractedChunk
+        from xiuxian_rag.entities import Entity, ExtractedChunk
 
         start = time.perf_counter()
         for i in range(1000):
@@ -42,7 +42,7 @@ class TestExtractedChunkPerformance:
 
     def test_chunk_serialization_performance(self):
         """Test ExtractedChunk serialization performance."""
-        from omni.rag.entities import Entity, ExtractedChunk
+        from xiuxian_rag.entities import Entity, ExtractedChunk
 
         chunks = [
             ExtractedChunk(
@@ -79,7 +79,7 @@ class TestEntitySerializationPerformance:
 
     def test_entity_to_dict_performance(self):
         """Test entity to_dict performance."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         entities = [
             Entity(
@@ -105,7 +105,7 @@ class TestEntitySerializationPerformance:
 
     def test_entity_from_dict_performance(self):
         """Test entity from_dict performance."""
-        from omni.rag.entities import Entity
+        from xiuxian_rag.entities import Entity
 
         dicts = [
             {
@@ -136,7 +136,7 @@ class TestRelationSerializationPerformance:
 
     def test_relation_to_dict_performance(self):
         """Test relation to_dict performance."""
-        from omni.rag.entities import Entity, Relation
+        from xiuxian_rag.entities import Entity, Relation
 
         entities = [
             Entity(
@@ -171,7 +171,7 @@ class TestPromptConstructionPerformance:
 
     def test_prompt_templates_exist(self):
         """Test that prompt templates are properly defined."""
-        from omni.rag.graph import EXTRACT_ENTITIES_PROMPT_EN
+        from xiuxian_rag.graph import EXTRACT_ENTITIES_PROMPT_EN
 
         # Verify prompts exist and are reasonable length
         assert len(EXTRACT_ENTITIES_PROMPT_EN) > 100

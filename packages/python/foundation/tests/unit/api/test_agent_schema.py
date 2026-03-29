@@ -1,10 +1,10 @@
-"""Tests for omni.foundation.api.agent_schema (server info shape and validation)."""
+"""Tests for xiuxian_foundation.api.agent_schema (server info shape and validation)."""
 
 from __future__ import annotations
 
 import pytest
 
-from omni.foundation.api.agent_schema import (
+from xiuxian_foundation.api.agent_schema import (
     MESSAGE_KEY,
     NAME_KEY,
     PROTOCOL_VERSION_KEY,
@@ -13,7 +13,7 @@ from omni.foundation.api.agent_schema import (
     build_server_info,
     validate,
 )
-from omni.foundation.api.schema_provider import get_schema
+from xiuxian_foundation.api.schema_provider import get_schema
 
 
 def test_build_server_info_defaults():

@@ -67,7 +67,7 @@ async fn service_mount_records_include_hot_reload_targets()
     let config = AgentConfig {
         inference_url: "http://127.0.0.1:4000/v1/chat/completions".to_string(),
         memory: None,
-        mcp_servers: Vec::new(),
+        tool_servers: Vec::new(),
         ..AgentConfig::default()
     };
 

@@ -1,5 +1,5 @@
 use anyhow::{Result, anyhow};
-use omni_agent::{LITELLM_DEFAULT_URL, McpServerEntry, RuntimeSettings};
+use omni_agent::{LITELLM_DEFAULT_URL, RuntimeSettings, ToolServerEntry};
 use xiuxian_llm::embedding::backend::parse_embedding_backend_kind;
 
 use crate::resolve::parse_bool_from_env;
@@ -138,7 +138,7 @@ fn endpoint_origin(url: &str) -> Option<String> {
 
 pub(super) fn validate_inference_url_origin(
     inference_url: &str,
-    mcp_servers: &[McpServerEntry],
+    tool_servers: &[ToolServerEntry],
     allow_shared_origin: bool,
 ) -> Result<()> {
     if allow_shared_origin {
@@ -147,7 +147,7 @@ pub(super) fn validate_inference_url_origin(
     let Some(inference_origin) = endpoint_origin(inference_url) else {
         return Ok(());
     };
-    let conflicts: Vec<String> = mcp_servers
+    let conflicts: Vec<String> = tool_servers
         .iter()
         .filter_map(|entry| {
             let url = entry.url.as_deref()?;
@@ -163,9 +163,9 @@ pub(super) fn validate_inference_url_origin(
         return Ok(());
     }
     Err(anyhow!(
-        "invalid inference URL: {} shares origin {} with MCP server(s): {}. \
+        "invalid inference URL: {} shares origin {} with external tool server(s): {}. \
 Use a dedicated LLM endpoint via LITELLM_PROXY_URL or OMNI_AGENT_INFERENCE_URL \
-(for example {}). If you intentionally run MCP and inference on one origin, set \
+(for example {}). If you intentionally run external tools and inference on one origin, set \
 OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN=true.",
         inference_url,
         inference_origin,
@@ -176,7 +176,7 @@ OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN=true.",
 
 pub(super) fn resolve_runtime_inference_url(
     runtime_settings: &RuntimeSettings,
-    mcp_servers: &[McpServerEntry],
+    tool_servers: &[ToolServerEntry],
 ) -> Result<String> {
     let litellm_proxy_url = non_empty_env("LITELLM_PROXY_URL");
     let agent_inference_url = non_empty_env("OMNI_AGENT_INFERENCE_URL");
@@ -187,7 +187,7 @@ pub(super) fn resolve_runtime_inference_url(
     );
     let allow_shared_origin =
         parse_bool_from_env("OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN").unwrap_or(false);
-    validate_inference_url_origin(&inference_url, mcp_servers, allow_shared_origin)?;
+    validate_inference_url_origin(&inference_url, tool_servers, allow_shared_origin)?;
     Ok(inference_url)
 }
 

@@ -1,10 +1,10 @@
-"""Tests for omni.rag.retrieval.postprocess helpers."""
+"""Tests for xiuxian_rag.retrieval.postprocess helpers."""
 
 from __future__ import annotations
 
 import pytest
 
-from omni.rag.retrieval import apply_recall_postprocess, filter_recall_rows
+from xiuxian_rag.retrieval import apply_recall_postprocess, filter_recall_rows
 
 
 def test_filter_recall_rows_respects_min_score_and_limit() -> None:

@@ -1,9 +1,8 @@
-"""omni.core tests configuration and fixtures."""
+"""xiuxian_core tests configuration."""
 
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 import pytest
 
@@ -55,57 +54,4 @@ def event_loop():
     loop.close()
 
 
-# Import shared fixtures and plugins from core/tests
-from .fixtures.core_fixtures import *  # noqa: F403
 from .plugins.seed_manager import pytest_configure  # noqa: F401
-
-
-@pytest.fixture
-def skills_path(tmp_path: Path) -> Path:
-    """Create a temporary skills directory structure."""
-    skills_dir = tmp_path / "skills"
-    skills_dir.mkdir()
-
-    # Create a sample skill structure
-    sample_skill = skills_dir / "sample"
-    sample_skill.mkdir()
-    (sample_skill / "SKILL.md").write_text("""---
-name: sample
-version: 1.0.0
-description: A sample skill for testing
-""")
-    scripts_dir = sample_skill / "scripts"
-    scripts_dir.mkdir()
-    (scripts_dir / "__init__.py").write_text("")
-
-    return skills_dir
-
-
-@pytest.fixture
-def git_skill_path(tmp_path: Path) -> Path:
-    """Create a git skill directory for testing."""
-    skills_dir = tmp_path / "skills"
-    git_dir = skills_dir / "git"
-    git_dir.mkdir()
-
-    # SKILL.md
-    (git_dir / "SKILL.md").write_text("""---
-name: git
-version: 1.0.0
-description: Git operations skill
-""")
-
-    # scripts/
-    scripts_dir = git_dir / "scripts"
-    scripts_dir.mkdir()
-    (scripts_dir / "__init__.py").write_text("")
-
-    # status.py
-    (scripts_dir / "status.py").write_text('''"""Git status command."""
-def git_status():
-    """Get git status."""
-    return "Clean"
-__all__ = ["git_status"]
-''')
-
-    return git_dir

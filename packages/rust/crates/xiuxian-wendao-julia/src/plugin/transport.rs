@@ -6,10 +6,10 @@ use serde_json::Value;
 use xiuxian_vector::{
     ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION, ArrowTransportClient, ArrowTransportConfig,
 };
-use xiuxian_wendao::analyzers::config::{RegisteredRepository, RepositoryPluginConfig};
-use xiuxian_wendao::analyzers::errors::RepoIntelligenceError;
-use xiuxian_wendao::analyzers::{
-    JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_FINAL_SCORE_COLUMN,
+use xiuxian_wendao_core::repo_intelligence::{
+    JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN,
+    JULIA_ARROW_FINAL_SCORE_COLUMN, RegisteredRepository, RepoIntelligenceError,
+    RepositoryPluginConfig,
 };
 
 const JULIA_PLUGIN_ID: &str = "julia";
@@ -325,7 +325,7 @@ mod tests {
     use axum::{Router, serve};
     use tokio::net::TcpListener;
     use xiuxian_vector::{ArrowTransportClient, ArrowTransportConfig, encode_record_batches_ipc};
-    use xiuxian_wendao::analyzers::{
+    use xiuxian_wendao_core::repo_intelligence::{
         JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN,
         JULIA_ARROW_FINAL_SCORE_COLUMN, JULIA_ARROW_TRACE_ID_COLUMN,
     };
@@ -345,7 +345,7 @@ mod tests {
         spawn_real_wendaoarrow_metadata_service, spawn_real_wendaoarrow_service, wait_for_health,
         wait_for_health_with_attempts,
     };
-    use xiuxian_wendao::analyzers::config::{RegisteredRepository, RepositoryPluginConfig};
+    use xiuxian_wendao_core::repo_intelligence::{RegisteredRepository, RepositoryPluginConfig};
 
     #[test]
     fn build_julia_arrow_transport_client_returns_none_without_inline_config() {

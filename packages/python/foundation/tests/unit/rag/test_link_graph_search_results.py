@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from omni.rag.link_graph.models import LinkGraphHit
-from omni.rag.link_graph.search_results import (
+from xiuxian_rag.link_graph.models import LinkGraphHit
+from xiuxian_rag.link_graph.search_results import (
     link_graph_hits_to_hybrid_results,
     link_graph_hits_to_search_results,
     merge_hybrid_results,

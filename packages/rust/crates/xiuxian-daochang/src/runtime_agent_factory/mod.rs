@@ -5,10 +5,10 @@ use anyhow::Result;
 
 mod inference;
 mod logging;
-mod mcp;
 mod memory;
 mod session;
 mod shared;
+mod tools;
 mod types;
 
 use logging::log_runtime_agent_options;
@@ -19,40 +19,40 @@ pub(crate) use inference::{
     resolve_runtime_embedding_base_url, resolve_runtime_inference_url, resolve_runtime_model,
     validate_inference_url_origin,
 };
-pub(crate) use mcp::{resolve_runtime_mcp_options, resolve_runtime_mcp_servers};
 pub(crate) use memory::resolve_runtime_memory_options;
+pub(crate) use tools::{resolve_runtime_tool_options, resolve_runtime_tool_servers};
 
-/// Build an agent instance from runtime settings and an MCP config file.
+/// Build an agent instance from runtime settings and the external tool config file.
 ///
 /// # Errors
 ///
-/// Returns an error when MCP config loading, runtime option resolution, or
+/// Returns an error when tool config loading, runtime option resolution, or
 /// agent initialization fails.
 pub async fn build_agent(
-    mcp_config_path: &Path,
+    tool_config_path: &Path,
     runtime_settings: &RuntimeSettings,
 ) -> Result<Agent> {
-    let mcp_servers = resolve_runtime_mcp_servers(mcp_config_path)?;
-    let inference_url = resolve_runtime_inference_url(runtime_settings, &mcp_servers)?;
+    let tool_servers = resolve_runtime_tool_servers(tool_config_path)?;
+    let inference_url = resolve_runtime_inference_url(runtime_settings, &tool_servers)?;
     let model = resolve_runtime_model(runtime_settings);
-    let mcp = resolve_runtime_mcp_options(runtime_settings);
+    let tool_runtime = resolve_runtime_tool_options(runtime_settings);
     let session = resolve_runtime_session_options(runtime_settings)?;
     let memory = resolve_runtime_memory_options(runtime_settings);
 
-    log_runtime_agent_options(&mcp, &session, &memory);
+    log_runtime_agent_options(&tool_runtime, &session, &memory);
 
     let config = AgentConfig {
         inference_url,
         model,
         api_key: None,
-        mcp_servers,
-        mcp_pool_size: mcp.connect_config.pool_size,
-        mcp_handshake_timeout_secs: mcp.connect_config.handshake_timeout_secs,
-        mcp_connect_retries: mcp.connect_config.connect_retries,
-        mcp_strict_startup: mcp.strict_startup,
-        mcp_connect_retry_backoff_ms: mcp.connect_config.connect_retry_backoff_ms,
-        mcp_tool_timeout_secs: mcp.connect_config.tool_timeout_secs,
-        mcp_list_tools_cache_ttl_ms: mcp.connect_config.list_tools_cache_ttl_ms,
+        tool_servers,
+        tool_pool_size: tool_runtime.pool_size,
+        tool_handshake_timeout_secs: tool_runtime.handshake_timeout_secs,
+        tool_connect_retries: tool_runtime.connect_retries,
+        tool_strict_startup: tool_runtime.strict_startup,
+        tool_connect_retry_backoff_ms: tool_runtime.connect_retry_backoff_ms,
+        tool_timeout_secs: tool_runtime.tool_timeout_secs,
+        tool_list_cache_ttl_ms: tool_runtime.list_tools_cache_ttl_ms,
         max_tool_rounds: session.max_tool_rounds,
         memory: Some(memory.config),
         window_max_turns: session.window_max_turns,

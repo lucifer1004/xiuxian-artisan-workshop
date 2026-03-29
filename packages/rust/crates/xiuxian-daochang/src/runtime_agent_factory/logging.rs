@@ -1,19 +1,19 @@
 use super::types::{McpRuntimeOptions, MemoryRuntimeOptions, SessionRuntimeOptions};
 
 pub(super) fn log_runtime_agent_options(
-    mcp: &McpRuntimeOptions,
+    tool_runtime: &McpRuntimeOptions,
     session: &SessionRuntimeOptions,
     memory: &MemoryRuntimeOptions,
 ) {
     let memory_config = &memory.config;
     tracing::info!(
-        mcp_pool_size = mcp.pool_size,
-        mcp_handshake_timeout_secs = mcp.handshake_timeout_secs,
-        mcp_connect_retries = mcp.connect_retries,
-        mcp_strict_startup = mcp.strict_startup,
-        mcp_connect_retry_backoff_ms = mcp.connect_retry_backoff_ms,
-        mcp_tool_timeout_secs = mcp.tool_timeout_secs,
-        mcp_list_tools_cache_ttl_ms = mcp.list_tools_cache_ttl_ms,
+        tool_pool_size = tool_runtime.pool_size,
+        tool_handshake_timeout_secs = tool_runtime.handshake_timeout_secs,
+        tool_connect_retries = tool_runtime.connect_retries,
+        tool_strict_startup = tool_runtime.strict_startup,
+        tool_connect_retry_backoff_ms = tool_runtime.connect_retry_backoff_ms,
+        tool_timeout_secs = tool_runtime.tool_timeout_secs,
+        tool_list_cache_ttl_ms = tool_runtime.list_tools_cache_ttl_ms,
         window_max_turns = ?session.window_max_turns,
         consolidation_threshold_turns = ?session.consolidation_threshold_turns,
         consolidation_take_turns = session.consolidation_take_turns,
@@ -54,6 +54,6 @@ pub(super) fn log_runtime_agent_options(
         memory_stream_consumer_batch_size = memory_config.stream_consumer_batch_size,
         memory_stream_consumer_block_ms = memory_config.stream_consumer_block_ms,
         memory_path = %memory_config.path,
-        "telegram runtime session window settings"
+        "runtime session and tool settings"
     );
 }

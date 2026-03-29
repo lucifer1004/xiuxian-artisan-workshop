@@ -7,7 +7,7 @@ use anyhow::Result;
 use xiuxian_llm::embedding::backend::EmbeddingBackendKind;
 
 use crate::runtime_agent_factory;
-use crate::{McpServerEntry, MemoryConfig, RuntimeSettings};
+use crate::{MemoryConfig, RuntimeSettings, ToolServerEntry};
 
 /// Resolved runtime memory options used by tests.
 #[derive(Debug, Clone)]
@@ -50,25 +50,25 @@ pub fn resolve_runtime_embedding_base_url(
     runtime_agent_factory::resolve_runtime_embedding_base_url(runtime_settings, backend_mode)
 }
 
-/// Validate that inference endpoint origin does not conflict with MCP servers.
+/// Validate that inference endpoint origin does not conflict with configured external tool servers.
 ///
 /// # Errors
 ///
-/// Returns an error when inference URL and MCP endpoints share the same origin
+/// Returns an error when inference URL and external tool endpoints share the same origin
 /// while shared-origin mode is disabled.
 pub fn validate_inference_url_origin(
     inference_url: &str,
-    mcp_servers: &[McpServerEntry],
+    tool_servers: &[ToolServerEntry],
     allow_shared_origin: bool,
 ) -> Result<()> {
     runtime_agent_factory::validate_inference_url_origin(
         inference_url,
-        mcp_servers,
+        tool_servers,
         allow_shared_origin,
     )
 }
 
-/// Resolve runtime inference URL using runtime settings and MCP server list.
+/// Resolve runtime inference URL using runtime settings and external tool server list.
 ///
 /// # Errors
 ///
@@ -76,9 +76,9 @@ pub fn validate_inference_url_origin(
 /// origin constraints.
 pub fn resolve_runtime_inference_url(
     runtime_settings: &RuntimeSettings,
-    mcp_servers: &[McpServerEntry],
+    tool_servers: &[ToolServerEntry],
 ) -> Result<String> {
-    runtime_agent_factory::resolve_runtime_inference_url(runtime_settings, mcp_servers)
+    runtime_agent_factory::resolve_runtime_inference_url(runtime_settings, tool_servers)
 }
 
 /// Resolve runtime model with env/config precedence.

@@ -1,12 +1,12 @@
-//! Example: one user turn with LLM + optional MCP tools.
+//! Example: one user turn with LLM + optional external tools.
 //!
 //! Inference: set OPENAI_API_KEY (or use LiteLLM: `litellm --port 4000` and
-//! LITELLM_PROXY_URL=http://127.0.0.1:4000/v1/chat/completions). Optional MCP:
-//! `omni mcp --transport sse --port 3002` and OMNI_MCP_URL=http://127.0.0.1:3002/sse.
+//! LITELLM_PROXY_URL=http://127.0.0.1:4000/v1/chat/completions). Optional tool server:
+//! `OMNI_TOOL_URL=http://127.0.0.1:3002/sse`.
 //!
-//! Run: `cargo run -p omni-agent --example one_turn -- "Your message here"`
+//! Run: `cargo run -p xiuxian-daochang --example one_turn -- "Your message here"`
 
-use omni_agent::{Agent, AgentConfig, McpServerEntry};
+use omni_agent::{Agent, AgentConfig, ToolServerEntry};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
         .nth(1)
         .unwrap_or_else(|| "Say hello in one sentence.".to_string());
 
-    let mcp_url = std::env::var("OMNI_MCP_URL").ok();
+    let tool_url = std::env::var("OMNI_TOOL_URL").ok();
     // Prefer LiteLLM when LITELLM_PROXY_URL is set (one endpoint for 100+ providers).
     let mut config = if std::env::var("LITELLM_PROXY_URL").is_ok() {
         AgentConfig::litellm("gpt-4o-mini")
@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(|_| "https://api.openai.com/v1/chat/completions".to_string()),
             model: std::env::var("OMNI_AGENT_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string()),
             api_key: None,
-            mcp_servers: Vec::new(),
+            tool_servers: Vec::new(),
             max_tool_rounds: 10,
             memory: None,
             window_max_turns: None,
@@ -33,12 +33,13 @@ async fn main() -> anyhow::Result<()> {
             consolidation_async: true,
             context_budget_tokens: None,
             context_budget_reserve_tokens: 512,
+            context_budget_strategy: Default::default(),
             summary_max_segments: 8,
             summary_max_chars: 480,
         }
     };
-    if let Some(url) = mcp_url {
-        config.mcp_servers = vec![McpServerEntry {
+    if let Some(url) = tool_url {
+        config.tool_servers = vec![ToolServerEntry {
             name: "local".to_string(),
             url: Some(url),
             command: None,

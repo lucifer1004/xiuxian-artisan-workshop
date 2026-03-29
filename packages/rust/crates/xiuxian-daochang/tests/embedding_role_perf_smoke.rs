@@ -345,7 +345,7 @@ fn build_role_configs(config: &PerfConfig, temp_root: &Path) -> Vec<RoleConfig> 
          persistence_backend = \"local\"\n\
          path = \"{}\"\n\
          \n\
-         [mcp]\n\
+         [tool_runtime]\n\
          strict_startup = false\n",
         config.upstream_base_url,
         litellm_memory_path.display()
@@ -368,7 +368,7 @@ fn build_role_configs(config: &PerfConfig, temp_root: &Path) -> Vec<RoleConfig> 
          persistence_backend = \"local\"\n\
          path = \"{}\"\n\
          \n\
-         [mcp]\n\
+         [tool_runtime]\n\
          strict_startup = false\n",
         mistral_memory_path.display()
     );
@@ -673,7 +673,7 @@ fn spawn_gateway_process(
     let mut command = Command::new(agent_bin);
     command
         .current_dir(workspace_root)
-        .env("OMNI_AGENT_MCP_STRICT_STARTUP", "false")
+        .env("OMNI_AGENT_TOOL_STRICT_STARTUP", "false")
         .env(
             "RUST_LOG",
             env::var("RUST_LOG").unwrap_or_else(|_| "xiuxian_daochang=warn".to_string()),
@@ -683,8 +683,8 @@ fn spawn_gateway_process(
         .arg("gateway")
         .arg("--bind")
         .arg(format!("127.0.0.1:{port}"))
-        .arg("--mcp-config")
-        .arg(".mcp.json")
+        .arg("--tool-config")
+        .arg(".tool.json")
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
 

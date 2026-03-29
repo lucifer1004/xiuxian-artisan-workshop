@@ -1,5 +1,5 @@
 """
-Tests for omni.rag.config module.
+Tests for xiuxian_rag.config module.
 """
 
 
@@ -8,7 +8,7 @@ class TestDocumentParsingConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from omni.rag.config import DocumentParsingConfig
+        from xiuxian_rag.config import DocumentParsingConfig
 
         config = DocumentParsingConfig()
         assert config.enabled is True
@@ -19,7 +19,7 @@ class TestDocumentParsingConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from omni.rag.config import DocumentParsingConfig
+        from xiuxian_rag.config import DocumentParsingConfig
 
         config = DocumentParsingConfig(
             enabled=False,
@@ -38,7 +38,7 @@ class TestMultimodalConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from omni.rag.config import MultimodalConfig
+        from xiuxian_rag.config import MultimodalConfig
 
         config = MultimodalConfig()
         assert config.enabled is False
@@ -49,7 +49,7 @@ class TestMultimodalConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from omni.rag.config import MultimodalConfig
+        from xiuxian_rag.config import MultimodalConfig
 
         config = MultimodalConfig(
             enabled=True,
@@ -66,7 +66,7 @@ class TestKnowledgeGraphConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from omni.rag.config import KnowledgeGraphConfig
+        from xiuxian_rag.config import KnowledgeGraphConfig
 
         config = KnowledgeGraphConfig()
         assert config.enabled is True
@@ -77,7 +77,7 @@ class TestKnowledgeGraphConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from omni.rag.config import KnowledgeGraphConfig
+        from xiuxian_rag.config import KnowledgeGraphConfig
 
         config = KnowledgeGraphConfig(
             enabled=False,
@@ -96,7 +96,7 @@ class TestRustSearchConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from omni.rag.config import RustSearchConfig
+        from xiuxian_rag.config import RustSearchConfig
 
         config = RustSearchConfig()
         assert config.enabled is True
@@ -107,7 +107,7 @@ class TestRustSearchConfig:
 
     def test_custom_values(self):
         """Test custom configuration values."""
-        from omni.rag.config import RustSearchConfig
+        from xiuxian_rag.config import RustSearchConfig
 
         config = RustSearchConfig(
             entity_aware=False,
@@ -124,7 +124,7 @@ class TestRAGConfig:
 
     def test_default_creation(self):
         """Test default RAGConfig creation."""
-        from omni.rag.config import (
+        from xiuxian_rag.config import (
             DocumentParsingConfig,
             KnowledgeGraphConfig,
             MultimodalConfig,
@@ -141,7 +141,7 @@ class TestRAGConfig:
 
     def test_from_dict(self):
         """Test RAGConfig creation from dictionary."""
-        from omni.rag.config import RAGConfig
+        from xiuxian_rag.config import RAGConfig
 
         data = {
             "enabled": False,
@@ -157,7 +157,7 @@ class TestRAGConfig:
 
     def test_is_enabled(self):
         """Test is_enabled method."""
-        from omni.rag.config import RAGConfig
+        from xiuxian_rag.config import RAGConfig
 
         config = RAGConfig()
         assert config.is_enabled("document_parsing") is True
@@ -176,7 +176,7 @@ class TestRAGConfigFunctions:
 
     def test_get_parser_when_enabled(self):
         """Test get_parser when document parsing is enabled."""
-        from omni.rag.config import get_parser, reload_rag_config
+        from xiuxian_rag.config import get_parser, reload_rag_config
 
         reload_rag_config()  # Reset cached config
         parser = get_parser()
@@ -185,7 +185,7 @@ class TestRAGConfigFunctions:
 
     def test_get_parser_with_override(self):
         """Test get_parser with custom parser name."""
-        from omni.rag.config import get_parser, reload_rag_config
+        from xiuxian_rag.config import get_parser, reload_rag_config
 
         reload_rag_config()
         parser = get_parser("mineru")
@@ -193,21 +193,21 @@ class TestRAGConfigFunctions:
 
     def test_is_knowledge_graph_enabled(self):
         """Test is_knowledge_graph_enabled function."""
-        from omni.rag.config import is_knowledge_graph_enabled, reload_rag_config
+        from xiuxian_rag.config import is_knowledge_graph_enabled, reload_rag_config
 
         reload_rag_config()
         assert is_knowledge_graph_enabled() is True
 
     def test_is_multimodal_enabled(self):
         """Test is_multimodal_enabled function."""
-        from omni.rag.config import is_multimodal_enabled, reload_rag_config
+        from xiuxian_rag.config import is_multimodal_enabled, reload_rag_config
 
         reload_rag_config()
         assert is_multimodal_enabled() is False  # Default is disabled
 
     def test_reload_rag_config(self):
         """Test reload_rag_config function."""
-        from omni.rag.config import get_rag_config, reload_rag_config
+        from xiuxian_rag.config import get_rag_config, reload_rag_config
 
         config1 = get_rag_config()
         config2 = reload_rag_config()

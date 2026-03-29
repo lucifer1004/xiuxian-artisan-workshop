@@ -232,7 +232,7 @@ impl MemoryGatePolicy {
     }
 }
 
-/// Auditable gate-event payload aligned with `omni.memory.gate_event.v1`.
+/// Auditable gate-event payload aligned with `xiuxian.memory.gate_event.v1`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MemoryGateEvent {
     /// Session identifier of the decision context.

@@ -11,7 +11,6 @@ mod gateway_http;
 mod llm;
 mod managed_parser;
 mod managed_runtime;
-mod mcp_startup;
 mod memory_credit;
 mod memory_feedback;
 mod memory_metrics;
@@ -24,6 +23,7 @@ mod session_context;
 mod session_redis;
 mod telegram_parser;
 mod telegram_runtime;
+mod tool_startup;
 mod types;
 mod warmup;
 mod zhenfa;
@@ -81,7 +81,6 @@ pub use managed_runtime::{
     persist_session_partition_mode_if_enabled, persist_session_partition_mode_to_path,
     resolve_session_partition_persist_enabled,
 };
-pub use mcp_startup::startup_connect_config;
 pub use memory_credit::{
     RecallCreditUpdate, RecallOutcome, RecalledEpisodeCandidate, apply_recall_credit,
     sanitize_decay_factor, select_recall_credit_candidates, should_apply_decay,
@@ -141,6 +140,7 @@ pub use telegram_runtime::{
     push_telegram_background_completion, resolve_telegram_snapshot_interval_secs,
     telegram_log_preview,
 };
+pub use tool_startup::startup_connect_config;
 pub use types::{
     JobStatusCommand, ManagedControlCommand, ManagedSlashCommand, OutputFormat,
     ResumeContextCommand, SessionAdminAction, SessionAdminCommand, SessionFeedbackCommand,

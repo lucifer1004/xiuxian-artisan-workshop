@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-import omni.rag.link_graph.recall_policy as recall_policy
-from omni.rag.link_graph.models import LinkGraphHit
-from omni.rag.link_graph.policy import LinkGraphSourceHint
+import xiuxian_rag.link_graph.recall_policy as recall_policy
+from xiuxian_rag.link_graph.models import LinkGraphHit
+from xiuxian_rag.link_graph.policy import LinkGraphSourceHint
 
 
 def _policy_config(mode: str = "hybrid") -> SimpleNamespace:
@@ -59,12 +59,12 @@ async def test_evaluate_link_graph_recall_policy_returns_graph_rows(
     monkeypatch.setattr(
         recall_policy,
         "serialize_link_graph_retrieval_plan",
-        lambda _plan_obj: {"schema": "omni.link_graph.retrieval_plan.v1"},
+        lambda _plan_obj: {"schema": "xiuxian_wendao.link_graph.retrieval_plan.v1"},
     )
     monkeypatch.setattr(
         recall_policy,
         "get_link_graph_retrieval_plan_schema_id",
-        lambda: "https://schemas.omni.dev/omni.link_graph.retrieval_plan.v1.schema.json",
+        lambda: "https://schemas.omni.dev/xiuxian_wendao.link_graph.retrieval_plan.v1.schema.json",
     )
 
     async def _fake_fetch(**_kwargs):
@@ -93,7 +93,7 @@ async def test_evaluate_link_graph_recall_policy_returns_graph_rows(
     assert decision.graph_only_empty is False
     assert len(decision.graph_rows) == 1
     assert decision.retrieval_plan_schema_id.endswith(
-        "/omni.link_graph.retrieval_plan.v1.schema.json"
+        "/xiuxian_wendao.link_graph.retrieval_plan.v1.schema.json"
     )
 
 
@@ -121,12 +121,12 @@ async def test_evaluate_link_graph_recall_policy_uses_plan_budget_rows_per_sourc
     monkeypatch.setattr(
         recall_policy,
         "serialize_link_graph_retrieval_plan",
-        lambda _plan_obj: {"schema": "omni.link_graph.retrieval_plan.v1"},
+        lambda _plan_obj: {"schema": "xiuxian_wendao.link_graph.retrieval_plan.v1"},
     )
     monkeypatch.setattr(
         recall_policy,
         "get_link_graph_retrieval_plan_schema_id",
-        lambda: "https://schemas.omni.dev/omni.link_graph.retrieval_plan.v1.schema.json",
+        lambda: "https://schemas.omni.dev/xiuxian_wendao.link_graph.retrieval_plan.v1.schema.json",
     )
 
     captured: dict[str, object] = {}
@@ -230,7 +230,7 @@ async def test_evaluate_link_graph_recall_policy_falls_back_to_vector_when_graph
         recall_policy,
         "serialize_link_graph_retrieval_plan",
         lambda _plan_obj: {
-            "schema": "omni.link_graph.retrieval_plan.v1",
+            "schema": "xiuxian_wendao.link_graph.retrieval_plan.v1",
             "selected_mode": "graph_only",
             "reason": "graph_sufficient",
         },

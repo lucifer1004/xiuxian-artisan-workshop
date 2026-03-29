@@ -79,7 +79,6 @@ impl EmbeddingClient {
         EmbeddingDispatchRuntime {
             client: self.client.clone(),
             base_url: self.base_url.clone(),
-            mcp_url: self.mcp_url.clone(),
             backend_mode: self.backend_mode,
             backend_source: self.backend_source,
             #[cfg(feature = "agent-provider-litellm")]

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from omni.rag.retrieval import run_recall_single_call
+from xiuxian_rag.retrieval import run_recall_single_call
 
 
 class _VectorStore:
@@ -42,7 +42,7 @@ async def test_run_recall_single_call_prefers_graph_rows_without_vector_query(
             graph_confidence_score=0.91,
             graph_confidence_level="high",
             retrieval_plan_schema_id="schema-id",
-            retrieval_plan={"schema": "omni.link_graph.retrieval_plan.v1"},
+            retrieval_plan={"schema": "xiuxian_wendao.link_graph.retrieval_plan.v1"},
             graph_rows=(
                 {
                     "content": "graph row",
@@ -57,7 +57,7 @@ async def test_run_recall_single_call_prefers_graph_rows_without_vector_query(
 
     monkeypatch.setitem(
         sys.modules,
-        "omni.rag.link_graph",
+        "xiuxian_rag.link_graph",
         types.SimpleNamespace(evaluate_link_graph_recall_policy=_fake_policy),
     )
 
@@ -98,7 +98,7 @@ async def test_run_recall_single_call_vector_failure_uses_graph_only_fallback_ro
                 graph_confidence_score=0.1,
                 graph_confidence_level="low",
                 retrieval_plan_schema_id="schema-id",
-                retrieval_plan={"schema": "omni.link_graph.retrieval_plan.v1"},
+                retrieval_plan={"schema": "xiuxian_wendao.link_graph.retrieval_plan.v1"},
                 graph_rows=(),
                 graph_only_empty=False,
             )
@@ -110,7 +110,7 @@ async def test_run_recall_single_call_vector_failure_uses_graph_only_fallback_ro
             graph_confidence_score=0.93,
             graph_confidence_level="high",
             retrieval_plan_schema_id="schema-id",
-            retrieval_plan={"schema": "omni.link_graph.retrieval_plan.v1"},
+            retrieval_plan={"schema": "xiuxian_wendao.link_graph.retrieval_plan.v1"},
             graph_rows=(
                 {
                     "content": "graph fallback",
@@ -125,7 +125,7 @@ async def test_run_recall_single_call_vector_failure_uses_graph_only_fallback_ro
 
     monkeypatch.setitem(
         sys.modules,
-        "omni.rag.link_graph",
+        "xiuxian_rag.link_graph",
         types.SimpleNamespace(evaluate_link_graph_recall_policy=_fake_policy),
     )
 
@@ -166,7 +166,7 @@ async def test_run_recall_single_call_vector_failure_returns_empty_when_graph_un
                 graph_confidence_score=0.0,
                 graph_confidence_level="none",
                 retrieval_plan_schema_id="schema-id",
-                retrieval_plan={"schema": "omni.link_graph.retrieval_plan.v1"},
+                retrieval_plan={"schema": "xiuxian_wendao.link_graph.retrieval_plan.v1"},
                 graph_rows=(),
                 graph_only_empty=False,
             )
@@ -174,7 +174,7 @@ async def test_run_recall_single_call_vector_failure_returns_empty_when_graph_un
 
     monkeypatch.setitem(
         sys.modules,
-        "omni.rag.link_graph",
+        "xiuxian_rag.link_graph",
         types.SimpleNamespace(evaluate_link_graph_recall_policy=_fake_policy),
     )
 
@@ -213,7 +213,7 @@ async def test_run_recall_single_call_vector_only_strict_disables_graph_policy_a
 
     monkeypatch.setitem(
         sys.modules,
-        "omni.rag.link_graph",
+        "xiuxian_rag.link_graph",
         types.SimpleNamespace(evaluate_link_graph_recall_policy=_fake_policy),
     )
 

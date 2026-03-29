@@ -29,7 +29,7 @@ _foundation_src = _PRJ_ROOT / "packages/python/foundation/src"
 if str(_foundation_src) not in sys.path:
     sys.path.insert(0, str(_foundation_src))
 
-from omni.foundation.config.skills import SKILLS_DIR
+from xiuxian_wendao_py.compat.config import get_skills_dir
 
 
 def parse_skill_md_frontmatter(skill_path: Path) -> dict[str, Any]:
@@ -131,14 +131,15 @@ def scan_tools_in_scripts(skill_path: Path) -> list[dict[str, Any]]:
 def scan_skills() -> list[dict[str, Any]]:
     """Scan all skills and build index."""
     skill_index: list[dict[str, Any]] = []
+    skills_dir = get_skills_dir()
 
-    if not SKILLS_DIR.exists():
-        print(f"❌ Skills directory not found: {SKILLS_DIR}")
+    if not skills_dir.exists():
+        print(f"❌ Skills directory not found: {skills_dir}")
         return []
 
-    print(f"🔍 Scanning skills in {SKILLS_DIR}...")
+    print(f"🔍 Scanning skills in {skills_dir}...")
 
-    for item in SKILLS_DIR.iterdir():
+    for item in skills_dir.iterdir():
         if item.is_dir() and not item.name.startswith("_"):
             metadata = parse_skill_md_frontmatter(item)
             entry: dict[str, Any] = {

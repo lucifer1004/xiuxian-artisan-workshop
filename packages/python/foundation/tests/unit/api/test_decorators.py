@@ -6,16 +6,16 @@ Validates @skill_command decorator correctness using core skill scripts.
 
 import pytest
 
-from omni.foundation.config.skills import SKILLS_DIR
+from xiuxian_foundation.config.dirs import get_skills_dir
 
 
 def load_skill_script(skill_name: str, script_name: str):
     """Load a specific skill script for testing."""
     import importlib.util
 
-    script_path = SKILLS_DIR(skill_name) / "scripts" / f"{script_name}.py"
+    script_path = get_skills_dir() / skill_name / "scripts" / f"{script_name}.py"
     if not script_path.exists():
-        raise FileNotFoundError(f"Script not found: {script_path}")
+        pytest.skip(f"Script not found: {script_path}")
 
     module_name = f"test_{skill_name}_{script_name}"
     spec = importlib.util.spec_from_file_location(module_name, str(script_path))

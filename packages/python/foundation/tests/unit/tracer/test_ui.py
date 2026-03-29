@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from omni.tracer.ui import (
+from xiuxian_tracer.ui import (
     StepInfo,
     TracedExecution,
     print_header,

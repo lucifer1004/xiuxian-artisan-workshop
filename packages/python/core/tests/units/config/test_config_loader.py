@@ -1,5 +1,5 @@
 """
-Tests for omni.core.config.loader
+Tests for xiuxian_core.config.loader
 """
 
 from unittest.mock import MagicMock, patch
@@ -10,7 +10,7 @@ class TestCommandOverride:
 
     def test_defaults(self):
         """Test default values."""
-        from omni.core.config.loader import CommandOverride
+        from xiuxian_core.config.loader import CommandOverride
 
         config = CommandOverride()
         assert config.alias is None
@@ -18,7 +18,7 @@ class TestCommandOverride:
 
     def test_custom_values(self):
         """Test custom values."""
-        from omni.core.config.loader import CommandOverride
+        from xiuxian_core.config.loader import CommandOverride
 
         config = CommandOverride(
             alias="save_memory", append_doc="Use this to persist important rules."
@@ -32,14 +32,14 @@ class TestOverridesConfig:
 
     def test_defaults(self):
         """Test default values."""
-        from omni.core.config.loader import OverridesConfig
+        from xiuxian_core.config.loader import OverridesConfig
 
         config = OverridesConfig()
         assert config.commands == {}
 
     def test_aliases_property(self):
         """Test aliases property builds reverse lookup."""
-        from omni.core.config.loader import CommandOverride, OverridesConfig
+        from xiuxian_core.config.loader import CommandOverride, OverridesConfig
 
         config = OverridesConfig(
             commands={
@@ -54,7 +54,7 @@ class TestOverridesConfig:
 
     def test_aliases_skips_none(self):
         """Test aliases property skips commands without alias."""
-        from omni.core.config.loader import CommandOverride, OverridesConfig
+        from xiuxian_core.config.loader import CommandOverride, OverridesConfig
 
         config = OverridesConfig(
             commands={
@@ -73,12 +73,12 @@ class TestLoadCommandOverrides:
 
     def test_loads_defaults_on_error(self):
         """Test that defaults are used when settings fail to load."""
-        from omni.core.config.loader import load_command_overrides, reset_config
+        from xiuxian_core.config.loader import load_command_overrides, reset_config
 
         reset_config()
 
         with patch(
-            "omni.foundation.config.settings.get_settings",
+            "xiuxian_foundation.config.settings.get_settings",
             side_effect=Exception("Settings error"),
         ):
             config = load_command_overrides()
@@ -86,11 +86,11 @@ class TestLoadCommandOverrides:
 
     def test_loads_from_settings(self):
         """Test loading overrides from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/settings.yaml)."""
-        from omni.core.config.loader import load_command_overrides, reset_config
+        from xiuxian_core.config.loader import load_command_overrides, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {
                 "memory.remember_insight": {
@@ -118,11 +118,11 @@ class TestLoadCommandOverrides:
 
     def test_singleton_behavior(self):
         """Test that config is cached after first load."""
-        from omni.core.config.loader import load_command_overrides, reset_config
+        from xiuxian_core.config.loader import load_command_overrides, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {"memory.remember_insight": {"alias": "save_memory"}}
             mock_settings.return_value = mock_instance
@@ -141,11 +141,11 @@ class TestResolveAlias:
 
     def test_resolves_existing_alias(self):
         """Test resolving an existing alias."""
-        from omni.core.config.loader import reset_config, resolve_alias
+        from xiuxian_core.config.loader import reset_config, resolve_alias
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {"memory.remember_insight": {"alias": "save_memory"}}
             mock_settings.return_value = mock_instance
@@ -155,11 +155,11 @@ class TestResolveAlias:
 
     def test_returns_none_for_unknown_alias(self):
         """Test that unknown aliases return None."""
-        from omni.core.config.loader import reset_config, resolve_alias
+        from xiuxian_core.config.loader import reset_config, resolve_alias
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {}
             mock_settings.return_value = mock_instance
@@ -173,11 +173,11 @@ class TestGetCommandDisplay:
 
     def test_returns_override(self):
         """Test that overrides are applied."""
-        from omni.core.config.loader import get_command_display, reset_config
+        from xiuxian_core.config.loader import get_command_display, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {
                 "memory.remember_insight": {
@@ -193,11 +193,11 @@ class TestGetCommandDisplay:
 
     def test_returns_original_for_no_override(self):
         """Test that non-overridden commands return original."""
-        from omni.core.config.loader import get_command_display, reset_config
+        from xiuxian_core.config.loader import get_command_display, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {}
             mock_settings.return_value = mock_instance
@@ -220,7 +220,7 @@ class TestBAMThreeModes:
         LLM sees: "save_memory"
         Kernel executes: "memory.remember_insight"
         """
-        from omni.core.config.loader import (
+        from xiuxian_core.config.loader import (
             get_command_display,
             reset_config,
             resolve_alias,
@@ -228,7 +228,7 @@ class TestBAMThreeModes:
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {
                 "memory.remember_insight": {
@@ -257,7 +257,7 @@ class TestBAMThreeModes:
         LLM sees: "code.smart_edit"
         Kernel executes: "code_tools.replace_in_file"
         """
-        from omni.core.config.loader import (
+        from xiuxian_core.config.loader import (
             get_command_display,
             reset_config,
             resolve_alias,
@@ -265,7 +265,7 @@ class TestBAMThreeModes:
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {
                 "code_tools.replace_in_file": {
@@ -295,7 +295,7 @@ class TestBAMThreeModes:
         Kernel executes: "git.status"
         Description: Enhanced with append_doc
         """
-        from omni.core.config.loader import (
+        from xiuxian_core.config.loader import (
             get_command_display,
             reset_config,
             resolve_alias,
@@ -303,7 +303,7 @@ class TestBAMThreeModes:
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {
                 "git.status": {"append_doc": "\n\nUse this for structured git status output."}
@@ -321,7 +321,7 @@ class TestBAMThreeModes:
 
     def test_mixed_modes_all_together(self):
         """Test all three modes loaded simultaneously."""
-        from omni.core.config.loader import (
+        from xiuxian_core.config.loader import (
             get_command_display,
             load_command_overrides,
             reset_config,
@@ -330,7 +330,7 @@ class TestBAMThreeModes:
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {
                 # Mode 1: Verb simplification
@@ -366,11 +366,11 @@ class TestBAMThreeModes:
 
     def test_alias_collision_detection(self):
         """Test that duplicate aliases are handled (last one wins)."""
-        from omni.core.config.loader import load_command_overrides, reset_config
+        from xiuxian_core.config.loader import load_command_overrides, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {
                 "command1": {"alias": "duplicate_alias"},
@@ -386,7 +386,7 @@ class TestBAMThreeModes:
 
     def test_empty_override_values(self):
         """Test that empty string alias/append_doc are handled."""
-        from omni.core.config.loader import (
+        from xiuxian_core.config.loader import (
             get_command_display,
             reset_config,
             resolve_alias,
@@ -394,7 +394,7 @@ class TestBAMThreeModes:
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {
                 "memory.remember_insight": {
@@ -419,7 +419,7 @@ class TestSkillLimitsConfig:
 
     def test_defaults(self):
         """Test default values."""
-        from omni.core.config.loader import SkillLimitsConfig
+        from xiuxian_core.config.loader import SkillLimitsConfig
 
         config = SkillLimitsConfig()
         assert config.dynamic_tools == 15
@@ -430,7 +430,7 @@ class TestSkillLimitsConfig:
 
     def test_custom_values(self):
         """Test custom values."""
-        from omni.core.config.loader import SkillLimitsConfig
+        from xiuxian_core.config.loader import SkillLimitsConfig
 
         config = SkillLimitsConfig(
             dynamic_tools=20,
@@ -451,14 +451,14 @@ class TestFilterCommandsConfig:
 
     def test_defaults(self):
         """Test default values."""
-        from omni.core.config.loader import FilterCommandsConfig
+        from xiuxian_core.config.loader import FilterCommandsConfig
 
         config = FilterCommandsConfig()
         assert config.patterns == []
 
     def test_custom_values(self):
         """Test custom values."""
-        from omni.core.config.loader import FilterCommandsConfig
+        from xiuxian_core.config.loader import FilterCommandsConfig
 
         config = FilterCommandsConfig(patterns=["terminal.*", "!terminal.run_task"])
         assert len(config.patterns) == 2
@@ -470,7 +470,7 @@ class TestSkillsConfig:
 
     def test_defaults(self):
         """Test default values."""
-        from omni.core.config.loader import SkillsConfig
+        from xiuxian_core.config.loader import SkillsConfig
 
         config = SkillsConfig()
         assert config.preload == []
@@ -478,7 +478,7 @@ class TestSkillsConfig:
 
     def test_custom_values(self):
         """Test custom values."""
-        from omni.core.config.loader import SkillsConfig
+        from xiuxian_core.config.loader import SkillsConfig
 
         config = SkillsConfig(
             preload=["git", "memory"],
@@ -493,11 +493,11 @@ class TestGetActivePreloadSkills:
 
     def test_default_mode(self):
         """Test default mode returns base preload only."""
-        from omni.core.config.loader import get_active_preload_skills, reset_config
+        from xiuxian_core.config.loader import get_active_preload_skills, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.side_effect = [
                 ["git", "memory"],  # preload
@@ -512,11 +512,11 @@ class TestGetActivePreloadSkills:
 
     def test_cli_mode(self):
         """Test CLI mode includes extensions."""
-        from omni.core.config.loader import get_active_preload_skills, reset_config
+        from xiuxian_core.config.loader import get_active_preload_skills, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.side_effect = [
                 ["git", "memory"],  # preload
@@ -532,11 +532,11 @@ class TestGetActivePreloadSkills:
 
     def test_deduplication(self):
         """Test that skills are deduplicated."""
-        from omni.core.config.loader import get_active_preload_skills, reset_config
+        from xiuxian_core.config.loader import get_active_preload_skills, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.side_effect = [
                 ["git", "git"],  # preload with duplicate
@@ -554,12 +554,12 @@ class TestLoadSkillLimits:
 
     def test_loads_defaults_on_error(self):
         """Test that defaults are used when settings fail to load."""
-        from omni.core.config.loader import load_skill_limits, reset_config
+        from xiuxian_core.config.loader import load_skill_limits, reset_config
 
         reset_config()
 
         with patch(
-            "omni.foundation.config.settings.get_settings",
+            "xiuxian_foundation.config.settings.get_settings",
             side_effect=Exception("Settings error"),
         ):
             config = load_skill_limits()
@@ -568,11 +568,11 @@ class TestLoadSkillLimits:
 
     def test_singleton_behavior(self):
         """Test that config is cached after first load."""
-        from omni.core.config.loader import load_skill_limits, reset_config
+        from xiuxian_core.config.loader import load_skill_limits, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.side_effect = [
                 25,  # dynamic_tools
@@ -597,12 +597,12 @@ class TestLoadFilterCommands:
 
     def test_loads_defaults_on_error(self):
         """Test that defaults are used when settings fail to load."""
-        from omni.core.config.loader import load_filter_commands, reset_config
+        from xiuxian_core.config.loader import load_filter_commands, reset_config
 
         reset_config()
 
         with patch(
-            "omni.foundation.config.settings.get_settings",
+            "xiuxian_foundation.config.settings.get_settings",
             side_effect=Exception("Settings error"),
         ):
             config = load_filter_commands()
@@ -610,11 +610,11 @@ class TestLoadFilterCommands:
 
     def test_loads_list_format(self):
         """Test loading filter commands as a list."""
-        from omni.core.config.loader import load_filter_commands, reset_config
+        from xiuxian_core.config.loader import load_filter_commands, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = ["terminal.*", "filesystem.*"]
             mock_settings.return_value = mock_instance
@@ -625,11 +625,11 @@ class TestLoadFilterCommands:
 
     def test_loads_dict_format(self):
         """Test loading filter commands as a dict with patterns."""
-        from omni.core.config.loader import load_filter_commands, reset_config
+        from xiuxian_core.config.loader import load_filter_commands, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = {"patterns": ["terminal.*", "!terminal.run_task"]}
             mock_settings.return_value = mock_instance
@@ -645,11 +645,11 @@ class TestIsFiltered:
 
     def test_filters_glob_pattern(self):
         """Test that glob pattern filters matching commands."""
-        from omni.core.config.loader import is_filtered, reset_config
+        from xiuxian_core.config.loader import is_filtered, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = ["terminal.*"]
             mock_settings.return_value = mock_instance
@@ -660,11 +660,11 @@ class TestIsFiltered:
 
     def test_whitelist_exception(self):
         """Test that whitelist exception allows filtered command."""
-        from omni.core.config.loader import is_filtered, reset_config
+        from xiuxian_core.config.loader import is_filtered, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = ["terminal.*", "!terminal.run_task"]
             mock_settings.return_value = mock_instance
@@ -676,11 +676,11 @@ class TestIsFiltered:
 
     def test_empty_filter_list(self):
         """Test with empty filter list."""
-        from omni.core.config.loader import is_filtered, reset_config
+        from xiuxian_core.config.loader import is_filtered, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = []
             mock_settings.return_value = mock_instance
@@ -689,11 +689,11 @@ class TestIsFiltered:
 
     def test_git_raw_filter(self):
         """Test git raw commands are filtered."""
-        from omni.core.config.loader import is_filtered, reset_config
+        from xiuxian_core.config.loader import is_filtered, reset_config
 
         reset_config()
 
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.return_value = ["git.raw_*"]
             mock_settings.return_value = mock_instance
@@ -707,7 +707,7 @@ class TestResetConfig:
 
     def test_resets_singletons(self):
         """Test that reset_config clears cached configs."""
-        from omni.core.config.loader import (
+        from xiuxian_core.config.loader import (
             load_filter_commands,
             load_skill_limits,
             reset_config,
@@ -723,7 +723,7 @@ class TestResetConfig:
         reset_config()
 
         # Load again - should get new instances
-        with patch("omni.foundation.config.settings.get_settings") as mock_settings:
+        with patch("xiuxian_foundation.config.settings.get_settings") as mock_settings:
             mock_instance = MagicMock()
             mock_instance.get.side_effect = [
                 30,  # dynamic_tools

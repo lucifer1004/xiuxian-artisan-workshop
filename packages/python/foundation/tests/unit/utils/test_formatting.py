@@ -1,8 +1,8 @@
 """
-Unit tests for omni.foundation.utils.formatting
+Unit tests for xiuxian_foundation.utils.formatting
 """
 
-from omni.foundation.utils.formatting import one_line_preview, sanitize_tool_args
+from xiuxian_foundation.utils.formatting import one_line_preview, sanitize_tool_args
 
 
 def test_one_line_preview_none():

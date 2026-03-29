@@ -1,4 +1,4 @@
-"""Tests for unified MCP-style tool execution context and idle/total timeout."""
+"""Tests for unified tool execution context and idle/total timeout."""
 
 from __future__ import annotations
 
@@ -7,8 +7,9 @@ import time
 
 import pytest
 
-from omni.foundation.api.tool_context import (
+from xiuxian_foundation.api.tool_context import (
     clear_tool_context,
+    get_execution_timeout_config,
     get_tool_context,
     heartbeat,
     run_with_heartbeat,
@@ -116,3 +117,46 @@ async def test_set_tool_context_allows_heartbeat():
     clear_tool_context()
     heartbeat()  # no-op when no context
     assert get_tool_context() is None
+
+
+def test_get_execution_timeout_config_reads_tool_settings(monkeypatch: pytest.MonkeyPatch):
+    """Timeout config should read the current tool.* settings keys."""
+    import xiuxian_foundation.api.tool_context as tool_context
+
+    def _fake_get_setting(key: str, default=None):
+        if key == "tool.timeout":
+            return 120
+        if key == "tool.idle_timeout":
+            return 45
+        return default
+
+    monkeypatch.setattr(tool_context, "get_setting", _fake_get_setting, raising=False)
+    assert get_execution_timeout_config() == (120.0, 45.0)
+
+
+def test_get_execution_timeout_config_clamps_idle_to_total(monkeypatch: pytest.MonkeyPatch):
+    """Idle timeout must never exceed the total timeout."""
+    import xiuxian_foundation.api.tool_context as tool_context
+
+    def _fake_get_setting(key: str, default=None):
+        if key == "tool.timeout":
+            return 30
+        if key == "tool.idle_timeout":
+            return 90
+        return default
+
+    monkeypatch.setattr(tool_context, "get_setting", _fake_get_setting, raising=False)
+    assert get_execution_timeout_config() == (30.0, 30.0)
+
+
+def test_get_execution_timeout_config_defaults_on_settings_error(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Settings lookup failures should fall back to default timeouts."""
+    import xiuxian_foundation.api.tool_context as tool_context
+
+    def _boom(_key: str, _default=None):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(tool_context, "get_setting", _boom, raising=False)
+    assert get_execution_timeout_config() == (1800.0, 0.0)

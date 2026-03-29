@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from omni.test_kit.fixtures.vector import (
+from xiuxian_test_kit.fixtures.vector import (
     make_hybrid_payload,
     make_tool_search_payload,
     make_vector_payload,
@@ -16,8 +16,8 @@ from omni.test_kit.fixtures.vector import (
 )
 from pydantic import ValidationError
 
-from omni.foundation.api.schema_provider import get_schema
-from omni.foundation.services.vector_schema import (
+from xiuxian_foundation.api.schema_provider import get_schema
+from xiuxian_foundation.services.vector_schema import (
     HYBRID_SCHEMA_V1,
     TOOL_SEARCH_SCHEMA_V1,
     VECTOR_SCHEMA_V1,
@@ -33,7 +33,6 @@ from omni.foundation.services.vector_schema import (
     parse_vector_payload,
     validate_vector_table_contract,
 )
-
 
 def test_parse_hybrid_payload_accepts_canonical_shape():
     raw = json.dumps(make_hybrid_payload())
@@ -339,7 +338,7 @@ def test_parse_tool_search_payload_accepts_canonical_shape():
 
 def test_parse_tool_search_payload_fails_when_schema_binding_unavailable(monkeypatch):
     """Tool payload parsing must fail fast when Rust schema binding is unavailable."""
-    from omni.foundation.services import vector_schema as vector_schema_module
+    from xiuxian_foundation.services import vector_schema as vector_schema_module
 
     def _raise_import_error():
         raise ImportError("schema binding unavailable")
@@ -475,22 +474,22 @@ def test_tool_router_result_contract_snapshot_v1():
 
 
 def test_tool_search_common_schema_resolves_from_rust_bindings():
-    tool_search_schema = get_schema("omni.vector.tool_search.v1")
-    vector_schema = get_schema("omni.vector.search.v1")
-    hybrid_schema = get_schema("omni.vector.hybrid.v1")
+    tool_search_schema = get_schema("xiuxian.vector.tool_search.v1")
+    vector_schema = get_schema("xiuxian.vector.search.v1")
+    hybrid_schema = get_schema("xiuxian.vector.hybrid.v1")
     assert tool_search_schema.get("type") == "object"
     assert vector_schema.get("type") == "object"
     assert hybrid_schema.get("type") == "object"
 
 
 def test_vector_payload_snapshot_validates_against_search_schema():
-    """E2E: snapshot must conform to omni.vector.search.v1 JSON schema (CI drift guard)."""
+    """E2E: snapshot must conform to xiuxian.vector.search.v1 JSON schema (CI drift guard)."""
     from jsonschema import Draft202012Validator
 
     snapshot_path = (
         Path(__file__).resolve().parent / "snapshots" / "vector_payload_contract_v1.json"
     )
-    schema = get_schema("omni.vector.search.v1")
+    schema = get_schema("xiuxian.vector.search.v1")
     data = json.loads(snapshot_path.read_text(encoding="utf-8"))
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(data))
@@ -498,13 +497,13 @@ def test_vector_payload_snapshot_validates_against_search_schema():
 
 
 def test_hybrid_payload_snapshot_validates_against_hybrid_schema():
-    """E2E: snapshot must conform to omni.vector.hybrid.v1 JSON schema (CI drift guard)."""
+    """E2E: snapshot must conform to xiuxian.vector.hybrid.v1 JSON schema (CI drift guard)."""
     from jsonschema import Draft202012Validator
 
     snapshot_path = (
         Path(__file__).resolve().parent / "snapshots" / "hybrid_payload_contract_v1.json"
     )
-    schema = get_schema("omni.vector.hybrid.v1")
+    schema = get_schema("xiuxian.vector.hybrid.v1")
     data = json.loads(snapshot_path.read_text(encoding="utf-8"))
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(data))
@@ -512,7 +511,7 @@ def test_hybrid_payload_snapshot_validates_against_hybrid_schema():
 
 
 def test_tool_search_payload_snapshot_validates_against_tool_search_schema():
-    """E2E: canonical tool_search payload validates against omni.vector.tool_search.v1 (CI drift guard)."""
+    """E2E: canonical tool_search payload validates against xiuxian.vector.tool_search.v1 (CI drift guard)."""
     from jsonschema import Draft202012Validator
 
     canonical = make_tool_search_payload(
@@ -521,7 +520,7 @@ def test_tool_search_payload_snapshot_validates_against_tool_search_schema():
         description="Find files by extension",
         routing_keywords=["find", "files", "directory"],
     )
-    schema = get_schema("omni.vector.tool_search.v1")
+    schema = get_schema("xiuxian.vector.tool_search.v1")
     validator = Draft202012Validator(schema)
     errors = list(validator.iter_errors(canonical))
     assert not errors, (

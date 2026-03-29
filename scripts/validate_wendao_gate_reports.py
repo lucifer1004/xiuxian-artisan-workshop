@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.runtime.gitops import get_project_root
+from xiuxian_wendao_py.compat.runtime import get_project_root
 
 RETRIEVAL_SCHEMA = "xiuxian_wendao.retrieval_eval.v1"
 RELATED_SCHEMA = "xiuxian_wendao.related_benchmark.v1"

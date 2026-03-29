@@ -22,9 +22,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.config.paths import get_config_paths
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
-from omni.foundation.runtime.gitops import get_project_root
+from xiuxian_wendao_py.compat.runtime import (
+    get_project_root,
+    prepare_cargo_subprocess_env,
+)
 
 
 @dataclass
@@ -54,8 +55,11 @@ def _resolve_project_root() -> Path:
         return Path(raw).resolve()
 
 
-def _resolve_default_config_path() -> Path:
-    return get_config_paths().wendao_settings_file.resolve()
+def _resolve_default_config_path(project_root: Path) -> Path | None:
+    default_path = (project_root / "wendao.toml").resolve()
+    if default_path.exists():
+        return default_path
+    return None
 
 
 def _resolve_env_target_bin(project_root: Path, profile: str) -> Path | None:
@@ -390,7 +394,7 @@ def main() -> int:
     parser.add_argument(
         "--config",
         default=None,
-        help="wendao config path (defaults to config API: $PRJ_CONFIG_HOME/xiuxian-artisan-workshop/wendao.yaml)",
+        help="wendao config path (default: explicit file only; otherwise use embedded defaults or project-root wendao.toml)",
     )
     parser.add_argument(
         "--release",
@@ -439,8 +443,8 @@ def main() -> int:
                 else (project_root / config_arg).resolve()
             )
         else:
-            config_path = _resolve_default_config_path()
-        if not config_path.exists():
+            config_path = _resolve_default_config_path(project_root)
+        if config_path is not None and not config_path.exists():
             raise FileNotFoundError(f"config not found: {config_path}")
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

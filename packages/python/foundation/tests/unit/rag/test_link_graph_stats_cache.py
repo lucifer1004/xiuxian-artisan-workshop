@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from omni.rag.link_graph.stats_cache import (
+from xiuxian_rag.link_graph.stats_cache import (
     clear_link_graph_stats_cache,
     get_cached_link_graph_stats,
     get_link_graph_stats_for_response,

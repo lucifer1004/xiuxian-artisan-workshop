@@ -146,6 +146,43 @@ Language-specific support must live in plugin packages that can be published, ve
 
 Transport negotiation, process lifecycle, health checks, config resolution, and fallback handling are runtime responsibilities. They must not define the stable host API.
 
+### 6.6 Feature-Boundary-First Modularization
+
+Wendao migration is feature-boundary-first, not crate-split-first.
+
+That means:
+
+1. new modules must be organized by functional responsibility, not by arbitrary file growth
+2. medium or complex features must prefer a directory namespace over a flat file
+3. namespace names must reflect intent, not accidental implementation history
+4. `mod.rs` must remain interface-only
+5. physical crate splitting without logical modularization is explicitly disallowed
+
+The migration must not replace one monolith with several smaller but still mixed-responsibility monoliths.
+
+### 6.7 Responsibility-Oriented Naming
+
+File and namespace names must communicate ownership clearly.
+
+Good names describe one bounded responsibility, for example:
+
+1. `manifest.rs`
+2. `negotiation.rs`
+3. `health.rs`
+4. `launch.rs`
+5. `records.rs`
+
+Bad names hide mixed ownership or become catch-all sinks, for example:
+
+1. `utils.rs`
+2. `misc.rs`
+3. `common.rs`
+4. broad `helpers.rs` files without one cohesive helper domain
+
+Shared helper files are acceptable only when the helper surface is both cohesive and tightly bounded by one responsibility.
+
+DTO warehouses and mixed transport-orchestration files are migration smells and must be treated as refactor targets rather than acceptable end states.
+
 ## 7. Target Topology
 
 ## 7.1 Target Crates
@@ -246,6 +283,191 @@ xiuxian-wendao-julia
   - artifacts/deployment/
   - launch/
 ```
+
+## 8. Program Rollout Plan
+
+This migration must now be executed as one coordinated program rather than as
+disconnected local refactors.
+
+The controlling rule is:
+
+**All future implementation work must attach to one macro phase, one gate, and
+one program-level success condition.**
+
+### 8.1 Macro Phases
+
+#### Phase M1: Contract and Compatibility Stabilization
+
+Purpose:
+
+1. finish in-place generalization of host-side contracts
+2. stop new language-specific host vocabulary from appearing
+3. consolidate compatibility seams into explicit namespaces
+
+Completion conditions:
+
+1. all new host-facing work uses capability-, artifact-, provider-, or
+   transport-oriented vocabulary
+2. crate-root compatibility exports are routed through explicit compatibility
+   namespaces
+3. no new Julia-specific host types are introduced outside compatibility seams
+
+#### Phase M2: Core Boundary Extraction
+
+Purpose:
+
+1. move stable contracts into `xiuxian-wendao-core`
+2. prove that `core` compiles without runtime lifecycle dependencies
+3. establish semver governance for stable plugin contracts
+
+Completion conditions:
+
+1. `xiuxian-wendao-core` exists and builds
+2. `core` owns capability, artifact, manifest, schema, and transport-descriptor
+   contracts
+3. compatibility re-exports exist where needed, but the ownership move is
+   physical, not only conceptual
+
+#### Phase M3: Runtime Boundary Extraction
+
+Purpose:
+
+1. move orchestration and lifecycle concerns into `xiuxian-wendao-runtime`
+2. centralize transport negotiation and fallback handling
+3. remove host-behavior ownership from the future `core` crate
+
+Completion conditions:
+
+1. `xiuxian-wendao-runtime` exists and builds
+2. runtime owns launch, health, readiness, negotiation, fallback, and routing
+3. binaries and host assembly paths delegate through runtime-owned seams
+
+#### Phase M4: Julia Ownership Externalization
+
+Purpose:
+
+1. move Julia-specific ownership into `xiuxian-wendao-julia`
+2. remove in-tree source inclusion and host-owned Julia deployment assembly
+3. keep current Julia Arrow IPC operability intact
+
+Completion conditions:
+
+1. Julia plugin package owns launch metadata, capability declarations, and
+   deployment artifacts
+2. host consumes Julia through plugin contracts rather than direct ownership
+3. current rerank/analyzer flows retain parity
+
+#### Phase M5: Generic Artifact and Endpoint Cutover
+
+Purpose:
+
+1. complete the cutover from Julia-specific outward surfaces to generic plugin
+   artifact surfaces
+2. reduce legacy Julia-named host exports to explicit compatibility shims only
+
+Completion conditions:
+
+1. generic plugin-artifact endpoints are canonical
+2. Julia-named outward surfaces are compatibility-only
+3. Studio, OpenAPI, and Zhenfa surfaces all point to generic contracts first
+
+#### Phase M6: Additional Plugin Onboarding Readiness
+
+Purpose:
+
+1. prove that a second language plugin can be onboarded without core expansion
+2. validate that the architecture is genuinely additive
+
+Completion conditions:
+
+1. one non-Julia plugin path can be introduced using the new contracts
+2. no new language-specific host expansion is required
+
+### 8.2 Current Program Position
+
+The current tree is inside **Phase M1**.
+
+What is already true:
+
+1. a generic plugin-runtime vocabulary exists in the current tree
+2. compatibility seams are now explicit and feature-folder-based
+3. crate-root compatibility exports are now routed through `src/compatibility/`
+4. compatibility migration paths are now documented in README, rustdoc, and
+   roadmap notes
+
+What is not yet complete:
+
+1. `xiuxian-wendao-core` does not yet exist as a physical crate
+2. `xiuxian-wendao-runtime` does not yet exist as a physical crate
+3. Julia ownership still physically lives inside the main crate
+4. generic outward artifact endpoints are not yet the only canonical surface
+
+### 8.3 Anti-Fragmentation Rule
+
+From this point forward, implementation should not be organized as isolated
+micro-refactors without explicit attachment to one macro phase.
+
+Every code task must answer:
+
+1. which macro phase it belongs to
+2. which phase gate it advances
+3. which ownership boundary it changes
+4. which compatibility seam it retires, preserves, or narrows
+
+Work that cannot answer those questions should be treated as out of program.
+
+### 8.4 Program-Level Stop Conditions
+
+Pause the migration program if any of the following becomes true:
+
+1. a new language-specific host type lands outside a compatibility seam
+2. crate extraction starts before ownership and namespace cleanup are physically
+   complete
+3. Julia parity regresses in runtime behavior or deployment operability
+4. compatibility shims begin receiving new implementation logic
+5. feature-folder discipline is bypassed in touched medium or complex seams
+
+The directory sketch above is normative in style, not just illustrative:
+
+1. namespace layout must follow functional ownership
+2. medium or complex features must land as folders with focused leaf modules
+3. crate roots and feature roots must not become logic sinks
+
+## 7.3 Structural Acceptance Rules
+
+The following structural rules are mandatory for this migration.
+
+### Create a feature folder when:
+
+1. a slice owns multiple concerns such as types, orchestration, transport, parsing, or tests
+2. a feature has more than one stable public concept
+3. a feature is expected to evolve independently across phases
+4. a file would otherwise mix contracts, orchestration, and helper logic
+
+### A leaf file is acceptable when:
+
+1. the responsibility is singular and stable
+2. the file does not act as a catch-all sink
+3. the file does not need multiple child namespaces to preserve clarity
+
+### Split a file further when:
+
+1. it owns unrelated concerns
+2. it becomes a DTO or type warehouse
+3. it mixes transport, orchestration, and contract logic
+4. tests can no longer mirror the internal ownership cleanly
+
+### Public re-exports must be stabilized by:
+
+1. keeping `mod.rs` interface-only
+2. re-exporting existing public names from the feature root where compatibility matters
+3. moving implementation logic behind responsibility-oriented leaf modules
+
+### Test layout must mirror feature layout:
+
+1. medium or complex features should keep tests in the same feature folder or a mirrored test namespace
+2. tests should follow feature seams such as `capabilities/`, `artifacts/`, `transport/`, and `launch/`
+3. migration phases should not leave test topology flatter and less expressive than production topology
 
 ## 8. Plugin Protocol Boundary
 
@@ -354,11 +576,13 @@ Objectives:
 1. extract capability, artifact, and transport concepts inside the current crate
 2. stop adding new Julia-specific runtime surfaces
 3. introduce generic plugin artifact and runtime config models
+4. land the new abstractions in feature-folder form rather than new flat files
 
 Exit criteria:
 
 1. new generic host-side types exist
 2. old Julia-specific types are only compatibility wrappers or aliases
+3. touched boundaries are split by responsibility and keep `mod.rs` interface-only
 
 ## Phase 2: Introduce `xiuxian-wendao-core`
 
@@ -372,6 +596,7 @@ Exit criteria:
 
 1. `core` builds independently
 2. plugin packages depend on `core` rather than the whole host crate
+3. `core` namespaces are responsibility-oriented and do not regress into flat contract warehouses
 
 ## Phase 3: Introduce `xiuxian-wendao-runtime`
 
@@ -385,6 +610,7 @@ Exit criteria:
 
 1. `runtime` owns transport negotiation and lifecycle
 2. host binaries can delegate to `runtime`
+3. runtime extraction does not create new orchestration monoliths or implementation-heavy `mod.rs`
 
 ## Phase 4: Externalize Julia Ownership
 
@@ -398,6 +624,7 @@ Exit criteria:
 
 1. Julia plugin compiles and publishes independently
 2. host consumes Julia through package metadata and runtime wiring
+3. Julia package layout uses capability, artifact, and launch folders rather than a crate-root implementation sink
 
 ## Phase 5: Generic Artifact and UI Migration
 
@@ -410,6 +637,7 @@ Exit criteria:
 
 1. no Julia-specific artifact endpoint is required in core
 2. plugin artifacts are surfaced by plugin id and artifact id
+3. generic artifact and UI surfaces preserve namespace clarity instead of introducing new mixed DTO/controller files
 
 ## Phase 6: Flight-First Runtime Negotiation
 
@@ -447,7 +675,18 @@ The migration should be backed by ecosystem tooling:
 
 These tools improve release hygiene and structure, but they do not replace the need for a host-defined plugin protocol.
 
-## 13. Risks
+## 14. Structural Migration Defaults
+
+Unless a narrower slice is genuinely trivial, implementation should default to:
+
+1. `feature_name/mod.rs` plus leaf modules instead of expanding `feature_name.rs`
+2. splitting by responsibility before moving logic across crates
+3. mirroring runtime and plugin feature seams in tests
+4. preserving stable public exports while changing internal physical layout
+
+These defaults are mandatory for migration phases unless a documented exception is approved at the RFC or blueprint level.
+
+## 15. Risks
 
 ### Risk 1: Premature Physical Split
 
@@ -456,6 +695,7 @@ If crates are split before boundaries are clean, the same confusion will simply 
 Mitigation:
 
 1. do logical boundary extraction before physical crate extraction
+2. require feature-folder-first modularization before phase completion
 
 ### Risk 2: Julia Regression
 
@@ -475,8 +715,19 @@ Mitigation:
 
 1. strict ownership rules
 2. semver checks on `core`
+3. structural acceptance rules enforced during migration gates
 
-## 14. Decision
+### Risk 4: Flat Modularization Theater
+
+If migration creates many files but keeps mixed responsibility and poor namespace naming, the architecture will remain unclear despite the physical split.
+
+Mitigation:
+
+1. hard structural acceptance rules
+2. responsibility-oriented naming requirements
+3. test topology mirroring feature topology
+
+## 16. Decision
 
 Wendao should migrate to a layered architecture with:
 
@@ -485,4 +736,4 @@ Wendao should migrate to a layered architecture with:
 3. independently published plugin packages for language-native capability ownership
 4. a compatibility bridge while the migration is underway
 
-This migration should proceed in staged phases, not as a one-shot crate explosion.
+This migration should proceed in staged phases, not as a one-shot crate explosion, and every phase must satisfy feature-folder-first modularization rules before it can be considered complete.

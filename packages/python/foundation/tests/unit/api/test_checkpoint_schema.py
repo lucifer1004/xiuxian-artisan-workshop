@@ -10,4 +10,4 @@ import pytest
 def test_checkpoint_schema_module_is_removed() -> None:
     """Checkpoint schema API should stay removed after workflow migration."""
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("omni.foundation.api.checkpoint_schema")
+        importlib.import_module("xiuxian_foundation.api.checkpoint_schema")

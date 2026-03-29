@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use xiuxian_daochang::{Agent, AgentConfig, McpServerEntry, set_config_home_override};
+use xiuxian_daochang::{Agent, AgentConfig, ToolServerEntry, set_config_home_override};
 use xiuxian_wendao::{Entity, EntityType};
 use xiuxian_zhixing::{ATTR_JOURNAL_CARRYOVER, ATTR_TIMER_SCHEDULED};
 
@@ -168,7 +168,7 @@ fn base_config(inference_url: String) -> anyhow::Result<AgentConfig> {
     Ok(AgentConfig {
         inference_url,
         model: "test-model".to_string(),
-        mcp_servers: Vec::<McpServerEntry>::new(),
+        tool_servers: Vec::<ToolServerEntry>::new(),
         max_tool_rounds: 4,
         ..AgentConfig::default()
     })

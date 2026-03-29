@@ -1,8 +1,8 @@
-"""Unit tests for omni.foundation.bridge.types (SearchResult and score clamping)."""
+"""Unit tests for xiuxian_foundation.bridge.types (SearchResult and score clamping)."""
 
 from __future__ import annotations
 
-from omni.foundation.bridge.types import SearchResult
+from xiuxian_foundation.bridge.types import SearchResult
 
 
 class TestSearchResultScoreClamping:

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from omni.foundation.config.link_graph_runtime import (
+from xiuxian_foundation.config.link_graph_runtime import (
     DEFAULT_LINK_GRAPH_BACKEND,
     DEFAULT_LINK_GRAPH_CANDIDATE_MULTIPLIER,
     DEFAULT_LINK_GRAPH_CONFIG_RELATIVE_PATH,
@@ -74,7 +74,7 @@ GATEWAY_BIND = "127.0.0.1:48083"
 
 def test_get_link_graph_default_config_relative_path_defaults() -> None:
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting",
+        "xiuxian_foundation.config.link_graph_runtime.get_setting",
         side_effect=lambda _k, default=None: default,
     ):
         relative_path = get_link_graph_default_config_relative_path()
@@ -89,7 +89,7 @@ def test_get_link_graph_default_config_relative_path_falls_back_on_blank() -> No
         return default
 
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting", side_effect=_fake_get_setting
+        "xiuxian_foundation.config.link_graph_runtime.get_setting", side_effect=_fake_get_setting
     ):
         relative_path = get_link_graph_default_config_relative_path()
 
@@ -103,7 +103,7 @@ def test_get_link_graph_default_config_relative_path_prefers_configured() -> Non
         return default
 
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting", side_effect=_fake_get_setting
+        "xiuxian_foundation.config.link_graph_runtime.get_setting", side_effect=_fake_get_setting
     ):
         relative_path = get_link_graph_default_config_relative_path()
 
@@ -135,7 +135,7 @@ def test_resolve_link_graph_excluded_dirs_ignores_hidden_config_and_merges_defau
 
 def test_get_link_graph_excluded_dirs_uses_setting_default() -> None:
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting",
+        "xiuxian_foundation.config.link_graph_runtime.get_setting",
         side_effect=lambda _k, default=None: default,
     ):
         resolved = get_link_graph_excluded_dirs()
@@ -185,7 +185,7 @@ def test_get_link_graph_include_dirs_uses_settings_overlay(tmp_path) -> None:
         return values.get(key, default)
 
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting", side_effect=_fake_get_setting
+        "xiuxian_foundation.config.link_graph_runtime.get_setting", side_effect=_fake_get_setting
     ):
         resolved = get_link_graph_include_dirs(notebook)
 
@@ -306,7 +306,7 @@ def test_get_link_graph_root_dir_falls_back_to_git_toplevel() -> None:
         return default
 
     with patch(
-        "omni.foundation.config.link_graph_runtime._resolve_link_graph_git_root_dir",
+        "xiuxian_foundation.config.link_graph_runtime._resolve_link_graph_git_root_dir",
         return_value="/tmp/git-root",
     ):
         resolved = get_link_graph_root_dir(setting_reader=_reader)
@@ -492,7 +492,7 @@ def test_resolve_link_graph_cache_valkey_url_ignores_redis_url_env() -> None:
 def test_get_link_graph_cache_valkey_url_prefers_setting_over_env() -> None:
     env = {LINK_GRAPH_CACHE_VALKEY_URL_ENV: "redis://127.0.0.1:6391/0"}
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting",
+        "xiuxian_foundation.config.link_graph_runtime.get_setting",
         side_effect=lambda key, default=None: (
             "redis://127.0.0.1:6394/0" if key == "link_graph.cache.valkey_url" else default
         ),
@@ -505,7 +505,7 @@ def test_get_link_graph_cache_valkey_url_prefers_setting_over_env() -> None:
 def test_get_link_graph_cache_valkey_url_falls_back_to_env() -> None:
     env = {LINK_GRAPH_CACHE_VALKEY_URL_ENV: "redis://127.0.0.1:6391/0"}
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting",
+        "xiuxian_foundation.config.link_graph_runtime.get_setting",
         side_effect=lambda _key, default=None: default,
     ):
         resolved = get_link_graph_cache_valkey_url(env=env, reload_on_missing=False)
@@ -540,7 +540,7 @@ def test_get_link_graph_cache_valkey_url_supports_custom_setting_reader_and_relo
 def test_get_link_graph_cache_key_prefix_prefers_env() -> None:
     env = {LINK_GRAPH_VALKEY_KEY_PREFIX_ENV: "omni:from:env"}
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting",
+        "xiuxian_foundation.config.link_graph_runtime.get_setting",
         side_effect=lambda key, default=None: (
             "omni:from:settings" if key == "link_graph.cache.key_prefix" else default
         ),
@@ -552,7 +552,7 @@ def test_get_link_graph_cache_key_prefix_prefers_env() -> None:
 
 def test_get_link_graph_cache_key_prefix_falls_back_to_setting() -> None:
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting",
+        "xiuxian_foundation.config.link_graph_runtime.get_setting",
         side_effect=lambda key, default=None: (
             "omni:from:settings" if key == "link_graph.cache.key_prefix" else default
         ),
@@ -565,7 +565,7 @@ def test_get_link_graph_cache_key_prefix_falls_back_to_setting() -> None:
 def test_get_link_graph_cache_ttl_seconds_prefers_env() -> None:
     env = {LINK_GRAPH_VALKEY_TTL_SECONDS_ENV: "999"}
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting",
+        "xiuxian_foundation.config.link_graph_runtime.get_setting",
         side_effect=lambda key, default=None: (
             300 if key == "link_graph.cache.ttl_seconds" else default
         ),
@@ -577,7 +577,7 @@ def test_get_link_graph_cache_ttl_seconds_prefers_env() -> None:
 
 def test_get_link_graph_cache_ttl_seconds_falls_back_to_setting() -> None:
     with patch(
-        "omni.foundation.config.link_graph_runtime.get_setting",
+        "xiuxian_foundation.config.link_graph_runtime.get_setting",
         side_effect=lambda key, default=None: (
             300 if key == "link_graph.cache.ttl_seconds" else default
         ),
@@ -631,7 +631,7 @@ def test_get_link_graph_runtime_config_uses_defaults_on_invalid_values() -> None
         return default
 
     with patch(
-        "omni.foundation.config.link_graph_runtime._resolve_link_graph_git_root_dir",
+        "xiuxian_foundation.config.link_graph_runtime._resolve_link_graph_git_root_dir",
         return_value="/tmp/git-root",
     ):
         config = get_link_graph_runtime_config(

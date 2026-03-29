@@ -1,3 +1,3 @@
 """
-Unit tests for omni.rag module.
+Unit tests for xiuxian_rag module.
 """

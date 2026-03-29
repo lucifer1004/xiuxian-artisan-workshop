@@ -9,7 +9,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _reset_embedding_singletons():
-    from omni.foundation.services import embedding as embedding_module
+    from xiuxian_foundation.services import embedding as embedding_module
 
     embedding_module._service = None
     embedding_module.EmbeddingService._instance = None
@@ -24,17 +24,17 @@ class TestEmbeddingServiceInitialization:
     """Initialization behavior for client-only embedding mode."""
 
     def setup_method(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
 
     def teardown_method(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
 
     def test_initialization_with_explicit_client_provider(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         with (
             patch.object(
@@ -44,7 +44,7 @@ class TestEmbeddingServiceInitialization:
             ),
             patch.object(EmbeddingService, "_check_http_server_healthy", return_value=True),
             patch.object(EmbeddingService, "_verify_embedding_service_works", return_value=True),
-            patch("omni.foundation.services.embedding.get_setting") as mock_setting,
+            patch("xiuxian_foundation.services.embedding.get_setting") as mock_setting,
         ):
             mock_setting.side_effect = lambda key, default=None: {
                 "embedding.provider": "client",
@@ -61,12 +61,12 @@ class TestEmbeddingServiceInitialization:
             assert service._client_url == "http://127.0.0.1:3002"
 
     def test_initialization_with_legacy_fallback_provider_forces_client(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         with (
             patch.object(EmbeddingService, "_check_http_server_healthy", return_value=True),
             patch.object(EmbeddingService, "_verify_embedding_service_works", return_value=True),
-            patch("omni.foundation.services.embedding.get_setting") as mock_setting,
+            patch("xiuxian_foundation.services.embedding.get_setting") as mock_setting,
         ):
             mock_setting.side_effect = lambda key, default=None: {
                 "embedding.provider": "fallback",
@@ -82,12 +82,12 @@ class TestEmbeddingServiceInitialization:
             assert service._client_mode is True
 
     def test_initialization_with_unknown_provider_forces_client(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         with (
             patch.object(EmbeddingService, "_check_http_server_healthy", return_value=True),
             patch.object(EmbeddingService, "_verify_embedding_service_works", return_value=True),
-            patch("omni.foundation.services.embedding.get_setting") as mock_setting,
+            patch("xiuxian_foundation.services.embedding.get_setting") as mock_setting,
         ):
             mock_setting.side_effect = lambda key, default=None: {
                 "embedding.provider": "legacy-provider",
@@ -103,12 +103,12 @@ class TestEmbeddingServiceInitialization:
             assert service._client_mode is True
 
     def test_initialization_client_unreachable_sets_unavailable(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         with (
             patch.object(EmbeddingService, "_check_http_server_healthy", return_value=False),
             patch.object(EmbeddingService, "_verify_embedding_service_works", return_value=False),
-            patch("omni.foundation.services.embedding.get_setting") as mock_setting,
+            patch("xiuxian_foundation.services.embedding.get_setting") as mock_setting,
         ):
             mock_setting.side_effect = lambda key, default=None: {
                 "embedding.provider": "client",
@@ -125,7 +125,7 @@ class TestEmbeddingServiceInitialization:
             assert service._dimension == 1024
 
     def test_initialization_falls_back_to_secondary_client_url_candidate(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         with (
             patch.object(
@@ -139,7 +139,7 @@ class TestEmbeddingServiceInitialization:
                 side_effect=[False, True],
             ),
             patch.object(EmbeddingService, "_verify_embedding_service_works", return_value=True),
-            patch("omni.foundation.services.embedding.get_setting") as mock_setting,
+            patch("xiuxian_foundation.services.embedding.get_setting") as mock_setting,
         ):
             mock_setting.side_effect = lambda key, default=None: {
                 "embedding.provider": "client",
@@ -156,19 +156,19 @@ class TestEmbeddingServiceInitialization:
 
 class TestEmbeddingServiceSingleton:
     def setup_method(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
 
     def test_singleton_returns_same_instance(self):
-        from omni.foundation.services.embedding import get_embedding_service
+        from xiuxian_foundation.services.embedding import get_embedding_service
 
         assert get_embedding_service() is get_embedding_service()
 
 
 class TestEmbeddingServiceEmbed:
     def setup_method(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
         service = EmbeddingService()
@@ -181,12 +181,12 @@ class TestEmbeddingServiceEmbed:
         service._embed_cache_value = None
 
     def teardown_method(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
 
     def test_embed_single_text(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         service = EmbeddingService()
         with patch.object(service, "_embed_http", return_value=[[0.1, 0.2, 0.3]]) as mock_http:
@@ -195,7 +195,7 @@ class TestEmbeddingServiceEmbed:
             mock_http.assert_called_once_with(["test text"])
 
     def test_embed_batch_texts(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         service = EmbeddingService()
         with patch.object(
@@ -208,14 +208,14 @@ class TestEmbeddingServiceEmbed:
             mock_http.assert_called_once_with(["text1", "text2"])
 
     def test_embed_raises_when_backend_unavailable(self):
-        from omni.foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+        from xiuxian_foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
 
         service = EmbeddingService()
         service._backend = "unavailable"
         service._client_mode = False
         service._client_retried = True
         with (
-            patch("omni.foundation.services.embedding.get_setting", return_value=None),
+            patch("xiuxian_foundation.services.embedding.get_setting", return_value=None),
             pytest.raises(EmbeddingUnavailableError),
         ):
             service.embed("hello")
@@ -223,7 +223,7 @@ class TestEmbeddingServiceEmbed:
 
 class TestEmbeddingServiceHttpRaisesOnFailure:
     def setup_method(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
         service = EmbeddingService()
@@ -236,15 +236,15 @@ class TestEmbeddingServiceHttpRaisesOnFailure:
         service._embed_cache_value = None
 
     def teardown_method(self):
-        from omni.foundation.services.embedding import EmbeddingService
+        from xiuxian_foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
 
     def test_embed_http_raises_on_http_error(self):
-        from omni.foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+        from xiuxian_foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
 
         service = EmbeddingService()
-        with patch("omni.foundation.embedding_client.get_embedding_client") as mock_get_client:
+        with patch("xiuxian_foundation.embedding_client.get_embedding_client") as mock_get_client:
             mock_client = MagicMock()
             mock_client.sync_embed_batch.side_effect = RuntimeError("connection refused")
             mock_get_client.return_value = mock_client
@@ -253,10 +253,10 @@ class TestEmbeddingServiceHttpRaisesOnFailure:
         assert "connection refused" in str(exc_info.value)
 
     def test_embed_batch_raises_on_http_error(self):
-        from omni.foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+        from xiuxian_foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
 
         service = EmbeddingService()
-        with patch("omni.foundation.embedding_client.get_embedding_client") as mock_get_client:
+        with patch("xiuxian_foundation.embedding_client.get_embedding_client") as mock_get_client:
             mock_client = MagicMock()
             mock_client.sync_embed_batch.side_effect = RuntimeError("HTTP 500")
             mock_get_client.return_value = mock_client
@@ -267,7 +267,7 @@ class TestEmbeddingServiceHttpRaisesOnFailure:
 
 class TestEmbeddingOverride:
     def test_embed_batch_uses_override_when_set(self):
-        from omni.foundation.services.embedding import (
+        from xiuxian_foundation.services.embedding import (
             get_embedding_override,
             get_embedding_service,
             set_embedding_override,

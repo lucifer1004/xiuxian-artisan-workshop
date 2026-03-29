@@ -1,7 +1,7 @@
-//! Rust agent: one-turn loop with LLM + MCP tools; HTTP gateway.
+//! Rust agent: one-turn loop with LLM + external tools; HTTP gateway.
 //!
 //! - **B.1**: Session store (in-memory or omni-window), LLM client (OpenAI-compatible chat API).
-//! - **B.2**: One turn: user message → prompt + tools/list → LLM → `tool_calls` → MCP tools/call → repeat until done.
+//! - **B.2**: One turn: user message → prompt + tools/list → LLM → `tool_calls` → external tool call → repeat until done.
 
 /// Compile-time embedded resource tree rooted at `omni-agent/resources`.
 pub static RESOURCES: ::include_dir::Dir<'_> =
@@ -17,7 +17,6 @@ mod env_parse;
 mod gateway;
 mod jobs;
 mod llm;
-mod mcp;
 mod observability;
 mod resolve;
 mod runtime_agent_factory;
@@ -25,6 +24,7 @@ mod session;
 mod shortcuts;
 #[doc(hidden)]
 pub mod test_support;
+mod tool_runtime;
 mod tools;
 #[doc(hidden)]
 pub mod warmup_options;
@@ -65,12 +65,12 @@ pub use channels::{
 };
 pub use config::{
     AgentConfig, ContextBudgetStrategy, DiscordSettings, EmbeddingSettings, InferenceSettings,
-    LITELLM_DEFAULT_URL, McpConfigFile, McpServerEntry, McpServerEntryFile, McpSettings,
-    MemoryConfig, MemorySettings, RuntimeSettings, SessionSettings, TelegramAclAllowSettings,
-    TelegramAclControlSettings, TelegramAclPrincipalSettings, TelegramAclSettings,
-    TelegramAclSlashSettings, TelegramSettings, XiuxianConfig, load_mcp_config,
-    load_runtime_settings, load_runtime_settings_from_paths, load_xiuxian_config_from_bases,
-    load_xiuxian_config_from_paths, set_config_home_override,
+    LITELLM_DEFAULT_URL, MemoryConfig, MemorySettings, RuntimeSettings, SessionSettings,
+    TelegramAclAllowSettings, TelegramAclControlSettings, TelegramAclPrincipalSettings,
+    TelegramAclSettings, TelegramAclSlashSettings, TelegramSettings, ToolConfigFile,
+    ToolRuntimeSettings, ToolServerEntry, ToolServerEntryFile, XiuxianConfig,
+    load_runtime_settings, load_runtime_settings_from_paths, load_tool_config,
+    load_xiuxian_config_from_bases, load_xiuxian_config_from_paths, set_config_home_override,
 };
 pub use contracts::{
     DiscoverConfidence, DiscoverMatch, GraphExecutionPlan, GraphPlanStep, GraphPlanStepKind,
@@ -80,18 +80,15 @@ pub use contracts::{
 };
 pub use embedding::EmbeddingClient;
 pub use gateway::{
-    DEFAULT_STDIO_SESSION_ID, GatewayHealthResponse, GatewayMcpHealthResponse, GatewayState,
-    MessageRequest, MessageResponse, router, run_http, run_stdio, validate_message_request,
+    DEFAULT_STDIO_SESSION_ID, GatewayExternalToolHealthResponse, GatewayHealthResponse,
+    GatewayState, MessageRequest, MessageResponse, router, run_http, run_stdio,
+    validate_message_request,
 };
 pub use jobs::{
     HeartbeatProbeState, JobCompletion, JobCompletionKind, JobHealthState, JobManager,
     JobManagerConfig, JobMetricsSnapshot, JobState, JobStatusSnapshot, RecurringScheduleConfig,
     RecurringScheduleOutcome, TurnRunner, classify_heartbeat_probe_result, classify_job_health,
     run_recurring_schedule,
-};
-pub use mcp::{
-    McpClientPool, McpDiscoverCacheStatsSnapshot, McpPoolConnectConfig,
-    McpToolsListCacheStatsSnapshot, connect_pool,
 };
 pub use observability::session_event_ids;
 pub use runtime_agent_factory::build_agent;
@@ -100,4 +97,8 @@ pub use session::{
     ToolCallOut,
 };
 pub use shortcuts::parse_react_shortcut;
+pub use tool_runtime::{
+    ToolClientPool, ToolDiscoverCacheStatsSnapshot, ToolListCacheStatsSnapshot,
+    ToolPoolConnectConfig, connect_tool_pool,
+};
 pub use tools::{parse_qualified_tool_name, qualify_tool_name};

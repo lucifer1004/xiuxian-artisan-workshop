@@ -6,12 +6,13 @@
 //! Usage:
 //!   cargo run --bin `export_types` --features zhenfa-router
 
-use specta_typescript::Typescript;
+use specta_typescript::{BigIntExportBehavior, Typescript};
 use xiuxian_wendao::gateway::studio::types::studio_type_collection;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let types = studio_type_collection();
     let ts = Typescript::new()
+        .bigint(BigIntExportBehavior::Number)
         .header("// Auto-generated from xiuxian-wendao\n// Run: cargo run --bin export_types --features zhenfa-router\n\n")
         .export(&types)?;
 

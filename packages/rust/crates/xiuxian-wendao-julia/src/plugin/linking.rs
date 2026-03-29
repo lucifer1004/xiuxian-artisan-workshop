@@ -3,11 +3,9 @@ use std::fs;
 use std::path::Path;
 
 use regex::Regex;
-
-use xiuxian_wendao::analyzers::errors::RepoIntelligenceError;
-use xiuxian_wendao::analyzers::plugin::PluginLinkContext;
-use xiuxian_wendao::analyzers::records::{
+use xiuxian_wendao_core::repo_intelligence::{
     DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, SymbolRecord,
+    PluginLinkContext, RepoIntelligenceError,
 };
 
 pub(crate) fn build_doc_relations(

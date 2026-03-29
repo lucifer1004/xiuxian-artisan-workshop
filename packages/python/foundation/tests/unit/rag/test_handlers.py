@@ -14,7 +14,7 @@ class TestSkillCommandHandlerIntegration:
 
     def test_skill_command_with_error_strategy_suppress(self):
         """Test error_strategy='suppress' stores handler config."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(
             name="test_command",
@@ -32,7 +32,7 @@ class TestSkillCommandHandlerIntegration:
 
     def test_skill_command_with_log_level_debug(self):
         """Test log_level='debug' stores handler config."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(
             name="test_command",
@@ -49,7 +49,7 @@ class TestSkillCommandHandlerIntegration:
 
     def test_skill_command_with_trace_args(self):
         """Test trace_args=True stores handler config."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(
             name="test_command",
@@ -64,7 +64,7 @@ class TestSkillCommandHandlerIntegration:
 
     def test_skill_command_combined_handler_params(self):
         """Test multiple handler params are stored correctly."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(
             name="test_command",
@@ -92,7 +92,7 @@ class TestSkillCommandHandlerIntegration:
 
     def test_skill_command_without_handler_returns_none(self):
         """Test that skill_command without handler params has handler=None."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(name="test_command")
         def test_command() -> str:
@@ -105,7 +105,7 @@ class TestSkillCommandHandlerIntegration:
 
     def test_skill_command_handler_wraps_function(self):
         """Test that handler wraps the function and output is MCP canonical shape."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(
             name="test_command",
@@ -125,7 +125,7 @@ class TestSkillCommandHandlerIntegration:
 
     def test_skill_command_handler_with_destructive_hint(self):
         """Test handler works alongside MCP annotations."""
-        from omni.foundation.api.decorators import skill_command
+        from xiuxian_foundation.api.decorators import skill_command
 
         @skill_command(
             name="delete_file",
@@ -149,7 +149,7 @@ class TestExecutionResultFromHandler:
 
     def test_execution_result_ok(self):
         """Test ExecutionResult.ok() factory method."""
-        from omni.foundation.api.handlers import ExecutionResult
+        from xiuxian_foundation.api.handlers import ExecutionResult
 
         result = ExecutionResult.ok(data={"key": "value"}, timing_ms=10.5)
         assert result.success is True
@@ -159,7 +159,7 @@ class TestExecutionResultFromHandler:
 
     def test_execution_result_fail(self):
         """Test ExecutionResult.fail() factory method."""
-        from omni.foundation.api.handlers import ExecutionResult
+        from xiuxian_foundation.api.handlers import ExecutionResult
 
         result = ExecutionResult.fail(error="Something went wrong", error_type="ValueError")
         assert result.success is False
@@ -168,7 +168,7 @@ class TestExecutionResultFromHandler:
 
     def test_execution_result_to_dict_success(self):
         """Test ExecutionResult.to_dict() for success case."""
-        from omni.foundation.api.handlers import ExecutionResult
+        from xiuxian_foundation.api.handlers import ExecutionResult
 
         result = ExecutionResult.ok(data={"result": "ok"}, timing_ms=5.0)
         d = result.to_dict()
@@ -179,7 +179,7 @@ class TestExecutionResultFromHandler:
 
     def test_execution_result_to_dict_failure(self):
         """Test ExecutionResult.to_dict() for failure case."""
-        from omni.foundation.api.handlers import ExecutionResult
+        from xiuxian_foundation.api.handlers import ExecutionResult
 
         result = ExecutionResult.fail(error="Failed", error_type="RuntimeError", timing_ms=2.0)
         d = result.to_dict()
@@ -194,7 +194,7 @@ class TestErrorStrategy:
 
     def test_error_strategy_values(self):
         """Test ErrorStrategy enum values."""
-        from omni.foundation.api.handlers import ErrorStrategy
+        from xiuxian_foundation.api.handlers import ErrorStrategy
 
         assert ErrorStrategy.RAISE.value == "raise"
         assert ErrorStrategy.SUPPRESS.value == "suppress"
@@ -202,7 +202,7 @@ class TestErrorStrategy:
 
     def test_error_strategy_from_string(self):
         """Test creating ErrorStrategy from string."""
-        from omni.foundation.api.handlers import ErrorStrategy
+        from xiuxian_foundation.api.handlers import ErrorStrategy
 
         strategy = ErrorStrategy("suppress")
         assert strategy == ErrorStrategy.SUPPRESS
@@ -213,7 +213,7 @@ class TestLoggerConfig:
 
     def test_logger_config_defaults(self):
         """Test LoggerConfig default values."""
-        from omni.foundation.api.handlers import LoggerConfig, LogLevel
+        from xiuxian_foundation.api.handlers import LoggerConfig, LogLevel
 
         config = LoggerConfig()
         assert config.level == LogLevel.INFO
@@ -223,7 +223,7 @@ class TestLoggerConfig:
 
     def test_logger_config_should_log(self):
         """Test LoggerConfig.should_log() method."""
-        from omni.foundation.api.handlers import LoggerConfig, LogLevel
+        from xiuxian_foundation.api.handlers import LoggerConfig, LogLevel
 
         config = LoggerConfig(level=LogLevel.WARNING)
         assert config.should_log("debug") is False
@@ -233,7 +233,7 @@ class TestLoggerConfig:
 
     def test_logger_config_off_disables_all(self):
         """Test that OFF level disables all logging."""
-        from omni.foundation.api.handlers import LoggerConfig, LogLevel
+        from xiuxian_foundation.api.handlers import LoggerConfig, LogLevel
 
         config = LoggerConfig(level=LogLevel.OFF)
         assert config.should_log("debug") is False
@@ -245,7 +245,7 @@ class TestResultConfig:
 
     def test_result_config_defaults(self):
         """Test ResultConfig default values."""
-        from omni.foundation.api.handlers import ResultConfig
+        from xiuxian_foundation.api.handlers import ResultConfig
 
         config = ResultConfig()
         assert config.filter_empty is True
@@ -259,7 +259,7 @@ class TestSkillCommandHandlerDirect:
 
     def test_handler_execute_sync_success(self):
         """Test handler executing sync function successfully."""
-        from omni.foundation.api.handlers import SkillCommandHandler
+        from xiuxian_foundation.api.handlers import SkillCommandHandler
 
         handler = SkillCommandHandler(
             name="test",
@@ -277,7 +277,7 @@ class TestSkillCommandHandlerDirect:
 
     def test_handler_execute_sync_error(self):
         """Test handler with suppressed error."""
-        from omni.foundation.api.handlers import ErrorStrategy, SkillCommandHandler
+        from xiuxian_foundation.api.handlers import ErrorStrategy, SkillCommandHandler
 
         handler = SkillCommandHandler(
             name="test",
@@ -296,7 +296,7 @@ class TestSkillCommandHandlerDirect:
 
     def test_handler_filter_empty_result(self):
         """Test handler filters empty dict/list results."""
-        from omni.foundation.api.handlers import SkillCommandHandler
+        from xiuxian_foundation.api.handlers import SkillCommandHandler
 
         handler = SkillCommandHandler(
             name="test",
@@ -323,7 +323,7 @@ class TestCreateHandlerFactory:
 
     def test_create_handler_defaults(self):
         """Test create_handler with default values."""
-        from omni.foundation.api.handlers import create_handler
+        from xiuxian_foundation.api.handlers import create_handler
 
         handler = create_handler(name="my_command")
         assert handler.name == "my_command"
@@ -331,7 +331,7 @@ class TestCreateHandlerFactory:
 
     def test_create_handler_custom_values(self):
         """Test create_handler with custom values."""
-        from omni.foundation.api.handlers import create_handler
+        from xiuxian_foundation.api.handlers import create_handler
 
         handler = create_handler(
             name="custom_handler",
@@ -355,7 +355,7 @@ class TestCreateHandlerFactory:
 @pytest.fixture
 def sample_handler():
     """Create a sample SkillCommandHandler for testing."""
-    from omni.foundation.api.handlers import ErrorStrategy, SkillCommandHandler
+    from xiuxian_foundation.api.handlers import ErrorStrategy, SkillCommandHandler
 
     return SkillCommandHandler(
         name="sample",
@@ -366,7 +366,7 @@ def sample_handler():
 @pytest.fixture
 def sample_decorated_command():
     """Create a sample skill_command with handler for testing."""
-    from omni.foundation.api.decorators import skill_command
+    from xiuxian_foundation.api.decorators import skill_command
 
     @skill_command(
         name="sample_command",

@@ -91,13 +91,13 @@ fn map_turn_execution_result(result: Result<String, anyhow::Error>) -> Foregroun
 pub(crate) fn classify_turn_error(error: &str) -> &'static str {
     let e = error.to_ascii_lowercase();
     if e.contains("tools/list") {
-        "mcp_tools_list"
+        "tool_runtime_tools_list"
     } else if e.contains("tools/call") {
-        "mcp_tools_call"
+        "tool_runtime_tools_call"
     } else if e.contains("transport send error") || e.contains("error sending request") {
-        "mcp_transport"
-    } else if e.contains("mcp handshake timeout") || e.contains("connect failed") {
-        "mcp_connect"
+        "tool_runtime_transport"
+    } else if e.contains("tool handshake timeout") || e.contains("connect failed") {
+        "tool_runtime_connect"
     } else if e.contains("llm") {
         "llm"
     } else {

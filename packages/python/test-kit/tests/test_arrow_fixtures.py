@@ -1,9 +1,9 @@
-"""Test Arrow/LanceDB fixtures (table health IPC) in omni.test_kit."""
+"""Test Arrow/LanceDB fixtures (table health IPC) in xiuxian_test_kit."""
 
 from __future__ import annotations
 
 import pytest
-from omni.test_kit.fixtures.arrow import (
+from xiuxian_test_kit.fixtures.arrow import (
     TABLE_HEALTH_IPC_COLUMNS,
     assert_table_health_ipc_table,
     decode_table_health_ipc_bytes,

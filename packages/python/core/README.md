@@ -10,18 +10,17 @@ Microkernel core for xiuxian-artisan-workshop.
 
 ## Components
 
-- `omni.core.kernel`: Microkernel abstraction layer (Kernel, Lifecycle, Components)
-- `omni.core.skills`: Skills system (Registry, Runtime, Discovery, Memory)
+- `xiuxian_core.kernel`: Microkernel abstraction layer (Kernel, Lifecycle, Components)
 
 ## Dependencies
 
-- `xiuxian-foundation`: Foundation layer (Rust bridge, logging, config)
-- `mcp`: Model Context Protocol
+- `xiuxian-foundation`: Foundation layer (logging, config, thin helpers)
+- `xiuxian-wendao-py`: Arrow Flight transport/client surface
 
 ## Usage
 
 ```python
-from omni.core.kernel import get_kernel
+from xiuxian_core.kernel import get_kernel
 
 kernel = get_kernel()
 await kernel.initialize()

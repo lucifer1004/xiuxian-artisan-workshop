@@ -14,8 +14,6 @@ dependencies = [
     "gitpython>=3.1.0",
     # Text & Data
     "jinja2>=3.1.0",
-    # Database
-    "lancedb>=0.17.0",
     # Utils
     "pydantic>=2.7.0",
 ]
@@ -34,7 +32,11 @@ build-backend = "hatchling.build"
 
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/omni"]
+packages = [
+    "src/xiuxian_foundation",
+    "src/xiuxian_rag",
+    "src/xiuxian_tracer",
+]
 
 
 [tool.pyright]
@@ -49,5 +51,5 @@ filterwarnings = [
     "ignore::pytest.PytestReturnNotNoneWarning",
     "ignore::DeprecationWarning:websockets",
     "ignore::DeprecationWarning:starlette",
-    "ignore:Module already imported so cannot be rewritten; omni\\.test_kit\\.fixtures:pytest.PytestAssertRewriteWarning",
+    "ignore:Module already imported so cannot be rewritten; xiuxian_test_kit\\.fixtures:pytest.PytestAssertRewriteWarning",
 ]

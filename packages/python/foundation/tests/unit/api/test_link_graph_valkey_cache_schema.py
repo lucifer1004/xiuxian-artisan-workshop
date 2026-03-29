@@ -1,16 +1,16 @@
-"""Tests for omni.foundation.api.link_graph_valkey_cache_schema."""
+"""Tests for xiuxian_foundation.api.link_graph_valkey_cache_schema."""
 
 from __future__ import annotations
 
 import pytest
 
-import omni.foundation.api.link_graph_valkey_cache_schema as cache_schema
-from omni.foundation.api.link_graph_valkey_cache_schema import get_schema_id, validate
+import xiuxian_foundation.api.link_graph_valkey_cache_schema as cache_schema
+from xiuxian_foundation.api.link_graph_valkey_cache_schema import get_schema_id, validate
 
 
 def _payload() -> dict:
     return {
-        "schema_version": "omni.link_graph.valkey_cache_snapshot.v1",
+        "schema_version": "xiuxian_wendao.link_graph.valkey_cache_snapshot.v1",
         "schema_fingerprint": "abc123",
         "root": "/tmp/notebook",
         "include_dirs": ["docs"],
@@ -61,7 +61,7 @@ def _payload() -> dict:
 
 def test_get_schema_id() -> None:
     schema_id = get_schema_id()
-    assert schema_id.endswith("/omni.link_graph.valkey_cache_snapshot.v1.schema.json")
+    assert schema_id.endswith("/xiuxian_wendao.link_graph.valkey_cache_snapshot.v1.schema.json")
 
 
 def test_validate_accepts_payload() -> None:
@@ -71,7 +71,7 @@ def test_validate_accepts_payload() -> None:
 
 def test_validate_rejects_invalid_schema_version() -> None:
     payload = _payload()
-    payload["schema_version"] = "omni.link_graph.valkey_cache_snapshot.v0"
+    payload["schema_version"] = "xiuxian_wendao.link_graph.valkey_cache_snapshot.v0"
     with pytest.raises(ValueError, match="schema_version"):
         validate(payload)
 

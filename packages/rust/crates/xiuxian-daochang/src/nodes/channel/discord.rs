@@ -28,7 +28,7 @@ const DISCORD_DEFAULT_INGRESS_PATH: &str = "/discord/ingress";
 
 struct DiscordRuntimeLaunchConfig {
     bot_token: String,
-    mcp_config_path: PathBuf,
+    tool_config_path: PathBuf,
     runtime_mode: DiscordRuntimeMode,
     runtime_config: DiscordRuntimeConfig,
     ingress_bind: String,
@@ -65,7 +65,7 @@ fn resolve_discord_runtime_launch_config(
 ) -> anyhow::Result<DiscordRuntimeLaunchConfig> {
     let ChannelCommandRequest {
         bot_token,
-        mcp_config,
+        tool_config,
         session_partition,
         inbound_queue_capacity,
         turn_timeout_secs,
@@ -130,7 +130,7 @@ fn resolve_discord_runtime_launch_config(
 
     Ok(DiscordRuntimeLaunchConfig {
         bot_token,
-        mcp_config_path: mcp_config,
+        tool_config_path: tool_config,
         runtime_mode,
         runtime_config: DiscordRuntimeConfig {
             session_partition,
@@ -223,7 +223,7 @@ async fn run_discord_channel_mode(
     let DiscordChannelModeRequest { runtime, acl } = request;
     let DiscordRuntimeLaunchConfig {
         bot_token,
-        mcp_config_path,
+        tool_config_path,
         runtime_mode,
         runtime_config,
         ingress_bind,
@@ -241,7 +241,7 @@ async fn run_discord_channel_mode(
 
     let effective_runtime_settings =
         apply_channel_embedding_memory_guard(runtime_settings, "discord");
-    let agent = Arc::new(build_agent(&mcp_config_path, &effective_runtime_settings).await?);
+    let agent = Arc::new(build_agent(&tool_config_path, &effective_runtime_settings).await?);
     let control_command_policy = DiscordControlCommandPolicy::new(
         admin_users,
         control_command_allow_from,

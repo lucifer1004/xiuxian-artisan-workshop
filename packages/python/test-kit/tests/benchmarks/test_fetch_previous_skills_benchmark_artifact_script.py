@@ -8,7 +8,7 @@ from functools import lru_cache
 from importlib.util import module_from_spec, spec_from_file_location
 from typing import TYPE_CHECKING
 
-from omni.foundation.runtime.gitops import get_project_root
+from xiuxian_wendao_py.compat.runtime import get_project_root
 
 if TYPE_CHECKING:
     from types import ModuleType

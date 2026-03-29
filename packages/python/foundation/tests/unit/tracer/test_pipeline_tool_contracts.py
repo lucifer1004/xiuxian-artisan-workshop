@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from omni.tracer.pipeline_tool_contracts import (
+from xiuxian_tracer.pipeline_tool_contracts import (
     BUILTIN_CONTRACTS_VERSION,
     load_builtin_tool_contracts,
 )

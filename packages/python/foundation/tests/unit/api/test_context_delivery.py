@@ -1,8 +1,8 @@
-"""Tests for omni.foundation.context_delivery - skill tool content strategies."""
+"""Tests for xiuxian_foundation.context_delivery - skill tool content strategies."""
 
 import pytest
 
-from omni.foundation.context_delivery import (
+from xiuxian_foundation.context_delivery import (
     ActionWorkflowEngine,
     ChunkedSessionStore,
     WorkflowStateStore,
@@ -37,9 +37,9 @@ def _install_fake_checkpoint_backend(
         storage.pop((workflow_type, workflow_id), None)
         return True
 
-    monkeypatch.setattr("omni.foundation.context_delivery.sessions.save_workflow_state", _save)
-    monkeypatch.setattr("omni.foundation.context_delivery.sessions.load_workflow_state", _load)
-    monkeypatch.setattr("omni.foundation.context_delivery.sessions.delete_workflow_state", _delete)
+    monkeypatch.setattr("xiuxian_foundation.context_delivery.sessions.save_workflow_state", _save)
+    monkeypatch.setattr("xiuxian_foundation.context_delivery.sessions.load_workflow_state", _load)
+    monkeypatch.setattr("xiuxian_foundation.context_delivery.sessions.delete_workflow_state", _delete)
     return storage
 
 
@@ -168,7 +168,7 @@ class TestChunkedSessionStore:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "omni.foundation.context_delivery.sessions.save_workflow_state",
+            "xiuxian_foundation.context_delivery.sessions.save_workflow_state",
             lambda *_args, **_kwargs: False,
         )
         store = ChunkedSessionStore("test_chunked_store_save_error")
@@ -231,7 +231,7 @@ class TestWorkflowStateStore:
 
     def test_save_raises_when_backend_rejects(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "omni.foundation.context_delivery.sessions.save_workflow_state",
+            "xiuxian_foundation.context_delivery.sessions.save_workflow_state",
             lambda *_args, **_kwargs: False,
         )
         store = WorkflowStateStore("test_workflow_store_save_error")

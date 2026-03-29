@@ -14,7 +14,7 @@ class TestRunSkillCommand:
 
     def test_script_not_found_returns_error(self):
         """Test that missing script returns appropriate error."""
-        from omni.foundation.runtime.isolation import run_skill_command
+        from xiuxian_foundation.runtime.isolation import run_skill_command
 
         result = run_skill_command(
             skill_dir=Path("/nonexistent"),
@@ -27,7 +27,7 @@ class TestRunSkillCommand:
 
     def test_args_conversion_bool(self):
         """Test that boolean args are converted to 'true'/'false' strings."""
-        from omni.foundation.runtime.isolation import run_skill_command
+        from xiuxian_foundation.runtime.isolation import run_skill_command
 
         with TemporaryDirectory() as tmpdir:
             # Create minimal skill structure
@@ -59,7 +59,7 @@ class TestRunSkillCommand:
 
     def test_args_conversion_string(self):
         """Test that string args are passed correctly."""
-        from omni.foundation.runtime.isolation import run_skill_command
+        from xiuxian_foundation.runtime.isolation import run_skill_command
 
         with TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir)
@@ -92,7 +92,7 @@ class TestRunSkillCommandPersistent:
 
     def test_persistent_mode_uses_worker_transport(self):
         """Persistent mode should write JSON request to worker stdin and parse one response line."""
-        from omni.foundation.runtime import isolation
+        from xiuxian_foundation.runtime import isolation
 
         isolation._shutdown_persistent_workers()
         with TemporaryDirectory() as tmpdir:
@@ -109,7 +109,7 @@ class TestRunSkillCommandPersistent:
             with (
                 patch("subprocess.Popen", return_value=proc) as mock_popen,
                 patch(
-                    "omni.foundation.runtime.isolation._readline_with_timeout",
+                    "xiuxian_foundation.runtime.isolation._readline_with_timeout",
                     return_value='{"success": true, "content": "ok", "metadata": {}}\n',
                 ),
             ):
@@ -134,7 +134,7 @@ class TestRunSkillCommandPersistent:
 
     def test_persistent_worker_reused_for_same_skill_script(self):
         """Two calls should reuse the same worker process."""
-        from omni.foundation.runtime import isolation
+        from xiuxian_foundation.runtime import isolation
 
         isolation._shutdown_persistent_workers()
         with TemporaryDirectory() as tmpdir:
@@ -151,7 +151,7 @@ class TestRunSkillCommandPersistent:
             with (
                 patch("subprocess.Popen", return_value=proc) as mock_popen,
                 patch(
-                    "omni.foundation.runtime.isolation._readline_with_timeout",
+                    "xiuxian_foundation.runtime.isolation._readline_with_timeout",
                     side_effect=[
                         '{"success": true, "content": "one", "metadata": {}}\n',
                         '{"success": true, "content": "two", "metadata": {}}\n',
@@ -182,9 +182,9 @@ class TestRunSkillCommandAsync:
 
     def test_async_wrapper_calls_sync_function(self):
         """Test that async wrapper calls the sync function."""
-        from omni.foundation.runtime.isolation import run_skill_command_async
+        from xiuxian_foundation.runtime.isolation import run_skill_command_async
 
-        with patch("omni.foundation.runtime.isolation.run_skill_command") as mock_sync:
+        with patch("xiuxian_foundation.runtime.isolation.run_skill_command") as mock_sync:
             mock_sync.return_value = {"success": True}
 
             result = run_skill_command_async(
@@ -202,7 +202,7 @@ class TestCheckSkillDependencies:
 
     def test_missing_pyproject_returns_error(self):
         """Test that missing pyproject.toml returns appropriate error."""
-        from omni.foundation.runtime.isolation import check_skill_dependencies
+        from xiuxian_foundation.runtime.isolation import check_skill_dependencies
 
         result = check_skill_dependencies(skill_dir=Path("/nonexistent"))
 
@@ -211,7 +211,7 @@ class TestCheckSkillDependencies:
 
     def test_uv_not_found_returns_error(self):
         """Test that missing uv returns appropriate error."""
-        from omni.foundation.runtime.isolation import check_skill_dependencies
+        from xiuxian_foundation.runtime.isolation import check_skill_dependencies
 
         with TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir)
@@ -227,7 +227,7 @@ class TestCheckSkillDependencies:
 
     def test_successful_dependency_check(self):
         """Test successful dependency check."""
-        from omni.foundation.runtime.isolation import check_skill_dependencies
+        from xiuxian_foundation.runtime.isolation import check_skill_dependencies
 
         with TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir)
@@ -247,9 +247,9 @@ class TestJsonParsing:
 
     def test_json_loads_fallback_to_stdlib(self):
         """Test that parsing falls back to stdlib when orjson unavailable."""
-        from omni.foundation.runtime.isolation import _json_loads
+        from xiuxian_foundation.runtime.isolation import _json_loads
 
-        with patch("omni.foundation.runtime.isolation._HAS_ORJSON", False):
+        with patch("xiuxian_foundation.runtime.isolation._HAS_ORJSON", False):
             result = _json_loads('{"key": "value"}')
             assert result == {"key": "value"}
 
@@ -260,10 +260,10 @@ class TestIntegration:
     @pytest.mark.slow
     def test_run_skill_command_with_crawl4ai_skill(self):
         """Integration test: run crawl4ai skill via isolation."""
-        from omni.foundation.config.skills import SKILLS_DIR
-        from omni.foundation.runtime.isolation import run_skill_command
+        from xiuxian_foundation.config.dirs import get_skills_dir
+        from xiuxian_foundation.runtime.isolation import run_skill_command
 
-        skill_dir = SKILLS_DIR(skill="crawl4ai")
+        skill_dir = get_skills_dir() / "crawl4ai"
 
         if not (skill_dir / "pyproject.toml").exists():
             pytest.skip("crawl4ai skill not installed")

@@ -1,11 +1,11 @@
-"""Tests for omni.foundation.api.link_graph_search_options_schema."""
+"""Tests for xiuxian_foundation.api.link_graph_search_options_schema."""
 
 from __future__ import annotations
 
 import pytest
 
-import omni.foundation.api.link_graph_search_options_schema as search_schema
-from omni.foundation.api.link_graph_search_options_schema import (
+import xiuxian_foundation.api.link_graph_search_options_schema as search_schema
+from xiuxian_foundation.api.link_graph_search_options_schema import (
     build_options_record,
     get_schema_id,
     validate,
@@ -44,14 +44,14 @@ def test_build_options_record_roundtrip() -> None:
 
 def test_get_schema_id() -> None:
     schema_id = get_schema_id()
-    assert schema_id.endswith("/omni.link_graph.search_options.v2.schema.json")
+    assert schema_id.endswith("/xiuxian_wendao.link_graph.search_options.v2.schema.json")
 
 
 def test_validate_rejects_invalid_strategy() -> None:
     with pytest.raises(ValueError, match="match_strategy"):
         validate(
             {
-                "schema": "omni.link_graph.search_options.v2",
+                "schema": "xiuxian_wendao.link_graph.search_options.v2",
                 "match_strategy": "bm25",
                 "sort_terms": [{"field": "score", "order": "desc"}],
                 "case_sensitive": False,
@@ -74,7 +74,7 @@ def test_validate_rejects_invalid_max_distance() -> None:
     with pytest.raises(ValueError, match="max_distance"):
         validate(
             {
-                "schema": "omni.link_graph.search_options.v2",
+                "schema": "xiuxian_wendao.link_graph.search_options.v2",
                 "match_strategy": "fts",
                 "sort_terms": [{"field": "score", "order": "desc"}],
                 "case_sensitive": False,

@@ -29,7 +29,7 @@
 )]
 
 //! HTTP gateway integration tests: validation (400), routing, response shape.
-//! Uses a minimal Agent (no MCP) so no external services are required.
+//! Uses a minimal Agent (no external tools) so no external services are required.
 
 use axum::body::Body;
 use axum::body::to_bytes;
@@ -158,7 +158,7 @@ async fn gateway_openai_embeddings_returns_400_for_invalid_input_type() {
 }
 
 #[tokio::test]
-async fn gateway_health_returns_structured_summary_without_mcp() {
+async fn gateway_health_returns_structured_summary_without_tools() {
     let config = minimal_agent_config();
     let agent = Agent::from_config(config).await.expect("agent");
     let app = router(agent, 300, Some(4));
@@ -190,16 +190,16 @@ async fn gateway_health_returns_structured_summary_without_mcp() {
     );
     assert_eq!(
         payload
-            .get("mcp")
-            .and_then(|mcp| mcp.get("enabled"))
+            .get("tools")
+            .and_then(|tools| tools.get("enabled"))
             .and_then(Value::as_bool),
         Some(false)
     );
     let tools_list_cache = payload
-        .get("mcp")
-        .and_then(|mcp| mcp.get("tools_list_cache"));
+        .get("tools")
+        .and_then(|tools| tools.get("tools_list_cache"));
     assert!(
         tools_list_cache.is_none() || tools_list_cache.is_some_and(Value::is_null),
-        "tools_list_cache should be omitted or null when MCP is disabled"
+        "tools_list_cache should be omitted or null when external tools are disabled"
     );
 }

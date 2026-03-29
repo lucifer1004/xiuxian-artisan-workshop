@@ -6,7 +6,9 @@
 
 - `xiuxian-vector` owns the reusable Arrow IPC transport substrate in `src/arrow_transport/`.
 - `xiuxian-wendao-julia` owns Julia-specific interpretation of repository plugin options and builds a transport client from them.
+- `xiuxian-wendao-julia` also owns the legacy Julia link-graph compatibility semantics under `src/compatibility/link_graph/`, including Julia selector ids, the default analyzer package dir, launcher path, example-config path, the Julia rerank runtime record, service-descriptor and CLI-arg meaning, launch-manifest meaning, deployment-artifact meaning, and conversions to and from Wendao core plugin contracts.
 - `xiuxian-wendao` hosts the analyzer registry and loads repository config, but it does not own a second Arrow transport implementation.
+- `xiuxian-wendao` now consumes this crate through a normal Cargo dependency instead of sibling-source inclusion.
 
 ## Public Surface
 
@@ -15,6 +17,7 @@
 - `build_julia_arrow_transport_client`
 - `process_julia_arrow_batches`
 - `validate_julia_arrow_response_batches`
+- `compatibility::link_graph::*` for Julia-owned legacy launch/deployment compatibility DTOs, the Julia rerank runtime record, selector helpers, and analyzer package-path defaults
 
 The transport builder consumes repository plugin entries that resolve to:
 

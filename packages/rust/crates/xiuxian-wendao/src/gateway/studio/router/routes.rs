@@ -186,8 +186,12 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::get_ui_capabilities),
         )
         .route(
-            openapi_paths::API_UI_JULIA_DEPLOYMENT_ARTIFACT_AXUM_PATH,
-            get(handlers::get_julia_deployment_artifact),
+            openapi_paths::API_UI_PLUGIN_ARTIFACT_AXUM_PATH,
+            get(handlers::get_plugin_artifact),
+        )
+        .route(
+            openapi_paths::API_UI_COMPAT_DEPLOYMENT_ARTIFACT_AXUM_PATH,
+            get(handlers::get_compat_deployment_artifact),
         )
         .route(
             "/api/analysis/refine-doc",

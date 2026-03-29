@@ -9,10 +9,16 @@ fn managed_turn_build_session_id_joins_channel_and_session_key() {
 #[test]
 fn managed_turn_classify_error_detects_known_categories_case_insensitive() {
     let cases = [
-        ("MCP tools/list failed", "mcp_tools_list"),
-        ("invoke TOOLS/CALL timeout", "mcp_tools_call"),
-        ("transport send error: broken pipe", "mcp_transport"),
-        ("MCP handshake timeout while booting", "mcp_connect"),
+        ("tool tools/list failed", "tool_runtime_tools_list"),
+        ("invoke TOOLS/CALL timeout", "tool_runtime_tools_call"),
+        (
+            "transport send error: broken pipe",
+            "tool_runtime_transport",
+        ),
+        (
+            "tool handshake timeout while booting",
+            "tool_runtime_connect",
+        ),
         ("LLM provider failed", "llm"),
         ("unexpected parser issue", "unknown"),
     ];
@@ -25,5 +31,5 @@ fn managed_turn_classify_error_detects_known_categories_case_insensitive() {
 #[test]
 fn managed_turn_classify_error_prioritizes_tools_list_bucket() {
     let error = "tools/list returned error sending request";
-    assert_eq!(classify_turn_error(error), "mcp_tools_list");
+    assert_eq!(classify_turn_error(error), "tool_runtime_tools_list");
 }

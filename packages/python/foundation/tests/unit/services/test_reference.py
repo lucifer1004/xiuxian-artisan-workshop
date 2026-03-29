@@ -8,7 +8,7 @@ import yaml
 
 
 def _reset_reference_singleton() -> None:
-    from omni.foundation.services.reference import ReferenceLibrary
+    from xiuxian_foundation.services.reference import ReferenceLibrary
 
     ReferenceLibrary._instance = None
 
@@ -23,12 +23,12 @@ def test_reference_library_reads_from_prj_config_home(tmp_path, monkeypatch):
     )
 
     monkeypatch.setenv("PRJ_CONFIG_HOME", str(conf_dir))
-    from omni.foundation.config.dirs import PRJ_DIRS
+    from xiuxian_foundation.config.dirs import PRJ_DIRS
 
     PRJ_DIRS.clear_cache()
     _reset_reference_singleton()
 
-    from omni.foundation.services.reference import ReferenceLibrary
+    from xiuxian_foundation.services.reference import ReferenceLibrary
 
     ref = ReferenceLibrary()
     assert ref.get("specs.dir") == "assets/specs"
@@ -45,8 +45,8 @@ def test_reference_set_conf_dir_routes_through_directory_api(tmp_path, monkeypat
         yaml.safe_dump({"cli": {"files": ["app.py"]}}), encoding="utf-8"
     )
 
-    from omni.foundation.config.dirs import PRJ_DIRS
-    from omni.foundation.services.reference import ReferenceLibrary, get_conf_dir, set_conf_dir
+    from xiuxian_foundation.config.dirs import PRJ_DIRS
+    from xiuxian_foundation.services.reference import ReferenceLibrary, get_conf_dir, set_conf_dir
 
     try:
         set_conf_dir(str(conf_dir))
@@ -74,12 +74,12 @@ def test_has_reference_missing_key(tmp_path, monkeypatch):
     )
 
     monkeypatch.setenv("PRJ_CONFIG_HOME", str(conf_dir))
-    from omni.foundation.config.dirs import PRJ_DIRS
+    from xiuxian_foundation.config.dirs import PRJ_DIRS
 
     PRJ_DIRS.clear_cache()
     _reset_reference_singleton()
 
-    from omni.foundation.services.reference import has_reference
+    from xiuxian_foundation.services.reference import has_reference
 
     assert has_reference("does.not.exist") is False
     assert has_reference("specs.dir") is True

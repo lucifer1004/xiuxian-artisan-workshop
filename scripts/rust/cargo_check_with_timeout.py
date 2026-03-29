@@ -6,7 +6,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
+from xiuxian_wendao_py.compat.runtime import prepare_cargo_subprocess_env
 
 
 def main() -> int:

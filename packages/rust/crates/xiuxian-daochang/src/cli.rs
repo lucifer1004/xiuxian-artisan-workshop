@@ -7,7 +7,9 @@ use xiuxian_daochang::DEFAULT_STDIO_SESSION_ID;
 
 #[derive(Parser)]
 #[command(name = "xiuxian-daochang")]
-#[command(about = "Rust agent: LLM + MCP tools. Gateway, stdio, or repl (interactive / one-shot).")]
+#[command(
+    about = "Rust agent: LLM + external tools. Gateway, stdio, or repl (interactive / one-shot)."
+)]
 pub(crate) struct Cli {
     /// Override config directory (same semantics as Python `--conf`).
     #[arg(long, global = true)]
@@ -61,9 +63,9 @@ pub(crate) enum Command {
         #[arg(long)]
         max_concurrent: Option<usize>,
 
-        /// Path to mcp.json (default: .mcp.json)
-        #[arg(long, default_value = ".mcp.json")]
-        mcp_config: PathBuf,
+        /// Path to external tool config (default: .tool.json)
+        #[arg(long, default_value = ".tool.json")]
+        tool_config: PathBuf,
     },
     /// Read lines from stdin, run turn, print output. Exit on EOF or Ctrl+C.
     Stdio {
@@ -71,9 +73,9 @@ pub(crate) enum Command {
         #[arg(long, default_value = DEFAULT_STDIO_SESSION_ID)]
         session_id: String,
 
-        /// Path to mcp.json (default: .mcp.json)
-        #[arg(long, default_value = ".mcp.json")]
-        mcp_config: PathBuf,
+        /// Path to external tool config (default: .tool.json)
+        #[arg(long, default_value = ".tool.json")]
+        tool_config: PathBuf,
     },
     /// REPL: interact with the model (complex intents, tool use). One-shot with --query, or interactive loop.
     Repl {
@@ -85,9 +87,9 @@ pub(crate) enum Command {
         #[arg(long, default_value = DEFAULT_STDIO_SESSION_ID)]
         session_id: String,
 
-        /// Path to mcp.json (default: .mcp.json)
-        #[arg(long, default_value = ".mcp.json")]
-        mcp_config: PathBuf,
+        /// Path to external tool config (default: .tool.json)
+        #[arg(long, default_value = ".tool.json")]
+        tool_config: PathBuf,
     },
     /// Run recurring scheduled jobs via `JobManager`.
     Schedule {
@@ -119,9 +121,9 @@ pub(crate) enum Command {
         #[arg(long, default_value_t = 30)]
         wait_for_completion_secs: u64,
 
-        /// Path to mcp.json (default: .mcp.json)
-        #[arg(long, default_value = ".mcp.json")]
-        mcp_config: PathBuf,
+        /// Path to external tool config (default: .tool.json)
+        #[arg(long, default_value = ".tool.json")]
+        tool_config: PathBuf,
     },
     /// Run messaging channel runtime (`telegram` or `discord`).
     Channel {
@@ -133,9 +135,9 @@ pub(crate) enum Command {
         #[arg(long)]
         bot_token: Option<String>,
 
-        /// Path to mcp.json (default: .mcp.json)
-        #[arg(long, default_value = ".mcp.json")]
-        mcp_config: PathBuf,
+        /// Path to external tool config (default: .tool.json)
+        #[arg(long, default_value = ".tool.json")]
+        tool_config: PathBuf,
 
         /// Telegram transport mode (`polling` for single instance, `webhook` for multi-instance).
         #[arg(long, value_enum)]

@@ -1,10 +1,10 @@
-"""Public API surface tests for omni.foundation.config."""
+"""Public API surface tests for xiuxian_foundation.config."""
 
 from __future__ import annotations
 
 
 def test_config_module_does_not_export_legacy_wrapper_helpers() -> None:
-    import omni.foundation.config as cfg
+    import xiuxian_foundation.config as cfg
 
     assert not hasattr(cfg, "get_conf_directory")
     assert not hasattr(cfg, "set_configuration_directory")
@@ -13,7 +13,7 @@ def test_config_module_does_not_export_legacy_wrapper_helpers() -> None:
 
 
 def test_config_module_exposes_primary_settings_api() -> None:
-    import omni.foundation.config as cfg
+    import xiuxian_foundation.config as cfg
 
     assert hasattr(cfg, "Settings")
     assert hasattr(cfg, "get_settings")
@@ -21,7 +21,7 @@ def test_config_module_exposes_primary_settings_api() -> None:
 
 
 def test_config_module_exposes_link_graph_api_only() -> None:
-    import omni.foundation.config as cfg
+    import xiuxian_foundation.config as cfg
 
     assert hasattr(cfg, "get_link_graph_default_config_relative_path")
     assert hasattr(cfg, "get_link_graph_notebook_dir")

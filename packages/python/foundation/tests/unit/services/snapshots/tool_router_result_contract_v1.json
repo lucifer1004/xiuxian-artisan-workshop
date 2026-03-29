@@ -1,37 +1,55 @@
 {
-  "id": "advanced_tools.smart_find",
-  "description": "Find files by extension",
-  "score": 0.88,
-  "confidence": "high",
-  "final_score": 0.89,
-  "skill_name": "advanced_tools",
-  "tool_name": "advanced_tools.smart_find",
+  "category": "search",
   "command": "smart_find",
+  "confidence": "high",
+  "description": "Find files by extension",
   "file_path": "assets/skills/advanced_tools/scripts/search.py",
-  "routing_keywords": ["find", "files", "directory"],
+  "final_score": 0.89,
+  "id": "advanced_tools.smart_find",
   "input_schema": {
     "type": "object"
   },
+  "intents": [
+    "Locate files"
+  ],
+  "keyword_score": 0.74,
+  "name": "advanced_tools.smart_find",
   "payload": {
-    "skill_name": "advanced_tools",
     "command": "smart_find",
-    "type": "command",
     "description": "Find files by extension",
-    "tool_name": "advanced_tools.smart_find",
     "input_schema": {
       "type": "object"
     },
     "metadata": {
-      "skill_name": "advanced_tools",
-      "command": "smart_find",
-      "tool_name": "advanced_tools.smart_find",
-      "file_path": "assets/skills/advanced_tools/scripts/search.py",
-      "routing_keywords": ["find", "files", "directory"],
-      "intents": ["Locate files"],
       "category": "search",
+      "command": "smart_find",
+      "file_path": "assets/skills/advanced_tools/scripts/search.py",
       "input_schema": {
         "type": "object"
-      }
-    }
-  }
+      },
+      "intents": [
+        "Locate files"
+      ],
+      "parameters": [],
+      "routing_keywords": [
+        "find",
+        "files",
+        "directory"
+      ],
+      "skill_name": "advanced_tools",
+      "tool_name": "advanced_tools.smart_find"
+    },
+    "skill_name": "advanced_tools",
+    "tool_name": "advanced_tools.smart_find",
+    "type": "command"
+  },
+  "routing_keywords": [
+    "find",
+    "files",
+    "directory"
+  ],
+  "score": 0.88,
+  "skill_name": "advanced_tools",
+  "tool_name": "advanced_tools.smart_find",
+  "vector_score": 0.81
 }

@@ -1,7 +1,7 @@
 use super::semantic_ignition::{QuantumSemanticIgnition, QuantumSemanticIgnitionFuture};
 #[cfg(feature = "julia")]
 use crate::analyzers::{
-    JuliaArrowRequestRow, RepoIntelligenceError, build_julia_arrow_request_batch,
+    PluginArrowRequestRow, RepoIntelligenceError, build_plugin_arrow_request_batch,
 };
 use crate::link_graph::models::{QuantumAnchorHit, QuantumSemanticSearchRequest};
 #[cfg(feature = "julia")]
@@ -115,22 +115,22 @@ impl OpenAiCompatibleSemanticIgnition {
         Ok(vector)
     }
 
-    /// Build a WendaoArrow `v1` Julia request batch for one OpenAI-compatible
-    /// semantic-ignition result set.
+    /// Build a WendaoArrow `v1` plugin rerank request batch for one
+    /// OpenAI-compatible semantic-ignition result set.
     ///
     /// # Errors
     ///
-    /// Returns [`OpenAiCompatibleJuliaRequestError`] when the effective query
-    /// vector cannot be resolved, candidate embeddings cannot be fetched, or
-    /// the WendaoArrow request batch cannot be assembled.
+    /// Returns [`OpenAiCompatibleJuliaRequestError`] when the effective
+    /// query vector cannot be resolved, candidate embeddings cannot be fetched,
+    /// or the WendaoArrow request batch cannot be assembled.
     #[cfg(feature = "julia")]
-    pub async fn build_julia_rerank_request_batch(
+    pub async fn build_plugin_rerank_request_batch(
         &self,
         request: QuantumSemanticSearchRequest<'_>,
         anchors: &[QuantumAnchorHit],
-    ) -> Result<RecordBatch, OpenAiCompatibleJuliaRequestError> {
+    ) -> Result<RecordBatch, OpenAiCompatiblePluginRerankRequestError> {
         if anchors.is_empty() {
-            return Err(OpenAiCompatibleJuliaRequestError::Build(
+            return Err(OpenAiCompatiblePluginRerankRequestError::Build(
                 RepoIntelligenceError::AnalysisFailed {
                     message: "cannot build Julia rerank request from an empty anchor set"
                         .to_string(),
@@ -140,7 +140,7 @@ impl OpenAiCompatibleSemanticIgnition {
         let query_vector = self
             .resolve_query_vector(request)
             .await
-            .map_err(OpenAiCompatibleJuliaRequestError::Ignition)?;
+            .map_err(OpenAiCompatiblePluginRerankRequestError::Ignition)?;
         let ids = anchors
             .iter()
             .map(|anchor| anchor.anchor_id.clone())
@@ -149,25 +149,41 @@ impl OpenAiCompatibleSemanticIgnition {
             .store
             .fetch_embeddings_by_ids(self.table_name.as_str(), &ids)
             .await
-            .map_err(OpenAiCompatibleJuliaRequestError::VectorStore)?;
+            .map_err(OpenAiCompatiblePluginRerankRequestError::VectorStore)?;
 
         let mut rows = Vec::with_capacity(anchors.len());
         for anchor in anchors {
             let embedding = embeddings
                 .get(anchor.anchor_id.as_str())
                 .cloned()
-                .ok_or_else(|| OpenAiCompatibleJuliaRequestError::MissingEmbedding {
+                .ok_or_else(|| OpenAiCompatiblePluginRerankRequestError::MissingEmbedding {
                     anchor_id: anchor.anchor_id.clone(),
                 })?;
-            rows.push(JuliaArrowRequestRow {
+            rows.push(PluginArrowRequestRow {
                 doc_id: anchor.anchor_id.clone(),
                 vector_score: anchor.vector_score,
                 embedding,
             });
         }
 
-        build_julia_arrow_request_batch(&rows, &query_vector)
-            .map_err(OpenAiCompatibleJuliaRequestError::Build)
+        build_plugin_arrow_request_batch(&rows, &query_vector)
+            .map_err(OpenAiCompatiblePluginRerankRequestError::Build)
+    }
+
+    /// Compatibility shim for the legacy Julia-named rerank request builder.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OpenAiCompatiblePluginRerankRequestError`] when the effective
+    /// query vector cannot be resolved, candidate embeddings cannot be fetched,
+    /// or the WendaoArrow request batch cannot be assembled.
+    #[cfg(feature = "julia")]
+    pub async fn build_julia_rerank_request_batch(
+        &self,
+        request: QuantumSemanticSearchRequest<'_>,
+        anchors: &[QuantumAnchorHit],
+    ) -> Result<RecordBatch, OpenAiCompatibleJuliaRequestError> {
+        self.build_plugin_rerank_request_batch(request, anchors).await
     }
 }
 
@@ -190,26 +206,29 @@ pub enum OpenAiCompatibleSemanticIgnitionError {
 }
 
 /// Error returned when OpenAI-compatible semantic ignition cannot assemble one
-/// WendaoArrow Julia rerank request batch.
+/// WendaoArrow plugin rerank request batch.
 #[cfg(feature = "julia")]
 #[derive(Debug, Error)]
-pub enum OpenAiCompatibleJuliaRequestError {
+pub enum OpenAiCompatiblePluginRerankRequestError {
     /// Effective query-vector resolution failed.
-    #[error("failed to resolve query vector for Julia rerank request")]
+    #[error("failed to resolve query vector for plugin rerank request")]
     Ignition(#[source] OpenAiCompatibleSemanticIgnitionError),
     /// Fetching candidate embeddings from the vector store failed.
-    #[error("failed to fetch candidate embeddings for Julia rerank request")]
+    #[error("failed to fetch candidate embeddings for plugin rerank request")]
     VectorStore(#[source] VectorStoreError),
     /// One anchor id from the semantic search result set had no stored vector.
-    #[error("missing embedding for Julia rerank anchor `{anchor_id}`")]
+    #[error("missing embedding for plugin rerank anchor `{anchor_id}`")]
     MissingEmbedding {
         /// Anchor id that could not be resolved into a stored embedding row.
         anchor_id: String,
     },
     /// WendaoArrow request batch construction failed.
-    #[error("failed to build Julia rerank request batch")]
+    #[error("failed to build plugin rerank request batch")]
     Build(#[source] RepoIntelligenceError),
 }
+
+#[cfg(feature = "julia")]
+pub type OpenAiCompatibleJuliaRequestError = OpenAiCompatiblePluginRerankRequestError;
 
 impl QuantumSemanticIgnition for OpenAiCompatibleSemanticIgnition {
     type Error = OpenAiCompatibleSemanticIgnitionError;
@@ -278,7 +297,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn build_julia_rerank_request_batch_uses_explicit_query_vector() {
+    async fn build_plugin_rerank_request_batch_uses_explicit_query_vector() {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let db_path = temp_dir.path().join("openai_ignition_julia");
         let db_path_str = db_path.to_string_lossy();
@@ -306,7 +325,7 @@ mod tests {
             max_vector_score: None,
         };
         let batch = ignition
-            .build_julia_rerank_request_batch(
+            .build_plugin_rerank_request_batch(
                 request,
                 &[QuantumAnchorHit {
                     anchor_id: "doc-1#alpha".to_string(),
@@ -321,7 +340,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn build_julia_rerank_request_batch_rejects_missing_query_signal() {
+    async fn build_plugin_rerank_request_batch_rejects_missing_query_signal() {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let db_path = temp_dir.path().join("openai_ignition_julia_error");
         let db_path_str = db_path.to_string_lossy();
@@ -332,7 +351,7 @@ mod tests {
         let ignition =
             OpenAiCompatibleSemanticIgnition::new(store, "anchors", "http://127.0.0.1:9999");
         let error = ignition
-            .build_julia_rerank_request_batch(
+            .build_plugin_rerank_request_batch(
                 QuantumSemanticSearchRequest {
                     query_text: None,
                     query_vector: &[],
@@ -350,7 +369,7 @@ mod tests {
 
         assert!(matches!(
             error,
-            OpenAiCompatibleJuliaRequestError::Ignition(
+            OpenAiCompatiblePluginRerankRequestError::Ignition(
                 OpenAiCompatibleSemanticIgnitionError::MissingQuerySignal
             )
         ));

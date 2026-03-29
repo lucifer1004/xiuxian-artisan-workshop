@@ -131,49 +131,11 @@ Where:
 
 ## API Reference
 
-### Python Service
+### Python Boundary
 
-**File**: `packages/python/agent/src/omni/agent/services/memory.py`
-
-```python
-from omni.agent.services.memory import MemoryService, MemoryConfig, MemoryEpisode
-
-# Configuration
-config = MemoryConfig(
-    embedding_dim=384,
-    k1=20,  # Phase 1 candidates
-    k2=5,   # Phase 2 results
-    q_weight=0.3,  # λ weight for Q-value
-    learning_rate=0.2,
-    discount_factor=0.95,
-)
-
-# Create service
-memory = MemoryService(config)
-
-# Store episode
-episode_id = memory.store_episode(
-    intent="debug network timeout",
-    experience="Increased timeout to 30s",
-    outcome="success"
-)
-
-# Semantic recall
-results = memory.recall("fix timeout error", k=5)
-
-# Two-phase recall (semantic + Q-value)
-results = memory.two_phase_recall("fix timeout error", k1=20, k2=5, q_weight=0.3)
-
-# Multi-hop reasoning
-results = memory.multi_hop_recall(
-    queries=["debug api error", "fix timeout", "network issue"],
-    k=3
-)
-
-# Update Q-value
-memory.mark_success(episode_id)  # reward = 1.0
-memory.mark_failure(episode_id)  # reward = 0.0
-```
+The historical Python memory service layer has been removed. Python no longer
+owns memory storage, recall orchestration, or memory APIs; those responsibilities
+live in Rust services and are accessed over transport boundaries.
 
 ### Rust Core
 
@@ -226,8 +188,6 @@ packages/rust/crates/xiuxian-memory-engine/
 └── tests/
     └── test_memory_engine.rs
 
-packages/python/agent/src/omni/agent/services/
-└── memory.py            # Python service layer
 ```
 
 ---
@@ -242,9 +202,7 @@ cargo test -p xiuxian-memory-engine
 
 ### Python Tests
 
-```bash
-uv run pytest packages/python/agent/tests/unit -k memory -v
-```
+Python memory-service tests were removed along with the package.
 
 ---
 

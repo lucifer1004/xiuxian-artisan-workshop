@@ -92,7 +92,7 @@ api_key = "OPENAI_API_KEY"
 model = "gpt-4o-mini"
 timeout = 45
 
-[mcp]
+[tool_runtime]
 pool_size = 4
 strict_startup = true
 list_tools_cache_ttl_ms = 900
@@ -136,7 +136,7 @@ provider = "minimax"
 api_key = "MINIMAX_API_KEY"
 timeout = 90
 
-[mcp]
+[tool_runtime]
 pool_size = 8
 strict_startup = false
 
@@ -169,9 +169,9 @@ fn assert_nested_llm_merge(merged: &xiuxian_daochang::RuntimeSettings) {
     assert_eq!(merged.inference.model.as_deref(), Some("gpt-4o-mini"));
     assert_eq!(merged.inference.timeout, Some(90));
 
-    assert_eq!(merged.mcp.pool_size, Some(8));
-    assert_eq!(merged.mcp.strict_startup, Some(false));
-    assert_eq!(merged.mcp.list_tools_cache_ttl_ms, Some(900));
+    assert_eq!(merged.tool_runtime.pool_size, Some(8));
+    assert_eq!(merged.tool_runtime.strict_startup, Some(false));
+    assert_eq!(merged.tool_runtime.list_tools_cache_ttl_ms, Some(900));
 
     assert_eq!(merged.session.context_budget_tokens, Some(7000));
     assert_eq!(
@@ -415,7 +415,7 @@ fn missing_files_fallback_to_defaults() {
     assert!(telegram_overrides.allowed_users.is_empty());
     assert!(telegram_overrides.allowed_groups.is_empty());
     assert!(merged.telegram.group_policy.is_none());
-    assert!(merged.mcp.pool_size.is_none());
+    assert!(merged.tool_runtime.pool_size.is_none());
     assert!(merged.embedding.backend.is_none());
     assert!(merged.memory.embedding_timeout_ms.is_none());
 }

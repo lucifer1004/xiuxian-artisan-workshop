@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from omni.foundation.api.response_payloads import (
+from xiuxian_foundation.api.response_payloads import (
     build_error_response,
     build_status_error_response,
     build_status_message_response,

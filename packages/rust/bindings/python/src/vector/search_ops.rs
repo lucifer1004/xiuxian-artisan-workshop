@@ -109,7 +109,7 @@ fn calibrate_confidence(score: f32, profile: &ConfidenceProfile) -> (&'static st
 }
 
 const TOOL_SEARCH_COMMON_SCHEMA_JSON: &str =
-    include_str!("../../../../../shared/schemas/omni.vector.tool_search.v1.schema.json");
+    include_str!("../../../../crates/xiuxian-vector/resources/xiuxian.vector.tool_search.v1.schema.json");
 
 #[derive(Debug, Clone)]
 struct CommonSchemaRules {
@@ -223,7 +223,7 @@ fn build_tool_search_payload(
     let mut payload = JsonMap::new();
     payload.insert(
         "schema".to_string(),
-        JsonValue::String("omni.vector.tool_search.v1".to_string()),
+        JsonValue::String("xiuxian.vector.tool_search.v1".to_string()),
     );
     payload.insert("name".to_string(), JsonValue::String(r.name.clone()));
     payload.insert(
@@ -322,7 +322,7 @@ pub(crate) fn search_optimized_async(
             .map(|r| {
                 let score = 1.0f64 / (1.0f64 + r.distance.max(0.0));
                 serde_json::json!({
-                    "schema": "omni.vector.search.v1",
+                    "schema": "xiuxian.vector.search.v1",
                     "id": r.id,
                     "content": r.content,
                     "metadata": r.metadata,
@@ -379,7 +379,7 @@ pub(crate) fn search_hybrid_async(
                     .cloned()
                     .unwrap_or_else(|| (String::new(), serde_json::json!({})));
                 serde_json::json!({
-                    "schema": "omni.vector.hybrid.v1",
+                    "schema": "xiuxian.vector.hybrid.v1",
                     "id": r.tool_name,
                     "content": content,
                     "metadata": metadata,
@@ -539,7 +539,7 @@ mod tests {
     #[test]
     fn common_schema_accepts_canonical_payload() {
         let payload = serde_json::json!({
-            "schema": "omni.vector.tool_search.v1",
+            "schema": "xiuxian.vector.tool_search.v1",
             "name": "git.commit",
             "tool_name": "git.commit",
             "description": "Commit changes",
@@ -560,7 +560,7 @@ mod tests {
     #[test]
     fn common_schema_rejects_legacy_keywords_field() {
         let payload = serde_json::json!({
-            "schema": "omni.vector.tool_search.v1",
+            "schema": "xiuxian.vector.tool_search.v1",
             "name": "git.commit",
             "tool_name": "git.commit",
             "keywords": ["git", "commit"]

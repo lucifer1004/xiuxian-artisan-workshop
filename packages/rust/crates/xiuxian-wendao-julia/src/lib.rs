@@ -1,5 +1,7 @@
 //! External Julia Repo Intelligence plugin for `xiuxian-wendao`.
 
+/// Legacy compatibility surfaces exported by the standalone Julia plugin crate.
+pub mod compatibility;
 mod plugin;
 
 #[cfg(test)]

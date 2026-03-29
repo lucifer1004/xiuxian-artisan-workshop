@@ -5,7 +5,6 @@ description = "Exclusive testing framework for Omni Dev Fusion"
 dependencies = [
     "pytest>=8.0.0",
     "pyarrow>=23.0.0",
-    "xiuxian-daochang",
     "xiuxian-foundation",
     "xiuxian-core",
 ]
@@ -16,8 +15,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.entry-points.pytest11]
-xiuxian_test_kit = "omni.test_kit.plugin"
+xiuxian_test_kit = "xiuxian_test_kit.plugin"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/omni"]
-exclude = ["src/omni/__init__.py"]
+packages = ["src/xiuxian_test_kit"]

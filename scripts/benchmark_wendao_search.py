@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
+from xiuxian_wendao_py.compat.runtime import prepare_cargo_subprocess_env
 
 
 @dataclass

@@ -1,6 +1,6 @@
 ---
 type: knowledge
-title: "Skill Discovery"
+title: "Discovery"
 category: "developer"
 tags:
   - developer
@@ -8,49 +8,26 @@ tags:
 saliency_base: 6.3
 decay_rate: 0.04
 metadata:
-  title: "Skill Discovery"
+  title: "Discovery"
 ---
 
-# Skill Discovery
+# Discovery
 
-> **WARNING**: This document is outdated and references deleted modules.
-> For current documentation, see the links below.
+## Status
 
----
+The historical Python discovery stack has been removed.
 
-## Migration Guide
+Python no longer owns:
 
-### Current Documentation
+1. skill discovery
+2. skill indexing
+3. router discovery
+4. local registry-based discovery helpers
 
-| Topic               | Documentation                                    |
-| ------------------- | ------------------------------------------------ |
-| Skills System       | [Skills System](../architecture/skills.md)       |
-| Router Architecture | [Router Architecture](../architecture/router.md) |
-| Kernel Architecture | [Kernel Architecture](../architecture/kernel.md) |
+Those responsibilities now live in Rust services.
 
-### Old → New Mappings
+## Developer Rule
 
-| Deleted Module                      | New Module                     |
-| ----------------------------------- | ------------------------------ |
-| `agent.core.skill_discovery`        | `omni.core.skills.discovery`   |
-| `agent.core.router.semantic_router` | `omni.core.router`             |
-| `agent/core/router/sniffer.py`      | `omni.core.router.sniffer`     |
-| `agent/core.vector_store`           | `omni.foundation.vector_store` |
-
-### Key Classes
-
-| Old                    | New                     |
-| ---------------------- | ----------------------- |
-| `VectorSkillDiscovery` | `SkillDiscoveryService` |
-| `SemanticRouter`       | `OmniRouter`            |
-| `ContextSniffer`       | `IntentSniffer`         |
-
----
-
-## Historical Note
-
-This document previously described the old skill discovery system which has been completely rewritten for the Trinity Architecture (Foundation/Core/MCP-Server). The new system uses:
-
-- **Rust Scanner**: High-performance skill scanning via `xiuxian-skills` crate
-- **Skill Index**: JSON-based index (`skill_index.json`)
-- **Intent Sniffer**: Context-aware routing
+Do not add new Python discovery layers. If a workflow needs discovery or
+indexing behavior, it must consume Rust-owned contracts instead of recreating a
+Python-local discovery stack.

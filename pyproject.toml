@@ -15,9 +15,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "xiuxian-core-rs",
     "xiuxian-wendao-py",
-    "xiuxian-daochang",
     "xiuxian-foundation",
     "xiuxian-core",
     "xiuxian-test-kit",
@@ -51,16 +49,18 @@ source = "vcs"
 [tool.uv.sources]
 xiuxian-wendao-py = { workspace = true }
 xiuxian-foundation = { workspace = true }
-xiuxian-daochang = { workspace = true }
 xiuxian-core = { workspace = true }
-xiuxian-mcp = { workspace = true }
 xiuxian-test-kit = { workspace = true }
-xiuxian-core-rs = { path = "packages/rust/bindings/python", editable = true }
 raganything = { git = "https://github.com/HKUDS/RAG-Anything.git" }
 
 
 [tool.uv.workspace]
-members = ["packages/python/*"]
+members = [
+    "packages/python/core",
+    "packages/python/foundation",
+    "packages/python/test-kit",
+    "packages/python/xiuxian-wendao-py",
+]
 
 
 [tool.hatch.build.targets.wheel]
@@ -71,7 +71,6 @@ bypass-selection = true
 target-version = "py313"
 line-length = 100
 src = [
-    "packages/python/agent/src",
     "packages/python/core/src",
     "packages/python/foundation/src",
     "packages/python/xiuxian-wendao-py/src",
@@ -96,7 +95,14 @@ ignore = ["E501"]
 keep-runtime-typing = true
 
 [tool.ruff.lint.isort]
-known-first-party = ["omni.agent", "omni.core", "omni.foundation", "xiuxian_wendao_py"]
+known-first-party = [
+    "xiuxian_core",
+    "xiuxian_foundation",
+    "xiuxian_rag",
+    "xiuxian_test_kit",
+    "xiuxian_tracer",
+    "xiuxian_wendao_py",
+]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]
@@ -112,7 +118,6 @@ disallow_untyped_defs = false
 namespace_packages = true
 explicit_package_bases = true
 mypy_path = [
-    "packages/python/agent/src",
     "packages/python/core/src",
     "packages/python/foundation/src",
     "packages/python/xiuxian-wendao-py/src",
@@ -131,10 +136,8 @@ addopts = [
     "-p", "no:benchmark", # Disable benchmark to avoid xdist warnings
 ]
 testpaths = [
-    "packages/python/agent/tests",
     "packages/python/core/tests",
     "packages/python/foundation/tests",
-    "packages/python/mcp-server/tests",
     "packages/python/test-kit/tests",
     "packages/python/xiuxian-wendao-py/tests",
     "assets/skills",
@@ -151,7 +154,7 @@ filterwarnings = [
     "ignore:enable_cleanup_closed ignored because .* is fixed in Python version.*:DeprecationWarning:aiohttp.connector",
     # Ignore benchmark disabled warning when running in parallel (xdist)
     "ignore:Benchmarks are automatically disabled:pytest_benchmark.logger.PytestBenchmarkWarning",
-    "ignore:Module already imported so cannot be rewritten; omni\\.test_kit\\.fixtures:pytest.PytestAssertRewriteWarning",
+    "ignore:Module already imported so cannot be rewritten; xiuxian_test_kit\\.fixtures:pytest.PytestAssertRewriteWarning",
 ]
 norecursedirs = ["stress_tests"]
 markers = [
@@ -164,7 +167,14 @@ markers = [
 
 # Coverage configuration for package sources
 [tool.coverage.run]
-source = ["omni"]
+source = [
+    "xiuxian_core",
+    "xiuxian_foundation",
+    "xiuxian_rag",
+    "xiuxian_test_kit",
+    "xiuxian_tracer",
+    "xiuxian_wendao_py",
+]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
@@ -192,7 +202,7 @@ title = "Omni Dev Fusion - Test Coverage Report"
 
 [tool.vulture]
 # Vulture configuration for dead code detection
-paths = ["packages/python/agent/src", "packages/python/foundation/src"]
+paths = ["packages/python/foundation/src"]
 min_confidence = 80
 # Exclude generated or third-party code
 exclude = ["*/tests/*", "*/__pycache__/*", "*/.venv/*", "*/venv/*"]

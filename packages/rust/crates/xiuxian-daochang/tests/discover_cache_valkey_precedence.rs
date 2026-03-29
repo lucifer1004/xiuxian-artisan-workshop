@@ -15,7 +15,7 @@ use rmcp::service::{RequestContext, RoleServer};
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 use tempfile::TempDir;
-use xiuxian_daochang::{McpPoolConnectConfig, connect_pool};
+use xiuxian_daochang::{ToolPoolConnectConfig, connect_tool_pool};
 
 const CHILD_ENV_KEY: &str = "OMNI_AGENT_DISCOVER_CACHE_PRECEDENCE_CHILD";
 const CHILD_CASE_KEY: &str = "OMNI_AGENT_DISCOVER_CACHE_PRECEDENCE_CASE";
@@ -96,8 +96,8 @@ fn write_runtime_settings(root: &Path, system_toml: &str) -> Result<()> {
     Ok(())
 }
 
-fn reconnect_test_config() -> McpPoolConnectConfig {
-    McpPoolConnectConfig {
+fn reconnect_test_config() -> ToolPoolConnectConfig {
+    ToolPoolConnectConfig {
         pool_size: 1,
         handshake_timeout_secs: 2,
         connect_retries: 6,
@@ -134,7 +134,7 @@ async fn spawn_mock_server(addr: std::net::SocketAddr) -> tokio::task::JoinHandl
     let router = Router::new().nest_service("/sse", service);
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => listener,
-        Err(error) => panic!("bind mock mcp listener: {error}"),
+        Err(error) => panic!("bind mock tool listener: {error}"),
     };
     tokio::spawn(async move {
         let _ = axum::serve(listener, router).await;
@@ -152,7 +152,7 @@ fn run_child_case(root: &Path, case: &str, valkey_url: &str) -> Result<()> {
         .env("PRJ_ROOT", root)
         .env("PRJ_CONFIG_HOME", root.join(".config"))
         .env("VALKEY_URL", valkey_url)
-        .env("OMNI_AGENT_MCP_DISCOVER_CACHE_ENABLED", "true")
+        .env("OMNI_AGENT_TOOL_DISCOVER_CACHE_ENABLED", "true")
         .output()
         .with_context(|| format!("spawn child probe for case={case}"))?;
 
@@ -175,7 +175,7 @@ fn discover_cache_valkey_url_resolution_prefers_settings_and_keeps_env_fallback(
     write_runtime_settings(
         case_settings_first.path(),
         r#"
-[mcp]
+[tool_runtime]
 discover_cache_enabled = true
 
 [session]
@@ -192,7 +192,7 @@ valkey_url = "redis://127.0.0.1:6379/0"
     write_runtime_settings(
         case_env_fallback.path(),
         r"
-[mcp]
+[tool_runtime]
 discover_cache_enabled = true
 ",
     )?;
@@ -221,7 +221,7 @@ async fn discover_cache_valkey_precedence_child_probe() -> Result<()> {
     let handle = spawn_mock_server(addr).await;
     let url = format!("http://{addr}/sse");
 
-    let pool = connect_pool(&url, reconnect_test_config())
+    let pool = connect_tool_pool(&url, reconnect_test_config())
         .await
         .context("connect pool in child probe")?;
     let snapshot = pool.discover_cache_stats_snapshot();

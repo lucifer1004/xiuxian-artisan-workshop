@@ -9,7 +9,7 @@ use std::time::Duration;
 use super::runtime::resolve_embed_model;
 use super::types::{
     EmbedBatchRequest, EmbedBatchResponse, EmbedRequest, EmbedResponse, GatewayEmbeddingRuntime,
-    GatewayHealthResponse, GatewayJsonError, GatewayJsonResult, GatewayMcpHealthResponse,
+    GatewayExternalToolHealthResponse, GatewayHealthResponse, GatewayJsonError, GatewayJsonResult,
     GatewayState, MessageRequest, MessageResponse, OpenAiEmbeddingData, OpenAiEmbeddingUsage,
     OpenAiEmbeddingsRequest, OpenAiEmbeddingsResponse,
 };
@@ -235,7 +235,7 @@ pub(super) async fn handle_openai_embeddings(
 pub(super) async fn handle_health(
     State(state): State<GatewayState>,
 ) -> Json<GatewayHealthResponse> {
-    let mcp_cache = state.agent.inspect_mcp_tools_list_cache_stats();
+    let tool_list_cache = state.agent.inspect_tool_list_cache_stats();
     let in_flight_turns = state.max_concurrent_turns.and_then(|max| {
         state
             .concurrency_semaphore
@@ -248,9 +248,9 @@ pub(super) async fn handle_health(
         turn_timeout_secs: state.turn_timeout_secs,
         max_concurrent_turns: state.max_concurrent_turns,
         in_flight_turns,
-        mcp: GatewayMcpHealthResponse {
-            enabled: mcp_cache.is_some(),
-            tools_list_cache: mcp_cache,
+        tools: GatewayExternalToolHealthResponse {
+            enabled: tool_list_cache.is_some(),
+            tools_list_cache: tool_list_cache,
         },
     })
 }

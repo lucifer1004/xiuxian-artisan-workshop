@@ -12,6 +12,9 @@ mod vfs;
 
 use crate::gateway::openapi::paths::shared::contracts::RouteContract;
 
+#[cfg(test)]
+pub(crate) use ui::UI_PLUGIN_ARTIFACT;
+
 macro_rules! route_contracts {
     ( $( $module:ident :: [ $( $name:ident ),+ $(,)? ] ),+ $(,)? ) => {
         &[
@@ -57,7 +60,7 @@ pub const WENDAO_GATEWAY_ROUTE_CONTRACTS: &[RouteContract] = route_contracts![
         DOCS_NAVIGATION,
         DOCS_NAVIGATION_SEARCH
     ],
-    ui::[UI_CONFIG, UI_CAPABILITIES, UI_JULIA_DEPLOYMENT_ARTIFACT],
+    ui::[UI_CONFIG, UI_CAPABILITIES, UI_PLUGIN_ARTIFACT, UI_COMPAT_DEPLOYMENT_ARTIFACT],
     repo::[
         REPO_OVERVIEW,
         REPO_MODULE_SEARCH,

@@ -9,10 +9,6 @@ fn has_non_empty(value: Option<&str>) -> bool {
     value.is_some_and(|candidate| !candidate.trim().is_empty())
 }
 
-fn has_legacy_mcp_url(runtime: &EmbeddingDispatchRuntime) -> bool {
-    has_non_empty(runtime.mcp_url.as_deref())
-}
-
 pub(super) async fn dispatch_chunk_by_backend(
     runtime: &EmbeddingDispatchRuntime,
     texts: &[String],
@@ -45,8 +41,7 @@ async fn dispatch_http_backend(
             event = "agent.embedding.http.primary_failed",
             base_url = runtime.base_url,
             model = model.unwrap_or(""),
-            has_legacy_mcp_url = has_legacy_mcp_url(runtime),
-            "embedding http primary failed; no MCP fallback is configured in rust-only mode"
+            "embedding http primary failed"
         );
     }
     primary
@@ -63,8 +58,7 @@ async fn dispatch_openai_backend(
             event = "agent.embedding.openai_http.primary_failed",
             base_url = runtime.base_url,
             model = model.unwrap_or(""),
-            has_legacy_mcp_url = has_legacy_mcp_url(runtime),
-            "embedding openai-http primary failed; no MCP fallback is configured in rust-only mode"
+            "embedding openai-http primary failed"
         );
     }
     primary
@@ -215,7 +209,7 @@ async fn dispatch_ollama_model_with_feature(
             event = "agent.embedding.litellm.provider.skipped_missing_api_key",
             model,
             base_url = runtime.base_url,
-            "litellm-rs provider fallback skipped because no API key is configured; rust-only mode disables MCP fallback"
+            "litellm-rs provider fallback skipped because no API key is configured; rust-only mode disables legacy external fallback"
         );
         return None;
     }
@@ -242,8 +236,7 @@ async fn dispatch_ollama_model_with_feature(
         event = "agent.embedding.ollama.all_paths_failed",
         model,
         base_url = runtime.base_url,
-        has_legacy_mcp_url = has_legacy_mcp_url(runtime),
-        "all rust embedding paths failed for ollama model; no MCP fallback in rust-only mode"
+        "all rust embedding paths failed for ollama model"
     );
     None
 }
@@ -288,8 +281,7 @@ async fn dispatch_standard_litellm_model_with_feature(
             event = "agent.embedding.litellm.standard_paths_failed",
             model,
             base_url = runtime.base_url,
-            has_legacy_mcp_url = has_legacy_mcp_url(runtime),
-            "provider and http fallback failed for litellm backend; no MCP fallback in rust-only mode"
+            "provider and http fallback failed for litellm backend"
         );
     }
     http_fallback

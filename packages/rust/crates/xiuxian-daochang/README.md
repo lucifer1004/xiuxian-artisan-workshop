@@ -1,24 +1,24 @@
-# omni-agent
+# xiuxian-daochang
 
-Minimal Rust agent loop (Phase B): one user turn with LLM + MCP tools.
+Minimal Rust agent loop (Phase B): one user turn with LLM and optional external tool integrations.
 
 ## Features
 
-- **Config** (`AgentConfig`): inference API URL, model, API key (env or field), MCP server list, `max_tool_rounds`, optional `window_max_turns`.
+- **Config** (`AgentConfig`): inference API URL, model, API key (env or field), external-tool server list (`tool_servers`), `max_tool_rounds`, optional `window_max_turns`.
 - **Session**: in-memory `SessionStore` per `session_id`; or when `window_max_turns` is set, **omni-window** (ring buffer) for bounded history and scalable context (1k–10k turns).
 - **LLM** (`LlmClient`): OpenAI-compatible chat completions with optional tool definitions and `tool_calls` parsing.
-- **Agent** (`Agent`): `run_turn(session_id, user_message)` — builds messages, optionally fetches tools from MCP, calls LLM, handles tool_calls via MCP `tools/call`, repeats until no tool_calls or `max_tool_rounds`.
+- **Agent** (`Agent`): `run_turn(session_id, user_message)` — builds messages, optionally fetches external tools, calls LLM, handles tool calls, repeats until no tool_calls or `max_tool_rounds`.
 
 ## Usage
 
 ```rust
-use omni_agent::{Agent, AgentConfig, McpServerEntry};
+use xiuxian_daochang::{Agent, AgentConfig, ToolServerEntry};
 
 let config = AgentConfig {
     inference_url: "https://api.openai.com/v1/chat/completions".to_string(),
     model: "gpt-4o-mini".to_string(),
     api_key: None, // uses OPENAI_API_KEY from env
-    mcp_servers: vec![McpServerEntry {
+    tool_servers: vec![ToolServerEntry {
         name: "local".to_string(),
         url: Some("http://127.0.0.1:3002/sse".to_string()),
         command: None,
@@ -50,16 +50,14 @@ let agent = Agent::from_config(config).await?;
 ```bash
 export OPENAI_API_KEY=sk-...
 # Optional: use LiteLLM proxy (then set LITELLM_PROXY_URL or use default :4000)
-# Optional: start Python MCP and set URL
-export OMNI_MCP_URL=http://127.0.0.1:3002/sse
 
-cargo run -p omni-agent --example one_turn -- "Say hello in one sentence."
+cargo run -p xiuxian-daochang --example one_turn -- "Say hello in one sentence."
 ```
 
 ## Tests
 
-- Unit: `cargo test -p omni-agent --test config_and_session`
-- Integration (real LLM + optional MCP): `cargo test -p omni-agent --test agent_integration -- --ignored`
+- Unit: `cargo test -p xiuxian-daochang --test config_and_session`
+- Integration (real LLM + optional external tools): `cargo test -p xiuxian-daochang --test agent_integration -- --ignored`
 
 ## Plan
 

@@ -6,12 +6,12 @@ from __future__ import annotations
 
 import pytest
 
-from omni.tracer import create_default_invoker_stack
+from xiuxian_tracer.invoker_stack import create_default_invoker_stack
 
 
-class _MCPClient:
+class _ToolClient:
     async def call_tool(self, name: str, arguments: dict | None = None):
-        return {"source": "mcp", "name": name, "arguments": arguments or {}}
+        return {"source": "tool", "name": name, "arguments": arguments or {}}
 
 
 @pytest.mark.asyncio
@@ -29,17 +29,17 @@ async def test_default_stack_uses_mapping_when_available():
 
 
 @pytest.mark.asyncio
-async def test_default_stack_prioritizes_mcp_over_mapping():
+async def test_default_stack_prioritizes_tool_client_over_mapping():
     async def mapped(payload, state):
         return {"source": "mapping"}
 
     invoker = create_default_invoker_stack(
-        mcp_client=_MCPClient(),
+        tool_client=_ToolClient(),
         include_retrieval=False,
         mapping={"demo.run": mapped},
     )
     out = await invoker.invoke("demo", "run", {"x": 1}, {})
-    assert out["source"] == "mcp"
+    assert out["source"] == "tool"
     assert out["name"] == "demo.run"
 
 
@@ -54,10 +54,10 @@ async def test_default_stack_falls_back_to_noop():
 
 @pytest.mark.asyncio
 async def test_default_stack_can_include_retrieval(monkeypatch):
-    import omni.tracer.invoker_stack as module
+    import xiuxian_tracer.invoker_stack as module
 
     class _FakeRetrievalInvoker:
-        def __init__(self, default_backend: str = "lance"):
+        def __init__(self, default_backend: str = "vector"):
             self.default_backend = default_backend
 
         async def invoke(self, server, tool, payload, state):

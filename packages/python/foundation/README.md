@@ -16,20 +16,20 @@ This package provides shared components used by both the orchestrator and execut
 
 | Module                     | Purpose                        |
 | -------------------------- | ------------------------------ |
-| `omni.foundation.config`   | Settings, paths, logging       |
-| `omni.foundation.api`      | Decorators, protocols, types   |
-| `omni.foundation.bridge`   | Rust-Python interop            |
-| `omni.foundation.services` | LLM, memory, embedding, vector |
-| `omni.foundation.runtime`  | Context, isolation, gitops     |
+| `xiuxian_foundation.config`   | Settings, paths, logging       |
+| `xiuxian_foundation.api`      | Decorators, protocols, types   |
+| `xiuxian_foundation.bridge`   | Rust-Python interop            |
+| `xiuxian_foundation.services` | LLM, memory, embedding, vector |
+| `xiuxian_foundation.runtime`  | Context, isolation, gitops     |
 
 ## Services Submodules
 
-### Memory Module (`omni.foundation.services.memory`)
+### Memory Module (`xiuxian_foundation.services.memory`)
 
 Project memory storage using ADR pattern with LanceDB backend.
 
 ```
-omni.foundation.services.memory/
+xiuxian_foundation.services.memory/
 ├── base.py                    # Public API exports
 ├── core/
 │   ├── interface.py           # Abstract interfaces and data types
@@ -42,7 +42,7 @@ omni.foundation.services.memory/
 ### Key Classes
 
 ```python
-from omni.foundation.services.memory import ProjectMemory
+from xiuxian_foundation.services.memory import ProjectMemory
 
 # Create memory instance (LanceDB by default)
 memory = ProjectMemory()

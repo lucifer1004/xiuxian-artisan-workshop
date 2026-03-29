@@ -10,7 +10,7 @@ Updated for ODF-EP v6.0 (Pydantic V2):
 
 import pytest
 
-from omni.foundation.api.decorators import (
+from xiuxian_foundation.api.decorators import (
     CommandResult,
     get_script_config,
     is_skill_command,
@@ -153,14 +153,14 @@ class TestSkillCommandDecorator:
         assert hasattr(test_cmd, "_skill_config")
 
     def test_skill_command_returns_direct_result(self) -> None:
-        """Verify @skill_command returns MCP canonical result (content[].text)."""
+        """Verify @skill_command returns canonical tool result (content[].text)."""
 
         @skill_command()
         def simple() -> str:
             """Simple function."""
             return "result"
 
-        # Decorator normalizes return to MCP tools/call result shape
+        # Decorator normalizes return to the canonical tool result shape
         result = simple()
         assert isinstance(result, dict)
         assert result.get("content") and result["content"][0].get("text") == "result"

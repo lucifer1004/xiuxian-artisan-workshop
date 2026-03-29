@@ -7,7 +7,7 @@ use xiuxian_vector::{
     ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION, ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY,
     attach_record_batch_metadata, attach_record_batch_trace_id,
 };
-use xiuxian_wendao::analyzers::{
+use xiuxian_wendao_core::repo_intelligence::{
     JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_FINAL_SCORE_COLUMN,
     julia_arrow_request_schema, julia_arrow_response_schema,
 };

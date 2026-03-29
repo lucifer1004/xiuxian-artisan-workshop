@@ -13,6 +13,8 @@ metadata:
 
 # Omega + Graph + Loop/ReAct: Rust Unification Blueprint
 
+> Legacy transition blueprint. Historical references to the older external-tool stack in this document describe an earlier migration stage and are no longer the target end-state.
+
 > Goal: converge execution into a single Rust runtime (`xiuxian-daochang`) by fusing Omega reasoning, Graph planning, ReAct tool execution, and authoritative Xiuxian-Qianhuan injection, then progressively remove Python runtime paths.
 >
 > Detailed companion: [Xiuxian-Qianhuan Injection + Memory Self-Evolution + Reflection](../memory/injection-evolution.md)
@@ -25,11 +27,10 @@ metadata:
 
 - In scope:
   - Unify Omega, Graph, and ReAct under one Rust execution kernel.
-  - Keep Python as MCP tool provider during transition.
   - Move session windowing, compression, and memory self-evolution to Rust-first execution path.
 - Out of scope:
   - Rewriting every tool/skill from Python to Rust immediately.
-  - Breaking existing MCP contracts during migration.
+  - Reintroducing a Python- or external-tool-centered runtime loop outside Rust ownership.
 
 ## 2. Target Architecture
 
@@ -43,9 +44,9 @@ flowchart LR
   R --> P[Graph Planning Engine]
   R --> X[ReAct Execution Engine]
 
-  X --> M[MCP Client Pool]
-  M --> PY[Python MCP Tool Servers (transition)]
-  M --> RS[Rust-native MCP servers]
+  X --> T[Tool Integration Layer]
+  T --> PY[Legacy Python Tool Adapters (compat only)]
+  T --> RS[Rust-native Tool Services]
 
   R --> W[xiuxian-window]
   R --> MM[xiuxian-memory-engine]
@@ -87,7 +88,7 @@ flowchart LR
    - Repair plan before execution when quality checks fail.
 6. ReAct execution:
    - Execute tool loop with budget, retries, and structured error taxonomy.
-   - Call tools through MCP client pool only.
+   - Call tools through one Rust-owned tool integration layer only.
 7. Self-evolution update:
    - Store episode outcome and feedback in `xiuxian-memory-engine`.
    - Persist session window snapshots and summary segments.
@@ -122,19 +123,19 @@ Project progress must be tracked by feature name (not phase/stage labels). Recom
 | **ReAct Tool Runtime (Rust)**            | Tool-call loop, retry, budget, and failure policy consolidated in Rust.                   |
 | **Session Window Compression (Rust)**    | Predictable context compression and restore strategy backed by `xiuxian-window`.          |
 | **Memory Self-Evolution Runtime (Rust)** | Outcome feedback and recall adaptation persisted via DB-backed `xiuxian-memory-engine`.   |
-| **Python Runtime Decommissioning**       | Python side is MCP tool service only; no duplicated runtime loop entrypoints.             |
+| **Python Runtime Decommissioning**       | Python side is transport/adapter-only; no duplicated runtime loop entrypoints.            |
 
 ## 5. Migration Rules
 
 - Single authority:
   - Runtime orchestration authority is Rust.
-  - Python authority is tool implementation behind MCP.
+  - Python authority is thin adapter/transport implementation only when still needed.
 - Thin orchestrator rule:
   - `xiuxian-daochang` remains orchestration-only.
   - Memory lifecycle/revalidation/promotion core logic must live in Rust memory package(s), not inside agent runtime modules.
-- MCP interoperability rule:
-  - Keep `skill memory` as MCP-facing tool surface for external clients.
-  - `skill memory` acts as a thin facade to Rust memory core (via bindings/bridge), without duplicating policy logic.
+- External interoperability rule:
+  - Keep any legacy external tool facade thin and compatibility-only.
+  - Memory policy must remain in Rust core without duplicated facade logic.
 - Prompt/context authority:
   - Prompt/knowledge injection authority is Rust `Xiuxian-Qianhuan Assembler`.
   - Python side must not inject hidden runtime prompt context.
@@ -142,7 +143,7 @@ Project progress must be tracked by feature name (not phase/stage labels). Recom
   - Do not keep long-term “Rust loop + Python loop” behavior parity mode.
   - Keep one execution contract and migrate callers to it.
 - Contract-first evolution:
-  - Keep MCP `tools/list` and `tools/call` behavior stable while internals move.
+  - Keep external tool-facing contracts stable while internals move.
   - Version schemas when changing output shape.
 - Isolation by default:
   - Session partition key is mandatory (`channel:chat_id:thread_id` when applicable).
@@ -152,9 +153,9 @@ Project progress must be tracked by feature name (not phase/stage labels). Recom
 
 - `memory`:
   - short-term operational runtime memory (Rust core owned)
-  - exposed through MCP memory skill facade for interoperability
+  - exposed through thin compatibility facades only when required
 - `knowledge`:
-  - long-term durable knowledge interface (MCP knowledge skill)
+  - long-term durable knowledge interface
 - `xiuxian-daochang`:
   - orchestration only; no embedding of memory lifecycle policy logic
 
@@ -195,19 +196,19 @@ Policy:
   - Deterministic parser and command routing tests in dedicated `tests/` modules.
   - Prompt injection determinism tests (same inputs => same ordered context blocks).
 - Reliability:
-  - MCP startup and reconnect resilience under slow-start and transient failures.
+  - External tool startup and reconnect resilience under slow-start and transient failures where such integrations still exist.
   - No silent exits; structured startup/shutdown diagnostics.
 - Performance:
   - Baseline and regression benchmark for p50/p95 latency, failure rate, and memory peak.
   - Concurrent-session load tests for gateway mode.
 - Observability:
-  - Structured events for session lifecycle, snapshot operations, memory recall/update, MCP call duration, and tool failures.
+  - Structured events for session lifecycle, snapshot operations, memory recall/update, tool call duration, and tool failures.
 
 ## 7. Python Runtime Removal End-State
 
 - End-state contract:
   - `xiuxian-daochang` is the only runtime orchestrator.
-  - Python process provides MCP tools and supporting services only.
+  - Python process provides transport/adapters only when still required.
 - Cleanup targets:
   - Remove Python runtime loop command paths after Rust parity is proven.
   - Keep compatibility wrappers only where they map directly to Rust commands.
@@ -242,7 +243,7 @@ After A0-A7 closure, the next implementation queue is feature-driven (not gate-d
 | P0-1     | Graph Planning Engine (Rust)                | Move planning contract and graph execution entry to Rust runtime with deterministic plan schema. | Rust graph plan contract is generated and consumed without Python runtime loop dependency. | `cargo test -p xiuxian-daochang --test contracts` + graph planning integration tests |
 | P0-2     | Omega Deliberation Engine (Rust)            | Expand policy routing into explicit plan-repair/quality-gate path in Rust.                       | Route policy can enforce repair or fallback with auditable reason fields.                  | `cargo test -p xiuxian-daochang --test agent_injection` + reflection threshold tests |
 | P0-3     | Role-Mix Injection Profiles                 | Add `single/classified/hybrid` profile selection with deterministic assembly.                    | Role-mix profile is selected by policy and recorded in injection snapshot traces.          | `cargo test -p xiuxian-daochang --lib injection::tests` + trace reconstruction gate  |
-| P0-4     | Python Runtime Decommissioning (Loop paths) | Remove duplicated Python runtime loop entrypoints while preserving MCP tool plane.               | Runtime orchestration entry remains Rust-only (`xiuxian-daochang`).                        | `python3 scripts/channel/test_xiuxian_daochang_memory_ci_gate.py --profile nightly`  |
+| P0-4     | Python Runtime Decommissioning (Loop paths) | Remove duplicated Python runtime loop entrypoints while preserving only the minimum adapter plane. | Runtime orchestration entry remains Rust-only (`xiuxian-daochang`).                        | `python3 scripts/channel/test_xiuxian_daochang_memory_ci_gate.py --profile nightly`  |
 | P0-5     | Adversarial Sub-graph Routing               | Deprecate regex-based triggers for Qianji workflows; elevate to Omega routing policy.            | Omega natively outputs `route: graph` + `workflow_mode: agenda_validation` via LLM JSON.   | `cargo test -p xiuxian-daochang --test agent_omega_routing`                          |
 
 ### P0-1 Status Update (2026-02-23)
@@ -316,21 +317,17 @@ Verification commands:
 
 Completed in current branch:
 
-- `omni.agent.cli.commands.gateway_agent` now dispatches to Rust runtime only; Python loop helpers removed.
-- `omni.agent.gateway.webhook.create_webhook_app()` is explicitly decommissioned and fails fast with a migration message.
+- Python gateway/CLI entrypoints now dispatch to Rust runtime only; Python loop helpers removed.
 - Added Rust-orchestrator startup guard in Python CLI (`agent.runtime_orchestrator` must stay `rust`).
-- `omni.agent.workflows.run_entry` is removed from the package.
-- `omni.agent.core.omni` public API no longer exports Python runtime orchestrators (`OmniLoop`, `OmegaRunner`, `MissionConfig`).
-- Python modules `core/omni/loop.py` and `core/omni/omega.py` are fully removed from the package.
-- Python runtime modules `omni.agent.main` and `omni.agent.cli.xiuxian_loop` are fully removed from the package.
-- MCP tool-plane behavior is preserved; no compatibility fallback to Python runtime loops was added.
+- The historical Python workflow and orchestration packages are removed.
+- The historical Python runtime loop modules are removed.
+- Legacy external tool behavior is preserved only where needed; no compatibility fallback to Python runtime loops was added.
 
 Verification evidence:
 
-- `uv run pytest -n0 packages/python/agent/tests/unit/runtime/test_python_runtime_decommission.py -q`
-- `uv run pytest -n0 packages/python/agent/tests/contracts/test_runtime_decommission_contract.py -q`
-- `uv run pytest -n0 packages/python/agent/tests/contracts/test_data_interface_services.py -q`
-- `uv run pytest -n0 packages/python/agent/tests/unit -q -W error::RuntimeWarning`
+- Rust-owned runtime validation now replaces the deleted Python agent package.
+- The remaining Python boundary is verified through retained package tests and
+  package-removal assertions under `packages/python/core/tests/units/`.
 
 ### P0-5 Status Update (Planned: Adversarial Sub-graph Routing)
 

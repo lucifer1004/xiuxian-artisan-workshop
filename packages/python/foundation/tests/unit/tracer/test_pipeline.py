@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from omni.tracer import (
+from xiuxian_tracer import (
     ExecutionTracer,
     MappingToolInvoker,
     PipelineConfig,
@@ -1032,7 +1032,7 @@ class TestCreateWorkflowFromPipeline:
 
     def test_creates_workflow_from_config(self):
         """Test creating a workflow app from pipeline config."""
-        from omni.tracer import create_workflow_from_pipeline
+        from xiuxian_tracer import create_workflow_from_pipeline
 
         config = PipelineConfig(servers={"test": "/path/to/test"}, pipeline=["test.step"])
 
@@ -1043,7 +1043,7 @@ class TestCreateWorkflowFromPipeline:
 
     def test_with_tracer(self):
         """Test creating a workflow app with tracer."""
-        from omni.tracer import create_workflow_from_pipeline
+        from xiuxian_tracer import create_workflow_from_pipeline
 
         config = PipelineConfig(servers={"test": "/path"}, pipeline=["test.step"])
         tracer = ExecutionTracer(trace_id="graph_trace")
@@ -1055,7 +1055,7 @@ class TestCreateWorkflowFromPipeline:
     @pytest.mark.asyncio
     async def test_with_custom_tool_invoker(self):
         """Test creating workflow with custom tool invoker and mapped outputs."""
-        from omni.tracer import create_workflow_from_pipeline
+        from xiuxian_tracer import create_workflow_from_pipeline
 
         config = PipelineConfig(
             servers={"retriever": "/path"},
@@ -1082,7 +1082,7 @@ class TestCreateWorkflowFromPipeline:
     @pytest.mark.asyncio
     async def test_with_defaults_uses_mapping_stack(self):
         """Test convenience API builds default stack and executes mapping handler."""
-        from omni.tracer import create_workflow_from_pipeline_with_defaults
+        from xiuxian_tracer import create_workflow_from_pipeline_with_defaults
 
         config = PipelineConfig(
             servers={"demo": "/path"},
@@ -1112,7 +1112,7 @@ class TestCreateWorkflowFromPipeline:
     @pytest.mark.asyncio
     async def test_with_defaults_respects_explicit_tool_invoker_override(self):
         """Test explicit tool_invoker overrides default stack settings."""
-        from omni.tracer import create_workflow_from_pipeline_with_defaults
+        from xiuxian_tracer import create_workflow_from_pipeline_with_defaults
 
         config = PipelineConfig(
             servers={"demo": "/path"},

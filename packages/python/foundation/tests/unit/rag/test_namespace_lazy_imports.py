@@ -1,4 +1,4 @@
-"""Regression tests for lazy import contracts in `omni.rag` namespace."""
+"""Regression tests for lazy import contracts in `xiuxian_rag` namespace."""
 
 from __future__ import annotations
 
@@ -24,23 +24,23 @@ def test_omni_rag_import_is_lazy() -> None:
             """
             import json
             import sys
-            import omni.rag
+            import xiuxian_rag
 
             watched = [
-                "omni.rag.analyzer",
-                "omni.rag.graph",
-                "omni.rag.multimodal",
-                "omni.rag.retrieval",
+                "xiuxian_rag.analyzer",
+                "xiuxian_rag.graph",
+                "xiuxian_rag.multimodal",
+                "xiuxian_rag.retrieval",
             ]
             print(json.dumps({name: (name in sys.modules) for name in watched}))
             """
         )
     )
     assert payload == {
-        "omni.rag.analyzer": False,
-        "omni.rag.graph": False,
-        "omni.rag.multimodal": False,
-        "omni.rag.retrieval": False,
+        "xiuxian_rag.analyzer": False,
+        "xiuxian_rag.graph": False,
+        "xiuxian_rag.multimodal": False,
+        "xiuxian_rag.retrieval": False,
     }
 
 
@@ -50,14 +50,14 @@ def test_omni_rag_loads_retrieval_module_on_attribute_access() -> None:
             """
             import json
             import sys
-            import omni.rag as rag
+            import xiuxian_rag as rag
 
             _ = rag.RetrievalConfig
             print(
                 json.dumps(
                     {
-                        "retrieval_loaded": "omni.rag.retrieval" in sys.modules,
-                        "analyzer_loaded": "omni.rag.analyzer" in sys.modules,
+                        "retrieval_loaded": "xiuxian_rag.retrieval" in sys.modules,
+                        "analyzer_loaded": "xiuxian_rag.analyzer" in sys.modules,
                     }
                 )
             )

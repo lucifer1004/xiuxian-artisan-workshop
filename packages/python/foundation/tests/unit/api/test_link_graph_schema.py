@@ -1,11 +1,11 @@
-"""Tests for omni.foundation.api.link_graph_schema."""
+"""Tests for xiuxian_foundation.api.link_graph_schema."""
 
 from __future__ import annotations
 
 import pytest
 
-import omni.foundation.api.link_graph_schema as link_graph_schema
-from omni.foundation.api.link_graph_schema import (
+import xiuxian_foundation.api.link_graph_schema as link_graph_schema
+from xiuxian_foundation.api.link_graph_schema import (
     build_record,
     get_schema_id,
     validate,
@@ -30,17 +30,17 @@ def test_build_record_hit_roundtrip() -> None:
 
 def test_get_schema_id() -> None:
     schema_id = get_schema_id()
-    assert schema_id.endswith("/omni.link_graph.record.v1.schema.json")
+    assert schema_id.endswith("/xiuxian_wendao.link_graph.record.v1.schema.json")
 
 
 def test_build_record_neighbor_requires_direction() -> None:
     with pytest.raises(ValueError, match="direction"):
-        validate({"schema": "omni.link_graph.record.v1", "kind": "neighbor", "stem": "x"})
+        validate({"schema": "xiuxian_wendao.link_graph.record.v1", "kind": "neighbor", "stem": "x"})
 
 
 def test_validate_records_rejects_invalid_item() -> None:
     good = build_record(kind="metadata", stem="a", tags=["tag1"])
-    bad = {"schema": "omni.link_graph.record.v1", "kind": "hit", "stem": "", "score": 0.1}
+    bad = {"schema": "xiuxian_wendao.link_graph.record.v1", "kind": "hit", "stem": "", "score": 0.1}
     with pytest.raises(ValueError, match="stem"):
         validate_records([good, bad])
 

@@ -25,7 +25,8 @@ use self::handlers::{
 use self::runtime::{build_embedding_runtime, build_embedding_runtime_for_gateway};
 pub(crate) use self::types::GatewayEmbeddingRuntime;
 pub use self::types::{
-    GatewayHealthResponse, GatewayMcpHealthResponse, GatewayState, MessageRequest, MessageResponse,
+    GatewayExternalToolHealthResponse, GatewayHealthResponse, GatewayState, MessageRequest,
+    MessageResponse,
 };
 pub use handlers::validate_message_request;
 

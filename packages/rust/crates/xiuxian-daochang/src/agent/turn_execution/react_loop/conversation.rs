@@ -119,13 +119,21 @@ impl Agent {
         for tool_call in tool_calls {
             let name = tool_call.function.name.clone();
             let args = parse_tool_call_arguments(&tool_call.function.arguments);
-            let output = match self.call_mcp_tool_with_diagnostics(&name, args).await {
+            let output = match self
+                .call_tool_with_diagnostics(
+                    turn_ctx.session_id(),
+                    Some(tool_call.id.as_str()),
+                    &name,
+                    args,
+                )
+                .await
+            {
                 Ok(output) => {
                     state.tool_summary.record_result(output.is_error);
                     output
                 }
                 Err(error) => {
-                    if let Some(soft_output) = self.soft_fail_mcp_tool_error_output(&name, &error) {
+                    if let Some(soft_output) = self.soft_fail_tool_error_output(&name, &error) {
                         state.tool_summary.record_result(true);
                         soft_output
                     } else {

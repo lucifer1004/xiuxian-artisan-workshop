@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 
 from omni.foundation.config.settings import get_setting
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
+from xiuxian_wendao_py.compat.runtime import prepare_cargo_subprocess_env
 
 _ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_REPORT = _ROOT / ".run" / "reports" / "xiuxian-daochang-embedding-role-perf-smoke.json"

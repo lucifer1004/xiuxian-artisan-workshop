@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from omni.foundation.utils.asyncio import run_async_blocking
+from xiuxian_foundation.utils.asyncio import run_async_blocking
 
 
 def test_run_async_blocking_without_running_loop() -> None:

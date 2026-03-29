@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from omni.core.router.config import (
+from xiuxian_core.router.config import (
     RouterConfidenceProfile,
     RouterSearchConfig,
     load_router_search_config,
@@ -43,7 +43,7 @@ def test_load_router_search_config_from_settings(monkeypatch):
     }
 
     monkeypatch.setattr(
-        "omni.core.router.config.get_setting",
+        "xiuxian_core.router.config.get_setting",
         lambda key, default=None: values.get(key, default),
     )
 
@@ -93,7 +93,7 @@ def test_load_router_search_config_explicit_overrides(monkeypatch):
             return 0.2
         return 0.99
 
-    monkeypatch.setattr("omni.core.router.config.get_setting", _mock_get_setting)
+    monkeypatch.setattr("xiuxian_core.router.config.get_setting", _mock_get_setting)
 
     config = load_router_search_config(
         semantic_weight=0.7,
@@ -134,7 +134,7 @@ def test_load_router_search_config_rejects_missing_active_profile(monkeypatch):
         },
     }
     monkeypatch.setattr(
-        "omni.core.router.config.get_setting",
+        "xiuxian_core.router.config.get_setting",
         lambda key, default=None: values.get(key, default),
     )
     with pytest.raises(ValidationError):
@@ -167,7 +167,7 @@ def test_load_router_search_config_rejects_invalid_profile_ranges(monkeypatch):
         },
     }
     monkeypatch.setattr(
-        "omni.core.router.config.get_setting",
+        "xiuxian_core.router.config.get_setting",
         lambda key, default=None: values.get(key, default),
     )
     with pytest.raises(ValidationError):
@@ -194,11 +194,11 @@ def test_router_search_json_schema_contains_expected_fields():
 def test_resolve_router_schema_path_uses_prj_config(monkeypatch, tmp_path):
     """Schema path should resolve under conf_dir (driven by --conf)."""
     monkeypatch.setattr(
-        "omni.core.router.config.get_setting",
+        "xiuxian_core.router.config.get_setting",
         lambda key, default=None: "schemas/custom.router.schema.json",
     )
     monkeypatch.setattr(
-        "omni.core.router.config.get_settings", lambda: type("S", (), {"conf_dir": str(tmp_path)})()
+        "xiuxian_core.router.config.get_settings", lambda: type("S", (), {"conf_dir": str(tmp_path)})()
     )
 
     path = resolve_router_schema_path()
@@ -219,11 +219,11 @@ def test_write_router_search_json_schema_writes_file(tmp_path):
 def test_resolve_router_schema_path_keeps_absolute_path(monkeypatch):
     """Absolute schema_file should not be rebased to conf_dir."""
     monkeypatch.setattr(
-        "omni.core.router.config.get_setting",
+        "xiuxian_core.router.config.get_setting",
         lambda key, default=None: "/tmp/router.search.schema.json",
     )
     monkeypatch.setattr(
-        "omni.core.router.config.get_settings",
+        "xiuxian_core.router.config.get_settings",
         lambda: type("S", (), {"conf_dir": "/ignored"})(),
     )
 
@@ -278,7 +278,7 @@ def test_load_router_search_config_rerank_defaults_true_when_missing(monkeypatch
         },
     }
     monkeypatch.setattr(
-        "omni.core.router.config.get_setting",
+        "xiuxian_core.router.config.get_setting",
         lambda key, default=None: values.get(key, default),
     )
 

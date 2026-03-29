@@ -32,7 +32,9 @@ Large search tasks are partitioned into discrete `WorkerPlans`, executing in par
 ## 3. Physical Architecture
 
 - **Planning Hub**: `xiuxian-wendao/src/link_graph/index/agentic_expansion/plan.rs`
-- **Dependency**: Requires [[packages/rust/crates/xiuxian-mcp|xiuxian-mcp]] for autonomous tool dispatching.
+- **Transport Direction**: autonomous dispatch is migrating away from MCP-bound
+  runtime edges and should not treat `xiuxian-mcp` as a permanent architecture
+  dependency.
 
 ## 4. Related Features
 

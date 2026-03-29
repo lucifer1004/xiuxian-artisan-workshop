@@ -1,7 +1,7 @@
 """
 Settings Tests - Simplified
 
-Tests for omni.foundation.config.settings module (basic functionality only).
+Tests for xiuxian_foundation.config.settings module (basic functionality only).
 Uses clean_settings fixture for isolation.
 """
 
@@ -11,7 +11,7 @@ class TestSettingsClass:
 
     def test_singleton_pattern(self, clean_settings):
         """Test that Settings is a singleton."""
-        from omni.foundation.config.settings import Settings
+        from xiuxian_foundation.config.settings import Settings
 
         # clean_settings is one instance
         settings1 = Settings()
@@ -74,14 +74,14 @@ class TestGetSettingFunction:
 
     def test_get_setting_with_default(self, clean_settings):
         """Test get_setting() with default value."""
-        from omni.foundation.config.settings import get_setting
+        from xiuxian_foundation.config.settings import get_setting
 
         result = get_setting("nonexistent.key", "default")
         assert result == "default"
 
     def test_get_setting_missing_returns_default(self, clean_settings):
         """Test get_setting() returns None default for missing keys."""
-        from omni.foundation.config.settings import get_setting
+        from xiuxian_foundation.config.settings import get_setting
 
         result = get_setting("totally.fake.key")
         assert result is None
@@ -92,7 +92,7 @@ class TestSettingsModuleSurface:
 
     def test_legacy_free_functions_removed(self):
         """Legacy wrapper functions should not be exported."""
-        import omni.foundation.config.settings as settings_module
+        import xiuxian_foundation.config.settings as settings_module
 
         assert not hasattr(settings_module, "get_config_path")
         assert not hasattr(settings_module, "has_setting")

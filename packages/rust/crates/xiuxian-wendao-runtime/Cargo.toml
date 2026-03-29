@@ -1,0 +1,28 @@
+[package]
+name = "xiuxian-wendao-runtime"
+version.workspace = true
+edition.workspace = true
+description = "Runtime-owned host behavior for xiuxian-wendao extraction"
+authors = ["CyberXiuXian Artisan Studio"]
+license = "Apache-2.0"
+publish = false
+
+[features]
+default = []
+julia = ["dep:xiuxian-vector"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+toml = { workspace = true }
+xiuxian-config-core = { path = "../xiuxian-config-core" }
+xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
+xiuxian-vector = { path = "../xiuxian-vector", optional = true }
+
+[dev-dependencies]
+serial_test = { version = "3", features = ["file_locks"] }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

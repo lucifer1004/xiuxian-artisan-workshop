@@ -190,7 +190,7 @@ When uncertain:
 
 ### 3. Check Available Tools
 
-List available tools: read the MCP resource `omni://skill/skill/list_tools` (use `list_resources` then `resources/read(uri)`).
+List available tools through the current CLI/runtime surfaces rather than legacy external resource registries.
 
 ### 4. Use Ghost Tools for Discovery
 

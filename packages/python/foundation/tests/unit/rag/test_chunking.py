@@ -1,5 +1,5 @@
 """
-Tests for omni.rag.chunking module.
+Tests for xiuxian_rag.chunking module.
 """
 
 import pytest
@@ -10,7 +10,7 @@ class TestChunkDataclass:
 
     def test_chunk_creation(self):
         """Test basic chunk creation."""
-        from omni.rag.chunking import Chunk
+        from xiuxian_rag.chunking import Chunk
 
         chunk = Chunk(text="Hello world", index=0)
         assert chunk.text == "Hello world"
@@ -20,7 +20,7 @@ class TestChunkDataclass:
 
     def test_chunk_with_metadata(self):
         """Test chunk creation with metadata."""
-        from omni.rag.chunking import Chunk
+        from xiuxian_rag.chunking import Chunk
 
         chunk = Chunk(
             text="Test content",
@@ -36,14 +36,14 @@ class TestChunkDataclass:
 
     def test_chunk_char_count(self):
         """Test chunk character count property."""
-        from omni.rag.chunking import Chunk
+        from xiuxian_rag.chunking import Chunk
 
         chunk = Chunk(text="Hello", index=0)
         assert chunk.char_count == 5
 
     def test_chunk_token_count(self):
         """Test chunk token count estimation."""
-        from omni.rag.chunking import Chunk
+        from xiuxian_rag.chunking import Chunk
 
         chunk = Chunk(text="Hello world test", index=0)
         # 17 chars / 4 = ~4 tokens
@@ -55,7 +55,7 @@ class TestSentenceChunker:
 
     def test_default_initialization(self):
         """Test sentence chunker default values."""
-        from omni.rag.chunking import SentenceChunker
+        from xiuxian_rag.chunking import SentenceChunker
 
         chunker = SentenceChunker()
         assert chunker.chunk_target_tokens == 512
@@ -65,7 +65,7 @@ class TestSentenceChunker:
     @pytest.mark.asyncio
     async def test_chunk_simple_text(self):
         """Test chunking simple text."""
-        from omni.rag.chunking import SentenceChunker
+        from xiuxian_rag.chunking import SentenceChunker
 
         text = "This is sentence one. This is sentence two. This is sentence three."
         chunker = SentenceChunker(chunk_target_tokens=100, overlap_tokens=10)
@@ -77,7 +77,7 @@ class TestSentenceChunker:
     @pytest.mark.asyncio
     async def test_chunk_empty_text(self):
         """Test chunking empty text returns empty list."""
-        from omni.rag.chunking import SentenceChunker
+        from xiuxian_rag.chunking import SentenceChunker
 
         chunker = SentenceChunker()
         chunks = await chunker.chunk("")
@@ -86,7 +86,7 @@ class TestSentenceChunker:
     @pytest.mark.asyncio
     async def test_chunk_preserves_sentence_boundaries(self):
         """Test that chunks preserve sentence boundaries."""
-        from omni.rag.chunking import SentenceChunker
+        from xiuxian_rag.chunking import SentenceChunker
 
         text = "First sentence. Second sentence. Third sentence."
         chunker = SentenceChunker(chunk_target_tokens=100, overlap_tokens=0)
@@ -104,7 +104,7 @@ class TestParagraphChunker:
 
     def test_default_initialization(self):
         """Test paragraph chunker default values."""
-        from omni.rag.chunking import ParagraphChunker
+        from xiuxian_rag.chunking import ParagraphChunker
 
         chunker = ParagraphChunker()
         assert chunker.max_chars == 2000
@@ -113,7 +113,7 @@ class TestParagraphChunker:
     @pytest.mark.asyncio
     async def test_chunk_single_paragraph(self):
         """Test chunking single paragraph."""
-        from omni.rag.chunking import ParagraphChunker
+        from xiuxian_rag.chunking import ParagraphChunker
 
         # Create longer paragraphs (>= 50 chars each)
         text = (
@@ -128,7 +128,7 @@ class TestParagraphChunker:
     @pytest.mark.asyncio
     async def test_chunk_multiple_paragraphs(self):
         """Test chunking multiple paragraphs."""
-        from omni.rag.chunking import ParagraphChunker
+        from xiuxian_rag.chunking import ParagraphChunker
 
         # Create longer paragraphs (>= 50 chars each)
         text = (
@@ -149,7 +149,7 @@ class TestSlidingWindowChunker:
 
     def test_default_initialization(self):
         """Test sliding window chunker default values."""
-        from omni.rag.chunking import SlidingWindowChunker
+        from xiuxian_rag.chunking import SlidingWindowChunker
 
         chunker = SlidingWindowChunker()
         assert chunker.window_size == 512
@@ -158,7 +158,7 @@ class TestSlidingWindowChunker:
     @pytest.mark.asyncio
     async def test_chunk_short_text(self):
         """Test chunking text shorter than window."""
-        from omni.rag.chunking import SlidingWindowChunker
+        from xiuxian_rag.chunking import SlidingWindowChunker
 
         text = "Short text."
         chunker = SlidingWindowChunker(window_size=512, step_size=256)
@@ -170,7 +170,7 @@ class TestSlidingWindowChunker:
     @pytest.mark.asyncio
     async def test_chunk_longer_text(self):
         """Test chunking text that requires multiple windows."""
-        from omni.rag.chunking import SlidingWindowChunker
+        from xiuxian_rag.chunking import SlidingWindowChunker
 
         text = "word " * 1000  # 5000 chars
         chunker = SlidingWindowChunker(window_size=500, step_size=250)
@@ -182,7 +182,7 @@ class TestSlidingWindowChunker:
     @pytest.mark.asyncio
     async def test_window_positions(self):
         """Test that windows have correct positions."""
-        from omni.rag.chunking import SlidingWindowChunker
+        from xiuxian_rag.chunking import SlidingWindowChunker
 
         # Create text that is 2x window size to force sliding
         text = "0123456789" * 20  # 200 chars
@@ -203,7 +203,7 @@ class TestSemanticChunker:
 
     def test_default_initialization(self):
         """Test semantic chunker default values."""
-        from omni.rag.chunking import SemanticChunker
+        from xiuxian_rag.chunking import SemanticChunker
 
         chunker = SemanticChunker()
         assert chunker.chunk_target_tokens == 512
@@ -212,7 +212,7 @@ class TestSemanticChunker:
     @pytest.mark.asyncio
     async def test_chunk_without_llm_uses_fallback(self):
         """Test semantic chunker falls back to sentence chunking without LLM."""
-        from omni.rag.chunking import SemanticChunker
+        from xiuxian_rag.chunking import SemanticChunker
 
         text = "This is a test. This is only a test."
         chunker = SemanticChunker(llm_complete_func=None)
@@ -225,7 +225,7 @@ class TestSemanticChunker:
     @pytest.mark.asyncio
     async def test_chunk_empty_text(self):
         """Test chunking empty text returns empty list."""
-        from omni.rag.chunking import SemanticChunker
+        from xiuxian_rag.chunking import SemanticChunker
 
         chunker = SemanticChunker()
         chunks = await chunker.chunk("")
@@ -237,28 +237,28 @@ class TestChunkingFactoryFunctions:
 
     def test_create_chunker_sentence(self):
         """Test creating sentence chunker."""
-        from omni.rag.chunking import SentenceChunker, create_chunker
+        from xiuxian_rag.chunking import SentenceChunker, create_chunker
 
         chunker = create_chunker("sentence")
         assert isinstance(chunker, SentenceChunker)
 
     def test_create_chunker_paragraph(self):
         """Test creating paragraph chunker."""
-        from omni.rag.chunking import ParagraphChunker, create_chunker
+        from xiuxian_rag.chunking import ParagraphChunker, create_chunker
 
         chunker = create_chunker("paragraph")
         assert isinstance(chunker, ParagraphChunker)
 
     def test_create_chunker_sliding_window(self):
         """Test creating sliding window chunker."""
-        from omni.rag.chunking import SlidingWindowChunker, create_chunker
+        from xiuxian_rag.chunking import SlidingWindowChunker, create_chunker
 
         chunker = create_chunker("sliding_window")
         assert isinstance(chunker, SlidingWindowChunker)
 
     def test_create_chunker_invalid(self):
         """Test creating invalid chunker raises error."""
-        from omni.rag.chunking import create_chunker
+        from xiuxian_rag.chunking import create_chunker
 
         with pytest.raises(ValueError):
             create_chunker("invalid_strategy")
@@ -266,7 +266,7 @@ class TestChunkingFactoryFunctions:
     @pytest.mark.asyncio
     async def test_chunk_text_convenience(self):
         """Test convenience chunk_text function."""
-        from omni.rag.chunking import chunk_text
+        from xiuxian_rag.chunking import chunk_text
 
         text = "One sentence. Two sentence."
         chunks = await chunk_text(text, strategy="sentence")

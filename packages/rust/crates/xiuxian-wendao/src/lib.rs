@@ -51,6 +51,8 @@ extern crate self as xiuxian_wendao;
 // ---------------------------------------------------------------------------
 // Core domain modules
 // ---------------------------------------------------------------------------
+/// Legacy compatibility namespaces for stable downstream re-export paths.
+pub mod compatibility;
 pub mod entity;
 pub mod graph;
 /// HMAS blackboard protocol contracts and validators.
@@ -92,9 +94,6 @@ pub mod skill_vfs;
 pub mod unified_symbol;
 /// High-level search router for integrating multiple backends.
 pub mod zhenfa_router;
-
-#[cfg(all(test, feature = "julia"))]
-pub(crate) use analyzers::languages::julia_plugin_test_support;
 
 // ---------------------------------------------------------------------------
 // Public re-exports (crate API)
@@ -145,6 +144,10 @@ pub use ingress::{
     SpiderWendaoBridge, WebAssimilationSink, WebIngestionSignal, canonical_web_uri,
     web_namespace_from_url,
 };
+pub use compatibility::link_graph::{
+    LinkGraphCompatAnalyzerLaunchManifest, LinkGraphCompatDeploymentArtifact,
+    LinkGraphCompatRerankRuntimeConfig,
+};
 pub use link_graph::{
     BatchQuantumScorer, BatchQuantumScorerError,
     LINK_GRAPH_QUANTUM_CONTEXT_SNAPSHOT_SCHEMA_VERSION, LINK_GRAPH_RETRIEVAL_PLAN_SCHEMA_VERSION,
@@ -155,9 +158,7 @@ pub use link_graph::{
     LinkGraphAgenticWorkerExecution, LinkGraphAgenticWorkerPhase, LinkGraphAgenticWorkerPlan,
     LinkGraphAttachment, LinkGraphAttachmentHit, LinkGraphAttachmentKind, LinkGraphCacheBuildMeta,
     LinkGraphConfidenceLevel, LinkGraphDirection, LinkGraphDisplayHit, LinkGraphDocument,
-    LinkGraphEdgeType, LinkGraphHit, LinkGraphIndex, LinkGraphJuliaAnalyzerLaunchManifest,
-    LinkGraphJuliaAnalyzerServiceDescriptor, LinkGraphJuliaDeploymentArtifact,
-    LinkGraphJuliaRerankRuntimeConfig, LinkGraphLinkFilter, LinkGraphMatchStrategy,
+    LinkGraphEdgeType, LinkGraphHit, LinkGraphIndex, LinkGraphLinkFilter, LinkGraphMatchStrategy,
     LinkGraphMetadata, LinkGraphNeighbor, LinkGraphPassage, LinkGraphPlannedSearchPayload,
     LinkGraphPprSubgraphMode, LinkGraphRefreshMode, LinkGraphRelatedFilter,
     LinkGraphRelatedPprDiagnostics, LinkGraphRelatedPprOptions, LinkGraphRetrievalBudget,
@@ -173,9 +174,10 @@ pub use link_graph::{
     QuantumFusionOptions, QuantumFusionTelemetry, QuantumSemanticIgnition,
     QuantumSemanticIgnitionError, QuantumSemanticIgnitionFuture, QuantumSemanticSearchRequest,
     VectorStoreSemanticIgnition, compute_link_graph_saliency,
-    export_link_graph_julia_deployment_artifact_toml, narrate_subgraph, parse_search_query,
-    quantum_context_snapshot_id, resolve_link_graph_index_runtime,
-    resolve_link_graph_julia_deployment_artifact, set_link_graph_config_home_override,
+    export_link_graph_compat_deployment_artifact_toml,
+    narrate_subgraph, parse_search_query, quantum_context_snapshot_id,
+    resolve_link_graph_index_runtime, resolve_link_graph_compat_deployment_artifact,
+    set_link_graph_config_home_override,
     set_link_graph_wendao_config_override, valkey_quantum_context_snapshot_drop,
     valkey_quantum_context_snapshot_get, valkey_quantum_context_snapshot_get_with_valkey,
     valkey_quantum_context_snapshot_rollback, valkey_quantum_context_snapshot_rollback_with_valkey,

@@ -64,7 +64,7 @@ vector:
 
 ## Operational Guidance
 
-1. Use bounded cache settings in long-lived agent/MCP processes.
+1. Use bounded cache settings in long-lived agent and external-tool runtime processes.
 2. Run scalar/vector index creation after bulk ingestion.
 3. Keep schema evolution explicit and covered by snapshot/contract tests.
 

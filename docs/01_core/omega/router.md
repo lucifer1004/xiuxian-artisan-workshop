@@ -98,7 +98,7 @@ The `HybridSearch` component is now **100% Rust-native** using `xiuxian-vector`:
 - Zero serialization overhead (no Python↔Rust data copying)
 - Atomic scoring (vector + keyword in single operation)
 - 10-100x faster than Python-based hybrid search
-- Consistent behavior between CLI and MCP server
+- Consistent behavior between CLI and external tool runtimes
 
 ### Search at scale: data + mechanisms (no per-skill hardcoding)
 

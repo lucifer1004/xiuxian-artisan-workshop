@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Child;
 
+use crate::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_PACKAGE_DIR;
+
 pub(crate) struct ChildGuard {
     child: Child,
 }
@@ -65,7 +67,7 @@ pub(crate) fn wendaoarrow_script(name: &str) -> PathBuf {
 
 pub(crate) fn wendaoanalyzer_package_dir() -> PathBuf {
     repo_root()
-        .join(".data/WendaoAnalyzer")
+        .join(DEFAULT_JULIA_ANALYZER_PACKAGE_DIR)
         .canonicalize()
         .unwrap_or_else(|error| panic!("resolve WendaoAnalyzer package dir: {error}"))
 }

@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use axum::{Json, Router, extract::State, routing::post};
 use serde_json::json;
-use xiuxian_daochang::{Agent, AgentConfig, McpServerEntry, set_config_home_override};
+use xiuxian_daochang::{Agent, AgentConfig, ToolServerEntry, set_config_home_override};
 
 #[derive(Clone)]
 struct MockLlmScenario {
@@ -198,7 +198,7 @@ async fn run_turn_dispatches_wendao_search_through_native_zhenfa_bridge() -> any
     let agent = Agent::from_config(AgentConfig {
         inference_url: format!("http://{llm_addr}/v1/chat/completions"),
         model: "test-model".to_string(),
-        mcp_servers: Vec::<McpServerEntry>::new(),
+        tool_servers: Vec::<ToolServerEntry>::new(),
         max_tool_rounds: 4,
         ..AgentConfig::default()
     })
@@ -249,7 +249,7 @@ async fn run_turn_dispatches_qianhuan_reload_through_native_zhenfa_bridge() -> a
     let agent = Agent::from_config(AgentConfig {
         inference_url: format!("http://{llm_addr}/v1/chat/completions"),
         model: "test-model".to_string(),
-        mcp_servers: Vec::<McpServerEntry>::new(),
+        tool_servers: Vec::<ToolServerEntry>::new(),
         max_tool_rounds: 4,
         ..AgentConfig::default()
     })

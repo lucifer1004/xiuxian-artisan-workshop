@@ -10,7 +10,9 @@ use crate::gateway::studio::types::{UiConfig, UiProjectConfig, VfsScanResult};
 use crate::set_link_graph_wendao_config_override;
 use crate::unified_symbol::UnifiedSymbolIndex;
 use chrono::DateTime;
+use serial_test::serial;
 use std::fs;
+use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH;
 
 #[test]
 fn set_ui_config_preserves_cached_state_when_effectively_unchanged() {
@@ -93,7 +95,8 @@ async fn ui_capabilities_reports_builtin_plugin_languages() {
 }
 
 #[tokio::test]
-async fn julia_deployment_artifact_handler_returns_resolved_artifact() {
+#[serial]
+async fn compat_deployment_artifact_handler_returns_resolved_artifact() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
     fs::write(
@@ -116,10 +119,10 @@ analyzer_strategy = "similarity_only"
         studio: Arc::new(StudioState::new()),
     });
 
-    let response = crate::gateway::studio::router::handlers::get_julia_deployment_artifact(
+    let response = crate::gateway::studio::router::handlers::get_compat_deployment_artifact(
         State(Arc::clone(&state)),
         Query(
-            crate::gateway::studio::router::handlers::capabilities::JuliaDeploymentArtifactQuery {
+            crate::gateway::studio::router::handlers::capabilities::CompatDeploymentArtifactQuery {
                 format: None,
             },
         ),
@@ -130,24 +133,28 @@ analyzer_strategy = "similarity_only"
     let body = to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap_or_else(|error| panic!("read json body: {error}"));
-    let artifact: crate::gateway::studio::types::UiJuliaDeploymentArtifact =
-        serde_json::from_slice(&body)
-            .unwrap_or_else(|error| panic!("decode artifact json: {error}"));
+    let artifact: serde_json::Value = serde_json::from_slice(&body)
+        .unwrap_or_else(|error| panic!("decode artifact json: {error}"));
 
-    assert_eq!(artifact.artifact_schema_version, "v1");
-    DateTime::parse_from_rfc3339(&artifact.generated_at)
-        .unwrap_or_else(|error| panic!("parse artifact generated_at: {error}"));
-    assert_eq!(artifact.base_url.as_deref(), Some("http://127.0.0.1:18080"));
-    assert_eq!(artifact.route.as_deref(), Some("/arrow-ipc"));
-    assert_eq!(artifact.schema_version.as_deref(), Some("v1"));
+    assert_eq!(artifact["artifactSchemaVersion"], "v1");
+    DateTime::parse_from_rfc3339(
+        artifact["generatedAt"]
+            .as_str()
+            .unwrap_or_else(|| panic!("artifact generatedAt should be a string")),
+    )
+    .unwrap_or_else(|error| panic!("parse artifact generated_at: {error}"));
+    assert_eq!(artifact["baseUrl"], "http://127.0.0.1:18080");
+    assert_eq!(artifact["route"], "/arrow-ipc");
+    assert_eq!(artifact["schemaVersion"], "v1");
     assert_eq!(
-        artifact.launch.launcher_path,
-        ".data/WendaoAnalyzer/scripts/run_analyzer_service.sh"
+        artifact["launch"]["launcherPath"],
+        DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH
     );
 }
 
 #[tokio::test]
-async fn julia_deployment_artifact_handler_returns_toml_when_requested() {
+#[serial]
+async fn compat_deployment_artifact_handler_returns_toml_when_requested() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
     fs::write(
@@ -169,12 +176,12 @@ service_mode = "stream"
         studio: Arc::new(StudioState::new()),
     });
 
-    let response = crate::gateway::studio::router::handlers::get_julia_deployment_artifact(
+    let response = crate::gateway::studio::router::handlers::get_compat_deployment_artifact(
         State(Arc::clone(&state)),
         Query(
-            crate::gateway::studio::router::handlers::capabilities::JuliaDeploymentArtifactQuery {
+            crate::gateway::studio::router::handlers::capabilities::CompatDeploymentArtifactQuery {
                 format: Some(
-                    crate::zhenfa_router::native::WendaoJuliaDeploymentArtifactOutputFormat::Toml,
+                    crate::zhenfa_router::native::WendaoCompatDeploymentArtifactOutputFormat::Toml,
                 ),
             },
         ),

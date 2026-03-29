@@ -3,8 +3,9 @@ use std::path::Path;
 
 use walkdir::WalkDir;
 
-use xiuxian_wendao::analyzers::errors::RepoIntelligenceError;
-use xiuxian_wendao::analyzers::records::{DocRecord, ExampleRecord};
+use xiuxian_wendao_core::repo_intelligence::{
+    DocRecord, ExampleRecord, RepoIntelligenceError,
+};
 
 pub(crate) fn discover_examples(
     repo_id: &str,

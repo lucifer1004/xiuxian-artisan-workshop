@@ -29,7 +29,7 @@ pub fn build_turn_reflection(
     let next_action = infer_next_action(normalized_outcome, assistant_message, tool_calls);
 
     TurnReflection {
-        schema: "omni.agent.reflection.v1",
+        schema: "xiuxian.runtime.reflection.v1",
         route: route.trim().to_lowercase(),
         objective: truncate(user_message.trim(), OBJECTIVE_MAX_CHARS),
         result_signal: truncate(&squash_whitespace(assistant_message), RESULT_MAX_CHARS),

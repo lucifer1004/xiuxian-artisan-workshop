@@ -1,1 +1,1 @@
-# Scale benchmarks: run_skill, reindex, sync. Run with: just test-benchmarks
+# Scale benchmarks: run_skill and related runtime paths. Run with: just test-benchmarks

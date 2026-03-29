@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omni.tracer import PipelineConfig, PipelineWorkflowBuilder
+from xiuxian_tracer import PipelineConfig, PipelineWorkflowBuilder
 
 
 def test_ultrarag_complex_template_is_valid_and_compilable():

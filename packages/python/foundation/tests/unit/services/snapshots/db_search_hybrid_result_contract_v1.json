@@ -1,6 +1,6 @@
 [
   {
-    "schema": "omni.vector.hybrid.v1",
+    "schema": "xiuxian.vector.hybrid.v1",
     "id": "doc-1",
     "content": "hello",
     "metadata": {

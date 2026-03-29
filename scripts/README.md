@@ -14,7 +14,6 @@ This directory contains utility scripts for the Omni-Dev Fusion project.
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `generate_llm_index.py`                               | Generate skill index for LLM context                                                                                                                                               |
 | `verify_skill_descriptions.py`                        | Verify skill command descriptions                                                                                                                                                  |
-| `verify_system.py`                                    | End-to-end smoke test for kernel                                                                                                                                                   |
 | `benchmark_wendao_search.py`                          | Benchmark wendao search latency                                                                                                                                                    |
 | `evaluate_wendao_retrieval.py`                        | Evaluate wendao Top1/Top3/Top10 on fixed query matrix                                                                                                                              |
 | `evaluate_wendao_retrieval.sh`                        | Thin shell wrapper for `evaluate_wendao_retrieval.py`                                                                                                                              |
@@ -26,7 +25,6 @@ This directory contains utility scripts for the Omni-Dev Fusion project.
 | `compare_cli_runner_summary.py`                       | Compare two CLI summary artifacts and detect per-case/per-phase latency regressions                                                                                                |
 | `fetch_previous_skills_benchmark_artifact.py`         | Fetch previous successful workflow artifact and extract `cli_runner_summary(.base).json` as baseline                                                                               |
 | `render_skills_tools_ci_summary.py`                   | Aggregate benchmark reports into one `skills_tools_ci_status.json/.md` status summary with `improved/regressed/unchanged` trends                                                   |
-| `ci-local-recall-gates.sh`                            | Unified runner for `knowledge.recall` perf gates (`auto` + `graph_only`)                                                                                                           |
 | `channel/test_xiuxian_daochang_discord_acl_events.py` | Live Discord ingress ACL black-box probe for managed command denial events                                                                                                         |
 | `channel/start-xiuxian-daochang-memory-ci.sh`         | Unified launcher for quick/nightly memory CI gates with latest status/failure aggregation                                                                                          |
 | `channel/start-xiuxian-daochang-memory-ci-quick.sh`   | Launch quick memory CI gate in background and aggregate latest failure reports                                                                                                     |
@@ -37,13 +35,13 @@ This directory contains utility scripts for the Omni-Dev Fusion project.
 
 ```bash
 # unified launcher (direct profile selection)
-bash scripts/channel/start-xiuxian-daochang-memory-ci.sh --profile quick --foreground --ensure-mcp
+bash scripts/channel/start-xiuxian-daochang-memory-ci.sh --profile quick --foreground
 
-# quick gate (foreground) with MCP preflight
-bash scripts/channel/start-xiuxian-daochang-memory-ci-quick.sh --foreground --ensure-mcp
+# quick gate (foreground)
+bash scripts/channel/start-xiuxian-daochang-memory-ci-quick.sh --foreground
 
-# nightly gate (background) with MCP preflight
-bash scripts/channel/start-xiuxian-daochang-memory-ci-nightly.sh --ensure-mcp
+# nightly gate (background)
+bash scripts/channel/start-xiuxian-daochang-memory-ci-nightly.sh
 ```
 
 ### `benchmark_skills_tools.py` quick patterns
@@ -84,7 +82,6 @@ OMNI_SKILLS_TOOLS_GATE_DRY_RUN=1 bash scripts/benchmark_skills_tools_gate.sh det
 just benchmark-skills-tools-gate
 just benchmark-skills-tools-network-observability
 just benchmark-skills-tools-ci
-just knowledge-recall-perf-ci
 
 # One-shot unified CI/local runner
 bash scripts/benchmark_skills_tools_ci.sh .run/reports/skills-tools-benchmark 3 5
@@ -134,11 +131,6 @@ uv run python scripts/render_skills_tools_ci_summary.py \
 # Print resolved commands only (for debugging/tests)
 OMNI_SKILLS_TOOLS_CI_DRY_RUN=1 bash scripts/benchmark_skills_tools_ci.sh
 
-# One-shot knowledge.recall perf gates (auto + graph_only)
-bash scripts/ci-local-recall-gates.sh 3 1 x 2 .run/reports/knowledge-recall-perf
-
-# Print resolved commands only (for debugging/tests)
-OMNI_RECALL_GATES_DRY_RUN=1 bash scripts/ci-local-recall-gates.sh
 ```
 
 ## Running Scripts

@@ -1,4 +1,4 @@
-//! One-turn agent loop: user message -> LLM (+ optional tools) -> `tool_calls` -> MCP tools/call -> repeat.
+//! One-turn agent loop: user message -> LLM (+ optional tools) -> `tool_calls` -> external tool call -> repeat.
 
 mod bootstrap;
 mod consolidation;
@@ -11,9 +11,6 @@ mod graph;
 mod graph_bridge;
 mod injection;
 pub(crate) mod logging;
-mod mcp;
-mod mcp_pool_state;
-mod mcp_startup;
 mod memory;
 mod memory_recall;
 mod memory_recall_feedback;
@@ -28,6 +25,9 @@ mod reflection;
 mod reflection_runtime_state;
 mod session_context;
 mod system_prompt_injection_state;
+mod tool_dispatch;
+mod tool_runtime_state;
+mod tool_startup;
 mod turn_execution;
 mod turn_support;
 
@@ -103,7 +103,7 @@ pub struct SessionRecallFeedbackUpdate {
     pub direction: SessionRecallFeedbackDirection,
 }
 
-/// Agent: config + session store (or bounded session) + LLM client + optional MCP pool + optional memory.
+/// Agent: config + session store (or bounded session) + LLM client + optional external tool pool + optional memory.
 pub struct Agent {
     config: AgentConfig,
     session: SessionStore,
@@ -136,7 +136,7 @@ pub struct Agent {
     /// Unix timestamp millis until which embedding calls are rejected by cooldown policy.
     memory_embed_timeout_cooldown_until_ms: AtomicU64,
     llm: LlmClient,
-    mcp: Option<crate::mcp_pool::McpClientPool>,
+    tool_runtime: Option<crate::ToolClientPool>,
     memory_stream_consumer_task: Option<tokio::task::JoinHandle<()>>,
 }
 

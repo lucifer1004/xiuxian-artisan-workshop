@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from omni.tracer import (
+from xiuxian_tracer import (
     LangGraphPipelineBuilder as PackageBuilder,
 )
-from omni.tracer import (
+from xiuxian_tracer import (
     PipelineConfig as PackagePipelineConfig,
 )
-from omni.tracer import (
+from xiuxian_tracer import (
     create_langgraph_from_pipeline as package_create_langgraph,
 )
-from omni.tracer.pipeline_builder import LangGraphPipelineBuilder
-from omni.tracer.pipeline_runtime import create_langgraph_from_pipeline
-from omni.tracer.pipeline_schema import PipelineConfig
+from xiuxian_tracer.pipeline_builder import LangGraphPipelineBuilder
+from xiuxian_tracer.pipeline_runtime import create_langgraph_from_pipeline
+from xiuxian_tracer.pipeline_schema import PipelineConfig
 
 
 def test_package_reexports_schema_class_identity() -> None:

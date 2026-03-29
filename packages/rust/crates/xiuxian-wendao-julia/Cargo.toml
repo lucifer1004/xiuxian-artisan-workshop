@@ -12,8 +12,10 @@ walkdir = { workspace = true }
 regex = "1"
 toml = "0.8"
 arrow = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
-xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false, features = ["zhenfa-router"] }
+chrono = { workspace = true, features = ["clock"] }
+xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-ast = { path = "../xiuxian-ast", features = ["julia"] }
 xiuxian-vector = { path = "../xiuxian-vector" }
 

@@ -94,7 +94,7 @@ println!("{normalized}");
 
 - Core memory policy/lifecycle belongs to Rust memory core (`omni-memory`), not this crate.
 - This crate focuses on context injection assembly only.
-- External MCP clients can use memory/knowledge tool facades, while runtime policy stays in Rust core packages.
+- External clients can use memory/knowledge tool facades, while runtime policy stays in Rust core packages.
 
 ## Related Docs
 

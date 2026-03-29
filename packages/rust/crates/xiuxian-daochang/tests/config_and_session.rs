@@ -42,16 +42,16 @@ fn config_resolve_api_key_from_field() {
 }
 
 #[test]
-fn config_default_mcp_servers_empty() {
+fn config_default_tool_servers_empty() {
     let config = AgentConfig::default();
-    assert!(config.mcp_servers.is_empty());
-    assert_eq!(config.mcp_pool_size, 4);
-    assert_eq!(config.mcp_handshake_timeout_secs, 30);
-    assert_eq!(config.mcp_connect_retries, 3);
-    assert!(config.mcp_strict_startup);
-    assert_eq!(config.mcp_connect_retry_backoff_ms, 1_000);
-    assert_eq!(config.mcp_tool_timeout_secs, 180);
-    assert_eq!(config.mcp_list_tools_cache_ttl_ms, 1_000);
+    assert!(config.tool_servers.is_empty());
+    assert_eq!(config.tool_pool_size, 4);
+    assert_eq!(config.tool_handshake_timeout_secs, 30);
+    assert_eq!(config.tool_connect_retries, 3);
+    assert!(config.tool_strict_startup);
+    assert_eq!(config.tool_connect_retry_backoff_ms, 1_000);
+    assert_eq!(config.tool_timeout_secs, 180);
+    assert_eq!(config.tool_list_cache_ttl_ms, 1_000);
     assert_eq!(config.max_tool_rounds, 30);
     assert_eq!(
         config.context_budget_strategy,

@@ -6,7 +6,7 @@ Tests for ToolResponse class and ResponseStatus enum.
 
 from datetime import UTC, datetime
 
-from omni.core.responses import ResponseStatus, ToolResponse
+from xiuxian_core.responses import ResponseStatus, ToolResponse
 
 
 class TestResponseStatus:
@@ -178,4 +178,4 @@ class TestToolResponseModelBehavior:
 
 
 # Need to import CoreErrorCode for tests
-from omni.core.errors import CoreErrorCode
+from xiuxian_core.errors import CoreErrorCode

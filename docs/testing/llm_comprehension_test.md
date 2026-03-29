@@ -57,7 +57,7 @@ This document contains a set of questions and expected answers to verify if an L
 **Question:** What is the relationship between the "Omega Architecture" and the "Trinity System Layers"?
 
 **Expected Answer:**
-The **Omega Architecture** defines the _functional/cognitive_ roles of the agent (Persona), while the **Trinity System Layers** define the _software_ structure (Foundation, Core, MCP-Server, Agent). The Omega systems operate on top of these software layers (e.g., Cortex runs in the Agent layer, Kernel in the Core layer).
+The **Omega Architecture** defines the _functional/cognitive_ roles of the agent (Persona), while the **Trinity System Layers** define the _software_ structure (Foundation, Core, Agent, and supporting runtime adapters). The Omega systems operate on top of these software layers (e.g., Cortex runs in the Agent layer, Kernel in the Core layer).
 
 ---
 

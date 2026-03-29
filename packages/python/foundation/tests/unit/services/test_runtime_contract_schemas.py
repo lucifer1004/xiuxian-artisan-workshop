@@ -6,7 +6,7 @@ import json
 
 from jsonschema import Draft202012Validator
 
-from omni.foundation.api.schema_locator import resolve_schema_file_path
+from xiuxian_foundation.api.schema_locator import resolve_schema_file_path
 
 
 def _load_schema(name: str) -> dict:
@@ -33,7 +33,7 @@ def test_discover_match_schema_accepts_contract_payload() -> None:
         "input_schema_digest": "sha256:abc123def456",
         "documentation_path": "/tmp/SKILL.md",
     }
-    _validate("omni.discover.match.v1.schema.json", payload)
+    _validate("xiuxian.discover.match.v1.schema.json", payload)
 
 
 def test_memory_gate_event_schema_accepts_contract_payload() -> None:
@@ -54,7 +54,7 @@ def test_memory_gate_event_schema_accepts_contract_payload() -> None:
             "next_action": "promote",
         },
     }
-    _validate("omni.memory.gate_event.v1.schema.json", payload)
+    _validate("xiuxian.memory.gate_event.v1.schema.json", payload)
 
 
 def test_route_trace_schema_accepts_contract_payload() -> None:
@@ -76,7 +76,7 @@ def test_route_trace_schema_accepts_contract_payload() -> None:
             "dropped_by_budget": 1,
         },
     }
-    _validate("omni.agent.route_trace.v1.schema.json", payload)
+    _validate("xiuxian.runtime.route_trace.v1.schema.json", payload)
 
 
 def test_route_trace_schema_accepts_graph_step_aggregation_payload() -> None:
@@ -124,63 +124,4 @@ def test_route_trace_schema_accepts_graph_step_aggregation_payload() -> None:
             },
         ],
     }
-    _validate("omni.agent.route_trace.v1.schema.json", payload)
-
-
-def test_skills_monitor_signals_schema_accepts_contract_payload() -> None:
-    payload = {
-        "schema": "omni.skills_monitor.signals.v1",
-        "retrieval_signals": {
-            "row_budget": {
-                "count": 2,
-                "query_count": 1,
-                "backend_count": 1,
-                "rows_fetched_sum": 6,
-                "rows_parsed_sum": 6,
-                "rows_input_sum": 4,
-                "rows_returned_sum": 4,
-                "rows_capped_sum": 0,
-                "rows_parse_dropped_sum": 0,
-                "memory": {
-                    "observed_count": 2,
-                    "rss_delta_sum": 10.5,
-                    "rss_peak_delta_sum": 11.0,
-                    "rss_delta_max": 10.0,
-                    "rss_peak_delta_max": 10.2,
-                },
-                "modes": {
-                    "semantic": {
-                        "count": 1,
-                        "rows_returned": 4,
-                        "rows_capped": 0,
-                    }
-                },
-                "latest": {
-                    "phase": "retrieval.rows.query",
-                    "mode": "semantic",
-                    "collection": "knowledge_chunks",
-                    "fetch_limit": 4,
-                    "rows_fetched": None,
-                    "rows_parsed": None,
-                    "rows_input": 4,
-                    "rows_returned": 4,
-                    "rows_capped": 0,
-                    "rows_parse_dropped": None,
-                },
-            }
-        },
-        "link_graph_signals": {
-            "policy_search": {
-                "count": 1,
-                "timeouts": 0,
-                "buckets": {"short": 1},
-                "latest": {
-                    "timeout_s": 2.55,
-                    "timeout_bucket": "short",
-                    "backend": "wendao",
-                    "timed_out": False,
-                },
-            }
-        },
-    }
-    _validate("omni.skills_monitor.signals.v1.schema.json", payload)
+    _validate("xiuxian.runtime.route_trace.v1.schema.json", payload)

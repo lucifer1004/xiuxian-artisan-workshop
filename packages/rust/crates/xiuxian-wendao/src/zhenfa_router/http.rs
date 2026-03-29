@@ -11,7 +11,8 @@ use xiuxian_zhenfa::{MethodRegistry, ZhenfaRouter};
 
 use super::models::{WendaoSearchHttpResponse, WendaoSearchRequest};
 use super::rpc::{
-    execute_search_async, export_julia_deployment_artifact_from_rpc_params, search_from_rpc_params,
+    execute_search_async, export_compat_deployment_artifact_from_rpc_params,
+    export_plugin_artifact_from_rpc_params, search_from_rpc_params,
 };
 use crate::link_graph::{
     LinkGraphDirection, LinkGraphDocument, LinkGraphIndex, LinkGraphMetadata, LinkGraphNeighbor,
@@ -74,9 +75,15 @@ impl ZhenfaRouter for WendaoZhenfaRouter {
         registry.register_fn("wendao.search", move |params, _meta| async move {
             search_from_rpc_params(params)
         });
-        registry.register_fn("wendao.julia_deployment_artifact", move |params, _meta| async move {
-            export_julia_deployment_artifact_from_rpc_params(params)
+        registry.register_fn("wendao.plugin_artifact", move |params, _meta| async move {
+            export_plugin_artifact_from_rpc_params(params)
         });
+        registry.register_fn(
+            "wendao.compat_deployment_artifact",
+            move |params, _meta| async move {
+                export_compat_deployment_artifact_from_rpc_params(params)
+            },
+        );
     }
 }
 

@@ -14,7 +14,7 @@ import json
 
 import pytest
 
-from omni.tracer import (
+from xiuxian_tracer import (
     DispatchMode,
     ExecutionStep,
     ExecutionTrace,

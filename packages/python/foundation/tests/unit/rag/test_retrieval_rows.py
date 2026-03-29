@@ -1,10 +1,10 @@
-"""Tests for omni.rag.retrieval.rows helpers."""
+"""Tests for xiuxian_rag.retrieval.rows helpers."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 
-from omni.rag.retrieval import (
+from xiuxian_rag.retrieval import (
     build_recall_row,
     recall_rows_from_hybrid_json,
     recall_rows_from_vector_results,

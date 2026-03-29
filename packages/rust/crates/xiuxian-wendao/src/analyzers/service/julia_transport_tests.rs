@@ -8,19 +8,19 @@ pub(crate) mod fixtures {
     use arrow::record_batch::RecordBatch;
 
     use crate::analyzers::service::{
-        JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_FINAL_SCORE_COLUMN, JuliaArrowRequestRow,
-        build_julia_arrow_request_batch, julia_arrow_response_schema,
+        JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_FINAL_SCORE_COLUMN, PluginArrowRequestRow,
+        build_plugin_arrow_request_batch, julia_arrow_response_schema,
     };
 
     pub(crate) fn request_batch() -> RecordBatch {
-        build_julia_arrow_request_batch(
+        build_plugin_arrow_request_batch(
             &[
-                JuliaArrowRequestRow {
+                PluginArrowRequestRow {
                     doc_id: "doc-1".to_string(),
                     vector_score: 0.3,
                     embedding: vec![1.0, 2.0, 3.0],
                 },
-                JuliaArrowRequestRow {
+                PluginArrowRequestRow {
                     doc_id: "doc-2".to_string(),
                     vector_score: 0.4,
                     embedding: vec![4.0, 5.0, 6.0],

@@ -147,8 +147,8 @@ All payloads stay schema-validated through shared contracts.
 1. **WG0: Contract Lock (schema + bindings) — Done**
 
 - extend shared contracts for PPR options/results:
-  - `packages/rust/crates/xiuxian-wendao/resources/omni.link_graph.search_options.v2.schema.json`
-  - `packages/rust/crates/xiuxian-wendao/resources/omni.link_graph.record.v1.schema.json`
+  - `packages/rust/crates/xiuxian-wendao/resources/xiuxian_wendao.link_graph.search_options.v2.schema.json`
+  - `packages/rust/crates/xiuxian-wendao/resources/xiuxian_wendao.link_graph.record.v1.schema.json`
   - `packages/rust/crates/xiuxian-wendao/resources/xiuxian_wendao.link_graph.valkey_cache_snapshot.v1.schema.json`
   - `packages/rust/crates/xiuxian-wendao/resources/xiuxian_wendao.link_graph.stats.cache.v1.schema.json`
   - `packages/rust/crates/xiuxian-wendao/resources/xiuxian_wendao.link_graph.saliency.v1.schema.json`
@@ -179,7 +179,7 @@ All payloads stay schema-validated through shared contracts.
   - `requested_mode`, `selected_mode`, `reason`,
   - `graph_hit_count`, `source_hint_count`,
   - `graph_confidence_score`, `graph_confidence_level`,
-  - schema-aligned `retrieval_plan` (`omni.link_graph.retrieval_plan.v1`).
+  - schema-aligned `retrieval_plan` (`xiuxian_wendao.link_graph.retrieval_plan.v1`).
 - Python policy now treats Rust payload as the single decision authority:
   - valid payload decision (`requested_mode` matches caller mode): trust payload `selected_mode` + `reason`;
   - payload mode conflict: force `vector_only` in hybrid path with `reason=graph_policy_mode_conflict`;
@@ -223,7 +223,6 @@ Executable gate commands (current + planned):
 - `uv run python scripts/benchmark_wendao_related.py --root . --stem README --runs 5 --warm-runs 1 --no-build --ppr-subgraph-mode auto`
 - `uv run pytest packages/python/foundation/tests/unit/api/test_link_graph_search_options_schema.py -q`
 - `uv run pytest packages/python/foundation/tests/unit/rag/test_link_graph.py -q`
-- `uv run python scripts/knowledge_recall_perf_gate.py --query x --limit 2 --retrieval-mode graph_only --runs 3 --warm-runs 1`
 
 ## 7. Section Graph: Implemented Scope and Hardening
 
@@ -293,7 +292,7 @@ PPR ranking should be edge-aware:
 
 Shared schema changes:
 
-- `packages/rust/crates/xiuxian-wendao/resources/omni.link_graph.search_options.v2.schema.json`
+- `packages/rust/crates/xiuxian-wendao/resources/xiuxian_wendao.link_graph.search_options.v2.schema.json`
   - add new filter fields in `filters` object:
     - `scope`, `max_heading_level`, `max_tree_hops`, `collapse_to_doc`, `edge_types`,
       `per_doc_section_cap`, `min_section_words`.

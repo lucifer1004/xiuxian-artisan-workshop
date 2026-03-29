@@ -4,8 +4,7 @@ use std::path::Path;
 
 use xiuxian_ast::{JuliaFileSummary, JuliaSourceSummary, TreeSitterJuliaParser};
 
-use xiuxian_wendao::analyzers::errors::RepoIntelligenceError;
-use xiuxian_wendao::analyzers::records::DiagnosticRecord;
+use xiuxian_wendao_core::repo_intelligence::{DiagnosticRecord, RepoIntelligenceError};
 
 use super::discovery::relative_path_string;
 

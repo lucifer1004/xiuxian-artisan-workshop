@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import ast
 import inspect
-from dataclasses import fields
 from pathlib import Path
 
 import pytest
 
-from omni.foundation.services.vector_schema import SearchOptionsContract
-from omni.rag.retrieval.factory import create_retrieval_backend
-from omni.rag.retrieval.hybrid import HybridRetrievalBackend
-from omni.rag.retrieval.interface import RetrievalConfig
+from xiuxian_rag.retrieval.factory import create_retrieval_backend
+from xiuxian_rag.retrieval.hybrid import HybridRetrievalBackend
 
 RAG_RETRIEVAL_DIR = Path(__file__).resolve().parents[3] / "src" / "omni" / "rag" / "retrieval"
 pytestmark = pytest.mark.architecture
@@ -44,16 +41,20 @@ def test_interface_module_has_no_backend_dependencies() -> None:
 
 
 def test_backend_modules_depend_on_interface_layer() -> None:
-    for module_name in ["lancedb.py", "hybrid.py"]:
+    for module_name in ["hybrid.py"]:
         imported = _imported_modules(_parse(module_name))
         assert any("interface" in module for module in imported), (
             f"{module_name} must import retrieval interface layer"
         )
 
 
+def test_local_lancedb_backend_module_is_removed() -> None:
+    assert not (RAG_RETRIEVAL_DIR / "lancedb.py").exists()
+
+
 def test_factory_module_does_not_depend_on_tracer_or_pipeline() -> None:
     imported = _imported_modules(_parse("factory.py"))
-    forbidden = {"omni.tracer", "pipeline_", "workflow_engine", "graphflow"}
+    forbidden = {"xiuxian_tracer", "pipeline_", "workflow_engine", "graphflow"}
     for module in imported:
         assert not any(name in module for name in forbidden), (
             "factory.py must remain retrieval-only without tracer/pipeline coupling"
@@ -63,7 +64,7 @@ def test_factory_module_does_not_depend_on_tracer_or_pipeline() -> None:
 def test_node_factory_depends_only_on_interface_contract() -> None:
     imported = _imported_modules(_parse("node_factory.py"))
     assert any("interface" in module for module in imported)
-    forbidden = {"lancedb", "hybrid", "omni.tracer"}
+    forbidden = {"lancedb", "hybrid", "xiuxian_tracer"}
     for module in imported:
         assert not any(name in module for name in forbidden), (
             "node_factory.py must depend on interface contracts, not concrete backends"
@@ -80,11 +81,3 @@ def test_factory_signature_has_no_keyword_backend_param() -> None:
     sig = inspect.signature(create_retrieval_backend)
     assert "keyword_backend" not in sig.parameters
     assert "reranker" not in sig.parameters
-
-
-def test_retrieval_config_includes_scanner_contract_fields() -> None:
-    """RetrievalConfig should expose Rust scanner options in orchestration layer."""
-    retrieval_fields = {f.name for f in fields(RetrievalConfig)}
-    scanner_fields = set(SearchOptionsContract.model_fields.keys())
-    assert scanner_fields.issubset(retrieval_fields)
-    assert "keywords" in retrieval_fields

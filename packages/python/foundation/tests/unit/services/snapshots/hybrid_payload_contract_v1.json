@@ -10,5 +10,5 @@
   },
   "source": "hybrid",
   "score": 0.8,
-  "schema": "omni.vector.hybrid.v1"
+  "schema": "xiuxian.vector.hybrid.v1"
 }

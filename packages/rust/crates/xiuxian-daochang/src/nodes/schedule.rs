@@ -16,11 +16,11 @@ pub(crate) async fn run_schedule_mode(
     session_prefix: String,
     recipient: String,
     wait_for_completion_secs: u64,
-    mcp_config_path: PathBuf,
+    tool_config_path: PathBuf,
     runtime_settings: &RuntimeSettings,
 ) -> anyhow::Result<()> {
     let runner: Arc<dyn TurnRunner> =
-        Arc::new(build_agent(&mcp_config_path, runtime_settings).await?);
+        Arc::new(build_agent(&tool_config_path, runtime_settings).await?);
     let (job_manager, completion_rx) = JobManager::start(runner, JobManagerConfig::default());
 
     println!(

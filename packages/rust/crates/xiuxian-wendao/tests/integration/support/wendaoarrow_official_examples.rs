@@ -4,9 +4,10 @@ use super::wendaoarrow_common::{
     WendaoArrowServiceGuard, repo_root, reserve_test_port, wait_for_health, wendaoarrow_script,
 };
 use xiuxian_wendao::{
-    LinkGraphJuliaAnalyzerLaunchManifest, LinkGraphJuliaDeploymentArtifact,
-    LinkGraphJuliaRerankRuntimeConfig,
+    LinkGraphCompatAnalyzerLaunchManifest, LinkGraphCompatDeploymentArtifact,
+    LinkGraphCompatRerankRuntimeConfig,
 };
+use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH;
 
 pub(crate) async fn spawn_wendaoarrow_stream_scoring_service() -> (String, WendaoArrowServiceGuard)
 {
@@ -28,21 +29,21 @@ pub(crate) async fn spawn_wendaoarrow_stream_metadata_service() -> (String, Wend
 
 pub(crate) async fn spawn_wendaoanalyzer_stream_linear_blend_service()
 -> (String, WendaoArrowServiceGuard) {
-    spawn_wendaoanalyzer_service_from_manifest(&LinkGraphJuliaAnalyzerLaunchManifest {
-        launcher_path: ".data/WendaoAnalyzer/scripts/run_analyzer_service.sh".to_string(),
+    spawn_wendaoanalyzer_service_from_manifest(&LinkGraphCompatAnalyzerLaunchManifest {
+        launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
         args: vec!["--service-mode".to_string(), "stream".to_string()],
     })
     .await
 }
 
 pub(crate) fn wendaoanalyzer_deployment_artifact_from_runtime(
-    runtime: &LinkGraphJuliaRerankRuntimeConfig,
-) -> LinkGraphJuliaDeploymentArtifact {
+    runtime: &LinkGraphCompatRerankRuntimeConfig,
+) -> LinkGraphCompatDeploymentArtifact {
     runtime.deployment_artifact()
 }
 
 pub(crate) async fn spawn_wendaoanalyzer_service_from_manifest(
-    manifest: &LinkGraphJuliaAnalyzerLaunchManifest,
+    manifest: &LinkGraphCompatAnalyzerLaunchManifest,
 ) -> (String, WendaoArrowServiceGuard) {
     let port = reserve_test_port();
     let base_url = format!("http://127.0.0.1:{port}");
@@ -67,7 +68,7 @@ pub(crate) async fn spawn_wendaoanalyzer_service_from_manifest(
 }
 
 pub(crate) async fn spawn_wendaoanalyzer_service_from_artifact(
-    artifact: &LinkGraphJuliaDeploymentArtifact,
+    artifact: &LinkGraphCompatDeploymentArtifact,
 ) -> (String, WendaoArrowServiceGuard) {
     spawn_wendaoanalyzer_service_from_manifest(&artifact.launch).await
 }

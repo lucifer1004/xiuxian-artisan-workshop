@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import omni.foundation.services.reference as reference_module
-from omni.foundation.config.link_graph import (
+import xiuxian_foundation.services.reference as reference_module
+from xiuxian_foundation.config.link_graph import (
     get_link_graph_config_path,
     get_link_graph_harvested_dir,
     get_link_graph_notebook_dir,
@@ -39,7 +39,7 @@ def test_get_link_graph_config_path_uses_runtime_default_relative_path(monkeypat
 
     monkeypatch.setattr(reference_module, "ref", _ref)
     monkeypatch.setattr(
-        "omni.foundation.config.link_graph.get_link_graph_default_config_relative_path",
+        "xiuxian_foundation.config.link_graph.get_link_graph_default_config_relative_path",
         lambda: Path(".link_graph/config.toml"),
     )
     assert get_link_graph_config_path() == Path("assets/knowledge/.link_graph/config.toml")
@@ -62,7 +62,7 @@ def test_get_link_graph_config_path_supports_absolute_runtime_path(monkeypatch) 
 
     monkeypatch.setattr(reference_module, "ref", _ref)
     monkeypatch.setattr(
-        "omni.foundation.config.link_graph.get_link_graph_default_config_relative_path",
+        "xiuxian_foundation.config.link_graph.get_link_graph_default_config_relative_path",
         lambda: Path("/etc/wendao/link-graph.toml"),
     )
     assert get_link_graph_config_path() == Path("/etc/wendao/link-graph.toml")

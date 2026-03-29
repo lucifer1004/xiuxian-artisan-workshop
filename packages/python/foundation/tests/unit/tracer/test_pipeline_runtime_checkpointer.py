@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-from omni.tracer import DispatchMode, ExecutionTracer
-from omni.tracer.pipeline_runtime import (
+from xiuxian_tracer.async_utils import DispatchMode
+from xiuxian_tracer.pipeline_runtime import (
     _resolve_state_schema,
     create_workflow_from_pipeline,
     create_workflow_from_pipeline_with_defaults,
     create_workflow_from_yaml,
 )
-from omni.tracer.pipeline_schema import PipelineConfig
+from xiuxian_tracer.pipeline_schema import PipelineConfig
+
+
+class _Tracer:
+    def __init__(self) -> None:
+        self.callback_dispatch_mode = DispatchMode.INLINE
 
 
 def test_create_workflow_passes_checkpointer_to_compiler(monkeypatch) -> None:
@@ -21,7 +26,7 @@ def test_create_workflow_passes_checkpointer_to_compiler(monkeypatch) -> None:
         captured["use_memory_saver"] = use_memory_saver
         return {"ok": True}
 
-    import omni.tracer.pipeline_runtime as module
+    import xiuxian_tracer.pipeline_runtime as module
 
     monkeypatch.setattr(module, "compile_workflow", _fake_compile)
     app = create_workflow_from_pipeline(
@@ -47,12 +52,12 @@ def test_create_workflow_with_defaults_passes_checkpointer(monkeypatch) -> None:
         captured["pipeline_kwargs"] = kwargs
         return {"ok": True}
 
-    import omni.tracer.pipeline_runtime as module
+    import xiuxian_tracer.pipeline_runtime as module
 
     monkeypatch.setattr(
         module, "create_workflow_from_pipeline", _fake_create_workflow_from_pipeline
     )
-    import omni.tracer.invoker_stack as stack_module
+    import xiuxian_tracer.invoker_stack as stack_module
 
     monkeypatch.setattr(
         stack_module, "create_default_invoker_stack", _fake_create_default_invoker_stack
@@ -96,11 +101,11 @@ pipeline:
         captured.update(kwargs)
         return {"ok": True}
 
-    import omni.tracer.pipeline_runtime as module
+    import xiuxian_tracer.pipeline_runtime as module
 
     monkeypatch.setattr(module, "create_workflow_from_pipeline_with_defaults", _fake_with_defaults)
 
-    tracer = ExecutionTracer(trace_id="yaml_runtime_tracer")
+    tracer = _Tracer()
     out = create_workflow_from_yaml(yaml_file, tracer=tracer)
 
     assert out == {"ok": True}
@@ -120,7 +125,7 @@ runtime:
   invoker:
     include_retrieval: true
   retrieval:
-    default_backend: lance
+    default_backend: vector
   tracer:
     callback_dispatch_mode: inline
 
@@ -134,11 +139,11 @@ pipeline:
         captured.update(kwargs)
         return {"ok": True}
 
-    import omni.tracer.pipeline_runtime as module
+    import xiuxian_tracer.pipeline_runtime as module
 
     monkeypatch.setattr(module, "create_workflow_from_pipeline_with_defaults", _fake_with_defaults)
 
-    tracer = ExecutionTracer(trace_id="yaml_override_tracer")
+    tracer = _Tracer()
     out = create_workflow_from_yaml(
         yaml_file,
         tracer=tracer,

@@ -78,16 +78,11 @@ User Query
 | `PipelineWorkflowBuilder` | Declarative pipeline-to-graph builder   | `packages/python/foundation/src/omni/tracer/pipeline_builder.py`    |
 | `run_graphflow_pipeline`  | Feature runtime for graphflow scenarios | `packages/python/foundation/src/omni/tracer/graphflow/runtime.py`   |
 
-## Agent Entrypoints
+## Runtime Entrypoints
 
-Agent-side workflow entrypoints are now native:
-
-- `packages/python/agent/src/omni/agent/workflows/robust_task/graph.py`
-- `packages/python/agent/src/omni/agent/workflows/memory/graph.py`
-- `packages/python/agent/src/omni/agent/core/omni/graph/workflow.py`
-
-These modules define node logic and routing policies while delegating runtime semantics to
-native graph execution primitives.
+Workflow entrypoints are now Rust-native. The historical Python workflow graph
+layer has been physically removed, and runtime graph orchestration lives under
+`xiuxian-daochang`.
 
 ## Checkpoint and Resume
 

@@ -757,8 +757,8 @@ agent-focus spec_path:
     @cat {{spec_path}}
     @echo ""
     @echo "=== 🏗️ RELATED CODE STRUCTURE ==="
-    @echo "packages/python/agent modules:"
-    @ls -1 packages/python/agent/src/agent/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
+    @echo "packages/python/xiuxian-wendao-py modules:"
+    @ls -1 packages/python/xiuxian-wendao-py/src/xiuxian_wendao_py/*.py 2>/dev/null | xargs -I {} basename {} .py | sed 's/^/  - /' || echo "  No modules found"
     @echo "agent/skills modules:"
     @ls -1 agent/skills/ 2>/dev/null | grep -v "^_" | sed 's/^/  - /' || echo "  No skills found"
     @echo ""
@@ -1008,11 +1008,6 @@ rust-xiuxian-daochang-dependency-assertions:
     @bash scripts/rust/xiuxian_daochang_dependency_assertions.sh
 
 [group('validate')]
-rust-xiuxian-daochang-mcp-facade-smoke:
-    @echo "Running xiuxian-daochang MCP facade smoke tests..."
-    @bash scripts/rust/xiuxian_daochang_mcp_facade_smoke.sh
-
-[group('validate')]
 rust-xiuxian-daochang-backend-role-contracts:
     @echo "Running xiuxian-daochang backend role contract tests..."
     @bash scripts/rust/xiuxian_daochang_backend_role_contracts.sh
@@ -1054,16 +1049,6 @@ rust-xiuxian-daochang-embedding-role-perf-medium-gate:
 [group('validate')]
 rust-xiuxian-daochang-embedding-role-perf-heavy-gate:
     @bash scripts/rust/xiuxian_daochang_embedding_role_perf_heavy_gate.sh
-
-[group('validate')]
-rust-xiuxian-mcp:
-    @echo "Running xiuxian-mcp package checks..."
-    @bash scripts/rust/xiuxian_mcp_check.sh
-
-[group('validate')]
-rust-xiuxian-llm-mcp:
-    @echo "Running xiuxian-llm MCP package checks..."
-    @bash scripts/rust/xiuxian_llm_mcp_check.sh
 
 [group('validate')]
 rust-fusion-snapshots:
@@ -1206,15 +1191,6 @@ test:
     @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ \
         -v --tb=short
     @echo ""
-    @uv run pytest packages/python/agent/tests/unit/cli/ \
-        -v --tb=short
-    @echo ""
-    @cd packages/python/mcp-server && uv run pytest tests/ \
-        -v --tb=short --ignore=tests/integration/test_sse.py \
-        --ignore=tests/unit/test_interfaces.py \
-        --ignore=tests/unit/test_types.py \
-        --ignore=tests/unit/test_transport/test_sse.py
-    @echo ""
     @echo "[7/7] Channel cursor contract gate"
     @just test-channel-cursor-contracts
     @echo ""
@@ -1235,13 +1211,7 @@ test-python:
     @echo "[3/6] xiuxian-wendao-py"
     @uv run pytest packages/python/xiuxian-wendao-py -q
     @echo ""
-    @echo "[4/6] agent"
-    @uv run pytest packages/python/agent -q
-    @echo ""
-    @echo "[5/6] mcp-server"
-    @uv run pytest packages/python/mcp-server -q
-    @echo ""
-    @echo "[6/6] test-kit"
+    @echo "[4/4] test-kit"
     @uv run pytest packages/python/test-kit -q
     @echo ""
     @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1295,7 +1265,6 @@ verify-native-runtime:
     @echo "Running native runtime verification scripts..."
     @uv run python scripts/verify_brain.py
     @uv run python scripts/verify_pipeline.py
-    @uv run python scripts/verify_mcp_interface.py
 
 [group('validate')]
 memory-gate-quick:
@@ -1330,14 +1299,6 @@ valkey-live:
     bash scripts/channel/valkey_live_gate.sh "${valkey_port}" "${valkey_url}"
 
 [group('validate')]
-ci-local-recall-gates runs="3" warm_runs="1" query="x" limit="2" report_dir=".run/reports/knowledge-recall-perf":
-    @bash scripts/ci-local-recall-gates.sh "{{runs}}" "{{warm_runs}}" "{{query}}" "{{limit}}" "{{report_dir}}"
-
-[group('validate')]
-knowledge-recall-perf-ci runs="3" warm_runs="1" query="x" limit="2" report_dir=".run/reports/knowledge-recall-perf":
-    @bash scripts/ci-local-recall-gates.sh "{{runs}}" "{{warm_runs}}" "{{query}}" "{{limit}}" "{{report_dir}}"
-
-[group('validate')]
 test-contract-freeze:
     @bash scripts/ci-contract-freeze.sh
 
@@ -1368,71 +1329,6 @@ benchmark-skills-tools-network-observability runs="5":
 [group('validate')]
 benchmark-skills-tools-ci report_dir=".run/reports/skills-tools-benchmark" deterministic_runs="3" network_runs="5":
     @bash scripts/benchmark_skills_tools_ci.sh "{{report_dir}}" "{{deterministic_runs}}" "{{network_runs}}"
-
-[group('validate')]
-benchmark-mcp-tools-list-sweep base_url="" host="" port="" no_embedding="true" mcp_health_timeout_secs="120" total="1000" concurrency_values="40,80,120,160,200" warmup_calls="2" timeout_secs="30" p95_slo_ms="400" p99_slo_ms="800" strict_snapshot="false" write_snapshot="false" report_dir=".run/reports/mcp-tools-list-sweep":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    resolved_base_url="{{base_url}}"
-    resolved_host="{{host}}"
-    resolved_port="{{port}}"
-    if [ -z "$resolved_base_url" ]; then
-      resolved_base_url="$(uv run python scripts/channel/resolve_mcp_endpoint.py --field base_url)"
-    fi
-    if [ -z "$resolved_host" ]; then
-      resolved_host="$(uv run python scripts/channel/resolve_mcp_endpoint.py --field host)"
-    fi
-    if [ -z "$resolved_port" ]; then
-      resolved_port="$(uv run python scripts/channel/resolve_mcp_endpoint.py --field port)"
-    fi
-    started_mcp="false"
-    mcp_pid=""
-    mcp_log=".run/logs/xiuxian-mcp-sse.benchmark.log"
-    cleanup() {
-      if [ "$started_mcp" = "true" ] && [ -n "$mcp_pid" ]; then
-        if kill -0 "$mcp_pid" >/dev/null 2>&1; then
-          kill "$mcp_pid" >/dev/null 2>&1 || true
-          wait "$mcp_pid" >/dev/null 2>&1 || true
-        fi
-      fi
-    }
-    trap cleanup EXIT
-    if python3 scripts/channel/check_mcp_health.py --host "$resolved_host" --port "$resolved_port" --timeout-secs "1.0" >/dev/null 2>&1; then
-      echo "MCP already healthy at ${resolved_base_url}; reusing existing server."
-    else
-      mkdir -p "$(dirname "$mcp_log")"
-      cmd=(uv run omni mcp --transport sse --host "$resolved_host" --port "$resolved_port")
-      if [ "{{no_embedding}}" = "true" ]; then
-        cmd+=(--no-embedding)
-      fi
-      "${cmd[@]}" >"$mcp_log" 2>&1 &
-      mcp_pid="$!"
-      started_mcp="true"
-      timeout="{{mcp_health_timeout_secs}}"
-      end_ts=$((SECONDS + timeout))
-      until python3 scripts/channel/check_mcp_health.py --host "$resolved_host" --port "$resolved_port" --timeout-secs "1.0" >/dev/null 2>&1; do
-        if ! kill -0 "$mcp_pid" >/dev/null 2>&1; then
-          echo "MCP process exited before health was ready (pid=$mcp_pid)." >&2
-          tail -n 80 "$mcp_log" >&2 || true
-          exit 1
-        fi
-        if (( SECONDS >= end_ts )); then
-          echo "Timed out waiting for MCP health (${resolved_base_url}/health) after ${timeout}s." >&2
-          tail -n 80 "$mcp_log" >&2 || true
-          exit 1
-        fi
-        sleep 0.2
-      done
-    fi
-    mkdir -p "{{report_dir}}"
-    args=(--base-url "$resolved_base_url" --total "{{total}}" --concurrency-values "{{concurrency_values}}" --warmup-calls "{{warmup_calls}}" --timeout-secs "{{timeout_secs}}" --p95-slo-ms "{{p95_slo_ms}}" --p99-slo-ms "{{p99_slo_ms}}" --json-out "{{report_dir}}/mcp_tools_list_concurrency_sweep.json" --markdown-out "{{report_dir}}/mcp_tools_list_concurrency_sweep.md")
-    if [ "{{strict_snapshot}}" = "true" ]; then
-      args+=(--strict-snapshot)
-    fi
-    if [ "{{write_snapshot}}" = "true" ]; then
-      args+=(--write-snapshot)
-    fi
-    bash scripts/channel/test-xiuxian-daochang-mcp-tools-list-concurrency-sweep.sh "${args[@]}"
 
 [group('validate')]
 evaluate-wendao-retrieval limit="10" min_top3_rate="0.0":
@@ -1545,25 +1441,9 @@ wendao-ppr-rollout-status:
         "{{xiuxian_wendao_rollout_strict_ready}}"
 
 [group('validate')]
-test-skills:
-    @echo "Running skill tests via omni skill test --all..."
-    @uv run omni skill test --all
-
-# Run Rust MCP client integration test (requires MCP server; endpoint resolved via settings)
-test-mcp-integration:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mcp_base_url="$(uv run python scripts/channel/resolve_mcp_endpoint.py --field base_url)"
-    OMNI_MCP_URL="${mcp_base_url}/sse" scripts/rust/cargo_exec.sh test -p xiuxian-mcp --test streamable_http_integration -- --ignored
-
-[group('validate')]
 test-parallel:
     @echo "Running tests in parallel (faster)..."
-    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/agent/tests/unit/cli/ -n auto --tb=short
-    @cd packages/python/mcp-server && uv run pytest tests/ -n auto --tb=short --ignore=tests/integration/test_sse.py \
-        --ignore=tests/unit/test_interfaces.py \
-        --ignore=tests/unit/test_types.py \
-        --ignore=tests/unit/test_transport/test_sse.py
+    @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ packages/python/xiuxian-wendao-py/tests/ -n auto --tb=short
 
 [group('validate')]
 vulture:
@@ -1573,13 +1453,13 @@ vulture:
 [group('validate')]
 test-stress:
     @echo "Running stress tests (slow)..."
-    @uv run pytest packages/python/agent/tests/stress_tests/ -v
+    @uv run pytest packages/python/test-kit/tests/benchmarks/ -v
 
 # Contract tests: data interface shape for run_skill, reindex, sync, run_entry (no xdist)
 [group('validate')]
 test-contracts:
     @echo "Running data interface contract tests..."
-    @uv run pytest packages/python/agent/tests/contracts/ -v --tb=short --override-ini addopts="-v --tb=short"
+    @uv run pytest packages/python/foundation/tests/unit/services/test_runtime_contract_schemas.py -v --tb=short --override-ini addopts="-v --tb=short"
 
 # Scale benchmarks: in test-kit (run_skill, reindex_status, sync; latency thresholds)
 [group('validate')]
@@ -1687,18 +1567,12 @@ _sync-versions:
     set -euo pipefail
     NEW_VERSION=$(cat VERSION)
     echo "Syncing version $NEW_VERSION across all packages..."
-    # Update agent pyproject.toml
-    sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/agent/pyproject.toml && rm -f packages/python/agent/pyproject.toml.bak
-    echo "  ✓ Agent: packages/python/agent/pyproject.toml"
     # Update core pyproject.toml
     sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/core/pyproject.toml && rm -f packages/python/core/pyproject.toml.bak
     echo "  ✓ Core: packages/python/core/pyproject.toml"
     # Update foundation pyproject.toml
     sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/foundation/pyproject.toml && rm -f packages/python/foundation/pyproject.toml.bak
     echo "  ✓ Foundation: packages/python/foundation/pyproject.toml"
-    # Update mcp-server pyproject.toml
-    sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" packages/python/mcp-server/pyproject.toml && rm -f packages/python/mcp-server/pyproject.toml.bak
-    echo "  ✓ MCP Server: packages/python/mcp-server/pyproject.toml"
     # Note: Root pyproject.toml uses dynamic version (hatch-vcs), no sync needed
     echo ""
     echo "All packages updated to version $NEW_VERSION!"
@@ -1855,16 +1729,6 @@ watch:
 # ==============================================================================
 # MCP SERVER COMMANDS
 # ==============================================================================
-
-[group('mcp')]
-debug server="packages/python/agent/src/agent/main.py":
-    @echo "Starting MCP Inspector..."
-    @uv run mcp-inspector python {{server}}
-
-[group('mcp')]
-run server="packages/python/agent/src/agent/main.py":
-    @echo "Running MCP server: {{server}}"
-    @python {{server}}
 
 # ==============================================================================
 # SRE HEALTH CHECKS
@@ -2500,87 +2364,6 @@ agent-channel-blackbox-memory-evolution scenario="memory_self_correction_high_co
       args+=(--execute-wave-parallel)
     fi
     bash scripts/channel/test-xiuxian-daochang-complex-scenarios.sh "${args[@]}"
-
-# Restart local MCP SSE server and wait for /health to become ready.
-# Usage:
-#   just mcp-restart
-#   just mcp-restart "<host>" "<port>" false 25 .run/xiuxian-mcp-sse.pid .run/logs/xiuxian-mcp-sse.log
-[group('channel')]
-mcp-restart host="" port="" no_embedding="false" health_timeout_secs="25" pid_file=".run/xiuxian-mcp-sse.pid" log_file=".run/logs/xiuxian-mcp-sse.log":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    resolved_host="{{host}}"
-    resolved_port="{{port}}"
-    if [ -z "$resolved_host" ]; then
-      resolved_host="$(uv run python scripts/channel/resolve_mcp_endpoint.py --field host)"
-    fi
-    if [ -z "$resolved_port" ]; then
-      resolved_port="$(uv run python scripts/channel/resolve_mcp_endpoint.py --field port)"
-    fi
-    args=(--host "$resolved_host" --port "$resolved_port" --health-timeout-secs "{{health_timeout_secs}}" --pid-file "{{pid_file}}" --log-file "{{log_file}}")
-    if [ "{{no_embedding}}" = "true" ]; then
-      args+=(--no-embedding)
-    fi
-    bash scripts/channel/restart-xiuxian-mcp.sh "${args[@]}"
-
-# Stress MCP startup by repeatedly launching xiuxian-daochang gateway probes.
-# Usage:
-#   just agent-channel-mcp-startup-stress
-#   just agent-channel-mcp-startup-stress 8 4 50 0.2 ".mcp.json" "<health_url>" "just mcp-restart" 0.2 true
-# Reports:
-#   .run/reports/xiuxian-daochang-mcp-startup-stress.json
-#   .run/reports/xiuxian-daochang-mcp-startup-stress.md
-[group('channel')]
-agent-channel-mcp-startup-stress rounds="6" parallel="3" startup_timeout_secs="45" cooldown_secs="0.2" mcp_config=".mcp.json" health_url="" restart_mcp_cmd="" restart_mcp_settle_secs="2.0" strict_health_check="false" health_probe_interval_secs="0.2" health_probe_timeout_secs="1.0" output_json=".run/reports/xiuxian-daochang-mcp-startup-stress.json" output_markdown=".run/reports/xiuxian-daochang-mcp-startup-stress.md":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    resolved_health_url="{{health_url}}"
-    if [ -z "$resolved_health_url" ]; then
-      resolved_health_url="$(uv run python scripts/channel/resolve_mcp_endpoint.py --field health_url)"
-    fi
-    args=(--rounds "{{rounds}}" --parallel "{{parallel}}" --startup-timeout-secs "{{startup_timeout_secs}}" --cooldown-secs "{{cooldown_secs}}" --mcp-config "{{mcp_config}}" --output-json "{{output_json}}" --output-markdown "{{output_markdown}}" --restart-mcp-settle-secs "{{restart_mcp_settle_secs}}" --health-probe-interval-secs "{{health_probe_interval_secs}}" --health-probe-timeout-secs "{{health_probe_timeout_secs}}")
-    if [ -n "$resolved_health_url" ]; then
-      args+=(--health-url "$resolved_health_url")
-    fi
-    if [ -n "{{restart_mcp_cmd}}" ]; then
-      args+=(--restart-mcp-cmd "{{restart_mcp_cmd}}")
-    fi
-    if [ "{{strict_health_check}}" = "true" ]; then
-      args+=(--strict-health-check)
-    fi
-    bash scripts/channel/test-xiuxian-daochang-mcp-startup-stress.sh "${args[@]}"
-
-# Run MCP startup regression suite (hot + cold start).
-# Usage:
-#   just agent-channel-mcp-startup-suite
-#   just agent-channel-mcp-startup-suite 20 8 8 4 60 0.2 "<mcp_host>" "<mcp_port>" ".mcp.json" false false
-#   just agent-channel-mcp-startup-suite 20 8 8 4 60 0.2 "<mcp_host>" "<mcp_port>" ".mcp.json" false false 0 1200 1500 "" 0.5 0.5
-# Reports:
-#   .run/reports/xiuxian-daochang-mcp-startup-suite.json
-#   .run/reports/xiuxian-daochang-mcp-startup-suite.md
-[group('channel')]
-agent-channel-mcp-startup-suite hot_rounds="20" hot_parallel="8" cold_rounds="8" cold_parallel="4" startup_timeout_secs="60" cooldown_secs="0.2" mcp_host="" mcp_port="" mcp_config=".mcp.json" skip_hot="false" skip_cold="false" health_probe_interval_secs="0.2" health_probe_timeout_secs="1.0" quality_max_failed_probes="0" quality_max_hot_p95_ms="1200" quality_max_cold_p95_ms="1500" quality_min_health_samples="1" quality_max_health_failure_rate="0.02" quality_max_health_p95_ms="350" quality_baseline_json="" quality_max_hot_p95_regression_ratio="0.5" quality_max_cold_p95_regression_ratio="0.5":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    resolved_mcp_host="{{mcp_host}}"
-    resolved_mcp_port="{{mcp_port}}"
-    if [ -z "$resolved_mcp_host" ]; then
-      resolved_mcp_host="$(uv run python scripts/channel/resolve_mcp_endpoint.py --field host)"
-    fi
-    if [ -z "$resolved_mcp_port" ]; then
-      resolved_mcp_port="$(uv run python scripts/channel/resolve_mcp_endpoint.py --field port)"
-    fi
-    args=(--hot-rounds "{{hot_rounds}}" --hot-parallel "{{hot_parallel}}" --cold-rounds "{{cold_rounds}}" --cold-parallel "{{cold_parallel}}" --startup-timeout-secs "{{startup_timeout_secs}}" --cooldown-secs "{{cooldown_secs}}" --mcp-host "$resolved_mcp_host" --mcp-port "$resolved_mcp_port" --mcp-config "{{mcp_config}}" --health-probe-interval-secs "{{health_probe_interval_secs}}" --health-probe-timeout-secs "{{health_probe_timeout_secs}}" --quality-max-failed-probes "{{quality_max_failed_probes}}" --quality-max-hot-p95-ms "{{quality_max_hot_p95_ms}}" --quality-max-cold-p95-ms "{{quality_max_cold_p95_ms}}" --quality-min-health-samples "{{quality_min_health_samples}}" --quality-max-health-failure-rate "{{quality_max_health_failure_rate}}" --quality-max-health-p95-ms "{{quality_max_health_p95_ms}}" --quality-max-hot-p95-regression-ratio "{{quality_max_hot_p95_regression_ratio}}" --quality-max-cold-p95-regression-ratio "{{quality_max_cold_p95_regression_ratio}}")
-    if [ -n "{{quality_baseline_json}}" ]; then
-      args+=(--quality-baseline-json "{{quality_baseline_json}}")
-    fi
-    if [ "{{skip_hot}}" = "true" ]; then
-      args+=(--skip-hot)
-    fi
-    if [ "{{skip_cold}}" = "true" ]; then
-      args+=(--skip-cold)
-    fi
-    bash scripts/channel/test-xiuxian-daochang-mcp-startup-suite.sh "${args[@]}"
 
 # Run memory-focused black-box + regression suite.
 # Usage:

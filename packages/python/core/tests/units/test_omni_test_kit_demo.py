@@ -1,15 +1,9 @@
-"""Example tests demonstrating the enhanced Omni Test Kit features.
-
-This file shows how to use:
-    - Testing layer markers (@unit, @integration, @cloud)
-    - Assertion helpers (assert_response_ok, assert_has_error, etc.)
-    - Skill test builder utilities
-"""
+"""Example tests demonstrating the retained Omni Test Kit features."""
 
 from __future__ import annotations
 
 import pytest
-from omni.test_kit.asserts import (
+from xiuxian_test_kit.asserts import (
     assert_equal,
     assert_has_error,
     assert_in,
@@ -17,13 +11,11 @@ from omni.test_kit.asserts import (
     assert_response_ok,
     assert_true,
 )
-from omni.test_kit.decorators import xiuxian_skill
-from omni.test_kit.fixtures import SkillTestBuilder
 
 # Import markers and assertions from test-kit
-from omni.test_kit.plugin import cloud, integration, unit
+from xiuxian_test_kit.plugin import cloud, integration, unit
 
-from omni.core.responses import ToolResponse
+from xiuxian_core.responses import ToolResponse
 
 # =============================================================================
 # Testing Layer Markers Examples
@@ -75,46 +67,6 @@ def test_response_assertions() -> None:
     # Create an error response
     error_response = ToolResponse.error(message="Not found", code="3001")
     assert_has_error(error_response, expected_code="3001")
-
-
-# =============================================================================
-# Skill Test Builder Examples
-# =============================================================================
-
-
-@unit
-def test_skill_builder() -> None:
-    """Demonstrate SkillTestBuilder for creating test skills."""
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Build a skill
-        builder = SkillTestBuilder("my_test_skill")
-        builder.with_metadata(
-            version="1.0.0",
-            description="A test skill",
-            routing_keywords=["test", "demo"],
-            authors=["Test Author"],
-            permissions=["filesystem:read"],
-        )
-        builder.with_script("example.py", "# Example script")
-
-        # Create the skill
-        skill_path = builder.create(tmpdir)
-
-        # Verify creation - path should end with my_test_skill
-        assert_true(skill_path.endswith("my_test_skill"))
-
-
-# =============================================================================
-# Custom Markers
-# =============================================================================
-
-
-@xiuxian_skill("git")
-def test_git_specific() -> None:
-    """Test specific to the git skill."""
-    assert_true(True)
 
 
 # =============================================================================

@@ -4,31 +4,31 @@ pub(super) fn default_max_tool_rounds() -> u32 {
     30
 }
 
-pub(super) fn default_mcp_pool_size() -> usize {
+pub(super) fn default_tool_pool_size() -> usize {
     4
 }
 
-pub(super) fn default_mcp_handshake_timeout_secs() -> u64 {
+pub(super) fn default_tool_handshake_timeout_secs() -> u64 {
     30
 }
 
-pub(super) fn default_mcp_connect_retries() -> u32 {
+pub(super) fn default_tool_connect_retries() -> u32 {
     3
 }
 
-pub(super) fn default_mcp_strict_startup() -> bool {
+pub(super) fn default_tool_strict_startup() -> bool {
     true
 }
 
-pub(super) fn default_mcp_connect_retry_backoff_ms() -> u64 {
+pub(super) fn default_tool_connect_retry_backoff_ms() -> u64 {
     1_000
 }
 
-pub(super) fn default_mcp_tool_timeout_secs() -> u64 {
+pub(super) fn default_tool_timeout_secs() -> u64 {
     180
 }
 
-pub(super) fn default_mcp_list_tools_cache_ttl_ms() -> u64 {
+pub(super) fn default_tool_list_cache_ttl_ms() -> u64 {
     1_000
 }
 
@@ -58,14 +58,14 @@ impl Default for AgentConfig {
             inference_url: "https://api.openai.com/v1/chat/completions".to_string(),
             model: "gpt-4o-mini".to_string(),
             api_key: None,
-            mcp_servers: Vec::new(),
-            mcp_pool_size: default_mcp_pool_size(),
-            mcp_handshake_timeout_secs: default_mcp_handshake_timeout_secs(),
-            mcp_connect_retries: default_mcp_connect_retries(),
-            mcp_strict_startup: default_mcp_strict_startup(),
-            mcp_connect_retry_backoff_ms: default_mcp_connect_retry_backoff_ms(),
-            mcp_tool_timeout_secs: default_mcp_tool_timeout_secs(),
-            mcp_list_tools_cache_ttl_ms: default_mcp_list_tools_cache_ttl_ms(),
+            tool_servers: Vec::new(),
+            tool_pool_size: default_tool_pool_size(),
+            tool_handshake_timeout_secs: default_tool_handshake_timeout_secs(),
+            tool_connect_retries: default_tool_connect_retries(),
+            tool_strict_startup: default_tool_strict_startup(),
+            tool_connect_retry_backoff_ms: default_tool_connect_retry_backoff_ms(),
+            tool_timeout_secs: default_tool_timeout_secs(),
+            tool_list_cache_ttl_ms: default_tool_list_cache_ttl_ms(),
             max_tool_rounds: default_max_tool_rounds(),
             memory: None,
             window_max_turns: None,
@@ -94,14 +94,14 @@ impl AgentConfig {
             inference_url,
             model,
             api_key: None,
-            mcp_servers: Vec::new(),
-            mcp_pool_size: default_mcp_pool_size(),
-            mcp_handshake_timeout_secs: default_mcp_handshake_timeout_secs(),
-            mcp_connect_retries: default_mcp_connect_retries(),
-            mcp_strict_startup: default_mcp_strict_startup(),
-            mcp_connect_retry_backoff_ms: default_mcp_connect_retry_backoff_ms(),
-            mcp_tool_timeout_secs: default_mcp_tool_timeout_secs(),
-            mcp_list_tools_cache_ttl_ms: default_mcp_list_tools_cache_ttl_ms(),
+            tool_servers: Vec::new(),
+            tool_pool_size: default_tool_pool_size(),
+            tool_handshake_timeout_secs: default_tool_handshake_timeout_secs(),
+            tool_connect_retries: default_tool_connect_retries(),
+            tool_strict_startup: default_tool_strict_startup(),
+            tool_connect_retry_backoff_ms: default_tool_connect_retry_backoff_ms(),
+            tool_timeout_secs: default_tool_timeout_secs(),
+            tool_list_cache_ttl_ms: default_tool_list_cache_ttl_ms(),
             max_tool_rounds: default_max_tool_rounds(),
             memory: None,
             window_max_turns: None,
@@ -117,8 +117,8 @@ impl AgentConfig {
     }
 
     /// Resolve API key: config value, or env (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`).
-    /// When inference goes to our own MCP server (loopback host), returns None
-    /// so we do not send a key — the server holds the key and forwards to the real LLM.
+    /// When inference goes to our own loopback tool/inference gateway, returns None
+    /// so we do not send a key — the local service holds the key and forwards to the real LLM.
     #[must_use]
     pub fn resolve_api_key(&self) -> Option<String> {
         self.resolve_api_key_with_env_reader(|key| std::env::var(key).ok())

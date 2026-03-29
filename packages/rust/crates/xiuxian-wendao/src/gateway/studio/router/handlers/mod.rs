@@ -8,23 +8,26 @@ mod capabilities_exports;
 #[path = "docs/mod.rs"]
 pub mod docs;
 mod docs_exports;
-mod graph_exports;
-mod repo_exports;
 pub mod graph;
+mod graph_exports;
 pub mod repo;
+mod repo_exports;
 pub mod ui_config;
 mod ui_config_exports;
 pub mod vfs;
 mod vfs_exports;
 
-pub use analysis_exports::{code_ast, code_ast_retrieval_arrow, markdown, markdown_retrieval_arrow};
-pub use capabilities_exports::{get_julia_deployment_artifact, get_ui_capabilities};
+pub use analysis_exports::{
+    code_ast, code_ast_retrieval_arrow, markdown, markdown_retrieval_arrow,
+};
+pub use capabilities_exports::{
+    get_compat_deployment_artifact, get_plugin_artifact, get_ui_capabilities,
+};
 pub use docs_exports::{
     docs_family_cluster, docs_family_context, docs_family_search, docs_navigation,
-    docs_navigation_search, docs_page, docs_planner_item, docs_planner_queue,
-    docs_planner_rank, docs_planner_search, docs_planner_workset,
-    docs_projected_gap_report, docs_retrieval, docs_retrieval_context,
-    docs_retrieval_hit, docs_search,
+    docs_navigation_search, docs_page, docs_planner_item, docs_planner_queue, docs_planner_rank,
+    docs_planner_search, docs_planner_workset, docs_projected_gap_report, docs_retrieval,
+    docs_retrieval_context, docs_retrieval_hit, docs_search,
 };
 pub use graph_exports::{graph_neighbors, node_neighbors, topology_3d};
 pub use repo_exports::{

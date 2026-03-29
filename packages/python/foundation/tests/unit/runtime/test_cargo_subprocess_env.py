@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
+from xiuxian_foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 
 def test_prepare_cargo_subprocess_env_rebinds_stale_pyo3_python() -> None:
@@ -40,11 +40,11 @@ def test_prepare_cargo_subprocess_env_keeps_valid_pyo3_python() -> None:
 def test_prepare_cargo_subprocess_env_drops_unresolvable_hints(monkeypatch) -> None:
     """When no interpreter can be resolved, PYO3 hints should be cleared."""
     monkeypatch.setattr(
-        "omni.foundation.runtime.cargo_subprocess_env.sys.executable",
+        "xiuxian_foundation.runtime.cargo_subprocess_env.sys.executable",
         "/tmp/does-not-exist-python",
     )
     monkeypatch.setattr(
-        "omni.foundation.runtime.cargo_subprocess_env.shutil.which",
+        "xiuxian_foundation.runtime.cargo_subprocess_env.shutil.which",
         lambda _name: None,
     )
 

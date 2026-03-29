@@ -45,7 +45,7 @@ metadata:
 | **Memory Mesh**    | Episodic memory for self-learning                   | Memory Mesh doc; table (Skills / Knowledge / Memory) + AdaptiveLoader + Agent Runtime.                       |
 | **Project Memory** | ADR-style decisions, tasks, context                 | ProjectMemory, LanceDB, decisions/tasks/context.                                                             |
 
-**Trinity**: Skills + Knowledge + Memory; single entry point `@omni("skill.command")`, MCP, skill-centric.
+**Trinity**: Skills + Knowledge + Memory; single entry point `@omni("skill.command")`, tool-centric runtime surface.
 
 ---
 
@@ -74,7 +74,7 @@ metadata:
 | **Trinity separation**   | Skills (how) / Knowledge (what) / Memory (remember doing) is a clear separation of roles and data sources.                             |
 | **No weight updates**    | We do not fine-tune the LLM; all learning is in memory/graph — same non-parametric philosophy as MemRL.                                |
 | **Structured knowledge** | Entity/relation graph + vector store gives both semantic and relational recall; MemRL focuses on episodic utility.                     |
-| **Single entry point**   | `@omni("skill.command")` + MCP keeps the interface stable while we add or change memory/knowledge backends.                            |
+| **Single entry point**   | `@omni("skill.command")` keeps the interface stable while we add or change memory/knowledge backends.                                  |
 
 ---
 

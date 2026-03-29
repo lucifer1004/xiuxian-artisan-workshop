@@ -564,7 +564,7 @@ pub struct VectorToolSearchResult {
     pub parameters: Vec<String>,
 }
 
-/// Hybrid search result payload (`omni.vector.hybrid.v1`).
+/// Hybrid search result payload (`xiuxian.vector.hybrid.v1`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct HybridSearchResult {
     /// Schema identifier.
@@ -589,7 +589,7 @@ pub struct HybridSearchResult {
     pub keyword_score: Option<f64>,
 }
 
-/// Tool search result payload (`omni.vector.tool_search.v1`).
+/// Tool search result payload (`xiuxian.vector.tool_search.v1`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ToolSearchResult {
     /// Schema identifier.

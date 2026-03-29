@@ -1,6 +1,6 @@
 use super::super::types::{
-    AgentSettings, EmbeddingSettings, InferenceSettings, McpSettings, MemorySettings,
-    MistralSettings, RuntimeSettings, SessionSettings,
+    AgentSettings, EmbeddingSettings, InferenceSettings, MemorySettings, MistralSettings,
+    RuntimeSettings, SessionSettings, ToolRuntimeSettings,
 };
 
 impl RuntimeSettings {
@@ -8,7 +8,7 @@ impl RuntimeSettings {
         Self {
             agent: self.agent.merge(overlay.agent),
             inference: self.inference.merge(overlay.inference),
-            mcp: self.mcp.merge(overlay.mcp),
+            tool_runtime: self.tool_runtime.merge(overlay.tool_runtime),
             telegram: self.telegram.merge(overlay.telegram),
             discord: self.discord.merge(overlay.discord),
             session: self.session.merge(overlay.session),
@@ -45,7 +45,7 @@ impl InferenceSettings {
     }
 }
 
-impl McpSettings {
+impl ToolRuntimeSettings {
     fn merge(self, overlay: Self) -> Self {
         Self {
             pool_size: overlay.pool_size.or(self.pool_size),

@@ -1,6 +1,7 @@
 //! omni-agent CLI: gateway, stdio, or repl mode.
 //!
-//! MCP servers from mcp.json only (default `.mcp.json`). Override with `--mcp-config <path>`.
+//! External tool servers are loaded from `.tool.json` by default.
+//! Override with `--tool-config <path>`.
 //!
 //! Logging: set `RUST_LOG=omni_agent=info` (or `warn`, `debug`) to see agent logs on stderr.
 
@@ -47,26 +48,26 @@ async fn main() -> anyhow::Result<()> {
             bind,
             turn_timeout,
             max_concurrent,
-            mcp_config,
+            tool_config,
         } => {
             run_gateway_mode(
                 bind,
                 turn_timeout,
                 max_concurrent,
-                mcp_config,
+                tool_config,
                 &runtime_settings,
             )
             .await
         }
         Command::Stdio {
             session_id,
-            mcp_config,
-        } => run_stdio_mode(session_id, mcp_config, &runtime_settings).await,
+            tool_config,
+        } => run_stdio_mode(session_id, tool_config, &runtime_settings).await,
         Command::Repl {
             query,
             session_id,
-            mcp_config,
-        } => run_repl_mode(query, session_id, mcp_config, &runtime_settings).await,
+            tool_config,
+        } => run_repl_mode(query, session_id, tool_config, &runtime_settings).await,
         Command::Schedule {
             prompt,
             interval_secs,
@@ -75,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
             session_prefix,
             recipient,
             wait_for_completion_secs,
-            mcp_config,
+            tool_config,
         } => {
             run_schedule_mode(
                 prompt,
@@ -85,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
                 session_prefix,
                 recipient,
                 wait_for_completion_secs,
-                mcp_config,
+                tool_config,
                 &runtime_settings,
             )
             .await
@@ -93,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Channel {
             provider,
             bot_token,
-            mcp_config,
+            tool_config,
             mode,
             webhook_bind,
             webhook_path,
@@ -112,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
                 ChannelCommandRequest {
                     provider,
                     bot_token,
-                    mcp_config,
+                    tool_config,
                     mode,
                     webhook_bind,
                     webhook_path,

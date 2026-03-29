@@ -27,7 +27,7 @@ Under the Zhenfa architecture, the `xiuxian-daochang` tool registry becomes incr
 1. **Thin Client Wrappers**: The agent's native tools are refactored to be pure HTTP clients (e.g., using `reqwest`).
 2. **Search-Driven Invocation**: When the LLM decides to invoke a tool like `wendao.search(query="...")`, the agent forwards this query via a `POST` request to the **Zhenfa** gateway.
 3. **Internal Routing**: Zhenfa hands the query to the **Wendao Search Engine**, which resolves the query against the **Valkey** storage layer and returns rendered results.
-4. **Omni-Channel Availability**: Because the tools are now exposed over HTTP, any language or interface (Python scripts, Web UI, external MCP clients) can utilize the exact same high-performance Rust backend without navigating PyO3 FFI bindings.
+4. **Omni-Channel Availability**: Because the tools are now exposed over HTTP, any language or interface (Python scripts, Web UI, external clients) can utilize the exact same high-performance Rust backend without navigating PyO3 FFI bindings.
 
 ## Hot-Reloading
 

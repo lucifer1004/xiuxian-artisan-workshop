@@ -23,7 +23,7 @@ _foundation_src = _PRJ_ROOT / "packages/python/foundation/src"
 if str(_foundation_src) not in sys.path:
     sys.path.insert(0, str(_foundation_src))
 
-from omni.foundation.config.skills import SKILLS_DIR
+from xiuxian_wendao_py.compat.config import get_skills_dir
 
 STANDARD_TEMPLATE = '''description="""
 One-line summary of what this command does.
@@ -42,7 +42,7 @@ class SkillDescriptionAnalyzer:
     """Analyzes skill scripts for description compliance."""
 
     def __init__(self, skills_dir: Path | None = None):
-        self.skills_dir = skills_dir or SKILLS_DIR()
+        self.skills_dir = skills_dir or get_skills_dir()
         self.issues: list[dict[str, Any]] = []
         self.stats = {
             "total_skills": 0,
@@ -310,7 +310,7 @@ class SkillDescriptionAnalyzer:
 def main() -> int:
     """Main entry point."""
     skills_dir_arg = sys.argv[1] if len(sys.argv) > 1 else None
-    skills_dir = Path(skills_dir_arg) if skills_dir_arg else SKILLS_DIR()
+    skills_dir = Path(skills_dir_arg) if skills_dir_arg else get_skills_dir()
 
     if not skills_dir.exists():
         print(f"Error: Skills directory not found: {skills_dir}")

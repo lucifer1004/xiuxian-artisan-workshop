@@ -83,12 +83,7 @@ async fn repeated_embedding_batch_uses_local_cache() {
     let addr = reserve_local_addr().await;
     let calls = Arc::new(AtomicUsize::new(0));
     let server = spawn_embed_server(addr, calls.clone()).await;
-    let client = EmbeddingClient::new_with_mcp_url_and_backend(
-        &format!("http://{addr}"),
-        5,
-        None,
-        Some("http"),
-    );
+    let client = EmbeddingClient::new_with_backend(&format!("http://{addr}"), 5, Some("http"));
     let texts = vec!["repeat this prompt".to_string()];
 
     let first = client.embed_batch_with_model(&texts, None).await;
@@ -115,12 +110,7 @@ async fn embedding_cache_isolated_by_model_hint() {
     let addr = reserve_local_addr().await;
     let calls = Arc::new(AtomicUsize::new(0));
     let server = spawn_embed_server(addr, calls.clone()).await;
-    let client = EmbeddingClient::new_with_mcp_url_and_backend(
-        &format!("http://{addr}"),
-        5,
-        None,
-        Some("http"),
-    );
+    let client = EmbeddingClient::new_with_backend(&format!("http://{addr}"), 5, Some("http"));
     let texts = vec!["same text".to_string()];
 
     let model_a = client.embed_batch_with_model(&texts, Some("m-a")).await;

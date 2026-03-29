@@ -24,7 +24,7 @@ def isolated_workflow_state_runtime(
     runtime_root.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(
-        "omni.foundation.workflow_state.get_runtime_dir",
+        "xiuxian_foundation.workflow_state.get_runtime_dir",
         lambda *parts: runtime_root.joinpath(*parts),
     )
     return runtime_root
@@ -33,12 +33,12 @@ def isolated_workflow_state_runtime(
 def test_legacy_checkpoint_module_is_removed() -> None:
     """Legacy checkpoint compatibility layer must stay removed."""
     with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("omni.foundation.checkpoint")
+        importlib.import_module("xiuxian_foundation.checkpoint")
 
 
 def test_save_and_load_workflow_state_roundtrip() -> None:
     """save_workflow_state/load_workflow_state should roundtrip one record."""
-    from omni.foundation.workflow_state import load_workflow_state, save_workflow_state
+    from xiuxian_foundation.workflow_state import load_workflow_state, save_workflow_state
 
     assert save_workflow_state(DEFAULT_WORKFLOW_TYPE, DEFAULT_WORKFLOW_ID, DEFAULT_STATE) is True
     assert load_workflow_state(DEFAULT_WORKFLOW_TYPE, DEFAULT_WORKFLOW_ID) == DEFAULT_STATE
@@ -46,7 +46,7 @@ def test_save_and_load_workflow_state_roundtrip() -> None:
 
 def test_save_rejects_invalid_payload_and_blank_id() -> None:
     """Invalid payloads should not be persisted."""
-    from omni.foundation.workflow_state import save_workflow_state
+    from xiuxian_foundation.workflow_state import save_workflow_state
 
     assert save_workflow_state(DEFAULT_WORKFLOW_TYPE, "", DEFAULT_STATE) is False
     assert save_workflow_state(DEFAULT_WORKFLOW_TYPE, DEFAULT_WORKFLOW_ID, "bad") is False
@@ -54,14 +54,14 @@ def test_save_rejects_invalid_payload_and_blank_id() -> None:
 
 def test_load_missing_workflow_returns_none() -> None:
     """Loading missing workflow state should return None."""
-    from omni.foundation.workflow_state import load_workflow_state
+    from xiuxian_foundation.workflow_state import load_workflow_state
 
     assert load_workflow_state(DEFAULT_WORKFLOW_TYPE, "missing-id") is None
 
 
 def test_get_workflow_history_returns_latest_first_with_metadata() -> None:
     """History should include metadata and be ordered from latest to oldest."""
-    from omni.foundation.workflow_state import get_workflow_history, save_workflow_state
+    from xiuxian_foundation.workflow_state import get_workflow_history, save_workflow_state
 
     assert save_workflow_state(
         DEFAULT_WORKFLOW_TYPE,
@@ -85,7 +85,7 @@ def test_get_workflow_history_returns_latest_first_with_metadata() -> None:
 
 def test_delete_workflow_state_removes_record_and_history() -> None:
     """Delete should remove both latest record and history file."""
-    from omni.foundation.workflow_state import (
+    from xiuxian_foundation.workflow_state import (
         delete_workflow_state,
         get_workflow_history,
         load_workflow_state,
@@ -103,7 +103,7 @@ def test_delete_workflow_state_removes_record_and_history() -> None:
 
 def test_get_checkpointer_returns_workflow_state_handle() -> None:
     """get_checkpointer should return a workflow-state handle bound to workflow type."""
-    from omni.foundation.workflow_state import WorkflowStateHandle, get_checkpointer
+    from xiuxian_foundation.workflow_state import WorkflowStateHandle, get_checkpointer
 
     handle = get_checkpointer(DEFAULT_WORKFLOW_TYPE)
     assert isinstance(handle, WorkflowStateHandle)
@@ -112,7 +112,7 @@ def test_get_checkpointer_returns_workflow_state_handle() -> None:
 
 def test_workflow_state_handle_save_get_history_and_delete() -> None:
     """WorkflowStateHandle should support save/get_latest/get_history/delete_thread."""
-    from omni.foundation.workflow_state import get_checkpointer
+    from xiuxian_foundation.workflow_state import get_checkpointer
 
     handle = get_checkpointer(DEFAULT_WORKFLOW_TYPE)
     table_name = DEFAULT_WORKFLOW_TYPE

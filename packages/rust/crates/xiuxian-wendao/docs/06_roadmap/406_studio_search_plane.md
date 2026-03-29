@@ -440,6 +440,10 @@ Replace Studio request-path search hot spots with a background-built search plan
   `analysis/types.rs`, `analysis/service.rs`, `analysis/markdown.rs`, and
   `analysis/code_ast.rs` now separate query types, shared loader logic, and
   route entrypoints, while `analysis/mod.rs` stays interface-only
+- the flat capabilities handler body is now closed behind a feature folder too.
+  `capabilities/types.rs`, `capabilities/service.rs`, and
+  `capabilities/deployment.rs` now separate query types and the two outward
+  route surfaces, while `capabilities/mod.rs` stays interface-only
 - query-core explain is now partially operational in production code, not only
   tests. Repo code-search lanes record query-core-derived scan telemetry back
   into Search Plane status, and graph handlers emit a compact explain summary to

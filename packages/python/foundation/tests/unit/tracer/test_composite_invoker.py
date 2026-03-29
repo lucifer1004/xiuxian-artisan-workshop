@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from omni.tracer import CompositeToolInvoker, MappingToolInvoker, NoOpToolInvoker
+from xiuxian_tracer import CompositeToolInvoker, MappingToolInvoker, NoOpToolInvoker
 
 
 class _ErrorInvoker:

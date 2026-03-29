@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
+use crate::ToolListCacheStatsSnapshot;
 use crate::agent::Agent;
 use crate::embedding::EmbeddingClient;
-use crate::mcp::McpToolsListCacheStatsSnapshot;
 
 /// Request body for POST /message.
 #[derive(Debug, Deserialize)]
@@ -128,14 +128,14 @@ pub struct OpenAiEmbeddingUsage {
     pub total_tokens: usize,
 }
 
-/// MCP section in gateway health response.
+/// External tool runtime section in gateway health response.
 #[derive(Debug, Serialize)]
-pub struct GatewayMcpHealthResponse {
-    /// Whether MCP integration is enabled in this runtime.
+pub struct GatewayExternalToolHealthResponse {
+    /// Whether external tool integration is enabled in this runtime.
     pub enabled: bool,
     /// Optional discover/tools cache stats snapshot.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools_list_cache: Option<McpToolsListCacheStatsSnapshot>,
+    pub tools_list_cache: Option<ToolListCacheStatsSnapshot>,
 }
 
 /// Response body for gateway health endpoint.
@@ -151,8 +151,8 @@ pub struct GatewayHealthResponse {
     /// Optional current in-flight turns.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub in_flight_turns: Option<usize>,
-    /// MCP health sub-section.
-    pub mcp: GatewayMcpHealthResponse,
+    /// External tool runtime health sub-section.
+    pub tools: GatewayExternalToolHealthResponse,
 }
 
 /// Standard JSON error payload tuple for gateway handlers.

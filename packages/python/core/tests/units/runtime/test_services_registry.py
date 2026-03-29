@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from omni.core.runtime.services import ServiceRegistry
+from xiuxian_core.runtime.services import ServiceRegistry
 
 
 @pytest.fixture(autouse=True)
@@ -19,7 +19,7 @@ def _reset_service_registry() -> None:
 
 def test_missing_service_log_is_emitted_once_per_name() -> None:
     """Repeated lookups of same missing service should not spam debug logs."""
-    with patch("omni.core.runtime.services.logger.debug") as debug:
+    with patch("xiuxian_core.runtime.services.logger.debug") as debug:
         assert ServiceRegistry.get("librarian") is None
         assert ServiceRegistry.get("librarian") is None
         assert ServiceRegistry.get("librarian") is None
@@ -32,7 +32,7 @@ def test_missing_log_cache_resets_after_unregister() -> None:
     ServiceRegistry.register("librarian", object())
     ServiceRegistry.unregister("librarian")
 
-    with patch("omni.core.runtime.services.logger.debug") as debug:
+    with patch("xiuxian_core.runtime.services.logger.debug") as debug:
         assert ServiceRegistry.get("librarian") is None
         assert ServiceRegistry.get("librarian") is None
 
@@ -41,7 +41,7 @@ def test_missing_log_cache_resets_after_unregister() -> None:
 
 def test_clear_resets_missing_log_cache() -> None:
     """Clearing registry should clear missing-service log suppression state."""
-    with patch("omni.core.runtime.services.logger.debug") as debug:
+    with patch("xiuxian_core.runtime.services.logger.debug") as debug:
         assert ServiceRegistry.get("embedding") is None
         ServiceRegistry.clear()
         assert ServiceRegistry.get("embedding") is None

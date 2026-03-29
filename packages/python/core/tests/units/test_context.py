@@ -1,15 +1,13 @@
-"""Tests for omni.core.context module."""
+"""Tests for xiuxian_core.context module."""
 
 from __future__ import annotations
 
 import pytest
 
-from omni.core.context import (
-    ActiveSkillProvider,
-    AvailableToolsProvider,
+from xiuxian_core.context import (
     ContextOrchestrator,
+    ContextProvider,
     ContextResult,
-    EpisodicMemoryProvider,
     SystemPersonaProvider,
     create_executor_orchestrator,
     create_planner_orchestrator,
@@ -98,13 +96,13 @@ class TestSystemPersonaProvider:
         prompt_path.write_text("SYSTEM CORE RELATIVE", encoding="utf-8")
 
         monkeypatch.setattr(
-            "omni.foundation.config.get_setting",
+            "xiuxian_foundation.config.get_setting",
             lambda key, default=None: "custom_prompts/system_core.md"
             if key == "prompts.system_core"
             else default,
         )
         monkeypatch.setattr(
-            "omni.foundation.config.get_config_paths",
+            "xiuxian_foundation.config.get_config_paths",
             lambda: type("P", (), {"project_root": tmp_path})(),
         )
 
@@ -119,11 +117,11 @@ class TestSystemPersonaProvider:
         prompt_path.write_text("SYSTEM CORE ABS", encoding="utf-8")
 
         monkeypatch.setattr(
-            "omni.foundation.config.get_setting",
+            "xiuxian_foundation.config.get_setting",
             lambda key, default=None: str(prompt_path) if key == "prompts.system_core" else default,
         )
         monkeypatch.setattr(
-            "omni.foundation.config.get_config_paths",
+            "xiuxian_foundation.config.get_config_paths",
             lambda: type("P", (), {"project_root": tmp_path})(),
         )
 
@@ -132,101 +130,19 @@ class TestSystemPersonaProvider:
         assert "SYSTEM CORE ABS" in result.content
 
 
-class TestActiveSkillProvider:
-    """Test ActiveSkillProvider."""
+class _StaticProvider(ContextProvider):
+    """Minimal provider stub for orchestrator tests."""
 
-    def test_creation(self):
-        """Test provider can be instantiated."""
-        provider = ActiveSkillProvider()
-        assert provider is not None
+    def __init__(self, name: str, content: str, token_count: int, priority: int) -> None:
+        self._result = ContextResult(
+            content=content,
+            token_count=token_count,
+            name=name,
+            priority=priority,
+        )
 
-    @pytest.mark.asyncio
-    async def test_no_active_skill(self):
-        """Test behavior when no active_skill in state."""
-        provider = ActiveSkillProvider()
-        result = await provider.provide({}, 1000)
-
-        assert result.content == ""
-        assert result.token_count == 0
-        assert result.priority == 10
-        assert result.name == "active_skill"
-
-    @pytest.mark.asyncio
-    async def test_with_active_skill(self):
-        """Test behavior when active_skill is provided."""
-        provider = ActiveSkillProvider()
-        state = {"active_skill": "nonexistent_skill"}
-        result = await provider.provide(state, 1000)
-
-        # Should return empty for unknown skill
-        assert result.name == "active_skill"
-
-    @pytest.mark.asyncio
-    async def test_wraps_content_in_xml(self):
-        """Test that content is wrapped in XML tags."""
-        provider = ActiveSkillProvider()
-        state = {"active_skill": "git"}
-        result = await provider.provide(state, 10000)
-
-        if result.content:
-            assert "<active_protocol>" in result.content
-            assert "</active_protocol>" in result.content
-
-
-class TestAvailableToolsProvider:
-    """Test AvailableToolsProvider."""
-
-    def test_creation(self):
-        """Test provider can be instantiated."""
-        provider = AvailableToolsProvider()
-        assert provider is not None
-
-    @pytest.mark.asyncio
-    async def test_returns_tools_index(self):
-        """Test that provider returns tools information."""
-        provider = AvailableToolsProvider()
-        result = await provider.provide({}, 1000)
-
-        assert result.name == "tools"
-        assert result.priority == 20
-        # Should return some content if skills are indexed
-        if result.content:
-            assert "<available_tools>" in result.content
-
-    @pytest.mark.asyncio
-    async def test_respects_budget(self):
-        """Test that budget is passed to provide method."""
-        provider = AvailableToolsProvider()
-        result = await provider.provide({}, 500)
-
-        assert result.priority == 20
-
-
-class TestEpisodicMemoryProvider:
-    """Test EpisodicMemoryProvider."""
-
-    def test_creation(self):
-        """Test provider can be instantiated."""
-        provider = EpisodicMemoryProvider()
-        assert provider is not None
-
-    @pytest.mark.asyncio
-    async def test_low_budget_returns_none(self):
-        """Test that low budget returns None (skips episodic memory)."""
-        provider = EpisodicMemoryProvider()
-        result = await provider.provide({}, 100)
-
-        # Budget < 300 should skip and return None
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_no_query_returns_none(self):
-        """Test that missing query returns None (skips episodic memory)."""
-        provider = EpisodicMemoryProvider()
-        result = await provider.provide({}, 1000)
-
-        # No query should return None
-        assert result is None
+    async def provide(self, state: dict[str, object], budget: int) -> ContextResult | None:
+        return self._result
 
 
 class TestContextOrchestrator:
@@ -279,28 +195,30 @@ class TestContextOrchestrator:
         orchestrator = ContextOrchestrator(
             [
                 SystemPersonaProvider(role="architect"),
-                AvailableToolsProvider(),
+                _StaticProvider(
+                    name="secondary",
+                    content="<secondary>extra</secondary>",
+                    token_count=2,
+                    priority=50,
+                ),
             ]
         )
         result = await orchestrator.build_context({})
-        # Both providers should contribute
-        assert "architect" in result or "<available_tools>" in result
+        assert "architect" in result
+        assert "<secondary>extra</secondary>" in result
 
     @pytest.mark.asyncio
     async def test_priority_ordering(self):
         """Test that context results are sorted by priority after assembly."""
         orchestrator = ContextOrchestrator(
             [
-                SystemPersonaProvider(),
-                ActiveSkillProvider(),
+                _StaticProvider("later", "<later/>", 1, 20),
+                _StaticProvider("first", "<first/>", 1, 5),
             ]
         )
-        # Execute and check results are sorted
-        state = {"active_skill": "git"}
-        context = await orchestrator.build_context(state)
+        context = await orchestrator.build_context({})
 
-        # Results should be assembled (persona comes first due to priority)
-        assert isinstance(context, str)
+        assert context.index("<first/>") < context.index("<later/>")
 
 
 class TestFactoryFunctions:
@@ -310,32 +228,31 @@ class TestFactoryFunctions:
         """Test planner orchestrator creation."""
         orchestrator = create_planner_orchestrator()
         assert isinstance(orchestrator, ContextOrchestrator)
-        assert len(orchestrator._providers) == 4
+        assert len(orchestrator._providers) == 1
 
     def test_create_executor_orchestrator(self):
         """Test executor orchestrator creation."""
         orchestrator = create_executor_orchestrator()
         assert isinstance(orchestrator, ContextOrchestrator)
-        assert len(orchestrator._providers) == 2
+        assert len(orchestrator._providers) == 1
 
     @pytest.mark.asyncio
     async def test_planner_has_all_providers(self):
-        """Test planner orchestrator has all provider types."""
+        """Planner orchestrator should keep only persona in Rust-authoritative mode."""
         orchestrator = create_planner_orchestrator()
         provider_types = [type(p).__name__ for p in orchestrator._providers]
         assert "SystemPersonaProvider" in provider_types
-        assert "AvailableToolsProvider" in provider_types
-        assert "ActiveSkillProvider" in provider_types
-        assert "EpisodicMemoryProvider" in provider_types
+        assert "AvailableToolsProvider" not in provider_types
+        assert "ActiveSkillProvider" not in provider_types
+        assert "EpisodicMemoryProvider" not in provider_types
 
     @pytest.mark.asyncio
     async def test_executor_has_core_providers(self):
-        """Test executor orchestrator has core providers only."""
+        """Executor orchestrator should keep only persona in Rust-authoritative mode."""
         orchestrator = create_executor_orchestrator()
         provider_types = [type(p).__name__ for p in orchestrator._providers]
         assert "SystemPersonaProvider" in provider_types
-        assert "ActiveSkillProvider" in provider_types
-        # Executor should not include tools or rag by default
+        assert "ActiveSkillProvider" not in provider_types
         assert provider_types.count("AvailableToolsProvider") == 0
 
 
@@ -343,21 +260,8 @@ class TestContextIntegration:
     """Integration tests for the context module."""
 
     @pytest.mark.asyncio
-    async def test_full_skill_context_flow(self):
-        """Test complete flow from state to context."""
-        from omni.core.skills.memory import get_skill_memory
-
-        # Verify skill memory works
-        memory = get_skill_memory()
-        assert memory is not None
-
-        # Verify skills are indexed
-        skills = memory.list_skills()
-        assert len(skills) > 0
-
-    @pytest.mark.asyncio
     async def test_build_context_with_state(self):
-        """Test building context with realistic state."""
+        """Test building context with realistic state in persona-only mode."""
         state = {
             "active_skill": "git",
             "current_task": "Analyze repository status",
