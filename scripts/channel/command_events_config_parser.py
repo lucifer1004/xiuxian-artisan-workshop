@@ -15,7 +15,7 @@ def build_parser(*, suites: tuple[str, ...]) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Run a strict Telegram command black-box matrix against local webhook runtime. "
-            "Each probe requires a command-specific event and forbids MCP tool-call errors."
+            "Each probe requires a command-specific event and forbids tool runtime errors."
         )
     )
     add_core_args(parser)

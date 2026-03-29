@@ -7,6 +7,7 @@ Stable forwarding module for project path APIs.
 Canonical implementations live in:
 - `xiuxian_foundation.config.prj`
 """
+
 from xiuxian_foundation.config.prj import (
     PRJ_CACHE,
     PRJ_CHECKPOINT,

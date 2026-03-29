@@ -1,10 +1,14 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::analyzers::projection::ProjectionPageKind;
+use crate::analyzers::projection::{
+    ProjectedMarkdownDocument, ProjectedPageIndexDocument, ProjectionPageKind,
+};
 use crate::analyzers::query::{
     RepoProjectedPageFamilyClusterResult, RepoProjectedPageFamilyContextResult,
-    RepoProjectedPageFamilySearchResult, RepoProjectedPageNavigationResult,
+    RepoProjectedPageFamilySearchResult, RepoProjectedPageIndexNodeResult,
+    RepoProjectedPageIndexTreeResult, RepoProjectedPageIndexTreeSearchResult,
+    RepoProjectedPageIndexTreesResult, RepoProjectedPageNavigationResult,
     RepoProjectedPageNavigationSearchResult, RepoProjectedPageResult,
     RepoProjectedPageSearchResult, RepoProjectedRetrievalContextResult,
     RepoProjectedRetrievalHitResult, RepoProjectedRetrievalResult,
@@ -83,6 +87,91 @@ pub struct DocsPageQuery {
 
 /// Docs-facing deterministic projected-page lookup result.
 pub type DocsPageResult = RepoProjectedPageResult;
+
+/// Docs-facing query for deterministic projected markdown documents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DocsMarkdownDocumentsQuery {
+    /// Repository identifier to project.
+    pub repo_id: String,
+}
+
+/// Docs-facing deterministic projected markdown documents result set for one repository.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DocsMarkdownDocumentsResult {
+    /// Repository identifier projected.
+    pub repo_id: String,
+    /// Deterministic projected markdown documents derived from repository truth.
+    pub documents: Vec<ProjectedMarkdownDocument>,
+}
+
+/// Docs-facing query for deterministic projected page-index tree lookup by stable page identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DocsPageIndexTreeQuery {
+    /// Repository identifier to project.
+    pub repo_id: String,
+    /// Stable projected page identifier.
+    pub page_id: String,
+}
+
+/// Docs-facing deterministic projected page-index tree lookup result.
+pub type DocsPageIndexTreeResult = RepoProjectedPageIndexTreeResult;
+
+/// Docs-facing query for deterministic projected page-index trees.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DocsPageIndexTreesQuery {
+    /// Repository identifier to project.
+    pub repo_id: String,
+}
+
+/// Docs-facing deterministic projected page-index trees result.
+pub type DocsPageIndexTreesResult = RepoProjectedPageIndexTreesResult;
+
+/// Docs-facing query for deterministic projected page-index documents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DocsPageIndexDocumentsQuery {
+    /// Repository identifier to project.
+    pub repo_id: String,
+}
+
+/// Docs-facing deterministic projected page-index documents result set for one repository.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DocsPageIndexDocumentsResult {
+    /// Repository identifier projected.
+    pub repo_id: String,
+    /// Parsed page-index-ready documents derived from repository truth.
+    pub documents: Vec<ProjectedPageIndexDocument>,
+}
+
+/// Docs-facing query for deterministic projected page-index tree search.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DocsPageIndexTreeSearchQuery {
+    /// Repository identifier to project.
+    pub repo_id: String,
+    /// User-provided page-index tree search string.
+    pub query: String,
+    /// Optional projected-page family filter applied to candidate pages.
+    pub kind: Option<ProjectionPageKind>,
+    /// Maximum number of page-index tree hits to return.
+    pub limit: usize,
+}
+
+/// Docs-facing deterministic projected page-index tree search result.
+pub type DocsPageIndexTreeSearchResult = RepoProjectedPageIndexTreeSearchResult;
+
+/// Docs-facing query for deterministic projected page-index node lookup by stable identifiers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[allow(clippy::struct_field_names)]
+pub struct DocsPageIndexNodeQuery {
+    /// Repository identifier to project.
+    pub repo_id: String,
+    /// Stable projected page identifier.
+    pub page_id: String,
+    /// Stable page-index node identifier.
+    pub node_id: String,
+}
+
+/// Docs-facing deterministic projected page-index node lookup result.
+pub type DocsPageIndexNodeResult = RepoProjectedPageIndexNodeResult;
 
 /// Docs-facing query for deterministic projected-page family context around one stable page.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

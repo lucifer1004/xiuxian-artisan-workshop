@@ -70,12 +70,12 @@ Use when user asks **questions** about the project.
 ```
 User: "What is the git flow?"
 → LLM: call read_docs(doc="how-to/git-workflow", action="load")
-→ MCP: returns docs content
+→ Tool runtime: returns docs content
 → LLM: answer user question
 
 User: "Help me commit these changes"
 → LLM: call load_git_workflow_memory()
-→ MCP: returns git workflow rules
+→ Tool runtime: returns git workflow rules
 → LLM: follow rules to execute smart_commit
 ```
 
@@ -88,7 +88,7 @@ Three-step process for building features with quality and context.
 Before starting any feature, load the development process standards:
 
 ```
-User: "Implement a new MCP tool for X"
+User: "Implement a new tool-runtime command for X"
 → LLM: call get_doc_protocol(doc="how-to/feature-development")
 → LLM: call manage_context(action="update_status", phase="Planning", focus="...")
 → LLM: establish scope and requirements
@@ -171,31 +171,30 @@ Identify Problem → Do NOT Apologize → Execute Concrete Actions → Verify Fi
 
 **Workspace:**
 
-- Root: `pyproject.toml` with `[tool.uv.workspace].members = ["mcp-server"]`
-- Package: `mcp-server/pyproject.toml` → package name: `omni_orchestrator`
+- Root: `pyproject.toml` with explicit retained workspace members
+- Package metadata lives under the retained Python packages, not a standalone protocol server package
 
 **Commands:**
 
 ```bash
 uv sync                          # Sync dependencies
 uv run python -c "..."          # Run Python (from project root)
-uv pip install -e mcp-server/   # Install mcp-server as editable (for imports)
+uv pip install -e packages/python/foundation/   # Example editable install for retained Python imports
 uv add <pkg>                    # Add dependencies
 ```
 
-**Debug MCP Tools:**
+**Debug Tool Runtime Helpers:**
 
 ```python
 import sys
-sys.path.insert(0, 'mcp-server')
-from docs import load_doc
-from lang_expert import StandardsCache
-from git_ops import GitWorkflowCache
+sys.path.insert(0, 'packages/python/foundation/src')
+from xiuxian_foundation.utils.instructions import get_instruction
+from xiuxian_foundation.services.reference import ReferenceLibrary
 ```
 
 **Fix Import Error:**
 
 ```
-ModuleNotFoundError: mcp_server
-→ Add: sys.path.insert(0, 'mcp-server')
+ModuleNotFoundError: xiuxian_foundation
+→ Add: sys.path.insert(0, 'packages/python/foundation/src')
 ```

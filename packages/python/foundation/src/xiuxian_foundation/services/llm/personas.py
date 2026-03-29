@@ -11,7 +11,7 @@ from typing import Any
 
 import structlog
 
-log = structlog.get_logger("mcp-core.inference")
+log = structlog.get_logger("xiuxian_foundation.inference")
 
 # Standard personas for project development
 PERSONAS = {

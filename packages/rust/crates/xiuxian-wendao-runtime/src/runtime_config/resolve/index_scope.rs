@@ -1,5 +1,7 @@
 use crate::runtime_config::LinkGraphIndexRuntimeConfig;
-use crate::settings::{dedup_dirs, get_setting_bool, get_setting_string_list, normalize_relative_dir};
+use crate::settings::{
+    dedup_dirs, get_setting_bool, get_setting_string_list, normalize_relative_dir,
+};
 use serde_yaml::Value;
 use std::path::Path;
 
@@ -72,7 +74,10 @@ exclude_dirs = [".git", "target", "target"]
 
         let settings = merged_toml_settings("link_graph", "", "", "wendao.toml");
         let runtime = resolve_link_graph_index_runtime_with_settings(temp.path(), &settings);
-        assert_eq!(runtime.include_dirs, vec!["src".to_string(), "docs".to_string()]);
+        assert_eq!(
+            runtime.include_dirs,
+            vec!["src".to_string(), "docs".to_string()]
+        );
         assert_eq!(runtime.exclude_dirs, vec!["target".to_string()]);
 
         Ok(())

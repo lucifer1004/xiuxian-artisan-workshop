@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
-use xiuxian_wendao::analyzers::{
+use xiuxian_wendao_core::repo_intelligence::{
     AnalysisContext, DiagnosticRecord, RepoIntelligenceError, RepositoryAnalysisOutput,
     RepositoryRecord,
 };
@@ -258,12 +258,12 @@ mod tests {
     use std::fs;
 
     use tempfile::TempDir;
-    use xiuxian_wendao::analyzers::{RegisteredRepository, RepositoryPluginConfig};
+    use xiuxian_wendao_core::repo_intelligence::{RegisteredRepository, RepositoryPluginConfig};
 
     use std::path::Path;
 
     use super::{analyze_repository, preflight_repository};
-    use xiuxian_wendao::analyzers::AnalysisContext;
+    use xiuxian_wendao_core::repo_intelligence::AnalysisContext;
 
     #[test]
     fn analyze_repository_keeps_top_level_package_paths() -> TestResult {

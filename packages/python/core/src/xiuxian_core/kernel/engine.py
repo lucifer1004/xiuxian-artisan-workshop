@@ -247,8 +247,7 @@ class Kernel:
     def load_universal_skill(self, skill_name: str) -> Any:
         _ = skill_name
         raise RuntimeError(
-            "Skill materialization is Rust-owned. Use Rust/Wendao over Arrow "
-            "Flight."
+            "Skill materialization is Rust-owned. Use Rust/Wendao over Arrow Flight."
         )
 
     async def load_all_universal_skills(self) -> list[Any]:
@@ -262,8 +261,7 @@ class Kernel:
     @property
     def router(self):
         raise RuntimeError(
-            "Routing and command selection are Rust-owned. Use Rust/Wendao over "
-            "Arrow Flight."
+            "Routing and command selection are Rust-owned. Use Rust/Wendao over Arrow Flight."
         )
 
     # =========================================================================
@@ -273,20 +271,16 @@ class Kernel:
     @property
     def sniffer(self) -> Any:
         raise RuntimeError(
-            "Routing context signals are Rust-owned. Use Rust/Wendao over Arrow "
-            "Flight."
+            "Routing context signals are Rust-owned. Use Rust/Wendao over Arrow Flight."
         )
 
     async def load_sniffer_rules(self) -> int:
         raise RuntimeError(
-            "Routing context signals are Rust-owned. Use Rust/Wendao over Arrow "
-            "Flight."
+            "Routing context signals are Rust-owned. Use Rust/Wendao over Arrow Flight."
         )
 
     async def build_cortex(self) -> None:
-        raise RuntimeError(
-            "Routing indexes are Rust-owned. Use Rust/Wendao over Arrow Flight."
-        )
+        raise RuntimeError("Routing indexes are Rust-owned. Use Rust/Wendao over Arrow Flight.")
 
     # =========================================================================
     # Event-Driven Reactor (Reactive Architecture)
@@ -320,16 +314,13 @@ class Kernel:
 
     async def reload_skill(self, skill_name: str) -> None:
         _ = skill_name
-        raise RuntimeError(
-            "Reload orchestration is Rust-owned. Use Rust/Wendao over Arrow "
-            "Flight."
-        )
+        raise RuntimeError("Reload orchestration is Rust-owned. Use Rust/Wendao over Arrow Flight.")
 
     async def _safe_build_cortex(self) -> None:
         return None
 
     async def _notify_clients_tool_list_changed(self) -> None:
-        """No-op after Python-side MCP removal."""
+        """No-op after Python-side tool-runtime removal."""
         return None
 
     # =========================================================================

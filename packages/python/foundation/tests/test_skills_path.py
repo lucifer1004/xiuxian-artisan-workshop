@@ -1,26 +1,14 @@
 """
-Skills Utilities Tests - Simplified
+Skills tree path utility tests.
 
-Tests for xiuxian_foundation.utils.skills module.
+Tests for retained helpers in ``xiuxian_foundation.utils.skills``.
 """
 
 from pathlib import Path
 
 
-class TestSkillUtilities:
-    """Test xiuxian_foundation.utils.skills functions."""
-
-    def test_current_skill_dir_exists(self):
-        """Test that current_skill_dir function exists."""
-        from xiuxian_foundation.utils.skills import current_skill_dir
-
-        assert callable(current_skill_dir)
-
-    def test_skill_path_exists(self):
-        """Test that skill_path function exists."""
-        from xiuxian_foundation.utils.skills import skill_path
-
-        assert callable(skill_path)
+class TestSkillsTreePathUtilities:
+    """Test retained helpers for the on-disk skills tree."""
 
     def test_skill_asset_exists(self):
         """Test that skill_asset function exists."""
@@ -28,11 +16,11 @@ class TestSkillUtilities:
 
         assert callable(skill_asset)
 
-    def test_skill_command_exists(self):
-        """Test that skill_command function exists."""
-        from xiuxian_foundation.utils.skills import skill_command
+    def test_skill_script_path_builder_exists(self):
+        """Test that the scripts-path helper exists."""
+        from xiuxian_foundation.utils.skills import skill_script
 
-        assert callable(skill_command)
+        assert callable(skill_script)
 
     def test_skill_reference_exists(self):
         """Test that skill_reference function exists."""
@@ -47,18 +35,8 @@ class TestSkillUtilities:
         assert callable(skill_data)
 
 
-class TestSkillPathBuilding:
-    """Test skill path building with explicit skill_dir."""
-
-    def test_skill_path_with_explicit_dir(self, tmp_path: Path):
-        """Test skill_path with explicit skill_dir."""
-        from xiuxian_foundation.utils.skills import skill_path
-
-        # Use tmp_path instead of hardcoded /test/skills/git
-        test_skill_dir = tmp_path / "skills" / "git"
-        result = skill_path("scripts/status.py", skill_dir=test_skill_dir)
-
-        assert str(result) == str(test_skill_dir / "scripts/status.py")
+class TestSkillsTreePathBuilding:
+    """Test skills-tree path building with explicit skill_dir."""
 
     def test_skill_asset_with_explicit_dir(self, tmp_path: Path):
         """Test skill_asset with explicit skill_dir."""
@@ -69,12 +47,12 @@ class TestSkillPathBuilding:
 
         assert str(result) == str(test_skill_dir / "assets/guide.md")
 
-    def test_skill_command_with_explicit_dir(self, tmp_path: Path):
-        """Test skill_command with explicit skill_dir."""
-        from xiuxian_foundation.utils.skills import skill_command
+    def test_skill_script_path_builder_with_explicit_dir(self, tmp_path: Path):
+        """Test scripts-path helper with explicit skill_dir."""
+        from xiuxian_foundation.utils.skills import skill_script
 
         test_skill_dir = tmp_path / "skills" / "git"
-        result = skill_command("workflow.py", skill_dir=test_skill_dir)
+        result = skill_script("workflow.py", skill_dir=test_skill_dir)
 
         assert str(result) == str(test_skill_dir / "scripts/workflow.py")
 

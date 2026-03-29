@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from xiuxian_foundation.runtime.skill_optimization import is_low_signal_query
+from .optimization import is_low_signal_query
 
 from .executor import run_recall_query_rows
 from .response import build_recall_search_response

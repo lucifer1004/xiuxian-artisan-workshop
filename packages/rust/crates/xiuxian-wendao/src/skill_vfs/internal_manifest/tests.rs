@@ -44,7 +44,7 @@ fn load_manifest_uses_defaults_and_overrides() {
 name = "Sample Tool"
 description = "Sample description"
 internal_id = "sample-native"
-mcp_contract = { category = "filesystem" }
+tool_contract = { category = "filesystem" }
 workflow_type = { type = "workflow" }
 qianhuan_background = { background = "wendao://background" }
 flow_definition = { uri = "flow://definition" }

@@ -78,8 +78,8 @@ impl PluginRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo_intelligence::{AnalysisContext, PluginAnalysisOutput, RepoSourceFile};
     use crate::repo_intelligence::RepositoryPluginConfig;
+    use crate::repo_intelligence::{AnalysisContext, PluginAnalysisOutput, RepoSourceFile};
 
     struct MockPlugin(&'static str);
 

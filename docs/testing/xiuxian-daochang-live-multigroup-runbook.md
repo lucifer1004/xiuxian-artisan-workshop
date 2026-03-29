@@ -83,7 +83,7 @@ python3 scripts/channel/test_xiuxian_daochang_command_events.py \
 Pass condition:
 
 - all selected core probes pass (`session_status_json`, `session_budget_json`, `session_memory_json`, `session_feedback_up_json`)
-- no forbidden MCP error regex is matched in runtime logs.
+- no forbidden tool-runtime error regex is matched in runtime logs.
 
 ## 4. Run Live Memory Evolution DAG
 

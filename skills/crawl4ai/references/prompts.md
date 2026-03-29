@@ -29,7 +29,7 @@ Can you get the content from https://example.com?
 ### Claude Invocation
 
 ```
-@omni("skill.run crawl4ai.crawl_webpage url='https://example.com'")
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com"}`
 ```
 
 ### Result

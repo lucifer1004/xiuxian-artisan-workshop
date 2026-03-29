@@ -39,7 +39,10 @@ fn build_plugin_arrow_request_batch_uses_contract_columns() {
 
     assert_eq!(batch.num_rows(), 2);
     assert_eq!(batch.schema().field(0).name(), JULIA_ARROW_DOC_ID_COLUMN);
-    assert_eq!(batch.schema().field(1).name(), JULIA_ARROW_VECTOR_SCORE_COLUMN);
+    assert_eq!(
+        batch.schema().field(1).name(),
+        JULIA_ARROW_VECTOR_SCORE_COLUMN
+    );
     assert_eq!(batch.schema().field(2).name(), JULIA_ARROW_EMBEDDING_COLUMN);
     assert_eq!(
         batch.schema().field(3).name(),
@@ -112,8 +115,8 @@ fn decode_plugin_arrow_score_rows_materializes_doc_scores() {
 
 #[test]
 fn decode_plugin_arrow_score_rows_materializes_optional_trace_id() {
-    let rows =
-        decode_plugin_arrow_score_rows(&[response_batch_with_trace_ids()]).expect("decode should work");
+    let rows = decode_plugin_arrow_score_rows(&[response_batch_with_trace_ids()])
+        .expect("decode should work");
 
     assert_eq!(
         rows.get("doc-1").and_then(|row| row.trace_id.as_deref()),

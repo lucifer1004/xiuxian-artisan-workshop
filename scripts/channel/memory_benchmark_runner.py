@@ -48,7 +48,7 @@ def run_benchmark_main(
     )
     print(f"modes={config.modes}", flush=True)
     print(f"iterations={config.iterations}", flush=True)
-    print(f"fail_on_mcp_error={config.fail_on_mcp_error}", flush=True)
+    print(f"fail_on_tool_error={config.fail_on_tool_error}", flush=True)
     print(
         f"feedback_policy={config.feedback_policy} "
         f"feedback_down_threshold={config.feedback_down_threshold}",

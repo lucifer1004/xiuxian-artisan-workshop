@@ -186,6 +186,7 @@ class TestGraphExtractorFactory:
                 assert result is not None
                 assert isinstance(result, KnowledgeGraphExtractor)
 
+
 class TestGraphModuleExports:
     """Test module exports."""
 

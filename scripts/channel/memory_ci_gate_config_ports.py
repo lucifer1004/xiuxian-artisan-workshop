@@ -9,7 +9,7 @@ import sys
 import time
 from typing import Any
 
-from resolve_mcp_endpoint import resolve_mcp_endpoint
+from resolve_tool_endpoint import resolve_tool_endpoint
 
 
 def default_valkey_prefix(profile: str) -> str:
@@ -56,7 +56,7 @@ def resolve_runtime_ports(
     allocate_free_tcp_port_fn: Any = allocate_free_tcp_port,
 ) -> tuple[int, int]:
     """Resolve non-conflicting runtime ports for webhook and mock Telegram API."""
-    resolved_host = host or str(resolve_mcp_endpoint()["host"])
+    resolved_host = host or str(resolve_tool_endpoint()["host"])
     resolved_telegram_api_port = telegram_api_port
     if not can_bind_tcp_fn(resolved_host, resolved_telegram_api_port):
         resolved_telegram_api_port = allocate_free_tcp_port_fn(resolved_host)

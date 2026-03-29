@@ -1,8 +1,8 @@
+use crate::runtime_config::LinkGraphCacheRuntimeConfig;
 use crate::runtime_config::constants::{
     DEFAULT_LINK_GRAPH_VALKEY_KEY_PREFIX, LINK_GRAPH_CACHE_VALKEY_URL_ENV,
     LINK_GRAPH_VALKEY_KEY_PREFIX_ENV, LINK_GRAPH_VALKEY_TTL_SECONDS_ENV,
 };
-use crate::runtime_config::LinkGraphCacheRuntimeConfig;
 use crate::settings::{first_non_empty, get_setting_string, parse_positive_u64};
 use serde_yaml::Value;
 

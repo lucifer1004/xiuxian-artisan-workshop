@@ -127,7 +127,7 @@ pub(super) struct InternalSkillManifestToml {
     #[serde(default)]
     pub(super) description: Option<String>,
     #[serde(default)]
-    pub(super) mcp_contract: Option<serde_json::Value>,
+    pub(super) tool_contract: Option<serde_json::Value>,
     #[serde(default)]
     pub(super) contract: Option<serde_json::Value>,
     #[serde(default)]

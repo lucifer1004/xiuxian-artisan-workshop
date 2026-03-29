@@ -7,7 +7,7 @@ Modularized.
 Provides consistent API key loading from multiple sources:
 1. Environment variable (ANTHROPIC_API_KEY)
 2. .claude/settings.json (path from packages/conf/settings.yaml or user settings)
-3. .mcp.json (Claude Desktop format)
+3. .tool.json (tool runtime format)
 
 Usage:
     from xiuxian_foundation.api.api_key import get_anthropic_api_key
@@ -21,12 +21,12 @@ from pathlib import Path
 
 import structlog
 
-logger = structlog.get_logger("mcp-core.api-key")
+logger = structlog.get_logger("xiuxian_foundation.api_key")
 
 
 def _find_project_root() -> Path:
     """Find project root (git toplevel)."""
-    from xiuxian_foundation.runtime.gitops import get_project_root
+    from xiuxian_foundation.config.prj import get_project_root
 
     return get_project_root()
 
@@ -53,7 +53,7 @@ def get_anthropic_api_key() -> str | None:
     Priority:
     1. Environment variable ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN
     2. .claude/settings.json (path from packages/conf/settings.yaml or user settings)
-    3. .mcp.json (Claude Desktop format)
+    3. .tool.json (tool runtime format)
 
     Supports both standard Anthropic format (ANTHROPIC_API_KEY) and
     MiniMax compatible format (ANTHROPIC_AUTH_TOKEN).
@@ -92,24 +92,24 @@ def get_anthropic_api_key() -> str | None:
         except Exception as e:
             logger.warning("Failed to load .claude/settings.json", error=str(e))
 
-    # 3. Try .mcp.json (Claude Desktop format)
-    mcp_path = project_root / ".mcp.json"
-    if mcp_path.exists():
+    # 3. Try .tool.json (tool runtime format)
+    tool_config_path = project_root / ".tool.json"
+    if tool_config_path.exists():
         try:
-            with open(mcp_path, encoding="utf-8") as f:
+            with open(tool_config_path, encoding="utf-8") as f:
                 data = json.load(f)
 
-            # Try mcpServers.orchestrator.env.ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN
-            if servers := data.get("mcpServers", {}):
+            # Try toolServers.orchestrator.env.ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN
+            if servers := data.get("toolServers", {}):
                 if orchestrator := servers.get("orchestrator", {}):
                     if env := orchestrator.get("env", {}):
                         api_key = env.get("ANTHROPIC_API_KEY") or env.get("ANTHROPIC_AUTH_TOKEN")
                         if api_key:
-                            logger.debug("API key loaded from .mcp.json")
+                            logger.debug("API key loaded from .tool.json")
                             return api_key
 
         except Exception as e:
-            logger.warning("Failed to load .mcp.json", error=str(e))
+            logger.warning("Failed to load .tool.json", error=str(e))
 
     logger.warning("No API key found in any source")
     return None
@@ -131,7 +131,7 @@ def ensure_api_key() -> str:
             "ANTHROPIC_API_KEY not found. Please set it via:\n"
             "1. Environment variable: export ANTHROPIC_API_KEY=sk-...\n"
             "2. .claude/settings.json (path from packages/conf/settings.yaml or user settings)\n"
-            "3. .mcp.json: mcpServers.orchestrator.env.ANTHROPIC_API_KEY"
+            "3. .tool.json: toolServers.orchestrator.env.ANTHROPIC_API_KEY"
         )
     return api_key
 

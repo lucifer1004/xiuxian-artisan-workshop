@@ -59,7 +59,7 @@ def test_build_config_rejects_identical_session_targets() -> None:
         thread_b=None,
         secret_token=None,
         prompt="/session json",
-        forbid_log_regex=["tools/call: Mcp error"],
+        forbid_log_regex=["tools/call: Tool runtime error"],
         allow_send_failure=False,
         session_partition="chat_user",
     )

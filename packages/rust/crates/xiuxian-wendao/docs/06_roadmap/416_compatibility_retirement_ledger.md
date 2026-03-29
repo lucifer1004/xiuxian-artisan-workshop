@@ -34,18 +34,18 @@ A compatibility surface may be retired only when:
 
 ## Retirement Ledger
 
-| Compatibility surface | Current location | Retirement unlock | Target retirement state |
-| :--- | :--- | :--- | :--- |
-| Legacy Studio compatibility artifact JSON shape | `src/gateway/studio/router/handlers/capabilities/deployment.rs` | `M5` generic artifact/UI cutover | Remove the route-local compat JSON wrapper once generic plugin-artifact UI payloads are canonical on every remaining consumer path |
+| Compatibility surface                      | Current location                                                                 | Retirement unlock                            | Target retirement state                                                                                                  |
+| :----------------------------------------- | :------------------------------------------------------------------------------- | :------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------- |
+| Package-owned Julia compatibility namespace | `packages/rust/crates/xiuxian-wendao-julia/src/compatibility/link_graph/` | post-`M5` downstream import cleanup in plugin consumers | Retire package-owned legacy Julia DTO imports once downstream users no longer need the compatibility naming surface |
 
 ## Retirement Order
 
-The expected retirement order is:
+The expected retirement order is now:
 
 1. top-level crate re-export retirement
 2. Studio/OpenAPI/Zhenfa outward compatibility retirement
-3. final Julia helper compatibility retirement
-4. final test-only compatibility seam retirement
+3. host crate-root compatibility namespace retirement
+4. package-owned Julia compatibility import retirement
 
 This order keeps the widest public surfaces shrinking first and the narrow
 regression seams shrinking last.
@@ -55,81 +55,37 @@ regression seams shrinking last.
 The following compatibility seams should remain protected until their unlock
 phase is complete:
 
-1. `src/compatibility/`
+1. `packages/rust/crates/xiuxian-wendao-julia/src/compatibility/link_graph/`
 
-No new primary implementation logic may be added there.
+No new host-owned primary implementation logic may be reintroduced behind a
+crate-root compatibility namespace in `xiuxian-wendao`.
 
 ## Current M5 Status
 
-The first `M5` outward-surface cutover is now physically landed:
+The active `M5` status is now:
 
-1. Studio routing and OpenAPI inventory now expose the canonical generic
+1. Studio routing and OpenAPI inventory expose only the canonical generic
    plugin-artifact endpoint at
    `/api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`
-2. the compat deployment-artifact route remains live, but it now behaves as a
-   wrapper over the generic plugin-artifact resolution/render path
-3. Zhenfa now also exposes `wendao.plugin_artifact` as the canonical generic
-   tool/RPC surface, while `wendao.compat_deployment_artifact` remains as the
-   narrowed compat-specific export path over the same selector-based export
-   path
-4. the Studio UI compatibility DTO seam is now also generic-first:
-   the compat route is built from `UiPluginArtifact`, and the remaining
-   legacy JSON adaptation is now route-local rather than a dedicated type leaf
-5. the canonical Studio schema-export seam now matches that same rule:
-   `studio_type_collection()` exports the generic artifact types without
-   promoting the compat artifact DTO into the primary TypeScript-facing
-   collection
-6. the remaining Studio compatibility DTO exposure is now also more explicit:
-   the compat artifact DTO no longer rides through any compatibility
-   namespace and instead stays behind the route-local adapter in
-   `src/gateway/studio/router/handlers/capabilities/deployment.rs`
-7. the remaining router-level Studio consumers have now narrowed too:
-   legacy compat JSON-shape coverage stays in the compatibility leaf itself,
-   while router-level tests assert the compat JSON payload generically instead
-   of deserializing a Julia-named DTO directly
-8. the compat handler seam has now narrowed further as well:
-   the route layer no longer imports a Julia-named DTO directly and instead
-   delegates adaptation through a route-local JSON wrapper over
-   `UiPluginArtifact`
-9. the Julia-named Studio compatibility Rust symbols are now retired too:
-   the compat route still preserves the legacy JSON shape, but the internal
-   adapter DTOs and builder are now compat-first rather than Julia-named
-10. the dedicated Studio compatibility type leaf is now retired too:
-    the remaining compat payload adaptation now lives directly in
-    `src/gateway/studio/router/handlers/capabilities/deployment.rs`
-11. that same route-local adapter is now thinner too:
-    the compat route no longer keeps a parallel Rust DTO and instead filters
-    and normalizes the serialized `UiPluginArtifact` payload at the JSON
-    boundary
-12. the test-only Studio Julia route/query shim is now retired too:
-    `JuliaDeploymentArtifactQuery` and `get_julia_deployment_artifact` have
-    been deleted, and legacy regression coverage now targets the compat
-    handler directly
-13. the OpenAPI Julia route-path aliases are now retired from code entirely:
-    `API_UI_JULIA_DEPLOYMENT_ARTIFACT_*` have been deleted, and the route
-    inventory now validates only the canonical plugin-artifact path plus the
-    compat deployment-artifact path
-14. the Zhenfa Julia outward tool name is now retired from code entirely:
-    `wendao.julia_deployment_artifact` is gone from the live tool/RPC path,
-    while the remaining outward surfaces are
-    `wendao.plugin_artifact` and `wendao.compat_deployment_artifact`
-15. the remaining Julia RPC/helper family in Zhenfa is now aligned to that
-    same retirement track: the test-only RPC shim has been deleted, native
-    deployment regression coverage hangs directly off `deployment.rs`, and the
-    former Julia helper/type aliases no longer exist
-16. the top-level crate and `runtime_config` Julia re-export blocks are now
-    retired from code too: Julia-named DTOs and deployment helpers no longer
-    leak through flat re-export blocks
-17. the intermediate `src/link_graph/runtime_config/compatibility/`
-    sub-namespace is now retired as well, so no public runtime-config helper
-    path sits between the host tree and the crate-root compatibility namespace
-18. the former crate-root Julia helper shim `src/compatibility/julia.rs` is
-    now retired from code entirely: `src/compatibility/link_graph.rs` is the
-    only remaining crate-root compatibility surface in the live tree
-19. this means the retirement unlock for Studio/OpenAPI/Zhenfa compatibility
-    is now in progress, but not yet complete, because the remaining outward
-    consumers and legacy payload names still need to converge on the generic
-    surface
+2. the former Studio compat deployment-artifact route, its OpenAPI constants,
+   and its query/handler glue are retired from the live tree
+3. the canonical Studio schema-export seam matches that same rule:
+   `studio_type_collection()` exports only the generic artifact types
+4. the Julia-named Studio route/query shims, DTO symbols, and compatibility
+   type leaves are retired from code entirely
+5. Zhenfa now exposes only `wendao.plugin_artifact` as the live generic
+   tool/RPC artifact surface
+6. the Julia Zhenfa outward tool name, test-only RPC shim, native
+   compatibility helper folder, and former Julia helper/type aliases are all
+   retired from code
+7. the top-level crate, `src/link_graph/mod.rs`, and `runtime_config` flat
+   compat re-export blocks are retired
+8. the former host crate-root compatibility namespace is retired too:
+   `src/compatibility/link_graph.rs`, `src/compatibility/mod.rs`, and the
+   `pub mod compatibility;` mount are all gone from the live tree
+9. the remaining retirement work is therefore centered on package-owned Julia
+   compatibility import cleanup rather than on any remaining host UI, Zhenfa,
+   or crate-root artifact endpoint
 
 ## Completion Condition
 

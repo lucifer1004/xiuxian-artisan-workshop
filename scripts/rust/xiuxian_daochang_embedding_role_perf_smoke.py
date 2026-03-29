@@ -104,7 +104,7 @@ def _role_configs(base_port: int, upstream_base_url: str, embedding_model: str) 
                 f'embedding_model = "{litellm_model}"\n'
                 'persistence_backend = "local"\n'
                 "\n"
-                "[mcp]\n"
+                "[tool_runtime]\n"
                 "strict_startup = false\n"
             ),
         ),
@@ -127,7 +127,7 @@ def _role_configs(base_port: int, upstream_base_url: str, embedding_model: str) 
                 f'embedding_model = "{model}"\n'
                 'persistence_backend = "local"\n'
                 "\n"
-                "[mcp]\n"
+                "[tool_runtime]\n"
                 "strict_startup = false\n"
             ),
         ),
@@ -254,7 +254,7 @@ def _start_gateway(
     agent_bin: Path, conf_root: Path, port: int, log_path: Path
 ) -> subprocess.Popen[str]:
     env = os.environ.copy()
-    env["XIUXIAN_DAOCHANG_MCP_STRICT_STARTUP"] = "false"
+    env["XIUXIAN_DAOCHANG_TOOL_STRICT_STARTUP"] = "false"
     env["RUST_LOG"] = env.get("RUST_LOG", "xiuxian_daochang=warn")
     command = [
         str(agent_bin),
@@ -263,8 +263,8 @@ def _start_gateway(
         "gateway",
         "--bind",
         f"{_DEFAULT_LOCAL_HOST}:{port}",
-        "--mcp-config",
-        ".mcp.json",
+        "--tool-config",
+        ".tool.json",
     ]
     log_file = log_path.open("w", encoding="utf-8")
     process = subprocess.Popen(

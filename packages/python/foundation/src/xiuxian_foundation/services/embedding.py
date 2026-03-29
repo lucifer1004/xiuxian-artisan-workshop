@@ -23,7 +23,7 @@ import structlog
 
 from xiuxian_foundation.config.dirs import PRJ_CONFIG
 from xiuxian_foundation.config.settings import get_setting
-from xiuxian_foundation.runtime.gitops import get_project_root
+from xiuxian_foundation.config.prj import get_project_root
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -33,7 +33,7 @@ logger = structlog.get_logger(__name__)
 _DEFAULT_EMBED_HTTP_PORT = 3002
 _DEFAULT_EMBED_HOST = "127.0.0.1"
 
-_KNOWN_MCP_PATH_SUFFIXES = ("/sse", "/mcp", "/messages")
+_KNOWN_TOOL_RUNTIME_PATH_SUFFIXES = ("/sse", "/messages")
 
 try:
     import tomllib
@@ -117,7 +117,7 @@ def _normalize_http_base_url(raw: object) -> str | None:
     scheme = parsed.scheme or "http"
     path = parsed.path.rstrip("/")
     lowered = path.lower()
-    if lowered in _KNOWN_MCP_PATH_SUFFIXES:
+    if lowered in _KNOWN_TOOL_RUNTIME_PATH_SUFFIXES:
         path = ""
     return f"{scheme}://{parsed.netloc}{path}".rstrip("/")
 
@@ -140,17 +140,19 @@ def _resolve_embedding_candidates_from_xiuxian() -> list[str]:
         if memory_embed_url:
             resolved.append(memory_embed_url)
 
-        mcp_base_url = _normalize_http_base_url(_dig(doc, "mcp", "base_url"))
-        if mcp_base_url:
-            resolved.append(mcp_base_url)
+        tool_runtime_base_url = _normalize_http_base_url(_dig(doc, "tool_runtime", "base_url"))
+        if tool_runtime_base_url:
+            resolved.append(tool_runtime_base_url)
 
-        mcp_port = _dig(doc, "mcp", "port")
+        tool_runtime_port = _dig(doc, "tool_runtime", "port")
         try:
-            mcp_port_int = int(mcp_port) if mcp_port is not None else None
+            tool_runtime_port_int = (
+                int(tool_runtime_port) if tool_runtime_port is not None else None
+            )
         except (TypeError, ValueError):
-            mcp_port_int = None
-        if isinstance(mcp_port_int, int) and 1 <= mcp_port_int <= 65535:
-            resolved.append(f"http://{host}:{mcp_port_int}")
+            tool_runtime_port_int = None
+        if isinstance(tool_runtime_port_int, int) and 1 <= tool_runtime_port_int <= 65535:
+            resolved.append(f"http://{host}:{tool_runtime_port_int}")
 
     return resolved
 
@@ -167,12 +169,12 @@ def _dedupe_preserve_order(urls: list[str]) -> list[str]:
     return ordered
 
 
-# Context override so skill execution can use MCP-first embedding (set by agent via skill hooks).
+# Context override so skill execution can use runtime-first embedding.
 _embedding_override: ContextVar[Any | None] = ContextVar("embedding_override", default=None)
 
 
 class EmbeddingOverrideProtocol(Protocol):
-    """Protocol for embedding override (e.g. MCP-first wrapper). Used during skill execution."""
+    """Protocol for embedding override used during skill execution."""
 
     def embed(self, text: str) -> list[list[float]]: ...
     def embed_batch(self, texts: list[str]) -> list[list[float]]: ...
@@ -184,7 +186,7 @@ def get_embedding_override() -> EmbeddingOverrideProtocol | None:
 
 
 def set_embedding_override(provider: EmbeddingOverrideProtocol | None) -> None:
-    """Set the embedding override for the current context (e.g. MCP-first when running skills)."""
+    """Set the embedding override for the current context."""
     _embedding_override.set(provider)
 
 

@@ -3,11 +3,10 @@ use std::process::{Command, Stdio};
 use super::wendaoarrow_common::{
     WendaoArrowServiceGuard, repo_root, reserve_test_port, wait_for_health, wendaoarrow_script,
 };
-use xiuxian_wendao::{
-    LinkGraphCompatAnalyzerLaunchManifest, LinkGraphCompatDeploymentArtifact,
-    LinkGraphCompatRerankRuntimeConfig,
+use xiuxian_wendao_julia::compatibility::link_graph::{
+    DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH, LinkGraphJuliaAnalyzerLaunchManifest,
+    LinkGraphJuliaDeploymentArtifact, LinkGraphJuliaRerankRuntimeConfig,
 };
-use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH;
 
 pub(crate) async fn spawn_wendaoarrow_stream_scoring_service() -> (String, WendaoArrowServiceGuard)
 {
@@ -29,7 +28,7 @@ pub(crate) async fn spawn_wendaoarrow_stream_metadata_service() -> (String, Wend
 
 pub(crate) async fn spawn_wendaoanalyzer_stream_linear_blend_service()
 -> (String, WendaoArrowServiceGuard) {
-    spawn_wendaoanalyzer_service_from_manifest(&LinkGraphCompatAnalyzerLaunchManifest {
+    spawn_wendaoanalyzer_service_from_manifest(&LinkGraphJuliaAnalyzerLaunchManifest {
         launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
         args: vec!["--service-mode".to_string(), "stream".to_string()],
     })
@@ -37,13 +36,13 @@ pub(crate) async fn spawn_wendaoanalyzer_stream_linear_blend_service()
 }
 
 pub(crate) fn wendaoanalyzer_deployment_artifact_from_runtime(
-    runtime: &LinkGraphCompatRerankRuntimeConfig,
-) -> LinkGraphCompatDeploymentArtifact {
+    runtime: &LinkGraphJuliaRerankRuntimeConfig,
+) -> LinkGraphJuliaDeploymentArtifact {
     runtime.deployment_artifact()
 }
 
 pub(crate) async fn spawn_wendaoanalyzer_service_from_manifest(
-    manifest: &LinkGraphCompatAnalyzerLaunchManifest,
+    manifest: &LinkGraphJuliaAnalyzerLaunchManifest,
 ) -> (String, WendaoArrowServiceGuard) {
     let port = reserve_test_port();
     let base_url = format!("http://127.0.0.1:{port}");
@@ -68,7 +67,7 @@ pub(crate) async fn spawn_wendaoanalyzer_service_from_manifest(
 }
 
 pub(crate) async fn spawn_wendaoanalyzer_service_from_artifact(
-    artifact: &LinkGraphCompatDeploymentArtifact,
+    artifact: &LinkGraphJuliaDeploymentArtifact,
 ) -> (String, WendaoArrowServiceGuard) {
     spawn_wendaoanalyzer_service_from_manifest(&artifact.launch).await
 }

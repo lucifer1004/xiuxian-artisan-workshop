@@ -136,7 +136,7 @@ def render_config(
         f'embedding_model = "{model}"\n'
         'persistence_backend = "local"\n'
         "\n"
-        "[mcp]\n"
+        "[tool_runtime]\n"
         "strict_startup = false\n"
     )
 
@@ -162,7 +162,7 @@ def start_gateway(
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_file = log_path.open("w", encoding="utf-8")
     env = os.environ.copy()
-    env["XIUXIAN_DAOCHANG_MCP_STRICT_STARTUP"] = "false"
+    env["XIUXIAN_DAOCHANG_TOOL_STRICT_STARTUP"] = "false"
     env["RUST_LOG"] = env.get("RUST_LOG", "xiuxian_daochang=warn")
     return subprocess.Popen(
         [
@@ -172,8 +172,8 @@ def start_gateway(
             "gateway",
             "--bind",
             f"{host}:{port}",
-            "--mcp-config",
-            ".mcp.json",
+            "--tool-config",
+            ".tool.json",
         ],
         cwd=ROOT,
         env=env,

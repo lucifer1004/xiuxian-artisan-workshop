@@ -10,4 +10,3 @@ pub struct PluginArtifactSelector {
     /// Stable artifact identifier.
     pub artifact_id: ArtifactId,
 }
-

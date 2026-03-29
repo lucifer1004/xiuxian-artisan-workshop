@@ -55,7 +55,10 @@ impl PluginArtifactPayload {
         P: AsRef<Path>,
     {
         let path = path.as_ref();
-        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             std::fs::create_dir_all(parent)?;
         }
 
@@ -74,7 +77,10 @@ impl PluginArtifactPayload {
         P: AsRef<Path>,
     {
         let path = path.as_ref();
-        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             std::fs::create_dir_all(parent)?;
         }
 
@@ -123,4 +129,3 @@ mod tests {
         let _ = PluginTransportKind::ArrowIpcHttp;
     }
 }
-

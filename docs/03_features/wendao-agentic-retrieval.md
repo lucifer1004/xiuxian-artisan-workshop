@@ -32,9 +32,9 @@ Large search tasks are partitioned into discrete `WorkerPlans`, executing in par
 ## 3. Physical Architecture
 
 - **Planning Hub**: `xiuxian-wendao/src/link_graph/index/agentic_expansion/plan.rs`
-- **Transport Direction**: autonomous dispatch is migrating away from MCP-bound
-  runtime edges and should not treat `xiuxian-mcp` as a permanent architecture
-  dependency.
+- **Transport Direction**: autonomous dispatch is moving away from legacy
+  external-tool transport seams and should not treat transport adapters as a
+  permanent architecture dependency.
 
 ## 4. Related Features
 

@@ -75,9 +75,9 @@ class GateConfig:
     discover_cache_hit_p95_ms: float
     discover_cache_miss_p95_ms: float
     discover_cache_bench_iterations: int
-    max_mcp_call_waiting_events: int
-    max_mcp_connect_waiting_events: int
-    max_mcp_waiting_events_total: int
+    max_tool_call_waiting_events: int
+    max_tool_connect_waiting_events: int
+    max_tool_waiting_events_total: int
     max_memory_stream_read_failed_events: int
     max_embedding_timeout_fallback_turns: int
     max_embedding_cooldown_fallback_turns: int

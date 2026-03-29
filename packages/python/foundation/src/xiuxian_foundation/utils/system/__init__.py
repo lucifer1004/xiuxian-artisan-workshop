@@ -1,5 +1,5 @@
 """
-utils - Common utilities for MCP servers.
+utils - Common utilities for retained runtime helpers.
 
 Protocol-based design with slots=True.
 
@@ -12,7 +12,7 @@ Note: Logging has been moved to common.log_config
 
 Usage:
     from xiuxian_foundation.config.logging import configure_logging, get_logger
-    from mcp_core.utils import is_safe_path, read_file_safely
+    from xiuxian_foundation.utils.system import is_safe_path, read_file_safely
 
     configure_logging(level="INFO")
     is_safe, error = is_safe_path("path/to/file.txt")

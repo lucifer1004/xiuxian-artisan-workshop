@@ -2,7 +2,7 @@
 
 - All vector/router payload parsers reject legacy 'keywords' field.
 - Route test JSON (with stats) and db search JSON snapshots locked; CI fails on field drift.
-- Assertions and payloads use test-kit factories (no hardcoded dicts).
+- Assertions and payloads use local shared payload factories (no hardcoded dicts).
 - E2E: Rust output -> Python parse -> CLI JSON validated against schema (CI gate).
 """
 
@@ -14,8 +14,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator
-from xiuxian_test_kit.fixtures.vector import (
+from _vector_payloads import (
     ROUTE_TEST_SCHEMA_V1,
     make_db_search_hybrid_result_list,
     make_db_search_vector_result_list,
@@ -25,9 +24,10 @@ from xiuxian_test_kit.fixtures.vector import (
     make_tool_search_payload,
     make_vector_payload,
 )
+from jsonschema import Draft202012Validator
 
 from xiuxian_foundation.api.schema_locator import resolve_schema_file_path
-from xiuxian_foundation.runtime.gitops import get_project_root
+from xiuxian_foundation.config.prj import get_project_root
 from xiuxian_foundation.services.vector_schema import (
     parse_hybrid_payload,
     parse_tool_search_payload,
@@ -154,11 +154,11 @@ def test_route_test_canonical_snapshot_validates_against_schema():
         assert "routing_keywords" in r
 
 
-# ---- P0: E2E snapshot matrix - route JSON (with stats), built from test-kit ----
+# ---- P0: E2E snapshot matrix - route JSON (with stats), built from local factories ----
 
 
 def test_route_test_payload_built_from_factory_has_contract_shape():
-    """Route test payload built from test-kit has required keys and no legacy keywords."""
+    """Route test payload built from local factories has required keys and no legacy keywords."""
     stats = {
         "semantic_weight": 1,
         "keyword_weight": 1.5,
@@ -183,7 +183,7 @@ def test_route_test_payload_built_from_factory_has_contract_shape():
 
 
 def test_route_test_snapshot_matches_factory_output():
-    """Snapshot equals test-kit factory output so CI fails on drift."""
+    """Snapshot equals local factory output so CI fails on drift."""
     stats = {
         "semantic_weight": 1,
         "keyword_weight": 1.5,
@@ -200,11 +200,11 @@ def test_route_test_snapshot_matches_factory_output():
     assert snapshot == expected, "Snapshot must match make_route_test_payload() output"
 
 
-# ---- P0: E2E snapshot matrix - db search JSON, built from test-kit ----
+# ---- P0: E2E snapshot matrix - db search JSON, built from local factories ----
 
 
 def test_db_search_vector_list_built_from_factory_validates_against_schema():
-    """Db search vector result list from test-kit conforms to xiuxian.vector.search.v1."""
+    """Db search vector result list from local factories conforms to xiuxian.vector.search.v1."""
     schema = _load_schema("xiuxian.vector.search.v1.schema.json")
     items = make_db_search_vector_result_list()
     _validate_items_against_schema(items, schema)
@@ -213,7 +213,7 @@ def test_db_search_vector_list_built_from_factory_validates_against_schema():
 
 
 def test_db_search_hybrid_list_built_from_factory_validates_against_schema():
-    """Db search hybrid result list from test-kit conforms to xiuxian.vector.hybrid.v1."""
+    """Db search hybrid result list from local factories conforms to xiuxian.vector.hybrid.v1."""
     schema = _load_schema("xiuxian.vector.hybrid.v1.schema.json")
     items = make_db_search_hybrid_result_list()
     _validate_items_against_schema(items, schema)
@@ -222,7 +222,7 @@ def test_db_search_hybrid_list_built_from_factory_validates_against_schema():
 
 
 def test_db_search_vector_snapshot_matches_factory_output():
-    """Snapshot equals test-kit factory output (vector list)."""
+    """Snapshot equals local factory output (vector list)."""
     expected = make_db_search_vector_result_list()
     path = _snapshots_dir() / "db_search_vector_result_contract_v1.json"
     snapshot = json.loads(path.read_text(encoding="utf-8"))
@@ -230,7 +230,7 @@ def test_db_search_vector_snapshot_matches_factory_output():
 
 
 def test_db_search_hybrid_snapshot_matches_factory_output():
-    """Snapshot equals test-kit factory output (hybrid list)."""
+    """Snapshot equals local factory output (hybrid list)."""
     expected = make_db_search_hybrid_result_list()
     path = _snapshots_dir() / "db_search_hybrid_result_contract_v1.json"
     snapshot = json.loads(path.read_text(encoding="utf-8"))

@@ -76,10 +76,7 @@ pub fn resolve_link_graph_coactivation_runtime_with_settings(
     }
 
     if let Some(value) = first_non_empty(&[
-        get_setting_string(
-            settings,
-            "link_graph.saliency.coactivation.hop_decay_scale",
-        ),
+        get_setting_string(settings, "link_graph.saliency.coactivation.hop_decay_scale"),
         std::env::var(LINK_GRAPH_COACTIVATION_HOP_DECAY_SCALE_ENV).ok(),
     ])
     .as_deref()

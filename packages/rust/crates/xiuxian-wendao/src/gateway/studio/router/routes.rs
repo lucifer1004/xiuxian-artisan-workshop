@@ -190,10 +190,6 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::get_plugin_artifact),
         )
         .route(
-            openapi_paths::API_UI_COMPAT_DEPLOYMENT_ARTIFACT_AXUM_PATH,
-            get(handlers::get_compat_deployment_artifact),
-        )
-        .route(
             "/api/analysis/refine-doc",
             post(handlers::refine_entity_doc),
         )

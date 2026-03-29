@@ -29,6 +29,6 @@ class BenchmarkConfig:
     skip_reset: bool
     output_json: Path
     output_markdown: Path
-    fail_on_mcp_error: bool
+    fail_on_tool_error: bool
     feedback_policy: str
     feedback_down_threshold: float

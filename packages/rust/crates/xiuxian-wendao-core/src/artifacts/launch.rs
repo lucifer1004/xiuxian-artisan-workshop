@@ -8,4 +8,3 @@ pub struct PluginLaunchSpec {
     /// Ordered launcher arguments.
     pub args: Vec<String>,
 }
-

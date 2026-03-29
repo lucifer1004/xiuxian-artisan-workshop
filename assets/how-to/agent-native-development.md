@@ -8,7 +8,7 @@ metadata:
 
 > **Code is Mechanism, Prompt is Policy**
 >
-> The foundation of Omni-Dev-Fusion architecture.
+> Historical note: examples below use a legacy Python tool-server sketch. The live repository now centers Rust-owned tool runtime surfaces plus skill/docs guidance.
 
 ---
 
@@ -113,7 +113,7 @@ assets/skills/{skill_name}/
 This module provides atomic git operations.
 Rules are in SKILL.md. Python only executes.
 """
-from mcp.server.fastmcp import FastMCP
+from some_tool_runtime import ToolRuntime
 
 async def git_commit(message: str) -> str:
     """
@@ -128,8 +128,8 @@ async def git_commit(message: str) -> str:
     result = subprocess.run(["git", "commit", "-m", message], ...)
     return result.stdout
 
-def register(mcp: FastMCP):
-    mcp.tool()(git_commit)
+def register(runtime: ToolRuntime):
+    runtime.tool()(git_commit)
 ```
 
 ## Development Workflow
@@ -272,18 +272,18 @@ skills:
 
 ### Git Skill (Simplified)
 
-The git skill is now **minimal** - only critical operations go through MCP:
+The git skill is now **minimal** - only critical operations go through the tool runtime:
 
 | Operation    | How                | Why                     |
 | ------------ | ------------------ | ----------------------- |
-| `git_commit` | MCP tool           | Needs user confirmation |
-| `git_push`   | MCP tool           | Destructive operation   |
+| `git_commit` | Tool runtime call  | Needs user confirmation |
+| `git_push`   | Tool runtime call  | Destructive operation   |
 | `git status` | Claude-native bash | Read-only, safe         |
 | `git diff`   | Claude-native bash | Read-only, safe         |
 | `git log`    | Claude-native bash | Read-only, safe         |
 | `git add`    | Claude-native bash | Safe staging            |
 
-**Principle: Read = bash. Write = MCP.**
+**Principle: Read = bash. Write = tool runtime.**
 
 ### Knowledge Skill (Project Cortex)
 
@@ -306,7 +306,7 @@ The `knowledge` skill is the **Project Cortex** - it provides structural knowled
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  MCP Server (Xiuxian-Artisan-Workshop)                      │
+│  Tool Runtime Surface (Xiuxian-Artisan-Workshop)            │
 ├─────────────────────────────────────────────────────────┤
 │  🧠 Knowledge Layer (knowledge skill)                   │
 │     - get_development_context()                         │
@@ -431,7 +431,7 @@ User says "commit":
 2. Generate message
 3. Show analysis
 4. Wait for confirmation
-5. Call git_commit (MCP)
+5. Call git_commit (tool runtime)
 ```
 
 **Benefits:**
@@ -508,7 +508,7 @@ def _load_module_from_path(self, name: str, path: str):
 packages/python/agent/src/agent/core/
 ├── skill_registry.py   # 50 lines - pure loading logic
 ├── settings.py         # Configuration driven
-└── mcp_core/           # I/O mechanisms only
+└── runtime_core/       # I/O mechanisms only
 
 assets/skills/{skill}/
 ├── SKILL.md            # Protocol definition

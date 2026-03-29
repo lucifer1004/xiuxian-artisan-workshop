@@ -13,7 +13,7 @@ from config_resolver_core import (
     settings_candidates,
 )
 from config_resolver_profiles import env_or_dotenv_value
-from resolve_mcp_endpoint import resolve_mcp_endpoint
+from resolve_tool_endpoint import resolve_tool_endpoint
 
 WEBHOOK_BIND_PORT_RE = re.compile(r":(\d{1,5})$")
 DEFAULT_TELEGRAM_WEBHOOK_PORT = 18081
@@ -104,5 +104,5 @@ def default_telegram_webhook_url(repo_root: Path | None = None) -> str:
     if bind:
         host = bind.strip().split(":", 1)[0].strip("[]").strip()
     if not host:
-        host = str(resolve_mcp_endpoint()["host"])
+        host = str(resolve_tool_endpoint()["host"])
     return f"http://{host}:{telegram_webhook_port(repo_root)}/telegram/webhook"

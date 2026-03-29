@@ -19,7 +19,7 @@ This document describes the workflow and commands for the Template skill.
 **Usage:**
 
 ```python
-@omni("template.example", {"param": "test_value"})
+tool: `template.example` with `{"param": "test_value"}`
 ```
 
 **Parameters:**
@@ -32,7 +32,7 @@ This document describes the workflow and commands for the Template skill.
 **Example:**
 
 ```python
-@omni("template.example", {"param": "hello"})
+tool: `template.example` with `{"param": "hello"}`
 # Returns: "Result: hello"
 ```
 
@@ -45,7 +45,7 @@ This document describes the workflow and commands for the Template skill.
 **Usage:**
 
 ```python
-@omni("template.example_with_options", {"param": "value", "optional": "opt"})
+tool: `template.example_with_options` with `{"param": "value", "optional": "opt"}`
 ```
 
 **Parameters:**
@@ -65,7 +65,7 @@ This document describes the workflow and commands for the Template skill.
 **Usage:**
 
 ```python
-@omni("template.process_data", {"data": ["a", "", "b"], "filter_empty": true})
+tool: `template.process_data` with `{"data": ["a", "", "b"], "filter_empty": true}`
 ```
 
 **Parameters:**
@@ -93,7 +93,7 @@ This document describes the workflow and commands for the Template skill.
 **Usage:**
 
 ```python
-@omni("template.help")
+tool: `template.help`
 ```
 
 **Returns:** Formatted help text with all commands and descriptions.
@@ -107,7 +107,7 @@ This document describes the workflow and commands for the Template skill.
 Commands in `scripts/commands.py` are decorated with `@skill_command`:
 
 ```python
-from agent.skills.decorators import skill_command
+from xiuxian_foundation.api.decorators import skill_command
 
 @skill_command(name="example", category="read", description="Brief desc")
 async def example(param: str = "default") -> str:

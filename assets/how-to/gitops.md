@@ -65,7 +65,7 @@ Claude: ✅ Commit Successful
 
 ### Bash Git Commands are Blocked
 
-Use MCP tools instead:
+Use tool-runtime calls instead:
 
 | Instead of   | Use This Tool               |
 | ------------ | --------------------------- |

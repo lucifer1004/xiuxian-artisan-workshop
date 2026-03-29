@@ -4,7 +4,7 @@
 //! is available, this module uses the richer AST-based parser from xiuxian-ast.
 //! Otherwise, it falls back to conservative line-based parsing.
 
-use xiuxian_wendao::analyzers::{ImportKind, RepoSymbolKind};
+use xiuxian_wendao_core::repo_intelligence::{ImportKind, RepoSymbolKind};
 
 use super::types::{ParsedDeclaration, ParsedImport};
 

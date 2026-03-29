@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from xiuxian_rag import RetrievalConfig, RetrievalResult, create_hybrid_node, create_retriever_node
+from xiuxian_rag.retrieval import create_hybrid_node, create_retriever_node
+from xiuxian_rag.retrieval.interface import RetrievalConfig, RetrievalResult
 
 
 class _Backend:

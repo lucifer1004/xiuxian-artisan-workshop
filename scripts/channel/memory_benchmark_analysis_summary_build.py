@@ -53,7 +53,7 @@ def summarize_mode_data(
     ]
     feedback_up_count = sum(1 for turn in turns if turn.feedback_direction == "up")
     feedback_down_count = sum(1 for turn in turns if turn.feedback_direction == "down")
-    mcp_error_turns = sum(1 for turn in turns if turn.mcp_error_detected)
+    tool_error_turns = sum(1 for turn in turns if turn.tool_error_detected)
     embedding_timeout_fallback_turns = sum(
         1 for turn in turns if turn.embedding_timeout_fallback_seen
     )
@@ -107,7 +107,7 @@ def summarize_mode_data(
         "feedback_up_count": feedback_up_count,
         "feedback_down_count": feedback_down_count,
         "avg_feedback_delta": maybe_mean(feedback_deltas),
-        "mcp_error_turns": mcp_error_turns,
+        "tool_error_turns": tool_error_turns,
         "embedding_timeout_fallback_turns": embedding_timeout_fallback_turns,
         "embedding_cooldown_fallback_turns": embedding_cooldown_fallback_turns,
         "embedding_unavailable_fallback_turns": embedding_unavailable_fallback_turns,

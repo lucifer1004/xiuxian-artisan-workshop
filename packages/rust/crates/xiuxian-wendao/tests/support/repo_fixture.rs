@@ -3,12 +3,9 @@ use std::path::{Path, PathBuf};
 
 use git2::{BranchType, IndexAddOption, Repository, Signature, Time, build::CheckoutBuilder};
 
-#[allow(dead_code)]
 pub type TestResult = Result<(), Box<dyn std::error::Error>>;
-#[allow(dead_code)]
 pub type TestResultPath = Result<PathBuf, Box<dyn std::error::Error>>;
 
-#[allow(dead_code)]
 pub fn create_sample_julia_repo(
     base: &Path,
     package_name: &str,
@@ -116,7 +113,84 @@ end
     Ok(repo_dir)
 }
 
-#[allow(dead_code)]
+pub fn create_sample_modelica_repo(base: &Path, package_name: &str) -> TestResultPath {
+    let repo_dir = base.join(package_name.to_ascii_lowercase());
+    fs::create_dir_all(repo_dir.join("Controllers").join("Examples"))?;
+    fs::create_dir_all(
+        repo_dir
+            .join("Controllers")
+            .join("UsersGuide")
+            .join("Tutorial"),
+    )?;
+
+    fs::write(repo_dir.join("README.md"), format!("# {package_name}\n"))?;
+    fs::write(repo_dir.join("package.order"), "Controllers\n")?;
+    fs::write(
+        repo_dir.join("package.mo"),
+        format!(
+            "within;\npackage {package_name}\n  annotation(Documentation(info = \"<html>{package_name} package docs.</html>\"));\nend {package_name};\n",
+        ),
+    )?;
+    fs::write(
+        repo_dir.join("Controllers").join("package.mo"),
+        format!("within {package_name};\npackage Controllers\nend Controllers;\n"),
+    )?;
+    fs::write(
+        repo_dir.join("Controllers").join("PI.mo"),
+        format!(
+            "within {package_name}.Controllers;\nmodel PI\n  annotation(Documentation(info = \"<html>PI controller docs.</html>\"));\nend PI;\n",
+        ),
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("Examples")
+            .join("package.order"),
+        "Step\n",
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("Examples")
+            .join("Step.mo"),
+        format!("within {package_name}.Controllers.Examples;\nmodel Step\nend Step;\n"),
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("UsersGuide")
+            .join("package.order"),
+        "Tutorial\n",
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("UsersGuide")
+            .join("package.mo"),
+        format!("within {package_name}.Controllers;\npackage UsersGuide\nend UsersGuide;\n",),
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("UsersGuide")
+            .join("Tutorial")
+            .join("FirstSteps.mo"),
+        format!(
+            "within {package_name}.Controllers.UsersGuide.Tutorial;\nmodel FirstSteps\n  annotation(Documentation(info = \"<html>First steps guide.</html>\"));\nend FirstSteps;\n",
+        ),
+    )?;
+
+    initialize_git_repository(
+        &repo_dir,
+        &format!(
+            "https://example.invalid/{}/{}.git",
+            "xiuxian-wendao",
+            package_name.to_ascii_lowercase()
+        ),
+    )?;
+    Ok(repo_dir)
+}
+
 fn initialize_git_repository(repo_dir: &Path, remote_url: &str) -> TestResult {
     let repository = Repository::init(repo_dir)?;
     repository.remote("origin", remote_url)?;
@@ -125,7 +199,6 @@ fn initialize_git_repository(repo_dir: &Path, remote_url: &str) -> TestResult {
     Ok(())
 }
 
-#[allow(dead_code)]
 fn commit_all(repository: &Repository, message: &str) -> Result<git2::Oid, git2::Error> {
     let mut index = repository.index()?;
     index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
@@ -155,7 +228,6 @@ fn commit_all(repository: &Repository, message: &str) -> Result<git2::Oid, git2:
     )
 }
 
-#[allow(dead_code)]
 fn ensure_branch_main(repository: &Repository, commit_id: git2::Oid) -> Result<(), git2::Error> {
     let commit = repository.find_commit(commit_id)?;
     match repository.find_branch("main", BranchType::Local) {

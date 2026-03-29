@@ -107,10 +107,9 @@ async def apply_link_graph_proximity_boost(
                 continue
 
             boosted = False
-            if (
-                right_stem in linked_by_stem.get(left_stem, set())
-                or left_stem in linked_by_stem.get(right_stem, set())
-            ):
+            if right_stem in linked_by_stem.get(
+                left_stem, set()
+            ) or left_stem in linked_by_stem.get(right_stem, set()):
                 left["score"] = float(left.get("score", 0.0)) + effective_link_boost
                 right["score"] = float(right.get("score", 0.0)) + effective_link_boost
                 boosted = True

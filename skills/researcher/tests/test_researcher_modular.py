@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from xiuxian_foundation.config.prj import get_project_root
 
 RESEARCHER_SCRIPTS = Path(__file__).parent.parent / "scripts"
 if str(RESEARCHER_SCRIPTS) not in sys.path:
@@ -20,7 +21,7 @@ research = importlib.import_module("research")
 
 
 def _unwrap_skill_output(output: object) -> dict[str, object]:
-    """Unwrap @skill_command result payload into the inner JSON object."""
+    """Unwrap decorated tool-command payload into the inner JSON object."""
     if isinstance(output, dict):
         content = output.get("content")
         if isinstance(content, list) and content:
@@ -58,7 +59,7 @@ class TestRunQianjiEngine:
     def test_success_parses_json_marker(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def _fake_run_subprocess(args: list[str], *, cwd: str, text: bool = True):
             assert "xiuxian-qianji" in " ".join(args)
-            assert cwd == "."
+            assert cwd == str(get_project_root())
             assert text is True
             return _completed_process(
                 'boot logs\n=== Final Qianji Execution Result ===\n{"status":"ok","value":1}\n'

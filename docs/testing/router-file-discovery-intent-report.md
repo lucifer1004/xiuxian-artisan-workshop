@@ -30,8 +30,8 @@ The router does not rank from a single field. It uses a fused score built from:
 These fields are indexed and used in ranking:
 
 - `tool_name`: exact tool identity (e.g. `advanced_tools.smart_find`)
-- `description`: tool-level text from `@skill_command(description=...)` or docstring fallback
-- `category`: tool category from `@skill_command(category=...)` (or inferred fallback)
+- `description`: tool-level text from registered command metadata or docstring fallback
+- `category`: tool category from registered command metadata (or inferred fallback)
 - `keywords`: merged scanner keywords (skill + tool)
 - `intents`: skill intents and intent-like phrases
 - `file_path`: only for payload/context, not core score term
@@ -40,7 +40,7 @@ Primary code path:
 
 - Rust search path: `packages/rust/crates/xiuxian-vector/src/skill/ops_impl.rs`
 - Fusion: `packages/rust/crates/xiuxian-vector/src/keyword/fusion.rs`
-- Scanner source for decorator metadata: `packages/rust/crates/xiuxian-skills/src/skills/tools.rs`
+- Scanner source for command metadata: `packages/rust/crates/xiuxian-skills/src/skills/tools.rs`
 
 ## Ranking Pipeline (Current)
 

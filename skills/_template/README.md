@@ -17,7 +17,7 @@ _template/                    # Start: Copy this template
    │
 2. scripts/                   # Step 1: COMMANDS (actual implementation)
    ├── __init__.py            #    Dynamic module loader
-   └── commands.py            #    @skill_command decorated functions
+   └── commands.py            #    registered command functions
    │
 3. tests/                     # Step 2: TESTS (zero-config pytest)
    └── test_template_commands.py
@@ -34,10 +34,10 @@ _template/                    # Start: Copy this template
 
 ## Step 1: COMMANDS (`scripts/commands.py`)
 
-Commands are defined directly with `@skill_command` decorator:
+Commands are defined directly in `scripts/commands.py`:
 
 ```python
-from agent.skills.decorators import skill_command
+from xiuxian_foundation.api.decorators import skill_command
 
 @skill_command(
     name="my_command",
@@ -88,29 +88,22 @@ def _setup_template_package_context():
     skills_root = template_dir.parent
     project_root = skills_root.parent.parent
 
-    # Ensure 'agent' package exists
-    if "agent" not in sys.modules:
-        agent_src = project_root / "packages/python/agent/src/agent"
-        agent_pkg = types.ModuleType("agent")
-        agent_pkg.__path__ = [str(agent_src)]
-        sys.modules["agent"] = agent_pkg
-
-    # Ensure 'agent.skills' package exists
-    if "agent.skills" not in sys.modules:
-        skills_pkg = types.ModuleType("agent.skills")
+    # Ensure 'skills' package exists
+    if "skills" not in sys.modules:
+        skills_pkg = types.ModuleType("skills")
         skills_pkg.__path__ = [str(skills_root)]
-        sys.modules["agent.skills"] = skills_pkg
+        sys.modules["skills"] = skills_pkg
 
-    # Ensure 'agent.skills._template' package exists
-    template_pkg_name = "agent.skills._template"
+    # Ensure 'skills._template' package exists
+    template_pkg_name = "skills._template"
     if template_pkg_name not in sys.modules:
         template_pkg = types.ModuleType(template_pkg_name)
         template_pkg.__path__ = [str(template_dir)]
         template_pkg.__file__ = str(template_dir / "__init__.py")
         sys.modules[template_pkg_name] = template_pkg
 
-    # Ensure 'agent.skills._template.scripts' package exists
-    scripts_pkg_name = "agent.skills._template.scripts"
+    # Ensure 'skills._template.scripts' package exists
+    scripts_pkg_name = "skills._template.scripts"
     if scripts_pkg_name not in sys.modules:
         scripts_dir = template_dir / "scripts"
         scripts_pkg = types.ModuleType(scripts_pkg_name)
@@ -124,7 +117,7 @@ _setup_template_package_context()
 
 def test_example_exists():
     """Verify example command exists and is callable."""
-    from agent.skills._template.scripts import commands
+    from skills._template.scripts import commands
 
     assert hasattr(commands, "example")
     assert callable(commands.example)
@@ -132,7 +125,7 @@ def test_example_exists():
 
 def test_example_with_options_exists():
     """Verify example_with_options command exists."""
-    from agent.skills._template.scripts import commands
+    from skills._template.scripts import commands
 
     assert hasattr(commands, "example_with_options")
     assert callable(commands.example_with_options)
@@ -140,7 +133,7 @@ def test_example_with_options_exists():
 
 def test_process_data_exists():
     """Verify process_data command exists."""
-    from agent.skills._template.scripts import commands
+    from skills._template.scripts import commands
 
     assert hasattr(commands, "process_data")
     assert callable(commands.process_data)
@@ -166,7 +159,7 @@ def test_process_data_exists():
 **Usage:**
 
 ```python
-@omni("template.example", {"param": "value"})
+tool: `template.example` with `{"param": "value"}`
 ```
 ````
 
@@ -197,7 +190,7 @@ Update frontmatter and system prompts for LLM context.
 
 When adding a new command `my_command` in `scripts/commands.py`:
 
-- [ ] **Command**: Add `@skill_command` decorated function in `scripts/commands.py`
+- [ ] **Command**: Add a registered command function in `scripts/commands.py`
 - [ ] **Tests**: Add test in `tests/test_template_commands.py`
 - [ ] **Docs**: Update `references/skill-workflow.md`
 - [ ] **User Docs**: Update `README.md` with command reference
@@ -218,13 +211,13 @@ When adding a new command `my_command` in `scripts/commands.py`:
 
 ```bash
 # Run a command
-@omni("template.example", {"param": "value"})
+tool: `template.example` with `{"param": "value"}`
 
 # Get skill context
-@omni("template.help")
+tool: `template.help`
 
 # List available commands
-@omni("template")
+tool: `template`
 ````
 
 ---
@@ -247,7 +240,7 @@ This skill template follows the **"Python Zenith" Engineering Protocol**:
 ### Command Pattern (`scripts/commands.py`)
 
 ```python
-from agent.skills.decorators import skill_command
+from xiuxian_foundation.api.decorators import skill_command
 
 @skill_command(
     name="my_command",
@@ -278,7 +271,7 @@ cp -r assets/skills/_template assets/skills/my_skill
 
 # Update SKILL.md frontmatter with new name/description
 
-# Add commands in scripts/commands.py (with @skill_command decorator)
+# Add commands in scripts/commands.py
 # Add tests in tests/ (required!)
 # Add docs in references/ (required!)
 ```

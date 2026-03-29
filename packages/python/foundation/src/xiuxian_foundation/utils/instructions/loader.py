@@ -13,7 +13,10 @@ Key Design:
 - thread-safe with Lock: No race conditions or empty data
 
 Usage:
-    from mcp_core.instructions import get_instructions, get_instruction
+    from xiuxian_foundation.utils.instructions import (
+        get_instructions,
+        get_instruction,
+    )
 
     # First call triggers lazy load
     all_instructions = get_instructions()
@@ -21,9 +24,9 @@ Usage:
 
 import threading
 
-from xiuxian_foundation.runtime.gitops import get_instructions_dir
+from xiuxian_foundation.config.prj import get_project_root
 
-instructions_dir = get_instructions_dir()
+instructions_dir = get_project_root() / "agent" / "instructions"
 
 # Internal state
 _data: dict[str, str] = {}

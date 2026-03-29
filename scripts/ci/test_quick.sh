@@ -13,8 +13,8 @@ uv run pytest \
   scripts/test_no_inline_python_exec_patterns.py \
   scripts/channel/test_epoch_millis.py \
   scripts/channel/test_config_resolver_compat.py \
-  scripts/channel/test_resolve_mcp_port_from_settings.py \
-  scripts/channel/test_check_mcp_health.py \
+  scripts/channel/test_resolve_tool_port_from_settings.py \
+  scripts/channel/test_check_tool_health.py \
   scripts/channel/test_generate_secret_token.py \
   scripts/channel/test_read_telegram_setting.py \
   scripts/channel/test_extract_ngrok_public_url.py \

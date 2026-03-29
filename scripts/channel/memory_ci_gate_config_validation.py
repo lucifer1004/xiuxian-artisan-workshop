@@ -37,12 +37,12 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--discover-cache-miss-p95-ms must be positive.")
     if args.discover_cache_bench_iterations <= 0:
         raise ValueError("--discover-cache-bench-iterations must be a positive integer.")
-    if args.max_mcp_call_waiting_events < 0:
-        raise ValueError("--max-mcp-call-waiting-events must be >= 0.")
-    if args.max_mcp_connect_waiting_events < 0:
-        raise ValueError("--max-mcp-connect-waiting-events must be >= 0.")
-    if args.max_mcp_waiting_events_total < 0:
-        raise ValueError("--max-mcp-waiting-events-total must be >= 0.")
+    if args.max_tool_call_waiting_events < 0:
+        raise ValueError("--max-tool-call-waiting-events must be >= 0.")
+    if args.max_tool_connect_waiting_events < 0:
+        raise ValueError("--max-tool-connect-waiting-events must be >= 0.")
+    if args.max_tool_waiting_events_total < 0:
+        raise ValueError("--max-tool-waiting-events-total must be >= 0.")
     if args.max_memory_stream_read_failed_events < 0:
         raise ValueError("--max-memory-stream-read-failed-events must be >= 0.")
     if args.max_embedding_timeout_fallback_turns < 0:

@@ -115,7 +115,8 @@ impl VectorStoreSemanticIgnition {
         request: QuantumSemanticSearchRequest<'_>,
         anchors: &[QuantumAnchorHit],
     ) -> Result<RecordBatch, VectorStoreJuliaRequestError> {
-        self.build_plugin_rerank_request_batch(request, anchors).await
+        self.build_plugin_rerank_request_batch(request, anchors)
+            .await
     }
 }
 

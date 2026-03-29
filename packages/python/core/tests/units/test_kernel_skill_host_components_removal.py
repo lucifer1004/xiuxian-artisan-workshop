@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import importlib.util
+from pathlib import Path
 
 
 def test_kernel_skill_host_components_are_removed() -> None:
-    assert importlib.util.find_spec("xiuxian_core.kernel.components.skill_loader") is None
-    assert importlib.util.find_spec("xiuxian_core.kernel.components.skill_plugin") is None
-    assert importlib.util.find_spec("xiuxian_core.kernel.components.registry") is None
-    assert importlib.util.find_spec("xiuxian_core.kernel.components.mcp_tool") is None
+    components_dir = (
+        Path(__file__).resolve().parents[2] / "src" / "xiuxian_core" / "kernel" / "components"
+    )
+    py_files = sorted(path.name for path in components_dir.glob("*.py"))
+    assert py_files == ["__init__.py"]

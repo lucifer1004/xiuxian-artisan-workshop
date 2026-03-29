@@ -6,7 +6,7 @@ metadata:
 
 # Skills Directory
 
-> @skill_command Pattern - No tools.py Required
+> scripts/commands.py Pattern - No tools.py Required
 
 This directory contains **Skills** - composable, self-contained packages that provide specific capabilities to the Xiuxian Daochang.
 
@@ -23,7 +23,7 @@ This directory contains **Skills** - composable, self-contained packages that pr
 ```
 assets/skills/{skill_name}/
 ├── SKILL.md           # Metadata + LLM context (YAML frontmatter)
-├── scripts/           # Commands (@skill_command decorated functions)
+├── scripts/           # Commands (registered runtime functions)
 │   ├── __init__.py    # Dynamic module loader (importlib.util)
 │   └── commands.py    # All skill commands
 ├── README.md          # Human-readable documentation
@@ -34,21 +34,22 @@ assets/skills/{skill_name}/
 
 **Data hierarchy:** `SKILL.md` is the **top-level comprehensive** doc for the skill; **tools** come only from `scripts/`; **references/** hold detailed docs. In each reference markdown use frontmatter: `metadata.for_tools: <skill.command>` (and optionally `metadata.title`). See [Skill Data Hierarchy and References](../../docs/reference/skill-data-hierarchy-and-references.md).
 
-## Pure MCP Server
+## Runtime Surface
 
-Omni uses **pure `mcp.server.Server`** instead of FastMCP for better control and performance:
+Historical note: older revisions used a dedicated Python protocol server. The
+current repository keeps skills as documentation-plus-script packages and lets
+the retained runtime/tool surfaces own transport concerns.
 
 ```python
-# mcp_server.py - Pure MCP Server (no FastMCP)
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+# runtime_entry.py - minimal runtime registration sketch
+from some_tool_runtime import Runtime
 
-server = Server("xiuxian-daochang")
+runtime = Runtime("xiuxian-daochang")
 
-@server.list_tools()
+@runtime.list_tools()
 async def list_tools(): ...
 
-@server.call_tool()
+@runtime.call_tool()
 async def call_tool(name, arguments): ...
 ```
 
@@ -57,7 +58,7 @@ async def call_tool(name, arguments): ...
 - Direct control over tool listing/execution
 - Explicit error handling for TaskGroup
   嗯。- Optional uvloop (SSE mode) + orjson for performance
-- No FastMCP dependency overhead
+- No removed legacy protocol-server dependency overhead
 
 ## Cascading Templates
 
@@ -71,7 +72,7 @@ assets/skills/git/                    # Skill Directory
 │   └── error_message.j2
 └── scripts/
     ├── __init__.py                   # Package marker (required!)
-    └── commands.py                    # @skill_command decorated commands
+    └── commands.py                    # registered commands
 
 assets/templates/                      # User overrides (Priority)
 └── git/
@@ -95,7 +96,7 @@ cp -r assets/skills/_template assets/skills/my_new_skill
 ### 2. Add Commands in scripts/commands.py
 
 ```python
-from agent.skills.decorators import skill_command
+from xiuxian_foundation.api.decorators import skill_command
 
 @skill_command(
     name="my_command",
@@ -107,7 +108,8 @@ async def my_command(param: str) -> str:
     return "result"
 ```
 
-**Note:** Command name is just `my_command`, not `my_new_skill.my_command`. MCP Server auto-prefixes.
+**Note:** Command name is just `my_command`, not `my_new_skill.my_command`. The
+runtime surface is responsible for any external namespacing.
 
 ## Command Categories
 
@@ -119,9 +121,10 @@ async def my_command(param: str) -> str:
 | `workflow` | Multi-step operations (complex tasks)         |
 | `general`  | Miscellaneous commands                        |
 
-## @skill_command Decorator
+## Command Registration
 
-The `@skill_command` decorator registers functions as MCP tools:
+Command functions in `scripts/*.py` are registered as runtime-discoverable
+tools:
 
 ```python
 @skill_command(

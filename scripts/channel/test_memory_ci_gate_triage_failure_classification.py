@@ -13,9 +13,9 @@ from test_xiuxian_daochang_memory_ci_gate import (
 
 def test_classify_gate_failure_maps_waiting_budget_error() -> None:
     category, summary = classify_gate_failure(
-        RuntimeError("mcp waiting warning budget exceeded: mcp_waiting_events_total=4 > 0")
+        RuntimeError("tool waiting warning budget exceeded: tool_waiting_events_total=4 > 0")
     )
-    assert category == "mcp_waiting_budget"
+    assert category == "tool_waiting_budget"
     assert "budget exceeded" in summary
 
 
@@ -37,7 +37,7 @@ def test_build_gate_failure_repro_commands_includes_stage_command(tmp_path) -> N
             "-p",
             "xiuxian-daochang",
             "--test",
-            "mcp_discover_cache",
+            "tool_discover_cache",
         ],
         returncode=101,
     )
@@ -46,7 +46,7 @@ def test_build_gate_failure_repro_commands_includes_stage_command(tmp_path) -> N
     )
     assert any(command.startswith("tail -n 200 ") for command in commands)
     assert any(
-        "cargo test -p xiuxian-daochang --test mcp_discover_cache" in command
+        "cargo test -p xiuxian-daochang --test tool_discover_cache" in command
         for command in commands
     )
     assert any(

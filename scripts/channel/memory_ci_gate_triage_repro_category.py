@@ -66,7 +66,7 @@ def append_category_commands(
         )
     if category == "discover_cache_gate_subprocess":
         commands.append(
-            "cargo test -p xiuxian-daochang --test mcp_discover_cache "
+            "cargo test -p xiuxian-daochang --test tool_discover_cache "
             "discover_calls_use_valkey_read_through_cache_when_configured -- --ignored --exact"
         )
     if category in {"trace_reconstruction_subprocess", "trace_reconstruction_quality"}:
@@ -93,9 +93,9 @@ def append_category_commands(
                 ]
             )
         )
-    if category in {"mcp_waiting_budget", "memory_suite_subprocess"}:
+    if category in {"tool_waiting_budget", "memory_suite_subprocess"}:
         commands.append(
-            f'rg -n "mcp\\.pool\\.(call|connect)\\.waiting" {shlex.quote(str(cfg.runtime_log_file))}'
+            f'rg -n "tool_runtime\\.pool\\.(call|connect)\\.waiting" {shlex.quote(str(cfg.runtime_log_file))}'
         )
     if category in {"memory_stream_budget", "memory_suite_subprocess"}:
         commands.append(

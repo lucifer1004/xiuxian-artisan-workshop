@@ -13,7 +13,7 @@ ERROR_MARKERS = (
     "ERROR",
     "error:",
     "Address already in use",
-    "tools/call: Mcp error",
+    "tools/call: Tool runtime error",
 )
 
 EVENT_TOKEN_RE = re.compile(r"\bevent\s*=\s*(?:\"|')?([A-Za-z0-9_.:-]+)")

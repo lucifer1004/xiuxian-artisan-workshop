@@ -4,13 +4,9 @@ High-performance Git operations using Rust bindings.
 Import this package to enable Rust acceleration for the Git skill.
 
 Usage:
-    from omni.core.skills.extensions import SkillExtensionLoader
+    Load the extension package directly from the git skill extension surface.
 
-    loader = SkillExtensionLoader("/path/to/git/extensions")
-    loader.load_all()
-
-    bridge = loader.get("rust_bridge")
-    accelerator = bridge.RustAccelerator("/path/to/repo")
+    bridge = RustAccelerator("/path/to/repo")
 """
 
 from .accelerator import RustAccelerator, create_accelerator

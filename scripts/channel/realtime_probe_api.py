@@ -35,12 +35,12 @@ _TELEGRAM_ERROR_PATTERNS = (
     "telegram sendmessage failed",
     "failed to send",
     "foreground message handling failed",
-    "tools/call: mcp error",
+    "tools/call: tool runtime error",
 )
 _DISCORD_ERROR_PATTERNS = (
     "discord failed to send command reply",
     "foreground message handling failed",
-    "tools/call: mcp error",
+    "tools/call: tool runtime error",
 )
 
 

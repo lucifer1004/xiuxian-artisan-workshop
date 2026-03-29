@@ -15,7 +15,7 @@ metadata:
 | `agent/knowledge/`  | LLM      | Troubleshooting, patterns, best practices | deadlock patterns, cache strategies    |
 | `agent/how-to/`     | LLM      | Step-by-step workflow guides              | git workflow, testing workflow         |
 | `docs/explanation/` | Users    | Design decisions, philosophy              | architecture decisions, why we chose X |
-| `docs/reference/`   | Users    | API documentation, config reference       | MCP tool reference                     |
+| `docs/reference/`   | Users    | API documentation, config reference       | tool runtime reference                |
 | `docs/tutorials/`   | Users    | Step-by-step tutorials                    | getting started guide                  |
 
 ## Naming Conventions

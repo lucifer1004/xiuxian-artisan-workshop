@@ -179,47 +179,48 @@ repeating serialization or file-write conventions outside `xiuxian-wendao`.
 The deployment artifact now also carries artifact-level inspection metadata:
 `artifact_schema_version` identifies the artifact contract itself, while
 `generated_at` records when a concrete JSON/TOML export instance was rendered.
-On top of that, `xiuxian-wendao` now exposes the Julia deployment helpers only
-through the explicit compatibility namespace, so callers can consume the
-current resolved Julia deployment contract without reaching into the internal
-retrieval-policy runtime resolver.
+On top of that, the remaining Julia-shaped launch and deployment DTOs are now
+package-owned by `xiuxian-wendao-julia`, so callers that still need the
+legacy Julia compatibility records should import them from the Julia package
+rather than from `xiuxian-wendao` crate-root shims.
 
-For downstream Rust imports, the crate now provides an explicit public
-compatibility namespace:
+For downstream Rust imports:
 
-- prefer `xiuxian_wendao::compatibility::link_graph::*` for compat-first
-  runtime-config DTO imports and deployment helpers such as
-  `LinkGraphCompatRerankRuntimeConfig` and
-  `resolve_link_graph_compat_deployment_artifact`
-- treat this namespaced compatibility module as the only supported public
-  migration path for compat-first runtime-config DTOs and deployment helpers
+- prefer `xiuxian_wendao_julia::compatibility::link_graph::*` for Julia-owned
+  deployment and launch compatibility DTOs such as
+  `LinkGraphJuliaRerankRuntimeConfig` and
+  `LinkGraphJuliaDeploymentArtifact`
+- treat `xiuxian-wendao` itself as the owner of the generic plugin-artifact
+  surfaces and runtime binding helpers
+- do not expect a crate-root `xiuxian_wendao::compatibility::*` namespace;
+  that host migration shim is retired
 
 ```rust
-use xiuxian_wendao::compatibility::link_graph::{
-    LinkGraphCompatDeploymentArtifact, LinkGraphCompatRerankRuntimeConfig,
-    resolve_link_graph_compat_deployment_artifact,
+use xiuxian_wendao_julia::compatibility::link_graph::{
+    DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH, LinkGraphJuliaDeploymentArtifact,
+    LinkGraphJuliaRerankRuntimeConfig,
 };
 
-let _ = core::mem::size_of::<LinkGraphCompatRerankRuntimeConfig>();
-let _resolver: fn() -> LinkGraphCompatDeploymentArtifact =
-    resolve_link_graph_compat_deployment_artifact;
+let _ = core::mem::size_of::<LinkGraphJuliaRerankRuntimeConfig>();
+let _ = core::mem::size_of::<LinkGraphJuliaDeploymentArtifact>();
+let _launcher = DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH;
 ```
 
 For inspection surfaces, the same export is now visible through
-`zhenfa_router` as `wendao.compat_deployment_artifact`, which returns the
-resolved deployment artifact over the existing native/RPC tool boundary. The
-tool defaults to TOML and also supports a structured JSON variant via
-`output_format = "json"`.
-The same tool now also accepts an optional `output_path`, which persists the
-resolved artifact directly to disk as TOML or JSON instead of only returning
-the rendered payload inline.
+`zhenfa_router` as `wendao.plugin_artifact`, which returns one resolved
+artifact selected by `plugin_id` and `artifact_id` over the existing
+native/RPC tool boundary. The tool defaults to TOML, also supports a
+structured JSON variant via `output_format = "json"`, and accepts an optional
+`output_path` for direct TOML or JSON export instead of only returning the
+rendered payload inline.
 Studio now also exposes the same resolved artifact at
-`GET /api/ui/julia-deployment-artifact`, returning the structured deployment
-artifact JSON directly from the gateway debug surface. The same endpoint also
-accepts `?format=toml` for parity with the tool-side inspection surface.
-That Studio inspection surface is now also formalized in the gateway OpenAPI
-route inventory and a dedicated Studio-owned JSON type, so the debug endpoint
-no longer leaks the raw link-graph runtime artifact struct directly.
+`GET /api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`, returning the
+structured generic plugin-artifact JSON directly from the gateway debug
+surface. The same endpoint also accepts `?format=toml` for parity with the
+tool-side inspection surface. That Studio inspection surface is now also
+formalized in the gateway OpenAPI route inventory around the generic
+`UiPluginArtifact` payload, so the debug endpoint no longer leaks the raw
+link-graph runtime artifact struct directly.
 The Studio JSON payload includes the same artifact-level metadata fields, so
 UI/debug consumers can distinguish artifact-contract versioning from the
 underlying WendaoArrow transport `schema_version`.

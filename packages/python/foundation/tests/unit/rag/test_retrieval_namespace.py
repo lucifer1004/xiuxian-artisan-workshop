@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from xiuxian_rag import HybridRetrievalBackend, HybridRetrievalUnavailableError, RetrievalConfig
+from xiuxian_rag.retrieval import HybridRetrievalBackend, HybridRetrievalUnavailableError
+from xiuxian_rag.retrieval.interface import RetrievalConfig
 from xiuxian_rag.retrieval.interface import RetrievalResult
 
 
@@ -71,7 +72,9 @@ async def test_hybrid_backend_applies_threshold_filter() -> None:
 async def test_hybrid_backend_prefers_native_hybrid_when_available() -> None:
     class _NativeHybridBackend(_StaticBackend):
         def __init__(self):
-            super().__init__([RetrievalResult(id="ignored", content="ignored", score=0.1)], "vector")
+            super().__init__(
+                [RetrievalResult(id="ignored", content="ignored", score=0.1)], "vector"
+            )
             self.hybrid_calls = 0
 
         async def search_hybrid(self, query: str, config: RetrievalConfig):

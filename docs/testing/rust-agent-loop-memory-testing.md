@@ -36,21 +36,21 @@ So: **one `run_turn` = one Nanobot-style “process message”** (session + opti
 
 ## 2. Test layers
 
-| Layer           | What                                                                           | Where                                                               |
-| --------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| **Unit**        | Config, session, qualify/parse, agent `from_config` with memory                | `config_and_session`, `multiple_mcp`, `config_mcp`, `gateway_stdio` |
+| Layer           | What                                                                                      | Where                                                               |
+| --------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Unit**        | Config, session, qualify/parse, agent `from_config` with memory                           | `config_and_session`, `multiple_mcp`, `config_mcp`, `gateway_stdio` |
 | **Integration** | One turn with real LLM; one turn with LLM + external tools (ReAct); two turns with memory | `agent_integration`                                                 |
 
 ### What each test covers
 
-| Test                                      | Loop (LLM) | ReAct (tool roundtrip)       | Memory (recall + store)           |
-| ----------------------------------------- | ---------- | ---------------------------- | --------------------------------- |
-| `config_and_session`                      | —          | —                            | `from_config` with `MemoryConfig` |
-| `agent_from_config_with_memory_succeeds`  | —          | —                            | Agent builds with memory          |
-| `test_agent_one_turn_with_llm_and_mcp`    | ✓          | ✓ (if model uses a tool)     | —                                 |
+| Test                                      | Loop (LLM) | ReAct (tool roundtrip)                    | Memory (recall + store)           |
+| ----------------------------------------- | ---------- | ----------------------------------------- | --------------------------------- |
+| `config_and_session`                      | —          | —                                         | `from_config` with `MemoryConfig` |
+| `agent_from_config_with_memory_succeeds`  | —          | —                                         | Agent builds with memory          |
+| `test_agent_one_turn_with_llm_and_mcp`    | ✓          | ✓ (if model uses a tool)                  | —                                 |
 | `test_agent_one_turn_litellm_project_mcp` | ✓          | ✓ (if an external tool + model uses tool) | —                                 |
-| **`test_agent_react_flow_tool_used`**     | ✓          | **✓ (required)**             | —                                 |
-| `test_agent_two_turns_memory_stored`      | ✓          | optional                     | ✓ (episode count ≥ 2)             |
+| **`test_agent_react_flow_tool_used`**     | ✓          | **✓ (required)**                          | —                                 |
+| `test_agent_two_turns_memory_stored`      | ✓          | optional                                  | ✓ (episode count ≥ 2)             |
 
 - **Loop**: Any integration test that calls `run_turn` and gets a non-empty reply exercises the loop (LLM call, optional tool rounds, final reply).
 - **ReAct (same as Nanobot/ZeroClaw)**: `test_agent_react_flow_tool_used` **requires** the model to use a tool: it sends a prompt that asks the model to call the echo (demo) tool with a fixed string; the test asserts the final reply contains that string, proving the path **LLM → tool_calls → tool execution → LLM → final reply** ran.
@@ -74,6 +74,7 @@ Require env:
 - `LITELLM_PROXY_URL` or `XIUXIAN_DAOCHANG_INFERENCE_URL` (inference endpoint)
 - `XIUXIAN_DAOCHANG_MODEL` (model name)
 - `OPENAI_API_KEY` or `XIUXIAN_DAOCHANG_INFERENCE_API_KEY` (unless inference is local)
+
 ```bash
 # One turn (loop; ReAct if a tool-enabled model uses a tool)
 cargo test -p xiuxian-daochang --test agent_integration test_agent_one_turn_litellm_project_mcp -- --ignored

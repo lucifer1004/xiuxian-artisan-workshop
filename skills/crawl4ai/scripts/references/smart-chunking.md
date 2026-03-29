@@ -136,7 +136,7 @@ chunk = extract_chunk(
 ## Integration with crawl_url
 
 ```python
-# In crawl_url.py (main MCP env with LLM)
+# In crawl_url.py (main tool runtime env with LLM)
 from graph import CHUNKING_PLANNER_PROMPT
 
 # 1. Crawl and get skeleton
@@ -155,7 +155,7 @@ response = llm.complete(
 
 # 3. Pass plan to isolated engine for extraction
 chunk_plan = json.loads(response.content)
-final_content = run_skill_command("crawl4ai", "engine.py", {
+final_content = run_script_command("crawl4ai", "engine.py", {
     "url": url,
     "action": "smart",
     "chunk_plan": chunk_plan

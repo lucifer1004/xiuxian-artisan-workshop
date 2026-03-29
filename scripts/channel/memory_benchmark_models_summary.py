@@ -39,7 +39,7 @@ class ModeSummary:
     feedback_up_count: int
     feedback_down_count: int
     avg_feedback_delta: float
-    mcp_error_turns: int
+    tool_error_turns: int
     embedding_timeout_fallback_turns: int
     embedding_cooldown_fallback_turns: int
     embedding_unavailable_fallback_turns: int

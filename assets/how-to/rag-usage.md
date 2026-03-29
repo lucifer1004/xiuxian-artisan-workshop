@@ -14,9 +14,9 @@ The project includes a RAG-powered knowledge base that provides contextual guida
 
 ## Auto-Activation (Default)
 
-When the orchestrator MCP server starts, it automatically:
+When the runtime starts, it automatically:
 
-1. Ingests all documentation from `agent/knowledge/`, `agent/how-to/`, `docs/explanation/`
+1. Ingests all documentation from project knowledge sources
 2. Bootstraps core knowledge (git workflow, coding standards, architecture)
 
 ## Manual Activation
@@ -44,10 +44,10 @@ list_knowledge_domains()
 
 | Directory                              | Domain       | Content                                   |
 | -------------------------------------- | ------------ | ----------------------------------------- |
-| `agent/knowledge/`                     | knowledge    | Troubleshooting, patterns, best practices |
-| `agent/how-to/`                        | workflow     | How-to guides and workflows               |
-| `docs/explanation/`                    | architecture | Architectural decisions                   |
-| `agent/knowledge/uv-best-practices.md` | uv           | UV best practices                         |
+| `assets/knowledge/`                    | knowledge    | Troubleshooting, patterns, best practices |
+| `assets/how-to/`                       | workflow     | How-to guides and workflows               |
+| `docs/`                                | architecture | Architectural decisions                   |
+| `assets/knowledge/uv-best-practices.md` | uv          | UV best practices                         |
 
 ## Available Tools
 

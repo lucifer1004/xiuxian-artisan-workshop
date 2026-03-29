@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from xiuxian_test_kit.fixtures.vector import (
+from _vector_payloads import (
     make_hybrid_payload,
     make_tool_search_payload,
     make_vector_payload,
@@ -33,6 +33,7 @@ from xiuxian_foundation.services.vector_schema import (
     parse_vector_payload,
     validate_vector_table_contract,
 )
+
 
 def test_parse_hybrid_payload_accepts_canonical_shape():
     raw = json.dumps(make_hybrid_payload())

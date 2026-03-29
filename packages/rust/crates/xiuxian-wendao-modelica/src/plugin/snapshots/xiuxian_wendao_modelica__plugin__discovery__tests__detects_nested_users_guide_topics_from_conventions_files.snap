@@ -6,16 +6,16 @@ expression: payload
 {
   "conventions": [
     {
-      "title": "Documentation",
-      "format": "modelica_users_guide_documentation"
+      "format": "modelica_users_guide_documentation",
+      "title": "Documentation"
     },
     {
-      "title": "ModelicaCode",
-      "format": "modelica_users_guide_modelica_code"
+      "format": "modelica_users_guide_modelica_code",
+      "title": "ModelicaCode"
     },
     {
-      "title": "Icons",
-      "format": "modelica_users_guide_icons"
+      "format": "modelica_users_guide_icons",
+      "title": "Icons"
     }
   ],
   "non_conventions": []

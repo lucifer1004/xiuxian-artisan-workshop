@@ -5,23 +5,44 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
-from git.scripts.smart_commit_graphflow import commands
 
-from omni.foundation.api.mcp_schema import extract_text_content, parse_result_payload
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from scripts.smart_commit_graphflow import commands
+
+from xiuxian_foundation.api.decorators import normalize_tool_result
+from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 
 def _unwrap_payload(result: object) -> dict[str, object]:
     """Unwrap decorated skill output into JSON dict payload when possible."""
-    parsed = parse_result_payload(result)
+    normalized = normalize_tool_result(result)
+    content = normalized.get("content") or []
+    first = content[0] if content else {}
+    text = first.get("text") if isinstance(first, dict) else None
+    if not isinstance(text, str):
+        raise TypeError("Unexpected tool result payload")
+    parsed = json.loads(text)
     if isinstance(parsed, dict):
         return parsed
     if isinstance(parsed, str):
         return json.loads(parsed)
     raise TypeError(f"Unexpected payload type: {type(parsed).__name__}")
+
+
+def _extract_text_content(result: object) -> str | None:
+    normalized = normalize_tool_result(result)
+    content = normalized.get("content") or []
+    first = content[0] if content else {}
+    text = first.get("text") if isinstance(first, dict) else None
+    return text if isinstance(text, str) else None
 
 
 def _completed_process(
@@ -92,7 +113,7 @@ class TestSmartCommitWorkflowModular:
         )
 
         out = await commands.smart_commit(action="start", project_root="/tmp/repo")
-        text = extract_text_content(out) or ""
+        text = _extract_text_content(out) or ""
 
         assert "Workflow preparation complete" in text
 
@@ -105,19 +126,19 @@ class TestSmartCommitWorkflowModular:
         )
 
         out = await commands.smart_commit(action="start", project_root="/tmp/repo")
-        text = extract_text_content(out) or ""
+        text = _extract_text_content(out) or ""
 
         assert "Workflow Execution Failed" in text
         assert "engine failed" in text
 
     async def test_approve_requires_workflow_id(self) -> None:
         out = await commands.smart_commit(action="approve", workflow_id="", message="feat(core): x")
-        text = extract_text_content(out) or ""
+        text = _extract_text_content(out) or ""
         assert "workflow_id required" in text
 
     async def test_approve_requires_message(self) -> None:
         out = await commands.smart_commit(action="approve", workflow_id="sid-1", message="")
-        text = extract_text_content(out) or ""
+        text = _extract_text_content(out) or ""
         assert "message required" in text
 
     async def test_approve_scope_validation_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -148,21 +169,21 @@ class TestSmartCommitWorkflowModular:
             message="feat(router): add fast path",
             project_root="/tmp/repo",
         )
-        text = extract_text_content(out) or ""
+        text = _extract_text_content(out) or ""
 
         assert "Commit Successful" in text
         assert "sid-1" in text
 
     async def test_action_normalizes_whitespace_and_case(self) -> None:
         out = await commands.smart_commit(action="  Visualize  ")
-        text = extract_text_content(out) or ""
+        text = _extract_text_content(out) or ""
 
         assert "Qianji Engine" in text
         assert "smart_commit.toml" in text
 
     async def test_invalid_action_returns_allowed_list(self) -> None:
         out = await commands.smart_commit(action="invalid")
-        text = extract_text_content(out) or ""
+        text = _extract_text_content(out) or ""
 
         assert "action must be one of:" in text
         assert "start" in text
@@ -180,7 +201,7 @@ class TestSmartCommitWorkflowModular:
             return _completed_process('=== Final Qianji Execution Result ===\n{"status":"ok"}')
 
         monkeypatch.setattr(commands, "_run_subprocess", _fake_run_subprocess)
-        monkeypatch.setattr(commands, "get_git_toplevel", lambda *_args, **_kwargs: "/workspace")
+        monkeypatch.setattr(commands, "get_project_root", lambda: "/workspace")
 
         ok, payload, err = await commands.run_qianji_engine(
             "/tmp/repo",

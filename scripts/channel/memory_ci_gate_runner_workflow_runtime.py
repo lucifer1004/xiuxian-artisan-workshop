@@ -6,12 +6,12 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from resolve_mcp_endpoint import resolve_mcp_endpoint
+from resolve_tool_endpoint import resolve_tool_endpoint
 
 
 def _local_host() -> str:
     """Resolve local host used by runtime webhook/mock endpoints."""
-    return str(resolve_mcp_endpoint()["host"])
+    return str(resolve_tool_endpoint()["host"])
 
 
 def build_agent_command(cfg: Any) -> list[str]:

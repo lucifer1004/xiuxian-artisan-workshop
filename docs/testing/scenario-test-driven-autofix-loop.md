@@ -28,11 +28,6 @@ metadata:
 Executes tests and returns structured failure data:
 
 ```python
-@skill_command(
-    name="run_pytest",
-    description="Run pytest and return STRUCTURED failure data for auto-fixing.",
-    autowire=True,
-)
 def run_pytest(
     target: str = ".",
     max_fail: int = 5,
@@ -68,12 +63,6 @@ def run_pytest(
 Surgically reads file context:
 
 ```python
-@skill_command(
-    name="read_file_context",
-    category="read",
-    description="[SURGICAL READ] Read specific lines around a target line.",
-    autowire=True,
-)
 def read_file_context(
     file_path: str,
     line_number: int,

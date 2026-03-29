@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use xiuxian_wendao::analyzers::{
+use xiuxian_wendao_core::repo_intelligence::{
     ExampleRecord, ModuleRecord, RelationKind, RelationRecord, SymbolRecord,
 };
 
@@ -319,7 +319,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use serde_json::json;
-    use xiuxian_wendao::analyzers::ModuleRecord;
+    use xiuxian_wendao_core::repo_intelligence::ModuleRecord;
 
     use super::{doc_targets_for_annotation_doc, doc_targets_for_file_doc};
 

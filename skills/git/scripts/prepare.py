@@ -14,7 +14,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from omni.foundation.config.logging import get_logger
+from xiuxian_foundation.config.logging import get_logger
 
 logger = get_logger("git.prepare")
 
@@ -91,8 +91,8 @@ def _get_cog_scopes(project_root: Path | None = None) -> list[str]:
     Falls back to .conform.yaml if cog.toml doesn't exist.
     """
     try:
-        from omni.foundation.config.settings import get_setting
-        from omni.foundation.runtime.gitops import get_project_root
+        from xiuxian_foundation.config.settings import get_setting
+        from xiuxian_foundation.config.prj import get_project_root
 
         root = project_root or get_project_root()
 

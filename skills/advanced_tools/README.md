@@ -43,7 +43,7 @@ await search_project_code(
 
 # Get structured results
 response = await search_project_code(
-    pattern="class.*MCP",
+    pattern="class.*ToolClient",
     file_type="py"
 )
 # response.stats.files_searched

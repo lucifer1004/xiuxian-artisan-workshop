@@ -1,11 +1,8 @@
 //! Integration tests for Repo Intelligence module search flow.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
-
 use std::process::Command;
 
-use repo_test_support::{
+use crate::support::repo_intelligence::{
     assert_repo_json_snapshot, create_sample_julia_repo, sample_projection_analysis,
     write_repo_config,
 };

@@ -90,12 +90,8 @@ pub(crate) use page_index::{
 pub use parser::blocks::extract_blocks;
 pub use query::{ParsedLinkGraphQuery, parse_search_query};
 pub use runtime_config::{
-    julia_deployment_artifact_selector, LinkGraphCompatAnalyzerLaunchManifest,
-    LinkGraphCompatDeploymentArtifact, LinkGraphCompatRerankRuntimeConfig,
-    LinkGraphIndexRuntimeConfig,
-    export_link_graph_compat_deployment_artifact_toml,
-    resolve_link_graph_compat_deployment_artifact, resolve_link_graph_index_runtime,
-    resolve_link_graph_rerank_binding,
+    LinkGraphIndexRuntimeConfig, julia_deployment_artifact_selector,
+    resolve_link_graph_index_runtime, resolve_link_graph_rerank_binding,
     set_link_graph_config_home_override, set_link_graph_wendao_config_override,
 };
 pub use saliency::{

@@ -50,7 +50,7 @@ fn soft_fail_tool_error_output(
     let is_embedding_timeout = lower.contains("embedding timed out")
         || (lower.contains("embedding")
             && lower.contains("timed out")
-            && lower.contains("mcp error: -32603"));
+            && lower.contains("tool runtime error: -32603"));
     if name != MEMORY_SEARCH_TOOL_NAME || !is_embedding_timeout {
         return None;
     }

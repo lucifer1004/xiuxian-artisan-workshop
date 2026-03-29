@@ -20,8 +20,8 @@ Retained Python testing covers only:
 1. `packages/python/foundation/tests`
 2. `packages/python/core/tests`
 3. `packages/python/xiuxian-wendao-py/tests`
-4. focused `packages/python/test-kit/tests` helpers that still validate the
-   retained adapter surface
+4. `scripts/channel/test_*.py`
+5. `scripts/tests/test_*.py`
 
 Python agent/skill/runtime test suites are gone with the deleted packages.
 
@@ -35,6 +35,8 @@ just test-python
 uv run pytest packages/python/foundation/tests
 uv run pytest packages/python/core/tests
 uv run pytest packages/python/xiuxian-wendao-py/tests
+uv run pytest scripts/channel
+uv run pytest scripts/tests
 
 # Rust validation
 cargo check --workspace --all-targets

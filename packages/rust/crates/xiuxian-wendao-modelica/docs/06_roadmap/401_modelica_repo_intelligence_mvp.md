@@ -8,6 +8,15 @@
 
 This roadmap tracks the external Modelica plugin as a first-class package, separate from the Wendao common-core roadmap.
 
+Current program position:
+
+- the external Modelica package is now the completed `M6` additive proof path
+  for Wendao
+- that additive proof now spans repo-facing, docs-facing, and Studio-facing
+  consumers, including the Stage-A repo service-state bundle
+- the next governed program move is `Phase 7: Flight-First Runtime
+  Negotiation`, not more outward-surface expansion
+
 ## Landed
 
 - external crate boundary validated through `plugins = ["modelica"]`
@@ -34,13 +43,158 @@ This roadmap tracks the external Modelica plugin as a first-class package, separ
 - parser-facing `ProjectedMarkdownDocument` and `ProjectedPageIndexDocument` output validated from the external Modelica integration path, so Stage-2 projected pages can reuse the existing markdown parser before page-index ingestion
 - real `ProjectedPageIndexTree` output validated from the external Modelica integration path, so projected Modelica guide pages now carry builder-native page-index hierarchy and thinning signals
 - normalized page titles for file-backed docs
-- external crate contracts are now realigned to the live `xiuxian-wendao::analyzers` record/import schemas again, restoring a green package test lane against the current common core
+- production contract ownership now comes from
+  `xiuxian-wendao-core::repo_intelligence`, while registry-aware integration
+  query validation keeps `xiuxian-wendao` only as a dev-dependency
+- the host now consumes `xiuxian-wendao-modelica` through a normal optional
+  Cargo dependency instead of sibling-source inclusion
+- the host `xiuxian-wendao` test gate now validates the external Modelica
+  plugin through builtin-registry repo-overview, module-search,
+  example-search, and symbol-search entry points
+- the host `xiuxian-wendao` test gate now also validates the same external
+  Modelica path through a relation-graph regression, so the additive proof
+  covers structural/semantic relation output in addition to search consumers
+- the host `xiuxian-wendao` test gate now also validates config-backed
+  projected-page generation and deterministic projected-page lookup from the
+  same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates projected page-index
+  tree generation and deterministic tree lookup from the same external
+  Modelica path
+- the host `xiuxian-wendao` test gate now also validates projected page-index
+  node lookup from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates page-centric
+  projected navigation bundles from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates grouped projected
+  page-family context from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates singular projected
+  page-family cluster lookup from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates projected
+  page-family search from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates projected
+  page-navigation search from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-navigation search from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-family search from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-family context from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-navigation lookup from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-family cluster lookup from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page lookup from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-index tree lookup from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-index node lookup from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-index tree search from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-index tree listing from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page-index document generation from the same external Modelica
+  path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected markdown document generation from the same external Modelica
+  path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected page search from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing mixed
+  projected retrieval from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing local
+  projected retrieval context from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  deterministic projected retrieval-hit reopening from the same external
+  Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  projected gap reporting from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  deterministic planner queue shaping from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  deterministic planner workset shaping from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  deterministic planner ranking from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  deterministic planner item reopening from the same external Modelica path
+- the host `xiuxian-wendao` test gate now also validates docs-facing
+  deterministic planner search from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/planner-search` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/planner-item` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/planner-workset` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/planner-rank` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/planner-queue` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/search` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/retrieval` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/retrieval-context` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/retrieval-hit` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/page` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/family-context` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/family-search` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/family-cluster` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/navigation` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/navigation-search` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/docs/projected-gap-report` route from the same external Modelica
+  path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/repo/overview` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/repo/module-search` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/repo/symbol-search` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/repo/example-search` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/repo/doc-coverage` route from the same external Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/repo/sync`, `/api/repo/projected-pages`, and
+  `/api/repo/projected-gap-report` routes from the same external Modelica
+  path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/repo/projected-page`, `/api/repo/projected-page-index-tree`,
+  `/api/repo/projected-page-index-node`, `/api/repo/projected-retrieval-hit`,
+  and `/api/repo/projected-retrieval-context` routes from the same external
+  Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Studio
+  `/api/repo/projected-page-index-tree-search`,
+  `/api/repo/projected-page-search`, `/api/repo/projected-retrieval`,
+  `/api/repo/projected-page-family-context`,
+  `/api/repo/projected-page-family-search`,
+  `/api/repo/projected-page-family-cluster`,
+  `/api/repo/projected-page-navigation`,
+  `/api/repo/projected-page-navigation-search`, and
+  `/api/repo/projected-page-index-trees` routes from the same external
+  Modelica path
+- the host `xiuxian-wendao` lib-test lane now also validates the Stage-A
+  Studio repo service-state bundle `/api/repo/index` and
+  `/api/repo/index/status` from the same external Modelica path
+- the shared host integration support now mounts repo fixtures once under
+  `tests/integration/support/`, so the external Modelica proof no longer
+  depends on per-file support copies or local dead-code suppressions
 - the shared Wendao plus external Modelica slice is now green on the Tier-3 lane (`clippy` plus `nextest`), so follow-up work can move from contract repair back to feature hygiene and bounded semantic growth
 
 ## Active Tracking Focus
 
 - keep package-level documentation in this crate instead of only under `xiuxian-wendao/docs`
 - track Modelica-specific behavior changes independently from the Wendao common-core roadmap
+- keep the production dependency boundary on `xiuxian-wendao-core` rather than
+  reintroducing a monolithic host contract dependency
 - preserve conservative semantics until a richer Modelica parsing layer exists
 
 ## Next Steps

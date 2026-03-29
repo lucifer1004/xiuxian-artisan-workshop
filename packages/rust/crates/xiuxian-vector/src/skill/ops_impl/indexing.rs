@@ -236,7 +236,7 @@ impl VectorStore {
             .collect())
     }
 
-    /// List all tools that are also MCP resources (have non-empty `resource_uri` in metadata).
+    /// List all tools that also expose a non-empty `resource_uri` in metadata.
     ///
     /// # Errors
     ///

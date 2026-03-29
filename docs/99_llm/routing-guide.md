@@ -74,12 +74,12 @@ The router considers:
 
 ### 1. Be Specific
 
-```python
+```text
 # GOOD - Specific action
-@omni("filesystem.read_files", {"path": "src/main.py"})
+tool: filesystem.read_files with {"path": "src/main.py"}
 
 # GOOD - Specific intent
-@omni("git.commit", {"message": "feat: add new feature"})
+tool: git.commit with {"message": "feat: add new feature"}
 ```
 
 ### 2. Use Action Verbs
@@ -95,10 +95,10 @@ The router considers:
 
 ### 3. Include Context
 
-```python
+```text
 # GOOD - Includes context
-@omni("filesystem.read_files", {"path": "src/main.py"})
-# Later: @omni("filesystem.search_files", {"pattern": "def main"})
+tool: filesystem.read_files with {"path": "src/main.py"}
+# Later: tool: filesystem.search_files with {"pattern": "def main"}
 ```
 
 ## Omega System Routing
@@ -109,49 +109,49 @@ The system routes requests through biological functional layers:
 
 For complex tasks requiring planning:
 
-```python
+```text
 # Cortex handles:
 # - Multi-step mission decomposition
 # - Parallel task DAG generation
 # - Mission state management
-@omni("cortex.decompose_task", {"goal": "implement OAuth2 flow"})
+tool: cortex.decompose_task with {"goal": "implement OAuth2 flow"}
 ```
 
 ### Cerebellum (Semantic Navigation)
 
 For understanding the codebase and environment:
 
-```python
+```text
 # Cerebellum handles:
 # - AST semantic scanning
 # - Knowledge RAG retrieval
 # - Tool discovery
-@omni("cerebellum.scan_codebase", {"query": "authentication logic"})
-@omni("knowledge.search", {"topic": "coding standards"})
+tool: cerebellum.scan_codebase with {"query": "authentication logic"}
+tool: knowledge.search with {"topic": "coding standards"}
 ```
 
 ### Hippocampus (Memory Recall)
 
 For learning from history:
 
-```python
+```text
 # Hippocampus handles:
 # - Episodic memory recall
 # - Experience-driven reasoning
-@omni("hippocampus.recall_experience", {"query": "fix git lock error"})
+tool: hippocampus.recall_experience with {"query": "fix git lock error"}
 ```
 
 ### Homeostasis (Isolated Execution)
 
 For safe modification and execution:
 
-```python
+```text
 # Homeostasis handles:
 # - Isolated file edits
 # - Git branch management
 # - Command execution audit
-@omni("filesystem.write_file", {"path": "src/auth.py", "content": "..."})
-@omni("terminal.run_command", {"command": "pytest"})
+tool: filesystem.write_file with {"path": "src/auth.py", "content": "..."}
+tool: terminal.run_command with {"command": "pytest"}
 ```
 
 ## Hybrid Routing
@@ -174,17 +174,17 @@ User Query → Router → [Confidence < high threshold?]
 
 The router is designed to make optimal decisions. If you're unsure which skill to use, describe your intent:
 
-```python
+```text
 # Instead of guessing, ask for suggestion
-@omni("skill.suggest", {"task": "I need to search for all test files"})
+tool: skill.suggest with {"task": "I need to search for all test files"}
 ```
 
 ### 2. Use Skill Suggestions
 
 When uncertain:
 
-```python
-@omni("skill.suggest", {"task": "find and read configuration"})
+```text
+tool: skill.suggest with {"task": "find and read configuration"}
 # Returns: Suggested skill with confidence score
 ```
 
@@ -208,7 +208,7 @@ Ghost tools provide hints about available capabilities:
 ```
 User: "Read README.md"
 → Router: filesystem.read_files (confidence: 0.95)
-→ Action: @omni("filesystem.read_files", {"path": "README.md"})
+→ Action: tool: filesystem.read_files with {"path": "README.md"}
 ```
 
 ### Pattern 2: Multi-step Task
@@ -216,7 +216,7 @@ User: "Read README.md"
 ```
 User: "Run tests and show results"
 → Router: terminal.run_task (confidence: 0.85)
-→ Action: @omni("terminal.run_task", {"command": "pytest", "args": ["-v"]})
+→ Action: tool: terminal.run_task with {"command": "pytest", "args": ["-v"]}
 ```
 
 ### Pattern 3: Complex Task (Planner)
@@ -232,7 +232,7 @@ User: "Refactor the entire authentication module"
 ```
 User: "Commit my changes with a message"
 → Router: git.commit (confidence: 0.92)
-→ Action: @omni("git.commit", {"message": "feat: add auth"})
+→ Action: tool: git.commit with {"message": "feat: add auth"}
 ```
 
 ## Troubleshooting
@@ -250,7 +250,7 @@ If routing confidence is low:
 If routed to wrong skill:
 
 1. **Provide more context** in your query
-2. **Use explicit skill.command** format
+2. **Use explicit `tool: skill.command with {...}` format**
 3. **Report feedback** to improve routing
 
 ## Related Documentation

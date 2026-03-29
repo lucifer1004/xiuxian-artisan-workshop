@@ -16,16 +16,15 @@ from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
 
-from git.scripts.prepare import (
+from ..prepare import (
     _get_cog_scopes,
 )
-from git.scripts.rendering import render_commit_message, render_template
+from ..rendering import render_commit_message, render_template
 
-from omni.foundation.api.decorators import skill_command
-from omni.foundation.api.response_payloads import build_status_message_response
-from omni.foundation.config.logging import get_logger
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
-from omni.foundation.runtime.gitops import get_git_toplevel
+from xiuxian_foundation.config.logging import get_logger
+from xiuxian_foundation.config.prj import get_project_root
+from xiuxian_rag.retrieval.response import build_status_message_response
+from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 from ._enums import SmartCommitAction, SmartCommitStatus
 
@@ -35,15 +34,8 @@ logger = get_logger("git.smart_commit")
 def _resolve_git_repo_root(project_root: str = "") -> str:
     """Resolve git top-level for execution root."""
     if project_root:
-        try:
-            return str(get_git_toplevel(Path(project_root)))
-        except RuntimeError:
-            return project_root
-
-    try:
-        return str(get_git_toplevel())
-    except RuntimeError:
-        return "."
+        return project_root
+    return str(get_project_root())
 
 
 async def _run_subprocess(
@@ -211,9 +203,9 @@ async def run_qianji_engine(
     project_root: str, context: dict[str, Any], session_id: str
 ) -> tuple[bool, dict[str, Any], str]:
     """Execute the Qianji engine with smart_commit.toml."""
-    from omni.foundation.config.skills import SKILLS_DIR
+    from xiuxian_foundation.config.prj import get_skills_dir
 
-    manifest_path = str(SKILLS_DIR("git") / "workflows" / "smart_commit.toml")
+    manifest_path = str(get_skills_dir() / "git" / "workflows" / "smart_commit.toml")
 
     cmd = [
         "cargo",
@@ -233,10 +225,7 @@ async def run_qianji_engine(
         session_id,
     ]
 
-    try:
-        engine_root = str(get_git_toplevel(Path(__file__).resolve()))
-    except RuntimeError:
-        engine_root = "."
+    engine_root = str(get_project_root())
 
     proc = await _run_subprocess(cmd, cwd=engine_root)
 
@@ -308,22 +297,6 @@ def _render_start_result(
     )
 
 
-@skill_command(
-    name="smart_commit",
-    category="workflow",
-    description="""
-    Primary git commit workflow using Qianji Rust engine.
-
-    Multi-step workflow:
-    1. start: Detects submodules, stages files, runs lefthook, security scan.
-    2. approve: User approves, executes final commit.
-    3. reject: Cancels the workflow via ValKey eviction.
-    """,
-    read_only=False,
-    destructive=True,
-    idempotent=False,
-    open_world=False,
-)
 async def smart_commit(
     action: SmartCommitAction = SmartCommitAction.START,
     workflow_id: str = "",

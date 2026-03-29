@@ -13,7 +13,7 @@ metadata:
 
 # LLM Guide: Writing Native Workflows
 
-> Omni-Dev-Fusion System Layering - Workflow Implementation Guide
+> Xiuxian Runtime Layering - Workflow Authoring Guide
 
 ## Overview
 
@@ -22,10 +22,10 @@ This guide defines the current standard for implementing native workflows.
 All workflows should:
 
 1. Use `NativeStateGraph` for graph construction.
-2. Compile through `omni.tracer.pipeline_checkpoint.compile_workflow`.
-3. Persist final state through `omni.foundation.workflow_state` helpers.
+2. Compile through `xiuxian_tracer.pipeline_checkpoint.compile_workflow`.
+3. Persist final state through `xiuxian_foundation.workflow_state` helpers.
 4. Use `get_logger()` for observability.
-5. Export public entrypoints through `@skill_command`.
+5. Export public entrypoints as retained runtime command functions.
 
 ## Runtime Persistence Model
 
@@ -44,11 +44,10 @@ This replaces the removed legacy LanceDB checkpoint backend.
 
 from typing import TypedDict
 
-from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.logging import get_logger
-from omni.foundation.workflow_state import save_workflow_state
-from omni.tracer.workflow_engine import END_NODE, NativeStateGraph
-from omni.tracer.pipeline_checkpoint import compile_workflow
+from xiuxian_foundation.config.logging import get_logger
+from xiuxian_foundation.workflow_state import save_workflow_state
+from xiuxian_tracer.workflow_engine import END_NODE, NativeStateGraph
+from xiuxian_tracer.pipeline_checkpoint import compile_workflow
 
 logger = get_logger("skill.workflow")
 _WORKFLOW_TYPE = "my_workflow"
@@ -84,11 +83,6 @@ def _build_workflow() -> NativeStateGraph:
 _app = compile_workflow(_build_workflow(), use_memory_saver=True)
 
 
-@skill_command(
-    name="my_workflow",
-    category="workflow",
-    description="Run my native workflow",
-)
 async def my_workflow(request: str = "") -> str:
     initial_state = MyWorkflowState(
         request=request,
@@ -108,6 +102,9 @@ async def my_workflow(request: str = "") -> str:
     return result.get("result", "Done")
 ```
 
+Register the callable through the retained runtime command-registration layer in
+the package that exposes this workflow externally.
+
 ## Checklist
 
 Before shipping a workflow:
@@ -118,6 +115,10 @@ Before shipping a workflow:
 4. Final state is persisted with `save_workflow_state(...)`.
 5. Unit tests cover happy path and failure path.
 
+Registration note:
+- keep workflow construction and workflow registration as separate concerns
+- expose only the final callable through the retained runtime boundary
+
 ## Anti-Patterns
 
 Do not:
@@ -125,10 +126,10 @@ Do not:
 - Re-introduce LanceDB checkpoint store code in workflow paths.
 - Build custom ad-hoc persistence files outside `workflow_state` helpers.
 - Compile graphs inside every command invocation.
-- Depend on removed modules such as `omni.foundation.checkpoint`.
+- Depend on removed checkpoint compatibility modules.
 
 ## Related Modules
 
-- `packages/python/foundation/src/omni/foundation/workflow_state.py`
-- `packages/python/foundation/src/omni/tracer/pipeline_checkpoint.py`
-- `packages/python/foundation/src/omni/tracer/workflow_engine.py`
+- `packages/python/foundation/src/xiuxian_foundation/workflow_state.py`
+- `packages/python/foundation/src/xiuxian_tracer/pipeline_checkpoint.py`
+- `packages/python/foundation/src/xiuxian_tracer/workflow_engine.py`

@@ -20,7 +20,7 @@ def load_env_from_file(
 ) -> dict[str, str]:
     """Load environment variables from a JSON config file.
 
-    Supports both flat structure and nested mcpServers structure.
+    Supports both flat structure and nested toolServers structure.
 
     Args:
         config_key: Config key to extract (e.g., "orchestrator", "coder")
@@ -31,7 +31,7 @@ def load_env_from_file(
         Dict of environment variables
     """
     if config_file is None:
-        config_file = env_key or os.environ.get("MCP_CONFIG_FILE", ".mcp.json")
+        config_file = env_key or os.environ.get("TOOL_CONFIG_FILE", ".tool.json")
 
     if not os.path.exists(config_file):
         return {}
@@ -42,9 +42,9 @@ def load_env_from_file(
     except Exception:
         return {}
 
-    # Handle flat config or nested mcpServers config
-    if config_key and isinstance(data.get("mcpServers"), dict):
-        server_config = data["mcpServers"].get(config_key, {})
+    # Handle flat config or nested toolServers config
+    if config_key and isinstance(data.get("toolServers"), dict):
+        server_config = data["toolServers"].get(config_key, {})
         env_vars = server_config.get("env", {}) if isinstance(server_config, dict) else {}
         flat_env = data if isinstance(data, dict) else {}
     else:

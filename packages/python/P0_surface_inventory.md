@@ -17,15 +17,13 @@ collapsed to the retained post-deletion surface:
    Thin config, schema, logging, and RAG-enhancement helpers.
 3. `core`
    Minimal retained compatibility/helpers around kernel-adjacent utilities.
-4. `test-kit`
-   Focused retained fixtures and adapter-validation helpers.
 
 The old runtime-center packages are no longer present:
 
 - `packages/python/agent/` has been physically deleted.
-- `packages/python/mcp-server/` has been physically deleted.
+- the removed standalone protocol server package has been physically deleted.
 - `xiuxian_core.skills` has been physically deleted.
-- Python-local router, workflow, memory, knowledge-host, and MCP-host package
+- Python-local router, workflow, memory, knowledge-host, and legacy protocol-host package
   surfaces have been physically deleted.
 
 ## Retained Public Surface
@@ -56,19 +54,13 @@ Retained role:
 - minimal kernel/context/security helpers that remain useful without recreating
   a Python runtime center
 
-### `xiuxian_test_kit`
-
-Retained role:
-
-- focused fixture helpers for retained Python adapter surfaces
-
 ## Removed Surface
 
 These surfaces no longer belong to the Python architecture and have already
 been removed:
 
 1. `omni.agent`
-2. `omni.mcp`
+2. the removed protocol-host package surface
 3. `xiuxian_core.skills`
 4. Python-local router/indexer stacks
 5. Python-local knowledge ingestion/indexing stacks

@@ -7,7 +7,6 @@ use xiuxian_wendao_core::{
 };
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaError, zhenfa_tool};
 
-use crate::link_graph::julia_deployment_artifact_selector;
 use crate::link_graph::plugin_runtime::{
     render_plugin_artifact_toml_for_selector, resolve_plugin_artifact_for_selector,
 };
@@ -38,35 +37,9 @@ pub struct WendaoPluginArtifactArgs {
     pub output_path: Option<String>,
 }
 
-/// Legacy compatibility alias for deployment-artifact output formats.
-pub type WendaoCompatDeploymentArtifactOutputFormat = WendaoPluginArtifactOutputFormat;
-
-/// Arguments for exporting the resolved compatibility deployment artifact.
-#[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
-pub struct WendaoCompatDeploymentArtifactArgs {
-    /// Optional output format. Defaults to TOML.
-    #[serde(default)]
-    pub output_format: WendaoCompatDeploymentArtifactOutputFormat,
-    /// Optional destination path for persisting the rendered artifact.
-    #[serde(default)]
-    pub output_path: Option<String>,
-}
-
 impl WendaoPluginArtifactArgs {
     fn selector(&self) -> Result<PluginArtifactSelector, ZhenfaError> {
         build_plugin_artifact_selector(self.plugin_id.trim(), self.artifact_id.trim())
-    }
-}
-
-impl WendaoCompatDeploymentArtifactArgs {
-    fn into_plugin_artifact_args(self) -> WendaoPluginArtifactArgs {
-        let selector = julia_deployment_artifact_selector();
-        WendaoPluginArtifactArgs {
-            plugin_id: selector.plugin_id.0,
-            artifact_id: selector.artifact_id.0,
-            output_format: self.output_format,
-            output_path: self.output_path,
-        }
     }
 }
 
@@ -109,26 +82,6 @@ pub fn wendao_plugin_artifact(
     args: WendaoPluginArtifactArgs,
 ) -> Result<String, ZhenfaError> {
     export_plugin_artifact(args)
-}
-
-/// Export the resolved compatibility deployment artifact.
-///
-/// # Errors
-///
-/// Returns a [`ZhenfaError`] when the current compatibility deployment artifact
-/// cannot be serialized into the requested format.
-#[allow(missing_docs)]
-#[allow(clippy::needless_pass_by_value)]
-#[zhenfa_tool(
-    name = "wendao.compat_deployment_artifact",
-    description = "Export the resolved compatibility deployment artifact as TOML or structured JSON.",
-    tool_struct = "WendaoCompatDeploymentArtifactTool"
-)]
-pub fn wendao_compat_deployment_artifact_tool(
-    _ctx: &ZhenfaContext,
-    args: WendaoCompatDeploymentArtifactArgs,
-) -> Result<String, ZhenfaError> {
-    export_compat_deployment_artifact(args)
 }
 
 /// Render the resolved plugin artifact as TOML.
@@ -211,61 +164,6 @@ pub fn export_plugin_artifact(args: WendaoPluginArtifactArgs) -> Result<String, 
     }
 
     render_plugin_artifact(&selector, args.output_format)
-}
-
-/// Render the resolved compatibility deployment artifact as TOML.
-///
-/// # Errors
-///
-/// Returns a [`ZhenfaError`] when TOML serialization fails.
-pub fn render_compat_deployment_artifact_toml() -> Result<String, ZhenfaError> {
-    render_plugin_artifact_toml(&julia_deployment_artifact_selector())
-}
-
-/// Render the resolved compatibility deployment artifact as structured JSON.
-///
-/// # Errors
-///
-/// Returns a [`ZhenfaError`] when JSON serialization fails.
-pub fn render_compat_deployment_artifact_json() -> Result<String, ZhenfaError> {
-    render_plugin_artifact_json(&julia_deployment_artifact_selector())
-}
-
-/// Render the resolved compatibility deployment artifact using the selected format.
-///
-/// # Errors
-///
-/// Returns a [`ZhenfaError`] when serialization fails.
-pub fn render_compat_deployment_artifact(
-    output_format: WendaoCompatDeploymentArtifactOutputFormat,
-) -> Result<String, ZhenfaError> {
-    render_plugin_artifact(&julia_deployment_artifact_selector(), output_format)
-}
-
-/// Export the resolved compatibility deployment artifact, optionally writing it to a file.
-///
-/// # Errors
-///
-/// Returns a [`ZhenfaError`] when serialization or file writing fails.
-pub fn export_compat_deployment_artifact(
-    args: WendaoCompatDeploymentArtifactArgs,
-) -> Result<String, ZhenfaError> {
-    let output_path = args.output_path.clone();
-    let output_format = args.output_format;
-    let rendered = export_plugin_artifact(args.into_plugin_artifact_args())?;
-
-    if let Some(output_path) = output_path {
-        return Ok(format!(
-            "Wrote compatibility deployment artifact ({}) to {}",
-            match output_format {
-                WendaoCompatDeploymentArtifactOutputFormat::Toml => "toml",
-                WendaoCompatDeploymentArtifactOutputFormat::Json => "json",
-            },
-            output_path
-        ));
-    }
-
-    Ok(rendered)
 }
 
 #[cfg(test)]

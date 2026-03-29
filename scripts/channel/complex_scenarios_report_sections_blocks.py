@@ -6,7 +6,7 @@ from __future__ import annotations
 from complex_scenarios_report_sections_blocks_summary import append_scenario_header
 from complex_scenarios_report_sections_blocks_tables import (
     append_failure_tails,
-    append_mcp_diagnostics,
+    append_tool_diagnostics,
     append_memory_adaptation,
     append_natural_language_trace,
     append_step_table,
@@ -14,7 +14,7 @@ from complex_scenarios_report_sections_blocks_tables import (
 
 __all__ = [
     "append_failure_tails",
-    "append_mcp_diagnostics",
+    "append_tool_diagnostics",
     "append_memory_adaptation",
     "append_natural_language_trace",
     "append_scenario_header",

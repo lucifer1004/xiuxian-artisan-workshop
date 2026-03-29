@@ -60,7 +60,10 @@ async def run_recall_hybrid_rows(
     on_parse_error: Callable[[Exception], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Run hybrid recall query (embedding + Rust hybrid search) and return normalized rows."""
-    from xiuxian_foundation.services.embedding import EmbeddingUnavailableError, get_embedding_service
+    from xiuxian_foundation.services.embedding import (
+        EmbeddingUnavailableError,
+        get_embedding_service,
+    )
     from xiuxian_foundation.services.vector.search import search_embed_timeout
 
     limit = _normalize_fetch_limit(fetch_limit)

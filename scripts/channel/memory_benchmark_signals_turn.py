@@ -27,7 +27,7 @@ def parse_turn_signals(
         "decision": None,
         "feedback": None,
         "bot_line": None,
-        "mcp_error": False,
+        "tool_error": False,
         "embedding_timeout_fallback": False,
         "embedding_cooldown_fallback": False,
         "embedding_unavailable_fallback": False,
@@ -35,7 +35,7 @@ def parse_turn_signals(
 
     for line in lines:
         if forbidden_log_pattern in line:
-            signals["mcp_error"] = True
+            signals["tool_error"] = True
         if bot_marker in line:
             signals["bot_line"] = line.split(bot_marker, 1)[1].strip()
 

@@ -68,7 +68,7 @@ def test_build_report_render_and_write_outputs(tmp_path: Path) -> None:
         thread_b=None,
         thread_c=None,
         mixed_plain_prompt="hello",
-        forbid_log_regexes=("tools/call: Mcp error",),
+        forbid_log_regexes=("tools/call: Tool runtime error",),
     )
     results = [
         _StepResult(

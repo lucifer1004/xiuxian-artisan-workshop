@@ -95,7 +95,7 @@ fn timeout_output_preserves_tool_call_id() {
 
 #[test]
 fn soft_fail_output_preserves_tool_call_id() {
-    let error = anyhow::anyhow!("embedding timed out: mcp error: -32603");
+    let error = anyhow::anyhow!("embedding timed out: tool runtime error: -32603");
     let output =
         Agent::soft_fail_tool_error_output("memory.search_memory", Some("call_789"), &error)
             .expect("embedding timeout should degrade to soft tool output");

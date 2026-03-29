@@ -1,13 +1,13 @@
 //! Integration tests for deterministic projected page navigation search.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
+use std::fs;
 
-use repo_test_support::{assert_repo_json_snapshot, sample_projection_analysis};
+use crate::support::repo_intelligence::create_sample_modelica_repo;
+use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedPageNavigationSearchQuery,
-    build_repo_projected_page_navigation_search,
+    build_repo_projected_page_navigation_search, repo_projected_page_navigation_search_from_config,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -30,6 +30,45 @@ fn projected_page_navigation_search_expands_reference_hits_into_navigation_bundl
 
     assert_repo_json_snapshot(
         "repo_projected_page_navigation_search_result",
+        json!(result),
+    );
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[test]
+fn modelica_plugin_projected_page_navigation_search_expands_reference_hits_into_navigation_bundles()
+-> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_modelica_repo(temp.path(), "Projectionica")?;
+    let config_path = temp.path().join("modelica-navigation-search.wendao.toml");
+    fs::write(
+        &config_path,
+        format!(
+            r#"[link_graph.projects.modelica-navigation-search]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+
+    let result = repo_projected_page_navigation_search_from_config(
+        &RepoProjectedPageNavigationSearchQuery {
+            repo_id: "modelica-navigation-search".to_string(),
+            query: "Projectionica.Controllers".to_string(),
+            kind: Some(ProjectionPageKind::Reference),
+            family_kind: Some(ProjectionPageKind::HowTo),
+            limit: 2,
+            related_limit: 3,
+            family_limit: 2,
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+
+    assert_repo_json_snapshot(
+        "repo_projected_page_navigation_search_modelica_result",
         json!(result),
     );
     Ok(())

@@ -18,7 +18,7 @@ _TRUSTED_ABSOLUTE_PATHS = {"/nix/store/"}
 def _default_project_root() -> Path:
     """Project root from git top level; fallback to cwd when not in a repo."""
     try:
-        from xiuxian_foundation.runtime.gitops import get_project_root
+        from xiuxian_foundation.config.prj import get_project_root
 
         return get_project_root()
     except Exception:

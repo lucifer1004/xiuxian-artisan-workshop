@@ -14,9 +14,9 @@ metadata:
 
 | Task                    | Tool/Command                                    |
 | ----------------------- | ----------------------------------------------- |
-| Create knowledge entry  | `@xiuxian-orchestrator create_knowledge_entry`  |
-| Rebuild knowledge index | `@xiuxian-orchestrator rebuild_knowledge_index` |
-| Search knowledge base   | `@xiuxian-orchestrator search_knowledge_base`   |
+| Create knowledge entry  | add/update docs under `assets/knowledge/`       |
+| Rebuild knowledge index | rerun the owning package/index flow if needed   |
+| Search knowledge base   | use the retained knowledge query surface        |
 
 ---
 
@@ -26,9 +26,9 @@ metadata:
 
 | If you modify...       | You must update...                                         |
 | ---------------------- | ---------------------------------------------------------- |
-| `agent/skills/*.py`    | Skill documentation in `agent/skills/*/guide.md`           |
-| `assets/specs/*.md`    | `agent/standards/feature-lifecycle.md` (workflow diagrams) |
-| `agent/standards/*.md` | Update the standard itself                                 |
+| `skills/*/scripts/*`   | Skill documentation in `skills/*/SKILL.md` and `README.md` |
+| `assets/specs/*.md`    | The matching workflow/process docs                          |
+| `assets/how-to/*.md`   | Update the how-to itself                                    |
 | `docs/*.md`            | User-facing guides (if breaking changes)                   |
 | `CLAUDE.md`            | Project conventions                                        |
 | `justfile`             | Command documentation in `docs/`                           |
@@ -44,19 +44,19 @@ metadata:
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  Step 1: Determine doc type                                     │
-│  - New knowledge → Documentation Skill (create_knowledge_entry)│
-│  - Code changes → Update relevant docs in docs/                │
+│  - New knowledge → Add a focused note under assets/knowledge/  │
+│  - Code changes → Update relevant docs in docs/ or assets/     │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  Step 2: Create or update documentation                         │
-│  - Use create_knowledge_entry for new insights                 │
-│  - Update existing docs in docs/                               │
+│  - Add or revise the relevant knowledge/how-to/doc entry       │
+│  - Keep package docs and GTD in sync                           │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  Step 3: Rebuild knowledge index (if creating new entry)       │
-│  @xiuxian-orchestrator rebuild_knowledge_index()               │
+│  Step 3: Rebuild or resync retained indexes if required        │
+│  (only where the owning package still keeps one)               │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -72,31 +72,29 @@ metadata:
 ### Create a Knowledge Entry
 
 ```python
-@xiuxian-orchestrator create_knowledge_entry(
-    title="Fixing Deadlocks",
-    category="debugging",
-    content="## Problem\n... \n## Solution\n..."
-)
+Create a focused markdown note under `assets/knowledge/` or update the
+relevant existing guide in place.
 ```
 
 **Response:**
 
 ```
-Created knowledge entry: 20260103-debugging-fixing-deadlocks.md
+Updated knowledge note: `assets/knowledge/...`
 ```
 
 ### Rebuild Knowledge Index
 
-Call this after adding or deleting knowledge entries:
+Run the owning package or documentation sync flow only if that area keeps a
+derived index:
 
 ```python
-@xiuxian-orchestrator rebuild_knowledge_index()
+direnv exec . <package-or-doc sync command>
 ```
 
 ### Search Knowledge Base
 
 ```python
-@xiuxian-orchestrator search_knowledge_base(query="deadlock")
+Use the retained query surface or repository search to locate the note.
 ```
 
 ---
@@ -105,7 +103,8 @@ Call this after adding or deleting knowledge entries:
 
 ### Location
 
-- All knowledge goes into `agent/knowledge/harvested/`
+- Knowledge notes belong under `assets/knowledge/` unless a package-specific
+  doc tree owns the content.
 
 ### Naming Convention
 
@@ -137,10 +136,10 @@ Understand where to write documentation:
 
 | Directory         | Audience     | Purpose                                            |
 | ----------------- | ------------ | -------------------------------------------------- |
-| `agent/`          | LLM (Claude) | How-to guides, standards - context for AI behavior |
-| `docs/`           | Users        | Human-readable manuals, tutorials                  |
-| `agent/skills/*/` | LLM + Devs   | Skill documentation (guide.md, prompts.md)         |
-| `assets/specs/`   | LLM + Devs   | Feature specifications                             |
+| `assets/how-to/` | Operators    | How-to guides and workflows                         |
+| `docs/`          | Users        | Human-readable manuals, tutorials                   |
+| `skills/*/`      | LLM + Devs   | Skill documentation (`SKILL.md`, `README.md`)       |
+| `assets/specs/`  | LLM + Devs   | Feature specifications                              |
 
 ---
 
@@ -148,13 +147,13 @@ Understand where to write documentation:
 
 | Scenario               | Write To                                                           |
 | ---------------------- | ------------------------------------------------------------------ |
-| New skill              | `agent/skills/{skill}/guide.md`                                    |
-| New workflow/process   | `agent/how-to/` (for LLM to follow)                                |
+| New skill              | `skills/{skill}/SKILL.md` and `skills/{skill}/README.md`           |
+| New workflow/process   | `assets/how-to/`                                                   |
 | User-facing guide      | `docs/` (for humans)                                               |
-| Implementation details | `agent/skills/*/` (for contributors)                               |
+| Implementation details | `skills/*/` (for contributors)                                     |
 | Feature spec           | `assets/specs/` (contract between requirements and implementation) |
 | Project convention     | `CLAUDE.md` (quick reference)                                      |
-| Captured insight       | `agent/knowledge/harvested/` (Documentation Skill)                 |
+| Captured insight       | `assets/knowledge/`                                                |
 
 ---
 
@@ -164,9 +163,9 @@ Understand where to write documentation:
 | ----------------------------------- | -------------------------------------------------------------- |
 | Commit code without updating README | Check relevant docs first                                      |
 | Update docs in a separate commit    | Update docs in the SAME commit as code                         |
-| Write user docs in `agent/`         | Write user docs in `docs/`                                     |
+| Write user docs in internal how-to  | Write user docs in `docs/`                                     |
 | Forget to update CLAUDE.md          | Update CLAUDE.md for new tools/commands                        |
-| Store insights without index update | Always call `rebuild_knowledge_index()` after creating entries |
+| Store insights without sync         | Update the owning package/docs index only where one still exists |
 
 ---
 
@@ -174,10 +173,9 @@ Understand where to write documentation:
 
 | Document                               | Purpose                          |
 | -------------------------------------- | -------------------------------- |
-| `agent/standards/feature-lifecycle.md` | Spec-driven development workflow |
-| `agent/how-to/git-workflow.md`         | Commit conventions               |
-| `agent/how-to/testing-workflows.md`    | Test requirements                |
-| `agent/skills/documentation/guide.md`  | Documentation Skill guide        |
+| `assets/how-to/gitops.md`              | Commit conventions               |
+| `assets/how-to/testing-workflows.md`   | Test requirements                |
+| `assets/knowledge/`                    | Knowledge notes                  |
 
 ---
 

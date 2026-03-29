@@ -18,8 +18,8 @@ def process_event_lines(
     parse_command_reply_json_summary_line_fn: Any,
     telegram_send_retry_grace_seconds_fn: Any,
     parse_log_tokens_fn: Any,
-    mcp_observability_events: tuple[str, ...],
-    mcp_waiting_events: frozenset[str],
+    tool_observability_events: tuple[str, ...],
+    tool_waiting_events: frozenset[str],
     target_session_scope_placeholder: str,
     helpers_module: Any,
     monotonic_fn: Any,
@@ -35,11 +35,11 @@ def process_event_lines(
                 line=line,
                 parse_log_tokens_fn=parse_log_tokens_fn,
             )
-            helpers_module.record_mcp_event(
+            helpers_module.record_tool_event(
                 runtime_state,
                 event_token=event_token,
-                mcp_observability_events=mcp_observability_events,
-                mcp_waiting_events=mcp_waiting_events,
+                tool_observability_events=tool_observability_events,
+                tool_waiting_events=tool_waiting_events,
             )
 
         reply_obs = parse_command_reply_event_line_fn(line)

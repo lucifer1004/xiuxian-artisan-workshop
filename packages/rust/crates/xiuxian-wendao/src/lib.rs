@@ -51,8 +51,6 @@ extern crate self as xiuxian_wendao;
 // ---------------------------------------------------------------------------
 // Core domain modules
 // ---------------------------------------------------------------------------
-/// Legacy compatibility namespaces for stable downstream re-export paths.
-pub mod compatibility;
 pub mod entity;
 pub mod graph;
 /// HMAS blackboard protocol contracts and validators.
@@ -144,10 +142,6 @@ pub use ingress::{
     SpiderWendaoBridge, WebAssimilationSink, WebIngestionSignal, canonical_web_uri,
     web_namespace_from_url,
 };
-pub use compatibility::link_graph::{
-    LinkGraphCompatAnalyzerLaunchManifest, LinkGraphCompatDeploymentArtifact,
-    LinkGraphCompatRerankRuntimeConfig,
-};
 pub use link_graph::{
     BatchQuantumScorer, BatchQuantumScorerError,
     LINK_GRAPH_QUANTUM_CONTEXT_SNAPSHOT_SCHEMA_VERSION, LINK_GRAPH_RETRIEVAL_PLAN_SCHEMA_VERSION,
@@ -173,21 +167,18 @@ pub use link_graph::{
     QuantumAnchorHit, QuantumContext, QuantumContextBuildError, QuantumContextSnapshot,
     QuantumFusionOptions, QuantumFusionTelemetry, QuantumSemanticIgnition,
     QuantumSemanticIgnitionError, QuantumSemanticIgnitionFuture, QuantumSemanticSearchRequest,
-    VectorStoreSemanticIgnition, compute_link_graph_saliency,
-    export_link_graph_compat_deployment_artifact_toml,
-    narrate_subgraph, parse_search_query, quantum_context_snapshot_id,
-    resolve_link_graph_index_runtime, resolve_link_graph_compat_deployment_artifact,
-    set_link_graph_config_home_override,
-    set_link_graph_wendao_config_override, valkey_quantum_context_snapshot_drop,
-    valkey_quantum_context_snapshot_get, valkey_quantum_context_snapshot_get_with_valkey,
-    valkey_quantum_context_snapshot_rollback, valkey_quantum_context_snapshot_rollback_with_valkey,
-    valkey_quantum_context_snapshot_save, valkey_quantum_context_snapshot_save_with_valkey,
-    valkey_saliency_decay_all, valkey_saliency_decay_all_with_valkey, valkey_saliency_del,
-    valkey_saliency_get, valkey_saliency_get_with_valkey, valkey_saliency_touch,
-    valkey_saliency_touch_with_valkey, valkey_suggested_link_decide,
-    valkey_suggested_link_decide_with_valkey, valkey_suggested_link_decisions_recent,
-    valkey_suggested_link_decisions_recent_with_valkey, valkey_suggested_link_log,
-    valkey_suggested_link_log_with_valkey, valkey_suggested_link_recent,
+    VectorStoreSemanticIgnition, compute_link_graph_saliency, narrate_subgraph, parse_search_query,
+    quantum_context_snapshot_id, resolve_link_graph_index_runtime,
+    set_link_graph_config_home_override, set_link_graph_wendao_config_override,
+    valkey_quantum_context_snapshot_drop, valkey_quantum_context_snapshot_get,
+    valkey_quantum_context_snapshot_get_with_valkey, valkey_quantum_context_snapshot_rollback,
+    valkey_quantum_context_snapshot_rollback_with_valkey, valkey_quantum_context_snapshot_save,
+    valkey_quantum_context_snapshot_save_with_valkey, valkey_saliency_decay_all,
+    valkey_saliency_decay_all_with_valkey, valkey_saliency_del, valkey_saliency_get,
+    valkey_saliency_get_with_valkey, valkey_saliency_touch, valkey_saliency_touch_with_valkey,
+    valkey_suggested_link_decide, valkey_suggested_link_decide_with_valkey,
+    valkey_suggested_link_decisions_recent, valkey_suggested_link_decisions_recent_with_valkey,
+    valkey_suggested_link_log, valkey_suggested_link_log_with_valkey, valkey_suggested_link_recent,
     valkey_suggested_link_recent_latest, valkey_suggested_link_recent_latest_with_valkey,
     valkey_suggested_link_recent_with_valkey,
 };

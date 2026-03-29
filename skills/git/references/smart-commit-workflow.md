@@ -25,16 +25,16 @@ Stage files      User approval
 
 ```python
 # Step 1: Start workflow (Tool stages & extracts diff)
-@omni("git.smart_commit", {"action": "start"})
+tool: `git.smart_commit` with `{"action": "start"}`
 
 # Step 2: LLM analyzes diff, generates message, user confirms
-@omni("git.smart_commit", {"action": "approve", "workflow_id": "abc123", "message": "refactor(core): ..."})
+tool: `git.smart_commit` with `{"action": "approve", "workflow_id": "abc123", "message": "refactor(core): ..."}`
 
 # Or reject
-@omni("git.smart_commit", {"action": "reject", "workflow_id": "abc123"})
+tool: `git.smart_commit` with `{"action": "reject", "workflow_id": "abc123"}`
 
 # Check status
-@omni("git.commit_status", {"workflow_id": "abc123"})
+tool: `git.commit_status` with `{"workflow_id": "abc123"}`
 ```
 
 ---
@@ -169,11 +169,11 @@ refactor(git): simplify smart commit workflow architecture
 After user confirms "Yes", call:
 ```
 
-@omni("git.smart_commit", {
+tool: `git.smart_commit` with {
 "action": "approve",
 "workflow_id": "a1b2c3",
 "message": "refactor(git): simplify smart commit workflow architecture\n\n- Simplified workflow..."
-})
+}
 
 ```
 
@@ -206,7 +206,7 @@ After user confirms "Yes", call:
 📅 Date: 2026-01-12 19:56:27
 📁 Files: 10 files changed
 
-🛡️ **Verified by**: omni Git Skill (cog)
+🛡️ **Verified by**: Git skill workflow
 🔒 **Security Detection**: No sensitive files detected
 ```
 

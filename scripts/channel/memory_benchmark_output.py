@@ -45,7 +45,7 @@ def build_json_payload(
             "max_idle_secs": config.max_idle_secs,
             "username": config.username,
             "skip_reset": config.skip_reset,
-            "fail_on_mcp_error": config.fail_on_mcp_error,
+            "fail_on_tool_error": config.fail_on_tool_error,
             "feedback_policy": config.feedback_policy,
             "feedback_down_threshold": config.feedback_down_threshold,
         },
@@ -92,10 +92,10 @@ def print_summary(
     print("\nBenchmark completed.", flush=True)
     print(f"JSON report: {config.output_json}", flush=True)
     print(f"Markdown report: {config.output_markdown}", flush=True)
-    total_mcp_error_turns = sum(summary.mcp_error_turns for summary in mode_summaries.values())
-    if total_mcp_error_turns > 0:
+    total_tool_error_turns = sum(summary.tool_error_turns for summary in mode_summaries.values())
+    if total_tool_error_turns > 0:
         print(
-            f"Observed MCP error interference on {total_mcp_error_turns} query turn(s).",
+            f"Observed tool runtime error interference on {total_tool_error_turns} query turn(s).",
             flush=True,
         )
     if comparison is not None:

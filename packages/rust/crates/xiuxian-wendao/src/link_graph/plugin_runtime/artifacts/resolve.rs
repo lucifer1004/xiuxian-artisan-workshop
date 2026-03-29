@@ -8,7 +8,10 @@ use xiuxian_wendao_runtime::artifacts::{
 
 /// Resolve one plugin artifact through the current runtime compatibility layer.
 #[must_use]
-pub fn resolve_plugin_artifact(plugin_id: &str, artifact_id: &str) -> Option<PluginArtifactPayload> {
+pub fn resolve_plugin_artifact(
+    plugin_id: &str,
+    artifact_id: &str,
+) -> Option<PluginArtifactPayload> {
     resolve_plugin_artifact_with(plugin_id, artifact_id, resolve_plugin_artifact_for_selector)
 }
 

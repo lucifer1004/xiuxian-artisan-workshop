@@ -12,14 +12,16 @@ metadata:
 
 ---
 
+> Archive note: the legacy Python package paths and old protocol-server lanes below are historical. Use the retained Rust and Python package test entrypoints that exist in the current tree.
+
 ## 1. Test Levels
 
 | Level           | Path                                                           | Scope                   | Command          | Timeout | Rules                               |
 | :-------------- | :------------------------------------------------------------- | :---------------------- | :--------------- | :------ | :---------------------------------- |
-| **Unit**        | `packages/python/agent/src/agent/tests/`                       | Single module           | `just test-unit` | < 30s   | Fast, no network/disk I/O           |
+| **Unit**        | `packages/python/*/tests/`, `packages/rust/crates/*/tests/`   | Single module           | `just test-unit` | < 30s   | Fast, no network/disk I/O           |
 | **Integration** | `tests/integration/`                                           | Module interaction      | `just test-int`  | < 2m    | Can touch DB/FS, mock external APIs |
 | **E2E**         | `tests/e2e/`                                                   | Full system             | `just test-e2e`  | < 10m   | CI only, real external services     |
-| **MCP**         | `packages/python/agent/src/agent/tests/test_phase13_skills.py` | MCP tools + Performance | `just test-mcp`  | < 60s   | Verify all tools work + benchmarks  |
+| **Tool Runtime**| Current tool/runtime slices                                   | Tool/runtime checks     | project-specific | < 60s   | Verify retained runtime surfaces    |
 
 ---
 
@@ -38,11 +40,11 @@ When running tests during development:
             ↓                               ↓
         SKIP TESTS              ┌───────────┴───────────┐
                                 ↓                       ↓
-                        Only mcp-server/            Other code
+                        Only tool-runtime/          Other code
                         changed?                    changes?
                             ↓                           ↓
-                    Run: just test-mcp          Run: just test
-                    (fast MCP tests)             (full test suite)
+                    Run: targeted tests         Run: just test
+                    (fast runtime slice)        (full test suite)
 ```
 
 ### Decision Matrix
@@ -50,8 +52,8 @@ When running tests during development:
 | Modified Files                 | Action              | Reason                     |
 | :----------------------------- | :------------------ | :------------------------- |
 | `docs/`, `agent/`, `*.md` only | **Skip tests**      | Docs don't affect code     |
-| `mcp-server/*.py`              | Run `just test-mcp` | Test MCP tools only        |
-| `tool-router/**`               | Run `just test-mcp` | Test routing only          |
+| `scripts/channel/**`           | Run targeted tests  | Test tool/runtime scripts  |
+| `tool-router/**`               | Run targeted tests  | Test routing only          |
 | `*.nix`, `devenv.nix`          | Run `just test`     | Infrastructure affects all |
 | Mixed (code + docs)            | Run `just test`     | Code changes need testing  |
 
@@ -63,23 +65,23 @@ When running tests during development:
 # Agent-friendly commands
 just test-unit      # Fast unit tests (< 30s)
 just test-int       # Integration tests (< 2m)
-just test-mcp       # MCP server tests + Performance benchmarks (< 60s)
+just test           # Full retained test surface
 just test           # All tests (devenv test)
 ```
 
 ---
 
-## 4. MCP Test Patterns
+## 4. Tool Runtime Test Patterns
 
 ### Async/Await Tests
 
-All MCP tool tests must use `pytest.mark.asyncio`:
+All async tool tests must use `pytest.mark.asyncio`:
 
 ```python
 @pytest.mark.asyncio
 async def test_omni_git_status(skill_manager):
     """Test omni tool with git.status command."""
-    from agent.mcp_server import omni
+    from runtime_entry import omni
 
     result = await omni("git.status")
     assert "Git Status" in result or "branch" in result
@@ -132,7 +134,7 @@ Tests for Image and Context capabilities:
 class TestMultimodalReturns:
     def test_image_creation(self):
         """Test creating an Image object."""
-        from mcp.server.fastmcp import Image
+        from some_tool_runtime import Image
         import base64
 
         png_data = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==")
@@ -143,7 +145,7 @@ class TestMultimodalReturns:
     async def test_context_progress_reporting(self):
         """Test Context.progress reporting."""
         from unittest.mock import MagicMock, AsyncMock
-        from mcp.server.fastmcp import Context
+        from some_tool_runtime import Context
 
         mock_ctx = MagicMock(spec=Context)
         mock_ctx.report_progress = AsyncMock()
@@ -161,10 +163,10 @@ Verify current architecture:
 ```python
 class TestArchitectureCompliance:
     def test_only_one_tool_registered(self):
-        """MCP server should only have ONE tool registered."""
-        from agent.mcp_server import mcp
+        """The runtime surface should expose the expected tool set."""
+        from runtime_entry import runtime
 
-        tools = list(mcp._tool_manager._tools.values())
+        tools = list(runtime._tool_manager._tools.values())
         assert len(tools) == 1
 
     def test_skill_manager_is_async(self):
@@ -205,15 +207,15 @@ class TestArchitectureCompliance:
 - Critical paths (orchestrator, coder) require tests
 - Performance benchmarks for async operations
 
-### MCP Tool Tests
+### Tool Runtime Tests
 
-Every new MCP tool must have tests in `test_phase13_skills.py`:
+Every new retained tool runtime path must have targeted tests in the owning package:
 
 ```python
 @pytest.mark.asyncio
 async def test_omni_dispatch_to_new_skill(skill_manager):
     """Test dispatch to new skill."""
-    from agent.mcp_server import omni
+    from runtime_entry import omni
 
     result = await omni("new_skill.command", {"arg": "value"})
     assert isinstance(result, str)
@@ -226,10 +228,10 @@ async def test_omni_dispatch_to_new_skill(skill_manager):
 In CI, always run the full suite:
 
 ```bash
-just test-unit && just test-int && just test-mcp
+just test-unit && just test-int && just test
 ```
 
-### MCP Test Output Example
+### Tool Runtime Test Output Example
 
 ```
 [Performance] SkillManager.run() avg: 12.34ms
@@ -244,7 +246,7 @@ just test-unit && just test-int && just test-mcp
 ## 8. Related Documentation
 
 - [Git Workflow](./git-workflow.md) - Commit protocols
-- [MCP Best Practices](../../docs/reference/mcp-best-practices.md) - MCP SDK patterns
+- Tool runtime and package-local test docs
 - Writing Style - Documentation standards
 
 ---

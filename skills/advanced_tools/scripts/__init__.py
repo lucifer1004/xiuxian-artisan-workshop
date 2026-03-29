@@ -8,7 +8,7 @@ Commands organized by responsibility:
 Philosophy:
 - Modern Rust-based tools for performance
 - Zero config: Environment PATH is the source of truth
-- Security: All operations constrained to ConfigPaths.project_root
+- Security: All operations constrained to the resolved project root
 """
 
 # Re-export all commands for skill loader

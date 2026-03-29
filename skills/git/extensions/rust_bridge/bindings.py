@@ -1,12 +1,13 @@
-"""bindings.py - Rust Bindings Isolation Layer.
+"""bindings.py - Rust bindings isolation layer.
 
-Safely imports Rust bindings from omni.foundation.
-Handles ImportError gracefully without crashing the Skill.
+The historical Python bridge for Rust git sniffers has been removed from the
+retained runtime surface. This module keeps a graceful no-op fallback so the
+skill extension layer can remain importable without hard-failing.
 """
 
 import logging
 
-logger = logging.getLogger("omni.skill.git.ext.rust.bindings")
+logger = logging.getLogger("xiuxian.skill.git.ext.rust.bindings")
 
 
 class RustBindings:
@@ -40,15 +41,11 @@ class RustBindings:
 
     @classmethod
     def _try_import(cls):
-        """Attempt to import Rust bindings."""
+        """Attempt to import retained Rust bindings if they exist."""
         cls._checked = True
         try:
-            # Import from omni.foundation bridge layer
-            from omni.foundation.bridge.rust_impl import RustGitSniffer
-
-            cls._instance = RustGitSniffer
-            cls._available = True
-            logger.debug("Rust bindings linked successfully")
+            # No retained Python Rust sniffer bridge currently exists.
+            raise ImportError("retained Python Rust sniffer bridge is not available")
 
         except ImportError as e:
             cls._error_msg = f"Rust bindings not available: {e}"

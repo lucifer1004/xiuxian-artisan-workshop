@@ -5,8 +5,7 @@ Provides thread-safe global access to the narrowed Python compatibility services
 Usage:
     from xiuxian_core.runtime.services import get_librarian
 
-    @skill_command(...)
-    async def my_skill():
+    async def my_cli_entrypoint():
         librarian = get_librarian()
         if librarian:
             results = librarian.query("...")

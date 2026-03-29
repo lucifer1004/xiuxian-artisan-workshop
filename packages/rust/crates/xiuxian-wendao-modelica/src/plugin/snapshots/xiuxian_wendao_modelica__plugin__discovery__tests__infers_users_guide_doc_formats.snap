@@ -5,113 +5,113 @@ expression: payload
 ---
 [
   {
-    "path": "Controllers/UsersGuide/package.mo",
+    "annotation_format": "modelica_users_guide_page_annotation",
     "file_format": "modelica_users_guide_page",
-    "annotation_format": "modelica_users_guide_page_annotation"
+    "path": "Controllers/UsersGuide/package.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Conventions.mo",
+    "annotation_format": "modelica_users_guide_conventions_annotation",
     "file_format": "modelica_users_guide_conventions",
-    "annotation_format": "modelica_users_guide_conventions_annotation"
+    "path": "Controllers/UsersGuide/Conventions.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Connectors.mo",
+    "annotation_format": "modelica_users_guide_connectors_annotation",
     "file_format": "modelica_users_guide_connectors",
-    "annotation_format": "modelica_users_guide_connectors_annotation"
+    "path": "Controllers/UsersGuide/Connectors.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Implementation.mo",
+    "annotation_format": "modelica_users_guide_implementation_annotation",
     "file_format": "modelica_users_guide_implementation",
-    "annotation_format": "modelica_users_guide_implementation_annotation"
+    "path": "Controllers/UsersGuide/Implementation.mo"
   },
   {
-    "path": "Controllers/UsersGuide/RevisionHistory.mo",
+    "annotation_format": "modelica_users_guide_revision_history_annotation",
     "file_format": "modelica_users_guide_revision_history",
-    "annotation_format": "modelica_users_guide_revision_history_annotation"
+    "path": "Controllers/UsersGuide/RevisionHistory.mo"
   },
   {
-    "path": "Controllers/UsersGuide/VersionManagement.mo",
+    "annotation_format": "modelica_users_guide_version_management_annotation",
     "file_format": "modelica_users_guide_version_management",
-    "annotation_format": "modelica_users_guide_version_management_annotation"
+    "path": "Controllers/UsersGuide/VersionManagement.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Tutorial/package.mo",
+    "annotation_format": "modelica_users_guide_tutorial_annotation",
     "file_format": "modelica_users_guide_tutorial",
-    "annotation_format": "modelica_users_guide_tutorial_annotation"
+    "path": "Controllers/UsersGuide/Tutorial/package.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Tutorial/FirstSteps.mo",
+    "annotation_format": "modelica_users_guide_tutorial_annotation",
     "file_format": "modelica_users_guide_tutorial",
-    "annotation_format": "modelica_users_guide_tutorial_annotation"
+    "path": "Controllers/UsersGuide/Tutorial/FirstSteps.mo"
   },
   {
-    "path": "Controllers/UsersGuide/ReleaseNotes.mo",
+    "annotation_format": "modelica_users_guide_release_notes_annotation",
     "file_format": "modelica_users_guide_release_notes",
-    "annotation_format": "modelica_users_guide_release_notes_annotation"
+    "path": "Controllers/UsersGuide/ReleaseNotes.mo"
   },
   {
-    "path": "Controllers/UsersGuide/References.mo",
+    "annotation_format": "modelica_users_guide_reference_annotation",
     "file_format": "modelica_users_guide_reference",
-    "annotation_format": "modelica_users_guide_reference_annotation"
+    "path": "Controllers/UsersGuide/References.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Contact.mo",
+    "annotation_format": "modelica_users_guide_contact_annotation",
     "file_format": "modelica_users_guide_contact",
-    "annotation_format": "modelica_users_guide_contact_annotation"
+    "path": "Controllers/UsersGuide/Contact.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Concept.mo",
+    "annotation_format": "modelica_users_guide_concept_annotation",
     "file_format": "modelica_users_guide_concept",
-    "annotation_format": "modelica_users_guide_concept_annotation"
+    "path": "Controllers/UsersGuide/Concept.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Parameters.mo",
+    "annotation_format": "modelica_users_guide_parameter_annotation",
     "file_format": "modelica_users_guide_parameter",
-    "annotation_format": "modelica_users_guide_parameter_annotation"
+    "path": "Controllers/UsersGuide/Parameters.mo"
   },
   {
-    "path": "UsersGuide/Overview.mo",
+    "annotation_format": "modelica_users_guide_overview_annotation",
     "file_format": "modelica_users_guide_overview",
-    "annotation_format": "modelica_users_guide_overview_annotation"
+    "path": "UsersGuide/Overview.mo"
   },
   {
-    "path": "UsersGuide/Conventions.mo",
+    "annotation_format": "modelica_users_guide_conventions_annotation",
     "file_format": "modelica_users_guide_conventions",
-    "annotation_format": "modelica_users_guide_conventions_annotation"
+    "path": "UsersGuide/Conventions.mo"
   },
   {
-    "path": "UsersGuide/Connectors.mo",
+    "annotation_format": "modelica_users_guide_connectors_annotation",
     "file_format": "modelica_users_guide_connectors",
-    "annotation_format": "modelica_users_guide_connectors_annotation"
+    "path": "UsersGuide/Connectors.mo"
   },
   {
-    "path": "UsersGuide/Implementation.mo",
+    "annotation_format": "modelica_users_guide_implementation_annotation",
     "file_format": "modelica_users_guide_implementation",
-    "annotation_format": "modelica_users_guide_implementation_annotation"
+    "path": "UsersGuide/Implementation.mo"
   },
   {
-    "path": "UsersGuide/RevisionHistory.mo",
+    "annotation_format": "modelica_users_guide_revision_history_annotation",
     "file_format": "modelica_users_guide_revision_history",
-    "annotation_format": "modelica_users_guide_revision_history_annotation"
+    "path": "UsersGuide/RevisionHistory.mo"
   },
   {
-    "path": "UsersGuide/VersionManagement.mo",
+    "annotation_format": "modelica_users_guide_version_management_annotation",
     "file_format": "modelica_users_guide_version_management",
-    "annotation_format": "modelica_users_guide_version_management_annotation"
+    "path": "UsersGuide/VersionManagement.mo"
   },
   {
-    "path": "UsersGuide/Literature.mo",
+    "annotation_format": "modelica_users_guide_reference_annotation",
     "file_format": "modelica_users_guide_reference",
-    "annotation_format": "modelica_users_guide_reference_annotation"
+    "path": "UsersGuide/Literature.mo"
   },
   {
-    "path": "UsersGuide/Glossar.mo",
+    "annotation_format": "modelica_users_guide_glossary_annotation",
     "file_format": "modelica_users_guide_glossary",
-    "annotation_format": "modelica_users_guide_glossary_annotation"
+    "path": "UsersGuide/Glossar.mo"
   },
   {
-    "path": "UsersGuide/Parameterization.mo",
+    "annotation_format": "modelica_users_guide_parameter_annotation",
     "file_format": "modelica_users_guide_parameter",
-    "annotation_format": "modelica_users_guide_parameter_annotation"
+    "path": "UsersGuide/Parameterization.mo"
   }
 ]

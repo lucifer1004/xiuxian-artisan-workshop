@@ -228,7 +228,7 @@ Current implementation status:
    no longer blocked by host-side source embedding
 6. `xiuxian-wendao-julia::compatibility::link_graph` now owns the Julia
    plugin selector ids/helpers, `LinkGraphJuliaAnalyzerServiceDescriptor`,
-    `LinkGraphJuliaAnalyzerLaunchManifest`,
+   `LinkGraphJuliaAnalyzerLaunchManifest`,
    `LinkGraphJuliaDeploymentArtifact`, the Julia CLI-arg mapping for analyzer
    launch, and the conversion boundary between those Julia DTOs and
    `PluginLaunchSpec` / `PluginArtifactPayload`

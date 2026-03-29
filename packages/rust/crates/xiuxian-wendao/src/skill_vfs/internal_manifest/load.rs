@@ -32,7 +32,7 @@ pub fn load_internal_skill_manifest_from_path(
             field: "manifest_id".to_string(),
         })?;
 
-    let contract_raw = parsed.mcp_contract.as_ref().or(parsed.contract.as_ref());
+    let contract_raw = parsed.tool_contract.as_ref().or(parsed.contract.as_ref());
     let tool_name = parsed
         .tool_name
         .clone()

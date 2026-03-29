@@ -36,7 +36,7 @@ class _Summary:
     avg_k2: float = 3.0
     avg_lambda: float = 0.4
     avg_recall_feedback_bias: float = 0.1
-    mcp_error_turns: int = 0
+    tool_error_turns: int = 0
     embedding_fallback_turns_total: int = 1
 
 

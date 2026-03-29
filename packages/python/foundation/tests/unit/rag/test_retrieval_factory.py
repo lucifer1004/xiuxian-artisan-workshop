@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from xiuxian_rag import create_retrieval_backend
+from xiuxian_rag.retrieval.factory import create_retrieval_backend
 
 
 @pytest.mark.parametrize("kind", ["lance", "hybrid", "lancedb", "vector", "unknown"])

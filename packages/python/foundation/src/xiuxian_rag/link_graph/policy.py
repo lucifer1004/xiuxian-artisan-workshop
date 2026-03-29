@@ -24,6 +24,7 @@ from xiuxian_foundation.config.link_graph_runtime import (
     get_link_graph_retrieval_mode,
 )
 from xiuxian_foundation.config.settings import get_setting
+
 if TYPE_CHECKING:
     from .models import LinkGraphHit
 

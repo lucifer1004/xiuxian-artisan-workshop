@@ -43,8 +43,8 @@ resolve_valkey_field() {
   uv run python "${PROJECT_ROOT}/scripts/channel/resolve_valkey_endpoint.py" --field "$1"
 }
 
-resolve_mcp_field() {
-  uv run python "${PROJECT_ROOT}/scripts/channel/resolve_mcp_endpoint.py" --field "$1"
+resolve_tool_field() {
+  uv run python "${PROJECT_ROOT}/scripts/channel/resolve_tool_endpoint.py" --field "$1"
 }
 
 resolve_prj_cache_home() {
@@ -148,7 +148,7 @@ configure_vision_quantized_requirement() {
   fi
 }
 
-LOCAL_HOST_DEFAULT="${XIUXIAN_WENDAO_LOCAL_HOST:-${LOCAL_HOST_DEFAULT:-$(resolve_mcp_field host)}}"
+LOCAL_HOST_DEFAULT="${XIUXIAN_WENDAO_LOCAL_HOST:-${LOCAL_HOST_DEFAULT:-$(resolve_tool_field host)}}"
 DEFAULT_TELEGRAM_WEBHOOK_PORT="${XIUXIAN_WENDAO_TELEGRAM_WEBHOOK_PORT:-18081}"
 DEFAULT_DISCORD_INGRESS_PORT="${XIUXIAN_WENDAO_DISCORD_INGRESS_PORT:-18082}"
 DEFAULT_DISCORD_INGRESS_PATH="${XIUXIAN_WENDAO_DISCORD_INGRESS_PATH:-/discord/ingress}"

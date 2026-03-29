@@ -1,6 +1,6 @@
-//! MCP client: full protocol handshake and tool calls.
+//! Tool runtime client: full protocol handshake and tool calls.
 //!
-//! **Protocol (MCP spec, same as codex-rs):**
+//! **Protocol (tool runtime over rmcp, same as codex-rs):**
 //! 1. Build transport (Streamable HTTP or stdio via `rmcp`).
 //! 2. `serve_client(init_params, transport)` runs the handshake:
 //!    - Client sends `initialize` request (JSON-RPC) with protocolVersion, capabilities, clientInfo.
@@ -8,7 +8,7 @@
 //!    - Client sends `notifications/initialized` (no id); server must respond **202 Accepted**.
 //! 3. After handshake, use `list_tools` and `call_tool` on the running service.
 //!
-//! Reference: [MCP Streamable HTTP](https://spec.modelcontextprotocol.io/specification/2025-06-18/server/streamableHTTP/),
+//! Reference: [Streamable HTTP](https://spec.modelcontextprotocol.io/specification/2025-06-18/server/streamableHTTP/),
 //! codex-rs `rmcp-client` (`serve_client` + `RunningService`).
 
 use std::sync::Arc;
@@ -26,12 +26,10 @@ use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig
 use tokio::process::Command;
 use tokio::sync::Mutex;
 
-use crate::config::McpServerTransportConfig;
-
-/// Build init params for the omni Python MCP server (protocol 2025-06-18).
-/// Use this when connecting to `omni mcp --transport sse` so protocol version matches server support.
+/// Build init params for the omni Python tool server (protocol 2025-06-18).
+/// Use this when connecting to the retained streamable HTTP tool endpoint.
 #[must_use]
-pub fn init_params_omni_server() -> InitializeRequestParams {
+pub fn init_params_tool_server() -> InitializeRequestParams {
     InitializeRequestParams {
         meta: None,
         protocol_version: ProtocolVersion::V_2025_06_18,
@@ -48,25 +46,16 @@ enum ClientState {
     },
 }
 
-/// MCP client: one server. Initialize once, then `list_tools` / `call_tool`.
-pub struct OmniMcpClient {
+/// Tool client: one server. Initialize once, then `list_tools` / `call_tool`.
+pub struct OmniToolClient {
     state: Mutex<ClientState>,
 }
 
-impl OmniMcpClient {
-    /// Create client from transport config. Call `initialize` before `list_tools`/`call_tool`.
-    #[must_use]
-    pub fn from_config(_transport: &McpServerTransportConfig) -> Self {
-        // Build transport in `connect_*`; for now constructors return an uninitialized client.
-        Self {
-            state: Mutex::new(ClientState::Connecting),
-        }
-    }
-
-    /// Connect via Streamable HTTP (e.g. `http://127.0.0.1:3000` for our Python MCP SSE).
+impl OmniToolClient {
+    /// Connect via Streamable HTTP.
     ///
     /// # Errors
-    /// Returns an error if the HTTP client cannot be built, the MCP handshake times out,
+    /// Returns an error if the HTTP client cannot be built, the tool handshake times out,
     /// or the server rejects initialization.
     pub async fn connect_streamable_http(
         url: &str,
@@ -81,11 +70,11 @@ impl OmniMcpClient {
         let service = match timeout {
             Some(d) => tokio::time::timeout(d, serve_client(init_params, transport))
                 .await
-                .map_err(|_| anyhow::anyhow!("MCP handshake timeout"))?
-                .map_err(|e| anyhow::anyhow!("MCP handshake: {e}"))?,
+                .map_err(|_| anyhow::anyhow!("tool handshake timeout"))?
+                .map_err(|e| anyhow::anyhow!("tool handshake: {e}"))?,
             None => serve_client(init_params, transport)
                 .await
-                .map_err(|e| anyhow::anyhow!("MCP handshake: {e}"))?,
+                .map_err(|e| anyhow::anyhow!("tool handshake: {e}"))?,
         };
         Ok(Self {
             state: Mutex::new(ClientState::Ready {
@@ -94,10 +83,10 @@ impl OmniMcpClient {
         })
     }
 
-    /// Connect via stdio: spawn command, stdin/stdout = MCP.
+    /// Connect via stdio: spawn command, stdin/stdout = tool runtime stream.
     ///
     /// # Errors
-    /// Returns an error if spawning the MCP subprocess fails, the handshake times out,
+    /// Returns an error if spawning the subprocess fails, the handshake times out,
     /// or the server rejects initialization.
     pub async fn connect_stdio(
         command: &str,
@@ -111,15 +100,15 @@ impl OmniMcpClient {
             .stdout(std::process::Stdio::piped());
         let (transport, _stderr) = TokioChildProcess::builder(cmd)
             .spawn()
-            .map_err(|e| anyhow::anyhow!("spawn MCP process: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("spawn tool process: {e}"))?;
         let service = match timeout {
             Some(d) => tokio::time::timeout(d, serve_client(init_params, transport))
                 .await
-                .map_err(|_| anyhow::anyhow!("MCP handshake timeout"))?
-                .map_err(|e| anyhow::anyhow!("MCP handshake: {e}"))?,
+                .map_err(|_| anyhow::anyhow!("tool handshake timeout"))?
+                .map_err(|e| anyhow::anyhow!("tool handshake: {e}"))?,
             None => serve_client(init_params, transport)
                 .await
-                .map_err(|e| anyhow::anyhow!("MCP handshake: {e}"))?,
+                .map_err(|e| anyhow::anyhow!("tool handshake: {e}"))?,
         };
         Ok(Self {
             state: Mutex::new(ClientState::Ready {
@@ -128,7 +117,7 @@ impl OmniMcpClient {
         })
     }
 
-    /// List tools from the MCP server.
+    /// List tools from the tool server.
     ///
     /// # Errors
     /// Returns an error if the client has not connected yet or if the server fails `tools/list`.
@@ -141,7 +130,7 @@ impl OmniMcpClient {
             match &*guard {
                 ClientState::Ready { service } => Arc::clone(service),
                 ClientState::Connecting => {
-                    return Err(anyhow::anyhow!("MCP client not initialized"));
+                    return Err(anyhow::anyhow!("tool client not initialized"));
                 }
             }
         };
@@ -165,7 +154,7 @@ impl OmniMcpClient {
             match &*guard {
                 ClientState::Ready { service } => Arc::clone(service),
                 ClientState::Connecting => {
-                    return Err(anyhow::anyhow!("MCP client not initialized"));
+                    return Err(anyhow::anyhow!("tool client not initialized"));
                 }
             }
         };

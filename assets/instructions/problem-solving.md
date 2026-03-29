@@ -81,7 +81,7 @@ CONCLUSION: The rule must be self-enforcing by structure, not by meta-rule
 **The Solution: Atomic Design**
 
 ```
-WRONG: Rule says "use MCP tools" + Meta-rule says "don't use bash"
+WRONG: Rule says "use tool runtime helpers" + Meta-rule says "don't use bash"
           ↑ This is a meta-rule that could also be bypassed
 
 RIGHT: The execution ITSELF is authorization (single-path principle)
@@ -170,7 +170,7 @@ CLAIM: "Authorization = Execution prevents bypass"
 TEST: What if LLM tries to bypass?
       → run_task("bash", "git commit...") → Blocked
       → run_task("git", ["commit"...]) → Blocked
-      → Direct subprocess → Not possible via MCP tools
+      → Direct subprocess → Not possible via tool-runtime helpers
 
 COUNTERFACTUAL: Is there ANY way to execute commit without token?
                 → NO
@@ -285,7 +285,7 @@ If you find yourself thinking:
 - "What if I call just directly?"
 - "Maybe bash can do this..."
 
-**STOP. The only path is the MCP tool path.**
+**STOP. The only path is the tool-runtime path.**
 
 ### Pattern: Atomic Authorization
 
@@ -317,7 +317,7 @@ There is NO step between 4 and 5 where you could "do something else"
 
 | Wrong Thought                   | Why                                         |
 | ------------------------------- | ------------------------------------------- |
-| "I'll try run_task instead"     | No - only MCP tools can execute             |
+| "I'll try run_task instead"     | No - only tool-runtime helpers can execute  |
 | "Can I use bash?"               | No - bash is blocked for commits            |
 | "What if I just..."             | No - only one path exists                   |
 | "User said 'ok', that means go" | No - only exact phrase counts               |
@@ -327,11 +327,11 @@ There is NO step between 4 and 5 where you could "do something else"
 
 When you think about executing a protected operation, ask:
 
-1. **Am I using the MCP tool?** → If no, STOP
+1. **Am I using the tool-runtime helper?** → If no, STOP
 2. **Is this the only path?** → If you're looking for alternatives, STOP
 3. **Is the token from the SAME tool?** → Must be `smart_commit` → `execute_authorized_commit`
 
-**If any answer is "no" → STOP. Use the MCP tool path.**
+**If any answer is "no" → STOP. Use the tool-runtime path.**
 
 ---
 

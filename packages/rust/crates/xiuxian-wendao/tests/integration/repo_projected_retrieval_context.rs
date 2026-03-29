@@ -1,9 +1,6 @@
 //! Integration tests for deterministic mixed projected retrieval context.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
-
-use repo_test_support::{assert_repo_json_snapshot, sample_projection_analysis};
+use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     ProjectedPageIndexNode, RepoProjectedPageIndexTreesQuery, RepoProjectedPagesQuery,

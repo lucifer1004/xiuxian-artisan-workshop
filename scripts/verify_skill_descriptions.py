@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 scripts/verify_skill_descriptions.py
-Verify skill command descriptions meet MCP standards.
+Verify skill command descriptions meet retained runtime standards.
 
 This script analyzes all skill scripts and verifies that:
 1. Each @skill_command has an explicit description= parameter

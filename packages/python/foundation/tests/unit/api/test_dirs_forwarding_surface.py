@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from importlib.util import find_spec
 
-from xiuxian_foundation.config import prj
-from xiuxian_foundation.config import dirs as dirs_mod
+import xiuxian_foundation.config.dirs as dirs_mod
+import xiuxian_foundation.config.prj as prj
 
 
 def test_dirs_forwards_prj_symbols() -> None:
@@ -29,3 +29,10 @@ def test_dirs_no_longer_forward_removed_symbols() -> None:
     assert not hasattr(dirs_mod, "get_memory_db_path")
     assert not hasattr(dirs_mod, "get_harvest_dir")
     assert not hasattr(dirs_mod, "get_harvest_file")
+
+
+def test_config_package_no_longer_re_exports_dirs_or_prj() -> None:
+    import xiuxian_foundation.config as config_pkg
+
+    for name in ("PRJ_DIRS", "get_prj_dir", "get_setting", "get_settings"):
+        assert not hasattr(config_pkg, name)

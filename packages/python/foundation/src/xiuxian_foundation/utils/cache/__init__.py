@@ -11,7 +11,7 @@ Modules:
 - repomix_cache.py: RepomixCache for LLM context
 
 Usage:
-    from mcp_core.lazy_cache import FileCache, MarkdownCache, ConfigCache
+    from xiuxian_foundation.utils.cache import FileCache, MarkdownCache, ConfigCache
 
     # File content caching
     cache = FileCache(Path("path/to/file.txt"))
@@ -26,7 +26,7 @@ Usage:
     config = config_cache.get()
 
     # Repomix context caching for skills
-    from mcp_core.lazy_cache import RepomixCache
+    from xiuxian_foundation.utils.cache import RepomixCache
     repomix = RepomixCache(target_path=skill_dir)
     xml = repomix.get()
 """

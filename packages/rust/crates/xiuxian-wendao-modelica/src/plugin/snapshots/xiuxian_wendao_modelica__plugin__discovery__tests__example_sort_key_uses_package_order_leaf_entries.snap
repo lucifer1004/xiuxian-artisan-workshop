@@ -5,7 +5,6 @@ expression: payload
 ---
 [
   {
-    "path": "Controllers/Examples/Step.mo",
     "key": [
       [
         0,
@@ -23,10 +22,10 @@ expression: payload
         0,
         "Step"
       ]
-    ]
+    ],
+    "path": "Controllers/Examples/Step.mo"
   },
   {
-    "path": "Controllers/Examples/Alpha.mo",
     "key": [
       [
         0,
@@ -44,6 +43,7 @@ expression: payload
         1,
         "Alpha"
       ]
-    ]
+    ],
+    "path": "Controllers/Examples/Alpha.mo"
   }
 ]

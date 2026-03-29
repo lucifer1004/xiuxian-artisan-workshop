@@ -22,7 +22,7 @@ def compare_mode_summaries(baseline: Any, adaptive: Any) -> dict[str, float]:
         "avg_best_score_delta": adaptive.avg_best_score - baseline.avg_best_score,
         "avg_recall_feedback_bias_delta": adaptive.avg_recall_feedback_bias
         - baseline.avg_recall_feedback_bias,
-        "mcp_error_turns_delta": float(adaptive.mcp_error_turns - baseline.mcp_error_turns),
+        "tool_error_turns_delta": float(adaptive.tool_error_turns - baseline.tool_error_turns),
         "embedding_timeout_fallback_turns_delta": float(
             adaptive.embedding_timeout_fallback_turns - baseline.embedding_timeout_fallback_turns
         ),

@@ -12,4 +12,3 @@ pub enum PluginTransportKind {
     /// Local process invocation with Arrow IPC exchange.
     LocalProcessArrowIpc,
 }
-

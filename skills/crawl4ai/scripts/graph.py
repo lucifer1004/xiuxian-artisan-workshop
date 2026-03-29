@@ -3,9 +3,9 @@
 graph.py - Skeleton Extraction Utilities for crawl4ai
 
 This module provides utilities for extracting document skeleton (TOC) from markdown.
-Used by crawl_url.py in the main MCP environment.
+Used by crawl_url.py in the main tool runtime environment.
 
-Note: This module runs in the main MCP environment with native workflow support.
+Note: This module runs in the main tool runtime environment with native workflow support.
 """
 
 from typing import Any, TypedDict

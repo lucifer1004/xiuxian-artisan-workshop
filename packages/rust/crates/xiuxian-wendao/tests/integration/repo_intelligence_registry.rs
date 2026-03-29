@@ -1,10 +1,8 @@
 //! Integration tests for Repo Intelligence plugin registry behavior.
 
-#[path = "../support/repo_fixture.rs"]
-mod repo_fixture;
-
 use std::fs;
 
+use crate::support::repo_fixture;
 use xiuxian_wendao::analyzers::{
     AnalysisContext, PluginAnalysisOutput, PluginLinkContext, PluginRegistry, RegisteredRepository,
     RelationRecord, RepoIntelligenceError, RepoIntelligencePlugin, RepoOverviewQuery,

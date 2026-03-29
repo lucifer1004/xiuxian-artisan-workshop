@@ -4,10 +4,7 @@ use serde_json::{Value, json};
 use xiuxian_zhenfa::{INTERNAL_ERROR_CODE, JsonRpcErrorObject};
 
 use super::models::{WendaoSearchRequest, WendaoSearchResponseFormat};
-use super::native::{
-    WendaoCompatDeploymentArtifactArgs, WendaoPluginArtifactArgs,
-    export_compat_deployment_artifact, export_plugin_artifact,
-};
+use super::native::{WendaoPluginArtifactArgs, export_plugin_artifact};
 use crate::link_graph::{LinkGraphIndex, LinkGraphPlannedSearchPayload};
 
 pub(super) const DEFAULT_SEARCH_LIMIT: usize = 20;
@@ -45,29 +42,6 @@ pub fn export_plugin_artifact_from_rpc_params(params: Value) -> Result<String, J
         JsonRpcErrorObject::new(
             INTERNAL_ERROR_CODE,
             "wendao plugin artifact export failed",
-            Some(json!({ "details": error.to_string() })),
-        )
-    })
-}
-
-/// Execute `wendao.compat_deployment_artifact` from JSON-RPC parameters.
-///
-/// # Errors
-/// Returns JSON-RPC error payloads when params are invalid or export fails.
-pub fn export_compat_deployment_artifact_from_rpc_params(
-    params: Value,
-) -> Result<String, JsonRpcErrorObject> {
-    let request: WendaoCompatDeploymentArtifactArgs =
-        serde_json::from_value(params).map_err(|error| {
-            JsonRpcErrorObject::invalid_params(format!(
-                "invalid wendao.compat_deployment_artifact params: {error}"
-            ))
-        })?;
-
-    export_compat_deployment_artifact(request).map_err(|error: xiuxian_zhenfa::ZhenfaError| {
-        JsonRpcErrorObject::new(
-            INTERNAL_ERROR_CODE,
-            "wendao compatibility deployment artifact export failed",
             Some(json!({ "details": error.to_string() })),
         )
     })

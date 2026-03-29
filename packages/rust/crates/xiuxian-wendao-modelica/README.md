@@ -27,6 +27,12 @@ Current scope:
 
 Current parser strategy is intentionally conservative. It relies on filesystem layout plus simple declaration scanning for `.mo` files and avoids claiming full Modelica semantic completeness.
 
+Current dependency boundary is now explicit:
+
+- production contracts come from `xiuxian-wendao-core::repo_intelligence`
+- `xiuxian-wendao` consumes this crate through a normal optional Cargo dependency instead of sibling-source inclusion
+- registry-aware integration-query validation still uses `xiuxian-wendao` as a dev-dependency only
+
 Package-local tracking docs now live under [docs/index.md](/Users/guangtao/projects/xiuxian-artisan-workshop/packages/rust/crates/xiuxian-wendao-modelica/docs/index.md), mirroring the higher-level `xiuxian-wendao/docs` structure so Modelica-specific architecture, feature notes, research notes, and roadmap progress can evolve independently. The first split is now explicit:
 
 - `docs/01_core/` for extension-boundary and package architecture notes

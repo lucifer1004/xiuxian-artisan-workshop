@@ -28,7 +28,7 @@ cli:
 # =============================================================================
 # Filter Commands (Pattern Matching)
 # =============================================================================
-# Use glob patterns to hide tools from the LLM (MCP Server).
+# Use glob patterns to hide tools from the LLM-facing tool runtime surface.
 # Syntax:
 #   "pattern"   -> Filter matching commands
 #   "!pattern"  -> Whitelist (Keep these even if they match a filter)
@@ -69,7 +69,7 @@ limits:
 # Skill Architecture Standards (ODF-EP v7.0)
 # =============================================================================
 # Defines the canonical structure for all Omni skills.
-# Aligned with Anthropic's Skill Standard but extended for Omni's MCP features.
+# Aligned with Anthropic's Skill Standard but extended for the retained tool/runtime surface.
 # Used by StructureValidator to enforce skill structure integrity.
 
 architecture:

@@ -1,6 +1,6 @@
 [project]
 name = "xiuxian-artisan-workshop"
-description = "Tri-MCP Agentic OS: orchestrator + executor + coder"
+description = "Native agentic OS kernel: orchestrator, executor, and tool runtime"
 readme = "README.md"
 requires-python = ">=3.13"
 dynamic = ["version"]
@@ -18,7 +18,6 @@ dev = [
     "xiuxian-wendao-py",
     "xiuxian-foundation",
     "xiuxian-core",
-    "xiuxian-test-kit",
     "polyfactory>=3.2.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0,<2.0",
@@ -50,7 +49,6 @@ source = "vcs"
 xiuxian-wendao-py = { workspace = true }
 xiuxian-foundation = { workspace = true }
 xiuxian-core = { workspace = true }
-xiuxian-test-kit = { workspace = true }
 raganything = { git = "https://github.com/HKUDS/RAG-Anything.git" }
 
 
@@ -58,7 +56,6 @@ raganything = { git = "https://github.com/HKUDS/RAG-Anything.git" }
 members = [
     "packages/python/core",
     "packages/python/foundation",
-    "packages/python/test-kit",
     "packages/python/xiuxian-wendao-py",
 ]
 
@@ -99,7 +96,6 @@ known-first-party = [
     "xiuxian_core",
     "xiuxian_foundation",
     "xiuxian_rag",
-    "xiuxian_test_kit",
     "xiuxian_tracer",
     "xiuxian_wendao_py",
 ]
@@ -138,8 +134,9 @@ addopts = [
 testpaths = [
     "packages/python/core/tests",
     "packages/python/foundation/tests",
-    "packages/python/test-kit/tests",
     "packages/python/xiuxian-wendao-py/tests",
+    "scripts/channel",
+    "scripts/tests",
     "assets/skills",
 ]
 python_files = ["test_*.py"]
@@ -154,15 +151,18 @@ filterwarnings = [
     "ignore:enable_cleanup_closed ignored because .* is fixed in Python version.*:DeprecationWarning:aiohttp.connector",
     # Ignore benchmark disabled warning when running in parallel (xdist)
     "ignore:Benchmarks are automatically disabled:pytest_benchmark.logger.PytestBenchmarkWarning",
-    "ignore:Module already imported so cannot be rewritten; xiuxian_test_kit\\.fixtures:pytest.PytestAssertRewriteWarning",
 ]
 norecursedirs = ["stress_tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "architecture: marks architecture guardrail tests",
+    "unit: marks fast isolated tests",
+    "integration: marks tests with multiple real components",
+    "cloud: marks tests requiring external services",
     "benchmark: marks tests as performance benchmarks (requires pytest-benchmark)",
-    "xiuxian_skill: mark tests for a specific Omni skill",
-    "xiuxian_data_driven: mark tests for data-driven execution with Omni test-kit",
+    "stress: marks long-running or resource-intensive tests",
+    "e2e: marks end-to-end workflow tests",
+    "project_skill: mark tests for a specific retained project skill",
 ]
 
 # Coverage configuration for package sources
@@ -171,7 +171,6 @@ source = [
     "xiuxian_core",
     "xiuxian_foundation",
     "xiuxian_rag",
-    "xiuxian_test_kit",
     "xiuxian_tracer",
     "xiuxian_wendao_py",
 ]
@@ -197,7 +196,7 @@ precision = 1
 show_missing = true
 
 [tool.coverage.html]
-title = "Omni Dev Fusion - Test Coverage Report"
+title = "Xiuxian Artisan Workshop - Test Coverage Report"
 
 
 [tool.vulture]

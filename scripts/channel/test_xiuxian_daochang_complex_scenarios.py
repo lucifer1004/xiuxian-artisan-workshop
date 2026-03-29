@@ -35,7 +35,7 @@ DEFAULT_MAX_IDLE_SECS = int(os.environ.get("OMNI_BLACKBOX_MAX_IDLE_SECS", "30"))
 DEFAULT_LOG_FILE = os.environ.get("OMNI_CHANNEL_LOG_FILE", ".run/logs/xiuxian-daochang-webhook.log")
 
 DEFAULT_FORBID_LOG_REGEXES = (
-    "tools/call: Mcp error",
+    "tools/call: Tool runtime error",
     "Telegram sendMessage failed",
 )
 
@@ -162,7 +162,7 @@ evaluate_quality = _EVALUATION.evaluate_quality
 run_cmd = _EXECUTION.run_cmd
 extract_bot_excerpt = _EXECUTION.extract_bot_excerpt
 detect_memory_event_flags = _EXECUTION.detect_memory_event_flags
-extract_memory_metrics, extract_mcp_metrics = (
+extract_memory_metrics, extract_tool_metrics = (
     _MODULES.signal_bindings_module.build_signal_extractors(
         execution_module=_EXECUTION,
         regex_module=re,
@@ -190,7 +190,7 @@ def run_step(
         run_cmd_fn=run_cmd,
         detect_memory_event_flags_fn=detect_memory_event_flags,
         extract_memory_metrics_fn=extract_memory_metrics,
-        extract_mcp_metrics_fn=extract_mcp_metrics,
+        extract_tool_metrics_fn=extract_tool_metrics,
         extract_bot_excerpt_fn=extract_bot_excerpt,
         tail_text_fn=tail_text,
         step_run_result_cls=StepRunResult,

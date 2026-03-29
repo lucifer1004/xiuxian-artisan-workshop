@@ -17,9 +17,9 @@ NATIVE_DISPATCH_SUCCESS_REGEX = (
     rf'source{LOG_FIELD_SEPARATOR_REGEX}"native".*'
     rf'outcome{LOG_FIELD_SEPARATOR_REGEX}"success"'
 )
-MCP_DISPATCH_REGEX = (
+TOOL_RUNTIME_DISPATCH_REGEX = (
     rf'event{LOG_FIELD_SEPARATOR_REGEX}"agent\.tool\.dispatch".*'
-    rf'source{LOG_FIELD_SEPARATOR_REGEX}"mcp"'
+    rf'source{LOG_FIELD_SEPARATOR_REGEX}"tool_runtime"'
 )
 ZHENFA_DISPATCH_REGEX = (
     rf'event{LOG_FIELD_SEPARATOR_REGEX}"agent\.tool\.dispatch".*'
@@ -40,7 +40,7 @@ def _apply_native_tools_only_expectations(
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     if native_tools_only:
         _append_unique(expect_log_regexes, NATIVE_DISPATCH_SUCCESS_REGEX)
-        _append_unique(forbid_log_regexes, MCP_DISPATCH_REGEX)
+        _append_unique(forbid_log_regexes, TOOL_RUNTIME_DISPATCH_REGEX)
         _append_unique(forbid_log_regexes, ZHENFA_DISPATCH_REGEX)
     return tuple(expect_log_regexes), tuple(forbid_log_regexes)
 

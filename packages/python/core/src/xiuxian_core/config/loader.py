@@ -180,7 +180,7 @@ def get_active_preload_skills(mode: str = "default") -> list[str]:
     """Get the calculated list of skills to preload based on mode.
 
     Args:
-        mode: "default" (MCP Server) or "cli" (Omni Run)
+        mode: "default" (tool runtime) or "cli" (Omni Run)
 
     Returns:
         Combined list of skill names (deduplicated)
@@ -244,7 +244,7 @@ def is_filtered(command: str) -> bool:
         command: Full command name (e.g., "git.raw_commit")
 
     Returns:
-        True if command should be filtered from MCP tools
+        True if command should be filtered from retained tool exposure
     """
     config = load_filter_commands()
 

@@ -7,6 +7,8 @@ from typing import Mapping
 
 from .mode import WendaoTransportMode
 
+WENDAO_SCHEMA_VERSION_HEADER = "x-wendao-schema-version"
+
 
 @dataclass(frozen=True, slots=True)
 class WendaoTransportEndpoint:
@@ -47,6 +49,7 @@ class WendaoTransportConfig:
     """
 
     endpoint: WendaoTransportEndpoint
+    schema_version: str = "v1"
     request_timeout_seconds: float = 30.0
     allow_embedded: bool = False
     prefer_arrow_ipc_fallback: bool = True
@@ -61,4 +64,8 @@ class WendaoTransportConfig:
         return tuple(modes)
 
 
-__all__ = ["WendaoTransportConfig", "WendaoTransportEndpoint"]
+__all__ = [
+    "WENDAO_SCHEMA_VERSION_HEADER",
+    "WendaoTransportConfig",
+    "WendaoTransportEndpoint",
+]

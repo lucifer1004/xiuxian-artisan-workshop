@@ -19,9 +19,13 @@ pub use planner::{
 };
 pub use search::{
     DocsFamilyClusterQuery, DocsFamilyClusterResult, DocsFamilyContextQuery,
-    DocsFamilyContextResult, DocsFamilySearchQuery, DocsFamilySearchResult, DocsNavigationQuery,
-    DocsNavigationResult, DocsNavigationSearchQuery, DocsNavigationSearchResult, DocsPageQuery,
-    DocsPageResult, DocsRetrievalContextQuery, DocsRetrievalContextResult, DocsRetrievalHitQuery,
-    DocsRetrievalHitResult, DocsRetrievalQuery, DocsRetrievalResult, DocsSearchQuery,
-    DocsSearchResult,
+    DocsFamilyContextResult, DocsFamilySearchQuery, DocsFamilySearchResult,
+    DocsMarkdownDocumentsQuery, DocsMarkdownDocumentsResult, DocsNavigationQuery,
+    DocsNavigationResult, DocsNavigationSearchQuery, DocsNavigationSearchResult,
+    DocsPageIndexDocumentsQuery, DocsPageIndexDocumentsResult, DocsPageIndexNodeQuery,
+    DocsPageIndexNodeResult, DocsPageIndexTreeQuery, DocsPageIndexTreeResult,
+    DocsPageIndexTreeSearchQuery, DocsPageIndexTreeSearchResult, DocsPageIndexTreesQuery,
+    DocsPageIndexTreesResult, DocsPageQuery, DocsPageResult, DocsRetrievalContextQuery,
+    DocsRetrievalContextResult, DocsRetrievalHitQuery, DocsRetrievalHitResult, DocsRetrievalQuery,
+    DocsRetrievalResult, DocsSearchQuery, DocsSearchResult,
 };

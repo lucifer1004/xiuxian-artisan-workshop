@@ -9,8 +9,9 @@
 
 ## Mission
 
-This note is the `P0 / Mapping Gate` inventory for the active Wendao
-`core` / `runtime` / plugin-package migration.
+This note started as the early `P0` ownership map for the Wendao
+`core` / `runtime` / plugin-package migration. It is now maintained as the
+active late-`M6` outward-surface inventory and compatibility ledger.
 
 Primary references:
 
@@ -20,21 +21,23 @@ Primary references:
 - `[[06_roadmap/405_large_rust_modularization]]`
 - `[[06_roadmap/410_p1_generic_plugin_contract_staging]]`
 
-This document records the current Julia-specific host surfaces that must be
-generalized or relocated before crate extraction and independent plugin
-publication can proceed safely.
+This document now records the live outward surfaces, the remaining
+package-owned compatibility seams, and the additive external-plugin proof
+coverage that currently governs the migration.
 
 ## Gate Intent
 
-`Gate P0` requires:
+The active alignment bundle requires:
 
-1. a complete inventory of the current Julia-specific host surfaces
-2. an ownership decision for each surface
-3. a target namespace for each migrated responsibility
-4. an explicit modularization expectation for every touched medium or complex
-   seam
+1. an accurate inventory of the live outward surfaces
+2. one explicit record of which compatibility seams are still intentionally
+   package-owned
+3. one outward-facing summary of the late-`M6` additive proof
+4. active documentation that no longer describes the tree as early-phase
+   extraction startup
 
-The migration must not begin crate extraction until this map is stable.
+The historical ownership map remains below, but the document's primary job is
+now to keep late-`M6` outward reality synchronized across the active docs.
 
 ## Classification Rules
 
@@ -58,22 +61,91 @@ This inventory also uses the following structural rule:
 3. compatibility shims may preserve public exports, but implementation must
    move behind the new namespace
 
-## Current Surface Inventory
+## Late-M6 Outward Surface Summary
 
-| Current surface | Current path | Current problem | Target owner | Target namespace | Planned phase |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| Julia-specific runtime config records such as `LinkGraphJuliaRerankRuntimeConfig`, `LinkGraphJuliaAnalyzerServiceDescriptor`, `LinkGraphJuliaAnalyzerLaunchManifest`, and `LinkGraphJuliaDeploymentArtifact` | `src/link_graph/runtime_config/models.rs` | Stable runtime config is encoded as Julia-only types inside the host | `runtime` and `xiuxian-wendao-julia` | `runtime/runtime_config/providers/`, `runtime/artifacts/`, `xiuxian-wendao-julia/capabilities/`, `xiuxian-wendao-julia/artifacts/`, `xiuxian-wendao-julia/launch/` | `P1`, `P3`, `P4` |
-| `link_graph.retrieval.julia_rerank` host config path | `src/link_graph/runtime_config/models.rs`, `src/link_graph/runtime_config/resolve/policy.rs` | Provider identity is hardcoded into the config shape, which blocks generic capability routing | `runtime` | `runtime/runtime_config/capabilities/`, `runtime/negotiation/` | `P1`, `P3` |
-| Julia-specific environment variables and launcher defaults such as `XIUXIAN_WENDAO_LINK_GRAPH_JULIA_RERANK_*` and `.data/WendaoAnalyzer/scripts/run_analyzer_service.sh` | `src/link_graph/runtime_config/constants.rs` | Host runtime defaults are language-scoped rather than provider-scoped | `runtime` with Julia-owned defaults in plugin package | `runtime/runtime_config/providers/`, `runtime/launch/`, `xiuxian-wendao-julia/manifest/`, `xiuxian-wendao-julia/launch/` | `P1`, `P3`, `P4` |
-| Legacy Studio compatibility artifact JSON shape and route-local JSON wrapper | `src/gateway/studio/router/handlers/capabilities/deployment.rs` | The compat route still preserves Julia-compatible field grouping instead of exposing only the generic plugin-artifact payload | `runtime` | `runtime/gateway/studio/router/handlers/plugin_artifacts/` | `P1`, `P5` |
-| Julia-only Studio route `get_julia_deployment_artifact` and endpoint wiring | `src/gateway/studio/router/handlers/capabilities/deployment.rs`, `src/gateway/studio/router/routes.rs` | Gateway exposes a language-specific artifact path rather than a plugin artifact surface | `runtime` | `runtime/gateway/studio/router/handlers/plugin_artifacts/`, `runtime/gateway/studio/router/routes/` | `P3`, `P5` |
-| Compatibility deployment-artifact JSON-RPC and native tool surfaces such as `wendao.compat_deployment_artifact` | `src/zhenfa_router/native/deployment.rs`, `src/zhenfa_router/rpc.rs`, `src/zhenfa_router/http.rs` | RPC contract still exposes a compat-specific artifact export instead of routing everything through the generic plugin-artifact selector surface | `runtime` | `runtime/zhenfa/artifacts/`, `runtime/zhenfa/rpc/`, `runtime/zhenfa/http/` | `P3`, `P5` |
-| Builtin Julia registration in host bootstrap | `src/analyzers/service/bootstrap.rs` | The host owns Julia plugin assembly directly instead of loading a package-defined provider | `runtime` and `xiuxian-wendao-julia` | `runtime/registry/`, `runtime/discovery/`, `xiuxian-wendao-julia/entry/` | `P3`, `P4` |
-| Former sibling-source inclusion hack for Julia plugin code | `src/analyzers/languages/mod.rs` | Julia previously entered the host through `#[path]`; the current tree now uses a normal crate dependency, so this row remains only as a retirement checkpoint and as a reminder that Modelica still needs the same treatment | resolved for Julia, still relevant as pattern guidance for remaining plugins | `xiuxian-wendao-julia/plugin/` with package dependency registration instead of source inclusion | `P4` |
-| Julia-specific rerank planning and transport helpers | `src/link_graph/index/search/plan/payload/quantum.rs` | Capability execution path is hardcoded to Julia rather than routed through a generic provider binding | `runtime` with Julia-specific transport details in plugin package | `runtime/capabilities/rerank/`, `runtime/transport/`, `runtime/negotiation/`, `xiuxian-wendao-julia/transport/`, `xiuxian-wendao-julia/capabilities/rerank/` | `P1`, `P3`, `P4` |
-| Julia-specific request-batch builder names in ignition helpers | `src/link_graph/index/search/quantum_fusion/openai_ignition.rs`, `src/link_graph/index/search/quantum_fusion/vector_ignition.rs` | Shared preparation logic is named after one provider even though the long-term host contract is capability-oriented | `runtime` | `runtime/capabilities/rerank/request/` | `P1`, `P3` |
-| Link-graph public re-exports of Julia-specific types | `src/link_graph/mod.rs`, `src/link_graph/runtime_config.rs` | The link-graph domain surface leaks one plugin provider as core vocabulary | `core` compatibility shim plus `runtime` implementation | `core/capabilities/`, `runtime/capabilities/`, `runtime/artifacts/` | `P1`, `P2`, `P5` |
-| Julia-specific test fixtures and planned integration tests | `tests/integration/planned_search_julia_rerank*.rs`, `tests/integration/support/wendaoarrow_official_examples.rs`, `src/gateway/studio/router/tests/config.rs` | The test topology mirrors the current host leak and must migrate alongside the runtime and plugin seams | split across `runtime` and `xiuxian-wendao-julia` | `runtime/tests/capabilities/rerank/`, `runtime/tests/artifacts/`, `xiuxian-wendao-julia/tests/launch/`, `xiuxian-wendao-julia/tests/artifacts/` | `P3`, `P4`, `P5` |
+The current live outward surfaces are:
+
+| Outward family | Canonical surface | Current late-`M6` status | Compatibility note |
+| :------------- | :---------------- | :----------------------- | :----------------- |
+| Generic artifact inspection | `wendao.plugin_artifact`, `GET /api/ui/plugins/{plugin_id}/artifacts/{artifact_id}` | canonical and live | Julia-named outward artifact surfaces are retired from the host |
+| Studio docs gateway family | `/api/docs/*` | external Modelica proof now covers docs-facing search, retrieval, navigation, family, gap-report, and planner peers | no host-owned language-specific route family remains in this surface |
+| Studio repo query/projection family | `/api/repo/overview`, `/api/repo/*search`, `/api/repo/doc-coverage`, `/api/repo/sync`, `/api/repo/projected-*` | external Modelica proof now covers repo-facing query, projection, reopen, and navigation peers | additive proof stays on generic host surfaces |
+| Studio repo service-state family | `POST /api/repo/index`, `GET /api/repo/index/status` | `Stage A` is complete; the external Modelica path now covers the remaining service-state bundle | bounded local helper reuse only; no dead-code suppressions added |
+| Remaining Julia compatibility imports | `xiuxian_wendao_julia::compatibility::link_graph::*` | package-owned only | host crate-root compatibility shims are retired |
+
+The current late-`M6` outward story is therefore:
+
+1. generic outward artifact inspection is canonical
+2. repo-facing, docs-facing, and Studio-facing additive proof now all exist on
+   one non-Julia external plugin path
+3. the `M6` additive-proof exit condition is now satisfied
+4. the next governed move is `Phase 7: Flight-First Runtime Negotiation`,
+   not more outward-surface expansion
+
+## Phase-7 Transport Surface Inventory
+
+The `Phase-7 Stage A` inventory resolves the live transport surface as
+follows:
+
+| Surface | Current owner | Stage-A finding | Phase-7 implication |
+| :------ | :------------ | :-------------- | :------------------ |
+| Generic transport contract | `xiuxian-wendao-core` | `PluginCapabilityBinding` carries `endpoint`, `transport`, and `contract_version`; `PluginTransportKind` declares `ArrowFlight`, `ArrowIpcHttp`, and `LocalProcessArrowIpc` | negotiation policy should stay generic and contract-first |
+| Runtime transport construction | `xiuxian-wendao-runtime` | `src/transport/client.rs` owns `build_arrow_transport_client_from_binding(...)`, which currently materializes `ArrowIpcHttp` only | `Stage B` should add preference/selection logic here instead of in host gateway code |
+| Host Arrow response encoding | `xiuxian-wendao` host gateway | `src/gateway/studio/search/handlers/arrow_transport.rs` only serializes local Arrow payload responses | this seam is not the negotiation owner and should stay out of transport-policy growth |
+| Outward transport inspection payload | `xiuxian-wendao` Studio types | `UiPluginArtifact` already exposes `base_url`, `route`, `health_route`, `timeout_secs`, and `schema_version` | `Stage C` should surface negotiated transport and fallback reason through this outward inspection family or an adjacent runtime-owned diagnostic payload |
+
+The canonical Phase-7 transport preference order is now fixed as:
+
+1. `ArrowFlight`
+2. `ArrowIpcHttp`
+3. `LocalProcessArrowIpc`
+
+Interpretation:
+
+1. `ArrowFlight` is the preferred runtime negotiation result where a provider
+   and host path can support it
+2. `ArrowIpcHttp` is the bounded compatibility fallback
+3. `LocalProcessArrowIpc` remains reserved for explicitly managed local
+   provider paths rather than generic remote negotiation
+
+Current Stage-B implementation status:
+
+1. the runtime-owned negotiation policy now lives in
+   `packages/rust/crates/xiuxian-wendao-runtime/src/transport/negotiation.rs`
+2. the current rerank transport path now delegates through that negotiation
+   seam instead of directly materializing an Arrow IPC client
+3. the runtime now also owns a real Flight client seam in
+   `packages/rust/crates/xiuxian-wendao-runtime/src/transport/flight.rs`
+4. that Flight client intentionally uses `arrow-flight = 57.3.0` so the data
+   plane stays aligned with the LanceDB Arrow line already present in
+   `lance-arrow`
+5. the host-side rerank path stays on the current engine Arrow line by
+   reusing `xiuxian-vector`'s existing
+   `engine_batches_to_lance_batches(...)` and
+   `lance_batches_to_engine_batches(...)` conversion seam
+6. when both `ArrowFlight` and `ArrowIpcHttp` candidates are present, the
+   runtime now selects supported `ArrowFlight` bindings first and falls back
+   deterministically to `ArrowIpcHttp` only when the preferred binding is
+   incomplete
+7. `Phase-7 Stage B` is therefore complete; `Stage C` now owns outward
+   negotiated-transport diagnostics
+
+## Historical Ownership Inventory
+
+The table below remains as the resolved extraction-era ownership map that got
+the program to the current late-`M6` shape.
+
+| Current surface                                                                                                                                                                                              | Current path                                                                                                                                                   | Current problem                                                                                                                                                                                                              | Target owner                                                                 | Target namespace                                                                                                                                                   | Planned phase    |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------- |
+| Julia-specific runtime config records such as `LinkGraphJuliaRerankRuntimeConfig`, `LinkGraphJuliaAnalyzerServiceDescriptor`, `LinkGraphJuliaAnalyzerLaunchManifest`, and `LinkGraphJuliaDeploymentArtifact` | `src/link_graph/runtime_config/models.rs`                                                                                                                      | Stable runtime config is encoded as Julia-only types inside the host                                                                                                                                                         | `runtime` and `xiuxian-wendao-julia`                                         | `runtime/runtime_config/providers/`, `runtime/artifacts/`, `xiuxian-wendao-julia/capabilities/`, `xiuxian-wendao-julia/artifacts/`, `xiuxian-wendao-julia/launch/` | `P1`, `P3`, `P4` |
+| `link_graph.retrieval.julia_rerank` host config path                                                                                                                                                         | `src/link_graph/runtime_config/models.rs`, `src/link_graph/runtime_config/resolve/policy.rs`                                                                   | Provider identity is hardcoded into the config shape, which blocks generic capability routing                                                                                                                                | `runtime`                                                                    | `runtime/runtime_config/capabilities/`, `runtime/negotiation/`                                                                                                     | `P1`, `P3`       |
+| Julia-specific environment variables and launcher defaults such as `XIUXIAN_WENDAO_LINK_GRAPH_JULIA_RERANK_*` and `.data/WendaoAnalyzer/scripts/run_analyzer_service.sh`                                     | `src/link_graph/runtime_config/constants.rs`                                                                                                                   | Host runtime defaults are language-scoped rather than provider-scoped                                                                                                                                                        | `runtime` with Julia-owned defaults in plugin package                        | `runtime/runtime_config/providers/`, `runtime/launch/`, `xiuxian-wendao-julia/manifest/`, `xiuxian-wendao-julia/launch/`                                           | `P1`, `P3`, `P4` |
+| Builtin Julia registration in host bootstrap                                                                                                                                                                 | `src/analyzers/service/bootstrap.rs`                                                                                                                           | The host owns Julia plugin assembly directly instead of loading a package-defined provider                                                                                                                                   | `runtime` and `xiuxian-wendao-julia`                                         | `runtime/registry/`, `runtime/discovery/`, `xiuxian-wendao-julia/entry/`                                                                                           | `P3`, `P4`       |
+| Former sibling-source inclusion hacks for package-local plugin code                                                                                                                                           | `src/analyzers/languages/mod.rs`                                                                                                                               | Julia and Modelica previously entered the host through `#[path]`; the current tree now uses normal crate dependencies for both, so this row remains only as a resolved retirement checkpoint for future plugin onboarding    | resolved for Julia and Modelica                                               | `xiuxian-wendao-julia/plugin/`, `xiuxian-wendao-modelica/plugin/`, and package dependency registration instead of source inclusion                                 | `P4`, `P6`       |
+| Julia-specific rerank planning and transport helpers                                                                                                                                                         | `src/link_graph/index/search/plan/payload/quantum.rs`                                                                                                          | Capability execution path is hardcoded to Julia rather than routed through a generic provider binding                                                                                                                        | `runtime` with Julia-specific transport details in plugin package            | `runtime/capabilities/rerank/`, `runtime/transport/`, `runtime/negotiation/`, `xiuxian-wendao-julia/transport/`, `xiuxian-wendao-julia/capabilities/rerank/`       | `P1`, `P3`, `P4` |
+| Julia-specific request-batch builder names in ignition helpers                                                                                                                                               | `src/link_graph/index/search/quantum_fusion/openai_ignition.rs`, `src/link_graph/index/search/quantum_fusion/vector_ignition.rs`                               | Shared preparation logic is named after one provider even though the long-term host contract is capability-oriented                                                                                                          | `runtime`                                                                    | `runtime/capabilities/rerank/request/`                                                                                                                             | `P1`, `P3`       |
+| Link-graph public re-exports of Julia-specific types                                                                                                                                                         | `src/link_graph/mod.rs`, `src/link_graph/runtime_config.rs`                                                                                                    | The link-graph domain surface leaks one plugin provider as core vocabulary                                                                                                                                                   | `core` compatibility shim plus `runtime` implementation                      | `core/capabilities/`, `runtime/capabilities/`, `runtime/artifacts/`                                                                                                | `P1`, `P2`, `P5` |
+| Julia-specific test fixtures and planned integration tests                                                                                                                                                   | `tests/integration/planned_search_julia_rerank*.rs`, `tests/integration/support/wendaoarrow_official_examples.rs`, `src/gateway/studio/router/tests/config.rs` | The test topology mirrors the current host leak and must migrate alongside the runtime and plugin seams                                                                                                                      | split across `runtime` and `xiuxian-wendao-julia`                            | `runtime/tests/capabilities/rerank/`, `runtime/tests/artifacts/`, `xiuxian-wendao-julia/tests/launch/`, `xiuxian-wendao-julia/tests/artifacts/`                    | `P3`, `P4`, `P5` |
 
 ## Immediate Ownership Decisions
 
@@ -169,66 +241,278 @@ Current live status note:
   which owns `LinkGraphJuliaRerankRuntimeConfig` and its provider-binding /
   launch / artifact normalization helpers; the host `runtime.rs` and
   `conversions.rs` files now serve only as compatibility wrappers
-- the Zhenfa-side test-only Julia deployment aliases and shim functions are
-  now explicitly grouped under `src/zhenfa_router/native/compatibility/`,
-  which keeps the compat-first implementation path and the legacy Julia test
-  seam physically separated
-- the first `M5` outward-surface cutover is now live too: Studio routing and
-  OpenAPI inventory expose the canonical generic plugin-artifact path
-  `/api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`, while the compat
-  deployment-artifact route remains as a wrapper over that same generic
-  artifact resolution/render path
-- the same `M5` cutover has now reached Zhenfa as well: the canonical outward
-  tool/RPC surface is `wendao.plugin_artifact`, while the narrowed
-  compat-specific surface is now `wendao.compat_deployment_artifact` over the
-  same selector-based export path
-- the Studio UI payload seam has now tightened as well: `UiPluginArtifact`
-  is the primary Studio artifact payload, while
-  the remaining legacy compat JSON shape is now built from the generic
-  UI payload instead of reading the core plugin-artifact record directly
-- the Studio schema-export seam now follows the same pattern:
-  `studio_type_collection()` registers the generic artifact types and the
-  `export_types` binary compiles against that generic-only artifact schema
-  path without promoting `UiJuliaDeploymentArtifact` into the canonical
-  TypeScript-facing collection
-- the remaining Julia UI DTO exposure has now narrowed one layer further:
-  `UiJuliaDeploymentArtifact` no longer rides through the compatibility
-  namespace root and now survives only as route-local compat JSON adaptation
-  inside `src/gateway/studio/router/handlers/capabilities/deployment.rs`
-- the remaining router-level consumers have now narrowed as well:
-  `UiJuliaDeploymentArtifact` is no longer deserialized directly in router
-  tests, so the legacy DTO shape now stays covered in the compatibility leaf
-  while higher-level Studio tests assert outward JSON payloads generically
-- the compat handler seam has now narrowed one layer further too:
-  the route layer no longer imports `UiJuliaDeploymentArtifact` directly and
-  instead delegates legacy JSON shaping through a route-local wrapper over
-  `UiPluginArtifact`
-- the test-only Studio Julia route/query shim has now been retired too:
-  `JuliaDeploymentArtifactQuery` and `get_julia_deployment_artifact` are gone,
-  and legacy regression coverage now targets the compat handler directly
-- the OpenAPI Julia route-path aliases are now retired from code:
-  `API_UI_JULIA_DEPLOYMENT_ARTIFACT_*` are gone from the live tree, and the
-  route inventory now validates only the canonical plugin-artifact path plus
-  the compat deployment-artifact path
-- the Zhenfa Julia tool entry point has now entered the same retirement track:
-  `wendao_julia_deployment_artifact` is deprecated, while the high-level
-  default stays on `WendaoPluginArtifactTool` and
-  `WendaoCompatDeploymentArtifactTool`
-- the remaining Julia RPC/helper family in Zhenfa has now been tightened as a
-  whole: the test-only RPC shim is gone, and the surviving Julia-named helper
-  aliases in `native/compatibility/julia_deployment.rs` are now explicitly
-  deprecated compatibility seams
-- the old Zhenfa native compatibility helper folder is now retired entirely:
-  `native/compatibility/` is gone, native deployment tests now live directly
-  under `deployment.rs`, and the former test-only Julia helper/type aliases no
-  longer exist in the tree
+- the `M5` outward artifact cutover is now complete on the Studio/OpenAPI
+  side: `UiPluginArtifact` is the primary payload, the canonical schema
+  export is generic-only, and
+  `/api/ui/plugins/{plugin_id}/artifacts/{artifact_id}` is now the only live
+  Studio/OpenAPI UI artifact endpoint
+- the old Studio Julia compatibility path is now fully retired from code:
+  `UiJuliaDeploymentArtifact`, the dedicated compatibility type leaf, the
+  route-local compat adapter, `JuliaDeploymentArtifactQuery`,
+  `get_julia_deployment_artifact`, and
+  `GET /api/ui/julia-deployment-artifact` are all gone from the live tree
+- the OpenAPI Julia route-path aliases are now retired from code too:
+  `API_UI_JULIA_DEPLOYMENT_ARTIFACT_*` are gone, and the route inventory now
+  validates only the canonical plugin-artifact path
+- the `M5` outward artifact cutover is now complete on the Zhenfa side too:
+  `wendao.plugin_artifact` is the only live tool/RPC artifact surface, and
+  the former Julia outward tool name, compat-specific tool/RPC path, native
+  compatibility helper folder, and Julia helper/type aliases are all retired
+  from code
 - the crate-root and `runtime_config` top-level Julia-named DTO/helper exports
   are now retired too: those names live only under the explicit compatibility
   namespaces instead of leaking through flat public re-export blocks
-- the former crate-root Julia compatibility shim is now retired from code too:
-  `src/compatibility/julia.rs` has been deleted, so
-  `src/compatibility/link_graph.rs` is now the only remaining crate-root
-  compatibility surface in the live tree
+- the former host crate-root compatibility shim is now retired from code too:
+  `src/compatibility/julia.rs`, `src/compatibility/link_graph.rs`, and the
+  `pub mod compatibility;` mount in `src/lib.rs` are all gone, so the touched
+  internal consumers now read Julia compatibility imports directly from
+  `packages/rust/crates/xiuxian-wendao-julia/src/compatibility/link_graph/`
+- the first `M6` additive-plugin proof is now landed too:
+  `xiuxian-wendao-modelica` consumes
+  `xiuxian-wendao-core::repo_intelligence` for production contracts, the host
+  loads Modelica through a normal optional crate dependency, and Modelica
+  keeps `xiuxian-wendao` only as a dev-dependency for registry-aware
+  integration-query validation
+- that same `M6` slice now has a host-side proof too:
+  `packages/rust/crates/xiuxian-wendao/tests/integration/repo_overview.rs`
+  now exercises the external Modelica plugin through the builtin registry and
+  the shared repo-overview/module-search/example-search entry points
+- that `M6` host proof is now deeper than the first search slice:
+  `repo_symbol_search.rs`, `repo_relations.rs`, and `repo_projected_page.rs`
+  now also exercise the external Modelica plugin through builtin-registry
+  symbol-search, relation-graph, and projected-page lookup consumers
+- that same `M6` host proof now reaches parsed page hierarchy too:
+  `repo_projected_page_index_tree.rs` exercises the external Modelica plugin
+  through builtin-registry projected page-index tree generation and lookup
+- that same `M6` host proof now reaches stable node addressing too:
+  `repo_projected_page_index_node.rs` exercises the external Modelica plugin
+  through builtin-registry projected page-index node lookup
+- that same `M6` host proof now reaches assembled navigation too:
+  `repo_projected_page_navigation.rs` exercises the external Modelica plugin
+  through builtin-registry projected page navigation bundles
+- that same `M6` host proof now reaches grouped family context too:
+  `repo_projected_page_family_context.rs` exercises the external Modelica
+  plugin through builtin-registry projected page-family context lookup
+- that same `M6` host proof now reaches singular family-cluster lookup too:
+  `repo_projected_page_family_cluster.rs` exercises the external Modelica
+  plugin through builtin-registry projected page-family cluster lookup
+- that same `M6` host proof now reaches search-driven family expansion too:
+  `repo_projected_page_family_search.rs` exercises the external Modelica
+  plugin through builtin-registry projected page-family search
+- that same `M6` host proof now reaches search-driven navigation expansion too:
+  `repo_projected_page_navigation_search.rs` exercises the external Modelica
+  plugin through builtin-registry projected page-navigation search
+- that same `M6` additive slice now reaches a docs-facing search consumer too:
+  `docs_navigation_search.rs` exercises the external Modelica plugin through
+  builtin-registry docs-facing projected page-navigation search
+- that same `M6` additive slice now reaches the docs-facing family-search
+  peer too: `docs_family_search.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing projected page-family search
+- that same `M6` additive slice now reaches the docs-facing family-context
+  peer too: `docs_family_context.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing projected page-family context
+- that same `M6` additive slice now reaches the docs-facing navigation lookup
+  peer too: `docs_navigation.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing projected page navigation lookup
+- that same `M6` additive slice now reaches the docs-facing family-cluster
+  peer too: `docs_family_cluster.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing projected page-family cluster lookup
+- that same `M6` additive slice now reaches the docs-facing page lookup peer
+  too: `docs_page.rs` exercises the external Modelica plugin through
+  builtin-registry docs-facing projected page lookup
+- that same `M6` additive slice now reaches the docs-facing page-index tree
+  lookup peer too: `docs_page_index_tree.rs` exercises the external Modelica
+  plugin through builtin-registry docs-facing projected page-index tree
+  lookup
+- that same `M6` additive slice now reaches the docs-facing page-index node
+  lookup peer too: `docs_page_index_node.rs` exercises the external Modelica
+  plugin through builtin-registry docs-facing projected page-index node
+  lookup
+- that same `M6` additive slice now reaches the docs-facing page-index tree
+  search peer too: `docs_page_index_tree_search.rs` exercises the external
+  Modelica plugin through builtin-registry docs-facing projected page-index
+  tree search
+- that same `M6` additive slice now reaches the docs-facing page-index trees
+  peer too: `docs_page_index_trees.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing projected page-index tree listing
+- that same `M6` additive slice now reaches the docs-facing page-index
+  documents peer too: `docs_page_index_documents.rs` exercises the external
+  Modelica plugin through builtin-registry docs-facing projected page-index
+  document generation
+- that same `M6` additive slice now reaches the docs-facing markdown
+  documents peer too: `docs_markdown_documents.rs` exercises the external
+  Modelica plugin through builtin-registry docs-facing projected markdown
+  document generation
+- that same `M6` additive slice now reaches the docs-facing search peer too:
+  `docs_search.rs` exercises the external Modelica plugin through
+  builtin-registry docs-facing projected page search
+- that same `M6` additive slice now reaches the docs-facing retrieval peer
+  too: `docs_retrieval.rs` exercises the external Modelica plugin through
+  builtin-registry docs-facing mixed projected retrieval
+- that same `M6` additive slice now reaches the docs-facing retrieval-
+  context peer too: `docs_retrieval_context.rs` exercises the external
+  Modelica plugin through builtin-registry docs-facing local projected
+  retrieval context
+- that same `M6` additive slice now reaches the docs-facing retrieval-hit
+  peer too: `docs_retrieval_hit.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing deterministic projected retrieval-hit
+  reopening
+- that same `M6` additive slice now reaches the docs-facing projected-gap
+  report peer too: `docs_projected_gap_report.rs` exercises the external
+  Modelica plugin through builtin-registry docs-facing projected gap
+  reporting
+- that same `M6` additive slice now reaches the docs-facing planner-queue
+  peer too: `docs_planner_queue.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing deterministic planner queue shaping
+- that same `M6` additive slice now reaches the docs-facing planner-workset
+  peer too: `docs_planner_workset.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing deterministic planner workset shaping
+- that same `M6` additive slice now reaches the docs-facing planner-rank
+  peer too: `docs_planner_rank.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing deterministic planner ranking
+- that same `M6` additive slice now reaches the docs-facing planner-item
+  peer too: `docs_planner_item.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing deterministic planner item reopening
+- that same `M6` additive slice now reaches the docs-facing planner-search
+  peer too: `docs_planner_search.rs` exercises the external Modelica plugin
+  through builtin-registry docs-facing deterministic planner search
+- that same `M6` additive slice now reaches the Studio docs route layer too:
+  `tests/unit/studio_repo_sync_api.rs` exercises `/api/docs/planner-search`
+  through the builtin-registry external Modelica path, so the additive proof
+  now covers one real gateway consumer above the analyzer entrypoint
+- that same `M6` additive slice now reaches a second Studio docs route peer
+  too: `tests/unit/studio_repo_sync_api.rs` also exercises
+  `/api/docs/planner-item` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers deterministic planner
+  gap reopening as well as planner search
+- that same `M6` additive slice now reaches a third Studio docs route peer
+  too: `tests/unit/studio_repo_sync_api.rs` also exercises
+  `/api/docs/planner-workset` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers deterministic planner
+  workset shaping as well as planner search and planner-item reopening
+- that same `M6` additive slice now reaches a fourth Studio docs route peer
+  too: `tests/unit/studio_repo_sync_api.rs` also exercises
+  `/api/docs/planner-rank` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers deterministic planner
+  ranking as well as planner search, planner-item reopening, and
+  planner-workset shaping
+- that same `M6` additive slice now reaches a fifth Studio docs route peer
+  too: `tests/unit/studio_repo_sync_api.rs` also exercises
+  `/api/docs/planner-queue` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers deterministic planner
+  queue shaping as well as planner search, planner-item reopening,
+  planner-workset shaping, and planner ranking
+- that same `M6` additive slice now exits the Studio planner subtree too:
+  `tests/unit/studio_repo_sync_api.rs` also exercises `/api/docs/search`
+  through the builtin-registry external Modelica path, so the gateway-layer
+  additive proof now reaches the first non-planner docs-facing route family
+  as well
+- that same `M6` additive slice now extends the non-planner Studio docs
+  route family too: `tests/unit/studio_repo_sync_api.rs` also exercises
+  `/api/docs/retrieval` through the builtin-registry external Modelica path,
+  so the gateway-layer additive proof now covers mixed docs-facing retrieval
+  as well as plain docs search
+- that same `M6` additive slice now pushes deeper into the non-planner
+  Studio docs route family too: `tests/unit/studio_repo_sync_api.rs` now
+  also exercises `/api/docs/retrieval-context` through the builtin-registry
+  external Modelica path, so the gateway-layer additive proof now covers
+  deterministic node-context reopening as well
+- that same `M6` additive slice now closes the sibling deterministic
+  reopening peer too: `tests/unit/studio_repo_sync_api.rs` now also
+  exercises `/api/docs/retrieval-hit` through the builtin-registry external
+  Modelica path, so the gateway-layer additive proof now covers
+  deterministic hit reopening as well
+- that same `M6` additive slice now closes the deterministic page-lookup
+  peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/docs/page` through the builtin-registry external Modelica path, so
+  the gateway-layer additive proof now covers deterministic docs page
+  lookup as well
+- that same `M6` additive slice now closes the deterministic family-context
+  peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/docs/family-context` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers grouped family
+  context reopening as well
+- that same `M6` additive slice now closes the deterministic family-search
+  peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/docs/family-search` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers grouped family
+  search expansion as well
+- that same `M6` additive slice now closes the deterministic family-cluster
+  peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/docs/family-cluster` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers single-family
+  reopening as well
+- that same `M6` additive slice now closes the deterministic navigation peer
+  too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/docs/navigation` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers tree-context plus
+  family-cluster reopening as well
+- that same `M6` additive slice now closes the deterministic navigation-
+  search peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/docs/navigation-search` through the builtin-registry external
+  Modelica path, so the gateway-layer additive proof now covers grouped
+  navigation-bundle expansion as well
+- that same `M6` additive slice now closes the docs projected-gap-report
+  peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/docs/projected-gap-report` through the builtin-registry external
+  Modelica path, so the gateway-layer additive proof now covers docs-facing
+  gap reporting as well
+- that same `M6` additive slice now opens the sibling Studio repo route
+  family too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/repo/overview` through the builtin-registry external Modelica path,
+  so the gateway-layer additive proof now covers repo-summary reopening
+  outside the docs-only surface too
+- that same `M6` additive slice now closes the sibling Studio repo module-
+  search peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/repo/module-search` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers deterministic module
+  search outside the docs-only surface too
+- that same `M6` additive slice now closes the sibling Studio repo symbol-
+  search peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/repo/symbol-search` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers deterministic symbol
+  search outside the docs-only surface too
+- that same `M6` additive slice now closes the sibling Studio repo example-
+  search peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/repo/example-search` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers deterministic example
+  search outside the docs-only surface too
+- that same `M6` additive slice now closes the sibling Studio repo doc-
+  coverage peer too: `tests/unit/studio_repo_sync_api.rs` now also exercises
+  `/api/repo/doc-coverage` through the builtin-registry external Modelica
+  path, so the gateway-layer additive proof now covers deterministic
+  module-scoped doc coverage outside the docs-only surface too
+- that same `M6` additive slice now closes a bundled Studio repo lifecycle-
+  and-projection batch too: `tests/unit/studio_repo_sync_api.rs` now also
+  exercises `/api/repo/sync`, `/api/repo/projected-pages`, and
+  `/api/repo/projected-gap-report` through the builtin-registry external
+  Modelica path, so the gateway-layer additive proof now covers repo
+  status reopening, projected-page enumeration, and projected-gap reporting
+  outside the docs-only surface too
+- that same `M6` additive slice now closes a bundled deterministic Studio
+  repo projected reopen family too: `tests/unit/studio_repo_sync_api.rs`
+  now also exercises `/api/repo/projected-page`,
+  `/api/repo/projected-page-index-tree`, `/api/repo/projected-page-index-node`,
+  `/api/repo/projected-retrieval-hit`, and
+  `/api/repo/projected-retrieval-context` through the builtin-registry
+  external Modelica path, so the gateway-layer additive proof now covers
+  symbol-page reopening, tree reopening, node reopening, deterministic hit
+  reopening, and node-context reopening outside the docs-only surface too
+- that same `M6` additive slice now closes the remaining bundled Studio repo
+  projected query-and-navigation family too: `tests/unit/studio_repo_sync_api.rs`
+  now also exercises `/api/repo/projected-page-index-tree-search`,
+  `/api/repo/projected-page-search`, `/api/repo/projected-retrieval`,
+  `/api/repo/projected-page-family-context`,
+  `/api/repo/projected-page-family-search`,
+  `/api/repo/projected-page-family-cluster`,
+  `/api/repo/projected-page-navigation`,
+  `/api/repo/projected-page-navigation-search`, and
+  `/api/repo/projected-page-index-trees` through the builtin-registry
+  external Modelica path, so the gateway-layer additive proof now also
+  covers deterministic section search, projected page search, mixed
+  projected retrieval, grouped family reopening, single-family reopening,
+  navigation-bundle reopening, navigation-search expansion, and projected
+  tree listing outside the docs-only surface too
 
 ## Current Compatibility Ledger
 
@@ -236,11 +520,12 @@ The current live tree now has a narrower set of Julia-named outward surfaces.
 These should be treated as an explicit compatibility ledger rather than as
 default host vocabulary.
 
-### Legacy Julia names that still remain intentionally
+### Legacy compatibility surfaces that still remain intentionally
 
-| Surface | Current path | Why it still exists | Migration rule |
-| :--- | :--- | :--- | :--- |
-| Legacy Studio compatibility artifact JSON shape | `src/gateway/studio/router/handlers/capabilities/deployment.rs` | Existing Studio-facing JSON payloads still preserve Julia-compatible field grouping on the compat route | Keep as a route-local JSON wrapper over `UiPluginArtifact`; do not reintroduce a dedicated compatibility type leaf or canonical Studio type export |
+No host-owned outward compatibility route, tool surface, or crate-root
+compatibility namespace remains in the live artifact path. The remaining
+Julia-specific compatibility imports are package-owned in
+`packages/rust/crates/xiuxian-wendao-julia/src/compatibility/link_graph/`.
 
 ### Julia names that are now compatibility-seam only
 
@@ -268,53 +553,47 @@ should not reappear on higher-level host surfaces:
 The current compatibility seams are now physically grouped as follows:
 
 ```text
-src/compatibility/
-  link_graph.rs
-
-src/gateway/studio/router/handlers/capabilities/
-  deployment.rs
+packages/rust/crates/xiuxian-wendao-julia/src/compatibility/
+  link_graph/
 ```
 
-The crate-root compatibility shim work should remain under
-`src/compatibility/`. The remaining Studio compat JSON adaptation is now
-route-local in the deployment handler and should not be promoted back into a
-dedicated type compatibility folder.
+The remaining compatibility import work is now package-owned under
+`xiuxian-wendao-julia`.
 
-The crate root now exposes an explicit `src/compatibility/` namespace. Inside
-that namespace, `src/compatibility/link_graph.rs` is the canonical compat-first
-path and the only remaining crate-root compatibility module.
-
-The crate-root flat Julia re-export block is gone, the `runtime_config`
-compatibility sub-namespace has been retired, and the former
-`src/compatibility/julia.rs` shim has now been deleted as well. The remaining
-host-side legacy regression no longer imports any Julia-named crate-root helper
-path from `src/link_graph/runtime_config/tests.rs`.
+The host crate-root compatibility shim is gone. The flat crate-root Julia
+re-export block, the `runtime_config` compatibility sub-namespace, the former
+`src/compatibility/julia.rs` shim, and the final
+`src/compatibility/link_graph.rs` migration module are all retired from the
+live tree. The remaining host-side legacy regression no longer imports any
+crate-root compatibility helper path.
 
 Downstream migration guidance now becomes:
 
-1. prefer `crate::compatibility::link_graph::*` for compat-first runtime-config
-   DTO imports and deployment helpers
-2. treat Julia-named crate-root helper imports as retired from host code
-3. move remaining legacy Julia compatibility usage into package-owned or
-   leaf-level compatibility seams instead of restoring a crate-root Julia shim
+1. prefer `xiuxian_wendao_julia::compatibility::link_graph::*` for
+   Julia-specific deployment and launch compatibility DTO imports
+2. treat host crate-root compatibility imports as retired from code
+3. keep generic plugin-artifact inspection on the canonical `xiuxian-wendao`
+   surfaces instead of restoring a host compatibility namespace
 
 ### Next removal / generalization candidates
 
 The next outward surfaces most likely to move after `P1` are:
 
-1. Studio route-local compat JSON adapter retirement once generic consumers
-   can accept the primary plugin-artifact payload directly
-2. any remaining `UiJulia*` historical wording in tests or notes once generic
-   plugin artifact UI payloads become the canonical external contract
+1. post-`M5` downstream import cleanup for any package-owned Julia
+   compatibility DTO users
+2. post-`M6` additive-proof expansion beyond the landed Modelica slice,
+   reusing the canonical generic plugin-artifact and plugin-capability
+   surfaces without reintroducing host-owned compatibility seams
 
-## Exit Criteria for `Gate P0`
+## Stage-B Acceptance State
 
-`Gate P0` is complete when:
+The outward-alignment bundle and exit review are complete when:
 
-1. this inventory remains accurate for the live tree
-2. every listed surface has a resolved owner
-3. every listed medium or complex seam has a target feature-folder namespace
-4. `P1` implementation work can proceed without reopening ownership debates
+1. this inventory describes the live outward surfaces rather than only the
+   early extraction map
+2. the active docs agree that late-`M6` additive proof now spans repo-facing,
+   docs-facing, and Studio-facing consumers plus the repo service-state bundle
+3. the next governed move is the RFC `Phase 7` transport-hardening target
 
 :RELATIONS:
 :LINKS: [[index]], [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]], [[06_roadmap/405_large_rust_modularization]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]], [[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]
@@ -324,5 +603,5 @@ The next outward surfaces most likely to move after `P1` are:
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-03-28
+:LAST_SYNC: 2026-03-29
 :END:

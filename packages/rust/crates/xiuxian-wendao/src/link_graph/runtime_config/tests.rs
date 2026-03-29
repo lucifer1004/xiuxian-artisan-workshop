@@ -1,11 +1,9 @@
 use super::{
     export_link_graph_compat_deployment_artifact_toml, resolve_link_graph_agentic_runtime,
     resolve_link_graph_coactivation_runtime, resolve_link_graph_compat_deployment_artifact,
-    resolve_link_graph_retrieval_policy_runtime, resolve_link_graph_rerank_binding,
+    resolve_link_graph_rerank_binding, resolve_link_graph_retrieval_policy_runtime,
 };
-use crate::link_graph::runtime_config::constants::{
-    DEFAULT_LINK_GRAPH_JULIA_DEPLOYMENT_ARTIFACT_SCHEMA_VERSION,
-};
+use crate::link_graph::runtime_config::constants::DEFAULT_LINK_GRAPH_JULIA_DEPLOYMENT_ARTIFACT_SCHEMA_VERSION;
 use crate::link_graph::runtime_config::models::LinkGraphSemanticIgnitionBackend;
 use crate::link_graph::runtime_config::models::retrieval::{
     julia_deployment_artifact_selector, julia_rerank_provider_selector,
@@ -229,10 +227,7 @@ similarity_weight = 0.8
     let launch_spec = runtime.julia_rerank.plugin_launch_spec();
     assert_eq!(manifest.launcher_path, launch_spec.launcher_path);
     assert_eq!(manifest.args, launch_spec.args);
-    assert_eq!(
-        manifest.launcher_path,
-        DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH
-    );
+    assert_eq!(manifest.launcher_path, DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH);
     assert_eq!(
         manifest.args,
         vec![
@@ -266,18 +261,25 @@ similarity_weight = 0.8
     assert_eq!(artifact.timeout_secs, Some(15));
     assert_eq!(artifact.launch, manifest);
 
-    let direct_binding = runtime.julia_rerank
+    let direct_binding = runtime
+        .julia_rerank
         .rerank_provider_binding()
         .expect("direct generic rerank binding");
     let binding = runtime.rerank_binding().expect("generic rerank binding");
-    assert_eq!(direct_binding.selector.provider.0, binding.selector.provider.0);
+    assert_eq!(
+        direct_binding.selector.provider.0,
+        binding.selector.provider.0
+    );
     assert_eq!(
         direct_binding.selector.capability_id.0,
         binding.selector.capability_id.0
     );
     assert_eq!(direct_binding.endpoint.base_url, binding.endpoint.base_url);
     assert_eq!(binding.selector, julia_rerank_provider_selector());
-    assert_eq!(binding.endpoint.base_url.as_deref(), Some("http://127.0.0.1:8088"));
+    assert_eq!(
+        binding.endpoint.base_url.as_deref(),
+        Some("http://127.0.0.1:8088")
+    );
     assert_eq!(binding.endpoint.route.as_deref(), Some("/arrow-ipc"));
     assert_eq!(binding.endpoint.health_route.as_deref(), Some("/healthz"));
     assert_eq!(binding.endpoint.timeout_secs, Some(15));
@@ -409,15 +411,21 @@ fn test_compat_deployment_artifact_writes_json_file() -> Result<(), Box<dyn std:
 
 #[test]
 fn legacy_julia_runtime_type_aliases_match_compat_aliases() {
-    let compat_artifact = std::any::type_name::<super::models::retrieval::LinkGraphCompatDeploymentArtifact>();
-    let legacy_artifact = std::any::type_name::<super::models::retrieval::LinkGraphJuliaDeploymentArtifact>();
+    let compat_artifact =
+        std::any::type_name::<super::models::retrieval::LinkGraphCompatDeploymentArtifact>();
+    let legacy_artifact =
+        std::any::type_name::<super::models::retrieval::LinkGraphJuliaDeploymentArtifact>();
     assert_eq!(compat_artifact, legacy_artifact);
 
-    let compat_launch = std::any::type_name::<super::models::retrieval::LinkGraphCompatAnalyzerLaunchManifest>();
-    let legacy_launch = std::any::type_name::<super::models::retrieval::LinkGraphJuliaAnalyzerLaunchManifest>();
+    let compat_launch =
+        std::any::type_name::<super::models::retrieval::LinkGraphCompatAnalyzerLaunchManifest>();
+    let legacy_launch =
+        std::any::type_name::<super::models::retrieval::LinkGraphJuliaAnalyzerLaunchManifest>();
     assert_eq!(compat_launch, legacy_launch);
 
-    let compat_runtime = std::any::type_name::<super::models::retrieval::LinkGraphCompatRerankRuntimeConfig>();
-    let legacy_runtime = std::any::type_name::<super::models::retrieval::LinkGraphJuliaRerankRuntimeConfig>();
+    let compat_runtime =
+        std::any::type_name::<super::models::retrieval::LinkGraphCompatRerankRuntimeConfig>();
+    let legacy_runtime =
+        std::any::type_name::<super::models::retrieval::LinkGraphJuliaRerankRuntimeConfig>();
     assert_eq!(compat_runtime, legacy_runtime);
 }

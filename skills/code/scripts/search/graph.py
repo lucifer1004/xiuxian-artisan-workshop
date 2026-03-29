@@ -11,8 +11,8 @@ Orchestrates strategy-aware search execution with:
 from datetime import datetime
 from typing import Any
 
-from omni.tracer.pipeline_checkpoint import compile_workflow
-from omni.tracer.workflow_engine import END_NODE, NativeStateGraph
+from xiuxian_tracer.pipeline_checkpoint import compile_workflow
+from xiuxian_tracer.workflow_engine import END_NODE, NativeStateGraph
 
 from .nodes import classifier, engines, formatter
 from .state import SearchGraphState

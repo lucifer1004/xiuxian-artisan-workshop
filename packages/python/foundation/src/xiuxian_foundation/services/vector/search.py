@@ -454,11 +454,14 @@ def _phase_scope(phase: str, extra: dict[str, Any] | None = None):
 # --- Semantic search ---
 
 if TYPE_CHECKING:
+
     class VectorSearchClient(Protocol):
         _search_cache: Any
 
         @staticmethod
-        def _log_error(message: str, error_code: str, cause: str, error: str, **context: Any) -> None: ...
+        def _log_error(
+            message: str, error_code: str, cause: str, error: str, **context: Any
+        ) -> None: ...
 
         @staticmethod
         def _is_table_not_found(error: Exception) -> bool: ...

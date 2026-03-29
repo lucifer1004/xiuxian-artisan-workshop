@@ -24,15 +24,15 @@ def assert_benchmark_quality(cfg: Any) -> None:
             failures.append(f"missing mode summary: {mode}")
             continue
         query_turns = int(summary.get("query_turns", 0))
-        mcp_error_turns = int(summary.get("mcp_error_turns", 0))
+        tool_error_turns = int(summary.get("tool_error_turns", 0))
         timeout_fallback_turns = int(summary.get("embedding_timeout_fallback_turns", 0))
         cooldown_fallback_turns = int(summary.get("embedding_cooldown_fallback_turns", 0))
         unavailable_fallback_turns = int(summary.get("embedding_unavailable_fallback_turns", 0))
         fallback_turns_total = int(summary.get("embedding_fallback_turns_total", 0))
         if query_turns <= 0:
             failures.append(f"{mode}.query_turns={query_turns} <= 0")
-        if mcp_error_turns > 0:
-            failures.append(f"{mode}.mcp_error_turns={mcp_error_turns} > 0")
+        if tool_error_turns > 0:
+            failures.append(f"{mode}.tool_error_turns={tool_error_turns} > 0")
         if timeout_fallback_turns > cfg.max_embedding_timeout_fallback_turns:
             failures.append(
                 f"{mode}.embedding_timeout_fallback_turns={timeout_fallback_turns} > "
@@ -63,7 +63,7 @@ def assert_benchmark_quality(cfg: Any) -> None:
 
     print(
         "Benchmark quality gates passed "
-        "(query_turns > 0, mcp_error_turns == 0, embedding fallback budgets respected): "
+        "(query_turns > 0, tool_error_turns == 0, embedding fallback budgets respected): "
         + "; ".join(mode_fallback_observations),
         flush=True,
     )

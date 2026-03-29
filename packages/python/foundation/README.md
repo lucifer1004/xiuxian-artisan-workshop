@@ -4,21 +4,20 @@ metadata:
   title: "Omni Foundation"
 ---
 
-# Omni Foundation
+# Xiuxian Foundation
 
-Shared kernel and utilities for xiuxian-artisan-workshop MCP servers.
+Shared kernel and utilities for retained xiuxian-artisan-workshop runtime helpers.
 
 ## Overview
 
-This package provides shared components used by both the orchestrator and executor agents.
+This package provides shared helper components for retained Python consumers.
 
 ## Core Modules
 
-| Module                     | Purpose                        |
-| -------------------------- | ------------------------------ |
+| Module                        | Purpose                        |
+| ----------------------------- | ------------------------------ |
 | `xiuxian_foundation.config`   | Settings, paths, logging       |
 | `xiuxian_foundation.api`      | Decorators, protocols, types   |
-| `xiuxian_foundation.bridge`   | Rust-Python interop            |
 | `xiuxian_foundation.services` | LLM, memory, embedding, vector |
 | `xiuxian_foundation.runtime`  | Context, isolation, gitops     |
 

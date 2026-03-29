@@ -38,9 +38,9 @@
 
 use super::*;
 
-fn mcp_server(url: &str) -> McpServerEntry {
+fn tool_server(url: &str) -> McpServerEntry {
     McpServerEntry {
-        name: "local-mcp".to_string(),
+        name: "local-tool".to_string(),
         url: Some(url.to_string()),
         command: None,
         args: None,
@@ -66,26 +66,26 @@ fn resolve_inference_url_does_not_duplicate_v1_path() {
 }
 
 #[test]
-fn validate_inference_url_origin_rejects_same_origin_as_mcp_by_default() {
-    let servers = vec![mcp_server("http://127.0.0.1:3002/sse")];
+fn validate_inference_url_origin_rejects_same_origin_as_tool_by_default() {
+    let servers = vec![tool_server("http://127.0.0.1:3002/sse")];
     let err =
         validate_inference_url_origin("http://127.0.0.1:3002/v1/chat/completions", &servers, false)
             .expect_err("shared origin should be rejected by default");
     let message = format!("{err:#}");
     assert!(message.contains("invalid inference URL"));
-    assert!(message.contains("OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN=true"));
+    assert!(message.contains("OMNI_AGENT_ALLOW_INFERENCE_TOOL_SHARED_ORIGIN=true"));
 }
 
 #[test]
 fn validate_inference_url_origin_allows_distinct_origin() {
-    let servers = vec![mcp_server("http://127.0.0.1:3002/sse")];
+    let servers = vec![tool_server("http://127.0.0.1:3002/sse")];
     validate_inference_url_origin("http://127.0.0.1:4000/v1/chat/completions", &servers, false)
         .expect("distinct origin should be valid");
 }
 
 #[test]
 fn validate_inference_url_origin_allows_shared_origin_when_opted_in() {
-    let servers = vec![mcp_server("http://127.0.0.1:3002/sse")];
+    let servers = vec![tool_server("http://127.0.0.1:3002/sse")];
     validate_inference_url_origin("http://127.0.0.1:3002/v1/chat/completions", &servers, true)
         .expect("opt-in should allow shared origin");
 }

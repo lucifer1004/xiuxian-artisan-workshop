@@ -156,9 +156,11 @@ impl OpenAiCompatibleSemanticIgnition {
             let embedding = embeddings
                 .get(anchor.anchor_id.as_str())
                 .cloned()
-                .ok_or_else(|| OpenAiCompatiblePluginRerankRequestError::MissingEmbedding {
-                    anchor_id: anchor.anchor_id.clone(),
-                })?;
+                .ok_or_else(
+                    || OpenAiCompatiblePluginRerankRequestError::MissingEmbedding {
+                        anchor_id: anchor.anchor_id.clone(),
+                    },
+                )?;
             rows.push(PluginArrowRequestRow {
                 doc_id: anchor.anchor_id.clone(),
                 vector_score: anchor.vector_score,
@@ -183,7 +185,8 @@ impl OpenAiCompatibleSemanticIgnition {
         request: QuantumSemanticSearchRequest<'_>,
         anchors: &[QuantumAnchorHit],
     ) -> Result<RecordBatch, OpenAiCompatibleJuliaRequestError> {
-        self.build_plugin_rerank_request_batch(request, anchors).await
+        self.build_plugin_rerank_request_batch(request, anchors)
+            .await
     }
 }
 

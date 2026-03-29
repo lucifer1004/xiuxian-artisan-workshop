@@ -11,8 +11,7 @@ pub use coactivation::LinkGraphCoactivationRuntimeConfig;
 pub use index::LinkGraphIndexRuntimeConfig;
 pub(crate) use related::LinkGraphRelatedRuntimeConfig;
 pub use retrieval::{
-    build_rerank_provider_binding,
-    julia_deployment_artifact_selector,
     LinkGraphRetrievalPolicyRuntimeConfig, LinkGraphSemanticIgnitionBackend,
-    LinkGraphSemanticIgnitionRuntimeConfig,
+    LinkGraphSemanticIgnitionRuntimeConfig, build_rerank_provider_binding,
+    julia_deployment_artifact_selector,
 };

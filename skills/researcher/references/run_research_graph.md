@@ -40,7 +40,7 @@ Execute the sharded repository analysis workflow via Qianji with explicit start/
 ## Example
 
 ```python
-@omni("researcher.git_repo_analyer", {"repo_url": "https://github.com/owner/repo", "request": "Analyze the architecture", "action": "start"})
+tool: `researcher.git_repo_analyer` with `{"repo_url": "https://github.com/owner/repo", "request": "Analyze the architecture", "action": "start"}`
 ```
 
 ## See also

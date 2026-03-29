@@ -1,11 +1,10 @@
 //! Integration tests for Repo Intelligence example search flow.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
-
 use std::process::Command;
 
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
+use crate::support::repo_intelligence::{
+    assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
+};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{ExampleSearchQuery, example_search_from_config};
 

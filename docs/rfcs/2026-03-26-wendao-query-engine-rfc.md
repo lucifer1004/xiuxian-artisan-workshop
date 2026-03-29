@@ -32,7 +32,7 @@ This RFC explicitly rejects three directions as the primary architecture:
 
 1. `GraphQL` as the main query engine.
 2. A fully custom Wendao-specific DSL.
-3. A transport-first architecture centered on MCP.
+3. A transport-first architecture centered on an external tool protocol.
 
 The proposed design keeps the external query surface easy for humans, CLI workflows, and LLMs to generate while preserving a native execution path for the current Rust ecosystem.
 

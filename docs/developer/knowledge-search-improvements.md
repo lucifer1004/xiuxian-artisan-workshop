@@ -104,7 +104,7 @@ To improve relevance of **knowledge.recall** results:
 ### 3. Minimum score threshold (recall)
 
 - **knowledge.recall** accepts **`min_score`** (float 0–1). Results with score below this value are dropped. Use e.g. `min_score=0.5` or `0.6` for stricter precision when you want fewer but more relevant hits.
-- MCP call example: `knowledge.recall` with `query`, `limit`, `min_score` (optional).
+- Tool call example: `knowledge.recall` with `query`, `limit`, `min_score` (optional).
 
 ### 4. Optional keywords for technical queries
 

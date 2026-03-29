@@ -38,10 +38,10 @@ from typing import Any
 
 import jinja2
 
-from omni.foundation.config.settings import get_setting
+from xiuxian_foundation.config.settings import get_setting
 
 # ODF Core Imports: SSOT path resolution
-from omni.foundation.runtime.gitops import get_git_toplevel, get_project_root
+from xiuxian_foundation.config.prj import get_project_root
 
 
 def _get_search_paths() -> list:
@@ -54,10 +54,7 @@ def _get_search_paths() -> list:
     # Resolve workspace root from this module location first so temporary test
     # git repos (cwd/project_root) do not break skill template discovery.
     module_dir = Path(__file__).resolve().parent
-    try:
-        workspace_root = get_git_toplevel(module_dir)
-    except RuntimeError:
-        workspace_root = get_project_root()
+    workspace_root = get_project_root()
 
     # Path 1: Skill-local default templates (Primary)
     skill_templates_dir = module_dir.parent / "templates"

@@ -235,7 +235,6 @@ async def test_async_persistence_service() -> bool:
         print("[WARN] AsyncPersistenceService module not available - skipping")
         return True
     try:
-
         # Create mock Rust store
         class MockRustStore:
             def __init__(self):

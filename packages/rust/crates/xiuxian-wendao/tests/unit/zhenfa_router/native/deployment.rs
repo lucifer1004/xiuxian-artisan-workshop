@@ -24,29 +24,24 @@ fn wendao_plugin_artifact_args_deserialize_selector_and_format() {
 }
 
 #[test]
-fn compat_deployment_artifact_args_deserialize_empty_object() {
-    let args: WendaoCompatDeploymentArtifactArgs =
-        serde_json::from_value(serde_json::json!({})).expect("empty args should deserialize");
+fn wendao_plugin_artifact_args_default_to_toml_output() {
+    let args: WendaoPluginArtifactArgs = serde_json::from_value(serde_json::json!({
+        "plugin_id": JULIA_PLUGIN_ID,
+        "artifact_id": JULIA_DEPLOYMENT_ARTIFACT_ID
+    }))
+    .expect("generic plugin-artifact args should deserialize");
+
     assert!(matches!(
         args.output_format,
-        WendaoCompatDeploymentArtifactOutputFormat::Toml
+        WendaoPluginArtifactOutputFormat::Toml
     ));
 }
 
 #[test]
-fn compat_deployment_artifact_args_deserialize_json_output() {
-    let args: WendaoCompatDeploymentArtifactArgs =
-        serde_json::from_value(serde_json::json!({ "output_format": "json" }))
-            .expect("json args should deserialize");
-    assert!(matches!(
-        args.output_format,
-        WendaoCompatDeploymentArtifactOutputFormat::Json
-    ));
-}
-
-#[test]
-fn compat_deployment_artifact_args_deserialize_output_path() {
-    let args: WendaoCompatDeploymentArtifactArgs = serde_json::from_value(serde_json::json!({
+fn wendao_plugin_artifact_args_deserialize_output_path() {
+    let args: WendaoPluginArtifactArgs = serde_json::from_value(serde_json::json!({
+        "plugin_id": JULIA_PLUGIN_ID,
+        "artifact_id": JULIA_DEPLOYMENT_ARTIFACT_ID,
         "output_format": "json",
         "output_path": ".run/julia/artifact.json"
     }))
@@ -59,19 +54,8 @@ fn compat_deployment_artifact_args_deserialize_output_path() {
 }
 
 #[test]
-fn compat_deployment_artifact_args_accept_legacy_empty_shape() {
-    let args: WendaoCompatDeploymentArtifactArgs =
-        serde_json::from_value(serde_json::json!({ "output_format": "json" }))
-            .expect("compat args should deserialize");
-    assert!(matches!(
-        args.output_format,
-        WendaoCompatDeploymentArtifactOutputFormat::Json
-    ));
-}
-
-#[test]
 #[serial]
-fn render_compat_deployment_artifact_toml_uses_runtime_config() {
+fn render_plugin_artifact_toml_uses_runtime_config() {
     let temp = tempfile::tempdir().expect("tempdir");
     let config_path = temp.path().join("wendao.toml");
     fs::write(
@@ -88,7 +72,9 @@ analyzer_strategy = "similarity_only"
     let config_path_string = config_path.to_string_lossy().to_string();
     set_link_graph_wendao_config_override(&config_path_string);
 
-    let rendered = render_compat_deployment_artifact_toml().expect("render toml");
+    let selector = build_plugin_artifact_selector(JULIA_PLUGIN_ID, JULIA_DEPLOYMENT_ARTIFACT_ID)
+        .expect("build plugin selector");
+    let rendered = render_plugin_artifact_toml(&selector).expect("render toml");
     assert!(rendered.contains("artifact_schema_version = \"v1\""));
     assert!(rendered.contains("generated_at = "));
     assert!(rendered.contains("base_url = \"http://127.0.0.1:8088\""));
@@ -100,7 +86,7 @@ analyzer_strategy = "similarity_only"
 
 #[test]
 #[serial]
-fn render_compat_deployment_artifact_json_uses_runtime_config() {
+fn render_plugin_artifact_json_uses_runtime_config() {
     let temp = tempfile::tempdir().expect("tempdir");
     let config_path = temp.path().join("wendao.toml");
     fs::write(
@@ -117,7 +103,9 @@ analyzer_strategy = "similarity_only"
     let config_path_string = config_path.to_string_lossy().to_string();
     set_link_graph_wendao_config_override(&config_path_string);
 
-    let rendered = render_compat_deployment_artifact_json().expect("render json");
+    let selector = build_plugin_artifact_selector(JULIA_PLUGIN_ID, JULIA_DEPLOYMENT_ARTIFACT_ID)
+        .expect("build plugin selector");
+    let rendered = render_plugin_artifact_json(&selector).expect("render json");
     assert!(rendered.contains("\"artifact_schema_version\": \"v1\""));
     assert!(rendered.contains("\"generated_at\": "));
     assert!(rendered.contains("\"base_url\": \"http://127.0.0.1:8088\""));
@@ -129,7 +117,7 @@ analyzer_strategy = "similarity_only"
 
 #[test]
 #[serial]
-fn export_compat_deployment_artifact_writes_json_file_when_requested() {
+fn render_plugin_artifact_uses_selected_format() {
     let temp = tempfile::tempdir().expect("tempdir");
     let config_path = temp.path().join("wendao.toml");
     fs::write(
@@ -145,17 +133,13 @@ service_mode = "stream"
     let config_path_string = config_path.to_string_lossy().to_string();
     set_link_graph_wendao_config_override(&config_path_string);
 
-    let output_path = temp.path().join("exports").join("artifact.json");
-    let message = export_compat_deployment_artifact(WendaoCompatDeploymentArtifactArgs {
-        output_format: WendaoCompatDeploymentArtifactOutputFormat::Json,
-        output_path: Some(output_path.to_string_lossy().to_string()),
-    })
-    .expect("export json file");
+    let selector = build_plugin_artifact_selector(JULIA_PLUGIN_ID, JULIA_DEPLOYMENT_ARTIFACT_ID)
+        .expect("build plugin selector");
+    let rendered = render_plugin_artifact(&selector, WendaoPluginArtifactOutputFormat::Json)
+        .expect("render generic plugin artifact");
 
-    assert!(message.contains("Wrote compatibility deployment artifact (json)"));
-    let written = fs::read_to_string(&output_path).expect("read written json");
-    assert!(written.contains("\"artifact_schema_version\": \"v1\""));
-    assert!(written.contains("\"route\": \"/arrow-ipc\""));
+    assert!(rendered.contains("\"artifact_schema_version\": \"v1\""));
+    assert!(rendered.contains("\"route\": \"/arrow-ipc\""));
 }
 
 #[test]
@@ -191,42 +175,4 @@ service_mode = "stream"
     let written = fs::read_to_string(&output_path).expect("read written json");
     assert!(written.contains("\"artifact_schema_version\": \"v1\""));
     assert!(written.contains("\"route\": \"/arrow-ipc\""));
-}
-
-#[test]
-#[serial]
-fn compat_deployment_artifact_helpers_still_render_and_export() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let config_path = temp.path().join("wendao.toml");
-    fs::write(
-        &config_path,
-        r#"[link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:8088"
-route = "/arrow-ipc"
-schema_version = "v1"
-service_mode = "stream"
-"#,
-    )
-    .expect("write config");
-    let config_path_string = config_path.to_string_lossy().to_string();
-    set_link_graph_wendao_config_override(&config_path_string);
-
-    let rendered_toml = render_compat_deployment_artifact_toml().expect("compat render toml");
-    assert!(rendered_toml.contains("artifact_schema_version = \"v1\""));
-
-    let rendered_json = render_compat_deployment_artifact_json().expect("compat render json");
-    assert!(rendered_json.contains("\"artifact_schema_version\": \"v1\""));
-
-    let rendered_via_format = render_compat_deployment_artifact(
-        WendaoCompatDeploymentArtifactOutputFormat::Toml,
-    )
-    .expect("compat render by format");
-    assert!(rendered_via_format.contains("route = \"/arrow-ipc\""));
-
-    let exported = export_compat_deployment_artifact(WendaoCompatDeploymentArtifactArgs {
-        output_format: WendaoCompatDeploymentArtifactOutputFormat::Json,
-        output_path: None,
-    })
-    .expect("compat export");
-    assert!(exported.contains("\"route\": \"/arrow-ipc\""));
 }

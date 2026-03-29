@@ -27,8 +27,8 @@ class SloConfig:
     min_quality_score: float
     required_benchmark_modes: tuple[str, ...]
     min_query_turns: int
-    max_mode_mcp_error_turns: int
-    max_total_mcp_error_turns: int
+    max_mode_tool_error_turns: int
+    max_total_tool_error_turns: int
     min_session_steps: int
     max_session_failed_steps: int
     enable_stream_gate: bool

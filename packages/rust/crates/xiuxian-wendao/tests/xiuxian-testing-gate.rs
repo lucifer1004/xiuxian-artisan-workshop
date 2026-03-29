@@ -71,6 +71,94 @@ mod quantum_fusion_saliency_window;
 mod repo_doc_coverage;
 
 #[cfg(not(feature = "performance"))]
+#[path = "integration/docs_markdown_documents.rs"]
+mod docs_markdown_documents;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_search.rs"]
+mod docs_search;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_retrieval.rs"]
+mod docs_retrieval;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_retrieval_context.rs"]
+mod docs_retrieval_context;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_retrieval_hit.rs"]
+mod docs_retrieval_hit;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_planner_item.rs"]
+mod docs_planner_item;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_planner_queue.rs"]
+mod docs_planner_queue;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_planner_rank.rs"]
+mod docs_planner_rank;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_planner_search.rs"]
+mod docs_planner_search;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_planner_workset.rs"]
+mod docs_planner_workset;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_navigation_search.rs"]
+mod docs_navigation_search;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_projected_gap_report.rs"]
+mod docs_projected_gap_report;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_navigation.rs"]
+mod docs_navigation;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_family_search.rs"]
+mod docs_family_search;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_family_context.rs"]
+mod docs_family_context;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_family_cluster.rs"]
+mod docs_family_cluster;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_page.rs"]
+mod docs_page;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_page_index_tree.rs"]
+mod docs_page_index_tree;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_page_index_documents.rs"]
+mod docs_page_index_documents;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_page_index_trees.rs"]
+mod docs_page_index_trees;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_page_index_tree_search.rs"]
+mod docs_page_index_tree_search;
+
+#[cfg(not(feature = "performance"))]
+#[path = "integration/docs_page_index_node.rs"]
+mod docs_page_index_node;
+
+#[cfg(not(feature = "performance"))]
 #[path = "integration/repo_example_search.rs"]
 mod repo_example_search;
 

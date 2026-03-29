@@ -127,7 +127,7 @@ def test_run_gate_quick_profile_invokes_expected_steps(tmp_path: Path) -> None:
         run_discover_cache_gate_fn=_mark("discover"),
         run_trace_reconstruction_gate_fn=_mark("trace"),
         run_cross_group_complex_gate_fn=_mark("cross"),
-        assert_mcp_waiting_warning_budget_fn=_mark("mcp_wait"),
+        assert_tool_waiting_warning_budget_fn=_mark("tool_wait"),
         assert_memory_stream_warning_budget_fn=_mark("memory_stream"),
         assert_evolution_quality_fn=_mark("evolution"),
         assert_evolution_slow_response_quality_fn=_mark("slow_response"),
@@ -138,5 +138,5 @@ def test_run_gate_quick_profile_invokes_expected_steps(tmp_path: Path) -> None:
 
     assert "Start Valkey" in invoked_titles
     assert any("Quick gate: memory suite" in title for title in invoked_titles)
-    assert invoked_gates == ["reflection", "discover", "trace", "mcp_wait", "memory_stream"]
+    assert invoked_gates == ["reflection", "discover", "trace", "tool_wait", "memory_stream"]
     assert terminated == ["xiuxian-daochang runtime", "mock Telegram API"]

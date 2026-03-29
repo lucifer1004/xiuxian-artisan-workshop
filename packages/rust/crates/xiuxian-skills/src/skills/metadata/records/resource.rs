@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Represents a discovered MCP Resource from @`skill_resource` decorated functions.
+/// Represents a discovered tool resource from `@skill_resource` decorated functions.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ResourceRecord {
     /// Resource name (from decorator or function name).

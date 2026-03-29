@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Transport-first Python client package for the xiuxian-wendao Rust runtime"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pyarrow>=14.0.0",
+]
 
 [dependency-groups]
 test = [

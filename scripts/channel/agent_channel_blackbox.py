@@ -46,8 +46,8 @@ ProbeConfig = _MODULES.probe_config_cls
 DISCORD_SESSION_SCOPE_PREFIX = _MODULES.discord_session_scope_prefix
 TELEGRAM_SESSION_SCOPE_PREFIX = _MODULES.telegram_session_scope_prefix
 ERROR_PATTERNS = _MODULES.error_patterns
-MCP_OBSERVABILITY_EVENTS = _MODULES.mcp_observability_events
-MCP_WAITING_EVENTS = _MODULES.mcp_waiting_events
+TOOL_OBSERVABILITY_EVENTS = _MODULES.tool_observability_events
+TOOL_WAITING_EVENTS = _MODULES.tool_waiting_events
 TARGET_SESSION_SCOPE_PLACEHOLDER = _MODULES.target_session_scope_placeholder
 
 _exports.apply_compat_exports(

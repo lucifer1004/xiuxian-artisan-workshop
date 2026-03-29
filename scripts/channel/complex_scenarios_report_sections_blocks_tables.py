@@ -16,7 +16,7 @@ from complex_scenarios_report_sections_blocks_tables_diagnostics import (
     append_failure_tails as _append_failure_tails_impl,
 )
 from complex_scenarios_report_sections_blocks_tables_diagnostics import (
-    append_mcp_diagnostics as _append_mcp_diagnostics_impl,
+    append_tool_diagnostics as _append_tool_diagnostics_impl,
 )
 
 
@@ -35,9 +35,9 @@ def append_memory_adaptation(lines: list[str], scenario: dict[str, object]) -> N
     _append_memory_adaptation_impl(lines, scenario)
 
 
-def append_mcp_diagnostics(lines: list[str], scenario: dict[str, object]) -> None:
-    """Append MCP event diagnostics table."""
-    _append_mcp_diagnostics_impl(lines, scenario)
+def append_tool_diagnostics(lines: list[str], scenario: dict[str, object]) -> None:
+    """Append tool runtime diagnostics table."""
+    _append_tool_diagnostics_impl(lines, scenario)
 
 
 def append_failure_tails(lines: list[str], scenario: dict[str, object]) -> None:

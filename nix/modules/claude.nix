@@ -33,7 +33,7 @@ in
     # };
   };
   claude.code.mcpServers = {
-    # Local devenv MCP server
+    # Local devenv tool-runtime helper
     devenv = {
       type = "stdio";
       command = "devenv";
@@ -47,17 +47,17 @@ in
     #   command = "nix";
     #   args = [
     #     "run"
-    #     "github:utensils/mcp-nixos"
+    #     "github:utensils/tool-runtime-nixos"
     #     "--"
     #   ];
     # };
     # MiniMax = {
     #   type = "stdio";
     #   command = "uvx";
-    #   args = [ "minimax-coding-plan-mcp" ];
+    #   args = [ "minimax-coding-plan-tool-runtime" ];
     #   env = {
     #     MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;
-    #     MINIMAX_MCP_BASE_PATH = "${config.devenv.root}/.minimax-output";
+    #     MINIMAX_TOOL_BASE_PATH = "${config.devenv.root}/.minimax-output";
     #     MINIMAX_API_HOST = "https://api.minimax.io";
     #     MINIMAX_API_RESOURCE_MODE = "url";
     #   };

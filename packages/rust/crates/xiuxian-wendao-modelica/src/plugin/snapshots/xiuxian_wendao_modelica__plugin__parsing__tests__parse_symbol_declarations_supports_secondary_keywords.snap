@@ -5,24 +5,24 @@ expression: payload
 ---
 [
   {
-    "name": "ControllerState",
+    "equations_count": 0,
     "kind": "Type",
-    "signature": "record ControllerState",
     "line_start": 2,
-    "equations_count": 0
+    "name": "ControllerState",
+    "signature": "record ControllerState"
   },
   {
-    "name": "Gain",
+    "equations_count": 0,
     "kind": "Constant",
-    "signature": "parameter Gain = 1;",
     "line_start": 5,
-    "equations_count": 0
+    "name": "Gain",
+    "signature": "parameter Gain = 1;"
   },
   {
-    "name": "Limiter",
+    "equations_count": 0,
     "kind": "Type",
-    "signature": "block Limiter",
     "line_start": 7,
-    "equations_count": 0
+    "name": "Limiter",
+    "signature": "block Limiter"
   }
 ]

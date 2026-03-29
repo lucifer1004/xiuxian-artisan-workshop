@@ -27,7 +27,7 @@ extract_bot_excerpt = _runtime_module.extract_bot_excerpt
 detect_memory_event_flags = _runtime_module.detect_memory_event_flags
 _as_float = _runtime_module.as_float
 extract_memory_metrics = _runtime_module.extract_memory_metrics
-extract_mcp_metrics = _runtime_module.extract_mcp_metrics
+extract_tool_metrics = _runtime_module.extract_tool_metrics
 run_step = _runtime_module.run_step
 skipped_step_result = _runtime_module.skipped_step_result
 run_scenario = _runtime_module.run_scenario
@@ -37,7 +37,7 @@ __all__ = [
     "_required_str_field",
     "detect_memory_event_flags",
     "extract_bot_excerpt",
-    "extract_mcp_metrics",
+    "extract_tool_metrics",
     "extract_memory_metrics",
     "load_scenarios",
     "merge_quality_requirements",

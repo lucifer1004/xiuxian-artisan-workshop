@@ -34,8 +34,8 @@ class BlackboxModuleBindings:
     http_module: Any
     entry_bindings_module: Any
     error_patterns: tuple[str, ...]
-    mcp_observability_events: tuple[str, ...]
-    mcp_waiting_events: frozenset[str]
+    tool_observability_events: tuple[str, ...]
+    tool_waiting_events: frozenset[str]
     target_session_scope_placeholder: str
     telegram_session_scope_prefix: str
     discord_session_scope_prefix: str

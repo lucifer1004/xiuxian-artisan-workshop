@@ -1,7 +1,7 @@
 """
 interfaces.py - Core type definitions for the execution tracing system
 
-UltraRAG-style fine-grained execution tracing for workflows + MCP.
+UltraRAG-style fine-grained execution tracing for workflows and tool runtime calls.
 
 Defines:
 - StepType: Enumeration of step types (LLM, TOOL, RETRIEVAL, REASONING, etc.)

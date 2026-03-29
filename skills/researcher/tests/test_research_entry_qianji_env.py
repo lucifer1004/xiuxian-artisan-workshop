@@ -5,7 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from xiuxian_foundation.config.prj import get_project_root
+from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 RESEARCHER_SCRIPTS = Path(__file__).parent.parent / "scripts"
 if str(RESEARCHER_SCRIPTS) not in sys.path:
@@ -58,10 +63,9 @@ def test_prepare_cargo_subprocess_env_keeps_valid_pyo3_python() -> None:
 def test_run_qianji_engine_uses_default_subprocess_env(monkeypatch) -> None:
     calls: dict[str, object] = {}
 
-    async def _fake_run_subprocess(args, *, cwd, extra_env=None, text=True):
+    async def _fake_run_subprocess(args, *, cwd, text=True):
         calls["args"] = args
         calls["cwd"] = cwd
-        calls["extra_env"] = extra_env
         calls["text"] = text
         return _completed_process(
             'boot logs\n=== Final Qianji Execution Result ===\n{"status": "ok"}\n'
@@ -80,13 +84,12 @@ def test_run_qianji_engine_uses_default_subprocess_env(monkeypatch) -> None:
     assert success is True
     assert error == ""
     assert result["status"] == "ok"
-    assert calls["cwd"] == "."
-    assert calls["extra_env"] is None
+    assert calls["cwd"] == str(get_project_root())
     assert calls["text"] is True
 
 
 def test_run_qianji_engine_reports_missing_json_marker(monkeypatch) -> None:
-    async def _fake_run_subprocess(args, *, cwd, extra_env=None, text=True):
+    async def _fake_run_subprocess(args, *, cwd, text=True):
         return _completed_process("no result marker found")
 
     monkeypatch.setattr(research_entry, "_run_subprocess", _fake_run_subprocess)

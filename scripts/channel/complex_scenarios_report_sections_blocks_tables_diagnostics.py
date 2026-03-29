@@ -3,28 +3,28 @@
 
 from __future__ import annotations
 
-from complex_scenarios_report_sections_support import format_mcp_event_counts
+from complex_scenarios_report_sections_support import format_tool_event_counts
 
 
-def append_mcp_diagnostics(lines: list[str], scenario: dict[str, object]) -> None:
-    """Append MCP event diagnostics table."""
+def append_tool_diagnostics(lines: list[str], scenario: dict[str, object]) -> None:
+    """Append tool-runtime diagnostics table."""
     lines.extend(
         [
             "",
-            "MCP stage diagnostics:",
+            "Tool runtime diagnostics:",
             "",
-            "| Step | mcp_last_event | waiting_seen | mcp_event_counts |",
+            "| Step | tool_last_event | waiting_seen | tool_event_counts |",
             "|---|---|---|---|",
         ]
     )
     for step in scenario["steps"]:
-        mcp_last_event = str(step.get("mcp_last_event") or "-")
-        waiting_seen = "true" if step.get("mcp_waiting_seen") else "false"
-        counts_text = format_mcp_event_counts(step.get("mcp_event_counts"))
+        tool_last_event = str(step.get("tool_last_event") or "-")
+        waiting_seen = "true" if step.get("tool_waiting_seen") else "false"
+        counts_text = format_tool_event_counts(step.get("tool_event_counts"))
         lines.append(
             "| `{sid}` | `{last}` | {waiting} | `{counts}` |".format(
                 sid=step["step_id"],
-                last=mcp_last_event.replace("|", "\\|"),
+                last=tool_last_event.replace("|", "\\|"),
                 waiting=waiting_seen,
                 counts=counts_text.replace("|", "\\|"),
             )

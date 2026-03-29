@@ -25,7 +25,7 @@ def _validate(schema_name: str, payload: dict) -> None:
 def test_discover_match_schema_accepts_contract_payload() -> None:
     payload = {
         "tool": "skill.discover",
-        "usage": '@omni("skill.discover", {"intent": "<intent: string>"})',
+        "usage": 'tool: skill.discover with {"intent": "<intent: string>"}',
         "score": 0.67,
         "final_score": 0.82,
         "confidence": "high",

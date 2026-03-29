@@ -31,9 +31,9 @@ class ProbeRuntimeState:
     bot_observations: list[str]
     command_reply_observations: list[dict[str, object]]
     json_reply_summary_observations: list[dict[str, str]]
-    mcp_event_counts: Counter[str]
-    mcp_last_event: str | None
-    mcp_waiting_seen: bool
+    tool_event_counts: Counter[str]
+    tool_last_event: str | None
+    tool_waiting_seen: bool
 
 
 def build_probe_runtime_state(
@@ -77,7 +77,7 @@ def build_probe_runtime_state(
         bot_observations=[],
         command_reply_observations=[],
         json_reply_summary_observations=[],
-        mcp_event_counts=Counter(),
-        mcp_last_event=None,
-        mcp_waiting_seen=False,
+        tool_event_counts=Counter(),
+        tool_last_event=None,
+        tool_waiting_seen=False,
     )

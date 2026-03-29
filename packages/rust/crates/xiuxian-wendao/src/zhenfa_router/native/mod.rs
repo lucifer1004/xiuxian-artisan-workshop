@@ -21,11 +21,8 @@ pub use agentic_nav::WendaoAgenticNavTool;
 pub use audit::{audit_search_payload, evaluate_alignment};
 pub use context::WendaoContextExt;
 pub use deployment::{
-    WendaoCompatDeploymentArtifactArgs, WendaoCompatDeploymentArtifactOutputFormat,
-    WendaoCompatDeploymentArtifactTool, WendaoPluginArtifactArgs, WendaoPluginArtifactOutputFormat,
-    WendaoPluginArtifactTool, export_compat_deployment_artifact, export_plugin_artifact,
-    render_compat_deployment_artifact, render_compat_deployment_artifact_json,
-    render_compat_deployment_artifact_toml, render_plugin_artifact, render_plugin_artifact_json,
+    WendaoPluginArtifactArgs, WendaoPluginArtifactOutputFormat, WendaoPluginArtifactTool,
+    export_plugin_artifact, render_plugin_artifact, render_plugin_artifact_json,
     render_plugin_artifact_toml, wendao_plugin_artifact,
 };
 pub use forwarder::{

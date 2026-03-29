@@ -86,13 +86,13 @@ class _Step:
     memory_decay_seen: bool = False
     memory_recall_credit_count: int = 0
     memory_decay_count: int = 0
-    mcp_waiting_seen: bool = False
-    mcp_event_counts: dict[str, int] | None = None
+    tool_waiting_seen: bool = False
+    tool_event_counts: dict[str, int] | None = None
     memory_planned_bias: float | None = None
     memory_decision: str | None = None
     feedback_command_bias_delta: float | None = None
     feedback_heuristic_bias_delta: float | None = None
-    mcp_last_event: str | None = None
+    tool_last_event: str | None = None
 
 
 @dataclass(frozen=True)
@@ -154,7 +154,7 @@ def test_build_report_render_and_write_outputs(tmp_path: Path) -> None:
         execute_wave_parallel=True,
         runtime_partition_mode="chat_user",
         username="tester",
-        forbid_log_regexes=("tools/call: Mcp error",),
+        forbid_log_regexes=("tools/call: Tool runtime error",),
         global_requirement=_Requirement(1, 0, 1, 1),
         global_quality_requirement=_QualityRequirement(0, 0, 0, 0, 0, 0, 0, 0),
         sessions=(_Session("s1", -1001, 42, None, "group"),),

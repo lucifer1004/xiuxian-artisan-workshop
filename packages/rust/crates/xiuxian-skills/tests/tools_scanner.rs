@@ -905,7 +905,7 @@ async def discover(intent: str, limit: int = 3) -> dict:
 
 /// Tests that `input_schema` correctly infers Python types as JSON Schema types.
 ///
-/// Validates the MCP tool schema specification:
+/// Validates the tool schema specification:
 /// - str -> "string"
 /// - int -> "integer"
 /// - bool -> "boolean"

@@ -13,7 +13,9 @@ BUILTIN_CONTRACTS_VERSION = "v1"
 def load_builtin_tool_contracts() -> dict[str, set[str]]:
     """Load built-in tool contracts from versioned JSON resource."""
     filename = f"contracts.{BUILTIN_CONTRACTS_VERSION}.json"
-    text = resources.files("xiuxian_tracer.contracts").joinpath(filename).read_text(encoding="utf-8")
+    text = (
+        resources.files("xiuxian_tracer.contracts").joinpath(filename).read_text(encoding="utf-8")
+    )
     raw = json.loads(text)
     if not isinstance(raw, dict):
         raise ValueError("Built-in tool contracts must be a JSON object")

@@ -6,10 +6,11 @@
 use serial_test::serial;
 use std::fs;
 use xiuxian_vector::VectorStore;
-use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH;
 use xiuxian_wendao::{
-    LinkGraphCompatRerankRuntimeConfig, LinkGraphIndex, LinkGraphSearchOptions,
-    set_link_graph_wendao_config_override,
+    LinkGraphIndex, LinkGraphSearchOptions, set_link_graph_wendao_config_override,
+};
+use xiuxian_wendao_julia::compatibility::link_graph::{
+    DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, LinkGraphJuliaRerankRuntimeConfig,
 };
 
 use crate::support::wendaoarrow_official_examples::{
@@ -78,11 +79,11 @@ analyzer_strategy = "similarity_only"
     set_link_graph_wendao_config_override(&config_path_string);
 
     let analyzer_runtime =
-        wendaoanalyzer_deployment_artifact_from_runtime(&LinkGraphCompatRerankRuntimeConfig {
+        wendaoanalyzer_deployment_artifact_from_runtime(&LinkGraphJuliaRerankRuntimeConfig {
             service_mode: Some("stream".to_string()),
             analyzer_config_path: Some(DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH.to_string()),
             analyzer_strategy: Some("similarity_only".to_string()),
-            ..LinkGraphCompatRerankRuntimeConfig::default()
+            ..LinkGraphJuliaRerankRuntimeConfig::default()
         });
     let (server_base_url, mut server_guard) = runtime.block_on(
         spawn_wendaoanalyzer_service_from_artifact(&analyzer_runtime),

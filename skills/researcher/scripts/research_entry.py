@@ -14,10 +14,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.logging import get_logger
-from omni.foundation.runtime.cargo_subprocess_env import prepare_cargo_subprocess_env
-from omni.foundation.runtime.gitops import get_git_toplevel
+from xiuxian_foundation.config.logging import get_logger
+from xiuxian_foundation.config.prj import get_project_root
+from xiuxian_foundation.config.prj import get_skills_dir
+from skills._shared.cargo_subprocess_env import prepare_cargo_subprocess_env
 
 logger = get_logger("researcher.entry")
 
@@ -48,9 +48,7 @@ async def run_qianji_engine(
     project_root: str, context: dict[str, Any], session_id: str
 ) -> tuple[bool, dict[str, Any], str]:
     """Execute the Qianji engine with repo_analyzer.toml."""
-    from omni.foundation.config.skills import SKILLS_DIR
-
-    manifest_path = str(SKILLS_DIR("researcher") / "workflows" / "repo_analyzer.toml")
+    manifest_path = str(get_skills_dir() / "researcher" / "workflows" / "repo_analyzer.toml")
 
     cmd = [
         "cargo",
@@ -72,7 +70,7 @@ async def run_qianji_engine(
 
     # LLM runtime config is resolved by Rust (`qianji.toml` + user overrides + env).
     try:
-        engine_root = str(get_git_toplevel(Path(__file__).resolve()))
+        engine_root = str(get_project_root())
     except RuntimeError:
         engine_root = "."
     proc = await _run_subprocess(cmd, cwd=engine_root)
@@ -93,37 +91,6 @@ async def run_qianji_engine(
     return False, {}, "Could not find result JSON marker in engine output."
 
 
-@skill_command(
-    name="git_repo_analyer",
-    description="""
-    Research a git repository: clone, analyze by shards, and produce an index.
-
-    This autonomously analyzes large repositories using a Map-Plan-Loop-Synthesize pattern:
-
-    1. **Setup**: Clone repository and generate file tree map
-    2. **Architect (Plan)**: LLM breaks down the repo into 3-5 logical shards (subsystems)
-    3. **Process Shard (Loop)**: For each shard - compress with repomix + analyze with LLM
-    4. **Synthesize**: Generate index.md linking all shard analyses
-
-    This approach handles large codebases that exceed LLM context limits by analyzing
-    one subsystem at a time, then combining results.
-
-    Args:
-        - repo_url: str - Git repository URL to analyze (required)
-        - request: str = "Analyze the architecture" - Specific analysis goal
-        - action: str = "start" - "start" (propose shards) or "approve" (run deep analysis)
-        - session_id: str = "" - Required for "approve" action
-        - approved_shards: str = "" - JSON string of approved shards for "approve" action
-
-    Returns:
-        dict with success status, harvest directory path, and shard summaries
-    """,
-    category="research",
-    read_only=False,
-    destructive=False,
-    idempotent=True,
-    open_world=True,
-)
 async def run_research_graph(
     repo_url: str,
     request: str = "Analyze the architecture",

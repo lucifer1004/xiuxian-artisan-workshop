@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
-use xiuxian_wendao::analyzers::{
+use xiuxian_wendao_core::repo_intelligence::{
     DocRecord, ExampleRecord, ImportRecord, ModuleRecord, RepoIntelligenceError, SymbolRecord,
 };
 
@@ -254,9 +254,9 @@ pub(crate) fn collect_import_records(
                 .get(source_module.as_str())
                 .map(|module| module.module_id.clone());
             let kind_key = match parsed_import.kind {
-                xiuxian_wendao::analyzers::ImportKind::Symbol => "symbol",
-                xiuxian_wendao::analyzers::ImportKind::Module => "module",
-                xiuxian_wendao::analyzers::ImportKind::Reexport => "reexport",
+                xiuxian_wendao_core::repo_intelligence::ImportKind::Symbol => "symbol",
+                xiuxian_wendao_core::repo_intelligence::ImportKind::Module => "module",
+                xiuxian_wendao_core::repo_intelligence::ImportKind::Reexport => "reexport",
             };
             let import_key = (source_module.clone(), import_name.clone(), kind_key);
             if !seen.insert(import_key) {

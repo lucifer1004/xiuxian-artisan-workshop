@@ -13,20 +13,70 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import importlib
+import sys
+from pathlib import Path
 
 import pytest
+from xiuxian_foundation.api.decorators import normalize_tool_result
+
+
+def _scripts_root() -> Path:
+    return Path(__file__).parent.parent / "scripts"
+
+
+def _ensure_skill_paths() -> None:
+    path_text = str(_scripts_root())
+    if path_text not in sys.path:
+        sys.path.insert(0, path_text)
+
+
+def _load_search_commands_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.commands", None)
+    return importlib.import_module("search.commands")
+
+
+def _load_search_graph_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.graph", None)
+    return importlib.import_module("search.graph")
+
+
+def _load_search_state_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.state", None)
+    return importlib.import_module("search.state")
+
+
+def _load_search_engines_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.nodes.engines", None)
+    return importlib.import_module("search.nodes.engines")
+
+
+def _load_search_nodes_package():
+    _ensure_skill_paths()
+    sys.modules.pop("search.nodes", None)
+    return importlib.import_module("search.nodes")
+
+
+def _load_search_formatter_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.nodes.formatter", None)
+    return importlib.import_module("search.nodes.formatter")
+
+
+def _load_search_classifier_direct_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.nodes.classifier", None)
+    return importlib.import_module("search.nodes.classifier")
 
 
 def _unwrap_command_text(result: object) -> str:
-    if isinstance(result, str):
-        return result
-    assert isinstance(result, dict)
-    assert result.get("isError") is False
-    content = result.get("content")
-    assert isinstance(content, list)
-    assert content
+    normalized = normalize_tool_result(result)
+    content = normalized["content"]
     first = content[0]
-    assert isinstance(first, dict)
     text = first.get("text", "")
     assert isinstance(text, str)
     return text
@@ -36,79 +86,53 @@ class TestCodeSearchCommand:
     """Tests for the code_search command."""
 
     @pytest.fixture
-    def skill_loader(self):
-        """Create a skill loader for code."""
-        from omni.core.skills.tools_loader import create_tools_loader
-        from omni.foundation.config.skills import SKILLS_DIR
+    def code_search(self):
+        """Load the retained code_search command directly."""
+        return _load_search_commands_module().code_search
 
-        scripts_path = SKILLS_DIR() / "code" / "scripts"
-        loader = create_tools_loader(scripts_path, "code")
-        loader.load_all()
-        return loader
+    def test_code_search_command_exists(self, code_search):
+        """Test that code_search command remains importable."""
+        assert callable(code_search)
 
-    def test_code_search_command_exists(self, skill_loader):
-        """Test that code_search command is registered."""
-        assert "code.code_search" in skill_loader.commands
-
-    def test_code_search_is_async(self, skill_loader):
+    def test_code_search_is_async(self, code_search):
         """Test that code_search is an async function."""
-        code_search = skill_loader.commands["code.code_search"]
         assert asyncio.iscoroutinefunction(code_search)
 
     @pytest.mark.asyncio
-    async def test_code_search_returns_xml_format(self, skill_loader):
+    async def test_code_search_returns_xml_format(self, code_search):
         """Test that code_search returns XML-formatted output."""
-        code_search = skill_loader.commands["code.code_search"]
         result = await code_search("def test_function")
         text = _unwrap_command_text(result)
 
         assert "<" in text and ">" in text
 
     @pytest.mark.asyncio
-    async def test_code_search_class_query(self, skill_loader):
+    async def test_code_search_class_query(self, code_search):
         """Test code_search with class query."""
-        code_search = skill_loader.commands["code.code_search"]
-
-        # Test with a simple class query
         result = await code_search("class TestClass")
         assert len(_unwrap_command_text(result)) > 0
 
     @pytest.mark.asyncio
-    async def test_code_search_function_query(self, skill_loader):
+    async def test_code_search_function_query(self, code_search):
         """Test code_search with function query."""
-        code_search = skill_loader.commands["code.code_search"]
-
-        # Test with a function query
         result = await code_search("def hello_world")
         assert len(_unwrap_command_text(result)) > 0
 
     @pytest.mark.asyncio
-    async def test_code_search_with_session_id(self, skill_loader):
+    async def test_code_search_with_session_id(self, code_search):
         """Test code_search with custom session_id."""
-        code_search = skill_loader.commands["code.code_search"]
-
         result = await code_search("def test", session_id="test_session_123")
         assert len(_unwrap_command_text(result)) > 0
 
     @pytest.mark.asyncio
-    async def test_code_search_empty_query(self, skill_loader):
+    async def test_code_search_empty_query(self, code_search):
         """Test code_search with empty query."""
-        code_search = skill_loader.commands["code.code_search"]
-
         result = await code_search("")
         assert len(_unwrap_command_text(result)) > 0
 
-    def test_code_search_has_skill_config(self, skill_loader):
-        """Test that code_search has proper skill config."""
-        code_search = skill_loader.commands["code.code_search"]
-
-        assert hasattr(code_search, "_is_skill_command")
-        assert code_search._is_skill_command is True
-
-        assert hasattr(code_search, "_skill_config")
-        config = code_search._skill_config
-        assert config["name"] == "code_search"
-        assert config["category"] == "search"
+    def test_code_search_is_plain_callable_surface(self, code_search):
+        """Test that code_search stays a plain callable without decorator metadata."""
+        assert not hasattr(code_search, "_command_metadata")
 
 
 class TestSearchEngines:
@@ -116,39 +140,39 @@ class TestSearchEngines:
 
     def test_run_ast_search_import(self):
         """Test that AST search engine can be imported."""
-        from code.scripts.search.nodes.engines import run_ast_search
+        run_ast_search = _load_search_engines_module().run_ast_search
 
         assert callable(run_ast_search)
 
     def test_run_grep_search_import(self):
         """Test that grep search engine can be imported."""
-        from code.scripts.search.nodes.engines import run_grep_search
+        run_grep_search = _load_search_engines_module().run_grep_search
 
         assert callable(run_grep_search)
 
     def test_run_vector_search_import(self):
         """Test that vector search engine can be imported."""
-        from code.scripts.search.nodes.engines import run_vector_search
+        run_vector_search = _load_search_engines_module().run_vector_search
 
         assert callable(run_vector_search)
 
     def test_extract_ast_pattern_class(self):
         """Test AST pattern extraction for class."""
-        from code.scripts.search.nodes.engines import extract_ast_pattern
+        extract_ast_pattern = _load_search_engines_module().extract_ast_pattern
 
         result = extract_ast_pattern("Find the class User")
         assert result == "class User"
 
     def test_extract_ast_pattern_find_class(self):
         """Test AST pattern extraction for find-class query."""
-        from code.scripts.search.nodes.engines import extract_ast_pattern
+        extract_ast_pattern = _load_search_engines_module().extract_ast_pattern
 
         result = extract_ast_pattern("Find class User")
         assert "class" in result and "User" in result
 
     def test_extract_ast_pattern_fallback(self):
         """Test AST pattern fallback for simple patterns."""
-        from code.scripts.search.nodes.engines import extract_ast_pattern
+        extract_ast_pattern = _load_search_engines_module().extract_ast_pattern
 
         # Simple patterns like "def hello" should be returned as-is
         result = extract_ast_pattern("def hello")
@@ -160,20 +184,20 @@ class TestSearchGraph:
 
     def test_search_graph_state_import(self):
         """Test that SearchGraphState can be imported."""
-        from code.scripts.search.state import SearchGraphState
+        SearchGraphState = _load_search_state_module().SearchGraphState
 
         assert SearchGraphState is not None
 
     def test_search_graph_state_creation(self):
         """Test SearchGraphState creation."""
-        from code.scripts.search.state import SearchGraphState
+        SearchGraphState = _load_search_state_module().SearchGraphState
 
         state = SearchGraphState(query="test query")
         assert state["query"] == "test query"
 
     def test_create_search_graph(self):
         """Test that search graph can be created."""
-        from code.scripts.search.graph import create_search_graph
+        create_search_graph = _load_search_graph_module().create_search_graph
 
         graph = create_search_graph()
         assert graph is not None
@@ -184,10 +208,8 @@ class TestSearchNodes:
 
     def test_node_run_ast_search(self):
         """Test AST search node."""
-        from code.scripts.search.nodes.engines import (
-            node_run_ast_search,
-        )
-        from code.scripts.search.state import SearchGraphState
+        node_run_ast_search = _load_search_engines_module().node_run_ast_search
+        SearchGraphState = _load_search_state_module().SearchGraphState
 
         state = SearchGraphState(query="class Test")
         result = node_run_ast_search(state)
@@ -196,10 +218,8 @@ class TestSearchNodes:
 
     def test_node_run_grep_search(self):
         """Test grep search node."""
-        from code.scripts.search.nodes.engines import (
-            node_run_grep_search,
-        )
-        from code.scripts.search.state import SearchGraphState
+        node_run_grep_search = _load_search_engines_module().node_run_grep_search
+        SearchGraphState = _load_search_state_module().SearchGraphState
 
         state = SearchGraphState(query="def test")
         result = node_run_grep_search(state)
@@ -207,10 +227,8 @@ class TestSearchNodes:
 
     def test_node_run_vector_search(self):
         """Test vector search node."""
-        from code.scripts.search.nodes.engines import (
-            node_run_vector_search,
-        )
-        from code.scripts.search.state import SearchGraphState
+        node_run_vector_search = _load_search_engines_module().node_run_vector_search
+        SearchGraphState = _load_search_state_module().SearchGraphState
 
         state = SearchGraphState(query="test query")
         result = node_run_vector_search(state)
@@ -222,7 +240,7 @@ class TestSearchClassifier:
 
     def test_classifier_import(self):
         """Test that classifier can be imported."""
-        from code.scripts.search.nodes import classifier
+        classifier = _load_search_classifier_direct_module()
 
         assert classifier is not None
 
@@ -232,6 +250,6 @@ class TestSearchFormatter:
 
     def test_formatter_import(self):
         """Test that formatter can be imported."""
-        from code.scripts.search.nodes import formatter
+        formatter = _load_search_formatter_module()
 
         assert formatter is not None

@@ -18,7 +18,7 @@ if str(_foundation_path) not in sys.path:
 @pytest.fixture(scope="session")
 def project_root():
     """Get project root directory."""
-    from xiuxian_foundation.runtime.gitops import get_project_root
+    from xiuxian_foundation.config.prj import get_project_root
 
     return get_project_root()
 

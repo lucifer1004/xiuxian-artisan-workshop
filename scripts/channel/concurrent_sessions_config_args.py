@@ -84,7 +84,7 @@ def parse_args(*, webhook_url_default: str) -> argparse.Namespace:
     parser.add_argument(
         "--forbid-log-regex",
         action="append",
-        default=["tools/call: Mcp error", "Telegram sendMessage failed"],
+        default=["tools/call: Tool runtime error", "Telegram sendMessage failed"],
         help="Regex that must not appear in new logs (repeatable).",
     )
     parser.add_argument(

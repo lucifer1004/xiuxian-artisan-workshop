@@ -5,4 +5,3 @@ mod version;
 pub use binding::PluginCapabilityBinding;
 pub use selector::PluginProviderSelector;
 pub use version::ContractVersion;
-

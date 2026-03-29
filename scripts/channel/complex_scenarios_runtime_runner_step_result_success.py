@@ -19,7 +19,7 @@ def build_step_result(
     stderr: str,
     detect_memory_event_flags_fn: Any,
     extract_memory_metrics_fn: Any,
-    extract_mcp_metrics_fn: Any,
+    extract_tool_metrics_fn: Any,
     extract_bot_excerpt_fn: Any,
     tail_text_fn: Any,
     step_run_result_cls: Any,
@@ -30,7 +30,7 @@ def build_step_result(
         detect_memory_event_flags_fn(stdout)
     )
     memory_metrics = extract_memory_metrics_fn(stdout)
-    mcp_metrics = extract_mcp_metrics_fn(stdout)
+    tool_metrics = extract_tool_metrics_fn(stdout)
     recall_credit_count = int(memory_metrics.get("memory_recall_credit_count") or 0)
     decay_count = int(memory_metrics.get("memory_decay_count") or 0)
     return step_run_result_cls(
@@ -59,9 +59,9 @@ def build_step_result(
         memory_decay_count=decay_count,
         memory_planned_bias=memory_metrics["memory_planned_bias"],  # type: ignore[arg-type]
         memory_decision=memory_metrics["memory_decision"],  # type: ignore[arg-type]
-        mcp_last_event=mcp_metrics["mcp_last_event"],  # type: ignore[arg-type]
-        mcp_waiting_seen=bool(mcp_metrics["mcp_waiting_seen"]),
-        mcp_event_counts=dict(mcp_metrics["mcp_event_counts"]),  # type: ignore[arg-type]
+        tool_last_event=tool_metrics["tool_last_event"],  # type: ignore[arg-type]
+        tool_waiting_seen=bool(tool_metrics["tool_waiting_seen"]),
+        tool_event_counts=dict(tool_metrics["tool_event_counts"]),  # type: ignore[arg-type]
         feedback_command_bias_before=memory_metrics["feedback_command_bias_before"],  # type: ignore[arg-type]
         feedback_command_bias_after=memory_metrics["feedback_command_bias_after"],  # type: ignore[arg-type]
         feedback_command_bias_delta=memory_metrics["feedback_command_bias_delta"],  # type: ignore[arg-type]

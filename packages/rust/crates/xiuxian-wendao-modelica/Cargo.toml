@@ -14,7 +14,7 @@ tree-sitter = ["xiuxian-ast/modelica"]
 
 [dependencies]
 walkdir = { workspace = true }
-xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false }
+xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
 xiuxian-ast = { path = "../xiuxian-ast", optional = true }
 
 [dev-dependencies]
@@ -22,6 +22,7 @@ git2 = { workspace = true }
 insta = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+xiuxian-wendao = { path = "../xiuxian-wendao", default-features = false, features = ["zhenfa-router"] }
 
 [lints]
 workspace = true

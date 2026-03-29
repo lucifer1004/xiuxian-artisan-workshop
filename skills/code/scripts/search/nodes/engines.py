@@ -2,8 +2,8 @@
 Search Engines - Unified interface to AST, Vector, and Grep search
 
 Wraps:
-- AST Engine: code_tools.smart_ast.engine.SmartAstEngine (using omni.ast Rust bindings)
-- Vector Engine: omni.core.knowledge.librarian.Librarian
+- AST Engine: local smart AST engine using Rust AST bindings when available
+- Vector Engine: retained Python compatibility hook over Rust/Wendao ownership
 - Grep Engine: ripgrep via subprocess
 """
 
@@ -32,7 +32,7 @@ def run_ast_search(query: str) -> List[SearchResult]:
     results: List[SearchResult] = []
 
     try:
-        from code_tools.scripts.smart_ast.engine import SmartAstEngine
+        from smart_ast.engine import SmartAstEngine
 
         engine = SmartAstEngine()
 
@@ -131,7 +131,7 @@ def run_vector_search(query: str, limit: int = 10) -> List[SearchResult]:
     results: List[SearchResult] = []
 
     try:
-        from omni.core.runtime.services import get_librarian
+        from xiuxian_core.runtime.services import get_librarian
 
         librarian = get_librarian()
         if librarian is None:
@@ -158,7 +158,9 @@ def run_vector_search(query: str, limit: int = 10) -> List[SearchResult]:
             )
 
     except ImportError:
-        logger.warning("Librarian not available")
+        logger.warning("Python librarian compatibility surface is not importable")
+    except RuntimeError as e:
+        logger.warning(f"Vector search delegated to Rust/Wendao: {e}")
     except Exception as e:
         logger.warning(f"Vector search error: {e}")
 

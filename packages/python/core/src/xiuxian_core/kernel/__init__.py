@@ -3,7 +3,7 @@ xiuxian_core.kernel - Kernel Namespace
 
 Microkernel architecture core:
 - Kernel: Main orchestrator
-- Components: Registry, Skill Plugin, Skill Loader, MCP Tool Adapter
+- Components: lifecycle, event reactor, and retained runtime helpers
 - Lifecycle: State machine management
 
 Lifecycle Flow (async, ordered):

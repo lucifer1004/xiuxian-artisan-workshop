@@ -1,13 +1,11 @@
 //! Integration tests for Repo Intelligence symbol search flow.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
-
+use std::fs;
 use std::process::Command;
 
-use repo_test_support::{
-    assert_repo_json_snapshot, create_sample_julia_repo, sample_projection_analysis,
-    write_repo_config,
+use crate::support::repo_intelligence::{
+    assert_repo_json_snapshot, create_sample_julia_repo, create_sample_modelica_repo,
+    sample_projection_analysis, write_repo_config,
 };
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
@@ -33,6 +31,37 @@ fn symbol_search_matches_symbol_name() -> TestResult {
     )?;
 
     assert_repo_json_snapshot("repo_symbol_search_result", json!(result));
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[test]
+fn modelica_plugin_symbol_search_matches_external_symbols() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_modelica_repo(temp.path(), "Symbolica")?;
+    let config_path = temp.path().join("modelica-symbol-search.wendao.toml");
+    fs::write(
+        &config_path,
+        format!(
+            r#"[link_graph.projects.modelica-symbol-search]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+
+    let result = symbol_search_from_config(
+        &SymbolSearchQuery {
+            repo_id: "modelica-symbol-search".to_string(),
+            query: "PI".to_string(),
+            limit: 10,
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+
+    assert_repo_json_snapshot("repo_symbol_search_modelica_result", json!(result));
     Ok(())
 }
 

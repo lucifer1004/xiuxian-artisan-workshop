@@ -4,7 +4,7 @@ use xiuxian_wendao_core::{
     ids::{ArtifactId, PluginId},
 };
 
-use crate::zhenfa_router::native::WendaoCompatDeploymentArtifactOutputFormat;
+use crate::zhenfa_router::native::WendaoPluginArtifactOutputFormat;
 
 /// Path parameters for Studio generic plugin artifact inspection.
 #[derive(Debug, Clone, Deserialize)]
@@ -29,13 +29,5 @@ impl From<PluginArtifactPath> for PluginArtifactSelector {
 pub struct PluginArtifactQuery {
     /// Optional response format. Defaults to structured JSON.
     #[serde(default)]
-    pub format: Option<WendaoCompatDeploymentArtifactOutputFormat>,
-}
-
-/// Query parameters for Studio compatibility deployment artifact inspection.
-#[derive(Debug, Default, Deserialize)]
-pub struct CompatDeploymentArtifactQuery {
-    /// Optional response format. Defaults to structured JSON.
-    #[serde(default)]
-    pub format: Option<WendaoCompatDeploymentArtifactOutputFormat>,
+    pub format: Option<WendaoPluginArtifactOutputFormat>,
 }

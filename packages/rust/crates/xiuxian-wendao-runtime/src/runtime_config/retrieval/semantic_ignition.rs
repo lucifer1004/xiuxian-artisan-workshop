@@ -84,19 +84,31 @@ pub fn apply_semantic_ignition_runtime_config(
     }
 
     resolved.vector_store_path = normalize_optional_runtime_string(first_non_empty(&[
-        get_setting_string(settings, "link_graph.retrieval.semantic_ignition.vector_store_path"),
+        get_setting_string(
+            settings,
+            "link_graph.retrieval.semantic_ignition.vector_store_path",
+        ),
         std::env::var(LINK_GRAPH_SEMANTIC_IGNITION_VECTOR_STORE_PATH_ENV).ok(),
     ]));
     resolved.table_name = normalize_optional_runtime_string(first_non_empty(&[
-        get_setting_string(settings, "link_graph.retrieval.semantic_ignition.table_name"),
+        get_setting_string(
+            settings,
+            "link_graph.retrieval.semantic_ignition.table_name",
+        ),
         std::env::var(LINK_GRAPH_SEMANTIC_IGNITION_TABLE_NAME_ENV).ok(),
     ]));
     resolved.embedding_base_url = normalize_optional_runtime_string(first_non_empty(&[
-        get_setting_string(settings, "link_graph.retrieval.semantic_ignition.embedding_base_url"),
+        get_setting_string(
+            settings,
+            "link_graph.retrieval.semantic_ignition.embedding_base_url",
+        ),
         std::env::var(LINK_GRAPH_SEMANTIC_IGNITION_EMBEDDING_BASE_URL_ENV).ok(),
     ]));
     resolved.embedding_model = normalize_optional_runtime_string(first_non_empty(&[
-        get_setting_string(settings, "link_graph.retrieval.semantic_ignition.embedding_model"),
+        get_setting_string(
+            settings,
+            "link_graph.retrieval.semantic_ignition.embedding_model",
+        ),
         std::env::var(LINK_GRAPH_SEMANTIC_IGNITION_EMBEDDING_MODEL_ENV).ok(),
     ]));
 }
@@ -119,8 +131,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn semantic_ignition_runtime_reads_override_values() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn semantic_ignition_runtime_reads_override_values() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let config_path = temp.path().join("wendao.toml");
         fs::write(
@@ -139,7 +150,10 @@ embedding_model = "glm-5"
         let settings = merged_toml_settings("link_graph", "", "", "wendao.toml");
         let mut runtime = LinkGraphSemanticIgnitionRuntimeConfig::default();
         apply_semantic_ignition_runtime_config(&settings, &mut runtime);
-        assert_eq!(runtime.backend, LinkGraphSemanticIgnitionBackend::OpenAiCompatible);
+        assert_eq!(
+            runtime.backend,
+            LinkGraphSemanticIgnitionBackend::OpenAiCompatible
+        );
         assert_eq!(runtime.vector_store_path.as_deref(), Some(".cache/store"));
         assert_eq!(runtime.table_name.as_deref(), Some("docs"));
         assert_eq!(

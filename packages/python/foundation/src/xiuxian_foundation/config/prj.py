@@ -31,8 +31,12 @@ Environment Variables (from direnv .envrc):
     PRJ_PATH=.bin
 """
 
+import os
+import subprocess
 from pathlib import Path
 from typing import Literal
+
+_project_root: Path | None = None
 
 # =============================================================================
 # PRJ_SPEC Environment Variables
@@ -41,9 +45,44 @@ from typing import Literal
 
 def _get_env(key: str, default: str) -> str:
     """Get environment variable with default."""
-    import os
-
     return os.environ.get(key, default)
+
+
+def get_project_root() -> Path:
+    """Get the project root directory."""
+    global _project_root
+
+    if _project_root is not None:
+        return _project_root
+
+    prj_root = os.environ.get("PRJ_ROOT")
+    if prj_root:
+        _project_root = Path(prj_root)
+        return _project_root
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            _project_root = Path(result.stdout.strip())
+            return _project_root
+    except Exception:
+        pass
+
+    cwd = Path.cwd()
+    if (cwd / ".git").exists():
+        _project_root = cwd
+        return _project_root
+
+    raise RuntimeError(
+        "CRITICAL: Cannot determine project root. "
+        "Not in a git repository and no fallback available. "
+        f"Current working directory: {Path.cwd()}"
+    )
 
 
 # Define PRJ_SPEC directories with env var names and defaults
@@ -79,8 +118,6 @@ class _PrjDirsCallable:
 
         env_key, default = _PRJ_SPECS[name]
         dir_name = _get_env(env_key, default)
-
-        from xiuxian_foundation.runtime.gitops import get_project_root
 
         project_root = get_project_root()
         dir_path = project_root / dir_name
@@ -121,8 +158,6 @@ class _PrjDirsCallable:
         """
         env_key, _ = _PRJ_SPECS.get(f"{category}_home", ("PRJ_DATA_HOME", ".data"))
         dir_name = _get_env(env_key, ".data")
-
-        from xiuxian_foundation.runtime.gitops import get_project_root
 
         project_root = get_project_root()
         path = project_root / dir_name / subdir
@@ -183,8 +218,6 @@ class _PrjDirSingleton:
         env_key, default = _PRJ_SPECS.get(f"{self._category}_home", ("PRJ_DATA_HOME", ".data"))
         dir_name = _get_env(env_key, default)
 
-        from xiuxian_foundation.runtime.gitops import get_project_root
-
         project_root = get_project_root()
         path = project_root / dir_name
         if subdir:
@@ -197,8 +230,6 @@ class _PrjDirSingleton:
         """Support / operator for path joining."""
         env_key, default = _PRJ_SPECS.get(f"{self._category}_home", ("PRJ_DATA_HOME", ".data"))
         dir_name = _get_env(env_key, default)
-
-        from xiuxian_foundation.runtime.gitops import get_project_root
 
         project_root = get_project_root()
         return project_root / dir_name / other
@@ -240,8 +271,6 @@ def get_prj_dir(
     """
     env_key, default = _PRJ_SPECS.get(f"{category}_home", ("PRJ_DATA_HOME", ".data"))
     dir_name = _get_env(env_key, default)
-
-    from xiuxian_foundation.runtime.gitops import get_project_root
 
     project_root = get_project_root()
     path = project_root / dir_name
@@ -304,8 +333,6 @@ def get_skills_dir() -> Path:
     Returns:
         Path to project skills directory.
     """
-    from xiuxian_foundation.runtime.gitops import get_project_root
-
     return get_project_root() / "skills"
 
 
@@ -320,6 +347,7 @@ __all__ = [
     "get_cache_dir",
     "get_config_dir",
     "get_data_dir",
+    "get_project_root",
     "get_prj_dir",
     "get_runtime_dir",
     "get_skills_dir",

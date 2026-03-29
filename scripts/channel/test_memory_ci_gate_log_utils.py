@@ -25,12 +25,12 @@ def test_count_log_event_handles_large_log_streaming(tmp_path) -> None:
     with runtime_log.open("wb") as handle:
         handle.write(b"B" * 320_000)
         handle.write(b"\n")
-        handle.write(b'2026-02-20T00:00:00Z WARN event="mcp.pool.call.waiting"\n')
-        handle.write(b'2026-02-20T00:00:01Z WARN event="mcp.pool.call.waiting"\n')
-        handle.write(b'2026-02-20T00:00:02Z WARN event="mcp.pool.connect.waiting"\n')
+        handle.write(b'2026-02-20T00:00:00Z WARN event="tool_runtime.pool.call.waiting"\n')
+        handle.write(b'2026-02-20T00:00:01Z WARN event="tool_runtime.pool.call.waiting"\n')
+        handle.write(b'2026-02-20T00:00:02Z WARN event="tool_runtime.pool.connect.waiting"\n')
 
-    assert count_log_event(runtime_log, "mcp.pool.call.waiting") == 2
-    assert count_log_event(runtime_log, "mcp.pool.connect.waiting") == 1
+    assert count_log_event(runtime_log, "tool_runtime.pool.call.waiting") == 2
+    assert count_log_event(runtime_log, "tool_runtime.pool.connect.waiting") == 1
 
 
 def test_wait_for_log_regex_matches_existing_tail(tmp_path) -> None:

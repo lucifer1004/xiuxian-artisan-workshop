@@ -1,4 +1,4 @@
-# mcp-core/reference_library.py
+# reference_library.py
 """
 Reference Knowledge Library - Knowledge Document Path Resolution
 
@@ -18,7 +18,7 @@ from typing import Any
 from xiuxian_foundation.config.dirs import PRJ_CONFIG
 
 # Project root detection using GitOps
-from xiuxian_foundation.runtime.gitops import get_project_root
+from xiuxian_foundation.config.prj import get_project_root
 
 
 def get_references_config_path() -> Path:

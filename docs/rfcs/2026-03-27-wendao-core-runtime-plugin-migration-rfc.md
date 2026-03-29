@@ -385,22 +385,27 @@ Completion conditions:
 
 ### 8.2 Current Program Position
 
-The current tree is inside **Phase M1**.
+The current tree has completed **Phase M6** and is now at the handoff to
+**Phase 7**.
 
 What is already true:
 
-1. a generic plugin-runtime vocabulary exists in the current tree
-2. compatibility seams are now explicit and feature-folder-based
-3. crate-root compatibility exports are now routed through `src/compatibility/`
-4. compatibility migration paths are now documented in README, rustdoc, and
-   roadmap notes
+1. `xiuxian-wendao-core` and `xiuxian-wendao-runtime` both exist as physical
+   crates in the workspace
+2. Julia-specific ownership is package-owned in `xiuxian-wendao-julia`
+3. generic plugin-artifact outward surfaces are canonical and the host
+   compatibility shims are retired from the live crate root
+4. one non-Julia plugin path (`xiuxian-wendao-modelica`) already proves that
+   repo-facing, docs-facing, and Studio-facing consumers can expand without
+   new language-specific host structs
+5. the active migration risk is no longer extraction ambiguity or additive-
+   proof fragmentation; it is transport/runtime hardening ambiguity at the
+   Phase-7 opening boundary
 
 What is not yet complete:
 
-1. `xiuxian-wendao-core` does not yet exist as a physical crate
-2. `xiuxian-wendao-runtime` does not yet exist as a physical crate
-3. Julia ownership still physically lives inside the main crate
-4. generic outward artifact endpoints are not yet the only canonical surface
+1. the next macro-phase proposal still needs to be executed after the
+   late-`M6` additive-proof track has been formally signed off
 
 ### 8.3 Anti-Fragmentation Rule
 
@@ -639,29 +644,244 @@ Exit criteria:
 2. plugin artifacts are surfaced by plugin id and artifact id
 3. generic artifact and UI surfaces preserve namespace clarity instead of introducing new mixed DTO/controller files
 
-## Phase 6: Flight-First Runtime Negotiation
+## Phase 6: Additional Plugin Onboarding Readiness
 
 Objectives:
 
-1. implement transport preference order
-2. make Flight the preferred transport
-3. preserve Arrow IPC fallback
+1. onboard at least one non-Julia plugin path without core expansion
+2. prove the architecture is capability-first rather than Julia-specialized
+3. turn the additive proof into a governed program checkpoint rather than a
+   stream of detached endpoint slices
+
+Exit criteria:
+
+1. at least one non-Julia plugin can land without new language-specific host
+   structs
+2. repo-facing, docs-facing, and Studio-facing consumers all have bounded
+   additive proof coverage
+3. the RFC, ExecPlan, and Wendao program note agree on the current macro-phase
+   position and the next staged push plan
+
+## Phase 7: Flight-First Runtime Negotiation
+
+Objectives:
+
+1. harden transport preference order after additive plugin proof is closed
+2. make Flight the preferred transport where capability providers can support
+   it
+3. preserve Arrow IPC fallback while keeping transport decisions observable
 
 Exit criteria:
 
 1. runtime diagnostics expose negotiated transport
 2. fallback decisions are explicit and observable
+3. transport hardening does not reintroduce language-specific host behavior
 
-## Phase 7: Additional Language Plugins
+### 11.3 Phase-7 Staged Push Plan
+
+The `Phase 7` rollout should now proceed as a bounded transport-hardening
+program rather than as scattered runtime tweaks.
+
+Current phase status:
+
+1. `Phase 7` is open
+2. `Phase-7 Stage A` is complete: the transport-surface inventory now names
+   the live contract, runtime, and outward inspection seams
+3. `Phase-7 Stage B` is now in progress: the runtime-owned negotiation policy
+   seam has landed and the rerank path now delegates through it
+4. `Phase-7 Stage C` remains pending behind outward diagnostics and the final
+   transport gate
+
+#### Phase-7 Stage A: Transport Surface Inventory Bundle
 
 Objectives:
 
-1. onboard Python and JavaScript without core expansion
-2. prove the architecture is capability-first rather than Julia-specialized
+1. identify the live transport-negotiation seams, fallback callers, and
+   outward diagnostics surfaces
+2. declare one canonical transport preference order per capability family
+3. record where negotiated transport and fallback reason should be surfaced
 
 Exit criteria:
 
-1. at least one non-Julia plugin can land without new language-specific host structs
+1. the RFC, program note, and active ExecPlan all name the same touched
+   negotiation and diagnostics seams
+2. the preferred transport order is documented without ambiguity
+3. the next implementation slice can cite one bounded transport ownership seam
+
+Stage-A inventory findings:
+
+1. the generic transport contract surface already lives in
+   `xiuxian-wendao-core` through `PluginCapabilityBinding`,
+   `PluginTransportEndpoint`, and `PluginTransportKind`; the currently
+   declared transport kinds are `ArrowFlight`, `ArrowIpcHttp`, and
+   `LocalProcessArrowIpc`
+2. the only live runtime-owned client-construction seam today is
+   `xiuxian-wendao-runtime/src/transport/client.rs`, where
+   `build_arrow_transport_client_from_binding(...)` materializes Arrow IPC
+   over HTTP from a generic capability binding; there is not yet a runtime-
+   owned multi-transport selector in the live tree
+3. the host-side `src/gateway/studio/search/handlers/arrow_transport.rs` seam
+   is a local Arrow response encoder, not a plugin transport-negotiation owner
+4. the current outward inspection surface for transport metadata is
+   `UiPluginArtifact` in `src/gateway/studio/types/config.rs`, which already
+   exposes `base_url`, `route`, `health_route`, `timeout_secs`, and
+   `schema_version`
+5. the canonical Phase-7 preference order is now fixed as
+   `ArrowFlight -> ArrowIpcHttp -> LocalProcessArrowIpc`; `ArrowIpcHttp`
+   remains the bounded compatibility fallback, and `LocalProcessArrowIpc`
+   stays reserved for explicitly managed local-provider paths
+6. `Phase-7 Stage B` should therefore extend the runtime-owned
+   `xiuxian-wendao-runtime/src/transport/` seam instead of introducing new
+   transport-selection logic under host gateway handlers
+
+#### Phase-7 Stage B: Negotiation Policy Bundle
+
+Objectives:
+
+1. harden runtime negotiation so Flight is preferred where providers support
+   it
+2. preserve Arrow IPC fallback as the bounded compatibility path
+3. keep provider-specific transport detail out of generic host vocabulary
+
+Exit criteria:
+
+1. the runtime selects Flight first on the targeted capability path
+2. fallback remains explicit and deterministic
+3. touched runtime tests prove both preferred and fallback paths
+
+Current Stage-B status:
+
+1. the runtime-owned negotiation policy now lives in
+   `xiuxian-wendao-runtime/src/transport/negotiation.rs`
+2. the canonical preference order is now executable in code, not only
+   documented in Stage-A notes
+3. the rerank transport path now delegates through
+   `negotiate_arrow_transport_client_from_bindings(...)` instead of directly
+   constructing an Arrow IPC client from the raw binding
+4. the runtime now also owns a real Flight client materialization seam in
+   `xiuxian-wendao-runtime/src/transport/flight.rs`
+5. that Flight client intentionally rides the LanceDB-owned Arrow `57.3`
+   line through `arrow-flight = 57.3.0`, then uses the existing
+   `xiuxian-vector` `58 -> 57.3 -> 58` batch bridge to keep the host-side
+   rerank path on the current engine Arrow line
+6. fallback from an incomplete configured `ArrowFlight` binding to a lower-
+   preference `ArrowIpcHttp` binding is now deterministic and covered by
+   runtime tests, while a supported `ArrowFlight` binding is now selected
+   first and can process a real roundtrip against a mock Flight service
+7. `Phase-7 Stage B` is now complete; the governed next move is
+   `Phase-7 Stage C: Observability and Gate Bundle`
+
+#### Phase-7 Stage C: Observability and Gate Bundle
+
+Objectives:
+
+1. expose negotiated transport and fallback reason through runtime diagnostics
+   and outward inspection surfaces
+2. verify that transport hardening did not regress the additive plugin path
+3. record an explicit `Phase 7` gate decision before opening the next phase
+
+Exit criteria:
+
+1. runtime diagnostics expose negotiated transport
+2. outward gateway/tool/debug surfaces can report fallback decisions
+3. the RFC records a go/no-go decision for `Phase 7`
+
+### 11.1 Late-M6 Staged Push Plan
+
+The next RFC-governed push should be executed as three bounded stages, not as
+unrelated endpoint picks.
+
+Current stage status:
+
+1. `Stage A` is complete: the external Modelica path now covers the remaining
+   Studio repo service-state bundle, including `/api/repo/index` and
+   `/api/repo/index/status`
+2. `Stage B` is complete: the active RFC, program note, route inventory, and
+   package note now describe the same late-`M6` outward position
+3. `Stage C` is complete: the `M6` exit review now records a go decision and
+   opens the next macro-phase target
+
+#### Stage A: Gateway Completion Bundle
+
+Objectives:
+
+1. close the remaining Studio repo service-state family as one bundle
+2. keep external-plugin proofs grouped by outward family instead of single
+   route drift
+3. consolidate local selector/config helpers only where they reduce repeated
+   proof wiring
+
+Exit criteria:
+
+1. the remaining live Studio repo family, led by `/api/repo/index/status`, is
+   covered by the external Modelica path, including the sibling
+   `/api/repo/index` enqueue route
+2. helper consolidation does not introduce new dead-code suppressions
+3. grouped route verification stays green for the touched family
+
+#### Stage B: Outward Contract Alignment Bundle
+
+Objectives:
+
+1. align the RFC, program note, route inventory, and outward contract notes
+   with the now-broadened late-`M6` proof set
+2. remove stale early-phase claims from active status sections
+3. keep the additive proof discoverable from one Wendao-local entrypoint
+
+Exit criteria:
+
+1. the active RFC/program note no longer describe the tree as early-phase
+   extraction work
+2. outward inventory and package-roadmap notes describe the same late-`M6`
+   position
+3. the staged push plan is recorded in the active ExecPlan and GTD log
+
+#### Stage C: M6 Exit Review
+
+Objectives:
+
+1. compare the accumulated Modelica proof set against the `M6` completion
+   conditions
+2. decide whether `M6` is complete or whether one more bounded bundle is
+   required
+3. open the next macro-phase proposal only after the late-`M6` proof is
+   explicitly signed off
+
+Exit criteria:
+
+1. the RFC records a go/no-go decision for `M6` completion
+2. the program note records the next macro-phase target instead of leaving the
+   program in open-ended additive drift
+3. follow-up implementation work can cite one stage and one gate before
+   reading more code
+
+### 11.2 M6 Exit Review Decision
+
+Decision: `go`
+
+The late-`M6` additive-proof track is complete.
+
+Criteria review:
+
+1. `M6` criterion 1 is satisfied:
+   `xiuxian-wendao-modelica` lands as one non-Julia plugin path without new
+   language-specific host structs.
+2. `M6` criterion 2 is satisfied:
+   repo-facing, docs-facing, and Studio-facing consumers all now have bounded
+   additive proof coverage, including the final Studio repo service-state
+   bundle `/api/repo/index` and `/api/repo/index/status`.
+3. `M6` criterion 3 is satisfied:
+   the RFC, active ExecPlan, Wendao program note, outward inventory, and
+   Modelica package note now agree on the same late-`M6` position and on the
+   next governed move.
+
+Next macro-phase target:
+
+1. open `Phase 7: Flight-First Runtime Negotiation`
+2. treat transport preference hardening and transport observability as the
+   next governed program concern
+3. stop accumulating additive-proof slices unless a later phase explicitly
+   requires them
 
 ## 12. Governance and Tooling
 

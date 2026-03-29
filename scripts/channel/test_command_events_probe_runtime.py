@@ -117,7 +117,7 @@ def test_run_case_uses_per_case_timeout_overrides(tmp_path: Path) -> None:
         max_idle_secs=25,
         secret_token="",
         runtime_partition_mode=None,
-        forbidden_log_pattern="tools/call: Mcp error",
+        forbidden_log_pattern="tools/call: Tool runtime error",
         python_executable="python3",
         subprocess_run_fn=_subprocess_run,
     )

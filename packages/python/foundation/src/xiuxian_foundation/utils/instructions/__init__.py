@@ -9,7 +9,10 @@ Modules:
 - loader.py: Lazy loading implementation
 
 Usage:
-    from mcp_core.instructions import get_instructions, get_instruction
+    from xiuxian_foundation.utils.instructions import (
+        get_instructions,
+        get_instruction,
+    )
 
     # First call triggers lazy load
     all_instructions = get_instructions()

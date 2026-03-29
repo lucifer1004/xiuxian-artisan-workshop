@@ -1,43 +1,26 @@
-import pytest
-from omni.test_kit.decorators import xiuxian_skill
+from pathlib import Path
 
 
-@pytest.mark.asyncio
-@xiuxian_skill(name="git")
-class TestGitCommandsModular:
-    """Test git skill commands using modular SDK and GitOpsVerifier."""
+def test_git_rust_bridge_extension_surface_exists() -> None:
+    """The retained git extension surface keeps the rust_bridge package importable."""
+    base = Path(__file__).parent.parent / "extensions" / "rust_bridge"
+    assert (base / "__init__.py").exists()
+    assert (base / "accelerator.py").exists()
+    assert (base / "bindings.py").exists()
 
-    async def test_git_status(self, skill_tester, gitops_verifier):
-        """Verify git status command returns a valid result.
 
-        NOTE: git status is a READ operation and should use bash directly.
-        This test is skipped because status command was removed.
-        """
-        pytest.skip("git status is a READ operation - use bash directly")
+def test_git_rust_bridge_bindings_default_to_unavailable() -> None:
+    """Without a retained Python Rust bridge, bindings should degrade gracefully."""
+    import sys
 
-    async def test_git_commit(self, skill_tester, git_test_env, gitops_verifier):
-        """Verify git commit command creates a new commit."""
-        # git_test_env is the temp repo path, already CWD
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from extensions.rust_bridge.bindings import RustBindings
 
-        # Create dirty state
-        (git_test_env / "new_file.txt").write_text("content")
+    RustBindings._instance = None
+    RustBindings._checked = False
+    RustBindings._available = False
+    RustBindings._error_msg = None
 
-        # Verify it's unstaged
-        gitops_verifier.assert_unstaged("new_file.txt")
-
-        # Stage it
-        import subprocess
-
-        subprocess.run(["git", "add", "."], cwd=git_test_env)
-
-        gitops_verifier.assert_staged("new_file.txt")
-
-        # Run commit (assuming commit command doesn't take repo_path, or ignores kwargs)
-        # But monkeypatch.chdir ensures subprocess.run inside skill uses CWD
-        result = await skill_tester.run("git", "commit", message="feat: add new file")
-        assert result.success
-
-        # Verify side effects using GitOpsVerifier
-        gitops_verifier.assert_clean().assert_commit_exists(
-            message_pattern="feat: add new file", files_changed=["new_file.txt"]
-        )
+    assert RustBindings.is_available() is False
+    assert RustBindings.get_sniffer_cls() is None
+    assert RustBindings.get_error_message() is not None

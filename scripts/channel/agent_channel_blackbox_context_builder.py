@@ -53,6 +53,6 @@ def build_entry_context(
         telegram_send_retry_grace_seconds_fn=namespace["telegram_send_retry_grace_seconds"],
         parse_log_tokens_fn=namespace["parse_log_tokens"],
         error_patterns=namespace["ERROR_PATTERNS"],
-        mcp_observability_events=namespace["MCP_OBSERVABILITY_EVENTS"],
-        mcp_waiting_events=namespace["MCP_WAITING_EVENTS"],
+        tool_observability_events=namespace["TOOL_OBSERVABILITY_EVENTS"],
+        tool_waiting_events=namespace["TOOL_WAITING_EVENTS"],
     )

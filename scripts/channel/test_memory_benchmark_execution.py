@@ -59,7 +59,7 @@ def test_build_turn_result_maps_feedback_metrics() -> None:
             "embedding_timeout_fallback": False,
             "embedding_cooldown_fallback": False,
             "embedding_unavailable_fallback": False,
-            "mcp_error": False,
+            "tool_error": False,
         }
 
     def _float_token(tokens: dict[str, object], key: str) -> float | None:
@@ -159,7 +159,7 @@ def test_run_probe_maps_admin_required_error(
         user_id=2,
         thread_id=None,
         runtime_partition_mode=None,
-        fail_on_mcp_error=False,
+        fail_on_tool_error=False,
         username="tester",
         max_wait=20,
         max_idle_secs=10,
@@ -186,7 +186,7 @@ def test_run_probe_maps_admin_required_error(
             strip_ansi_fn=lambda line: line,
             has_event_fn=lambda _lines, _event: True,
             control_admin_required_event="telegram.command.control_admin_required.replied",
-            forbidden_log_pattern="tools/call: Mcp error",
+            forbidden_log_pattern="tools/call: Tool runtime error",
         )
 
 

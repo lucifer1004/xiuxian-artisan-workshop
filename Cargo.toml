@@ -122,8 +122,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # Parallel processing
 rayon = "1.11"
 
-# MCP client (xiuxian-daochang Phase A; ref: codex-rs rmcp-client)
-# Note: rmcp 0.16 still requires "server" feature for client build (task_manager/handler refs)
+# Streamable tool runtime client/server transport support
+# Note: rmcp 0.16 still requires the "server" feature for client builds
 rmcp = { version = "0.16", default-features = false, features = [
     "client",
     "server",

@@ -6,10 +6,10 @@
 # (e.g. .config/xiuxian-artisan-workshop/settings.yaml or --conf <dir>)
 #
 # Usage:
-#   omni ...                      # uses default conf dir (.config)
-#   omni --conf ./.config.dev ... # uses custom conf dir
+#   xiuxian ...                      # uses default conf dir (.config)
+#   xiuxian --conf ./.config.dev ... # uses custom conf dir
 #
-#   from omni.foundation.config.settings import get_setting
+#   from xiuxian_foundation.config.settings import get_setting
 #   cog_path = get_setting("config.cog_toml")
 #
 # Note: Actual commit types/scopes are read from cog.toml/.conform.yaml,
@@ -127,14 +127,14 @@ agent:
   allow_python_runtime_for_tests: false
 
 # =============================================================================
-# MCP Configuration
+# Tool Runtime Configuration
 # =============================================================================
-# MCP configuration files
-mcp:
-  # Main MCP configuration file
-  config_file: ".mcp.json"
+# Tool-runtime configuration files
+tool_runtime:
+  # Main tool-runtime configuration file
+  config_file: ".tool.json"
 
-  # Preferred port for MCP embedding (e.g. when running `omni mcp --port 3002`).
+  # Preferred port for tool-runtime embedding.
   # Route test and other CLI flows try this port first for fast warm-path embedding.
   # Omit or set null to fall back to the port in `embedding.client_url`.
   # preferred_embed_port: 3002
@@ -144,7 +144,7 @@ mcp:
   coder: "coder"
   executor: "executor"
 
-  # Tool execution timeout. See docs/reference/mcp-timeout-spec.md for formal spec.
+  # Tool execution timeout. See docs/reference/tool-timeout-spec.md for formal spec.
   #
   # timeout: Hard wall-clock cap (seconds). With heartbeat: allows long tasks (e.g. researcher);
   #   prevents runaway programs. Without heartbeat: idle_timeout kills at 120s. 30 min = 1800.
@@ -161,11 +161,11 @@ mcp:
   memory_monitor_enabled: true
   memory_monitor_threshold_mb: 100 # Log tracemalloc stats when single call grows RSS by this much
 
-  # xiuxian-daochang MCP pool startup/connect policy (Rust channel/gateway client side)
-  # - pool_size: concurrent MCP clients in pool
+  # xiuxian-daochang tool-runtime pool startup/connect policy (Rust channel/gateway client side)
+  # - pool_size: concurrent tool-runtime clients in pool
   # - handshake_timeout_secs: timeout per handshake attempt
   # - connect_retries: retry attempts before failing startup
-  # - strict_startup: when false, startup degrades without MCP instead of aborting
+  # - strict_startup: when false, startup degrades without external tools instead of aborting
   # - connect_retry_backoff_ms: initial retry backoff (exponential, capped)
   # - tool_timeout_secs: timeout for tools/list and tools/call (prevents silent hangs)
   # - list_tools_cache_ttl_ms: Rust client-side tools/list snapshot cache TTL
@@ -186,7 +186,7 @@ mcp:
   # - embed_max_concurrency: max concurrent embedding calls accepted by SSE endpoint.
   # - embed_queue_wait_timeout_secs: max wait to enter embedding queue before fail-fast 503.
   # - embed_request_timeout_secs: max runtime of one embedding call before timeout 503.
-  # - embed_client_timeout_secs: CLI/client timeout for each MCP embed request before keyword-only fallback.
+  # - embed_client_timeout_secs: CLI/client timeout for each embed request before keyword-only fallback.
   # Tune these together based on observed p95 and upstream model throughput.
   embed_max_concurrency: 24
   embed_queue_wait_timeout_secs: 1.0
@@ -616,7 +616,7 @@ session:
 # =============================================================================
 # Configure embedding provider for vector storage (RAG, memory, skills)
 #
-# When MCP is already running the embedding service (model loaded there), other
+# When the tool runtime is already running the embedding service (model loaded there), other
 # processes (CLI, skill run, etc.) should only connect as client — no local
 # server, no model load. Set provider: "client" and optionally client_url below.
 # Auto-detection: if provider is empty, code will try health check on http_port
@@ -653,11 +653,11 @@ embedding:
   auto_reindex_on_change: true
 
   # HTTP server port (for client mode: connect to existing embedding API on this port)
-  # Default aligns with MCP SSE runtime endpoint.
+  # Default aligns with the tool-runtime SSE endpoint.
   http_port: 3002
 
-  # When MCP provides embedding (omni mcp --transport sse --port 3002), client connects here.
-  # MCP exposes /embed/batch and /embed/single for embedding_client compatibility.
+  # When the tool runtime provides embedding on port 3002, the client connects here.
+  # The runtime exposes /embed/batch and /embed/single for embedding_client compatibility.
   client_url: "http://localhost:3002"
 
 # Optional mistralrs SDK hints for in-process model loading (`mistral_sdk` backend).
@@ -725,10 +725,10 @@ rag:
 # Vector Store (LanceDB) Configuration
 # =============================================================================
 # Shared by router (skills), knowledge, and other vector-backed features
-# Bounded defaults below prevent MCP/long-lived process memory growth (e.g. 24GB+).
+# Bounded defaults below prevent long-lived runtime memory growth (e.g. 24GB+).
 # For ~1–2G total RSS (minimal embedding model): use 134217728 (128 MiB) and max_cached_tables: 2–4.
 vector:
-  # LanceDB index cache size in bytes. Bounded default keeps MCP memory under control.
+  # LanceDB index cache size in bytes. Bounded default keeps runtime memory under control.
   # Set to null to use runtime default (256 MiB). Use 134217728 (128 MiB) for ~1–2G target.
   index_cache_size_bytes: 134217728 # 128 MiB (was 256; lower for minimal-model 1–2G RSS)
 

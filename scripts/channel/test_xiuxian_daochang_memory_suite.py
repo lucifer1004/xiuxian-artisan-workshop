@@ -65,7 +65,7 @@ DEFAULT_VALKEY_URL = os.environ.get(
     "XIUXIAN_WENDAO_VALKEY_URL",
     f"redis://{DEFAULT_LOCAL_HOST}:6379/0",
 )
-FORBIDDEN_LOG_PATTERN = "tools/call: Mcp error"
+FORBIDDEN_LOG_PATTERN = "tools/call: Tool runtime error"
 DEFAULT_EVOLUTION_SCENARIO_ID = "memory_self_correction_high_complexity_dag"
 TARGET_SESSION_SCOPE_PLACEHOLDER = _blackbox_module.TARGET_SESSION_SCOPE_PLACEHOLDER
 BlackboxCase = _blackbox_module.BlackboxCase

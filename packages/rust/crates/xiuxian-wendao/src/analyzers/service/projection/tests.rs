@@ -14,6 +14,10 @@ use super::{
 };
 
 #[allow(dead_code)]
+#[path = "../../../../tests/support/repo_fixture.rs"]
+mod repo_fixture;
+
+#[allow(dead_code)]
 #[path = "../../../../tests/support/repo_intelligence.rs"]
 mod repo_test_support;
 

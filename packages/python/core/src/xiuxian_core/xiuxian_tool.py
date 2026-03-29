@@ -2,14 +2,14 @@
 xiuxian_tool.py - Master Xiuxian Tool Definition
 
 Centralized definition of the highest-authority universal gateway tool.
-Used by MCP server and the list_tools resource (omni://skill/skill/list_tools).
+Used by the retained tool runtime and the list_tools resource.
 
 Usage:
     from xiuxian_core.xiuxian_tool import get_xiuxian_tool_info, XIUXIAN_TOOL_DESCRIPTION
 
-    # For MCP Tool registration
+    # For tool registration
     info = get_xiuxian_tool_info()
-    mcp_tools.append(Tool(name="omni", description=info["description"], inputSchema=info["inputSchema"]))
+    tools.append(Tool(name="omni", description=info["description"], inputSchema=info["inputSchema"]))
 
     # For list_tools resource output
     info = get_xiuxian_tool_info()

@@ -20,15 +20,13 @@ Only these Python package responsibilities remain endorsed:
    Thin config/schema/logging/RAG-enhancement helpers.
 3. `core`
    Minimal retained helper surfaces only.
-4. `test-kit`
-   Focused retained fixtures for adapter and contract verification.
 
 ## Already Deleted
 
 These package centers are no longer part of the Python tree:
 
 1. `packages/python/agent/`
-2. `packages/python/mcp-server/`
+2. the removed standalone protocol server package
 3. `xiuxian_core.skills`
 4. Python-local router, watcher, scanner, workflow, memory, and knowledge-host
    stacks
@@ -38,7 +36,7 @@ These package centers are no longer part of the Python tree:
 Any retained Python surface must satisfy all of these:
 
 1. It does not recreate a Python runtime center.
-2. It does not depend on deleted local skill/agent/MCP infrastructure.
+2. It does not depend on deleted local skill/agent/protocol infrastructure.
 3. It stays transport-consumer-only or helper-only.
 4. It can justify its existence without invoking legacy compatibility as the
    primary reason.

@@ -34,9 +34,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        resolve_plugin_artifact_for_selector_with, resolve_plugin_artifact_with,
-    };
+    use super::{resolve_plugin_artifact_for_selector_with, resolve_plugin_artifact_with};
     use xiuxian_wendao_core::{
         artifacts::{PluginArtifactPayload, PluginArtifactSelector},
         capabilities::ContractVersion,
@@ -64,15 +62,12 @@ mod tests {
 
     #[test]
     fn resolve_plugin_artifact_with_builds_selector_before_delegating() {
-        let artifact = resolve_plugin_artifact_with(
-            "xiuxian-wendao-julia",
-            "deployment",
-            |selector| {
+        let artifact =
+            resolve_plugin_artifact_with("xiuxian-wendao-julia", "deployment", |selector| {
                 assert_eq!(selector, &sample_selector());
                 Some(sample_payload())
-            },
-        )
-        .unwrap_or_else(|| panic!("artifact should resolve"));
+            })
+            .unwrap_or_else(|| panic!("artifact should resolve"));
 
         assert_eq!(artifact.plugin_id.0, "xiuxian-wendao-julia");
         assert_eq!(artifact.artifact_id.0, "deployment");

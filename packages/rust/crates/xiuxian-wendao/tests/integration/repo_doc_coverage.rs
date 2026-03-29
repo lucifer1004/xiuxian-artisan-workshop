@@ -1,12 +1,11 @@
 //! Integration tests for Repo Intelligence documentation coverage flow.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
-
 use std::fs;
 use std::process::Command;
 
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
+use crate::support::repo_intelligence::{
+    assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
+};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     DocCoverageQuery, analyze_repository_from_config, doc_coverage_from_config,

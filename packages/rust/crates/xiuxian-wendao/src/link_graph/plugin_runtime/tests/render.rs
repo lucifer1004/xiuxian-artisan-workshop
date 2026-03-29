@@ -1,6 +1,4 @@
-use crate::link_graph::plugin_runtime::{
-    render_plugin_artifact_toml_for_selector,
-};
+use crate::link_graph::plugin_runtime::render_plugin_artifact_toml_for_selector;
 use crate::link_graph::runtime_config::julia_deployment_artifact_selector;
 use crate::link_graph::set_link_graph_wendao_config_override;
 use serial_test::serial;

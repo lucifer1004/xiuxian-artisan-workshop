@@ -1,13 +1,15 @@
 //! Integration tests for deterministic projected page-index node lookup.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
+use std::fs;
 
-use repo_test_support::{assert_repo_json_snapshot, sample_projection_analysis};
+use crate::support::repo_intelligence::{
+    assert_repo_json_snapshot, create_sample_modelica_repo, sample_projection_analysis,
+};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     ProjectedPageIndexNode, RepoProjectedPageIndexNodeQuery, RepoProjectedPageIndexTreesQuery,
     build_repo_projected_page_index_node, build_repo_projected_page_index_trees,
+    repo_projected_page_index_node_from_config, repo_projected_page_index_trees_from_config,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -41,6 +43,58 @@ fn projected_page_index_node_lookup_resolves_one_stable_node() -> TestResult {
     )?;
 
     assert_repo_json_snapshot("repo_projected_page_index_node_result", json!(result));
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[test]
+fn modelica_plugin_projected_page_index_node_lookup_resolves_one_stable_node() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_modelica_repo(temp.path(), "Projectionica")?;
+    let config_path = temp
+        .path()
+        .join("modelica-projected-index-node.wendao.toml");
+    fs::write(
+        &config_path,
+        format!(
+            r#"[link_graph.projects.modelica-projected-index-node]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: "modelica-projected-index-node".to_string(),
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.title == "Projectionica.Controllers.PI")
+        .expect("expected a projected page-index tree titled `Projectionica.Controllers.PI`");
+    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
+        .expect("expected a projected page-index node titled `Anchors`");
+
+    let result = repo_projected_page_index_node_from_config(
+        &RepoProjectedPageIndexNodeQuery {
+            repo_id: "modelica-projected-index-node".to_string(),
+            page_id: tree.page_id.clone(),
+            node_id,
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+
+    assert_repo_json_snapshot(
+        "repo_projected_page_index_node_modelica_result",
+        json!(result),
+    );
     Ok(())
 }
 

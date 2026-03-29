@@ -38,9 +38,9 @@ class StepRunResult:
     memory_decay_count: int
     memory_planned_bias: float | None
     memory_decision: str | None
-    mcp_last_event: str | None
-    mcp_waiting_seen: bool
-    mcp_event_counts: dict[str, int]
+    tool_last_event: str | None
+    tool_waiting_seen: bool
+    tool_event_counts: dict[str, int]
     feedback_command_bias_before: float | None
     feedback_command_bias_after: float | None
     feedback_command_bias_delta: float | None

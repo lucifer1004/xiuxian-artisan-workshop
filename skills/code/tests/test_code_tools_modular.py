@@ -1,5 +1,5 @@
 """
-Tests for code skill - Unified Code Search
+Tests for code skill - Unified Code Search.
 
 Tests cover:
 - code_search: Unified search entry point
@@ -7,82 +7,133 @@ Tests cover:
 - Classifier: Intent classification
 """
 
-import pytest
-from omni.test_kit.decorators import xiuxian_skill
+import asyncio
+import importlib
+import sys
+from pathlib import Path
+
+from xiuxian_foundation.api.decorators import normalize_tool_result
 
 
-@pytest.mark.asyncio
-@xiuxian_skill(name="code")
+def _scripts_root() -> Path:
+    return Path(__file__).parent.parent / "scripts"
+
+
+def _ensure_skill_paths() -> None:
+    scripts_root = _scripts_root()
+    path_text = str(scripts_root)
+    if path_text not in sys.path:
+        sys.path.insert(0, path_text)
+
+
+def _load_search_commands_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.commands", None)
+    return importlib.import_module("search.commands")
+
+
+def _load_search_graph_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.graph", None)
+    return importlib.import_module("search.graph")
+
+
+def _load_search_engines_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.nodes.engines", None)
+    return importlib.import_module("search.nodes.engines")
+
+
+def _load_search_classifier_module():
+    _ensure_skill_paths()
+    sys.modules.pop("search.nodes.classifier", None)
+    return importlib.import_module("search.nodes.classifier")
+
+
+def _load_smart_ast_engine_module():
+    _ensure_skill_paths()
+    sys.modules.pop("smart_ast.engine", None)
+    return importlib.import_module("smart_ast.engine")
+
+
+def _load_smart_ast_patterns_module():
+    _ensure_skill_paths()
+    sys.modules.pop("smart_ast.patterns", None)
+    return importlib.import_module("smart_ast.patterns")
+
+
+def _tool_text(result: object) -> str:
+    return normalize_tool_result(result)["content"][0]["text"]
+
+
 class TestCodeSearchUnified:
     """Test unified code_search command."""
 
-    async def test_code_search_class(self, skill_tester):
-        """Test code_search for class definitions."""
-        result = await skill_tester.run("code", "code_search", query="class User")
-        assert result.success
-        # Should route to AST or Vector based on pattern
+    def test_code_search_class(self):
+        module = _load_search_commands_module()
 
-    async def test_code_search_function(self, skill_tester):
-        """Test code_search for function definitions."""
-        result = await skill_tester.run("code", "code_search", query="def authenticate")
-        assert result.success
+        result = _tool_text(asyncio.run(module.code_search(query="class User", session_id="test")))
+        assert isinstance(result, str)
 
-    async def test_code_search_semantic(self, skill_tester):
-        """Test code_search for semantic queries."""
-        result = await skill_tester.run("code", "code_search", query="how does authentication work")
-        assert result.success
+    def test_code_search_function(self):
+        module = _load_search_commands_module()
 
-    async def test_code_search_todo(self, skill_tester):
-        """Test code_search for TODO comments."""
-        result = await skill_tester.run("code", "code_search", query="TODO: fix")
-        assert result.success
+        result = _tool_text(asyncio.run(module.code_search(query="def authenticate", session_id="test")))
+        assert isinstance(result, str)
 
-    async def test_code_search_refactor_pattern(self, skill_tester):
-        """Test code_search with refactor pattern."""
-        result = await skill_tester.run("code", "code_search", query="connect($$$)")
-        assert result.success
+    def test_code_search_semantic(self):
+        module = _load_search_commands_module()
+
+        result = _tool_text(
+            asyncio.run(module.code_search(query="how does authentication work", session_id="test"))
+        )
+        assert isinstance(result, str)
+
+    def test_code_search_todo(self):
+        module = _load_search_commands_module()
+
+        result = _tool_text(asyncio.run(module.code_search(query="TODO: fix", session_id="test")))
+        assert isinstance(result, str)
+
+    def test_code_search_refactor_pattern(self):
+        module = _load_search_commands_module()
+
+        result = _tool_text(asyncio.run(module.code_search(query="connect($$$)", session_id="test")))
+        assert isinstance(result, str)
 
 
-@pytest.mark.asyncio
-@xiuxian_skill(name="code")
 class TestSmartAstEngine:
     """Test SmartAstEngine for AST-based search."""
 
-    async def test_engine_init(self, skill_tester):
-        """Test SmartAstEngine initialization."""
-        from code.scripts.smart_ast.engine import SmartAstEngine
+    def test_engine_init(self):
+        module = _load_smart_ast_engine_module()
 
-        engine = SmartAstEngine()
+        engine = module.SmartAstEngine()
         assert engine is not None
 
-    async def test_engine_list_rules(self, skill_tester):
-        """Test listing available rules."""
-        from code.scripts.smart_ast.engine import SmartAstEngine
+    def test_engine_list_rules(self):
+        module = _load_smart_ast_engine_module()
 
-        engine = SmartAstEngine()
+        engine = module.SmartAstEngine()
         rules = engine.list_rules()
         assert isinstance(rules, list)
         assert len(rules) > 0
 
-    async def test_engine_register_rule(self, skill_tester):
-        """Test registering a custom rule."""
-        from code.scripts.smart_ast.engine import BUILTIN_RULES, SmartAstEngine
+    def test_engine_register_rule(self):
+        module = _load_smart_ast_engine_module()
 
-        engine = SmartAstEngine()
-        initial_count = len(BUILTIN_RULES)
+        engine = module.SmartAstEngine()
+        initial_count = len(module.BUILTIN_RULES)
         engine.register_rule("test_rule", "test($$$)", "Test rule message")
-        assert "test_rule" in BUILTIN_RULES
-        assert len(BUILTIN_RULES) == initial_count + 1
+        assert "test_rule" in module.BUILTIN_RULES
+        assert len(module.BUILTIN_RULES) == initial_count + 1
 
-    async def test_yaml_rules_loaded(self, skill_tester):
-        """Test that YAML rules are loaded from rules directory."""
-        from code.scripts.smart_ast.engine import SmartAstEngine
+    def test_yaml_rules_loaded(self):
+        module = _load_smart_ast_engine_module()
 
-        engine = SmartAstEngine()
+        engine = module.SmartAstEngine()
         rules = engine.list_rules()
-        # Should include rules from YAML files like architecture, complexity, etc.
         rule_ids = [r["id"] for r in rules]
-        # Check for some expected rules from YAML
         expected_rules = ["deep-nesting", "open-without-with", "find-entrypoints"]
         for expected in expected_rules:
             if expected in rule_ids:
@@ -90,114 +141,87 @@ class TestSmartAstEngine:
                 break
 
 
-@pytest.mark.asyncio
-@xiuxian_skill(name="code")
 class TestSearchEngines:
     """Test individual search engines."""
 
-    async def test_ast_engine_function(self, skill_tester):
-        """Test AST search for functions."""
-        from code.scripts.search.nodes.engines import extract_ast_pattern
+    def test_ast_engine_function(self):
+        module = _load_search_engines_module()
 
-        # Test pattern extraction
-        pattern = extract_ast_pattern("class User")
+        pattern = module.extract_ast_pattern("class User")
         assert pattern == "class User"
 
-        pattern = extract_ast_pattern("def authenticate")
+        pattern = module.extract_ast_pattern("def authenticate")
         assert pattern == "def authenticate"
 
-    async def test_ast_pattern_extraction(self, skill_tester):
-        """Test AST pattern extraction for various queries."""
-        from code.scripts.search.nodes.engines import extract_ast_pattern
+    def test_ast_pattern_extraction(self):
+        module = _load_search_engines_module()
 
-        # Class patterns
-        assert extract_ast_pattern("class User") == "class User"
-        assert extract_ast_pattern("Find the User class") == "class User"
-
-        # Function patterns
-        assert extract_ast_pattern("def authenticate") == "def authenticate"
-        assert extract_ast_pattern("fn main") == "fn main"
-
-        # Impl patterns
-        assert extract_ast_pattern("impl Foo") == "impl Foo"
-
-        # Struct patterns
-        assert extract_ast_pattern("struct User") == "struct User"
-
-        # Non-pattern queries return None
-        assert extract_ast_pattern("how does auth work") is None
+        assert module.extract_ast_pattern("class User") == "class User"
+        assert module.extract_ast_pattern("Find the User class") == "class User"
+        assert module.extract_ast_pattern("def authenticate") == "def authenticate"
+        assert module.extract_ast_pattern("fn main") == "fn main"
+        assert module.extract_ast_pattern("impl Foo") == "impl Foo"
+        assert module.extract_ast_pattern("struct User") == "struct User"
+        assert module.extract_ast_pattern("how does auth work") is None
 
 
-@pytest.mark.asyncio
-@xiuxian_skill(name="code")
 class TestClassifier:
     """Test query classifier for intent recognition."""
 
-    async def test_classify_structural_query(self, skill_tester):
-        """Test classification of structural queries."""
-        from code.scripts.search.nodes.classifier import classify_query
+    def test_classify_structural_query(self):
+        module = _load_search_classifier_module()
 
-        result = classify_query({"query": "class User"})
+        result = module.classify_query({"query": "class User"})
         assert "ast" in result["strategies"]
 
-        result = classify_query({"query": "def authenticate"})
+        result = module.classify_query({"query": "def authenticate"})
         assert "ast" in result["strategies"]
 
-    async def test_classify_semantic_query(self, skill_tester):
-        """Test classification of semantic queries."""
-        from code.scripts.search.nodes.classifier import classify_query
+    def test_classify_semantic_query(self):
+        module = _load_search_classifier_module()
 
-        result = classify_query({"query": "how does authentication work?"})
+        result = module.classify_query({"query": "how does authentication work?"})
         assert "vector" in result["strategies"]
 
-    async def test_classify_grep_query(self, skill_tester):
-        """Test classification of grep queries."""
-        from code.scripts.search.nodes.classifier import classify_query
+    def test_classify_grep_query(self):
+        module = _load_search_classifier_module()
 
-        result = classify_query({"query": "TODO: fix"})
+        result = module.classify_query({"query": "TODO: fix"})
         assert "grep" in result["strategies"]
 
-        result = classify_query({"query": '"error message"'})
+        result = module.classify_query({"query": '"error message"'})
         assert "grep" in result["strategies"]
 
-    async def test_classify_fallback(self, skill_tester):
-        """Test fallback classification."""
-        from code.scripts.search.nodes.classifier import classify_query
+    def test_classify_fallback(self):
+        module = _load_search_classifier_module()
 
-        result = classify_query({"query": "auth"})
+        result = module.classify_query({"query": "auth"})
         assert "vector" in result["strategies"]
 
 
-@pytest.mark.asyncio
-@xiuxian_skill(name="code")
 class TestGraphWorkflow:
     """Test native workflow integration."""
 
-    async def test_create_search_graph(self, skill_tester):
-        """Test search graph creation."""
-        from code.scripts.search.graph import create_search_graph
+    def test_create_search_graph(self):
+        module = _load_search_graph_module()
 
-        graph = create_search_graph()
+        graph = module.create_search_graph()
         assert graph is not None
 
-    async def test_create_initial_state(self, skill_tester):
-        """Test initial state creation."""
-        from code.scripts.search.graph import create_initial_state
+    def test_create_initial_state(self):
+        module = _load_search_graph_module()
 
-        state = create_initial_state("test query", "test-thread")
+        state = module.create_initial_state("test query", "test-thread")
         assert state["query"] == "test query"
         assert state["thread_id"] == "test-thread"
         assert "strategies" in state
         assert "raw_results" in state
 
 
-@pytest.mark.asyncio
-@xiuxian_skill(name="code")
 class TestSearchState:
     """Test search state types."""
 
-    async def test_state_type(self, skill_tester):
-        """Test SearchGraphState type."""
+    def test_state_type(self):
         result = {
             "engine": "ast",
             "file": "test.py",
@@ -215,26 +239,18 @@ class TestSearchState:
         assert state["query"] == "test"
 
 
-@pytest.mark.asyncio
-@xiuxian_skill(name="code")
 class TestPatternUtils:
     """Test pattern utilities."""
 
-    async def test_language_patterns(self, skill_tester):
-        """Test language-specific patterns."""
-        from code.scripts.smart_ast.patterns import LANG_PATTERNS
+    def test_language_patterns(self):
+        module = _load_smart_ast_patterns_module()
 
-        # Python patterns
-        assert "class $NAME" in LANG_PATTERNS["python"]["classes"]
-        assert "def $NAME($$$)" in LANG_PATTERNS["python"]["functions"]
+        assert "class $NAME" in module.LANG_PATTERNS["python"]["classes"]
+        assert "def $NAME($$$)" in module.LANG_PATTERNS["python"]["functions"]
+        assert "struct $NAME" in module.LANG_PATTERNS["rust"]["structs"]
+        assert "fn $NAME($$$)" in module.LANG_PATTERNS["rust"]["functions"]
 
-        # Rust patterns
-        assert "struct $NAME" in LANG_PATTERNS["rust"]["structs"]
-        assert "fn $NAME($$$)" in LANG_PATTERNS["rust"]["functions"]
+    def test_common_patterns(self):
+        module = _load_smart_ast_patterns_module()
 
-    async def test_common_patterns(self, skill_tester):
-        """Test common patterns alias."""
-        from code.scripts.smart_ast.patterns import COMMON_PATTERNS
-
-        # Should be python patterns by default
-        assert "class $NAME" in COMMON_PATTERNS["class"]
+        assert "class $NAME" in module.COMMON_PATTERNS["class"]

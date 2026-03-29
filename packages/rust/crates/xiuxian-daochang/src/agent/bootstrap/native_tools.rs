@@ -226,7 +226,7 @@ mod tests {
 [qianhuan]
 background = \"$wendao://skills-internal/agenda/SKILL.md\"
 
-[mcp_contract]
+[tool_contract]
 category = \"write\"
 name = \"agenda.add\"
 description = \"\"\"
@@ -253,7 +253,7 @@ flow_definition = \"$wendao://skills-internal/agenda/references/add/qianji.toml\
 [qianhuan]
 background = \"$wendao://skills-internal/agenda/SKILL.md\"
 
-[mcp_contract]
+[tool_contract]
 category = \"read\"
 name = \"agenda.view\"
 description = \"\"\"

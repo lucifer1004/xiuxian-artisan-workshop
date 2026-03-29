@@ -235,6 +235,7 @@ class KnowledgeGraphExtractor:
         self.llm_complete = llm_complete_func
         self.entity_types = entity_types or get_rag_config().knowledge_graph.entity_types
         self.relation_types = relation_types or get_rag_config().knowledge_graph.relation_types
+
     async def extract_entities(
         self,
         text: str,

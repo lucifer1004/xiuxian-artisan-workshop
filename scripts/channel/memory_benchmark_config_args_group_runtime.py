@@ -59,10 +59,10 @@ def add_output_and_policy_args(parser: Any) -> None:
         help="Output Markdown report path.",
     )
     parser.add_argument(
-        "--fail-on-mcp-error",
+        "--fail-on-tool-error",
         action="store_true",
         help=(
-            "Fail immediately when logs include `tools/call: Mcp error`. "
+            "Fail immediately when logs include `tools/call` runtime errors. "
             "Default behavior records this as interference."
         ),
     )

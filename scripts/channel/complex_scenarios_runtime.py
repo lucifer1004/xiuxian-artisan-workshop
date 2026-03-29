@@ -7,7 +7,7 @@ from complex_scenarios_runtime_metrics import (
     as_float,
     detect_memory_event_flags,
     extract_bot_excerpt,
-    extract_mcp_metrics,
+    extract_tool_metrics,
     extract_memory_metrics,
     run_cmd,
 )
@@ -17,7 +17,7 @@ __all__ = [
     "as_float",
     "detect_memory_event_flags",
     "extract_bot_excerpt",
-    "extract_mcp_metrics",
+    "extract_tool_metrics",
     "extract_memory_metrics",
     "run_cmd",
     "run_scenario",

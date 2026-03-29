@@ -536,7 +536,7 @@ pub struct DecoratorArguments {
     pub destructive: Option<bool>,
     /// Whether tool is read-only.
     pub read_only: Option<bool>,
-    /// MCP Resource URI (e.g. `omni://skill/git/status`).
+    /// Tool resource URI (e.g. `omni://skill/git/status`).
     pub resource_uri: Option<String>,
 }
 

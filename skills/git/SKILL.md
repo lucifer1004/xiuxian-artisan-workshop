@@ -66,8 +66,8 @@ Use `git.smart_commit` to run the full smart commit workflow (stage -> scan -> a
 
 ## Architecture
 
-This skill uses `@skill_command` decorator in `scripts/*.py` files.
-Commands are automatically exposed via MCP as `git.command_name`.
+This skill keeps its runnable command functions in `scripts/*.py`.
+Commands are exposed through the retained tool runtime as `git.command_name`.
 
 ## Available Commands
 
@@ -156,7 +156,7 @@ git diff
 git log --oneline
 ```
 
-### Write Operations (Use MCP Tools)
+### Write Operations (Use Tool Runtime Calls)
 
 | Operation    | Tool                                  |
 | ------------ | ------------------------------------- |
@@ -167,4 +167,4 @@ git log --oneline
 
 ## Key Principle
 
-> **Read = Claude-native bash. Write = MCP tools.**
+> **Read = Claude-native bash. Write = tool runtime calls.**

@@ -59,7 +59,7 @@ def build_mode_summary_lines(
     lines = [
         "## Mode Summary",
         "",
-        "| Mode | Query Turns | Scored Turns | Success Rate | Avg Hit Ratio | Injected Rate | Avg Pipeline ms | Avg k1 | Avg k2 | Avg lambda | Avg Feedback Bias | MCP Error Turns | Embedding Fallback Turns |",
+        "| Mode | Query Turns | Scored Turns | Success Rate | Avg Hit Ratio | Injected Rate | Avg Pipeline ms | Avg k1 | Avg k2 | Avg lambda | Avg Feedback Bias | Tool Error Turns | Embedding Fallback Turns |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for mode in config.modes:
@@ -77,7 +77,7 @@ def build_mode_summary_lines(
             f"{format_float_fn(summary.avg_k2)} | "
             f"{format_float_fn(summary.avg_lambda)} | "
             f"{format_float_fn(summary.avg_recall_feedback_bias)} | "
-            f"{summary.mcp_error_turns} | "
+            f"{summary.tool_error_turns} | "
             f"{summary.embedding_fallback_turns_total} |"
         )
     lines.append("")

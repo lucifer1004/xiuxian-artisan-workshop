@@ -13,12 +13,12 @@ def run_common_post_gates(
     run_reflection_quality_gate_fn: Any,
     run_discover_cache_gate_fn: Any,
     run_trace_reconstruction_gate_fn: Any,
-    assert_mcp_waiting_warning_budget_fn: Any,
+    assert_tool_waiting_warning_budget_fn: Any,
     assert_memory_stream_warning_budget_fn: Any,
 ) -> None:
     """Run common post-suite quality/warning gates."""
     run_reflection_quality_gate_fn(cfg, cwd=cfg.project_root, env=env)
     run_discover_cache_gate_fn(cfg, cwd=cfg.project_root, env=env)
     run_trace_reconstruction_gate_fn(cfg, cwd=cfg.project_root, env=env)
-    assert_mcp_waiting_warning_budget_fn(cfg)
+    assert_tool_waiting_warning_budget_fn(cfg)
     assert_memory_stream_warning_budget_fn(cfg)

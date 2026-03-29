@@ -284,6 +284,7 @@ class LinkGraphEnhancer:
 # Factory
 # ---------------------------------------------------------------------------
 
+
 def get_link_graph_enhancer() -> LinkGraphEnhancer:
     """Create a LinkGraphEnhancer instance.
 

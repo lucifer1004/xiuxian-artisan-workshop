@@ -18,11 +18,11 @@ from xiuxian_foundation.api.api_key import get_anthropic_api_key
 from xiuxian_foundation.config.settings import get_setting
 from xiuxian_foundation.services.llm.http_backend import OpenAIHTTPBackend
 
-log = structlog.get_logger("mcp-core.inference")
+log = structlog.get_logger("xiuxian_foundation.inference")
 
 
 class InferenceClient:
-    """Unified LLM inference client for MCP servers via OpenAI-compatible HTTP."""
+    """Unified LLM inference client for retained runtimes via OpenAI-compatible HTTP."""
 
     def __init__(
         self,

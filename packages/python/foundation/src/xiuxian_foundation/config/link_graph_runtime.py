@@ -335,9 +335,9 @@ def get_link_graph_root_dir(
 def _resolve_link_graph_git_root_dir() -> str | None:
     """Best-effort git top-level fallback when link_graph.root_dir is not configured."""
     try:
-        from xiuxian_foundation.runtime.gitops import get_git_toplevel
+        from xiuxian_foundation.config.prj import get_project_root
 
-        return str(get_git_toplevel())
+        return str(get_project_root())
     except Exception:
         return None
 

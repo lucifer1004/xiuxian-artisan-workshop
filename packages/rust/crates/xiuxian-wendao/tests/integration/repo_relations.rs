@@ -1,9 +1,11 @@
 //! Integration tests for Repo Intelligence relation graph output.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
+use std::fs;
 
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
+use crate::support::repo_intelligence::{
+    assert_repo_json_snapshot, create_sample_julia_repo, create_sample_modelica_repo,
+    write_repo_config,
+};
 use serde_json::json;
 use xiuxian_wendao::analyzers::analyze_repository_from_config;
 
@@ -17,8 +19,41 @@ fn analysis_emits_structural_and_semantic_relations() -> TestResult {
 
     let analysis =
         analyze_repository_from_config("relation-sample", Some(&config_path), temp.path())?;
-    let mut relations = analysis
-        .relations
+    let relations = normalized_relations_payload(analysis.relations);
+
+    assert_repo_json_snapshot("repo_relations_result", json!(relations));
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[test]
+fn modelica_plugin_emits_structural_and_semantic_relations() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_modelica_repo(temp.path(), "Relationica")?;
+    let config_path = temp.path().join("modelica-relations.wendao.toml");
+    fs::write(
+        &config_path,
+        format!(
+            r#"[link_graph.projects.modelica-relations]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+
+    let analysis =
+        analyze_repository_from_config("modelica-relations", Some(&config_path), temp.path())?;
+    let relations = normalized_relations_payload(analysis.relations);
+
+    assert_repo_json_snapshot("repo_relations_modelica_result", json!(relations));
+    Ok(())
+}
+
+fn normalized_relations_payload(
+    relations: Vec<xiuxian_wendao::analyzers::RelationRecord>,
+) -> Vec<serde_json::Value> {
+    let mut relations = relations
         .into_iter()
         .map(|relation| {
             json!({
@@ -35,7 +70,5 @@ fn analysis_emits_structural_and_semantic_relations() -> TestResult {
             .then_with(|| left["source_id"].as_str().cmp(&right["source_id"].as_str()))
             .then_with(|| left["target_id"].as_str().cmp(&right["target_id"].as_str()))
     });
-
-    assert_repo_json_snapshot("repo_relations_result", json!(relations));
-    Ok(())
+    relations
 }

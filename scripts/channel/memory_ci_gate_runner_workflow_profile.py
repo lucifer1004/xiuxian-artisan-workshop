@@ -17,7 +17,7 @@ def run_profile(
     run_discover_cache_gate_fn: Any,
     run_trace_reconstruction_gate_fn: Any,
     run_cross_group_complex_gate_fn: Any,
-    assert_mcp_waiting_warning_budget_fn: Any,
+    assert_tool_waiting_warning_budget_fn: Any,
     assert_memory_stream_warning_budget_fn: Any,
     assert_evolution_quality_fn: Any,
     assert_evolution_slow_response_quality_fn: Any,
@@ -38,7 +38,7 @@ def run_profile(
             run_reflection_quality_gate_fn=run_reflection_quality_gate_fn,
             run_discover_cache_gate_fn=run_discover_cache_gate_fn,
             run_trace_reconstruction_gate_fn=run_trace_reconstruction_gate_fn,
-            assert_mcp_waiting_warning_budget_fn=assert_mcp_waiting_warning_budget_fn,
+            assert_tool_waiting_warning_budget_fn=assert_tool_waiting_warning_budget_fn,
             assert_memory_stream_warning_budget_fn=assert_memory_stream_warning_budget_fn,
         )
         return
@@ -58,6 +58,6 @@ def run_profile(
         run_reflection_quality_gate_fn=run_reflection_quality_gate_fn,
         run_discover_cache_gate_fn=run_discover_cache_gate_fn,
         run_trace_reconstruction_gate_fn=run_trace_reconstruction_gate_fn,
-        assert_mcp_waiting_warning_budget_fn=assert_mcp_waiting_warning_budget_fn,
+        assert_tool_waiting_warning_budget_fn=assert_tool_waiting_warning_budget_fn,
         assert_memory_stream_warning_budget_fn=assert_memory_stream_warning_budget_fn,
     )

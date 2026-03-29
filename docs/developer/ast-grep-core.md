@@ -162,8 +162,8 @@ The `$$$` is ast-grep's **Sequence Wildcard** that matches zero or more items in
 // Match function calls with any arguments
 "func($$$)"             // Matches func(), func(1), func(a, b, c)
 
-// Match decorator calls with any arguments
-"@skill_command($$$)"    // Matches @skill_command, @skill_command(name="test"), @skill_command(...)
+// Match registered command decorators with any arguments
+"@skill_command($$$)"    // Matches command decorators with zero or more arguments
 
 // Match class inheritance with any number of bases
 "class $NAME($$$)"      // Matches class Foo, class Foo(Base), class Foo(A, B, C)
@@ -288,10 +288,10 @@ let pattern = r#"@skill_command($)"#;
 let pattern = r#"@skill_command($$$)"#;
 ```
 
-**Real Example** (from `scanner.rs` for @skill_command discovery):
+**Real Example** (from `scanner.rs` for command-decorator discovery):
 
 ```rust
-// Match @skill_command decorator with any arguments
+// Match command decorator with any arguments
 let decorator_pattern = r#"@skill_command($$$)"#;
 
 let search_decorator = Pattern::try_new(decorator_pattern, lang)
@@ -383,7 +383,7 @@ impl<'tree, D: Doc> NodeMatch<'tree, D> {
 ## 8. Related Files
 
 - `packages/rust/crates/xiuxian-tags/src/lib.rs` - Implementation example
-- `packages/rust/crates/xiuxian-vector/src/scanner.rs` - Real-world @skill_command discovery
+- `packages/rust/crates/xiuxian-vector/src/scanner.rs` - Real-world command-decorator discovery
 - `packages/rust/crates/xiuxian-ast/src/scan.rs` - Pattern matching utilities
 - `packages/rust/crates/xiuxian-tags/Cargo.toml` - Dependency configuration
 - `assets/specs/cca_navigation.md` - Code navigation specification

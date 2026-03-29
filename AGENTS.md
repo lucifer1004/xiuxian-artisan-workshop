@@ -47,8 +47,7 @@ To prevent context bloating and "hallucination spirals," all Agents MUST follow 
 ## 5. Project Structure & Sovereignty (物理架构主权)
 
 - `packages/rust/crates/*`: **Sovereign Kernel**.
-  - `xiuxian-mcp`: Native MCP protocol implementation.
-  - `xiuxian-llm`: MCP Client Pools, retry logic, and LLM orchestration.
+  - `xiuxian-llm`: tool runtime pools, retry logic, and LLM orchestration.
   - `xiuxian-wendao`: Knowledge graph and hybrid search engine.
   - `xiuxian-vector`: High-performance vector retrieval.
 - `packages/rust/bindings/python`: PyO3 bridge crate (`xiuxian-core-rs`).

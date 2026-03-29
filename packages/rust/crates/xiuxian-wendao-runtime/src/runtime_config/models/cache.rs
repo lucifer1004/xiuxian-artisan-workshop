@@ -14,7 +14,11 @@ pub struct LinkGraphCacheRuntimeConfig {
 impl LinkGraphCacheRuntimeConfig {
     /// Build a cache runtime record from normalized cache settings.
     #[must_use]
-    pub fn from_parts(valkey_url: &str, key_prefix: Option<&str>, ttl_seconds: Option<u64>) -> Self {
+    pub fn from_parts(
+        valkey_url: &str,
+        key_prefix: Option<&str>,
+        ttl_seconds: Option<u64>,
+    ) -> Self {
         let resolved_url = valkey_url.trim().to_string();
         let resolved_prefix = key_prefix
             .map(str::trim)

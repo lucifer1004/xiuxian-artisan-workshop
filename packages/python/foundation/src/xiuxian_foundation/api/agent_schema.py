@@ -1,7 +1,7 @@
 """
 Runtime server info schema API.
 
-Load, validate, and build payloads for GET /sse and /mcp responses.
+Load, validate, and build payloads for runtime server-info responses.
 """
 
 from __future__ import annotations

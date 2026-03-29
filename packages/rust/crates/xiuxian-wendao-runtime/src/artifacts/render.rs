@@ -37,9 +37,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        render_plugin_artifact_toml_for_selector_with, render_plugin_artifact_toml_with,
-    };
+    use super::{render_plugin_artifact_toml_for_selector_with, render_plugin_artifact_toml_with};
     use xiuxian_wendao_core::{
         artifacts::{PluginArtifactPayload, PluginArtifactSelector},
         capabilities::ContractVersion,

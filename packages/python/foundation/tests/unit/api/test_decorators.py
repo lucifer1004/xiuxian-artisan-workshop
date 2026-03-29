@@ -1,50 +1,11 @@
-"""
-Agent Tests - Decorator Validation Tests
+"""Removal guards for deleted script metadata assumptions."""
 
-Validates @skill_command decorator correctness using core skill scripts.
-"""
+from __future__ import annotations
 
-import pytest
-
-from xiuxian_foundation.config.dirs import get_skills_dir
+import importlib
 
 
-def load_skill_script(skill_name: str, script_name: str):
-    """Load a specific skill script for testing."""
-    import importlib.util
-
-    script_path = get_skills_dir() / skill_name / "scripts" / f"{script_name}.py"
-    if not script_path.exists():
-        pytest.skip(f"Script not found: {script_path}")
-
-    module_name = f"test_{skill_name}_{script_name}"
-    spec = importlib.util.spec_from_file_location(module_name, str(script_path))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-class TestSkillScriptDecorators:
-    """Test @skill_command decorator functionality on real scripts."""
-
-    @pytest.fixture
-    def discovery_module(self):
-        """Load skill discovery script."""
-        return load_skill_script("skill", "discovery")
-
-    def test_discover_has_marker(self, discovery_module):
-        """discover command should have _is_skill_command marker."""
-        assert hasattr(discovery_module.discover, "_is_skill_command")
-        assert discovery_module.discover._is_skill_command is True
-
-    def test_discover_has_config(self, discovery_module):
-        """discover command should have _skill_config with name and category."""
-        assert hasattr(discovery_module.discover, "_skill_config")
-        config = discovery_module.discover._skill_config
-        assert config["name"] == "discover"
-        assert config["category"] == "system"
-
-    def test_jit_install_has_marker(self, discovery_module):
-        """jit_install should have _is_skill_command marker."""
-        assert hasattr(discovery_module.jit_install, "_is_skill_command")
-        assert discovery_module.jit_install._is_skill_command is True
+def test_skill_discovery_module_no_longer_relies_on_command_metadata() -> None:
+    decorators = importlib.import_module("xiuxian_foundation.api.decorators")
+    assert not hasattr(decorators, "tool_command")
+    assert not hasattr(decorators, "get_command_metadata")

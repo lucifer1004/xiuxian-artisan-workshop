@@ -6,7 +6,9 @@ import pytest
 def test_reactive_skill_watcher_is_removed() -> None:
     from xiuxian_core.kernel.watcher import ReactiveSkillWatcher
 
-    with pytest.raises(RuntimeError, match="Python hot reload and file watcher support have been removed"):
+    with pytest.raises(
+        RuntimeError, match="Python hot reload and file watcher support have been removed"
+    ):
         ReactiveSkillWatcher(indexer=None)
 
 

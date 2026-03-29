@@ -1,12 +1,9 @@
 //! Language-specific Repo Intelligence plugins bundled into the Wendao runtime.
 //!
 //! The Julia plugin now enters the host through a normal crate dependency.
-//! The remaining path-inclusion seam is currently Modelica-specific and is
-//! tracked separately under `M4`.
-
-#[cfg(feature = "modelica")]
-#[path = "../../../../xiuxian-wendao-modelica/src/plugin/mod.rs"]
-mod modelica;
+//! Modelica now follows the same package-dependency path, which turns the
+//! second plugin onboarding proof into a normal Cargo integration rather than
+//! a sibling-source inclusion seam.
 
 #[cfg(feature = "julia")]
 pub use xiuxian_wendao_julia::{
@@ -17,4 +14,6 @@ pub use xiuxian_wendao_julia::{
 };
 
 #[cfg(feature = "modelica")]
-pub use modelica::{ModelicaRepoIntelligencePlugin, register_into as register_modelica_plugin};
+pub use xiuxian_wendao_modelica::{
+    ModelicaRepoIntelligencePlugin, register_into as register_modelica_plugin,
+};

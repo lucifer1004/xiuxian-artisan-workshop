@@ -15,18 +15,7 @@ def _project_roots() -> tuple[Path, ...]:
     seen: set[str] = set()
 
     try:
-        from xiuxian_foundation.config.paths import get_config_paths
-
-        root = get_config_paths().project_root
-        key = str(root)
-        if key not in seen:
-            seen.add(key)
-            roots.append(root)
-    except Exception:
-        pass
-
-    try:
-        from xiuxian_foundation.runtime.gitops import get_project_root
+        from xiuxian_foundation.config.prj import get_project_root
 
         root = get_project_root()
         key = str(root)

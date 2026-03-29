@@ -109,7 +109,9 @@ pub fn resolve_link_graph_retrieval_base_runtime_with_settings(
 #[cfg(test)]
 mod tests {
     use super::resolve_link_graph_retrieval_base_runtime_with_settings;
-    use crate::runtime_config::{LinkGraphSemanticIgnitionBackend, LinkGraphSemanticIgnitionRuntimeConfig};
+    use crate::runtime_config::{
+        LinkGraphSemanticIgnitionBackend, LinkGraphSemanticIgnitionRuntimeConfig,
+    };
     use crate::settings::{merged_toml_settings, set_link_graph_wendao_config_override};
     use serial_test::serial;
     use std::fs;

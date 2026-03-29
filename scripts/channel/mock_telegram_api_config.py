@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 
-from resolve_mcp_endpoint import resolve_mcp_endpoint
+from resolve_tool_endpoint import resolve_tool_endpoint
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ def parse_args() -> ServerConfig:
     parser = argparse.ArgumentParser(description="Run a minimal Telegram Bot API mock server.")
     parser.add_argument(
         "--host",
-        default=str(resolve_mcp_endpoint()["host"]),
+        default=str(resolve_tool_endpoint()["host"]),
         help="Bind host (default: resolved local host).",
     )
     parser.add_argument("--port", type=int, default=18080, help="Bind port (default: 18080).")

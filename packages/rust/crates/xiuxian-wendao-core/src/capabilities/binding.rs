@@ -18,4 +18,3 @@ pub struct PluginCapabilityBinding {
     /// Contract version negotiated for this binding.
     pub contract_version: ContractVersion,
 }
-

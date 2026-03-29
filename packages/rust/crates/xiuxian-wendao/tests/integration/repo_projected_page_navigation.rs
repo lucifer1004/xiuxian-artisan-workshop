@@ -1,11 +1,10 @@
 //! Integration tests for deterministic projected page navigation bundles.
 
-#[path = "../support/repo_projection_support.rs"]
-mod repo_test_support;
-
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::support::repo_intelligence::create_sample_modelica_repo;
+use crate::support::repo_projection_support::{assert_repo_json_snapshot, write_repo_config};
 use git2::{BranchType, IndexAddOption, Repository, Signature, Time, build::CheckoutBuilder};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
@@ -14,8 +13,6 @@ use xiuxian_wendao::analyzers::{
     repo_projected_page_index_trees_from_config, repo_projected_page_navigation_from_config,
     repo_projected_pages_from_config,
 };
-
-use repo_test_support::{assert_repo_json_snapshot, write_repo_config};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -73,6 +70,77 @@ fn projected_page_navigation_bundle_resolves_tree_context_and_family_cluster() -
     )?;
 
     assert_repo_json_snapshot("repo_projected_page_navigation_result", json!(result));
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[test]
+fn modelica_plugin_projected_page_navigation_bundle_resolves_tree_context() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_modelica_repo(temp.path(), "Projectionica")?;
+    let config_path = temp
+        .path()
+        .join("modelica-projected-navigation.wendao.toml");
+    fs::write(
+        &config_path,
+        format!(
+            r#"[link_graph.projects.modelica-projected-navigation]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-projected-navigation".to_string(),
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .expect("expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`");
+
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: "modelica-projected-navigation".to_string(),
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.page_id == page.page_id)
+        .expect("expected a projected page-index tree for the selected page");
+    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
+        .expect("expected a projected page-index node titled `Anchors`");
+
+    let result = repo_projected_page_navigation_from_config(
+        &RepoProjectedPageNavigationQuery {
+            repo_id: "modelica-projected-navigation".to_string(),
+            page_id: page.page_id.clone(),
+            node_id: Some(node_id),
+            family_kind: None,
+            related_limit: 3,
+            family_limit: 0,
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+
+    assert_repo_json_snapshot(
+        "repo_projected_page_navigation_modelica_result",
+        json!(result),
+    );
     Ok(())
 }
 

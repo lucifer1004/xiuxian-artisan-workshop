@@ -6,10 +6,10 @@ use xiuxian_ast::{
     JuliaSymbol, JuliaSymbolKind as AstJuliaSymbolKind, TreeSitterJuliaParser,
 };
 use xiuxian_wendao_core::repo_intelligence::{
-    AnalysisContext, PluginAnalysisOutput, PluginLinkContext, RepoIntelligencePlugin,
-    RepoIntelligenceError, RepoSourceFile, RepositoryAnalysisOutput, RegisteredRepository,
-    DocRecord, ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind, RepositoryRecord,
-    SymbolRecord,
+    AnalysisContext, DocRecord, ModuleRecord, PluginAnalysisOutput, PluginLinkContext,
+    RegisteredRepository, RelationKind, RelationRecord, RepoIntelligenceError,
+    RepoIntelligencePlugin, RepoSourceFile, RepoSymbolKind, RepositoryAnalysisOutput,
+    RepositoryRecord, SymbolRecord,
 };
 
 use super::discovery::{discover_docs, discover_examples, relative_path_string};

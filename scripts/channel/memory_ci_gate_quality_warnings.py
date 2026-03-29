@@ -6,32 +6,34 @@ from __future__ import annotations
 from typing import Any
 
 
-def assert_mcp_waiting_warning_budget(cfg: Any, *, count_log_event_fn: Any) -> None:
-    """Validate warning budgets for MCP waiting events."""
+def assert_tool_waiting_warning_budget(cfg: Any, *, count_log_event_fn: Any) -> None:
+    """Validate warning budgets for tool-runtime waiting events."""
     if not cfg.runtime_log_file.exists():
         raise RuntimeError(f"missing runtime log file: {cfg.runtime_log_file}")
 
-    call_waiting = count_log_event_fn(cfg.runtime_log_file, "mcp.pool.call.waiting")
-    connect_waiting = count_log_event_fn(cfg.runtime_log_file, "mcp.pool.connect.waiting")
+    call_waiting = count_log_event_fn(cfg.runtime_log_file, "tool_runtime.pool.call.waiting")
+    connect_waiting = count_log_event_fn(cfg.runtime_log_file, "tool_runtime.pool.connect.waiting")
     waiting_total = call_waiting + connect_waiting
 
     failures: list[str] = []
-    if call_waiting > cfg.max_mcp_call_waiting_events:
-        failures.append(f"mcp.pool.call.waiting={call_waiting} > {cfg.max_mcp_call_waiting_events}")
-    if connect_waiting > cfg.max_mcp_connect_waiting_events:
+    if call_waiting > cfg.max_tool_call_waiting_events:
         failures.append(
-            f"mcp.pool.connect.waiting={connect_waiting} > {cfg.max_mcp_connect_waiting_events}"
+            f"tool_runtime.pool.call.waiting={call_waiting} > {cfg.max_tool_call_waiting_events}"
         )
-    if waiting_total > cfg.max_mcp_waiting_events_total:
+    if connect_waiting > cfg.max_tool_connect_waiting_events:
         failures.append(
-            f"mcp_waiting_events_total={waiting_total} > {cfg.max_mcp_waiting_events_total}"
+            f"tool_runtime.pool.connect.waiting={connect_waiting} > {cfg.max_tool_connect_waiting_events}"
+        )
+    if waiting_total > cfg.max_tool_waiting_events_total:
+        failures.append(
+            f"tool_waiting_events_total={waiting_total} > {cfg.max_tool_waiting_events_total}"
         )
 
     if failures:
-        raise RuntimeError("mcp waiting warning budget exceeded: " + "; ".join(failures))
+        raise RuntimeError("tool waiting warning budget exceeded: " + "; ".join(failures))
 
     print(
-        "MCP waiting warning budget passed: "
+        "Tool waiting warning budget passed: "
         f"call_waiting={call_waiting}, "
         f"connect_waiting={connect_waiting}, "
         f"total={waiting_total}",

@@ -18,8 +18,8 @@ pub struct DecoratorArgs {
     /// Whether this tool only reads data.
     #[serde(default)]
     pub read_only: Option<bool>,
-    /// MCP Resource URI.  When set, this command is also exposed as a
-    /// read-only MCP Resource at the given URI (e.g. `omni://skill/git/status`).
+    /// Tool resource URI. When set, this command is also exposed as a
+    /// read-only tool resource at the given URI (e.g. `omni://skill/git/status`).
     #[serde(default)]
     pub resource_uri: Option<String>,
 }

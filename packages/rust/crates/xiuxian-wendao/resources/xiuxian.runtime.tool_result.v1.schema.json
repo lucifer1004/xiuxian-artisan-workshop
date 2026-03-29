@@ -9,7 +9,7 @@
   "properties": {
     "content": {
       "type": "array",
-      "description": "List of content items (MCP Content type). At least one item with type 'text' for display.",
+      "description": "List of content items in the retained tool-result content shape. At least one item with type 'text' for display.",
       "minItems": 1,
       "items": {
         "type": "object",

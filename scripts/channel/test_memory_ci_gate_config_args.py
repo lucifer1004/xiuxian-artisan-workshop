@@ -102,9 +102,9 @@ def test_parse_args_uses_run_scoped_default_artifacts(monkeypatch, tmp_path: Pat
     )
     assert cfg.cross_group_report_markdown.suffix == ".md"
     assert cfg.benchmark_iterations == 3
-    assert cfg.max_mcp_call_waiting_events == 0
-    assert cfg.max_mcp_connect_waiting_events == 0
-    assert cfg.max_mcp_waiting_events_total == 0
+    assert cfg.max_tool_call_waiting_events == 0
+    assert cfg.max_tool_connect_waiting_events == 0
+    assert cfg.max_tool_waiting_events_total == 0
 
 
 def test_parse_args_honors_explicit_artifact_paths(monkeypatch, tmp_path: Path) -> None:

@@ -37,7 +37,7 @@ class _Turn:
     feedback_bias_before: float | None
     feedback_bias_after: float | None
     feedback_direction: str | None
-    mcp_error_detected: bool
+    tool_error_detected: bool
     embedding_timeout_fallback_seen: bool
     embedding_cooldown_fallback_seen: bool
     embedding_unavailable_fallback_seen: bool
@@ -54,7 +54,7 @@ class _Summary:
     avg_recalled_injected: float
     avg_best_score: float
     avg_recall_feedback_bias: float
-    mcp_error_turns: int
+    tool_error_turns: int
     embedding_timeout_fallback_turns: int
     embedding_cooldown_fallback_turns: int
     embedding_unavailable_fallback_turns: int
@@ -119,7 +119,7 @@ def test_summarize_mode_data_and_compare_mode_summaries() -> None:
             feedback_bias_before=0.0,
             feedback_bias_after=0.1,
             feedback_direction="up",
-            mcp_error_detected=False,
+            tool_error_detected=False,
             embedding_timeout_fallback_seen=True,
             embedding_cooldown_fallback_seen=False,
             embedding_unavailable_fallback_seen=False,
@@ -145,7 +145,7 @@ def test_summarize_mode_data_and_compare_mode_summaries() -> None:
             feedback_bias_before=0.1,
             feedback_bias_after=0.0,
             feedback_direction="down",
-            mcp_error_detected=True,
+            tool_error_detected=True,
             embedding_timeout_fallback_seen=False,
             embedding_cooldown_fallback_seen=True,
             embedding_unavailable_fallback_seen=False,
@@ -162,7 +162,7 @@ def test_summarize_mode_data_and_compare_mode_summaries() -> None:
     assert summary_payload["query_turns"] == 2
     assert summary_payload["scored_turns"] == 2
     assert summary_payload["success_count"] == 1
-    assert summary_payload["mcp_error_turns"] == 1
+    assert summary_payload["tool_error_turns"] == 1
     assert summary_payload["embedding_fallback_turns_total"] == 2
     assert summary_payload["feedback_up_count"] == 1
     assert summary_payload["feedback_down_count"] == 1
@@ -176,7 +176,7 @@ def test_summarize_mode_data_and_compare_mode_summaries() -> None:
         avg_recalled_injected=1.0,
         avg_best_score=0.5,
         avg_recall_feedback_bias=0.05,
-        mcp_error_turns=1,
+        tool_error_turns=1,
         embedding_timeout_fallback_turns=1,
         embedding_cooldown_fallback_turns=1,
         embedding_unavailable_fallback_turns=0,
@@ -191,7 +191,7 @@ def test_summarize_mode_data_and_compare_mode_summaries() -> None:
         avg_recalled_injected=1.2,
         avg_best_score=0.55,
         avg_recall_feedback_bias=0.08,
-        mcp_error_turns=0,
+        tool_error_turns=0,
         embedding_timeout_fallback_turns=0,
         embedding_cooldown_fallback_turns=1,
         embedding_unavailable_fallback_turns=0,
@@ -199,4 +199,4 @@ def test_summarize_mode_data_and_compare_mode_summaries() -> None:
     )
     delta = module.compare_mode_summaries(baseline, adaptive)
     assert delta["success_rate_delta"] == 0.25
-    assert delta["mcp_error_turns_delta"] == -1.0
+    assert delta["tool_error_turns_delta"] == -1.0

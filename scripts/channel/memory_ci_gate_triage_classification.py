@@ -54,8 +54,8 @@ def classify_gate_failure(error: Exception) -> tuple[str, str]:
         return ("benchmark_quality", "benchmark quality thresholds failed")
     if "trace reconstruction quality gates failed" in message:
         return ("trace_reconstruction_quality", "trace reconstruction quality gate failed")
-    if "mcp waiting warning budget exceeded" in message:
-        return ("mcp_waiting_budget", "mcp waiting warning budget exceeded")
+    if "tool waiting warning budget exceeded" in message:
+        return ("tool_waiting_budget", "tool waiting warning budget exceeded")
     if "memory stream warning budget exceeded" in message:
         return ("memory_stream_budget", "memory stream warning budget exceeded")
     return ("unknown", "unclassified gate failure")

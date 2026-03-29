@@ -1,94 +1,144 @@
-#!/usr/bin/env python3
-"""Unit tests for runtime monitor helpers."""
+"""Tests for scripts/channel/agent_channel_runtime_monitor.py."""
 
 from __future__ import annotations
 
-import importlib
+import importlib.util
 import json
+import signal
+import subprocess
 import sys
+import time
 from pathlib import Path
+from types import ModuleType
 
-_SCRIPT_DIR = Path(__file__).resolve().parent
-if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
-
-monitor_module = importlib.import_module("agent_channel_runtime_monitor")
-runtime_module = importlib.import_module("agent_channel_runtime_monitor_runtime")
+from xiuxian_foundation.config.prj import get_project_root
 
 
-def test_classify_exit_maps_ok_signal_and_nonzero() -> None:
-    assert monitor_module.classify_exit(0)["kind"] == "ok"
-    assert monitor_module.classify_exit(-15)["kind"] == "signal"
-    assert monitor_module.classify_exit(1)["kind"] == "nonzero"
+def _load_monitor_module() -> ModuleType:
+    root = get_project_root()
+    script_path = root / "scripts" / "channel" / "agent_channel_runtime_monitor.py"
+    spec = importlib.util.spec_from_file_location(
+        "xiuxian_daochang_channel_runtime_monitor", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
-def test_extract_event_token_parses_event_field() -> None:
-    line = '2026-01-01T00:00:00Z INFO event="agent.memory.recall.planned" scope=test'
-    assert monitor_module.extract_event_token(line) == "agent.memory.recall.planned"
+def test_normalize_exit_code_maps_signals() -> None:
+    module = _load_monitor_module()
+    assert module.normalize_exit_code(0) == 0
+    assert module.normalize_exit_code(3) == 3
+    assert module.normalize_exit_code(-15) == 143
 
 
-def test_write_report_writes_json_and_jsonl(tmp_path: Path) -> None:
-    report = {"schema_version": 1, "ok": True}
-    report_path = tmp_path / "reports" / "report.json"
-    jsonl_path = tmp_path / "reports" / "report.jsonl"
+def test_classify_exit_for_success_and_signal() -> None:
+    module = _load_monitor_module()
+    ok = module.classify_exit(0)
+    assert ok["kind"] == "ok"
+    assert ok["exit_code"] == 0
 
-    monitor_module.write_report(report_path, jsonl_path, report)
-
-    loaded = json.loads(report_path.read_text(encoding="utf-8"))
-    assert loaded["ok"] is True
-    lines = jsonl_path.read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 1
-    assert json.loads(lines[0])["schema_version"] == 1
+    sig = module.classify_exit(-15)
+    assert sig["kind"] == "signal"
+    assert sig["exit_code"] == 143
+    assert sig["signal"] == 15
+    assert sig["signal_name"] == "SIGTERM"
 
 
-def test_run_monitored_process_success_records_stats(tmp_path: Path) -> None:
+def test_extract_event_token_parses_structured_log() -> None:
+    module = _load_monitor_module()
+    line = (
+        "2026-02-18 INFO xiuxian_daochang::channels::telegram::runtime::jobs: "
+        'telegram command reply sent event="telegram.command.session_reset.replied"'
+    )
+    assert module.extract_event_token(line) == "telegram.command.session_reset.replied"
+
+
+def test_run_monitored_process_writes_success_report(tmp_path: Path) -> None:
+    module = _load_monitor_module()
     log_file = tmp_path / "runtime.log"
-    report_file = tmp_path / "report.json"
-    report_jsonl = tmp_path / "report.jsonl"
+    report_file = tmp_path / "runtime.exit.json"
+    report_jsonl = tmp_path / "runtime.exit.jsonl"
 
-    command = [
-        sys.executable,
-        "-c",
-        (
-            "print('Webhook received Telegram update');"
-            "print('event=\"agent.test.event\"');"
-            "print('← User: hello');"
-            "print('→ Bot: ok')"
-        ),
-    ]
-    code = runtime_module.run_monitored_process(
-        command=command,
+    exit_code = module.run_monitored_process(
+        command=[sys.executable, "-c", "print('event=\"demo.event\"'); print('ok')"],
         log_file=log_file,
         report_file=report_file,
         report_jsonl=report_jsonl,
-        tail_lines=3,
+        tail_lines=5,
     )
-    assert code == 0
-
-    payload = json.loads(report_file.read_text(encoding="utf-8"))
-    stats = payload["stats"]
-    assert stats["total_lines"] == 4
-    assert stats["saw_webhook"] is True
-    assert stats["saw_user_dispatch"] is True
-    assert stats["saw_bot_reply"] is True
-    assert payload["events"]["counts"].get("agent.test.event") == 1
-    assert len(payload["tail"]) == 3
+    assert exit_code == 0
     assert log_file.exists()
+    assert report_file.exists()
     assert report_jsonl.exists()
 
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+    assert report["exit"]["kind"] == "ok"
+    assert report["exit"]["exit_code"] == 0
+    assert report["stats"]["total_lines"] >= 2
+    assert report["events"]["last_event"] == "demo.event"
 
-def test_run_monitored_process_spawn_error_generates_report(tmp_path: Path) -> None:
+
+def test_run_monitored_process_writes_nonzero_report(tmp_path: Path) -> None:
+    module = _load_monitor_module()
     log_file = tmp_path / "runtime.log"
-    report_file = tmp_path / "report.json"
+    report_file = tmp_path / "runtime.exit.json"
 
-    code = runtime_module.run_monitored_process(
-        command=["__definitely_missing_runtime_monitor_binary__"],
+    exit_code = module.run_monitored_process(
+        command=[sys.executable, "-c", "print('error: boom'); raise SystemExit(7)"],
         log_file=log_file,
         report_file=report_file,
         report_jsonl=None,
-        tail_lines=10,
+        tail_lines=5,
     )
-    assert code == 127
-    payload = json.loads(report_file.read_text(encoding="utf-8"))
-    assert payload["exit"]["kind"] == "spawn_error"
-    assert payload["exit"]["exit_code"] == 127
+    assert exit_code == 7
+
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+    assert report["exit"]["kind"] == "nonzero"
+    assert report["exit"]["exit_code"] == 7
+    assert report["stats"]["error_lines"] >= 1
+    assert "error: boom" in report["stats"]["first_error_line"]
+
+
+def test_runtime_monitor_writes_report_when_monitor_gets_sigterm(tmp_path: Path) -> None:
+    root = get_project_root()
+    script_path = root / "scripts" / "channel" / "agent_channel_runtime_monitor.py"
+    log_file = tmp_path / "runtime.log"
+    report_file = tmp_path / "runtime.exit.json"
+
+    monitor = subprocess.Popen(
+        [
+            sys.executable,
+            str(script_path),
+            "--log-file",
+            str(log_file),
+            "--report-file",
+            str(report_file),
+            "--",
+            sys.executable,
+            "-c",
+            "import time; print('ready', flush=True); time.sleep(60)",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        time.sleep(0.6)
+        monitor.send_signal(signal.SIGTERM)
+        stdout, stderr = monitor.communicate(timeout=20)
+    except Exception:
+        monitor.kill()
+        monitor.wait(timeout=5)
+        raise
+
+    assert monitor.returncode == 143, (stdout, stderr)
+    assert report_file.exists()
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+    assert report["exit"]["kind"] == "signal"
+    assert report["exit"]["exit_code"] == 143
+    assert report["exit"]["signal_name"] == "SIGTERM"
+    assert report["termination"]["requested_signal_name"] == "SIGTERM"

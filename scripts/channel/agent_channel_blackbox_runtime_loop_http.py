@@ -54,8 +54,8 @@ def handle_webhook_post(
     print("Response body:", file=sys.stderr)
     for line in body.splitlines():
         print(f"  {line}", file=sys.stderr)
-    print("MCP diagnostics:")
-    print("  mcp_last_event=")
-    print("  mcp_waiting_seen=false")
-    print("  mcp_event_counts={}")
+    print("Tool runtime diagnostics:")
+    print("  tool_last_event=")
+    print("  tool_waiting_seen=false")
+    print("  tool_event_counts={}")
     return 1

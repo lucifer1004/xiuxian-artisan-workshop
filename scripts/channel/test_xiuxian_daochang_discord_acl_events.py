@@ -31,9 +31,9 @@ SUITES = ("core", "all")
 ERROR_PATTERNS = (
     "discord failed to send command reply",
     "Foreground message handling failed",
-    "tools/call: Mcp error",
+    "tools/call: Tool runtime error",
 )
-FORBIDDEN_LOG_PATTERN = "tools/call: Mcp error"
+FORBIDDEN_LOG_PATTERN = "tools/call: Tool runtime error"
 DISCORD_SESSION_SCOPE_PREFIX = "discord:"
 
 _MODULES = load_module_bindings(__file__)

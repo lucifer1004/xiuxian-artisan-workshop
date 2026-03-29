@@ -38,7 +38,7 @@ Use `/commit` slash command for the complete workflow:
 ### Step 1: Preparation & Checks
 
 ```bash
-@omni("git.prepare_commit")
+tool: `git.prepare_commit`
 ```
 
 This:
@@ -58,7 +58,7 @@ Generates commit analysis based on staged diff:
 ### Step 3: Scope Validation
 
 ```bash
-@omni("git.prepare_commit", {"message": "type(scope): description"})
+tool: `git.prepare_commit` with `{"message": "type(scope): description"}`
 ```
 
 This validates:
@@ -70,7 +70,7 @@ This validates:
 ### Step 4: Commit
 
 ```bash
-@omni("git.commit", {"message": "type(scope): description"})
+tool: `git.commit` with `{"message": "type(scope): description"}`
 ```
 
 Executes the commit with template rendering.
@@ -144,7 +144,7 @@ scopes = [
 
 ## Available Commands
 
-### MCP Tools
+### Tool Runtime Calls
 
 | Command              | Category | Description                   |
 | -------------------- | -------- | ----------------------------- |

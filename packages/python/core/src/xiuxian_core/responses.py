@@ -1,7 +1,7 @@
 """
-responses.py - Unified MCP Tool Response Format
+responses.py - Unified Tool Response Format
 
-Standardized response format for all MCP Tools following Omni-Dev-Fusion
+Standardized response format for all tools following Omni-Dev-Fusion
 architecture improvements (Items 4 & 5).
 
 Usage:
@@ -34,9 +34,9 @@ class ResponseStatus(str, Enum):
 
 
 class ToolResponse(BaseModel):
-    """Unified MCP Tool Response Format.
+    """Unified tool response format.
 
-    All MCP tools should return responses in this standardized format.
+    All tools should return responses in this standardized format.
     Provides consistent structure for success, error, and blocked states.
 
     Attributes:
@@ -62,8 +62,8 @@ class ToolResponse(BaseModel):
         description="Response timestamp",
     )
 
-    def to_mcp(self) -> list[dict]:
-        """Convert to MCP protocol format.
+    def to_tool_blocks(self) -> list[dict]:
+        """Convert to the canonical tool content-block format.
 
         Returns:
             List containing a single text content block with JSON response

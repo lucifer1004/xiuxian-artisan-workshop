@@ -151,8 +151,8 @@ assert_evolution_slow_response_quality = _quality_module.assert_evolution_slow_r
 assert_session_matrix_quality = _quality_module.assert_session_matrix_quality
 assert_cross_group_complex_quality = _quality_module.assert_cross_group_complex_quality
 assert_trace_reconstruction_quality = _quality_module.assert_trace_reconstruction_quality
-assert_mcp_waiting_warning_budget = partial(
-    _quality_module.assert_mcp_waiting_warning_budget,
+assert_tool_waiting_warning_budget = partial(
+    _quality_module.assert_tool_waiting_warning_budget,
     count_log_event_fn=count_log_event,
 )
 assert_memory_stream_warning_budget = partial(
@@ -207,7 +207,7 @@ run_gate = partial(
     run_discover_cache_gate_fn=run_discover_cache_gate,
     run_trace_reconstruction_gate_fn=run_trace_reconstruction_gate,
     run_cross_group_complex_gate_fn=run_cross_group_complex_gate,
-    assert_mcp_waiting_warning_budget_fn=assert_mcp_waiting_warning_budget,
+    assert_tool_waiting_warning_budget_fn=assert_tool_waiting_warning_budget,
     assert_memory_stream_warning_budget_fn=assert_memory_stream_warning_budget,
     assert_evolution_quality_fn=assert_evolution_quality,
     assert_evolution_slow_response_quality_fn=assert_evolution_slow_response_quality,

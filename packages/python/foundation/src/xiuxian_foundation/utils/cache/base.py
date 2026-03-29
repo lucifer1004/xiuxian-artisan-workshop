@@ -30,7 +30,7 @@ class LazyCacheBase(ABC, Generic[T]):
         class WritingStyleCache(LazyCacheBase[dict]):
             @property
             def _file_path(self) -> Path:
-                from xiuxian_foundation.runtime.gitops import get_project_root
+                from xiuxian_foundation.config.prj import get_project_root
                 return get_project_root() / "agent/writing-style/concise.md"
 
             def _load(self) -> dict:

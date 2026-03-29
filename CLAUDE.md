@@ -9,7 +9,7 @@ metadata:
 (赛博修仙创意工坊)
 
 > One Tool + Trinity Architecture
-> Single Entry Point: `@omni("skill.command")`
+> Single Entry Point: `tool: skill.command`
 
 Quick Reference: `docs/explanation/trinity-architecture.md` | `docs/skills.md`
 
@@ -40,7 +40,7 @@ Project-specific implementations:
 
 - Rust/Python cross-language workflow
 - Project namespace conventions and examples
-- SSOT utilities: `SKILLS_DIR()`, `PRJ_DATA()`, `get_setting()`
+- SSOT utilities: `get_skills_dir()`, `PRJ_DATA()`, `get_setting()`
 - Build and test commands
 
 ### 3. RAG/Representation Protocol
@@ -58,7 +58,7 @@ Memory system, knowledge indexing, context optimization
 - **Protocol Adherence**: Strictly follow the instructions in each skill's `SKILL.md`.
 - **Re-anchoring**: If you drift from the protocol or attempt unauthorized tool calls, the Gatekeeper will inject the correct `SKILL.md` rules into your context to force re-alignment.
 - **Overload Management**: Avoid activating more than 5 skills simultaneously. If you see a `COGNITIVE LOAD WARNING`, disable unused skills to maintain precision.
-- **Tool Selection**: Prioritize skill-specific MCP tools over generic shell commands for all write operations.
+- **Tool Selection**: Prioritize project-specific tool surfaces over generic shell commands for all write operations.
 
 ### No Global Lint Suppressions in Rust
 
@@ -134,7 +134,7 @@ Use these directories for all project-local paths. Do not hardcode paths.
 
 - `just validate` - fmt, lint, test
 - `uv run pytest` - Run Python tests
-- `/mcp enable orchestrator` - Reconnect omni mcp
+- `just validate` - Re-run the retained project verification lanes
 
 ---
 

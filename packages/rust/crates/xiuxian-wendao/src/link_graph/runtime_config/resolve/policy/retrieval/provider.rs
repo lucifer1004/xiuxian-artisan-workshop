@@ -45,11 +45,17 @@ pub(super) fn apply_plugin_rerank_runtime_config_to_julia_runtime(
         std::env::var(LINK_GRAPH_JULIA_RERANK_SERVICE_MODE_ENV).ok(),
     ]));
     resolved.analyzer_config_path = normalize_optional_runtime_string(first_non_empty(&[
-        get_setting_string(settings, "link_graph.retrieval.julia_rerank.analyzer_config_path"),
+        get_setting_string(
+            settings,
+            "link_graph.retrieval.julia_rerank.analyzer_config_path",
+        ),
         std::env::var(LINK_GRAPH_JULIA_RERANK_ANALYZER_CONFIG_PATH_ENV).ok(),
     ]));
     resolved.analyzer_strategy = normalize_optional_runtime_string(first_non_empty(&[
-        get_setting_string(settings, "link_graph.retrieval.julia_rerank.analyzer_strategy"),
+        get_setting_string(
+            settings,
+            "link_graph.retrieval.julia_rerank.analyzer_strategy",
+        ),
         std::env::var(LINK_GRAPH_JULIA_RERANK_ANALYZER_STRATEGY_ENV).ok(),
     ]));
     resolved.vector_weight = first_non_empty(&[
@@ -59,7 +65,10 @@ pub(super) fn apply_plugin_rerank_runtime_config_to_julia_runtime(
     .as_deref()
     .and_then(parse_positive_f64);
     resolved.similarity_weight = first_non_empty(&[
-        get_setting_string(settings, "link_graph.retrieval.julia_rerank.similarity_weight"),
+        get_setting_string(
+            settings,
+            "link_graph.retrieval.julia_rerank.similarity_weight",
+        ),
         std::env::var(LINK_GRAPH_JULIA_RERANK_SIMILARITY_WEIGHT_ENV).ok(),
     ])
     .as_deref()

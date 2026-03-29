@@ -197,10 +197,10 @@ def test_build_config_native_tools_only_injects_expectations(tmp_path) -> None:
 
     assert cfg.native_tools_only is True
     assert any(
-        "agent\.tool\.dispatch" in item and "native" in item and "outcome" in item
+        r"agent\.tool\.dispatch" in item and "native" in item and "outcome" in item
         for item in cfg.expect_log_regexes
     )
-    assert any("mcp" in item for item in cfg.forbid_log_regexes)
+    assert any("tool_runtime" in item for item in cfg.forbid_log_regexes)
     assert any("zhenfa" in item for item in cfg.forbid_log_regexes)
 
 

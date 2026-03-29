@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from xiuxian_foundation.runtime.skill_optimization import filter_ranked_chunks, is_markdown_index_chunk
+from .optimization import (
+    filter_ranked_chunks,
+    is_markdown_index_chunk,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

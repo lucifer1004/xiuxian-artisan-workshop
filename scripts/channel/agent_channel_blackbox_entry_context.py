@@ -45,8 +45,8 @@ class BlackboxEntryContext:
     telegram_send_retry_grace_seconds_fn: Any
     parse_log_tokens_fn: Any
     error_patterns: tuple[str, ...]
-    mcp_observability_events: tuple[str, ...]
-    mcp_waiting_events: frozenset[str]
+    tool_observability_events: tuple[str, ...]
+    tool_waiting_events: frozenset[str]
 
 
 def parse_args(context: BlackboxEntryContext) -> Any:
@@ -102,7 +102,7 @@ def run_probe(cfg: Any, context: BlackboxEntryContext) -> int:
         telegram_send_retry_grace_seconds_fn=context.telegram_send_retry_grace_seconds_fn,
         parse_log_tokens_fn=context.parse_log_tokens_fn,
         error_patterns=context.error_patterns,
-        mcp_observability_events=context.mcp_observability_events,
-        mcp_waiting_events=context.mcp_waiting_events,
+        tool_observability_events=context.tool_observability_events,
+        tool_waiting_events=context.tool_waiting_events,
         target_session_scope_placeholder=context.target_session_scope_placeholder,
     )

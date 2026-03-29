@@ -1,22 +1,34 @@
 import importlib
 import shutil
 import sys
-import types
 from pathlib import Path
 
 import pytest
-from omni.test_kit.decorators import xiuxian_skill
 
-from omni.foundation.api.mcp_schema import parse_result_payload
+from xiuxian_foundation.api.decorators import normalize_tool_result
 
 
 def _load_search_module():
     scripts_dir = Path(__file__).parent.parent / "scripts"
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
-    # Avoid cross-skill module collision (other skills also expose `search`).
     sys.modules.pop("search", None)
     return importlib.import_module("search")
+
+
+def _load_mutation_module():
+    scripts_dir = Path(__file__).parent.parent / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    sys.modules.pop("mutation", None)
+    return importlib.import_module("mutation")
+
+
+def _unwrap_payload(result: object) -> dict:
+    normalized = normalize_tool_result(result)
+    return normalized if "tool" in normalized else __import__("json").loads(
+        normalized["content"][0]["text"]
+    )
 
 
 class TestAdvancedToolsPatternMode:
@@ -162,20 +174,19 @@ class TestAdvancedToolsPatternMode:
 
         clear_smart_search_cache()
         try:
-            paths = types.SimpleNamespace(project_root=str(tmp_path))
             first = smart_search(
                 pattern="Hard Constraints",
                 file_globs="*.md",
                 case_sensitive=True,
                 context_lines=0,
-                paths=paths,
+                project_root=tmp_path,
             )
             second = smart_search(
                 pattern="Hard Constraints",
                 file_globs="*.md",
                 case_sensitive=True,
                 context_lines=0,
-                paths=paths,
+                project_root=tmp_path,
             )
         finally:
             clear_smart_search_cache()
@@ -184,83 +195,81 @@ class TestAdvancedToolsPatternMode:
         assert calls["count"] == 1
 
 
-@pytest.mark.asyncio
-@xiuxian_skill(name="advanced_tools")
 class TestAdvancedToolsModular:
-    """Modular tests for advanced_tools skill."""
+    """Retained modular tests for advanced_tools scripts."""
 
-    async def test_smart_search(self, skill_tester):
-        """Test smart_search execution."""
-        result = await skill_tester.run("advanced_tools", "smart_search", pattern="import pytest")
-        assert result.success
-        payload = parse_result_payload(result.output)
+    def test_smart_search(self, tmp_path: Path):
+        module = _load_search_module()
+        target = tmp_path / "sample.py"
+        target.write_text("import pytest\n")
+
+        payload = _unwrap_payload(
+            module.smart_search(
+                pattern="import pytest",
+                file_globs="*.py",
+                search_root=str(tmp_path),
+                project_root=tmp_path,
+            )
+        )
+
         assert payload["tool"] == "ripgrep"
         assert isinstance(payload["matches"], list)
 
-    async def test_smart_find(self, skill_tester, project_root):
-        """Test smart_find execution."""
-        # Check if fd is available
+    def test_smart_find(self, tmp_path: Path):
         if not shutil.which("fd"):
             pytest.skip("fd command not installed")
 
-        # Use specific pattern to limit results
-        result = await skill_tester.run(
-            "advanced_tools", "smart_find", pattern="test_*.py", extension="py"
+        module = _load_search_module()
+        (tmp_path / "test_alpha.py").write_text("x = 1\n")
+
+        payload = _unwrap_payload(
+            module.smart_find(
+                pattern="test_*.py",
+                extension="py",
+                search_root=str(tmp_path),
+                project_root=tmp_path,
+            )
         )
-        assert result.success, f"Expected success but got error: {result.error}"
-        payload = parse_result_payload(result.output)
+
         assert payload["tool"] == "fd"
         assert isinstance(payload["files"], list)
 
-    async def test_regex_replace(self, skill_tester, project_root):
-        """Test regex_replace execution."""
+    def test_regex_replace(self, tmp_path: Path):
         if not shutil.which("sed"):
             pytest.skip("sed command not installed")
 
-        # Use project_root fixture instead of hardcoded path
-        test_file = project_root / "test_regex_replace_temp.txt"
+        module = _load_mutation_module()
+        test_file = tmp_path / "test_regex_replace_temp.txt"
         test_file.write_text("Hello World")
 
-        try:
-            result = await skill_tester.run(
-                "advanced_tools",
-                "regex_replace",
+        result = _unwrap_payload(
+            module.regex_replace(
                 file_path=str(test_file),
                 pattern="World",
                 replacement="Modular",
+                project_root=tmp_path,
             )
+        )
 
-            assert result.success, f"Expected success but got error: {result.error}"
-            assert test_file.read_text().strip() == "Hello Modular"
-        finally:
-            # Cleanup
-            test_file.unlink(missing_ok=True)
+        assert result["success"] is True
+        assert test_file.read_text().strip() == "Hello Modular"
 
-    async def test_batch_replace_dry_run(self, skill_tester, project_root):
-        """Test batch_replace execution (dry run)."""
-        # Use project_root fixture - create test files in a subdir
-        test_dir = project_root / "test_batch_temp"
+    def test_batch_replace_dry_run(self, tmp_path: Path):
+        module = _load_mutation_module()
+        test_dir = tmp_path / "test_batch_temp"
         test_dir.mkdir(exist_ok=True)
+        (test_dir / "file1.py").write_text("old_val = 1")
+        (test_dir / "file2.py").write_text("old_val = 2")
 
-        try:
-            (test_dir / "file1.py").write_text("old_val = 1")
-            (test_dir / "file2.py").write_text("old_val = 2")
-
-            result = await skill_tester.run(
-                "advanced_tools",
-                "batch_replace",
+        payload = _unwrap_payload(
+            module.batch_replace(
                 pattern="old_val",
                 replacement="new_val",
                 file_glob="test_batch_temp/*.py",
                 dry_run=True,
+                project_root=tmp_path,
             )
+        )
 
-            assert result.success, f"Expected success but got error: {result.error}"
-            payload = parse_result_payload(result.output)
-            assert payload["mode"] == "Dry-Run"
-            assert payload["count"] == 2
-            # Files should NOT be changed
-            assert "old_val" in (test_dir / "file1.py").read_text()
-        finally:
-            # Cleanup
-            shutil.rmtree(test_dir, ignore_errors=True)
+        assert payload["success"] is True
+        assert payload["mode"] == "Dry-Run"

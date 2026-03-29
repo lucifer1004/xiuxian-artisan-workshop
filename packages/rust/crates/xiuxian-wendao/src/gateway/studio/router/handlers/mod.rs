@@ -20,9 +20,7 @@ mod vfs_exports;
 pub use analysis_exports::{
     code_ast, code_ast_retrieval_arrow, markdown, markdown_retrieval_arrow,
 };
-pub use capabilities_exports::{
-    get_compat_deployment_artifact, get_plugin_artifact, get_ui_capabilities,
-};
+pub use capabilities_exports::{get_plugin_artifact, get_ui_capabilities};
 pub use docs_exports::{
     docs_family_cluster, docs_family_context, docs_family_search, docs_navigation,
     docs_navigation_search, docs_page, docs_planner_item, docs_planner_queue, docs_planner_rank,

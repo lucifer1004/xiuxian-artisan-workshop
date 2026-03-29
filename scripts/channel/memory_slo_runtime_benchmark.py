@@ -16,9 +16,9 @@ def evaluate_benchmark(cfg: SloConfig, report: dict[str, Any]) -> dict[str, Any]
     mode_summaries = mode_summaries_obj if isinstance(mode_summaries_obj, dict) else {}
     if not mode_summaries:
         failures.append("benchmark.mode_summaries missing or empty")
-    total_mcp_error_turns = 0
+    total_tool_error_turns = 0
     query_turns_by_mode: dict[str, int] = {}
-    mcp_errors_by_mode: dict[str, int] = {}
+    tool_errors_by_mode: dict[str, int] = {}
 
     for mode in cfg.required_benchmark_modes:
         summary_obj = mode_summaries.get(mode)
@@ -26,22 +26,22 @@ def evaluate_benchmark(cfg: SloConfig, report: dict[str, Any]) -> dict[str, Any]
             failures.append(f"benchmark.mode={mode} missing")
             continue
         query_turns = int(summary_obj.get("query_turns", 0))
-        mcp_error_turns = int(summary_obj.get("mcp_error_turns", 0))
+        tool_error_turns = int(summary_obj.get("tool_error_turns", 0))
         query_turns_by_mode[mode] = query_turns
-        mcp_errors_by_mode[mode] = mcp_error_turns
-        total_mcp_error_turns += mcp_error_turns
+        tool_errors_by_mode[mode] = tool_error_turns
+        total_tool_error_turns += tool_error_turns
         if query_turns < cfg.min_query_turns:
             failures.append(f"benchmark.{mode}.query_turns={query_turns} < {cfg.min_query_turns}")
-        if mcp_error_turns > cfg.max_mode_mcp_error_turns:
+        if tool_error_turns > cfg.max_mode_tool_error_turns:
             failures.append(
                 "benchmark."
-                f"{mode}.mcp_error_turns={mcp_error_turns} > {cfg.max_mode_mcp_error_turns}"
+                f"{mode}.tool_error_turns={tool_error_turns} > {cfg.max_mode_tool_error_turns}"
             )
 
-    if total_mcp_error_turns > cfg.max_total_mcp_error_turns:
+    if total_tool_error_turns > cfg.max_total_tool_error_turns:
         failures.append(
-            f"benchmark.total_mcp_error_turns={total_mcp_error_turns} > "
-            f"{cfg.max_total_mcp_error_turns}"
+            f"benchmark.total_tool_error_turns={total_tool_error_turns} > "
+            f"{cfg.max_total_tool_error_turns}"
         )
 
     return {
@@ -50,7 +50,7 @@ def evaluate_benchmark(cfg: SloConfig, report: dict[str, Any]) -> dict[str, Any]
         "summary": {
             "required_modes": list(cfg.required_benchmark_modes),
             "query_turns_by_mode": query_turns_by_mode,
-            "mcp_error_turns_by_mode": mcp_errors_by_mode,
-            "total_mcp_error_turns": total_mcp_error_turns,
+            "tool_error_turns_by_mode": tool_errors_by_mode,
+            "total_tool_error_turns": total_tool_error_turns,
         },
     }

@@ -50,14 +50,14 @@ def test_run_quick_profile_executes_suite_and_quality_steps(tmp_path: Path) -> N
         run_reflection_quality_gate_fn=_mark("reflection"),
         run_discover_cache_gate_fn=_mark("discover"),
         run_trace_reconstruction_gate_fn=_mark("trace"),
-        assert_mcp_waiting_warning_budget_fn=_mark("mcp_wait"),
+        assert_tool_waiting_warning_budget_fn=_mark("tool_wait"),
         assert_memory_stream_warning_budget_fn=_mark("memory_stream"),
     )
 
     assert recorded_titles == [
         "Quick gate: memory suite (black-box + Rust regressions, evolution skipped)"
     ]
-    assert gate_steps == ["reflection", "discover", "trace", "mcp_wait", "memory_stream"]
+    assert gate_steps == ["reflection", "discover", "trace", "tool_wait", "memory_stream"]
 
 
 def test_run_nightly_profile_runs_matrix_and_benchmark_flows(tmp_path: Path) -> None:
@@ -118,7 +118,7 @@ def test_run_nightly_profile_runs_matrix_and_benchmark_flows(tmp_path: Path) -> 
         run_reflection_quality_gate_fn=_mark("reflection"),
         run_discover_cache_gate_fn=_mark("discover"),
         run_trace_reconstruction_gate_fn=_mark("trace"),
-        assert_mcp_waiting_warning_budget_fn=_mark("mcp_wait"),
+        assert_tool_waiting_warning_budget_fn=_mark("tool_wait"),
         assert_memory_stream_warning_budget_fn=_mark("memory_stream"),
     )
 
@@ -136,6 +136,6 @@ def test_run_nightly_profile_runs_matrix_and_benchmark_flows(tmp_path: Path) -> 
         "reflection",
         "discover",
         "trace",
-        "mcp_wait",
+        "tool_wait",
         "memory_stream",
     ]

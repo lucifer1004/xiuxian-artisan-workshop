@@ -1,13 +1,13 @@
 //! Integration tests for explicit Repo Intelligence source synchronization.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
-
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
+use crate::support::repo_intelligence::{
+    assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config,
+};
 use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::json;
 use xiuxian_config_core::resolve_data_home;
@@ -15,8 +15,6 @@ use xiuxian_wendao::analyzers::{
     RepoSyncDriftState, RepoSyncHealthState, RepoSyncMode, RepoSyncQuery, RepoSyncStalenessState,
     repo_sync_from_config,
 };
-
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 

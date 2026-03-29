@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use axum::body::to_bytes;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 
 use crate::analyzers::bootstrap_builtin_registry;
 use crate::gateway::studio::router::tests::repo_project;
 use crate::gateway::studio::router::{GatewayState, StudioState};
-use crate::gateway::studio::types::{UiConfig, UiProjectConfig, VfsScanResult};
+use crate::gateway::studio::types::{UiConfig, UiPluginArtifact, UiProjectConfig, VfsScanResult};
 use crate::set_link_graph_wendao_config_override;
 use crate::unified_symbol::UnifiedSymbolIndex;
 use chrono::DateTime;
@@ -96,7 +96,7 @@ async fn ui_capabilities_reports_builtin_plugin_languages() {
 
 #[tokio::test]
 #[serial]
-async fn compat_deployment_artifact_handler_returns_resolved_artifact() {
+async fn plugin_artifact_handler_returns_resolved_artifact() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
     fs::write(
@@ -119,10 +119,16 @@ analyzer_strategy = "similarity_only"
         studio: Arc::new(StudioState::new()),
     });
 
-    let response = crate::gateway::studio::router::handlers::get_compat_deployment_artifact(
+    let response = crate::gateway::studio::router::handlers::get_plugin_artifact(
         State(Arc::clone(&state)),
+        Path(
+            crate::gateway::studio::router::handlers::capabilities::PluginArtifactPath {
+                plugin_id: "xiuxian-wendao-julia".to_string(),
+                artifact_id: "deployment".to_string(),
+            },
+        ),
         Query(
-            crate::gateway::studio::router::handlers::capabilities::CompatDeploymentArtifactQuery {
+            crate::gateway::studio::router::handlers::capabilities::PluginArtifactQuery {
                 format: None,
             },
         ),
@@ -133,28 +139,29 @@ analyzer_strategy = "similarity_only"
     let body = to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap_or_else(|error| panic!("read json body: {error}"));
-    let artifact: serde_json::Value = serde_json::from_slice(&body)
+    let artifact: UiPluginArtifact = serde_json::from_slice(&body)
         .unwrap_or_else(|error| panic!("decode artifact json: {error}"));
 
-    assert_eq!(artifact["artifactSchemaVersion"], "v1");
-    DateTime::parse_from_rfc3339(
-        artifact["generatedAt"]
-            .as_str()
-            .unwrap_or_else(|| panic!("artifact generatedAt should be a string")),
-    )
-    .unwrap_or_else(|error| panic!("parse artifact generated_at: {error}"));
-    assert_eq!(artifact["baseUrl"], "http://127.0.0.1:18080");
-    assert_eq!(artifact["route"], "/arrow-ipc");
-    assert_eq!(artifact["schemaVersion"], "v1");
+    assert_eq!(artifact.plugin_id, "xiuxian-wendao-julia");
+    assert_eq!(artifact.artifact_id, "deployment");
+    assert_eq!(artifact.artifact_schema_version, "v1");
+    DateTime::parse_from_rfc3339(&artifact.generated_at)
+        .unwrap_or_else(|error| panic!("parse artifact generated_at: {error}"));
+    assert_eq!(artifact.base_url.as_deref(), Some("http://127.0.0.1:18080"));
+    assert_eq!(artifact.route.as_deref(), Some("/arrow-ipc"));
+    assert_eq!(artifact.schema_version.as_deref(), Some("v1"));
     assert_eq!(
-        artifact["launch"]["launcherPath"],
-        DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH
+        artifact
+            .launch
+            .as_ref()
+            .map(|launch| launch.launcher_path.as_str()),
+        Some(DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH)
     );
 }
 
 #[tokio::test]
 #[serial]
-async fn compat_deployment_artifact_handler_returns_toml_when_requested() {
+async fn plugin_artifact_handler_returns_canonical_json_shape() {
     let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
     let config_path = temp.path().join("wendao.toml");
     fs::write(
@@ -176,13 +183,72 @@ service_mode = "stream"
         studio: Arc::new(StudioState::new()),
     });
 
-    let response = crate::gateway::studio::router::handlers::get_compat_deployment_artifact(
+    let response = crate::gateway::studio::router::handlers::get_plugin_artifact(
         State(Arc::clone(&state)),
+        Path(
+            crate::gateway::studio::router::handlers::capabilities::PluginArtifactPath {
+                plugin_id: "xiuxian-wendao-julia".to_string(),
+                artifact_id: "deployment".to_string(),
+            },
+        ),
         Query(
-            crate::gateway::studio::router::handlers::capabilities::CompatDeploymentArtifactQuery {
-                format: Some(
-                    crate::zhenfa_router::native::WendaoCompatDeploymentArtifactOutputFormat::Toml,
-                ),
+            crate::gateway::studio::router::handlers::capabilities::PluginArtifactQuery {
+                format: None,
+            },
+        ),
+    )
+    .await
+    .unwrap_or_else(|error| panic!("deployment artifact handler should resolve: {error:?}"));
+
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap_or_else(|error| panic!("read json body: {error}"));
+    let artifact: serde_json::Value = serde_json::from_slice(&body)
+        .unwrap_or_else(|error| panic!("decode artifact json: {error}"));
+
+    assert_eq!(artifact["pluginId"], "xiuxian-wendao-julia");
+    assert_eq!(artifact["artifactId"], "deployment");
+    assert_eq!(
+        artifact["launch"]["launcherPath"],
+        DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn plugin_artifact_handler_returns_toml_when_requested() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let config_path = temp.path().join("wendao.toml");
+    fs::write(
+        &config_path,
+        r#"[link_graph.retrieval.julia_rerank]
+base_url = "http://127.0.0.1:18080"
+route = "/arrow-ipc"
+schema_version = "v1"
+service_mode = "stream"
+"#,
+    )
+    .unwrap_or_else(|error| panic!("write config: {error}"));
+    let config_path_string = config_path.to_string_lossy().to_string();
+    set_link_graph_wendao_config_override(&config_path_string);
+
+    let state = Arc::new(GatewayState {
+        index: None,
+        signal_tx: None,
+        studio: Arc::new(StudioState::new()),
+    });
+
+    let response = crate::gateway::studio::router::handlers::get_plugin_artifact(
+        State(Arc::clone(&state)),
+        Path(
+            crate::gateway::studio::router::handlers::capabilities::PluginArtifactPath {
+                plugin_id: "xiuxian-wendao-julia".to_string(),
+                artifact_id: "deployment".to_string(),
+            },
+        ),
+        Query(
+            crate::gateway::studio::router::handlers::capabilities::PluginArtifactQuery {
+                format: Some(crate::zhenfa_router::native::WendaoPluginArtifactOutputFormat::Toml),
             },
         ),
     )

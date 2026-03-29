@@ -13,7 +13,7 @@ def build_confidence_lines(*, mode_summaries: dict[str, Any]) -> list[str]:
     adaptive = mode_summaries.get("adaptive")
     if baseline and adaptive and min(baseline.scored_turns, adaptive.scored_turns) < 5:
         confidence_note = "low"
-    total_mcp_error_turns = sum(summary.mcp_error_turns for summary in mode_summaries.values())
+    total_tool_error_turns = sum(summary.tool_error_turns for summary in mode_summaries.values())
     total_embedding_fallback_turns = sum(
         summary.embedding_fallback_turns_total for summary in mode_summaries.values()
     )
@@ -26,9 +26,9 @@ def build_confidence_lines(*, mode_summaries: dict[str, Any]) -> list[str]:
         f"- Confidence level for this run: `{confidence_note}` "
         f"(scored turns may be small; increase `--iterations` for stronger signal).",
     ]
-    if total_mcp_error_turns > 0:
+    if total_tool_error_turns > 0:
         lines.append(
-            f"- MCP error interference observed on `{total_mcp_error_turns}` query turn(s)."
+            f"- Tool runtime error interference observed on `{total_tool_error_turns}` query turn(s)."
         )
     if total_embedding_fallback_turns > 0:
         lines.append(

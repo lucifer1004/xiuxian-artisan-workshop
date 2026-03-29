@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Represents a discovered MCP Prompt from @prompt decorated functions.
+/// Represents a discovered prompt from `@prompt` decorated functions.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PromptRecord {
     /// Prompt name (from decorator or function name).

@@ -30,7 +30,7 @@ When working with the Template skill:
 
 - Use `template.example` for basic operations
 - Use `template.process_data` for data processing tasks
-- All commands are defined in `scripts/commands.py` with @skill_command decorator
+- All commands are defined in `scripts/commands.py`
 - No tools.py needed - this is the single source of truth
 ```
 
@@ -43,21 +43,21 @@ _template/
 ├── SKILL.md           # Metadata + System Prompts
 ├── scripts/           # Commands (v2.0+)
 │   ├── __init__.py    # Dynamic module loader (importlib.util)
-│   └── commands.py    # @skill_command decorated functions
+│   └── commands.py    # registered command functions
 └── tests/             # Test files
 ```
 
 | Component   | Description                                                   |
 | ----------- | ------------------------------------------------------------- |
 | **Code**    | `scripts/commands.py` - Hot-reloaded via ModuleLoader         |
-| **Context** | `@omni("template.help")` - Full skill context via Repomix XML |
+| **Context** | `template.help` - Full skill context via Repomix XML |
 | **State**   | `SKILL.md` - Skill metadata in YAML Frontmatter               |
 
 ## Why scripts/commands.py Pattern?
 
 The Trinity Architecture v2.0 uses a simplified pattern:
 
-- `scripts/commands.py` - Commands with `@skill_command` decorators
+- `scripts/commands.py` - Command functions registered for runtime discovery
 - Single source of truth
 - No router-indirection layer
 - Easier to understand and maintain
@@ -101,7 +101,7 @@ cp -r assets/skills/_template assets/skills/my_new_skill
 ### Step 2: Add Commands (`scripts/commands.py`)
 
 ```python
-from agent.skills.decorators import skill_command
+from xiuxian_foundation.api.decorators import skill_command
 
 @skill_command(
     name="my_command",
@@ -113,13 +113,13 @@ async def my_command(param: str) -> str:
     return f"Result: {param}"
 ```
 
-**Note:** Command name is just `my_command`, not `my_new_skill.my_command`. MCP Server auto-prefixes.
+**Note:** Command name is just `my_command`, not `my_new_skill.my_command`. The skill runtime applies the skill namespace during registration.
 
 ### Step 3: Add Tests (`tests/test_*.py`)
 
 ```python
 def test_my_command_exists():
-    from agent.skills.my_new_skill.scripts import commands
+    from skills.my_new_skill.scripts import commands
     assert hasattr(commands, "my_command")
 ```
 

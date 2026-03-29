@@ -8,15 +8,16 @@ use git2::{IndexAddOption, Repository, Signature, Time};
 use serde_json::json;
 use xiuxian_config_core::resolve_data_home;
 use xiuxian_wendao::analyzers::{
-    RepoIntelligenceError, RepoOverviewQuery, RepositoryRefreshPolicy,
-    analyze_repository_from_config, bootstrap_builtin_registry, load_repo_intelligence_config,
+    ExampleSearchQuery, ModuleSearchQuery, RepoIntelligenceError, RepoOverviewQuery,
+    RepositoryRefreshPolicy, analyze_repository_from_config, bootstrap_builtin_registry,
+    example_search_from_config, load_repo_intelligence_config, module_search_from_config,
     repo_overview_from_config,
 };
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
-
-use repo_test_support::{assert_repo_json_snapshot, create_sample_julia_repo, write_repo_config};
+use crate::support::repo_intelligence::{
+    assert_repo_json_snapshot, create_sample_julia_repo, create_sample_modelica_repo,
+    write_repo_config,
+};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -81,6 +82,70 @@ fn julia_analyzer_builds_repo_overview_from_local_repo() -> TestResult {
     });
     redact_repo_root(&mut payload);
     assert_repo_json_snapshot("repo_overview_analysis", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[test]
+fn modelica_plugin_builds_repo_overview_and_search_results_from_local_repo() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_sample_modelica_repo(temp.path(), "DemoLib")?;
+    let config_path = temp.path().join("modelica-demo.wendao.toml");
+    fs::write(
+        &config_path,
+        format!(
+            r#"[link_graph.projects.modelica-demo]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+
+    let analysis =
+        analyze_repository_from_config("modelica-demo", Some(&config_path), temp.path())?;
+    let overview = repo_overview_from_config(
+        &RepoOverviewQuery {
+            repo_id: "modelica-demo".to_string(),
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+    let module_search = module_search_from_config(
+        &ModuleSearchQuery {
+            repo_id: "modelica-demo".to_string(),
+            query: "Controllers".to_string(),
+            limit: 10,
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+    let example_search = example_search_from_config(
+        &ExampleSearchQuery {
+            repo_id: "modelica-demo".to_string(),
+            query: "Step".to_string(),
+            limit: 10,
+        },
+        Some(&config_path),
+        temp.path(),
+    )?;
+
+    let mut payload = json!({
+        "analysis": {
+            "repository": analysis.repository,
+            "modules": analysis.modules,
+            "symbols": analysis.symbols,
+            "examples": analysis.examples,
+            "docs": analysis.docs,
+            "relations": analysis.relations,
+            "diagnostics": analysis.diagnostics,
+        },
+        "overview": overview,
+        "module_search": module_search,
+        "example_search": example_search,
+    });
+    redact_repo_root(&mut payload);
+    assert_repo_json_snapshot("repo_overview_modelica_analysis", payload);
     Ok(())
 }
 

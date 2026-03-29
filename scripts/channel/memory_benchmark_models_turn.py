@@ -40,5 +40,5 @@ class TurnResult:
     embedding_timeout_fallback_seen: bool = False
     embedding_cooldown_fallback_seen: bool = False
     embedding_unavailable_fallback_seen: bool = False
-    mcp_error_detected: bool = False
+    tool_error_detected: bool = False
     bot_excerpt: str | None = None

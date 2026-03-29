@@ -20,10 +20,3 @@ pub(crate) const UI_PLUGIN_ARTIFACT: RouteContract = RouteContract {
     methods: &["get"],
     path_params: &["plugin_id", "artifact_id"],
 };
-
-pub(crate) const UI_COMPAT_DEPLOYMENT_ARTIFACT: RouteContract = RouteContract {
-    axum_path: API_UI_COMPAT_DEPLOYMENT_ARTIFACT_AXUM_PATH,
-    openapi_path: API_UI_COMPAT_DEPLOYMENT_ARTIFACT_OPENAPI_PATH,
-    methods: &["get"],
-    path_params: &[],
-};

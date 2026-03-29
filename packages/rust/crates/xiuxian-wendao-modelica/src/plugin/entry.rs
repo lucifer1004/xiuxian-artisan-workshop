@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use xiuxian_wendao::analyzers::{
+use xiuxian_wendao_core::repo_intelligence::{
     AnalysisContext, PluginAnalysisOutput, PluginLinkContext, PluginRegistry, RegisteredRepository,
     RelationRecord, RepoIntelligenceError, RepoIntelligencePlugin, RepoSourceFile,
     RepositoryAnalysisOutput,

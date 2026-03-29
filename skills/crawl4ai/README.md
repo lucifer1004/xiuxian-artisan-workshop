@@ -33,26 +33,26 @@ Crawl web pages and extract markdown content using the **Skeleton Planning Patte
 
 ```python
 # Smart crawl with LLM chunking
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com"})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com"}`
 
 # Skeleton only
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "action": "skeleton"})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com", "action": "skeleton"}`
 
 # Extract specific sections
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "chunk_indices": [0, 1, 2]})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com", "chunk_indices": [0, 1, 2]}`
 
 # Deep crawl
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "max_depth": 2})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com", "max_depth": 2}`
 ```
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Main MCP Env                            │
+│                 Main Tool Runtime Env                       │
 │  ┌─────────────────┐    ┌─────────────────────────────┐   │
 │  │ crawl_url.py    │───▶│ LLM Chunk Planning         │   │
-│  │ (MCP entry)     │    │ (system_prompt + skeleton) │   │
+│  │ (runtime entry) │    │ (system_prompt + skeleton) │   │
 │  └─────────────────┘    └─────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -71,7 +71,7 @@ Crawl web pages and extract markdown content using the **Skeleton Planning Patte
 
 | File                   | Purpose                           |
 | ---------------------- | --------------------------------- |
-| `scripts/crawl_url.py` | MCP interface (main env with LLM) |
+| `scripts/crawl_url.py` | Runtime entry (main env with LLM) |
 | `scripts/engine.py`    | Crawl execution (isolated .venv)  |
 | `scripts/graph.py`     | Skeleton utilities & prompts      |
 | `scripts/references/`  | Detailed documentation            |

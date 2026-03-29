@@ -13,7 +13,7 @@ import structlog
 
 from xiuxian_foundation.services.memory.core.interface import STORAGE_MODE_LANCE, StorageMode
 
-log = structlog.get_logger("mcp-core.memory")
+log = structlog.get_logger("xiuxian_foundation.memory")
 
 
 def _get_memory_dir() -> Path:

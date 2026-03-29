@@ -23,7 +23,7 @@ def run_quick_profile(
     run_reflection_quality_gate_fn: Any,
     run_discover_cache_gate_fn: Any,
     run_trace_reconstruction_gate_fn: Any,
-    assert_mcp_waiting_warning_budget_fn: Any,
+    assert_tool_waiting_warning_budget_fn: Any,
     assert_memory_stream_warning_budget_fn: Any,
 ) -> None:
     """Run quick profile CI gate workflow."""
@@ -40,7 +40,7 @@ def run_quick_profile(
         run_reflection_quality_gate_fn=run_reflection_quality_gate_fn,
         run_discover_cache_gate_fn=run_discover_cache_gate_fn,
         run_trace_reconstruction_gate_fn=run_trace_reconstruction_gate_fn,
-        assert_mcp_waiting_warning_budget_fn=assert_mcp_waiting_warning_budget_fn,
+        assert_tool_waiting_warning_budget_fn=assert_tool_waiting_warning_budget_fn,
         assert_memory_stream_warning_budget_fn=assert_memory_stream_warning_budget_fn,
     )
 
@@ -61,7 +61,7 @@ def run_nightly_profile(
     run_reflection_quality_gate_fn: Any,
     run_discover_cache_gate_fn: Any,
     run_trace_reconstruction_gate_fn: Any,
-    assert_mcp_waiting_warning_budget_fn: Any,
+    assert_tool_waiting_warning_budget_fn: Any,
     assert_memory_stream_warning_budget_fn: Any,
 ) -> None:
     """Run nightly profile CI gate workflow."""
@@ -104,6 +104,6 @@ def run_nightly_profile(
         run_reflection_quality_gate_fn=run_reflection_quality_gate_fn,
         run_discover_cache_gate_fn=run_discover_cache_gate_fn,
         run_trace_reconstruction_gate_fn=run_trace_reconstruction_gate_fn,
-        assert_mcp_waiting_warning_budget_fn=assert_mcp_waiting_warning_budget_fn,
+        assert_tool_waiting_warning_budget_fn=assert_tool_waiting_warning_budget_fn,
         assert_memory_stream_warning_budget_fn=assert_memory_stream_warning_budget_fn,
     )

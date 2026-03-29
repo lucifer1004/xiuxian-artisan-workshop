@@ -27,7 +27,7 @@ class TestDualLayerConfig:
         # Mock environment and project root
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.config.prj.get_project_root", return_value=tmp_path),
         ):
             # Re-initialize settings (clean_settings fixture handles cleanup)
             # We need to manually trigger load because clean_settings gives us an already initialized empty one?
@@ -62,7 +62,7 @@ class TestDualLayerConfig:
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.config.prj.get_project_root", return_value=tmp_path),
         ):
             from xiuxian_foundation.config.settings import Settings
 
@@ -90,7 +90,7 @@ class TestDualLayerConfig:
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.config.prj.get_project_root", return_value=tmp_path),
         ):
             from xiuxian_foundation.config.settings import Settings
 
@@ -119,7 +119,7 @@ class TestDualLayerConfig:
 
         with (
             patch.object(sys, "argv", test_args),
-            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.config.prj.get_project_root", return_value=tmp_path),
         ):
             from xiuxian_foundation.config.settings import Settings
 
@@ -158,7 +158,7 @@ class TestDualLayerConfig:
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(env_conf)}),
             patch.object(sys, "argv", test_args),
-            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.config.prj.get_project_root", return_value=tmp_path),
         ):
             from xiuxian_foundation.config.settings import Settings
 
@@ -191,7 +191,7 @@ class TestDualLayerConfig:
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.config.prj.get_project_root", return_value=tmp_path),
         ):
             from xiuxian_foundation.config.settings import Settings
 
@@ -236,7 +236,7 @@ class TestDualLayerConfig:
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("xiuxian_foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+            patch("xiuxian_foundation.config.prj.get_project_root", return_value=tmp_path),
         ):
             from xiuxian_foundation.config.settings import Settings
 

@@ -153,9 +153,9 @@ This is incompatible with generic placeholder-key strategy unless caller bypasse
 
 - For `ollama/...`, it tries OpenAI-compatible direct path first, then `/embed/batch`, then `litellm-rs` provider (when key is present):
   - `packages/rust/crates/xiuxian-daochang/src/embedding/client/backend_dispatch.rs:118`
-- When no provider key is configured, provider path is skipped and runtime remains Rust-only (no Python MCP embedding fallback):
+- When no provider key is configured, provider path is skipped and runtime remains Rust-only (no legacy Python embedding fallback):
   - `packages/rust/crates/xiuxian-daochang/src/embedding/client/backend_dispatch.rs:174`
-- The embedding startup log now emits resolved runtime parameters (backend/source/base_url/mcp_url/default_model/api_key_source):
+- The embedding startup log now emits resolved runtime parameters (backend/source/base_url/tool_runtime_url/default_model/api_key_source):
   - `packages/rust/crates/xiuxian-daochang/src/embedding/client/mod.rs:194`
   - `packages/rust/crates/xiuxian-daochang/src/embedding/client/support.rs:47`
 - `transport_litellm` normalizes `ollama/...` into `openai/...` + `/v1` base normalization:
@@ -168,7 +168,7 @@ This is incompatible with generic placeholder-key strategy unless caller bypasse
 Source: `/tmp/omni_embed_bench_nocache_1771964244.json`
 
 - Rust gateway `/embed/batch` and Rust gateway `/v1/embeddings` are nearly identical (same upstream, negligible transport overhead difference).
-- Rust gateway is materially faster than Python MCP embedding service:
+- Rust gateway is materially faster than the removed Python embedding sidecar:
   - Sequential single-text avg latency: ~1.96x faster
   - Sequential batch-8 avg latency: ~2.77x faster
   - Concurrent single-text throughput: ~3.50x higher RPS
@@ -183,7 +183,7 @@ The following medium-term items from the initial audit are now implemented in th
 - Startup diagnostics for embedding runtime selection and key-source visibility (without exposing secret values):
   - `packages/rust/crates/xiuxian-daochang/src/embedding/client/mod.rs:194`
   - `packages/rust/crates/xiuxian-daochang/src/embedding/client/support.rs:47`
-- Integration tests that lock Rust-only fallback behavior for `litellm_rs` (`ollama/...` and `mistral/...`) without Python MCP embedding fallback:
+- Integration tests that lock Rust-only fallback behavior for `litellm_rs` (`ollama/...` and `mistral/...`) without any Python embedding fallback:
   - `packages/rust/crates/xiuxian-daochang/tests/embedding_client.rs:418`
 - OpenAI-compatible response parse hardening and failure observability in `xiuxian-llm`:
   - `packages/rust/crates/xiuxian-llm/src/embedding/openai_compat.rs:84`
@@ -198,7 +198,7 @@ The following medium-term items from the initial audit are now implemented in th
    - Default: `litellm_rs` (hybrid provider-first policy)
    - Local explicit runtime: `mistral_sdk` (managed by `xiuxian-llm::mistral`)
    - Rust protocol paths: `openai_http` and `/embed/batch` as Rust-local fallbacks
-3. Keep embedding runtime Rust-only (no Python MCP fallback in the embedding dispatch path).
+3. Keep embedding runtime Rust-only (no Python fallback in the embedding dispatch path).
 4. Keep role boundaries explicit: do not evaluate `litellm-rs` and `mistralrs` as mutually exclusive choices.
 
 ### Medium-term (to reduce ambiguity/risk)

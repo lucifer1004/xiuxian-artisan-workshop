@@ -35,22 +35,21 @@ class SystemPersonaProvider(ContextProvider):
 
         if self._knowledge_content is None:
             try:
-                from xiuxian_foundation.config import get_config_paths, get_setting
+                from xiuxian_foundation.config.prj import get_project_root
+                from xiuxian_foundation.config.settings import get_setting
 
                 prompt_path = get_setting("prompts.system_core") or get_setting(
                     "prompts.core_path",
                     "assets/prompts/system_core.md",
                 )
                 raw = Path(str(prompt_path))
-                prompt_file = raw if raw.is_absolute() else get_config_paths().project_root / raw
+                prompt_file = raw if raw.is_absolute() else get_project_root() / raw
             except (ImportError, Exception):
-                from xiuxian_foundation.runtime.gitops import get_project_root
+                from xiuxian_foundation.config.prj import get_project_root
 
                 prompt_file = get_project_root() / "assets/prompts/system_core.md"
 
-            self._knowledge_content = (
-                prompt_file.read_text() if prompt_file.exists() else ""
-            )
+            self._knowledge_content = prompt_file.read_text() if prompt_file.exists() else ""
 
         content = (
             f"{self._content}\n\n<knowledge_system>\n{self._knowledge_content}\n</knowledge_system>"

@@ -32,10 +32,10 @@ def build_config(
         raise ValueError("--min-quality-score must be >= 0.")
     if args.min_query_turns < 0:
         raise ValueError("--min-query-turns must be >= 0.")
-    if args.max_mode_mcp_error_turns < 0:
-        raise ValueError("--max-mode-mcp-error-turns must be >= 0.")
-    if args.max_total_mcp_error_turns < 0:
-        raise ValueError("--max-total-mcp-error-turns must be >= 0.")
+    if args.max_mode_tool_error_turns < 0:
+        raise ValueError("--max-mode-tool-error-turns must be >= 0.")
+    if args.max_total_tool_error_turns < 0:
+        raise ValueError("--max-total-tool-error-turns must be >= 0.")
     if args.min_session_steps < 0:
         raise ValueError("--min-session-steps must be >= 0.")
     if args.max_session_failed_steps < 0:
@@ -65,8 +65,8 @@ def build_config(
         min_quality_score=float(args.min_quality_score),
         required_benchmark_modes=parse_required_modes(args.required_benchmark_modes),
         min_query_turns=int(args.min_query_turns),
-        max_mode_mcp_error_turns=int(args.max_mode_mcp_error_turns),
-        max_total_mcp_error_turns=int(args.max_total_mcp_error_turns),
+        max_mode_tool_error_turns=int(args.max_mode_tool_error_turns),
+        max_total_tool_error_turns=int(args.max_total_tool_error_turns),
         min_session_steps=int(args.min_session_steps),
         max_session_failed_steps=int(args.max_session_failed_steps),
         enable_stream_gate=bool(args.enable_stream_gate),

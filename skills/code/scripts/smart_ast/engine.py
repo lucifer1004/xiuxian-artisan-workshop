@@ -1,5 +1,5 @@
 """
-AST Analysis Engine using omni.ast (Rust ast-grep bindings)
+AST Analysis Engine using retained Rust AST bindings
 
 Provides:
 - Pattern-based code search
@@ -42,8 +42,15 @@ BUILTIN_RULES = {
 }
 
 
+def _load_xiuxian_ast():
+    """Load the retained Rust AST binding module."""
+    import importlib
+
+    return importlib.import_module("xiuxian_ast")
+
+
 class SmartAstEngine:
-    """Unified AST search and analysis engine using omni.ast."""
+    """Unified AST search and analysis engine using retained AST bindings."""
 
     def __init__(self):
         """Initialize the engine."""
@@ -102,7 +109,7 @@ class SmartAstEngine:
     ) -> str:
         """Execute AST-based search or analysis."""
         try:
-            import omni.ast as xiuxian_ast
+            xiuxian_ast = _load_xiuxian_ast()
 
             if mode == "pattern":
                 return self._search_pattern(query, path, language)
@@ -114,14 +121,14 @@ class SmartAstEngine:
                 return f"Unknown mode: {mode}"
 
         except ImportError as e:
-            return f"Error: omni.ast not available. {e}"
+            return f"Error: xiuxian_ast not available. {e}"
         except Exception as e:
             return f"Error executing AST operation: {e}"
 
     def _search_pattern(self, pattern: str, target: str, language: str) -> str:
         """Search using AST pattern."""
         try:
-            import omni.ast as xiuxian_ast
+            xiuxian_ast = _load_xiuxian_ast()
 
             target_path = Path(target)
             results = []
@@ -162,14 +169,14 @@ class SmartAstEngine:
                 return f"No matches found for pattern: {pattern}"
 
         except ImportError:
-            return "Error: omni.ast not installed"
+            return "Error: xiuxian_ast not installed"
         except Exception as e:
             return f"Search error: {e}"
 
     def _analyze_code(self, target: str, language: str) -> str:
         """Analyze code for patterns and issues using YAML rules."""
         try:
-            import omni.ast as xiuxian_ast
+            xiuxian_ast = _load_xiuxian_ast()
 
             target_path = Path(target)
             if target_path.is_file():
@@ -212,7 +219,7 @@ class SmartAstEngine:
                 return "No issues found"
 
         except ImportError:
-            return "Error: omni.ast not installed"
+            return "Error: xiuxian_ast not installed"
         except Exception as e:
             return f"Analysis error: {e}"
 
@@ -265,7 +272,7 @@ class SmartAstEngine:
     def extract_skeleton(self, content: str, language: str) -> str:
         """Extract code skeleton (signatures only)."""
         try:
-            import omni.ast as xiuxian_ast
+            xiuxian_ast = _load_xiuxian_ast()
 
             result = xiuxian_ast.py_extract_skeleton(content, language)
             parsed = json.loads(result)
@@ -278,7 +285,7 @@ class SmartAstEngine:
     ) -> List[Dict[str, Any]]:
         """Chunk code into semantic units."""
         try:
-            import omni.ast as xiuxian_ast
+            xiuxian_ast = _load_xiuxian_ast()
 
             chunks = xiuxian_ast.py_chunk_code(
                 content=content,

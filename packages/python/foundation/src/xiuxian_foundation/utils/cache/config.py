@@ -24,7 +24,7 @@ class ConfigCache(LazyCacheBase[dict[str, Any]]):
 
     Example:
         cache = ConfigCache(file_path=Path("/project/cog.toml"))
-        config = cache.get()  # {"scopes": ["nix", "mcp", ...]}
+        config = cache.get()  # {"scopes": ["nix", "tool_runtime", ...]}
     """
 
     __slots__ = ("_file_path",)

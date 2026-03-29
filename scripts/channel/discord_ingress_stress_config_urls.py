@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import os
 
-from resolve_mcp_endpoint import resolve_mcp_endpoint
+from resolve_tool_endpoint import resolve_tool_endpoint
 
 
 def _default_ingress_bind() -> str:
     """Resolve default ingress bind host:port for local stress probes."""
-    host = str(resolve_mcp_endpoint()["host"])
+    host = str(resolve_tool_endpoint()["host"])
     return f"{host}:18082"
 
 
@@ -21,11 +21,11 @@ def normalize_ingress_bind_for_local_url(bind_addr: str) -> str:
         return _default_ingress_bind()
     host, sep, port = token.rpartition(":")
     if not sep:
-        default_host = str(resolve_mcp_endpoint()["host"])
+        default_host = str(resolve_tool_endpoint()["host"])
         return f"{default_host}:{token}"
     normalized_host = host.strip("[]").strip()
     if normalized_host in {"", "0.0.0.0", "::"}:
-        normalized_host = str(resolve_mcp_endpoint()["host"])
+        normalized_host = str(resolve_tool_endpoint()["host"])
     return f"{normalized_host}:{port.strip()}"
 
 

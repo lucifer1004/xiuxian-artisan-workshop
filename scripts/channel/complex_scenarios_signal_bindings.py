@@ -12,7 +12,7 @@ def build_signal_extractors(
     execution_module: Any,
     regex_module: Any,
 ) -> tuple[Any, Any]:
-    """Build memory + MCP extractor callables with compiled regex patterns."""
+    """Build memory + tool-runtime extractor callables with compiled regex patterns."""
     ansi_escape_re = regex_module.compile(r"\x1b\[[0-9;]*m")
     memory_planned_bias_re = regex_module.compile(
         r'event\s*=\s*"agent\.memory\.recall\.planned".*?\brecall_feedback_bias\b\s*=\s*([\-0-9.eE]+)'
@@ -30,9 +30,9 @@ def build_signal_extractors(
         r'event\s*=\s*"agent\.memory\.recall\.credit_applied"'
     )
     memory_decay_re = regex_module.compile(r'event\s*=\s*"agent\.memory\.decay\.applied"')
-    mcp_last_event_re = regex_module.compile(r"^\s*mcp_last_event=(.*)$")
-    mcp_waiting_seen_re = regex_module.compile(r"^\s*mcp_waiting_seen=(true|false)$")
-    mcp_event_counts_re = regex_module.compile(r"^\s*mcp_event_counts=(\{.*\})$")
+    tool_last_event_re = regex_module.compile(r"^\s*tool_last_event=(.*)$")
+    tool_waiting_seen_re = regex_module.compile(r"^\s*tool_waiting_seen=(true|false)$")
+    tool_event_counts_re = regex_module.compile(r"^\s*tool_event_counts=(\{.*\})$")
 
     extract_memory_metrics = partial(
         execution_module.extract_memory_metrics,
@@ -44,11 +44,11 @@ def build_signal_extractors(
         memory_decay_re=memory_decay_re,
     )
 
-    extract_mcp_metrics = partial(
-        execution_module.extract_mcp_metrics,
+    extract_tool_metrics = partial(
+        execution_module.extract_tool_metrics,
         ansi_escape_re=ansi_escape_re,
-        mcp_last_event_re=mcp_last_event_re,
-        mcp_waiting_seen_re=mcp_waiting_seen_re,
-        mcp_event_counts_re=mcp_event_counts_re,
+        tool_last_event_re=tool_last_event_re,
+        tool_waiting_seen_re=tool_waiting_seen_re,
+        tool_event_counts_re=tool_event_counts_re,
     )
-    return extract_memory_metrics, extract_mcp_metrics
+    return extract_memory_metrics, extract_tool_metrics

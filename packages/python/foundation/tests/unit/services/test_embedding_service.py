@@ -208,7 +208,10 @@ class TestEmbeddingServiceEmbed:
             mock_http.assert_called_once_with(["text1", "text2"])
 
     def test_embed_raises_when_backend_unavailable(self):
-        from xiuxian_foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+        from xiuxian_foundation.services.embedding import (
+            EmbeddingService,
+            EmbeddingUnavailableError,
+        )
 
         service = EmbeddingService()
         service._backend = "unavailable"
@@ -241,7 +244,10 @@ class TestEmbeddingServiceHttpRaisesOnFailure:
         EmbeddingService._instance = None
 
     def test_embed_http_raises_on_http_error(self):
-        from xiuxian_foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+        from xiuxian_foundation.services.embedding import (
+            EmbeddingService,
+            EmbeddingUnavailableError,
+        )
 
         service = EmbeddingService()
         with patch("xiuxian_foundation.embedding_client.get_embedding_client") as mock_get_client:
@@ -253,7 +259,10 @@ class TestEmbeddingServiceHttpRaisesOnFailure:
         assert "connection refused" in str(exc_info.value)
 
     def test_embed_batch_raises_on_http_error(self):
-        from xiuxian_foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+        from xiuxian_foundation.services.embedding import (
+            EmbeddingService,
+            EmbeddingUnavailableError,
+        )
 
         service = EmbeddingService()
         with patch("xiuxian_foundation.embedding_client.get_embedding_client") as mock_get_client:

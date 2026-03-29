@@ -9,9 +9,7 @@
   "input_schema": {
     "type": "object"
   },
-  "intents": [
-    "Locate files"
-  ],
+  "intents": ["Locate files"],
   "keyword_score": 0.74,
   "name": "advanced_tools.smart_find",
   "payload": {
@@ -27,15 +25,9 @@
       "input_schema": {
         "type": "object"
       },
-      "intents": [
-        "Locate files"
-      ],
+      "intents": ["Locate files"],
       "parameters": [],
-      "routing_keywords": [
-        "find",
-        "files",
-        "directory"
-      ],
+      "routing_keywords": ["find", "files", "directory"],
       "skill_name": "advanced_tools",
       "tool_name": "advanced_tools.smart_find"
     },
@@ -43,11 +35,7 @@
     "tool_name": "advanced_tools.smart_find",
     "type": "command"
   },
-  "routing_keywords": [
-    "find",
-    "files",
-    "directory"
-  ],
+  "routing_keywords": ["find", "files", "directory"],
   "score": 0.88,
   "skill_name": "advanced_tools",
   "tool_name": "advanced_tools.smart_find",

@@ -1,7 +1,7 @@
 use schemars::JsonSchema as SchemarsJsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Safety and behavior annotations for tools (MCP Protocol compliant).
+/// Safety and behavior annotations for tools.
 ///
 /// These annotations help the agent understand the safety implications
 /// of using a tool, enabling smarter execution decisions.
@@ -16,7 +16,7 @@ pub struct ToolBehaviorAnnotations {
     pub open_world: bool,
 }
 
-/// Safety and behavior annotations for tools (MCP Protocol compliant).
+/// Safety and behavior annotations for tools.
 ///
 /// The behavior flags are flattened to keep the external JSON shape stable
 /// while avoiding an excessive-bool anti-pattern in a single struct.

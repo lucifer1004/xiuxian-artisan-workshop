@@ -26,7 +26,7 @@ Python retains only:
 2. Arrow IPC fallback helpers
 3. thin config/schema/logging helpers
 4. thin consumer-side RAG enhancement helpers
-5. focused adapter and contract tests
+5. package-local adapter and contract tests
 
 Retained runtime contract prefixes:
 
@@ -42,25 +42,23 @@ packages/python/
   xiuxian-wendao-py/   Arrow Flight transport client
   foundation/          thin config/schema/logging/RAG helpers
   core/                minimal retained helper surface
-  test-kit/            focused retained fixtures/tests
 ```
 
-The root workspace is explicitly limited to those four packages.
+The root workspace is explicitly limited to those three packages.
 Retained Python code now ships under direct top-level packages:
 
 - `xiuxian_core`
 - `xiuxian_foundation`
 - `xiuxian_rag`
-- `xiuxian_test_kit`
 - `xiuxian_tracer`
 - `xiuxian_wendao_py`
 
 ## Removed Surface
 
 The historical Python runtime-center architecture is gone. This includes the
-former `agent` package, `mcp-server`, `xiuxian_core.skills`, and the old
-Python-local router, memory, workflow, knowledge-host, bindings, MCP, watcher,
-scanner, hot-reload, and skill-runner stacks.
+former `agent` package, `xiuxian_core.skills`, and the old Python-local router,
+memory, workflow, knowledge-host, bindings, watcher, scanner, hot-reload, and
+skill-runner stacks.
 
 The old `src/omni/...` namespace layout is gone as well.
 

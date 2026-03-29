@@ -11,7 +11,7 @@ pub struct IndexToolEntry {
     /// Category for organizing tools (e.g., "read", "write", "query").
     #[serde(default)]
     pub category: String,
-    /// JSON schema for tool input validation (MCP protocol format).
+    /// JSON schema for tool input validation (tool runtime format).
     #[serde(default)]
     pub input_schema: String,
     /// Hash of the source file for incremental sync.

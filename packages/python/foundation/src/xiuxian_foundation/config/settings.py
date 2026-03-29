@@ -110,7 +110,7 @@ class Settings:
         # 2. Load system defaults from packages/conf/*.yaml
         defaults = {}
         try:
-            from xiuxian_foundation.runtime.gitops import get_project_root
+            from xiuxian_foundation.config.prj import get_project_root
 
             project_root = get_project_root()
         except Exception:

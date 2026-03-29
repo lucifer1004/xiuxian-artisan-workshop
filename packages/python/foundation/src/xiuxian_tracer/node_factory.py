@@ -4,7 +4,7 @@ node_factory.py - Pluggable node factory for pipeline-generated workflow nodes.
 Provides a ToolInvoker protocol so pipeline nodes can execute tools via:
 - built-in no-op execution (default)
 - mapped Python callables (tests/local adapters)
-- future MCP adapters
+- future runtime adapters
 """
 
 from __future__ import annotations

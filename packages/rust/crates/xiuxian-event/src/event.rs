@@ -8,7 +8,7 @@ use uuid::Uuid;
 pub struct OmniEvent {
     /// Unique event identifier.
     pub id: String,
-    /// Event source (e.g., "watcher", "mcp:filesystem", "kernel").
+    /// Event source (e.g., "watcher", "tool:filesystem", "kernel").
     pub source: String,
     /// Event topic/category (e.g., "file/changed", "agent/thought").
     pub topic: String,

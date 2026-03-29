@@ -52,7 +52,7 @@ def test_build_runtime_env_sets_ci_variables(tmp_path: Path, monkeypatch) -> Non
 
     monkeypatch.setattr(
         _env_module,
-        "resolve_mcp_endpoint",
+        "resolve_tool_endpoint",
         lambda: {"host": resolved_host},
     )
     env, settings_path = _env_module.build_runtime_env(

@@ -73,6 +73,6 @@ def build_turn_result(
         embedding_timeout_fallback_seen=bool(signals.get("embedding_timeout_fallback")),
         embedding_cooldown_fallback_seen=bool(signals.get("embedding_cooldown_fallback")),
         embedding_unavailable_fallback_seen=bool(signals.get("embedding_unavailable_fallback")),
-        mcp_error_detected=bool(signals.get("mcp_error")),
+        tool_error_detected=bool(signals.get("tool_error")),
         bot_excerpt=trim_text_fn(bot_line),
     )

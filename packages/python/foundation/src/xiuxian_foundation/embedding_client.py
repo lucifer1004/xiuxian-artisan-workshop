@@ -2,7 +2,7 @@
 xiuxian_foundation.embedding.client - Embedding HTTP Client
 
 Client for connecting to the Rust embedding HTTP service.
-Used by lightweight MCP processes that don't load the embedding model.
+Used by lightweight retained runtime processes that do not load the embedding model.
 """
 
 from __future__ import annotations
@@ -154,7 +154,7 @@ class EmbeddingClient:
             raise RuntimeError(f"Failed to connect to embedding server: {e}") from e
 
     def sync_embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Synchronous batch embedding (client-only; used when MCP embedding service is already running)."""
+        """Synchronous batch embedding for an already-running embedding service."""
         data = self._sync_request_json("/embed/batch", {"texts": texts})
         return data.get("vectors", [])
 

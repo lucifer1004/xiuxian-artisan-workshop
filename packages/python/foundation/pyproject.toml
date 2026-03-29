@@ -51,5 +51,4 @@ filterwarnings = [
     "ignore::pytest.PytestReturnNotNoneWarning",
     "ignore::DeprecationWarning:websockets",
     "ignore::DeprecationWarning:starlette",
-    "ignore:Module already imported so cannot be rewritten; xiuxian_test_kit\\.fixtures:pytest.PytestAssertRewriteWarning",
 ]

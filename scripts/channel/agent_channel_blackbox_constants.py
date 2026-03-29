@@ -7,22 +7,24 @@ ERROR_PATTERNS = (
     "Telegram sendMessage failed",
     "Failed to send",
     "Foreground message handling failed",
-    "tools/call: Mcp error",
+    "tools/call: Tool runtime error",
 )
 
-MCP_OBSERVABILITY_EVENTS = (
-    "mcp.pool.connect.attempt",
-    "mcp.pool.connect.waiting",
-    "mcp.pool.connect.failed",
-    "mcp.pool.connect.succeeded",
-    "mcp.pool.health.wait.start",
-    "mcp.pool.health.wait.ready",
-    "mcp.pool.health.wait.timeout",
-    "mcp.pool.call.waiting",
-    "mcp.pool.call.slow",
+TOOL_OBSERVABILITY_EVENTS = (
+    "tool_runtime.pool.connect.attempt",
+    "tool_runtime.pool.connect.waiting",
+    "tool_runtime.pool.connect.failed",
+    "tool_runtime.pool.connect.succeeded",
+    "tool_runtime.pool.health.wait.start",
+    "tool_runtime.pool.health.wait.ready",
+    "tool_runtime.pool.health.wait.timeout",
+    "tool_runtime.pool.call.waiting",
+    "tool_runtime.pool.call.slow",
 )
 
-MCP_WAITING_EVENTS = frozenset({"mcp.pool.connect.waiting", "mcp.pool.call.waiting"})
+TOOL_WAITING_EVENTS = frozenset(
+    {"tool_runtime.pool.connect.waiting", "tool_runtime.pool.call.waiting"}
+)
 TARGET_SESSION_SCOPE_PLACEHOLDER = "__target_session_scope__"
 TELEGRAM_SESSION_SCOPE_PREFIX = "telegram:"
 DISCORD_SESSION_SCOPE_PREFIX = "discord:"

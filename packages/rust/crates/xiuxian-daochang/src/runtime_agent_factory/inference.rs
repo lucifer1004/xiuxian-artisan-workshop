@@ -166,7 +166,7 @@ pub(super) fn validate_inference_url_origin(
         "invalid inference URL: {} shares origin {} with external tool server(s): {}. \
 Use a dedicated LLM endpoint via LITELLM_PROXY_URL or OMNI_AGENT_INFERENCE_URL \
 (for example {}). If you intentionally run external tools and inference on one origin, set \
-OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN=true.",
+OMNI_AGENT_ALLOW_INFERENCE_TOOL_SHARED_ORIGIN=true.",
         inference_url,
         inference_origin,
         conflicts.join(", "),
@@ -186,7 +186,7 @@ pub(super) fn resolve_runtime_inference_url(
         runtime_settings,
     );
     let allow_shared_origin =
-        parse_bool_from_env("OMNI_AGENT_ALLOW_INFERENCE_MCP_SHARED_ORIGIN").unwrap_or(false);
+        parse_bool_from_env("OMNI_AGENT_ALLOW_INFERENCE_TOOL_SHARED_ORIGIN").unwrap_or(false);
     validate_inference_url_origin(&inference_url, tool_servers, allow_shared_origin)?;
     Ok(inference_url)
 }

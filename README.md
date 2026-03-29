@@ -10,8 +10,7 @@ metadata:
 
 **The Agentic OS Kernel. Native-First. Synaptic Flow. Valkey-Powered.**
 
-CyberXiuXian Artisan Workshop (赛博修仙创意工坊) is more than an MCP agent;
-it is a **High-Performance AI Operating System Kernel**
+CyberXiuXian Artisan Workshop (赛博修仙创意工坊) is a **High-Performance AI Operating System Kernel**
 designed for the next generation of autonomous intelligent agents.
 It bridges the gap between LLM reasoning and system-level execution via a **Zero-copy Native Memory Bus**, self-evolving **Synaptic Workflows**, and a distributed **Valkey Synapse** for real-time state orchestration.
 
@@ -49,7 +48,7 @@ flowchart TB
 
     subgraph External["Matrix Gateway (Legacy/Ext)"]
         HTTP["Axum JSON-RPC"]
-        MCP["MCP Server"]
+        ToolGateway["Streamable Tool Gateway"]
     end
 
     User --> IM

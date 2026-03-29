@@ -11,4 +11,3 @@ pub struct CapabilityId(pub String);
 /// Stable artifact identifier used by generic artifact resolution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ArtifactId(pub String);
-

@@ -76,22 +76,22 @@ Crawl a web page with native workflow execution and LLM-based intelligent chunki
 
 ```python
 # Smart crawl with LLM chunking (default)
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com"})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com"}`
 
 # Skeleton only - get TOC quickly
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "action": "skeleton"})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com", "action": "skeleton"}`
 
 # Full content crawl
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "action": "crawl"})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com", "action": "crawl"}`
 
 # Extract specific sections
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "chunk_indices": [0, 1, 2]})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com", "chunk_indices": [0, 1, 2]}`
 
 # Deep crawl (follow links up to depth N)
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "max_depth": 2})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com", "max_depth": 2}`
 
 # Get skeleton with full content
-@omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "return_skeleton": true})
+tool: `crawl4ai.CrawlUrl` with `{"url": "https://example.com", "return_skeleton": true}`
 ```
 
 ## Core Concepts

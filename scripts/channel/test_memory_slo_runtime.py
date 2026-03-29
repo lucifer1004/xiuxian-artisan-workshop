@@ -30,8 +30,8 @@ def _cfg(tmp_path: Path) -> object:
         min_quality_score=90.0,
         required_benchmark_modes=("baseline", "adaptive"),
         min_query_turns=1,
-        max_mode_mcp_error_turns=0,
-        max_total_mcp_error_turns=0,
+        max_mode_tool_error_turns=0,
+        max_total_tool_error_turns=0,
         min_session_steps=1,
         max_session_failed_steps=0,
         enable_stream_gate=True,
@@ -47,13 +47,13 @@ def test_evaluate_benchmark_reports_mode_failures(tmp_path: Path) -> None:
         cfg,
         {
             "mode_summaries": {
-                "baseline": {"query_turns": 2, "mcp_error_turns": 1},
-                "adaptive": {"query_turns": 2, "mcp_error_turns": 0},
+                "baseline": {"query_turns": 2, "tool_error_turns": 1},
+                "adaptive": {"query_turns": 2, "tool_error_turns": 0},
             }
         },
     )
     assert result["passed"] is False
-    assert any("benchmark.baseline.mcp_error_turns=1 > 0" in item for item in result["failures"])
+    assert any("benchmark.baseline.tool_error_turns=1 > 0" in item for item in result["failures"])
 
 
 def test_evaluate_stream_health_counts_ack_and_failures(tmp_path: Path) -> None:

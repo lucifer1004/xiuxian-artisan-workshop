@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "xiuxian.runtime.session_closed.v1.schema.json",
-  "title": "Xiuxian Runtime session closed (DELETE /mcp) v1",
-  "description": "Canonical shape for MCP Streamable HTTP session close response. Returned on DELETE /mcp when client closes the session.",
+  "title": "Xiuxian Runtime session closed (DELETE tool-runtime session) v1",
+  "description": "Canonical shape for tool-runtime Streamable HTTP session close response. Returned when the client closes the session.",
   "type": "object",
   "additionalProperties": false,
   "required": ["status", "message"],

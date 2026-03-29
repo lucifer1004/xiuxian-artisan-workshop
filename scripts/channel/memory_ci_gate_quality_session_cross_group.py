@@ -68,11 +68,13 @@ def assert_cross_group_complex_quality(cfg: Any) -> None:
         raise RuntimeError("cross-group complex scenario did not exercise mixed concurrency waves")
 
     waiting_steps = sum(
-        1 for step in steps if isinstance(step, dict) and bool(step.get("mcp_waiting_seen", False))
+        1
+        for step in steps
+        if isinstance(step, dict) and bool(step.get("tool_waiting_seen", False))
     )
     if waiting_steps > 0:
         raise RuntimeError(
-            "cross-group complex scenario observed mcp waiting steps: "
+            "cross-group complex scenario observed tool waiting steps: "
             f"waiting_steps={waiting_steps}"
         )
 

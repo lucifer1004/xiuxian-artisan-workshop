@@ -1,6 +1,4 @@
-use crate::link_graph::plugin_runtime::{
-    resolve_plugin_artifact_for_selector,
-};
+use crate::link_graph::plugin_runtime::resolve_plugin_artifact_for_selector;
 use crate::link_graph::runtime_config::julia_deployment_artifact_selector;
 use crate::link_graph::set_link_graph_wendao_config_override;
 use serial_test::serial;
@@ -26,8 +24,7 @@ service_mode = "stream"
     set_link_graph_wendao_config_override(&config_path.to_string_lossy());
 
     let selector = julia_deployment_artifact_selector();
-    let artifact = resolve_plugin_artifact_for_selector(&selector)
-        .expect("artifact");
+    let artifact = resolve_plugin_artifact_for_selector(&selector).expect("artifact");
     assert_eq!(artifact.plugin_id, selector.plugin_id);
     assert_eq!(artifact.artifact_id, selector.artifact_id);
     assert_eq!(artifact.artifact_schema_version.0, "v1");

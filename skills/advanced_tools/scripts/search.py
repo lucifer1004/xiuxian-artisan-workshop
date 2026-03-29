@@ -15,10 +15,9 @@ from os import walk
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.logging import get_logger
-from omni.foundation.config.paths import ConfigPaths
-from omni.foundation.utils import json_codec as json
+from xiuxian_foundation.config.logging import get_logger
+from xiuxian_foundation.config.prj import get_project_root
+from xiuxian_foundation.utils import json_codec as json
 
 logger = get_logger("skill.advanced_tools.search")
 
@@ -44,6 +43,13 @@ def _resolve_exec(*candidates: str) -> str | None:
         if resolved:
             return resolved
     return None
+
+
+def _resolve_project_root(project_root: str | Path | None) -> str:
+    """Resolve the project root for local CLI execution."""
+    if project_root is None:
+        return str(get_project_root())
+    return str(Path(project_root).resolve())
 
 
 def _run_command(cmd: list[str], root: str, timeout_seconds: float = 30.0) -> tuple[str, str, int]:
@@ -240,59 +246,16 @@ def _python_fast_find_files(
 # =============================================================================
 
 
-@skill_command(
-    name="smart_search",
-    category="file_discovery",
-    description="""
-    [SEARCH] High-performance code/text search using 'ripgrep' (rg).
-
-    Use this tool to find TEXT CONTENT, string literals, TODOs, or regex patterns INSIDE files.
-
-    Architecture: Parallelized File Scan -> Regex Match Engine -> Context Extraction -> JSON Stream Output
-
-    Why this is the Gold Standard:
-    1. Speed: Faster than grep, ack, or ag by orders of magnitude.
-    2. Smart Filtering: Respects .gitignore, .ignore, and .rgignore automatically.
-    3. Contextual Insight: Can provide lines around the match to understand usage.
-    4. Multiline Support: Capable of searching across line boundaries if required.
-
-    Usage Guidelines:
-    - Use when you need to know WHERE a variable, function, or string is defined or used.
-    - Prefer specific file_globs (e.g., "*.py") to reduce noise in large projects.
-    - Use context_lines to get a preview of the surrounding code for better analysis.
-
-    Common Use Cases:
-    - "Find all usages of class 'Kernel' in the project"
-    - "Search for 'TODO' or 'FIXME' tags across all documentation"
-    - "Locate error handling patterns in rust files": pattern='Err\\(.*?\\)', file_globs='*.rs'
-
-    Args:
-        - pattern: str - The regex or literal string to search for (required).
-        - file_globs: str | None - Filter files using glob patterns (e.g. "*.py *.ts").
-        - search_root: str | None - Optional scoped root path (relative to project root or absolute).
-        - case_sensitive: bool = True - Whether to perform a case-sensitive search.
-        - context_lines: int = 0 - Number of lines of context to show around each match.
-
-    Returns:
-        Structured JSON with:
-        - success: bool
-        - count: int (total matches found)
-        - matches: List[dict] (file, line, content snippets)
-    """,
-    autowire=True,
-)
 def smart_search(
     pattern: str,
     file_globs: str | None = None,
     search_root: str | None = None,
     case_sensitive: bool = True,
     context_lines: int = 0,
-    paths: ConfigPaths | None = None,
+    project_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """Search using `rg --json`."""
-    if paths is None:
-        paths = ConfigPaths()
-    root = paths.project_root
+    root = _resolve_project_root(project_root)
 
     rg_exec = _resolve_exec("rg")
     if not rg_exec:
@@ -403,62 +366,17 @@ def smart_search(
 # =============================================================================
 
 
-@skill_command(
-    name="smart_find",
-    category="file_discovery",
-    description="""
-    [FIND] Ultra-fast file/directory discovery engine using 'fd'.
-
-    Best for finding FILES and DIRECTORIES by name, extension, or path pattern.
-
-    Architecture: Parallelized Rust Traversal -> Pattern Match -> .gitignore Filter -> Output
-
-    Key Features:
-    - High Performance: Written in Rust, outperforms standard 'find' by 10x+.
-    - Developer Friendly: Automatically skips hidden folders (.git) and respects .gitignore.
-    - Smart Case: Sensitive only when uppercase characters are provided in the pattern.
-    - Combined Mode: Can find files by content when search_mode='content' (powered by rg).
-
-    When to Use:
-    - Use this whenever you need to locate a specific file but don't know its exact path.
-    - Excellent for exploring project structure or verifying file existence.
-    - Faster than 'list_directory' for recursive project-wide discovery.
-
-    Common Use Cases:
-    - "Find all python files (*.py) in the project" -> pattern='.', extension='py'
-    - "Locate the config file" -> pattern='settings.yaml' (e.g. packages/conf/settings.yaml)
-    - "Find all test files excluding node_modules" -> pattern='test', exclude='node_modules'
-    - "Find all files containing 'TODO'" -> pattern='TODO', search_mode='content'
-
-    Args:
-        - pattern: str = "." - The search pattern (regex or glob). Default matches all files.
-        - extension: str | None - Filter by file extension (e.g. 'py', 'rs').
-        - exclude: str | None - Glob pattern to exclude (e.g. 'build/*', 'target/').
-        - search_root: str | None - Optional scoped root path (relative to project root or absolute).
-        - search_mode: str = "filename" - "filename" (uses fd) or "content" (uses rg).
-
-    Returns:
-        A dictionary containing:
-        - success: bool
-        - count: int (number of files matched)
-        - files: List[str] (project-relative paths to matches, top 100)
-    """,
-    autowire=True,
-)
 def smart_find(
     pattern: str = ".",
     extension: str | None = None,
     exclude: str | None = None,
     search_root: str | None = None,
-    paths: ConfigPaths | None = None,
+    project_root: str | Path | None = None,
     # Search mode: "filename" (default, uses fd) or "content" (uses rg)
     search_mode: str = "filename",
 ) -> dict[str, Any]:
     """Find files using 'fd' (by filename) or 'rg --files-with-matches' (by content)."""
-    if paths is None:
-        paths = ConfigPaths()
-
-    root = paths.project_root
+    root = _resolve_project_root(project_root)
     resolved_search_root = _resolve_search_root(root, search_root)
 
     # Mode 1: Content Search (Delegates to ripgrep)

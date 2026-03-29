@@ -4,8 +4,8 @@ crawl4ai/scripts/ - Crawl4ai Skill Interface
 This module exposes command interfaces for the main agent.
 Commands are executed via Foundation's Isolation Pattern.
 
-IMPORTANT: These function signatures are scanned by Rust AST Scanner
-for command discovery. The actual implementation is in engine.py.
+IMPORTANT: These function signatures are invoked from CLI/runtime entrypoints.
+The actual crawl implementation is in engine.py.
 """
 
 import importlib
@@ -15,12 +15,11 @@ from typing import Any
 
 import structlog
 
-from omni.foundation.api.decorators import skill_command
-from omni.foundation.context_delivery import validate_chunked_action
-from omni.foundation.runtime.isolation import run_skill_command
-from omni.foundation.services.llm.client import InferenceClient
+from xiuxian_foundation.context_delivery import validate_chunked_action
+from xiuxian_foundation.services.llm.client import InferenceClient
+from skills._shared.isolation import run_script_command
 
-log = structlog.get_logger("omni.skill.crawl4ai")
+log = structlog.get_logger("xiuxian.skill.crawl4ai")
 
 
 def _get_skill_dir() -> Path:
@@ -232,48 +231,6 @@ async def _generate_chunk_plan(skeleton: list, title: str) -> list | None:
         return None
 
 
-@skill_command(
-    name="crawl_url",
-    category="read",
-    description="""
-    Crawl a web page with intelligent chunking.
-
-    Uses Skeleton Planning Pattern - LLM sees only the TOC (~500 tokens)
-    instead of full content (~10k+ tokens).
-
-    Modes:
-    - Smart Crawl (default): Uses LLM to plan optimal chunking
-    - Skeleton: Extract lightweight TOC without full content
-    - Basic: Crawl URL and extract full markdown content
-
-    Auto-Upgrade: When max_depth > 1, action is automatically upgraded to "smart"
-    because smart mode uses LLM to plan optimal chunking for multi-page crawls.
-
-    Args:
-        - url: str - Target URL to crawl (required)
-        - action: str = "smart" - Action: smart (default), skeleton, crawl (auto-upgraded if max_depth > 1)
-        - fit_markdown: bool = true - Clean and simplify the markdown output
-        - max_depth: int = 0 - Maximum crawling depth (0 = single page, >1 auto-upgrades to smart)
-        - return_skeleton: bool = false - Also return document skeleton (TOC)
-        - chunk_indices: list[int] - List of section indices to extract
-
-    Returns:
-        - action=smart: dict with chunk_plan, processed_chunks, final_summary
-        - action=skeleton: dict with skeleton, stats, content summary
-        - action=crawl: dict with content, metadata, success
-
-    Example:
-        @omni("crawl4ai.CrawlUrl", {"url": "https://example.com"})
-        @omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "action": "skeleton"})
-        @omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "action": "crawl"})
-        @omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "action": "crawl", "max_depth": 2})
-        #                                           ^ auto-upgraded to "smart" internally
-    """,
-    read_only=True,
-    destructive=False,
-    idempotent=False,
-    open_world=True,
-)
 async def CrawlUrl(
     url: str,
     action: str = "smart",
@@ -313,8 +270,8 @@ async def CrawlUrl(
     chunk_plan = None
     if action_name == "smart":
         # First crawl to get skeleton
-        crawl_result = run_skill_command(
-            skill_dir=_get_skill_dir(),
+        crawl_result = run_script_command(
+            script_root=_get_skill_dir(),
             script_name="engine.py",
             args={
                 "url": url,
@@ -339,8 +296,8 @@ async def CrawlUrl(
     if action_name == "smart":
         return _build_smart_result(url=url, crawl_result=crawl_result, chunk_plan=chunk_plan)
 
-    result = run_skill_command(
-        skill_dir=_get_skill_dir(),
+    result = run_script_command(
+        script_root=_get_skill_dir(),
         script_name="engine.py",
         args={
             "url": url,

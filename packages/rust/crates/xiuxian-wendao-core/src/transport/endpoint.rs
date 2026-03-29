@@ -12,4 +12,3 @@ pub struct PluginTransportEndpoint {
     /// Optional request timeout in seconds.
     pub timeout_secs: Option<u64>,
 }
-

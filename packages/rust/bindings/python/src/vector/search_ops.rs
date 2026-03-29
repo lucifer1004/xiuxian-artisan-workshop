@@ -108,8 +108,9 @@ fn calibrate_confidence(score: f32, profile: &ConfidenceProfile) -> (&'static st
     }
 }
 
-const TOOL_SEARCH_COMMON_SCHEMA_JSON: &str =
-    include_str!("../../../../crates/xiuxian-vector/resources/xiuxian.vector.tool_search.v1.schema.json");
+const TOOL_SEARCH_COMMON_SCHEMA_JSON: &str = include_str!(
+    "../../../../crates/xiuxian-vector/resources/xiuxian.vector.tool_search.v1.schema.json"
+);
 
 #[derive(Debug, Clone)]
 struct CommonSchemaRules {

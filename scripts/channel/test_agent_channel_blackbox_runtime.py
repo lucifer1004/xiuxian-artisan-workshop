@@ -67,8 +67,8 @@ def test_run_probe_returns_error_on_non_200_webhook(tmp_path: Path) -> None:
         telegram_send_retry_grace_seconds_fn=lambda _line: None,
         parse_log_tokens_fn=lambda _line: {},
         error_patterns=("error",),
-        mcp_observability_events=("mcp.pool.connect.waiting",),
-        mcp_waiting_events=frozenset({"mcp.pool.connect.waiting"}),
+        tool_observability_events=("tool_runtime.pool.connect.waiting",),
+        tool_waiting_events=frozenset({"tool_runtime.pool.connect.waiting"}),
         target_session_scope_placeholder="__target_session_scope__",
     )
     assert code == 1
@@ -106,8 +106,8 @@ def test_run_probe_allow_no_bot_succeeds_when_non_bot_expectations_met(tmp_path:
         telegram_send_retry_grace_seconds_fn=lambda _line: None,
         parse_log_tokens_fn=lambda _line: {},
         error_patterns=("error",),
-        mcp_observability_events=("mcp.pool.connect.waiting",),
-        mcp_waiting_events=frozenset({"mcp.pool.connect.waiting"}),
+        tool_observability_events=("tool_runtime.pool.connect.waiting",),
+        tool_waiting_events=frozenset({"tool_runtime.pool.connect.waiting"}),
         target_session_scope_placeholder="__target_session_scope__",
     )
     assert code == 0

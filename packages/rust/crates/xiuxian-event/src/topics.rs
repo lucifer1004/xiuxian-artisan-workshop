@@ -16,10 +16,10 @@ pub const AGENT_ACTION: &str = "agent/action";
 /// Agent result event
 pub const AGENT_RESULT: &str = "agent/result";
 
-/// MCP request event
-pub const MCP_REQUEST: &str = "mcp/request";
-/// MCP response event
-pub const MCP_RESPONSE: &str = "mcp/response";
+/// Tool runtime request event
+pub const TOOL_REQUEST: &str = "tool/request";
+/// Tool runtime response event
+pub const TOOL_RESPONSE: &str = "tool/response";
 
 /// System shutdown event
 pub const SYSTEM_SHUTDOWN: &str = "system/shutdown";
@@ -96,8 +96,8 @@ pub const ALL_TOPICS: &[(&str, &str)] = &[
     ("AGENT_THINK", AGENT_THINK),
     ("AGENT_ACTION", AGENT_ACTION),
     ("AGENT_RESULT", AGENT_RESULT),
-    ("MCP_REQUEST", MCP_REQUEST),
-    ("MCP_RESPONSE", MCP_RESPONSE),
+    ("TOOL_REQUEST", TOOL_REQUEST),
+    ("TOOL_RESPONSE", TOOL_RESPONSE),
     ("SYSTEM_SHUTDOWN", SYSTEM_SHUTDOWN),
     ("SYSTEM_READY", SYSTEM_READY),
     ("CORTEX_INDEX_UPDATED", CORTEX_INDEX_UPDATED),

@@ -49,7 +49,7 @@ def run_probe(
         cmd.extend(["--thread-id", str(config.thread_id)])
     if config.runtime_partition_mode:
         cmd.extend(["--session-partition", config.runtime_partition_mode])
-    if config.fail_on_mcp_error:
+    if config.fail_on_tool_error:
         cmd.extend(["--forbid-log-regex", forbidden_log_pattern])
     else:
         cmd.append("--no-fail-fast-error-log")

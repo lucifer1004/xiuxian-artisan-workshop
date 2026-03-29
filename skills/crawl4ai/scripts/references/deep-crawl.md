@@ -15,10 +15,10 @@ Deep crawling crawls multiple pages by following links from the starting URL. Us
 Set `max_depth` parameter:
 
 ```python
-@omni("crawl4ai.CrawlUrl", {
+tool: `crawl4ai.CrawlUrl` with {
     "url": "https://example.com/docs",
     "max_depth": 2  # Crawl 2 levels deep
-})
+}
 ```
 
 ## Depth Levels
@@ -116,7 +116,7 @@ urls = [
 ]
 
 for url in urls:
-    @omni("crawl4ai.CrawlUrl", {"url": url})
+    call `crawl4ai.CrawlUrl` with `{"url": url}`
 ```
 
 This allows per-page error handling and custom chunking strategies.

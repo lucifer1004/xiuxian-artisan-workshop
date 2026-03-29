@@ -46,7 +46,7 @@ pub(super) fn is_timeout_error_message(message: &str) -> bool {
     let lowercase = message.to_ascii_lowercase();
     lowercase.contains("timed out")
         || lowercase.contains("timeout")
-        || lowercase.contains("mcp.pool.call.waiting")
+        || lowercase.contains("tool_runtime.pool.call.waiting")
 }
 
 pub(super) fn degraded_tool_error_payload(
@@ -141,11 +141,11 @@ mod tests {
 
     #[test]
     fn timeout_payload_marks_degraded_error_shape() {
-        let payload = timeout_tool_error_payload("mcp", "memory.search_memory", 3);
+        let payload = timeout_tool_error_payload("tool_runtime", "memory.search_memory", 3);
         let value: serde_json::Value = serde_json::from_str(&payload).expect("valid payload json");
         assert_eq!(value["ok"], false);
         assert_eq!(value["degraded"], true);
-        assert_eq!(value["source"], "mcp");
+        assert_eq!(value["source"], "tool_runtime");
         assert_eq!(value["error_kind"], "timeout");
         assert_eq!(value["timeout_secs"], 3);
     }

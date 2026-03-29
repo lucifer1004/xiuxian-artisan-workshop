@@ -8,7 +8,9 @@ use crate::link_graph::models::{
 #[cfg(feature = "julia")]
 use crate::link_graph::models::{QuantumAnchorHit, QuantumSemanticSearchRequest};
 #[cfg(feature = "julia")]
-use crate::link_graph::plugin_runtime::build_arrow_transport_client_from_binding;
+use crate::link_graph::plugin_runtime::{
+    NegotiatedArrowTransportClient, negotiate_arrow_transport_client_from_bindings,
+};
 use crate::link_graph::{OpenAiCompatibleSemanticIgnition, VectorStoreSemanticIgnition};
 #[cfg(feature = "julia")]
 use arrow::record_batch::RecordBatch;
@@ -17,9 +19,7 @@ use std::cmp::Ordering;
 #[cfg(feature = "julia")]
 use std::collections::BTreeMap;
 #[cfg(feature = "julia")]
-use xiuxian_vector::{
-    ARROW_TRANSPORT_TRACE_ID_METADATA_KEY, ArrowTransportClient, attach_record_batch_metadata,
-};
+use xiuxian_vector::{ARROW_TRANSPORT_TRACE_ID_METADATA_KEY, attach_record_batch_metadata};
 use xiuxian_wendao_core::capabilities::PluginCapabilityBinding;
 
 #[cfg(feature = "julia")]
@@ -65,10 +65,7 @@ pub(super) async fn apply_vector_store_plugin_rerank(
         })
         .collect::<Vec<_>>();
     let request_batch = match build_vector_store_plugin_rerank_request_batch(
-        ignition,
-        request,
-        &anchors,
-        query_text,
+        ignition, request, &anchors, query_text,
     )
     .await
     {
@@ -152,17 +149,13 @@ pub(super) async fn apply_openai_plugin_rerank(
             vector_score: context.vector_score,
         })
         .collect::<Vec<_>>();
-    let request_batch = match build_openai_plugin_rerank_request_batch(
-        ignition,
-        request,
-        &anchors,
-        query_text,
-    )
-    .await
-    {
-        Ok(batch) => batch,
-        Err(error) => return Some(plugin_rerank_error_telemetry(error)),
-    };
+    let request_batch =
+        match build_openai_plugin_rerank_request_batch(ignition, request, &anchors, query_text)
+            .await
+        {
+            Ok(batch) => batch,
+            Err(error) => return Some(plugin_rerank_error_telemetry(error)),
+        };
     let response_batches = match transport.process_batch(&request_batch).await {
         Ok(batches) => batches,
         Err(error) => {
@@ -209,8 +202,8 @@ pub(super) async fn apply_openai_plugin_rerank(
 #[cfg(feature = "julia")]
 pub(super) fn build_plugin_rerank_transport_client(
     binding: &PluginCapabilityBinding,
-) -> Result<Option<ArrowTransportClient>, String> {
-    build_arrow_transport_client_from_binding(binding)
+) -> Result<Option<NegotiatedArrowTransportClient>, String> {
+    negotiate_arrow_transport_client_from_bindings(std::slice::from_ref(binding))
 }
 
 #[cfg(feature = "julia")]

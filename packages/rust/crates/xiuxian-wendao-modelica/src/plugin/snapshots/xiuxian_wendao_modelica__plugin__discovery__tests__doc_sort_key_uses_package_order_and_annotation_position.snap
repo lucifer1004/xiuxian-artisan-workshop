@@ -5,7 +5,6 @@ expression: payload
 ---
 [
   {
-    "path": "Controllers/UsersGuide/package.mo",
     "key": [
       [
         0,
@@ -27,10 +26,10 @@ expression: payload
         0,
         ""
       ]
-    ]
+    ],
+    "path": "Controllers/UsersGuide/package.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Tutorial/package.mo",
     "key": [
       [
         0,
@@ -56,10 +55,10 @@ expression: payload
         0,
         ""
       ]
-    ]
+    ],
+    "path": "Controllers/UsersGuide/Tutorial/package.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Tutorial/FirstSteps.mo",
     "key": [
       [
         0,
@@ -85,10 +84,10 @@ expression: payload
         0,
         ""
       ]
-    ]
+    ],
+    "path": "Controllers/UsersGuide/Tutorial/FirstSteps.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Tutorial/FirstSteps.mo#annotation.documentation",
     "key": [
       [
         0,
@@ -114,10 +113,10 @@ expression: payload
         2,
         ""
       ]
-    ]
+    ],
+    "path": "Controllers/UsersGuide/Tutorial/FirstSteps.mo#annotation.documentation"
   },
   {
-    "path": "Controllers/UsersGuide/Conventions.mo#section.Documentation",
     "key": [
       [
         0,
@@ -139,10 +138,10 @@ expression: payload
         1,
         ""
       ]
-    ]
+    ],
+    "path": "Controllers/UsersGuide/Conventions.mo#section.Documentation"
   },
   {
-    "path": "Controllers/UsersGuide/References.mo",
     "key": [
       [
         0,
@@ -164,10 +163,10 @@ expression: payload
         0,
         ""
       ]
-    ]
+    ],
+    "path": "Controllers/UsersGuide/References.mo"
   },
   {
-    "path": "Controllers/UsersGuide/ReleaseNotes.mo#section.VersionManagement",
     "key": [
       [
         0,
@@ -189,10 +188,10 @@ expression: payload
         1,
         ""
       ]
-    ]
+    ],
+    "path": "Controllers/UsersGuide/ReleaseNotes.mo#section.VersionManagement"
   },
   {
-    "path": "Controllers/UsersGuide/ReleaseNotes.mo",
     "key": [
       [
         0,
@@ -214,10 +213,10 @@ expression: payload
         0,
         ""
       ]
-    ]
+    ],
+    "path": "Controllers/UsersGuide/ReleaseNotes.mo"
   },
   {
-    "path": "Controllers/UsersGuide/Tuning.mo",
     "key": [
       [
         0,
@@ -239,6 +238,7 @@ expression: payload
         0,
         ""
       ]
-    ]
+    ],
+    "path": "Controllers/UsersGuide/Tuning.mo"
   }
 ]

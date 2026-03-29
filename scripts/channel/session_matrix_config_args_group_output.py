@@ -33,6 +33,6 @@ def add_probe_and_output_args(parser: Any) -> None:
     parser.add_argument(
         "--forbid-log-regex",
         action="append",
-        default=["tools/call: Mcp error", "Telegram sendMessage failed"],
+        default=["tools/call: Tool runtime error", "Telegram sendMessage failed"],
         help="Regex that must not appear in probe logs (repeatable).",
     )

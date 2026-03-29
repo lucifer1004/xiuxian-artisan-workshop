@@ -1,12 +1,16 @@
 """
-mcp_core/protocols.py
-Protocol-based design for mcp_core modules.
+protocols.py
+Protocol-based design for retained foundation modules.
 
 Provides Protocol definitions for type-safe, testable code.
 All major components implement these protocols for mocking capability.
 
 Usage:
-    from mcp_core.protocols import ILazyCache, ISafeExecutor, IInferenceClient
+    from xiuxian_foundation.api.protocols import (
+        ILazyCache,
+        ISafeExecutor,
+        IInferenceClient,
+    )
 
     # For testing, mock the protocol
     from unittest.mock import MagicMock
@@ -347,7 +351,7 @@ class IEnvironmentLoader(Protocol):
 # =============================================================================
 
 
-class IMCPLogger(Protocol):
+class IRuntimeLogger(Protocol):
     """Protocol for structured logging."""
 
     @abstractmethod
@@ -390,7 +394,7 @@ __all__ = [
     "IPathSafety",
     "IEnvironmentLoader",
     # Logger Protocol
-    "IMCPLogger",
+    "IRuntimeLogger",
     # Base Dataclasses
     "ExecutionResult",
     "InferenceResult",

@@ -10,4 +10,3 @@ pub struct PluginProviderSelector {
     /// Stable plugin identifier.
     pub provider: PluginId,
 }
-

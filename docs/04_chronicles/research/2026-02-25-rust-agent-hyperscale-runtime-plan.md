@@ -30,7 +30,7 @@ Goals:
 
 - `litellm_rs`: provider-routing path.
 - `mistral_sdk`: explicit local runtime path.
-- Rust embedding/LLM path is the primary runtime path; Python MCP embedding fallback is removed from agent steady-state flow.
+- Rust embedding/LLM path is the primary runtime path; the legacy Python embedding fallback is removed from agent steady-state flow.
 
 ## Hardening Added in This Iteration
 

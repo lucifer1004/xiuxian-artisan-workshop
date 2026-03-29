@@ -22,8 +22,8 @@ def coerce_positive_int(value: object) -> int | None:
     return parsed if parsed > 0 else None
 
 
-def format_mcp_event_counts(counts: object) -> str:
-    """Render MCP event count map as deterministic compact text."""
+def format_tool_event_counts(counts: object) -> str:
+    """Render tool-runtime event count map as deterministic compact text."""
     if not isinstance(counts, dict):
         return "-"
 
@@ -57,15 +57,15 @@ def behavioral_evidence_summary(scenario: dict[str, object]) -> str:
     decay_steps = sum(1 for step in steps if step.get("memory_decay_seen"))
     recall_credit_events = sum(int(step.get("memory_recall_credit_count") or 0) for step in steps)
     decay_events = sum(int(step.get("memory_decay_count") or 0) for step in steps)
-    mcp_waiting_steps = sum(1 for step in steps if step.get("mcp_waiting_seen"))
+    tool_waiting_steps = sum(1 for step in steps if step.get("tool_waiting_seen"))
 
-    mcp_waiting_events = 0
+    tool_waiting_events = 0
     for step in steps:
-        counts = step.get("mcp_event_counts")
+        counts = step.get("tool_event_counts")
         if not isinstance(counts, dict):
             continue
-        mcp_waiting_events += int(counts.get("mcp.pool.connect.waiting", 0) or 0)
-        mcp_waiting_events += int(counts.get("mcp.pool.call.waiting", 0) or 0)
+        tool_waiting_events += int(counts.get("tool_runtime.pool.connect.waiting", 0) or 0)
+        tool_waiting_events += int(counts.get("tool_runtime.pool.call.waiting", 0) or 0)
 
     return (
         f"natural_language_steps={len(natural_language_steps)}, "
@@ -74,5 +74,5 @@ def behavioral_evidence_summary(scenario: dict[str, object]) -> str:
         f"skipped_hits={skipped_hits}, feedback_updated_hits={feedback_hits}, "
         f"recall_credit_steps={recall_credit_steps}, decay_steps={decay_steps}, "
         f"recall_credit_events={recall_credit_events}, decay_events={decay_events}, "
-        f"mcp_waiting_steps={mcp_waiting_steps}, mcp_waiting_events={mcp_waiting_events}"
+        f"tool_waiting_steps={tool_waiting_steps}, tool_waiting_events={tool_waiting_events}"
     )

@@ -4,8 +4,8 @@ use std::path::Path;
 
 use regex::Regex;
 use xiuxian_wendao_core::repo_intelligence::{
-    DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, SymbolRecord,
-    PluginLinkContext, RepoIntelligenceError,
+    DocRecord, ExampleRecord, ModuleRecord, PluginLinkContext, RelationKind, RelationRecord,
+    RepoIntelligenceError, SymbolRecord,
 };
 
 pub(crate) fn build_doc_relations(

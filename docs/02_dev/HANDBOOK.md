@@ -605,14 +605,14 @@ Notes:
 
 ## Env vars
 
-| Var                      | Purpose                                                                                                                                                   |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OPENAI_API_KEY`         | API key for OpenAI-compatible endpoint                                                                                                                    |
-| `ANTHROPIC_API_KEY`      | For Claude endpoints                                                                                                                                      |
+| Var                      | Purpose                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`         | API key for OpenAI-compatible endpoint                                                    |
+| `ANTHROPIC_API_KEY`      | For Claude endpoints                                                                      |
 | `LITELLM_PROXY_URL`      | **Recommended.** Chat completions URL (e.g. `http://127.0.0.1:4000/v1/chat/completions`). |
-| `XIUXIAN_DAOCHANG_MODEL` | Model id (e.g. `gpt-4o-mini`)                                                                                                                             |
-| `TELEGRAM_BOT_TOKEN`     | Telegram bot token for `xiuxian-daochang channel`                                                                                                         |
-| `VALKEY_URL`             | Fallback Valkey/Redis URL when `session.valkey_url` is not configured                                                                                     |
+| `XIUXIAN_DAOCHANG_MODEL` | Model id (e.g. `gpt-4o-mini`)                                                             |
+| `TELEGRAM_BOT_TOKEN`     | Telegram bot token for `xiuxian-daochang channel`                                         |
+| `VALKEY_URL`             | Fallback Valkey/Redis URL when `session.valkey_url` is not configured                     |
 
 **First-time setup**: Set `LITELLM_PROXY_URL` (or run LiteLLM and point to it) and `OPENAI_API_KEY` before starting the agent.
 

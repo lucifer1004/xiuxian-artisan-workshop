@@ -3,7 +3,9 @@ use crate::runtime_config::constants::{
     LINK_GRAPH_RELATED_MAX_CANDIDATES_ENV, LINK_GRAPH_RELATED_MAX_PARTITIONS_ENV,
     LINK_GRAPH_RELATED_TIME_BUDGET_MS_ENV,
 };
-use crate::settings::{first_non_empty, get_setting_string, parse_positive_f64, parse_positive_usize};
+use crate::settings::{
+    first_non_empty, get_setting_string, parse_positive_f64, parse_positive_usize,
+};
 use serde_yaml::Value;
 
 /// Resolve related-query runtime settings from merged Wendao configuration.

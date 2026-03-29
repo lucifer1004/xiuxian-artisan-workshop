@@ -207,22 +207,22 @@ in
         "''${OMNI_SKILLS_TOOLS_NETWORK_RUNS:-5}"
     '';
 
-    "ci:mcp-tools-list-sweep" = mkPythonScriptTask ''
-      just benchmark-mcp-tools-list-sweep \
-        "''${OMNI_MCP_TOOLS_LIST_BASE_URL:-}" \
-        "''${OMNI_MCP_TOOLS_LIST_HOST:-}" \
-        "''${OMNI_MCP_TOOLS_LIST_PORT:-}" \
-        "''${OMNI_MCP_TOOLS_LIST_NO_EMBEDDING:-true}" \
-        "''${OMNI_MCP_TOOLS_LIST_HEALTH_TIMEOUT_SECS:-120}" \
-        "''${OMNI_MCP_TOOLS_LIST_TOTAL:-1000}" \
-        "''${OMNI_MCP_TOOLS_LIST_CONCURRENCY_VALUES:-40,80,120,160,200}" \
-        "''${OMNI_MCP_TOOLS_LIST_WARMUP_CALLS:-2}" \
-        "''${OMNI_MCP_TOOLS_LIST_TIMEOUT_SECS:-30}" \
-        "''${OMNI_MCP_TOOLS_LIST_P95_SLO_MS:-400}" \
-        "''${OMNI_MCP_TOOLS_LIST_P99_SLO_MS:-800}" \
-        "''${OMNI_MCP_TOOLS_LIST_STRICT_SNAPSHOT:-true}" \
-        "''${OMNI_MCP_TOOLS_LIST_WRITE_SNAPSHOT:-false}" \
-        "''${OMNI_MCP_TOOLS_LIST_REPORT_DIR:-.run/reports/mcp-tools-list-sweep}"
+    "ci:tool-list-sweep" = mkPythonScriptTask ''
+      just benchmark-tool-list-sweep \
+        "''${OMNI_TOOL_LIST_BASE_URL:-}" \
+        "''${OMNI_TOOL_LIST_HOST:-}" \
+        "''${OMNI_TOOL_LIST_PORT:-}" \
+        "''${OMNI_TOOL_LIST_NO_EMBEDDING:-true}" \
+        "''${OMNI_TOOL_LIST_HEALTH_TIMEOUT_SECS:-120}" \
+        "''${OMNI_TOOL_LIST_TOTAL:-1000}" \
+        "''${OMNI_TOOL_LIST_CONCURRENCY_VALUES:-40,80,120,160,200}" \
+        "''${OMNI_TOOL_LIST_WARMUP_CALLS:-2}" \
+        "''${OMNI_TOOL_LIST_TIMEOUT_SECS:-30}" \
+        "''${OMNI_TOOL_LIST_P95_SLO_MS:-400}" \
+        "''${OMNI_TOOL_LIST_P99_SLO_MS:-800}" \
+        "''${OMNI_TOOL_LIST_STRICT_SNAPSHOT:-true}" \
+        "''${OMNI_TOOL_LIST_WRITE_SNAPSHOT:-false}" \
+        "''${OMNI_TOOL_LIST_REPORT_DIR:-.run/reports/tool-list-sweep}"
     '';
 
     "ci:knowledge-recall-gates" = mkPythonScriptTask ''

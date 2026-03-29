@@ -5,16 +5,15 @@ expression: payload
 ---
 [
   {
-    "path": "package.mo",
     "key": [
       [
         0,
         ""
       ]
-    ]
+    ],
+    "path": "package.mo"
   },
   {
-    "path": "UsersGuide/package.mo",
     "key": [
       [
         0,
@@ -24,10 +23,10 @@ expression: payload
         0,
         "UsersGuide"
       ]
-    ]
+    ],
+    "path": "UsersGuide/package.mo"
   },
   {
-    "path": "Controllers/package.mo",
     "key": [
       [
         0,
@@ -37,10 +36,10 @@ expression: payload
         1,
         "Controllers"
       ]
-    ]
+    ],
+    "path": "Controllers/package.mo"
   },
   {
-    "path": "Controllers/Examples/package.mo",
     "key": [
       [
         0,
@@ -54,6 +53,7 @@ expression: payload
         0,
         "Examples"
       ]
-    ]
+    ],
+    "path": "Controllers/Examples/package.mo"
   }
 ]

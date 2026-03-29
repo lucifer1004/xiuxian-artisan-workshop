@@ -3,15 +3,16 @@ use super::rerank::{
     build_plugin_rerank_transport_client, collect_plugin_rerank_trace_ids,
     plugin_rerank_request_trace_id,
 };
-use arrow::array::StringArray;
-use arrow::datatypes::{DataType, Field, Schema};
-use arrow::record_batch::RecordBatch;
 use crate::analyzers::PluginArrowScoreRow;
 use crate::link_graph::models::QuantumContext;
 use crate::link_graph::plugin_runtime::build_rerank_provider_binding;
 use crate::link_graph::runtime_config::models::retrieval::LinkGraphCompatRerankRuntimeConfig;
+use arrow::array::StringArray;
+use arrow::datatypes::{DataType, Field, Schema};
+use arrow::record_batch::RecordBatch;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use xiuxian_wendao_core::transport::PluginTransportKind;
 
 #[test]
 fn apply_plugin_rerank_scores_overwrites_saliency_and_resorts_contexts() {
@@ -72,26 +73,56 @@ fn apply_plugin_rerank_scores_overwrites_saliency_and_resorts_contexts() {
 #[test]
 fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
     let binding = build_rerank_provider_binding(&LinkGraphCompatRerankRuntimeConfig {
-            base_url: Some("http://127.0.0.1:8090".to_string()),
-            route: Some("/custom-ipc".to_string()),
-            health_route: Some("/healthz".to_string()),
-            schema_version: Some("v1".to_string()),
-            timeout_secs: Some(15),
-            service_mode: None,
-            analyzer_config_path: None,
-            analyzer_strategy: None,
-            vector_weight: None,
-            similarity_weight: None,
-        });
+        base_url: Some("http://127.0.0.1:8090".to_string()),
+        route: Some("/custom-ipc".to_string()),
+        health_route: Some("/healthz".to_string()),
+        schema_version: Some("v1".to_string()),
+        timeout_secs: Some(15),
+        service_mode: None,
+        analyzer_config_path: None,
+        analyzer_strategy: None,
+        vector_weight: None,
+        similarity_weight: None,
+    });
     let client = build_plugin_rerank_transport_client(&binding)
         .expect("config should be valid")
         .expect("base url should enable transport");
+    let config = client
+        .arrow_ipc_http_config()
+        .expect("runtime overrides should still select Arrow IPC");
 
-    assert_eq!(client.config().base_url(), "http://127.0.0.1:8090");
-    assert_eq!(client.config().route(), "/custom-ipc");
-    assert_eq!(client.config().health_route(), "/healthz");
-    assert_eq!(client.config().schema_version(), "v1");
-    assert_eq!(client.config().timeout().as_secs(), 15);
+    assert_eq!(client.selection().selected_transport, PluginTransportKind::ArrowIpcHttp);
+    assert_eq!(config.base_url(), "http://127.0.0.1:8090");
+    assert_eq!(config.route(), "/custom-ipc");
+    assert_eq!(config.health_route(), "/healthz");
+    assert_eq!(config.schema_version(), "v1");
+    assert_eq!(config.timeout().as_secs(), 15);
+}
+
+#[test]
+fn build_plugin_rerank_transport_client_accepts_arrow_flight_bindings() {
+    let mut binding = build_rerank_provider_binding(&LinkGraphCompatRerankRuntimeConfig {
+        base_url: Some("http://127.0.0.1:18080".to_string()),
+        route: Some("/rerank/flight".to_string()),
+        health_route: Some("/healthz".to_string()),
+        schema_version: Some("v2".to_string()),
+        timeout_secs: Some(20),
+        service_mode: None,
+        analyzer_config_path: None,
+        analyzer_strategy: None,
+        vector_weight: None,
+        similarity_weight: None,
+    });
+    binding.transport = PluginTransportKind::ArrowFlight;
+
+    let client = build_plugin_rerank_transport_client(&binding)
+        .expect("flight binding should be negotiable")
+        .expect("flight binding should materialize a lazy Flight client");
+
+    assert_eq!(client.selection().selected_transport, PluginTransportKind::ArrowFlight);
+    assert_eq!(client.flight_base_url(), Some("http://127.0.0.1:18080"));
+    assert_eq!(client.flight_route(), Some("/rerank/flight"));
+    assert!(client.arrow_ipc_http_config().is_none());
 }
 
 #[test]

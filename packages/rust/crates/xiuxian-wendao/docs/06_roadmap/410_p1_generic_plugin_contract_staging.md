@@ -208,16 +208,16 @@ These types should live behind feature folders such as:
 
 The current Julia-specific host surfaces should map as follows:
 
-| Current Julia surface | `P1` generic target | Notes |
-| :--- | :--- | :--- |
-| `LinkGraphJuliaRerankRuntimeConfig` | `PluginCapabilityBinding` plus provider-scoped config leaf | Split endpoint, launch, and provider binding instead of keeping one warehouse struct |
-| `LinkGraphJuliaAnalyzerServiceDescriptor` | provider-scoped launch options under `runtime_config/providers/` | Runtime keeps the binding, Julia package keeps provider option semantics |
-| `LinkGraphJuliaAnalyzerLaunchManifest` | `PluginLaunchSpec` | Keep Julia compatibility conversion until `P4` |
-| `LinkGraphJuliaDeploymentArtifact` | `PluginArtifactPayload` | Deployment becomes one artifact kind, not one language-only DTO |
-| `UiJuliaAnalyzerLaunchManifest` | `UiPluginLaunchSpec` | UI contract should mirror runtime generic payload names |
-| `UiJuliaDeploymentArtifact` | `UiPluginArtifact` | Route by `plugin_id` and `artifact_id` |
-| `resolve_link_graph_julia_deployment_artifact()` | `resolve_plugin_artifact(plugin_id, artifact_id)` | Keep Julia-named shim only as compatibility |
-| `/api/ui/julia-deployment-artifact` | `/api/ui/plugins/{plugin_id}/artifacts/{artifact_id}` | Introduce generic endpoint before removing legacy path |
+| Current Julia surface                            | `P1` generic target                                              | Notes                                                                                |
+| :----------------------------------------------- | :--------------------------------------------------------------- | :----------------------------------------------------------------------------------- |
+| `LinkGraphJuliaRerankRuntimeConfig`              | `PluginCapabilityBinding` plus provider-scoped config leaf       | Split endpoint, launch, and provider binding instead of keeping one warehouse struct |
+| `LinkGraphJuliaAnalyzerServiceDescriptor`        | provider-scoped launch options under `runtime_config/providers/` | Runtime keeps the binding, Julia package keeps provider option semantics             |
+| `LinkGraphJuliaAnalyzerLaunchManifest`           | `PluginLaunchSpec`                                               | Keep Julia compatibility conversion until `P4`                                       |
+| `LinkGraphJuliaDeploymentArtifact`               | `PluginArtifactPayload`                                          | Deployment becomes one artifact kind, not one language-only DTO                      |
+| `UiJuliaAnalyzerLaunchManifest`                  | `UiPluginLaunchSpec`                                             | UI contract should mirror runtime generic payload names                              |
+| `UiJuliaDeploymentArtifact`                      | `UiPluginArtifact`                                               | Route by `plugin_id` and `artifact_id`                                               |
+| `resolve_link_graph_julia_deployment_artifact()` | `resolve_plugin_artifact(plugin_id, artifact_id)`                | Keep Julia-named shim only as compatibility                                          |
+| `/api/ui/julia-deployment-artifact`              | `/api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`            | Introduce generic endpoint before removing legacy path                               |
 
 ## Retrieval Config Staging
 

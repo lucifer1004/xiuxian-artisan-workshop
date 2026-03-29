@@ -45,8 +45,7 @@ pub fn first_non_empty(values: &[Option<String>]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        first_non_empty, parse_bool, parse_positive_f64, parse_positive_u64,
-        parse_positive_usize,
+        first_non_empty, parse_bool, parse_positive_f64, parse_positive_u64, parse_positive_usize,
     };
 
     #[test]

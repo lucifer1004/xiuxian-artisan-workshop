@@ -15,13 +15,15 @@ use serde_json::Value;
 use tower::util::ServiceExt;
 
 use xiuxian_wendao::analyzers::{
-    ProjectedPageIndexNode, ProjectionPageKind, RefineEntityDocRequest,
+    DocsProjectedGapReportQuery, ProjectedPageIndexNode, ProjectionPageKind,
+    RefineEntityDocRequest,
     RepoProjectedPageIndexTreesQuery, RepoProjectedPagesQuery,
     analyze_registered_repository_with_registry, load_repo_intelligence_config,
+    docs_projected_gap_report_from_config,
     repo_projected_page_index_trees_from_config, repo_projected_pages_from_config,
 };
 use xiuxian_wendao::gateway::studio::repo_index::RepoCodeDocument;
-use xiuxian_wendao::gateway::studio::repo_index::RepoIndexCoordinator;
+use xiuxian_wendao::gateway::studio::repo_index::{RepoIndexCoordinator, RepoIndexRequest};
 use xiuxian_wendao::gateway::studio::symbol_index::SymbolIndexCoordinator;
 use xiuxian_wendao::gateway::studio::test_support::assert_studio_json_snapshot;
 use xiuxian_wendao::gateway::studio::{GatewayState, StudioState, studio_router};
@@ -75,6 +77,45 @@ async fn repo_overview_endpoint_returns_repo_summary_payload() -> TestResult {
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_overview_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-overview]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) =
+        request_json(router, "/api/repo/overview?repo=modelica-gateway-overview").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload.get("repo_id").and_then(Value::as_str),
+        Some("modelica-gateway-overview")
+    );
+    assert_eq!(
+        payload.get("display_name").and_then(Value::as_str),
+        Some("Projectionica")
+    );
+    assert!(
+        payload
+            .get("module_count")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count >= 1),
+        "repo-overview endpoint should expose at least one Modelica module over the external plugin path"
+    );
+    assert_studio_json_snapshot("repo_overview_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_module_search_endpoint_returns_module_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -89,6 +130,58 @@ async fn repo_module_search_endpoint_returns_module_payload() -> TestResult {
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_module_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_module_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-module-search]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/module-search?repo=modelica-gateway-module-search&query=Projectionica.Controllers&limit=3",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload.get("repo_id").and_then(Value::as_str),
+        Some("modelica-gateway-module-search")
+    );
+    let modules = payload
+        .get("modules")
+        .and_then(Value::as_array)
+        .ok_or("repo-module-search payload should include a modules array")?;
+    assert!(
+        !modules.is_empty(),
+        "repo-module-search endpoint should return at least one module over the external Modelica path"
+    );
+    assert!(
+        modules.len() <= 3,
+        "repo-module-search endpoint should honor the configured module limit"
+    );
+    assert!(
+        modules.iter().any(|module| {
+            module
+                .get("qualified_name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| name.contains("Projectionica.Controllers"))
+        }),
+        "repo-module-search endpoint should keep module hits anchored to the requested Modelica namespace"
+    );
+    assert_studio_json_snapshot("repo_module_search_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -110,6 +203,58 @@ async fn repo_symbol_search_endpoint_returns_symbol_payload() -> TestResult {
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_symbol_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_symbol_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-symbol-search]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/symbol-search?repo=modelica-gateway-symbol-search&query=PI&limit=3",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload.get("repo_id").and_then(Value::as_str),
+        Some("modelica-gateway-symbol-search")
+    );
+    let symbols = payload
+        .get("symbols")
+        .and_then(Value::as_array)
+        .ok_or("repo-symbol-search payload should include a symbols array")?;
+    assert!(
+        !symbols.is_empty(),
+        "repo-symbol-search endpoint should return at least one symbol over the external Modelica path"
+    );
+    assert!(
+        symbols.len() <= 3,
+        "repo-symbol-search endpoint should honor the configured symbol limit"
+    );
+    assert!(
+        symbols.iter().any(|symbol| {
+            symbol
+                .get("qualified_name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| name.contains("Projectionica.Controllers.PI"))
+        }),
+        "repo-symbol-search endpoint should keep symbol hits anchored to the requested Modelica symbol"
+    );
+    assert_studio_json_snapshot("repo_symbol_search_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -136,6 +281,57 @@ async fn repo_example_search_endpoint_returns_example_payload() -> TestResult {
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_example_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_example_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-example-search]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/example-search?repo=modelica-gateway-example-search&query=Step&limit=3",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload.get("repo_id").and_then(Value::as_str),
+        Some("modelica-gateway-example-search")
+    );
+    let examples = payload
+        .get("examples")
+        .and_then(Value::as_array)
+        .ok_or("repo-example-search payload should include an examples array")?;
+    assert!(
+        !examples.is_empty(),
+        "repo-example-search endpoint should return at least one example over the external Modelica path"
+    );
+    assert!(
+        examples.len() <= 3,
+        "repo-example-search endpoint should honor the configured example limit"
+    );
+    assert!(
+        examples.iter().any(|example| {
+            let title = example.get("title").and_then(Value::as_str).unwrap_or_default();
+            let path = example.get("path").and_then(Value::as_str).unwrap_or_default();
+            title.contains("Step") || path.contains("Step.mo")
+        }),
+        "repo-example-search endpoint should keep example hits anchored to the requested Modelica example"
+    );
+    assert_studio_json_snapshot("repo_example_search_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -255,6 +451,113 @@ async fn repo_doc_coverage_endpoint_returns_coverage_payload() -> TestResult {
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_doc_coverage_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-doc-coverage]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/doc-coverage?repo=modelica-gateway-doc-coverage&module=Projectionica.Controllers",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload.get("repo_id").and_then(Value::as_str),
+        Some("modelica-gateway-doc-coverage")
+    );
+    assert!(
+        payload
+            .get("module_id")
+            .and_then(Value::as_str)
+            .is_some_and(|module_id| module_id.contains("Projectionica.Controllers")),
+        "repo-doc-coverage endpoint should stay anchored to the requested Modelica module"
+    );
+    let docs = payload
+        .get("docs")
+        .and_then(Value::as_array)
+        .ok_or("repo-doc-coverage payload should include a docs array")?;
+    assert!(
+        !docs.is_empty(),
+        "repo-doc-coverage endpoint should expose at least one documentation record over the external Modelica path"
+    );
+    assert_studio_json_snapshot("repo_doc_coverage_endpoint_modelica_json", payload);
+    Ok(())
+}
+
+#[tokio::test]
+async fn repo_index_endpoint_returns_status_payload() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_git_repo(temp.path(), "GatewaySyncPkg")?;
+    write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
+    let router = studio_router(gateway_state_for_project_with_options(
+        temp.path(),
+        false,
+        false,
+    ));
+
+    let payload = RepoIndexRequest {
+        repo: Some("gateway-sync".to_string()),
+        refresh: false,
+    };
+    let (status, mut payload) = request_json_post(router, "/api/repo/index", &payload).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(payload.get("total").and_then(Value::as_u64), Some(1));
+    assert_eq!(payload.get("queued").and_then(Value::as_u64), Some(1));
+    redact_repo_index_payload(&mut payload);
+    assert_studio_json_snapshot("repo_index_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_index_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(temp.path(), &repo_dir, "modelica-gateway-index")?;
+    let router = studio_router(gateway_state_for_project_with_options(
+        temp.path(),
+        false,
+        false,
+    ));
+
+    let payload = RepoIndexRequest {
+        repo: Some("modelica-gateway-index".to_string()),
+        refresh: false,
+    };
+    let (status, mut payload) = request_json_post(router, "/api/repo/index", &payload).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(payload.get("total").and_then(Value::as_u64), Some(1));
+    assert_eq!(payload.get("queued").and_then(Value::as_u64), Some(1));
+    let repos = payload
+        .get("repos")
+        .and_then(Value::as_array)
+        .ok_or("repo-index payload should include a repos array")?;
+    assert!(
+        repos.iter().any(|repo| {
+            repo.get("repoId")
+                .and_then(Value::as_str)
+                .is_some_and(|repo_id| repo_id == "modelica-gateway-index")
+        }),
+        "repo-index endpoint should queue the requested external Modelica repository",
+    );
+    redact_repo_index_payload(&mut payload);
+    assert_studio_json_snapshot("repo_index_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_index_status_endpoint_returns_status_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -266,6 +569,47 @@ async fn repo_index_status_endpoint_returns_status_payload() -> TestResult {
         request_json(router, "/api/repo/index/status?repo=gateway-sync").await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_index_status_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_index_status_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(temp.path(), &repo_dir, "modelica-gateway-index-status")?;
+    let router = studio_router(gateway_state_for_project_with_options(
+        temp.path(),
+        false,
+        false,
+    ));
+
+    let enqueue_payload = RepoIndexRequest {
+        repo: Some("modelica-gateway-index-status".to_string()),
+        refresh: false,
+    };
+    let (enqueue_status, _) =
+        request_json_post(router.clone(), "/api/repo/index", &enqueue_payload).await?;
+    assert_eq!(enqueue_status, StatusCode::OK);
+
+    let (status, mut payload) = request_json(
+        router,
+        "/api/repo/index/status?repo=modelica-gateway-index-status",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(payload.get("total").and_then(Value::as_u64), Some(1));
+    let repos = payload
+        .get("repos")
+        .and_then(Value::as_array)
+        .ok_or("repo-index-status payload should include a repos array")?;
+    assert_eq!(repos.len(), 1);
+    assert_eq!(
+        repos[0].get("repoId").and_then(Value::as_str),
+        Some("modelica-gateway-index-status")
+    );
+    redact_repo_index_payload(&mut payload);
+    assert_studio_json_snapshot("repo_index_status_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -308,6 +652,33 @@ async fn repo_sync_endpoint_returns_repo_status_payload() -> TestResult {
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_sync_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-sync]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, mut payload) =
+        request_json(router, "/api/repo/sync?repo=modelica-gateway-sync&mode=status").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(payload.get("repo_id").and_then(Value::as_str), Some("modelica-gateway-sync"));
+    assert_eq!(payload.get("mode").and_then(Value::as_str), Some("status"));
+    redact_repo_sync_payload(&mut payload);
+    assert_studio_json_snapshot("repo_sync_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_projected_pages_endpoint_returns_projection_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -330,6 +701,49 @@ async fn repo_projected_pages_endpoint_returns_projection_payload() -> TestResul
         request_json(router, "/api/repo/projected-pages?repo=gateway-sync").await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_projected_pages_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_pages_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-projected-pages]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) =
+        request_json(router, "/api/repo/projected-pages?repo=modelica-gateway-projected-pages")
+            .await?;
+    assert_eq!(status, StatusCode::OK);
+    let pages = payload
+        .get("pages")
+        .and_then(Value::as_array)
+        .ok_or("repo-projected-pages payload should include a pages array")?;
+    assert!(
+        !pages.is_empty(),
+        "repo-projected-pages endpoint should return at least one projected page over the external Modelica path"
+    );
+    assert!(
+        pages.iter().any(|page| {
+            let title = page.get("title").and_then(Value::as_str).unwrap_or_default();
+            let page_id = page.get("page_id").and_then(Value::as_str).unwrap_or_default();
+            title.contains("Projectionica.Controllers")
+                || title.contains("Step")
+                || page_id.contains("Projectionica.Controllers")
+        }),
+        "repo-projected-pages endpoint should keep projected pages anchored to the external Modelica namespace"
+    );
+    assert_studio_json_snapshot("repo_projected_pages_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -358,6 +772,63 @@ async fn repo_projected_gap_report_endpoint_returns_projection_gap_payload() -> 
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_gap_report_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-projected-gap-report]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/projected-gap-report?repo=modelica-gateway-projected-gap-report",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload.get("repo_id").and_then(Value::as_str),
+        Some("modelica-gateway-projected-gap-report")
+    );
+    let gaps = payload
+        .get("gaps")
+        .and_then(Value::as_array)
+        .ok_or("repo-projected-gap-report payload should include a gaps array")?;
+    let summary = payload
+        .get("summary")
+        .and_then(Value::as_object)
+        .ok_or("repo-projected-gap-report payload should include a summary object")?;
+    let gap_count = summary
+        .get("gap_count")
+        .and_then(Value::as_u64)
+        .ok_or("repo-projected-gap-report summary should include gap_count")?;
+    let page_count = summary
+        .get("page_count")
+        .and_then(Value::as_u64)
+        .ok_or("repo-projected-gap-report summary should include page_count")?;
+    assert_eq!(
+        gap_count as usize,
+        gaps.len(),
+        "repo-projected-gap-report summary should stay aligned with the materialized gap list"
+    );
+    assert!(
+        page_count > 0,
+        "repo-projected-gap-report summary should reflect non-empty projected pages over the external Modelica path"
+    );
+    assert_studio_json_snapshot("repo_projected_gap_report_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn docs_projected_gap_report_endpoint_returns_projection_gap_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -380,6 +851,56 @@ async fn docs_projected_gap_report_endpoint_returns_projection_gap_payload() -> 
         request_json(router, "/api/docs/projected-gap-report?repo=gateway-sync").await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("docs_projected_gap_report_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_projected_gap_report_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-projected-gap-report]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/projected-gap-report?repo=modelica-gateway-projected-gap-report",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let gaps = payload
+        .get("gaps")
+        .and_then(Value::as_array)
+        .ok_or("docs-projected-gap-report payload should include a gaps array")?;
+    let summary_gap_count = payload
+        .get("summary")
+        .and_then(Value::as_object)
+        .and_then(|summary| summary.get("gap_count"))
+        .and_then(Value::as_u64)
+        .ok_or("docs-projected-gap-report payload should include summary.gap_count")?;
+    assert_eq!(
+        summary_gap_count as usize,
+        gaps.len(),
+        "docs-projected-gap-report endpoint should keep summary.gap_count aligned with the materialized gap list"
+    );
+    assert!(
+        payload
+            .get("repo_id")
+            .and_then(Value::as_str)
+            .is_some_and(|repo_id| repo_id == "modelica-gateway-projected-gap-report"),
+        "docs-projected-gap-report endpoint should stay anchored to the requested external Modelica repo"
+    );
+    assert_studio_json_snapshot("docs_projected_gap_report_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -406,6 +927,100 @@ async fn docs_planner_item_endpoint_returns_gap_bundle() -> TestResult {
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_planner_item_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        repo_dir.join("Controllers").join("NoDocs.mo"),
+        "within Projectionica.Controllers;\nmodel NoDocs\nend NoDocs;\n",
+    )?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-item]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let gap_report = docs_projected_gap_report_from_config(
+        &DocsProjectedGapReportQuery {
+            repo_id: "modelica-gateway-item".to_string(),
+        },
+        Some(&temp.path().join("wendao.toml")),
+        temp.path(),
+    )?;
+    let gap = gap_report
+        .gaps
+        .first()
+        .cloned()
+        .ok_or("planner-item route expected at least one projected gap")?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/planner-item?repo=modelica-gateway-item&gap_id={}&family_kind=how_to&related_limit=3&family_limit=3",
+            gap.gap_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let route_gap = payload
+        .get("gap")
+        .and_then(Value::as_object)
+        .ok_or("planner-item payload should include a gap object")?;
+    let route_gap_id = route_gap
+        .get("gap_id")
+        .and_then(Value::as_str)
+        .ok_or("planner-item payload should include gap.gap_id")?;
+    let route_page_id = route_gap
+        .get("page_id")
+        .and_then(Value::as_str)
+        .ok_or("planner-item payload should include gap.page_id")?;
+    let route_title = route_gap
+        .get("title")
+        .and_then(Value::as_str)
+        .ok_or("planner-item payload should include gap.title")?;
+    assert_eq!(
+        route_gap_id, gap.gap_id,
+        "planner-item route should reopen the requested stable gap"
+    );
+    assert!(
+        route_title.contains("NoDocs") || route_page_id.contains("NoDocs"),
+        "planner-item route should stay anchored to the injected no-doc target"
+    );
+    assert_eq!(
+        payload
+            .get("hit")
+            .and_then(Value::as_object)
+            .and_then(|hit| hit.get("page"))
+            .and_then(Value::as_object)
+            .and_then(|page| page.get("page_id"))
+            .and_then(Value::as_str),
+        Some(route_page_id),
+        "planner-item route retrieval hit should stay anchored to the gap page"
+    );
+    assert_eq!(
+        payload
+            .get("navigation")
+            .and_then(Value::as_object)
+            .and_then(|navigation| navigation.get("center"))
+            .and_then(Value::as_object)
+            .and_then(|center| center.get("page"))
+            .and_then(Value::as_object)
+            .and_then(|page| page.get("page_id"))
+            .and_then(Value::as_str),
+        Some(route_page_id),
+        "planner-item route navigation center should stay anchored to the gap page"
+    );
+    assert_studio_json_snapshot("docs_planner_item_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn docs_planner_search_endpoint_returns_gap_hits() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -426,6 +1041,62 @@ async fn docs_planner_search_endpoint_returns_gap_hits() -> TestResult {
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("docs_planner_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_planner_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        repo_dir.join("Controllers").join("NoDocs.mo"),
+        "within Projectionica.Controllers;\nmodel NoDocs\nend NoDocs;\n",
+    )?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-sync]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/planner-search?repo=modelica-gateway-sync&query=NoDocs&limit=4",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let hits = payload
+        .get("hits")
+        .and_then(Value::as_array)
+        .ok_or("planner-search payload should include a hits array")?;
+    assert!(
+        !hits.is_empty(),
+        "planner-search endpoint should return at least one gap hit"
+    );
+    assert!(
+        hits.len() <= 4,
+        "planner-search endpoint should honor the configured hit limit"
+    );
+    assert!(
+        hits.iter().all(|hit| {
+            hit.get("gap")
+                .and_then(Value::as_object)
+                .map(|gap| {
+                    let title = gap.get("title").and_then(Value::as_str).unwrap_or_default();
+                    let page_id = gap.get("page_id").and_then(Value::as_str).unwrap_or_default();
+                    title.contains("NoDocs") || page_id.contains("NoDocs")
+                })
+                .unwrap_or(false)
+        }),
+        "planner-search endpoint hits should stay anchored to the injected no-doc target"
+    );
+    assert_studio_json_snapshot("docs_planner_search_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -457,6 +1128,94 @@ async fn docs_planner_queue_endpoint_returns_grouped_gap_backlog() -> TestResult
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_planner_queue_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        repo_dir.join("Controllers").join("NoDocs.mo"),
+        "within Projectionica.Controllers;\nmodel NoDocs\nend NoDocs;\n",
+    )?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-queue]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/planner-queue?repo=modelica-gateway-queue&gap_kind=symbol_reference_without_documentation&page_kind=reference&per_kind_limit=3",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let groups = payload
+        .get("groups")
+        .and_then(Value::as_array)
+        .ok_or("planner-queue payload should include a groups array")?;
+    let total_gap_count = payload
+        .get("total_gap_count")
+        .and_then(Value::as_u64)
+        .ok_or("planner-queue payload should include total_gap_count")?;
+
+    assert!(
+        !groups.is_empty(),
+        "planner-queue endpoint should return at least one grouped backlog lane"
+    );
+    assert_eq!(
+        total_gap_count,
+        groups
+            .iter()
+            .map(|group| {
+                group.get("count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default()
+            })
+            .sum::<u64>(),
+        "planner-queue total should match grouped counts"
+    );
+    assert!(
+        groups.iter().all(|group| {
+            group.get("gaps")
+                .and_then(Value::as_array)
+                .map(|gaps| gaps.len() <= 3)
+                .unwrap_or(false)
+        }),
+        "planner-queue previews should honor per-kind truncation"
+    );
+    assert!(
+        groups.iter().all(|group| {
+            group.get("gaps")
+                .and_then(Value::as_array)
+                .map(|gaps| {
+                    gaps.iter().all(|gap| {
+                        gap.as_object()
+                            .map(|gap| {
+                                let title =
+                                    gap.get("title").and_then(Value::as_str).unwrap_or_default();
+                                let page_id = gap
+                                    .get("page_id")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or_default();
+                                title.contains("NoDocs") || page_id.contains("NoDocs")
+                            })
+                            .unwrap_or(false)
+                    })
+                })
+                .unwrap_or(false)
+        }),
+        "planner-queue endpoint gaps should stay anchored to the injected no-doc target"
+    );
+    assert_studio_json_snapshot("docs_planner_queue_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn docs_planner_rank_endpoint_returns_priority_sorted_gaps() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -479,6 +1238,125 @@ async fn docs_planner_rank_endpoint_returns_priority_sorted_gaps() -> TestResult
         request_json(router, "/api/docs/planner-rank?repo=gateway-sync&limit=4").await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("docs_planner_rank_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_planner_rank_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        repo_dir.join("Controllers").join("NoDocs.mo"),
+        "within Projectionica.Controllers;\nmodel NoDocs\nend NoDocs;\n",
+    )?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-rank]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/planner-rank?repo=modelica-gateway-rank&gap_kind=symbol_reference_without_documentation&page_kind=reference&limit=4",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let hits = payload
+        .get("hits")
+        .and_then(Value::as_array)
+        .ok_or("planner-rank payload should include a hits array")?;
+    assert!(
+        !hits.is_empty(),
+        "planner-rank endpoint should return at least one ranked gap hit"
+    );
+    assert!(
+        hits.len() <= 4,
+        "planner-rank endpoint should honor the configured hit limit"
+    );
+    assert!(
+        hits.iter().all(|hit| {
+            hit.get("reasons")
+                .and_then(Value::as_array)
+                .map(|reasons| !reasons.is_empty())
+                .unwrap_or(false)
+        }),
+        "planner-rank endpoint should keep deterministic score explanations"
+    );
+    assert!(
+        hits.iter().all(|hit| {
+            hit.get("gap")
+                .and_then(Value::as_object)
+                .map(|gap| {
+                    let title = gap.get("title").and_then(Value::as_str).unwrap_or_default();
+                    let page_id = gap.get("page_id").and_then(Value::as_str).unwrap_or_default();
+                    title.contains("NoDocs") || page_id.contains("NoDocs")
+                })
+                .unwrap_or(false)
+        }),
+        "planner-rank endpoint hits should stay anchored to the injected no-doc target"
+    );
+    assert!(
+        hits.windows(2).all(|window| {
+            let left = &window[0];
+            let right = &window[1];
+            (
+                std::cmp::Reverse(
+                    left.get("priority_score")
+                        .and_then(Value::as_i64)
+                        .unwrap_or_default(),
+                ),
+                left.get("gap")
+                    .and_then(Value::as_object)
+                    .and_then(|gap| gap.get("kind"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+                left.get("gap")
+                    .and_then(Value::as_object)
+                    .and_then(|gap| gap.get("title"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+                left.get("gap")
+                    .and_then(Value::as_object)
+                    .and_then(|gap| gap.get("gap_id"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            ) <= (
+                std::cmp::Reverse(
+                    right
+                        .get("priority_score")
+                        .and_then(Value::as_i64)
+                        .unwrap_or_default(),
+                ),
+                right
+                    .get("gap")
+                    .and_then(Value::as_object)
+                    .and_then(|gap| gap.get("kind"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+                right
+                    .get("gap")
+                    .and_then(Value::as_object)
+                    .and_then(|gap| gap.get("title"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+                right
+                    .get("gap")
+                    .and_then(Value::as_object)
+                    .and_then(|gap| gap.get("gap_id"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            )
+        }),
+        "planner-rank endpoint hits should stay in deterministic priority order"
+    );
+    assert_studio_json_snapshot("docs_planner_rank_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -510,6 +1388,112 @@ async fn docs_planner_workset_endpoint_returns_opened_gap_batch() -> TestResult 
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_planner_workset_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        repo_dir.join("Controllers").join("NoDocs.mo"),
+        "within Projectionica.Controllers;\nmodel NoDocs\nend NoDocs;\n",
+    )?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-workset]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/planner-workset?repo=modelica-gateway-workset&gap_kind=symbol_reference_without_documentation&page_kind=reference&per_kind_limit=3&limit=4&family_kind=how_to&related_limit=3&family_limit=3",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let items = payload
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("planner-workset payload should include an items array")?;
+    let ranked_hits = payload
+        .get("ranked_hits")
+        .and_then(Value::as_array)
+        .ok_or("planner-workset payload should include a ranked_hits array")?;
+    let queue = payload
+        .get("queue")
+        .and_then(Value::as_object)
+        .ok_or("planner-workset payload should include a queue object")?;
+    let queue_groups = queue
+        .get("groups")
+        .and_then(Value::as_array)
+        .ok_or("planner-workset payload should include queue.groups")?;
+    let total_gap_count = queue
+        .get("total_gap_count")
+        .and_then(Value::as_u64)
+        .ok_or("planner-workset payload should include queue.total_gap_count")?;
+    let groups = payload
+        .get("groups")
+        .and_then(Value::as_array)
+        .ok_or("planner-workset payload should include groups")?;
+
+    assert!(
+        !items.is_empty(),
+        "planner-workset endpoint should select at least one Modelica workset item"
+    );
+    assert_eq!(
+        items.len(),
+        ranked_hits.len(),
+        "planner-workset endpoint should reopen every ranked hit into one item"
+    );
+    assert!(
+        items.len() <= 4,
+        "planner-workset endpoint should honor the ranked-hit limit"
+    );
+    assert_eq!(
+        total_gap_count,
+        queue_groups
+            .iter()
+            .map(|group| {
+                group.get("count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default()
+            })
+            .sum::<u64>(),
+        "planner-workset queue total should match grouped counts"
+    );
+    assert_eq!(
+        groups
+            .iter()
+            .map(|group| {
+                group.get("selected_count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default()
+            })
+            .sum::<u64>() as usize,
+        items.len(),
+        "planner-workset grouped selected counts should match opened items"
+    );
+    assert!(
+        items.iter().all(|item| {
+            item.get("gap")
+                .and_then(Value::as_object)
+                .map(|gap| {
+                    let title = gap.get("title").and_then(Value::as_str).unwrap_or_default();
+                    let page_id = gap.get("page_id").and_then(Value::as_str).unwrap_or_default();
+                    title.contains("NoDocs") || page_id.contains("NoDocs")
+                })
+                .unwrap_or(false)
+        }),
+        "planner-workset endpoint items should stay anchored to the injected no-doc target"
+    );
+    assert_studio_json_snapshot("docs_planner_workset_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn docs_search_endpoint_returns_projection_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -535,6 +1519,61 @@ async fn docs_search_endpoint_returns_projection_payload() -> TestResult {
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("docs_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_search_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-search]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/search?repo=modelica-gateway-search&query=Projectionica.Controllers&kind=reference&limit=3",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let pages = payload
+        .get("pages")
+        .and_then(Value::as_array)
+        .ok_or("docs-search payload should include a pages array")?;
+    assert!(
+        !pages.is_empty(),
+        "docs-search endpoint should return at least one projected page"
+    );
+    assert!(
+        pages.len() <= 3,
+        "docs-search endpoint should honor the configured hit limit"
+    );
+    assert!(
+        pages.iter().all(|page| {
+            page.as_object()
+                .map(|page| {
+                    let title = page.get("title").and_then(Value::as_str).unwrap_or_default();
+                    let page_id = page
+                        .get("page_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    title.contains("Projectionica.Controllers")
+                        || page_id.contains("Projectionica.Controllers")
+                })
+                .unwrap_or(false)
+        }),
+        "docs-search endpoint pages should stay anchored to the requested Modelica controller path"
+    );
+    assert_studio_json_snapshot("docs_search_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -566,6 +1605,96 @@ async fn docs_retrieval_endpoint_returns_mixed_hits() -> TestResult {
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_retrieval_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-retrieval]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/retrieval?repo=modelica-gateway-retrieval&query=Projectionica.Controllers&kind=reference&limit=4",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let hits = payload
+        .get("hits")
+        .and_then(Value::as_array)
+        .ok_or("docs-retrieval payload should include a hits array")?;
+    assert!(
+        !hits.is_empty(),
+        "docs-retrieval endpoint should return at least one mixed retrieval hit"
+    );
+    assert!(
+        hits.len() <= 4,
+        "docs-retrieval endpoint should honor the configured hit limit"
+    );
+    assert!(
+        hits.iter().any(|hit| {
+            hit.get("kind")
+                .and_then(Value::as_str)
+                .is_some_and(|kind| kind == "page")
+        }),
+        "docs-retrieval endpoint should preserve page hits over the external Modelica path"
+    );
+    assert!(
+        hits.iter().any(|hit| {
+            hit.get("kind")
+                .and_then(Value::as_str)
+                .is_some_and(|kind| kind == "page_index_node")
+        }),
+        "docs-retrieval endpoint should preserve page-index node hits over the external Modelica path"
+    );
+    assert!(
+        hits.iter().all(|hit| {
+            let page_anchor = hit
+                .get("page")
+                .and_then(Value::as_object)
+                .map(|page| {
+                    let title = page.get("title").and_then(Value::as_str).unwrap_or_default();
+                    let page_id = page
+                        .get("page_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    title.contains("Projectionica.Controllers")
+                        || page_id.contains("Projectionica.Controllers")
+                })
+                .unwrap_or(false);
+            let node_anchor = hit
+                .get("node")
+                .and_then(Value::as_object)
+                .map(|node| {
+                    let node_title = node
+                        .get("node_title")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    let page_title = node
+                        .get("page_title")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    node_title.contains("Projectionica.Controllers")
+                        || page_title.contains("Projectionica.Controllers")
+                })
+                .unwrap_or(true);
+            page_anchor && node_anchor
+        }),
+        "docs-retrieval endpoint hits should stay anchored to the requested Modelica controller path"
+    );
+    assert_studio_json_snapshot("docs_retrieval_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn docs_retrieval_context_endpoint_returns_node_context_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -591,6 +1720,87 @@ async fn docs_retrieval_context_endpoint_returns_node_context_payload() -> TestR
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("docs_retrieval_context_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_retrieval_context_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-retrieval-context]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-retrieval-context".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+            )
+        });
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: "modelica-gateway-retrieval-context".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.page_id == page.page_id)
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for the selected page"));
+    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `Anchors`"));
+    let encoded_node_id = node_id.replace('#', "%23");
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/retrieval-context?repo=modelica-gateway-retrieval-context&page_id={}&node_id={}&related_limit=3",
+            page.page_id, encoded_node_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("center")
+            .and_then(Value::as_object)
+            .and_then(|center| center.get("page"))
+            .and_then(Value::as_object)
+            .and_then(|page| page.get("page_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|page_id| page_id == page.page_id),
+        "docs-retrieval-context endpoint should stay anchored to the requested Modelica projected page"
+    );
+    assert!(
+        payload.get("node_context").and_then(Value::as_object).is_some(),
+        "docs-retrieval-context endpoint should include node context when reopening a Modelica page-index node"
+    );
+    assert_studio_json_snapshot("docs_retrieval_context_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -622,6 +1832,102 @@ async fn docs_retrieval_hit_endpoint_returns_hit_payload() -> TestResult {
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_retrieval_hit_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-retrieval-hit]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-retrieval-hit".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+            )
+        });
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: "modelica-gateway-retrieval-hit".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.page_id == page.page_id)
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for the selected page"));
+    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `Anchors`"));
+    let encoded_node_id = node_id.replace('#', "%23");
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/retrieval-hit?repo=modelica-gateway-retrieval-hit&page_id={}&node_id={}",
+            page.page_id, encoded_node_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("hit")
+            .and_then(Value::as_object)
+            .and_then(|hit| hit.get("kind"))
+            .and_then(Value::as_str)
+            .is_some_and(|kind| kind == "page_index_node"),
+        "docs-retrieval-hit endpoint should reopen the requested Modelica page-index node as a node hit"
+    );
+    assert!(
+        payload
+            .get("hit")
+            .and_then(Value::as_object)
+            .and_then(|hit| hit.get("page"))
+            .and_then(Value::as_object)
+            .and_then(|page_value| page_value.get("page_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|page_id| page_id == page.page_id),
+        "docs-retrieval-hit endpoint should stay anchored to the requested Modelica projected page"
+    );
+    assert!(
+        payload
+            .get("hit")
+            .and_then(Value::as_object)
+            .and_then(|hit| hit.get("node"))
+            .and_then(Value::as_object)
+            .and_then(|node| node.get("node_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|returned_node_id| returned_node_id == node_id),
+        "docs-retrieval-hit endpoint should reopen the requested Modelica page-index node"
+    );
+    assert_studio_json_snapshot("docs_retrieval_hit_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn docs_page_endpoint_returns_projection_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -647,6 +1953,74 @@ async fn docs_page_endpoint_returns_projection_payload() -> TestResult {
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("docs_page_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_page_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-page]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-page".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+            )
+        });
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/page?repo=modelica-gateway-page&page_id={}",
+            page.page_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("page")
+            .and_then(Value::as_object)
+            .and_then(|page_value| page_value.get("page_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|page_id| page_id == page.page_id),
+        "docs-page endpoint should stay anchored to the requested Modelica projected page"
+    );
+    assert!(
+        payload
+            .get("page")
+            .and_then(Value::as_object)
+            .and_then(|page_value| page_value.get("title"))
+            .and_then(Value::as_str)
+            .is_some_and(|title| title == "Projectionica.Controllers.PI"),
+        "docs-page endpoint should reopen the requested Modelica projected page title"
+    );
+    assert_studio_json_snapshot("docs_page_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -693,6 +2067,66 @@ async fn docs_family_context_endpoint_returns_family_context() -> TestResult {
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_family_context_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-family-context]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-family-context".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| page.kind == ProjectionPageKind::HowTo)
+        .unwrap_or_else(|| panic!("expected a projected how-to page"));
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/family-context?repo=modelica-gateway-family-context&page_id={}&per_kind_limit=2",
+            page.page_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("center_page")
+            .and_then(Value::as_object)
+            .and_then(|center| center.get("page_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|page_id| page_id == page.page_id),
+        "docs-family-context endpoint should stay anchored to the requested Modelica how-to page"
+    );
+    let families = payload
+        .get("families")
+        .and_then(Value::as_array)
+        .ok_or("docs-family-context payload should include a families array")?;
+    assert!(
+        !families.is_empty(),
+        "docs-family-context endpoint should return at least one related family over the external Modelica path"
+    );
+    assert_studio_json_snapshot("docs_family_context_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn docs_family_search_endpoint_returns_family_clusters() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -718,6 +2152,63 @@ async fn docs_family_search_endpoint_returns_family_clusters() -> TestResult {
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("docs_family_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_family_search_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-family-search]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/family-search?repo=modelica-gateway-family-search&query=Projectionica.Controllers&kind=reference&limit=3&per_kind_limit=2",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let hits = payload
+        .get("hits")
+        .and_then(Value::as_array)
+        .ok_or("docs-family-search payload should include a hits array")?;
+    assert!(
+        !hits.is_empty(),
+        "docs-family-search endpoint should return at least one family-search hit over the external Modelica path"
+    );
+    assert!(
+        hits.len() <= 3,
+        "docs-family-search endpoint should honor the configured hit limit"
+    );
+    assert!(
+        hits.iter().all(|hit| {
+            hit.get("center_page")
+                .and_then(Value::as_object)
+                .map(|page| {
+                    let title = page.get("title").and_then(Value::as_str).unwrap_or_default();
+                    let page_id = page
+                        .get("page_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    title.contains("Projectionica.Controllers")
+                        || page_id.contains("Projectionica.Controllers")
+                })
+                .unwrap_or(false)
+        }),
+        "docs-family-search endpoint hits should stay anchored to the requested Modelica controller path"
+    );
+    assert_studio_json_snapshot("docs_family_search_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -761,6 +2252,73 @@ async fn docs_family_cluster_endpoint_returns_requested_cluster() -> TestResult 
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("docs_family_cluster_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_family_cluster_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-family-cluster]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-family-cluster".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference && page.title == "Projectionica.Controllers"
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a module-backed projected reference page titled `Projectionica.Controllers`"
+            )
+        });
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/family-cluster?repo=modelica-gateway-family-cluster&page_id={}&kind=how_to&limit=2",
+            page.page_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("center_page")
+            .and_then(Value::as_object)
+            .and_then(|center| center.get("page_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|page_id| page_id == page.page_id),
+        "docs-family-cluster endpoint should stay anchored to the requested Modelica reference page"
+    );
+    assert!(
+        payload
+            .get("family")
+            .and_then(Value::as_object)
+            .and_then(|family| family.get("kind"))
+            .and_then(Value::as_str)
+            .is_some_and(|kind| kind == "how_to"),
+        "docs-family-cluster endpoint should reopen the requested Modelica how-to family cluster"
+    );
+    assert_studio_json_snapshot("docs_family_cluster_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -830,6 +2388,96 @@ async fn docs_navigation_endpoint_returns_navigation_bundle() -> TestResult {
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_navigation_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-navigation]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-navigation".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+            )
+        });
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: "modelica-gateway-navigation".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.page_id == page.page_id)
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for the selected page"));
+    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `Anchors`"));
+    let encoded_node_id = node_id.replace('#', "%23");
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/docs/navigation?repo=modelica-gateway-navigation&page_id={}&node_id={}&family_kind=how_to&related_limit=3&family_limit=2",
+            page.page_id, encoded_node_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("center")
+            .and_then(Value::as_object)
+            .and_then(|center| center.get("page"))
+            .and_then(Value::as_object)
+            .and_then(|page_value| page_value.get("page_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|page_id| page_id == page.page_id),
+        "docs-navigation endpoint should stay anchored to the requested Modelica projected page"
+    );
+    assert!(
+        payload
+            .get("family_cluster")
+            .and_then(Value::as_object)
+            .and_then(|family| family.get("kind"))
+            .and_then(Value::as_str)
+            .is_some_and(|kind| kind == "how_to"),
+        "docs-navigation endpoint should reopen the requested Modelica how-to family cluster"
+    );
+    assert!(
+        payload.get("node_context").and_then(Value::as_object).is_some(),
+        "docs-navigation endpoint should include node context over the external Modelica path"
+    );
+    assert_studio_json_snapshot("docs_navigation_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn docs_navigation_search_endpoint_returns_navigation_hits() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -855,6 +2503,67 @@ async fn docs_navigation_search_endpoint_returns_navigation_hits() -> TestResult
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("docs_navigation_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn docs_navigation_search_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-navigation-search]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/docs/navigation-search?repo=modelica-gateway-navigation-search&query=Projectionica.Controllers&kind=reference&family_kind=how_to&limit=2&related_limit=3&family_limit=2",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let hits = payload
+        .get("hits")
+        .and_then(Value::as_array)
+        .ok_or("docs-navigation-search payload should include a hits array")?;
+    assert!(
+        !hits.is_empty(),
+        "docs-navigation-search endpoint should return at least one navigation hit over the external Modelica path"
+    );
+    assert!(
+        hits.len() <= 2,
+        "docs-navigation-search endpoint should honor the configured hit limit"
+    );
+    assert!(
+        hits.iter().all(|hit| {
+            hit.get("navigation")
+                .and_then(Value::as_object)
+                .and_then(|navigation| navigation.get("center"))
+                .and_then(Value::as_object)
+                .and_then(|center| center.get("page"))
+                .and_then(Value::as_object)
+                .map(|page| {
+                    let title = page.get("title").and_then(Value::as_str).unwrap_or_default();
+                    let page_id = page
+                        .get("page_id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    title.contains("Projectionica.Controllers")
+                        || page_id.contains("Projectionica.Controllers")
+                })
+                .unwrap_or(false)
+        }),
+        "docs-navigation-search endpoint hits should stay anchored to the requested Modelica controller path"
+    );
+    assert_studio_json_snapshot("docs_navigation_search_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -886,6 +2595,65 @@ async fn repo_projected_page_endpoint_returns_projection_payload() -> TestResult
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_endpoint_executes_over_external_modelica_plugin_path() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-projected-page]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-projected-page".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+            )
+        });
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/repo/projected-page?repo=modelica-gateway-projected-page&page_id={}",
+            page.page_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("page")
+            .and_then(Value::as_object)
+            .and_then(|page_value| page_value.get("page_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|page_id| page_id == page.page_id),
+        "repo-projected-page endpoint should stay anchored to the requested Modelica projected page"
+    );
+    assert_studio_json_snapshot("repo_projected_page_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_projected_page_index_tree_endpoint_returns_tree_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -914,6 +2682,75 @@ async fn repo_projected_page_index_tree_endpoint_returns_tree_payload() -> TestR
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_index_tree_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-projected-index-tree]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-projected-index-tree".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+            )
+        });
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/repo/projected-page-index-tree?repo=modelica-gateway-projected-index-tree&page_id={}",
+            page.page_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("tree")
+            .and_then(Value::as_object)
+            .and_then(|tree| tree.get("page_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|page_id| page_id == page.page_id),
+        "repo-projected-page-index-tree endpoint should stay anchored to the requested Modelica projected page"
+    );
+    assert!(
+        payload
+            .get("tree")
+            .and_then(Value::as_object)
+            .and_then(|tree| tree.get("roots"))
+            .and_then(Value::as_array)
+            .is_some_and(|roots| !roots.is_empty()),
+        "repo-projected-page-index-tree endpoint should reopen a non-empty tree over the external Modelica path"
+    );
+    assert_studio_json_snapshot("repo_projected_page_index_tree_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_projected_page_index_node_endpoint_returns_node_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -939,6 +2776,81 @@ async fn repo_projected_page_index_node_endpoint_returns_node_payload() -> TestR
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_projected_page_index_node_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_index_node_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-projected-index-node]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-projected-index-node".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+            )
+        });
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: "modelica-gateway-projected-index-node".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.page_id == page.page_id)
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for the selected page"));
+    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `Anchors`"));
+    let encoded_node_id = node_id.replace('#', "%23");
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/repo/projected-page-index-node?repo=modelica-gateway-projected-index-node&page_id={}&node_id={}",
+            page.page_id, encoded_node_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("hit")
+            .and_then(Value::as_object)
+            .and_then(|hit| hit.get("node_id"))
+            .and_then(Value::as_str)
+            .is_some_and(|returned_node_id| returned_node_id == node_id),
+        "repo-projected-page-index-node endpoint should reopen the requested Modelica page-index node"
+    );
+    assert_studio_json_snapshot("repo_projected_page_index_node_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -973,6 +2885,52 @@ async fn repo_projected_page_index_tree_search_endpoint_returns_hit_payload() ->
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_index_tree_search_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(
+        temp.path(),
+        &repo_dir,
+        "modelica-gateway-projected-index-tree-search",
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/projected-page-index-tree-search?repo=modelica-gateway-projected-index-tree-search&query=anchors&kind=reference&limit=3",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let hits = payload
+        .get("hits")
+        .and_then(Value::as_array)
+        .ok_or("repo-projected-page-index-tree-search payload should include a hits array")?;
+    assert!(
+        !hits.is_empty(),
+        "repo-projected-page-index-tree-search endpoint should return at least one section hit over the external Modelica path"
+    );
+    assert!(
+        hits.len() <= 3,
+        "repo-projected-page-index-tree-search endpoint should honor the configured hit limit"
+    );
+    assert!(
+        hits.iter().any(|hit| {
+            hit.get("page_title")
+                .and_then(Value::as_str)
+                .is_some_and(|title| title.contains("Projectionica.Controllers"))
+        }),
+        "repo-projected-page-index-tree-search endpoint should keep section hits anchored to the requested Modelica controller family"
+    );
+    assert_studio_json_snapshot(
+        "repo_projected_page_index_tree_search_endpoint_modelica_json",
+        payload,
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_projected_page_search_endpoint_returns_projection_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -998,6 +2956,49 @@ async fn repo_projected_page_search_endpoint_returns_projection_payload() -> Tes
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_projected_page_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_search_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(
+        temp.path(),
+        &repo_dir,
+        "modelica-gateway-projected-page-search",
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/projected-page-search?repo=modelica-gateway-projected-page-search&query=Projectionica.Controllers&kind=reference&limit=3",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let pages = payload
+        .get("pages")
+        .and_then(Value::as_array)
+        .ok_or("repo-projected-page-search payload should include a pages array")?;
+    assert!(
+        !pages.is_empty(),
+        "repo-projected-page-search endpoint should return at least one projected page over the external Modelica path"
+    );
+    assert!(
+        pages.len() <= 3,
+        "repo-projected-page-search endpoint should honor the configured page limit"
+    );
+    assert!(
+        pages.iter().any(|page| {
+            page.get("title")
+                .and_then(Value::as_str)
+                .is_some_and(|title| title.contains("Projectionica.Controllers"))
+        }),
+        "repo-projected-page-search endpoint should keep page hits anchored to the requested Modelica controller path"
+    );
+    assert_studio_json_snapshot("repo_projected_page_search_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -1029,6 +3030,51 @@ async fn repo_projected_retrieval_endpoint_returns_mixed_hit_payload() -> TestRe
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_retrieval_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(
+        temp.path(),
+        &repo_dir,
+        "modelica-gateway-projected-retrieval",
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/projected-retrieval?repo=modelica-gateway-projected-retrieval&query=Projectionica.Controllers&kind=reference&limit=4",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let hits = payload
+        .get("hits")
+        .and_then(Value::as_array)
+        .ok_or("repo-projected-retrieval payload should include a hits array")?;
+    assert!(
+        !hits.is_empty(),
+        "repo-projected-retrieval endpoint should return at least one mixed hit over the external Modelica path"
+    );
+    assert!(
+        hits.len() <= 4,
+        "repo-projected-retrieval endpoint should honor the configured hit limit"
+    );
+    assert!(
+        hits.iter().any(|hit| {
+            hit.get("page")
+                .and_then(Value::as_object)
+                .and_then(|page| page.get("title"))
+                .and_then(Value::as_str)
+                .is_some_and(|title| title.contains("Projectionica.Controllers"))
+        }),
+        "repo-projected-retrieval endpoint should keep mixed hits anchored to the requested Modelica controller path"
+    );
+    assert_studio_json_snapshot("repo_projected_retrieval_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_projected_retrieval_hit_endpoint_returns_page_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1057,6 +3103,81 @@ async fn repo_projected_retrieval_hit_endpoint_returns_page_payload() -> TestRes
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_retrieval_hit_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-projected-retrieval-hit]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-projected-retrieval-hit".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+            )
+        });
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: "modelica-gateway-projected-retrieval-hit".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.page_id == page.page_id)
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for the selected page"));
+    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `Anchors`"));
+    let encoded_node_id = node_id.replace('#', "%23");
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/repo/projected-retrieval-hit?repo=modelica-gateway-projected-retrieval-hit&page_id={}&node_id={}",
+            page.page_id, encoded_node_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload
+            .get("hit")
+            .and_then(Value::as_object)
+            .and_then(|hit| hit.get("kind"))
+            .and_then(Value::as_str)
+            .is_some_and(|kind| kind == "page_index_node"),
+        "repo-projected-retrieval-hit endpoint should reopen the requested Modelica page-index node as a node hit"
+    );
+    assert_studio_json_snapshot("repo_projected_retrieval_hit_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_projected_retrieval_context_endpoint_returns_node_context_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1082,6 +3203,76 @@ async fn repo_projected_retrieval_context_endpoint_returns_node_context_payload(
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_projected_retrieval_context_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_retrieval_context_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    fs::write(
+        temp.path().join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.modelica-gateway-projected-retrieval-context]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: "modelica-gateway-projected-retrieval-context".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| {
+            page.kind == ProjectionPageKind::Reference
+                && page.title == "Projectionica.Controllers.PI"
+                && page.page_id.contains(":symbol:")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "expected a symbol-backed projected reference page titled `Projectionica.Controllers.PI`"
+            )
+        });
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: "modelica-gateway-projected-retrieval-context".to_string(),
+        },
+        None,
+        temp.path(),
+    )?;
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.page_id == page.page_id)
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for the selected page"));
+    let node_id = find_node_id(tree.roots.as_slice(), "Anchors")
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `Anchors`"));
+    let encoded_node_id = node_id.replace('#', "%23");
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/repo/projected-retrieval-context?repo=modelica-gateway-projected-retrieval-context&page_id={}&node_id={}&related_limit=3",
+            page.page_id, encoded_node_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        payload.get("node_context").and_then(Value::as_object).is_some(),
+        "repo-projected-retrieval-context endpoint should include node context when reopening a Modelica page-index node"
+    );
+    assert_studio_json_snapshot("repo_projected_retrieval_context_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -1128,6 +3319,49 @@ async fn repo_projected_page_family_context_endpoint_returns_family_clusters() -
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_family_context_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(
+        temp.path(),
+        &repo_dir,
+        "modelica-gateway-projected-family-context",
+    )?;
+    let page_id = projected_page_id_for_title(
+        temp.path(),
+        "modelica-gateway-projected-family-context",
+        ProjectionPageKind::HowTo,
+        "Step",
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/repo/projected-page-family-context?repo=modelica-gateway-projected-family-context&page_id={}&per_kind_limit=2",
+            page_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload
+            .get("center_page")
+            .and_then(Value::as_object)
+            .and_then(|page| page.get("page_id"))
+            .and_then(Value::as_str),
+        Some(page_id.as_str())
+    );
+    assert_studio_json_snapshot(
+        "repo_projected_page_family_context_endpoint_modelica_json",
+        payload,
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_projected_page_family_search_endpoint_returns_family_clusters() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1153,6 +3387,54 @@ async fn repo_projected_page_family_search_endpoint_returns_family_clusters() ->
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_projected_page_family_search_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_family_search_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(
+        temp.path(),
+        &repo_dir,
+        "modelica-gateway-projected-family-search",
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/projected-page-family-search?repo=modelica-gateway-projected-family-search&query=Projectionica.Controllers&kind=reference&limit=3&per_kind_limit=2",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let hits = payload
+        .get("hits")
+        .and_then(Value::as_array)
+        .ok_or("repo-projected-page-family-search payload should include a hits array")?;
+    assert!(
+        !hits.is_empty(),
+        "repo-projected-page-family-search endpoint should return at least one family hit over the external Modelica path"
+    );
+    assert!(
+        hits.len() <= 3,
+        "repo-projected-page-family-search endpoint should honor the configured hit limit"
+    );
+    assert!(
+        hits.iter().any(|hit| {
+            hit.get("center_page")
+                .and_then(Value::as_object)
+                .and_then(|page| page.get("title"))
+                .and_then(Value::as_str)
+                .is_some_and(|title| title.contains("Projectionica.Controllers"))
+        }),
+        "repo-projected-page-family-search endpoint should keep family hits anchored to the requested Modelica controller path"
+    );
+    assert_studio_json_snapshot(
+        "repo_projected_page_family_search_endpoint_modelica_json",
+        payload,
+    );
     Ok(())
 }
 
@@ -1204,6 +3486,49 @@ async fn repo_projected_page_family_cluster_endpoint_returns_family_payload() ->
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_projected_page_family_cluster_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_family_cluster_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(
+        temp.path(),
+        &repo_dir,
+        "modelica-gateway-projected-family-cluster",
+    )?;
+    let page_id = projected_page_id_for_title(
+        temp.path(),
+        "modelica-gateway-projected-family-cluster",
+        ProjectionPageKind::Reference,
+        "Projectionica.Controllers",
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/repo/projected-page-family-cluster?repo=modelica-gateway-projected-family-cluster&page_id={}&kind=how_to&limit=2",
+            page_id
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload
+            .get("center_page")
+            .and_then(Value::as_object)
+            .and_then(|page| page.get("page_id"))
+            .and_then(Value::as_str),
+        Some(page_id.as_str())
+    );
+    assert_studio_json_snapshot(
+        "repo_projected_page_family_cluster_endpoint_modelica_json",
+        payload,
+    );
     Ok(())
 }
 
@@ -1273,6 +3598,49 @@ async fn repo_projected_page_navigation_endpoint_returns_navigation_bundle() -> 
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_navigation_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(
+        temp.path(),
+        &repo_dir,
+        "modelica-gateway-projected-navigation",
+    )?;
+    let (page_id, node_id) = projected_page_and_node_id_for_title(
+        temp.path(),
+        "modelica-gateway-projected-navigation",
+        "Projectionica.Controllers.PI",
+        "Anchors",
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        &format!(
+            "/api/repo/projected-page-navigation?repo=modelica-gateway-projected-navigation&page_id={}&node_id={}&family_kind=how_to&related_limit=3&family_limit=2",
+            page_id,
+            node_id.replace('#', "%23")
+        ),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload
+            .get("center")
+            .and_then(Value::as_object)
+            .and_then(|center| center.get("page"))
+            .and_then(Value::as_object)
+            .and_then(|page| page.get("page_id"))
+            .and_then(Value::as_str),
+        Some(page_id.as_str())
+    );
+    assert_studio_json_snapshot("repo_projected_page_navigation_endpoint_modelica_json", payload);
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_projected_page_navigation_search_endpoint_returns_navigation_hits() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1304,6 +3672,58 @@ async fn repo_projected_page_navigation_search_endpoint_returns_navigation_hits(
     Ok(())
 }
 
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_navigation_search_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(
+        temp.path(),
+        &repo_dir,
+        "modelica-gateway-projected-navigation-search",
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/projected-page-navigation-search?repo=modelica-gateway-projected-navigation-search&query=Projectionica.Controllers&kind=reference&family_kind=how_to&limit=2&related_limit=3&family_limit=2",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let hits = payload
+        .get("hits")
+        .and_then(Value::as_array)
+        .ok_or("repo-projected-page-navigation-search payload should include a hits array")?;
+    assert!(
+        !hits.is_empty(),
+        "repo-projected-page-navigation-search endpoint should return at least one navigation hit over the external Modelica path"
+    );
+    assert!(
+        hits.len() <= 2,
+        "repo-projected-page-navigation-search endpoint should honor the configured hit limit"
+    );
+    assert!(
+        hits.iter().any(|hit| {
+            hit.get("navigation")
+                .and_then(Value::as_object)
+                .and_then(|navigation| navigation.get("center"))
+                .and_then(Value::as_object)
+                .and_then(|center| center.get("page"))
+                .and_then(Value::as_object)
+                .and_then(|page| page.get("title"))
+                .and_then(Value::as_str)
+                .is_some_and(|title| title.contains("Projectionica.Controllers"))
+        }),
+        "repo-projected-page-navigation-search endpoint should keep navigation hits anchored to the requested Modelica controller path"
+    );
+    assert_studio_json_snapshot(
+        "repo_projected_page_navigation_search_endpoint_modelica_json",
+        payload,
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn repo_projected_page_index_trees_endpoint_returns_tree_payload() -> TestResult {
     let temp = tempfile::tempdir()?;
@@ -1329,6 +3749,55 @@ async fn repo_projected_page_index_trees_endpoint_returns_tree_payload() -> Test
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert_studio_json_snapshot("repo_projected_page_index_trees_endpoint_json", payload);
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+#[tokio::test]
+async fn repo_projected_page_index_trees_endpoint_executes_over_external_modelica_plugin_path(
+) -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let repo_dir = create_local_modelica_repo(temp.path(), "Projectionica")?;
+    write_modelica_repo_config(
+        temp.path(),
+        &repo_dir,
+        "modelica-gateway-projected-index-trees",
+    )?;
+    let selected_page_id = projected_page_id_for_title(
+        temp.path(),
+        "modelica-gateway-projected-index-trees",
+        ProjectionPageKind::Reference,
+        "Projectionica.Controllers.PI",
+    )?;
+    let router = studio_router(gateway_state_for_project(temp.path()));
+
+    let (status, payload) = request_json(
+        router,
+        "/api/repo/projected-page-index-trees?repo=modelica-gateway-projected-index-trees",
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload.get("repo_id").and_then(Value::as_str),
+        Some("modelica-gateway-projected-index-trees")
+    );
+    let trees = payload
+        .get("trees")
+        .and_then(Value::as_array)
+        .ok_or("repo-projected-page-index-trees payload should include a trees array")?;
+    assert!(
+        !trees.is_empty(),
+        "repo-projected-page-index-trees endpoint should return at least one projected tree over the external Modelica path"
+    );
+    assert!(
+        trees.iter().any(|tree| {
+            tree.get("page_id")
+                .and_then(Value::as_str)
+                .is_some_and(|page_id| page_id == selected_page_id)
+        }),
+        "repo-projected-page-index-trees endpoint should include the projected tree for the selected Modelica symbol page"
+    );
+    assert_studio_json_snapshot("repo_projected_page_index_trees_endpoint_modelica_json", payload);
     Ok(())
 }
 
@@ -1931,6 +4400,153 @@ version = "0.1.0"
     Ok(repo_dir)
 }
 
+fn create_local_modelica_repo(
+    base: &Path,
+    package_name: &str,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let repo_dir = base.join(package_name.to_ascii_lowercase());
+    fs::create_dir_all(repo_dir.join("Controllers").join("Examples"))?;
+    fs::create_dir_all(
+        repo_dir
+            .join("Controllers")
+            .join("UsersGuide")
+            .join("Tutorial"),
+    )?;
+    fs::write(repo_dir.join("README.md"), format!("# {package_name}\n"))?;
+    fs::write(repo_dir.join("package.order"), "Controllers\n")?;
+    fs::write(
+        repo_dir.join("package.mo"),
+        format!(
+            "within;\npackage {package_name}\n  annotation(Documentation(info = \"<html>{package_name} package docs.</html>\"));\nend {package_name};\n",
+        ),
+    )?;
+    fs::write(
+        repo_dir.join("Controllers").join("package.mo"),
+        format!("within {package_name};\npackage Controllers\nend Controllers;\n"),
+    )?;
+    fs::write(
+        repo_dir.join("Controllers").join("PI.mo"),
+        format!(
+            "within {package_name}.Controllers;\nmodel PI\n  annotation(Documentation(info = \"<html>PI controller docs.</html>\"));\nend PI;\n",
+        ),
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("Examples")
+            .join("package.order"),
+        "Step\n",
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("Examples")
+            .join("Step.mo"),
+        format!("within {package_name}.Controllers.Examples;\nmodel Step\nend Step;\n"),
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("UsersGuide")
+            .join("package.order"),
+        "Tutorial\n",
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("UsersGuide")
+            .join("package.mo"),
+        format!("within {package_name}.Controllers;\npackage UsersGuide\nend UsersGuide;\n"),
+    )?;
+    fs::write(
+        repo_dir
+            .join("Controllers")
+            .join("UsersGuide")
+            .join("Tutorial")
+            .join("FirstSteps.mo"),
+        format!(
+            "within {package_name}.Controllers.UsersGuide.Tutorial;\nmodel FirstSteps\n  annotation(Documentation(info = \"<html>First steps guide.</html>\"));\nend FirstSteps;\n",
+        ),
+    )?;
+
+    let repository = Repository::init(&repo_dir)?;
+    repository.remote(
+        "origin",
+        &format!(
+            "https://example.invalid/xiuxian-wendao/{}.git",
+            package_name.to_ascii_lowercase()
+        ),
+    )?;
+    commit_all(&repository, "initial import")?;
+    Ok(repo_dir)
+}
+
+#[cfg(feature = "modelica")]
+fn write_modelica_repo_config(
+    base: &Path,
+    repo_dir: &Path,
+    repo_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    fs::write(
+        base.join("wendao.toml"),
+        format!(
+            r#"[link_graph.projects.{repo_id}]
+root = "{}"
+plugins = ["modelica"]
+"#,
+            repo_dir.display()
+        ),
+    )?;
+    Ok(())
+}
+
+#[cfg(feature = "modelica")]
+fn projected_page_id_for_title(
+    base: &Path,
+    repo_id: &str,
+    kind: ProjectionPageKind,
+    title: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let pages = repo_projected_pages_from_config(
+        &RepoProjectedPagesQuery {
+            repo_id: repo_id.to_string(),
+        },
+        None,
+        base,
+    )?;
+    let page = pages
+        .pages
+        .iter()
+        .find(|page| page.kind == kind && page.title == title)
+        .unwrap_or_else(|| panic!("expected a projected `{title}` page in repo `{repo_id}`"));
+    Ok(page.page_id.clone())
+}
+
+#[cfg(feature = "modelica")]
+fn projected_page_and_node_id_for_title(
+    base: &Path,
+    repo_id: &str,
+    title: &str,
+    node_title: &str,
+) -> Result<(String, String), Box<dyn std::error::Error>> {
+    let page_id = projected_page_id_for_title(base, repo_id, ProjectionPageKind::Reference, title)?;
+    let trees = repo_projected_page_index_trees_from_config(
+        &RepoProjectedPageIndexTreesQuery {
+            repo_id: repo_id.to_string(),
+        },
+        None,
+        base,
+    )?;
+    let tree = trees
+        .trees
+        .iter()
+        .find(|tree| tree.page_id == page_id)
+        .unwrap_or_else(|| panic!("expected a projected page-index tree for `{title}`"));
+    let node_id = find_node_id(tree.roots.as_slice(), node_title)
+        .unwrap_or_else(|| panic!("expected a projected page-index node titled `{node_title}`"));
+    Ok((page_id, node_id))
+}
+
 fn commit_all(repository: &Repository, message: &str) -> Result<(), git2::Error> {
     let mut index = repository.index()?;
     index.add_all(["*"], IndexAddOption::DEFAULT, None)?;
@@ -1975,6 +4591,16 @@ fn redact_repo_sync_payload(value: &mut Value) {
             Value::Null => Value::Null,
             _ => Value::String("[last-fetched-at]".to_string()),
         };
+    }
+}
+
+fn redact_repo_index_payload(value: &mut Value) {
+    if let Some(repos) = value.get_mut("repos").and_then(Value::as_array_mut) {
+        for repo in repos {
+            if let Some(updated_at) = repo.get_mut("updatedAt") {
+                *updated_at = Value::String("[updated-at]".to_string());
+            }
+        }
     }
 }
 

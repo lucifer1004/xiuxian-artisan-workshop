@@ -64,11 +64,10 @@ def _generate_tool_schema(
         type_hints = {n: p.annotation for n, p in sig.parameters.items()}
 
     # Lazy import Settings to avoid circular dependency
-    from ..config.paths import ConfigPaths
     from ..config.settings import Settings
 
     # Build a set of types to exclude from schema generation
-    _INJECTED_TYPES_SET = {Settings, ConfigPaths}
+    _INJECTED_TYPES_SET = {Settings}
 
     fields: dict[str, tuple[Any, Any]] = {}
 

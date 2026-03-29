@@ -15,8 +15,8 @@ from memory_ci_gate_quality_session import (
     assert_trace_reconstruction_quality,
 )
 from memory_ci_gate_quality_warnings import (
-    assert_mcp_waiting_warning_budget,
     assert_memory_stream_warning_budget,
+    assert_tool_waiting_warning_budget,
 )
 
 __all__ = [
@@ -24,8 +24,8 @@ __all__ = [
     "assert_cross_group_complex_quality",
     "assert_evolution_quality",
     "assert_evolution_slow_response_quality",
-    "assert_mcp_waiting_warning_budget",
     "assert_memory_stream_warning_budget",
+    "assert_tool_waiting_warning_budget",
     "assert_session_matrix_quality",
     "assert_trace_reconstruction_quality",
     "load_json",

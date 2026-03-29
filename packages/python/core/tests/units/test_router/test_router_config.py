@@ -198,7 +198,8 @@ def test_resolve_router_schema_path_uses_prj_config(monkeypatch, tmp_path):
         lambda key, default=None: "schemas/custom.router.schema.json",
     )
     monkeypatch.setattr(
-        "xiuxian_core.router.config.get_settings", lambda: type("S", (), {"conf_dir": str(tmp_path)})()
+        "xiuxian_core.router.config.get_settings",
+        lambda: type("S", (), {"conf_dir": str(tmp_path)})(),
     )
 
     path = resolve_router_schema_path()

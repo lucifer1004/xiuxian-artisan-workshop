@@ -51,7 +51,7 @@ rsync -av --delete --delete-excluded \
   --exclude='.env.development' \
   --exclude='.devenv*' \
   --exclude='devenv.local.nix' \
-  --exclude='.mcp.json' \
+  --exclude='.tool.json' \
   --exclude='.run' \
   --exclude='cog.toml' \
   --exclude='.conform.yaml' \

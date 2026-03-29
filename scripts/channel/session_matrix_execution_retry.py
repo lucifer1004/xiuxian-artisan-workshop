@@ -11,7 +11,7 @@ RESTART_NOISE_MARKERS = (
     "Telegram webhook listening on ",
     "Webhook dedup backend:",
     "Session commands: /session [json]",
-    "mcp pool client connect attempt started",
+    "tool runtime pool client connect attempt started",
 )
 
 

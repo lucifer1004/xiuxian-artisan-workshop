@@ -1,12 +1,4 @@
-"""
-Standalone tests for code AST search components.
-
-Usage:
-    pytest assets/skills/code/tests/test_standalone.py -v
-
-Or using test-kit helpers:
-    from omni.test_kit.fixtures.ast import classify_query_helper, extract_ast_pattern_helper
-"""
+"""Standalone tests for code AST search components."""
 
 import pytest
 

@@ -30,7 +30,7 @@ def run_discover_cache_gate(
             "-p",
             "xiuxian-daochang",
             "--test",
-            "mcp_discover_cache",
+            "tool_discover_cache",
             "discover_calls_use_valkey_read_through_cache_when_configured",
             "--",
             "--ignored",

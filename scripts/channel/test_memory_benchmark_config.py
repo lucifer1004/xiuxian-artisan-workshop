@@ -66,7 +66,7 @@ def test_build_config_infers_session_ids_and_creates_report_dirs(
         skip_reset=False,
         output_json=str(tmp_path / "reports" / "out.json"),
         output_markdown=str(tmp_path / "reports" / "out.md"),
-        fail_on_mcp_error=True,
+        fail_on_tool_error=True,
         feedback_policy="deadband",
     )
 

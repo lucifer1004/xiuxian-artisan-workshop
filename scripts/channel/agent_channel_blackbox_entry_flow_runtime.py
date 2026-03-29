@@ -31,8 +31,8 @@ def run_probe(
     telegram_send_retry_grace_seconds_fn: Any,
     parse_log_tokens_fn: Any,
     error_patterns: tuple[str, ...],
-    mcp_observability_events: tuple[str, ...],
-    mcp_waiting_events: frozenset[str],
+    tool_observability_events: tuple[str, ...],
+    tool_waiting_events: frozenset[str],
     target_session_scope_placeholder: str,
 ) -> int:
     """Run one probe execution through runtime bindings."""
@@ -59,8 +59,8 @@ def run_probe(
         telegram_send_retry_grace_seconds_fn=telegram_send_retry_grace_seconds_fn,
         parse_log_tokens_fn=parse_log_tokens_fn,
         error_patterns=error_patterns,
-        mcp_observability_events=mcp_observability_events,
-        mcp_waiting_events=mcp_waiting_events,
+        tool_observability_events=tool_observability_events,
+        tool_waiting_events=tool_waiting_events,
         target_session_scope_placeholder=target_session_scope_placeholder,
     )
 

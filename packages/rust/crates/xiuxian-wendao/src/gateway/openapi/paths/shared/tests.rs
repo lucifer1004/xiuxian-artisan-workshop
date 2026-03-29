@@ -2,8 +2,7 @@ use std::collections::BTreeSet;
 
 use crate::gateway::openapi::paths::{
     API_HEALTH_OPENAPI_PATH, API_NOTIFY_OPENAPI_PATH, API_REPO_SYNC_OPENAPI_PATH,
-    API_UI_COMPAT_DEPLOYMENT_ARTIFACT_OPENAPI_PATH, API_UI_PLUGIN_ARTIFACT_OPENAPI_PATH,
-    WENDAO_GATEWAY_ROUTE_CONTRACTS,
+    API_UI_PLUGIN_ARTIFACT_OPENAPI_PATH, WENDAO_GATEWAY_ROUTE_CONTRACTS,
 };
 
 #[test]
@@ -17,7 +16,6 @@ fn route_inventory_keeps_core_endpoints() {
     assert!(openapi_paths.contains(API_NOTIFY_OPENAPI_PATH));
     assert!(openapi_paths.contains(API_REPO_SYNC_OPENAPI_PATH));
     assert!(openapi_paths.contains(API_UI_PLUGIN_ARTIFACT_OPENAPI_PATH));
-    assert!(openapi_paths.contains(API_UI_COMPAT_DEPLOYMENT_ARTIFACT_OPENAPI_PATH));
 }
 
 #[test]

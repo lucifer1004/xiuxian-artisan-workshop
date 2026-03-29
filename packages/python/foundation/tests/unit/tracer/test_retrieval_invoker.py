@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from xiuxian_rag import RetrievalResult
+from xiuxian_rag.retrieval.interface import RetrievalResult
 from xiuxian_tracer.retrieval_invoker import RetrievalToolInvoker
 
 

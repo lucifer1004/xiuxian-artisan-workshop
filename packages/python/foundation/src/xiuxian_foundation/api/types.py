@@ -33,7 +33,7 @@ class OrjsonModel(BaseModel):
     Features:
     - 10x faster serialization than standard json.
     - Native support for datetime, numpy, etc.
-    - Produces compact byte strings perfect for network transmission (MCP).
+    - Produces compact byte strings suitable for runtime transport.
     """
 
     def model_dump_json_bytes(self, **kwargs) -> bytes:
@@ -47,7 +47,7 @@ class OrjsonModel(BaseModel):
 
 class CommandResult[T](OrjsonModel):
     """
-    Structured output for all skill commands using Python 3.12 Native Generics.
+    Structured output for CLI-invoked commands using Python 3.12 Native Generics.
 
     Usage:
         >>> result = CommandResult[str](success=True, data="output")

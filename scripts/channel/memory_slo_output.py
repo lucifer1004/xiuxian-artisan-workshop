@@ -52,9 +52,9 @@ def render_markdown(report: dict[str, Any]) -> str:
             )
         ),
         (
-            "- Benchmark MCP errors: "
-            f"{benchmark['summary']['total_mcp_error_turns']} "
-            f"(per-mode={benchmark['summary']['mcp_error_turns_by_mode']})"
+            "- Benchmark tool runtime errors: "
+            f"{benchmark['summary']['total_tool_error_turns']} "
+            f"(per-mode={benchmark['summary']['tool_error_turns_by_mode']})"
         ),
         (
             "- Session matrix: "

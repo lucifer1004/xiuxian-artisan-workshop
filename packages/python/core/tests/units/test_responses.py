@@ -91,30 +91,30 @@ class TestToolResponse:
         assert resp.data == {"partial": "data"}
         assert resp.error_message == "Only partial results available"
 
-    def test_to_mcp_format(self):
-        """Test converting response to MCP format."""
+    def test_to_tool_blocks(self):
+        """Test converting response to canonical tool blocks."""
         resp = ToolResponse.success(data={"key": "value"})
-        mcp = resp.to_mcp()
-        assert isinstance(mcp, list)
-        assert len(mcp) == 1
-        assert mcp[0]["type"] == "text"
+        blocks = resp.to_tool_blocks()
+        assert isinstance(blocks, list)
+        assert len(blocks) == 1
+        assert blocks[0]["type"] == "text"
         # Verify JSON content
         import json
 
-        content = json.loads(mcp[0]["text"])
+        content = json.loads(blocks[0]["text"])
         assert content["status"] == "success"
         assert content["data"] == {"key": "value"}
 
-    def test_to_mcp_format_error(self):
-        """Test converting error response to MCP format."""
+    def test_to_tool_blocks_error(self):
+        """Test converting error response to canonical tool blocks."""
         resp = ToolResponse.error(
             message="Not found",
             code=CoreErrorCode.TOOL_NOT_FOUND,
         )
-        mcp = resp.to_mcp()
+        blocks = resp.to_tool_blocks()
         import json
 
-        content = json.loads(mcp[0]["text"])
+        content = json.loads(blocks[0]["text"])
         assert content["status"] == "error"
         assert content["error_message"] == "Not found"
         assert content["error_code"] == "3001"
@@ -132,13 +132,13 @@ class TestToolResponse:
         after = datetime.now(UTC)
         assert before <= resp.timestamp <= after
 
-    def test_timestamp_in_mcp_output(self):
-        """Test that timestamp is included in MCP output."""
+    def test_timestamp_in_tool_blocks(self):
+        """Test that timestamp is included in canonical tool blocks."""
         resp = ToolResponse.success()
-        mcp = resp.to_mcp()
+        blocks = resp.to_tool_blocks()
         import json
 
-        content = json.loads(mcp[0]["text"])
+        content = json.loads(blocks[0]["text"])
         assert "timestamp" in content
 
     def test_empty_metadata(self):

@@ -39,7 +39,7 @@ def pytest_configure(config):
     )
 
 
-# Core specific fixtures are now loaded from xiuxian-test-kit-core plugin
+# Core-specific fixtures are defined in the local test tree.
 
 
 @pytest.fixture(scope="session")

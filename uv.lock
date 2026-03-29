@@ -15,7 +15,6 @@ members = [
     "xiuxian-artisan-workshop",
     "xiuxian-core",
     "xiuxian-foundation",
-    "xiuxian-test-kit",
     "xiuxian-wendao-py",
 ]
 
@@ -4648,7 +4647,6 @@ dev = [
     { name = "vulture" },
     { name = "xiuxian-core" },
     { name = "xiuxian-foundation" },
-    { name = "xiuxian-test-kit" },
     { name = "xiuxian-wendao-py" },
 ]
 
@@ -4680,7 +4678,6 @@ dev = [
     { name = "vulture", specifier = ">=2.14" },
     { name = "xiuxian-core", editable = "packages/python/core" },
     { name = "xiuxian-foundation", editable = "packages/python/foundation" },
-    { name = "xiuxian-test-kit", editable = "packages/python/test-kit" },
     { name = "xiuxian-wendao-py", editable = "packages/python/xiuxian-wendao-py" },
 ]
 
@@ -4745,28 +4742,12 @@ requires-dist = [
 ]
 
 [[package]]
-name = "xiuxian-test-kit"
-version = "0.1.0"
-source = { editable = "packages/python/test-kit" }
-dependencies = [
-    { name = "pyarrow" },
-    { name = "pytest" },
-    { name = "xiuxian-core" },
-    { name = "xiuxian-foundation" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pyarrow", specifier = ">=23.0.0" },
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "xiuxian-core", editable = "packages/python/core" },
-    { name = "xiuxian-foundation", editable = "packages/python/foundation" },
-]
-
-[[package]]
 name = "xiuxian-wendao-py"
 version = "0.1.0"
 source = { editable = "packages/python/xiuxian-wendao-py" }
+dependencies = [
+    { name = "pyarrow" },
+]
 
 [package.dev-dependencies]
 test = [
@@ -4774,6 +4755,7 @@ test = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "pyarrow", specifier = ">=14.0.0" }]
 
 [package.metadata.requires-dev]
 test = [{ name = "pytest", specifier = ">=8.0" }]

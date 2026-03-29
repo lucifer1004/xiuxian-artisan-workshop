@@ -96,7 +96,7 @@ def add_core_args(parser: argparse.ArgumentParser, *, webhook_url_default: str) 
         action="store_true",
         help=(
             "Enable native-tools-only assertions: require native tool dispatch success "
-            "and reject MCP/Zhenfa tool dispatch in this probe."
+            "and reject tool-runtime/Zhenfa dispatch in this probe."
         ),
     )
     parser.add_argument(

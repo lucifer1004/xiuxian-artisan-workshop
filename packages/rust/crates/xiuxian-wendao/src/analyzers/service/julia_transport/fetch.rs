@@ -12,9 +12,7 @@ use crate::analyzers::errors::RepoIntelligenceError;
 use crate::analyzers::languages::process_julia_arrow_batches_for_repository;
 
 #[cfg(feature = "julia")]
-use super::response::{
-    JuliaArrowScoreRow, PluginArrowScoreRow, decode_plugin_arrow_score_rows,
-};
+use super::response::{JuliaArrowScoreRow, PluginArrowScoreRow, decode_plugin_arrow_score_rows};
 
 /// Execute the repository-configured Julia Arrow transport and materialize the
 /// validated response into typed score rows.

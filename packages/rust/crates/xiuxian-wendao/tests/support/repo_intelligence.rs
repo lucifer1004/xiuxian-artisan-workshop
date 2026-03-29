@@ -8,19 +8,20 @@ use xiuxian_wendao::analyzers::{
     RepositoryAnalysisOutput, RepositoryRecord, SymbolRecord,
 };
 
-#[path = "repo_fixture.rs"]
-mod repo_fixture;
+use super::repo_fixture;
 
-#[allow(dead_code)]
 pub type TestResultPath = repo_fixture::TestResultPath;
 
-#[allow(dead_code)]
 pub fn create_sample_julia_repo(
     base: &Path,
     package_name: &str,
     expected_root: bool,
 ) -> TestResultPath {
     repo_fixture::create_sample_julia_repo(base, package_name, expected_root)
+}
+
+pub fn create_sample_modelica_repo(base: &Path, package_name: &str) -> TestResultPath {
+    repo_fixture::create_sample_modelica_repo(base, package_name)
 }
 
 pub fn assert_repo_json_snapshot(name: &str, value: impl Serialize) {
@@ -33,7 +34,6 @@ pub fn assert_repo_json_snapshot(name: &str, value: impl Serialize) {
     });
 }
 
-#[allow(dead_code)]
 pub fn write_repo_config(base: &Path, repo_dir: &Path, repo_id: &str) -> TestResultPath {
     let config_path = base.join(format!("{repo_id}.wendao.toml"));
     fs::write(
@@ -50,7 +50,6 @@ plugins = ["julia"]
 }
 
 #[must_use]
-#[allow(dead_code)]
 #[allow(clippy::too_many_lines)]
 pub fn sample_projection_analysis(repo_id: &str) -> RepositoryAnalysisOutput {
     let module_id = format!("repo:{repo_id}:module:ProjectionPkg");

@@ -12,12 +12,17 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.api.decorators import skill_command
-from omni.foundation.config.logging import get_logger
-from omni.foundation.config.paths import ConfigPaths
+from xiuxian_foundation.config.logging import get_logger
+from xiuxian_foundation.config.prj import get_project_root
 from pydantic import BaseModel
 
 logger = get_logger("skill.advanced_tools.mutation")
+
+
+def _resolve_project_root(project_root: str | Path | None) -> Path:
+    if project_root is None:
+        return get_project_root()
+    return Path(project_root).resolve()
 
 
 class FileChange(BaseModel):
@@ -29,36 +34,13 @@ class FileChange(BaseModel):
     diff: str = ""
 
 
-@skill_command(
-    name="batch_replace",
-    description="""
-    Batch refactoring with dry-run safety. RECOMMENDED for refactoring.
-
-    Uses rg (ripgrep) to find matches, then applies regex replacements.
-
-    Args:
-        - pattern: str - Regex pattern to search for (required)
-        - replacement: str - Replacement string (required)
-        - file_glob: str = **/* - Glob pattern for files (e.g., "**/*.py")
-        - dry_run: bool = true - If true, only preview changes
-        - max_files: int = 50 - Maximum files to process
-
-    Returns:
-        JSON with success, count, changes list, and diffs.
-
-    IMPORTANT: Always use dry_run=true first. Use specific file_glob patterns
-    to limit scope (e.g., "src/*.py" not "**/*"). If rg fails with
-    "Resource temporarily unavailable", reduce max_files or use more specific glob.
-    """,
-    autowire=True,
-)
 def batch_replace(
     pattern: str,
     replacement: str,
     file_glob: str = "**/*",
     dry_run: bool = True,
     max_files: int = 50,
-    paths: ConfigPaths | None = None,
+    project_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """
     Batch refactoring with dry-run safety.
@@ -73,10 +55,7 @@ def batch_replace(
     Returns:
         dict with success count, changes list, and diffs
     """
-    if paths is None:
-        paths = ConfigPaths()
-
-    root = Path(paths.project_root)
+    root = _resolve_project_root(project_root)
 
     # Check for required tools
     rg_path = shutil.which("rg")
@@ -160,16 +139,11 @@ def batch_replace(
     }
 
 
-@skill_command(
-    name="regex_replace",
-    description="Replace text in a file using sed regex. Efficient for large files.",
-    autowire=True,
-)
 def regex_replace(
     file_path: str,
     pattern: str,
     replacement: str,
-    paths: ConfigPaths | None = None,
+    project_root: str | Path | None = None,
     outside: bool = False,
 ) -> dict[str, Any]:
     """
@@ -180,13 +154,10 @@ def regex_replace(
         file_path: Path to file (relative to project root, or absolute)
         pattern: Regex pattern to search for
         replacement: Replacement string
-        paths: ConfigPaths injection
+        project_root: Optional project root for relative paths
         outside: If True, allow editing files outside project root (shows warning)
     """
-    if paths is None:
-        paths = ConfigPaths()
-
-    root = Path(paths.project_root)
+    root = _resolve_project_root(project_root)
     file_path_path = Path(file_path)
 
     # Handle path: relative paths are resolved relative to project root
@@ -202,12 +173,12 @@ def regex_replace(
         if not is_within_root and not outside:
             raise RuntimeError(
                 "File path is outside project. Use outside=true to allow.\n"
-                "Example: @omni('advanced_tools.regex_replace', {\n"
+                "Example: call `advanced_tools.regex_replace` with {\n"
                 '  "file_path": "/external/path/file.txt",\n'
                 '  "pattern": "old",\n'
                 '  "replacement": "new",\n'
                 '  "outside": true\n'
-                "})"
+                "}"
             )
         target = resolved_target
         if outside and not is_within_root:

@@ -1,9 +1,6 @@
 //! Integration tests for deterministic projected-page search.
 
-#[path = "../support/repo_intelligence.rs"]
-mod repo_test_support;
-
-use repo_test_support::{assert_repo_json_snapshot, sample_projection_analysis};
+use crate::support::repo_intelligence::{assert_repo_json_snapshot, sample_projection_analysis};
 use serde_json::json;
 use xiuxian_wendao::analyzers::{
     ProjectionPageKind, RepoProjectedPageSearchQuery, build_repo_projected_page_search,

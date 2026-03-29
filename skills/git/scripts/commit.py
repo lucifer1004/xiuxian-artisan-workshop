@@ -1,14 +1,12 @@
 """
 git/scripts/commit.py - Git commit operations
 
-Write commands (commit, amend, revert) use @skill_command.
+Write commands (commit, amend, revert) are exposed as plain CLI-callable functions.
 Read commands (get_last_commit, get_last_commit_msg) are simple wrappers.
 """
 
 import subprocess
 from pathlib import Path
-
-from omni.foundation.api.decorators import skill_command
 
 
 def _run(cmd: list[str], cwd: Path | None = None) -> tuple[str, str, int]:
@@ -17,21 +15,6 @@ def _run(cmd: list[str], cwd: Path | None = None) -> tuple[str, str, int]:
     return result.stdout.strip(), result.stderr.strip(), result.returncode
 
 
-@skill_command(
-    name="commit",
-    category="write",
-    description="""
-    Commit staged changes with a message. Re-stages all modified files before committing.
-
-    Skips pre-commit hooks - use git.commit for hook execution.
-
-    Args:
-        - message: str - The commit message for the changes (required)
-
-    Returns:
-        Success or failure message with commit hash.
-    """,
-)
 def commit(message: str, project_root: Path | None = None) -> str:
     _run(["git", "add", "-u"], cwd=project_root)
 
@@ -41,21 +24,6 @@ def commit(message: str, project_root: Path | None = None) -> str:
     raise RuntimeError(f"Commit failed: {stdout} {stderr}")
 
 
-@skill_command(
-    name="commit_amend",
-    category="write",
-    description="""
-    Amend the previous commit with a new message without changing its content.
-
-    Does not run pre-commit hooks.
-
-    Args:
-        - message: str - The new commit message to replace the previous one (required)
-
-    Returns:
-        Success or failure message.
-    """,
-)
 def commit_with_amend(message: str, project_root: Path | None = None) -> str:
     stdout, stderr, rc = _run(["git", "commit", "--amend", "-m", message], cwd=project_root)
     if rc == 0:
@@ -63,21 +31,6 @@ def commit_with_amend(message: str, project_root: Path | None = None) -> str:
     raise RuntimeError(f"Amend failed: {stdout} {stderr}")
 
 
-@skill_command(
-    name="commit_no_verify",
-    category="write",
-    description="""
-    Commit staged changes without running pre-commit hooks.
-
-    Bypasses git hooks for faster commits. Use with caution.
-
-    Args:
-        - message: str - The commit message for the changes (required)
-
-    Returns:
-        Success or failure message.
-    """,
-)
 def commit_no_verify(message: str, project_root: Path | None = None) -> str:
     stdout, stderr, rc = _run(["git", "commit", "--no-verify", "-m", message], cwd=project_root)
     if rc == 0:
@@ -97,20 +50,6 @@ def get_last_commit_msg(project_root: Path | None = None) -> str:
     return stdout
 
 
-@skill_command(
-    name="revert",
-    category="write",
-    description="""
-    Revert a specific commit by creating a new reverse commit.
-
-    Args:
-        - commit: str - The commit hash or reference to revert (e.g., HEAD~1, abc1234) (required)
-        - no_commit: bool = false - If true, stages the revert but does not commit
-
-    Returns:
-        Success or failure message.
-    """,
-)
 def revert(commit: str, no_commit: bool = False, project_root: Path | None = None) -> str:
     cmd = ["git", "revert"]
     if no_commit:

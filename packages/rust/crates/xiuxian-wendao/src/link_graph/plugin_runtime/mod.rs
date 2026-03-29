@@ -10,12 +10,16 @@ pub mod ids;
 pub mod transport;
 
 pub use artifacts::{
-    render_plugin_artifact_toml, render_plugin_artifact_toml_for_selector,
-    resolve_plugin_artifact, resolve_plugin_artifact_for_selector,
+    render_plugin_artifact_toml, render_plugin_artifact_toml_for_selector, resolve_plugin_artifact,
+    resolve_plugin_artifact_for_selector,
 };
 pub use compat::build_rerank_provider_binding;
 #[cfg(feature = "julia")]
-pub use transport::build_arrow_transport_client_from_binding;
+pub use transport::{
+    CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER, NegotiatedArrowTransportClient,
+    NegotiatedTransportSelection, build_arrow_transport_client_from_binding,
+    negotiate_arrow_transport_client_from_bindings,
+};
 pub use xiuxian_wendao_core::artifacts::{
     PluginArtifactPayload, PluginArtifactSelector, PluginLaunchSpec,
 };

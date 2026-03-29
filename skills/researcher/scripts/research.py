@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.config.dirs import PRJ_CACHE, get_data_dir
+from xiuxian_foundation.config.dirs import PRJ_CACHE, get_data_dir
 
 logger = structlog.get_logger("researcher.tools")
 
@@ -283,7 +283,7 @@ def repomix_map(path: str, max_depth: int = 4) -> str:
 # Subprocess timeout for repomix (avoid hanging on huge shards)
 REPOMIX_SHARD_TIMEOUT_S = 120
 
-# Max characters to keep from repomix output (smaller = faster LLM, fits MCP timeout)
+# Max characters to keep from repomix output (smaller = faster LLM, fits tool timeout)
 REPOMIX_SHARD_MAX_CHARS = 32_000
 
 
@@ -298,7 +298,7 @@ def repomix_compress_shard(
     Compress a specific shard with optimized repomix call.
 
     Uses system binary directly to avoid npx overhead.
-    Truncates output to max_chars to keep downstream LLM analysis fast (MCP-friendly).
+    Truncates output to max_chars to keep downstream LLM analysis fast.
     shard_id ensures unique config/output filenames when parallel shards share similar names.
     """
     repo_path = Path(path)

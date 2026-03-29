@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from resolve_mcp_endpoint import resolve_mcp_endpoint
+from resolve_tool_endpoint import resolve_tool_endpoint
 
 
 def resolve_script_paths(script_dir: Any) -> dict[str, Any]:
@@ -28,7 +28,7 @@ def build_runtime_env(
     write_ci_channel_acl_settings_fn: Any,
 ) -> tuple[dict[str, str], Any]:
     """Build isolated runtime environment and write run-scoped settings."""
-    local_host = str(resolve_mcp_endpoint()["host"])
+    local_host = str(resolve_tool_endpoint()["host"])
     env = os.environ.copy()
     env["XIUXIAN_WENDAO_VALKEY_URL"] = cfg.valkey_url
     env["XIUXIAN_DAOCHANG_SESSION_VALKEY_PREFIX"] = cfg.valkey_prefix

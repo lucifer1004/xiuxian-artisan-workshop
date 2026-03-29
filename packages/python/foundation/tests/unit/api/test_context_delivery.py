@@ -39,7 +39,9 @@ def _install_fake_checkpoint_backend(
 
     monkeypatch.setattr("xiuxian_foundation.context_delivery.sessions.save_workflow_state", _save)
     monkeypatch.setattr("xiuxian_foundation.context_delivery.sessions.load_workflow_state", _load)
-    monkeypatch.setattr("xiuxian_foundation.context_delivery.sessions.delete_workflow_state", _delete)
+    monkeypatch.setattr(
+        "xiuxian_foundation.context_delivery.sessions.delete_workflow_state", _delete
+    )
     return storage
 
 

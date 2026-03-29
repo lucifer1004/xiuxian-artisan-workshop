@@ -2,8 +2,8 @@
 pub const WATCHER: &str = "watcher";
 /// Kernel source.
 pub const KERNEL: &str = "kernel";
-/// MCP server source.
-pub const MCP_SERVER: &str = "mcp:server";
+/// Tool runtime server source.
+pub const TOOL_SERVER: &str = "tool:server";
 /// Cortex source.
 pub const CORTEX: &str = "cortex";
 /// Agent source.

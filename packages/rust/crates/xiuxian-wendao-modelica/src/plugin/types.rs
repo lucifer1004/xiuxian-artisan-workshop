@@ -1,6 +1,6 @@
 //! Shared types for Modelica repository intelligence.
 
-use xiuxian_wendao::analyzers::{DocRecord, ImportKind, RepoSymbolKind};
+use xiuxian_wendao_core::repo_intelligence::{DocRecord, ImportKind, RepoSymbolKind};
 
 /// Collected documentation record with target IDs.
 #[derive(Debug, Clone)]

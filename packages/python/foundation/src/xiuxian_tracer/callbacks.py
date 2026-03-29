@@ -14,11 +14,24 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
-
-from xiuxian_foundation.bridge import SearchResult
+from pydantic import field_validator
 from xiuxian_foundation.config.logging import get_logger
 
 logger = get_logger("xiuxian_core.router.hybrid")
+
+
+class SearchResult(BaseModel):
+    """Represents a single semantic-search result."""
+
+    score: float
+    payload: dict[str, Any]
+    id: str
+
+    @field_validator("score")
+    @classmethod
+    def validate_score(cls, value: float) -> float:
+        """Clamp score to [0, 1]. Fusion/RRF can produce values slightly above 1.0."""
+        return max(0.0, min(1.0, float(value)))
 
 
 class HybridMatch(BaseModel):

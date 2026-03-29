@@ -38,7 +38,7 @@ pub struct ToolRecord {
     /// Category inferred from decorator or function signature.
     #[serde(default)]
     pub category: String,
-    /// MCP protocol safety annotations.
+    /// Tool runtime safety annotations.
     #[serde(default)]
     pub annotations: ToolAnnotations,
     /// Parameter names inferred from function signature.
@@ -47,7 +47,7 @@ pub struct ToolRecord {
     /// Full tool names (skill.tool) this skill tool refers to for docs (`SkillToolsRefers`).
     #[serde(default)]
     pub skill_tools_refers: Vec<String>,
-    /// MCP Resource URI.  Non-empty means this tool is also an MCP Resource.
+    /// Tool resource URI. Non-empty means this tool is also a tool resource.
     #[serde(default)]
     pub resource_uri: String,
 }
@@ -73,7 +73,7 @@ pub struct ToolEnrichment {
     /// Category inferred from decorator or function signature.
     #[serde(default)]
     pub category: String,
-    /// MCP protocol safety annotations.
+    /// Tool runtime safety annotations.
     #[serde(default)]
     pub annotations: ToolAnnotations,
     /// Parameter names inferred from function signature.
@@ -85,7 +85,7 @@ pub struct ToolEnrichment {
     /// Full tool names (skill.tool) this skill tool refers to for docs (`SkillToolsRefers`).
     #[serde(default)]
     pub skill_tools_refers: Vec<String>,
-    /// MCP Resource URI. Non-empty means this tool is also an MCP Resource.
+    /// Tool resource URI. Non-empty means this tool is also a tool resource.
     #[serde(default)]
     pub resource_uri: String,
 }

@@ -74,7 +74,7 @@ def build_config(
         skip_reset=bool(args.skip_reset),
         output_json=Path(args.output_json).expanduser().resolve(),
         output_markdown=Path(args.output_markdown).expanduser().resolve(),
-        fail_on_mcp_error=bool(args.fail_on_mcp_error),
+        fail_on_tool_error=bool(args.fail_on_tool_error),
         feedback_policy=args.feedback_policy,
         feedback_down_threshold=float(args.feedback_down_threshold),
     )

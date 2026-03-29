@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from complex_scenarios_report_sections import (
     append_failure_tails,
-    append_mcp_diagnostics,
+    append_tool_diagnostics,
     append_memory_adaptation,
     append_natural_language_trace,
     append_scenario_header,
@@ -47,7 +47,7 @@ def render_markdown(report: dict[str, object]) -> str:
         append_step_table(lines, scenario)
         append_natural_language_trace(lines, scenario)
         append_memory_adaptation(lines, scenario)
-        append_mcp_diagnostics(lines, scenario)
+        append_tool_diagnostics(lines, scenario)
         append_failure_tails(lines, scenario)
         lines.append("")
 
