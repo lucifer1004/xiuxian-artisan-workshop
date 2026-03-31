@@ -3,6 +3,7 @@ use crate::link_graph::runtime_config::julia_deployment_artifact_selector;
 use crate::link_graph::set_link_graph_wendao_config_override;
 use serial_test::serial;
 use std::fs;
+use xiuxian_wendao_core::transport::PluginTransportKind;
 
 #[test]
 #[serial]
@@ -35,6 +36,12 @@ service_mode = "stream"
             .and_then(|endpoint| endpoint.base_url.as_deref()),
         Some("http://127.0.0.1:8088")
     );
+    assert_eq!(
+        artifact.selected_transport,
+        Some(PluginTransportKind::ArrowIpcHttp)
+    );
+    assert_eq!(artifact.fallback_from, None);
+    assert_eq!(artifact.fallback_reason, None);
 
     Ok(())
 }

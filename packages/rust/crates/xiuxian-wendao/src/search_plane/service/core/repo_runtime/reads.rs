@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fs;
 
 use crate::search_plane::service::core::types::{RepoRuntimeState, SearchPlaneService};
 use crate::search_plane::{
@@ -157,6 +158,18 @@ impl SearchPlaneService {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = records.clone();
             return records;
         }
+        if let Some(snapshot) = self.load_local_repo_corpus_snapshot() {
+            let mut records = BTreeMap::new();
+            for record in snapshot.records {
+                let (record, _) = self.reconcile_repo_corpus_record_for_reads(record);
+                records.insert((record.corpus, record.repo_id.clone()), record);
+            }
+            *self
+                .repo_corpus_records
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = records.clone();
+            return records;
+        }
         BTreeMap::new()
     }
 
@@ -177,13 +190,34 @@ impl SearchPlaneService {
             return Some(record);
         }
         if let Some(record) = self.cache.get_repo_corpus_record(corpus, repo_id).await {
-            let (record, changed) = self.reconcile_repo_corpus_record_for_reads(record);
+            let (mut record, mut changed) = self.reconcile_repo_corpus_record_for_reads(record);
+            if record.publication.is_none()
+                && let Some(local_record) = self.load_local_repo_corpus_record(corpus, repo_id)
+            {
+                let (local_record, local_changed) =
+                    self.reconcile_repo_corpus_record_for_reads(local_record);
+                if local_record.publication.is_some() {
+                    record = local_record;
+                    changed |= local_changed;
+                }
+            }
             self.repo_corpus_records
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .insert((corpus, repo_id.to_string()), record.clone());
             if changed {
                 self.cache.set_repo_corpus_record(&record).await;
+            }
+            return Some(record);
+        }
+        if let Some(record) = self.load_local_repo_corpus_record(corpus, repo_id) {
+            let (record, changed) = self.reconcile_repo_corpus_record_for_reads(record);
+            self.repo_corpus_records
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert((corpus, repo_id.to_string()), record.clone());
+            if changed {
+                self.persist_local_repo_corpus_record(&record);
             }
             return Some(record);
         }
@@ -204,5 +238,19 @@ impl SearchPlaneService {
             return Some(record);
         }
         None
+    }
+
+    pub(crate) fn load_local_repo_corpus_record(
+        &self,
+        corpus: SearchCorpusKind,
+        repo_id: &str,
+    ) -> Option<SearchRepoCorpusRecord> {
+        let payload = fs::read(self.repo_corpus_record_json_path(corpus, repo_id)).ok()?;
+        serde_json::from_slice(payload.as_slice()).ok()
+    }
+
+    pub(crate) fn load_local_repo_corpus_snapshot(&self) -> Option<SearchRepoCorpusSnapshotRecord> {
+        let payload = fs::read(self.repo_corpus_snapshot_json_path()).ok()?;
+        serde_json::from_slice(payload.as_slice()).ok()
     }
 }

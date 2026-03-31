@@ -1,5 +1,5 @@
-use super::super::shared::normalize_command_input;
 use super::{SessionAdminAction, SessionAdminCommand, SessionOutputFormat};
+use crate::channels::managed_runtime::parsing::normalize_command_input;
 
 /// Parse delegated session-admin command:
 /// - `/session admin` or `/session admin list [json]`

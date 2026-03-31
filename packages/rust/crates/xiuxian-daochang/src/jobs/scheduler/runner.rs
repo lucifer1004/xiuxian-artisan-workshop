@@ -7,7 +7,7 @@ use anyhow::{Result, bail};
 use tokio::sync::mpsc;
 use tokio::time::{Instant, MissedTickBehavior};
 
-use super::{JobCompletion, JobCompletionKind, JobManager};
+use crate::jobs::{JobCompletion, JobCompletionKind, JobManager};
 
 /// Config for recurring scheduler runs.
 #[derive(Debug, Clone)]

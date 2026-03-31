@@ -1,15 +1,160 @@
 from __future__ import annotations
 
+import os
+import socket
+import subprocess
+import time
+from collections.abc import Mapping, Sequence
+
 import pyarrow as pa
 import pyarrow.flight as flight
+import pytest
 
 from xiuxian_wendao_py.transport import (
+    REPO_SEARCH_COLUMNS,
+    RERANK_RESPONSE_COLUMNS,
+    WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER,
+    WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER,
+    WENDAO_RERANK_DIMENSION_HEADER,
+    WENDAO_REPO_SEARCH_LIMIT_HEADER,
+    WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER,
+    WENDAO_REPO_SEARCH_QUERY_HEADER,
+    WENDAO_REPO_SEARCH_TAG_FILTERS_HEADER,
+    WENDAO_REPO_SEARCH_TITLE_FILTERS_HEADER,
     WendaoFlightRouteQuery,
+    WendaoRepoSearchRequest,
+    WendaoRepoSearchResultRow,
+    WendaoRerankRequestRow,
+    WendaoRerankResultRow,
     WendaoTransportClient,
     WendaoTransportConfig,
     WendaoTransportEndpoint,
     WendaoTransportMode,
+    repo_search_request,
+    repo_search_query,
 )
+
+
+def _project_root() -> str:
+    project_root = os.environ.get("PRJ_ROOT")
+    if not project_root:
+        pytest.skip("set PRJ_ROOT before running Wendao Flight integration tests")
+    return project_root
+
+
+def _wendao_search_flight_server_binary() -> str:
+    return os.path.join(
+        _project_root(),
+        ".cache",
+        "pyflight-rust-contract-target",
+        "debug",
+        "wendao_search_flight_server",
+    )
+
+
+def _spawn_rust_mock_flight_server(
+    host: str,
+    port: int,
+    *,
+    binary_env_var: str = "WENDAO_MOCK_SERVER_BINARY",
+    default_binary: str | None = None,
+    extra_args: Sequence[str] = (),
+    extra_env: Mapping[str, str] | None = None,
+) -> subprocess.Popen[str]:
+    repo_root = _project_root()
+    cache_target_dir = os.path.join(
+        repo_root,
+        ".cache",
+        "pyflight-rust-contract-target",
+    )
+    if default_binary is None:
+        default_binary = os.path.join(
+            cache_target_dir,
+            "debug",
+            "examples",
+            "mock_flight_exchange_server",
+        )
+    binary = os.environ.get(
+        binary_env_var,
+        default_binary,
+    )
+    if not os.path.exists(binary):
+        pytest.skip(f"build {binary} before running the Rust Flight integration smoke tests")
+
+    process_env = os.environ.copy()
+    if extra_env is not None:
+        process_env.update(extra_env)
+
+    process = subprocess.Popen(
+        [binary, f"{host}:{port}", "v2", *extra_args],
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=process_env,
+    )
+    ready_line = ""
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        line = process.stdout.readline() if process.stdout is not None else ""
+        if line.startswith("READY http://"):
+            ready_line = line.strip()
+            break
+        if process.poll() is not None:
+            stderr = process.stderr.read() if process.stderr is not None else ""
+            raise AssertionError(
+                "Rust mock Flight server exited before becoming ready:\n"
+                f"{stderr}"
+            )
+    if not ready_line:
+        raise AssertionError("timed out waiting for Rust mock Flight server readiness")
+    time.sleep(1.0)
+    return process
+
+
+def _run_rust_search_plane_seed_binary(
+    project_root: str,
+    *,
+    repo_id: str = "alpha/repo",
+    binary_env_var: str = "WENDAO_SEARCH_SEED_BINARY",
+) -> None:
+    repo_root = _project_root()
+    cache_target_dir = os.path.join(
+        repo_root,
+        ".cache",
+        "pyflight-rust-contract-target",
+    )
+    default_binary = os.path.join(
+        cache_target_dir,
+        "debug",
+        "wendao_search_seed_sample",
+    )
+    binary = os.environ.get(binary_env_var, default_binary)
+    if not os.path.exists(binary):
+        pytest.skip(f"build {binary} before running the Wendao search-plane seed smoke")
+
+    result = subprocess.run(
+        [binary, repo_id, project_root],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "Wendao search-plane seed binary failed:\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def _terminate_process(process: subprocess.Popen[str]) -> None:
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=10)
 
 
 def test_transport_client_prefers_flight_then_arrow_ipc() -> None:
@@ -185,6 +330,52 @@ def test_transport_client_fetches_flight_info_for_route_descriptor(monkeypatch) 
     assert captured["options"].headers == [(b"x-wendao-schema-version", b"v3")]
 
 
+def test_transport_client_fetches_repo_search_info_with_typed_request(monkeypatch) -> None:
+    client = WendaoTransportClient(
+        WendaoTransportConfig(
+            endpoint=WendaoTransportEndpoint(host="127.0.0.1", port=50051),
+        )
+    )
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def get_flight_info(self, descriptor: object, options: object) -> str:
+            captured["descriptor"] = descriptor
+            captured["options"] = options
+            return "repo-search-info"
+
+    monkeypatch.setattr(
+        WendaoTransportClient,
+        "connect_flight",
+        lambda self, **kwargs: FakeClient(),
+    )
+
+    info = client.get_repo_search_info(
+        WendaoRepoSearchRequest(
+            query_text="rerank rust traits",
+            limit=25,
+            language_filters=("rust", "markdown"),
+            path_prefixes=("src/", "README"),
+            title_filters=("README", "overview"),
+            tag_filters=("code", "lang:rust"),
+            filename_filters=("README.md", "lib.rs"),
+        )
+    )
+
+    assert info == "repo-search-info"
+    assert captured["descriptor"].path == [b"search", b"repos", b"main"]
+    assert captured["options"].headers == [
+        (b"x-wendao-schema-version", b"v1"),
+        (b"x-wendao-repo-search-query", b"rerank rust traits"),
+        (b"x-wendao-repo-search-limit", b"25"),
+        (b"x-wendao-repo-search-language-filters", b"markdown,rust"),
+        (b"x-wendao-repo-search-path-prefixes", b"README,src/"),
+        (b"x-wendao-repo-search-title-filters", b"README,overview"),
+        (b"x-wendao-repo-search-tag-filters", b"code,lang:rust"),
+        (b"x-wendao-repo-search-filename-filters", b"README.md,lib.rs"),
+    ]
+
+
 def test_transport_client_fetches_flight_info_for_typed_query(monkeypatch) -> None:
     client = WendaoTransportClient(
         WendaoTransportConfig(
@@ -212,6 +403,99 @@ def test_transport_client_fetches_flight_info_for_typed_query(monkeypatch) -> No
     assert info == "query-info"
     assert captured["descriptor"].path == [b"search", b"repos", b"main"]
     assert captured["options"].headers == [(b"x-wendao-schema-version", b"v1")]
+
+
+def test_transport_client_reads_repo_search_rows(monkeypatch) -> None:
+    client = WendaoTransportClient(
+        WendaoTransportConfig(
+            endpoint=WendaoTransportEndpoint(host="127.0.0.1", port=50051),
+        )
+    )
+    expected = pa.table(
+        {
+            "doc_id": ["doc-1"],
+            "path": ["src/lib.rs"],
+            "title": ["Repo Search Result"],
+            "best_section": ["7: Repo Search Result section"],
+            "score": [0.91],
+            "language": ["rust"],
+        }
+    )
+
+    request = repo_search_request("rerank rust traits")
+    captured: dict[str, object] = {}
+
+    def fake_read_repo_search_table(self, request_arg, **kwargs):  # type: ignore[no-untyped-def]
+        captured["request"] = request_arg
+        return expected
+
+    monkeypatch.setattr(WendaoTransportClient, "read_repo_search_table", fake_read_repo_search_table)
+
+    rows = client.read_repo_search_rows(request)
+
+    assert rows == [
+        WendaoRepoSearchResultRow(
+            doc_id="doc-1",
+            path="src/lib.rs",
+            title="Repo Search Result",
+            best_section="7: Repo Search Result section",
+            score=0.91,
+            language="rust",
+        )
+    ]
+    assert captured["request"] == request
+
+
+def test_transport_client_exchanges_typed_rerank_rows(monkeypatch) -> None:
+    client = WendaoTransportClient(
+        WendaoTransportConfig(
+            endpoint=WendaoTransportEndpoint(host="127.0.0.1", port=50051),
+        )
+    )
+    expected = pa.table({"doc_id": ["doc-1"]})
+    captured: dict[str, object] = {}
+
+    def fake_exchange_rerank_table(self, table, **kwargs):  # type: ignore[no-untyped-def]
+        captured["table"] = table
+        captured["kwargs"] = kwargs
+        return expected
+
+    monkeypatch.setattr(
+        WendaoTransportClient,
+        "exchange_rerank_table",
+        fake_exchange_rerank_table,
+    )
+
+    response = client.exchange_rerank_rows(
+        [
+            WendaoRerankRequestRow(
+                doc_id="doc-0",
+                vector_score=0.5,
+                embedding=(0.1, 0.2, 0.3),
+                query_embedding=(0.4, 0.5, 0.6),
+            )
+        ],
+        tls_root_certs=b"roots",
+    )
+
+    assert response == expected
+    assert captured["table"].to_pylist() == [
+        {
+            "doc_id": "doc-0",
+            "vector_score": pytest.approx(0.5),
+            "embedding": [pytest.approx(0.1), pytest.approx(0.2), pytest.approx(0.3)],
+            "query_embedding": [
+                pytest.approx(0.4),
+                pytest.approx(0.5),
+                pytest.approx(0.6),
+            ],
+        }
+    ]
+    assert captured["kwargs"] == {
+        "tls_root_certs": b"roots",
+        "embedding_dimension": 3,
+    }
+    assert captured["table"].schema.field("embedding").type == pa.list_(pa.float32(), 3)
 
 
 def test_transport_client_reads_table_via_do_get(monkeypatch) -> None:
@@ -292,3 +576,794 @@ def test_transport_client_reads_table_for_typed_query(monkeypatch) -> None:
     assert isinstance(captured["ticket"], flight.Ticket)
     assert captured["ticket"].ticket == b"ticket/repos/main"
     assert captured["options"].headers == [(b"x-wendao-schema-version", b"v1")]
+
+
+def test_transport_client_exchanges_table_via_do_exchange(monkeypatch) -> None:
+    client = WendaoTransportClient(
+        WendaoTransportConfig(
+            endpoint=WendaoTransportEndpoint(
+                host="127.0.0.1",
+                port=50051,
+                path="/rerank/flight",
+                metadata={"authorization": "Bearer token"},
+            ),
+            schema_version="v2",
+            request_timeout_seconds=7.5,
+        )
+    )
+    request = pa.table({"id": ["doc-0"], "score": [0.5]})
+    expected = pa.table({"id": ["doc-1"], "score": [0.9]})
+    captured: dict[str, object] = {}
+
+    class FakeWriter:
+        def begin(self, schema: pa.Schema) -> None:
+            captured["schema"] = schema
+
+        def write_table(self, table: pa.Table) -> None:
+            captured["table"] = table
+
+        def done_writing(self) -> None:
+            captured["done"] = True
+
+    class FakeReader:
+        def read_all(self) -> pa.Table:
+            return expected
+
+    class FakeClient:
+        def do_exchange(self, descriptor: object, options: object) -> tuple[FakeWriter, FakeReader]:
+            captured["descriptor"] = descriptor
+            captured["options"] = options
+            return FakeWriter(), FakeReader()
+
+    monkeypatch.setattr(
+        WendaoTransportClient,
+        "connect_flight",
+        lambda self, **kwargs: FakeClient(),
+    )
+
+    table = client.exchange_table(request)
+
+    assert table == expected
+    assert captured["schema"] == request.schema
+    assert captured["table"] == request
+    assert captured["done"] is True
+    assert captured["descriptor"].path == [b"rerank", b"flight"]
+    assert captured["options"].timeout == 7.5
+    assert captured["options"].headers == [
+        (b"x-wendao-schema-version", b"v2"),
+        (b"authorization", b"Bearer token"),
+    ]
+
+
+def test_transport_client_exchanges_table_for_typed_query(monkeypatch) -> None:
+    client = WendaoTransportClient(
+        WendaoTransportConfig(
+            endpoint=WendaoTransportEndpoint(host="127.0.0.1", port=50051),
+        )
+    )
+    request = pa.table({"id": ["doc-0"], "score": [0.5]})
+    expected = pa.table({"id": ["doc-2"], "score": [0.8]})
+    captured: dict[str, object] = {}
+
+    class FakeWriter:
+        def begin(self, schema: pa.Schema) -> None:
+            captured["schema"] = schema
+
+        def write_table(self, table: pa.Table) -> None:
+            captured["table"] = table
+
+    class FakeReader:
+        def read_all(self) -> pa.Table:
+            return expected
+
+    class FakeClient:
+        def do_exchange(self, descriptor: object, options: object) -> tuple[FakeWriter, FakeReader]:
+            captured["descriptor"] = descriptor
+            captured["options"] = options
+            return FakeWriter(), FakeReader()
+
+    monkeypatch.setattr(
+        WendaoTransportClient,
+        "connect_flight",
+        lambda self, **kwargs: FakeClient(),
+    )
+
+    table = client.exchange_query_table(
+        WendaoFlightRouteQuery(route="/rerank/flight"),
+        request,
+    )
+
+    assert table == expected
+    assert captured["schema"] == request.schema
+    assert captured["table"] == request
+    assert captured["descriptor"].path == [b"rerank", b"flight"]
+    assert captured["options"].headers == [(b"x-wendao-schema-version", b"v1")]
+
+
+def test_transport_client_parses_typed_rerank_result_rows(monkeypatch) -> None:
+    client = WendaoTransportClient(
+        WendaoTransportConfig(
+            endpoint=WendaoTransportEndpoint(host="127.0.0.1", port=50051),
+        )
+    )
+
+    monkeypatch.setattr(
+        WendaoTransportClient,
+        "exchange_rerank_rows",
+        lambda self, rows, **kwargs: pa.table(
+            {
+                "doc_id": ["doc-1"],
+                "final_score": [0.97],
+                "rank": [1],
+            }
+        ),
+    )
+
+    response = client.exchange_rerank_result_rows(
+        [
+            WendaoRerankRequestRow(
+                doc_id="doc-0",
+                vector_score=0.5,
+                embedding=(0.1, 0.2, 0.3),
+                query_embedding=(0.4, 0.5, 0.6),
+            )
+        ]
+    )
+
+    assert response == [
+        WendaoRerankResultRow(
+            doc_id="doc-1",
+            final_score=0.97,
+            rank=1,
+        )
+    ]
+
+
+@pytest.mark.integration
+def test_transport_client_exchanges_table_with_rust_mock_flight_server() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    process = _spawn_rust_mock_flight_server(host, port)
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(
+                    host=host,
+                    port=port,
+                    path="/rerank/flight",
+                ),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+        request = pa.table(
+            {
+                "doc_id": pa.array(["doc-0", "doc-1"], type=pa.string()),
+                "vector_score": pa.array([0.5, 0.8], type=pa.float32()),
+                "embedding": pa.array(
+                    [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                    type=pa.list_(pa.float32(), 3),
+                ),
+                "query_embedding": pa.array(
+                    [[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                    type=pa.list_(pa.float32(), 3),
+                ),
+            }
+        )
+
+        response = client.exchange_query_table(
+            WendaoFlightRouteQuery(route="/rerank/flight"),
+            request,
+            extra_metadata={WENDAO_RERANK_DIMENSION_HEADER: "3"},
+        )
+
+        assert tuple(response.column_names) == RERANK_RESPONSE_COLUMNS
+        rows = response.to_pylist()
+        assert [row["doc_id"] for row in rows] == ["doc-0", "doc-1"]
+        assert [row["rank"] for row in rows] == [1, 2]
+        assert [row["final_score"] for row in rows] == pytest.approx([0.8, 0.62])
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+@pytest.mark.integration
+def test_transport_client_exchanges_typed_rerank_rows_with_rust_mock_flight_server() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    process = _spawn_rust_mock_flight_server(host, port)
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(
+                    host=host,
+                    port=port,
+                ),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+
+        response = client.exchange_rerank_rows(
+            [
+                WendaoRerankRequestRow(
+                    doc_id="doc-0",
+                    vector_score=0.5,
+                    embedding=(1.0, 0.0, 0.0),
+                    query_embedding=(1.0, 0.0, 0.0),
+                ),
+                WendaoRerankRequestRow(
+                    doc_id="doc-1",
+                    vector_score=0.8,
+                    embedding=(0.0, 1.0, 0.0),
+                    query_embedding=(1.0, 0.0, 0.0),
+                )
+            ]
+        )
+
+        assert tuple(response.column_names) == RERANK_RESPONSE_COLUMNS
+        rows = response.to_pylist()
+        assert [row["doc_id"] for row in rows] == ["doc-0", "doc-1"]
+        assert [row["rank"] for row in rows] == [1, 2]
+        assert [row["final_score"] for row in rows] == pytest.approx([0.8, 0.62])
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+@pytest.mark.integration
+def test_transport_client_parses_typed_rerank_rows_with_rust_mock_flight_server() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    process = _spawn_rust_mock_flight_server(host, port)
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(
+                    host=host,
+                    port=port,
+                ),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+
+        rows = client.exchange_rerank_result_rows(
+            [
+                WendaoRerankRequestRow(
+                    doc_id="doc-0",
+                    vector_score=0.5,
+                    embedding=(1.0, 0.0, 0.0),
+                    query_embedding=(1.0, 0.0, 0.0),
+                ),
+                WendaoRerankRequestRow(
+                    doc_id="doc-1",
+                    vector_score=0.8,
+                    embedding=(0.0, 1.0, 0.0),
+                    query_embedding=(1.0, 0.0, 0.0),
+                )
+            ]
+        )
+
+        assert [row.doc_id for row in rows] == ["doc-0", "doc-1"]
+        assert [row.rank for row in rows] == [1, 2]
+        assert [row.final_score for row in rows] == pytest.approx([0.8, 0.62])
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+@pytest.mark.integration
+def test_transport_client_rejects_malformed_rerank_request_with_rust_mock_flight_server() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    process = _spawn_rust_mock_flight_server(host, port)
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(
+                    host=host,
+                    port=port,
+                ),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+        malformed = pa.table(
+            {
+                "doc_id": ["doc-0"],
+                "vector_score": pa.array([0.5], type=pa.float64()),
+                "embedding": pa.array([[0.1, 0.2, 0.3]], type=pa.list_(pa.float32(), 3)),
+                "query_embedding": pa.array(
+                    [[0.4, 0.5, 0.6]],
+                    type=pa.list_(pa.float32(), 3),
+                ),
+            }
+        )
+
+        with pytest.raises(pa.ArrowInvalid, match="x-wendao-rerank-embedding-dimension"):
+            client.exchange_rerank_table(malformed)
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+@pytest.mark.integration
+def test_transport_client_rejects_query_embedding_drift_with_rust_mock_flight_server() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    process = _spawn_rust_mock_flight_server(host, port)
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(
+                    host=host,
+                    port=port,
+                ),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+
+        with pytest.raises(
+            pa.ArrowInvalid,
+            match="query_embedding` must remain stable across all rows",
+        ):
+            client.exchange_rerank_rows(
+                [
+                    WendaoRerankRequestRow(
+                        doc_id="doc-0",
+                        vector_score=0.5,
+                        embedding=(0.1, 0.2, 0.3),
+                        query_embedding=(0.4, 0.5, 0.6),
+                    ),
+                    WendaoRerankRequestRow(
+                        doc_id="doc-1",
+                        vector_score=0.4,
+                        embedding=(0.7, 0.8, 0.9),
+                        query_embedding=(1.0, 1.1, 1.2),
+                    ),
+                ]
+            )
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+@pytest.mark.integration
+def test_transport_client_rejects_duplicate_doc_ids_with_rust_mock_flight_server() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    process = _spawn_rust_mock_flight_server(host, port)
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(
+                    host=host,
+                    port=port,
+                ),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+
+        with pytest.raises(
+            pa.ArrowInvalid,
+            match="doc_id` must be unique across one batch",
+        ):
+            client.exchange_rerank_rows(
+                [
+                    WendaoRerankRequestRow(
+                        doc_id="doc-0",
+                        vector_score=0.5,
+                        embedding=(0.1, 0.2, 0.3),
+                        query_embedding=(0.4, 0.5, 0.6),
+                    ),
+                    WendaoRerankRequestRow(
+                        doc_id="doc-0",
+                        vector_score=0.4,
+                        embedding=(0.7, 0.8, 0.9),
+                        query_embedding=(0.4, 0.5, 0.6),
+                    ),
+                ]
+            )
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+@pytest.mark.integration
+def test_transport_client_reads_query_via_rust_mock_flight_server() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    process = _spawn_rust_mock_flight_server(host, port)
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(
+                    host=host,
+                    port=port,
+                ),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+        query = repo_search_query()
+        request = repo_search_request(
+            "rerank rust traits",
+            limit=25,
+            language_filters=("rust",),
+            path_prefixes=("src/",),
+            title_filters=("Repo Search",),
+            tag_filters=("lang:rust",),
+        )
+
+        info = client.get_repo_search_info(request)
+        response = client.read_query_table(
+            query,
+            extra_metadata={
+                WENDAO_REPO_SEARCH_QUERY_HEADER: request.query_text,
+                WENDAO_REPO_SEARCH_LIMIT_HEADER: str(request.limit),
+                WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER: "rust",
+                WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER: "src/",
+                WENDAO_REPO_SEARCH_TAG_FILTERS_HEADER: "lang:rust",
+                WENDAO_REPO_SEARCH_TITLE_FILTERS_HEADER: "Repo Search",
+            },
+        )
+        rows = client.read_repo_search_rows(request)
+
+        assert info.descriptor.path == [b"search", b"repos", b"main"]
+        assert len(info.endpoints) == 1
+        assert info.endpoints[0].ticket.ticket == b"/search/repos/main"
+        assert tuple(response.column_names) == REPO_SEARCH_COLUMNS
+        assert response.to_pylist() == [
+            {
+                "doc_id": "doc-1",
+                "path": "src/lib.rs",
+                "title": "Repo Search Result",
+                "score": 0.91,
+                "language": "rust",
+            }
+        ]
+        assert rows == [
+            WendaoRepoSearchResultRow(
+                doc_id="doc-1",
+                path="src/lib.rs",
+                title="Repo Search Result",
+                score=0.91,
+                language="rust",
+            )
+        ]
+    finally:
+        _terminate_process(process)
+
+
+@pytest.mark.integration
+def test_transport_client_reads_query_via_wendao_search_flight_server(tmp_path) -> None:
+    binary = _wendao_search_flight_server_binary()
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    _run_rust_search_plane_seed_binary(str(tmp_path))
+    process = _spawn_rust_mock_flight_server(
+        host,
+        port,
+        binary_env_var="WENDAO_SEARCH_SERVER_BINARY",
+        default_binary=binary,
+        extra_args=("alpha/repo", str(tmp_path), "3"),
+    )
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(host=host, port=port),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+        alpha_rows = client.read_repo_search_rows(repo_search_request("alpha", limit=10))
+        markdown_rows = client.read_repo_search_rows(
+            repo_search_request("alpha", limit=10, language_filters=("markdown",))
+        )
+        rust_only_rows = client.read_repo_search_rows(
+            repo_search_request("alpha", limit=10, language_filters=("rust",))
+        )
+        src_rows = client.read_repo_search_rows(
+            repo_search_request("alpha", limit=10, path_prefixes=("src/",))
+        )
+        readme_title_rows = client.read_repo_search_rows(
+            repo_search_request("alpha", limit=10, title_filters=("readme",))
+        )
+        markdown_tag_rows = client.read_repo_search_rows(
+            repo_search_request("alpha", limit=10, tag_filters=("lang:markdown",))
+        )
+        exact_match_rows = client.read_repo_search_rows(
+            repo_search_request("searchonlytoken", limit=10, tag_filters=("match:exact",))
+        )
+        readme_filename_rows = client.read_repo_search_rows(
+            repo_search_request("alpha", limit=10, filename_filters=("readme.md",))
+        )
+        flight_prefixed_rows = client.read_repo_search_rows(
+            repo_search_request("flightbridgetoken", limit=10, path_prefixes=("src/flight",))
+        )
+        flight_title_rows = client.read_repo_search_rows(
+            repo_search_request("flightbridgetoken", limit=10, title_filters=("flight_search",))
+        )
+        rust_tag_rows = client.read_repo_search_rows(
+            repo_search_request("alpha", limit=10, tag_filters=("lang:rust",))
+        )
+        search_rows = client.read_repo_search_rows(
+            repo_search_request("searchonlytoken", limit=1)
+        )
+        mixed_case_exact_rows = client.read_repo_search_rows(
+            repo_search_request("CamelBridgeToken", limit=2)
+        )
+        rank_tie_rows = client.read_repo_search_rows(
+            repo_search_request("ranktieexacttoken", limit=1)
+        )
+        flight_search_rows = client.read_repo_search_rows(
+            repo_search_request("flightbridgetoken", limit=10)
+        )
+
+        assert alpha_rows
+        assert any(row.path == "src/lib.rs" for row in alpha_rows)
+        assert all(row.language == "rust" for row in alpha_rows if row.path.startswith("src/"))
+        assert len(markdown_rows) == 1
+        assert markdown_rows[0].path == "README.md"
+        assert markdown_rows[0].language == "markdown"
+        assert rust_only_rows
+        assert all(row.language == "rust" for row in rust_only_rows)
+        assert all(row.path != "README.md" for row in rust_only_rows)
+        assert src_rows
+        assert all(row.path.startswith("src/") for row in src_rows)
+        assert all(row.path != "README.md" for row in src_rows)
+        assert len(readme_title_rows) == 1
+        assert readme_title_rows[0].path == "README.md"
+        assert len(markdown_tag_rows) == 1
+        assert markdown_tag_rows[0].path == "README.md"
+        assert len(exact_match_rows) == 1
+        assert exact_match_rows[0].path == "src/search.rs"
+        assert "searchonlytoken" in exact_match_rows[0].best_section.lower()
+        assert len(readme_filename_rows) == 1
+        assert readme_filename_rows[0].path == "README.md"
+        assert "alpha" in readme_filename_rows[0].best_section.lower()
+        assert flight_prefixed_rows
+        assert all(row.path.startswith("src/flight") for row in flight_prefixed_rows)
+        assert flight_title_rows
+        assert all("flight_search" in row.title.lower() for row in flight_title_rows)
+        assert rust_tag_rows
+        assert all(row.language == "rust" for row in rust_tag_rows)
+        assert all(row.path != "README.md" for row in rust_tag_rows)
+        assert len(search_rows) == 1
+        assert search_rows[0].path == "src/search.rs"
+        assert "searchonlytoken" in search_rows[0].best_section.lower()
+        assert len(mixed_case_exact_rows) == 2
+        assert mixed_case_exact_rows[0].path == "docs/CamelBridge.md"
+        assert mixed_case_exact_rows[1].path == "src/camelbridge.rs"
+        assert mixed_case_exact_rows[0].score > mixed_case_exact_rows[1].score
+        assert "camelbridgetoken" in mixed_case_exact_rows[0].best_section.lower()
+        assert len(rank_tie_rows) == 1
+        assert rank_tie_rows[0].path == "src/a_rank.rs"
+        assert "ranktieexacttoken" in rank_tie_rows[0].best_section.lower()
+        assert any(row.path == "src/flight_search.rs" for row in flight_search_rows)
+    finally:
+        _terminate_process(process)
+
+
+@pytest.mark.integration
+def test_transport_client_reads_query_via_restarted_wendao_search_flight_server(tmp_path) -> None:
+    binary = _wendao_search_flight_server_binary()
+    _run_rust_search_plane_seed_binary(str(tmp_path))
+
+    def next_bind() -> tuple[str, int]:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            host, port = sock.getsockname()
+        return host, port
+
+    alpha_request = repo_search_request("alpha", limit=10)
+    markdown_request = repo_search_request("alpha", limit=10, language_filters=("markdown",))
+    src_request = repo_search_request("alpha", limit=10, path_prefixes=("src/",))
+    readme_title_request = repo_search_request("alpha", limit=10, title_filters=("readme",))
+    markdown_tag_request = repo_search_request("alpha", limit=10, tag_filters=("lang:markdown",))
+    exact_match_request = repo_search_request("searchonlytoken", limit=10, tag_filters=("match:exact",))
+    readme_filename_request = repo_search_request("alpha", limit=10, filename_filters=("readme.md",))
+    search_request = repo_search_request("searchonlytoken", limit=1)
+    mixed_case_exact_request = repo_search_request("CamelBridgeToken", limit=2)
+    rank_tie_request = repo_search_request("ranktieexacttoken", limit=1)
+
+    for _ in range(2):
+        host, port = next_bind()
+        process = _spawn_rust_mock_flight_server(
+            host,
+            port,
+            binary_env_var="WENDAO_SEARCH_SERVER_BINARY",
+            default_binary=binary,
+            extra_args=("alpha/repo", str(tmp_path), "3"),
+        )
+        try:
+            client = WendaoTransportClient(
+                WendaoTransportConfig(
+                    endpoint=WendaoTransportEndpoint(host=host, port=port),
+                    schema_version="v2",
+                    request_timeout_seconds=10.0,
+                )
+            )
+            info = client.get_repo_search_info(alpha_request)
+            alpha_rows = client.read_repo_search_rows(alpha_request)
+            markdown_rows = client.read_repo_search_rows(markdown_request)
+            src_rows = client.read_repo_search_rows(src_request)
+            readme_title_rows = client.read_repo_search_rows(readme_title_request)
+            markdown_tag_rows = client.read_repo_search_rows(markdown_tag_request)
+            exact_match_rows = client.read_repo_search_rows(exact_match_request)
+            readme_filename_rows = client.read_repo_search_rows(readme_filename_request)
+            search_rows = client.read_repo_search_rows(search_request)
+            mixed_case_exact_rows = client.read_repo_search_rows(mixed_case_exact_request)
+            rank_tie_rows = client.read_repo_search_rows(rank_tie_request)
+
+            assert info.descriptor.path == [b"search", b"repos", b"main"]
+            assert alpha_rows
+            assert any(row.path == "src/lib.rs" for row in alpha_rows)
+            assert len(markdown_rows) == 1
+            assert markdown_rows[0].path == "README.md"
+            assert src_rows
+            assert all(row.path.startswith("src/") for row in src_rows)
+            assert len(readme_title_rows) == 1
+            assert readme_title_rows[0].path == "README.md"
+            assert len(markdown_tag_rows) == 1
+            assert markdown_tag_rows[0].path == "README.md"
+            assert len(exact_match_rows) == 1
+            assert exact_match_rows[0].path == "src/search.rs"
+            assert "searchonlytoken" in exact_match_rows[0].best_section.lower()
+            assert len(readme_filename_rows) == 1
+            assert readme_filename_rows[0].path == "README.md"
+            assert "alpha" in readme_filename_rows[0].best_section.lower()
+            assert len(search_rows) == 1
+            assert search_rows[0].path == "src/search.rs"
+            assert "searchonlytoken" in search_rows[0].best_section.lower()
+            assert len(mixed_case_exact_rows) == 2
+            assert mixed_case_exact_rows[0].path == "docs/CamelBridge.md"
+            assert mixed_case_exact_rows[1].path == "src/camelbridge.rs"
+            assert mixed_case_exact_rows[0].score > mixed_case_exact_rows[1].score
+            assert "camelbridgetoken" in mixed_case_exact_rows[0].best_section.lower()
+            assert len(rank_tie_rows) == 1
+            assert rank_tie_rows[0].path == "src/a_rank.rs"
+            assert "ranktieexacttoken" in rank_tie_rows[0].best_section.lower()
+        finally:
+            _terminate_process(process)
+
+
+@pytest.mark.integration
+def test_transport_client_exchanges_rerank_rows_via_wendao_search_flight_server(tmp_path) -> None:
+    binary = _wendao_search_flight_server_binary()
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    process = _spawn_rust_mock_flight_server(
+        host,
+        port,
+        binary_env_var="WENDAO_SEARCH_SERVER_BINARY",
+        default_binary=binary,
+        extra_args=("alpha/repo", str(tmp_path), "3"),
+    )
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(host=host, port=port),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+        rows = client.exchange_rerank_result_rows(
+            [
+                WendaoRerankRequestRow(
+                    doc_id="doc-0",
+                    vector_score=0.5,
+                    embedding=(1.0, 0.0, 0.0),
+                    query_embedding=(1.0, 0.0, 0.0),
+                ),
+                WendaoRerankRequestRow(
+                    doc_id="doc-1",
+                    vector_score=0.8,
+                    embedding=(0.0, 1.0, 0.0),
+                    query_embedding=(1.0, 0.0, 0.0),
+                ),
+            ]
+        )
+
+        assert [row.doc_id for row in rows] == ["doc-0", "doc-1"]
+        assert [row.rank for row in rows] == [1, 2]
+        assert [row.final_score for row in rows] == pytest.approx([0.8, 0.62])
+    finally:
+        _terminate_process(process)
+
+
+@pytest.mark.integration
+def test_transport_client_rejects_duplicate_rerank_doc_ids_via_wendao_search_flight_server(
+    tmp_path,
+) -> None:
+    binary = _wendao_search_flight_server_binary()
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        host, port = sock.getsockname()
+
+    process = _spawn_rust_mock_flight_server(
+        host,
+        port,
+        binary_env_var="WENDAO_SEARCH_SERVER_BINARY",
+        default_binary=binary,
+        extra_args=("alpha/repo", str(tmp_path), "3"),
+    )
+    try:
+        client = WendaoTransportClient(
+            WendaoTransportConfig(
+                endpoint=WendaoTransportEndpoint(host=host, port=port),
+                schema_version="v2",
+                request_timeout_seconds=10.0,
+            )
+        )
+
+        with pytest.raises(
+            pa.ArrowInvalid,
+            match="doc_id` must be unique across one batch",
+        ):
+            client.exchange_rerank_rows(
+                [
+                    WendaoRerankRequestRow(
+                        doc_id="doc-0",
+                        vector_score=0.5,
+                        embedding=(0.1, 0.2, 0.3),
+                        query_embedding=(0.4, 0.5, 0.6),
+                    ),
+                    WendaoRerankRequestRow(
+                        doc_id="doc-0",
+                        vector_score=0.4,
+                        embedding=(0.7, 0.8, 0.9),
+                        query_embedding=(0.4, 0.5, 0.6),
+                    ),
+                ]
+            )
+    finally:
+        _terminate_process(process)

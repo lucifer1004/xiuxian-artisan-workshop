@@ -17,8 +17,9 @@ pub use compat::build_rerank_provider_binding;
 #[cfg(feature = "julia")]
 pub use transport::{
     CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER, NegotiatedArrowTransportClient,
-    NegotiatedTransportSelection, build_arrow_transport_client_from_binding,
-    negotiate_arrow_transport_client_from_bindings,
+    NegotiatedTransportSelection, SearchPlaneRepoSearchFlightRouteProvider,
+    bootstrap_sample_repo_search_content, build_arrow_transport_client_from_binding,
+    build_search_plane_flight_service, negotiate_arrow_transport_client_from_bindings,
 };
 pub use xiuxian_wendao_core::artifacts::{
     PluginArtifactPayload, PluginArtifactSelector, PluginLaunchSpec,

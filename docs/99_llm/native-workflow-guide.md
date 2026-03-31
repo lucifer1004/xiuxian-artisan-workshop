@@ -116,6 +116,7 @@ Before shipping a workflow:
 5. Unit tests cover happy path and failure path.
 
 Registration note:
+
 - keep workflow construction and workflow registration as separate concerns
 - expose only the final callable through the retained runtime boundary
 

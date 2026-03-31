@@ -4,10 +4,13 @@ mod memory_recall;
 mod messages;
 mod types;
 
-#[allow(clippy::wildcard_imports)]
-use super::*;
+use anyhow::Result;
 
-use types::{ReactConversationState, ReactPreparedMessages, TurnRuntimeContext};
+use crate::agent::{Agent, omega};
+use crate::contracts::{OmegaDecision, OmegaFallbackPolicy};
+use crate::observability::SessionEvent;
+
+use self::types::{ReactConversationState, ReactPreparedMessages, TurnRuntimeContext};
 
 impl Agent {
     pub(in crate::agent) async fn run_react_loop(

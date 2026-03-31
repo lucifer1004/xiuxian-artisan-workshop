@@ -3900,7 +3900,7 @@ dependencies = [
  "deepseek-ocr-core",
  "deepseek-ocr-dsq-models",
  "deepseek-ocr-dsq-runtime",
- "fast_image_resize 5.5.0",
+ "fast_image_resize",
  "image",
  "serde",
  "serde_json",
@@ -3920,7 +3920,7 @@ dependencies = [
  "deepseek-ocr-core",
  "deepseek-ocr-dsq-models",
  "deepseek-ocr-dsq-runtime",
- "fast_image_resize 5.5.0",
+ "fast_image_resize",
  "image",
  "memmap2",
  "rand 0.8.5",
@@ -4506,21 +4506,6 @@ dependencies = [
  "cfg-if",
  "document-features",
  "num-traits",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "fast_image_resize"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12dd43e5011e8d8411a3215a0d57a2ec5c68282fb90eb5d7221fab0113442174"
-dependencies = [
- "bytemuck",
- "cfg-if",
- "document-features",
- "image",
- "num-traits",
- "rayon",
  "thiserror 2.0.18",
 ]
 
@@ -11466,42 +11451,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spider_agent"
-version = "2.45.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9df25a59fd5c0e46693f03d0ebc8bec89ee5d5ebcb197646f4d29288f9b89453"
-dependencies = [
- "aho-corasick",
- "async-trait",
- "base64 0.22.1",
- "dashmap 6.1.0",
- "llm_models_spider",
- "log",
- "lol_html",
- "parking_lot",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "spider_agent_html",
- "spider_agent_types",
- "thiserror 2.0.18",
- "tokio",
-]
-
-[[package]]
-name = "spider_agent_html"
-version = "2.45.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c1c5c3eba29fcdb25d77c71d22fce9c93f31c516e21b80604a7c9f3682d0f8e"
-dependencies = [
- "aho-corasick",
- "lol_html",
- "serde",
- "serde_json",
- "spider_agent_types",
-]
-
-[[package]]
 name = "spider_agent_types"
 version = "2.45.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15190,7 +15139,6 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "clap",
- "comrak",
  "fs2",
  "futures",
  "hex",
@@ -15199,7 +15147,6 @@ dependencies = [
  "num-traits",
  "pulldown-cmark 0.12.2",
  "redis 1.0.3",
- "regex",
  "reqwest 0.13.2",
  "rmcp",
  "serde",
@@ -15314,7 +15261,6 @@ dependencies = [
  "deepseek-ocr-infer-dots",
  "deepseek-ocr-infer-paddleocr",
  "env_logger",
- "fast_image_resize 6.0.0",
  "futures",
  "hex",
  "image",
@@ -15324,12 +15270,10 @@ dependencies = [
  "num-traits",
  "redis 1.0.3",
  "reqwest 0.13.2",
- "rmcp",
  "serde",
  "serde_json",
  "sha2",
  "spider",
- "spider_agent",
  "tempfile",
  "thiserror 2.0.18",
  "tokenizers 0.22.2",
@@ -15649,7 +15593,7 @@ version = "0.1.1"
 dependencies = [
  "anyhow",
  "arrow 58.1.0",
- "arrow-ipc 58.1.0",
+ "arrow-flight",
  "async-trait",
  "axum",
  "blake3",
@@ -15663,32 +15607,30 @@ dependencies = [
  "globset",
  "include_dir",
  "insta",
- "lazy_static",
  "log",
  "notify 8.2.0",
  "notify-debouncer-full",
- "once_cell",
  "petgraph 0.7.1",
  "pyo3",
  "rayon",
  "redis 1.0.3",
  "regex",
  "reqwest 0.13.2",
- "rmcp",
  "schemars 1.2.0",
  "serde",
  "serde_json",
  "serde_yaml",
  "serial_test",
  "sha1",
- "sha2",
  "specta",
  "specta-typescript",
  "tantivy 0.25.0",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-stream",
  "toml 0.8.23",
+ "tonic",
  "tower",
  "unicode-normalization",
  "url",
@@ -15764,7 +15706,9 @@ dependencies = [
 name = "xiuxian-wendao-runtime"
 version = "0.1.1"
 dependencies = [
+ "arrow-array 57.3.0",
  "arrow-flight",
+ "arrow-schema 57.3.0",
  "async-trait",
  "futures",
  "serde",

@@ -15,7 +15,7 @@ Current program position:
 - that additive proof now spans repo-facing, docs-facing, and Studio-facing
   consumers, including the Stage-A repo service-state bundle
 - the next governed program move is `Phase 7: Flight-First Runtime
-  Negotiation`, not more outward-surface expansion
+Negotiation`, not more outward-surface expansion
 
 ## Landed
 

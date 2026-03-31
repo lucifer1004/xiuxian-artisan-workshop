@@ -4,8 +4,8 @@ mod gate;
 use crate::session::ChatMessage;
 use anyhow::Result;
 
-use super::super::Agent;
 use super::persist_memory_state;
+use crate::agent::Agent;
 use episode::turn_store_outcome;
 
 struct TurnStoreOutcome {

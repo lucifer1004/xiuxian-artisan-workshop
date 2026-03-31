@@ -1,5 +1,7 @@
-#[allow(clippy::wildcard_imports)]
-use super::*;
+use anyhow::Result;
+
+use crate::agent::Agent;
+use crate::session::ChatMessage;
 
 use super::context_repair::is_context_window_exceeded_error;
 use super::types::{ReactConversationState, TurnRuntimeContext};
@@ -121,7 +123,7 @@ impl Agent {
             let args = parse_tool_call_arguments(&tool_call.function.arguments);
             let output = match self
                 .call_tool_with_diagnostics(
-                    turn_ctx.session_id(),
+                    Some(turn_ctx.session_id),
                     Some(tool_call.id.as_str()),
                     &name,
                     args,
@@ -133,7 +135,11 @@ impl Agent {
                     output
                 }
                 Err(error) => {
-                    if let Some(soft_output) = self.soft_fail_tool_error_output(&name, &error) {
+                    if let Some(soft_output) = Self::soft_fail_tool_error_output(
+                        &name,
+                        Some(tool_call.id.as_str()),
+                        &error,
+                    ) {
                         state.tool_summary.record_result(true);
                         soft_output
                     } else {

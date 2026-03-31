@@ -1,21 +1,20 @@
 use std::sync::Arc;
 
-use crate::channels::traits::{Channel, ChannelMessage};
-
-use super::super::super::super::parsing::SessionPartitionCommand;
-use super::super::super::super::replies::{
+use crate::channels::discord::runtime::managed::handlers::events::{
+    EVENT_DISCORD_COMMAND_SESSION_PARTITION_JSON_REPLIED,
+    EVENT_DISCORD_COMMAND_SESSION_PARTITION_REPLIED,
+};
+use crate::channels::discord::runtime::managed::handlers::send::send_response;
+use crate::channels::discord::runtime::managed::parsing::SessionPartitionCommand;
+use crate::channels::discord::runtime::managed::replies::{
     format_session_partition_admin_required, format_session_partition_admin_required_json,
     format_session_partition_error_json, format_session_partition_status,
     format_session_partition_status_json, format_session_partition_updated,
     format_session_partition_updated_json,
 };
-use super::super::events::{
-    EVENT_DISCORD_COMMAND_SESSION_PARTITION_JSON_REPLIED,
-    EVENT_DISCORD_COMMAND_SESSION_PARTITION_REPLIED,
-};
-use super::super::send::send_response;
+use crate::channels::traits::{Channel, ChannelMessage};
 
-pub(super) async fn handle_session_partition(
+pub(in crate::channels::discord::runtime::managed::handlers::command_dispatch) async fn handle_session_partition(
     channel: &Arc<dyn Channel>,
     msg: &ChannelMessage,
     command: SessionPartitionCommand,

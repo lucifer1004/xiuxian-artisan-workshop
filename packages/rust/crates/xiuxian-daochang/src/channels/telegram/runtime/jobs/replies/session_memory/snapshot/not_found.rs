@@ -1,13 +1,12 @@
 use serde_json::json;
 
 use crate::agent::{MemoryRecallMetricsSnapshot, MemoryRuntimeStatusSnapshot};
-
-use super::super::metrics::format_memory_recall_metrics_json;
-use super::super::runtime_status::{
+use crate::channels::telegram::runtime::jobs::replies::session_memory::metrics::format_memory_recall_metrics_json;
+use crate::channels::telegram::runtime::jobs::replies::session_memory::runtime_status::{
     format_memory_runtime_status_json, format_memory_runtime_status_lines,
 };
 
-pub(in super::super::super::super) fn format_memory_recall_not_found(
+pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_found(
     runtime_status: MemoryRuntimeStatusSnapshot,
     session_scope: &str,
 ) -> String {
@@ -28,7 +27,7 @@ pub(in super::super::super::super) fn format_memory_recall_not_found(
     lines.join("\n")
 }
 
-pub(in super::super::super::super) fn format_memory_recall_not_found_json(
+pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_found_json(
     metrics: MemoryRecallMetricsSnapshot,
     runtime_status: MemoryRuntimeStatusSnapshot,
     session_scope: &str,
@@ -43,4 +42,11 @@ pub(in super::super::super::super) fn format_memory_recall_not_found_json(
         "metrics": format_memory_recall_metrics_json(metrics),
     })
     .to_string()
+}
+
+pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_not_found_telegram(
+    runtime_status: MemoryRuntimeStatusSnapshot,
+    session_scope: &str,
+) -> String {
+    format_memory_recall_not_found(runtime_status, session_scope)
 }

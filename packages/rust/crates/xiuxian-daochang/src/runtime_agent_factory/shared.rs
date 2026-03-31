@@ -1,10 +1,13 @@
 use xiuxian_macros::env_non_empty;
 
-pub(super) fn non_empty_env(name: &str) -> Option<String> {
+pub(in crate::runtime_agent_factory) fn non_empty_env(name: &str) -> Option<String> {
     env_non_empty!(name)
 }
 
-pub(super) fn normalize_unit_f32(value: f32, source: &str) -> Option<f32> {
+pub(in crate::runtime_agent_factory) fn normalize_unit_f32(
+    value: f32,
+    source: &str,
+) -> Option<f32> {
     if (0.0..=1.0).contains(&value) {
         return Some(value);
     }

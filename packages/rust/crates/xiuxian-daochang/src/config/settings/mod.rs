@@ -19,6 +19,6 @@ pub use types::{
     DiscordAclSettings, DiscordAclSlashSettings, DiscordSettings, EmbeddingSettings,
     InferenceSettings, MemorySettings, MistralSettings, RuntimeSettings, SessionSettings,
     TelegramAclAllowSettings, TelegramAclControlSettings, TelegramAclPrincipalSettings,
-    TelegramAclSettings, TelegramAclSlashSettings, TelegramGroupSettings, TelegramSettings,
-    TelegramTopicSettings, ToolRuntimeSettings,
+    TelegramAclRuleSettings, TelegramAclSettings, TelegramAclSlashSettings, TelegramGroupSettings,
+    TelegramSettings, TelegramTopicSettings, ToolRuntimeSettings,
 };

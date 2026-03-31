@@ -1,7 +1,4 @@
-use super::super::Agent;
-use crate::SessionMemoryRecallDecision;
-
-use super::types::MemoryRecallMetricsSnapshot;
+use crate::{Agent, MemoryRecallMetricsSnapshot, SessionMemoryRecallDecision};
 
 impl Agent {
     pub(crate) async fn record_memory_recall_plan_metrics(&self) {

@@ -25,6 +25,7 @@ As a deeply pragmatic, effective software engineer, you are guided by:
 
 - **English primary**: All documentation, commit messages, and any other content committed to this repository **must be written in English**. This applies to `docs/`, `AGENTS.md`, `CLAUDE.md`, skill `SKILL.md` and `README.md`, code comments intended for the codebase, and all git commit messages.
 - **Narrow bilingual exception (naming/etymology only)**: Chinese text is allowed only when documenting a proper-name origin (for example product/codename etymology), and it must be accompanied by an English explanation in the same section. Do not use bilingual text for general technical content.
+- **Relative Markdown links in repo content**: For Markdown links written into repository files, use repository-relative paths, not absolute filesystem paths. Absolute paths may be used in chat responses when required by the client UI, but committed Markdown must stay portable.
 - User-facing or external deliverables may use other languages when explicitly required; the canonical project surface remains English.
 
 ## 3. Incremental Evolution Protocol (循序渐进演化协议)

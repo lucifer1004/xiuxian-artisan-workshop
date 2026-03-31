@@ -2,7 +2,7 @@
 
 mod bounded_store;
 mod message;
-mod redis_backend;
+pub(crate) mod redis_backend;
 mod store;
 mod summary;
 

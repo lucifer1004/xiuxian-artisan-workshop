@@ -38,6 +38,9 @@ jobs:
       - name: Rust dependency security gate (cargo-audit + cargo-deny)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-security-gate
 
+      - name: Rust contract and dependency governance gate
+        run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-contract-dependency-governance
+
       - name: Rust gate - xiuxian-core-rs lib runtime lane (explicit)
         run: secretspec run --provider env --profile default -- devenv tasks run ci:rust-xiuxian-core-rs-lib
 

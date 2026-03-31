@@ -9,6 +9,7 @@ pub static RESOURCES: ::include_dir::Dir<'_> =
 
 mod agent;
 mod agent_builder;
+mod channel_runtime;
 mod channels;
 mod config;
 mod contracts;
@@ -31,14 +32,17 @@ pub mod warmup_options;
 
 pub use agent::{
     Agent, MemoryRecallLatencyBucketsSnapshot, MemoryRecallMetricsSnapshot, NativeToolRegistry,
-    SessionContextBudgetClassSnapshot, SessionContextBudgetSnapshot, SessionContextMode,
-    SessionContextSnapshotInfo, SessionContextStats, SessionContextWindowInfo,
-    SessionMemoryRecallDecision, SessionMemoryRecallSnapshot,
+    NotificationDispatcher, NotificationProvider, SessionContextBudgetClassSnapshot,
+    SessionContextBudgetSnapshot, SessionContextMode, SessionContextSnapshotInfo,
+    SessionContextStats, SessionContextWindowInfo, SessionMemoryRecallDecision,
+    SessionMemoryRecallSnapshot,
     native_tools::registry::{NativeTool, NativeToolCallContext},
     native_tools::spider::SpiderCrawlTool,
     native_tools::zhixing::{AgendaViewTool, JournalRecordTool, TaskAddTool},
-    notification::{NotificationDispatcher, NotificationProvider},
     prune_messages_for_token_budget, summarise_drained_turns,
+};
+pub use channel_runtime::{
+    ChannelProvider, DiscordRuntimeMode, TelegramChannelMode, WebhookDedupBackendMode,
 };
 pub use channels::{
     Channel, ChannelAttachment, ChannelMessage, DEFAULT_REDIS_KEY_PREFIX,
@@ -99,6 +103,7 @@ pub use session::{
 pub use shortcuts::parse_react_shortcut;
 pub use tool_runtime::{
     ToolClientPool, ToolDiscoverCacheStatsSnapshot, ToolListCacheStatsSnapshot,
-    ToolPoolConnectConfig, connect_tool_pool,
+    ToolPoolConnectConfig, ToolRuntimeCallResult, ToolRuntimeListRequestParams,
+    ToolRuntimeListResult, ToolRuntimeToolDefinition, connect_tool_pool,
 };
 pub use tools::{parse_qualified_tool_name, qualify_tool_name};

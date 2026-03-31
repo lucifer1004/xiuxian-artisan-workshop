@@ -147,6 +147,9 @@ impl From<LinkGraphJuliaDeploymentArtifact> for PluginArtifactPayload {
             }),
             schema_version: value.schema_version,
             launch: Some(value.launch.into()),
+            selected_transport: None,
+            fallback_from: None,
+            fallback_reason: None,
         }
     }
 }

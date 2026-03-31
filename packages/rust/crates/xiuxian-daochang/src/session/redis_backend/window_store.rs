@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use omni_window::TurnSlot;
+use xiuxian_window::TurnSlot;
 
 use crate::observability::SessionEvent;
 

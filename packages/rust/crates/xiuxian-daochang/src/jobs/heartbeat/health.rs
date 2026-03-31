@@ -2,7 +2,7 @@
 
 use tokio::time::error::Elapsed;
 
-use super::manager::JobMetricsSnapshot;
+use crate::jobs::JobMetricsSnapshot;
 
 /// Result classification for a heartbeat probe with timeout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

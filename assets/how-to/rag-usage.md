@@ -42,12 +42,12 @@ list_knowledge_domains()
 
 ## Knowledge Sources
 
-| Directory                              | Domain       | Content                                   |
-| -------------------------------------- | ------------ | ----------------------------------------- |
-| `assets/knowledge/`                    | knowledge    | Troubleshooting, patterns, best practices |
-| `assets/how-to/`                       | workflow     | How-to guides and workflows               |
-| `docs/`                                | architecture | Architectural decisions                   |
-| `assets/knowledge/uv-best-practices.md` | uv          | UV best practices                         |
+| Directory                               | Domain       | Content                                   |
+| --------------------------------------- | ------------ | ----------------------------------------- |
+| `assets/knowledge/`                     | knowledge    | Troubleshooting, patterns, best practices |
+| `assets/how-to/`                        | workflow     | How-to guides and workflows               |
+| `docs/`                                 | architecture | Architectural decisions                   |
+| `assets/knowledge/uv-best-practices.md` | uv           | UV best practices                         |
 
 ## Available Tools
 

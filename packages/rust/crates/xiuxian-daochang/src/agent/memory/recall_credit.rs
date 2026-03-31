@@ -3,13 +3,13 @@ use xiuxian_memory_engine::{Episode, EpisodeStore};
 use super::super::memory_recall_feedback::RecallOutcome;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::agent) struct RecalledEpisodeCandidate {
+pub(crate) struct RecalledEpisodeCandidate {
     pub episode_id: String,
     pub score: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::agent) struct RecallCreditUpdate {
+pub(crate) struct RecallCreditUpdate {
     pub episode_id: String,
     pub score: f32,
     pub weight: f32,
@@ -18,7 +18,7 @@ pub(in crate::agent) struct RecallCreditUpdate {
     pub updated_q: f32,
 }
 
-pub(in crate::agent) fn select_recall_credit_candidates(
+pub(crate) fn select_recall_credit_candidates(
     recalled: &[(Episode, f32)],
     max_candidates: usize,
 ) -> Vec<RecalledEpisodeCandidate> {
@@ -32,7 +32,7 @@ pub(in crate::agent) fn select_recall_credit_candidates(
         .collect()
 }
 
-pub(in crate::agent) fn apply_recall_credit(
+pub(crate) fn apply_recall_credit(
     store: &EpisodeStore,
     candidates: &[RecalledEpisodeCandidate],
     outcome: RecallOutcome,

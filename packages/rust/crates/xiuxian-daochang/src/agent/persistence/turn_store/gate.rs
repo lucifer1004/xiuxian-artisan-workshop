@@ -3,9 +3,9 @@ use xiuxian_memory_engine::{
     MemoryGateVerdict, MemoryUtilityLedger,
 };
 
+use crate::agent::Agent;
 use crate::observability::SessionEvent;
 
-use super::super::super::Agent;
 use super::{StoredTurnEpisode, TurnStoreOutcome};
 
 impl Agent {
@@ -188,15 +188,15 @@ fn memory_gate_event_fields(
         ),
         (
             "react_evidence_refs".to_string(),
-            super::super::encode_string_list_for_stream(&decision.react_evidence_refs),
+            encode_string_list_for_stream(&decision.react_evidence_refs),
         ),
         (
             "graph_evidence_refs".to_string(),
-            super::super::encode_string_list_for_stream(&decision.graph_evidence_refs),
+            encode_string_list_for_stream(&decision.graph_evidence_refs),
         ),
         (
             "omega_factors".to_string(),
-            super::super::encode_string_list_for_stream(&decision.omega_factors),
+            encode_string_list_for_stream(&decision.omega_factors),
         ),
         ("next_action".to_string(), decision.next_action.clone()),
     ]
@@ -238,28 +238,25 @@ fn memory_promoted_event_fields(
         ("usage_count".to_string(), ledger.usage_count.to_string()),
         (
             "intent_excerpt".to_string(),
-            super::super::stream_excerpt(&stored_episode.intent, 512),
+            stream_excerpt(&stored_episode.intent, 512),
         ),
         (
             "experience_excerpt".to_string(),
-            super::super::stream_excerpt(&stored_episode.experience, 1024),
+            stream_excerpt(&stored_episode.experience, 1024),
         ),
         ("outcome".to_string(), stored_episode.outcome.clone()),
-        (
-            "reason".to_string(),
-            super::super::stream_excerpt(&decision.reason, 512),
-        ),
+        ("reason".to_string(), stream_excerpt(&decision.reason, 512)),
         (
             "react_evidence_refs".to_string(),
-            super::super::encode_string_list_for_stream(&decision.react_evidence_refs),
+            encode_string_list_for_stream(&decision.react_evidence_refs),
         ),
         (
             "graph_evidence_refs".to_string(),
-            super::super::encode_string_list_for_stream(&decision.graph_evidence_refs),
+            encode_string_list_for_stream(&decision.graph_evidence_refs),
         ),
         (
             "omega_factors".to_string(),
-            super::super::encode_string_list_for_stream(&decision.omega_factors),
+            encode_string_list_for_stream(&decision.omega_factors),
         ),
         ("next_action".to_string(), decision.next_action.clone()),
         (
@@ -267,4 +264,23 @@ fn memory_promoted_event_fields(
             "knowledge.ingest_candidate".to_string(),
         ),
     ]
+}
+
+fn encode_string_list_for_stream(values: &[String]) -> String {
+    serde_json::to_string(values).unwrap_or_else(|_| "[]".to_string())
+}
+
+fn stream_excerpt(input: &str, max_chars: usize) -> String {
+    if max_chars == 0 {
+        return String::new();
+    }
+    let trimmed = input.trim();
+    if trimmed.chars().count() <= max_chars {
+        return trimmed.to_string();
+    }
+
+    let keep = max_chars.saturating_sub(3);
+    let mut out = trimmed.chars().take(keep).collect::<String>();
+    out.push_str("...");
+    out
 }

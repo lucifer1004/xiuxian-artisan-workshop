@@ -95,6 +95,9 @@ impl LinkGraphJuliaRerankRuntimeConfig {
             }),
             schema_version: self.schema_version.clone(),
             launch: Some(self.plugin_launch_spec()),
+            selected_transport: None,
+            fallback_from: None,
+            fallback_reason: None,
         }
     }
 

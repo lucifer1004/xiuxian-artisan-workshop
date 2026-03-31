@@ -139,6 +139,29 @@ impl SearchPlaneService {
             .join(format!("{table_name}.parquet"))
     }
 
+    #[must_use]
+    pub(crate) fn repo_corpus_runtime_root(&self) -> std::path::PathBuf {
+        self.storage_root.join("_runtime").join("repo_corpus")
+    }
+
+    #[must_use]
+    pub(crate) fn repo_corpus_record_json_path(
+        &self,
+        corpus: SearchCorpusKind,
+        repo_id: &str,
+    ) -> std::path::PathBuf {
+        let repo_key = blake3::hash(repo_id.as_bytes()).to_hex().to_string();
+        self.repo_corpus_runtime_root()
+            .join("records")
+            .join(corpus.as_str())
+            .join(format!("{repo_key}.json"))
+    }
+
+    #[must_use]
+    pub(crate) fn repo_corpus_snapshot_json_path(&self) -> std::path::PathBuf {
+        self.repo_corpus_runtime_root().join("snapshot.json")
+    }
+
     fn repo_table_name(corpus: SearchCorpusKind, repo_id: &str) -> String {
         format!(
             "{}_repo_{}",

@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 
 use crate::observability::SessionEvent;
+use crate::session::SessionSummarySegment;
 
-use super::super::summary::SessionSummarySegment;
 use super::RedisSessionBackend;
+use super::backend::usize_to_i64_saturating;
 
 impl RedisSessionBackend {
     pub(crate) async fn append_summary_segment(
@@ -15,7 +16,7 @@ impl RedisSessionBackend {
         let key = self.summary_key(session_id);
         let encoded =
             serde_json::to_string(segment).context("failed to encode summary segment for redis")?;
-        let max_segments_i64 = super::usize_to_i64_saturating(max_segments.max(1));
+        let max_segments_i64 = usize_to_i64_saturating(max_segments.max(1));
         let ttl_secs = self.ttl_secs;
 
         self.run_pipeline::<(), _>("append_summary_segment", || {
@@ -52,7 +53,7 @@ impl RedisSessionBackend {
             return Ok(Vec::new());
         }
         let key = self.summary_key(session_id);
-        let limit_i64 = super::usize_to_i64_saturating(limit);
+        let limit_i64 = usize_to_i64_saturating(limit);
         let payloads = self
             .run_command::<Vec<String>, _>("get_recent_summary_segments", || {
                 let mut cmd = redis::cmd("LRANGE");

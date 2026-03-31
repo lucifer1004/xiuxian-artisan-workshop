@@ -979,6 +979,40 @@ rust-security-gate: rust-security-audit rust-security-deny
     @echo "Rust dependency security gates passed (cargo-audit + cargo-deny)."
 
 [group('validate')]
+rust-contract-semver-core baseline_rev="":
+    @echo "Running xiuxian-wendao-core semver gate (cargo-semver-checks)..."
+    @if ! command -v cargo-semver-checks >/dev/null 2>&1; then \
+        echo "cargo-semver-checks is required but not installed."; \
+        echo "Install with: nix profile add nixpkgs#cargo-semver-checks"; \
+        exit 1; \
+    fi
+    @WENDAO_CORE_SEMVER_BASELINE_REV="{{baseline_rev}}" bash scripts/rust/wendao_contract_dependency_governance.sh semver-core
+
+[group('validate')]
+rust-dependency-hygiene-machete-wendao:
+    @echo "Running Wendao dependency-hygiene advisory lane (cargo-machete)..."
+    @if ! command -v cargo-machete >/dev/null 2>&1; then \
+        echo "cargo-machete is required but not installed."; \
+        echo "Install with: nix profile add nixpkgs#cargo-machete"; \
+        exit 1; \
+    fi
+    @bash scripts/rust/wendao_contract_dependency_governance.sh machete-wendao
+
+[group('validate')]
+rust-dependency-hygiene-udeps-wendao:
+    @echo "Running bounded Wendao unused-dependency advisory lane (cargo-udeps)..."
+    @if ! command -v cargo-udeps >/dev/null 2>&1; then \
+        echo "cargo-udeps is required but not installed."; \
+        echo "Install with: nix profile add nixpkgs#cargo-udeps"; \
+        exit 1; \
+    fi
+    @bash scripts/rust/wendao_contract_dependency_governance.sh udeps-wendao
+
+[group('validate')]
+rust-contract-dependency-governance: rust-contract-semver-core rust-dependency-hygiene-machete-wendao rust-dependency-hygiene-udeps-wendao
+    @echo "Rust contract and dependency governance lanes completed (semver + advisory hygiene)."
+
+[group('validate')]
 rust-test-xiuxian-core-rs cargo_args="--no-fail-fast":
     @echo "Running xiuxian-core-rs test lane (runtime-linking-safe wrapper)..."
     @CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/workspace-strict-proof}" scripts/rust/test_xiuxian_core_rs.sh {{cargo_args}}

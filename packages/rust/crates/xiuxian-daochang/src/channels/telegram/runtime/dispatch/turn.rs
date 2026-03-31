@@ -1,6 +1,6 @@
 use crate::agent::Agent;
 use crate::channels::managed_runtime::turn::{
-    ForegroundTurnOutcome, ForegroundTurnRequest, build_session_id, compose_turn_content,
+    ForegroundTurnOutcome, build_session_id, compose_turn_content,
     run_foreground_turn_with_interrupt,
 };
 use crate::channels::traits::{Channel, ChannelMessage};
@@ -30,18 +30,18 @@ pub(super) async fn process_foreground_message(
 
     let turn_content = compose_turn_content(&msg);
     let interrupt_generation = *interrupt_rx.borrow();
-    let result = run_foreground_turn_with_interrupt(ForegroundTurnRequest {
-        agent: Arc::clone(&agent),
-        session_id: session_id.clone(),
-        content: turn_content,
-        timeout_secs: turn_timeout_secs,
-        timeout_reply: format!(
+    let result = run_foreground_turn_with_interrupt(
+        Arc::clone(&agent),
+        &session_id,
+        &turn_content,
+        turn_timeout_secs,
+        format!(
             "Request timed out after {turn_timeout_secs}s. Use `/bg <prompt>` for long-running tasks."
         ),
         interrupt_rx,
         interrupt_generation,
-        interrupted_reply: "Request interrupted by a newer instruction.".to_string(),
-    })
+        "Request interrupted by a newer instruction.".to_string(),
+    )
     .await;
 
     if let Err(error) = channel.stop_typing(&msg.recipient).await {

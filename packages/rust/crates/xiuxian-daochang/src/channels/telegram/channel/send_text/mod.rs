@@ -1,4 +1,3 @@
-mod dispatch;
 mod helpers;
 
 use std::time::Duration;

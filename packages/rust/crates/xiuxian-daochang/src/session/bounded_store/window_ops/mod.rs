@@ -1,9 +1,8 @@
 mod read_ops;
 mod write_ops;
 
+use crate::session::ChatMessage;
 use xiuxian_window::TurnSlot;
-
-use super::super::message::ChatMessage;
 
 fn turn_slots_to_messages(slots: &[TurnSlot]) -> Vec<ChatMessage> {
     slots

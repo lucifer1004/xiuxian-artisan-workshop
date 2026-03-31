@@ -1,6 +1,11 @@
+use anyhow::Result;
+use xiuxian_qianhuan::InjectionPolicy;
+
+use crate::agent::system_prompt_injection_state::SYSTEM_PROMPT_INJECTION_CONTEXT_MESSAGE_NAME;
+use crate::agent::{Agent, context_budget, injection};
+use crate::session::{ChatMessage, SessionSummarySegment};
+
 use super::types::ReactPreparedMessages;
-#[allow(clippy::wildcard_imports)]
-use super::*;
 
 impl Agent {
     pub(super) async fn prepare_react_messages(

@@ -2,11 +2,16 @@
 
 mod bridge;
 mod discover_cache;
+mod types;
 
 use anyhow::Result;
 pub use bridge::{
     ToolClientPool, ToolDiscoverCacheStatsSnapshot, ToolListCacheStatsSnapshot,
     ToolPoolConnectConfig,
+};
+pub use types::{
+    ToolRuntimeCallResult, ToolRuntimeListRequestParams, ToolRuntimeListResult,
+    ToolRuntimeToolDefinition,
 };
 
 /// Build an external tool client pool from URL with runtime-resolved discover-cache wiring.

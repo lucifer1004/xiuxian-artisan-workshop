@@ -1,5 +1,6 @@
 //! One-turn agent loop: user message -> LLM (+ optional tools) -> `tool_calls` -> external tool call -> repeat.
 
+pub(crate) mod admission;
 mod bootstrap;
 mod consolidation;
 mod context_budget;
@@ -11,25 +12,27 @@ mod graph;
 mod graph_bridge;
 mod injection;
 pub(crate) mod logging;
-mod memory;
-mod memory_recall;
-mod memory_recall_feedback;
-mod memory_recall_metrics;
-mod memory_recall_state;
+pub(crate) mod memory;
+pub(crate) mod memory_recall;
+pub(crate) mod memory_recall_feedback;
+pub(crate) mod memory_recall_metrics;
+pub(crate) mod memory_recall_state;
 mod memory_state;
-mod memory_stream_consumer;
+pub(crate) mod memory_stream_consumer;
 pub(crate) mod native_tools;
+mod notification;
 mod omega;
 mod persistence;
-mod reflection;
+pub(crate) mod reflection;
 mod reflection_runtime_state;
-mod session_context;
+pub(crate) mod session_context;
 mod system_prompt_injection_state;
 mod tool_dispatch;
 mod tool_runtime_state;
-mod tool_startup;
+pub(crate) mod tool_startup;
 mod turn_execution;
 mod turn_support;
+pub(crate) mod zhenfa;
 
 use anyhow::{Context, Result};
 use std::collections::HashMap;
@@ -75,6 +78,10 @@ const MIN_MEMORY_EMBED_TIMEOUT_MS: u64 = 100;
 const MAX_MEMORY_EMBED_TIMEOUT_MS: u64 = 60_000;
 const MAX_MEMORY_EMBED_COOLDOWN_MS: u64 = 300_000;
 
+pub(crate) use admission::{
+    DownstreamAdmissionMetricsSnapshot, DownstreamAdmissionRuntimeSnapshot,
+    DownstreamInFlightSnapshot, DownstreamRuntimeSnapshot,
+};
 pub use consolidation::summarise_drained_turns;
 pub use context_budget::prune_messages_for_token_budget;
 pub use context_budget_state::{SessionContextBudgetClassSnapshot, SessionContextBudgetSnapshot};
@@ -83,6 +90,7 @@ pub use memory_recall_metrics::{MemoryRecallLatencyBucketsSnapshot, MemoryRecall
 pub use memory_recall_state::{SessionMemoryRecallDecision, SessionMemoryRecallSnapshot};
 pub use memory_state::MemoryRuntimeStatusSnapshot;
 pub use native_tools::registry::NativeToolRegistry;
+pub use notification::{NotificationDispatcher, NotificationProvider};
 pub use session_context::{
     SessionContextMode, SessionContextSnapshotInfo, SessionContextStats, SessionContextWindowInfo,
 };

@@ -1,7 +1,7 @@
 //! Top-level integration harness for `agent::session_context`.
 
 mod config {
-    pub(crate) use omni_agent::AgentConfig;
+    pub(crate) use xiuxian_daochang::AgentConfig;
 }
 
 mod observability {
@@ -49,7 +49,7 @@ mod observability {
 }
 
 mod session {
-    pub(crate) use omni_agent::{
+    pub(crate) use xiuxian_daochang::{
         BoundedSessionStore, ChatMessage, SessionStore, SessionSummarySegment,
     };
 }

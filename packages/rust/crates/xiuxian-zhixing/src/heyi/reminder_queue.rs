@@ -75,7 +75,10 @@ impl DueReminderRecord {
     #[must_use]
     pub fn into_signal(self, _time_zone: Tz) -> ReminderSignal {
         ReminderSignal {
+            task_id: self.task_id,
             title: self.title,
+            task_brief: self.task_brief,
+            scheduled_at: Some(self.scheduled_at),
             recipient: self.recipient,
         }
     }

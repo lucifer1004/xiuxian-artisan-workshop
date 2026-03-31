@@ -1,5 +1,5 @@
-use crate::cli::{DiscordRuntimeMode, TelegramChannelMode, WebhookDedupBackendMode};
-use omni_macros::env_non_empty;
+use crate::{DiscordRuntimeMode, TelegramChannelMode, WebhookDedupBackendMode};
+use xiuxian_macros::env_non_empty;
 
 pub(crate) fn resolve_string(
     cli_value: Option<String>,

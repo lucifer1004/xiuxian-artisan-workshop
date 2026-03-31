@@ -2,7 +2,7 @@
 type: knowledge
 title: "RFC: Python Arrow Flight Boundary and Removal Program"
 category: "rfc"
-status: "draft"
+status: "implemented"
 authors:
   - codex
 created: 2026-03-29
@@ -42,9 +42,9 @@ transport use case requires it to remain.
 
 This RFC is governed by:
 
-1. [wendao_arrow_plugin_core_runtime_migration.md](/Users/guangtao/projects/xiuxian-artisan-workshop/.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md)
-2. [2026-03-27-wendao-arrow-plugin-flight-rfc.md](/Users/guangtao/projects/xiuxian-artisan-workshop/docs/rfcs/2026-03-27-wendao-arrow-plugin-flight-rfc.md)
-3. [2026-03-27-wendao-core-runtime-plugin-migration-rfc.md](/Users/guangtao/projects/xiuxian-artisan-workshop/docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md)
+1. [wendao_arrow_plugin_core_runtime_migration.md](../../.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md)
+2. [2026-03-27-wendao-arrow-plugin-flight-rfc.md](./2026-03-27-wendao-arrow-plugin-flight-rfc.md)
+3. [2026-03-27-wendao-core-runtime-plugin-migration-rfc.md](./2026-03-27-wendao-core-runtime-plugin-migration-rfc.md)
 
 The blueprint already fixes the architectural center:
 
@@ -228,6 +228,25 @@ This RFC is considered operational when:
 3. no remaining Python work is justified only as local cleanup if it advances
    the boundary
 
+## 11.1 Operational Status
+
+This RFC is now operationally complete.
+
+The boundary program defined by `PY-P1` through `PY-P4` has been executed to
+the point where:
+
+1. broad Python runtime, bridge, knowledge, and test-helper surfaces have been
+   retired
+2. the standalone Python test-helper platform has been removed
+3. retained Python scope is centered on `xiuxian-wendao-py` plus narrow
+   transport-adjacent helpers
+4. active work has moved from boundary closure into Flight query-contract
+   evolution
+
+Follow-on work on repo-search and rerank request/response semantics is no
+longer tracked as part of this boundary RFC. That work now belongs to the
+successor query-contract RFC.
+
 ## 12. Open Questions
 
 1. should any part of `packages/python/core` survive once Flight/IPC transport
@@ -244,3 +263,20 @@ From this point:
 1. Python work must be grouped by phase
 2. deletions should be justified against the retained Arrow/Flight boundary
 3. new Python runtime-center behavior is architecturally out of bounds
+
+## 14. Completion Notes
+
+This RFC should now be treated as the completed boundary baseline for Python.
+
+Subsequent work should reference this RFC only when:
+
+1. defending the retained Python boundary
+2. rejecting new Python-local runtime regrowth
+3. auditing whether a helper belongs inside or outside the retained boundary
+
+Subsequent work should not use this RFC as the primary planning surface for:
+
+1. repo-search request-contract growth
+2. rerank request/response contract growth
+3. real-host query semantics
+4. Flight response-shape evolution

@@ -1,5 +1,12 @@
-use super::super::shared::{
-    SessionPartitionModeToken, is_reset_context_command as is_reset_context_command_shared,
+mod admin;
+mod injection;
+
+use crate::channels::managed_runtime::parsing::{
+    FeedbackDirection as SharedSessionFeedbackDirection, OutputFormat as SharedSessionOutputFormat,
+    ResumeCommand as SharedResumeContextCommand,
+    SessionFeedbackCommand as SharedSessionFeedbackCommand,
+    SessionPartitionCommand as SharedSessionPartitionCommand, SessionPartitionModeToken,
+    is_reset_context_command as is_reset_context_command_shared,
     is_stop_command as is_stop_command_shared, parse_resume_context_command as parse_resume_shared,
     parse_session_context_budget_command as parse_session_budget_shared,
     parse_session_context_memory_command as parse_session_memory_shared,
@@ -8,10 +15,63 @@ use super::super::shared::{
     parse_session_partition_command as parse_session_partition_shared,
     parse_session_partition_mode_token as parse_partition_mode_token,
 };
-use super::{
-    ResumeContextCommand, SessionFeedbackCommand, SessionOutputFormat, SessionPartitionCommand,
-    SessionPartitionMode,
-};
+
+pub(crate) use admin::parse_session_admin_command;
+pub(crate) use injection::parse_session_injection_command;
+
+pub(crate) type SessionOutputFormat = SharedSessionOutputFormat;
+pub(crate) type ResumeContextCommand = SharedResumeContextCommand;
+pub(crate) type SessionFeedbackDirection = SharedSessionFeedbackDirection;
+pub(crate) type SessionFeedbackCommand = SharedSessionFeedbackCommand;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SessionPartitionMode {
+    Chat,
+    ChatUser,
+    User,
+    ChatThreadUser,
+}
+
+impl SessionPartitionMode {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Chat => "chat",
+            Self::ChatUser => "chat_user",
+            Self::User => "user",
+            Self::ChatThreadUser => "chat_thread_user",
+        }
+    }
+}
+
+pub(crate) type SessionPartitionCommand = SharedSessionPartitionCommand<SessionPartitionMode>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SessionAdminAction {
+    List,
+    Set(Vec<String>),
+    Add(Vec<String>),
+    Remove(Vec<String>),
+    Clear,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionAdminCommand {
+    pub(crate) action: SessionAdminAction,
+    pub(crate) format: SessionOutputFormat,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SessionInjectionAction {
+    Status,
+    Clear,
+    SetXml(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionInjectionCommand {
+    pub(crate) action: SessionInjectionAction,
+    pub(crate) format: SessionOutputFormat,
+}
 
 /// Parse session status command and return output format.
 pub fn parse_session_context_status_command(input: &str) -> Option<SessionOutputFormat> {

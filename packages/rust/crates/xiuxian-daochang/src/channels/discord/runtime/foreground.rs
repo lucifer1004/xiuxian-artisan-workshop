@@ -8,12 +8,13 @@ use super::ForegroundInterruptController;
 use super::dispatch::process_discord_message_with_interrupt;
 use super::managed::push_background_completion;
 use crate::agent::{Agent, DownstreamAdmissionRuntimeSnapshot};
+use crate::channels::managed_runtime::ForegroundQueueMode;
+use crate::channels::managed_runtime::session_turn_queue::SessionTurnQueue;
 use crate::channels::managed_runtime::turn::build_session_id;
-use crate::channels::managed_runtime::{ForegroundQueueMode, SessionTurnQueue};
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::{JobCompletion, JobManager, JobManagerConfig, TurnRunner};
 
-pub(super) struct DiscordForegroundRuntime {
+pub(crate) struct DiscordForegroundRuntime {
     agent: Arc<Agent>,
     channel_for_send: Arc<dyn Channel>,
     job_manager: Arc<JobManager>,
@@ -35,7 +36,7 @@ pub(super) struct DiscordForegroundSnapshot {
 }
 
 impl DiscordForegroundRuntime {
-    pub(super) async fn spawn_foreground_turn(&mut self, msg: ChannelMessage) {
+    pub(crate) async fn spawn_foreground_turn(&mut self, msg: ChannelMessage) {
         let session_key = msg.session_key.clone();
         let channel_name = msg.channel.clone();
         let recipient = msg.recipient.clone();
@@ -132,21 +133,21 @@ impl DiscordForegroundRuntime {
         });
     }
 
-    pub(super) async fn push_completion(&self, completion: JobCompletion) {
+    pub(crate) async fn push_completion(&self, completion: JobCompletion) {
         push_background_completion(&self.channel_for_send, &self.agent, completion).await;
     }
 
-    pub(super) fn has_foreground_tasks(&self) -> bool {
+    pub(crate) fn has_foreground_tasks(&self) -> bool {
         !self.foreground_tasks.is_empty()
     }
 
-    pub(super) async fn join_next_foreground_task(&mut self) {
+    pub(crate) async fn join_next_foreground_task(&mut self) {
         if let Some(Err(error)) = self.foreground_tasks.join_next().await {
             tracing::warn!(error = %error, "discord foreground worker task join error");
         }
     }
 
-    pub(super) async fn abort_and_drain_foreground_tasks(&mut self) {
+    pub(crate) async fn abort_and_drain_foreground_tasks(&mut self) {
         self.foreground_tasks.abort_all();
         while let Some(result) = self.foreground_tasks.join_next().await {
             if let Err(error) = result {
@@ -155,7 +156,7 @@ impl DiscordForegroundRuntime {
         }
     }
 
-    pub(super) fn snapshot(&self) -> DiscordForegroundSnapshot {
+    pub(crate) fn snapshot(&self) -> DiscordForegroundSnapshot {
         let available_permits = self.foreground_gate.available_permits();
         let max_in_flight_messages = self.foreground_max_in_flight_messages;
         let in_flight_messages = max_in_flight_messages.saturating_sub(available_permits);
@@ -168,12 +169,12 @@ impl DiscordForegroundRuntime {
         }
     }
 
-    pub(super) fn admission_runtime_snapshot(&self) -> DownstreamAdmissionRuntimeSnapshot {
+    pub(crate) fn admission_runtime_snapshot(&self) -> DownstreamAdmissionRuntimeSnapshot {
         self.agent.downstream_admission_runtime_snapshot()
     }
 }
 
-pub(super) fn build_foreground_runtime(
+pub(crate) fn build_foreground_runtime(
     agent: Arc<Agent>,
     channel_for_send: Arc<dyn Channel>,
     turn_timeout_secs: u64,

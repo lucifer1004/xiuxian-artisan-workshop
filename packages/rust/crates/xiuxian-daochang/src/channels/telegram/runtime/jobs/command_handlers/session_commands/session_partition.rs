@@ -2,16 +2,16 @@ use std::sync::Arc;
 
 use crate::channels::traits::{Channel, ChannelMessage};
 
-use super::super::super::observability::send_with_observability;
-use super::super::super::replies::{
+use super::{
+    EVENT_TELEGRAM_COMMAND_SESSION_PARTITION_JSON_REPLIED,
+    EVENT_TELEGRAM_COMMAND_SESSION_PARTITION_REPLIED,
+};
+use crate::channels::telegram::runtime::jobs::observability::send_with_observability;
+use crate::channels::telegram::runtime::jobs::replies::{
     format_session_partition_admin_required, format_session_partition_admin_required_json,
     format_session_partition_error_json, format_session_partition_status,
     format_session_partition_status_json, format_session_partition_updated,
     format_session_partition_updated_json,
-};
-use super::{
-    EVENT_TELEGRAM_COMMAND_SESSION_PARTITION_JSON_REPLIED,
-    EVENT_TELEGRAM_COMMAND_SESSION_PARTITION_REPLIED,
 };
 
 use crate::channels::telegram::commands::{SessionPartitionMode, parse_session_partition_command};

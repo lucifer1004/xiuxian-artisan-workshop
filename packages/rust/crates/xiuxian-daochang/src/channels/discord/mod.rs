@@ -5,7 +5,7 @@ mod channel;
 mod client;
 mod constants;
 mod parsing;
-mod runtime;
+pub(crate) mod runtime;
 mod send;
 mod serenity_payload;
 mod session_partition;
@@ -16,8 +16,9 @@ pub use channel::{
     DiscordSlashCommandPolicy, build_discord_command_admin_rule,
 };
 pub use constants::DISCORD_MAX_MESSAGE_LENGTH;
+pub use runtime::DiscordIngressRunRequest;
 pub use runtime::{
-    DiscordIngressApp, DiscordRuntimeConfig, build_discord_ingress_app,
+    DiscordIngressApp, DiscordIngressBuildRequest, DiscordRuntimeConfig, build_discord_ingress_app,
     build_discord_ingress_app_with_control_command_policy,
     build_discord_ingress_app_with_partition_and_control_command_policy, run_discord_gateway,
     run_discord_ingress,

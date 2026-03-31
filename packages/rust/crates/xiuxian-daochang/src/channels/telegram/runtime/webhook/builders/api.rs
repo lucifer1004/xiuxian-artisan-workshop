@@ -1,125 +1,124 @@
-use std::sync::Arc;
-
 use anyhow::Result;
+use tokio::sync::mpsc;
 
-use super::super::console::{print_foreground_config, print_managed_commands_help};
-use super::super::dispatch::start_telegram_runtime;
-use super::super::webhook::build_telegram_webhook_app_with_control_command_policy;
-use super::loop_control;
-use super::secret;
-use super::server;
-use crate::agent::Agent;
-use crate::channels::telegram::TelegramCommandAdminRule;
-use crate::channels::telegram::TelegramControlCommandPolicy;
 use crate::channels::telegram::idempotency::WebhookDedupConfig;
-use crate::channels::telegram::runtime_config::TelegramRuntimeConfig;
-use crate::channels::traits::Channel;
+use crate::channels::telegram::session_partition::TelegramSessionPartition;
+use crate::channels::telegram::{TelegramCommandAdminRule, TelegramControlCommandPolicy};
+use crate::channels::traits::ChannelMessage;
 
-/// Run Telegram channel via webhook (recommended for multi-instance deployments).
-pub async fn run_telegram_webhook(
-    agent: Arc<Agent>,
-    bot_token: String,
-    allowed_users: Vec<String>,
-    allowed_groups: Vec<String>,
-    admin_users: Vec<String>,
-    control_command_allow_from: Option<Vec<String>>,
-    control_command_rules: Vec<TelegramCommandAdminRule>,
-    bind_addr: &str,
-    webhook_path: &str,
-    secret_token: Option<String>,
-    dedup_config: WebhookDedupConfig,
-) -> Result<()> {
-    run_telegram_webhook_with_control_command_policy(
-        agent,
-        bot_token,
-        allowed_users,
-        allowed_groups,
-        TelegramControlCommandPolicy::new(
-            admin_users,
-            control_command_allow_from,
-            control_command_rules,
-        ),
-        bind_addr,
-        webhook_path,
-        secret_token,
-        dedup_config,
-    )
-    .await
+use super::super::app::TelegramWebhookApp;
+use super::core::{
+    TelegramWebhookCoreBuildRequest,
+    build_telegram_webhook_app_with_partition_and_control_command_policy,
+};
+
+pub struct TelegramWebhookControlPolicyBuildRequest {
+    pub bot_token: String,
+    pub allowed_users: Vec<String>,
+    pub allowed_groups: Vec<String>,
+    pub control_command_policy: TelegramControlCommandPolicy,
+    pub webhook_path: String,
+    pub secret_token: Option<String>,
+    pub dedup_config: WebhookDedupConfig,
+    pub tx: mpsc::Sender<ChannelMessage>,
 }
 
-/// Run Telegram channel via webhook with structured control-command policy.
-pub async fn run_telegram_webhook_with_control_command_policy(
-    agent: Arc<Agent>,
+pub struct TelegramWebhookPartitionBuildRequest {
+    pub bot_token: String,
+    pub allowed_users: Vec<String>,
+    pub allowed_groups: Vec<String>,
+    pub admin_users: Vec<String>,
+    pub webhook_path: String,
+    pub secret_token: Option<String>,
+    pub dedup_config: WebhookDedupConfig,
+    pub session_partition: TelegramSessionPartition,
+    pub tx: mpsc::Sender<ChannelMessage>,
+}
+
+pub fn build_telegram_webhook_app(
     bot_token: String,
     allowed_users: Vec<String>,
     allowed_groups: Vec<String>,
-    control_command_policy: TelegramControlCommandPolicy,
-    bind_addr: &str,
-    webhook_path: &str,
+    webhook_path: impl Into<String>,
     secret_token: Option<String>,
     dedup_config: WebhookDedupConfig,
-) -> Result<()> {
-    let secret_token = secret::normalize_secret_token(secret_token)?;
-    let runtime_config = TelegramRuntimeConfig::from_env();
-    let (tx, mut inbound_rx) = tokio::sync::mpsc::channel(runtime_config.inbound_queue_capacity);
-    let webhook = build_telegram_webhook_app_with_control_command_policy(
+    tx: mpsc::Sender<ChannelMessage>,
+) -> Result<TelegramWebhookApp> {
+    build_telegram_webhook_app_with_control_command_policy(
+        TelegramWebhookControlPolicyBuildRequest {
+            bot_token,
+            allowed_users,
+            allowed_groups,
+            control_command_policy: TelegramControlCommandPolicy::new(
+                Vec::new(),
+                None,
+                Vec::<TelegramCommandAdminRule>::new(),
+            ),
+            webhook_path: webhook_path.into(),
+            secret_token,
+            dedup_config,
+            tx,
+        },
+    )
+}
+
+pub fn build_telegram_webhook_app_with_control_command_policy(
+    request: TelegramWebhookControlPolicyBuildRequest,
+) -> Result<TelegramWebhookApp> {
+    let TelegramWebhookControlPolicyBuildRequest {
         bot_token,
         allowed_users,
         allowed_groups,
         control_command_policy,
         webhook_path,
-        Some(secret_token),
+        secret_token,
         dedup_config,
         tx,
-    )?;
-    let channel_for_send: Arc<dyn Channel> = webhook.channel.clone();
-    let session_partition = webhook.channel.session_partition();
-    let path = webhook.path;
-    let dedup_config = webhook.dedup_config;
-    let app = webhook.app;
-
-    let mut webhook_server = server::start_webhook_server(bind_addr, app).await?;
-
-    let (
-        session_gate_backend,
-        foreground_tx,
-        interrupt_controller,
-        foreground_dispatcher,
-        job_manager,
-        mut completion_rx,
-    ) = start_telegram_runtime(
-        Arc::clone(&agent),
-        Arc::clone(&channel_for_send),
-        runtime_config,
-    )?;
-
-    println!(
-        "Telegram webhook listening on {}{} (Ctrl+C to stop)",
-        bind_addr, path
-    );
-    println!(
-        "Webhook dedup backend: {} (ttl={}s)",
-        dedup_config.backend_name(),
-        dedup_config.ttl_secs
-    );
-    println!("Session partition: {}", session_partition.to_string());
-    print_foreground_config(&runtime_config, &session_gate_backend);
-    print_managed_commands_help();
-
-    loop_control::run_webhook_event_loop(
-        &mut inbound_rx,
-        &mut completion_rx,
-        &channel_for_send,
-        &foreground_tx,
-        &interrupt_controller,
-        &job_manager,
-        &agent,
-        &mut webhook_server.task,
+    } = request;
+    build_telegram_webhook_app_with_partition_and_control_command_policy(
+        TelegramWebhookCoreBuildRequest {
+            bot_token,
+            allowed_users,
+            allowed_groups,
+            control_command_policy,
+            webhook_path,
+            secret_token,
+            dedup_config,
+            session_partition: TelegramSessionPartition::default(),
+            tx,
+        },
     )
-    .await;
+}
 
-    server::stop_webhook_server(webhook_server).await;
-    drop(foreground_tx);
-    foreground_dispatcher.abort();
-    Ok(())
+pub fn build_telegram_webhook_app_with_partition(
+    request: TelegramWebhookPartitionBuildRequest,
+) -> Result<TelegramWebhookApp> {
+    let TelegramWebhookPartitionBuildRequest {
+        bot_token,
+        allowed_users,
+        allowed_groups,
+        admin_users,
+        webhook_path,
+        secret_token,
+        dedup_config,
+        session_partition,
+        tx,
+    } = request;
+    build_telegram_webhook_app_with_partition_and_control_command_policy(
+        TelegramWebhookCoreBuildRequest {
+            bot_token,
+            allowed_users,
+            allowed_groups,
+            control_command_policy: TelegramControlCommandPolicy::new(
+                admin_users,
+                None,
+                Vec::<TelegramCommandAdminRule>::new(),
+            ),
+            webhook_path,
+            secret_token,
+            dedup_config,
+            session_partition,
+            tx,
+        },
+    )
 }

@@ -2,8 +2,10 @@ use crate::channels::managed_runtime::session_partition::{
     SessionPartitionProfile, quick_toggle_usage, set_mode_usage, supported_modes_csv,
 };
 
-pub(in super::super::super) fn format_session_partition_status(current_mode: &str) -> String {
-    let profile = SessionPartitionProfile::Discord;
+pub(in crate::channels::telegram::runtime::jobs) fn format_session_partition_status(
+    current_mode: &str,
+) -> String {
+    let profile = SessionPartitionProfile::Telegram;
     [
         "Session partition status.".to_string(),
         format!("current_mode={current_mode}"),
@@ -15,7 +17,7 @@ pub(in super::super::super) fn format_session_partition_status(current_mode: &st
     .join("\n")
 }
 
-pub(in super::super::super) fn format_session_partition_updated(
+pub(in crate::channels::telegram::runtime::jobs) fn format_session_partition_updated(
     requested_mode: &str,
     current_mode: &str,
 ) -> String {
@@ -28,7 +30,7 @@ pub(in super::super::super) fn format_session_partition_updated(
     .join("\n")
 }
 
-pub(in super::super::super) fn format_session_partition_admin_required(
+pub(in crate::channels::telegram::runtime::jobs) fn format_session_partition_admin_required(
     sender: &str,
     current_mode: &str,
 ) -> String {
@@ -37,8 +39,61 @@ pub(in super::super::super) fn format_session_partition_admin_required(
         "- `reason`: `admin_required`".to_string(),
         format!("- `sender`: `{sender}`"),
         format!("- `current_mode`: `{current_mode}`"),
-        "- `hint`: Ask an identity allowed by `discord.acl.control.allow_from` (or matching `discord.acl.control.rules` / `discord.acl.admin`) to run `/session partition ...` (or `/session scope ...`)."
+        "- `hint`: Ask an identity allowed by `telegram.acl.control.allow_from` (or matching `telegram.acl.control.rules` / `telegram.acl.admin`) to run `/session partition ...` (or `/session scope ...`)."
             .to_string(),
     ]
     .join("\n")
+}
+
+pub(in crate::channels::telegram::runtime::jobs) fn format_session_partition_status_json(
+    current_mode: &str,
+) -> String {
+    serde_json::json!({
+        "kind": "session_partition",
+        "current_mode": current_mode,
+        "supported_modes": supported_modes_csv(SessionPartitionProfile::Telegram),
+        "quick_toggle": quick_toggle_usage(),
+        "set_mode": set_mode_usage(SessionPartitionProfile::Telegram),
+    })
+    .to_string()
+}
+
+pub(in crate::channels::telegram::runtime::jobs) fn format_session_partition_updated_json(
+    requested_mode: &str,
+    current_mode: &str,
+) -> String {
+    serde_json::json!({
+        "kind": "session_partition",
+        "status": "updated",
+        "requested_mode": requested_mode,
+        "current_mode": current_mode,
+    })
+    .to_string()
+}
+
+pub(in crate::channels::telegram::runtime::jobs) fn format_session_partition_error_json(
+    requested_mode: &str,
+    error: &str,
+) -> String {
+    serde_json::json!({
+        "kind": "session_partition",
+        "status": "error",
+        "requested_mode": requested_mode,
+        "error": error,
+    })
+    .to_string()
+}
+
+pub(in crate::channels::telegram::runtime::jobs) fn format_session_partition_admin_required_json(
+    sender: &str,
+    current_mode: &str,
+) -> String {
+    serde_json::json!({
+        "kind": "session_partition",
+        "status": "admin_required",
+        "sender": sender,
+        "current_mode": current_mode,
+        "hint": "Ask an identity allowed by telegram.acl.control.allow_from (or telegram.acl.control.rules / telegram.acl.admin) to run /session partition ... (or /session scope ...).",
+    })
+    .to_string()
 }

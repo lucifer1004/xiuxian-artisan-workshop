@@ -1,4 +1,4 @@
-pub(in crate::agent) fn should_apply_decay(
+pub(crate) fn should_apply_decay(
     decay_enabled: bool,
     decay_every_turns: usize,
     turn_index: u64,
@@ -10,7 +10,7 @@ pub(in crate::agent) fn should_apply_decay(
     turn_index > 0 && turn_index.is_multiple_of(every)
 }
 
-pub(in crate::agent) fn sanitize_decay_factor(raw: f32) -> f32 {
+pub(crate) fn sanitize_decay_factor(raw: f32) -> f32 {
     if !raw.is_finite() {
         return 0.985;
     }

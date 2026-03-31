@@ -1,4 +1,4 @@
-use litellm_rs::core::types::{
+use litellm_rs::core::types::tools::{
     FunctionDefinition as LiteFunctionDefinition, Tool as LiteTool, ToolType as LiteToolType,
 };
 

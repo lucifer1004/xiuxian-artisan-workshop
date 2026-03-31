@@ -5,9 +5,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Mapping
 
-from .config import WENDAO_SCHEMA_VERSION_HEADER, WendaoTransportConfig
+from .config import (
+    WENDAO_RERANK_DIMENSION_HEADER,
+    WENDAO_SCHEMA_VERSION_HEADER,
+    WendaoTransportConfig,
+)
 from .mode import WendaoTransportMode
-from .query import WendaoFlightRouteQuery
+from .query import (
+    WendaoFlightRouteQuery,
+    WendaoRepoSearchRequest,
+    WendaoRerankRequestRow,
+    build_rerank_request_table,
+    parse_rerank_response_rows,
+    parse_repo_search_rows,
+    repo_search_metadata,
+    repo_search_query,
+    rerank_embedding_dimension,
+    rerank_exchange_query,
+)
 
 if TYPE_CHECKING:
     import pyarrow.flight as flight
@@ -60,17 +75,19 @@ class WendaoTransportClient:
             self.config.endpoint.port,
         )
 
-    def flight_call_options(self) -> "flight.FlightCallOptions":
+    def flight_call_options(
+        self,
+        *,
+        extra_metadata: Mapping[str, str] | None = None,
+    ) -> "flight.FlightCallOptions":
         """Build call options for Arrow Flight RPCs."""
         flight = _flight_module()
         metadata = {
             WENDAO_SCHEMA_VERSION_HEADER: self.schema_version(),
             **self.request_metadata(),
+            **(extra_metadata or {}),
         }
-        headers = [
-            (key.encode("utf-8"), value.encode("utf-8"))
-            for key, value in metadata.items()
-        ]
+        headers = [(key.encode("utf-8"), value.encode("utf-8")) for key, value in metadata.items()]
         return flight.FlightCallOptions(
             timeout=self.config.request_timeout_seconds,
             headers=headers or None,
@@ -83,9 +100,7 @@ class WendaoTransportClient:
 
     def flight_descriptor(self) -> "flight.FlightDescriptor":
         """Build a route-backed Flight descriptor aligned to the Rust runtime."""
-        return self.flight_descriptor_for_query(
-            WendaoFlightRouteQuery(route=self.flight_route())
-        )
+        return self.flight_descriptor_for_query(WendaoFlightRouteQuery(route=self.flight_route()))
 
     def flight_descriptor_for_query(
         self,
@@ -112,13 +127,15 @@ class WendaoTransportClient:
     def get_query_info(
         self,
         query: WendaoFlightRouteQuery,
+        *,
+        extra_metadata: Mapping[str, str] | None = None,
         **connect_kwargs: object,
     ):
         """Fetch Flight metadata for one typed route query."""
         client = self.connect_flight(**connect_kwargs)
         return client.get_flight_info(
             self.flight_descriptor_for_query(query),
-            self.flight_call_options(),
+            self.flight_call_options(extra_metadata=extra_metadata),
         )
 
     def read_table(
@@ -135,15 +152,135 @@ class WendaoTransportClient:
     def read_query_table(
         self,
         query: WendaoFlightRouteQuery,
+        *,
+        extra_metadata: Mapping[str, str] | None = None,
         **connect_kwargs: object,
     ):
         """Read one Arrow table through ``do_get`` for one typed route query."""
         client = self.connect_flight(**connect_kwargs)
         reader = client.do_get(
             self.make_ticket(query.effective_ticket()),
-            self.flight_call_options(),
+            self.flight_call_options(extra_metadata=extra_metadata),
         )
         return reader.read_all()
+
+    def get_repo_search_info(
+        self,
+        request: WendaoRepoSearchRequest,
+        **connect_kwargs: object,
+    ):
+        """Fetch Flight metadata for the stable repo-search query."""
+
+        return self.get_query_info(
+            repo_search_query(),
+            extra_metadata=repo_search_metadata(request),
+            **connect_kwargs,
+        )
+
+    def read_repo_search_table(
+        self,
+        request: WendaoRepoSearchRequest,
+        **connect_kwargs: object,
+    ):
+        """Read the stable repo-search Arrow table."""
+
+        return self.read_query_table(
+            repo_search_query(),
+            extra_metadata=repo_search_metadata(request),
+            **connect_kwargs,
+        )
+
+    def read_repo_search_rows(
+        self,
+        request: WendaoRepoSearchRequest,
+        **connect_kwargs: object,
+    ):
+        """Read and parse stable repo-search rows."""
+
+        return parse_repo_search_rows(
+            self.read_repo_search_table(request, **connect_kwargs)
+        )
+
+    def exchange_table(
+        self,
+        table,
+        **connect_kwargs: object,
+    ):
+        """Round-trip one Arrow table through ``do_exchange``."""
+        return self.exchange_query_table(
+            WendaoFlightRouteQuery(route=self.flight_route()),
+            table,
+            **connect_kwargs,
+        )
+
+    def exchange_query_table(
+        self,
+        query: WendaoFlightRouteQuery,
+        table,
+        *,
+        extra_metadata: Mapping[str, str] | None = None,
+        **connect_kwargs: object,
+    ):
+        """Round-trip one Arrow table through ``do_exchange`` for one typed query."""
+        client = self.connect_flight(**connect_kwargs)
+        writer, reader = client.do_exchange(
+            self.flight_descriptor_for_query(query),
+            self.flight_call_options(extra_metadata=extra_metadata),
+        )
+        begin = getattr(writer, "begin", None)
+        if callable(begin):
+            begin(table.schema)
+        writer.write_table(table)
+        done_writing = getattr(writer, "done_writing", None)
+        if callable(done_writing):
+            done_writing()
+        return reader.read_all()
+
+    def exchange_rerank_table(
+        self,
+        table,
+        *,
+        embedding_dimension: int | None = None,
+        **connect_kwargs: object,
+    ):
+        """Round-trip one typed rerank request table through the stable route."""
+
+        return self.exchange_query_table(
+            rerank_exchange_query(),
+            table,
+            extra_metadata=(
+                {
+                    WENDAO_RERANK_DIMENSION_HEADER: str(embedding_dimension),
+                }
+                if embedding_dimension is not None
+                else None
+            ),
+            **connect_kwargs,
+        )
+
+    def exchange_rerank_rows(
+        self,
+        rows: list[WendaoRerankRequestRow],
+        **connect_kwargs: object,
+    ):
+        """Build and send one typed rerank request through the stable route."""
+
+        return self.exchange_rerank_table(
+            build_rerank_request_table(rows),
+            embedding_dimension=rerank_embedding_dimension(rows),
+            **connect_kwargs,
+        )
+
+    def exchange_rerank_result_rows(
+        self,
+        rows: list[WendaoRerankRequestRow],
+        **connect_kwargs: object,
+    ):
+        """Build, send, and parse one typed rerank request through the stable route."""
+
+        return parse_rerank_response_rows(
+            self.exchange_rerank_rows(rows, **connect_kwargs)
+        )
 
 
 def _flight_module() -> "flight":

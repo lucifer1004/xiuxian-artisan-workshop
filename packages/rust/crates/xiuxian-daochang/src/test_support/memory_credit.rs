@@ -1,12 +1,16 @@
 //! Memory decay and recall-credit helpers exposed for integration tests.
 
-use omni_memory::{Episode, EpisodeStore};
+use xiuxian_memory_engine::{Episode, EpisodeStore};
 
-use crate::agent::{
-    TestRecallCreditUpdate, TestRecallOutcome, TestRecalledEpisodeCandidate,
-    test_apply_recall_credit, test_sanitize_decay_factor, test_select_recall_credit_candidates,
-    test_should_apply_decay,
+use crate::agent::memory::{
+    RecallCreditUpdate as InternalRecallCreditUpdate,
+    RecalledEpisodeCandidate as InternalRecalledEpisodeCandidate,
+    apply_recall_credit as apply_recall_credit_internal,
+    sanitize_decay_factor as sanitize_decay_factor_internal,
+    select_recall_credit_candidates as select_recall_credit_candidates_internal,
+    should_apply_decay as should_apply_decay_internal,
 };
+use crate::agent::memory_recall_feedback::RecallOutcome as InternalRecallOutcome;
 
 /// Test-facing recall feedback outcome.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,13 +40,13 @@ pub struct RecallCreditUpdate {
 /// Decide whether memory decay should execute on this turn.
 #[must_use]
 pub fn should_apply_decay(decay_enabled: bool, decay_every_turns: usize, turn_index: u64) -> bool {
-    test_should_apply_decay(decay_enabled, decay_every_turns, turn_index)
+    should_apply_decay_internal(decay_enabled, decay_every_turns, turn_index)
 }
 
 /// Clamp/sanitize decay factor into supported numeric range.
 #[must_use]
 pub fn sanitize_decay_factor(raw: f32) -> f32 {
-    test_sanitize_decay_factor(raw)
+    sanitize_decay_factor_internal(raw)
 }
 
 /// Select ranked recall-credit candidates.
@@ -51,7 +55,7 @@ pub fn select_recall_credit_candidates(
     recalled: &[(Episode, f32)],
     max_candidates: usize,
 ) -> Vec<RecalledEpisodeCandidate> {
-    test_select_recall_credit_candidates(recalled, max_candidates)
+    select_recall_credit_candidates_internal(recalled, max_candidates)
         .into_iter()
         .map(from_internal_candidate)
         .collect()
@@ -66,29 +70,31 @@ pub fn apply_recall_credit(
 ) -> Vec<RecallCreditUpdate> {
     let internal_candidates = candidates
         .iter()
-        .map(|candidate| TestRecalledEpisodeCandidate {
+        .map(|candidate| InternalRecalledEpisodeCandidate {
             episode_id: candidate.episode_id.clone(),
             score: candidate.score,
         })
         .collect::<Vec<_>>();
     let internal_outcome = match outcome {
-        RecallOutcome::Success => TestRecallOutcome::Success,
-        RecallOutcome::Failure => TestRecallOutcome::Failure,
+        RecallOutcome::Success => InternalRecallOutcome::Success,
+        RecallOutcome::Failure => InternalRecallOutcome::Failure,
     };
-    test_apply_recall_credit(store, &internal_candidates, internal_outcome)
+    apply_recall_credit_internal(store, &internal_candidates, internal_outcome)
         .into_iter()
         .map(from_internal_update)
         .collect()
 }
 
-fn from_internal_candidate(candidate: TestRecalledEpisodeCandidate) -> RecalledEpisodeCandidate {
+fn from_internal_candidate(
+    candidate: InternalRecalledEpisodeCandidate,
+) -> RecalledEpisodeCandidate {
     RecalledEpisodeCandidate {
         episode_id: candidate.episode_id,
         score: candidate.score,
     }
 }
 
-fn from_internal_update(update: TestRecallCreditUpdate) -> RecallCreditUpdate {
+fn from_internal_update(update: InternalRecallCreditUpdate) -> RecallCreditUpdate {
     RecallCreditUpdate {
         episode_id: update.episode_id,
         score: update.score,

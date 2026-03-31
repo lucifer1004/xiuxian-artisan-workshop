@@ -1,12 +1,3 @@
-use crate::channels::control_command_authorization::ControlCommandPolicy;
-use crate::channels::telegram::build_telegram_acl_overrides_from_settings;
-use crate::config::TelegramSettings;
-
-use super::super::TelegramSlashCommandPolicy;
-use super::super::admin_rules::parse_admin_command_rule_specs;
-use super::super::group_policy::{
-    TelegramGroupPolicyConfig, TelegramGroupPolicyMode, parse_group_policy_mode,
-};
 use super::group_overrides::parse_group_overrides;
 use super::normalization::{
     normalize_allowed_group_entries, normalize_allowed_user_entries_with_context,
@@ -20,19 +11,27 @@ use super::slash_policy::build_slash_command_policy;
 use super::types::{
     TELEGRAM_ACL_FIELD_ADMIN_COMMAND_RULES, TELEGRAM_ACL_FIELD_ALLOWED_USERS, TelegramAclConfig,
 };
+use crate::TelegramSlashCommandPolicy;
+use crate::build_telegram_acl_overrides_from_settings;
+use crate::channels::control_command_authorization::ControlCommandPolicy;
+use crate::channels::telegram::channel::admin_rules::parse_admin_command_rule_specs;
+use crate::channels::telegram::channel::group_policy::{
+    TelegramGroupPolicyConfig, TelegramGroupPolicyMode, parse_group_policy_mode,
+};
+use crate::config::TelegramSettings;
 
 pub(in crate::channels::telegram::channel) fn resolve_acl_config_from_settings(
     settings: TelegramSettings,
 ) -> anyhow::Result<TelegramAclConfig> {
-    let acl_overrides = build_telegram_acl_overrides_from_settings(&settings);
+    let acl_overrides = build_telegram_acl_overrides_from_settings(&settings)?;
     let allowed_users_raw = resolve_string_env_or_setting(
         "OMNI_AGENT_TELEGRAM_ALLOWED_USERS",
-        acl_overrides.allowed_users,
+        acl_overrides.allowed_users.join(","),
         "",
     );
     let allowed_groups_raw = resolve_string_env_or_setting(
         "OMNI_AGENT_TELEGRAM_ALLOWED_GROUPS",
-        acl_overrides.allowed_groups,
+        acl_overrides.allowed_groups.join(","),
         "",
     );
     let session_admin_persist = resolve_bool_env_or_setting(
@@ -57,18 +56,18 @@ pub(in crate::channels::telegram::channel) fn resolve_acl_config_from_settings(
     let group_entries = settings.groups.unwrap_or_default();
     let admin_users_raw = resolve_string_env_or_setting(
         "OMNI_AGENT_TELEGRAM_ADMIN_USERS",
-        acl_overrides.admin_users,
+        acl_overrides.admin_users.join(","),
         "",
     );
     let control_command_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_CONTROL_COMMAND_ALLOW_FROM",
-        acl_overrides.control_command_allow_from,
+        acl_overrides
+            .control_command_allow_from
+            .as_ref()
+            .map(|entries| entries.join(",")),
     );
-    let admin_command_rules_raw = resolve_string_env_or_setting(
-        "OMNI_AGENT_TELEGRAM_ADMIN_COMMAND_RULES",
-        acl_overrides.admin_command_rules,
-        "",
-    );
+    let admin_command_rules_raw =
+        resolve_string_env_or_setting("OMNI_AGENT_TELEGRAM_ADMIN_COMMAND_RULES", "", "");
     let slash_command_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_SLASH_COMMAND_ALLOW_FROM",
         acl_overrides.slash_command_allow_from,
@@ -103,8 +102,12 @@ pub(in crate::channels::telegram::channel) fn resolve_acl_config_from_settings(
     );
 
     let admin_command_rule_specs = parse_semicolon_entries(admin_command_rules_raw.as_str());
-    let admin_command_rules = parse_admin_command_rule_specs(admin_command_rule_specs)
-        .map_err(|error| anyhow::anyhow!("{TELEGRAM_ACL_FIELD_ADMIN_COMMAND_RULES}: {error}"))?;
+    let admin_command_rules = if admin_command_rules_raw.trim().is_empty() {
+        acl_overrides.control_command_rules
+    } else {
+        parse_admin_command_rule_specs(admin_command_rule_specs)
+            .map_err(|error| anyhow::anyhow!("{TELEGRAM_ACL_FIELD_ADMIN_COMMAND_RULES}: {error}"))?
+    };
 
     let allowed_users = normalize_allowed_user_entries_with_context(
         parse_comma_entries(allowed_users_raw.as_str()),
@@ -120,22 +123,14 @@ pub(in crate::channels::telegram::channel) fn resolve_acl_config_from_settings(
     let control_command_allow_from = parse_optional_comma_entries(control_command_allow_from_raw);
 
     let slash_command_policy = TelegramSlashCommandPolicy {
-        slash_command_allow_from: parse_optional_comma_entries(slash_command_allow_from_raw),
-        session_status_allow_from: parse_optional_comma_entries(
-            slash_session_status_allow_from_raw,
-        ),
-        session_budget_allow_from: parse_optional_comma_entries(
-            slash_session_budget_allow_from_raw,
-        ),
-        session_memory_allow_from: parse_optional_comma_entries(
-            slash_session_memory_allow_from_raw,
-        ),
-        session_feedback_allow_from: parse_optional_comma_entries(
-            slash_session_feedback_allow_from_raw,
-        ),
-        job_status_allow_from: parse_optional_comma_entries(slash_job_allow_from_raw),
-        jobs_summary_allow_from: parse_optional_comma_entries(slash_jobs_allow_from_raw),
-        background_submit_allow_from: parse_optional_comma_entries(slash_bg_allow_from_raw),
+        global: parse_optional_comma_entries(slash_command_allow_from_raw),
+        session_status: parse_optional_comma_entries(slash_session_status_allow_from_raw),
+        session_budget: parse_optional_comma_entries(slash_session_budget_allow_from_raw),
+        session_memory: parse_optional_comma_entries(slash_session_memory_allow_from_raw),
+        session_feedback: parse_optional_comma_entries(slash_session_feedback_allow_from_raw),
+        job_status: parse_optional_comma_entries(slash_job_allow_from_raw),
+        jobs_summary: parse_optional_comma_entries(slash_jobs_allow_from_raw),
+        background_submit: parse_optional_comma_entries(slash_bg_allow_from_raw),
     };
 
     let control_command_policy = normalize_control_command_policy(ControlCommandPolicy::new(

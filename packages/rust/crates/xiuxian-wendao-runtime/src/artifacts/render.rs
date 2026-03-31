@@ -53,6 +53,9 @@ mod tests {
             endpoint: None,
             schema_version: Some("v1".to_string()),
             launch: None,
+            selected_transport: None,
+            fallback_from: None,
+            fallback_reason: None,
         }
     }
 

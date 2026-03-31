@@ -1,5 +1,12 @@
 use super::service_mount::{ServiceMountCatalog, ServiceMountMeta};
+use crate::agent::NativeToolRegistry;
 use crate::agent::native_tools::macros::register_native_tools;
+use crate::agent::native_tools::zhixing::{AgendaViewTool, JournalRecordTool, TaskAddTool};
+use crate::agent::notification::NotificationDispatcher;
+use crate::agent::notification::discord::DiscordProvider;
+use crate::agent::notification::linux::LinuxProvider;
+use crate::agent::notification::llm::LlmProvider;
+use crate::agent::notification::telegram::TelegramProvider;
 use crate::config::load_xiuxian_config;
 use crate::env_parse::{
     parse_positive_u64_from_env, parse_positive_usize_from_env, resolve_valkey_url_env,
@@ -11,6 +18,7 @@ use xiuxian_qianhuan::{
     ManifestationInterface, ManifestationManager, MemoryTemplateRecord, PersonaProfile,
 };
 use xiuxian_wendao::WendaoResourceUri;
+use xiuxian_zhixing::{ReminderQueueSettings, ReminderQueueStore, ReminderSignal, ZhixingHeyi};
 
 const XIUXIAN_WENDAO_NOTEBOOK_PATH_ENV: &str = "XIUXIAN_WENDAO_NOTEBOOK_PATH";
 const XIUXIAN_RESOURCE_ROOT_ENV: &str = "XIUXIAN_RESOURCE_ROOT";
@@ -31,7 +39,7 @@ pub(crate) struct ZhixingSkillTemplateLoadSummary {
 }
 
 pub(super) struct ZhixingRuntimeBundle {
-    pub(super) heyi: Arc<super::super::ZhixingHeyi>,
+    pub(super) heyi: Arc<ZhixingHeyi>,
     pub(super) manifestation_manager: Arc<ManifestationManager>,
 }
 
@@ -494,7 +502,7 @@ pub(super) fn init_zhixing_runtime(
         )?;
     let manifestation: Arc<dyn ManifestationInterface> = manifestation_manager.clone();
     let reminder_queue = resolve_reminder_queue_store(&xiuxian_toml_cfg, &scope_key, mounts);
-    match super::super::ZhixingHeyi::new(
+    match ZhixingHeyi::new(
         graph,
         Arc::clone(&manifestation),
         storage,
@@ -506,7 +514,15 @@ pub(super) fn init_zhixing_runtime(
             .with_active_persona(active_persona)
     }) {
         Ok(heyi) => {
-            heyi.backfill_reminder_queue();
+            if let Err(error) = heyi.backfill_due_reminders() {
+                mounts.failed(
+                    "zhixing.reminder_queue_backfill",
+                    "scheduler",
+                    ServiceMountMeta::default()
+                        .storage(notebook_root.display().to_string())
+                        .detail(format!("backfill failed: {error}")),
+                );
+            }
             mounts.mounted(
                 "zhixing.heyi",
                 "workflow",
@@ -544,19 +560,19 @@ pub(super) fn init_zhixing_runtime(
 }
 
 pub(super) fn register_zhixing_native_tools(
-    heyi: &Arc<super::super::ZhixingHeyi>,
-    native_tools: &mut super::super::NativeToolRegistry,
+    heyi: &Arc<ZhixingHeyi>,
+    native_tools: &mut NativeToolRegistry,
     mounts: &mut ServiceMountCatalog,
 ) {
     register_native_tools!(
         native_tools,
-        super::super::native_tools::zhixing::JournalRecordTool {
+        JournalRecordTool {
             heyi: Arc::clone(heyi),
         },
-        super::super::native_tools::zhixing::TaskAddTool {
+        TaskAddTool {
             heyi: Arc::clone(heyi),
         },
-        super::super::native_tools::zhixing::AgendaViewTool {
+        AgendaViewTool {
             heyi: Arc::clone(heyi),
         }
     );
@@ -567,16 +583,13 @@ pub(super) fn register_zhixing_native_tools(
     );
 }
 
-pub(super) fn mount_zhixing_services(
-    heyi: &Arc<super::super::ZhixingHeyi>,
-    mounts: &mut ServiceMountCatalog,
-) {
+pub(super) fn mount_zhixing_services(heyi: &Arc<ZhixingHeyi>, mounts: &mut ServiceMountCatalog) {
     let (tx, rx) = tokio::sync::mpsc::channel(100);
     let _watcher_handle = Arc::clone(heyi).start_timer_watcher(tx);
-    let poll_interval_seconds = heyi.reminder_queue.as_ref().map_or(
-        60,
-        xiuxian_zhixing::ReminderQueueStore::poll_interval_seconds,
-    );
+    let poll_interval_seconds = heyi
+        .reminder_queue
+        .as_ref()
+        .map_or(60, ReminderQueueStore::poll_interval_seconds);
     let backend = if heyi.reminder_queue.is_some() {
         "valkey_due_queue"
     } else {
@@ -591,7 +604,7 @@ pub(super) fn mount_zhixing_services(
     );
 
     let default_notification_recipient = resolve_default_notification_recipient();
-    let dispatcher = Arc::new(super::super::notification::NotificationDispatcher::new());
+    let dispatcher = Arc::new(NotificationDispatcher::new());
     mounts.mounted(
         "notification.dispatcher",
         "notification",
@@ -611,30 +624,16 @@ pub(super) fn mount_zhixing_services(
 }
 
 fn spawn_reminder_notification_worker(
-    mut rx: tokio::sync::mpsc::Receiver<xiuxian_zhixing::ReminderSignal>,
-    dispatcher: Arc<super::super::notification::NotificationDispatcher>,
-    heyi: Arc<super::super::ZhixingHeyi>,
+    mut rx: tokio::sync::mpsc::Receiver<ReminderSignal>,
+    dispatcher: Arc<NotificationDispatcher>,
+    heyi: Arc<ZhixingHeyi>,
     fallback_recipient: Option<String>,
 ) {
     tokio::spawn(async move {
-        dispatcher
-            .register(Arc::new(
-                super::super::notification::telegram::TelegramProvider::new(),
-            ))
-            .await;
-        dispatcher
-            .register(Arc::new(
-                super::super::notification::discord::DiscordProvider::new(),
-            ))
-            .await;
-        dispatcher
-            .register(Arc::new(
-                super::super::notification::linux::LinuxProvider::new(),
-            ))
-            .await;
-        dispatcher
-            .register(Arc::new(super::super::notification::llm::LlmProvider::new()))
-            .await;
+        dispatcher.register(Arc::new(TelegramProvider::new())).await;
+        dispatcher.register(Arc::new(DiscordProvider::new())).await;
+        dispatcher.register(Arc::new(LinuxProvider::new())).await;
+        dispatcher.register(Arc::new(LlmProvider::new())).await;
 
         while let Some(signal) = rx.recv().await {
             let Some(recipient) = signal
@@ -649,7 +648,7 @@ fn spawn_reminder_notification_worker(
                 continue;
             };
 
-            let content = match heyi.render_reminder_notice_markdown_v2(&signal) {
+            let content = match heyi.render_reminder_notice_markdown(&signal) {
                 Ok(payload) => payload,
                 Err(error) => {
                     tracing::warn!(
@@ -692,7 +691,7 @@ fn resolve_reminder_queue_store(
     xiuxian_toml_cfg: &crate::config::XiuxianConfig,
     scope_key: &str,
     mounts: &mut ServiceMountCatalog,
-) -> Option<xiuxian_zhixing::ReminderQueueStore> {
+) -> Option<ReminderQueueStore> {
     let valkey_url = resolve_valkey_url_env()
         .or(xiuxian_toml_cfg
             .wendao
@@ -737,13 +736,13 @@ fn resolve_reminder_queue_store(
         .reminder_queue
         .poll_batch_size);
 
-    let settings = xiuxian_zhixing::ReminderQueueSettings::with_defaults(
+    let settings = ReminderQueueSettings::with_defaults(
         valkey_url,
         key_prefix,
         poll_interval_seconds,
         poll_batch_size,
     );
-    match xiuxian_zhixing::ReminderQueueStore::new(settings.clone(), scope_key.to_string()) {
+    match ReminderQueueStore::new(settings.clone(), scope_key.to_string()) {
         Ok(store) => {
             mounts.mounted(
                 "zhixing.reminder_queue",

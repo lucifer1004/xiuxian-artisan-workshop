@@ -4,20 +4,22 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
+use futures::StreamExt;
 use redis::Client as ValkeyClient;
-use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ClientCapabilities, InitializeRequestParams,
-    ListToolsResult, PaginatedRequestParams, ProtocolVersion,
-};
-use rmcp::service::{RoleClient, RunningService, serve_client};
-use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
-use serde::Serialize;
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use tokio::sync::{Mutex, RwLock};
 
+use super::types::{ToolRuntimeCallResult, ToolRuntimeListRequestParams, ToolRuntimeListResult};
+
 const DISCOVER_TOOL_NAME: &str = "skill.discover";
-const DEFAULT_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V_2025_06_18;
+const JSON_RPC_VERSION: &str = "2.0";
+const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
+const HEADER_SESSION_ID: &str = "Mcp-Session-Id";
+const JSON_MIME_TYPE: &str = "application/json";
+const EVENT_STREAM_MIME_TYPE: &str = "text/event-stream";
 
 #[derive(Clone, Debug, Serialize)]
 pub struct ToolPoolConnectConfig {
@@ -155,7 +157,7 @@ impl ToolDiscoverReadThroughCache {
         &self,
         tool_name: &str,
         arguments: &serde_json::Value,
-    ) -> Result<Option<CallToolResult>> {
+    ) -> Result<Option<ToolRuntimeCallResult>> {
         self.stats.requests_total.fetch_add(1, Ordering::Relaxed);
         let key = self.cache_key(tool_name, arguments)?;
         let mut connection = self
@@ -186,7 +188,7 @@ impl ToolDiscoverReadThroughCache {
         &self,
         tool_name: &str,
         arguments: &serde_json::Value,
-        result: &CallToolResult,
+        result: &ToolRuntimeCallResult,
     ) -> Result<()> {
         let key = self.cache_key(tool_name, arguments)?;
         let payload = serde_json::to_string(result)
@@ -220,7 +222,261 @@ impl ToolDiscoverReadThroughCache {
     }
 }
 
-type ToolClientService = RunningService<RoleClient, InitializeRequestParams>;
+type ToolClientService = ToolRuntimeSessionClient;
+
+#[derive(Debug)]
+struct ToolRuntimeSessionClient {
+    http_client: reqwest::Client,
+    url: String,
+    session_id: String,
+    next_request_id: AtomicU64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolRuntimeInitializeRequestParams {
+    protocol_version: &'static str,
+    capabilities: Value,
+    client_info: ToolRuntimeImplementation,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolRuntimeImplementation {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    icons: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    website_url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ToolRuntimeJsonRpcRequest<P> {
+    jsonrpc: &'static str,
+    id: u64,
+    method: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    params: Option<P>,
+}
+
+#[derive(Debug, Serialize)]
+struct ToolRuntimeJsonRpcNotification<P> {
+    jsonrpc: &'static str,
+    method: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    params: Option<P>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolRuntimeJsonRpcResponse<R> {
+    jsonrpc: String,
+    id: Value,
+    #[serde(default)]
+    result: Option<R>,
+    #[serde(default)]
+    error: Option<ToolRuntimeJsonRpcError>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolRuntimeJsonRpcError {
+    code: i64,
+    message: String,
+    #[serde(default)]
+    data: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolRuntimeInitializeResult {
+    protocol_version: String,
+    #[serde(default)]
+    capabilities: Value,
+    server_info: ToolRuntimeImplementation,
+    #[serde(default)]
+    instructions: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolRuntimeCallWireResult {
+    #[serde(default)]
+    content: Vec<ToolRuntimeContentBlock>,
+    #[serde(default)]
+    is_error: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolRuntimeContentBlock {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    text: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolRuntimeCallRequestParams {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    arguments: Option<Map<String, Value>>,
+}
+
+#[derive(Debug)]
+struct ToolRuntimePostResponse {
+    session_id: Option<String>,
+    payload: Option<Value>,
+    accepted: bool,
+}
+
+impl ToolRuntimeSessionClient {
+    async fn connect(url: &str, handshake_timeout_secs: u64) -> Result<Self> {
+        let http_client = reqwest::Client::builder()
+            .build()
+            .context("build tool runtime HTTP client")?;
+        let timeout = Duration::from_secs(handshake_timeout_secs.max(1));
+        tokio::time::timeout(timeout, async {
+            let initialize_request = ToolRuntimeJsonRpcRequest {
+                jsonrpc: JSON_RPC_VERSION,
+                id: 0,
+                method: "initialize",
+                params: Some(ToolRuntimeInitializeRequestParams {
+                    protocol_version: DEFAULT_PROTOCOL_VERSION,
+                    capabilities: Value::Object(Map::new()),
+                    client_info: ToolRuntimeImplementation::from_build_env(),
+                }),
+            };
+            let initialize_response =
+                post_runtime_message(&http_client, url, None, &initialize_request, "initialize")
+                    .await?;
+            let session_id = initialize_response
+                .session_id
+                .ok_or_else(|| anyhow!("tool runtime initialize did not return a session id"))?;
+            let initialize_result: ToolRuntimeInitializeResult =
+                decode_rpc_result(initialize_response, 0, "initialize")?;
+            if initialize_result.protocol_version.is_empty() {
+                return Err(anyhow!(
+                    "tool runtime initialize returned an empty protocol version"
+                ));
+            }
+            let _ = (
+                initialize_result.capabilities,
+                initialize_result.server_info,
+                initialize_result.instructions,
+            );
+
+            let client = Self {
+                http_client,
+                url: url.to_string(),
+                session_id,
+                next_request_id: AtomicU64::new(1),
+            };
+            client.send_initialized_notification().await?;
+            Ok(client)
+        })
+        .await
+        .map_err(|_| {
+            anyhow!(
+                "tool runtime handshake timed out after {}s",
+                timeout.as_secs()
+            )
+        })?
+    }
+
+    async fn list_tools(
+        &self,
+        params: Option<ToolRuntimeListRequestParams>,
+    ) -> Result<ToolRuntimeListResult> {
+        self.post_request("tools/list", params).await
+    }
+
+    async fn call_tool(
+        &self,
+        name: String,
+        arguments: Option<Value>,
+    ) -> Result<ToolRuntimeCallResult> {
+        let result: ToolRuntimeCallWireResult = self
+            .post_request(
+                "tools/call",
+                Some(ToolRuntimeCallRequestParams {
+                    name,
+                    arguments: arguments.and_then(|value| value.as_object().cloned()),
+                }),
+            )
+            .await?;
+        Ok(ToolRuntimeCallResult {
+            text_segments: result
+                .content
+                .into_iter()
+                .filter(|content| content.kind == "text")
+                .filter_map(|content| content.text)
+                .collect(),
+            is_error: result.is_error.unwrap_or(false),
+        })
+    }
+
+    async fn post_request<P, R>(&self, method: &'static str, params: Option<P>) -> Result<R>
+    where
+        P: Serialize,
+        R: DeserializeOwned,
+    {
+        let id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
+        let request = ToolRuntimeJsonRpcRequest {
+            jsonrpc: JSON_RPC_VERSION,
+            id,
+            method,
+            params,
+        };
+        let response = post_runtime_message(
+            &self.http_client,
+            &self.url,
+            Some(self.session_id.as_str()),
+            &request,
+            method,
+        )
+        .await?;
+        decode_rpc_result(response, id, method)
+    }
+
+    async fn send_initialized_notification(&self) -> Result<()> {
+        let notification = ToolRuntimeJsonRpcNotification::<Value> {
+            jsonrpc: JSON_RPC_VERSION,
+            method: "notifications/initialized",
+            params: None,
+        };
+        let response = post_runtime_message(
+            &self.http_client,
+            &self.url,
+            Some(self.session_id.as_str()),
+            &notification,
+            "notifications/initialized",
+        )
+        .await?;
+        if !response.accepted {
+            return Err(anyhow!(
+                "notifications/initialized should return an accepted response"
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl ToolRuntimeImplementation {
+    fn from_build_env() -> Self {
+        Self {
+            name: env!("CARGO_CRATE_NAME").to_owned(),
+            title: None,
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            description: None,
+            icons: None,
+            website_url: None,
+        }
+    }
+}
 
 #[derive(Debug)]
 struct ToolRuntimeState {
@@ -229,7 +485,7 @@ struct ToolRuntimeState {
 
 #[derive(Debug)]
 struct CachedToolList {
-    value: ListToolsResult,
+    value: ToolRuntimeListResult,
     expires_at: Instant,
 }
 
@@ -246,8 +502,8 @@ pub struct ToolClientPool {
 impl ToolClientPool {
     pub async fn list_tools(
         &self,
-        params: Option<PaginatedRequestParams>,
-    ) -> Result<ListToolsResult> {
+        params: Option<ToolRuntimeListRequestParams>,
+    ) -> Result<ToolRuntimeListResult> {
         self.list_stats
             .requests_total
             .fetch_add(1, Ordering::Relaxed);
@@ -278,7 +534,7 @@ impl ToolClientPool {
         &self,
         name: String,
         arguments: Option<serde_json::Value>,
-    ) -> Result<CallToolResult> {
+    ) -> Result<ToolRuntimeCallResult> {
         if let Some(discover_cache) = self.discover_cache.as_ref()
             && name == DISCOVER_TOOL_NAME
             && let Some(arguments) = arguments.as_ref()
@@ -291,16 +547,8 @@ impl ToolClientPool {
         let timeout_secs = self.config.tool_timeout_secs.max(1);
         let result = self
             .call_with_retry("tools/call", timeout_secs, |service| async move {
-                let params = CallToolRequestParams {
-                    meta: None,
-                    name: name.clone().into(),
-                    arguments: arguments
-                        .clone()
-                        .and_then(|value| value.as_object().cloned()),
-                    task: None,
-                };
                 service
-                    .call_tool(params)
+                    .call_tool(name.clone(), arguments.clone())
                     .await
                     .map_err(|error| anyhow!("tools/call failed: {error}"))
             })
@@ -309,7 +557,7 @@ impl ToolClientPool {
         if let Some(discover_cache) = self.discover_cache.as_ref()
             && name == DISCOVER_TOOL_NAME
             && let Some(arguments) = arguments.as_ref()
-            && result.is_error != Some(true)
+            && !result.is_error
             && let Err(error) = discover_cache.store(&name, arguments, &result).await
         {
             tracing::warn!(
@@ -386,9 +634,7 @@ impl ToolClientPool {
 
     async fn connected_service(&self) -> Result<Arc<ToolClientService>> {
         let mut guard = self.state.lock().await;
-        if let Some(service) = guard.service.as_ref()
-            && !service.is_closed()
-        {
+        if let Some(service) = guard.service.as_ref() {
             return Ok(Arc::clone(service));
         }
         let service =
@@ -402,13 +648,13 @@ impl ToolClientPool {
         guard.service = None;
     }
 
-    async fn read_cached_tools(&self) -> Option<ListToolsResult> {
+    async fn read_cached_tools(&self) -> Option<ToolRuntimeListResult> {
         let guard = self.list_cache.read().await;
         let cached = guard.as_ref()?;
         (Instant::now() < cached.expires_at).then(|| cached.value.clone())
     }
 
-    async fn store_cached_tools(&self, list: ListToolsResult) {
+    async fn store_cached_tools(&self, list: ToolRuntimeListResult) {
         self.list_stats
             .cache_refreshes
             .fetch_add(1, Ordering::Relaxed);
@@ -447,27 +693,7 @@ pub(crate) async fn connect_tool_pool_backend(
 }
 
 async fn connect_service(url: &str, handshake_timeout_secs: u64) -> Result<ToolClientService> {
-    let init_params = InitializeRequestParams {
-        meta: None,
-        protocol_version: DEFAULT_PROTOCOL_VERSION,
-        capabilities: ClientCapabilities::default(),
-        client_info: rmcp::model::Implementation::from_build_env(),
-    };
-    let transport_config = StreamableHttpClientTransportConfig::with_uri(url.to_string());
-    let http_client = reqwest::Client::builder()
-        .build()
-        .context("build tool runtime HTTP client")?;
-    let transport = StreamableHttpClientTransport::with_client(http_client, transport_config);
-    let timeout = Duration::from_secs(handshake_timeout_secs.max(1));
-    tokio::time::timeout(timeout, serve_client(init_params, transport))
-        .await
-        .map_err(|_| {
-            anyhow!(
-                "tool runtime handshake timed out after {}s",
-                timeout.as_secs()
-            )
-        })?
-        .map_err(|error| anyhow!("tool runtime handshake failed: {error}"))
+    ToolRuntimeSessionClient::connect(url, handshake_timeout_secs).await
 }
 
 fn normalize_json(value: &serde_json::Value) -> serde_json::Value {
@@ -492,4 +718,208 @@ fn now_unix_ms() -> Option<u64> {
         .duration_since(UNIX_EPOCH)
         .ok()
         .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+}
+
+async fn post_runtime_message<M: Serialize>(
+    http_client: &reqwest::Client,
+    url: &str,
+    session_id: Option<&str>,
+    message: &M,
+    method: &'static str,
+) -> Result<ToolRuntimePostResponse> {
+    let mut request = http_client
+        .post(url)
+        .header(
+            ACCEPT,
+            format!("{JSON_MIME_TYPE}, {EVENT_STREAM_MIME_TYPE}"),
+        )
+        .header(CONTENT_TYPE, JSON_MIME_TYPE);
+    if let Some(session_id) = session_id {
+        request = request.header(HEADER_SESSION_ID, session_id);
+    }
+    let response = request
+        .json(message)
+        .send()
+        .await
+        .with_context(|| format!("send tool runtime {method} request"))?;
+    let status = response.status();
+    let response_session_id = response
+        .headers()
+        .get(HEADER_SESSION_ID)
+        .and_then(|value| value.to_str().ok())
+        .map(ToOwned::to_owned);
+
+    if matches!(
+        status,
+        reqwest::StatusCode::ACCEPTED | reqwest::StatusCode::NO_CONTENT
+    ) {
+        return Ok(ToolRuntimePostResponse {
+            session_id: response_session_id,
+            payload: None,
+            accepted: true,
+        });
+    }
+
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(anyhow!(
+            "tool runtime {method} request failed with status {status}: {body}"
+        ));
+    }
+
+    let content_type = response
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(ToOwned::to_owned);
+
+    let payload = match content_type.as_deref() {
+        Some(content_type) if content_type.starts_with(EVENT_STREAM_MIME_TYPE) => {
+            Some(parse_first_sse_message(response, method).await?)
+        }
+        Some(content_type) if content_type.starts_with(JSON_MIME_TYPE) => Some(
+            response
+                .json()
+                .await
+                .with_context(|| format!("decode tool runtime {method} JSON response"))?,
+        ),
+        Some(content_type) => {
+            return Err(anyhow!(
+                "tool runtime {method} returned unsupported content-type: {}",
+                content_type
+            ));
+        }
+        None => {
+            return Err(anyhow!(
+                "tool runtime {method} response missing content-type header"
+            ));
+        }
+    };
+
+    Ok(ToolRuntimePostResponse {
+        session_id: response_session_id,
+        payload,
+        accepted: false,
+    })
+}
+
+async fn parse_first_sse_message(
+    response: reqwest::Response,
+    method: &'static str,
+) -> Result<Value> {
+    let mut stream = response.bytes_stream();
+    let mut buffer = String::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk =
+            chunk.with_context(|| format!("read tool runtime {method} SSE response chunk"))?;
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
+        if let Some(message) = try_parse_sse_message(&buffer)
+            .with_context(|| format!("decode tool runtime {method} SSE response"))?
+        {
+            return Ok(message);
+        }
+    }
+    Err(anyhow!(
+        "tool runtime {method} SSE response ended before a JSON-RPC message arrived"
+    ))
+}
+
+fn try_parse_sse_message(buffer: &str) -> Result<Option<Value>> {
+    let normalized = buffer.replace("\r\n", "\n");
+    if !normalized.contains("\n\n") {
+        return Ok(None);
+    }
+
+    for event in normalized.split("\n\n") {
+        let payload = event
+            .lines()
+            .filter_map(|line| line.strip_prefix("data:"))
+            .map(str::trim_start)
+            .collect::<Vec<_>>()
+            .join("\n");
+        if payload.trim().is_empty() {
+            continue;
+        }
+        let message =
+            serde_json::from_str(&payload).context("deserialize tool runtime SSE payload")?;
+        return Ok(Some(message));
+    }
+
+    Ok(None)
+}
+
+fn decode_rpc_result<R>(
+    response: ToolRuntimePostResponse,
+    request_id: u64,
+    method: &'static str,
+) -> Result<R>
+where
+    R: DeserializeOwned,
+{
+    let payload = response
+        .payload
+        .ok_or_else(|| anyhow!("tool runtime {method} returned an empty response body"))?;
+    let response: ToolRuntimeJsonRpcResponse<R> = serde_json::from_value(payload)
+        .with_context(|| format!("deserialize tool runtime {method} JSON-RPC response"))?;
+    if response.jsonrpc != JSON_RPC_VERSION {
+        return Err(anyhow!(
+            "tool runtime {method} returned unexpected jsonrpc version: {}",
+            response.jsonrpc
+        ));
+    }
+    match &response.id {
+        Value::Number(number) if number.as_u64() == Some(request_id) => {}
+        other => {
+            return Err(anyhow!(
+                "tool runtime {method} returned mismatched response id: expected {request_id}, got {other}"
+            ));
+        }
+    }
+    if let Some(error) = response.error {
+        let error_data = error
+            .data
+            .map(|data| format!(" data={data}"))
+            .unwrap_or_default();
+        return Err(anyhow!(
+            "tool runtime {method} failed with code {}: {}{}",
+            error.code,
+            error.message,
+            error_data
+        ));
+    }
+    response
+        .result
+        .ok_or_else(|| anyhow!("tool runtime {method} response missing result"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ToolRuntimeCallWireResult, ToolRuntimeJsonRpcResponse, try_parse_sse_message};
+
+    #[test]
+    fn sse_parser_skips_retry_priming_event() {
+        let payload = "id: 0\nretry: 3000\n\ndata: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"tools\":[]}}\n\n";
+        let parsed = try_parse_sse_message(payload)
+            .expect("parse should succeed")
+            .expect("json-rpc message should be extracted");
+        let response: ToolRuntimeJsonRpcResponse<serde_json::Value> =
+            serde_json::from_value(parsed).expect("response should deserialize");
+        assert_eq!(response.jsonrpc, "2.0");
+    }
+
+    #[test]
+    fn call_result_deserialization_preserves_text_and_error_flag() {
+        let payload = serde_json::json!({
+            "content": [
+                { "type": "text", "text": "hello" },
+                { "type": "image", "data": "ignored", "mimeType": "image/png" }
+            ],
+            "isError": true
+        });
+        let result: ToolRuntimeCallWireResult =
+            serde_json::from_value(payload).expect("call result should deserialize");
+        assert_eq!(result.content.len(), 2);
+        assert_eq!(result.content[0].text.as_deref(), Some("hello"));
+        assert_eq!(result.is_error, Some(true));
+    }
 }

@@ -34,8 +34,8 @@ A compatibility surface may be retired only when:
 
 ## Retirement Ledger
 
-| Compatibility surface                      | Current location                                                                 | Retirement unlock                            | Target retirement state                                                                                                  |
-| :----------------------------------------- | :------------------------------------------------------------------------------- | :------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------- |
+| Compatibility surface                       | Current location                                                          | Retirement unlock                                       | Target retirement state                                                                                             |
+| :------------------------------------------ | :------------------------------------------------------------------------ | :------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------ |
 | Package-owned Julia compatibility namespace | `packages/rust/crates/xiuxian-wendao-julia/src/compatibility/link_graph/` | post-`M5` downstream import cleanup in plugin consumers | Retire package-owned legacy Julia DTO imports once downstream users no longer need the compatibility naming surface |
 
 ## Retirement Order

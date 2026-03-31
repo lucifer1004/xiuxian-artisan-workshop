@@ -30,6 +30,9 @@ impl RepoContentChunkCandidate {
             tags.push(language.clone());
             tags.push(format!("lang:{language}"));
         }
+        if self.exact_match {
+            tags.push("match:exact".to_string());
+        }
         let stem = Path::new(self.path.as_str())
             .file_name()
             .and_then(|value| value.to_str())

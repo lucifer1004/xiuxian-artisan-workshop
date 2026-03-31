@@ -78,7 +78,9 @@ class TestCodeSearchUnified:
     def test_code_search_function(self):
         module = _load_search_commands_module()
 
-        result = _tool_text(asyncio.run(module.code_search(query="def authenticate", session_id="test")))
+        result = _tool_text(
+            asyncio.run(module.code_search(query="def authenticate", session_id="test"))
+        )
         assert isinstance(result, str)
 
     def test_code_search_semantic(self):
@@ -98,7 +100,9 @@ class TestCodeSearchUnified:
     def test_code_search_refactor_pattern(self):
         module = _load_search_commands_module()
 
-        result = _tool_text(asyncio.run(module.code_search(query="connect($$$)", session_id="test")))
+        result = _tool_text(
+            asyncio.run(module.code_search(query="connect($$$)", session_id="test"))
+        )
         assert isinstance(result, str)
 
 

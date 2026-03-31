@@ -52,7 +52,8 @@ impl Agent {
         session: SessionStore,
         bounded_session: Option<BoundedSessionStore>,
     ) -> Result<Self> {
-        let tool_runtime = super::tool_startup::connect_tool_pool_if_configured(&config).await?;
+        let tool_runtime =
+            crate::agent::tool_startup::connect_tool_pool_if_configured(&config).await?;
         let (memory_store, memory_state_backend, memory_state_load_status) =
             init_memory_backends(&config)?;
 
@@ -79,22 +80,22 @@ impl Agent {
             )
         });
         let memory_stream_consumer_task = config.memory.as_ref().and_then(|memory_cfg| {
-            super::memory_stream_consumer::spawn_memory_stream_consumer(
+            crate::agent::memory_stream_consumer::spawn_memory_stream_consumer(
                 memory_cfg,
                 session.redis_runtime_snapshot(),
             )
         });
         let memory_embed_timeout = duration_from_env_ms(
             "OMNI_AGENT_MEMORY_EMBED_TIMEOUT_MS",
-            duration_to_u64_millis(super::DEFAULT_MEMORY_EMBED_TIMEOUT),
-            super::MIN_MEMORY_EMBED_TIMEOUT_MS,
-            super::MAX_MEMORY_EMBED_TIMEOUT_MS,
+            duration_to_u64_millis(crate::agent::DEFAULT_MEMORY_EMBED_TIMEOUT),
+            crate::agent::MIN_MEMORY_EMBED_TIMEOUT_MS,
+            crate::agent::MAX_MEMORY_EMBED_TIMEOUT_MS,
         );
         let memory_embed_timeout_cooldown = duration_from_env_ms(
             "OMNI_AGENT_MEMORY_EMBED_TIMEOUT_COOLDOWN_MS",
-            duration_to_u64_millis(super::DEFAULT_MEMORY_EMBED_TIMEOUT_COOLDOWN),
+            duration_to_u64_millis(crate::agent::DEFAULT_MEMORY_EMBED_TIMEOUT_COOLDOWN),
             0,
-            super::MAX_MEMORY_EMBED_COOLDOWN_MS,
+            crate::agent::MAX_MEMORY_EMBED_COOLDOWN_MS,
         );
 
         Ok(Self {
@@ -107,7 +108,7 @@ impl Agent {
             embedding_client,
             context_budget_snapshots: Arc::new(RwLock::new(HashMap::new())),
             memory_recall_metrics: Arc::new(RwLock::new(
-                super::memory_recall_metrics::MemoryRecallMetricsState::default(),
+                crate::agent::memory_recall_metrics::MemoryRecallMetricsState::default(),
             )),
             memory_recall_feedback: Arc::new(RwLock::new(HashMap::new())),
             system_prompt_injection: Arc::new(RwLock::new(HashMap::new())),

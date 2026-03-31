@@ -57,3 +57,10 @@ pub(super) fn parse_comma_entries(raw: &str) -> Vec<String> {
 pub(super) fn parse_optional_comma_entries(raw: Option<String>) -> Option<Vec<String>> {
     raw.map(|value| parse_comma_entries(value.as_str()))
 }
+
+pub(super) fn parse_semicolon_entries(raw: &str) -> Vec<String> {
+    raw.split(';')
+        .map(|entry| entry.trim().to_string())
+        .filter(|entry| !entry.is_empty())
+        .collect()
+}

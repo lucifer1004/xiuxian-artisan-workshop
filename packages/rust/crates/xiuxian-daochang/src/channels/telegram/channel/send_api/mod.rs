@@ -1,5 +1,4 @@
 pub mod chat_action;
-pub mod gate;
 pub mod media;
 pub mod request;
 pub mod response;

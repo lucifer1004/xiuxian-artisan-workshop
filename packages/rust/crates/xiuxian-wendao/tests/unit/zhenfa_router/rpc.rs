@@ -58,6 +58,9 @@ fn render_markdown_includes_hits() {
         julia_rerank: Some(LinkGraphJuliaRerankTelemetry {
             applied: false,
             response_row_count: 0,
+            selected_transport: None,
+            fallback_from: None,
+            fallback_reason: None,
             trace_ids: Vec::new(),
             error: Some("not configured".to_string()),
         }),

@@ -122,6 +122,7 @@ impl JobManager {
                     .send(JobCompletion {
                         job_id: job.job_id,
                         recipient: job.recipient,
+                        parent_session_id: job.parent_session_id,
                         kind: JobCompletionKind::Succeeded { output },
                     })
                     .await;
@@ -134,6 +135,7 @@ impl JobManager {
                     .send(JobCompletion {
                         job_id: job.job_id,
                         recipient: job.recipient,
+                        parent_session_id: job.parent_session_id,
                         kind: JobCompletionKind::Failed { error: err },
                     })
                     .await;
@@ -147,6 +149,7 @@ impl JobManager {
                     .send(JobCompletion {
                         job_id: job.job_id,
                         recipient: job.recipient,
+                        parent_session_id: job.parent_session_id,
                         kind: JobCompletionKind::TimedOut { timeout_secs },
                     })
                     .await;

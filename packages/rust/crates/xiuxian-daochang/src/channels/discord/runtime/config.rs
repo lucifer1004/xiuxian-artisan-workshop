@@ -1,7 +1,7 @@
 use super::super::session_partition::DiscordSessionPartition;
 use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::config::{DiscordSettings, load_runtime_settings};
-use omni_macros::env_non_empty;
+use xiuxian_macros::env_non_empty;
 
 const DISCORD_DEFAULT_INBOUND_QUEUE_CAPACITY: usize = 512;
 const DISCORD_DEFAULT_TURN_TIMEOUT_SECS: u64 = 120;

@@ -1,18 +1,13 @@
 mod events;
 mod helpers;
 mod session_admin;
-mod session_context;
 mod session_feedback;
 mod session_injection;
 mod session_partition;
-pub(in super::super) use session_admin::try_handle_session_admin_command;
-pub(in super::super) use session_context::{
-    try_handle_session_context_budget_command, try_handle_session_context_memory_command,
-    try_handle_session_context_status_command,
-};
-pub(in super::super) use session_feedback::try_handle_session_feedback_command;
-pub(in super::super) use session_injection::try_handle_session_injection_command;
-pub(in super::super) use session_partition::try_handle_session_partition_command;
+pub(in crate::channels::telegram::runtime::jobs) use session_admin::try_handle_session_admin_command;
+pub(in crate::channels::telegram::runtime::jobs) use session_feedback::try_handle_session_feedback_command;
+pub(in crate::channels::telegram::runtime::jobs) use session_injection::try_handle_session_injection_command;
+pub(in crate::channels::telegram::runtime::jobs) use session_partition::try_handle_session_partition_command;
 
 pub(super) use events::{
     EVENT_TELEGRAM_COMMAND_CONTROL_ADMIN_REQUIRED_REPLIED,

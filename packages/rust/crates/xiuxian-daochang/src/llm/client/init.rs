@@ -3,17 +3,18 @@ use std::sync::Once;
 use std::time::{Duration, Instant};
 
 use tokio::sync::Semaphore;
-use xiuxian_llm::llm::vision::{DeepseekRuntime, get_deepseek_runtime, prewarm_deepseek_ocr};
+use xiuxian_llm::llm::vision::deepseek::prewarm_deepseek_ocr;
+use xiuxian_llm::llm::vision::{DeepseekRuntime, get_deepseek_runtime};
 use xiuxian_macros::env_non_empty;
 
-use super::super::backend::{extract_api_base_from_inference_url, parse_backend_mode};
-#[cfg(feature = "agent-provider-litellm")]
-use super::super::compat::litellm::LiteLlmRuntime;
-#[cfg(feature = "agent-provider-litellm")]
-use super::super::compat::litellm_ocr::mark_deepseek_ocr_runtime_prewarmed;
-use super::super::providers::{ProviderSettings, resolve_provider_settings};
-use super::LlmClient;
 use crate::config::load_runtime_settings;
+use crate::llm::backend::{extract_api_base_from_inference_url, parse_backend_mode};
+use crate::llm::client::LlmClient;
+#[cfg(feature = "agent-provider-litellm")]
+use crate::llm::compat::litellm::LiteLlmRuntime;
+#[cfg(feature = "agent-provider-litellm")]
+use crate::llm::compat::litellm_ocr::mark_deepseek_ocr_runtime_prewarmed;
+use crate::llm::providers::{ProviderSettings, resolve_provider_settings};
 
 static DEEPSEEK_VISION_STARTUP_PROBE_ONCE: Once = Once::new();
 

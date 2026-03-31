@@ -1,6 +1,7 @@
 //! Telegram channel transport and message formatting.
 
 mod acl;
+mod acl_overrides;
 mod acl_reload;
 mod admin_rules;
 mod authorization;
@@ -14,6 +15,7 @@ mod identity;
 mod listen;
 mod markdown;
 mod media;
+mod outbound_text;
 mod parsing;
 mod policy;
 mod recipient_admin;
@@ -27,6 +29,9 @@ mod state;
 mod trait_impl;
 
 pub(in crate::channels::telegram::channel) use super::session_partition::TelegramSessionPartition;
+pub use acl_overrides::{
+    TelegramAclOverrides, build_telegram_acl_overrides, build_telegram_acl_overrides_from_settings,
+};
 pub use admin_rules::TelegramCommandAdminRule;
 pub use admin_rules::build_telegram_command_admin_rule;
 pub use chunking::{

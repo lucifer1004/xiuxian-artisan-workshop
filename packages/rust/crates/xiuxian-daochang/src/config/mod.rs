@@ -11,11 +11,11 @@ pub use agent::{
 pub use settings::{
     DiscordAclAllowSettings, DiscordAclControlSettings, DiscordAclPrincipalSettings,
     DiscordAclSettings, DiscordAclSlashSettings, DiscordSettings, EmbeddingSettings,
-    MemorySettings, RuntimeSettings, SessionSettings, TelegramAclAllowSettings,
-    TelegramAclControlSettings, TelegramAclPrincipalSettings, TelegramAclSettings,
-    TelegramAclSlashSettings, TelegramGroupSettings, TelegramSettings, TelegramTopicSettings,
-    ToolRuntimeSettings, load_runtime_settings, load_runtime_settings_from_paths,
-    runtime_settings_paths, set_config_home_override,
+    InferenceSettings, MemorySettings, RuntimeSettings, SessionSettings, TelegramAclAllowSettings,
+    TelegramAclControlSettings, TelegramAclPrincipalSettings, TelegramAclRuleSettings,
+    TelegramAclSettings, TelegramAclSlashSettings, TelegramGroupSettings, TelegramSettings,
+    TelegramTopicSettings, ToolRuntimeSettings, load_runtime_settings,
+    load_runtime_settings_from_paths, runtime_settings_paths, set_config_home_override,
 };
 pub use tools::{ToolConfigFile, ToolServerEntryFile, load_tool_config};
 pub use xiuxian::{

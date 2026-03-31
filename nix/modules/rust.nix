@@ -73,6 +73,9 @@ in
     pkgs.cargo-nextest
     pkgs.cargo-audit
     pkgs.cargo-deny
+    pkgs.cargo-semver-checks
+    pkgs.cargo-machete
+    pkgs.cargo-udeps
     pkgs.cargo-sweep
     pkgs.cargo-insta
   ];

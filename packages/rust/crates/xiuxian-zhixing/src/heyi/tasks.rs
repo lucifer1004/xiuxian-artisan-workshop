@@ -75,6 +75,7 @@ impl ZhixingHeyi {
         let journal = JournalEntry::new(title.to_string());
         self.storage.record_journal(&journal).await?;
 
+        let scheduled_at_for_queue = scheduled_at.clone();
         let task_name = if title.chars().count() > TASK_TITLE_LIMIT {
             manifest_task_title(title)
         } else {
@@ -89,6 +90,19 @@ impl ZhixingHeyi {
         );
         if let Err(error) = self.graph.add_entity(task_entity) {
             log::error!("Failed to update graph: {error}");
+        }
+
+        if let (Some(reminder_queue), Some(scheduled_at)) = (
+            self.reminder_queue.as_ref(),
+            scheduled_at_for_queue.as_deref(),
+        ) && let Err(error) = reminder_queue.enqueue_task(
+            &format!("task:{}", journal.id),
+            &task_name,
+            Some(title),
+            scheduled_at,
+            None,
+        ) {
+            log::warn!("Failed to enqueue scheduled task reminder: {error}");
         }
 
         Ok(format!("Vow manifested: '{task_name}'."))

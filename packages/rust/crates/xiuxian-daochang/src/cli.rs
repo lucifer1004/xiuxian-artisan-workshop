@@ -1,9 +1,12 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use xiuxian_logging::LogCliArgs;
 
-use xiuxian_daochang::DEFAULT_STDIO_SESSION_ID;
+pub(crate) use xiuxian_daochang::{
+    ChannelProvider, DEFAULT_STDIO_SESSION_ID, DiscordRuntimeMode, TelegramChannelMode,
+    WebhookDedupBackendMode,
+};
 
 #[derive(Parser)]
 #[command(name = "xiuxian-daochang")]
@@ -21,30 +24,6 @@ pub(crate) struct Cli {
 
     #[command(subcommand)]
     pub(crate) command: Command,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub(crate) enum TelegramChannelMode {
-    Polling,
-    Webhook,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub(crate) enum ChannelProvider {
-    Telegram,
-    Discord,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub(crate) enum DiscordRuntimeMode {
-    Gateway,
-    Ingress,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub(crate) enum WebhookDedupBackendMode {
-    Memory,
-    Valkey,
 }
 
 #[derive(Subcommand)]

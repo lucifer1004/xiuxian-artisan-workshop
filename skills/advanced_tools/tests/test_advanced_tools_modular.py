@@ -26,8 +26,10 @@ def _load_mutation_module():
 
 def _unwrap_payload(result: object) -> dict:
     normalized = normalize_tool_result(result)
-    return normalized if "tool" in normalized else __import__("json").loads(
-        normalized["content"][0]["text"]
+    return (
+        normalized
+        if "tool" in normalized
+        else __import__("json").loads(normalized["content"][0]["text"])
     )
 
 

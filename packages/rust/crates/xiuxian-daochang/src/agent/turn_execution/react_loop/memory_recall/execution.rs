@@ -1,10 +1,9 @@
 use crate::agent::Agent;
-use crate::session::ChatMessage;
-
-use super::super::types::{
+use crate::agent::turn_execution::react_loop::types::{
     MemoryRecallExecutionContext, MemoryRecallPlanContext, MemoryRecallResultStats,
     MemoryRecallTuning,
 };
+use crate::session::ChatMessage;
 
 use crate::agent::memory::{RecalledEpisodeCandidate, select_recall_credit_candidates};
 use crate::agent::memory_recall::{
@@ -13,7 +12,7 @@ use crate::agent::memory_recall::{
 use xiuxian_memory_engine::Episode;
 
 impl Agent {
-    pub(in super::super) async fn apply_memory_recall_if_enabled(
+    pub(in crate::agent::turn_execution::react_loop) async fn apply_memory_recall_if_enabled(
         &self,
         session_id: &str,
         user_message: &str,

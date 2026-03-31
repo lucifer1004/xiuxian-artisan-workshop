@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::agent::Agent;
+use crate::channels::traits::ChannelMessage;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
@@ -23,6 +24,10 @@ pub(crate) enum ForegroundTurnOutcome {
 
 pub(crate) fn build_session_id(channel: &str, session_key: &str) -> String {
     format!("{channel}:{session_key}")
+}
+
+pub(crate) fn compose_turn_content(msg: &ChannelMessage) -> String {
+    msg.content.clone()
 }
 
 #[allow(clippy::too_many_arguments)]

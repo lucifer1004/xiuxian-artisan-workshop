@@ -1,10 +1,36 @@
 use anyhow::{Context, Result};
-use xiuxian_qianhuan::{
-    SessionSystemPromptInjectionSnapshot, normalize_session_system_prompt_injection_xml,
-};
+use serde::{Deserialize, Serialize};
+use std::time::{SystemTime, UNIX_EPOCH};
+use xiuxian_qianhuan::{InjectionWindowConfig, SystemPromptInjectionWindow};
+
+use crate::session::ChatMessage;
 
 use super::super::Agent;
-use super::storage::{message_to_snapshot, snapshot_to_message, storage_session_id};
+
+const SYSTEM_PROMPT_INJECTION_SNAPSHOT_SESSION_PREFIX: &str =
+    "__session_system_prompt_injection__:";
+const SYSTEM_PROMPT_INJECTION_SNAPSHOT_MESSAGE_NAME: &str =
+    "agent.system_prompt_injection.snapshot";
+pub(crate) const SYSTEM_PROMPT_INJECTION_CONTEXT_MESSAGE_NAME: &str =
+    "agent.system_prompt_injection.context";
+
+/// Persisted session-scoped system prompt injection payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionSystemPromptInjectionSnapshot {
+    /// Canonical XML payload after qianhuan window normalization.
+    pub xml: String,
+    /// Number of retained `<qa>` entries in the normalized payload.
+    pub qa_count: usize,
+    /// Update time in Unix milliseconds.
+    pub updated_at_unix_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct StoredSessionSystemPromptInjectionSnapshot {
+    xml: String,
+    qa_count: usize,
+    updated_at_unix_ms: u64,
+}
 
 impl Agent {
     /// Upsert session-scoped system-prompt injection XML into persistent session storage.
@@ -16,12 +42,8 @@ impl Agent {
         session_id: &str,
         raw_xml: &str,
     ) -> Result<SessionSystemPromptInjectionSnapshot> {
-        let snapshot = if let Some(manager) = self.manifestation_manager.as_ref() {
-            manager.upsert_session_prompt_injection_xml(session_id, raw_xml)?
-        } else {
-            normalize_session_system_prompt_injection_xml(raw_xml)
-                .context("invalid system prompt injection xml payload")?
-        };
+        let snapshot = normalize_session_prompt_injection_snapshot(raw_xml)
+            .context("invalid system prompt injection xml payload")?;
         let Some(message) = snapshot_to_message(&snapshot) else {
             anyhow::bail!("failed to serialize system prompt injection payload");
         };
@@ -33,9 +55,10 @@ impl Agent {
                 format!("failed to persist system prompt injection payload: {storage_id}")
             })?;
 
-        if let Some(manager) = self.manifestation_manager.as_ref() {
-            manager.upsert_session_prompt_injection_snapshot(session_id, snapshot.clone());
-        }
+        self.system_prompt_injection
+            .write()
+            .await
+            .insert(session_id.to_string(), snapshot.clone());
 
         if let Err(error) = self
             .session
@@ -74,8 +97,12 @@ impl Agent {
         &self,
         session_id: &str,
     ) -> Option<SessionSystemPromptInjectionSnapshot> {
-        if let Some(manager) = self.manifestation_manager.as_ref()
-            && let Some(snapshot) = manager.inspect_session_prompt_injection(session_id)
+        if let Some(snapshot) = self
+            .system_prompt_injection
+            .read()
+            .await
+            .get(session_id)
+            .cloned()
         {
             return Some(snapshot);
         }
@@ -102,10 +129,11 @@ impl Agent {
                 "failed to parse persisted system prompt injection payload"
             );
         }
-        if let Some(value) = snapshot.clone()
-            && let Some(manager) = self.manifestation_manager.as_ref()
-        {
-            manager.upsert_session_prompt_injection_snapshot(session_id, value);
+        if let Some(value) = snapshot.clone() {
+            self.system_prompt_injection
+                .write()
+                .await
+                .insert(session_id.to_string(), value);
         }
         snapshot
     }
@@ -116,9 +144,11 @@ impl Agent {
     /// Returns an error when storage clear fails.
     pub async fn clear_session_system_prompt_injection(&self, session_id: &str) -> Result<bool> {
         let removed_cache = self
-            .manifestation_manager
-            .as_ref()
-            .is_some_and(|manager| manager.clear_session_prompt_injection(session_id));
+            .system_prompt_injection
+            .write()
+            .await
+            .remove(session_id)
+            .is_some();
         let storage_id = storage_session_id(session_id);
         let existed_storage = self
             .session
@@ -151,5 +181,99 @@ impl Agent {
             );
         }
         Ok(removed_cache || existed_storage)
+    }
+}
+
+fn storage_session_id(session_id: &str) -> String {
+    format!("{SYSTEM_PROMPT_INJECTION_SNAPSHOT_SESSION_PREFIX}{session_id}")
+}
+
+fn normalize_session_prompt_injection_snapshot(
+    raw_xml: &str,
+) -> std::result::Result<SessionSystemPromptInjectionSnapshot, xiuxian_qianhuan::InjectionError> {
+    let window = SystemPromptInjectionWindow::from_xml(raw_xml, InjectionWindowConfig::default())?;
+    Ok(SessionSystemPromptInjectionSnapshot {
+        xml: window.render_xml(),
+        qa_count: window.len(),
+        updated_at_unix_ms: now_unix_ms(),
+    })
+}
+
+fn snapshot_to_message(snapshot: &SessionSystemPromptInjectionSnapshot) -> Option<ChatMessage> {
+    let payload = serde_json::to_string(&StoredSessionSystemPromptInjectionSnapshot {
+        xml: snapshot.xml.clone(),
+        qa_count: snapshot.qa_count,
+        updated_at_unix_ms: snapshot.updated_at_unix_ms,
+    })
+    .ok()?;
+    Some(ChatMessage {
+        role: "system".to_string(),
+        content: Some(payload),
+        tool_calls: None,
+        tool_call_id: None,
+        name: Some(SYSTEM_PROMPT_INJECTION_SNAPSHOT_MESSAGE_NAME.to_string()),
+    })
+}
+
+fn message_to_snapshot(message: &ChatMessage) -> Option<SessionSystemPromptInjectionSnapshot> {
+    if let Some(name) = message.name.as_deref()
+        && name != SYSTEM_PROMPT_INJECTION_SNAPSHOT_MESSAGE_NAME
+    {
+        return None;
+    }
+    let payload = message.content.as_deref()?;
+    let stored: StoredSessionSystemPromptInjectionSnapshot = serde_json::from_str(payload).ok()?;
+    Some(SessionSystemPromptInjectionSnapshot {
+        xml: stored.xml,
+        qa_count: stored.qa_count,
+        updated_at_unix_ms: stored.updated_at_unix_ms,
+    })
+}
+
+fn now_unix_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        SessionSystemPromptInjectionSnapshot, message_to_snapshot,
+        normalize_session_prompt_injection_snapshot, snapshot_to_message,
+    };
+
+    #[test]
+    fn normalization_counts_qa_entries_and_renders_canonical_xml() {
+        let snapshot = normalize_session_prompt_injection_snapshot(
+            r#"
+<system_prompt_injection>
+  <qa><q>q1</q><a>a1</a></qa>
+  <qa><q>q2</q><a>a2</a></qa>
+</system_prompt_injection>
+"#,
+        )
+        .expect("xml should normalize");
+
+        assert_eq!(snapshot.qa_count, 2);
+        assert!(snapshot.xml.contains("<system_prompt_injection>"));
+        assert!(snapshot.xml.contains("<q>q1</q>"));
+        assert!(snapshot.updated_at_unix_ms > 0);
+    }
+
+    #[test]
+    fn snapshot_storage_roundtrip_preserves_fields() {
+        let snapshot = SessionSystemPromptInjectionSnapshot {
+            xml: "<system_prompt_injection><qa><q>q</q><a>a</a></qa></system_prompt_injection>"
+                .to_string(),
+            qa_count: 1,
+            updated_at_unix_ms: 42,
+        };
+        let message = snapshot_to_message(&snapshot).expect("snapshot should serialize");
+        let decoded = message_to_snapshot(&message).expect("message should deserialize");
+        assert_eq!(decoded, snapshot);
     }
 }

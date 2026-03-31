@@ -221,7 +221,10 @@ mod tests {
 
         assert_eq!(client.base_url(), "http://127.0.0.1:18080");
         assert_eq!(client.route(), "/arrow-ipc");
-        assert_eq!(client.schema_version(), ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION);
+        assert_eq!(
+            client.schema_version(),
+            ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION
+        );
         assert_eq!(client.timeout().as_secs(), 10);
     }
 }

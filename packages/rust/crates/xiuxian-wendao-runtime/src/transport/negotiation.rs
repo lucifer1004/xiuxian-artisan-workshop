@@ -1,8 +1,5 @@
 use xiuxian_vector::{ArrowTransportClient, ArrowTransportConfig, EngineRecordBatch};
-use xiuxian_wendao_core::{
-    capabilities::PluginCapabilityBinding,
-    transport::PluginTransportKind,
-};
+use xiuxian_wendao_core::{capabilities::PluginCapabilityBinding, transport::PluginTransportKind};
 
 use super::client::{
     build_arrow_flight_transport_client_from_binding, build_arrow_transport_client_from_binding,
@@ -158,10 +155,9 @@ pub fn negotiate_arrow_transport_client_from_bindings(
     }
 
     if saw_material_failure {
-        return Err(
-            fallback_reason
-                .unwrap_or_else(|| "no supported runtime transport client could be negotiated".to_string()),
-        );
+        return Err(fallback_reason.unwrap_or_else(|| {
+            "no supported runtime transport client could be negotiated".to_string()
+        }));
     }
 
     Ok(None)
@@ -171,8 +167,10 @@ fn build_runtime_arrow_transport_client_from_binding(
     binding: &PluginCapabilityBinding,
 ) -> Result<Option<RuntimeArrowTransportClient>, String> {
     match binding.transport {
-        PluginTransportKind::ArrowFlight => build_arrow_flight_transport_client_from_binding(binding)
-            .map(|client| client.map(RuntimeArrowTransportClient::ArrowFlight)),
+        PluginTransportKind::ArrowFlight => {
+            build_arrow_flight_transport_client_from_binding(binding)
+                .map(|client| client.map(RuntimeArrowTransportClient::ArrowFlight))
+        }
         PluginTransportKind::ArrowIpcHttp => build_arrow_transport_client_from_binding(binding)
             .map(|client| client.map(RuntimeArrowTransportClient::ArrowIpcHttp)),
         PluginTransportKind::LocalProcessArrowIpc => Err(
@@ -276,8 +274,14 @@ mod tests {
         let config = negotiated
             .arrow_ipc_http_config()
             .unwrap_or_else(|| panic!("fallback should produce an Arrow IPC client"));
-        assert_eq!(selection.selected_transport, PluginTransportKind::ArrowIpcHttp);
-        assert_eq!(selection.fallback_from, Some(PluginTransportKind::ArrowFlight));
+        assert_eq!(
+            selection.selected_transport,
+            PluginTransportKind::ArrowIpcHttp
+        );
+        assert_eq!(
+            selection.fallback_from,
+            Some(PluginTransportKind::ArrowFlight)
+        );
         assert!(
             selection
                 .fallback_reason

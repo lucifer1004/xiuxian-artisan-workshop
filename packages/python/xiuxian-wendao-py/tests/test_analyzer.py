@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pyarrow as pa
 
-from xiuxian_wendao_py.analyzer import run_analyzer
+from xiuxian_wendao_py.analyzer import (
+    build_mock_flight_info,
+    run_analyzer,
+    run_analyzer_with_mock_rows,
+    run_analyzer_with_rows,
+    run_analyzer_with_table,
+)
 from xiuxian_wendao_py.transport import (
     WendaoFlightRouteQuery,
     WendaoTransportClient,
@@ -84,3 +90,92 @@ def test_run_analyzer_can_skip_flight_info(monkeypatch) -> None:
     )
 
     assert result == (1, None)
+
+
+def test_run_analyzer_with_table_supports_offline_replay() -> None:
+    query = WendaoFlightRouteQuery(route="/search/repos/main")
+    table = pa.table({"id": ["doc-3"], "score": [0.7]})
+
+    result = run_analyzer_with_table(
+        lambda value, context: {
+            "rows": value.num_rows,
+            "route": context.query.normalized_route(),
+            "client": context.client,
+            "flight_info": context.flight_info,
+        },
+        table,
+        query,
+        flight_info={"mode": "offline"},
+    )
+
+    assert result == {
+        "rows": 1,
+        "route": "/search/repos/main",
+        "client": None,
+        "flight_info": {"mode": "offline"},
+    }
+
+
+def test_run_analyzer_with_rows_builds_arrow_table_for_offline_replay() -> None:
+    query = WendaoFlightRouteQuery(route="/search/repos/main")
+
+    result = run_analyzer_with_rows(
+        lambda table, context: {
+            "rows": table.num_rows,
+            "columns": table.column_names,
+            "route": context.query.normalized_route(),
+        },
+        [{"id": "doc-4", "score": 0.6}],
+        query,
+    )
+
+    assert result == {
+        "rows": 1,
+        "columns": ["id", "score"],
+        "route": "/search/repos/main",
+    }
+
+
+def test_build_mock_flight_info_creates_stable_replay_metadata() -> None:
+    query = WendaoFlightRouteQuery(route="/search/repos/main")
+
+    flight_info = build_mock_flight_info(
+        query,
+        [{"id": "doc-4", "score": 0.6}],
+    )
+
+    assert flight_info == {
+        "route": "/search/repos/main",
+        "descriptor_path": ("search", "repos", "main"),
+        "ticket": "/search/repos/main",
+        "row_count": 1,
+        "mode": "mock_flight",
+    }
+
+
+def test_run_analyzer_with_mock_rows_adds_mock_flight_context() -> None:
+    query = WendaoFlightRouteQuery(route="/search/repos/main")
+
+    result = run_analyzer_with_mock_rows(
+        lambda table, context: {
+            "rows": table.num_rows,
+            "route": context.query.normalized_route(),
+            "flight_info": context.flight_info,
+            "client": context.client,
+        },
+        [{"id": "doc-5", "score": 0.5}],
+        query,
+    )
+
+    assert result == {
+        "rows": 1,
+        "route": "/search/repos/main",
+        "flight_info": {
+            "route": "/search/repos/main",
+            "descriptor_path": ("search", "repos", "main"),
+            "ticket": "/search/repos/main",
+            "row_count": 1,
+            "mode": "mock_flight",
+        },
+        "client": None,
+    }

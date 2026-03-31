@@ -25,6 +25,7 @@ schema_version = "v1"
     assert!(rendered.contains("plugin_id = \"xiuxian-wendao-julia\""));
     assert!(rendered.contains("artifact_id = \"deployment\""));
     assert!(rendered.contains("route = \"/arrow-ipc\""));
+    assert!(rendered.contains("selected_transport = \"arrow_ipc_http\""));
 
     Ok(())
 }

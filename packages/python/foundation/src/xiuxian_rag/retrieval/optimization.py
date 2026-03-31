@@ -394,7 +394,9 @@ def build_preview_rows(
     for row in rows[:preview_limit]:
         copied = dict(row)
         content = str(copied.get("content") or "")
-        copied["content"] = f"{content[:snippet_chars]}…" if len(content) > snippet_chars else content
+        copied["content"] = (
+            f"{content[:snippet_chars]}…" if len(content) > snippet_chars else content
+        )
         copied["preview"] = True
         preview_rows.append(copied)
     return preview_rows

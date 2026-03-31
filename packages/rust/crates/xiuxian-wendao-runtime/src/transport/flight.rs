@@ -1,10 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use arrow_flight::FlightDescriptor;
 use arrow_flight::client::FlightClient;
 use arrow_flight::encode::FlightDataEncoderBuilder;
-use arrow_flight::FlightDescriptor;
-use futures::{stream, TryStreamExt};
+use arrow_schema::DataType;
+use futures::{TryStreamExt, stream};
 use tokio::sync::Mutex;
 use tonic::transport::Endpoint;
 use xiuxian_vector::{
@@ -12,7 +13,10 @@ use xiuxian_vector::{
     lance_batches_to_engine_batches,
 };
 
-const WENDAO_SCHEMA_VERSION_HEADER: &str = "x-wendao-schema-version";
+use super::query_contract::{
+    RERANK_EXCHANGE_ROUTE, RERANK_REQUEST_EMBEDDING_COLUMN, WENDAO_RERANK_DIMENSION_HEADER,
+    WENDAO_SCHEMA_VERSION_HEADER, flight_descriptor_path, normalize_flight_route,
+};
 
 /// Lazy Arrow Flight client aligned to the Lance/Arrow-57 transport line.
 #[derive(Clone)]
@@ -44,7 +48,7 @@ impl ArrowFlightTransportClient {
         }
 
         let base_url = base_url.into();
-        let route = normalize_route(route.into())?;
+        let route = normalize_flight_route(route.into())?;
         let schema_version = schema_version.into();
         if schema_version.trim().is_empty() {
             return Err("Arrow Flight schema version must not be blank".to_string());
@@ -124,6 +128,8 @@ impl ArrowFlightTransportClient {
         let request_batches = engine_batches_to_lance_batches(batches).map_err(|error| {
             format!("failed to convert engine batches onto the Lance Arrow line: {error}")
         })?;
+        let rerank_dimension_header =
+            rerank_dimension_header(self.route.as_str(), &request_batches)?;
         let request_stream = FlightDataEncoderBuilder::new()
             .with_flight_descriptor(Some(flight_descriptor(self.route.as_str())))
             .build(stream::iter(
@@ -135,18 +141,23 @@ impl ArrowFlightTransportClient {
         let response = {
             let mut client = self.client.lock().await;
             if client.is_none() {
-                let channel = self
-                    .endpoint
-                    .clone()
-                    .connect()
-                    .await
-                    .map_err(|error| format!("failed to connect Arrow Flight endpoint: {error}"))?;
+                let channel =
+                    self.endpoint.clone().connect().await.map_err(|error| {
+                        format!("failed to connect Arrow Flight endpoint: {error}")
+                    })?;
                 let mut flight_client = FlightClient::new(channel);
                 flight_client
                     .add_header(WENDAO_SCHEMA_VERSION_HEADER, self.schema_version.as_str())
                     .map_err(|error| {
                         format!("invalid Arrow Flight schema-version metadata: {error}")
                     })?;
+                if let Some(rerank_dimension_header) = rerank_dimension_header.as_deref() {
+                    flight_client
+                        .add_header(WENDAO_RERANK_DIMENSION_HEADER, rerank_dimension_header)
+                        .map_err(|error| {
+                            format!("invalid Arrow Flight rerank-dimension metadata: {error}")
+                        })?;
+                }
                 *client = Some(flight_client);
             }
 
@@ -168,169 +179,58 @@ impl ArrowFlightTransportClient {
     }
 }
 
-fn normalize_route(route: String) -> Result<String, String> {
-    let normalized = if route.starts_with('/') {
-        route
-    } else {
-        format!("/{route}")
-    };
-    if normalized.trim_matches('/').is_empty() {
-        return Err("Arrow Flight route must resolve to at least one descriptor segment".to_string());
-    }
-    Ok(normalized)
+fn flight_descriptor(route: &str) -> FlightDescriptor {
+    let path = flight_descriptor_path(route).unwrap_or_else(|error| {
+        panic!("flight descriptor route should already be normalized: {error}")
+    });
+    FlightDescriptor::new_path(path)
 }
 
-fn flight_descriptor(route: &str) -> FlightDescriptor {
-    let path = route
-        .trim_matches('/')
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    FlightDescriptor::new_path(path)
+fn rerank_dimension_header(
+    route: &str,
+    request_batches: &[LanceRecordBatch],
+) -> Result<Option<String>, String> {
+    if route != RERANK_EXCHANGE_ROUTE {
+        return Ok(None);
+    }
+
+    let first_batch = request_batches
+        .first()
+        .ok_or_else(|| "Arrow Flight request batches cannot be empty".to_string())?;
+    let embedding_column = first_batch
+        .column_by_name(RERANK_REQUEST_EMBEDDING_COLUMN)
+        .ok_or_else(|| {
+            format!("rerank Flight request missing `{RERANK_REQUEST_EMBEDDING_COLUMN}` column")
+        })?;
+    match embedding_column.data_type() {
+        DataType::FixedSizeList(_, dimension) if *dimension > 0 => Ok(Some(dimension.to_string())),
+        other => Err(format!(
+            "rerank Flight request column `{RERANK_REQUEST_EMBEDDING_COLUMN}` must be FixedSizeList, found {other:?}"
+        )),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ArrowFlightTransportClient, WENDAO_SCHEMA_VERSION_HEADER};
-    use std::pin::Pin;
+    use super::ArrowFlightTransportClient;
+    use crate::transport::{
+        REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_PATH_COLUMN,
+        REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN, RERANK_EXCHANGE_ROUTE,
+        WendaoFlightService,
+    };
     use std::sync::Arc;
     use std::time::Duration;
 
-    use arrow_flight::encode::FlightDataEncoderBuilder;
-    use arrow_flight::flight_service_server::{FlightService, FlightServiceServer};
-    use arrow_flight::{
-        Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
-        HandshakeRequest, HandshakeResponse, PollInfo, PutResult, SchemaResult, Ticket,
-    };
-    use async_trait::async_trait;
-    use futures::stream;
-    use futures::StreamExt;
+    use arrow_array::types::Float32Type;
+    use arrow_array::{FixedSizeListArray, Float32Array, Float64Array, Int32Array, StringArray};
+    use arrow_flight::flight_service_server::FlightServiceServer;
     use tokio::net::TcpListener;
     use tokio_stream::wrappers::TcpListenerStream;
     use tonic::transport::Server;
-    use tonic::{Request, Response, Status};
     use xiuxian_vector::{
-        LanceDataType, LanceField, LanceRecordBatch, LanceSchema, LanceStringArray,
-        lance_batch_to_engine_batch,
+        LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema,
+        engine_batches_to_lance_batches, lance_batch_to_engine_batch,
     };
-
-    #[derive(Clone)]
-    struct MockFlightService {
-        response_batch: LanceRecordBatch,
-    }
-
-    type FlightDataStream = Pin<Box<dyn futures::Stream<Item = Result<FlightData, Status>> + Send>>;
-    type HandshakeStream = Pin<Box<dyn futures::Stream<Item = Result<HandshakeResponse, Status>> + Send>>;
-    type PutResultStream = Pin<Box<dyn futures::Stream<Item = Result<PutResult, Status>> + Send>>;
-    type ActionResultStream =
-        Pin<Box<dyn futures::Stream<Item = Result<arrow_flight::Result, Status>> + Send>>;
-    type FlightInfoStream = Pin<Box<dyn futures::Stream<Item = Result<FlightInfo, Status>> + Send>>;
-    type ActionTypeStream =
-        Pin<Box<dyn futures::Stream<Item = Result<ActionType, Status>> + Send>>;
-
-    #[async_trait]
-    impl FlightService for MockFlightService {
-        type HandshakeStream = HandshakeStream;
-        type ListFlightsStream = FlightInfoStream;
-        type DoGetStream = FlightDataStream;
-        type DoPutStream = PutResultStream;
-        type DoExchangeStream = FlightDataStream;
-        type DoActionStream = ActionResultStream;
-        type ListActionsStream = ActionTypeStream;
-
-        async fn handshake(
-            &self,
-            _request: Request<tonic::Streaming<HandshakeRequest>>,
-        ) -> Result<Response<Self::HandshakeStream>, Status> {
-            Err(Status::unimplemented("handshake is not used in this test"))
-        }
-
-        async fn list_flights(
-            &self,
-            _request: Request<Criteria>,
-        ) -> Result<Response<Self::ListFlightsStream>, Status> {
-            Err(Status::unimplemented("list_flights is not used in this test"))
-        }
-
-        async fn get_flight_info(
-            &self,
-            _request: Request<FlightDescriptor>,
-        ) -> Result<Response<FlightInfo>, Status> {
-            Err(Status::unimplemented("get_flight_info is not used in this test"))
-        }
-
-        async fn poll_flight_info(
-            &self,
-            _request: Request<FlightDescriptor>,
-        ) -> Result<Response<PollInfo>, Status> {
-            Err(Status::unimplemented("poll_flight_info is not used in this test"))
-        }
-
-        async fn get_schema(
-            &self,
-            _request: Request<FlightDescriptor>,
-        ) -> Result<Response<SchemaResult>, Status> {
-            Err(Status::unimplemented("get_schema is not used in this test"))
-        }
-
-        async fn do_get(
-            &self,
-            _request: Request<Ticket>,
-        ) -> Result<Response<Self::DoGetStream>, Status> {
-            Err(Status::unimplemented("do_get is not used in this test"))
-        }
-
-        async fn do_put(
-            &self,
-            _request: Request<tonic::Streaming<FlightData>>,
-        ) -> Result<Response<Self::DoPutStream>, Status> {
-            Err(Status::unimplemented("do_put is not used in this test"))
-        }
-
-        async fn do_exchange(
-            &self,
-            request: Request<tonic::Streaming<FlightData>>,
-        ) -> Result<Response<Self::DoExchangeStream>, Status> {
-            let schema_version = request
-                .metadata()
-                .get(WENDAO_SCHEMA_VERSION_HEADER)
-                .and_then(|value| value.to_str().ok())
-                .unwrap_or_default()
-                .to_string();
-            if schema_version != "v2" {
-                return Err(Status::invalid_argument(format!(
-                    "unexpected schema version header: {schema_version}"
-                )));
-            }
-
-            let mut stream = request.into_inner();
-            if stream.message().await?.is_none() {
-                return Err(Status::invalid_argument("expected at least one request frame"));
-            }
-
-            let response_stream = FlightDataEncoderBuilder::new()
-                .build(stream::iter(vec![Ok::<LanceRecordBatch, arrow_flight::error::FlightError>(
-                    self.response_batch.clone(),
-                )]))
-                .map(|item| item.map_err(|error| Status::internal(error.to_string())));
-            Ok(Response::new(Box::pin(response_stream)))
-        }
-
-        async fn do_action(
-            &self,
-            _request: Request<Action>,
-        ) -> Result<Response<Self::DoActionStream>, Status> {
-            Err(Status::unimplemented("do_action is not used in this test"))
-        }
-
-        async fn list_actions(
-            &self,
-            _request: Request<Empty>,
-        ) -> Result<Response<Self::ListActionsStream>, Status> {
-            Err(Status::unimplemented("list_actions is not used in this test"))
-        }
-    }
 
     #[tokio::test]
     async fn flight_transport_client_roundtrips_batches_over_lance_arrow_line() {
@@ -340,18 +240,28 @@ mod tests {
         let address = listener
             .local_addr()
             .unwrap_or_else(|error| panic!("listener should expose a local address: {error}"));
-        let response_batch = LanceRecordBatch::try_new(
-            Arc::new(LanceSchema::new(vec![LanceField::new(
-                "doc_id",
-                LanceDataType::Utf8,
-                false,
-            )])),
-            vec![Arc::new(LanceStringArray::from(vec!["doc-1"]))],
+        let query_response_batch = LanceRecordBatch::try_new(
+            Arc::new(LanceSchema::new(vec![
+                LanceField::new(REPO_SEARCH_DOC_ID_COLUMN, LanceDataType::Utf8, false),
+                LanceField::new(REPO_SEARCH_PATH_COLUMN, LanceDataType::Utf8, false),
+                LanceField::new(REPO_SEARCH_TITLE_COLUMN, LanceDataType::Utf8, false),
+                LanceField::new(REPO_SEARCH_SCORE_COLUMN, LanceDataType::Float64, false),
+                LanceField::new(REPO_SEARCH_LANGUAGE_COLUMN, LanceDataType::Utf8, false),
+            ])),
+            vec![
+                Arc::new(StringArray::from(vec!["doc-1"])),
+                Arc::new(StringArray::from(vec!["src/lib.rs"])),
+                Arc::new(StringArray::from(vec!["Repo Search Result"])),
+                Arc::new(LanceFloat64Array::from(vec![0.91_f64])),
+                Arc::new(StringArray::from(vec!["rust"])),
+            ],
         )
-        .unwrap_or_else(|error| panic!("response batch should build: {error}"));
+        .unwrap_or_else(|error| panic!("query response batch should build: {error}"));
+        let service = WendaoFlightService::new("v2", query_response_batch, 3)
+            .unwrap_or_else(|error| panic!("runtime-owned Flight service should build: {error}"));
         let server = tokio::spawn(async move {
             Server::builder()
-                .add_service(FlightServiceServer::new(MockFlightService { response_batch }))
+                .add_service(FlightServiceServer::new(service))
                 .serve_with_incoming(TcpListenerStream::new(listener))
                 .await
                 .unwrap_or_else(|error| panic!("mock Flight server should serve: {error}"));
@@ -359,30 +269,106 @@ mod tests {
 
         let client = ArrowFlightTransportClient::new(
             format!("http://{address}"),
-            "/rerank/flight",
+            RERANK_EXCHANGE_ROUTE,
             "v2",
             Duration::from_secs(5),
         )
         .unwrap_or_else(|error| panic!("flight client should build: {error}"));
-        let request_batch = lance_batch_to_engine_batch(&LanceRecordBatch::try_new(
-            Arc::new(LanceSchema::new(vec![LanceField::new(
-                "doc_id",
-                LanceDataType::Utf8,
-                false,
-            )])),
-            vec![Arc::new(LanceStringArray::from(vec!["doc-0"]))],
+        let request_batch = lance_batch_to_engine_batch(
+            &LanceRecordBatch::try_new(
+                Arc::new(xiuxian_vector::LanceSchema::new(vec![
+                    xiuxian_vector::LanceField::new(
+                        "doc_id",
+                        xiuxian_vector::LanceDataType::Utf8,
+                        false,
+                    ),
+                    xiuxian_vector::LanceField::new(
+                        "vector_score",
+                        xiuxian_vector::LanceDataType::Float32,
+                        false,
+                    ),
+                    xiuxian_vector::LanceField::new(
+                        "embedding",
+                        xiuxian_vector::LanceDataType::FixedSizeList(
+                            Arc::new(xiuxian_vector::LanceField::new(
+                                "item",
+                                xiuxian_vector::LanceDataType::Float32,
+                                true,
+                            )),
+                            3,
+                        ),
+                        false,
+                    ),
+                    xiuxian_vector::LanceField::new(
+                        "query_embedding",
+                        xiuxian_vector::LanceDataType::FixedSizeList(
+                            Arc::new(xiuxian_vector::LanceField::new(
+                                "item",
+                                xiuxian_vector::LanceDataType::Float32,
+                                true,
+                            )),
+                            3,
+                        ),
+                        false,
+                    ),
+                ])),
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-0", "doc-1"])),
+                    Arc::new(Float32Array::from(vec![0.5_f32, 0.8_f32])),
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                                Some(vec![Some(0.0_f32), Some(1.0_f32), Some(0.0_f32)]),
+                            ],
+                            3,
+                        ),
+                    ),
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                            ],
+                            3,
+                        ),
+                    ),
+                ],
+            )
+            .unwrap_or_else(|error| panic!("request batch should build: {error}")),
         )
-        .unwrap_or_else(|error| panic!("request batch should build: {error}")))
         .unwrap_or_else(|error| panic!("request batch should convert onto engine Arrow: {error}"));
         let response_batches = client
             .process_batch(&request_batch)
             .await
             .unwrap_or_else(|error| panic!("flight roundtrip should succeed: {error}"));
+        let lance_response_batches = engine_batches_to_lance_batches(&response_batches)
+            .unwrap_or_else(|error| {
+                panic!("response batches should convert onto Lance Arrow: {error}")
+            });
 
         assert_eq!(response_batches.len(), 1);
-        assert_eq!(response_batches[0].num_rows(), 1);
+        assert_eq!(response_batches[0].num_rows(), 2);
+        let doc_ids = lance_response_batches[0]
+            .column_by_name("doc_id")
+            .and_then(|column| column.as_any().downcast_ref::<StringArray>())
+            .unwrap_or_else(|| panic!("response doc_id column should decode as Utf8"));
+        let final_scores = lance_response_batches[0]
+            .column_by_name("final_score")
+            .and_then(|column| column.as_any().downcast_ref::<Float64Array>())
+            .unwrap_or_else(|| panic!("response final_score column should decode as Float64"));
+        let ranks = lance_response_batches[0]
+            .column_by_name("rank")
+            .and_then(|column| column.as_any().downcast_ref::<Int32Array>())
+            .unwrap_or_else(|| panic!("response rank column should decode as Int32"));
+        assert_eq!(doc_ids.value(0), "doc-0");
+        assert_eq!(doc_ids.value(1), "doc-1");
+        assert!((final_scores.value(0) - 0.8).abs() < 1e-6);
+        assert!((final_scores.value(1) - 0.62).abs() < 1e-6);
+        assert_eq!(ranks.value(0), 1);
+        assert_eq!(ranks.value(1), 2);
         assert_eq!(client.base_url(), format!("http://{address}"));
-        assert_eq!(client.route(), "/rerank/flight");
+        assert_eq!(client.route(), RERANK_EXCHANGE_ROUTE);
         assert_eq!(client.schema_version(), "v2");
         assert_eq!(client.timeout().as_secs(), 5);
 

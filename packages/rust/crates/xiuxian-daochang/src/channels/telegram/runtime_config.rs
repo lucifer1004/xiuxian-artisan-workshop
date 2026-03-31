@@ -1,6 +1,6 @@
 //! Telegram foreground runtime configuration (queueing, concurrency, timeout).
 
-use omni_macros::env_non_empty;
+use xiuxian_macros::env_non_empty;
 
 use crate::config::{TelegramSettings, load_runtime_settings};
 

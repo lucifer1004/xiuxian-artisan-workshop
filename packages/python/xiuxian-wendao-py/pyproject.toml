@@ -8,6 +8,9 @@ dependencies = [
     "pyarrow>=14.0.0",
 ]
 
+[project.scripts]
+xiuxian-wendao-scaffold = "xiuxian_wendao_py.scaffold:main"
+
 [dependency-groups]
 test = [
     "pytest>=8.0",

@@ -160,7 +160,7 @@ async fn tool_pool_call_tool_recovers_after_server_restart() {
         Ok(initial) => initial,
         Err(error) => panic!("initial call_tool: {error}"),
     };
-    assert_eq!(initial.content.len(), 1);
+    assert_eq!(initial.text_segments.len(), 1);
 
     handle_1.abort();
     let _ = handle_1.await;
@@ -182,7 +182,7 @@ async fn tool_pool_call_tool_recovers_after_server_restart() {
         Ok(recovered) => recovered,
         Err(error) => panic!("call_tool should recover after reconnect: {error}"),
     };
-    assert_eq!(recovered.content.len(), 1);
+    assert_eq!(recovered.text_segments.len(), 1);
 
     if let Err(error) = restart.await {
         panic!("restart task join: {error}");

@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use crate::channels::discord::runtime;
-use crate::{Agent, Channel, ChannelMessage, ForegroundQueueMode, JobCompletion, JobManager};
+use crate::jobs::{JobCompletion, JobManager};
+use crate::{Agent, Channel, ChannelMessage, ForegroundQueueMode};
 
 /// Public wrapper for Discord foreground interrupt coordination in tests.
 #[derive(Clone, Default)]

@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fs;
 
 use super::types::SearchPlaneService;
 use crate::search_plane::{
@@ -50,7 +51,9 @@ impl SearchPlaneService {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert((corpus, repo_id.to_string()), corpus_record.clone());
+        self.persist_local_repo_corpus_record(&corpus_record);
         self.cache.set_repo_corpus_record(&corpus_record).await;
+        self.persist_local_repo_corpus_snapshot(&self.current_repo_corpus_snapshot_record());
         self.cache
             .set_repo_corpus_snapshot(&self.current_repo_corpus_snapshot_record())
             .await;
@@ -187,5 +190,32 @@ impl SearchPlaneService {
             limit,
         )
         .await
+    }
+
+    pub(crate) fn persist_local_repo_corpus_record(&self, record: &SearchRepoCorpusRecord) {
+        let path = self.repo_corpus_record_json_path(record.corpus, record.repo_id.as_str());
+        let Some(parent) = path.parent() else {
+            return;
+        };
+        let Ok(payload) = serde_json::to_vec(record) else {
+            return;
+        };
+        let _ = fs::create_dir_all(parent);
+        let _ = fs::write(path, payload);
+    }
+
+    pub(crate) fn persist_local_repo_corpus_snapshot(
+        &self,
+        snapshot: &crate::search_plane::SearchRepoCorpusSnapshotRecord,
+    ) {
+        let path = self.repo_corpus_snapshot_json_path();
+        let Some(parent) = path.parent() else {
+            return;
+        };
+        let Ok(payload) = serde_json::to_vec(snapshot) else {
+            return;
+        };
+        let _ = fs::create_dir_all(parent);
+        let _ = fs::write(path, payload);
     }
 }

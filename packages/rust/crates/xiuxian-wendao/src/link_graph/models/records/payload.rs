@@ -6,6 +6,7 @@ use super::retrieval_plan::{
 use crate::link_graph::agentic::LinkGraphSuggestedLink;
 use crate::link_graph::models::query::LinkGraphSearchOptions;
 use serde::{Deserialize, Serialize};
+use xiuxian_wendao_core::transport::PluginTransportKind;
 
 /// Canonical planned-search payload used by CLI/bindings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,6 +127,15 @@ pub struct LinkGraphJuliaRerankTelemetry {
     /// Number of score rows returned by the Julia service.
     #[serde(default)]
     pub response_row_count: usize,
+    /// Runtime-selected transport surfaced by the negotiation seam.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_transport: Option<PluginTransportKind>,
+    /// Higher-preference transport skipped before selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_from: Option<PluginTransportKind>,
+    /// Reason the runtime fell back from a higher-preference transport.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_reason: Option<String>,
     /// Optional trace identifiers surfaced from additive Julia response columns.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub trace_ids: Vec<String>,

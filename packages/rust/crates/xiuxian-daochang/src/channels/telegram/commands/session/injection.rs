@@ -1,5 +1,7 @@
-use super::super::shared::{normalize_command_input, slice_original_command_suffix};
 use super::{SessionInjectionAction, SessionInjectionCommand, SessionOutputFormat};
+use crate::channels::managed_runtime::parsing::{
+    normalize_command_input, slice_original_command_suffix,
+};
 
 /// Parse session system prompt injection command:
 /// - `/session inject` or `/session inject status [json]`

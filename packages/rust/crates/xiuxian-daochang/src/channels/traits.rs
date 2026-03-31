@@ -10,9 +10,13 @@ pub enum RecipientCommandAdminUsersMutation {
     Clear,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChannelAttachment {
+    ImageUrl { url: String },
+}
+
 /// A message received from or sent to a channel.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct ChannelMessage {
     /// Unique message ID (e.g. `telegram_{chat_id}_{message_id}` to prevent duplicate memories).
     pub id: String,
@@ -24,6 +28,8 @@ pub struct ChannelMessage {
     pub session_key: String,
     /// Message text content.
     pub content: String,
+    /// Structured inbound attachments available to the agent turn.
+    pub attachments: Vec<ChannelAttachment>,
     /// Channel name (e.g. `telegram`).
     pub channel: String,
     /// Unix timestamp.
@@ -31,7 +37,6 @@ pub struct ChannelMessage {
 }
 
 /// Core channel trait — implement for any messaging platform.
-#[allow(dead_code)]
 #[async_trait]
 pub trait Channel: Send + Sync {
     /// Human-readable channel name.

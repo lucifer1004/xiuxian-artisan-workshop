@@ -1,3 +1,7 @@
+mod consolidation;
+mod turn_store;
+
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
@@ -7,7 +11,37 @@ use crate::observability::SessionEvent;
 
 use super::Agent;
 use super::memory::{sanitize_decay_factor, should_apply_decay};
-use super::persist_memory_state;
+
+fn persist_memory_state(
+    backend: Option<&Arc<super::memory_state::MemoryStateBackend>>,
+    store: &EpisodeStore,
+    session_id: &str,
+    reason: &str,
+) {
+    let Some(backend) = backend else {
+        return;
+    };
+
+    match backend.save(store) {
+        Ok(()) => {
+            tracing::debug!(
+                event = SessionEvent::MemoryStateSaveSucceeded.as_str(),
+                session_id,
+                reason,
+                "memory state persisted"
+            );
+        }
+        Err(error) => {
+            tracing::warn!(
+                event = SessionEvent::MemoryStateSaveFailed.as_str(),
+                session_id,
+                reason,
+                error = %error,
+                "failed to persist memory state"
+            );
+        }
+    }
+}
 
 impl Agent {
     pub(in crate::agent) fn memory_gate_policy(&self) -> MemoryGatePolicy {

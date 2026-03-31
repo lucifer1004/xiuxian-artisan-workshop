@@ -1,8 +1,10 @@
 use std::future::Future;
 use std::time::Duration;
 
+use crate::tool_runtime::{
+    ToolRuntimeCallResult, ToolRuntimeListResult, ToolRuntimeToolDefinition,
+};
 use anyhow::Error;
-use rmcp::model::{CallToolResult, ListToolsResult, RawContent, Tool};
 
 pub(super) struct ToolCallExecutionOutput {
     pub(super) text: String,
@@ -21,7 +23,7 @@ pub(super) async fn execute_call_with_timeout<F, Fut>(
 ) -> ToolCallExecution
 where
     F: FnOnce() -> Fut,
-    Fut: Future<Output = anyhow::Result<CallToolResult>>,
+    Fut: Future<Output = anyhow::Result<ToolRuntimeCallResult>>,
 {
     let timeout_secs = timeout_secs.max(1);
     let call_result = tokio::time::timeout(Duration::from_secs(timeout_secs), operation()).await;
@@ -93,15 +95,15 @@ pub(super) fn timeout_tool_error_payload(source: &str, tool: &str, timeout_secs:
     degraded_tool_error_payload(tool, Some(source), "timeout", Some(timeout_secs), &message)
 }
 
-pub(super) fn llm_tool_definitions(list: &ListToolsResult) -> Vec<serde_json::Value> {
+pub(super) fn llm_tool_definitions(list: &ToolRuntimeListResult) -> Vec<serde_json::Value> {
     list.tools.iter().map(llm_tool_definition).collect()
 }
 
-fn llm_tool_definition(tool: &Tool) -> serde_json::Value {
+fn llm_tool_definition(tool: &ToolRuntimeToolDefinition) -> serde_json::Value {
     let mut object = serde_json::Map::new();
     object.insert(
         "name".to_string(),
-        serde_json::Value::String(tool.name.to_string()),
+        serde_json::Value::String(tool.name.clone()),
     );
     if let Some(description) = &tool.description {
         object.insert(
@@ -116,26 +118,16 @@ fn llm_tool_definition(tool: &Tool) -> serde_json::Value {
     serde_json::Value::Object(object)
 }
 
-fn decode_call_tool_result(result: &CallToolResult) -> ToolCallExecutionOutput {
-    let text: String = result
-        .content
-        .iter()
-        .filter_map(|content| match &content.raw {
-            RawContent::Text(text) => Some(text.text.as_str()),
-            _ => None,
-        })
-        .collect();
-
+fn decode_call_tool_result(result: &ToolRuntimeCallResult) -> ToolCallExecutionOutput {
     ToolCallExecutionOutput {
-        text,
-        is_error: result.is_error.unwrap_or(false),
+        text: result.text_segments.concat(),
+        is_error: result.is_error,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use anyhow::anyhow;
-    use rmcp::model::{Annotated, RawTextContent, TextContent, Tool};
 
     use super::*;
 
@@ -152,15 +144,15 @@ mod tests {
 
     #[test]
     fn llm_tool_definitions_maps_description_and_schema() {
-        let tool = Tool::new(
-            "mock.echo",
-            "Echo tool",
-            std::sync::Arc::new(serde_json::Map::from_iter([(
+        let tool = ToolRuntimeToolDefinition {
+            name: "mock.echo".to_string(),
+            description: Some("Echo tool".to_string()),
+            input_schema: serde_json::Map::from_iter([(
                 "type".to_string(),
                 serde_json::Value::String("object".to_string()),
-            )])),
-        );
-        let list = ListToolsResult::with_all_items(vec![tool]);
+            )]),
+        };
+        let list = ToolRuntimeListResult { tools: vec![tool] };
         let values = llm_tool_definitions(&list);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0]["name"], "mock.echo");
@@ -187,16 +179,9 @@ mod tests {
     async fn execute_call_with_timeout_decodes_text_results() {
         let result = execute_call_with_timeout(
             || async {
-                Ok(CallToolResult {
-                    content: vec![Annotated::new(RawContent::Text(RawTextContent {
-                        text: TextContent {
-                            text: "hello".to_string(),
-                            annotations: None,
-                            meta: None,
-                        },
-                    }))],
-                    is_error: Some(false),
-                    meta: None,
+                Ok(ToolRuntimeCallResult {
+                    text_segments: vec!["hello".to_string()],
+                    is_error: false,
                 })
             },
             1,

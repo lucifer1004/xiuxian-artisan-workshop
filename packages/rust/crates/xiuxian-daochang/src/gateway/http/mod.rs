@@ -4,8 +4,8 @@
 //! Each request is limited by a timeout to avoid stuck connections.
 
 mod handlers;
-mod llm_proxy;
-mod runtime;
+pub(crate) mod llm_proxy;
+pub(crate) mod runtime;
 mod types;
 
 use anyhow::Result;

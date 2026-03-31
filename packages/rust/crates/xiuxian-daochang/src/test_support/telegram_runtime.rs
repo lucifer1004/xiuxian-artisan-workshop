@@ -5,8 +5,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::channels::telegram::runtime;
-use crate::channels::telegram::runtime::support;
-use crate::{Agent, Channel, ChannelMessage, ForegroundQueueMode, JobCompletion, JobManager};
+use crate::jobs::JobCompletion;
+use crate::{Agent, Channel, ChannelMessage, ForegroundQueueMode, JobManager};
 
 /// Public wrapper for Telegram foreground interrupt coordination in tests.
 #[derive(Clone, Default)]
@@ -36,7 +36,7 @@ pub async fn handle_telegram_inbound_message_with_interrupt(
     agent: &Arc<Agent>,
     queue_mode: ForegroundQueueMode,
 ) -> bool {
-    support::test_handle_inbound_message_with_interrupt(
+    runtime::test_handle_inbound_message_with_interrupt(
         msg,
         channel,
         foreground_tx,
@@ -53,7 +53,7 @@ pub async fn push_telegram_background_completion(
     agent: &Arc<Agent>,
     completion: JobCompletion,
 ) {
-    support::test_push_background_completion(channel, agent, completion).await;
+    runtime::test_push_background_completion(channel, agent, completion).await;
 }
 
 #[must_use]
@@ -61,10 +61,10 @@ pub fn resolve_telegram_snapshot_interval_secs<F>(lookup: F) -> Option<u64>
 where
     F: Fn(&str) -> Option<String>,
 {
-    support::test_resolve_snapshot_interval_secs(lookup)
+    runtime::test_resolve_snapshot_interval_secs(lookup)
 }
 
 #[must_use]
 pub fn telegram_log_preview(s: &str) -> String {
-    support::test_log_preview(s)
+    runtime::test_log_preview(s)
 }

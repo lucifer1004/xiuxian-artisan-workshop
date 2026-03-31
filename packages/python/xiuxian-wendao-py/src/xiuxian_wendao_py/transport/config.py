@@ -8,6 +8,15 @@ from typing import Mapping
 from .mode import WendaoTransportMode
 
 WENDAO_SCHEMA_VERSION_HEADER = "x-wendao-schema-version"
+WENDAO_RERANK_DIMENSION_HEADER = "x-wendao-rerank-embedding-dimension"
+WENDAO_REPO_SEARCH_QUERY_HEADER = "x-wendao-repo-search-query"
+WENDAO_REPO_SEARCH_LIMIT_HEADER = "x-wendao-repo-search-limit"
+WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER = "x-wendao-repo-search-language-filters"
+WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER = "x-wendao-repo-search-path-prefixes"
+WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER = "x-wendao-repo-search-filename-filters"
+WENDAO_REPO_SEARCH_TAG_FILTERS_HEADER = "x-wendao-repo-search-tag-filters"
+WENDAO_REPO_SEARCH_TITLE_FILTERS_HEADER = "x-wendao-repo-search-title-filters"
+REPO_SEARCH_DEFAULT_LIMIT = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +74,15 @@ class WendaoTransportConfig:
 
 
 __all__ = [
+    "REPO_SEARCH_DEFAULT_LIMIT",
+    "WENDAO_RERANK_DIMENSION_HEADER",
+    "WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER",
+    "WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER",
+    "WENDAO_REPO_SEARCH_LIMIT_HEADER",
+    "WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER",
+    "WENDAO_REPO_SEARCH_TAG_FILTERS_HEADER",
+    "WENDAO_REPO_SEARCH_TITLE_FILTERS_HEADER",
+    "WENDAO_REPO_SEARCH_QUERY_HEADER",
     "WENDAO_SCHEMA_VERSION_HEADER",
     "WendaoTransportConfig",
     "WendaoTransportEndpoint",

@@ -12,11 +12,11 @@ metadata:
 
 ## Quick Reference
 
-| Task                    | Tool/Command                                    |
-| ----------------------- | ----------------------------------------------- |
-| Create knowledge entry  | add/update docs under `assets/knowledge/`       |
-| Rebuild knowledge index | rerun the owning package/index flow if needed   |
-| Search knowledge base   | use the retained knowledge query surface        |
+| Task                    | Tool/Command                                  |
+| ----------------------- | --------------------------------------------- |
+| Create knowledge entry  | add/update docs under `assets/knowledge/`     |
+| Rebuild knowledge index | rerun the owning package/index flow if needed |
+| Search knowledge base   | use the retained knowledge query surface      |
 
 ---
 
@@ -24,14 +24,14 @@ metadata:
 
 > **Rule**: Feature code cannot be merged until documentation is updated.
 
-| If you modify...       | You must update...                                         |
-| ---------------------- | ---------------------------------------------------------- |
-| `skills/*/scripts/*`   | Skill documentation in `skills/*/SKILL.md` and `README.md` |
-| `assets/specs/*.md`    | The matching workflow/process docs                          |
-| `assets/how-to/*.md`   | Update the how-to itself                                    |
-| `docs/*.md`            | User-facing guides (if breaking changes)                   |
-| `CLAUDE.md`            | Project conventions                                        |
-| `justfile`             | Command documentation in `docs/`                           |
+| If you modify...     | You must update...                                         |
+| -------------------- | ---------------------------------------------------------- |
+| `skills/*/scripts/*` | Skill documentation in `skills/*/SKILL.md` and `README.md` |
+| `assets/specs/*.md`  | The matching workflow/process docs                         |
+| `assets/how-to/*.md` | Update the how-to itself                                   |
+| `docs/*.md`          | User-facing guides (if breaking changes)                   |
+| `CLAUDE.md`          | Project conventions                                        |
+| `justfile`           | Command documentation in `docs/`                           |
 
 ---
 
@@ -134,12 +134,12 @@ Content...
 
 Understand where to write documentation:
 
-| Directory         | Audience     | Purpose                                            |
-| ----------------- | ------------ | -------------------------------------------------- |
-| `assets/how-to/` | Operators    | How-to guides and workflows                         |
-| `docs/`          | Users        | Human-readable manuals, tutorials                   |
-| `skills/*/`      | LLM + Devs   | Skill documentation (`SKILL.md`, `README.md`)       |
-| `assets/specs/`  | LLM + Devs   | Feature specifications                              |
+| Directory        | Audience   | Purpose                                       |
+| ---------------- | ---------- | --------------------------------------------- |
+| `assets/how-to/` | Operators  | How-to guides and workflows                   |
+| `docs/`          | Users      | Human-readable manuals, tutorials             |
+| `skills/*/`      | LLM + Devs | Skill documentation (`SKILL.md`, `README.md`) |
+| `assets/specs/`  | LLM + Devs | Feature specifications                        |
 
 ---
 
@@ -159,23 +159,23 @@ Understand where to write documentation:
 
 ## 7. Anti-Patterns
 
-| Wrong                               | Correct                                                        |
-| ----------------------------------- | -------------------------------------------------------------- |
-| Commit code without updating README | Check relevant docs first                                      |
-| Update docs in a separate commit    | Update docs in the SAME commit as code                         |
-| Write user docs in internal how-to  | Write user docs in `docs/`                                     |
-| Forget to update CLAUDE.md          | Update CLAUDE.md for new tools/commands                        |
+| Wrong                               | Correct                                                          |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| Commit code without updating README | Check relevant docs first                                        |
+| Update docs in a separate commit    | Update docs in the SAME commit as code                           |
+| Write user docs in internal how-to  | Write user docs in `docs/`                                       |
+| Forget to update CLAUDE.md          | Update CLAUDE.md for new tools/commands                          |
 | Store insights without sync         | Update the owning package/docs index only where one still exists |
 
 ---
 
 ## 8. Related Documentation
 
-| Document                               | Purpose                          |
-| -------------------------------------- | -------------------------------- |
-| `assets/how-to/gitops.md`              | Commit conventions               |
-| `assets/how-to/testing-workflows.md`   | Test requirements                |
-| `assets/knowledge/`                    | Knowledge notes                  |
+| Document                             | Purpose            |
+| ------------------------------------ | ------------------ |
+| `assets/how-to/gitops.md`            | Commit conventions |
+| `assets/how-to/testing-workflows.md` | Test requirements  |
+| `assets/knowledge/`                  | Knowledge notes    |
 
 ---
 

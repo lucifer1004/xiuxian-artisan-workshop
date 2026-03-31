@@ -1,8 +1,10 @@
 use anyhow::Result;
-use litellm_rs::core::types::{
-    ChatMessage as LiteChatMessage, FunctionCall as LiteFunctionCall,
-    MessageContent as LiteMessageContent, MessageRole as LiteMessageRole, ToolCall as LiteToolCall,
+use litellm_rs::core::types::chat::ChatMessage as LiteChatMessage;
+use litellm_rs::core::types::content::ContentPart as LiteContentPart;
+use litellm_rs::core::types::message::{
+    MessageContent as LiteMessageContent, MessageRole as LiteMessageRole,
 };
+use litellm_rs::core::types::tools::{FunctionCall as LiteFunctionCall, ToolCall as LiteToolCall};
 
 use crate::session::{ChatMessage, FunctionCall, ToolCallOut};
 
@@ -51,7 +53,7 @@ pub(super) fn content_from_litellm(content: Option<LiteMessageContent>) -> Optio
             let text = parts
                 .into_iter()
                 .filter_map(|part| match part {
-                    litellm_rs::core::types::ContentPart::Text { text } => Some(text),
+                    LiteContentPart::Text { text } => Some(text),
                     _ => None,
                 })
                 .collect::<Vec<_>>()

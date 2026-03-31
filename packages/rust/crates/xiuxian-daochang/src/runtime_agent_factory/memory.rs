@@ -1,16 +1,15 @@
-use omni_agent::{MemoryConfig, RuntimeSettings};
-
-use super::MemoryRuntimeOptions;
 use super::inference::{
     parse_embedding_backend_mode, resolve_runtime_embedding_backend_mode,
     resolve_runtime_embedding_base_url,
 };
+use super::types::MemoryRuntimeOptions;
+use crate::{MemoryConfig, RuntimeSettings};
 
 mod embedding;
 mod env_overrides;
 mod runtime;
 
-pub(super) fn resolve_runtime_memory_options(
+pub(crate) fn resolve_runtime_memory_options(
     runtime_settings: &RuntimeSettings,
 ) -> MemoryRuntimeOptions {
     let mut memory = MemoryConfig::default();

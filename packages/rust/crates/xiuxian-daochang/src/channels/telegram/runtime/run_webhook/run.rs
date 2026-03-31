@@ -159,18 +159,17 @@ pub async fn run_telegram_webhook_with_control_command_policy(
     print_foreground_config(&runtime_config, &session_gate_backend);
     print_managed_commands_help();
 
-    loop_control::run_webhook_event_loop(loop_control::WebhookEventLoopContext {
-        inbound_rx: &mut inbound_rx,
-        completion_rx: &mut completion_rx,
-        inbound_tx: &inbound_snapshot_tx,
-        channel_for_send: &channel_for_send,
-        foreground_tx: &foreground_tx,
-        interrupt_controller: &interrupt_controller,
-        job_manager: &job_manager,
-        agent: &agent,
-        webhook_server: &mut webhook_server.task,
-        runtime_config,
-    })
+    loop_control::run_webhook_event_loop(
+        &mut inbound_rx,
+        &mut completion_rx,
+        &channel_for_send,
+        &foreground_tx,
+        &interrupt_controller,
+        &job_manager,
+        &agent,
+        runtime_config.foreground_queue_mode,
+        &mut webhook_server.task,
+    )
     .await;
 
     server::stop_webhook_server(webhook_server).await;

@@ -11,15 +11,12 @@ struct SessionInterruptState {
 
 /// In-memory foreground interrupt controller keyed by Discord session id.
 #[derive(Clone, Default)]
-pub(in crate::channels::discord::runtime) struct ForegroundInterruptController {
+pub(crate) struct ForegroundInterruptController {
     channels: Arc<Mutex<HashMap<String, SessionInterruptState>>>,
 }
 
 impl ForegroundInterruptController {
-    pub(in crate::channels::discord::runtime) fn begin_generation(
-        &self,
-        session_id: &str,
-    ) -> watch::Receiver<u64> {
+    pub(crate) fn begin_generation(&self, session_id: &str) -> watch::Receiver<u64> {
         let mut guard = self.channels.lock().unwrap_or_else(PoisonError::into_inner);
         let state = guard
             .entry(session_id.to_string())
@@ -31,14 +28,14 @@ impl ForegroundInterruptController {
         state.sender.subscribe()
     }
 
-    pub(in crate::channels::discord::runtime) fn end_generation(&self, session_id: &str) {
+    pub(crate) fn end_generation(&self, session_id: &str) {
         let mut guard = self.channels.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(state) = guard.get_mut(session_id) {
             state.active_generations = state.active_generations.saturating_sub(1);
         }
     }
 
-    pub(in crate::channels::discord::runtime) fn interrupt(&self, session_id: &str) -> bool {
+    pub(crate) fn interrupt(&self, session_id: &str) -> bool {
         let state = {
             let guard = self.channels.lock().unwrap_or_else(PoisonError::into_inner);
             guard.get(session_id).cloned()

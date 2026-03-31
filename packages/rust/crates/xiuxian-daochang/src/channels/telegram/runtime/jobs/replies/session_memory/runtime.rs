@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
-use crate::jobs::manager::types::{JobRecord, JobState, QueuedJob, epoch_millis};
+use crate::jobs::{JobRecord, JobState, QueuedJob, epoch_millis};
 
 const JOB_MANAGER_STATE_VERSION: u32 = 1;
 

@@ -16,12 +16,12 @@ metadata:
 
 ## 1. Test Levels
 
-| Level           | Path                                                           | Scope                   | Command          | Timeout | Rules                               |
-| :-------------- | :------------------------------------------------------------- | :---------------------- | :--------------- | :------ | :---------------------------------- |
-| **Unit**        | `packages/python/*/tests/`, `packages/rust/crates/*/tests/`   | Single module           | `just test-unit` | < 30s   | Fast, no network/disk I/O           |
-| **Integration** | `tests/integration/`                                           | Module interaction      | `just test-int`  | < 2m    | Can touch DB/FS, mock external APIs |
-| **E2E**         | `tests/e2e/`                                                   | Full system             | `just test-e2e`  | < 10m   | CI only, real external services     |
-| **Tool Runtime**| Current tool/runtime slices                                   | Tool/runtime checks     | project-specific | < 60s   | Verify retained runtime surfaces    |
+| Level            | Path                                                        | Scope               | Command          | Timeout | Rules                               |
+| :--------------- | :---------------------------------------------------------- | :------------------ | :--------------- | :------ | :---------------------------------- |
+| **Unit**         | `packages/python/*/tests/`, `packages/rust/crates/*/tests/` | Single module       | `just test-unit` | < 30s   | Fast, no network/disk I/O           |
+| **Integration**  | `tests/integration/`                                        | Module interaction  | `just test-int`  | < 2m    | Can touch DB/FS, mock external APIs |
+| **E2E**          | `tests/e2e/`                                                | Full system         | `just test-e2e`  | < 10m   | CI only, real external services     |
+| **Tool Runtime** | Current tool/runtime slices                                 | Tool/runtime checks | project-specific | < 60s   | Verify retained runtime surfaces    |
 
 ---
 
@@ -49,13 +49,13 @@ When running tests during development:
 
 ### Decision Matrix
 
-| Modified Files                 | Action              | Reason                     |
-| :----------------------------- | :------------------ | :------------------------- |
-| `docs/`, `agent/`, `*.md` only | **Skip tests**      | Docs don't affect code     |
-| `scripts/channel/**`           | Run targeted tests  | Test tool/runtime scripts  |
-| `tool-router/**`               | Run targeted tests  | Test routing only          |
-| `*.nix`, `devenv.nix`          | Run `just test`     | Infrastructure affects all |
-| Mixed (code + docs)            | Run `just test`     | Code changes need testing  |
+| Modified Files                 | Action             | Reason                     |
+| :----------------------------- | :----------------- | :------------------------- |
+| `docs/`, `agent/`, `*.md` only | **Skip tests**     | Docs don't affect code     |
+| `scripts/channel/**`           | Run targeted tests | Test tool/runtime scripts  |
+| `tool-router/**`               | Run targeted tests | Test routing only          |
+| `*.nix`, `devenv.nix`          | Run `just test`    | Infrastructure affects all |
+| Mixed (code + docs)            | Run `just test`    | Code changes need testing  |
 
 ---
 

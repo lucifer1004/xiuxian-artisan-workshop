@@ -107,6 +107,9 @@ fn deployment_artifact_round_trips_plugin_artifact_payload() {
             launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
             args: vec!["--service-mode".to_string(), "stream".to_string()],
         }),
+        selected_transport: None,
+        fallback_from: None,
+        fallback_reason: None,
     });
 
     assert_eq!(roundtrip.artifact_schema_version, "v1");

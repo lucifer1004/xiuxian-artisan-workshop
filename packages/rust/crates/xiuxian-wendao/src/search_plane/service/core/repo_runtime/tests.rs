@@ -1,5 +1,6 @@
 use crate::search_plane::SearchCorpusKind;
 use crate::search_plane::service::core::types::SearchPlaneService;
+use std::fs;
 
 impl SearchPlaneService {
     #[cfg(test)]
@@ -34,8 +35,10 @@ impl SearchPlaneService {
             SearchCorpusKind::RepoContentChunk,
         ] {
             self.cache.delete_repo_corpus_record(corpus, repo_id).await;
+            let _ = fs::remove_file(self.repo_corpus_record_json_path(corpus, repo_id));
         }
         self.cache.delete_repo_corpus_snapshot().await;
+        let _ = fs::remove_file(self.repo_corpus_snapshot_json_path());
     }
 
     #[cfg(test)]

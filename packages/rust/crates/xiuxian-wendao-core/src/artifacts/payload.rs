@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::artifacts::PluginLaunchSpec;
 use crate::capabilities::ContractVersion;
 use crate::ids::{ArtifactId, PluginId};
-use crate::transport::PluginTransportEndpoint;
+use crate::transport::{PluginTransportEndpoint, PluginTransportKind};
 
 /// Generic artifact payload returned by plugin-artifact resolution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +23,15 @@ pub struct PluginArtifactPayload {
     pub schema_version: Option<String>,
     /// Optional launch metadata carried by the artifact payload.
     pub launch: Option<PluginLaunchSpec>,
+    /// Runtime-selected transport surfaced through outward inspection payloads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_transport: Option<PluginTransportKind>,
+    /// Higher-preference transport that was skipped before selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_from: Option<PluginTransportKind>,
+    /// Reason the runtime fell back from a higher-preference transport.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_reason: Option<String>,
 }
 
 impl PluginArtifactPayload {
@@ -115,6 +124,12 @@ mod tests {
                 launcher_path: ".data/WendaoAnalyzer/scripts/run.sh".to_string(),
                 args: vec!["--stdio".to_string()],
             }),
+            selected_transport: Some(PluginTransportKind::ArrowIpcHttp),
+            fallback_from: Some(PluginTransportKind::ArrowFlight),
+            fallback_reason: Some(
+                "preferred transport ArrowFlight is unavailable because the binding has no base_url"
+                    .to_string(),
+            ),
         };
 
         let toml = payload
@@ -125,7 +140,8 @@ mod tests {
             .expect("payload should serialize to JSON");
 
         assert!(toml.contains("wendao-julia"));
+        assert!(toml.contains("selected_transport = \"arrow_ipc_http\""));
         assert!(json.contains("\"deployment\""));
-        let _ = PluginTransportKind::ArrowIpcHttp;
+        assert!(json.contains("\"fallback_reason\""));
     }
 }

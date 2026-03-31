@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use xiuxian_wendao_core::artifacts::{PluginArtifactPayload, PluginLaunchSpec};
+use xiuxian_wendao_core::{
+    artifacts::{PluginArtifactPayload, PluginLaunchSpec},
+    transport::PluginTransportKind,
+};
 
 /// Global UI configuration for Studio.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
@@ -46,6 +49,25 @@ impl From<PluginLaunchSpec> for UiPluginLaunchSpec {
     }
 }
 
+/// Studio-visible generic plugin transport kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum UiPluginTransportKind {
+    ArrowFlight,
+    ArrowIpcHttp,
+    LocalProcessArrowIpc,
+}
+
+impl From<PluginTransportKind> for UiPluginTransportKind {
+    fn from(value: PluginTransportKind) -> Self {
+        match value {
+            PluginTransportKind::ArrowFlight => Self::ArrowFlight,
+            PluginTransportKind::ArrowIpcHttp => Self::ArrowIpcHttp,
+            PluginTransportKind::LocalProcessArrowIpc => Self::LocalProcessArrowIpc,
+        }
+    }
+}
+
 /// Studio-visible generic plugin artifact inspection payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Default)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +92,12 @@ pub struct UiPluginArtifact {
     pub schema_version: Option<String>,
     /// Optional launch manifest for managed providers.
     pub launch: Option<UiPluginLaunchSpec>,
+    /// Runtime-selected transport surfaced by the current negotiation seam.
+    pub selected_transport: Option<UiPluginTransportKind>,
+    /// Higher-preference transport skipped before selection.
+    pub fallback_from: Option<UiPluginTransportKind>,
+    /// Reason the runtime fell back from a higher-preference transport.
+    pub fallback_reason: Option<String>,
 }
 
 impl From<PluginArtifactPayload> for UiPluginArtifact {
@@ -92,18 +120,21 @@ impl From<PluginArtifactPayload> for UiPluginArtifact {
             timeout_secs: endpoint.as_ref().and_then(|endpoint| endpoint.timeout_secs),
             schema_version: value.schema_version,
             launch: value.launch.map(Into::into),
+            selected_transport: value.selected_transport.map(Into::into),
+            fallback_from: value.fallback_from.map(Into::into),
+            fallback_reason: value.fallback_reason,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{UiPluginArtifact, UiPluginLaunchSpec};
+    use super::{UiPluginArtifact, UiPluginLaunchSpec, UiPluginTransportKind};
     use xiuxian_wendao_core::{
         artifacts::{PluginArtifactPayload, PluginLaunchSpec},
         capabilities::ContractVersion,
         ids::{ArtifactId, PluginId},
-        transport::PluginTransportEndpoint,
+        transport::{PluginTransportEndpoint, PluginTransportKind},
     };
     use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH;
 
@@ -125,6 +156,12 @@ mod tests {
                 launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
                 args: vec!["--service-mode".to_string(), "stream".to_string()],
             }),
+            selected_transport: Some(PluginTransportKind::ArrowIpcHttp),
+            fallback_from: Some(PluginTransportKind::ArrowFlight),
+            fallback_reason: Some(
+                "preferred transport ArrowFlight is unavailable because the binding has no base_url"
+                    .to_string(),
+            ),
         };
 
         assert_eq!(
@@ -143,6 +180,12 @@ mod tests {
                     launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
                     args: vec!["--service-mode".to_string(), "stream".to_string()],
                 }),
+                selected_transport: Some(UiPluginTransportKind::ArrowIpcHttp),
+                fallback_from: Some(UiPluginTransportKind::ArrowFlight),
+                fallback_reason: Some(
+                    "preferred transport ArrowFlight is unavailable because the binding has no base_url"
+                        .to_string(),
+                ),
             }
         );
     }

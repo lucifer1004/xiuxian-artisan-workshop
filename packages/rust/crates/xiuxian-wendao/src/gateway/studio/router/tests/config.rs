@@ -151,6 +151,12 @@ analyzer_strategy = "similarity_only"
     assert_eq!(artifact.route.as_deref(), Some("/arrow-ipc"));
     assert_eq!(artifact.schema_version.as_deref(), Some("v1"));
     assert_eq!(
+        artifact.selected_transport,
+        Some(crate::gateway::studio::types::config::UiPluginTransportKind::ArrowIpcHttp)
+    );
+    assert_eq!(artifact.fallback_from, None);
+    assert_eq!(artifact.fallback_reason, None);
+    assert_eq!(
         artifact
             .launch
             .as_ref()
@@ -208,6 +214,7 @@ service_mode = "stream"
 
     assert_eq!(artifact["pluginId"], "xiuxian-wendao-julia");
     assert_eq!(artifact["artifactId"], "deployment");
+    assert_eq!(artifact["selectedTransport"], "arrow_ipc_http");
     assert_eq!(
         artifact["launch"]["launcherPath"],
         DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH
@@ -270,4 +277,5 @@ service_mode = "stream"
     assert_eq!(content_type, "text/plain; charset=utf-8");
     assert!(body_text.contains("base_url = \"http://127.0.0.1:18080\""));
     assert!(body_text.contains("route = \"/arrow-ipc\""));
+    assert!(body_text.contains("selected_transport = \"arrow_ipc_http\""));
 }

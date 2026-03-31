@@ -1,10 +1,10 @@
 use crate::channels::control_command_authorization::ControlCommandPolicy;
-
-use super::super::TelegramSlashCommandRule;
-use super::super::admin_rules::TelegramCommandAdminRule;
-use super::super::group_policy::TelegramGroupPolicyConfig;
+use crate::channels::telegram::channel::TelegramSlashCommandRule;
+use crate::channels::telegram::channel::admin_rules::TelegramCommandAdminRule;
+use crate::channels::telegram::channel::group_policy::TelegramGroupPolicyConfig;
 
 pub(super) const TELEGRAM_ACL_FIELD_ALLOWED_USERS: &str = "telegram.acl.allow.users";
+pub(super) const TELEGRAM_ACL_FIELD_ADMIN_COMMAND_RULES: &str = "telegram.acl.control.rules";
 pub(super) const TELEGRAM_ACL_FIELD_GROUP_ALLOW_FROM: &str = "telegram.group_allow_from";
 pub(super) const TELEGRAM_ACL_FIELD_ADMIN_USERS: &str = "telegram.acl.admin.users";
 pub(super) const TELEGRAM_ACL_FIELD_CONTROL_COMMAND_ALLOW_FROM: &str =

@@ -13,9 +13,9 @@ use tokio::sync::{Semaphore, oneshot};
 use tokio::time::MissedTickBehavior;
 use xiuxian_config_core::{absolutize_path, resolve_project_root_or_cwd};
 use xiuxian_llm::llm::multimodal::Base64ImageSource;
+use xiuxian_llm::llm::vision::deepseek::preprocess_image_for_ocr;
 use xiuxian_llm::llm::vision::{
     DeepseekRuntime, PreparedVisionImage, get_deepseek_runtime, infer_deepseek_ocr_truth,
-    preprocess_image_for_ocr,
 };
 
 const OCR_TRUTH_HEADER: &str =

@@ -684,13 +684,17 @@ program rather than as scattered runtime tweaks.
 
 Current phase status:
 
-1. `Phase 7` is open
+1. `Phase 7` is complete
 2. `Phase-7 Stage A` is complete: the transport-surface inventory now names
    the live contract, runtime, and outward inspection seams
-3. `Phase-7 Stage B` is now in progress: the runtime-owned negotiation policy
-   seam has landed and the rerank path now delegates through it
-4. `Phase-7 Stage C` remains pending behind outward diagnostics and the final
-   transport gate
+3. `Phase-7 Stage B` is complete: the runtime now owns both the Flight-first
+   negotiation policy seam and the LanceDB-aligned Flight client
+   materialization seam
+4. `Phase-7 Stage C` is complete: outward inspection payloads and rerank
+   telemetry now expose `selected_transport`, `fallback_from`, and
+   `fallback_reason`
+5. the explicit `Phase 7` gate decision is `go`
+6. the next macro-phase proposal is now `Phase 8: Contract and Dependency Governance`
 
 #### Phase-7 Stage A: Transport Surface Inventory Bundle
 
@@ -786,6 +790,15 @@ Exit criteria:
 2. outward gateway/tool/debug surfaces can report fallback decisions
 3. the RFC records a go/no-go decision for `Phase 7`
 
+Gate decision: `go`
+
+1. `PluginArtifactPayload` and `UiPluginArtifact` now expose
+   `selected_transport`, `fallback_from`, and `fallback_reason`
+2. `LinkGraphJuliaRerankTelemetry` now exposes the same transport-decision
+   fields for the live rerank diagnostics path
+3. targeted core, runtime, Julia-package, Studio, plugin-runtime, rerank, and
+   host `--lib --no-run` validation all passed
+
 ### 11.1 Late-M6 Staged Push Plan
 
 The next RFC-governed push should be executed as three bounded stages, not as
@@ -877,11 +890,205 @@ Criteria review:
 
 Next macro-phase target:
 
-1. open `Phase 7: Flight-First Runtime Negotiation`
-2. treat transport preference hardening and transport observability as the
-   next governed program concern
-3. stop accumulating additive-proof slices unless a later phase explicitly
-   requires them
+1. open `Phase 8: Contract and Dependency Governance`
+2. treat tooling-backed contract stability and dependency hygiene as the next
+   governed program concern
+3. build on the existing `cargo-audit`/`cargo-deny` baseline instead of
+   pretending the workspace starts from zero
+4. stop accumulating unrelated implementation slices until the new phase is
+   staged
+
+### 11.4 Phase-8 Proposal: Contract and Dependency Governance
+
+Rationale:
+
+1. `Phase 7` closed the transport/runtime hardening ambiguity
+2. the workspace already has a live `deny.toml` baseline and local
+   `just rust-security-audit` / `just rust-security-deny` lanes
+3. the remaining governance gap is not transport policy; it is the missing
+   phase-owned rollout for `cargo-semver-checks` on `xiuxian-wendao-core` and
+   dependency-hygiene lanes such as `cargo-machete` / `cargo-udeps`
+
+Proposed staged push plan:
+
+1. `Phase-8 Stage A: Tooling Reality Inventory Bundle`
+   verify the live `deny.toml`, `justfile`, Nix inputs, and missing
+   semver/dependency-hygiene seams
+2. `Phase-8 Stage B: Contract and Dependency Policy Bundle`
+   define owner crates, pass/fail policy, and scope boundaries for
+   `cargo-audit`, `cargo-deny`, `cargo-semver-checks`, `cargo-machete`, and
+   `cargo-udeps`
+3. `Phase-8 Stage C: Lane Integration and Gate Bundle`
+   land the first bounded lane set and record an explicit `Phase 8`
+   go/no-go decision
+
+Current staged position:
+
+1. `Phase-8 Stage A` is complete
+2. `Phase-8 Stage B` is complete
+3. `Phase-8 Stage C` is complete
+4. the explicit `Phase 8` gate decision is `go`
+
+Stage-A inventory summary:
+
+1. a live repo-root `deny.toml` baseline already exists
+2. the live `justfile` already exposes `rust-security-audit`,
+   `rust-security-deny`, and `rust-security-gate`
+3. Nix already provisions `cargo-audit` and `cargo-deny`
+4. no live `justfile`, Nix, or CI lane currently references
+   `cargo-semver-checks`, `cargo-machete`, or `cargo-udeps`
+
+Stage-B policy summary:
+
+1. `cargo-audit` remains a workspace-wide blocking security lane; `Phase 8`
+   should extend the existing `rust-security-gate` baseline rather than split
+   advisory scanning into a Wendao-only path
+2. `cargo-deny` remains a workspace-wide blocking policy lane for
+   advisories, bans, and sources; duplicate-version findings stay warn-only
+   under the current `deny.toml`, and license gating stays out of the initial
+   `Phase-8 Stage C` lane set
+3. `cargo-semver-checks` is the new blocking contract-governance lane for
+   `xiuxian-wendao-core` only, because that crate is now the physical home of
+   the stable plugin contract surface
+4. `xiuxian-wendao`, `xiuxian-wendao-runtime`, `xiuxian-wendao-julia`, and
+   `xiuxian-wendao-modelica` stay out of the initial semver gate because
+   their public surfaces are still migration-owned and not yet frozen as
+   stable external contract packages
+5. `cargo-machete` is the initial advisory dependency-hygiene lane for the
+   Wendao migration cluster:
+   `xiuxian-wendao-core`, `xiuxian-wendao-runtime`, `xiuxian-wendao`,
+   `xiuxian-wendao-julia`, and `xiuxian-wendao-modelica`
+6. `cargo-udeps` is the initial advisory unused-dependency lane, but the
+   first bounded scope should start with `xiuxian-wendao-core` and
+   `xiuxian-wendao-runtime` before expanding to the host facade and plugin
+   packages
+7. `Phase-8 Stage C` should therefore land one bounded lane bundle:
+   existing blocking workspace security, new blocking semver checks on
+   `xiuxian-wendao-core`, and advisory Wendao-scoped dependency-hygiene
+   lanes
+
+Stage-C landing summary:
+
+1. the local lane bundle now lives in `justfile` through
+   `rust-contract-semver-core`,
+   `rust-dependency-hygiene-machete-wendao`,
+   `rust-dependency-hygiene-udeps-wendao`, and
+   `rust-contract-dependency-governance`
+2. Nix task/runtime provisioning now includes `cargo-semver-checks`,
+   `cargo-machete`, and `cargo-udeps` through `nix/modules/rust.nix` and
+   `nix/modules/tasks.nix`
+3. CI now executes the bounded bundle through
+   `ci:rust-contract-dependency-governance` in both `checks.yaml` and
+   `ci.yaml`
+4. the blocking semver lane for `xiuxian-wendao-core` is live and passed on
+   the current tree
+5. the advisory `cargo-machete` lane is live and now passes cleanly on the
+   current Wendao migration cluster after removing the stale
+   `xiuxian-wendao` dependency entries
+6. the advisory `cargo-udeps` lane is wired but currently skips when a
+   `rustup` nightly toolchain is unavailable, which is the present bounded
+   behavior in the Nix-managed environment
+7. follow-on bounded sibling remediations removed the stale
+   `xiuxian-llm` direct dependencies `rmcp`, `fast_image_resize`, and
+   `spider_agent`, then retired the dead `xiuxian-zhenfa`
+   `tests/support/gateway.rs` helper; `toml` and `xiuxian-config-core`
+   remain in `xiuxian-llm` as `cargo-machete`-ignored macro dependencies
+   owned by `#[xiuxian_macros::xiuxian_config(...)]`, and live `rmcp`
+   ownership is now concentrated in `xiuxian-daochang`
+8. the final bounded production-side replacement moved
+   `xiuxian-daochang/src/tool_runtime/bridge.rs` off `rmcp` entirely by
+   landing a self-owned streamable-HTTP JSON-RPC client for `initialize`,
+   `tools/list`, and `tools/call`, and by moving `rmcp` to
+   `dev-dependencies` for the test-side server harness only; direct `rmcp`
+   usage no longer exists in `xiuxian-daochang/src/`
+9. full `xiuxian-daochang` crate verification still remains blocked by
+   unrelated pre-existing module/export failures outside the touched seam
+10. the bounded follow-on remediation has now removed the stale
+    `xiuxian-daochang` direct dependencies `comrak` and `regex`, and
+    `cargo-machete` is now clean on that package
+11. the next bounded crate-health slice has repaired
+    `xiuxian-daochang/src/agent/system_prompt_injection_state.rs` by moving
+    session prompt-injection ownership back to a local snapshot/cache/storage
+    seam backed by `SystemPromptInjectionWindow`; that cluster no longer
+    blocks the compile front, which has moved on to larger pre-existing
+    import/export failures elsewhere in the crate
+12. the following bounded slice has repaired the
+    `runtime_agent_factory` test-support visibility seam by promoting the
+    reused helper functions to `pub(crate)`; that private-import cluster no
+    longer appears at the compile front
+13. the next bounded Discord crate-health slice has retired the dead mounted
+    `channels/discord/channel/constructors.rs` duplicate, so the stale
+    `omni_agent` / `ChannelCommandRequest` import cluster no longer needs to
+    be carried inside the live Discord channel module tree
+14. the following bounded channel-runtime slice has restored the missing
+    `nodes/channel/common.rs` embedding-memory guard helper and test shim, so
+    the live `nodes/channel/{discord,telegram}.rs` launch paths no longer
+    depend on a nonexistent shared leaf; the compile front now advances into
+    deeper pre-existing Discord runtime dispatch and Telegram channel wiring
+15. the next bounded Discord runtime slice has now repaired the stale
+    `channels/discord/runtime/dispatch/` surface by restoring child-module
+    wiring, a local `dispatch/support.rs` leaf, the
+    `process_discord_message(...)` compatibility wrapper, and crate-internal
+    `ForegroundInterruptController` visibility, while also restoring the
+    shared `compose_turn_content(...)` helper in
+    `channels/managed_runtime/turn.rs`; that Discord dispatch cluster no
+    longer appears at the compile front, which now starts deeper in the
+    Telegram runtime surface and other pre-existing export drift
+16. the following bounded channel path-normalization slice has now repaired
+    the remaining live Telegram channel/runtime owner drift by mounting the
+    existing `channel/outbound_text.rs` leaf, re-exporting the
+    `jobs::{JobRecord, QueuedJob, epoch_millis}` owner seam, switching the
+    touched imports from relative `super::super::...` paths to `crate::...`,
+    and retiring dead duplicate Discord managed-session
+    `admin` / `injection` leaves plus the dead Telegram
+    `session_context` duplicate; the `xiuxian-daochang` compile front no
+    longer stops in that channel family and now exits the crate at a
+    pre-existing `xiuxian-wendao` transport import failure
+17. the next bounded runtime transport slice has now repaired that
+    `xiuxian-wendao` import failure by restoring the missing
+    `RepoSearchFlightRouteProvider` re-export in
+    `xiuxian-wendao-runtime/src/transport/mod.rs`; both
+    `xiuxian-wendao-runtime --features julia` and
+    `xiuxian-wendao --features julia` now clear that transport seam again
+18. the following bounded helper slice has now repaired the
+    `xiuxian-daochang` `jobs/heartbeat` owner import and the initial
+    embedding helper drift by replacing the dead `env_first_non_empty`
+    macro dependency with a local env scan and by making the currently
+    unwired `mistral_sdk` embedding path fail explicitly instead of failing
+    the build; the compile front now starts deeper in `llm/*`,
+    `resolve.rs`, and `runtime_agent_factory/*`
+
+Phase-8 gate review:
+
+1. `go`
+2. the phase objective was to land a real governance baseline rather than to
+   clear every advisory finding before the lane existed
+3. the next governed move should therefore be a new macro-phase proposal or a
+   bounded remediation plan for the surfaced advisory findings, not another
+   restart of contract/dependency policy design; the current bounded
+   remediation lane is now explicit `xiuxian-daochang` crate-health work.
+   The two latest landed slices removed the first telegram/discord internal
+   visibility bundle and the stale `llm/*` import/owner drift bundle from
+   the compile front. The active next blockers now start in `resolve.rs`,
+   `runtime_agent_factory/*`, `session/*`, `test_support/*`, and root
+   outward re-export drift in `lib.rs`
+4. the following bounded crate-health slice has now repaired the
+   `resolve.rs` plus `runtime_agent_factory/*` owner drift by moving channel
+   runtime enums into a crate-owned `channel_runtime.rs` seam, rebinding the
+   factory modules to crate-owned `RuntimeSettings` / `MemoryConfig` /
+   `ToolServerEntry` surfaces, restoring the missing environment-parsing
+   helpers, and replacing touched relative paths with `crate::...`; the
+   compile front no longer stops in that bundle and now starts deeper in
+   `session/*`, `test_support/*`, `lib.rs`, and `agent/*` private-module
+   exposure consumed by `test_support/*`
+5. the following bounded crate-health slice has now repaired the
+   `session/*` owner drift by restoring the missing local `SessionStore`,
+   switching the live `TurnSlot` owner back to `xiuxian_window`, fixing the
+   `RedisSessionBackend` message-content snapshot field, and rebinding the
+   touched session tests to `xiuxian_daochang` instead of `omni_agent`; the
+   compile front no longer stops in that bundle and now starts deeper in
+   `test_support/*`, `lib.rs`, and `agent/*` private-module exposure
+   consumed by `test_support/*`
 
 ## 12. Governance and Tooling
 
@@ -957,3 +1164,32 @@ Wendao should migrate to a layered architecture with:
 4. a compatibility bridge while the migration is underway
 
 This migration should proceed in staged phases, not as a one-shot crate explosion, and every phase must satisfy feature-folder-first modularization rules before it can be considered complete.
+
+The active post-`Phase 8` remediation lane is now deeper `xiuxian-daochang`
+crate-health work. The latest landed owner-removal slice retired the
+duplicate `runtime_agent_factory/*` memory-runtime owner and moved that
+builder path back onto its live runtime-settings applicator seam; the
+compile front now starts below that layer in `agent/bootstrap/zhixing.rs`,
+`agent/turn_execution/react_loop/*`, and
+`session/bounded_store/window_ops/*`.
+
+The next bounded slice has now removed the `zhixing` reminder/bootstrap
+owner drift too. Reminder queue backfill, queue-aware polling, and reminder
+notice rendering now live on the `xiuxian-zhixing::ZhixingHeyi` owner
+surface; `xiuxian-daochang` bootstrap only orchestrates that live surface.
+Two targeted `xiuxian-zhixing` reminder unit tests now pass, and the
+`xiuxian-daochang --lib` compile front no longer stops in
+`agent/bootstrap/zhixing.rs`; the active next owners are
+`agent/turn_execution/react_loop/*` and
+`session/bounded_store/window_ops/*`.
+
+The following bounded slice has now removed the
+`agent/turn_execution/react_loop/*` owner/import drift bundle too. The
+touched scope now uses explicit crate-owned imports instead of wildcard or
+deep relative imports, the live tool-dispatch call sites match the current
+runtime signatures, and the `turn_store` owner seam is mounted again so the
+react loop can see the current append-turn path. The `xiuxian-daochang
+--lib` compile front no longer stops in `agent/turn_execution/react_loop/*`;
+the active next owners are now `agent/persistence/turn_store/*`,
+`agent/session_context/window_ops/*`, and
+`session/bounded_store/window_ops/*`.

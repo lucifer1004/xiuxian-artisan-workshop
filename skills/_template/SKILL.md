@@ -47,11 +47,11 @@ _template/
 └── tests/             # Test files
 ```
 
-| Component   | Description                                                   |
-| ----------- | ------------------------------------------------------------- |
-| **Code**    | `scripts/commands.py` - Hot-reloaded via ModuleLoader         |
-| **Context** | `template.help` - Full skill context via Repomix XML |
-| **State**   | `SKILL.md` - Skill metadata in YAML Frontmatter               |
+| Component   | Description                                           |
+| ----------- | ----------------------------------------------------- |
+| **Code**    | `scripts/commands.py` - Hot-reloaded via ModuleLoader |
+| **Context** | `template.help` - Full skill context via Repomix XML  |
+| **State**   | `SKILL.md` - Skill metadata in YAML Frontmatter       |
 
 ## Why scripts/commands.py Pattern?
 

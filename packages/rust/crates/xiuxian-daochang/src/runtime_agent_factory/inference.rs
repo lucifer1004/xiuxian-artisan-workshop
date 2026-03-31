@@ -1,10 +1,10 @@
 use anyhow::{Result, anyhow};
-use omni_agent::{LITELLM_DEFAULT_URL, RuntimeSettings, ToolServerEntry};
 use xiuxian_llm::embedding::backend::parse_embedding_backend_kind;
 
 use crate::resolve::parse_bool_from_env;
-
-use super::{RuntimeEmbeddingBackendMode, non_empty_env};
+use crate::runtime_agent_factory::shared::non_empty_env;
+use crate::runtime_agent_factory::types::RuntimeEmbeddingBackendMode;
+use crate::{LITELLM_DEFAULT_URL, RuntimeSettings, ToolServerEntry};
 
 fn normalize_inference_url(raw: &str) -> String {
     let u = raw.trim_end_matches('/');
@@ -17,7 +17,7 @@ fn normalize_inference_url(raw: &str) -> String {
     }
 }
 
-pub(super) fn resolve_inference_url(
+pub(crate) fn resolve_inference_url(
     litellm_proxy_url: Option<&str>,
     agent_inference_url: Option<&str>,
 ) -> String {
@@ -70,7 +70,7 @@ fn resolve_inference_url_with_settings(
     resolve_inference_url(litellm_proxy_url, agent_inference_url)
 }
 
-pub(super) fn parse_embedding_backend_mode(
+pub(crate) fn parse_embedding_backend_mode(
     raw: Option<&str>,
 ) -> Option<RuntimeEmbeddingBackendMode> {
     let trimmed = raw.map(str::trim).filter(|value| !value.is_empty());
@@ -86,7 +86,7 @@ pub(super) fn parse_embedding_backend_mode(
     parsed
 }
 
-pub(super) fn resolve_runtime_embedding_backend_mode(
+pub(crate) fn resolve_runtime_embedding_backend_mode(
     runtime_settings: &RuntimeSettings,
 ) -> RuntimeEmbeddingBackendMode {
     parse_embedding_backend_mode(non_empty_env("OMNI_AGENT_MEMORY_EMBEDDING_BACKEND").as_deref())
@@ -104,7 +104,7 @@ pub(super) fn resolve_runtime_embedding_backend_mode(
         .unwrap_or(RuntimeEmbeddingBackendMode::Http)
 }
 
-pub(super) fn resolve_runtime_embedding_base_url(
+pub(crate) fn resolve_runtime_embedding_base_url(
     runtime_settings: &RuntimeSettings,
     backend_mode: RuntimeEmbeddingBackendMode,
 ) -> Option<String> {
@@ -121,6 +121,7 @@ pub(super) fn resolve_runtime_embedding_base_url(
         RuntimeEmbeddingBackendMode::Http => memory_base_url
             .or(embedding_client_url)
             .or(litellm_api_base),
+        RuntimeEmbeddingBackendMode::MistralSdk => None,
         RuntimeEmbeddingBackendMode::OpenAiHttp | RuntimeEmbeddingBackendMode::LiteLlmRs => {
             litellm_api_base
                 .or(memory_base_url)
@@ -136,7 +137,7 @@ fn endpoint_origin(url: &str) -> Option<String> {
     Some(format!("{}://{}:{}", parsed.scheme(), host, port))
 }
 
-pub(super) fn validate_inference_url_origin(
+pub(crate) fn validate_inference_url_origin(
     inference_url: &str,
     tool_servers: &[ToolServerEntry],
     allow_shared_origin: bool,
@@ -174,7 +175,7 @@ OMNI_AGENT_ALLOW_INFERENCE_TOOL_SHARED_ORIGIN=true.",
     ))
 }
 
-pub(super) fn resolve_runtime_inference_url(
+pub(crate) fn resolve_runtime_inference_url(
     runtime_settings: &RuntimeSettings,
     tool_servers: &[ToolServerEntry],
 ) -> Result<String> {
@@ -191,7 +192,7 @@ pub(super) fn resolve_runtime_inference_url(
     Ok(inference_url)
 }
 
-pub(super) fn resolve_runtime_model(runtime_settings: &RuntimeSettings) -> String {
+pub(crate) fn resolve_runtime_model(runtime_settings: &RuntimeSettings) -> String {
     non_empty_env("OMNI_AGENT_MODEL")
         .or_else(|| {
             runtime_settings

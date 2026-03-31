@@ -2,6 +2,8 @@
 mod client;
 mod endpoint;
 mod kind;
+#[cfg(feature = "julia")]
+mod server;
 
 #[cfg(feature = "julia")]
 pub use client::{
@@ -11,3 +13,8 @@ pub use client::{
 };
 pub use endpoint::PluginTransportEndpoint;
 pub use kind::PluginTransportKind;
+#[cfg(feature = "julia")]
+pub use server::{
+    SearchPlaneRepoSearchFlightRouteProvider, bootstrap_sample_repo_search_content,
+    build_search_plane_flight_service,
+};

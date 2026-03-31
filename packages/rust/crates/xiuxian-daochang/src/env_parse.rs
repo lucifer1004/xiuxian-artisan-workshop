@@ -1,4 +1,13 @@
 #[must_use]
+pub fn parse_positive_u32_from_env(name: &str) -> Option<u32> {
+    parse_env_value(
+        name,
+        |raw| raw.parse::<u32>().ok().filter(|value| *value > 0),
+        "invalid positive integer env value",
+    )
+}
+
+#[must_use]
 pub fn parse_positive_usize_from_env(name: &str) -> Option<usize> {
     parse_env_value(
         name,
@@ -13,6 +22,28 @@ pub fn parse_positive_u64_from_env(name: &str) -> Option<u64> {
         name,
         |raw| raw.parse::<u64>().ok().filter(|value| *value > 0),
         "invalid positive integer env value",
+    )
+}
+
+#[must_use]
+pub fn parse_positive_f32_from_env(name: &str) -> Option<f32> {
+    parse_env_value(
+        name,
+        |raw| raw.parse::<f32>().ok().filter(|value| *value > 0.0),
+        "invalid positive float env value",
+    )
+}
+
+#[must_use]
+pub fn parse_unit_f32_from_env(name: &str) -> Option<f32> {
+    parse_env_value(
+        name,
+        |raw| {
+            raw.parse::<f32>()
+                .ok()
+                .filter(|value| (0.0..=1.0).contains(value))
+        },
+        "invalid unit float env value (expected 0.0..=1.0)",
     )
 }
 

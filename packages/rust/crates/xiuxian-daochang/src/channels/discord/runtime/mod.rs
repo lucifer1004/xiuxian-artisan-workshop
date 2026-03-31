@@ -22,9 +22,13 @@ pub use run::{DiscordIngressRunRequest, run_discord_ingress};
 use crate::agent::Agent;
 use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::channels::traits::{Channel, ChannelMessage};
-use crate::jobs::JobManager;
+use crate::jobs::{JobCompletion, JobManager};
 use std::sync::Arc;
 
+pub(crate) use foreground::{
+    DiscordForegroundRuntime as TestDiscordForegroundRuntime,
+    build_foreground_runtime as test_build_discord_foreground_runtime,
+};
 pub(crate) use interrupt::ForegroundInterruptController;
 
 pub(crate) async fn test_process_discord_message_with_interrupt(
@@ -60,4 +64,12 @@ pub(crate) fn test_interrupted_reply_is_suppressed(
     turn_timeout_secs: u64,
 ) -> bool {
     dispatch::test_interrupted_reply_is_suppressed(msg, turn_timeout_secs)
+}
+
+pub(crate) async fn test_push_background_completion(
+    channel: &Arc<dyn Channel>,
+    agent: &Arc<Agent>,
+    completion: JobCompletion,
+) {
+    managed::push_background_completion(channel, agent, completion).await;
 }

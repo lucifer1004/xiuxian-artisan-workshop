@@ -4,7 +4,6 @@
 //! without path-compiling source files via `#[path = ...]`.
 
 mod admission;
-mod bootstrap;
 mod discord_runtime;
 mod embedding;
 mod gateway_http;
@@ -32,15 +31,6 @@ pub use admission::{
     DownstreamAdmissionDecision, DownstreamAdmissionMetrics, DownstreamAdmissionMetricsSnapshot,
     DownstreamAdmissionPolicy, DownstreamAdmissionRejectReason, DownstreamAdmissionRuntimeSnapshot,
     DownstreamInFlightSnapshot, DownstreamRuntimeSnapshot,
-};
-pub use bootstrap::{
-    BootstrapServiceMountCatalog, ServiceMountStatus, SkillTemplateLoadSummary,
-    build_skill_vfs_resolver_from_roots, init_persona_registries_internal_len,
-    load_skill_templates_from_embedded_registry, resolve_memory_embed_base_url,
-    resolve_memory_embedding_backend_hint_with_inputs, resolve_notebook_root,
-    resolve_prj_data_home_with_env, resolve_project_root_with_prj_root, resolve_template_globs,
-    resolve_template_globs_with_resource_root, resolve_wendao_incremental_policy,
-    resolve_wendao_watch_patterns, resolve_wendao_watch_roots,
 };
 pub use discord_runtime::{
     DiscordForegroundInterruptController, DiscordForegroundRuntimeHarness,
@@ -91,7 +81,6 @@ pub use memory_feedback::{
     apply_feedback_to_plan, classify_assistant_outcome, parse_explicit_user_feedback,
     resolve_feedback_outcome, update_feedback_bias,
 };
-pub use memory_metrics::{MemoryRecallMetricsState, ratio_as_f32};
 pub use memory_recall::{
     MemoryRecallInput, MemoryRecallPlan, build_memory_context_message, filter_recalled_episodes,
     filter_recalled_episodes_at, plan_memory_recall,

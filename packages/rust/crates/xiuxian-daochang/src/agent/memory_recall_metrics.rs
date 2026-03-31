@@ -1,7 +1,37 @@
 use crate::SessionMemoryRecallDecision;
 
-use super::types::{MemoryRecallLatencyBucketsSnapshot, MemoryRecallMetricsSnapshot};
-use super::util::{now_unix_ms, ratio_as_f32};
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MemoryRecallLatencyBucketsSnapshot {
+    pub le_10ms: u64,
+    pub le_25ms: u64,
+    pub le_50ms: u64,
+    pub le_100ms: u64,
+    pub le_250ms: u64,
+    pub le_500ms: u64,
+    pub gt_500ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct MemoryRecallMetricsSnapshot {
+    pub captured_at_unix_ms: u64,
+    pub planned_total: u64,
+    pub injected_total: u64,
+    pub skipped_total: u64,
+    pub completed_total: u64,
+    pub selected_total: u64,
+    pub injected_items_total: u64,
+    pub context_chars_injected_total: u64,
+    pub pipeline_duration_ms_total: u64,
+    pub avg_pipeline_duration_ms: f32,
+    pub avg_selected_per_completed: f32,
+    pub avg_injected_per_injected: f32,
+    pub injected_rate: f32,
+    pub latency_buckets: MemoryRecallLatencyBucketsSnapshot,
+    pub embedding_success_total: u64,
+    pub embedding_timeout_total: u64,
+    pub embedding_cooldown_reject_total: u64,
+    pub embedding_unavailable_total: u64,
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct MemoryRecallMetricsState {
@@ -115,4 +145,20 @@ impl MemoryRecallMetricsState {
             embedding_unavailable_total: self.embedding_unavailable_total,
         }
     }
+}
+
+fn ratio_as_f32(numerator: u64, denominator: u64) -> f32 {
+    if denominator == 0 {
+        return 0.0;
+    }
+    numerator as f32 / denominator as f32
+}
+
+fn now_unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
 }

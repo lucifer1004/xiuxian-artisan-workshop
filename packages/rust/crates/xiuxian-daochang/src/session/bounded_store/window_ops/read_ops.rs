@@ -2,9 +2,8 @@ use anyhow::{Context, Result};
 use xiuxian_window::TurnSlot;
 
 use crate::observability::SessionEvent;
+use crate::session::{BoundedSessionStore, ChatMessage};
 
-use super::super::super::message::ChatMessage;
-use super::super::BoundedSessionStore;
 use super::turn_slots_to_messages;
 
 impl BoundedSessionStore {

@@ -30,7 +30,9 @@
 
 //! Unit tests: config and session store (no network).
 
-use omni_agent::{AgentConfig, ChatMessage, ContextBudgetStrategy, MemoryConfig, SessionStore};
+use xiuxian_daochang::{
+    AgentConfig, ChatMessage, ContextBudgetStrategy, MemoryConfig, SessionStore,
+};
 
 #[test]
 fn config_resolve_api_key_from_field() {

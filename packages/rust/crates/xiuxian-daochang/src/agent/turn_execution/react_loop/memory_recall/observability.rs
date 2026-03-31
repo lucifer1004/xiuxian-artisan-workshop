@@ -1,8 +1,7 @@
-use crate::agent::{Agent, memory_recall_state};
-
-use super::super::types::{
+use crate::agent::turn_execution::react_loop::types::{
     MemoryRecallExecutionContext, MemoryRecallPlanContext, MemoryRecallResultStats,
 };
+use crate::agent::{Agent, memory_recall_state};
 
 use crate::agent::embedding_runtime::EMBEDDING_SOURCE_UNAVAILABLE;
 use crate::agent::embedding_runtime::MemoryEmbeddingErrorKind;

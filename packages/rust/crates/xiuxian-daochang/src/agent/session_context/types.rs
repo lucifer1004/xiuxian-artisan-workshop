@@ -1,5 +1,5 @@
-use omni_window::TurnSlot;
 use serde::{Deserialize, Serialize};
+use xiuxian_window::TurnSlot;
 
 use crate::session::{ChatMessage, SessionSummarySegment};
 

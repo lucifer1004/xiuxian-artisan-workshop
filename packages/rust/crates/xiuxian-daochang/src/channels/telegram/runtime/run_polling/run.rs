@@ -2,14 +2,15 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use super::super::console::{print_foreground_config, print_managed_commands_help};
-use super::super::dispatch::start_telegram_runtime;
-use super::channel_listener;
-use super::loop_control;
-use super::loop_control::PollingEventLoopContext;
 use crate::agent::Agent;
 use crate::channels::telegram::TelegramCommandAdminRule;
 use crate::channels::telegram::TelegramControlCommandPolicy;
+use crate::channels::telegram::runtime::console::{
+    print_foreground_config, print_managed_commands_help,
+};
+use crate::channels::telegram::runtime::dispatch::start_telegram_runtime;
+use crate::channels::telegram::runtime::run_polling::channel_listener;
+use crate::channels::telegram::runtime::run_polling::loop_control;
 use crate::channels::telegram::runtime_config::TelegramRuntimeConfig;
 
 /// Run Telegram channel via long polling.
@@ -77,15 +78,13 @@ pub async fn run_telegram_with_control_command_policy(
     loop_control::run_polling_event_loop(
         &mut inbound_rx,
         &mut completion_rx,
-        PollingEventLoopContext {
-            inbound_tx: &inbound_tx,
-            channel_for_send: &channel_for_send,
-            foreground_tx: &foreground_tx,
-            interrupt_controller: &interrupt_controller,
-            job_manager: &job_manager,
-            agent: &agent,
-            runtime_config,
-        },
+        &inbound_tx,
+        &channel_for_send,
+        &foreground_tx,
+        &interrupt_controller,
+        &job_manager,
+        &agent,
+        runtime_config,
     )
     .await;
 

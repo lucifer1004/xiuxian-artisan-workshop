@@ -3,9 +3,6 @@ use std::time::Duration;
 use xiuxian_macros::env_non_empty;
 
 #[cfg(feature = "agent-provider-litellm")]
-use xiuxian_macros::env_first_non_empty;
-
-#[cfg(feature = "agent-provider-litellm")]
 use crate::config::load_runtime_settings;
 
 pub(super) fn build_chunk_ranges(total: usize, max_chunk_size: usize) -> Vec<(usize, usize)> {
@@ -132,16 +129,13 @@ pub(super) fn resolve_litellm_embed_api_key() -> LitellmEmbedApiKeyResolution {
         };
     }
 
-    if let Some(api_key) = env_first_non_empty!("MINIMAX_API_KEY", "OPENAI_API_KEY") {
-        let source = if env_non_empty!("MINIMAX_API_KEY").is_some() {
-            "MINIMAX_API_KEY"
-        } else {
-            "OPENAI_API_KEY"
-        };
-        return LitellmEmbedApiKeyResolution {
-            api_key: Some(api_key),
-            source: source.to_string(),
-        };
+    for source in ["MINIMAX_API_KEY", "OPENAI_API_KEY"] {
+        if let Some(api_key) = read_from_env(source) {
+            return LitellmEmbedApiKeyResolution {
+                api_key: Some(api_key),
+                source: source.to_string(),
+            };
+        }
     }
 
     LitellmEmbedApiKeyResolution {

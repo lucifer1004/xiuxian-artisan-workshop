@@ -1,11 +1,13 @@
 use super::rerank::{
     apply_plugin_rerank_scores, attach_plugin_rerank_request_trace_id,
-    build_plugin_rerank_transport_client, collect_plugin_rerank_trace_ids,
-    plugin_rerank_request_trace_id,
+    build_plugin_rerank_telemetry, build_plugin_rerank_transport_client,
+    collect_plugin_rerank_trace_ids, plugin_rerank_request_trace_id,
 };
 use crate::analyzers::PluginArrowScoreRow;
 use crate::link_graph::models::QuantumContext;
-use crate::link_graph::plugin_runtime::build_rerank_provider_binding;
+use crate::link_graph::plugin_runtime::{
+    NegotiatedTransportSelection, build_rerank_provider_binding,
+};
 use crate::link_graph::runtime_config::models::retrieval::LinkGraphCompatRerankRuntimeConfig;
 use arrow::array::StringArray;
 use arrow::datatypes::{DataType, Field, Schema};
@@ -91,7 +93,10 @@ fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
         .arrow_ipc_http_config()
         .expect("runtime overrides should still select Arrow IPC");
 
-    assert_eq!(client.selection().selected_transport, PluginTransportKind::ArrowIpcHttp);
+    assert_eq!(
+        client.selection().selected_transport,
+        PluginTransportKind::ArrowIpcHttp
+    );
     assert_eq!(config.base_url(), "http://127.0.0.1:8090");
     assert_eq!(config.route(), "/custom-ipc");
     assert_eq!(config.health_route(), "/healthz");
@@ -119,7 +124,10 @@ fn build_plugin_rerank_transport_client_accepts_arrow_flight_bindings() {
         .expect("flight binding should be negotiable")
         .expect("flight binding should materialize a lazy Flight client");
 
-    assert_eq!(client.selection().selected_transport, PluginTransportKind::ArrowFlight);
+    assert_eq!(
+        client.selection().selected_transport,
+        PluginTransportKind::ArrowFlight
+    );
     assert_eq!(client.flight_base_url(), Some("http://127.0.0.1:18080"));
     assert_eq!(client.flight_route(), Some("/rerank/flight"));
     assert!(client.arrow_ipc_http_config().is_none());
@@ -163,6 +171,41 @@ fn collect_plugin_rerank_trace_ids_deduplicates_non_empty_values() {
         trace_ids,
         vec!["trace-123".to_string(), "trace-456".to_string()]
     );
+}
+
+#[test]
+fn build_plugin_rerank_telemetry_carries_transport_selection_and_fallback() {
+    let telemetry = build_plugin_rerank_telemetry(
+        Some(&NegotiatedTransportSelection {
+            selected_transport: PluginTransportKind::ArrowIpcHttp,
+            fallback_from: Some(PluginTransportKind::ArrowFlight),
+            fallback_reason: Some(
+                "preferred transport ArrowFlight is unavailable because the binding has no base_url"
+                    .to_string(),
+            ),
+        }),
+        true,
+        2,
+        vec!["trace-123".to_string()],
+        None,
+    );
+
+    assert!(telemetry.applied);
+    assert_eq!(telemetry.response_row_count, 2);
+    assert_eq!(
+        telemetry.selected_transport,
+        Some(PluginTransportKind::ArrowIpcHttp)
+    );
+    assert_eq!(
+        telemetry.fallback_from,
+        Some(PluginTransportKind::ArrowFlight)
+    );
+    assert_eq!(
+        telemetry.fallback_reason.as_deref(),
+        Some("preferred transport ArrowFlight is unavailable because the binding has no base_url")
+    );
+    assert_eq!(telemetry.trace_ids, vec!["trace-123".to_string()]);
+    assert_eq!(telemetry.error, None);
 }
 
 #[test]

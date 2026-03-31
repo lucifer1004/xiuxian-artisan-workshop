@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class WendaoAnalyzerContext:
     """Runtime context passed to one analyzer invocation."""
 
-    client: WendaoTransportClient
+    client: WendaoTransportClient | None
     query: WendaoFlightRouteQuery
     flight_info: object | None = None
 
@@ -33,6 +33,21 @@ class WendaoAnalyzer(Protocol[ResultT]):
     ) -> ResultT: ...
 
 
+def build_mock_flight_info(
+    query: WendaoFlightRouteQuery,
+    rows: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    """Build one stable mock Flight-info payload for local analyzer replay."""
+
+    return {
+        "route": query.normalized_route(),
+        "descriptor_path": query.descriptor_segments(),
+        "ticket": query.effective_ticket(),
+        "row_count": 0 if rows is None else len(rows),
+        "mode": "mock_flight",
+    }
+
+
 def run_analyzer(
     client: WendaoTransportClient,
     analyzer: WendaoAnalyzer[ResultT],
@@ -48,9 +63,7 @@ def run_analyzer(
     metadata, and table-fetch plumbing.
     """
 
-    flight_info = (
-        client.get_query_info(query, **connect_kwargs) if include_flight_info else None
-    )
+    flight_info = client.get_query_info(query, **connect_kwargs) if include_flight_info else None
     table = client.read_query_table(query, **connect_kwargs)
     context = WendaoAnalyzerContext(
         client=client,
@@ -60,4 +73,67 @@ def run_analyzer(
     return analyzer(table, context)
 
 
-__all__ = ["WendaoAnalyzer", "WendaoAnalyzerContext", "run_analyzer"]
+def run_analyzer_with_table(
+    analyzer: WendaoAnalyzer[ResultT],
+    table: "pa.Table",
+    query: WendaoFlightRouteQuery,
+    *,
+    client: WendaoTransportClient | None = None,
+    flight_info: object | None = None,
+) -> ResultT:
+    """Invoke one analyzer against a prebuilt Arrow table."""
+
+    context = WendaoAnalyzerContext(
+        client=client,
+        query=query,
+        flight_info=flight_info,
+    )
+    return analyzer(table, context)
+
+
+def run_analyzer_with_rows(
+    analyzer: WendaoAnalyzer[ResultT],
+    rows: list[dict[str, object]],
+    query: WendaoFlightRouteQuery,
+    *,
+    client: WendaoTransportClient | None = None,
+    flight_info: object | None = None,
+) -> ResultT:
+    """Invoke one analyzer against a local row replay payload."""
+
+    import pyarrow as pa
+
+    return run_analyzer_with_table(
+        analyzer,
+        pa.Table.from_pylist(rows),
+        query,
+        client=client,
+        flight_info=flight_info,
+    )
+
+
+def run_analyzer_with_mock_rows(
+    analyzer: WendaoAnalyzer[ResultT],
+    rows: list[dict[str, object]],
+    query: WendaoFlightRouteQuery,
+) -> ResultT:
+    """Invoke one analyzer against local rows with mock Flight metadata."""
+
+    return run_analyzer_with_rows(
+        analyzer,
+        rows,
+        query,
+        client=None,
+        flight_info=build_mock_flight_info(query, rows),
+    )
+
+
+__all__ = [
+    "build_mock_flight_info",
+    "WendaoAnalyzer",
+    "WendaoAnalyzerContext",
+    "run_analyzer",
+    "run_analyzer_with_mock_rows",
+    "run_analyzer_with_rows",
+    "run_analyzer_with_table",
+]

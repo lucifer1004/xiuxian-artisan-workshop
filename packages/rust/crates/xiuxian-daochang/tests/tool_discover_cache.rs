@@ -222,7 +222,7 @@ async fn discover_calls_use_valkey_read_through_cache_when_configured() -> Resul
             Err(error) => panic!("first discover call: {error}"),
         };
         miss_latencies_ms.push(miss_started.elapsed().as_secs_f64() * 1000.0);
-        assert_ne!(first.is_error, Some(true));
+        assert!(!first.is_error);
 
         let args_hit = serde_json::json!({
             "limit": 5,
@@ -237,7 +237,7 @@ async fn discover_calls_use_valkey_read_through_cache_when_configured() -> Resul
             Err(error) => panic!("second discover call: {error}"),
         };
         hit_latencies_ms.push(hit_started.elapsed().as_secs_f64() * 1000.0);
-        assert_ne!(second.is_error, Some(true));
+        assert!(!second.is_error);
     }
     assert_eq!(
         discover_calls_total.load(Ordering::SeqCst),

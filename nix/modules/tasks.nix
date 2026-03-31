@@ -49,6 +49,12 @@ let
     pkgs.cargo-deny
   ];
 
+  rustGovernanceEnv = rustBaseEnv ++ [
+    pkgs.cargo-semver-checks
+    pkgs.cargo-machete
+    pkgs.cargo-udeps
+  ];
+
   # Reuse CI-relevant tool packages from global config, but exclude heavy runtime-only tools.
   ciSupportEnv = lib.filter (
     pkg:
@@ -68,6 +74,7 @@ let
   rustTaskEnv = rustBaseEnv;
   rustQualityTaskEnv = rustQualityEnv;
   rustSecurityTaskEnv = rustSecurityEnv;
+  rustGovernanceTaskEnv = rustGovernanceEnv;
   runtimeTaskEnv = rustBaseEnv ++ [ pkgs.valkey ];
 
   mkTask = envPackages: command: {
@@ -92,6 +99,7 @@ let
   mkRustTask = command: mkRustTaskWith rustTaskEnv command;
   mkRustQualityTask = command: mkRustTaskWith rustQualityTaskEnv command;
   mkRustSecurityTask = command: mkRustTaskWith rustSecurityTaskEnv command;
+  mkRustGovernanceTask = command: mkRustTaskWith rustGovernanceTaskEnv command;
 
   mkPythonTask = command: mkTask pythonTaskEnv command;
   mkPythonScriptTask = command: mkTask pythonScriptTaskEnv command;
@@ -122,6 +130,10 @@ in
 
     "ci:rust-security-gate" = mkRustSecurityTask ''
       just rust-security-gate
+    '';
+
+    "ci:rust-contract-dependency-governance" = mkRustGovernanceTask ''
+      just rust-contract-dependency-governance
     '';
 
     "ci:rust-xiuxian-core-rs-lib" = mkRustTask ''

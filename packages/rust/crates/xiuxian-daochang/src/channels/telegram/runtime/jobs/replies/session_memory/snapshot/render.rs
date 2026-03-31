@@ -4,17 +4,19 @@ use crate::agent::{
     DownstreamAdmissionRuntimeSnapshot, MemoryRecallMetricsSnapshot, MemoryRuntimeStatusSnapshot,
     SessionMemoryRecallSnapshot,
 };
-
-use super::super::super::shared::{format_optional_f32, format_optional_usize};
-use super::super::metrics::{
-    format_memory_recall_metrics_json, format_memory_recall_metrics_lines,
-};
-use super::super::runtime_status::{
+use crate::channels::telegram::runtime::jobs::replies::session_memory::runtime_status::{
     format_downstream_admission_status_json, format_downstream_admission_status_lines,
     format_memory_runtime_status_json, format_memory_runtime_status_lines,
 };
 
-pub(in super::super::super::super) fn format_memory_recall_snapshot(
+use crate::channels::telegram::runtime::jobs::replies::session_memory::metrics::{
+    format_memory_recall_metrics_json, format_memory_recall_metrics_lines,
+};
+use crate::channels::telegram::runtime::jobs::replies::shared::{
+    format_optional_f32, format_optional_usize,
+};
+
+pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapshot(
     snapshot: SessionMemoryRecallSnapshot,
     metrics: MemoryRecallMetricsSnapshot,
     runtime_status: MemoryRuntimeStatusSnapshot,
@@ -91,7 +93,7 @@ pub(in super::super::super::super) fn format_memory_recall_snapshot(
     lines.join("\n")
 }
 
-pub(in super::super::super::super) fn format_memory_recall_snapshot_json(
+pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapshot_json(
     snapshot: SessionMemoryRecallSnapshot,
     metrics: MemoryRecallMetricsSnapshot,
     runtime_status: MemoryRuntimeStatusSnapshot,
@@ -135,4 +137,20 @@ pub(in super::super::super::super) fn format_memory_recall_snapshot_json(
         "metrics": format_memory_recall_metrics_json(metrics),
     })
     .to_string()
+}
+
+pub(in crate::channels::telegram::runtime::jobs) fn format_memory_recall_snapshot_telegram(
+    snapshot: SessionMemoryRecallSnapshot,
+    metrics: MemoryRecallMetricsSnapshot,
+    runtime_status: MemoryRuntimeStatusSnapshot,
+    admission_status: DownstreamAdmissionRuntimeSnapshot,
+    session_scope: &str,
+) -> String {
+    format_memory_recall_snapshot(
+        snapshot,
+        metrics,
+        runtime_status,
+        admission_status,
+        session_scope,
+    )
 }

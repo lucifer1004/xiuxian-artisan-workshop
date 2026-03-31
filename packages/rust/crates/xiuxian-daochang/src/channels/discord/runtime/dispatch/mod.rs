@@ -1,3 +1,9 @@
+mod generation;
+mod preview;
+mod stop;
+mod support;
+mod turn;
+
 use std::sync::Arc;
 
 use crate::agent::Agent;
@@ -10,14 +16,34 @@ use crate::channels::managed_runtime::turn::{build_session_id, compose_turn_cont
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::JobManager;
 
-use super::super::ForegroundInterruptController;
-use super::generation::begin_active_generation;
-use super::stop::try_handle_stop_command;
-use super::support::{log_inbound_user_message, log_preempted_turn};
-use super::turn::{
+use self::generation::begin_active_generation;
+use self::stop::try_handle_stop_command;
+use self::support::{log_inbound_user_message, log_preempted_turn};
+use self::turn::{
     ForegroundTurnInput, render_foreground_turn_reply, run_foreground_turn_with_typing,
 };
+use super::ForegroundInterruptController;
 use crate::channels::discord::runtime::managed::handle_inbound_managed_command;
+
+pub(in crate::channels::discord::runtime) async fn process_discord_message(
+    agent: Arc<Agent>,
+    channel: Arc<dyn Channel>,
+    msg: ChannelMessage,
+    job_manager: &Arc<JobManager>,
+    turn_timeout_secs: u64,
+) {
+    let interrupt_controller = ForegroundInterruptController::default();
+    process_discord_message_with_interrupt(
+        agent,
+        channel,
+        msg,
+        job_manager,
+        turn_timeout_secs,
+        ForegroundQueueMode::Queue,
+        &interrupt_controller,
+    )
+    .await;
+}
 
 pub(in crate::channels::discord::runtime) async fn process_discord_message_with_interrupt(
     agent: Arc<Agent>,
@@ -78,6 +104,13 @@ pub(in crate::channels::discord::runtime) async fn process_discord_message_with_
     };
     let result = run_foreground_turn_with_typing(channel.as_ref(), agent.clone(), turn_input).await;
     if let Some(reply) = render_foreground_turn_reply(result, &msg, turn_timeout_secs) {
-        super::turn::send_discord_reply(channel.as_ref(), &msg, &reply).await;
+        turn::send_discord_reply(channel.as_ref(), &msg, &reply).await;
     }
+}
+
+pub(in crate::channels::discord::runtime) fn test_interrupted_reply_is_suppressed(
+    _msg: &ChannelMessage,
+    _turn_timeout_secs: u64,
+) -> bool {
+    true
 }

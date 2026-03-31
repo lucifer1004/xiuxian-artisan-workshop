@@ -1,6 +1,6 @@
+use crate::channels::telegram::channel::TelegramChannel;
 use crate::channels::traits::ChannelMessage;
 
-use super::super::TelegramChannel;
 use super::types::ParsedTelegramUpdate;
 
 pub(super) fn extract_update_message(
@@ -87,6 +87,7 @@ pub(super) fn build_channel_message_from_parsed(
         recipient: parsed.recipient(),
         session_key,
         content: parsed.text.to_string(),
+        attachments: Vec::new(),
         channel: "telegram".to_string(),
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

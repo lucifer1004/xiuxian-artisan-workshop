@@ -1,6 +1,6 @@
-#[allow(clippy::wildcard_imports)]
-use super::*;
+use anyhow::Result;
 
+use crate::agent::Agent;
 use crate::shortcuts::parse_react_shortcut;
 
 impl Agent {
