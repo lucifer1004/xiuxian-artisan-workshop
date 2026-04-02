@@ -4,6 +4,7 @@ use crate::gateway::studio::analysis::markdown::{CompiledDocument, compile_markd
 use crate::gateway::studio::analysis::projection;
 use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::types::{AnalysisNode, MarkdownAnalysisResponse};
+use crate::gateway::studio::vfs::resolve_vfs_file_path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnalysisError {
@@ -38,8 +39,15 @@ pub(crate) async fn analyze_markdown(
         ));
     }
 
-    let project_root = state.project_root.clone();
-    let full_path = project_root.join(path);
+    let full_path = resolve_vfs_file_path(state, path).map_err(|error| {
+        AnalysisError::Vfs(
+            error
+                .error
+                .details
+                .clone()
+                .unwrap_or_else(|| error.error.message.clone()),
+        )
+    })?;
 
     let content = std::fs::read_to_string(&full_path)
         .map_err(|e| AnalysisError::Vfs(format!("Failed to read file: {e}")))?;

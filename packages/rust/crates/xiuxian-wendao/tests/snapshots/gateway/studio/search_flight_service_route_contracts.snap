@@ -80,5 +80,30 @@ expression: value
     "route": "/search/ast",
     "schemaLength": 768,
     "ticket": "/search/ast"
+  },
+  {
+    "descriptorPath": [
+      "search",
+      "definition"
+    ],
+    "endpointCount": 1,
+    "query": "AlphaService",
+    "route": "/search/definition",
+    "schemaLength": 832,
+    "sourceLine": 2,
+    "sourcePath": "packages/rust/crates/demo/src/lib.rs",
+    "ticket": "/search/definition"
+  },
+  {
+    "descriptorPath": [
+      "search",
+      "autocomplete"
+    ],
+    "endpointCount": 1,
+    "limit": 5,
+    "prefix": "Alpha",
+    "route": "/search/autocomplete",
+    "schemaLength": 192,
+    "ticket": "/search/autocomplete"
   }
 ]

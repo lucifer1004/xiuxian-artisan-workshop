@@ -227,6 +227,18 @@ mod tests {
         };
 
         assert!(
+            !paths.contains_key("/api/search"),
+            "bundled gateway OpenAPI must not expose the retired knowledge HTTP path"
+        );
+        assert!(
+            !paths.contains_key("/api/search/definition"),
+            "bundled gateway OpenAPI must not expose the retired definition HTTP path"
+        );
+        assert!(
+            !paths.contains_key("/api/search/autocomplete"),
+            "bundled gateway OpenAPI must not expose the retired autocomplete HTTP path"
+        );
+        assert!(
             !paths.contains_key("/api/search/intent"),
             "bundled gateway OpenAPI must not expose the retired intent HTTP path"
         );
@@ -245,6 +257,10 @@ mod tests {
         assert!(
             !paths.contains_key("/api/search/ast"),
             "bundled gateway OpenAPI must not expose the retired AST HTTP path"
+        );
+        assert!(
+            !paths.contains_key("/api/graph/neighbors/{id}"),
+            "bundled gateway OpenAPI must not expose the retired graph-neighbors HTTP path"
         );
         assert!(
             !paths.contains_key("/api/analysis/markdown"),

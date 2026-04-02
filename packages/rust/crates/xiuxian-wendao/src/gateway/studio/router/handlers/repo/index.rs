@@ -48,9 +48,7 @@ pub async fn repo_index_status(
     Query(query): Query<RepoIndexStatusApiQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> Result<Json<RepoIndexStatusEnvelope>, StudioApiError> {
+    let status = run_repo_index_status(&state, query.repo.as_deref());
     let telemetry = state.studio.bootstrap_background_indexing_telemetry();
-    Ok(Json(RepoIndexStatusEnvelope {
-        status: run_repo_index_status(&state, query.repo.as_deref()),
-        telemetry,
-    }))
+    Ok(Json(RepoIndexStatusEnvelope { status, telemetry }))
 }

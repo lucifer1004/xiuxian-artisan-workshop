@@ -102,7 +102,7 @@ fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
 fn build_plugin_rerank_transport_client_accepts_arrow_flight_bindings() {
     let mut binding = build_rerank_provider_binding(&LinkGraphCompatRerankRuntimeConfig {
         base_url: Some("http://127.0.0.1:18080".to_string()),
-        route: Some("/rerank/flight".to_string()),
+        route: Some("/rerank".to_string()),
         health_route: Some("/healthz".to_string()),
         schema_version: Some("v2".to_string()),
         timeout_secs: Some(20),
@@ -123,7 +123,7 @@ fn build_plugin_rerank_transport_client_accepts_arrow_flight_bindings() {
         PluginTransportKind::ArrowFlight
     );
     assert_eq!(client.flight_base_url(), Some("http://127.0.0.1:18080"));
-    assert_eq!(client.flight_route(), Some("/rerank/flight"));
+    assert_eq!(client.flight_route(), Some("/rerank"));
 }
 
 #[test]

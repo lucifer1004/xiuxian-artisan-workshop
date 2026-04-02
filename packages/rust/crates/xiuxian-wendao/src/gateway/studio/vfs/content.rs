@@ -54,6 +54,10 @@ pub(super) struct ResolvedVfsPath {
     pub(super) full_path: PathBuf,
 }
 
+pub(crate) fn resolve_vfs_file_path(state: &StudioState, path: &str) -> Result<PathBuf, VfsError> {
+    resolve_vfs_path(state, path).map(|resolved| resolved.full_path)
+}
+
 pub(super) fn resolve_vfs_path(
     state: &StudioState,
     path: &str,

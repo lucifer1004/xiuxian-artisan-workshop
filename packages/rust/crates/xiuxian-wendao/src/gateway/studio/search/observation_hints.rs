@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::gateway::studio::analysis;
-use crate::gateway::studio::router::GatewayState;
+use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::types::{AnalysisEdgeKind, AnalysisNodeKind, MarkdownAnalysisResponse};
 use crate::link_graph::parser::code_observation::CodeObservation;
 
@@ -13,7 +13,7 @@ pub(super) struct DefinitionObservationHints {
 }
 
 pub(super) async fn definition_observation_hints(
-    state: &GatewayState,
+    state: &StudioState,
     source_paths: Option<&[String]>,
     source_line: Option<usize>,
     query: &str,
@@ -26,9 +26,7 @@ pub(super) async fn definition_observation_hints(
             continue;
         }
 
-        let Ok(analysis) =
-            analysis::analyze_markdown(state.studio.as_ref(), source_path.as_str()).await
-        else {
+        let Ok(analysis) = analysis::analyze_markdown(state, source_path.as_str()).await else {
             continue;
         };
 

@@ -10,6 +10,5 @@ pub(crate) use crate::gateway::studio::search::handlers::code_search::{
     query::parse_repo_code_search_query,
 };
 pub(crate) use crate::gateway::studio::search::handlers::queries::{
-    AstSearchQuery, AttachmentSearchQuery, AutocompleteQuery, DefinitionResolveQuery,
-    ReferenceSearchQuery, SearchQuery, SymbolSearchQuery,
+    AstSearchQuery, AttachmentSearchQuery, ReferenceSearchQuery, SearchQuery, SymbolSearchQuery,
 };

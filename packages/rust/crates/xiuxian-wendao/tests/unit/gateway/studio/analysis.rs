@@ -49,7 +49,7 @@ fn compile() {}
     state.config_root = temp_dir.path().to_path_buf();
     state.set_ui_config(UiConfig {
         projects: vec![UiProjectConfig {
-            name: "kernel".to_string(),
+            name: "main".to_string(),
             root: ".".to_string(),
             dirs: vec!["docs".to_string()],
         }],
@@ -65,7 +65,7 @@ fn compile() {}
 #[tokio::test]
 async fn analyze_markdown_returns_ir_and_projections() {
     let fixture = make_analysis_fixture();
-    let payload = analyze_markdown(&fixture.state, "docs/analysis.md")
+    let payload = analyze_markdown(&fixture.state, "main/docs/analysis.md")
         .await
         .unwrap_or_else(|err| panic!("expected markdown analysis to succeed: {err:?}"));
 
@@ -118,7 +118,7 @@ async fn analyze_markdown_returns_ir_and_projections() {
 #[tokio::test]
 async fn analyze_markdown_rejects_non_markdown_content() {
     let fixture = make_analysis_fixture();
-    let result = analyze_markdown(&fixture.state, "docs/raw.rs").await;
+    let result = analyze_markdown(&fixture.state, "main/docs/raw.rs").await;
     let Err(error) = result else {
         panic!("expected non-markdown analysis request to fail");
     };
@@ -132,9 +132,25 @@ async fn analyze_markdown_rejects_non_markdown_content() {
 }
 
 #[tokio::test]
+async fn analyze_markdown_rejects_unqualified_vfs_paths() {
+    let fixture = make_analysis_fixture();
+    let result = analyze_markdown(&fixture.state, "docs/analysis.md").await;
+    let Err(error) = result else {
+        panic!("expected unqualified markdown analysis request to fail");
+    };
+
+    assert_studio_json_snapshot(
+        "analysis_markdown_unqualified_path_error",
+        json!({
+            "error": error.to_string(),
+        }),
+    );
+}
+
+#[tokio::test]
 async fn analyze_markdown_emits_retrieval_atoms_for_document_sections_and_code_blocks() {
     let fixture = make_analysis_fixture();
-    let payload = analyze_markdown(&fixture.state, "docs/analysis.md")
+    let payload = analyze_markdown(&fixture.state, "main/docs/analysis.md")
         .await
         .unwrap_or_else(|err| panic!("expected markdown analysis to succeed: {err:?}"));
 
@@ -156,7 +172,7 @@ async fn analyze_markdown_emits_retrieval_atoms_for_document_sections_and_code_b
 
     assert!(payload.retrieval_atoms.iter().any(|atom| {
         atom.owner_id == "doc:0"
-            && atom.chunk_id.starts_with("md:docs-analysis-md:doc-0")
+            && atom.chunk_id.starts_with("md:main-docs-analysis-md:doc-0")
             && atom.semantic_type == "document"
             && atom.line_start == Some(1)
             && atom.line_end == Some(17)
@@ -166,7 +182,7 @@ async fn analyze_markdown_emits_retrieval_atoms_for_document_sections_and_code_b
 
     assert!(payload.retrieval_atoms.iter().any(|atom| {
         atom.owner_id == "sec:7"
-            && atom.chunk_id.starts_with("md:docs-analysis-md:sec-7")
+            && atom.chunk_id.starts_with("md:main-docs-analysis-md:sec-7")
             && atom.semantic_type == "h2"
             && atom.line_start == Some(7)
             && atom.line_end == Some(17)
@@ -176,7 +192,9 @@ async fn analyze_markdown_emits_retrieval_atoms_for_document_sections_and_code_b
 
     assert!(payload.retrieval_atoms.iter().any(|atom| {
         atom.owner_id == "code:15"
-            && atom.chunk_id.starts_with("md:docs-analysis-md:code-15")
+            && atom
+                .chunk_id
+                .starts_with("md:main-docs-analysis-md:code-15")
             && atom.semantic_type == "code:rust"
             && atom.line_start == Some(15)
             && atom.line_end == Some(17)
@@ -199,13 +217,13 @@ async fn analyze_markdown_emits_retrieval_atoms_for_tables() {
     )
     .unwrap_or_else(|err| panic!("failed to write table markdown fixture: {err}"));
 
-    let payload = analyze_markdown(&fixture.state, "docs/table.md")
+    let payload = analyze_markdown(&fixture.state, "main/docs/table.md")
         .await
         .unwrap_or_else(|err| panic!("expected markdown analysis to succeed: {err:?}"));
 
     assert!(payload.retrieval_atoms.iter().any(|atom| {
         atom.owner_id == "table:3"
-            && atom.chunk_id.starts_with("md:docs-table-md:table-3")
+            && atom.chunk_id.starts_with("md:main-docs-table-md:table-3")
             && atom.semantic_type == "table"
             && atom.line_start == Some(3)
             && atom.line_end == Some(5)
@@ -223,13 +241,13 @@ async fn analyze_markdown_emits_retrieval_atoms_for_display_math() {
     )
     .unwrap_or_else(|err| panic!("failed to write math markdown fixture: {err}"));
 
-    let payload = analyze_markdown(&fixture.state, "docs/math.md")
+    let payload = analyze_markdown(&fixture.state, "main/docs/math.md")
         .await
         .unwrap_or_else(|err| panic!("expected markdown analysis to succeed: {err:?}"));
 
     assert!(payload.retrieval_atoms.iter().any(|atom| {
         atom.owner_id.starts_with("math:")
-            && atom.chunk_id.starts_with("md:docs-math-md:math-")
+            && atom.chunk_id.starts_with("md:main-docs-math-md:math-")
             && atom.semantic_type == "math:block"
             && atom.line_end >= atom.line_start
             && atom.fingerprint.starts_with("fp:")

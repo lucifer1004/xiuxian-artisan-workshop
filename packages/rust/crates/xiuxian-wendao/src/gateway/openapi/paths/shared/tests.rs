@@ -6,10 +6,14 @@ use crate::gateway::openapi::paths::{
 };
 
 const RETIRED_SEARCH_AST_OPENAPI_PATH: &str = "/api/search/ast";
+const RETIRED_SEARCH_DEFINITION_OPENAPI_PATH: &str = "/api/search/definition";
+const RETIRED_SEARCH_AUTOCOMPLETE_OPENAPI_PATH: &str = "/api/search/autocomplete";
+const RETIRED_SEARCH_KNOWLEDGE_OPENAPI_PATH: &str = "/api/search";
 const RETIRED_SEARCH_INTENT_OPENAPI_PATH: &str = "/api/search/intent";
 const RETIRED_SEARCH_ATTACHMENTS_OPENAPI_PATH: &str = "/api/search/attachments";
 const RETIRED_SEARCH_REFERENCES_OPENAPI_PATH: &str = "/api/search/references";
 const RETIRED_SEARCH_SYMBOLS_OPENAPI_PATH: &str = "/api/search/symbols";
+const RETIRED_GRAPH_NEIGHBORS_OPENAPI_PATH: &str = "/api/graph/neighbors/{id}";
 const RETIRED_ANALYSIS_MARKDOWN_OPENAPI_PATH: &str = "/api/analysis/markdown";
 const RETIRED_ANALYSIS_CODE_AST_OPENAPI_PATH: &str = "/api/analysis/code-ast";
 
@@ -44,6 +48,18 @@ fn route_inventory_omits_retired_flight_only_http_paths() {
         .collect::<BTreeSet<_>>();
 
     assert!(
+        !openapi_paths.contains(RETIRED_SEARCH_KNOWLEDGE_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired knowledge HTTP search path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_SEARCH_DEFINITION_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired definition HTTP search path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_SEARCH_AUTOCOMPLETE_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired autocomplete HTTP search path"
+    );
+    assert!(
         !openapi_paths.contains(RETIRED_SEARCH_INTENT_OPENAPI_PATH),
         "stable shared route inventory must not re-expose retired intent HTTP search path"
     );
@@ -62,6 +78,10 @@ fn route_inventory_omits_retired_flight_only_http_paths() {
     assert!(
         !openapi_paths.contains(RETIRED_SEARCH_SYMBOLS_OPENAPI_PATH),
         "stable shared route inventory must not re-expose retired symbols HTTP search path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_GRAPH_NEIGHBORS_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired graph-neighbors HTTP path"
     );
     assert!(
         !openapi_paths.contains(RETIRED_ANALYSIS_MARKDOWN_OPENAPI_PATH),

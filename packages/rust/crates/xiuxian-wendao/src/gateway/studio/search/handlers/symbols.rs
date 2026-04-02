@@ -1,15 +1,12 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use xiuxian_vector::{
     LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema, LanceStringArray,
     LanceUInt64Array,
 };
-use xiuxian_wendao_runtime::transport::{
-    SEARCH_SYMBOLS_ROUTE, SearchFlightRouteProvider, SearchFlightRouteResponse,
-};
+use xiuxian_wendao_runtime::transport::SearchFlightRouteResponse;
 
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::gateway::studio::symbol_index::SymbolIndexPhase;
@@ -88,80 +85,24 @@ pub(crate) async fn load_symbol_search_response(
     })
 }
 
-pub(crate) struct StudioSymbolSearchFlightRouteProvider {
-    state: Arc<GatewayState>,
-}
-
-impl std::fmt::Debug for StudioSymbolSearchFlightRouteProvider {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("StudioSymbolSearchFlightRouteProvider")
-            .finish_non_exhaustive()
-    }
-}
-
-#[async_trait]
-impl SearchFlightRouteProvider for StudioSymbolSearchFlightRouteProvider {
-    async fn search_batch(
-        &self,
-        route: &str,
-        query_text: &str,
-        limit: usize,
-        _intent: Option<&str>,
-        _repo_hint: Option<&str>,
-    ) -> Result<SearchFlightRouteResponse, String> {
-        if route != SEARCH_SYMBOLS_ROUTE {
-            return Err(format!(
-                "studio symbol Flight provider only supports route `{SEARCH_SYMBOLS_ROUTE}`, got `{route}`"
-            ));
-        }
-        let response = load_symbol_search_response(
-            self.state.as_ref(),
-            SymbolSearchQuery {
-                q: Some(query_text.to_string()),
-                limit: Some(limit),
-            },
-        )
-        .await
-        .map_err(|error| {
-            error
-                .error
-                .details
-                .clone()
-                .unwrap_or_else(|| format!("{}: {}", error.code(), error.error.message))
-        })?;
-        build_symbol_hits_flight_batch(&response.hits).map(SearchFlightRouteResponse::new)
-    }
-}
-
-pub(crate) async fn load_symbol_search_response_flight_batch(
+pub(crate) async fn load_symbol_search_flight_response(
     state: Arc<GatewayState>,
     query: SymbolSearchQuery,
-) -> Result<LanceRecordBatch, StudioApiError> {
-    let raw_query = query.q.clone().unwrap_or_default();
-    let query_text = raw_query.trim();
-    if query_text.is_empty() {
-        return Err(StudioApiError::bad_request(
-            "MISSING_QUERY",
-            "Symbol search requires a non-empty query",
-        ));
-    }
-
-    let provider = StudioSymbolSearchFlightRouteProvider { state };
-    provider
-        .search_batch(
-            SEARCH_SYMBOLS_ROUTE,
-            query_text,
-            query.limit.unwrap_or(20).max(1),
-            None,
-            None,
+) -> Result<SearchFlightRouteResponse, StudioApiError> {
+    let response = load_symbol_search_response(state.as_ref(), query).await?;
+    let app_metadata = serde_json::to_vec(&response).map_err(|error| {
+        StudioApiError::internal(
+            "SEARCH_SYMBOL_FLIGHT_METADATA_ENCODE_FAILED",
+            "Failed to encode symbol-search Flight metadata",
+            Some(error.to_string()),
         )
-        .await
-        .map(|response| response.batch)
+    })?;
+    build_symbol_hits_flight_batch(&response.hits)
+        .map(|batch| SearchFlightRouteResponse::new(batch).with_app_metadata(app_metadata))
         .map_err(|error| {
             StudioApiError::internal(
-                "SEARCH_SYMBOL_FLIGHT_BRIDGE_FAILED",
-                "Failed to materialize symbol hits through the Flight-backed provider",
+                "SEARCH_SYMBOL_FLIGHT_BATCH_BUILD_FAILED",
+                "Failed to build symbol-search Flight batch",
                 Some(error),
             )
         })
@@ -319,34 +260,4 @@ fn build_project_glob_matcher(projects: &[UiProjectConfig]) -> Option<GlobSet> {
 
 fn is_glob_pattern(value: &str) -> bool {
     value.contains('*') || value.contains('?') || value.contains('[')
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use xiuxian_wendao_runtime::transport::{SEARCH_INTENT_ROUTE, SearchFlightRouteProvider};
-
-    use crate::gateway::studio::search::handlers::tests::test_studio_state;
-
-    #[tokio::test]
-    async fn studio_symbol_flight_provider_rejects_non_symbol_routes() {
-        let provider = StudioSymbolSearchFlightRouteProvider {
-            state: Arc::new(GatewayState {
-                index: None,
-                signal_tx: None,
-                studio: Arc::new(test_studio_state()),
-            }),
-        };
-
-        let error = provider
-            .search_batch(SEARCH_INTENT_ROUTE, "alpha", 5, None, None)
-            .await
-            .expect_err("non-symbol route should be rejected");
-
-        assert!(
-            error.contains(SEARCH_SYMBOLS_ROUTE),
-            "unexpected error: {error}"
-        );
-    }
 }

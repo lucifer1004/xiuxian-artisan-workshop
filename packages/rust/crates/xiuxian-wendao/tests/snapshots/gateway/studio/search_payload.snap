@@ -1,6 +1,5 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
-assertion_line: 9
 expression: value
 ---
 {
@@ -9,7 +8,7 @@ expression: value
   "hits": [
     {
       "auditStatus": null,
-      "bestSection": "Alpha",
+      "bestSection": null,
       "docType": null,
       "hierarchicalUri": null,
       "hierarchy": [
@@ -27,7 +26,7 @@ expression: value
     },
     {
       "auditStatus": null,
-      "bestSection": "Beta",
+      "bestSection": null,
       "docType": null,
       "hierarchicalUri": null,
       "hierarchy": [

@@ -28,13 +28,8 @@ macro_rules! route_contracts {
 pub const WENDAO_GATEWAY_ROUTE_CONTRACTS: &[RouteContract] = route_contracts![
     core::[HEALTH, STATS, NOTIFY],
     vfs::[VFS_ROOT, VFS_SCAN, VFS_CAT, VFS_ENTRY],
-    graph::[NEIGHBORS, GRAPH_NEIGHBORS, TOPOLOGY_3D],
-    search::[
-        SEARCH,
-        SEARCH_DEFINITION,
-        SEARCH_AUTOCOMPLETE,
-        SEARCH_INDEX_STATUS
-    ],
+    graph::[NEIGHBORS, TOPOLOGY_3D],
+    search::[SEARCH_INDEX_STATUS],
     docs::[
         PROJECTED_GAP_REPORT,
         PLANNER_ITEM,

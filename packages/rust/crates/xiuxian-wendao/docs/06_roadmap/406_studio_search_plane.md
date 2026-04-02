@@ -243,6 +243,33 @@ Replace Studio request-path search hot spots with a background-built search plan
 - that cache layer only stores successful typed payloads and keeps existing failure semantics unchanged, which means `REPO_INDEX_PENDING` and other gateway errors still bypass caching while steady-state hot queries reuse the cached payload directly
 - local corpus request serving now closes that cold-start gap too. `StudioState` waits for the first successful publish of `local_symbol`, `knowledge_section`, `attachment`, and `reference_occurrence` before AST search, autocomplete, definition resolve, knowledge search, attachment search, and reference search continue, so a fresh gateway restart no longer surfaces transient `INDEX_NOT_READY` errors to the first caller when the build is still in progress
 - targeted gateway tests now pin that contract explicitly. Six cold-start regressions call the handlers without pre-publishing their local corpora and assert success once the background build completes, which protects the exact OpenAPI-facing failure mode that the pressure benchmark exposed
+- the pure-Flight search cut now also covers `definition` and `autocomplete`.
+  The active business contracts are `/search/definition` and
+  `/search/autocomplete`; the old `/api/search/definition` and
+  `/api/search/autocomplete` HTTP business routes are removed from the router
+  and bundled OpenAPI surface
+- the Studio-owned definition/autocomplete builders are now wired through the
+  same `WendaoFlightService::new_with_route_providers(...)` aggregate seam as
+  the rest of the semantic search family, and the checked-in Flight snapshot
+  now pins those two routes directly instead of relying on HTTP wrapper tests
+- `.data/wendao-frontend` now routes definition resolution and autocomplete
+  through same-origin Flight in `src/api/flightDocumentTransport.ts`, so the
+  browser no longer uses standalone HTTP document-search business endpoints for
+  those two flows
+- the first bounded `graph/vfs` Flight cut is now landed too:
+  `/api/vfs/resolve` is removed from the outward router and bundled OpenAPI
+  surface, the canonical business contract is now `/vfs/resolve`, the Studio
+  VFS provider is wired through `WendaoFlightService::new_with_route_providers(...)`,
+  and `.data/wendao-frontend` now resolves navigation targets through
+  same-origin Flight in `src/api/flightWorkspaceTransport.ts`
+- the next bounded `graph/vfs` Flight cut is now landed too:
+  `/api/graph/neighbors/{id}` is removed from the outward router and bundled
+  OpenAPI surface, the canonical business contract is now `/graph/neighbors`,
+  the Studio graph-neighbors provider lives in
+  `src/gateway/studio/router/handlers/graph/flight.rs`, the shared workspace
+  Flight snapshot now locks `/graph/neighbors` alongside `/vfs/resolve`, and
+  `.data/wendao-frontend` now resolves graph-neighbor payloads through
+  same-origin Flight in `src/api/flightGraphTransport.ts`
 - the next bounded repo-search pressure slice is now formalized in `.cache/codex/execplans/wendao_repo_content_query_pressure_hardening.md`. It stays intentionally narrow: repo-content query filtering, read-side backpressure, and FTS eligibility only
 - `xiuxian-vector` now exports `string_contains_mask(...)`, a reusable Arrow-backed substring mask helper built on `arrow-string`, so search-plane consumers can prefilter UTF-8 batches with one boolean mask instead of open-coding row-by-row folded-string probes
 - `repo_content_chunk` query filtering now uses that helper against `line_text_folded`, which preserves the exact-match boost logic but only evaluates `line_text.contains(raw_needle)` for rows that already matched the folded batch mask
@@ -643,3 +670,8 @@ Replace Studio request-path search hot spots with a background-built search plan
 - the docs router export audit is now landed too. Docs handler re-exports now
   resolve through `handlers/docs_exports.rs`, so the outward-facing docs symbol
   boundary is grouped instead of repeated inline in `handlers/mod.rs`
+- deferred repo bootstrap is now corrected too. `set_ui_config(...)` no longer
+  drops eager repo/symbol indexing when an unchanged sanitized config is
+  explicitly re-applied, and `/api/repo/index/status` now seeds deferred repo
+  indexing on first access instead of remaining stuck at `total = 0` with a
+  populated repo-project config

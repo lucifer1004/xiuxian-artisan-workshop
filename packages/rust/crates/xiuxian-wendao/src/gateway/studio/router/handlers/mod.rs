@@ -24,7 +24,7 @@ pub use docs::projection::{
     retrieval_context as docs_retrieval_context, retrieval_hit as docs_retrieval_hit,
     search as docs_search,
 };
-pub use graph::{graph_neighbors, node_neighbors, topology_3d};
+pub use graph::{node_neighbors, topology_3d};
 pub use repo::{
     doc_coverage, example_search, import_search, module_search, overview, projected_page,
     projected_page_family_cluster, projected_page_family_context, projected_page_family_search,
@@ -35,6 +35,5 @@ pub use repo::{
 };
 pub use ui_config::{get as get_ui_config, set as set_ui_config};
 pub use vfs::{
-    cat as vfs_cat, entry as vfs_entry, resolve as vfs_resolve, root_entries as vfs_root_entries,
-    scan as vfs_scan,
+    cat as vfs_cat, entry as vfs_entry, root_entries as vfs_root_entries, scan as vfs_scan,
 };

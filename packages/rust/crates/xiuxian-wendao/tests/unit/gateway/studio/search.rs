@@ -224,14 +224,11 @@ fn test_strip_option() {
 async fn search_knowledge_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
-    let result = search_knowledge(
-        State(Arc::clone(&fixture.state)),
-        Query(SearchQuery {
-            q: Some("   ".to_string()),
-            limit: None,
-            intent: None,
-            repo: None,
-        }),
+    let result = build_knowledge_search_response(
+        fixture.state.studio.as_ref(),
+        "   ",
+        10,
+        Some("semantic_lookup".to_string()),
     )
     .await;
 
@@ -280,14 +277,11 @@ async fn search_knowledge_returns_payload() {
     ]);
     publish_knowledge_section_index(&fixture.state).await;
 
-    let result = search_knowledge(
-        State(fixture.state),
-        Query(SearchQuery {
-            q: Some("wendao".to_string()),
-            limit: Some(5),
-            intent: None,
-            repo: None,
-        }),
+    let result = build_knowledge_search_response(
+        fixture.state.studio.as_ref(),
+        "wendao",
+        5,
+        Some("semantic_lookup".to_string()),
     )
     .await;
 
@@ -298,14 +292,14 @@ async fn search_knowledge_returns_payload() {
     assert_studio_json_snapshot(
         "search_payload",
         json!({
-            "query": response.0.query,
-            "hitCount": response.0.hit_count,
-            "selectedMode": response.0.selected_mode,
-            "searchMode": response.0.search_mode,
-            "intent": response.0.intent,
-            "intentConfidence": response.0.intent_confidence.map(round_f64),
-            "graphConfidenceScore": response.0.graph_confidence_score.map(round_f64),
-            "hits": response.0.hits.into_iter().map(|hit| {
+            "query": response.query,
+            "hitCount": response.hit_count,
+            "selectedMode": response.selected_mode,
+            "searchMode": response.search_mode,
+            "intent": response.intent,
+            "intentConfidence": response.intent_confidence.map(round_f64),
+            "graphConfidenceScore": response.graph_confidence_score.map(round_f64),
+            "hits": response.hits.into_iter().map(|hit| {
                 json!({
                     "stem": hit.stem,
                     "title": hit.title,
@@ -334,14 +328,11 @@ async fn search_knowledge_waits_for_initial_index_publication() {
         "# Alpha\n\nThis note contains search target keyword: wendao.\n",
     )]);
 
-    let result = search_knowledge(
-        State(fixture.state),
-        Query(SearchQuery {
-            q: Some("wendao".to_string()),
-            limit: Some(5),
-            intent: None,
-            repo: None,
-        }),
+    let result = build_knowledge_search_response(
+        fixture.state.studio.as_ref(),
+        "wendao",
+        5,
+        Some("semantic_lookup".to_string()),
     )
     .await;
 
@@ -349,7 +340,7 @@ async fn search_knowledge_waits_for_initial_index_publication() {
         panic!("expected cold-start knowledge search request to succeed");
     };
 
-    assert!(response.0.hit_count >= 1);
+    assert!(response.hit_count >= 1);
 }
 
 #[tokio::test]
@@ -511,14 +502,11 @@ async fn search_knowledge_uses_studio_display_paths() {
     ]);
     publish_knowledge_section_index(&fixture.state).await;
 
-    let result = search_knowledge(
-        State(Arc::clone(&fixture.state)),
-        Query(SearchQuery {
-            q: Some("wendao".to_string()),
-            limit: Some(5),
-            intent: None,
-            repo: None,
-        }),
+    let result = build_knowledge_search_response(
+        fixture.state.studio.as_ref(),
+        "wendao",
+        5,
+        Some("semantic_lookup".to_string()),
     )
     .await;
 
@@ -526,7 +514,6 @@ async fn search_knowledge_uses_studio_display_paths() {
         panic!("expected search request to succeed");
     };
     let hit_paths = response
-        .0
         .hits
         .iter()
         .map(|hit| hit.path.clone())
@@ -535,15 +522,15 @@ async fn search_knowledge_uses_studio_display_paths() {
     assert_studio_json_snapshot(
         "search_display_paths_payload",
         json!({
-            "query": response.0.query,
-            "hitCount": response.0.hit_count,
-            "selectedMode": response.0.selected_mode,
+            "query": response.query,
+            "hitCount": response.hit_count,
+            "selectedMode": response.selected_mode,
             "paths": hit_paths.clone(),
         }),
     );
 
     if hit_paths.is_empty() {
-        assert_eq!(response.0.selected_mode.as_deref(), Some("vector_only"));
+        assert_eq!(response.selected_mode.as_deref(), Some("vector_only"));
         return;
     }
 
@@ -592,14 +579,11 @@ async fn search_knowledge_uses_project_scoped_display_paths_for_duplicate_roots(
     });
     publish_knowledge_section_index(&fixture.state).await;
 
-    let result = search_knowledge(
-        State(Arc::clone(&fixture.state)),
-        Query(SearchQuery {
-            q: Some("wendao".to_string()),
-            limit: Some(10),
-            intent: None,
-            repo: None,
-        }),
+    let result = build_knowledge_search_response(
+        fixture.state.studio.as_ref(),
+        "wendao",
+        10,
+        Some("semantic_lookup".to_string()),
     )
     .await;
 
@@ -607,7 +591,6 @@ async fn search_knowledge_uses_project_scoped_display_paths_for_duplicate_roots(
         panic!("expected project-scoped search request to succeed");
     };
     let hit_paths = response
-        .0
         .hits
         .iter()
         .map(|hit| hit.path.as_str())
@@ -791,14 +774,7 @@ async fn autocomplete_limits_and_filters_prefix() {
     ]);
     publish_local_symbol_index(&fixture.state).await;
 
-    let result = search_autocomplete(
-        State(fixture.state),
-        Query(AutocompleteQuery {
-            prefix: Some("se".to_string()),
-            limit: Some(2),
-        }),
-    )
-    .await;
+    let result = build_autocomplete_response(fixture.state.studio.as_ref(), "se", 2).await;
 
     let Ok(response) = result else {
         panic!("expected autocomplete request to succeed");
@@ -807,8 +783,8 @@ async fn autocomplete_limits_and_filters_prefix() {
     assert_studio_json_snapshot(
         "search_autocomplete_payload",
         json!({
-            "prefix": response.0.prefix,
-            "suggestions": response.0.suggestions.into_iter().map(|suggestion| {
+            "prefix": response.prefix,
+            "suggestions": response.suggestions.into_iter().map(|suggestion| {
                 json!({
                     "text": suggestion.text,
                     "suggestionType": suggestion.suggestion_type,
@@ -832,21 +808,13 @@ async fn autocomplete_includes_code_symbols() {
     ]);
     publish_local_symbol_index(&fixture.state).await;
 
-    let result = search_autocomplete(
-        State(fixture.state),
-        Query(AutocompleteQuery {
-            prefix: Some("al".to_string()),
-            limit: Some(10),
-        }),
-    )
-    .await;
+    let result = build_autocomplete_response(fixture.state.studio.as_ref(), "al", 10).await;
 
     let Ok(response) = result else {
         panic!("expected code-symbol autocomplete request to succeed");
     };
 
     let suggestions = response
-        .0
         .suggestions
         .into_iter()
         .map(|suggestion| (suggestion.text, suggestion.suggestion_type))
@@ -870,14 +838,7 @@ async fn autocomplete_waits_for_initial_index_publication() {
         "pub struct AlphaService;\npub fn alpha_handler() {}\n",
     )]);
 
-    let result = search_autocomplete(
-        State(fixture.state),
-        Query(AutocompleteQuery {
-            prefix: Some("al".to_string()),
-            limit: Some(10),
-        }),
-    )
-    .await;
+    let result = build_autocomplete_response(fixture.state.studio.as_ref(), "al", 10).await;
 
     let Ok(response) = result else {
         panic!("expected cold-start autocomplete request to succeed");
@@ -885,7 +846,6 @@ async fn autocomplete_waits_for_initial_index_publication() {
 
     assert!(
         response
-            .0
             .suggestions
             .iter()
             .any(|suggestion| suggestion.text == "AlphaService")
@@ -1134,15 +1094,7 @@ async fn search_ast_waits_for_initial_index_publication() {
 async fn search_definition_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
-    let result = search_definition(
-        State(Arc::clone(&fixture.state)),
-        Query(DefinitionResolveQuery {
-            q: Some("   ".to_string()),
-            path: None,
-            line: None,
-        }),
-    )
-    .await;
+    let result = build_definition_response(fixture.state.studio.as_ref(), "   ", None, None).await;
 
     let Err(error) = result else {
         panic!("expected missing-query definition resolve to fail");
@@ -1170,13 +1122,11 @@ async fn search_definition_returns_best_payload() {
     ]);
     publish_local_symbol_index(&fixture.state).await;
 
-    let result = search_definition(
-        State(fixture.state),
-        Query(DefinitionResolveQuery {
-            q: Some("AlphaService".to_string()),
-            path: Some("packages/rust/crates/demo/src/lib.rs".to_string()),
-            line: Some(2),
-        }),
+    let result = build_definition_response(
+        fixture.state.studio.as_ref(),
+        "AlphaService",
+        Some("packages/rust/crates/demo/src/lib.rs"),
+        Some(2),
     )
     .await;
 
@@ -1187,31 +1137,31 @@ async fn search_definition_returns_best_payload() {
     assert_studio_json_snapshot(
         "search_definition_payload",
         json!({
-            "query": response.0.query,
-            "sourcePath": response.0.source_path,
-            "sourceLine": response.0.source_line,
-            "candidateCount": response.0.candidate_count,
-            "selectedScope": response.0.selected_scope,
+            "query": response.query,
+            "sourcePath": response.source_path,
+            "sourceLine": response.source_line,
+            "candidateCount": response.candidate_count,
+            "selectedScope": response.selected_scope,
             "navigationTarget": {
-                "path": response.0.navigation_target.path,
-                "category": response.0.navigation_target.category,
-                "projectName": response.0.navigation_target.project_name,
-                "rootLabel": response.0.navigation_target.root_label,
-                "line": response.0.navigation_target.line,
-                "lineEnd": response.0.navigation_target.line_end,
-                "column": response.0.navigation_target.column,
+                "path": response.navigation_target.path,
+                "category": response.navigation_target.category,
+                "projectName": response.navigation_target.project_name,
+                "rootLabel": response.navigation_target.root_label,
+                "line": response.navigation_target.line,
+                "lineEnd": response.navigation_target.line_end,
+                "column": response.navigation_target.column,
             },
             "definition": {
-                "name": response.0.definition.name,
-                "signature": response.0.definition.signature,
-                "path": response.0.definition.path,
-                "language": response.0.definition.language,
-                "crateName": response.0.definition.crate_name,
-                "projectName": response.0.definition.project_name,
-                "rootLabel": response.0.definition.root_label,
-                "lineStart": response.0.definition.line_start,
-                "lineEnd": response.0.definition.line_end,
-                "score": round_f64(response.0.definition.score),
+                "name": response.definition.name,
+                "signature": response.definition.signature,
+                "path": response.definition.path,
+                "language": response.definition.language,
+                "crateName": response.definition.crate_name,
+                "projectName": response.definition.project_name,
+                "rootLabel": response.definition.root_label,
+                "lineStart": response.definition.line_start,
+                "lineEnd": response.definition.line_end,
+                "score": round_f64(response.definition.score),
             },
         }),
     );
@@ -1230,13 +1180,11 @@ async fn search_definition_waits_for_initial_index_publication() {
         ),
     ]);
 
-    let result = search_definition(
-        State(Arc::clone(&fixture.state)),
-        Query(DefinitionResolveQuery {
-            q: Some("AlphaService".to_string()),
-            path: Some("packages/rust/crates/demo/src/lib.rs".to_string()),
-            line: Some(2),
-        }),
+    let result = build_definition_response(
+        fixture.state.studio.as_ref(),
+        "AlphaService",
+        Some("packages/rust/crates/demo/src/lib.rs"),
+        Some(2),
     )
     .await;
 
@@ -1244,7 +1192,7 @@ async fn search_definition_waits_for_initial_index_publication() {
         panic!("expected cold-start definition resolve request to succeed");
     };
 
-    assert_eq!(response.0.definition.name, "AlphaService");
+    assert_eq!(response.definition.name, "AlphaService");
 }
 
 #[tokio::test]
@@ -1272,13 +1220,11 @@ async fn search_definition_accepts_absolute_source_paths() {
         .to_string_lossy()
         .to_string();
 
-    let result = search_definition(
-        State(Arc::clone(&fixture.state)),
-        Query(DefinitionResolveQuery {
-            q: Some("AlphaService".to_string()),
-            path: Some(absolute_source_path),
-            line: Some(2),
-        }),
+    let result = build_definition_response(
+        fixture.state.studio.as_ref(),
+        "AlphaService",
+        Some(absolute_source_path.as_str()),
+        Some(2),
     )
     .await;
 
@@ -1287,7 +1233,7 @@ async fn search_definition_accepts_absolute_source_paths() {
     };
 
     assert_eq!(
-        response.0.definition.path,
+        response.definition.path,
         "packages/rust/crates/demo/src/service.rs"
     );
 }
@@ -1310,13 +1256,11 @@ async fn search_definition_uses_markdown_observe_hints() {
     ]);
     publish_local_symbol_index(&fixture.state).await;
 
-    let result = search_definition(
-        State(Arc::clone(&fixture.state)),
-        Query(DefinitionResolveQuery {
-            q: Some("AlphaService".to_string()),
-            path: Some("packages/notes/index.md".to_string()),
-            line: Some(4),
-        }),
+    let result = build_definition_response(
+        fixture.state.studio.as_ref(),
+        "AlphaService",
+        Some("packages/notes/index.md"),
+        Some(4),
     )
     .await;
 
@@ -1327,31 +1271,31 @@ async fn search_definition_uses_markdown_observe_hints() {
     assert_studio_json_snapshot(
         "search_definition_markdown_observe_hint_payload",
         json!({
-            "query": response.0.query,
-            "sourcePath": response.0.source_path,
-            "sourceLine": response.0.source_line,
-            "candidateCount": response.0.candidate_count,
-            "selectedScope": response.0.selected_scope,
+            "query": response.query,
+            "sourcePath": response.source_path,
+            "sourceLine": response.source_line,
+            "candidateCount": response.candidate_count,
+            "selectedScope": response.selected_scope,
             "navigationTarget": {
-                "path": response.0.navigation_target.path,
-                "category": response.0.navigation_target.category,
-                "projectName": response.0.navigation_target.project_name,
-                "rootLabel": response.0.navigation_target.root_label,
-                "line": response.0.navigation_target.line,
-                "lineEnd": response.0.navigation_target.line_end,
-                "column": response.0.navigation_target.column,
+                "path": response.navigation_target.path,
+                "category": response.navigation_target.category,
+                "projectName": response.navigation_target.project_name,
+                "rootLabel": response.navigation_target.root_label,
+                "line": response.navigation_target.line,
+                "lineEnd": response.navigation_target.line_end,
+                "column": response.navigation_target.column,
             },
             "definition": {
-                "name": response.0.definition.name,
-                "signature": response.0.definition.signature,
-                "path": response.0.definition.path,
-                "language": response.0.definition.language,
-                "crateName": response.0.definition.crate_name,
-                "projectName": response.0.definition.project_name,
-                "rootLabel": response.0.definition.root_label,
-                "lineStart": response.0.definition.line_start,
-                "lineEnd": response.0.definition.line_end,
-                "score": round_f64(response.0.definition.score),
+                "name": response.definition.name,
+                "signature": response.definition.signature,
+                "path": response.definition.path,
+                "language": response.definition.language,
+                "crateName": response.definition.crate_name,
+                "projectName": response.definition.project_name,
+                "rootLabel": response.definition.root_label,
+                "lineStart": response.definition.line_start,
+                "lineEnd": response.definition.line_end,
+                "score": round_f64(response.definition.score),
             },
         }),
     );
@@ -1371,13 +1315,11 @@ async fn search_definition_falls_back_to_fuzzy_symbol_match() {
     ]);
     publish_local_symbol_index(&fixture.state).await;
 
-    let result = search_definition(
-        State(Arc::clone(&fixture.state)),
-        Query(DefinitionResolveQuery {
-            q: Some("AlphaServic".to_string()),
-            path: Some("packages/rust/crates/demo/src/lib.rs".to_string()),
-            line: Some(2),
-        }),
+    let result = build_definition_response(
+        fixture.state.studio.as_ref(),
+        "AlphaServic",
+        Some("packages/rust/crates/demo/src/lib.rs"),
+        Some(2),
     )
     .await;
 
@@ -1386,10 +1328,10 @@ async fn search_definition_falls_back_to_fuzzy_symbol_match() {
     };
 
     assert_eq!(
-        response.0.definition.path,
+        response.definition.path,
         "packages/rust/crates/demo/src/service.rs"
     );
-    assert!(response.0.candidate_count >= 1);
+    assert!(response.candidate_count >= 1);
 }
 
 #[tokio::test]
@@ -1400,13 +1342,11 @@ async fn search_definition_can_resolve_markdown_heading_hits() {
     )]);
     publish_local_symbol_index(&fixture.state).await;
 
-    let result = search_definition(
-        State(Arc::clone(&fixture.state)),
-        Query(DefinitionResolveQuery {
-            q: Some("AlphaService Guide".to_string()),
-            path: Some("packages/notes/guide.md".to_string()),
-            line: Some(1),
-        }),
+    let result = build_definition_response(
+        fixture.state.studio.as_ref(),
+        "AlphaService Guide",
+        Some("packages/notes/guide.md"),
+        Some(1),
     )
     .await;
 
@@ -1414,8 +1354,8 @@ async fn search_definition_can_resolve_markdown_heading_hits() {
         panic!("expected markdown-backed definition resolve request to succeed");
     };
 
-    assert_eq!(response.0.definition.language, "markdown");
-    assert_eq!(response.0.definition.path, "packages/notes/guide.md");
+    assert_eq!(response.definition.language, "markdown");
+    assert_eq!(response.definition.path, "packages/notes/guide.md");
 }
 
 #[tokio::test]

@@ -7,10 +7,7 @@ pub mod project_scope;
 pub mod source_index;
 pub mod support;
 
-pub use handlers::{
-    build_symbol_index, search_autocomplete, search_definition, search_index_status,
-    search_knowledge,
-};
+pub use handlers::{build_symbol_index, search_index_status};
 
 #[cfg(test)]
 pub use handlers::build_ast_index;

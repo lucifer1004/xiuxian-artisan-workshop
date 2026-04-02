@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use xiuxian_vector::{
     LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema, LanceStringArray,
     LanceUInt64Array,
@@ -8,9 +7,7 @@ use xiuxian_vector::{
 
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::gateway::studio::types::{ReferenceSearchHit, ReferenceSearchResponse};
-use xiuxian_wendao_runtime::transport::{
-    SEARCH_REFERENCES_ROUTE, SearchFlightRouteProvider, SearchFlightRouteResponse,
-};
+use xiuxian_wendao_runtime::transport::SearchFlightRouteResponse;
 
 use super::queries::ReferenceSearchQuery;
 
@@ -43,76 +40,24 @@ pub(crate) async fn load_reference_search_response(
     })
 }
 
-struct ReferenceSearchFlightRouteProvider {
-    state: Arc<GatewayState>,
-}
-
-impl std::fmt::Debug for ReferenceSearchFlightRouteProvider {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("ReferenceSearchFlightRouteProvider")
-    }
-}
-
-#[async_trait]
-impl SearchFlightRouteProvider for ReferenceSearchFlightRouteProvider {
-    async fn search_batch(
-        &self,
-        route: &str,
-        query_text: &str,
-        limit: usize,
-        _intent: Option<&str>,
-        _repo_hint: Option<&str>,
-    ) -> Result<SearchFlightRouteResponse, String> {
-        if route != SEARCH_REFERENCES_ROUTE {
-            return Err(format!("unsupported reference Flight route: {route}"));
-        }
-        let response = load_reference_search_response(
-            self.state.as_ref(),
-            ReferenceSearchQuery {
-                q: Some(query_text.to_string()),
-                limit: Some(limit),
-            },
-        )
-        .await
-        .map_err(|error| {
-            error
-                .error
-                .details
-                .clone()
-                .unwrap_or_else(|| format!("{}: {}", error.code(), error.error.message))
-        })?;
-        build_reference_hits_flight_batch(&response.hits).map(SearchFlightRouteResponse::new)
-    }
-}
-
-pub(crate) async fn load_reference_search_response_flight_batch(
+pub(crate) async fn load_reference_search_flight_response(
     state: Arc<GatewayState>,
     query: ReferenceSearchQuery,
-) -> Result<LanceRecordBatch, StudioApiError> {
-    let raw_query = query.q.clone().unwrap_or_default();
-    let query_text = raw_query.trim();
-    if query_text.is_empty() {
-        return Err(StudioApiError::bad_request(
-            "MISSING_QUERY",
-            "Reference search requires a non-empty query",
-        ));
-    }
-
-    let provider = ReferenceSearchFlightRouteProvider { state };
-    provider
-        .search_batch(
-            SEARCH_REFERENCES_ROUTE,
-            query_text,
-            query.limit.unwrap_or(20).max(1),
-            None,
-            None,
+) -> Result<SearchFlightRouteResponse, StudioApiError> {
+    let response = load_reference_search_response(state.as_ref(), query).await?;
+    let app_metadata = serde_json::to_vec(&response).map_err(|error| {
+        StudioApiError::internal(
+            "SEARCH_REFERENCE_FLIGHT_METADATA_ENCODE_FAILED",
+            "Failed to encode reference-search Flight metadata",
+            Some(error.to_string()),
         )
-        .await
-        .map(|response| response.batch)
+    })?;
+    build_reference_hits_flight_batch(&response.hits)
+        .map(|batch| SearchFlightRouteResponse::new(batch).with_app_metadata(app_metadata))
         .map_err(|error| {
             StudioApiError::internal(
-                "SEARCH_REFERENCE_FLIGHT_BRIDGE_FAILED",
-                "Failed to materialize reference hits through the Flight-backed provider",
+                "SEARCH_REFERENCE_FLIGHT_BATCH_BUILD_FAILED",
+                "Failed to build reference-search Flight batch",
                 Some(error),
             )
         })

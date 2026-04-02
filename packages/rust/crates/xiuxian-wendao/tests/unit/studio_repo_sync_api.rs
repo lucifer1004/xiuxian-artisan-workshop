@@ -583,16 +583,20 @@ async fn repo_index_status_endpoint_returns_status_payload() -> TestResult {
     );
     assert_eq!(
         payload.get("studioBootstrapBackgroundIndexingDeferredActivationObserved"),
-        Some(&Value::Bool(false))
+        Some(&Value::Bool(true))
     );
     assert_eq!(
-        payload.get("studioBootstrapBackgroundIndexingDeferredActivationAt"),
-        Some(&Value::Null)
+        payload
+            .get("studioBootstrapBackgroundIndexingDeferredActivationAt")
+            .and_then(Value::as_str)
+            .is_some(),
+        true
     );
     assert_eq!(
         payload.get("studioBootstrapBackgroundIndexingDeferredActivationSource"),
-        Some(&Value::Null)
+        Some(&Value::String("repo_index_status".to_string()))
     );
+    assert_eq!(payload.get("total").and_then(Value::as_u64), Some(1));
     assert_studio_json_snapshot("repo_index_status_endpoint_json", payload);
     Ok(())
 }
@@ -4711,6 +4715,14 @@ fn redact_repo_index_payload(value: &mut Value) {
                 *updated_at = Value::String("[updated-at]".to_string());
             }
         }
+    }
+    if let Some(activation_at) =
+        value.get_mut("studioBootstrapBackgroundIndexingDeferredActivationAt")
+    {
+        *activation_at = match activation_at {
+            Value::Null => Value::Null,
+            _ => Value::String("[activation-at]".to_string()),
+        };
     }
 }
 

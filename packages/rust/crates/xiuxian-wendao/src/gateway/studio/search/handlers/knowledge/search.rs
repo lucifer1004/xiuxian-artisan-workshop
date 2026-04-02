@@ -1,43 +1,13 @@
 use std::sync::Arc;
 
-use axum::Json;
-use axum::extract::{Query, State};
 use xiuxian_wendao_runtime::transport::SearchFlightRouteResponse;
 
-use crate::gateway::studio::router::{GatewayState, StudioApiError, StudioState};
+use crate::gateway::studio::router::{StudioApiError, StudioState};
 use crate::gateway::studio::search::handlers::knowledge::intent::flight::{
     search_hit_batch_from_hits, search_response_flight_app_metadata,
 };
-use crate::gateway::studio::search::handlers::queries::SearchQuery;
 use crate::gateway::studio::types::SearchResponse;
 use crate::search_plane::{SearchCorpusKind, SearchPlaneCacheTtl};
-
-pub async fn search_knowledge(
-    State(state): State<Arc<GatewayState>>,
-    Query(query): Query<SearchQuery>,
-) -> Result<Json<SearchResponse>, StudioApiError> {
-    let raw_query = query.q.unwrap_or_default();
-    let query_text = raw_query.trim();
-    if query_text.is_empty() {
-        return Err(StudioApiError::bad_request(
-            "MISSING_QUERY",
-            "Knowledge search requires a non-empty query",
-        ));
-    }
-
-    let limit = query.limit.unwrap_or(10).max(1);
-    let response = build_knowledge_search_response(
-        state.studio.as_ref(),
-        query_text,
-        limit,
-        query
-            .intent
-            .clone()
-            .or_else(|| Some("semantic_lookup".to_string())),
-    )
-    .await?;
-    Ok(Json(response))
-}
 
 pub(crate) async fn build_knowledge_search_response(
     studio: &StudioState,
@@ -45,6 +15,13 @@ pub(crate) async fn build_knowledge_search_response(
     limit: usize,
     intent: Option<String>,
 ) -> Result<SearchResponse, StudioApiError> {
+    let query_text = query_text.trim();
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Knowledge search requires a non-empty query",
+        ));
+    }
     studio.ensure_knowledge_section_index_ready().await?;
     let cache_key = studio.search_plane.search_query_cache_key(
         "knowledge",

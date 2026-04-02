@@ -2,9 +2,11 @@ use std::fs;
 use std::sync::Arc;
 
 use crate::analyzers::analyze_registered_repository_with_registry;
-use crate::gateway::studio::router::code_ast::build_code_ast_analysis_response;
+use crate::gateway::studio::router::code_ast::{
+    build_code_ast_analysis_response, resolve_code_ast_repository_and_path,
+};
 use crate::gateway::studio::router::{
-    GatewayState, StudioApiError, configured_repository, map_repo_intelligence_error,
+    GatewayState, StudioApiError, configured_repositories, map_repo_intelligence_error,
 };
 use crate::gateway::studio::types::CodeAstAnalysisResponse;
 
@@ -15,12 +17,15 @@ pub(crate) async fn load_code_ast_analysis_response(
     line_hint: Option<usize>,
 ) -> Result<CodeAstAnalysisResponse, StudioApiError> {
     let cwd = state.studio.project_root.clone();
-    let repository =
-        configured_repository(&state.studio, repo_id).map_err(map_repo_intelligence_error)?;
+    let repositories = configured_repositories(&state.studio);
+    let (repository, repo_relative_path) =
+        resolve_code_ast_repository_and_path(&repositories, Some(repo_id), path)?;
     let plugin_registry = Arc::clone(&state.studio.plugin_registry);
 
-    let repo_id = repo_id.to_string();
-    let repo_path = path.to_string();
+    let repo_id = repository.id.clone();
+    let request_path = path.to_string();
+    let repo_path = repo_relative_path;
+    let repository = repository.clone();
 
     tokio::task::spawn_blocking(
         move || -> Result<CodeAstAnalysisResponse, crate::analyzers::RepoIntelligenceError> {
@@ -29,19 +34,22 @@ pub(crate) async fn load_code_ast_analysis_response(
                 cwd.as_path(),
                 &plugin_registry,
             )?;
-            let source_content = repository
-                .path
-                .as_ref()
-                .map(|root| root.join(&repo_path))
-                .filter(|path| path.is_file())
-                .and_then(|path| fs::read_to_string(path).ok());
-            Ok(build_code_ast_analysis_response(
+            let source_content = repository.path.as_ref().and_then(|root| {
+                let source_path = root.join(&repo_path);
+                source_path
+                    .is_file()
+                    .then(|| fs::read_to_string(source_path).ok())
+                    .flatten()
+            });
+            let mut response = build_code_ast_analysis_response(
                 repo_id,
                 repo_path,
                 line_hint,
                 source_content.as_deref(),
                 &analysis,
-            ))
+            );
+            response.path = request_path;
+            Ok(response)
         },
     )
     .await

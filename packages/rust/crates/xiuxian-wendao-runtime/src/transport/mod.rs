@@ -30,7 +30,8 @@ pub use negotiation::{
     NegotiatedTransportSelection, negotiate_flight_transport_client_from_bindings,
 };
 pub use query_contract::{
-    ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, REPO_SEARCH_BEST_SECTION_COLUMN,
+    ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_DEFAULT_HOPS,
+    GRAPH_NEIGHBORS_DEFAULT_LIMIT, GRAPH_NEIGHBORS_ROUTE, REPO_SEARCH_BEST_SECTION_COLUMN,
     REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_HIERARCHY_COLUMN,
     REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,
     REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN, REPO_SEARCH_NAVIGATION_LINE_COLUMN,
@@ -40,19 +41,26 @@ pub use query_contract::{
     RERANK_REQUEST_QUERY_EMBEDDING_COLUMN, RERANK_REQUEST_VECTOR_SCORE_COLUMN,
     RERANK_RESPONSE_DOC_ID_COLUMN, RERANK_RESPONSE_FINAL_SCORE_COLUMN, RERANK_RESPONSE_RANK_COLUMN,
     RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN, RERANK_RESPONSE_VECTOR_SCORE_COLUMN, RERANK_ROUTE,
-    SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE,
-    SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
-    WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
+    SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE,
+    SEARCH_DEFINITION_ROUTE, SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE,
+    SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE, VFS_RESOLVE_ROUTE,
+    WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
     WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER, WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER,
-    WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER, WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER,
+    WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER, WENDAO_AUTOCOMPLETE_LIMIT_HEADER,
+    WENDAO_AUTOCOMPLETE_PREFIX_HEADER, WENDAO_DEFINITION_LINE_HEADER,
+    WENDAO_DEFINITION_PATH_HEADER, WENDAO_DEFINITION_QUERY_HEADER,
+    WENDAO_GRAPH_DIRECTION_HEADER, WENDAO_GRAPH_HOPS_HEADER, WENDAO_GRAPH_LIMIT_HEADER,
+    WENDAO_GRAPH_NODE_ID_HEADER, WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER,
     WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER, WENDAO_REPO_SEARCH_LIMIT_HEADER,
     WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER, WENDAO_REPO_SEARCH_QUERY_HEADER,
     WENDAO_REPO_SEARCH_TAG_FILTERS_HEADER, WENDAO_REPO_SEARCH_TITLE_FILTERS_HEADER,
-    WENDAO_RERANK_DIMENSION_HEADER, WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_INTENT_HEADER,
-    WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER, WENDAO_SEARCH_REPO_HEADER,
-    flight_descriptor_path, normalize_flight_route, validate_attachment_search_request,
-    validate_code_ast_analysis_request, validate_markdown_analysis_request,
-    validate_repo_search_request,
+    WENDAO_RERANK_DIMENSION_HEADER, WENDAO_SCHEMA_VERSION_HEADER,
+    WENDAO_SEARCH_INTENT_HEADER, WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER,
+    WENDAO_SEARCH_REPO_HEADER, WENDAO_VFS_PATH_HEADER, flight_descriptor_path,
+    normalize_flight_route, validate_attachment_search_request, validate_autocomplete_request,
+    validate_code_ast_analysis_request, validate_definition_request,
+    validate_graph_neighbors_request, validate_markdown_analysis_request,
+    validate_repo_search_request, validate_vfs_resolve_request,
 };
 #[cfg(feature = "julia")]
 pub use query_contract::{
@@ -63,8 +71,12 @@ pub use query_contract::{
 };
 #[cfg(feature = "julia")]
 pub use server::{
-    AstSearchFlightRouteProvider, AttachmentSearchFlightRouteProvider,
-    CodeAstAnalysisFlightRouteProvider, MarkdownAnalysisFlightRouteProvider,
+    AnalysisFlightRouteResponse, AstSearchFlightRouteProvider, AttachmentSearchFlightRouteProvider,
+    AutocompleteFlightRouteProvider, AutocompleteFlightRouteResponse,
+    CodeAstAnalysisFlightRouteProvider, DefinitionFlightRouteProvider,
+    DefinitionFlightRouteResponse, GraphNeighborsFlightRouteProvider,
+    GraphNeighborsFlightRouteResponse, MarkdownAnalysisFlightRouteProvider,
     RepoSearchFlightRouteProvider, RerankFlightRouteHandler, SearchFlightRouteProvider,
-    SearchFlightRouteResponse, WendaoFlightService,
+    SearchFlightRouteResponse, VfsResolveFlightRouteProvider, VfsResolveFlightRouteResponse,
+    WendaoFlightService,
 };

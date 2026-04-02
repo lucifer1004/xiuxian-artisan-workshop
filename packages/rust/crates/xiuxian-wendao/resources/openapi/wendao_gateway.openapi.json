@@ -173,33 +173,6 @@
         }
       }
     },
-    "/api/graph/neighbors/{id}": {
-      "get": {
-        "operationId": "studioGraphNeighbors",
-        "tags": ["studio-graph"],
-        "summary": "Neighborhood graph payload",
-        "description": "Return nodes and links for the neighborhood surrounding one graph node.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Graph node identifier.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Graph neighborhood payload for the requested node."
-          },
-          "404": {
-            "description": "The requested node could not be found."
-          }
-        }
-      }
-    },
     "/api/topology/3d": {
       "get": {
         "operationId": "studioTopology3d",
@@ -216,51 +189,6 @@
         }
       }
     },
-    "/api/search": {
-      "get": {
-        "operationId": "studioSearchKnowledge",
-        "tags": ["studio-search"],
-        "summary": "Search knowledge",
-        "description": "Run ranked knowledge search over the current studio scope.",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "description": "Search query text.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "description": "Maximum number of hits to return.",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "intent",
-            "in": "query",
-            "required": false,
-            "description": "Optional intent hint passed through to intent-aware ranking metadata.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Ranked knowledge search results."
-          },
-          "400": {
-            "description": "The search query was missing or invalid."
-          }
-        }
-      }
-    },
     "/api/search/index/status": {
       "get": {
         "operationId": "studioSearchIndexStatus",
@@ -273,60 +201,6 @@
           },
           "500": {
             "description": "The gateway failed while computing the search-plane index status."
-          }
-        }
-      }
-    },
-    "/api/search/definition": {
-      "get": {
-        "operationId": "studioSearchDefinition",
-        "tags": ["studio-search"],
-        "summary": "Resolve definitions",
-        "description": "Resolve likely definition locations for a symbol or identifier in the current studio scope.",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "description": "Identifier or symbol to resolve.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Candidate definition locations for the requested symbol."
-          },
-          "400": {
-            "description": "The definition query was missing or invalid."
-          }
-        }
-      }
-    },
-    "/api/search/autocomplete": {
-      "get": {
-        "operationId": "studioSearchAutocomplete",
-        "tags": ["studio-search"],
-        "summary": "Autocomplete search input",
-        "description": "Return autocomplete suggestions for the current search prefix.",
-        "parameters": [
-          {
-            "name": "prefix",
-            "in": "query",
-            "required": true,
-            "description": "Search prefix to complete.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Autocomplete suggestions for the provided prefix."
-          },
-          "400": {
-            "description": "The autocomplete prefix was missing or invalid."
           }
         }
       }

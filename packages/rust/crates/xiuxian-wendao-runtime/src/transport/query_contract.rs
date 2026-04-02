@@ -20,6 +20,30 @@ pub const WENDAO_SEARCH_LIMIT_HEADER: &str = "x-wendao-search-limit";
 pub const WENDAO_SEARCH_INTENT_HEADER: &str = "x-wendao-search-intent";
 /// Canonical generic search repository hint metadata header for Wendao Flight requests.
 pub const WENDAO_SEARCH_REPO_HEADER: &str = "x-wendao-search-repo";
+/// Canonical definition-resolution query metadata header for Wendao Flight requests.
+pub const WENDAO_DEFINITION_QUERY_HEADER: &str = "x-wendao-definition-query";
+/// Canonical definition-resolution source-path metadata header for Wendao Flight requests.
+pub const WENDAO_DEFINITION_PATH_HEADER: &str = "x-wendao-definition-path";
+/// Canonical definition-resolution source-line metadata header for Wendao Flight requests.
+pub const WENDAO_DEFINITION_LINE_HEADER: &str = "x-wendao-definition-line";
+/// Canonical autocomplete prefix metadata header for Wendao Flight requests.
+pub const WENDAO_AUTOCOMPLETE_PREFIX_HEADER: &str = "x-wendao-autocomplete-prefix";
+/// Canonical autocomplete result-limit metadata header for Wendao Flight requests.
+pub const WENDAO_AUTOCOMPLETE_LIMIT_HEADER: &str = "x-wendao-autocomplete-limit";
+/// Canonical VFS resolve path metadata header for Wendao Flight requests.
+pub const WENDAO_VFS_PATH_HEADER: &str = "x-wendao-vfs-path";
+/// Canonical graph-neighbors node identifier metadata header for Wendao Flight
+/// requests.
+pub const WENDAO_GRAPH_NODE_ID_HEADER: &str = "x-wendao-graph-node-id";
+/// Canonical graph-neighbors direction metadata header for Wendao Flight
+/// requests.
+pub const WENDAO_GRAPH_DIRECTION_HEADER: &str = "x-wendao-graph-direction";
+/// Canonical graph-neighbors hop-limit metadata header for Wendao Flight
+/// requests.
+pub const WENDAO_GRAPH_HOPS_HEADER: &str = "x-wendao-graph-hops";
+/// Canonical graph-neighbors result-limit metadata header for Wendao Flight
+/// requests.
+pub const WENDAO_GRAPH_LIMIT_HEADER: &str = "x-wendao-graph-limit";
 /// Canonical analysis path metadata header for Wendao Flight requests.
 pub const WENDAO_ANALYSIS_PATH_HEADER: &str = "x-wendao-analysis-path";
 /// Canonical analysis repository metadata header for Wendao Flight requests.
@@ -61,6 +85,14 @@ pub const SEARCH_AST_ROUTE: &str = "/search/ast";
 pub const SEARCH_REFERENCES_ROUTE: &str = "/search/references";
 /// Stable route for the search-symbols contract.
 pub const SEARCH_SYMBOLS_ROUTE: &str = "/search/symbols";
+/// Stable route for the definition-resolution contract.
+pub const SEARCH_DEFINITION_ROUTE: &str = "/search/definition";
+/// Stable route for the autocomplete contract.
+pub const SEARCH_AUTOCOMPLETE_ROUTE: &str = "/search/autocomplete";
+/// Stable route for the VFS navigation-resolution contract.
+pub const VFS_RESOLVE_ROUTE: &str = "/vfs/resolve";
+/// Stable route for the graph-neighbors contract.
+pub const GRAPH_NEIGHBORS_ROUTE: &str = "/graph/neighbors";
 /// Stable route for the markdown analysis contract.
 pub const ANALYSIS_MARKDOWN_ROUTE: &str = "/analysis/markdown";
 /// Stable route for the code-AST analysis contract.
@@ -69,6 +101,12 @@ pub const ANALYSIS_CODE_AST_ROUTE: &str = "/analysis/code-ast";
 pub const RERANK_ROUTE: &str = "/rerank";
 /// Stable default result limit for repo-search requests.
 pub const REPO_SEARCH_DEFAULT_LIMIT: usize = 10;
+/// Stable default hop distance for graph-neighbors requests.
+pub const GRAPH_NEIGHBORS_DEFAULT_HOPS: usize = 2;
+/// Stable default result limit for graph-neighbors requests.
+pub const GRAPH_NEIGHBORS_DEFAULT_LIMIT: usize = 50;
+const GRAPH_NEIGHBORS_MAX_HOPS: usize = 8;
+const GRAPH_NEIGHBORS_MAX_LIMIT: usize = 300;
 /// Canonical rerank request `doc_id` column.
 pub const RERANK_REQUEST_DOC_ID_COLUMN: &str = "doc_id";
 /// Canonical rerank request `vector_score` column.
@@ -314,6 +352,98 @@ pub fn validate_attachment_search_request(
         }
     }
     Ok(())
+}
+
+/// Validate the stable definition-resolution request contract.
+///
+/// # Errors
+///
+/// Returns an error when the definition query text is blank, when the optional
+/// source path is blank, or when the optional source line is zero.
+pub fn validate_definition_request(
+    query_text: &str,
+    source_path: Option<&str>,
+    source_line: Option<usize>,
+) -> Result<(), String> {
+    if query_text.trim().is_empty() {
+        return Err("definition query text must not be blank".to_string());
+    }
+    if matches!(source_path, Some(path) if path.trim().is_empty()) {
+        return Err("definition source path must not be blank".to_string());
+    }
+    if matches!(source_line, Some(0)) {
+        return Err("definition source line must be greater than zero".to_string());
+    }
+    Ok(())
+}
+
+/// Validate the stable autocomplete request contract.
+///
+/// # Errors
+///
+/// Returns an error when the requested limit is zero or when the optional
+/// prefix contains only whitespace.
+pub fn validate_autocomplete_request(prefix: &str, limit: usize) -> Result<(), String> {
+    if limit == 0 {
+        return Err("autocomplete limit must be greater than zero".to_string());
+    }
+    if !prefix.is_empty() && prefix.trim().is_empty() {
+        return Err("autocomplete prefix must not be blank".to_string());
+    }
+    Ok(())
+}
+
+/// Validate the stable VFS navigation-resolution request contract.
+///
+/// # Errors
+///
+/// Returns an error when the path is blank.
+pub fn validate_vfs_resolve_request(path: &str) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("VFS resolve requires a non-empty path".to_string());
+    }
+    Ok(())
+}
+
+/// Validate and normalize the stable graph-neighbors request contract.
+///
+/// # Errors
+///
+/// Returns an error when the requested node identifier is blank.
+pub fn validate_graph_neighbors_request(
+    node_id: &str,
+    direction: Option<&str>,
+    hops: Option<usize>,
+    limit: Option<usize>,
+) -> Result<(String, String, usize, usize), String> {
+    let normalized_node_id = node_id.trim();
+    if normalized_node_id.is_empty() {
+        return Err("graph neighbors requires a non-empty node id".to_string());
+    }
+
+    let normalized_direction = match direction
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("incoming") => "incoming",
+        Some("outgoing") => "outgoing",
+        _ => "both",
+    };
+    let normalized_hops = hops
+        .unwrap_or(GRAPH_NEIGHBORS_DEFAULT_HOPS)
+        .clamp(1, GRAPH_NEIGHBORS_MAX_HOPS);
+    let normalized_limit = limit
+        .unwrap_or(GRAPH_NEIGHBORS_DEFAULT_LIMIT)
+        .clamp(1, GRAPH_NEIGHBORS_MAX_LIMIT);
+
+    Ok((
+        normalized_node_id.to_string(),
+        normalized_direction.to_string(),
+        normalized_hops,
+        normalized_limit,
+    ))
 }
 
 /// Validate the stable markdown analysis request contract.
@@ -828,7 +958,8 @@ fn cosine_similarity(left: &[f32], right: &[f32], row_index: usize) -> Result<f6
 #[cfg(test)]
 mod tests {
     use super::{
-        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, REPO_SEARCH_DEFAULT_LIMIT,
+        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_DEFAULT_HOPS,
+        GRAPH_NEIGHBORS_DEFAULT_LIMIT, GRAPH_NEIGHBORS_ROUTE, REPO_SEARCH_DEFAULT_LIMIT,
         REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_PATH_COLUMN,
         REPO_SEARCH_ROUTE, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN,
         RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
@@ -836,17 +967,24 @@ mod tests {
         RERANK_RESPONSE_DOC_ID_COLUMN, RERANK_RESPONSE_FINAL_SCORE_COLUMN,
         RERANK_RESPONSE_RANK_COLUMN, RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
         RERANK_RESPONSE_VECTOR_SCORE_COLUMN, RERANK_ROUTE, SEARCH_AST_ROUTE,
-        SEARCH_ATTACHMENTS_ROUTE, SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE,
-        SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
+        SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE, SEARCH_DEFINITION_ROUTE,
+        SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE, SEARCH_REFERENCES_ROUTE,
+        SEARCH_SYMBOLS_ROUTE, VFS_RESOLVE_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
         WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
         WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER,
         WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER, WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER,
+        WENDAO_AUTOCOMPLETE_LIMIT_HEADER, WENDAO_AUTOCOMPLETE_PREFIX_HEADER,
+        WENDAO_DEFINITION_LINE_HEADER, WENDAO_DEFINITION_PATH_HEADER,
+        WENDAO_DEFINITION_QUERY_HEADER, WENDAO_GRAPH_DIRECTION_HEADER,
+        WENDAO_GRAPH_HOPS_HEADER, WENDAO_GRAPH_LIMIT_HEADER, WENDAO_GRAPH_NODE_ID_HEADER,
         WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER, WENDAO_REPO_SEARCH_LIMIT_HEADER,
         WENDAO_REPO_SEARCH_QUERY_HEADER, WENDAO_RERANK_DIMENSION_HEADER,
         WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER,
-        flight_descriptor_path, normalize_flight_route, validate_attachment_search_request,
-        validate_code_ast_analysis_request, validate_markdown_analysis_request,
-        validate_repo_search_request,
+        WENDAO_VFS_PATH_HEADER, flight_descriptor_path, normalize_flight_route,
+        validate_attachment_search_request, validate_autocomplete_request,
+        validate_code_ast_analysis_request, validate_definition_request,
+        validate_graph_neighbors_request, validate_markdown_analysis_request,
+        validate_repo_search_request, validate_vfs_resolve_request,
     };
 
     #[test]
@@ -870,6 +1008,22 @@ mod tests {
         );
         assert_eq!(WENDAO_SEARCH_QUERY_HEADER, "x-wendao-search-query");
         assert_eq!(WENDAO_SEARCH_LIMIT_HEADER, "x-wendao-search-limit");
+        assert_eq!(WENDAO_DEFINITION_QUERY_HEADER, "x-wendao-definition-query");
+        assert_eq!(WENDAO_DEFINITION_PATH_HEADER, "x-wendao-definition-path");
+        assert_eq!(WENDAO_DEFINITION_LINE_HEADER, "x-wendao-definition-line");
+        assert_eq!(
+            WENDAO_AUTOCOMPLETE_PREFIX_HEADER,
+            "x-wendao-autocomplete-prefix"
+        );
+        assert_eq!(
+            WENDAO_AUTOCOMPLETE_LIMIT_HEADER,
+            "x-wendao-autocomplete-limit"
+        );
+        assert_eq!(WENDAO_VFS_PATH_HEADER, "x-wendao-vfs-path");
+        assert_eq!(WENDAO_GRAPH_NODE_ID_HEADER, "x-wendao-graph-node-id");
+        assert_eq!(WENDAO_GRAPH_DIRECTION_HEADER, "x-wendao-graph-direction");
+        assert_eq!(WENDAO_GRAPH_HOPS_HEADER, "x-wendao-graph-hops");
+        assert_eq!(WENDAO_GRAPH_LIMIT_HEADER, "x-wendao-graph-limit");
         assert_eq!(WENDAO_ANALYSIS_PATH_HEADER, "x-wendao-analysis-path");
         assert_eq!(WENDAO_ANALYSIS_REPO_HEADER, "x-wendao-analysis-repo");
         assert_eq!(WENDAO_ANALYSIS_LINE_HEADER, "x-wendao-analysis-line");
@@ -892,10 +1046,16 @@ mod tests {
         assert_eq!(SEARCH_AST_ROUTE, "/search/ast");
         assert_eq!(SEARCH_REFERENCES_ROUTE, "/search/references");
         assert_eq!(SEARCH_SYMBOLS_ROUTE, "/search/symbols");
+        assert_eq!(SEARCH_DEFINITION_ROUTE, "/search/definition");
+        assert_eq!(SEARCH_AUTOCOMPLETE_ROUTE, "/search/autocomplete");
+        assert_eq!(VFS_RESOLVE_ROUTE, "/vfs/resolve");
+        assert_eq!(GRAPH_NEIGHBORS_ROUTE, "/graph/neighbors");
         assert_eq!(ANALYSIS_MARKDOWN_ROUTE, "/analysis/markdown");
         assert_eq!(ANALYSIS_CODE_AST_ROUTE, "/analysis/code-ast");
         assert_eq!(RERANK_ROUTE, "/rerank");
         assert_eq!(REPO_SEARCH_DEFAULT_LIMIT, 10);
+        assert_eq!(GRAPH_NEIGHBORS_DEFAULT_HOPS, 2);
+        assert_eq!(GRAPH_NEIGHBORS_DEFAULT_LIMIT, 50);
         assert_eq!(REPO_SEARCH_DOC_ID_COLUMN, "doc_id");
         assert_eq!(REPO_SEARCH_PATH_COLUMN, "path");
         assert_eq!(REPO_SEARCH_TITLE_COLUMN, "title");
@@ -960,6 +1120,22 @@ mod tests {
         assert_eq!(
             flight_descriptor_path(SEARCH_SYMBOLS_ROUTE),
             Ok(vec!["search".to_string(), "symbols".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(SEARCH_DEFINITION_ROUTE),
+            Ok(vec!["search".to_string(), "definition".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(SEARCH_AUTOCOMPLETE_ROUTE),
+            Ok(vec!["search".to_string(), "autocomplete".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(VFS_RESOLVE_ROUTE),
+            Ok(vec!["vfs".to_string(), "resolve".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(GRAPH_NEIGHBORS_ROUTE),
+            Ok(vec!["graph".to_string(), "neighbors".to_string()])
         );
         assert_eq!(
             flight_descriptor_path(ANALYSIS_MARKDOWN_ROUTE),
@@ -1040,6 +1216,118 @@ mod tests {
     #[test]
     fn markdown_analysis_request_validation_accepts_stable_request() {
         assert!(validate_markdown_analysis_request("docs/analysis.md").is_ok());
+    }
+
+    #[test]
+    fn definition_request_validation_accepts_stable_request() {
+        assert!(validate_definition_request("AlphaService", Some("src/lib.rs"), Some(7)).is_ok());
+    }
+
+    #[test]
+    fn definition_request_validation_rejects_blank_query() {
+        assert_eq!(
+            validate_definition_request("   ", Some("src/lib.rs"), Some(7)),
+            Err("definition query text must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn definition_request_validation_rejects_blank_source_path() {
+        assert_eq!(
+            validate_definition_request("AlphaService", Some("   "), Some(7)),
+            Err("definition source path must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn definition_request_validation_rejects_zero_source_line() {
+        assert_eq!(
+            validate_definition_request("AlphaService", Some("src/lib.rs"), Some(0)),
+            Err("definition source line must be greater than zero".to_string())
+        );
+    }
+
+    #[test]
+    fn autocomplete_request_validation_accepts_stable_request() {
+        assert!(validate_autocomplete_request("Alpha", 5).is_ok());
+        assert!(validate_autocomplete_request("", 5).is_ok());
+    }
+
+    #[test]
+    fn autocomplete_request_validation_rejects_zero_limit() {
+        assert_eq!(
+            validate_autocomplete_request("Alpha", 0),
+            Err("autocomplete limit must be greater than zero".to_string())
+        );
+    }
+
+    #[test]
+    fn autocomplete_request_validation_rejects_blank_prefix() {
+        assert_eq!(
+            validate_autocomplete_request("   ", 5),
+            Err("autocomplete prefix must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn vfs_resolve_request_validation_accepts_stable_request() {
+        assert!(validate_vfs_resolve_request("main/docs/index.md").is_ok());
+    }
+
+    #[test]
+    fn vfs_resolve_request_validation_rejects_blank_path() {
+        assert_eq!(
+            validate_vfs_resolve_request("   "),
+            Err("VFS resolve requires a non-empty path".to_string())
+        );
+    }
+
+    #[test]
+    fn graph_neighbors_request_validation_accepts_canonical_request() {
+        assert_eq!(
+            validate_graph_neighbors_request(
+                "kernel/docs/index.md",
+                Some("outgoing"),
+                Some(3),
+                Some(25),
+            ),
+            Ok((
+                "kernel/docs/index.md".to_string(),
+                "outgoing".to_string(),
+                3,
+                25,
+            ))
+        );
+    }
+
+    #[test]
+    fn graph_neighbors_request_validation_normalizes_defaults_and_clamps_bounds() {
+        assert_eq!(
+            validate_graph_neighbors_request("kernel/docs/index.md", Some("invalid"), Some(0), Some(999)),
+            Ok((
+                "kernel/docs/index.md".to_string(),
+                "both".to_string(),
+                1,
+                300,
+            ))
+        );
+        assert_eq!(
+            validate_graph_neighbors_request("kernel/docs/index.md", None, None, None),
+            Ok((
+                "kernel/docs/index.md".to_string(),
+                "both".to_string(),
+                GRAPH_NEIGHBORS_DEFAULT_HOPS,
+                GRAPH_NEIGHBORS_DEFAULT_LIMIT,
+            ))
+        );
+    }
+
+    #[test]
+    fn graph_neighbors_request_validation_rejects_blank_node_id() {
+        assert_eq!(
+            validate_graph_neighbors_request("   ", Some("both"), Some(2), Some(20)),
+            Err("graph neighbors requires a non-empty node id".to_string())
+        );
     }
 
     #[test]

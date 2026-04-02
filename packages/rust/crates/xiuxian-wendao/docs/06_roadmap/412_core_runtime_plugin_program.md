@@ -1484,6 +1484,61 @@ extract_markdown_config_blocks}`
     - `xiuxian-qianji --lib --features pyo3,llm` passes
 82. `Stage B` remains open, and the next move should still be another small
     bounded consumer family rather than a broad `LinkGraphIndex` cut
+83. the same-port pure Flight search cut is now complete at the search
+    business boundary:
+    - `/api/search` is removed from the active router/OpenAPI surface
+    - `/search/knowledge` is the only active knowledge-search business
+      contract
+    - the frontend source tree now relies on the Flight business routes rather
+      than on `/api/search` or `/api/search/*/hits-arrow`
+84. the same bounded cleanup also closes the touched warning front:
+    - `SearchQuery` is test-only
+    - dead references/symbols provider wrappers and batch-helper shims are
+      removed
+85. the runtime transport-server modularization slice is now complete:
+    - retired `xiuxian-wendao-runtime/src/transport/server.rs`
+    - added
+      `xiuxian-wendao-runtime/src/transport/server/{mod,types,request_metadata,service,tests}.rs`
+86. fresh same-port verification on a newly built `127.0.0.1:9519` gateway is
+    clean:
+    - `/api/health -> 200`
+    - `FlightService/GetFlightInfo -> 400`
+    - `/api/search -> 404`
+    - frontend same-origin live Flight proof passes `4/4`
+87. the same search-boundary cut is now complete for definition and
+    autocomplete as well:
+    - `/search/definition` and `/search/autocomplete` are active Flight
+      business contracts in the runtime query contract and shared Flight
+      snapshot
+    - `/api/search/definition` and `/api/search/autocomplete` are removed from
+      the router and bundled OpenAPI document
+    - `.data/wendao-frontend` now routes both flows through same-origin
+      Flight via `src/api/flightDocumentTransport.ts`
+88. the governed next slice is therefore no longer search-definition cleanup;
+    it is the first bounded `graph/vfs` Flight migration cut
+89. that first bounded `graph/vfs` Flight migration cut is now landed:
+    - `/vfs/resolve` is now a runtime-owned business contract and part of the
+      shared workspace Flight snapshot
+    - the Studio-backed provider seam lives in
+      `src/gateway/studio/vfs/flight.rs` and is wired through
+      `WendaoFlightService::new_with_route_providers(...)`
+    - `/api/vfs/resolve` is removed from the outward router and bundled
+      OpenAPI surface
+    - `.data/wendao-frontend` now resolves Studio navigation targets through
+      same-origin Flight via `src/api/flightWorkspaceTransport.ts`
+90. that next bounded `graph/vfs` Flight migration cut is now landed too:
+    - `/graph/neighbors` is now a runtime-owned business contract and part of
+      the shared workspace Flight snapshot
+    - the Studio-backed provider seam lives in
+      `src/gateway/studio/router/handlers/graph/flight.rs` and is wired
+      through `WendaoFlightService::new_with_route_providers(...)`
+    - `/api/graph/neighbors/{id}` is removed from the outward router and
+      bundled OpenAPI surface
+    - `.data/wendao-frontend` now resolves graph-neighbor payloads through
+      same-origin Flight via `src/api/flightGraphTransport.ts`
+91. the governed next slice is therefore no longer graph-neighbor cutover; it
+    is the remaining `graph/vfs` family utility surface, followed by the
+    larger docs/repo families
 
 ## Governance Rule
 

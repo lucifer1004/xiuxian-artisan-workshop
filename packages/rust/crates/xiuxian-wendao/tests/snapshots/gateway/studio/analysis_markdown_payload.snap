@@ -1,6 +1,5 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
-assertion_line: 9
 expression: value
 ---
 {
@@ -13,7 +12,7 @@ expression: value
         "confidence": 1.0,
         "lineEnd": 1,
         "lineStart": 1,
-        "path": "docs/analysis.md"
+        "path": "main/docs/analysis.md"
       },
       "id": "edge:1",
       "kind": "contains",
@@ -26,7 +25,7 @@ expression: value
         "confidence": 1.0,
         "lineEnd": 3,
         "lineStart": 3,
-        "path": "docs/analysis.md"
+        "path": "main/docs/analysis.md"
       },
       "id": "edge:2",
       "kind": "contains",
@@ -39,7 +38,7 @@ expression: value
         "confidence": 1.0,
         "lineEnd": 4,
         "lineStart": 4,
-        "path": "docs/analysis.md"
+        "path": "main/docs/analysis.md"
       },
       "id": "edge:3",
       "kind": "contains",
@@ -52,7 +51,7 @@ expression: value
         "confidence": 1.0,
         "lineEnd": 5,
         "lineStart": 5,
-        "path": "docs/analysis.md"
+        "path": "main/docs/analysis.md"
       },
       "id": "edge:4",
       "kind": "contains",
@@ -65,7 +64,7 @@ expression: value
         "confidence": 0.9,
         "lineEnd": 5,
         "lineStart": 5,
-        "path": "docs/analysis.md"
+        "path": "main/docs/analysis.md"
       },
       "id": "edge:5",
       "kind": "nextstep",
@@ -78,7 +77,7 @@ expression: value
         "confidence": 1.0,
         "lineEnd": 7,
         "lineStart": 7,
-        "path": "docs/analysis.md"
+        "path": "main/docs/analysis.md"
       },
       "id": "edge:6",
       "kind": "contains",
@@ -91,7 +90,7 @@ expression: value
         "confidence": 1.0,
         "lineEnd": 17,
         "lineStart": 15,
-        "path": "docs/analysis.md"
+        "path": "main/docs/analysis.md"
       },
       "id": "edge:7",
       "kind": "contains",
@@ -106,7 +105,7 @@ expression: value
       "depth": 0,
       "id": "doc:0",
       "kind": "document",
-      "label": "docs/analysis.md",
+      "label": "main/docs/analysis.md",
       "lineEnd": 17,
       "lineStart": 1,
       "parentId": null
@@ -166,7 +165,7 @@ expression: value
       "parentId": "sec:7"
     }
   ],
-  "path": "docs/analysis.md",
+  "path": "main/docs/analysis.md",
   "projections": [
     {
       "edgeCount": 6,

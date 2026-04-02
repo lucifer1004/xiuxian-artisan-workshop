@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use crate::gateway::studio::repo_index::RepoIndexStatusResponse;
 use crate::gateway::studio::router::config::persist_ui_config_to_wendao_toml;
 use crate::gateway::studio::router::repository::configured_repositories;
 use crate::gateway::studio::router::sanitization::{sanitize_projects, sanitize_repo_projects};
@@ -57,6 +58,26 @@ impl StudioState {
         self.apply_ui_config(config, true);
     }
 
+    fn ensure_repo_background_indexing_started(&self, source: &'static str) {
+        let repositories = configured_repositories(self);
+        if repositories.is_empty() {
+            return;
+        }
+
+        self.record_deferred_bootstrap_background_indexing_activation(source);
+        self.repo_index.sync_repositories(repositories);
+    }
+
+    fn ensure_background_indexes_started(&self, source: &'static str) {
+        let configured_projects = self.configured_projects();
+        if !configured_projects.is_empty() {
+            self.record_deferred_bootstrap_background_indexing_activation(source);
+            self.symbol_index_coordinator
+                .sync_projects(configured_projects, Arc::clone(&self.symbol_index));
+        }
+        self.ensure_repo_background_indexing_started(source);
+    }
+
     pub(crate) fn apply_ui_config(&self, config: UiConfig, eager_background_indexing: bool) {
         let sanitized_projects = sanitize_projects(config.projects);
         let sanitized_repo_projects = sanitize_repo_projects(config.repo_projects);
@@ -65,6 +86,10 @@ impl StudioState {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if guard.projects == sanitized_projects && guard.repo_projects == sanitized_repo_projects {
+            drop(guard);
+            if eager_background_indexing {
+                self.ensure_background_indexes_started("set_ui_config");
+            }
             return;
         }
         guard.projects = sanitized_projects;
@@ -93,11 +118,18 @@ impl StudioState {
         drop(vfs_guard);
 
         if eager_background_indexing {
-            self.symbol_index_coordinator
-                .sync_projects(self.configured_projects(), Arc::clone(&self.symbol_index));
-            self.repo_index
-                .sync_repositories(configured_repositories(self));
+            self.ensure_background_indexes_started("set_ui_config");
         }
+    }
+
+    pub(crate) fn repo_index_status(&self, repo: Option<&str>) -> RepoIndexStatusResponse {
+        let status = self.repo_index.status_response(repo);
+        if status.total > 0 {
+            return status;
+        }
+
+        self.ensure_repo_background_indexing_started("repo_index_status");
+        self.repo_index.status_response(repo)
     }
 
     pub(crate) fn set_ui_config_and_persist(&self, config: UiConfig) -> Result<(), String> {

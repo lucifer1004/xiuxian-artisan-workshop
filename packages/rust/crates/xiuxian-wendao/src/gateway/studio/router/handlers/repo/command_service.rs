@@ -32,7 +32,7 @@ pub(crate) fn run_repo_index_status(
     state: &Arc<GatewayState>,
     repo: Option<&str>,
 ) -> RepoIndexStatusResponse {
-    state.studio.repo_index.status_response(repo)
+    state.studio.repo_index_status(repo)
 }
 
 pub(crate) async fn run_refine_entity_doc(

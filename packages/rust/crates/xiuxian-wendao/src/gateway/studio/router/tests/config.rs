@@ -50,17 +50,17 @@ fn set_ui_config_preserves_cached_state_when_effectively_unchanged() {
 
     assert!(
         studio
-            .symbol_index
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-    );
-    assert!(
-        studio
             .vfs_scan
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_some()
+    );
+    let repo_status = studio.repo_index.status_response(None);
+    assert_eq!(repo_status.total, 1);
+    assert_ne!(repo_status.repos[0].phase, RepoIndexPhase::Idle);
+    assert_ne!(
+        studio.symbol_index_coordinator.status().phase,
+        SymbolIndexPhase::Idle
     );
 }
 
@@ -108,6 +108,39 @@ async fn set_ui_config_still_eagerly_enqueues_background_indexes() {
     assert_ne!(
         studio.symbol_index_coordinator.status().phase,
         SymbolIndexPhase::Idle
+    );
+}
+
+#[tokio::test]
+async fn repo_index_status_bootstraps_deferred_repo_indexing() {
+    let studio = StudioState::new();
+
+    studio.apply_ui_config(
+        UiConfig {
+            projects: vec![UiProjectConfig {
+                name: "kernel".to_string(),
+                root: ".".to_string(),
+                dirs: vec!["docs".to_string()],
+            }],
+            repo_projects: vec![repo_project("sciml")],
+        },
+        false,
+    );
+
+    assert_eq!(studio.repo_index.status_response(None).total, 0);
+    assert_eq!(
+        studio.bootstrap_background_indexing_deferred_activation_source(),
+        None
+    );
+
+    let repo_status = studio.repo_index_status(None);
+
+    assert_eq!(repo_status.total, 1);
+    assert_eq!(repo_status.repos[0].repo_id, "sciml");
+    assert_ne!(repo_status.repos[0].phase, RepoIndexPhase::Idle);
+    assert_eq!(
+        studio.bootstrap_background_indexing_deferred_activation_source(),
+        Some("repo_index_status".to_string())
     );
 }
 

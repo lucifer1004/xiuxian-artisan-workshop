@@ -156,13 +156,30 @@ Current concrete Flight replacement reality:
     the search unit suite now proves intent/attachments/references/symbols
     through the active response seams directly instead of through retired HTTP
     wrapper functions
+20. the first bounded `graph/vfs` Flight business cut is now also landed:
+    `VFS_RESOLVE_ROUTE = /vfs/resolve` is runtime-owned in the query contract,
+    `VfsResolveFlightRouteProvider` is now part of
+    `WendaoFlightService::new_with_route_providers(...)`, the Studio-backed
+    owner seam lives in `src/gateway/studio/vfs/flight.rs`, the shared
+    workspace Flight snapshot now locks `/vfs/resolve`, and the old
+    `/api/vfs/resolve` HTTP business route is removed from the outward router
+    and bundled OpenAPI surface
+21. the next bounded `graph/vfs` Flight business cut is now also landed:
+    `GRAPH_NEIGHBORS_ROUTE = /graph/neighbors` is runtime-owned in the query
+    contract, `GraphNeighborsFlightRouteProvider` is now part of
+    `WendaoFlightService::new_with_route_providers(...)`, the Studio-backed
+    owner seam lives in
+    `src/gateway/studio/router/handlers/graph/flight.rs`, the shared
+    workspace Flight snapshot now locks `/graph/neighbors`, and the old
+    `/api/graph/neighbors/{id}` HTTP business route is removed from the
+    outward router and bundled OpenAPI surface
 
 Bounded Stage-A retirement mapping:
 
-| IPC debt family                                                                    | Current physical owner                                                                                                                                      | Concrete Flight replacement today                 | Governed next move                                                                                               |
-| :--------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------- |
-| retired `/api/search/{intent,attachments,references,symbols}` HTTP business routes | `src/gateway/studio/search/handlers/{attachments,references,symbols}.rs` plus `src/gateway/studio/search/handlers/knowledge/intent/{arrow,entry,flight}.rs` | `/search/{intent,attachments,references,symbols}` | keep only as provider/materialization seams and remove downstream HTTP assumptions                               |
-| retired non-Flight plugin transport vocabulary                                     | `xiuxian-wendao-core` transport contract plus runtime/studio mirrors                                                                                        | complete                                          | remove retired variants from the active public type system and keep Flight as the only live plugin transport     |
+| IPC debt family                                                                    | Current physical owner                                                                                                                                      | Concrete Flight replacement today                 | Governed next move                                                                                           |
+| :--------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------ | :----------------------------------------------------------------------------------------------------------- |
+| retired `/api/search/{intent,attachments,references,symbols}` HTTP business routes | `src/gateway/studio/search/handlers/{attachments,references,symbols}.rs` plus `src/gateway/studio/search/handlers/knowledge/intent/{arrow,entry,flight}.rs` | `/search/{intent,attachments,references,symbols}` | keep only as provider/materialization seams and remove downstream HTTP assumptions                           |
+| retired non-Flight plugin transport vocabulary                                     | `xiuxian-wendao-core` transport contract plus runtime/studio mirrors                                                                                        | complete                                          | remove retired variants from the active public type system and keep Flight as the only live plugin transport |
 
 ## Classification Rules
 
@@ -218,12 +235,12 @@ The current late-`M6` outward story is therefore:
 The `Phase-7 Stage A` inventory resolves the live transport surface as
 follows:
 
-| Surface                              | Current owner                 | Stage-A finding                                                                                                                                                             | Phase-7 implication                                                                   |
-| :----------------------------------- | :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------ |
-| Generic transport contract           | `xiuxian-wendao-core`         | `PluginCapabilityBinding` carries `endpoint`, `transport`, and `contract_version`; `PluginTransportKind` is now `ArrowFlight`-only                                            | the public plugin transport contract is now Flight-only                               |
-| Runtime transport construction       | `xiuxian-wendao-runtime`      | `src/transport/flight.rs` and `src/transport/negotiation.rs` materialize `ArrowFlight` directly                                                                                  | runtime negotiation is Flight-only on the live materialization path                   |
-| Host Arrow response encoding         | `xiuxian-wendao` host gateway | `src/gateway/studio/search/handlers/arrow_transport.rs` only serializes local Arrow payload responses                                                                       | this seam is not the negotiation owner and should stay out of transport-policy growth |
-| Outward transport inspection payload | `xiuxian-wendao` Studio types | `UiPluginArtifact` now exposes `base_url`, `route`, `health_route`, `timeout_secs`, `schema_version`, `selected_transport`, `fallback_from`, and `fallback_reason`          | `Stage C` is complete for the outward inspection family                               |
+| Surface                              | Current owner                 | Stage-A finding                                                                                                                                                    | Phase-7 implication                                                                   |
+| :----------------------------------- | :---------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------ |
+| Generic transport contract           | `xiuxian-wendao-core`         | `PluginCapabilityBinding` carries `endpoint`, `transport`, and `contract_version`; `PluginTransportKind` is now `ArrowFlight`-only                                 | the public plugin transport contract is now Flight-only                               |
+| Runtime transport construction       | `xiuxian-wendao-runtime`      | `src/transport/flight.rs` and `src/transport/negotiation.rs` materialize `ArrowFlight` directly                                                                    | runtime negotiation is Flight-only on the live materialization path                   |
+| Host Arrow response encoding         | `xiuxian-wendao` host gateway | `src/gateway/studio/search/handlers/arrow_transport.rs` only serializes local Arrow payload responses                                                              | this seam is not the negotiation owner and should stay out of transport-policy growth |
+| Outward transport inspection payload | `xiuxian-wendao` Studio types | `UiPluginArtifact` now exposes `base_url`, `route`, `health_route`, `timeout_secs`, `schema_version`, `selected_transport`, `fallback_from`, and `fallback_reason` | `Stage C` is complete for the outward inspection family                               |
 
 The canonical Phase-7 runtime negotiation order is now fixed as:
 
@@ -1213,6 +1230,32 @@ extract_markdown_config_blocks}`
     - `xiuxian-qianji --lib --features pyo3,llm` passes
 82. the natural next Stage-B follow-up is still another small bounded
     consumer family rather than a broad `LinkGraphIndex` cut
+83. the current pure Flight same-port checkpoint is now explicit:
+    - `/api/search` is removed from the active router and bundled OpenAPI
+      surface
+    - `/search/knowledge` is the only knowledge-search business contract
+    - the search business family is now Flight-only in the active source tree
+84. the current search-surface cleanup is warning-clean in the touched scope:
+    - `SearchQuery` is now test-only
+    - dead references/symbols provider wrappers and batch-helper shims are gone
+85. the current runtime transport server is now modularized out of the old
+    monolith:
+    - retired `xiuxian-wendao-runtime/src/transport/server.rs`
+    - added
+      `xiuxian-wendao-runtime/src/transport/server/{mod,types,request_metadata,service,tests}.rs`
+86. fresh same-port proof on a newly built `127.0.0.1:9519` gateway is clean:
+    - `/api/health -> 200`
+    - `FlightService/GetFlightInfo -> 400`
+    - `/api/search -> 404`
+    - frontend same-origin live Flight proof passes end-to-end
+87. the same pure-Flight search boundary now also includes definition and
+    autocomplete:
+    - `/search/definition` and `/search/autocomplete` are part of the active
+      Flight snapshot and runtime provider contract
+    - `/api/search/definition` and `/api/search/autocomplete` are removed from
+      the active router and bundled OpenAPI surface
+    - `.data/wendao-frontend` now resolves both flows through same-origin
+      Flight instead of through standalone HTTP business routes
 
 :RELATIONS:
 :LINKS: [[index]], [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]], [[06_roadmap/405_large_rust_modularization]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]], [[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]
@@ -1222,5 +1265,5 @@ extract_markdown_config_blocks}`
 
 :FOOTER:
 :STANDARDS: v2.0
-:LAST_SYNC: 2026-03-31
+:LAST_SYNC: 2026-04-02
 :END:

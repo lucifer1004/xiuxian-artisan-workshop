@@ -24,7 +24,6 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::vfs_scan),
         )
         .route(openapi_paths::API_VFS_CAT_AXUM_PATH, get(handlers::vfs_cat))
-        .route("/api/vfs/resolve", get(handlers::vfs_resolve))
         .route(
             openapi_paths::API_VFS_ENTRY_AXUM_PATH,
             get(handlers::vfs_entry),
@@ -34,24 +33,8 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::node_neighbors),
         )
         .route(
-            openapi_paths::API_GRAPH_NEIGHBORS_AXUM_PATH,
-            get(handlers::graph_neighbors),
-        )
-        .route(
             openapi_paths::API_TOPOLOGY_3D_AXUM_PATH,
             get(handlers::topology_3d),
-        )
-        .route(
-            openapi_paths::API_SEARCH_AXUM_PATH,
-            get(search::search_knowledge),
-        )
-        .route(
-            openapi_paths::API_SEARCH_DEFINITION_AXUM_PATH,
-            get(search::search_definition),
-        )
-        .route(
-            openapi_paths::API_SEARCH_AUTOCOMPLETE_AXUM_PATH,
-            get(search::search_autocomplete),
         )
         .route(
             openapi_paths::API_SEARCH_INDEX_STATUS_AXUM_PATH,

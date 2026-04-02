@@ -7,17 +7,25 @@ expression: value
   "checking": 0,
   "failed": 0,
   "indexing": 0,
-  "maxConcurrency": 0,
-  "queued": 0,
+  "maxConcurrency": 15,
+  "queued": 1,
   "ready": 0,
-  "studioBootstrapBackgroundIndexingDeferredActivationAt": null,
-  "studioBootstrapBackgroundIndexingDeferredActivationObserved": false,
-  "studioBootstrapBackgroundIndexingDeferredActivationSource": null,
+  "repos": [
+    {
+      "attemptCount": 0,
+      "phase": "queued",
+      "repoId": "gateway-sync",
+      "updatedAt": "2026-04-02T07:24:56.788133+00:00"
+    }
+  ],
+  "studioBootstrapBackgroundIndexingDeferredActivationAt": "2026-04-02T07:24:56.787849+00:00",
+  "studioBootstrapBackgroundIndexingDeferredActivationObserved": true,
+  "studioBootstrapBackgroundIndexingDeferredActivationSource": "repo_index_status",
   "studioBootstrapBackgroundIndexingEnabled": false,
   "studioBootstrapBackgroundIndexingMode": "deferred",
-  "syncConcurrencyLimit": 0,
+  "syncConcurrencyLimit": 1,
   "syncing": 0,
-  "targetConcurrency": 0,
-  "total": 0,
+  "targetConcurrency": 1,
+  "total": 1,
   "unsupported": 0
 }

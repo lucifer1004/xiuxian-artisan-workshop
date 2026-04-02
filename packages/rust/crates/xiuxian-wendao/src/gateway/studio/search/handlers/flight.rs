@@ -17,14 +17,19 @@ use crate::gateway::studio::router::GatewayState;
 use crate::gateway::studio::router::handlers::analysis::{
     StudioCodeAstAnalysisFlightRouteProvider, StudioMarkdownAnalysisFlightRouteProvider,
 };
+use crate::gateway::studio::router::handlers::graph::StudioGraphNeighborsFlightRouteProvider;
+#[cfg(feature = "julia")]
+use crate::gateway::studio::vfs::StudioVfsResolveFlightRouteProvider;
 
 use super::ast::StudioAstSearchFlightRouteProvider;
 use super::attachments::StudioAttachmentSearchFlightRouteProvider;
+use super::autocomplete::StudioAutocompleteFlightRouteProvider;
+use super::definition::StudioDefinitionFlightRouteProvider;
 use super::knowledge::intent::flight::load_intent_search_flight_response;
 use super::knowledge::load_knowledge_search_flight_response;
 use super::queries::{ReferenceSearchQuery, SymbolSearchQuery};
-use super::references::load_reference_search_response_flight_batch;
-use super::symbols::load_symbol_search_response_flight_batch;
+use super::references::load_reference_search_flight_response;
+use super::symbols::load_symbol_search_flight_response;
 
 /// Studio-backed aggregate Flight provider for the currently-aligned semantic
 /// search families.
@@ -84,7 +89,7 @@ impl SearchFlightRouteProvider for StudioSearchFlightRouteProvider {
                     "studio aggregate Flight provider failed to build knowledge response for `{query_text}`: {error:?}"
                 )
             }),
-            SEARCH_REFERENCES_ROUTE => load_reference_search_response_flight_batch(
+            SEARCH_REFERENCES_ROUTE => load_reference_search_flight_response(
                 Arc::clone(&self.state),
                 ReferenceSearchQuery {
                     q: Some(query_text.to_string()),
@@ -92,13 +97,12 @@ impl SearchFlightRouteProvider for StudioSearchFlightRouteProvider {
                 },
             )
             .await
-            .map(SearchFlightRouteResponse::new)
             .map_err(|error| {
                 format!(
-                    "studio aggregate Flight provider failed to build reference batch for `{query_text}`: {error:?}"
+                    "studio aggregate Flight provider failed to build reference response for `{query_text}`: {error:?}"
                 )
             }),
-            SEARCH_SYMBOLS_ROUTE => load_symbol_search_response_flight_batch(
+            SEARCH_SYMBOLS_ROUTE => load_symbol_search_flight_response(
                 Arc::clone(&self.state),
                 SymbolSearchQuery {
                     q: Some(query_text.to_string()),
@@ -106,10 +110,9 @@ impl SearchFlightRouteProvider for StudioSearchFlightRouteProvider {
                 },
             )
             .await
-            .map(SearchFlightRouteResponse::new)
             .map_err(|error| {
                 format!(
-                    "studio aggregate Flight provider failed to build symbol batch for `{query_text}`: {error:?}"
+                    "studio aggregate Flight provider failed to build symbol response for `{query_text}`: {error:?}"
                 )
             }),
             _ => Err(format!(
@@ -139,10 +142,22 @@ pub(crate) fn build_studio_search_flight_service_with_repo_provider(
         Some(Arc::new(StudioAstSearchFlightRouteProvider::new(
             Arc::clone(&state),
         ))),
+        Some(Arc::new(StudioDefinitionFlightRouteProvider::new(
+            Arc::clone(&state.studio),
+        ))),
+        Some(Arc::new(StudioAutocompleteFlightRouteProvider::new(
+            Arc::clone(&state.studio),
+        ))),
         Some(Arc::new(StudioMarkdownAnalysisFlightRouteProvider::new(
             Arc::clone(&state),
         ))),
         Some(Arc::new(StudioCodeAstAnalysisFlightRouteProvider::new(
+            Arc::clone(&state),
+        ))),
+        Some(Arc::new(StudioVfsResolveFlightRouteProvider::new(
+            Arc::clone(&state.studio),
+        ))),
+        Some(Arc::new(StudioGraphNeighborsFlightRouteProvider::new(
             Arc::clone(&state),
         ))),
         rerank_dimension,
@@ -169,13 +184,19 @@ mod tests {
         LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema,
     };
     use xiuxian_wendao_runtime::transport::{
-        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, RepoSearchFlightRouteProvider,
-        RerankScoreWeights, SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_INTENT_ROUTE,
-        SEARCH_KNOWLEDGE_ROUTE, SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE,
-        SearchFlightRouteProvider, WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_PATH_HEADER,
-        WENDAO_ANALYSIS_REPO_HEADER, WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER,
+        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_ROUTE,
+        RepoSearchFlightRouteProvider, RerankScoreWeights, SEARCH_AST_ROUTE,
+        SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE, SEARCH_DEFINITION_ROUTE,
+        SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE, SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE,
+        SearchFlightRouteProvider, VFS_RESOLVE_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
+        WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
+        WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER,
         WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER, WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER,
-        WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER,
+        WENDAO_AUTOCOMPLETE_LIMIT_HEADER, WENDAO_AUTOCOMPLETE_PREFIX_HEADER,
+        WENDAO_DEFINITION_LINE_HEADER, WENDAO_DEFINITION_PATH_HEADER,
+        WENDAO_DEFINITION_QUERY_HEADER, WENDAO_GRAPH_DIRECTION_HEADER, WENDAO_GRAPH_HOPS_HEADER,
+        WENDAO_GRAPH_LIMIT_HEADER, WENDAO_GRAPH_NODE_ID_HEADER, WENDAO_SCHEMA_VERSION_HEADER,
+        WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER, WENDAO_VFS_PATH_HEADER,
         WendaoFlightService, flight_descriptor_path,
     };
 
@@ -533,6 +554,111 @@ mod tests {
         );
     }
 
+    fn populate_definition_headers(
+        metadata: &mut MetadataMap,
+        query_text: &str,
+        source_path: &str,
+        source_line: usize,
+    ) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_DEFINITION_QUERY_HEADER,
+            query_text
+                .parse()
+                .unwrap_or_else(|error| panic!("definition query metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_DEFINITION_PATH_HEADER,
+            source_path
+                .parse()
+                .unwrap_or_else(|error| panic!("definition path metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_DEFINITION_LINE_HEADER,
+            source_line
+                .to_string()
+                .parse()
+                .unwrap_or_else(|error| panic!("definition line metadata: {error}")),
+        );
+    }
+
+    fn populate_autocomplete_headers(metadata: &mut MetadataMap, prefix: &str, limit: usize) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_AUTOCOMPLETE_PREFIX_HEADER,
+            prefix
+                .parse()
+                .unwrap_or_else(|error| panic!("autocomplete prefix metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_AUTOCOMPLETE_LIMIT_HEADER,
+            limit
+                .to_string()
+                .parse()
+                .unwrap_or_else(|error| panic!("autocomplete limit metadata: {error}")),
+        );
+    }
+
+    fn populate_vfs_resolve_headers(metadata: &mut MetadataMap, path: &str) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_VFS_PATH_HEADER,
+            path.parse()
+                .unwrap_or_else(|error| panic!("VFS path metadata: {error}")),
+        );
+    }
+
+    fn populate_graph_neighbors_headers(
+        metadata: &mut MetadataMap,
+        node_id: &str,
+        direction: &str,
+        hops: usize,
+        limit: usize,
+    ) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_GRAPH_NODE_ID_HEADER,
+            node_id
+                .parse()
+                .unwrap_or_else(|error| panic!("graph node id metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_GRAPH_DIRECTION_HEADER,
+            direction
+                .parse()
+                .unwrap_or_else(|error| panic!("graph direction metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_GRAPH_HOPS_HEADER,
+            hops.to_string()
+                .parse()
+                .unwrap_or_else(|error| panic!("graph hops metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_GRAPH_LIMIT_HEADER,
+            limit
+                .to_string()
+                .parse()
+                .unwrap_or_else(|error| panic!("graph limit metadata: {error}")),
+        );
+    }
+
     fn populate_markdown_analysis_headers(metadata: &mut MetadataMap, path: &str) {
         metadata.insert(
             WENDAO_SCHEMA_VERSION_HEADER,
@@ -675,6 +801,142 @@ mod tests {
             "limit": limit,
             "extFilters": ["png"],
             "kindFilters": ["image"],
+            "ticket": ticket,
+            "endpointCount": flight_info.endpoint.len(),
+            "schemaLength": flight_info.schema.len(),
+        })
+    }
+
+    async fn snapshot_definition_route_contract(
+        service: &WendaoFlightService,
+        query_text: &str,
+        source_path: &str,
+        source_line: usize,
+    ) -> serde_json::Value {
+        let descriptor_path = flight_descriptor_path(SEARCH_DEFINITION_ROUTE)
+            .unwrap_or_else(|error| panic!("descriptor path: {error}"));
+        let mut request = Request::new(FlightDescriptor::new_path(descriptor_path.clone()));
+        populate_definition_headers(request.metadata_mut(), query_text, source_path, source_line);
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .unwrap_or_else(|error| panic!("definition route should resolve: {error}"));
+        let flight_info = response.into_inner();
+        let ticket = flight_info
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .unwrap_or_else(|| panic!("definition route should emit one ticket"));
+
+        json!({
+            "route": SEARCH_DEFINITION_ROUTE,
+            "descriptorPath": descriptor_path,
+            "query": query_text,
+            "sourcePath": source_path,
+            "sourceLine": source_line,
+            "ticket": ticket,
+            "endpointCount": flight_info.endpoint.len(),
+            "schemaLength": flight_info.schema.len(),
+        })
+    }
+
+    async fn snapshot_autocomplete_route_contract(
+        service: &WendaoFlightService,
+        prefix: &str,
+        limit: usize,
+    ) -> serde_json::Value {
+        let descriptor_path = flight_descriptor_path(SEARCH_AUTOCOMPLETE_ROUTE)
+            .unwrap_or_else(|error| panic!("descriptor path: {error}"));
+        let mut request = Request::new(FlightDescriptor::new_path(descriptor_path.clone()));
+        populate_autocomplete_headers(request.metadata_mut(), prefix, limit);
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .unwrap_or_else(|error| panic!("autocomplete route should resolve: {error}"));
+        let flight_info = response.into_inner();
+        let ticket = flight_info
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .unwrap_or_else(|| panic!("autocomplete route should emit one ticket"));
+
+        json!({
+            "route": SEARCH_AUTOCOMPLETE_ROUTE,
+            "descriptorPath": descriptor_path,
+            "prefix": prefix,
+            "limit": limit,
+            "ticket": ticket,
+            "endpointCount": flight_info.endpoint.len(),
+            "schemaLength": flight_info.schema.len(),
+        })
+    }
+
+    async fn snapshot_vfs_resolve_route_contract(
+        service: &WendaoFlightService,
+        path: &str,
+    ) -> serde_json::Value {
+        let descriptor_path = flight_descriptor_path(VFS_RESOLVE_ROUTE)
+            .unwrap_or_else(|error| panic!("descriptor path: {error}"));
+        let mut request = Request::new(FlightDescriptor::new_path(descriptor_path.clone()));
+        populate_vfs_resolve_headers(request.metadata_mut(), path);
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .unwrap_or_else(|error| panic!("VFS resolve route should resolve: {error}"));
+        let flight_info = response.into_inner();
+        let ticket = flight_info
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .unwrap_or_else(|| panic!("VFS resolve route should emit one ticket"));
+
+        json!({
+            "route": VFS_RESOLVE_ROUTE,
+            "descriptorPath": descriptor_path,
+            "path": path,
+            "ticket": ticket,
+            "endpointCount": flight_info.endpoint.len(),
+            "schemaLength": flight_info.schema.len(),
+        })
+    }
+
+    async fn snapshot_graph_neighbors_route_contract(
+        service: &WendaoFlightService,
+        node_id: &str,
+        direction: &str,
+        hops: usize,
+        limit: usize,
+    ) -> serde_json::Value {
+        let descriptor_path = flight_descriptor_path(GRAPH_NEIGHBORS_ROUTE)
+            .unwrap_or_else(|error| panic!("descriptor path: {error}"));
+        let mut request = Request::new(FlightDescriptor::new_path(descriptor_path.clone()));
+        populate_graph_neighbors_headers(request.metadata_mut(), node_id, direction, hops, limit);
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .unwrap_or_else(|error| panic!("graph-neighbors route should resolve: {error}"));
+        let flight_info = response.into_inner();
+        let ticket = flight_info
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .unwrap_or_else(|| panic!("graph-neighbors route should emit one ticket"));
+
+        json!({
+            "route": GRAPH_NEIGHBORS_ROUTE,
+            "descriptorPath": descriptor_path,
+            "nodeId": node_id,
+            "direction": direction,
+            "hops": hops,
+            "limit": limit,
             "ticket": ticket,
             "endpointCount": flight_info.endpoint.len(),
             "schemaLength": flight_info.schema.len(),
@@ -844,6 +1106,125 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn build_studio_search_flight_service_wires_definition_routes() {
+        let fixture = make_gateway_state_with_docs(&[
+            (
+                "packages/rust/crates/demo/src/lib.rs",
+                "pub fn build_service() {\n    let _service = AlphaService::new();\n}\n",
+            ),
+            (
+                "packages/rust/crates/demo/src/service.rs",
+                "pub struct AlphaService {\n    ready: bool,\n}\n",
+            ),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(SEARCH_DEFINITION_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_definition_headers(
+            request.metadata_mut(),
+            "AlphaService",
+            "packages/rust/crates/demo/src/lib.rs",
+            2,
+        );
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("definition route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("definition route should emit one ticket");
+
+        assert_eq!(ticket, SEARCH_DEFINITION_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_autocomplete_routes() {
+        let fixture = make_gateway_state_with_docs(&[(
+            "packages/rust/crates/demo/src/lib.rs",
+            "pub struct AlphaService;\npub fn alpha_handler() {}\n",
+        )]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(SEARCH_AUTOCOMPLETE_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_autocomplete_headers(request.metadata_mut(), "Alpha", 5);
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("autocomplete route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("autocomplete route should emit one ticket");
+
+        assert_eq!(ticket, SEARCH_AUTOCOMPLETE_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_vfs_resolve_routes() {
+        let fixture = make_gateway_state_with_docs(&[(
+            "docs/index.md",
+            "# Index\n\n- [Overview](overview.md)\n",
+        )]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(VFS_RESOLVE_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_vfs_resolve_headers(request.metadata_mut(), "docs/index.md");
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("VFS resolve route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("VFS resolve route should emit one ticket");
+
+        assert_eq!(ticket, VFS_RESOLVE_ROUTE);
+    }
+
+    #[tokio::test]
     async fn build_studio_search_flight_service_wires_markdown_analysis_routes() {
         let fixture = make_gateway_state_with_docs(&[(
             "docs/analysis.md",
@@ -922,6 +1303,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn build_studio_search_flight_service_wires_graph_neighbors_routes() {
+        let fixture = make_gateway_state_with_docs(&[
+            ("docs/alpha.md", "# Alpha\n\nSee [[beta]].\n"),
+            ("docs/beta.md", "# Beta\n\nBody.\n"),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(GRAPH_NEIGHBORS_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_graph_neighbors_headers(
+            request.metadata_mut(),
+            "kernel/docs/alpha.md",
+            "both",
+            1,
+            20,
+        );
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("graph-neighbors route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("graph-neighbors route should emit one ticket");
+
+        assert_eq!(ticket, GRAPH_NEIGHBORS_ROUTE);
+    }
+
+    #[tokio::test]
     async fn build_studio_search_flight_service_snapshots_search_route_contracts() {
         let fixture = make_gateway_state_with_search_routes().await;
         let service = build_studio_search_flight_service_with_repo_provider(
@@ -941,7 +1364,41 @@ mod tests {
                 .await,
             snapshot_search_route_contract(&service, SEARCH_SYMBOLS_ROUTE, "alpha", 5).await,
             snapshot_search_route_contract(&service, SEARCH_AST_ROUTE, "alpha", 5).await,
+            snapshot_definition_route_contract(
+                &service,
+                "AlphaService",
+                "packages/rust/crates/demo/src/lib.rs",
+                2,
+            )
+            .await,
+            snapshot_autocomplete_route_contract(&service, "Alpha", 5).await,
         ]);
         assert_studio_flight_snapshot("search_flight_service_route_contracts", snapshot);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_snapshots_workspace_route_contracts() {
+        let fixture = make_gateway_state_with_search_routes().await;
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+
+        let snapshot = json!([
+            snapshot_vfs_resolve_route_contract(&service, "docs/alpha.md").await,
+            snapshot_graph_neighbors_route_contract(
+                &service,
+                "kernel/docs/alpha.md",
+                "both",
+                1,
+                20,
+            )
+            .await,
+        ]);
+        assert_studio_flight_snapshot("workspace_flight_service_route_contracts", snapshot);
     }
 }

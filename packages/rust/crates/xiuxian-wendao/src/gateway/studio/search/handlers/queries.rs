@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 pub struct SearchQuery {
     #[serde(alias = "query")]
@@ -14,15 +15,6 @@ pub struct SearchQuery {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct DefinitionResolveQuery {
-    pub q: Option<String>,
-    #[serde(default)]
-    pub path: Option<String>,
-    #[serde(default)]
-    pub line: Option<usize>,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct AttachmentSearchQuery {
     pub q: Option<String>,
     #[serde(default)]
@@ -33,13 +25,6 @@ pub struct AttachmentSearchQuery {
     pub kind: Vec<String>,
     #[serde(default)]
     pub case_sensitive: bool,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AutocompleteQuery {
-    pub prefix: Option<String>,
-    #[serde(default)]
-    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -23,7 +23,19 @@ pub fn resolve_code_ast_repository_and_path<'a>(
                 format!("Repository `{id}` not found"),
             )
         })?;
-        return Ok((repo, path.to_string()));
+        if let Some(conflicting_repo) = repositories
+            .iter()
+            .find(|candidate| candidate.id != repo.id && path_has_repo_prefix(path, &candidate.id))
+        {
+            return Err(crate::gateway::studio::router::StudioApiError::bad_request(
+                "REPO_PATH_MISMATCH",
+                format!(
+                    "Path `{path}` is scoped to repository `{}` and cannot be analyzed under `{}`",
+                    conflicting_repo.id, repo.id
+                ),
+            ));
+        }
+        return Ok((repo, strip_repo_prefix(path, &repo.id)));
     }
 
     // Heuristic: try to find repo id in path prefix
@@ -38,6 +50,21 @@ pub fn resolve_code_ast_repository_and_path<'a>(
         "MISSING_REPO",
         "Repository context is required",
     ))
+}
+
+fn strip_repo_prefix(path: &str, repo_id: &str) -> String {
+    if path == repo_id {
+        return String::new();
+    }
+    let prefix = format!("{repo_id}/");
+    if path.starts_with(&prefix) {
+        return path[prefix.len()..].to_string();
+    }
+    path.to_string()
+}
+
+fn path_has_repo_prefix(path: &str, repo_id: &str) -> bool {
+    path == repo_id || path.starts_with(&format!("{repo_id}/"))
 }
 
 pub(crate) fn repo_relative_path_matches(path: &str, target: &str) -> bool {
