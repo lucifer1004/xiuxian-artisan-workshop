@@ -103,10 +103,6 @@ pub(crate) fn format_optional_usize(value: Option<usize>) -> String {
     value.map_or_else(|| "-".to_string(), |v| v.to_string())
 }
 
-pub(crate) fn format_optional_u32(value: Option<u32>) -> String {
-    value.map_or_else(|| "-".to_string(), |v| v.to_string())
-}
-
 pub(crate) fn format_optional_f32(value: Option<f32>) -> String {
     value.map_or_else(|| "-".to_string(), |v| format!("{v:.3}"))
 }

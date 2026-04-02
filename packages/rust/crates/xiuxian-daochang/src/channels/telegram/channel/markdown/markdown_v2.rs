@@ -222,6 +222,7 @@ impl MarkdownV2Renderer {
 }
 
 #[must_use]
+/// Renders generic Markdown into Telegram MarkdownV2 syntax.
 pub fn markdown_to_telegram_markdown_v2(markdown: &str) -> String {
     MarkdownV2Renderer::new().render(markdown)
 }

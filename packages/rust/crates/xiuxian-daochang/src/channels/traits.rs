@@ -2,17 +2,27 @@
 
 use async_trait::async_trait;
 
+/// Mutation applied to recipient-scoped control-command admin overrides.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecipientCommandAdminUsersMutation {
+    /// Replaces the entire override list with the provided identities.
     Set(Vec<String>),
+    /// Adds the provided identities to the existing override list.
     Add(Vec<String>),
+    /// Removes the provided identities from the existing override list.
     Remove(Vec<String>),
+    /// Clears the recipient-scoped override list.
     Clear,
 }
 
+/// Structured attachment attached to a channel message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChannelAttachment {
-    ImageUrl { url: String },
+    /// Attachment represented as a remotely fetchable image URL.
+    ImageUrl {
+        /// Remote image location.
+        url: String,
+    },
 }
 
 /// A message received from or sent to a channel.

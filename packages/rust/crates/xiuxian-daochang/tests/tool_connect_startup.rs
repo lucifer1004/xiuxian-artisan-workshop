@@ -31,7 +31,7 @@
 
 //! Startup external tool connect behavior.
 
-use omni_agent::{Agent, AgentConfig, ToolServerEntry};
+use xiuxian_daochang::{Agent, AgentConfig, ToolServerEntry};
 
 #[tokio::test]
 async fn agent_startup_tool_connect_retries_are_applied() {

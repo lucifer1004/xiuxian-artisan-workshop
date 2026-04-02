@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Child;
 
-use crate::compatibility::link_graph::DEFAULT_JULIA_ANALYZER_PACKAGE_DIR;
+use crate::compatibility::link_graph::{
+    DEFAULT_JULIA_ANALYZER_PACKAGE_DIR, DEFAULT_JULIA_ARROW_PACKAGE_DIR,
+};
 
 pub(crate) struct ChildGuard {
     child: Child,
@@ -52,7 +54,7 @@ pub(crate) fn repo_root() -> PathBuf {
 
 pub(crate) fn wendaoarrow_package_dir() -> PathBuf {
     repo_root()
-        .join(".data/WendaoArrow")
+        .join(DEFAULT_JULIA_ARROW_PACKAGE_DIR)
         .canonicalize()
         .unwrap_or_else(|error| panic!("resolve WendaoArrow package dir: {error}"))
 }

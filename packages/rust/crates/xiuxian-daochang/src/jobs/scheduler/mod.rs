@@ -1,6 +1,5 @@
 //! Recurring scheduler built on top of `JobManager`.
 
-mod helpers;
 mod runner;
 mod types;
 

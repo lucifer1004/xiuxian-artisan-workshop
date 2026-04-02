@@ -13,6 +13,76 @@ use super::state::DiscordChannel;
 
 impl DiscordChannel {
     #[must_use]
+    /// Builds a Discord channel with the default control-command policy and the
+    /// default `GuildChannelUser` session partition strategy.
+    pub fn new(bot_token: String, allowed_users: Vec<String>, allowed_guilds: Vec<String>) -> Self {
+        Self::new_with_partition_and_control_command_policy(
+            bot_token,
+            allowed_users,
+            allowed_guilds,
+            DiscordControlCommandPolicy::default(),
+            DiscordSessionPartition::GuildChannelUser,
+        )
+    }
+
+    #[must_use]
+    /// Builds a Discord channel with an explicit session partition strategy.
+    pub fn new_with_partition(
+        bot_token: String,
+        allowed_users: Vec<String>,
+        allowed_guilds: Vec<String>,
+        session_partition: DiscordSessionPartition,
+    ) -> Self {
+        Self::new_with_partition_and_control_command_policy(
+            bot_token,
+            allowed_users,
+            allowed_guilds,
+            DiscordControlCommandPolicy::default(),
+            session_partition,
+        )
+    }
+
+    #[must_use]
+    /// Builds a Discord channel with an explicit control-command policy.
+    pub fn new_with_control_command_policy(
+        bot_token: String,
+        allowed_users: Vec<String>,
+        allowed_guilds: Vec<String>,
+        control_command_policy: DiscordControlCommandPolicy,
+    ) -> Self {
+        Self::new_with_partition_and_control_command_policy(
+            bot_token,
+            allowed_users,
+            allowed_guilds,
+            control_command_policy,
+            DiscordSessionPartition::GuildChannelUser,
+        )
+    }
+
+    #[must_use]
+    /// Builds a Discord channel and overrides the Discord HTTP API base URL.
+    pub fn new_with_base_url(
+        bot_token: String,
+        allowed_users: Vec<String>,
+        allowed_guilds: Vec<String>,
+        api_base_url: String,
+    ) -> Self {
+        let mut channel = Self::new(bot_token, allowed_users, allowed_guilds);
+        channel.api_base_url = api_base_url;
+        channel
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    /// Compatibility helper used by older test call sites that chained
+    /// `.expect(...)` on constructors.
+    pub fn expect(self, _message: &str) -> Self {
+        self
+    }
+
+    #[must_use]
+    /// Builds a Discord channel with explicit session partition and control
+    /// command policy settings.
     pub fn new_with_partition_and_control_command_policy(
         bot_token: String,
         allowed_users: Vec<String>,

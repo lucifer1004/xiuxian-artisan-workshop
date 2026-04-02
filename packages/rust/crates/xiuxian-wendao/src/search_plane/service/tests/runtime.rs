@@ -137,3 +137,47 @@ fn synchronize_repo_runtime_replaces_previous_snapshot_entries() {
         Some(RepoIndexPhase::Queued)
     );
 }
+
+#[tokio::test]
+async fn stale_repo_runtime_refresh_does_not_override_newer_generation() {
+    let service = SearchPlaneService::with_paths(
+        PathBuf::from("/tmp/project"),
+        PathBuf::from("/tmp/project/.data/search_plane"),
+        service_test_manifest_keyspace(),
+        SearchMaintenancePolicy::default(),
+    );
+
+    let stale_generation = service.advance_repo_runtime_generation_for_test();
+    let current_generation = service.advance_repo_runtime_generation_for_test();
+    assert!(current_generation > stale_generation);
+
+    service
+        .refresh_repo_runtime_cache_for_test(
+            stale_generation,
+            vec![SearchRepoRuntimeRecord {
+                repo_id: "stale/repo".to_string(),
+                phase: RepoIndexPhase::Ready,
+                last_revision: Some("rev-1".to_string()),
+                last_error: None,
+                updated_at: Some("2026-03-22T12:00:00Z".to_string()),
+            }],
+        )
+        .await;
+
+    assert_eq!(repo_phase(&service, "stale/repo"), None);
+
+    service
+        .refresh_repo_runtime_cache_for_test(
+            current_generation,
+            vec![SearchRepoRuntimeRecord {
+                repo_id: "fresh/repo".to_string(),
+                phase: RepoIndexPhase::Ready,
+                last_revision: Some("rev-2".to_string()),
+                last_error: None,
+                updated_at: Some("2026-03-22T12:05:00Z".to_string()),
+            }],
+        )
+        .await;
+
+    assert_eq!(repo_phase(&service, "fresh/repo"), Some(RepoIndexPhase::Ready));
+}

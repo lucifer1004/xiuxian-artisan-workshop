@@ -65,14 +65,17 @@ in
       exec = ''
         mkdir -p ${gatewayRuntimeDir} ${gatewayLogDir}
         rm -f ${gatewayPidFile}
-        printf '%s\n' "$$" > ${gatewayPidFile}
-        export WENDAO_GATEWAY_PIDFILE=${gatewayPidFile}
         export CARGO_TARGET_DIR=${gatewayTargetDir}
         export VALKEY_URL=redis://127.0.0.1:6379/0
         cargo build -p xiuxian-wendao --bin wendao --locked
-        exec ${gatewayTargetDir}/debug/wendao --conf ${gatewayConfig} gateway start \
+        ${gatewayTargetDir}/debug/wendao --conf ${gatewayConfig} gateway start \
           > >(tee -a ${gatewayStdoutLog}) \
-          2> >(tee -a ${gatewayStderrLog} >&2)
+          2> >(tee -a ${gatewayStderrLog} >&2) &
+        GATEWAY_CHILD_PID=$!
+        printf '%s\n' "$GATEWAY_CHILD_PID" > ${gatewayPidFile}
+        export WENDAO_GATEWAY_PIDFILE=${gatewayPidFile}
+        trap 'kill "$GATEWAY_CHILD_PID" 2>/dev/null || true' TERM INT
+        wait "$GATEWAY_CHILD_PID"
       '';
       process-compose = {
         depends_on = {

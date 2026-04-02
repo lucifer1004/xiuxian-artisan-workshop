@@ -1,4 +1,4 @@
-use crate::resolve::{parse_positive_u64_from_env, parse_positive_usize_from_env};
+use crate::env_parse::{parse_positive_u64_from_env, parse_positive_usize_from_env};
 use crate::runtime_agent_factory::shared::non_empty_env;
 use crate::{MemoryConfig, RuntimeSettings};
 

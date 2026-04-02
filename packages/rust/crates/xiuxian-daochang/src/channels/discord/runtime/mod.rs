@@ -31,6 +31,16 @@ pub(crate) use foreground::{
 };
 pub(crate) use interrupt::ForegroundInterruptController;
 
+pub(crate) async fn test_process_discord_message(
+    agent: Arc<Agent>,
+    channel: Arc<dyn Channel>,
+    msg: ChannelMessage,
+    job_manager: &Arc<JobManager>,
+    turn_timeout_secs: u64,
+) {
+    dispatch::process_discord_message(agent, channel, msg, job_manager, turn_timeout_secs).await;
+}
+
 pub(crate) async fn test_process_discord_message_with_interrupt(
     agent: Arc<Agent>,
     channel: Arc<dyn Channel>,

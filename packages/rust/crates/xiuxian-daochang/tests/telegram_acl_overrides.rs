@@ -31,11 +31,11 @@
 
 use std::path::PathBuf;
 
-use omni_agent::{
+use tempfile::TempDir;
+use xiuxian_daochang::{
     Channel, TelegramChannel, TelegramControlCommandPolicy, TelegramSessionPartition,
     build_telegram_acl_overrides, load_runtime_settings_from_paths,
 };
-use tempfile::TempDir;
 
 fn write_file(path: PathBuf, content: &str) {
     if let Some(parent) = path.parent() {

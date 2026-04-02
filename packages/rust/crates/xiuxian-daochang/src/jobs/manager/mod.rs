@@ -10,4 +10,3 @@ pub use types::{
     JobCompletion, JobCompletionKind, JobManagerConfig, JobMetricsSnapshot, JobState,
     JobStatusSnapshot, TurnRunner,
 };
-pub(crate) use types::{JobRecord, QueuedJob, epoch_millis};

@@ -2,15 +2,31 @@ use std::collections::HashSet;
 
 use xiuxian_qianhuan::{
     InjectionMode, InjectionOrderStrategy, InjectionPolicy, InjectionSnapshot, PromptContextBlock,
-    PromptContextCategory, RoleMixProfile, RoleMixRole,
+    PromptContextCategory, PromptContextSource, RoleMixProfile, RoleMixRole,
 };
+
+use super::builder::InjectionBlock;
 
 pub(super) fn assemble_snapshot(
     session_id: &str,
     turn_id: u64,
     policy: InjectionPolicy,
-    blocks: Vec<PromptContextBlock>,
+    blocks: Vec<InjectionBlock>,
 ) -> InjectionSnapshot {
+    let blocks: Vec<PromptContextBlock> = blocks
+        .into_iter()
+        .map(|block| {
+            PromptContextBlock::new(
+                block.block_id,
+                PromptContextSource::RuntimeHint,
+                PromptContextCategory::RuntimeHint,
+                0,
+                session_id,
+                block.content,
+                false,
+            )
+        })
+        .collect();
     let mut dropped_block_ids = Vec::new();
 
     let mut selected = blocks

@@ -27,7 +27,7 @@ pub(crate) struct DiscordForegroundRuntime {
     foreground_queue_mode: ForegroundQueueMode,
 }
 
-pub(super) struct DiscordForegroundSnapshot {
+pub(crate) struct DiscordForegroundSnapshot {
     pub max_in_flight_messages: usize,
     pub available_permits: usize,
     pub in_flight_messages: usize,

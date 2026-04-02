@@ -38,7 +38,7 @@
 
 use std::fs;
 
-use omni_agent::{
+use xiuxian_daochang::{
     Channel, RecipientCommandAdminUsersMutation, TelegramChannel, TelegramControlCommandPolicy,
     TelegramSessionPartition, load_runtime_settings_from_paths,
 };

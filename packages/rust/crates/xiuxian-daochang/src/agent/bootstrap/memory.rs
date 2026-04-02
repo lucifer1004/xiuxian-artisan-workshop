@@ -51,6 +51,11 @@ impl Agent {
         Self::build_with_backends(config, llm, session, bounded_session).await
     }
 
+    #[doc(hidden)]
+    pub async fn service_mount_records(&self) -> Vec<crate::agent::bootstrap::ServiceMountRecord> {
+        self.service_mount_records.read().await.clone()
+    }
+
     async fn build_with_backends(
         config: AgentConfig,
         llm: LlmClient,
@@ -94,22 +99,20 @@ impl Agent {
                 session.redis_runtime_snapshot(),
             )
         });
-        let memory_embed_timeout = duration_from_env_ms(
-            "OMNI_AGENT_MEMORY_EMBED_TIMEOUT_MS",
-            duration_to_u64_millis(crate::agent::DEFAULT_MEMORY_EMBED_TIMEOUT),
-            crate::agent::MIN_MEMORY_EMBED_TIMEOUT_MS,
-            crate::agent::MAX_MEMORY_EMBED_TIMEOUT_MS,
-        );
-        let memory_embed_timeout_cooldown = duration_from_env_ms(
-            "OMNI_AGENT_MEMORY_EMBED_TIMEOUT_COOLDOWN_MS",
-            duration_to_u64_millis(crate::agent::DEFAULT_MEMORY_EMBED_TIMEOUT_COOLDOWN),
-            0,
-            crate::agent::MAX_MEMORY_EMBED_COOLDOWN_MS,
-        );
         let embedding_runtime = config.memory.as_ref().map(|_| {
             Arc::new(EmbeddingRuntime::new(
-                memory_embed_timeout,
-                memory_embed_timeout_cooldown,
+                duration_from_env_ms(
+                    "OMNI_AGENT_MEMORY_EMBED_TIMEOUT_MS",
+                    duration_to_u64_millis(crate::agent::DEFAULT_MEMORY_EMBED_TIMEOUT),
+                    crate::agent::MIN_MEMORY_EMBED_TIMEOUT_MS,
+                    crate::agent::MAX_MEMORY_EMBED_TIMEOUT_MS,
+                ),
+                duration_from_env_ms(
+                    "OMNI_AGENT_MEMORY_EMBED_TIMEOUT_COOLDOWN_MS",
+                    duration_to_u64_millis(crate::agent::DEFAULT_MEMORY_EMBED_TIMEOUT_COOLDOWN),
+                    0,
+                    crate::agent::MAX_MEMORY_EMBED_COOLDOWN_MS,
+                ),
             ))
         });
         let mut native_tools = crate::agent::native_tools::registry::NativeToolRegistry::new();
@@ -136,14 +139,10 @@ impl Agent {
             reflection_policy_hints: Arc::new(RwLock::new(HashMap::new())),
             memory_decay_turn_counter: Arc::new(AtomicU64::new(0)),
             native_tools: Arc::new(native_tools),
-            manifestation_manager: None,
             heyi: None,
             zhenfa_tools: None,
             downstream_admission_policy: DownstreamAdmissionPolicy::from_env(),
             downstream_admission_metrics: DownstreamAdmissionMetrics::default(),
-            memory_embed_timeout,
-            memory_embed_timeout_cooldown,
-            memory_embed_timeout_cooldown_until_ms: AtomicU64::new(0),
             llm,
             tool_runtime,
             memory_stream_consumer_task,
@@ -175,13 +174,13 @@ fn init_memory_backends(config: &AgentConfig) -> Result<MemoryBackendInit> {
         embedding_dim = memory_cfg.embedding_dim,
         "memory persistence backend initialized"
     );
-    let store = EpisodeStore::new(StoreConfig {
+    let mut store = EpisodeStore::new(StoreConfig {
         path: memory_cfg.path.clone(),
         embedding_dim: memory_cfg.embedding_dim,
         table_name: memory_cfg.table_name.clone(),
     });
     let load_started = Instant::now();
-    let load_status = match backend.load(&store) {
+    let load_status = match backend.load(&mut store) {
         Ok(()) => {
             tracing::debug!(
                 event = SessionEvent::MemoryStateLoadSucceeded.as_str(),

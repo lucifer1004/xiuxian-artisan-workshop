@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use omni_agent::{RuntimeSettings, run_stdio};
+use xiuxian_daochang::{Agent, RuntimeSettings, run_stdio};
 
 use crate::agent_builder::build_agent;
 
@@ -10,7 +10,7 @@ pub(crate) async fn run_repl_mode(
     tool_config_path: PathBuf,
     runtime_settings: &RuntimeSettings,
 ) -> anyhow::Result<()> {
-    let agent = build_agent(&tool_config_path, runtime_settings).await?;
+    let agent: Agent = build_agent(&tool_config_path, runtime_settings).await?;
     if let Some(q) = query {
         let out = agent.run_turn(&session_id, q.trim()).await?;
         println!("{out}");

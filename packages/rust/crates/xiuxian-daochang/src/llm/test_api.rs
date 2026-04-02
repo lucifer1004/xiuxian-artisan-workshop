@@ -8,8 +8,6 @@ use litellm_rs::core::types::tools::ToolChoice as LiteToolChoice;
 #[cfg(feature = "agent-provider-litellm")]
 use std::collections::HashMap;
 #[cfg(feature = "agent-provider-litellm")]
-use std::sync::Arc;
-#[cfg(feature = "agent-provider-litellm")]
 use xiuxian_llm::llm::providers::AnthropicCustomBaseTransport;
 
 use crate::config::RuntimeSettings;
@@ -262,29 +260,6 @@ pub fn enforce_tool_message_integrity(
     )
 }
 
-/// Probe result for OCR gate timeout recovery behavior.
-#[cfg(feature = "agent-provider-litellm")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OcrProbeFirstOutcome {
-    TimedOut,
-    Panicked,
-    Other,
-}
-
-/// Probe result for OCR gate timeout recovery behavior.
-#[cfg(feature = "agent-provider-litellm")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OcrGateTimeoutRecoveryProbe {
-    /// First probe task terminal state.
-    pub first_outcome: OcrProbeFirstOutcome,
-    /// Whether the second probe task was rejected as busy.
-    pub second_was_busy: bool,
-    /// Whether the second probe task completed.
-    pub second_completed: bool,
-    /// Whether the probe eventually recovered after waiting for timed-out worker completion.
-    pub recovered_after_wait: bool,
-}
-
 /// Test-facing custom-base fallback transport selector.
 #[cfg(feature = "agent-provider-litellm")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,21 +270,6 @@ pub enum CustomBaseFallbackTransport {
     Minimax,
     /// Anthropic `/v1/messages` bypass transport.
     AnthropicMessagesBypass,
-}
-
-#[cfg(feature = "agent-provider-litellm")]
-impl OcrGateTimeoutRecoveryProbe {
-    /// Returns true when the first probe task ended via timeout.
-    #[must_use]
-    pub const fn first_timed_out(self) -> bool {
-        matches!(self.first_outcome, OcrProbeFirstOutcome::TimedOut)
-    }
-
-    /// Returns true when the first probe task ended via panic.
-    #[must_use]
-    pub const fn first_panicked(self) -> bool {
-        matches!(self.first_outcome, OcrProbeFirstOutcome::Panicked)
-    }
 }
 
 #[cfg(feature = "agent-provider-litellm")]
@@ -378,74 +338,6 @@ pub fn parse_responses_stream_tool_names(
     )
 }
 
-/// Simulate OCR timeout/busy recovery without starting channel runtimes.
-#[cfg(feature = "agent-provider-litellm")]
-pub async fn simulate_ocr_gate_timeout_recovery(
-    blocking_sleep_ms: u64,
-    timeout_ms: u64,
-) -> OcrGateTimeoutRecoveryProbe {
-    let probe = super::compat::litellm::simulate_ocr_gate_timeout_recovery_for_tests(
-        blocking_sleep_ms,
-        timeout_ms,
-    )
-    .await;
-    OcrGateTimeoutRecoveryProbe {
-        first_outcome: map_probe_first_outcome(probe.first_outcome),
-        second_was_busy: probe.second_was_busy,
-        second_completed: probe.second_completed,
-        recovered_after_wait: probe.recovered_after_wait,
-    }
-}
-
-/// Simulate OCR panic/busy recovery without starting channel runtimes.
-#[cfg(feature = "agent-provider-litellm")]
-pub async fn simulate_ocr_gate_panic_recovery() -> OcrGateTimeoutRecoveryProbe {
-    let probe = super::compat::litellm::simulate_ocr_gate_panic_recovery_for_tests().await;
-    OcrGateTimeoutRecoveryProbe {
-        first_outcome: map_probe_first_outcome(probe.first_outcome),
-        second_was_busy: probe.second_was_busy,
-        second_completed: probe.second_completed,
-        recovered_after_wait: probe.recovered_after_wait,
-    }
-}
-
-/// Probe `DeepSeek` OCR truth extraction from raw image bytes.
-#[cfg(feature = "agent-provider-litellm")]
-pub async fn infer_deepseek_ocr_truth_from_image_bytes(
-    image_bytes: Vec<u8>,
-    media_type: &str,
-) -> Option<String> {
-    super::compat::litellm_ocr::infer_deepseek_ocr_truth_from_bytes_for_tests(
-        Arc::from(image_bytes.into_boxed_slice()),
-        media_type,
-    )
-    .await
-}
-
-/// Resolve effective global OCR process-lock file path.
-#[cfg(feature = "agent-provider-litellm")]
-#[must_use]
-pub fn resolve_deepseek_ocr_global_lock_path() -> String {
-    super::compat::litellm_ocr::resolve_deepseek_ocr_global_lock_path_for_tests()
-}
-
-/// Resolve OCR RSS guard threshold bytes from a raw GB string.
-#[cfg(feature = "agent-provider-litellm")]
-#[must_use]
-pub fn resolve_deepseek_ocr_memory_limit_bytes(raw_limit_gb: Option<&str>) -> Option<u64> {
-    super::compat::litellm_ocr::resolve_deepseek_ocr_memory_limit_bytes_for_tests(raw_limit_gb)
-}
-
-/// Evaluate whether OCR memory guard should trigger for a given RSS usage.
-#[cfg(feature = "agent-provider-litellm")]
-#[must_use]
-pub fn deepseek_ocr_memory_guard_triggered(raw_limit_gb: Option<&str>, rss_bytes: u64) -> bool {
-    super::compat::litellm_ocr::deepseek_ocr_memory_guard_triggered_for_tests(
-        raw_limit_gb,
-        rss_bytes,
-    )
-}
-
 /// Resolve transport-specific API key precedence for anthropic custom-base fallback.
 #[cfg(feature = "agent-provider-litellm")]
 #[must_use]
@@ -479,21 +371,6 @@ fn map_wire_api(mode: super::providers::mode::LiteLlmWireApi) -> LiteLlmWireApi 
     match mode {
         super::providers::mode::LiteLlmWireApi::ChatCompletions => LiteLlmWireApi::ChatCompletions,
         super::providers::mode::LiteLlmWireApi::Responses => LiteLlmWireApi::Responses,
-    }
-}
-
-#[cfg(feature = "agent-provider-litellm")]
-fn map_probe_first_outcome(
-    outcome: super::compat::litellm_ocr::OcrProbeFirstOutcome,
-) -> OcrProbeFirstOutcome {
-    match outcome {
-        super::compat::litellm_ocr::OcrProbeFirstOutcome::TimedOut => {
-            OcrProbeFirstOutcome::TimedOut
-        }
-        super::compat::litellm_ocr::OcrProbeFirstOutcome::Panicked => {
-            OcrProbeFirstOutcome::Panicked
-        }
-        super::compat::litellm_ocr::OcrProbeFirstOutcome::Other => OcrProbeFirstOutcome::Other,
     }
 }
 

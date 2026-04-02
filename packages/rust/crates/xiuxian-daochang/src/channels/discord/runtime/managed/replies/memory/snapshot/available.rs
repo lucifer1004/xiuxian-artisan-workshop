@@ -130,7 +130,7 @@ pub(in super::super::super::super) fn format_memory_recall_snapshot_json(
             "best_score": snapshot.best_score,
             "weakest_score": snapshot.weakest_score,
         },
-        "runtime": format_memory_runtime_status_json(runtime_status),
+        "runtime": format_memory_runtime_status_json(runtime_status.clone()),
         "admission": format_downstream_admission_status_json(&admission_status),
         "metrics": format_memory_recall_metrics_json(metrics),
     })

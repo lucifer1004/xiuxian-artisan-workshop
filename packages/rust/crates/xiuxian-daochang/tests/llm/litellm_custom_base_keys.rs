@@ -1,6 +1,6 @@
 //! Regression tests for transport-specific API key selection in custom-base fallback.
 
-use omni_agent::test_support::{
+use xiuxian_daochang::test_support::{
     CustomBaseFallbackTransport, resolve_custom_base_transport_api_key_from_values,
 };
 

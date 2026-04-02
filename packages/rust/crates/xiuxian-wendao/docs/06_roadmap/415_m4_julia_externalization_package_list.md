@@ -250,6 +250,12 @@ Current implementation status:
 11. the host `runtime.rs` and `conversions.rs` files now behave as
     compatibility seams over that Julia-owned runtime record, so the hard
     ownership blockers for `M4` are now cleared
+12. the staged mixed-graph structural plugin contract now also follows the
+    same ownership rule: Julia-specific graph-structural route names, draft
+    schema-version defaults, request or response column inventories, and Arrow
+    batch validation live in `xiuxian-wendao-julia`, while
+    `xiuxian-wendao-runtime` stays limited to reusable Flight client and route
+    normalization helpers
 
 ## Compatibility Plan
 

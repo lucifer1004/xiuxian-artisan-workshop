@@ -18,9 +18,9 @@ fn hash_fallback_is_deterministic_for_identical_input() {
 }
 
 #[test]
-fn gateway_forces_http_embedding_backend_when_runtime_defaults_to_mistral_sdk() {
+fn gateway_preserves_configured_http_embedding_backend() {
     let mut settings = RuntimeSettings::default();
-    settings.memory.embedding_backend = Some("mistral_sdk".to_string());
+    settings.memory.embedding_backend = Some("http".to_string());
 
     let resolved =
         apply_gateway_embedding_memory_guard_for_tests(&settings, None, None, Some("false"));
@@ -31,7 +31,7 @@ fn gateway_forces_http_embedding_backend_when_runtime_defaults_to_mistral_sdk() 
 #[test]
 fn gateway_respects_explicit_memory_backend_env_override() {
     let mut settings = RuntimeSettings::default();
-    settings.memory.embedding_backend = Some("mistral_sdk".to_string());
+    settings.memory.embedding_backend = Some("http".to_string());
 
     let resolved = apply_gateway_embedding_memory_guard_for_tests(
         &settings,
@@ -41,18 +41,4 @@ fn gateway_respects_explicit_memory_backend_env_override() {
     );
 
     assert_eq!(resolved.memory.embedding_backend.as_deref(), Some("http"));
-}
-
-#[test]
-fn gateway_respects_allow_inproc_embed_flag() {
-    let mut settings = RuntimeSettings::default();
-    settings.memory.embedding_backend = Some("mistral_sdk".to_string());
-
-    let resolved =
-        apply_gateway_embedding_memory_guard_for_tests(&settings, None, None, Some("true"));
-
-    assert_eq!(
-        resolved.memory.embedding_backend.as_deref(),
-        Some("mistral_sdk")
-    );
 }

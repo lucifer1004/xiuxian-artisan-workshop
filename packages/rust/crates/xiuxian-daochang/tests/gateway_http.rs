@@ -34,9 +34,9 @@
 use axum::body::Body;
 use axum::body::to_bytes;
 use axum::http::{Request, StatusCode};
-use omni_agent::{Agent, AgentConfig, router};
 use serde_json::Value;
 use tower::ServiceExt;
+use xiuxian_daochang::{Agent, AgentConfig, router};
 
 fn minimal_agent_config() -> AgentConfig {
     AgentConfig {

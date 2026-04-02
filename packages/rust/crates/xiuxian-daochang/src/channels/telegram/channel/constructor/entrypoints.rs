@@ -125,4 +125,10 @@ impl TelegramChannel {
             session_partition,
         )
     }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn expect(self, _message: &str) -> Self {
+        self
+    }
 }

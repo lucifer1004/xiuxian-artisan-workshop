@@ -1,86 +1,89 @@
-use super::bindings::resolve_binding_target_from_registry;
-use super::model::{
-    InternalSkillManifest, InternalSkillNativeAliasCompilation,
-    InternalSkillNativeAliasCompileError, InternalSkillNativeAliasSeed,
-    InternalSkillNativeAliasSpec, InternalSkillWorkflowType,
+//! Bootstrap helper exports for integration tests.
+
+use std::path::{Path, PathBuf};
+
+use crate::agent::bootstrap::qianhuan::init_persona_registries;
+use crate::agent::bootstrap::service_mount::ServiceMountCatalog;
+use crate::agent::bootstrap::zhixing::{
+    load_skill_templates_from_embedded_registry as load_skill_templates_from_embedded_registry_internal,
+    resolve_notebook_root as resolve_notebook_root_internal,
+    resolve_prj_data_home_with_env as resolve_prj_data_home_with_env_internal,
+    resolve_project_root_with_prj_root as resolve_project_root_with_prj_root_internal,
+    resolve_template_globs_with_resource_root as resolve_template_globs_with_resource_root_internal,
 };
+use crate::config::XiuxianConfig;
+use anyhow::Result;
+use xiuxian_qianhuan::ManifestationManager;
 
-/// Resolve a validated internal binding id to the concrete native tool name used at runtime.
+/// Test-facing summary for embedded skill template loading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BootstrapTemplateLoadSummary {
+    /// Count of semantic wendao URI links attached to the manager.
+    pub linked_ids: usize,
+    /// Count of embedded template records loaded into the bridge.
+    pub template_records: usize,
+    /// Count of template names that became renderable after loading.
+    pub loaded_template_names: usize,
+}
+
+/// Resolve project root with an explicit `PRJ_ROOT` override for tests.
+pub fn resolve_project_root(prj_root: Option<&str>, current_dir: &Path) -> PathBuf {
+    resolve_project_root_with_prj_root_internal(prj_root, current_dir)
+}
+
+/// Resolve `PRJ_DATA_HOME` with an optional explicit override.
+pub fn resolve_prj_data_home(project_root: &Path, prj_data_home: Option<&str>) -> PathBuf {
+    resolve_prj_data_home_with_env_internal(project_root, prj_data_home)
+}
+
+/// Resolve notebook root with env-over-config-over-default precedence.
+pub fn resolve_notebook_root(
+    prj_data_home: &Path,
+    env_notebook_path: Option<&str>,
+    config_notebook_path: Option<&str>,
+) -> PathBuf {
+    resolve_notebook_root_internal(
+        prj_data_home,
+        env_notebook_path.map(str::to_owned),
+        config_notebook_path.map(str::to_owned),
+    )
+}
+
+/// Resolve template globs with an optional resource-root override.
+pub fn resolve_template_globs(
+    project_root: &Path,
+    config_template_paths: Option<Vec<String>>,
+    resource_root_override: Option<&str>,
+) -> Vec<String> {
+    resolve_template_globs_with_resource_root_internal(
+        project_root,
+        config_template_paths,
+        resource_root_override,
+    )
+}
+
+/// Load embedded skill templates into a manifestation manager.
 ///
 /// # Errors
 ///
-/// Returns an error when the manifest references an unknown internal runtime binding. The error
-/// includes the full set of currently supported binding ids for operator-facing diagnostics.
-pub fn resolve_internal_skill_binding_target(
-    internal_id: &str,
-) -> Result<&'static str, InternalSkillNativeAliasCompileError> {
-    resolve_binding_target_from_registry(internal_id)
+/// Returns an error when embedded template loading fails.
+pub fn load_skill_templates_from_embedded_registry(
+    manager: &ManifestationManager,
+) -> Result<BootstrapTemplateLoadSummary> {
+    load_skill_templates_from_embedded_registry_internal(manager)
+        .map(|summary| BootstrapTemplateLoadSummary {
+            linked_ids: summary.linked_ids,
+            template_records: summary.template_records,
+            loaded_template_names: summary.loaded_template_names,
+        })
+        .map_err(anyhow::Error::msg)
 }
 
-/// Compile a validated manifest payload into a runtime-ready native alias spec.
-#[must_use]
-pub fn compile_internal_skill_native_alias<Workflow>(
-    seed: InternalSkillNativeAliasSeed<Workflow>,
-) -> Option<InternalSkillNativeAliasSpec<Workflow>> {
-    try_compile_internal_skill_native_alias(seed).ok()
-}
-
-/// Compile a validated manifest payload into a runtime-ready native alias spec.
-///
-/// # Errors
-///
-/// Returns an error when the manifest references an unknown internal runtime binding.
-pub fn try_compile_internal_skill_native_alias<Workflow>(
-    seed: InternalSkillNativeAliasSeed<Workflow>,
-) -> Result<InternalSkillNativeAliasSpec<Workflow>, InternalSkillNativeAliasCompileError> {
-    let target_tool_name = resolve_internal_skill_binding_target(seed.internal_id.as_str())?;
-
-    Ok(InternalSkillNativeAliasSpec {
-        manifest_id: seed.manifest_id,
-        tool_name: seed.tool_name,
-        description: seed.description,
-        workflow_type: seed.workflow_type,
-        internal_id: seed.internal_id,
-        metadata: seed.metadata,
-        target_tool_name: target_tool_name.to_string(),
-        annotations: seed.annotations,
-        source_path: seed.source_path,
-    })
-}
-
-/// Compile a batch of validated internal manifests into native alias specs.
-///
-/// Manifests with unknown internal bindings are retained in `issues` with source-path context,
-/// allowing runtime consumers to stay thin while preserving audit visibility.
-#[must_use]
-pub fn compile_internal_skill_manifest_aliases(
-    manifests: Vec<InternalSkillManifest>,
-) -> InternalSkillNativeAliasCompilation<InternalSkillWorkflowType> {
-    let mut compilation = InternalSkillNativeAliasCompilation {
-        compiled_specs: Vec::with_capacity(manifests.len()),
-        issues: Vec::new(),
-    };
-
-    for manifest in manifests {
-        let source_path = manifest.source_path.clone();
-        let seed = InternalSkillNativeAliasSeed {
-            manifest_id: manifest.manifest_id,
-            tool_name: manifest.tool_name,
-            description: manifest.description,
-            workflow_type: manifest.workflow_type,
-            internal_id: manifest.internal_id,
-            metadata: manifest.metadata,
-            annotations: manifest.annotations,
-            source_path,
-        };
-
-        match try_compile_internal_skill_native_alias(seed) {
-            Ok(spec) => compilation.compiled_specs.push(spec),
-            Err(error) => compilation
-                .issues
-                .push(format!("{} -> {error}", manifest.source_path.display())),
-        }
-    }
-
-    compilation
+/// Return the internal persona-registry size produced by bootstrap wiring.
+pub fn init_persona_registries_internal_len(
+    project_root: &Path,
+    xiuxian_cfg: &XiuxianConfig,
+) -> usize {
+    let mut mounts = ServiceMountCatalog::new();
+    init_persona_registries(project_root, xiuxian_cfg, &mut mounts).internal_len()
 }

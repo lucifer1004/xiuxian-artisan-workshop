@@ -27,27 +27,51 @@ const TELEGRAM_ACL_FIELD_SLASH_JOB_ALLOW_FROM: &str = "telegram.acl.slash.job_st
 const TELEGRAM_ACL_FIELD_SLASH_JOBS_ALLOW_FROM: &str = "telegram.acl.slash.jobs_summary.users";
 const TELEGRAM_ACL_FIELD_SLASH_BG_ALLOW_FROM: &str = "telegram.acl.slash.background_submit.users";
 
+/// Runtime ACL overrides derived from Telegram configuration.
 #[derive(Debug, Clone, Default)]
 pub struct TelegramAclOverrides {
+    /// Explicitly allowed Telegram user identifiers.
     pub allowed_users: Vec<String>,
+    /// Explicitly allowed Telegram group or chat identifiers.
     pub allowed_groups: Vec<String>,
+    /// Telegram users allowed to execute privileged admin commands.
     pub admin_users: Vec<String>,
+    /// Optional allow-list for privileged text control commands.
     pub control_command_allow_from: Option<Vec<String>>,
+    /// Per-command admin rules compiled for runtime checks.
     pub control_command_rules: Vec<TelegramCommandAdminRule>,
+    /// Optional allow-list for all slash commands.
     pub slash_command_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/session status`.
     pub slash_session_status_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/session budget`.
     pub slash_session_budget_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/session memory`.
     pub slash_session_memory_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/session feedback`.
     pub slash_session_feedback_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/job`.
     pub slash_job_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/jobs`.
     pub slash_jobs_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/bg`.
     pub slash_bg_allow_from: Option<Vec<String>>,
 }
 
+/// Builds Telegram ACL runtime overrides from the root runtime settings.
+///
+/// # Errors
+///
+/// Returns an error when control-command rule parsing fails.
 pub fn build_telegram_acl_overrides(settings: &RuntimeSettings) -> Result<TelegramAclOverrides> {
     build_telegram_acl_overrides_from_settings(&settings.telegram)
 }
 
+/// Builds Telegram ACL runtime overrides from Telegram-only settings.
+///
+/// # Errors
+///
+/// Returns an error when control-command rule parsing fails.
 pub fn build_telegram_acl_overrides_from_settings(
     settings: &TelegramSettings,
 ) -> Result<TelegramAclOverrides> {

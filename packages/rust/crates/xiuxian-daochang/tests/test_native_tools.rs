@@ -1,7 +1,9 @@
+//! Native-tool registry smoke tests.
+
 use async_trait::async_trait;
-use omni_agent::{NativeTool, NativeToolRegistry};
 use serde_json::json;
 use std::sync::Arc;
+use xiuxian_daochang::{NativeTool, NativeToolCallContext, NativeToolRegistry};
 
 struct MockTool;
 
@@ -16,7 +18,11 @@ impl NativeTool for MockTool {
     fn parameters(&self) -> serde_json::Value {
         json!({})
     }
-    async fn call(&self, _args: Option<serde_json::Value>) -> anyhow::Result<String> {
+    async fn call(
+        &self,
+        _args: Option<serde_json::Value>,
+        _context: &NativeToolCallContext,
+    ) -> anyhow::Result<String> {
         Ok("Mock success".to_string())
     }
 }
@@ -31,7 +37,10 @@ async fn test_native_tool_registration_and_dispatch() {
         .expect("Tool should be registered");
     assert_eq!(tool.name(), "mock.test");
 
-    let result = tool.call(None).await.expect("Call should succeed");
+    let result = tool
+        .call(None, &NativeToolCallContext::default())
+        .await
+        .expect("Call should succeed");
     assert_eq!(result, "Mock success");
 }
 

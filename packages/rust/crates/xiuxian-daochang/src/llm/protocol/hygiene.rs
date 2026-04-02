@@ -10,16 +10,6 @@ pub(crate) struct ToolMessageIntegrityReport {
     pub empty_tool_call_assistants: usize,
 }
 
-impl ToolMessageIntegrityReport {
-    #[must_use]
-    pub(crate) fn dropped_total(self) -> usize {
-        self.incomplete_assistants
-            .saturating_add(self.linked_tools)
-            .saturating_add(self.orphan_tools)
-            .saturating_add(self.empty_tool_call_assistants)
-    }
-}
-
 #[derive(Debug)]
 struct PendingAssistant {
     message_index: usize,

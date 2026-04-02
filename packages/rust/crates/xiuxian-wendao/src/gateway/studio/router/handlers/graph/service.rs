@@ -6,8 +6,8 @@ use log::debug;
 use crate::gateway::studio::pathing::studio_display_path;
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 use crate::gateway::studio::types::{
-    GraphLink, GraphNeighborsResponse, GraphNode, NodeNeighbors, Topology3dPayload,
-    TopologyCluster, TopologyLink, TopologyNode,
+    GraphLink, GraphNeighborsResponse, GraphNode, Topology3dPayload, TopologyCluster, TopologyLink,
+    TopologyNode,
 };
 use crate::link_graph::{LinkGraphDirection, LinkGraphIndex};
 use crate::query_core::{
@@ -17,87 +17,9 @@ use crate::query_core::{
 };
 
 use crate::gateway::studio::router::handlers::graph::shared::{
-    LEGACY_NEIGHBOR_LIMIT, graph_node, layout_scalar, preferred_label, resolve_graph_node_id,
-    sorted_unique_paths, topology_color, topology_position,
+    graph_node, layout_scalar, preferred_label, resolve_graph_node_id, topology_color,
+    topology_position,
 };
-
-pub(crate) async fn run_node_neighbors(
-    state: Arc<GatewayState>,
-    node_id: &str,
-) -> Result<NodeNeighbors, StudioApiError> {
-    let index = state.link_graph_index().await?;
-    let Some(resolved_node_id) = resolve_graph_node_id(state.as_ref(), index.as_ref(), node_id)
-    else {
-        return Err(graph_node_not_found(node_id));
-    };
-    let Some(center) = index.metadata(resolved_node_id.as_str()) else {
-        return Err(graph_node_not_found(node_id));
-    };
-
-    let incoming = sorted_unique_paths(
-        map_projection_paths_to_display(
-            state.as_ref(),
-            execute_graph_neighbor_projection(
-                state.as_ref(),
-                Arc::clone(&index),
-                resolved_node_id.as_str(),
-                QueryCoreGraphDirection::Incoming,
-                1,
-                LEGACY_NEIGHBOR_LIMIT,
-                "node_neighbors",
-            )
-            .await?
-            .paths_at_distance(None)
-            .into_iter(),
-        )
-        .into_iter(),
-    );
-    let outgoing = sorted_unique_paths(
-        map_projection_paths_to_display(
-            state.as_ref(),
-            execute_graph_neighbor_projection(
-                state.as_ref(),
-                Arc::clone(&index),
-                resolved_node_id.as_str(),
-                QueryCoreGraphDirection::Outgoing,
-                1,
-                LEGACY_NEIGHBOR_LIMIT,
-                "node_neighbors",
-            )
-            .await?
-            .paths_at_distance(None)
-            .into_iter(),
-        )
-        .into_iter(),
-    );
-    let two_hop = sorted_unique_paths(
-        map_projection_paths_to_display(
-            state.as_ref(),
-            execute_graph_neighbor_projection(
-                state.as_ref(),
-                Arc::clone(&index),
-                resolved_node_id.as_str(),
-                QueryCoreGraphDirection::Both,
-                2,
-                LEGACY_NEIGHBOR_LIMIT.saturating_mul(2),
-                "node_neighbors",
-            )
-            .await?
-            .paths_at_distance(Some(2))
-            .into_iter(),
-        )
-        .into_iter(),
-    );
-
-    Ok(NodeNeighbors {
-        node_id: studio_display_path(state.studio.as_ref(), center.path.as_str()),
-        name: preferred_label(center.title.as_str(), center.path.as_str()),
-        node_type: "doc".to_string(),
-        incoming,
-        outgoing,
-        two_hop,
-    })
-}
 
 pub(crate) async fn run_graph_neighbors(
     state: Arc<GatewayState>,
@@ -224,44 +146,6 @@ pub(crate) async fn run_topology_3d(
     })
 }
 
-async fn execute_graph_neighbor_projection(
-    state: &GatewayState,
-    index: Arc<LinkGraphIndex>,
-    node_id: &str,
-    direction: QueryCoreGraphDirection,
-    hops: usize,
-    limit: usize,
-    route: &str,
-) -> Result<WendaoGraphProjection, StudioApiError> {
-    let explain_sink = Arc::new(InMemoryWendaoExplainSink::new());
-    let projection = query_graph_neighbors_projection(
-        index,
-        node_id,
-        direction,
-        hops,
-        limit,
-        Some(explain_sink.clone()),
-    )
-    .await
-    .map_err(|error| {
-        StudioApiError::internal(
-            "GRAPH_NEIGHBOR_QUERY_CORE_FAILED",
-            "Failed to query graph neighbors through query core",
-            Some(error.to_string()),
-        )
-    })?;
-    record_graph_query_core_explain(
-        route,
-        node_id,
-        link_graph_direction(direction),
-        hops,
-        limit,
-        explain_sink.events().as_slice(),
-    );
-    let _ = state;
-    Ok(projection)
-}
-
 fn record_graph_query_core_explain(
     route: &str,
     node_id: &str,
@@ -284,14 +168,6 @@ fn query_core_graph_direction(direction: LinkGraphDirection) -> QueryCoreGraphDi
         LinkGraphDirection::Incoming => QueryCoreGraphDirection::Incoming,
         LinkGraphDirection::Outgoing => QueryCoreGraphDirection::Outgoing,
         LinkGraphDirection::Both => QueryCoreGraphDirection::Both,
-    }
-}
-
-fn link_graph_direction(direction: QueryCoreGraphDirection) -> LinkGraphDirection {
-    match direction {
-        QueryCoreGraphDirection::Incoming => LinkGraphDirection::Incoming,
-        QueryCoreGraphDirection::Outgoing => LinkGraphDirection::Outgoing,
-        QueryCoreGraphDirection::Both => LinkGraphDirection::Both,
     }
 }
 
@@ -376,15 +252,6 @@ fn graph_node_from_projection(
         node.is_center,
         node.distance,
     )
-}
-
-fn map_projection_paths_to_display(
-    state: &GatewayState,
-    paths: impl Iterator<Item = String>,
-) -> Vec<String> {
-    paths
-        .map(|path| studio_display_path(state.studio.as_ref(), path.as_str()))
-        .collect()
 }
 
 fn graph_node_not_found(node_id: &str) -> StudioApiError {

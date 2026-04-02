@@ -75,16 +75,9 @@ pub fn analyze_registered_repository_cached_bundle_with_registry(
         });
     }
 
-    let revision = cache_key
-        .checkout_revision
-        .as_deref()
-        .or(cache_key.mirror_revision.as_deref())
-        .or(cache_key.tracking_revision.as_deref());
-    if let Some(revision) = revision {
-        let valkey_cache = ValkeyAnalysisCache::new()?;
-        if let Some(ref cache) = valkey_cache
-            && let Some(cached) = cache.get(repository, revision)?
-        {
+    let valkey_cache = ValkeyAnalysisCache::new()?;
+    if let Some(ref cache) = valkey_cache {
+        if let Some(cached) = cache.get(&cache_key) {
             store_cached_repository_analysis(cache_key.clone(), &cached)?;
             return Ok(CachedRepositoryAnalysis {
                 cache_key,

@@ -96,16 +96,8 @@ impl EmbeddingClient {
             .max_in_flight
             .map(|limit| Arc::new(Semaphore::new(limit)));
         let normalized_base_url = base_url.trim_end_matches('/').to_string();
-        let display_base_url =
-            if backend_settings.mode == super::super::backend::EmbeddingBackendMode::MistralSdk {
-                "inproc://mistral-sdk".to_string()
-            } else {
-                normalized_base_url.clone()
-            };
+        let display_base_url = normalized_base_url.clone();
         let default_model = backend_settings.default_model.clone();
-        let mistral_sdk_hf_cache_path = backend_settings.mistral_sdk_hf_cache_path.clone();
-        let mistral_sdk_hf_revision = backend_settings.mistral_sdk_hf_revision.clone();
-        let mistral_sdk_max_num_seqs = backend_settings.mistral_sdk_max_num_seqs;
         #[cfg(feature = "agent-provider-litellm")]
         let litellm_api_key = resolve_litellm_embed_api_key();
         #[cfg(feature = "agent-provider-litellm")]
@@ -122,11 +114,6 @@ impl EmbeddingClient {
             embed_base_url = display_base_url.as_str(),
             embed_default_model = default_model.as_deref().unwrap_or(""),
             has_default_model = default_model.is_some(),
-            mistral_sdk_hf_cache_path = mistral_sdk_hf_cache_path.as_deref().unwrap_or(""),
-            has_mistral_sdk_hf_cache_path = mistral_sdk_hf_cache_path.is_some(),
-            mistral_sdk_hf_revision = mistral_sdk_hf_revision.as_deref().unwrap_or(""),
-            has_mistral_sdk_hf_revision = mistral_sdk_hf_revision.is_some(),
-            mistral_sdk_max_num_seqs = mistral_sdk_max_num_seqs,
             embed_api_key_source,
             "embedding backend selected"
         );
@@ -143,9 +130,6 @@ impl EmbeddingClient {
             batch_max_size,
             batch_max_concurrency,
             default_model,
-            mistral_sdk_hf_cache_path,
-            mistral_sdk_hf_revision,
-            mistral_sdk_max_num_seqs,
             #[cfg(feature = "agent-provider-litellm")]
             litellm_api_key: litellm_api_key.api_key,
         }

@@ -13,26 +13,6 @@ use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::JobManager;
 
-pub(in crate::channels::telegram::runtime::jobs) async fn handle_inbound_message(
-    msg: ChannelMessage,
-    channel: &Arc<dyn Channel>,
-    foreground_tx: &mpsc::Sender<ChannelMessage>,
-    job_manager: &Arc<JobManager>,
-    agent: &Arc<Agent>,
-) -> bool {
-    let interrupt_controller = ForegroundInterruptController::default();
-    handle_inbound_message_with_interrupt(
-        msg,
-        channel,
-        foreground_tx,
-        &interrupt_controller,
-        job_manager,
-        agent,
-        ForegroundQueueMode::Queue,
-    )
-    .await
-}
-
 pub(in crate::channels::telegram::runtime::jobs) async fn handle_inbound_message_with_interrupt(
     msg: ChannelMessage,
     channel: &Arc<dyn Channel>,

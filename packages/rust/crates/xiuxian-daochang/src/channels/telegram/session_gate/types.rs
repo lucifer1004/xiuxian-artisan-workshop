@@ -10,6 +10,10 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 use super::config::{SessionGateBackendMode, SessionGateRuntimeConfig};
 use super::valkey::{DistributedLeaseGuard, ValkeySessionGateBackend};
 
+/// Session-scoped foreground gate.
+///
+/// Calls sharing the same session id are serialized, while unrelated session
+/// ids can proceed concurrently.
 #[derive(Clone)]
 pub struct SessionGate {
     pub(super) inner: Arc<StdMutex<HashMap<String, Arc<SessionGateEntry>>>>,
@@ -63,7 +67,21 @@ impl Drop for SessionPermit {
 }
 
 impl SessionGate {
-    pub(crate) fn from_env() -> Result<Self> {
+    /// Build an in-memory gate with no distributed coordination backend.
+    #[must_use]
+    pub fn new_memory() -> Self {
+        Self {
+            inner: Arc::new(StdMutex::new(HashMap::new())),
+            backend: SessionGateBackend::Memory,
+        }
+    }
+
+    /// Build the gate from the current runtime environment and config.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when session-gate configuration is invalid.
+    pub fn from_env() -> Result<Self> {
         let runtime_config = SessionGateRuntimeConfig::from_env()?;
         let backend = match runtime_config.backend_mode {
             SessionGateBackendMode::Auto | SessionGateBackendMode::Memory => {
@@ -96,14 +114,44 @@ impl SessionGate {
         })
     }
 
-    pub(crate) fn backend_name(&self) -> &'static str {
+    /// Build a Valkey-backed gate for integration tests.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provided Valkey URL is invalid.
+    pub fn new_with_valkey_for_test(
+        valkey_url: String,
+        key_prefix: String,
+        lease_ttl_secs: u64,
+        acquire_timeout_secs: Option<u64>,
+    ) -> Result<Self> {
+        let backend = ValkeySessionGateBackend::new(
+            valkey_url.as_str(),
+            key_prefix.as_str(),
+            lease_ttl_secs,
+            acquire_timeout_secs,
+        )?;
+        Ok(Self {
+            inner: Arc::new(StdMutex::new(HashMap::new())),
+            backend: SessionGateBackend::Valkey(Arc::new(backend)),
+        })
+    }
+
+    /// Report the active backend label.
+    #[must_use]
+    pub fn backend_name(&self) -> &'static str {
         match self.backend {
             SessionGateBackend::Memory => "memory",
             SessionGateBackend::Valkey(_) => "valkey",
         }
     }
 
-    pub(crate) async fn acquire(&self, session_id: &str) -> Result<SessionGuard> {
+    /// Acquire the session gate for one logical session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when distributed lease acquisition fails.
+    pub async fn acquire(&self, session_id: &str) -> Result<SessionGuard> {
         let distributed_lease = match &self.backend {
             SessionGateBackend::Memory => None,
             SessionGateBackend::Valkey(backend) => Some(backend.acquire_lease(session_id).await?),
@@ -131,5 +179,21 @@ impl SessionGate {
                 entry,
             },
         })
+    }
+
+    /// Return the number of active session entries tracked in memory.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn active_sessions(&self) -> usize {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
+    }
+}
+
+impl Default for SessionGate {
+    fn default() -> Self {
+        Self::new_memory()
     }
 }

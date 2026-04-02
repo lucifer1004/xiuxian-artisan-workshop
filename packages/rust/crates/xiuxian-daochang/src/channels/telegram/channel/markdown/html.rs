@@ -160,6 +160,7 @@ impl HtmlRenderer {
 }
 
 #[must_use]
+/// Renders generic Markdown into Telegram-compatible HTML markup.
 pub fn markdown_to_telegram_html(markdown: &str) -> String {
     HtmlRenderer::default().render(markdown)
 }

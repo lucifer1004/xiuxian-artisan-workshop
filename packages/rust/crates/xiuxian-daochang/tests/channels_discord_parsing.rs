@@ -19,7 +19,7 @@
     clippy::similar_names
 )]
 
-use omni_agent::{Channel, DiscordChannel, DiscordSessionPartition};
+use xiuxian_daochang::{Channel, DiscordChannel, DiscordSessionPartition};
 
 macro_rules! parse_message {
     ($channel:expr, $event:expr, $context:literal) => {{

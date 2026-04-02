@@ -1,8 +1,7 @@
 //! Unified acceleration-device configuration for local model runtimes.
 //!
 //! This module provides one shared device selector (`auto`/`cpu`/`metal`/`cuda`)
-//! so both DeepSeek OCR and mistralrs in-process runtime can consume the same
-//! user intent from Xiuxian TOML or environment.
+//! for local runtime consumers that still need a unified platform decision.
 
 use std::path::Path;
 use std::sync::OnceLock;

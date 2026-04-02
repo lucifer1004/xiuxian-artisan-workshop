@@ -15,18 +15,10 @@ fn parse_backend_kind_supports_legacy_http_aliases() {
 }
 
 #[test]
-fn parse_backend_kind_supports_openai_and_mistral_sdk_aliases() {
+fn parse_backend_kind_supports_openai_aliases() {
     assert_eq!(
         parse_embedding_backend_kind(Some("openai_http")),
         Some(EmbeddingBackendKind::OpenAiHttp)
-    );
-    assert_eq!(
-        parse_embedding_backend_kind(Some("mistral_sdk")),
-        Some(EmbeddingBackendKind::MistralSdk)
-    );
-    assert_eq!(
-        parse_embedding_backend_kind(Some("mistral-inproc")),
-        Some(EmbeddingBackendKind::MistralSdk)
     );
 }
 

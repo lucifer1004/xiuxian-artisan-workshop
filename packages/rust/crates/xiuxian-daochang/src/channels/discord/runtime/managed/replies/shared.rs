@@ -57,10 +57,6 @@ pub(in super::super) fn format_optional_usize(value: Option<usize>) -> String {
     shared_replies::format_optional_usize(value)
 }
 
-pub(in super::super) fn format_optional_u32(value: Option<u32>) -> String {
-    shared_replies::format_optional_u32(value)
-}
-
 pub(in super::super) fn format_optional_f32(value: Option<f32>) -> String {
     shared_replies::format_optional_f32(value)
 }

@@ -31,20 +31,6 @@ pub struct ServiceMountMeta {
 }
 
 impl ServiceMountMeta {
-    /// Add endpoint metadata.
-    #[must_use]
-    pub fn endpoint(mut self, value: impl Into<String>) -> Self {
-        self.endpoint = Some(value.into());
-        self
-    }
-
-    /// Add storage metadata.
-    #[must_use]
-    pub fn storage(mut self, value: impl Into<String>) -> Self {
-        self.storage = Some(value.into());
-        self
-    }
-
     /// Add details metadata.
     #[must_use]
     pub fn detail(mut self, value: impl Into<String>) -> Self {
@@ -130,31 +116,8 @@ impl ServiceMountCatalog {
         self.records.push(record);
     }
 
+    #[cfg(test)]
     pub(crate) fn finish(self) -> Vec<ServiceMountRecord> {
-        let total = self.records.len();
-        let mounted = self
-            .records
-            .iter()
-            .filter(|record| record.status == ServiceMountStatus::Mounted)
-            .count();
-        let skipped = self
-            .records
-            .iter()
-            .filter(|record| record.status == ServiceMountStatus::Skipped)
-            .count();
-        let failed = self
-            .records
-            .iter()
-            .filter(|record| record.status == ServiceMountStatus::Failed)
-            .count();
-        tracing::info!(
-            event = "agent.service.mount.summary",
-            total,
-            mounted,
-            skipped,
-            failed,
-            "service mount summary"
-        );
         self.records
     }
 }

@@ -37,7 +37,7 @@
 mod telegram_media_support;
 
 use anyhow::Result;
-use omni_agent::{Channel, TelegramChannel};
+use xiuxian_daochang::{Channel, TelegramChannel};
 
 use telegram_media_support::{
     spawn_mock_telegram_media_api, spawn_mock_telegram_media_api_with_group_failure,

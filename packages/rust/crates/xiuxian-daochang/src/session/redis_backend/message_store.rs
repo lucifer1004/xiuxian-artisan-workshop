@@ -326,25 +326,6 @@ return count
         Ok(out)
     }
 
-    pub(crate) async fn get_messages_len(&self, session_id: &str) -> Result<usize> {
-        let key = self.messages_key(session_id);
-        let message_count = self
-            .run_command::<usize, _>("get_messages_len", || {
-                let mut cmd = redis::cmd("LLEN");
-                cmd.arg(&key);
-                cmd
-            })
-            .await?;
-        tracing::debug!(
-            event = SessionEvent::SessionMessagesLoaded.as_str(),
-            session_id,
-            loaded_messages = message_count,
-            count_only = true,
-            "valkey session message count loaded"
-        );
-        Ok(message_count)
-    }
-
     pub(crate) async fn clear_messages(&self, session_id: &str) -> Result<()> {
         let key = self.messages_key(session_id);
         let _ = self

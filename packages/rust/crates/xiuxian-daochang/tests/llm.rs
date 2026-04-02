@@ -10,12 +10,6 @@ mod http_request_tests;
 #[cfg(feature = "agent-provider-litellm")]
 #[path = "llm/litellm_custom_base_keys.rs"]
 mod litellm_custom_base_keys_tests;
-#[cfg(feature = "agent-provider-litellm")]
-#[path = "llm/litellm_ocr_probe.rs"]
-mod litellm_ocr_probe_tests;
-#[cfg(feature = "agent-provider-litellm")]
-#[path = "llm/litellm_ocr_recovery.rs"]
-mod litellm_ocr_recovery_tests;
 #[path = "llm/message_integrity.rs"]
 mod message_integrity_tests;
 #[path = "llm/provider_mode.rs"]

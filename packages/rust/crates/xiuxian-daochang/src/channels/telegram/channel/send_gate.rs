@@ -54,13 +54,6 @@ impl TelegramSendRateLimitBackend {
         Ok(Self::Valkey(Arc::new(backend)))
     }
 
-    pub(super) fn valkey(&self) -> Option<&Arc<ValkeyTelegramSendRateLimitBackend>> {
-        match self {
-            Self::Memory => None,
-            Self::Valkey(backend) => Some(backend),
-        }
-    }
-
     fn from_runtime_config(config: &TelegramSendRateLimitRuntimeConfig) -> Self {
         let Some(valkey_url) = config.valkey_url.as_deref() else {
             tracing::warn!(

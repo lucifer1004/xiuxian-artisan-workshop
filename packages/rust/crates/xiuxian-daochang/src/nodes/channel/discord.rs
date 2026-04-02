@@ -239,8 +239,7 @@ async fn run_discord_channel_mode(
         slash_command_policy,
     } = acl;
 
-    let effective_runtime_settings =
-        apply_channel_embedding_memory_guard(runtime_settings, "discord");
+    let effective_runtime_settings = apply_channel_embedding_memory_guard(runtime_settings);
     let agent = Arc::new(build_agent(&tool_config_path, &effective_runtime_settings).await?);
     let control_command_policy = DiscordControlCommandPolicy::new(
         admin_users,

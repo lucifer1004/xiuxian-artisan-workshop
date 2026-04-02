@@ -1,4 +1,4 @@
-use crate::agent::{SessionContextMode, SessionRecallFeedbackDirection};
+use crate::agent::SessionRecallFeedbackDirection;
 use crate::channels::managed_runtime::replies as shared_replies;
 use crate::jobs::{JobMetricsSnapshot, JobStatusSnapshot};
 
@@ -20,18 +20,6 @@ pub(in super::super) fn format_job_not_found(job_id: &str) -> String {
     shared_replies::format_job_not_found(job_id)
 }
 
-pub(in super::super) fn format_optional_usize(value: Option<usize>) -> String {
-    shared_replies::format_optional_usize(value)
-}
-
-pub(in super::super) fn format_optional_u32(value: Option<u32>) -> String {
-    shared_replies::format_optional_u32(value)
-}
-
-pub(in super::super) fn format_optional_f32(value: Option<f32>) -> String {
-    shared_replies::format_optional_f32(value)
-}
-
 pub(in super::super) fn format_job_status_json(snapshot: &JobStatusSnapshot) -> String {
     shared_replies::format_job_status_json(snapshot)
 }
@@ -42,13 +30,6 @@ pub(in super::super) fn format_job_metrics_json(metrics: &JobMetricsSnapshot) ->
 
 pub(in super::super) fn format_job_not_found_json(job_id: &str) -> String {
     shared_replies::format_job_not_found_json(job_id)
-}
-
-pub(in super::super) fn format_context_mode(mode: SessionContextMode) -> &'static str {
-    match mode {
-        SessionContextMode::Bounded => "bounded",
-        SessionContextMode::Unbounded => "unbounded",
-    }
 }
 
 pub(in super::super) fn format_session_feedback(
@@ -95,24 +76,4 @@ pub(in super::super) fn format_slash_help_json() -> String {
 
 pub(in super::super) fn format_command_error_json(command: &str, error: &str) -> String {
     shared_replies::format_command_error_json(command, error)
-}
-
-pub(in super::super) fn format_optional_bool(value: Option<bool>) -> String {
-    value.map_or_else(|| "-".to_string(), format_yes_no)
-}
-
-pub(in super::super) fn format_optional_str(value: Option<&str>) -> String {
-    value.map_or_else(|| "-".to_string(), ToString::to_string)
-}
-
-pub(in super::super) fn format_optional_string(value: Option<String>) -> String {
-    value.unwrap_or_else(|| "-".to_string())
-}
-
-pub(in super::super) fn format_yes_no(value: bool) -> String {
-    if value {
-        "yes".to_string()
-    } else {
-        "no".to_string()
-    }
 }

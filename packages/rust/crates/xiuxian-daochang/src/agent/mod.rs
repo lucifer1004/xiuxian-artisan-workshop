@@ -1,15 +1,12 @@
 //! One-turn agent loop: user message -> LLM (+ optional tools) -> `tool_calls` -> external tool call -> repeat.
 
 pub(crate) mod admission;
-mod bootstrap;
+pub(crate) mod bootstrap;
 mod consolidation;
 mod context_budget;
 mod context_budget_state;
-mod embedding_dimension;
 mod embedding_runtime;
 mod feedback;
-mod graph;
-mod graph_bridge;
 mod injection;
 pub(crate) mod logging;
 pub(crate) mod memory;
@@ -34,44 +31,22 @@ mod turn_execution;
 mod turn_support;
 pub(crate) mod zhenfa;
 
-use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 use xiuxian_memory_engine::EpisodeStore;
-use xiuxian_qianhuan::{HotReloadDriver, InjectionPolicy, InjectionSnapshot, ManifestationManager};
-use xiuxian_tokenizer::count_tokens;
+use xiuxian_qianhuan::HotReloadDriver;
 use xiuxian_zhixing::ZhixingHeyi;
 
 use crate::config::AgentConfig;
-use crate::contracts::{
-    GraphExecutionPlan, OmegaDecision, OmegaFallbackPolicy, OmegaRoute, RouteTrace,
-    RouteTraceInjection,
-};
 use crate::embedding::EmbeddingClient;
 use crate::llm::LlmClient;
-use crate::observability::SessionEvent;
-use crate::session::{BoundedSessionStore, ChatMessage, SessionStore, SessionSummarySegment};
-use crate::shortcuts::parse_react_shortcut;
-use embedding_dimension::{
-    EMBEDDING_SOURCE_EMBEDDING, EMBEDDING_SOURCE_EMBEDDING_REPAIRED, repair_embedding_dimension,
-};
-use embedding_runtime::EMBEDDING_SOURCE_UNAVAILABLE;
-use memory::{RecalledEpisodeCandidate, apply_recall_credit, select_recall_credit_candidates};
-use memory_recall::{
-    MEMORY_RECALL_MESSAGE_NAME, MemoryRecallInput, build_memory_context_message,
-    estimate_messages_tokens, filter_recalled_episodes, plan_memory_recall,
-};
-use memory_recall_feedback::{
-    RECALL_FEEDBACK_SOURCE_COMMAND, RecallOutcome, ToolExecutionSummary, apply_feedback_to_plan,
-    resolve_feedback_outcome, update_feedback_bias,
-};
+use crate::session::{BoundedSessionStore, SessionStore};
 use memory_state::{MemoryStateBackend, MemoryStateLoadStatus};
 use reflection::PolicyHintDirective;
-use system_prompt_injection_state::SYSTEM_PROMPT_INJECTION_CONTEXT_MESSAGE_NAME;
 
 const DEFAULT_MEMORY_EMBED_TIMEOUT: Duration = Duration::from_secs(3);
 const DEFAULT_MEMORY_EMBED_TIMEOUT_COOLDOWN: Duration = Duration::from_secs(20);
@@ -79,14 +54,10 @@ const MIN_MEMORY_EMBED_TIMEOUT_MS: u64 = 100;
 const MAX_MEMORY_EMBED_TIMEOUT_MS: u64 = 60_000;
 const MAX_MEMORY_EMBED_COOLDOWN_MS: u64 = 300_000;
 
-pub(crate) use admission::{
-    DownstreamAdmissionMetricsSnapshot, DownstreamAdmissionRuntimeSnapshot,
-    DownstreamInFlightSnapshot, DownstreamRuntimeSnapshot,
-};
+pub(crate) use admission::DownstreamAdmissionRuntimeSnapshot;
 pub use consolidation::summarise_drained_turns;
 pub use context_budget::prune_messages_for_token_budget;
 pub use context_budget_state::{SessionContextBudgetClassSnapshot, SessionContextBudgetSnapshot};
-pub use graph_bridge::{GraphBridgeRequest, GraphBridgeResult, validate_graph_bridge_request};
 pub use memory_recall_metrics::{MemoryRecallLatencyBucketsSnapshot, MemoryRecallMetricsSnapshot};
 pub use memory_recall_state::{SessionMemoryRecallDecision, SessionMemoryRecallSnapshot};
 pub use memory_state::MemoryRuntimeStatusSnapshot;
@@ -146,8 +117,6 @@ pub struct Agent {
     memory_decay_turn_counter: Arc<AtomicU64>,
     /// Native in-process tool registry.
     native_tools: Arc<NativeToolRegistry>,
-    /// Optional manifestation manager mounted by the Zhixing/Qianhuan runtime.
-    manifestation_manager: Option<Arc<ManifestationManager>>,
     /// Optional Zhixing-Heyi runtime mounted into the agent.
     heyi: Option<Arc<ZhixingHeyi>>,
     /// Optional in-process Zhenfa tool bridge.
@@ -156,12 +125,6 @@ pub struct Agent {
     downstream_admission_policy: admission::DownstreamAdmissionPolicy,
     /// Downstream saturation admission metrics.
     downstream_admission_metrics: admission::DownstreamAdmissionMetrics,
-    /// Per-attempt timeout for memory embedding requests.
-    memory_embed_timeout: Duration,
-    /// Cooldown window after an embedding timeout to avoid repeated long waits.
-    memory_embed_timeout_cooldown: Duration,
-    /// Unix timestamp millis until which embedding calls are rejected by cooldown policy.
-    memory_embed_timeout_cooldown_until_ms: AtomicU64,
     llm: LlmClient,
     tool_runtime: Option<crate::ToolClientPool>,
     memory_stream_consumer_task: Option<tokio::task::JoinHandle<()>>,
@@ -179,6 +142,8 @@ impl Drop for Agent {
 
 impl Agent {
     #[must_use]
+    /// Returns the mounted Zhixing-Heyi runtime when the agent was bootstrapped
+    /// with one.
     pub fn get_heyi(&self) -> Option<Arc<ZhixingHeyi>> {
         self.heyi.as_ref().map(Arc::clone)
     }

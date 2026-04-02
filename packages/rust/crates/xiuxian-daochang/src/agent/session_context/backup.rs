@@ -8,6 +8,13 @@ use super::types::{
 use super::{Agent, SessionContextStats, backup_metadata_session_id, now_unix_ms};
 
 impl Agent {
+    /// Moves the current session context into the backup slot and clears the
+    /// active context window.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the current session cannot be loaded, the backup
+    /// snapshot cannot be persisted, or the active session cannot be cleared.
     pub async fn reset_context_window(&self, session_id: &str) -> Result<SessionContextStats> {
         let backup = self.capture_session_backup(session_id).await?;
         let stats = backup.stats();
@@ -24,6 +31,12 @@ impl Agent {
         Ok(stats)
     }
 
+    /// Restores a previously backed-up session context into the active window.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the backup snapshot cannot be loaded, restored, or
+    /// cleaned up.
     pub async fn resume_context_window(
         &self,
         session_id: &str,
@@ -42,6 +55,13 @@ impl Agent {
         Ok(Some(stats))
     }
 
+    /// Returns metadata about the currently stored session-context backup, when
+    /// one exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the backup snapshot or its metadata cannot be
+    /// loaded.
     pub async fn peek_context_window_backup(
         &self,
         session_id: &str,
@@ -73,6 +93,12 @@ impl Agent {
         }))
     }
 
+    /// Deletes the stored backup for the given session, if present.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the backup snapshot or its metadata cannot be
+    /// loaded or cleared.
     pub async fn drop_context_window_backup(&self, session_id: &str) -> Result<bool> {
         let backup_session_id = super::backup_session_id(session_id);
         let backup = self.capture_session_backup(&backup_session_id).await?;

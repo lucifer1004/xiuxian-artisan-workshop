@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 
 use axum::routing::get;
 use axum::{Json, Router};
-use omni_agent::{Agent, AgentConfig, ToolServerEntry};
 use serde_json::json;
+use xiuxian_daochang::{Agent, AgentConfig, ToolServerEntry};
 
 fn config_for(base_url: &str, retries: u32) -> AgentConfig {
     AgentConfig {

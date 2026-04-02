@@ -4,9 +4,7 @@ use crate::gateway::studio::router::handlers::graph::tests::{
     assert_graph_neighbors_include_link_target, assert_graph_neighbors_include_path, build_fixture,
     build_fixture_with_projects, graph_neighbors_response, graph_neighbors_snapshot_payload,
 };
-use crate::gateway::studio::router::handlers::graph::{
-    GraphNeighborsQuery, graph_neighbors, node_neighbors,
-};
+use crate::gateway::studio::router::handlers::graph::{GraphNeighborsQuery, graph_neighbors};
 use crate::gateway::studio::test_support::assert_studio_json_snapshot;
 use crate::gateway::studio::types::UiProjectConfig;
 use axum::extract::{Path as AxumPath, Query, State};
@@ -88,26 +86,6 @@ async fn graph_neighbors_resolves_relative_markdown_links_from_index_pages() {
         "graph_neighbors_index_page_links_payload",
         graph_neighbors_snapshot_payload(response),
     );
-}
-
-#[tokio::test]
-async fn node_neighbors_returns_stable_payload_shape() {
-    let fixture = build_fixture(&[
-        ("alpha.md", "# Alpha\n\nSee [[beta]].\n"),
-        ("beta.md", "# Beta\n\nBody.\n"),
-    ]);
-
-    let response = node_neighbors(
-        State(Arc::clone(&fixture.state)),
-        AxumPath("kernel/alpha.md".to_string()),
-    )
-    .await
-    .unwrap_or_else(|error| panic!("node neighbors should succeed: {error:?}"))
-    .0;
-
-    assert_eq!(response.node_id, "kernel/alpha.md");
-    assert!(response.outgoing.contains(&"kernel/beta.md".to_string()));
-    assert_eq!(response.node_type, "doc");
 }
 
 #[tokio::test]

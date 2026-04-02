@@ -3,6 +3,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,6 +14,35 @@ use super::types::{
     GatewayState, MessageRequest, MessageResponse, OpenAiEmbeddingData, OpenAiEmbeddingUsage,
     OpenAiEmbeddingsRequest, OpenAiEmbeddingsResponse,
 };
+
+#[must_use]
+pub(crate) fn fallback_hash_embed_batch(inputs: &[String], dimension: usize) -> Vec<Vec<f32>> {
+    inputs
+        .iter()
+        .map(|input| fallback_hash_embed(input, dimension))
+        .collect()
+}
+
+fn fallback_hash_embed(input: &str, dimension: usize) -> Vec<f32> {
+    let mut vector = Vec::with_capacity(dimension);
+    let mut counter = 0u64;
+    while vector.len() < dimension {
+        let mut digest = Sha256::new();
+        digest.update(input.as_bytes());
+        digest.update(counter.to_le_bytes());
+        let bytes = digest.finalize();
+        for chunk in bytes.chunks_exact(4) {
+            if vector.len() == dimension {
+                break;
+            }
+            let raw = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            let normalized = (raw as f32) / (u32::MAX as f32);
+            vector.push(normalized * 2.0 - 1.0);
+        }
+        counter = counter.saturating_add(1);
+    }
+    vector
+}
 
 /// Validate request body; returns error for empty `session_id` or message.
 ///

@@ -1,7 +1,7 @@
 //! Test coverage for omni-agent behavior.
 
-use omni_agent::ChatMessage;
-use omni_agent::test_support::{ChatCompletionRequest, chat_completion_request_to_value};
+use xiuxian_daochang::ChatMessage;
+use xiuxian_daochang::test_support::{ChatCompletionRequest, chat_completion_request_to_value};
 
 fn sample_user_message() -> ChatMessage {
     ChatMessage {

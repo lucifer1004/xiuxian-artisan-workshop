@@ -28,6 +28,13 @@ pub enum OutputFormat {
     Json,
 }
 
+impl OutputFormat {
+    #[must_use]
+    pub const fn is_json(self) -> bool {
+        matches!(self, Self::Json)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobStatusCommand {
     pub job_id: String,

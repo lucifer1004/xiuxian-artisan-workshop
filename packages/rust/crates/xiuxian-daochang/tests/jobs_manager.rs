@@ -24,7 +24,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use omni_agent::{
+use xiuxian_daochang::{
     HeartbeatProbeState, JobCompletionKind, JobHealthState, JobManager, JobManagerConfig,
     JobMetricsSnapshot, JobState, TurnRunner, classify_heartbeat_probe_result, classify_job_health,
 };

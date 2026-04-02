@@ -37,7 +37,7 @@ pub struct RuntimeSettings {
 /// Agent-level settings section.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct AgentSettings {
-    /// Optional backend selector (for example `litellm`/`mistral_sdk`).
+    /// Optional backend selector (for example `litellm`).
     pub llm_backend: Option<String>,
     /// Agenda validation policy (`always`, `never`, `auto`).
     pub agenda_validation_policy: Option<String>,

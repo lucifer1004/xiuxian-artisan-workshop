@@ -1,15 +1,6 @@
 //! Runtime-agent factory integration harness.
 
-use xiuxian_daochang::{
-    LITELLM_DEFAULT_URL, RuntimeSettings, ToolServerEntry,
-    test_support::{
-        parse_embedding_backend_mode, resolve_inference_url,
-        resolve_runtime_embedding_backend_mode, resolve_runtime_embedding_base_url,
-        resolve_runtime_inference_url, resolve_runtime_memory_options, resolve_runtime_model,
-        validate_inference_url_origin,
-    },
-};
-use xiuxian_llm::embedding::backend::EmbeddingBackendKind as RuntimeEmbeddingBackendMode;
+use xiuxian_daochang::{RuntimeSettings, test_support::resolve_runtime_model};
 
 const _: fn(&RuntimeSettings) -> String = resolve_runtime_model;
 

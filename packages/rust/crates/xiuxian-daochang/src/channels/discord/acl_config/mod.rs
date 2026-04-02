@@ -14,26 +14,44 @@ mod principals;
 mod role_aliases;
 mod slash;
 
+/// Runtime ACL overrides derived from the Discord configuration surface.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DiscordAclOverrides {
+    /// Explicitly allowed Discord user IDs after principal expansion.
     pub allowed_users: Vec<String>,
+    /// Explicitly allowed Discord guild IDs after principal expansion.
     pub allowed_guilds: Vec<String>,
+    /// Optional global admin principal list after alias expansion.
     pub admin_users: Option<Vec<String>>,
+    /// Optional global allow-list for privileged text control commands.
     pub control_command_allow_from: Option<Vec<String>>,
+    /// Per-command control ACL rules compiled for runtime checks.
     pub control_command_rules: Vec<DiscordCommandAdminRule>,
+    /// Optional allow-list for all slash commands.
     pub slash_command_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/session status`.
     pub slash_session_status_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/session budget`.
     pub slash_session_budget_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/session memory`.
     pub slash_session_memory_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/session feedback`.
     pub slash_session_feedback_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/job`.
     pub slash_job_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/jobs`.
     pub slash_jobs_allow_from: Option<Vec<String>>,
+    /// Optional allow-list for `/bg`.
     pub slash_bg_allow_from: Option<Vec<String>>,
 }
 
 /// Build Discord runtime ACL overrides from settings.
 ///
+/// Normalizes configured principals, role aliases, and slash-command overrides
+/// into one runtime structure used by Discord authorization checks.
+///
 /// # Errors
+///
 /// Returns an error when ACL command-rule parsing fails.
 pub fn build_discord_acl_overrides(
     settings: &RuntimeSettings,

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
 use super::config::{DEFAULT_SESSION_KEY_PREFIX, RedisSessionConfig, RedisSessionRuntimeSnapshot};
 
@@ -22,7 +22,6 @@ pub(crate) struct RedisSessionBackend {
     pub(super) ttl_secs: Option<u64>,
     pub(super) message_content_max_chars: Option<usize>,
     pub(super) connection: Arc<RwLock<Option<redis::aio::MultiplexedConnection>>>,
-    pub(super) reconnect_lock: Arc<Mutex<()>>,
 }
 
 impl RedisSessionBackend {
@@ -41,7 +40,6 @@ impl RedisSessionBackend {
             ttl_secs: cfg.ttl_secs,
             message_content_max_chars: cfg.message_content_max_chars,
             connection: Arc::new(RwLock::new(None)),
-            reconnect_lock: Arc::new(Mutex::new(())),
         })
     }
 

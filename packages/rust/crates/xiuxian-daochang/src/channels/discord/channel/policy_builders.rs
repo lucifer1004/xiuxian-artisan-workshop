@@ -41,16 +41,6 @@ pub(super) fn normalize_allowed_guild_entries(entries: Vec<String>) -> Vec<Strin
         .collect()
 }
 
-pub(super) fn normalize_control_command_policy(
-    policy: ControlCommandPolicy<DiscordCommandAdminRule>,
-) -> ControlCommandPolicy<DiscordCommandAdminRule> {
-    ControlCommandPolicy::new(
-        normalize_allowed_user_entries(policy.admin_users),
-        normalize_optional_allowed_user_entries(policy.control_command_allow_from),
-        policy.rules,
-    )
-}
-
 pub(super) fn build_slash_command_policy(
     admin_users: Vec<String>,
     slash_policy: DiscordSlashCommandPolicy,

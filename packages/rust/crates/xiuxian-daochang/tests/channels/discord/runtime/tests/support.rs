@@ -3,13 +3,14 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use tokio::sync::{Mutex, RwLock, mpsc};
-
-use crate::agent::Agent;
-use crate::channels::traits::{Channel, ChannelMessage};
-use crate::config::AgentConfig;
-use crate::jobs::{JobManager, JobManagerConfig, TurnRunner};
-
-pub(super) use super::super::dispatch::process_discord_message;
+pub(super) use xiuxian_daochang::test_support::{
+    DiscordForegroundInterruptController as ForegroundInterruptController,
+    build_discord_foreground_runtime, process_discord_message,
+    process_discord_message_with_interrupt,
+};
+use xiuxian_daochang::{
+    Agent, AgentConfig, Channel, ChannelMessage, JobManager, JobManagerConfig, TurnRunner,
+};
 
 #[derive(Default)]
 pub(super) struct MockChannel {
@@ -99,14 +100,19 @@ pub(super) fn inbound(content: &str) -> ChannelMessage {
         recipient: "2001".to_string(),
         session_key: "3001:2001:1001".to_string(),
         content: content.to_string(),
+        attachments: Vec::new(),
         channel: "discord".to_string(),
         timestamp: 0,
     }
 }
 
 pub(super) async fn build_agent() -> Result<Arc<Agent>> {
+    build_agent_with_inference_url("http://127.0.0.1:1/v1/chat/completions").await
+}
+
+pub(super) async fn build_agent_with_inference_url(inference_url: &str) -> Result<Arc<Agent>> {
     let config = AgentConfig {
-        inference_url: "http://127.0.0.1:1/v1/chat/completions".to_string(),
+        inference_url: inference_url.to_string(),
         model: "gpt-4o-mini".to_string(),
         api_key: None,
         max_tool_rounds: 1,
@@ -115,7 +121,13 @@ pub(super) async fn build_agent() -> Result<Arc<Agent>> {
     Ok(Arc::new(Agent::from_config(config).await?))
 }
 
-pub(super) fn start_job_manager(agent: Arc<Agent>) -> Arc<JobManager> {
+pub(super) fn inbound_for_session(content: &str, session_key: &str) -> ChannelMessage {
+    let mut message = inbound(content);
+    message.session_key = session_key.to_string();
+    message
+}
+
+pub(super) fn start_job_manager(agent: &Arc<Agent>) -> Arc<JobManager> {
     let runner: Arc<dyn TurnRunner> = agent.clone();
     let (manager, _completion_rx) = JobManager::start(runner, JobManagerConfig::default());
     manager

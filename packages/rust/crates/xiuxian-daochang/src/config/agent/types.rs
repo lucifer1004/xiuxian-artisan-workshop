@@ -29,8 +29,6 @@ pub struct MemoryConfig {
     /// Supported values:
     /// - `http`: legacy `/embed/batch` endpoint
     /// - `openai_http`: generic OpenAI-compatible `/v1/embeddings` endpoint
-    /// - `mistral_sdk` (aliases: `mistral-inproc`, `mistral_inproc`): in-process `mistralrs`
-    ///   SDK embedding runtime (model loaded in Rust process)
     /// - `litellm_rs`: Rust `litellm-rs` provider path
     ///   (provider/API-key oriented; no-key mode stays on Rust HTTP paths)
     ///

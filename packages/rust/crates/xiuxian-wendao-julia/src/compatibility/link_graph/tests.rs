@@ -6,20 +6,27 @@ use xiuxian_wendao_core::{
 use super::{
     DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH,
     DEFAULT_JULIA_DEPLOYMENT_ARTIFACT_SCHEMA_VERSION, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
-    JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_PLUGIN_ID, JULIA_RERANK_CAPABILITY_ID,
+    JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_GRAPH_STRUCTURAL_CAPABILITY_ID, JULIA_PLUGIN_ID,
+    JULIA_RERANK_CAPABILITY_ID,
     LinkGraphJuliaAnalyzerLaunchManifest, LinkGraphJuliaAnalyzerServiceDescriptor,
     LinkGraphJuliaDeploymentArtifact, LinkGraphJuliaRerankRuntimeConfig,
     build_rerank_provider_binding, julia_deployment_artifact_selector,
-    julia_rerank_provider_selector,
+    julia_graph_structural_provider_selector, julia_rerank_provider_selector,
 };
 
 #[test]
 fn selectors_keep_stable_julia_ids() {
     let provider = julia_rerank_provider_selector();
+    let graph_structural = julia_graph_structural_provider_selector();
     let artifact = julia_deployment_artifact_selector();
 
     assert_eq!(provider.provider.0, JULIA_PLUGIN_ID);
     assert_eq!(provider.capability_id.0, JULIA_RERANK_CAPABILITY_ID);
+    assert_eq!(graph_structural.provider.0, JULIA_PLUGIN_ID);
+    assert_eq!(
+        graph_structural.capability_id.0,
+        JULIA_GRAPH_STRUCTURAL_CAPABILITY_ID
+    );
     assert_eq!(artifact.plugin_id.0, JULIA_PLUGIN_ID);
     assert_eq!(artifact.artifact_id.0, JULIA_DEPLOYMENT_ARTIFACT_ID);
 }

@@ -124,7 +124,7 @@ impl MemoryStateBackend {
         self.as_store().strict_startup()
     }
 
-    pub(super) fn load(&self, store: &EpisodeStore) -> Result<()> {
+    pub(super) fn load(&self, store: &mut EpisodeStore) -> Result<()> {
         self.as_store().load(store)
     }
 

@@ -154,7 +154,7 @@ impl Agent {
                 role: "tool".to_string(),
                 content: Some(output.text),
                 tool_calls: None,
-                tool_call_id: Some(tool_call.id.clone()),
+                tool_call_id: output.tool_call_id.or_else(|| Some(tool_call.id.clone())),
                 name: Some(name),
             });
         }

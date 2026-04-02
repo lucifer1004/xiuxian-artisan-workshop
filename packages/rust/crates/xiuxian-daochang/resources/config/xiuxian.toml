@@ -7,9 +7,7 @@ default_provider = "minimax"
 default_model = "MiniMax-M2.5"
 
 [llm.acceleration]
-# Unified local acceleration switch consumed by:
-# - xiuxian-llm DeepSeek OCR runtime
-# - xiuxian-llm mistralrs in-process embedding runtime
+# Unified acceleration switch for provider runtimes that expose device selection.
 # Values: "auto" | "cpu" | "metal" | "cuda"
 device = "auto"
 
@@ -41,26 +39,6 @@ api_key = "ANTHROPIC_API_KEY"
 [llm.providers.deepseek]
 base_url = "https://api.deepseek.com/v1"
 api_key = "DEEPSEEK_API_KEY"
-
-[llm.vision.deepseek]
-# OCR2 local model root (relative to PRJ_ROOT when not absolute).
-model_root = ".data/models/deepseek-ocr-2"
-# Optional overrides:
-# weights_path = ".data/models/deepseek-ocr-2/model-00001-of-000001.safetensors"
-# snapshot_path = ".data/models/deepseek-ocr-2/DeepSeek-OCR.Q4_K.dsq"
-device = "auto"
-base_size = 448
-image_size = 448
-crop_mode = true
-max_new_tokens = 1024
-
-[llm.vision.deepseek.cache]
-local_max_entries = 1024
-key_prefix = "xiuxian:vision:ocr:v1"
-ttl_seconds = 3600
-timeout_ms = 200
-# Optional distributed cache override:
-# valkey_url = "redis://127.0.0.1:6379/0"
 
 [agent]
 # Agenda validation preflight mode:
@@ -118,33 +96,24 @@ bind = "127.0.0.1:18092"
 
 [llm.embedding]
 # Rust embedding backend mode:
-# - mistral_sdk: in-process mistralrs SDK (loads model directly in agent process)
 # - litellm_rs: provider routing (cloud/API providers, no local lifecycle)
-backend = "mistral_sdk"
+backend = "litellm_rs"
 max_in_flight = 64
 batch_max_size = 128
 batch_max_concurrency = 8
-model = "Qwen/Qwen3-Embedding-0.6B"
+litellm_model = "ollama/Qwen/Qwen3-Embedding-0.6B"
+model = "ollama/Qwen/Qwen3-Embedding-0.6B"
+litellm_api_base = "http://127.0.0.1:11434"
 dimension = 1024
 timeout = 60
 
 [memory]
-# Memory embedding should follow the same local runtime role.
-embedding_backend = "mistral_sdk"
-embedding_model = "Qwen/Qwen3-Embedding-0.6B"
+# Memory embedding should follow the same provider-routed backend.
+embedding_backend = "litellm_rs"
+embedding_model = "ollama/Qwen/Qwen3-Embedding-0.6B"
 embedding_dim = 1024
 embedding_timeout_ms = 60000
 embedding_timeout_cooldown_ms = 20000
-
-[llm.mistral]
-# Optional for backend=mistral_sdk:
-# HF cache root used by mistralrs to store/reuse model downloads.
-# This path must be a HuggingFace cache layout, not an Ollama manifests path.
-# sdk_hf_cache_path = ".data/models/hf-cache"
-# Optional HF revision pin (for example: "main", "refs/pr/1").
-# sdk_hf_revision = "main"
-# Optional max embedding scheduler sequence concurrency for mistralrs.
-sdk_embedding_max_num_seqs = 128
 
 # External dependency manifests used by xiuxian-wendao dependency indexer.
 [[ast_symbols_external]]

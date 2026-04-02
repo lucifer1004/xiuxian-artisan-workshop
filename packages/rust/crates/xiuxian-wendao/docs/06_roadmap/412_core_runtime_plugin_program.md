@@ -1539,6 +1539,16 @@ extract_markdown_config_blocks}`
 91. the governed next slice is therefore no longer graph-neighbor cutover; it
     is the remaining `graph/vfs` family utility surface, followed by the
     larger docs/repo families
+92. the first remaining `graph/vfs` utility retirement slice is now landed:
+    - dead legacy `/api/neighbors/{id}` is removed from the outward router and
+      bundled OpenAPI document
+    - backend `node_neighbors` handler/type/export residue is removed from the
+      active Studio router surface
+    - `.data/wendao-frontend` no longer exposes the unused `NodeNeighbors`
+      client transport surface
+    - canonical `/graph/neighbors` Flight behavior is unchanged, and
+      `/api/topology/3d` plus `/api/vfs*` remain the next bounded utility
+      audit surfaces
 
 ## Governance Rule
 

@@ -53,6 +53,12 @@ Formal surface classes:
    - process liveness/bootstrap, operator config/status/control, and static
      artifact inspection
 
+Arrow IPC is not a third formal surface in this classification. Flight
+business calls still serialize record batches as Arrow IPC stream frames, so
+IPC encode/decode helpers remain protocol-intrinsic implementation detail.
+The remaining retirement debt is only the standalone IPC business transport
+vocabulary such as `ArrowIpcHttp` or `LocalProcessArrowIpc`.
+
 The current Stage-A classification snapshot is:
 
 | Formal class            | Current live family                                                                                                                                                                                      | Current physical transport reality                                                                         | Migration interpretation                                                                                   |
@@ -173,6 +179,13 @@ Current concrete Flight replacement reality:
     workspace Flight snapshot now locks `/graph/neighbors`, and the old
     `/api/graph/neighbors/{id}` HTTP business route is removed from the
     outward router and bundled OpenAPI surface
+22. the first remaining `graph/vfs` utility retirement slice is now also
+    landed: the dead legacy `/api/neighbors/{id}` route is removed from the
+    outward router and bundled OpenAPI surface, backend `node_neighbors`
+    handler/type residue is deleted, frontend `NodeNeighbors` client residue is
+    deleted, and `/graph/neighbors` remains the only live graph-neighbor read
+    surface while `/api/topology/3d` and `/api/vfs*` stay queued as separate
+    bounded utility slices
 
 Bounded Stage-A retirement mapping:
 

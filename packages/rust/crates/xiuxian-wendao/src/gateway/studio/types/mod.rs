@@ -38,8 +38,8 @@ pub use definitions::{
 };
 pub use error::ApiError;
 pub use graph::{
-    GraphLink, GraphNeighborsResponse, GraphNode, NodeNeighbors, Topology3dPayload,
-    TopologyCluster, TopologyLink, TopologyNode,
+    GraphLink, GraphNeighborsResponse, GraphNode, Topology3dPayload, TopologyCluster, TopologyLink,
+    TopologyNode,
 };
 pub use navigation::StudioNavigationTarget;
 pub use retrieval::{RetrievalChunk, RetrievalChunkSurface};

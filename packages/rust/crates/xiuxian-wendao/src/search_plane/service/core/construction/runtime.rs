@@ -72,6 +72,7 @@ impl SearchPlaneService {
             repo_search_dispatch: Arc::new(Mutex::new(
                 crate::search_plane::service::core::types::RepoSearchDispatchRuntime::default(),
             )),
+            repo_runtime_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             local_maintenance: Arc::new(Mutex::new(
                 crate::search_plane::service::core::types::LocalMaintenanceRuntime::default(),
             )),

@@ -1,0 +1,61 @@
+//! Memory recall metrics helpers exposed for integration tests.
+
+use crate::SessionMemoryRecallDecision;
+use crate::agent::memory_recall_metrics::{MemoryRecallMetricsSnapshot, MemoryRecallMetricsState};
+
+#[must_use]
+pub fn ratio_as_f32(numerator: u64, denominator: u64) -> f32 {
+    if denominator == 0 {
+        return 0.0;
+    }
+    numerator as f32 / denominator as f32
+}
+
+#[derive(Default)]
+pub struct TestMemoryRecallMetricsState {
+    inner: MemoryRecallMetricsState,
+}
+
+impl TestMemoryRecallMetricsState {
+    pub fn observe_plan(&mut self) {
+        self.inner.observe_plan();
+    }
+
+    pub fn observe_result(
+        &mut self,
+        decision: SessionMemoryRecallDecision,
+        recalled_selected: usize,
+        recalled_injected: usize,
+        context_chars_injected: usize,
+        pipeline_duration_ms: u64,
+    ) {
+        self.inner.observe_result(
+            decision,
+            recalled_selected,
+            recalled_injected,
+            context_chars_injected,
+            pipeline_duration_ms,
+        );
+    }
+
+    pub fn observe_embedding_success(&mut self) {
+        self.inner.observe_embedding_success();
+    }
+
+    pub fn observe_embedding_timeout(&mut self) {
+        self.inner.observe_embedding_timeout();
+    }
+
+    pub fn observe_embedding_cooldown_reject(&mut self) {
+        self.inner.observe_embedding_cooldown_reject();
+    }
+
+    pub fn observe_embedding_unavailable(&mut self) {
+        self.inner.observe_embedding_unavailable();
+    }
+
+    #[must_use]
+    pub fn snapshot(self) -> MemoryRecallMetricsSnapshot {
+        self.inner.snapshot()
+    }
+}

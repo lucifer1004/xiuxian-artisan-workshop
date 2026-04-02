@@ -10,9 +10,7 @@ use xiuxian_llm::llm::providers::{
     resolve_positive_usize_env,
 };
 
-use super::{
-    LiteLlmDispatchConfig, build_ocr_truth_overlay_text, infer_deepseek_ocr_truth_markdown,
-};
+use super::LiteLlmDispatchConfig;
 
 pub(super) async fn chat_anthropic_without_model_registry(
     config: &LiteLlmDispatchConfig<'_>,
@@ -50,11 +48,7 @@ pub(super) async fn chat_anthropic_without_model_registry(
         api_key.as_str(),
         &request,
         attempts,
-        |source| async move {
-            infer_deepseek_ocr_truth_markdown(&source)
-                .await
-                .map(|ocr_truth| build_ocr_truth_overlay_text(ocr_truth.as_str()))
-        },
+        |_source| async move { None },
     )
     .await
     .map_err(|error| {

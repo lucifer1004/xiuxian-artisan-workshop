@@ -3,12 +3,11 @@ use xiuxian_daochang::RuntimeSettings;
 use super::common::apply_channel_embedding_memory_guard_for_tests;
 
 #[test]
-fn channel_forces_http_embedding_backend_when_runtime_defaults_to_mistral_sdk() {
+fn channel_preserves_configured_http_embedding_backend() {
     let mut settings = RuntimeSettings::default();
-    settings.embedding.backend = Some("mistral_sdk".to_string());
+    settings.embedding.backend = Some("http".to_string());
 
-    let resolved =
-        apply_channel_embedding_memory_guard_for_tests(&settings, None, None, false, "telegram");
+    let resolved = apply_channel_embedding_memory_guard_for_tests(&settings, None, None, false);
 
     assert_eq!(resolved.memory.embedding_backend.as_deref(), Some("http"));
 }
@@ -16,32 +15,10 @@ fn channel_forces_http_embedding_backend_when_runtime_defaults_to_mistral_sdk() 
 #[test]
 fn channel_respects_explicit_memory_backend_env_override() {
     let mut settings = RuntimeSettings::default();
-    settings.memory.embedding_backend = Some("mistral_sdk".to_string());
-
-    let resolved = apply_channel_embedding_memory_guard_for_tests(
-        &settings,
-        Some("mistral_sdk"),
-        None,
-        false,
-        "telegram",
-    );
-
-    assert_eq!(
-        resolved.memory.embedding_backend.as_deref(),
-        Some("mistral_sdk")
-    );
-}
-
-#[test]
-fn channel_respects_allow_inproc_embed_flag() {
-    let mut settings = RuntimeSettings::default();
-    settings.memory.embedding_backend = Some("mistral_sdk".to_string());
+    settings.memory.embedding_backend = Some("http".to_string());
 
     let resolved =
-        apply_channel_embedding_memory_guard_for_tests(&settings, None, None, true, "discord");
+        apply_channel_embedding_memory_guard_for_tests(&settings, Some("http"), None, false);
 
-    assert_eq!(
-        resolved.memory.embedding_backend.as_deref(),
-        Some("mistral_sdk")
-    );
+    assert_eq!(resolved.memory.embedding_backend.as_deref(), Some("http"));
 }

@@ -70,14 +70,10 @@ define_native_tool! {
             .as_ref()
             .and_then(|a| a.get("scheduled_at"))
             .and_then(|v| v.as_str().map(ToString::to_string));
-        let reminder_recipient =
+        let _reminder_recipient =
             reminder_recipient_from_session_id(context.session_id.as_deref());
 
-        // Use the specialized add_task method to handle exact time manifestations
-        let result = tool
-            .heyi
-            .add_task(&title, scheduled_at, reminder_recipient)
-            .await?;
+        let result = tool.heyi.add_task(&title, scheduled_at).await?;
         Ok(result)
     })
 }

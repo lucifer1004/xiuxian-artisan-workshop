@@ -7,6 +7,55 @@ use crate::search_plane::{
 };
 
 impl SearchPlaneService {
+    fn merge_persisted_repo_corpus_record(
+        current: &mut SearchRepoCorpusRecord,
+        persisted: SearchRepoCorpusRecord,
+    ) -> bool {
+        let mut changed = false;
+        if current.publication.is_none() && persisted.publication.is_some() {
+            current.publication = persisted.publication;
+            changed = true;
+        }
+        if current.maintenance.is_none() && persisted.maintenance.is_some() {
+            current.maintenance = persisted.maintenance;
+            changed = true;
+        }
+        changed
+    }
+
+    async fn recover_persisted_repo_corpus_record_for_reads(
+        &self,
+        record: SearchRepoCorpusRecord,
+    ) -> (SearchRepoCorpusRecord, bool) {
+        let (mut record, mut changed) = self.reconcile_repo_corpus_record_for_reads(record);
+        if record.publication.is_some() {
+            return (record, changed);
+        }
+
+        if let Some(cache_record) = self
+            .cache
+            .get_repo_corpus_record(record.corpus, record.repo_id.as_str())
+            .await
+        {
+            let (cache_record, cache_changed) =
+                self.reconcile_repo_corpus_record_for_reads(cache_record);
+            changed |= cache_changed;
+            changed |= Self::merge_persisted_repo_corpus_record(&mut record, cache_record);
+        }
+
+        if record.publication.is_none()
+            && let Some(local_record) =
+                self.load_local_repo_corpus_record(record.corpus, record.repo_id.as_str())
+        {
+            let (local_record, local_changed) =
+                self.reconcile_repo_corpus_record_for_reads(local_record);
+            changed |= local_changed;
+            changed |= Self::merge_persisted_repo_corpus_record(&mut record, local_record);
+        }
+
+        (record, changed)
+    }
+
     #[cfg(test)]
     pub(crate) async fn repo_search_publication_state(
         &self,
@@ -124,7 +173,7 @@ impl SearchPlaneService {
             let mut changed_records = Vec::new();
             let mut records = BTreeMap::new();
             for (key, record) in current {
-                let (record, changed) = self.reconcile_repo_corpus_record_for_reads(record);
+                let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
                 if changed {
                     changed_records.push(record.clone());
                 }
@@ -149,7 +198,7 @@ impl SearchPlaneService {
         if let Some(snapshot) = self.cache.get_repo_corpus_snapshot().await {
             let mut records = BTreeMap::new();
             for record in snapshot.records {
-                let (record, _) = self.reconcile_repo_corpus_record_for_reads(record);
+                let (record, _) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
                 records.insert((record.corpus, record.repo_id.clone()), record);
             }
             *self
@@ -161,7 +210,7 @@ impl SearchPlaneService {
         if let Some(snapshot) = self.load_local_repo_corpus_snapshot() {
             let mut records = BTreeMap::new();
             for record in snapshot.records {
-                let (record, _) = self.reconcile_repo_corpus_record_for_reads(record);
+                let (record, _) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
                 records.insert((record.corpus, record.repo_id.clone()), record);
             }
             *self
@@ -179,7 +228,7 @@ impl SearchPlaneService {
         repo_id: &str,
     ) -> Option<SearchRepoCorpusRecord> {
         if let Some(record) = self.cached_repo_corpus_record(corpus, repo_id) {
-            let (record, changed) = self.reconcile_repo_corpus_record_for_reads(record);
+            let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
             if changed {
                 self.repo_corpus_records
                     .write()
@@ -190,17 +239,7 @@ impl SearchPlaneService {
             return Some(record);
         }
         if let Some(record) = self.cache.get_repo_corpus_record(corpus, repo_id).await {
-            let (mut record, mut changed) = self.reconcile_repo_corpus_record_for_reads(record);
-            if record.publication.is_none()
-                && let Some(local_record) = self.load_local_repo_corpus_record(corpus, repo_id)
-            {
-                let (local_record, local_changed) =
-                    self.reconcile_repo_corpus_record_for_reads(local_record);
-                if local_record.publication.is_some() {
-                    record = local_record;
-                    changed |= local_changed;
-                }
-            }
+            let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
             self.repo_corpus_records
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -211,7 +250,7 @@ impl SearchPlaneService {
             return Some(record);
         }
         if let Some(record) = self.load_local_repo_corpus_record(corpus, repo_id) {
-            let (record, changed) = self.reconcile_repo_corpus_record_for_reads(record);
+            let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
             self.repo_corpus_records
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -227,7 +266,7 @@ impl SearchPlaneService {
             .get(&(corpus, repo_id.to_string()))
             .cloned()
         {
-            let (record, changed) = self.reconcile_repo_corpus_record_for_reads(record);
+            let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
             self.repo_corpus_records
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)

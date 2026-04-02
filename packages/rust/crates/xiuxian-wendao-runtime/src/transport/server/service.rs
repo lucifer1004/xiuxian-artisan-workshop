@@ -17,9 +17,8 @@ use xiuxian_vector::LanceRecordBatch;
 
 use crate::transport::query_contract::{
     ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_ROUTE, REPO_SEARCH_ROUTE,
-    SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE,
-    SEARCH_DEFINITION_ROUTE, VFS_RESOLVE_ROUTE, validate_rerank_request_batch,
-    validate_rerank_response_batch,
+    SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE, SEARCH_DEFINITION_ROUTE,
+    VFS_RESOLVE_ROUTE, validate_rerank_request_batch, validate_rerank_response_batch,
 };
 
 use super::request_metadata::{
@@ -28,9 +27,8 @@ use super::request_metadata::{
     validate_code_ast_analysis_request_metadata, validate_definition_request_metadata,
     validate_graph_neighbors_request_metadata, validate_markdown_analysis_request_metadata,
     validate_repo_search_request_metadata, validate_rerank_dimension_header,
-    validate_rerank_min_final_score_header, validate_rerank_top_k_header,
-    validate_schema_version, validate_search_request_metadata,
-    validate_vfs_resolve_request_metadata,
+    validate_rerank_min_final_score_header, validate_rerank_top_k_header, validate_schema_version,
+    validate_search_request_metadata, validate_vfs_resolve_request_metadata,
 };
 use super::types::{
     ActionResultStream, ActionTypeStream, AstSearchFlightRouteProvider,
@@ -43,7 +41,7 @@ use super::types::{
 };
 use crate::transport::RerankScoreWeights;
 
-const MAX_PENDING_ROUTE_PAYLOADS: usize = 128;
+const MAX_CACHED_ROUTE_PAYLOADS: usize = 128;
 
 /// Runtime-owned minimal Wendao Flight service surface for the stable query and
 /// rerank routes.
@@ -64,10 +62,11 @@ pub struct WendaoFlightService {
     route_payload_cache: Arc<FlightRoutePayloadCache>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct FlightRoutePayload {
     batch: LanceRecordBatch,
     app_metadata: Vec<u8>,
+    encoded_do_get_frames: Mutex<Option<Arc<Vec<FlightData>>>>,
 }
 
 impl FlightRoutePayload {
@@ -75,26 +74,69 @@ impl FlightRoutePayload {
         Self {
             batch,
             app_metadata: Vec::new(),
+            encoded_do_get_frames: Mutex::new(None),
         }
     }
+
+    fn with_app_metadata(batch: LanceRecordBatch, app_metadata: Vec<u8>) -> Self {
+        Self {
+            batch,
+            app_metadata,
+            encoded_do_get_frames: Mutex::new(None),
+        }
+    }
+
+    async fn do_get_frames(&self) -> Result<Arc<Vec<FlightData>>, Status> {
+        if let Some(cached) = self.encoded_do_get_frames.lock().await.as_ref().cloned() {
+            return Ok(cached);
+        }
+
+        let encoded = Arc::new(encode_do_get_frames(self.batch.clone()).await?);
+        let mut cached_frames = self.encoded_do_get_frames.lock().await;
+        if let Some(cached) = cached_frames.as_ref().cloned() {
+            return Ok(cached);
+        }
+        *cached_frames = Some(Arc::clone(&encoded));
+        Ok(encoded)
+    }
+}
+
+async fn encode_do_get_frames(batch: LanceRecordBatch) -> Result<Vec<FlightData>, Status> {
+    FlightDataEncoderBuilder::new()
+        .build(stream::iter(vec![Ok::<
+            LanceRecordBatch,
+            arrow_flight::error::FlightError,
+        >(batch)]))
+        .map(|item| item.map_err(|error| Status::internal(error.to_string())))
+        .try_collect::<Vec<_>>()
+        .await
 }
 
 #[derive(Debug, Default)]
 struct FlightRoutePayloadCache {
-    payloads: Mutex<HashMap<String, FlightRoutePayload>>,
+    payloads: Mutex<HashMap<String, Arc<FlightRoutePayload>>>,
 }
 
 impl FlightRoutePayloadCache {
-    async fn insert(&self, cache_key: String, payload: FlightRoutePayload) {
+    async fn insert(
+        &self,
+        cache_key: String,
+        payload: FlightRoutePayload,
+    ) -> Arc<FlightRoutePayload> {
         let mut payloads = self.payloads.lock().await;
-        if payloads.len() >= MAX_PENDING_ROUTE_PAYLOADS {
+        if let Some(cached) = payloads.get(&cache_key) {
+            return Arc::clone(cached);
+        }
+        if payloads.len() >= MAX_CACHED_ROUTE_PAYLOADS {
             payloads.clear();
         }
-        payloads.insert(cache_key, payload);
+        let payload = Arc::new(payload);
+        payloads.insert(cache_key, Arc::clone(&payload));
+        payload
     }
 
-    async fn take(&self, cache_key: &str) -> Option<FlightRoutePayload> {
-        self.payloads.lock().await.remove(cache_key)
+    async fn get(&self, cache_key: &str) -> Option<Arc<FlightRoutePayload>> {
+        self.payloads.lock().await.get(cache_key).cloned()
     }
 }
 
@@ -378,9 +420,8 @@ impl WendaoFlightService {
             provider
                 .definition_batch(query_text.as_str(), source_path.as_deref(), source_line)
                 .await
-                .map(|response| FlightRoutePayload {
-                    batch: response.batch,
-                    app_metadata: response.app_metadata,
+                .map(|response| {
+                    FlightRoutePayload::with_app_metadata(response.batch, response.app_metadata)
                 })
         } else if route == SEARCH_AUTOCOMPLETE_ROUTE {
             let (prefix, limit) = autocomplete_request.ok_or_else(|| {
@@ -394,9 +435,8 @@ impl WendaoFlightService {
             provider
                 .autocomplete_batch(prefix.as_str(), limit)
                 .await
-                .map(|response| FlightRoutePayload {
-                    batch: response.batch,
-                    app_metadata: response.app_metadata,
+                .map(|response| {
+                    FlightRoutePayload::with_app_metadata(response.batch, response.app_metadata)
                 })
         } else if route == VFS_RESOLVE_ROUTE {
             let path = vfs_resolve_request.ok_or_else(|| {
@@ -410,9 +450,8 @@ impl WendaoFlightService {
             provider
                 .resolve_vfs_navigation_batch(path.as_str())
                 .await
-                .map(|response| FlightRoutePayload {
-                    batch: response.batch,
-                    app_metadata: response.app_metadata,
+                .map(|response| {
+                    FlightRoutePayload::with_app_metadata(response.batch, response.app_metadata)
                 })
         } else if route == GRAPH_NEIGHBORS_ROUTE {
             let (node_id, direction, hops, limit) = graph_neighbors_request.ok_or_else(|| {
@@ -428,9 +467,8 @@ impl WendaoFlightService {
             provider
                 .graph_neighbors_batch(node_id.as_str(), direction.as_str(), hops, limit)
                 .await
-                .map(|response| FlightRoutePayload {
-                    batch: response.batch,
-                    app_metadata: response.app_metadata,
+                .map(|response| {
+                    FlightRoutePayload::with_app_metadata(response.batch, response.app_metadata)
                 })
         } else if route == ANALYSIS_MARKDOWN_ROUTE {
             let path = markdown_analysis_request.ok_or_else(|| {
@@ -446,9 +484,8 @@ impl WendaoFlightService {
             provider
                 .markdown_analysis_batch(path.as_str())
                 .await
-                .map(|response| FlightRoutePayload {
-                    batch: response.batch,
-                    app_metadata: response.app_metadata,
+                .map(|response| {
+                    FlightRoutePayload::with_app_metadata(response.batch, response.app_metadata)
                 })
                 .map_err(Status::internal)
         } else if route == ANALYSIS_CODE_AST_ROUTE {
@@ -465,9 +502,8 @@ impl WendaoFlightService {
             provider
                 .code_ast_analysis_batch(path.as_str(), repo_id.as_str(), line_hint)
                 .await
-                .map(|response| FlightRoutePayload {
-                    batch: response.batch,
-                    app_metadata: response.app_metadata,
+                .map(|response| {
+                    FlightRoutePayload::with_app_metadata(response.batch, response.app_metadata)
                 })
                 .map_err(Status::internal)
         } else if is_search_family_route(route) {
@@ -488,9 +524,8 @@ impl WendaoFlightService {
                     repo_hint.as_deref(),
                 )
                 .await
-                .map(|response| FlightRoutePayload {
-                    batch: response.batch,
-                    app_metadata: response.app_metadata,
+                .map(|response| {
+                    FlightRoutePayload::with_app_metadata(response.batch, response.app_metadata)
                 })
                 .map_err(Status::internal)
         } else {
@@ -498,6 +533,22 @@ impl WendaoFlightService {
                 "unexpected routed Flight request: {route}"
             )))
         }
+    }
+
+    async fn cached_route_payload(
+        &self,
+        route: &str,
+        metadata: &tonic::metadata::MetadataMap,
+        cache_key: &str,
+    ) -> Result<Arc<FlightRoutePayload>, Status> {
+        if let Some(cached) = self.route_payload_cache.get(cache_key).await {
+            return Ok(cached);
+        }
+        let payload = self.read_route_payload(route, metadata).await?;
+        Ok(self
+            .route_payload_cache
+            .insert(cache_key.to_string(), payload)
+            .await)
     }
 }
 
@@ -538,10 +589,9 @@ impl FlightService for WendaoFlightService {
         let descriptor = request.into_inner();
         let route = descriptor_route(&descriptor)?;
         let cache_key = self.route_request_cache_key(route.as_str(), &metadata)?;
-        let route_payload = self.read_route_payload(route.as_str(), &metadata).await?;
-        self.route_payload_cache
-            .insert(cache_key, route_payload.clone())
-            .await;
+        let route_payload = self
+            .cached_route_payload(route.as_str(), &metadata, &cache_key)
+            .await?;
         let endpoint = FlightEndpoint::new().with_ticket(Ticket::new(route.clone()));
         let flight_info = FlightInfo::new()
             .try_with_schema(route_payload.batch.schema().as_ref())
@@ -549,7 +599,7 @@ impl FlightService for WendaoFlightService {
             .with_endpoint(endpoint)
             .with_descriptor(descriptor)
             .with_total_records(i64::from(route_payload.batch.num_rows() as i32))
-            .with_app_metadata(route_payload.app_metadata);
+            .with_app_metadata(route_payload.app_metadata.clone());
         Ok(Response::new(flight_info))
     }
 
@@ -580,21 +630,18 @@ impl FlightService for WendaoFlightService {
         let ticket = request.into_inner();
         let route = ticket_route(&ticket)?;
         let cache_key = self.route_request_cache_key(route.as_str(), &metadata)?;
-        let query_response_batch =
-            if let Some(cached) = self.route_payload_cache.take(&cache_key).await {
-                cached.batch
-            } else {
-                self.read_route_payload(route.as_str(), &metadata)
-                    .await?
-                    .batch
-            };
-
-        let response_stream = FlightDataEncoderBuilder::new()
-            .build(stream::iter(vec![Ok::<
-                LanceRecordBatch,
-                arrow_flight::error::FlightError,
-            >(query_response_batch)]))
-            .map(|item| item.map_err(|error| Status::internal(error.to_string())));
+        let do_get_frames = self
+            .cached_route_payload(route.as_str(), &metadata, &cache_key)
+            .await?
+            .do_get_frames()
+            .await?;
+        let response_stream =
+            stream::unfold((do_get_frames, 0_usize), |(frames, index)| async move {
+                frames
+                    .get(index)
+                    .cloned()
+                    .map(|frame| (Ok::<FlightData, Status>(frame), (frames, index + 1)))
+            });
         Ok(Response::new(Box::pin(response_stream)))
     }
 

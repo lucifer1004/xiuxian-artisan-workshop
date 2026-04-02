@@ -4,7 +4,7 @@ mod telegram;
 
 use std::path::PathBuf;
 
-use omni_agent::RuntimeSettings;
+use xiuxian_daochang::RuntimeSettings;
 
 use crate::cli::{
     ChannelProvider, DiscordRuntimeMode, TelegramChannelMode, WebhookDedupBackendMode,

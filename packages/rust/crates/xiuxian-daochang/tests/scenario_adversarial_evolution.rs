@@ -6,9 +6,12 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::stream;
 use num_traits::ToPrimitive;
 use serde_json::{Value, json};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::sleep;
+use xiuxian_llm::llm::client::ChatStream;
 use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmResult};
 use xiuxian_memory_engine::{EpisodeStore, StoreConfig};
 use xiuxian_qianhuan::{PersonaRegistry, orchestrator::ThousandFacesOrchestrator};
@@ -57,11 +60,16 @@ impl ZhenfaTool for RewardRelayTool {
             .and_then(Value::as_f64)
             .and_then(|raw| raw.to_f32())
             .unwrap_or(0.0);
-        ctx.emit_signal(ZhenfaSignal::Reward {
-            episode_id,
-            value,
-            source: "scenario.adversarial_evolution".to_string(),
-        });
+        let signal_sender = ctx
+            .get_extension::<UnboundedSender<ZhenfaSignal>>()
+            .ok_or_else(|| ZhenfaError::execution("signal sender missing from context"))?;
+        signal_sender
+            .send(ZhenfaSignal::Reward {
+                episode_id,
+                value,
+                source: "scenario.adversarial_evolution".to_string(),
+            })
+            .map_err(|_| ZhenfaError::execution("signal receiver closed"))?;
         Ok("<ok/>".to_string())
     }
 }
@@ -123,6 +131,11 @@ impl LlmClient for ScriptedAgendaAuditLlm {
             "<agenda_critique_report><score>0.92</score><critique>Reduced scope is feasible.</critique></agenda_critique_report>"
                 .to_string(),
         )
+    }
+
+    async fn chat_stream(&self, request: ChatRequest) -> LlmResult<ChatStream> {
+        let response = self.chat(request).await?;
+        Ok(Box::pin(stream::once(async move { Ok(response) })))
     }
 }
 

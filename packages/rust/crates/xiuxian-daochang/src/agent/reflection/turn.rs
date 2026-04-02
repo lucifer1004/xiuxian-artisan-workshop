@@ -40,32 +40,6 @@ pub fn build_turn_reflection(
     }
 }
 
-/// Render a compact markdown block for user-visible or logging output.
-pub(crate) fn render_turn_reflection_block(reflection: &TurnReflection) -> String {
-    format!(
-        "### Reflection\n- route: `{}`\n- outcome: `{}` confidence=`{:.2}` tool_calls=`{}`\n- objective: {}\n- next_action: {}",
-        reflection.route,
-        reflection.outcome,
-        reflection.confidence,
-        reflection.tool_calls,
-        reflection.objective,
-        reflection.next_action
-    )
-}
-
-/// Render reflection for memory episode experience append.
-pub(crate) fn render_turn_reflection_for_memory(reflection: &TurnReflection) -> String {
-    format!(
-        "[reflection]\nroute={}\noutcome={}\nconfidence={:.2}\ntool_calls={}\nobjective={}\nnext_action={}",
-        reflection.route,
-        reflection.outcome,
-        reflection.confidence,
-        reflection.tool_calls,
-        reflection.objective,
-        reflection.next_action
-    )
-}
-
 fn normalize_outcome(outcome: &str) -> &'static str {
     let normalized = outcome.trim().to_ascii_lowercase();
     match normalized.as_str() {

@@ -28,7 +28,7 @@
     clippy::single_match_else,
     clippy::assigning_clones
 )]
-use omni_agent::{
+use xiuxian_daochang::{
     Channel, TelegramChannel, TelegramCommandAdminRule, TelegramSessionPartition,
     build_telegram_command_admin_rule,
 };

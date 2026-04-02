@@ -84,8 +84,6 @@ impl JobManager {
 
         let record = JobRecord {
             session_id: session_id.clone(),
-            recipient: recipient.clone(),
-            parent_session_id: session_prefix.to_string(),
             prompt: prompt.clone(),
             state: JobState::Queued,
             submitted_at: now,

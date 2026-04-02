@@ -6,9 +6,10 @@ use axum::{Json, Router};
 use serde_json::{Value, json};
 use std::net::TcpListener;
 
-use crate::config::RuntimeSettings;
-use crate::gateway::http::runtime::{
-    resolve_embed_base_url, resolve_embed_model, resolve_runtime_embed_base_url,
+use xiuxian_daochang::RuntimeSettings;
+use xiuxian_daochang::test_support::{
+    build_embedding_runtime_for_settings, resolve_embed_base_url, resolve_embed_model,
+    resolve_runtime_embed_base_url,
 };
 
 #[test]
@@ -65,22 +66,10 @@ fn resolve_embed_base_url_prefers_memory_base_url_for_http_backend() {
 }
 
 #[test]
-fn resolve_embed_base_url_uses_inproc_label_for_mistral_sdk_backend() {
+fn resolve_runtime_embed_base_url_prefers_litellm_base_for_litellm_backend() {
     let mut settings = RuntimeSettings::default();
     settings.memory.embedding_base_url = Some("http://127.0.0.1:3002".to_string());
     settings.embedding.litellm_api_base = Some("http://127.0.0.1:11434".to_string());
-    settings.mistral.base_url = Some("http://127.0.0.1:11500".to_string());
-
-    let resolved = resolve_embed_base_url(&settings, Some("mistral_sdk"));
-    assert_eq!(resolved, "inproc://mistral-sdk");
-}
-
-#[test]
-fn resolve_runtime_embed_base_url_ignores_mistral_base_url_for_non_mistral_backend() {
-    let mut settings = RuntimeSettings::default();
-    settings.memory.embedding_base_url = Some("http://127.0.0.1:3002".to_string());
-    settings.embedding.litellm_api_base = Some("http://127.0.0.1:11434".to_string());
-    settings.mistral.base_url = Some("http://127.0.0.1:11500".to_string());
 
     let resolved = resolve_runtime_embed_base_url(&settings, Some("litellm_rs"), None);
     assert_eq!(resolved, "http://127.0.0.1:11434");
@@ -167,7 +156,7 @@ async fn build_embedding_runtime_for_settings_embeds_with_openai_http_backend() 
     runtime_settings.memory.embedding_base_url = Some(format!("http://127.0.0.1:{port}"));
     runtime_settings.embedding.timeout_secs = Some(3);
 
-    let runtime = super::build_embedding_runtime_for_settings(&runtime_settings);
+    let runtime = build_embedding_runtime_for_settings(&runtime_settings);
 
     let texts = vec!["gateway openai-http endpoint test".to_string()];
     let vectors = runtime

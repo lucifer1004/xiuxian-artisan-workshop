@@ -36,7 +36,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::channels::traits::Channel;
+use xiuxian_daochang::Channel;
 
 use super::support::{
     MockChannel, build_agent, inbound, process_discord_message, start_job_manager,
@@ -45,7 +45,7 @@ use super::support::{
 #[tokio::test]
 async fn process_discord_message_handles_help_json_without_llm_turn() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -60,7 +60,7 @@ async fn process_discord_message_handles_help_json_without_llm_turn() -> Result<
 #[tokio::test]
 async fn process_discord_message_handles_partition_command_and_updates_mode() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -83,7 +83,7 @@ async fn process_discord_message_handles_partition_command_and_updates_mode() ->
 #[tokio::test]
 async fn process_discord_message_partition_toggle_aliases_use_expected_modes() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -119,7 +119,7 @@ async fn process_discord_message_partition_toggle_aliases_use_expected_modes() -
 #[tokio::test]
 async fn process_discord_message_partition_chat_aliases_map_to_expected_modes() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -165,7 +165,7 @@ async fn process_discord_message_partition_chat_aliases_map_to_expected_modes() 
 #[tokio::test]
 async fn process_discord_message_partition_status_json_reports_supported_modes() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -195,7 +195,7 @@ async fn process_discord_message_partition_status_json_reports_supported_modes()
 #[tokio::test]
 async fn process_discord_message_resume_status_is_allowed_for_non_admin() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(false, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -222,7 +222,7 @@ async fn process_discord_message_resume_status_is_allowed_for_non_admin() -> Res
 #[tokio::test]
 async fn process_discord_message_handles_background_submit_ack() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -245,7 +245,7 @@ async fn process_discord_message_handles_background_submit_ack() -> Result<()> {
 #[tokio::test]
 async fn process_discord_message_session_memory_includes_gate_policy_in_text() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -273,7 +273,7 @@ async fn process_discord_message_session_memory_includes_gate_policy_in_text() -
 #[tokio::test]
 async fn process_discord_message_session_memory_json_includes_gate_policy_fields() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -305,7 +305,7 @@ async fn process_discord_message_session_memory_json_includes_gate_policy_fields
 #[tokio::test]
 async fn process_discord_message_handles_session_admin_set_and_status_json() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 
@@ -342,7 +342,7 @@ async fn process_discord_message_handles_session_admin_set_and_status_json() -> 
 #[tokio::test]
 async fn process_discord_message_handles_session_injection_set_and_status_json() -> Result<()> {
     let agent = build_agent().await?;
-    let job_manager = start_job_manager(agent.clone());
+    let job_manager = start_job_manager(&agent);
     let channel = Arc::new(MockChannel::with_acl(true, std::iter::empty::<&str>()));
     let channel_dyn: Arc<dyn Channel> = channel.clone();
 

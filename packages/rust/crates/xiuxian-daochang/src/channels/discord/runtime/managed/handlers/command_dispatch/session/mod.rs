@@ -1,6 +1,5 @@
 mod budget;
 mod feedback;
-mod helpers;
 mod memory;
 mod partition;
 mod status;

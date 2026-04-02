@@ -41,8 +41,11 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Mutex;
 
+#[path = "media_api/markdown_fallback.rs"]
 mod markdown_fallback;
+#[path = "media_api/routing.rs"]
 mod routing;
+#[path = "media_api/server_bootstrap.rs"]
 mod server_bootstrap;
 use server_bootstrap::spawn_media_api_server;
 

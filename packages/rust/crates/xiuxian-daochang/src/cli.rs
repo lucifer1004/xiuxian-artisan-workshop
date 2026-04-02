@@ -175,9 +175,5 @@ pub(crate) enum Command {
         /// Optional explicit embedding model override.
         #[arg(long)]
         model: Option<String>,
-
-        /// Only execute warmup when effective embedding backend is `mistral_sdk`.
-        #[arg(long, default_value_t = false)]
-        mistral_sdk_only: bool,
     },
 }

@@ -219,7 +219,7 @@ mod tests {
 
     use std::fs;
     use tempfile::TempDir;
-    use xiuxian_qianhuan::MockManifestation;
+    use xiuxian_qianhuan::ManifestationManager;
     use xiuxian_wendao::graph::KnowledgeGraph;
     use xiuxian_zhixing::storage::MarkdownStorage;
 
@@ -280,7 +280,10 @@ internal_id = \"xiuxian.native.zhixing.view\"
         let graph = Arc::new(KnowledgeGraph::new());
         let tmp = TempDir::new()?;
         let storage = Arc::new(MarkdownStorage::new(tmp.path().to_path_buf()));
-        let manifestation = Arc::new(MockManifestation);
+        let manifestation = Arc::new(ManifestationManager::new_with_embedded_templates(
+            &[],
+            &[("task_add_response.md", "ok")],
+        )?);
         let heyi = ZhixingHeyi::new(
             graph,
             manifestation,

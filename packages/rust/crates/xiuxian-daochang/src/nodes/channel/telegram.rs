@@ -167,8 +167,7 @@ async fn run_telegram_channel_mode(
         webhook_dedup_config,
     } = request;
 
-    let effective_runtime_settings =
-        apply_channel_embedding_memory_guard(runtime_settings, "telegram");
+    let effective_runtime_settings = apply_channel_embedding_memory_guard(runtime_settings);
     let agent = Arc::new(build_agent(&tool_config_path, &effective_runtime_settings).await?);
     if allowed_users.is_empty() && allowed_groups.is_empty() {
         tracing::warn!(

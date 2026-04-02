@@ -19,22 +19,6 @@ pub(crate) fn resolve_string(
     default.to_string()
 }
 
-pub(crate) fn resolve_optional_string(
-    cli_value: Option<String>,
-    env_name: &str,
-    settings_value: Option<&str>,
-) -> Option<String> {
-    cli_value
-        .and_then(|value| trim_non_empty(&value))
-        .or_else(|| {
-            std::env::var(env_name)
-                .ok()
-                .as_deref()
-                .and_then(trim_non_empty)
-        })
-        .or_else(|| settings_value.and_then(trim_non_empty))
-}
-
 pub(crate) fn resolve_positive_u64(
     cli_value: Option<u64>,
     env_name: &str,
@@ -193,12 +177,17 @@ fn trim_non_empty(raw: &str) -> Option<String> {
 }
 
 #[must_use]
-pub(crate) fn parse_positive_u32_from_env(name: &str) -> Option<u32> {
-    parse_env_value(
-        name,
-        |raw| raw.parse::<u32>().ok().filter(|value| *value > 0),
-        "invalid positive integer env value",
-    )
+pub(crate) fn resolve_valkey_url_env() -> Option<String> {
+    std::env::var("XIUXIAN_WENDAO_VALKEY_URL")
+        .ok()
+        .as_deref()
+        .and_then(trim_non_empty)
+        .or_else(|| {
+            std::env::var("VALKEY_URL")
+                .ok()
+                .as_deref()
+                .and_then(trim_non_empty)
+        })
 }
 
 #[must_use]
@@ -216,41 +205,6 @@ pub(crate) fn parse_positive_u64_from_env(name: &str) -> Option<u64> {
         name,
         |raw| raw.parse::<u64>().ok().filter(|value| *value > 0),
         "invalid positive integer env value",
-    )
-}
-
-#[must_use]
-pub(crate) fn parse_positive_f32_from_env(name: &str) -> Option<f32> {
-    parse_env_value(
-        name,
-        |raw| raw.parse::<f32>().ok().filter(|value| *value > 0.0),
-        "invalid positive float env value",
-    )
-}
-
-#[must_use]
-pub(crate) fn parse_unit_f32_from_env(name: &str) -> Option<f32> {
-    parse_env_value(
-        name,
-        |raw| {
-            raw.parse::<f32>()
-                .ok()
-                .filter(|value| (0.0..=1.0).contains(value))
-        },
-        "invalid unit float env value (expected 0.0..=1.0)",
-    )
-}
-
-#[must_use]
-pub(crate) fn parse_bool_from_env(name: &str) -> Option<bool> {
-    parse_env_value(
-        name,
-        |raw| match raw.trim().to_ascii_lowercase().as_str() {
-            "1" | "true" | "yes" | "on" => Some(true),
-            "0" | "false" | "no" | "off" => Some(false),
-            _ => None,
-        },
-        "invalid boolean env value",
     )
 }
 

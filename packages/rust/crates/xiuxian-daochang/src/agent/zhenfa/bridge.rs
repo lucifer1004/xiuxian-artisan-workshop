@@ -231,7 +231,7 @@ impl ZhenfaSignalSink for MemoryRewardSignalSink {
                 source,
             } => {
                 let resolved_episode_id = if episode_id.trim().is_empty() {
-                    ctx.correlation_id.clone().unwrap_or_default()
+                    ctx.trace_id.clone().unwrap_or_default()
                 } else {
                     episode_id
                 };
@@ -265,7 +265,6 @@ impl ZhenfaSignalSink for MemoryRewardSignalSink {
                     event = "agent.zhenfa.signal.reward.applied",
                     session_id = ?ctx.session_id,
                     trace_id = ?ctx.trace_id,
-                    correlation_id = ?ctx.correlation_id,
                     episode_id = %resolved_episode_id,
                     source = %source,
                     reward,
@@ -278,10 +277,28 @@ impl ZhenfaSignalSink for MemoryRewardSignalSink {
                     event = "agent.zhenfa.signal.trace.received",
                     session_id = ?ctx.session_id,
                     trace_id = ?ctx.trace_id,
-                    correlation_id = ?ctx.correlation_id,
                     node_id = %node_id,
                     trace_event = %event,
                     "received zhenfa trace signal"
+                );
+            }
+            ZhenfaSignal::SemanticDrift {
+                source_path,
+                file_stem,
+                affected_count,
+                confidence,
+                summary,
+            } => {
+                tracing::info!(
+                    event = "agent.zhenfa.signal.semantic_drift.received",
+                    session_id = ?ctx.session_id,
+                    trace_id = ?ctx.trace_id,
+                    source_path = %source_path,
+                    file_stem = %file_stem,
+                    affected_count,
+                    confidence = %confidence,
+                    summary = %summary,
+                    "received zhenfa semantic drift signal"
                 );
             }
         }

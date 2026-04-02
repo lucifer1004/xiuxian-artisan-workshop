@@ -113,7 +113,7 @@ fn llm_tool_definition(tool: &ToolRuntimeToolDefinition) -> serde_json::Value {
     }
     object.insert(
         "parameters".to_string(),
-        serde_json::Value::Object(tool.input_schema.as_ref().clone()),
+        serde_json::Value::Object(tool.input_schema.clone()),
     );
     serde_json::Value::Object(object)
 }

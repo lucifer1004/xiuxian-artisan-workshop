@@ -2,12 +2,13 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::analyzers::errors::RepoIntelligenceError;
-use crate::analyzers::query::RepoSyncResult;
+use crate::analyzers::query::{RepoSourceKind, RepoSyncResult};
 use crate::gateway::studio::repo_index::state::coordinator::RepoIndexCoordinator;
 use crate::gateway::studio::repo_index::state::task::{
     RepoIndexTask, RepoTaskFeedback, RepoTaskOutcome, should_retry_sync_failure,
 };
 use crate::gateway::studio::repo_index::types::RepoIndexPhase;
+use crate::search_plane::{SearchCorpusKind, SearchRepoCorpusRecord};
 
 impl RepoIndexCoordinator {
     pub(crate) async fn process_task(self: Arc<Self>, task: RepoIndexTask) -> RepoTaskFeedback {
@@ -67,6 +68,19 @@ impl RepoIndexCoordinator {
             None,
         );
 
+        if self
+            .repo_publications_are_current(repo_id.as_str(), &sync_result)
+            .await
+        {
+            return RepoTaskFeedback {
+                repo_id,
+                elapsed: started_at.elapsed(),
+                outcome: RepoTaskOutcome::Success {
+                    revision: sync_result.revision,
+                },
+            };
+        }
+
         match self.run_repository_analysis(task.repository.clone()).await {
             Ok(analysis) => {
                 self.complete_indexing(repo_id, started_at, task, sync_result, analysis)
@@ -81,6 +95,29 @@ impl RepoIndexCoordinator {
                 },
             },
         }
+    }
+
+    pub(crate) async fn repo_publications_are_current(
+        &self,
+        repo_id: &str,
+        sync_result: &RepoSyncResult,
+    ) -> bool {
+        let Some(revision) = sync_result.revision.as_deref() else {
+            return false;
+        };
+        if sync_result.source_kind != RepoSourceKind::ManagedRemote {
+            return false;
+        }
+
+        let (entity_record, content_record) = tokio::join!(
+            self.search_plane
+                .repo_corpus_record_for_reads(SearchCorpusKind::RepoEntity, repo_id),
+            self.search_plane
+                .repo_corpus_record_for_reads(SearchCorpusKind::RepoContentChunk, repo_id)
+        );
+
+        repo_publication_matches_revision(entity_record.as_ref(), revision)
+            && repo_publication_matches_revision(content_record.as_ref(), revision)
     }
 
     async fn complete_indexing(
@@ -192,4 +229,16 @@ impl RepoIndexCoordinator {
             },
         }
     }
+}
+
+fn repo_publication_matches_revision(
+    record: Option<&SearchRepoCorpusRecord>,
+    revision: &str,
+) -> bool {
+    record
+        .and_then(|record| record.publication.as_ref())
+        .is_some_and(|publication| {
+            publication.source_revision.as_deref() == Some(revision)
+                && publication.is_datafusion_readable()
+        })
 }

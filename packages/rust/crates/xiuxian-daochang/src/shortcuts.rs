@@ -6,7 +6,9 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowBridgeMode {
+    /// Historical graph-oriented workflow bridge mode.
     Graph,
+    /// Historical omega-oriented workflow bridge mode.
     Omega,
 }
 

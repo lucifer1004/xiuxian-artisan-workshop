@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::http::StatusCode;
 
-use crate::gateway::http::{llm_proxy, runtime};
+use crate::gateway::http::{handlers, llm_proxy, runtime};
 use crate::{EmbeddingClient, RuntimeSettings};
 
 /// Test-facing gateway embedding runtime descriptor.
@@ -55,6 +55,28 @@ pub fn build_embedding_runtime_for_settings(
         client: runtime.client,
         default_model: runtime.default_model,
     }
+}
+
+/// Deterministic hash fallback used by embedding gateway tests.
+#[must_use]
+pub fn fallback_hash_embed_batch(inputs: &[String], dimension: usize) -> Vec<Vec<f32>> {
+    handlers::fallback_hash_embed_batch(inputs, dimension)
+}
+
+/// Apply gateway embedding-memory guard with explicit env inputs for tests.
+#[must_use]
+pub fn apply_gateway_embedding_memory_guard_for_tests(
+    runtime_settings: &RuntimeSettings,
+    env_memory_backend: Option<&str>,
+    env_embed_backend: Option<&str>,
+    allow_inproc_embed_raw: Option<&str>,
+) -> RuntimeSettings {
+    runtime::apply_gateway_embedding_memory_guard_for_tests(
+        runtime_settings,
+        env_memory_backend,
+        env_embed_backend,
+        allow_inproc_embed_raw,
+    )
 }
 
 /// Resolve LLM-proxy target base URL from override/default candidates.

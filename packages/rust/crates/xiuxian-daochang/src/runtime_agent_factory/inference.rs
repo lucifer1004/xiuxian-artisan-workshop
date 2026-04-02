@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow};
 use xiuxian_llm::embedding::backend::parse_embedding_backend_kind;
 
-use crate::resolve::parse_bool_from_env;
+use crate::env_parse::parse_bool_from_env;
 use crate::runtime_agent_factory::shared::non_empty_env;
 use crate::runtime_agent_factory::types::RuntimeEmbeddingBackendMode;
 use crate::{LITELLM_DEFAULT_URL, RuntimeSettings, ToolServerEntry};
@@ -121,7 +121,6 @@ pub(crate) fn resolve_runtime_embedding_base_url(
         RuntimeEmbeddingBackendMode::Http => memory_base_url
             .or(embedding_client_url)
             .or(litellm_api_base),
-        RuntimeEmbeddingBackendMode::MistralSdk => None,
         RuntimeEmbeddingBackendMode::OpenAiHttp | RuntimeEmbeddingBackendMode::LiteLlmRs => {
             litellm_api_base
                 .or(memory_base_url)

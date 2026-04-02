@@ -1,14 +1,12 @@
 //! Builder module for extracting injection blocks from chat messages.
 
 use crate::session::ChatMessage;
-use anyhow::Result;
 
 /// Represents an extracted injection block.
 #[derive(Debug, Clone)]
 pub struct InjectionBlock {
     pub block_id: String,
     pub content: String,
-    pub source_turn_id: u64,
 }
 
 /// Result of extracting blocks from messages.

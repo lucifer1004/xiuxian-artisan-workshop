@@ -250,9 +250,13 @@ pub async fn handle_chat_completions(
 
     let status = upstream_res.status();
     let headers = upstream_res.headers().clone();
-
-    // Convert reqwest Response body to axum Body stream
-    let body_stream = Body::from_stream(upstream_res.bytes_stream());
+    let body_bytes = upstream_res.bytes().await.map_err(|error| {
+        (
+            StatusCode::BAD_GATEWAY,
+            format!("Failed to read upstream response body: {error}"),
+        )
+    })?;
+    let body_stream = Body::from(body_bytes);
 
     let mut axum_res = body_stream.into_response();
     *axum_res.status_mut() = status;

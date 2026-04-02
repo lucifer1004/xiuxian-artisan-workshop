@@ -63,6 +63,7 @@ mod agent {
 
     use crate::config::AgentConfig;
     use crate::session::{BoundedSessionStore, ChatMessage, SessionStore};
+    pub(crate) use session_context::{SessionContextMode, SessionContextWindowInfo};
 
     pub(crate) struct Agent {
         pub(crate) config: AgentConfig,
@@ -142,13 +143,28 @@ mod agent {
         include!("../src/agent/session_context/mod.rs");
 
         fn lint_symbol_probe() {
+            let _ = crate::agent::Agent::from_config;
+            let _ = now_unix_ms;
+            let _ = test_now_unix_ms;
+            let _ = crate::agent::Agent::test_set_session_reset_idle_timeout_ms;
+            let _ = crate::agent::Agent::test_set_session_last_activity;
+            let _ = crate::agent::Agent::test_enforce_session_reset_policy;
+            let _ = crate::agent::Agent::test_session_messages;
+            let _ = crate::agent::Agent::test_bounded_recent_messages;
+            let _ = crate::agent::Agent::test_bounded_recent_summary_segments;
             let _ = crate::agent::Agent::append_turn_with_tool_count_for_session;
+            let _ = crate::agent::Agent::reset_context_window;
             let _ = crate::agent::Agent::inspect_context_window;
+            let _ = crate::agent::Agent::peek_context_window_backup;
             let _ = crate::agent::Agent::resume_context_window;
             let _ = crate::agent::Agent::drop_context_window_backup;
+            let _ = crate::agent::Agent::store_session_backup;
             let _ = crate::agent::Agent::restore_session_backup;
+            let _ = crate::agent::Agent::store_backup_metadata;
             let _ = crate::agent::Agent::clear_backup_metadata;
+            let _ = crate::agent::Agent::append_turn_for_session;
             let _ = std::mem::size_of::<SessionContextMode>();
+            let _ = std::mem::size_of::<SessionContextSnapshotInfo>();
             let _ = std::mem::size_of::<SessionContextWindowInfo>();
         }
 

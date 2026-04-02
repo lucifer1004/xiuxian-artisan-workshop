@@ -4,26 +4,9 @@ use axum::Json;
 use axum::extract::{Path as AxumPath, Query, State};
 
 use super::shared::{GraphNeighborsQuery, normalize_hops, normalize_limit, parse_direction};
-use crate::gateway::studio::router::handlers::graph::service::{
-    run_graph_neighbors, run_node_neighbors,
-};
+use crate::gateway::studio::router::handlers::graph::service::run_graph_neighbors;
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
-use crate::gateway::studio::types::{GraphNeighborsResponse, NodeNeighbors};
-
-/// Gets node neighbors.
-///
-/// # Errors
-///
-/// Returns an error when the graph index cannot be loaded or when the
-/// requested node does not exist.
-pub async fn node_neighbors(
-    State(state): State<Arc<GatewayState>>,
-    AxumPath(node_id): AxumPath<String>,
-) -> Result<Json<NodeNeighbors>, StudioApiError> {
-    Ok(Json(
-        run_node_neighbors(Arc::clone(&state), node_id.as_str()).await?,
-    ))
-}
+use crate::gateway::studio::types::GraphNeighborsResponse;
 
 /// Gets graph neighbors.
 ///

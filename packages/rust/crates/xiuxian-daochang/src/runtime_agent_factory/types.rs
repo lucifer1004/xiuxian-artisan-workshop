@@ -3,14 +3,14 @@ use xiuxian_llm::embedding::backend::EmbeddingBackendKind;
 
 pub(crate) type RuntimeEmbeddingBackendMode = EmbeddingBackendKind;
 
-pub(super) struct McpRuntimeOptions {
-    pub(super) pool_size: usize,
-    pub(super) handshake_timeout_secs: u64,
-    pub(super) connect_retries: u32,
-    pub(super) strict_startup: bool,
-    pub(super) connect_retry_backoff_ms: u64,
-    pub(super) tool_timeout_secs: u64,
-    pub(super) list_tools_cache_ttl_ms: u64,
+pub(crate) struct McpRuntimeOptions {
+    pub(crate) pool_size: usize,
+    pub(crate) handshake_timeout_secs: u64,
+    pub(crate) connect_retries: u32,
+    pub(crate) strict_startup: bool,
+    pub(crate) connect_retry_backoff_ms: u64,
+    pub(crate) tool_timeout_secs: u64,
+    pub(crate) list_tools_cache_ttl_ms: u64,
 }
 
 pub(super) struct SessionRuntimeOptions {

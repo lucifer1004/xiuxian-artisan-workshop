@@ -62,15 +62,25 @@ pub fn build_discord_foreground_runtime(
     foreground_max_in_flight_messages: usize,
     foreground_queue_mode: ForegroundQueueMode,
 ) -> DiscordForegroundRuntimeHarness {
-    DiscordForegroundRuntimeHarness {
-        inner: runtime::test_build_discord_foreground_runtime(
-            agent,
-            channel,
-            turn_timeout_secs,
-            foreground_max_in_flight_messages,
-            foreground_queue_mode,
-        ),
-    }
+    let (inner, _completion_rx) = runtime::test_build_discord_foreground_runtime(
+        agent,
+        channel,
+        turn_timeout_secs,
+        foreground_max_in_flight_messages,
+        foreground_queue_mode,
+    );
+    DiscordForegroundRuntimeHarness { inner }
+}
+
+pub async fn process_discord_message(
+    agent: Arc<Agent>,
+    channel: Arc<dyn Channel>,
+    msg: ChannelMessage,
+    job_manager: &Arc<JobManager>,
+    turn_timeout_secs: u64,
+) {
+    runtime::test_process_discord_message(agent, channel, msg, job_manager, turn_timeout_secs)
+        .await;
 }
 
 pub async fn process_discord_message_with_interrupt(

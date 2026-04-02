@@ -263,6 +263,10 @@ mod tests {
             "bundled gateway OpenAPI must not expose the retired graph-neighbors HTTP path"
         );
         assert!(
+            !paths.contains_key("/api/neighbors/{id}"),
+            "bundled gateway OpenAPI must not expose the retired node-neighbors HTTP path"
+        );
+        assert!(
             !paths.contains_key("/api/analysis/markdown"),
             "bundled gateway OpenAPI must not expose the retired markdown HTTP path"
         );

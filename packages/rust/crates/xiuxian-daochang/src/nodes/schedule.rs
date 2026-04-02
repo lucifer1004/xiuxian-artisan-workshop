@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use omni_agent::{
+use xiuxian_daochang::{
     JobManager, JobManagerConfig, RecurringScheduleConfig, RuntimeSettings, TurnRunner,
     run_recurring_schedule,
 };

@@ -12,7 +12,6 @@ use super::types::GatewayEmbeddingRuntime;
 
 const DEFAULT_EMBED_TIMEOUT_SECS: u64 = 15;
 const DEFAULT_EMBED_UPSTREAM_BASE_URL: &str = "http://localhost:11434";
-const MISTRAL_SDK_INPROC_LABEL: &str = "inproc://mistral-sdk";
 const DEFAULT_FALLBACK_EMBED_DIM: usize = 1024;
 const GATEWAY_ALLOW_INPROC_EMBED_ENV: &str = "OMNI_AGENT_GATEWAY_ALLOW_INPROC_EMBED";
 
@@ -52,33 +51,10 @@ fn apply_gateway_embedding_memory_guard_with_inputs(
         return guarded;
     }
 
-    let configured_backend = guarded
-        .memory
-        .embedding_backend
-        .as_deref()
-        .or(guarded.embedding.backend.as_deref());
-    if !matches!(
-        parse_embedding_backend_kind(configured_backend),
-        Some(EmbeddingBackendKind::MistralSdk)
-    ) {
-        return guarded;
-    }
-
-    guarded.memory.embedding_backend = Some(EmbeddingBackendKind::Http.as_str().to_string());
-
-    tracing::warn!(
-        event = "gateway.embedding.memory_guard",
-        from_backend = "mistral_sdk",
-        to_backend = "http",
-        allow_inproc_embed_env = GATEWAY_ALLOW_INPROC_EMBED_ENV,
-        "forcing gateway embedding backend to http to avoid in-process mistral_sdk memory spikes"
-    );
-
     guarded
 }
 
-#[cfg(test)]
-pub(super) fn apply_gateway_embedding_memory_guard_for_tests(
+pub(crate) fn apply_gateway_embedding_memory_guard_for_tests(
     runtime_settings: &RuntimeSettings,
     env_memory_backend: Option<&str>,
     env_embed_backend: Option<&str>,
@@ -126,15 +102,11 @@ pub(crate) fn resolve_embed_base_url(
     let memory_base_url = trim_non_empty(runtime_settings.memory.embedding_base_url.as_deref());
     let litellm_api_base = trim_non_empty(runtime_settings.embedding.litellm_api_base.as_deref());
     let embedding_client_url = trim_non_empty(runtime_settings.embedding.client_url.as_deref());
-    let mistral_base_url = trim_non_empty(runtime_settings.mistral.base_url.as_deref());
     let backend_mode = parse_embedding_backend_kind(
         backend_hint
             .map(str::trim)
             .filter(|value| !value.is_empty()),
     );
-    if matches!(backend_mode, Some(EmbeddingBackendKind::MistralSdk)) {
-        return MISTRAL_SDK_INPROC_LABEL.to_string();
-    }
     let selected = match backend_mode {
         Some(EmbeddingBackendKind::LiteLlmRs | EmbeddingBackendKind::OpenAiHttp) => {
             litellm_api_base
@@ -143,8 +115,7 @@ pub(crate) fn resolve_embed_base_url(
         }
         _ => memory_base_url
             .or(embedding_client_url)
-            .or(litellm_api_base)
-            .or(mistral_base_url),
+            .or(litellm_api_base),
     };
     selected.unwrap_or_else(|| DEFAULT_EMBED_UPSTREAM_BASE_URL.to_string())
 }

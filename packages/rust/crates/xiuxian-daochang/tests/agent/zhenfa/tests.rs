@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use num_traits::ToPrimitive;
 use redis::Commands;
 use serde_json::json;
+use tokio::sync::mpsc::UnboundedSender;
 use xiuxian_daochang::XiuxianConfig;
 use xiuxian_daochang::test_support::{
     ZhenfaRuntimeDeps, ZhenfaToolBridge, memory_reward_signal_sink,
@@ -69,13 +70,25 @@ impl ZhenfaTool for RewardEmitterTool {
             .and_then(serde_json::Value::as_f64)
             .and_then(|raw| raw.to_f32())
             .unwrap_or(0.0);
-        ctx.emit_signal(ZhenfaSignal::Reward {
-            episode_id,
-            value,
-            source: "test.reward_emitter".to_string(),
-        });
+        let signal_sender = ctx
+            .get_extension::<UnboundedSender<ZhenfaSignal>>()
+            .ok_or_else(|| ZhenfaError::execution("signal sender missing from context"))?;
+        signal_sender
+            .send(ZhenfaSignal::Reward {
+                episode_id,
+                value,
+                source: "test.reward_emitter".to_string(),
+            })
+            .map_err(|_| ZhenfaError::execution("signal receiver closed"))?;
         Ok("<ok/>".to_string())
     }
+}
+
+fn build_manifestation_manager() -> Arc<ManifestationManager> {
+    Arc::new(
+        ManifestationManager::new_with_embedded_templates(&[], &[("bootstrap.md", "bootstrap")])
+            .unwrap_or_else(|error| panic!("build manifestation manager: {error}")),
+    )
 }
 
 #[test]
@@ -83,6 +96,7 @@ fn from_xiuxian_config_enables_default_wendao_search_tool() {
     let config = XiuxianConfig::default();
     let (_notebook, index) = build_wendao_index_fixture();
     let deps = ZhenfaRuntimeDeps {
+        embedding_client: None,
         manifestation_manager: None,
         link_graph_index: Some(index),
         skill_vfs_resolver: None,
@@ -129,9 +143,10 @@ fn from_xiuxian_config_enables_qianhuan_tools_when_runtime_dependency_is_availab
         "qianhuan.render".to_string(),
         "qianhuan.reload".to_string(),
     ]);
-    let manager = ManifestationManager::new_empty();
+    let manager = build_manifestation_manager();
     let deps = ZhenfaRuntimeDeps {
-        manifestation_manager: Some(std::sync::Arc::new(manager)),
+        embedding_client: None,
+        manifestation_manager: Some(manager),
         link_graph_index: None,
         skill_vfs_resolver: None,
         memory_store: None,
@@ -149,6 +164,7 @@ fn from_xiuxian_config_enables_valkey_hooks_when_configured() {
     config.zhenfa.valkey.url = Some("redis://127.0.0.1:6379/0".to_string());
     let (_notebook, index) = build_wendao_index_fixture();
     let deps = ZhenfaRuntimeDeps {
+        embedding_client: None,
         manifestation_manager: None,
         link_graph_index: Some(index),
         skill_vfs_resolver: None,
@@ -165,6 +181,7 @@ async fn call_tool_dispatches_wendao_search_natively() {
     let mut config = XiuxianConfig::default();
     config.wendao.zhixing.notebook_path = Some(notebook.path().to_string_lossy().to_string());
     let deps = ZhenfaRuntimeDeps {
+        embedding_client: None,
         manifestation_manager: None,
         link_graph_index: Some(index),
         skill_vfs_resolver: None,
@@ -193,6 +210,7 @@ async fn call_tool_dispatches_wendao_search_with_query_vector_natively() {
     let mut config = XiuxianConfig::default();
     config.wendao.zhixing.notebook_path = Some(notebook.path().to_string_lossy().to_string());
     let deps = ZhenfaRuntimeDeps {
+        embedding_client: None,
         manifestation_manager: None,
         link_graph_index: Some(index),
         skill_vfs_resolver: None,
@@ -222,9 +240,10 @@ async fn call_tool_dispatches_wendao_search_with_query_vector_natively() {
 async fn call_tool_dispatches_qianhuan_reload_natively() {
     let mut config = XiuxianConfig::default();
     config.zhenfa.enabled_tools = Some(vec!["qianhuan.reload".to_string()]);
-    let manager = ManifestationManager::new_empty();
+    let manager = build_manifestation_manager();
     let deps = ZhenfaRuntimeDeps {
-        manifestation_manager: Some(std::sync::Arc::new(manager)),
+        embedding_client: None,
+        manifestation_manager: Some(manager),
         link_graph_index: None,
         skill_vfs_resolver: None,
         memory_store: None,
@@ -313,7 +332,7 @@ async fn memory_reward_signal_sink_uses_correlation_id_when_episode_id_is_missin
         },
     );
     let mut ctx = ZhenfaContext::default();
-    ctx.set_correlation_id(Some("episode:from-correlation".to_string()));
+    ctx.set_correlation_id_if_absent("episode:from-correlation");
 
     let result = orchestrator
         .dispatch(

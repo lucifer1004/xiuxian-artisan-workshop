@@ -1,15 +1,3 @@
-pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_STATUS_REPLIED: &str =
-    "telegram.command.session_status.replied";
-pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_STATUS_JSON_REPLIED: &str =
-    "telegram.command.session_status_json.replied";
-pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_BUDGET_REPLIED: &str =
-    "telegram.command.session_budget.replied";
-pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_BUDGET_JSON_REPLIED: &str =
-    "telegram.command.session_budget_json.replied";
-pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_MEMORY_REPLIED: &str =
-    "telegram.command.session_memory.replied";
-pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_MEMORY_JSON_REPLIED: &str =
-    "telegram.command.session_memory_json.replied";
 pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_FEEDBACK_REPLIED: &str =
     "telegram.command.session_feedback.replied";
 pub(in crate::channels::telegram::runtime::jobs::command_handlers) const EVENT_TELEGRAM_COMMAND_SESSION_FEEDBACK_JSON_REPLIED: &str =

@@ -3,24 +3,6 @@ use specta::Type;
 
 use super::StudioNavigationTarget;
 
-/// Legacy 2-hop neighbors payload used by `/api/neighbors/{id}`.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct NodeNeighbors {
-    /// Canonical node identifier.
-    pub node_id: String,
-    /// Display name.
-    pub name: String,
-    /// Node category.
-    pub node_type: String,
-    /// One-hop incoming neighbors.
-    pub incoming: Vec<String>,
-    /// One-hop outgoing neighbors.
-    pub outgoing: Vec<String>,
-    /// Two-hop neighbors.
-    pub two_hop: Vec<String>,
-}
-
 /// A single node in the link-graph visualization.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

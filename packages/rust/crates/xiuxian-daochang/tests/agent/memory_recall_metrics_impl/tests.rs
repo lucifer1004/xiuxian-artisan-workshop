@@ -1,7 +1,7 @@
-//! Test coverage for omni-agent behavior.
+//! Test coverage for xiuxian-daochang behavior.
 
-use super::{MemoryRecallMetricsState, ratio_as_f32};
-use crate::agent::SessionMemoryRecallDecision;
+use xiuxian_daochang::SessionMemoryRecallDecision;
+use xiuxian_daochang::test_support::{TestMemoryRecallMetricsState, ratio_as_f32};
 
 fn assert_f32_near(actual: f32, expected: f32, epsilon: f32) {
     assert!(
@@ -18,7 +18,7 @@ fn ratio_as_f32_handles_zero_denominator() {
 
 #[test]
 fn metrics_snapshot_aggregates_counts_and_rates() {
-    let mut state = MemoryRecallMetricsState::default();
+    let mut state = TestMemoryRecallMetricsState::default();
     state.observe_plan();
     state.observe_plan();
     state.observe_plan();
@@ -47,7 +47,7 @@ fn metrics_snapshot_aggregates_counts_and_rates() {
 
 #[test]
 fn metrics_latency_buckets_are_classified_deterministically() {
-    let mut state = MemoryRecallMetricsState::default();
+    let mut state = TestMemoryRecallMetricsState::default();
 
     state.observe_result(SessionMemoryRecallDecision::Injected, 1, 1, 10, 10);
     state.observe_result(SessionMemoryRecallDecision::Injected, 1, 1, 10, 25);
@@ -69,7 +69,7 @@ fn metrics_latency_buckets_are_classified_deterministically() {
 
 #[test]
 fn metrics_snapshot_tracks_embedding_outcome_counters() {
-    let mut state = MemoryRecallMetricsState::default();
+    let mut state = TestMemoryRecallMetricsState::default();
 
     state.observe_embedding_success();
     state.observe_embedding_success();

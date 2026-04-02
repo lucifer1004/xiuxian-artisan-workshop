@@ -17,14 +17,14 @@ async fn runtime_partition_chat_user_isolates_users() -> Result<()> {
     run_partition_reset_status_flow(
         TelegramSessionPartition::ChatUser,
         SessionIdentity {
-            chat: -200,
-            user: 888,
-            thread: None,
+            chat_id: -200,
+            user_id: 888,
+            thread_id: None,
         },
         SessionIdentity {
-            chat: -200,
-            user: 999,
-            thread: None,
+            chat_id: -200,
+            user_id: 999,
+            thread_id: None,
         },
         false,
     )
@@ -36,14 +36,14 @@ async fn runtime_partition_chat_only_shares_users_in_same_chat() -> Result<()> {
     run_partition_reset_status_flow(
         TelegramSessionPartition::ChatOnly,
         SessionIdentity {
-            chat: -200,
-            user: 888,
-            thread: None,
+            chat_id: -200,
+            user_id: 888,
+            thread_id: None,
         },
         SessionIdentity {
-            chat: -200,
-            user: 999,
-            thread: None,
+            chat_id: -200,
+            user_id: 999,
+            thread_id: None,
         },
         true,
     )
@@ -55,14 +55,14 @@ async fn runtime_partition_chat_only_isolates_same_user_across_chats() -> Result
     run_partition_reset_status_flow(
         TelegramSessionPartition::ChatOnly,
         SessionIdentity {
-            chat: -200,
-            user: 888,
-            thread: None,
+            chat_id: -200,
+            user_id: 888,
+            thread_id: None,
         },
         SessionIdentity {
-            chat: -201,
-            user: 888,
-            thread: None,
+            chat_id: -201,
+            user_id: 888,
+            thread_id: None,
         },
         false,
     )
@@ -74,14 +74,14 @@ async fn runtime_partition_user_only_shares_across_chats() -> Result<()> {
     run_partition_reset_status_flow(
         TelegramSessionPartition::UserOnly,
         SessionIdentity {
-            chat: -200,
-            user: 888,
-            thread: None,
+            chat_id: -200,
+            user_id: 888,
+            thread_id: None,
         },
         SessionIdentity {
-            chat: -201,
-            user: 888,
-            thread: None,
+            chat_id: -201,
+            user_id: 888,
+            thread_id: None,
         },
         true,
     )
@@ -93,14 +93,14 @@ async fn runtime_partition_chat_thread_user_isolates_threads() -> Result<()> {
     run_partition_reset_status_flow(
         TelegramSessionPartition::ChatThreadUser,
         SessionIdentity {
-            chat: -200,
-            user: 888,
-            thread: Some(11),
+            chat_id: -200,
+            user_id: 888,
+            thread_id: Some(11),
         },
         SessionIdentity {
-            chat: -200,
-            user: 888,
-            thread: Some(22),
+            chat_id: -200,
+            user_id: 888,
+            thread_id: Some(22),
         },
         false,
     )
@@ -115,9 +115,9 @@ async fn runtime_partition_chat_user_concurrent_resets_stay_isolated() -> Result
     let job_manager = build_job_manager(agent.clone());
     let (foreground_tx, mut foreground_rx) = mpsc::channel::<ChannelMessage>(8);
     let identity = |user| SessionIdentity {
-        chat: -200,
-        user,
-        thread: None,
+        chat_id: -200,
+        user_id: user,
+        thread_id: None,
     };
 
     let reset_user_888 =

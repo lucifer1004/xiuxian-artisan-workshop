@@ -29,10 +29,6 @@ pub fn studio_routes() -> Router<Arc<GatewayState>> {
             get(handlers::vfs_entry),
         )
         .route(
-            openapi_paths::API_NEIGHBORS_AXUM_PATH,
-            get(handlers::node_neighbors),
-        )
-        .route(
             openapi_paths::API_TOPOLOGY_3D_AXUM_PATH,
             get(handlers::topology_3d),
         )

@@ -6,6 +6,7 @@
 
 - `xiuxian-wendao-runtime` owns the reusable Arrow Flight runtime client and negotiation seam.
 - `xiuxian-wendao-julia` owns Julia-specific interpretation of repository plugin options and translates them into the runtime-owned Flight binding.
+- `xiuxian-wendao-julia` also owns Julia-specific graph-structural route names, draft schema-version defaults, request or response column inventories, and Arrow batch validation for the mixed-graph structural plugin lane.
 - `xiuxian-wendao-julia` also owns the legacy Julia link-graph compatibility semantics under `src/compatibility/link_graph/`, including Julia selector ids, the default analyzer package dir, launcher path, example-config path, the Julia rerank runtime record, service-descriptor and CLI-arg meaning, launch-manifest meaning, deployment-artifact meaning, and conversions to and from Wendao core plugin contracts.
 - `xiuxian-wendao` hosts the analyzer registry and loads repository config, but it does not own a second transport implementation.
 - `xiuxian-wendao` now consumes this crate through a normal Cargo dependency instead of sibling-source inclusion.
@@ -17,6 +18,11 @@
 - `build_julia_flight_transport_client`
 - `process_julia_flight_batches`
 - `validate_julia_arrow_response_batches`
+- `GraphStructuralRouteKind`
+- `JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION`
+- `graph_structural_route_kind`
+- `is_graph_structural_route`
+- `validate_graph_structural_*`
 - `compatibility::link_graph::*` for Julia-owned legacy launch/deployment compatibility DTOs, the Julia rerank runtime record, selector helpers, and analyzer package-path defaults
 
 The transport builder consumes repository plugin entries that resolve to:
@@ -54,6 +60,24 @@ integration. It performs:
 - response schema-version enforcement
 - `v1` Julia response validation before returning decoded record batches
 
+## Graph-Structural Draft Contract
+
+The first mixed-graph structural plugin routes now stage from this crate
+instead of `xiuxian-wendao-runtime`.
+
+- schema version: `v0-draft`
+- structural rerank route: `/graph/structural/rerank`
+- constraint filter route: `/graph/structural/filter`
+
+That means:
+
+- `xiuxian-wendao-runtime` still owns generic Flight transport mechanics such
+  as route normalization and negotiated clients
+- `xiuxian-wendao-julia` owns the Julia-specific semantic contract for these
+  structural plugin exchanges
+- future host dispatch should import these Julia-owned route and validation
+  surfaces from this crate rather than adding another runtime-local contract
+
 ## Validation
 
 - `direnv exec . cargo test -p xiuxian-wendao-julia transport --lib`
@@ -62,8 +86,8 @@ integration. It performs:
 - `direnv exec . cargo check -p xiuxian-wendao-julia --lib`
 
 The real loopback tests now speak only to the Flight examples. They spawn
-`.data/WendaoArrow/scripts/run_stream_scoring_flight_server.sh` and
-`.data/WendaoArrow/scripts/run_stream_metadata_flight_server.sh`, wait for the
+`.data/WendaoArrow.jl/scripts/run_stream_scoring_flight_server.sh` and
+`.data/WendaoArrow.jl/scripts/run_stream_metadata_flight_server.sh`, wait for the
 Flight socket to accept connections, then send the canonical request batches
 through the runtime-owned negotiated Flight client. Those fixtures now use the
 shared `julia_arrow_request_schema(...)` builder as well, so the official
@@ -71,7 +95,7 @@ example roundtrip receives the full WendaoArrow `v1` request shape instead of a
 test-local reduced schema.
 
 There is also a metadata-aware real loopback that targets
-`.data/WendaoArrow/scripts/run_stream_metadata_flight_server.sh`, sends a
+`.data/WendaoArrow.jl/scripts/run_stream_metadata_flight_server.sh`, sends a
 request whose Arrow schema metadata includes `trace_id`, and asserts the Rust
 side can decode the additive `trace_id` response column. That path now goes
 through the production Flight client, so the test verifies request schema

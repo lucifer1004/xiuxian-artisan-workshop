@@ -24,7 +24,7 @@ pub use docs::projection::{
     retrieval_context as docs_retrieval_context, retrieval_hit as docs_retrieval_hit,
     search as docs_search,
 };
-pub use graph::{node_neighbors, topology_3d};
+pub use graph::topology_3d;
 pub use repo::{
     doc_coverage, example_search, import_search, module_search, overview, projected_page,
     projected_page_family_cluster, projected_page_family_context, projected_page_family_search,

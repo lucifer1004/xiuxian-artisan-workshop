@@ -25,7 +25,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use axum::{Json, Router, extract::State, routing::post};
-use omni_agent::{Channel, TelegramChannel};
+use xiuxian_daochang::{Channel, TelegramChannel};
 
 #[derive(Clone, Copy)]
 enum PollScenario {

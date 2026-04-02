@@ -39,8 +39,10 @@ use axum::{
     http::StatusCode,
     routing::post,
 };
-use omni_agent::{Channel, DISCORD_MAX_MESSAGE_LENGTH, DiscordChannel, split_message_for_discord};
 use tokio::sync::Mutex;
+use xiuxian_daochang::{
+    Channel, DISCORD_MAX_MESSAGE_LENGTH, DiscordChannel, split_message_for_discord,
+};
 
 #[derive(Clone, Default)]
 struct MockDiscordState {

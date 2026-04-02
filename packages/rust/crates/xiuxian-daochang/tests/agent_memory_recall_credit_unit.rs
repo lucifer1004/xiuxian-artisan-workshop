@@ -1,8 +1,10 @@
-use anyhow::Result;
-use omni_memory::{Episode, EpisodeStore, StoreConfig};
+//! Recall-credit regression tests for memory feedback updates.
 
-use super::{apply_recall_credit, select_recall_credit_candidates};
-use crate::agent::memory_recall_feedback::RecallOutcome;
+use anyhow::Result;
+use xiuxian_daochang::test_support::{
+    RecallOutcome, RecalledEpisodeCandidate, apply_recall_credit, select_recall_credit_candidates,
+};
+use xiuxian_memory_engine::{Episode, EpisodeStore, StoreConfig};
 
 fn new_store() -> EpisodeStore {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -48,7 +50,7 @@ fn apply_recall_credit_success_increases_q_and_tracks_success() -> Result<()> {
     let store = new_store();
     store.store(episode("ep-1"))?;
     store.update_q("ep-1", 0.2);
-    let candidates = vec![super::RecalledEpisodeCandidate {
+    let candidates = vec![RecalledEpisodeCandidate {
         episode_id: "ep-1".to_string(),
         score: 0.9,
     }];
@@ -68,7 +70,7 @@ fn apply_recall_credit_failure_decreases_q_and_tracks_failure() -> Result<()> {
     let store = new_store();
     store.store(episode("ep-1"))?;
     store.update_q("ep-1", 0.9);
-    let candidates = vec![super::RecalledEpisodeCandidate {
+    let candidates = vec![RecalledEpisodeCandidate {
         episode_id: "ep-1".to_string(),
         score: 0.8,
     }];

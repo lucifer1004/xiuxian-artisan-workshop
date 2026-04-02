@@ -26,12 +26,12 @@ pub(in crate::channels::telegram::channel) fn resolve_acl_config_from_settings(
     let acl_overrides = build_telegram_acl_overrides_from_settings(&settings)?;
     let allowed_users_raw = resolve_string_env_or_setting(
         "OMNI_AGENT_TELEGRAM_ALLOWED_USERS",
-        acl_overrides.allowed_users.join(","),
+        Some(acl_overrides.allowed_users.join(",")),
         "",
     );
     let allowed_groups_raw = resolve_string_env_or_setting(
         "OMNI_AGENT_TELEGRAM_ALLOWED_GROUPS",
-        acl_overrides.allowed_groups.join(","),
+        Some(acl_overrides.allowed_groups.join(",")),
         "",
     );
     let session_admin_persist = resolve_bool_env_or_setting(
@@ -56,7 +56,7 @@ pub(in crate::channels::telegram::channel) fn resolve_acl_config_from_settings(
     let group_entries = settings.groups.unwrap_or_default();
     let admin_users_raw = resolve_string_env_or_setting(
         "OMNI_AGENT_TELEGRAM_ADMIN_USERS",
-        acl_overrides.admin_users.join(","),
+        Some(acl_overrides.admin_users.join(",")),
         "",
     );
     let control_command_allow_from_raw = resolve_optional_env_or_setting(
@@ -67,38 +67,62 @@ pub(in crate::channels::telegram::channel) fn resolve_acl_config_from_settings(
             .map(|entries| entries.join(",")),
     );
     let admin_command_rules_raw =
-        resolve_string_env_or_setting("OMNI_AGENT_TELEGRAM_ADMIN_COMMAND_RULES", "", "");
+        resolve_string_env_or_setting("OMNI_AGENT_TELEGRAM_ADMIN_COMMAND_RULES", None, "");
     let slash_command_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_SLASH_COMMAND_ALLOW_FROM",
-        acl_overrides.slash_command_allow_from,
+        acl_overrides
+            .slash_command_allow_from
+            .as_ref()
+            .map(|entries| entries.join(",")),
     );
     let slash_session_status_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_SLASH_SESSION_STATUS_ALLOW_FROM",
-        acl_overrides.slash_session_status_allow_from,
+        acl_overrides
+            .slash_session_status_allow_from
+            .as_ref()
+            .map(|entries| entries.join(",")),
     );
     let slash_session_budget_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_SLASH_SESSION_BUDGET_ALLOW_FROM",
-        acl_overrides.slash_session_budget_allow_from,
+        acl_overrides
+            .slash_session_budget_allow_from
+            .as_ref()
+            .map(|entries| entries.join(",")),
     );
     let slash_session_memory_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_SLASH_SESSION_MEMORY_ALLOW_FROM",
-        acl_overrides.slash_session_memory_allow_from,
+        acl_overrides
+            .slash_session_memory_allow_from
+            .as_ref()
+            .map(|entries| entries.join(",")),
     );
     let slash_session_feedback_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_SLASH_SESSION_FEEDBACK_ALLOW_FROM",
-        acl_overrides.slash_session_feedback_allow_from,
+        acl_overrides
+            .slash_session_feedback_allow_from
+            .as_ref()
+            .map(|entries| entries.join(",")),
     );
     let slash_job_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_SLASH_JOB_ALLOW_FROM",
-        acl_overrides.slash_job_allow_from,
+        acl_overrides
+            .slash_job_allow_from
+            .as_ref()
+            .map(|entries| entries.join(",")),
     );
     let slash_jobs_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_SLASH_JOBS_ALLOW_FROM",
-        acl_overrides.slash_jobs_allow_from,
+        acl_overrides
+            .slash_jobs_allow_from
+            .as_ref()
+            .map(|entries| entries.join(",")),
     );
     let slash_bg_allow_from_raw = resolve_optional_env_or_setting(
         "OMNI_AGENT_TELEGRAM_SLASH_BG_ALLOW_FROM",
-        acl_overrides.slash_bg_allow_from,
+        acl_overrides
+            .slash_bg_allow_from
+            .as_ref()
+            .map(|entries| entries.join(",")),
     );
 
     let admin_command_rule_specs = parse_semicolon_entries(admin_command_rules_raw.as_str());

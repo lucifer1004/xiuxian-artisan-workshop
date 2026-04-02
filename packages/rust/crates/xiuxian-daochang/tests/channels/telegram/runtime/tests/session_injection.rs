@@ -37,7 +37,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
-use crate::channels::traits::{Channel, ChannelMessage};
+use xiuxian_daochang::{Channel, ChannelMessage};
 
 use super::{MockChannel, build_agent, build_job_manager, handle_inbound_message, inbound};
 

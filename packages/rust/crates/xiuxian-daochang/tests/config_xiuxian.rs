@@ -2,5 +2,4 @@
 
 mod config {
     mod tests;
-    mod xiuxian_overlay_tests;
 }

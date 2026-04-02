@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use axum::{Json, Router, extract::State, routing::post};
-use omni_agent::EmbeddingClient;
+use xiuxian_daochang::EmbeddingClient;
 
 #[derive(Clone)]
 struct EmbedState {

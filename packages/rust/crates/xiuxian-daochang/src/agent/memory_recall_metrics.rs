@@ -1,35 +1,62 @@
 use crate::{Agent, SessionMemoryRecallDecision};
 
+/// Histogram buckets for end-to-end memory-recall pipeline latency.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct MemoryRecallLatencyBucketsSnapshot {
+    /// Number of completed pipelines at or below 10 ms.
     pub le_10ms: u64,
+    /// Number of completed pipelines above 10 ms and at or below 25 ms.
     pub le_25ms: u64,
+    /// Number of completed pipelines above 25 ms and at or below 50 ms.
     pub le_50ms: u64,
+    /// Number of completed pipelines above 50 ms and at or below 100 ms.
     pub le_100ms: u64,
+    /// Number of completed pipelines above 100 ms and at or below 250 ms.
     pub le_250ms: u64,
+    /// Number of completed pipelines above 250 ms and at or below 500 ms.
     pub le_500ms: u64,
+    /// Number of completed pipelines above 500 ms.
     pub gt_500ms: u64,
 }
 
+/// Process-level memory-recall metrics snapshot used by diagnostics surfaces.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct MemoryRecallMetricsSnapshot {
+    /// Unix timestamp in milliseconds when the snapshot was captured.
     pub captured_at_unix_ms: u64,
+    /// Number of recall plans started.
     pub planned_total: u64,
+    /// Number of recall plans that injected memory into context.
     pub injected_total: u64,
+    /// Number of recall plans that completed without injection.
     pub skipped_total: u64,
+    /// Number of completed recall plans.
     pub completed_total: u64,
+    /// Total number of recalled items selected before injection filtering.
     pub selected_total: u64,
+    /// Total number of recalled items injected into context.
     pub injected_items_total: u64,
+    /// Total character count injected into context from recalled memory.
     pub context_chars_injected_total: u64,
+    /// Sum of pipeline duration across completed recall plans.
     pub pipeline_duration_ms_total: u64,
+    /// Average end-to-end pipeline duration in milliseconds.
     pub avg_pipeline_duration_ms: f32,
+    /// Average number of selected items per completed recall plan.
     pub avg_selected_per_completed: f32,
+    /// Average number of injected items for plans that injected memory.
     pub avg_injected_per_injected: f32,
+    /// Ratio of injected plans to completed plans in the `0..=1` range.
     pub injected_rate: f32,
+    /// Latency histogram for completed recall plans.
     pub latency_buckets: MemoryRecallLatencyBucketsSnapshot,
+    /// Number of successful embedding requests made by the recall pipeline.
     pub embedding_success_total: u64,
+    /// Number of embedding requests that timed out.
     pub embedding_timeout_total: u64,
+    /// Number of embedding requests rejected by cooldown protection.
     pub embedding_cooldown_reject_total: u64,
+    /// Number of embedding attempts skipped because embedding was unavailable.
     pub embedding_unavailable_total: u64,
 }
 
@@ -207,7 +234,7 @@ impl Agent {
         guard.observe_embedding_unavailable();
     }
 
-    /// Return current memory-recall metrics snapshot.
+    /// Returns the current process-level memory-recall metrics snapshot.
     pub async fn inspect_memory_recall_metrics(&self) -> MemoryRecallMetricsSnapshot {
         let guard = self.memory_recall_metrics.read().await;
         (*guard).snapshot()

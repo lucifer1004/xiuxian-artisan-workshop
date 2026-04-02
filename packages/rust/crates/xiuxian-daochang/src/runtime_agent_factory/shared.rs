@@ -3,18 +3,3 @@ use xiuxian_macros::env_non_empty;
 pub(in crate::runtime_agent_factory) fn non_empty_env(name: &str) -> Option<String> {
     env_non_empty!(name)
 }
-
-pub(in crate::runtime_agent_factory) fn normalize_unit_f32(
-    value: f32,
-    source: &str,
-) -> Option<f32> {
-    if (0.0..=1.0).contains(&value) {
-        return Some(value);
-    }
-    tracing::warn!(
-        source,
-        value,
-        "invalid memory gate unit value (expected 0.0..=1.0); keeping previous/default"
-    );
-    None
-}

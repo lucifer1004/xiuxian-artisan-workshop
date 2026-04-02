@@ -34,8 +34,11 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Mutex;
 
+#[path = "upload_api/media_group.rs"]
 mod media_group;
+#[path = "upload_api/photo.rs"]
 mod photo;
+#[path = "upload_api/server_bootstrap.rs"]
 mod server_bootstrap;
 
 use server_bootstrap::{spawn_upload_media_group_server, spawn_upload_photo_server};

@@ -34,9 +34,9 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use omni_agent::{WebhookDedupBackend, WebhookDedupConfig, build_telegram_webhook_app};
 use tokio::sync::mpsc;
 use tower::util::ServiceExt;
+use xiuxian_daochang::{WebhookDedupBackend, WebhookDedupConfig, build_telegram_webhook_app};
 
 #[tokio::test]
 async fn webhook_router_exposes_embedding_endpoints() -> Result<()> {

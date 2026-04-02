@@ -32,9 +32,8 @@
     clippy::assigning_clones
 )]
 
-use crate::config::RuntimeSettings;
-
-use super::providers::{
+use xiuxian_daochang::RuntimeSettings;
+use xiuxian_daochang::test_support::{
     DEFAULT_MINIMAX_KEY_ENV, DEFAULT_OPENAI_KEY_ENV, LiteLlmProviderMode,
     resolve_provider_settings_with_env,
 };
@@ -50,7 +49,7 @@ fn settings_with_inference(
 ) -> RuntimeSettings {
     let mut settings = RuntimeSettings::default();
     settings.inference.provider = provider.map(ToString::to_string);
-    settings.inference.api_key_env = api_key_env.map(ToString::to_string);
+    settings.inference.api_key = api_key_env.map(ToString::to_string);
     settings.inference.base_url = base_url.map(ToString::to_string);
     settings.inference.model = model.map(ToString::to_string);
     settings.inference.timeout = timeout;

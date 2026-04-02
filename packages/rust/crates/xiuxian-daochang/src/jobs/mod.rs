@@ -12,5 +12,4 @@ pub use manager::{
     JobCompletion, JobCompletionKind, JobManager, JobManagerConfig, JobMetricsSnapshot, JobState,
     JobStatusSnapshot, TurnRunner,
 };
-pub(crate) use manager::{JobRecord, QueuedJob, epoch_millis};
 pub use scheduler::{RecurringScheduleConfig, RecurringScheduleOutcome, run_recurring_schedule};

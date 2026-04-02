@@ -1,6 +1,6 @@
 use super::embedding::apply_memory_env_embedding_overrides;
 use crate::MemoryConfig;
-use crate::resolve::{
+use crate::env_parse::{
     parse_bool_from_env, parse_positive_f32_from_env, parse_positive_u32_from_env,
     parse_positive_u64_from_env, parse_positive_usize_from_env, parse_unit_f32_from_env,
 };

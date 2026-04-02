@@ -20,45 +20,72 @@ const HEADER_SESSION_ID: &str = "Mcp-Session-Id";
 const JSON_MIME_TYPE: &str = "application/json";
 const EVENT_STREAM_MIME_TYPE: &str = "text/event-stream";
 
+/// Connection and retry policy for the remote tool-runtime client pool.
 #[derive(Clone, Debug, Serialize)]
 pub struct ToolPoolConnectConfig {
+    /// Desired logical pool width used by higher-level configuration surfaces.
     pub pool_size: usize,
+    /// Timeout budget for the initial JSON-RPC handshake.
     pub handshake_timeout_secs: u64,
+    /// Maximum number of reconnect attempts for a failing operation.
     pub connect_retries: u32,
+    /// Backoff between reconnect attempts in milliseconds.
     pub connect_retry_backoff_ms: u64,
+    /// Timeout budget for each `tools/list` or `tools/call` request.
     pub tool_timeout_secs: u64,
+    /// TTL for the in-process `tools/list` cache in milliseconds.
     pub list_tools_cache_ttl_ms: u64,
 }
 
+/// Snapshot of the in-process `tools/list` cache counters.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct ToolListCacheStatsSnapshot {
+    /// Total `tools/list` requests seen by the pool.
     pub requests_total: u64,
+    /// Number of requests served from the in-process cache.
     pub cache_hits: u64,
+    /// Number of requests that missed the in-process cache.
     pub cache_misses: u64,
+    /// Number of successful cache refreshes.
     pub cache_refreshes: u64,
+    /// Number of refresh attempts that failed.
     pub refresh_errors: u64,
+    /// Unix timestamp in milliseconds of the last successful refresh.
     pub last_refresh_unix_ms: Option<u64>,
 }
 
+/// Snapshot of the read-through discover-cache counters.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct ToolDiscoverCacheStatsSnapshot {
+    /// Total discover-cache lookups attempted.
     pub requests_total: u64,
+    /// Number of discover-cache hits.
     pub cache_hits: u64,
+    /// Number of discover-cache misses.
     pub cache_misses: u64,
+    /// Number of successful cache writes.
     pub cache_writes: u64,
+    /// Cache hit rate expressed as a percentage in the `0..=100` range.
     pub hit_rate_pct: f64,
 }
 
+/// Configuration for the Valkey-backed discover read-through cache.
 #[derive(Clone, Debug)]
 pub struct ToolDiscoverCacheConfig {
+    /// Valkey connection string.
     pub valkey_url: String,
+    /// Prefix used for discover-cache keys.
     pub key_prefix: String,
+    /// Cache TTL in seconds.
     pub ttl_secs: u64,
 }
 
+/// Runtime metadata for the discover-cache backend currently in use.
 #[derive(Clone, Debug)]
 pub struct ToolDiscoverCacheRuntimeInfo {
+    /// Backend name, for example `valkey`.
     pub backend: &'static str,
+    /// Effective TTL in seconds.
     pub ttl_secs: u64,
 }
 
@@ -104,6 +131,7 @@ impl Default for ToolDiscoverCacheStats {
     }
 }
 
+/// Valkey-backed read-through cache for `skill.discover` tool calls.
 #[derive(Debug)]
 pub struct ToolDiscoverReadThroughCache {
     client: ValkeyClient,
@@ -113,6 +141,12 @@ pub struct ToolDiscoverReadThroughCache {
 }
 
 impl ToolDiscoverReadThroughCache {
+    /// Builds a discover-cache client from runtime configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the Valkey client cannot be constructed from the
+    /// provided URL.
     pub fn from_config(config: ToolDiscoverCacheConfig) -> Result<Self> {
         let client = ValkeyClient::open(config.valkey_url.clone())
             .with_context(|| format!("open discover cache valkey client: {}", config.valkey_url))?;
@@ -125,6 +159,7 @@ impl ToolDiscoverReadThroughCache {
     }
 
     #[must_use]
+    /// Returns static runtime metadata about the discover-cache backend.
     pub fn runtime_info(&self) -> ToolDiscoverCacheRuntimeInfo {
         ToolDiscoverCacheRuntimeInfo {
             backend: "valkey",
@@ -133,6 +168,7 @@ impl ToolDiscoverReadThroughCache {
     }
 
     #[must_use]
+    /// Returns a point-in-time snapshot of discover-cache counters.
     pub fn stats_snapshot(&self) -> ToolDiscoverCacheStatsSnapshot {
         let requests_total = self.stats.requests_total.load(Ordering::Relaxed);
         let cache_hits = self.stats.cache_hits.load(Ordering::Relaxed);
@@ -152,6 +188,12 @@ impl ToolDiscoverReadThroughCache {
         }
     }
 
+    /// Looks up a cached `skill.discover` result by normalized tool arguments.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the cache key cannot be serialized, Valkey cannot
+    /// be reached, or a cached payload cannot be decoded.
     pub async fn lookup(
         &self,
         tool_name: &str,
@@ -183,6 +225,12 @@ impl ToolDiscoverReadThroughCache {
         }
     }
 
+    /// Stores a successful `skill.discover` result in the read-through cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the cache key cannot be serialized, the result
+    /// payload cannot be encoded, or Valkey write operations fail.
     pub async fn store(
         &self,
         tool_name: &str,
@@ -487,6 +535,7 @@ struct CachedToolList {
     expires_at: Instant,
 }
 
+/// Lazy reconnecting client facade for the remote tool runtime.
 #[derive(Debug)]
 pub struct ToolClientPool {
     url: String,
@@ -498,6 +547,13 @@ pub struct ToolClientPool {
 }
 
 impl ToolClientPool {
+    /// Lists tools from the remote runtime, using the in-process cache when
+    /// pagination parameters are absent.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the remote runtime cannot be reached, the request
+    /// times out, or the remote response is invalid.
     pub async fn list_tools(
         &self,
         params: Option<ToolRuntimeListRequestParams>,
@@ -531,6 +587,12 @@ impl ToolClientPool {
         Ok(list)
     }
 
+    /// Calls one tool on the remote runtime and normalizes its textual output.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the remote runtime cannot be reached, the request
+    /// times out, or the remote response is invalid.
     pub async fn call_tool(
         &self,
         name: String,
@@ -577,6 +639,7 @@ impl ToolClientPool {
     }
 
     #[must_use]
+    /// Returns a point-in-time snapshot of `tools/list` cache counters.
     pub fn tools_list_cache_stats_snapshot(&self) -> ToolListCacheStatsSnapshot {
         let last_refresh_unix_ms =
             match self.list_stats.last_refresh_unix_ms.load(Ordering::Relaxed) {
@@ -594,6 +657,7 @@ impl ToolClientPool {
     }
 
     #[must_use]
+    /// Returns discover-cache counters when the read-through cache is enabled.
     pub fn discover_cache_stats_snapshot(&self) -> Option<ToolDiscoverCacheStatsSnapshot> {
         self.discover_cache
             .as_ref()

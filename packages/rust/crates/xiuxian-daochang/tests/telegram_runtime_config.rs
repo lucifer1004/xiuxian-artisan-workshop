@@ -30,7 +30,7 @@
 )]
 use std::collections::HashMap;
 
-use omni_agent::{TelegramRuntimeConfig, TelegramSettings};
+use xiuxian_daochang::{TelegramRuntimeConfig, TelegramSettings};
 
 #[test]
 fn defaults_are_applied_when_env_missing() {

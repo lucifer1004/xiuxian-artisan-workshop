@@ -82,11 +82,28 @@ domain persistence, not vector serving.
 
 #### Future Repo/Analyzer Cache If Activated
 
-- `src/analyzers/cache.rs`
+- `src/analyzers/cache/`
 
-`ValkeyAnalysisCache` is still a placeholder, but if Wendao later turns it into
-a real Valkey cache, ownership should remain in the analyzer layer because the
-payload is normalized repository analysis output.
+`ValkeyAnalysisCache` is now a real Wendao-owned Valkey cache. It persists
+normalized `RepositoryAnalysisOutput` snapshots under analyzer-specific key
+prefixing and revision-scoped identity, and ownership remains in the analyzer
+layer because the payload is repository-analysis semantics rather than vector
+storage state.
+
+The current repo-index and analyzer-cache audits make the ownership line
+concrete:
+
+- repo-backed publication reuse is already handled inside the search-plane
+  staged-mutation path
+- practical repo-index incrementality now has an additional managed-remote
+  revision short-circuit in the coordinator
+- normalized analyzer output now also persists in Valkey under the Wendao
+  analyzer surface, so repo-analysis reuse across process boundaries is no
+  longer a placeholder-only plan
+- the remaining follow-up work is operational rather than ownership-related:
+  live cache proof, cleanup/eviction policy refinement, and any future helper
+  extraction still remain Wendao-owned follow-up work rather than
+  vector-kernel concerns
 
 ### Shared Infra Candidates
 

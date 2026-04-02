@@ -24,10 +24,9 @@ test = false
 bench = false
 
 [features]
-default = ["agent-provider-litellm", "agent-discord", "agent-vision-dots-metal"]
+default = ["agent-provider-litellm", "agent-discord"]
 agent-provider-litellm = ["dep:litellm-rs", "xiuxian-llm/provider-litellm"]
 agent-discord = []
-agent-vision-dots-metal = ["xiuxian-llm/vision-dots-metal"]
 
 [dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }

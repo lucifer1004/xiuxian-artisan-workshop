@@ -10,7 +10,7 @@ use serde_json::json;
 use tempfile::tempdir;
 use tokio::net::TcpListener;
 use xiuxian_daochang::{NativeTool, NativeToolCallContext, SpiderCrawlTool};
-use xiuxian_qianhuan::MockManifestation;
+use xiuxian_qianhuan::ManifestationManager;
 use xiuxian_wendao::graph::KnowledgeGraph;
 use xiuxian_wendao::ingress::{SpiderWendaoBridge, canonical_web_uri};
 use xiuxian_zhixing::{ZhixingHeyi, storage::MarkdownStorage};
@@ -40,7 +40,13 @@ fn build_heyi() -> Result<(Arc<ZhixingHeyi>, tempfile::TempDir)> {
     let graph = Arc::new(KnowledgeGraph::new());
     let tmp = tempdir()?;
     let storage = Arc::new(MarkdownStorage::new(tmp.path().to_path_buf()));
-    let manifestation = Arc::new(MockManifestation);
+    let manifestation = Arc::new(ManifestationManager::new_with_embedded_templates(
+        &[],
+        &[(
+            "task_add_response.md",
+            "Mock Manifestation Content -> {{ task_title }}",
+        )],
+    )?);
     let heyi = ZhixingHeyi::new(
         graph,
         manifestation,

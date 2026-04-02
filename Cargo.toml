@@ -74,7 +74,6 @@ pulldown-cmark = "0.10"
 quick-xml = "0.39.2"
 petgraph = "0.7"
 async-trait = "0.1"
-mistralrs = "0.7.0"
 
 # Git operations (libgit2 for performance)
 git2 = "0.20.3"
@@ -164,9 +163,3 @@ missing_docs = "warn"      # Public APIs must have documentation
 pedantic = { level = "warn", priority = -1 }
 unwrap_used = "deny"       # Deny unwrap usage in production
 expect_used = "deny"       # Deny expect usage in production
-
-[patch."https://github.com/TimmyOVO/deepseek-ocr.rs"]
-deepseek-ocr-core = { path = "third_party/deepseek-ocr/crates/core" }
-deepseek-ocr-dsq = { path = "third_party/deepseek-ocr/crates/dsq" }
-deepseek-ocr-dsq-runtime = { path = "third_party/deepseek-ocr/crates/dsq-runtime" }
-deepseek-ocr-infer-deepseek = { path = "third_party/deepseek-ocr/crates/infer-deepseek" }

@@ -18,7 +18,7 @@ use super::{
 use arrow_array::types::Float32Type;
 use arrow_array::{FixedSizeListArray, Float32Array, StringArray};
 use arrow_flight::flight_service_server::FlightService;
-use arrow_flight::{FlightDescriptor, Ticket};
+use arrow_flight::{FlightData, FlightDescriptor, Ticket};
 use async_trait::async_trait;
 use futures::StreamExt;
 use std::sync::{Arc, Mutex};
@@ -31,18 +31,18 @@ use xiuxian_vector::{
 
 use crate::transport::query_contract::WENDAO_RERANK_TOP_K_HEADER;
 use crate::transport::{
-    ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_ROUTE,
-    RerankScoreWeights, SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE,
-    SEARCH_DEFINITION_ROUTE, SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE, VFS_RESOLVE_ROUTE,
-    WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
+    ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_ROUTE, RerankScoreWeights,
+    SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE, SEARCH_DEFINITION_ROUTE,
+    SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE, VFS_RESOLVE_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
+    WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
     WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER, WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER,
     WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER, WENDAO_AUTOCOMPLETE_LIMIT_HEADER,
     WENDAO_AUTOCOMPLETE_PREFIX_HEADER, WENDAO_DEFINITION_LINE_HEADER,
-    WENDAO_DEFINITION_PATH_HEADER, WENDAO_DEFINITION_QUERY_HEADER,
-    WENDAO_GRAPH_DIRECTION_HEADER, WENDAO_GRAPH_HOPS_HEADER, WENDAO_GRAPH_LIMIT_HEADER,
-    WENDAO_GRAPH_NODE_ID_HEADER, WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_INTENT_HEADER,
-    WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER, WENDAO_SEARCH_REPO_HEADER,
-    WENDAO_VFS_PATH_HEADER, flight_descriptor_path,
+    WENDAO_DEFINITION_PATH_HEADER, WENDAO_DEFINITION_QUERY_HEADER, WENDAO_GRAPH_DIRECTION_HEADER,
+    WENDAO_GRAPH_HOPS_HEADER, WENDAO_GRAPH_LIMIT_HEADER, WENDAO_GRAPH_NODE_ID_HEADER,
+    WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_INTENT_HEADER, WENDAO_SEARCH_LIMIT_HEADER,
+    WENDAO_SEARCH_QUERY_HEADER, WENDAO_SEARCH_REPO_HEADER, WENDAO_VFS_PATH_HEADER,
+    flight_descriptor_path,
 };
 
 #[test]
@@ -737,7 +737,8 @@ fn validate_graph_neighbors_request_metadata_accepts_stable_request() {
 
 #[test]
 fn validate_graph_neighbors_request_metadata_normalizes_defaults() {
-    let metadata = build_graph_neighbors_metadata("kernel/docs/index.md", Some("invalid"), None, None);
+    let metadata =
+        build_graph_neighbors_metadata("kernel/docs/index.md", Some("invalid"), None, None);
 
     let request = validate_graph_neighbors_request_metadata(&metadata)
         .expect("graph-neighbors metadata should normalize defaults");
@@ -925,6 +926,101 @@ async fn wendao_flight_service_do_get_reuses_cached_search_family_payload_after_
 
     assert!(!frames.is_empty());
     assert_eq!(provider.call_count(), 1);
+}
+
+#[tokio::test]
+async fn wendao_flight_service_do_get_reuses_cached_search_family_encoded_frames() {
+    let provider = Arc::new(RecordingSearchProvider::default());
+    let service = WendaoFlightService::new_with_route_providers(
+        "v2",
+        Arc::new(RecordingRepoSearchProvider),
+        Some(provider.clone()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        3,
+        RerankScoreWeights::default(),
+    )
+    .expect("service should build with search-family provider");
+
+    let mut first_request = Request::new(Ticket::new(SEARCH_INTENT_ROUTE.to_string()));
+    populate_schema_and_search_headers(first_request.metadata_mut(), "semantic-route", "6");
+    let first_frames = service
+        .do_get(first_request)
+        .await
+        .expect("first DoGet should resolve through the pluggable provider")
+        .into_inner()
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .map(|frame| frame.expect("first DoGet frame should stream successfully"))
+        .collect::<Vec<FlightData>>();
+
+    let mut second_request = Request::new(Ticket::new(SEARCH_INTENT_ROUTE.to_string()));
+    populate_schema_and_search_headers(second_request.metadata_mut(), "semantic-route", "6");
+    let second_frames = service
+        .do_get(second_request)
+        .await
+        .expect("second DoGet should reuse the cached encoded frames")
+        .into_inner()
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .map(|frame| frame.expect("second DoGet frame should stream successfully"))
+        .collect::<Vec<FlightData>>();
+
+    assert!(!first_frames.is_empty());
+    assert_eq!(first_frames, second_frames);
+    assert_eq!(provider.call_count(), 1);
+}
+
+#[tokio::test]
+async fn wendao_flight_service_get_flight_info_reuses_cached_search_family_payload() {
+    let provider = Arc::new(RecordingSearchProvider::default());
+    let service = WendaoFlightService::new_with_route_providers(
+        "v2",
+        Arc::new(RecordingRepoSearchProvider),
+        Some(provider.clone()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        3,
+        RerankScoreWeights::default(),
+    )
+    .expect("service should build with search-family provider");
+    let descriptor = FlightDescriptor::new_path(
+        flight_descriptor_path(SEARCH_INTENT_ROUTE).expect("descriptor path should build"),
+    );
+
+    let mut first_request = Request::new(descriptor.clone());
+    populate_schema_and_search_headers(first_request.metadata_mut(), "semantic-route", "5");
+    let first_info = service
+        .get_flight_info(first_request)
+        .await
+        .expect("first search-family route request should resolve")
+        .into_inner();
+
+    let mut second_request = Request::new(descriptor);
+    populate_schema_and_search_headers(second_request.metadata_mut(), "semantic-route", "5");
+    let second_info = service
+        .get_flight_info(second_request)
+        .await
+        .expect("second search-family route request should reuse the cached payload")
+        .into_inner();
+
+    assert_eq!(provider.call_count(), 1);
+    assert_eq!(first_info.total_records, second_info.total_records);
+    assert_eq!(first_info.app_metadata, second_info.app_metadata);
 }
 
 #[tokio::test]
@@ -1901,12 +1997,8 @@ impl GraphNeighborsFlightRouteProvider for RecordingGraphNeighborsProvider {
         *self
             .request
             .lock()
-            .expect("graph-neighbors provider record should lock") = Some((
-            node_id.to_string(),
-            direction.to_string(),
-            hops,
-            limit,
-        ));
+            .expect("graph-neighbors provider record should lock") =
+            Some((node_id.to_string(), direction.to_string(), hops, limit));
         *self
             .call_count
             .lock()

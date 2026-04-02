@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::path::Path;
 
 use crate::gateway::studio::pathing::{normalize_path_like, studio_display_path};
@@ -6,8 +5,6 @@ use crate::gateway::studio::router::GatewayState;
 use crate::gateway::studio::types::GraphNode;
 use crate::gateway::studio::vfs::resolve_navigation_target;
 use crate::link_graph::LinkGraphIndex;
-
-pub(crate) const LEGACY_NEIGHBOR_LIMIT: usize = 200;
 
 pub(crate) fn preferred_label(title: &str, fallback_path: &str) -> String {
     if !title.trim().is_empty() {
@@ -67,16 +64,6 @@ pub(crate) fn graph_node(
         is_center,
         distance,
     }
-}
-
-pub(crate) fn sorted_unique_paths(values: impl Iterator<Item = String>) -> Vec<String> {
-    let mut items = values
-        .filter(|value| !value.trim().is_empty())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-    items.sort();
-    items
 }
 
 pub(crate) fn topology_position(index: usize, total: usize) -> [f32; 3] {

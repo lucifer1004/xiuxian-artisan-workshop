@@ -1,7 +1,6 @@
 //! Session-scoped foreground gating.
 
 mod config;
-mod core;
 mod types;
 mod valkey;
 

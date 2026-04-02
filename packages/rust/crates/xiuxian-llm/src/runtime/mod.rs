@@ -22,7 +22,7 @@
 //! │  ┌─────────────────────────────────────────────────────────┐│
 //! │  │                   Executor Factories                      ││
 //! │  │  ┌────────────┐ ┌────────────┐ ┌────────────┐          ││
-//! │  │  │ DeepSeek   │ │  Mistral   │ │  Generic   │          ││
+//! │  │  │  Generic   │ │    ...     │ │    ...     │          ││
 //! │  │  └────────────┘ └────────────┘ └────────────┘          ││
 //! │  └─────────────────────────────────────────────────────────┘│
 //! └─────────────────────────────────────────────────────────────┘
@@ -34,7 +34,7 @@
 //! use xiuxian_llm::runtime::{model_bus, ModelSlotId, ModelInput};
 //!
 //! // Register a slot
-//! let slot = model_bus().get(&ModelSlotId::new("deepseek-ocr"));
+//! let slot = model_bus().get(&ModelSlotId::new("generic-model"));
 //!
 //! // Execute inference (auto-activates if needed)
 //! let output = model_bus().execute(&slot_id, ModelInput::Vision {
@@ -50,5 +50,4 @@ mod slot;
 
 pub use bus::{ExecutorFactory, ModelBus, model_bus};
 pub use executor::{ExecutorId, ModelExecutor, ModelInput, ModelOutput, NoopExecutor};
-pub use executors::DeepseekExecutor;
 pub use slot::{ModelMetadata, ModelSlot, ModelSlotId, ResidencyToken, SlotState};

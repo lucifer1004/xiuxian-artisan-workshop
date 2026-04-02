@@ -11,7 +11,7 @@ use xiuxian_daochang::{
 };
 use xiuxian_daochang::{NativeTool, NativeToolCallContext};
 use xiuxian_qianhuan::{
-    ManifestationManager, MemoryPersonaRecord, MemoryTemplateRecord, MockManifestation,
+    ManifestationInterface, ManifestationManager, MemoryPersonaRecord, MemoryTemplateRecord,
     PersonaRegistry,
 };
 use xiuxian_wendao::enhancer::markdown_config::{
@@ -24,13 +24,52 @@ use xiuxian_zhixing::{
     ZhixingHeyi, storage::MarkdownStorage,
 };
 
+fn build_manifestation_manager()
+-> std::result::Result<ManifestationManager, Box<dyn std::error::Error>> {
+    Ok(ManifestationManager::new_with_embedded_templates(
+        &[],
+        &[
+            (
+                "task_add_response.md",
+                "Mock Manifestation Content -> {{ task_title }} :: {{ task_id }}",
+            ),
+            ("daily_agenda.md", "Agenda Template"),
+            ("reminder_notice.md", "{{ task_title_mdv2 }}"),
+        ],
+    )?)
+}
+
+fn render_task_add_response(
+    manifestation: &dyn ManifestationInterface,
+    task: &Entity,
+) -> anyhow::Result<String> {
+    manifestation.render_template(
+        "task_add_response.md",
+        json!({
+            "task_title": task.name,
+            "task_detail": task.description,
+            "task_id": task.id,
+            "scheduled_local": task
+                .metadata
+                .get(ATTR_TIMER_SCHEDULED)
+                .and_then(serde_json::Value::as_str),
+            "reminder_lead_minutes": 10,
+            "qianhuan": {
+                "persona": {
+                    "name": "Mock Persona",
+                }
+            },
+        }),
+    )
+}
+
 fn build_heyi_with_time_zone(
     time_zone: &str,
 ) -> std::result::Result<(Arc<ZhixingHeyi>, tempfile::TempDir), Box<dyn std::error::Error>> {
     let graph = Arc::new(KnowledgeGraph::new());
     let tmp = tempdir()?;
     let storage = Arc::new(MarkdownStorage::new(tmp.path().to_path_buf()));
-    let manifestation = Arc::new(MockManifestation);
+    let manifestation = Arc::new(build_manifestation_manager()?);
     let heyi = ZhixingHeyi::new(
         graph,
         manifestation,
@@ -149,7 +188,6 @@ async fn task_add_tool_binds_recipient_from_session_context()
         })),
         &NativeToolCallContext {
             session_id: Some("telegram:1304799691".to_string()),
-            tool_call_id: None,
         },
     )
     .await?;
@@ -184,7 +222,6 @@ async fn task_add_tool_normalizes_human_local_time_input()
             })),
             &NativeToolCallContext {
                 session_id: Some("telegram:1304799691".to_string()),
-                tool_call_id: None,
             },
         )
         .await?;
@@ -285,7 +322,7 @@ async fn reminder_signal_flows_to_host_dispatcher()
 #[tokio::test]
 async fn task_add_confirmation_can_be_rendered_from_task_id()
 -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let (heyi, _tmp) = build_heyi_with_time_zone("America/Los_Angeles")?;
+    let manifestation = build_manifestation_manager()?;
     let task_id = "task:render-confirmation";
     let mut task = Entity::new(
         task_id.to_string(),
@@ -297,9 +334,7 @@ async fn task_add_confirmation_can_be_rendered_from_task_id()
         ATTR_TIMER_SCHEDULED.to_string(),
         json!("2026-02-26T08:50:00+00:00"),
     );
-    heyi.graph.add_entity(task)?;
-
-    let rendered = heyi.render_task_add_response_from_id(task_id)?;
+    let rendered = render_task_add_response(&manifestation, &task)?;
     assert!(
         rendered.contains("Mock Manifestation Content"),
         "expected manifestation render output"
@@ -310,22 +345,12 @@ async fn task_add_confirmation_can_be_rendered_from_task_id()
 #[tokio::test]
 async fn task_add_render_uses_hot_reloaded_manifestation_template()
 -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let graph = Arc::new(KnowledgeGraph::new());
-    let notebook_tmp = tempdir()?;
-    let storage = Arc::new(MarkdownStorage::new(notebook_tmp.path().to_path_buf()));
     let template_tmp = tempdir()?;
     let template_path = template_tmp.path().join("task_add_response.md");
     fs::write(&template_path, "Template v1 -> {{ task_title }}")?;
 
     let template_glob = format!("{}/*.md", template_tmp.path().display());
-    let manifestation = Arc::new(ManifestationManager::new(&[template_glob.as_str()])?);
-    let heyi = Arc::new(ZhixingHeyi::new(
-        graph,
-        manifestation,
-        storage,
-        "host-e2e".to_string(),
-        "UTC",
-    )?);
+    let manifestation = ManifestationManager::new(&[template_glob.as_str()])?;
 
     let task_id = "task:hot-reload-confirmation";
     let task = Entity::new(
@@ -334,16 +359,15 @@ async fn task_add_render_uses_hot_reloaded_manifestation_template()
         EntityType::Other("Task".to_string()),
         "Verify manifestation template reload path".to_string(),
     );
-    heyi.graph.add_entity(task)?;
 
-    let first = heyi.render_task_add_response_from_id(task_id)?;
+    let first = render_task_add_response(&manifestation, &task)?;
     assert!(
         first.contains("Template v1 -> Hot Reload Task"),
         "expected v1 template output, got: {first}"
     );
 
     fs::write(&template_path, "Template v2 -> {{ task_title }}")?;
-    let second = heyi.render_task_add_response_from_id(task_id)?;
+    let second = render_task_add_response(&manifestation, &task)?;
     assert!(
         second.contains("Template v2 -> Hot Reload Task"),
         "expected v2 template output without restart, got: {second}"
@@ -355,10 +379,6 @@ async fn task_add_render_uses_hot_reloaded_manifestation_template()
 #[tokio::test]
 async fn task_add_render_supports_markdown_ast_memory_bridge()
 -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let graph = Arc::new(KnowledgeGraph::new());
-    let notebook_tmp = tempdir()?;
-    let storage = Arc::new(MarkdownStorage::new(notebook_tmp.path().to_path_buf()));
-
     let markdown = r#"
 ## Persona: Agenda Steward
 <!-- id: "agenda_steward", type: "persona" -->
@@ -386,19 +406,10 @@ Markdown Bridge Template -> {{ task_title }} :: {{ task_id }}
     assert_eq!(loaded_personas, 1);
     assert!(registry.get("agenda_steward").is_some());
 
-    let manifestation_manager = ManifestationManager::new_empty();
+    let manifestation_manager = ManifestationManager::new_with_embedded_templates(&[], &[])?;
     let loaded_templates =
         manifestation_manager.load_templates_from_memory(template_records(&blocks))?;
     assert_eq!(loaded_templates, 2);
-    let manifestation = Arc::new(manifestation_manager);
-
-    let heyi = Arc::new(ZhixingHeyi::new(
-        Arc::clone(&graph),
-        manifestation,
-        storage,
-        "host-e2e".to_string(),
-        "UTC",
-    )?);
 
     let task_id = "task:markdown-bridge";
     let task = Entity::new(
@@ -407,9 +418,8 @@ Markdown Bridge Template -> {{ task_title }} :: {{ task_id }}
         EntityType::Other("Task".to_string()),
         "Verify markdown AST memory bridge".to_string(),
     );
-    graph.add_entity(task)?;
 
-    let rendered = heyi.render_task_add_response_from_id(task_id)?;
+    let rendered = render_task_add_response(&manifestation_manager, &task)?;
     assert!(rendered.contains("Markdown Bridge Template"));
     assert!(rendered.contains("Bridge Render Task"));
     assert!(rendered.contains(task_id));

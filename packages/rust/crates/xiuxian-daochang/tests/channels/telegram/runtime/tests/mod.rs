@@ -32,16 +32,14 @@ use axum::{Json, Router};
 use tokio::sync::{Mutex, mpsc};
 use tower::util::ServiceExt;
 
-use crate::agent::Agent;
-use crate::channels::telegram::TelegramChannel;
-use crate::channels::telegram::TelegramSessionPartition;
-use crate::channels::traits::{Channel, ChannelMessage};
-use crate::config::AgentConfig;
-use crate::jobs::{JobManager, JobManagerConfig};
-
-use super::dispatch::ForegroundInterruptController;
-use super::jobs::handle_inbound_message_with_interrupt;
-use super::webhook::build_telegram_webhook_app;
+use xiuxian_daochang::test_support::{
+    TelegramForegroundInterruptController as ForegroundInterruptController,
+    handle_telegram_inbound_message_with_interrupt,
+};
+use xiuxian_daochang::{
+    Agent, AgentConfig, Channel, ChannelMessage, ForegroundQueueMode, JobManager, JobManagerConfig,
+    TelegramChannel, TelegramSessionPartition, TurnRunner, build_telegram_webhook_app,
+};
 
 mod jobs_logging;
 mod partition_modes;
@@ -116,6 +114,7 @@ fn inbound(content: &str) -> ChannelMessage {
         recipient: "-200".to_string(),
         session_key: "-200:888".to_string(),
         content: content.to_string(),
+        attachments: Vec::new(),
         channel: "telegram".to_string(),
         timestamp: 0,
     }
@@ -286,9 +285,15 @@ async fn build_agent_with_context_budget() -> Result<Arc<Agent>> {
     Ok(Arc::new(Agent::from_config(config).await?))
 }
 
-fn build_job_manager(runner: Arc<dyn crate::jobs::TurnRunner>) -> Arc<JobManager> {
+fn build_job_manager(runner: Arc<dyn TurnRunner>) -> Arc<JobManager> {
     let (manager, _completion_rx) = JobManager::start(runner, JobManagerConfig::default());
     manager
+}
+
+mod support {
+    pub(super) use super::{
+        MockChannel, build_agent, build_job_manager, handle_inbound_message, inbound,
+    };
 }
 
 async fn handle_inbound_message(
@@ -299,13 +304,35 @@ async fn handle_inbound_message(
     agent: &Arc<Agent>,
 ) -> bool {
     let interrupt_controller = ForegroundInterruptController::default();
-    handle_inbound_message_with_interrupt(
+    handle_telegram_inbound_message_with_interrupt(
         msg,
         channel,
         foreground_tx,
         &interrupt_controller,
         job_manager,
         agent,
+        ForegroundQueueMode::Queue,
+    )
+    .await
+}
+
+async fn handle_inbound_message_with_interrupt(
+    msg: ChannelMessage,
+    channel: &Arc<dyn Channel>,
+    foreground_tx: &mpsc::Sender<ChannelMessage>,
+    interrupt_controller: &ForegroundInterruptController,
+    job_manager: &Arc<JobManager>,
+    agent: &Arc<Agent>,
+    queue_mode: ForegroundQueueMode,
+) -> bool {
+    handle_telegram_inbound_message_with_interrupt(
+        msg,
+        channel,
+        foreground_tx,
+        interrupt_controller,
+        job_manager,
+        agent,
+        queue_mode,
     )
     .await
 }

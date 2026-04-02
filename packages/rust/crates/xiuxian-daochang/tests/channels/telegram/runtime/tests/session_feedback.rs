@@ -42,9 +42,7 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 
-use crate::agent::Agent;
-use crate::channels::traits::{Channel, ChannelMessage};
-use crate::config::{AgentConfig, MemoryConfig};
+use xiuxian_daochang::{Agent, AgentConfig, Channel, ChannelMessage, MemoryConfig};
 
 use super::{MockChannel, build_agent, build_job_manager, handle_inbound_message, inbound};
 
@@ -77,6 +75,7 @@ fn feedback_inbound(content: &str, session: &FeedbackTestSession) -> ChannelMess
         recipient: session.recipient.clone(),
         session_key: session.session_key.clone(),
         content: content.to_string(),
+        attachments: Vec::new(),
         channel: "telegram".to_string(),
         timestamp: 0,
     }

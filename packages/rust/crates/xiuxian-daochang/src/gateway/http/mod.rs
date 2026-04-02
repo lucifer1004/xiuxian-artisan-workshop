@@ -3,7 +3,7 @@
 //! Request validation (400 for empty `session_id` or message), 500 on agent error.
 //! Each request is limited by a timeout to avoid stuck connections.
 
-mod handlers;
+pub(crate) mod handlers;
 pub(crate) mod llm_proxy;
 pub(crate) mod runtime;
 mod types;
@@ -106,7 +106,7 @@ pub async fn run_http(
     max_concurrent_turns: Option<usize>,
 ) -> Result<()> {
     let timeout = turn_timeout_secs.unwrap_or(TURN_TIMEOUT_SECS);
-    let embedding_runtime = Arc::new(build_embedding_runtime_for_gateway().await);
+    let embedding_runtime = Arc::new(build_embedding_runtime_for_gateway().await?);
     let app =
         router_with_embedding_runtime(agent, timeout, max_concurrent_turns, embedding_runtime);
     let listener = TcpListener::bind(bind_addr).await?;

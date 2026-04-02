@@ -1,16 +1,12 @@
 //! Test coverage for xiuxian-daochang behavior.
 
-use xiuxian_daochang::test_support::managed_parser::{
-    detect_managed_control_command, detect_managed_slash_command,
-};
-use xiuxian_daochang::test_support::telegram_parser::{
-    is_agenda_command, parse_help_command, parse_job_status_command, parse_resume_context_command,
-    parse_session_admin_command, parse_session_feedback_command, parse_session_injection_command,
-    parse_session_partition_command,
-};
-use xiuxian_daochang::test_support::types::{
+use xiuxian_daochang::test_support::{
     ManagedControlCommand, ManagedSlashCommand, OutputFormat, ResumeContextCommand,
     SessionAdminAction, SessionFeedbackDirection, SessionInjectionAction, SessionPartitionMode,
+    detect_managed_control_command, detect_managed_slash_command, is_agenda_command,
+    parse_help_command, parse_job_status_command, parse_resume_context_command,
+    parse_session_admin_command, parse_session_feedback_command, parse_session_injection_command,
+    parse_session_partition_command,
 };
 
 #[test]

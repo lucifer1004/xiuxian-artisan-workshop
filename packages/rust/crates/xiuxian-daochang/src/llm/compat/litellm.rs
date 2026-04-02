@@ -13,10 +13,6 @@ use tokio::sync::OnceCell;
 mod anthropic_custom;
 mod responses;
 
-use super::litellm_ocr::{build_ocr_truth_overlay_text, infer_deepseek_ocr_truth_markdown};
-pub(in crate::llm) use super::litellm_ocr::{
-    simulate_ocr_gate_panic_recovery_for_tests, simulate_ocr_gate_timeout_recovery_for_tests,
-};
 use crate::llm::converters::{
     chat_message_to_litellm_message, content_from_litellm, tool_call_from_litellm,
 };

@@ -4,6 +4,7 @@
 //! without path-compiling source files via `#[path = ...]`.
 
 mod admission;
+mod bootstrap;
 mod discord_runtime;
 mod embedding;
 mod gateway_http;
@@ -13,6 +14,7 @@ mod managed_runtime;
 mod memory_credit;
 mod memory_feedback;
 mod memory_recall;
+mod memory_recall_metrics;
 mod memory_recall_state;
 mod memory_stream_consumer;
 mod reflection;
@@ -31,11 +33,15 @@ pub use admission::{
     DownstreamAdmissionPolicy, DownstreamAdmissionRejectReason, DownstreamAdmissionRuntimeSnapshot,
     DownstreamInFlightSnapshot, DownstreamRuntimeSnapshot,
 };
+pub use bootstrap::{
+    init_persona_registries_internal_len, load_skill_templates_from_embedded_registry,
+    resolve_notebook_root, resolve_prj_data_home, resolve_project_root, resolve_template_globs,
+};
 pub use discord_runtime::{
     DiscordForegroundInterruptController, DiscordForegroundRuntimeHarness,
     build_discord_foreground_runtime, discord_interrupted_reply_is_suppressed,
-    process_discord_message_with_interrupt, push_discord_background_completion,
-    resolve_discord_snapshot_interval_secs,
+    process_discord_message, process_discord_message_with_interrupt,
+    push_discord_background_completion, resolve_discord_snapshot_interval_secs,
 };
 pub use embedding::{EmbeddingBackendMode, embed_http, parse_embedding_client_backend_mode};
 #[cfg(feature = "agent-provider-litellm")]
@@ -44,7 +50,8 @@ pub use embedding::{
     normalize_openai_compatible_base_url,
 };
 pub use gateway_http::{
-    GatewayEmbeddingRuntimeHandle, build_embedding_runtime_for_settings, read_api_key,
+    GatewayEmbeddingRuntimeHandle, apply_gateway_embedding_memory_guard_for_tests,
+    build_embedding_runtime_for_settings, fallback_hash_embed_batch, read_api_key,
     resolve_embed_base_url, resolve_embed_model, resolve_request_model,
     resolve_runtime_embed_base_url, resolve_target_api_key_env, resolve_target_base_url,
 };
@@ -57,12 +64,9 @@ pub use llm::{
 };
 #[cfg(feature = "agent-provider-litellm")]
 pub use llm::{
-    CustomBaseFallbackTransport, OcrGateTimeoutRecoveryProbe,
-    build_responses_payload_from_chat_completion_request, chat_message_to_litellm_message,
-    deepseek_ocr_memory_guard_triggered, infer_deepseek_ocr_truth_from_image_bytes,
-    parse_responses_stream_tool_names, resolve_custom_base_transport_api_key_from_values,
-    resolve_deepseek_ocr_global_lock_path, resolve_deepseek_ocr_memory_limit_bytes,
-    simulate_ocr_gate_panic_recovery, simulate_ocr_gate_timeout_recovery,
+    CustomBaseFallbackTransport, build_responses_payload_from_chat_completion_request,
+    chat_message_to_litellm_message, parse_responses_stream_tool_names,
+    resolve_custom_base_transport_api_key_from_values,
 };
 pub use managed_parser::{detect_managed_control_command, detect_managed_slash_command};
 pub use managed_runtime::{
@@ -84,6 +88,7 @@ pub use memory_recall::{
     MemoryRecallInput, MemoryRecallPlan, build_memory_context_message, filter_recalled_episodes,
     filter_recalled_episodes_at, plan_memory_recall,
 };
+pub use memory_recall_metrics::{TestMemoryRecallMetricsState, ratio_as_f32};
 pub use memory_recall_state::{
     EMBEDDING_SOURCE_EMBEDDING, EMBEDDING_SOURCE_EMBEDDING_REPAIRED, EMBEDDING_SOURCE_UNKNOWN,
     SessionMemoryRecallDecision, SessionMemoryRecallSnapshot,

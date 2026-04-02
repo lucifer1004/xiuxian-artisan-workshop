@@ -1,7 +1,6 @@
 use super::super::transport_http::embed_http;
 #[cfg(feature = "agent-provider-litellm")]
 use super::super::transport_litellm::embed_litellm;
-use super::super::transport_mistral_sdk::embed_mistral_sdk;
 use super::super::transport_openai::embed_openai_http;
 use super::EmbeddingDispatchRuntime;
 
@@ -20,9 +19,6 @@ pub(super) async fn dispatch_chunk_by_backend(
         }
         super::super::backend::EmbeddingBackendMode::OpenAiHttp => {
             dispatch_openai_backend(runtime, texts, model).await
-        }
-        super::super::backend::EmbeddingBackendMode::MistralSdk => {
-            dispatch_mistral_sdk_backend(runtime, texts, model).await
         }
         super::super::backend::EmbeddingBackendMode::LiteLlmRs => {
             dispatch_litellm_backend(runtime, texts, model).await
@@ -62,33 +58,6 @@ async fn dispatch_openai_backend(
         );
     }
     primary
-}
-
-async fn dispatch_mistral_sdk_backend(
-    runtime: &EmbeddingDispatchRuntime,
-    texts: &[String],
-    model: Option<&str>,
-) -> Option<Vec<Vec<f32>>> {
-    let vectors = embed_mistral_sdk(
-        texts,
-        model,
-        runtime.mistral_sdk_hf_cache_path.as_deref(),
-        runtime.mistral_sdk_hf_revision.as_deref(),
-        runtime.mistral_sdk_max_num_seqs,
-    )
-    .await;
-    if vectors.is_none() {
-        tracing::debug!(
-            event = "agent.embedding.mistral_sdk.failed",
-            model = model.unwrap_or(""),
-            backend_source = runtime.backend_source,
-            hf_cache_path = runtime.mistral_sdk_hf_cache_path.as_deref().unwrap_or(""),
-            hf_revision = runtime.mistral_sdk_hf_revision.as_deref().unwrap_or(""),
-            max_num_seqs = runtime.mistral_sdk_max_num_seqs,
-            "mistral_sdk embedding path failed"
-        );
-    }
-    vectors
 }
 
 async fn dispatch_litellm_backend(

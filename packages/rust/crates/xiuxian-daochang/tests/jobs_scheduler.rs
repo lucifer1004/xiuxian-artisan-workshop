@@ -34,7 +34,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use omni_agent::{
+use xiuxian_daochang::{
     JobManager, JobManagerConfig, RecurringScheduleConfig, TurnRunner, run_recurring_schedule,
 };
 

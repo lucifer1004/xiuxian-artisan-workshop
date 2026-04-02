@@ -258,6 +258,65 @@ async fn repo_search_publication_state_hydrates_from_repo_corpus_record_after_me
 }
 
 #[tokio::test]
+async fn repo_search_publication_state_recovers_publication_after_runtime_only_restart_hydration() {
+    let temp_dir = temp_dir();
+    let keyspace = unique_test_manifest_keyspace("runtime-only-restart-hydration");
+    let service = SearchPlaneService::with_runtime(
+        PathBuf::from("/tmp/project"),
+        temp_dir.path().join("search_plane"),
+        keyspace.clone(),
+        SearchMaintenancePolicy::default(),
+        SearchPlaneCache::for_tests(keyspace),
+    );
+    let documents = vec![RepoCodeDocument {
+        path: "src/lib.rs".to_string(),
+        language: Some("rust".to_string()),
+        contents: Arc::<str>::from("fn alpha() {}\n"),
+        size_bytes: 14,
+        modified_unix_ms: 0,
+    }];
+    publish_repo_bundle(&service, "searchable/repo", &documents, Some("rev-1")).await;
+    service.clear_all_in_memory_repo_corpus_records_for_test();
+
+    service.synchronize_repo_runtime(&RepoIndexStatusResponse {
+        total: 1,
+        active: 0,
+        queued: 0,
+        checking: 0,
+        syncing: 0,
+        indexing: 0,
+        ready: 1,
+        unsupported: 0,
+        failed: 0,
+        target_concurrency: 1,
+        max_concurrency: 1,
+        sync_concurrency_limit: 1,
+        current_repo_id: None,
+        active_repo_ids: Vec::new(),
+        repos: vec![repo_status_entry("searchable/repo", RepoIndexPhase::Ready)],
+    });
+
+    ok_or_panic(
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let searchable = service
+                    .repo_search_publication_state("searchable/repo")
+                    .await;
+                if searchable.availability == RepoSearchAvailability::Searchable
+                    && searchable.entity_published
+                    && searchable.content_published
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await,
+        "runtime-only restart hydration should recover persisted publication",
+    );
+}
+
+#[tokio::test]
 async fn repo_search_publication_state_does_not_hydrate_from_manifest_without_repo_corpus_cache() {
     let temp_dir = temp_dir();
     let keyspace = unique_test_manifest_keyspace("manifest-not-runtime");

@@ -2,7 +2,6 @@ mod budget;
 mod jobs;
 mod memory;
 mod partition;
-mod session_admin;
 mod session_context;
 mod shared;
 
@@ -23,10 +22,6 @@ pub(super) use partition::{
     format_session_partition_error_json, format_session_partition_status,
     format_session_partition_status_json, format_session_partition_updated,
     format_session_partition_updated_json,
-};
-pub(super) use session_admin::{
-    format_session_admin_status, format_session_admin_status_json, format_session_admin_updated,
-    format_session_admin_updated_json,
 };
 pub(super) use session_context::{
     format_session_context_snapshot, format_session_context_snapshot_json,

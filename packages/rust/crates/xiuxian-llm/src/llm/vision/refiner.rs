@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use super::anchor::{TextAnchor, VisualAnchor};
 use super::cot::{VisualCotInput, VisualCotMode, build_visual_cot_prompt};
-use super::deepseek::{DeepseekRuntime, get_deepseek_runtime, infer_deepseek_ocr_truth};
 use super::preprocess::{
     DEFAULT_VISION_MAX_DIMENSION, PreparedVisionImage, prepare_image_for_ocr_runtime,
 };
@@ -20,7 +19,7 @@ pub struct VisualRefinement {
     pub text_anchors: Vec<TextAnchor>,
     /// Semantic overlay text for prompt preprending.
     pub semantic_overlay: Option<String>,
-    /// `DeepSeek` OCR markdown truth, when available.
+    /// OCR truth markdown, when available.
     pub ocr_truth_markdown: Option<String>,
 }
 
@@ -73,24 +72,20 @@ impl VisualRefiner {
     ///
     /// # Errors
     ///
-    /// Returns an error when image preparation or OCR truth extraction fails.
-    pub async fn refine(&self, image_bytes: Arc<[u8]>) -> LlmResult<VisualRefinement> {
+    /// Returns an error when image preparation fails.
+    pub fn refine(&self, image_bytes: Arc<[u8]>) -> LlmResult<VisualRefinement> {
         let prepared = prepare_image_for_ocr_runtime(image_bytes)?;
         tracing::debug!(
-            event = "llm.vision.deepseek.refiner.prepare",
+            event = "llm.vision.refiner.prepare",
             requested_max_dimension = self.max_dimension,
             input_mode = prepared.mode.as_str(),
             width = prepared.width,
             height = prepared.height,
-            "VisualRefiner prepared image for DeepSeek OCR"
+            "VisualRefiner prepared image"
         );
 
-        let runtime = get_deepseek_runtime();
-        let ocr_truth_markdown =
-            infer_deepseek_ocr_truth(runtime.as_ref(), &prepared, None).await?;
-
-        let anchors =
-            self.detect_visual_anchors(runtime.as_ref(), &prepared, ocr_truth_markdown.as_deref());
+        let ocr_truth_markdown = None;
+        let anchors = self.detect_visual_anchors(&prepared, ocr_truth_markdown.as_deref());
         let text_anchors = anchors.iter().map(VisualAnchor::to_text_anchor).collect();
         let semantic_overlay = build_semantic_overlay(anchors.as_slice());
         Ok(VisualRefinement {
@@ -104,18 +99,9 @@ impl VisualRefiner {
 
     fn detect_visual_anchors(
         &self,
-        runtime: &DeepseekRuntime,
         _prepared: &PreparedVisionImage,
         _ocr_truth_markdown: Option<&str>,
     ) -> Vec<VisualAnchor> {
-        // DeepSeek runtime remains intentionally lazy-bound to model
-        // configuration. If models are not configured, this stage is a no-op.
-        if !runtime.is_enabled() {
-            return Vec::new();
-        }
-
-        // Reserved hook for DeepSeek anchor extraction. Keep deterministic
-        // filtering in the refiner so OCR backend output stays stable.
         let raw_anchors: Vec<VisualAnchor> = Vec::new();
         raw_anchors
             .into_iter()

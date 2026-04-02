@@ -1,10 +1,7 @@
 use std::sync::Arc;
-use std::sync::Once;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tokio::sync::Semaphore;
-use xiuxian_llm::llm::vision::deepseek::prewarm_deepseek_ocr;
-use xiuxian_llm::llm::vision::{DeepseekRuntime, get_deepseek_runtime};
 use xiuxian_macros::env_non_empty;
 
 use crate::config::load_runtime_settings;
@@ -12,11 +9,7 @@ use crate::llm::backend::{extract_api_base_from_inference_url, parse_backend_mod
 use crate::llm::client::LlmClient;
 #[cfg(feature = "agent-provider-litellm")]
 use crate::llm::compat::litellm::LiteLlmRuntime;
-#[cfg(feature = "agent-provider-litellm")]
-use crate::llm::compat::litellm_ocr::mark_deepseek_ocr_runtime_prewarmed;
 use crate::llm::providers::{ProviderSettings, resolve_provider_settings};
-
-static DEEPSEEK_VISION_STARTUP_PROBE_ONCE: Once = Once::new();
 
 impl LlmClient {
     pub fn new(inference_url: String, model: String, api_key: Option<String>) -> Self {
@@ -77,10 +70,8 @@ impl LlmClient {
             model,
             api_key,
             backend_mode,
-            backend_source,
             litellm_provider_mode,
             litellm_wire_api,
-            litellm_provider_source,
             #[cfg(feature = "agent-provider-litellm")]
             litellm_api_key_env,
             #[cfg(feature = "agent-provider-litellm")]
@@ -93,178 +84,6 @@ impl LlmClient {
             litellm_runtime: LiteLlmRuntime::new(),
         }
     }
-
-    /// Active backend mode label (`litellm_rs` or `http`).
-    pub fn backend_mode(&self) -> &'static str {
-        self.backend_mode.as_str()
-    }
-
-    /// Backend source label (`env`, `settings`, or `default`).
-    pub fn backend_source(&self) -> &'static str {
-        self.backend_source
-    }
-
-    /// Active litellm provider mode (`openai` or `minimax`).
-    pub fn litellm_provider_mode(&self) -> &'static str {
-        self.litellm_provider_mode.as_str()
-    }
-
-    /// Active wire protocol (`chat_completions` or `responses`).
-    pub fn litellm_wire_api(&self) -> &'static str {
-        self.litellm_wire_api.as_str()
-    }
-
-    /// litellm provider source (`env`, `runtime_settings`, `default`).
-    pub fn litellm_provider_source(&self) -> &'static str {
-        self.litellm_provider_source
-    }
-}
-
-/// Run the `DeepSeek` vision startup probe at most once per process.
-///
-/// `trigger` is a stable label describing the startup path (for example
-/// `telegram`, `discord`, or `gateway`) used only for observability logs.
-pub fn run_deepseek_vision_startup_probe_once(trigger: &'static str) {
-    DEEPSEEK_VISION_STARTUP_PROBE_ONCE.call_once(|| {
-        log_deepseek_vision_startup_probe(trigger);
-    });
-}
-
-fn log_deepseek_vision_startup_probe(trigger: &'static str) {
-    let runtime = get_deepseek_runtime();
-    match runtime.as_ref() {
-        DeepseekRuntime::Configured { model_root } => {
-            tracing::info!(
-                event = "agent.llm.vision.deepseek.startup_probe",
-                status = "enabled",
-                trigger,
-                model_root = %model_root,
-                "DeepSeek OCR startup probe finished: runtime enabled"
-            );
-            if deepseek_startup_prewarm_enabled() {
-                tracing::info!(
-                    event = "agent.llm.vision.deepseek.startup_prewarm",
-                    status = "scheduled",
-                    trigger,
-                    model_root = %model_root,
-                    "DeepSeek OCR startup prewarm scheduled in background"
-                );
-                spawn_deepseek_startup_prewarm(trigger, model_root, Arc::clone(&runtime));
-            } else {
-                tracing::info!(
-                    event = "agent.llm.vision.deepseek.startup_prewarm",
-                    status = "skipped",
-                    trigger,
-                    reason = "disabled_by_env",
-                    "DeepSeek OCR startup prewarm skipped by OMNI_AGENT_DEEPSEEK_OCR_PREWARM"
-                );
-            }
-        }
-        DeepseekRuntime::RemoteHttp { base_url } => {
-            tracing::info!(
-                event = "agent.llm.vision.deepseek.startup_probe",
-                status = "enabled_remote_http",
-                trigger,
-                base_url = %base_url,
-                "DeepSeek OCR startup probe finished: remote runtime enabled"
-            );
-            tracing::info!(
-                event = "agent.llm.vision.deepseek.startup_prewarm",
-                status = "scheduled",
-                trigger,
-                base_url = %base_url,
-                "DeepSeek OCR startup prewarm scheduled against remote runtime"
-            );
-            spawn_deepseek_startup_prewarm(trigger, base_url, Arc::clone(&runtime));
-        }
-        DeepseekRuntime::Disabled { reason } => {
-            tracing::warn!(
-                event = "agent.llm.vision.deepseek.startup_probe",
-                status = "disabled",
-                trigger,
-                reason = %reason,
-                "DeepSeek OCR startup probe finished: runtime disabled"
-            );
-        }
-    }
-}
-
-fn spawn_deepseek_startup_prewarm(
-    trigger: &'static str,
-    model_root: &str,
-    runtime: Arc<DeepseekRuntime>,
-) {
-    let thread_model_root = model_root.to_string();
-    let spawn_result = std::thread::Builder::new()
-        .name("deepseek-startup-prewarm".to_string())
-        .spawn(move || {
-            let started = Instant::now();
-            let prewarm_outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                prewarm_deepseek_ocr(runtime.as_ref())
-            }));
-            match prewarm_outcome {
-                Ok(Ok(())) => {
-                    #[cfg(feature = "agent-provider-litellm")]
-                    mark_deepseek_ocr_runtime_prewarmed();
-                    tracing::info!(
-                        event = "agent.llm.vision.deepseek.startup_prewarm",
-                        status = "ready",
-                        trigger,
-                        elapsed_ms = started.elapsed().as_millis(),
-                        model_root = %thread_model_root,
-                        "DeepSeek OCR startup prewarm completed"
-                    );
-                }
-                Ok(Err(error)) => {
-                    tracing::warn!(
-                        event = "agent.llm.vision.deepseek.startup_prewarm",
-                        status = "failed",
-                        trigger,
-                        elapsed_ms = started.elapsed().as_millis(),
-                        model_root = %thread_model_root,
-                        error = %error,
-                        "DeepSeek OCR startup prewarm failed; runtime stays best-effort"
-                    );
-                }
-                Err(payload) => {
-                    tracing::warn!(
-                        event = "agent.llm.vision.deepseek.startup_prewarm",
-                        status = "panicked",
-                        trigger,
-                        elapsed_ms = started.elapsed().as_millis(),
-                        model_root = %thread_model_root,
-                        panic = %panic_payload_to_message(payload.as_ref()),
-                        "DeepSeek OCR startup prewarm panicked; runtime stays best-effort"
-                    );
-                }
-            }
-        });
-    if let Err(error) = spawn_result {
-        tracing::warn!(
-            event = "agent.llm.vision.deepseek.startup_prewarm",
-            status = "spawn_failed",
-            trigger,
-            model_root = %model_root,
-            error = %error,
-            "DeepSeek OCR startup prewarm worker failed to start"
-        );
-    }
-}
-
-fn panic_payload_to_message(payload: &(dyn std::any::Any + Send)) -> String {
-    if let Some(message) = payload.downcast_ref::<&str>() {
-        return (*message).to_string();
-    }
-    if let Some(message) = payload.downcast_ref::<String>() {
-        return message.clone();
-    }
-    "unknown panic payload".to_string()
-}
-
-fn deepseek_startup_prewarm_enabled() -> bool {
-    env_non_empty!("OMNI_AGENT_DEEPSEEK_OCR_PREWARM")
-        .map(|raw| raw.trim().to_ascii_lowercase())
-        .is_none_or(|raw| !matches!(raw.as_str(), "0" | "false" | "no" | "off"))
 }
 
 fn build_http_client() -> reqwest::Client {

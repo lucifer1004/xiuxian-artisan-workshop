@@ -13,12 +13,13 @@ mod resolve;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
-use omni_agent::{load_runtime_settings, set_config_home_override};
+use xiuxian_daochang::{load_runtime_settings, set_config_home_override};
 
 use crate::cli::{Cli, Command};
+pub(crate) use crate::cli::{DiscordRuntimeMode, TelegramChannelMode, WebhookDedupBackendMode};
 use crate::nodes::{
-    ChannelCommandRequest, run_channel_command, run_gateway_mode, run_repl_mode, run_schedule_mode,
-    run_stdio_mode,
+    ChannelCommandRequest, run_channel_command, run_embedding_warmup, run_gateway_mode,
+    run_repl_mode, run_schedule_mode, run_stdio_mode,
 };
 
 #[tokio::main]
@@ -30,14 +31,8 @@ async fn main() -> anyhow::Result<()> {
     let runtime_settings = load_runtime_settings();
 
     // Initialize tracing: RUST_LOG overrides; --verbose on channel => debug; else info
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        let verbose = matches!(&cli.command, Command::Channel { verbose: true, .. });
-        EnvFilter::new(if verbose {
-            "omni_agent=debug"
-        } else {
-            "omni_agent=info"
-        })
-    });
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("omni_agent=info"));
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
@@ -107,7 +102,6 @@ async fn main() -> anyhow::Result<()> {
             valkey_url,
             webhook_dedup_ttl_secs,
             webhook_dedup_key_prefix,
-            verbose: _,
         } => {
             run_channel_command(
                 ChannelCommandRequest {
@@ -130,6 +124,9 @@ async fn main() -> anyhow::Result<()> {
                 &runtime_settings,
             )
             .await
+        }
+        Command::EmbeddingWarmup { text, model } => {
+            run_embedding_warmup(&runtime_settings, text, model).await
         }
     }
 }

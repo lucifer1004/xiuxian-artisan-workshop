@@ -351,26 +351,28 @@ fn build_role_configs(config: &PerfConfig, temp_root: &Path) -> Vec<RoleConfig> 
         litellm_memory_path.display()
     );
 
-    let mistral_memory_path = temp_root.join("memory-mistral-sdk");
-    let mistral_settings = format!(
+    let openai_http_memory_path = temp_root.join("memory-openai-http");
+    let openai_http_settings = format!(
         "[agent]\n\
          llm_backend = \"http\"\n\
          \n\
          [llm.embedding]\n\
-         backend = \"mistral_sdk\"\n\
+         backend = \"openai_http\"\n\
          batch_max_size = 128\n\
          batch_max_concurrency = 1\n\
          model = \"{base_model}\"\n\
+         litellm_api_base = \"{}\"\n\
          \n\
          [memory]\n\
-         embedding_backend = \"mistral_sdk\"\n\
+         embedding_backend = \"openai_http\"\n\
          embedding_model = \"{base_model}\"\n\
          persistence_backend = \"local\"\n\
          path = \"{}\"\n\
          \n\
          [tool_runtime]\n\
          strict_startup = false\n",
-        mistral_memory_path.display()
+        config.upstream_base_url,
+        openai_http_memory_path.display()
     );
 
     vec![
@@ -382,11 +384,11 @@ fn build_role_configs(config: &PerfConfig, temp_root: &Path) -> Vec<RoleConfig> 
             settings_toml: litellm_settings,
         },
         RoleConfig {
-            name: "mistral_sdk",
+            name: "openai_http",
             port: config.base_port + 1,
             model: base_model.clone(),
             upstream_model: base_model,
-            settings_toml: mistral_settings,
+            settings_toml: openai_http_settings,
         },
     ]
 }

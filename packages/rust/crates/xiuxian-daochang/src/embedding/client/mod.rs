@@ -42,9 +42,6 @@ pub struct EmbeddingClient {
     batch_max_size: usize,
     batch_max_concurrency: usize,
     default_model: Option<String>,
-    mistral_sdk_hf_cache_path: Option<String>,
-    mistral_sdk_hf_revision: Option<String>,
-    mistral_sdk_max_num_seqs: Option<usize>,
     #[cfg(feature = "agent-provider-litellm")]
     litellm_api_key: Option<String>,
 }
@@ -59,9 +56,6 @@ struct EmbeddingDispatchRuntime {
     timeout_secs: u64,
     max_in_flight: Option<usize>,
     in_flight_gate: Option<Arc<Semaphore>>,
-    mistral_sdk_hf_cache_path: Option<String>,
-    mistral_sdk_hf_revision: Option<String>,
-    mistral_sdk_max_num_seqs: Option<usize>,
     #[cfg(feature = "agent-provider-litellm")]
     litellm_api_key: Option<String>,
 }

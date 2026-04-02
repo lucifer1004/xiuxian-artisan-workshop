@@ -12,29 +12,56 @@ use super::core::{
     build_telegram_webhook_app_with_partition_and_control_command_policy,
 };
 
+/// Request payload for building a Telegram webhook app with an explicit control
+/// command policy.
 pub struct TelegramWebhookControlPolicyBuildRequest {
+    /// Telegram bot token used for webhook API calls.
     pub bot_token: String,
+    /// Allow-listed Telegram users.
     pub allowed_users: Vec<String>,
+    /// Allow-listed Telegram groups or chats.
     pub allowed_groups: Vec<String>,
+    /// Prebuilt control-command authorization policy.
     pub control_command_policy: TelegramControlCommandPolicy,
+    /// Webhook path mounted on the HTTP server.
     pub webhook_path: String,
+    /// Optional Telegram secret token used to validate webhook requests.
     pub secret_token: Option<String>,
+    /// Deduplication backend configuration for inbound webhook updates.
     pub dedup_config: WebhookDedupConfig,
+    /// Channel message sink that receives accepted inbound Telegram updates.
     pub tx: mpsc::Sender<ChannelMessage>,
 }
 
+/// Request payload for building a Telegram webhook app with an explicit session
+/// partition strategy.
 pub struct TelegramWebhookPartitionBuildRequest {
+    /// Telegram bot token used for webhook API calls.
     pub bot_token: String,
+    /// Allow-listed Telegram users.
     pub allowed_users: Vec<String>,
+    /// Allow-listed Telegram groups or chats.
     pub allowed_groups: Vec<String>,
+    /// Admin users allowed to execute privileged control commands.
     pub admin_users: Vec<String>,
+    /// Webhook path mounted on the HTTP server.
     pub webhook_path: String,
+    /// Optional Telegram secret token used to validate webhook requests.
     pub secret_token: Option<String>,
+    /// Deduplication backend configuration for inbound webhook updates.
     pub dedup_config: WebhookDedupConfig,
+    /// Session partition mode used to derive logical conversation keys.
     pub session_partition: TelegramSessionPartition,
+    /// Channel message sink that receives accepted inbound Telegram updates.
     pub tx: mpsc::Sender<ChannelMessage>,
 }
 
+/// Builds a Telegram webhook application with the default session partition and
+/// an empty control-command admin policy.
+///
+/// # Errors
+///
+/// Returns an error when webhook core construction fails.
 pub fn build_telegram_webhook_app(
     bot_token: String,
     allowed_users: Vec<String>,
@@ -62,6 +89,12 @@ pub fn build_telegram_webhook_app(
     )
 }
 
+/// Builds a Telegram webhook application with an explicit control-command
+/// policy.
+///
+/// # Errors
+///
+/// Returns an error when webhook core construction fails.
 pub fn build_telegram_webhook_app_with_control_command_policy(
     request: TelegramWebhookControlPolicyBuildRequest,
 ) -> Result<TelegramWebhookApp> {
@@ -90,6 +123,12 @@ pub fn build_telegram_webhook_app_with_control_command_policy(
     )
 }
 
+/// Builds a Telegram webhook application with an explicit session partition and
+/// admin-user list.
+///
+/// # Errors
+///
+/// Returns an error when webhook core construction fails.
 pub fn build_telegram_webhook_app_with_partition(
     request: TelegramWebhookPartitionBuildRequest,
 ) -> Result<TelegramWebhookApp> {

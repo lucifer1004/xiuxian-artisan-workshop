@@ -29,10 +29,8 @@ pub struct LlmClient {
     model: String,
     api_key: Option<String>,
     backend_mode: LlmBackendMode,
-    backend_source: &'static str,
     litellm_provider_mode: LiteLlmProviderMode,
     litellm_wire_api: LiteLlmWireApi,
-    litellm_provider_source: &'static str,
     #[cfg(feature = "agent-provider-litellm")]
     litellm_api_key_env: String,
     #[cfg(feature = "agent-provider-litellm")]
@@ -71,8 +69,6 @@ pub(crate) fn enforce_tool_message_integrity_for_tests(
 ) {
     super::protocol::enforce_tool_message_integrity(messages)
 }
-
-pub use init::run_deepseek_vision_startup_probe_once;
 
 fn compute_saturation_pct(in_flight: usize, max_in_flight: usize) -> u8 {
     if max_in_flight == 0 {

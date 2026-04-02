@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use omni_agent::{DEFAULT_REDIS_KEY_PREFIX, WebhookDedupBackend, WebhookDedupConfig};
+use xiuxian_daochang::{DEFAULT_REDIS_KEY_PREFIX, WebhookDedupBackend, WebhookDedupConfig};
 
 #[tokio::test]
 async fn memory_store_marks_duplicate_ids() -> anyhow::Result<()> {

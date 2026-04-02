@@ -11,6 +11,5 @@ pub(crate) mod test_api;
 mod tools;
 mod types;
 
-pub use client::run_deepseek_vision_startup_probe_once;
 pub use client::{LlmClient, LlmInFlightSnapshot};
 pub use types::AssistantMessage;

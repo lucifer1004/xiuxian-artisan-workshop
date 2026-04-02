@@ -100,9 +100,7 @@ pub fn analyze_registered_repository_bundle_with_registry(
     }
 
     let valkey_cache = ValkeyAnalysisCache::new()?;
-    if let Some(cached) =
-        load_cached_analysis_from_valkey(repository, &cache_key, valkey_cache.as_ref())?
-    {
+    if let Some(cached) = load_cached_analysis_from_valkey(&cache_key, valkey_cache.as_ref())? {
         return Ok(CachedRepositoryAnalysis {
             cache_key,
             analysis: cached,
@@ -154,7 +152,7 @@ pub fn analyze_registered_repository_bundle_with_registry(
     }
 
     if let Some(ref cache) = valkey_cache {
-        cache.set(repository, cache_revision(&cache_key), output.clone())?;
+        cache.set(&cache_key, &output);
     }
     store_cached_repository_analysis(cache_key.clone(), &output)?;
 
@@ -204,24 +202,14 @@ fn preflight_repository_plugins(
     Ok(())
 }
 
-fn cache_revision(cache_key: &RepositoryAnalysisCacheKey) -> &str {
-    cache_key
-        .checkout_revision
-        .as_deref()
-        .or(cache_key.mirror_revision.as_deref())
-        .or(cache_key.tracking_revision.as_deref())
-        .unwrap_or("unknown")
-}
-
 fn load_cached_analysis_from_valkey(
-    repository: &RegisteredRepository,
     cache_key: &RepositoryAnalysisCacheKey,
     valkey_cache: Option<&ValkeyAnalysisCache>,
 ) -> Result<Option<RepositoryAnalysisOutput>, RepoIntelligenceError> {
     let Some(cache) = valkey_cache else {
         return Ok(None);
     };
-    let Some(cached) = cache.get(repository, cache_revision(cache_key))? else {
+    let Some(cached) = cache.get(cache_key) else {
         return Ok(None);
     };
     store_cached_repository_analysis(cache_key.clone(), &cached)?;

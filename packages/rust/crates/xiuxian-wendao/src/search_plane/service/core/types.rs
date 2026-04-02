@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, RwLock};
 
 use tokio::sync::{Semaphore, oneshot};
@@ -144,6 +145,7 @@ pub struct SearchPlaneService {
     pub(crate) repo_search_read_concurrency_limit: usize,
     pub(crate) repo_search_read_permits: Arc<Semaphore>,
     pub(crate) repo_search_dispatch: Arc<Mutex<RepoSearchDispatchRuntime>>,
+    pub(crate) repo_runtime_generation: Arc<AtomicU64>,
     pub(crate) local_maintenance: Arc<Mutex<LocalMaintenanceRuntime>>,
     pub(crate) repo_maintenance: Arc<Mutex<RepoMaintenanceRuntime>>,
     pub(crate) query_telemetry:

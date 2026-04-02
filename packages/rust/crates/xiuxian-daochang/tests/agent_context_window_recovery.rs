@@ -40,7 +40,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
-use omni_agent::{Agent, AgentConfig};
+use xiuxian_daochang::{Agent, AgentConfig};
 
 #[derive(Clone)]
 struct LlmRecoveryState {

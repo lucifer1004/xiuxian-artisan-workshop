@@ -146,33 +146,6 @@
         }
       }
     },
-    "/api/neighbors/{id}": {
-      "get": {
-        "operationId": "studioNodeNeighbors",
-        "tags": ["studio-graph"],
-        "summary": "Node neighbor summary",
-        "description": "Return incoming, outgoing, and two-hop neighbor identifiers for one graph node.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Graph node identifier.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Neighbor summary for the requested node."
-          },
-          "404": {
-            "description": "The requested node could not be found."
-          }
-        }
-      }
-    },
     "/api/topology/3d": {
       "get": {
         "operationId": "studioTopology3d",

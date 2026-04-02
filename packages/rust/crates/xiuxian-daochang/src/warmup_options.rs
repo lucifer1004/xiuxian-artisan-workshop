@@ -20,8 +20,6 @@ pub struct WarmupEnvOverrides {
     pub embed_batch_max_size: Option<usize>,
     pub memory_embed_batch_max_concurrency: Option<usize>,
     pub embed_batch_max_concurrency: Option<usize>,
-    pub mistral_sdk_hf_cache_path: Option<String>,
-    pub mistral_sdk_hf_revision: Option<String>,
 }
 
 /// Resolved warmup execution options.
@@ -33,8 +31,6 @@ pub struct WarmupOptions {
     pub timeout_secs: u64,
     pub batch_max_size: Option<usize>,
     pub batch_max_concurrency: Option<usize>,
-    pub mistral_sdk_hf_cache_path: Option<String>,
-    pub mistral_sdk_hf_revision: Option<String>,
 }
 
 /// Resolve warmup options with deterministic precedence:
@@ -67,7 +63,6 @@ pub fn resolve_warmup_options(
         env.embedding_base_url.clone(),
         trim_non_empty(runtime_settings.embedding.client_url.as_deref()),
         trim_non_empty(runtime_settings.embedding.litellm_api_base.as_deref()),
-        trim_non_empty(runtime_settings.mistral.base_url.as_deref()),
     ])
     .unwrap_or_else(|| DEFAULT_MEMORY_EMBED_BASE_URL.to_string());
 
@@ -92,16 +87,6 @@ pub fn resolve_warmup_options(
             .batch_max_concurrency
             .filter(|value| *value > 0));
 
-    let mistral_sdk_hf_cache_path = env
-        .mistral_sdk_hf_cache_path
-        .clone()
-        .or_else(|| trim_non_empty(runtime_settings.mistral.sdk_hf_cache_path.as_deref()));
-
-    let mistral_sdk_hf_revision = env
-        .mistral_sdk_hf_revision
-        .clone()
-        .or_else(|| trim_non_empty(runtime_settings.mistral.sdk_hf_revision.as_deref()));
-
     WarmupOptions {
         backend_hint,
         model,
@@ -109,8 +94,6 @@ pub fn resolve_warmup_options(
         timeout_secs,
         batch_max_size,
         batch_max_concurrency,
-        mistral_sdk_hf_cache_path,
-        mistral_sdk_hf_revision,
     }
 }
 

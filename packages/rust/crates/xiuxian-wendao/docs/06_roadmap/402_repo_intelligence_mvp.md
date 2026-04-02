@@ -294,6 +294,16 @@ rust-wendao-performance-gate` expands into
 - when a repo has no ready analysis cache yet, those cached repo gateway
   endpoints now fail fast with `409 REPO_INDEX_PENDING` instead of stalling
   behind on-demand analysis or remote materialization work
+- the ready analysis cache is no longer in-process only. `ValkeyAnalysisCache`
+  now persists normalized `RepositoryAnalysisOutput` snapshots under a
+  repository/revision/plugin-scoped key, so cached repo gateway paths can
+  recover a ready analyzer snapshot after process restart when stable revision
+  identity is available
+- that Valkey runtime is now explicitly Wendao-owned and sync-bound:
+  `XIUXIAN_WENDAO_ANALYZER_VALKEY_URL` is the canonical repo-analysis cache
+  endpoint, `VALKEY_URL` / `REDIS_URL` remain generic fallback inputs, and
+  optional key-prefix / TTL controls live alongside the analyzer cache rather
+  than inside `xiuxian-vector`
 - the residual repo-gateway verification caveat is no longer `clippy`; it is
   now the need to keep the formal gateway six-case proof stable under one
   shared nextest filter and decide later whether the current Linux/local budget

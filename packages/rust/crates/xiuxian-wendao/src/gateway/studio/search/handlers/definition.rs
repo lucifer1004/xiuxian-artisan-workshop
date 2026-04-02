@@ -7,7 +7,9 @@ use xiuxian_vector::{
     LanceDataType, LanceField, LanceFloat64Array, LanceInt32Array, LanceRecordBatch, LanceSchema,
     LanceStringArray,
 };
-use xiuxian_wendao_runtime::transport::{DefinitionFlightRouteProvider, DefinitionFlightRouteResponse};
+use xiuxian_wendao_runtime::transport::{
+    DefinitionFlightRouteProvider, DefinitionFlightRouteResponse,
+};
 
 use crate::gateway::studio::router::{StudioApiError, StudioState};
 use crate::gateway::studio::search::definition::resolve::resolve_definition_candidates;
@@ -71,8 +73,8 @@ pub(crate) async fn build_definition_response(
         ));
     }
 
-    let normalized_source_path = source_path
-        .map(|path| normalize_source_path(studio.project_root.as_path(), path));
+    let normalized_source_path =
+        source_path.map(|path| normalize_source_path(studio.project_root.as_path(), path));
     let source_paths = normalized_source_path
         .as_ref()
         .map(std::slice::from_ref)
@@ -183,15 +185,22 @@ pub(crate) fn definition_hit_batch(hit: &DefinitionSearchHit) -> Result<LanceRec
             Arc::new(LanceStringArray::from(vec![hit.root_label.as_deref()])),
             Arc::new(LanceStringArray::from(vec![hit.node_kind.as_deref()])),
             Arc::new(LanceStringArray::from(vec![hit.owner_title.as_deref()])),
-            Arc::new(LanceStringArray::from(vec![navigation_target_json.as_str()])),
-            Arc::new(LanceInt32Array::from(vec![i32::try_from(hit.line_start).map_err(
-                |error| format!("failed to represent definition line_start: {error}"),
-            )?])),
-            Arc::new(LanceInt32Array::from(vec![i32::try_from(hit.line_end).map_err(
-                |error| format!("failed to represent definition line_end: {error}"),
-            )?])),
+            Arc::new(LanceStringArray::from(vec![
+                navigation_target_json.as_str(),
+            ])),
+            Arc::new(LanceInt32Array::from(vec![
+                i32::try_from(hit.line_start).map_err(|error| {
+                    format!("failed to represent definition line_start: {error}")
+                })?,
+            ])),
+            Arc::new(LanceInt32Array::from(vec![
+                i32::try_from(hit.line_end)
+                    .map_err(|error| format!("failed to represent definition line_end: {error}"))?,
+            ])),
             Arc::new(LanceFloat64Array::from(vec![hit.score])),
-            Arc::new(LanceStringArray::from(vec![observation_hints_json.as_str()])),
+            Arc::new(LanceStringArray::from(vec![
+                observation_hints_json.as_str(),
+            ])),
         ],
     )
     .map_err(|error| format!("failed to build definition Flight batch: {error}"))

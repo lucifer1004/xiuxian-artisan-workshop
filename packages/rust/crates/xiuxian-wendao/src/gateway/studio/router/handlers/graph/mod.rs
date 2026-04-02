@@ -10,6 +10,6 @@ mod topology;
 mod tests;
 
 pub(crate) use flight::StudioGraphNeighborsFlightRouteProvider;
-pub use neighbors::{graph_neighbors, node_neighbors};
+pub use neighbors::graph_neighbors;
 pub use shared::GraphNeighborsQuery;
 pub use topology::topology_3d;

@@ -49,6 +49,11 @@ pub struct ReflectiveRuntime {
 }
 
 impl ReflectiveRuntime {
+    #[must_use]
+    pub const fn stage(&self) -> Option<ReflectiveRuntimeStage> {
+        self.stage
+    }
+
     pub fn transition(
         &mut self,
         next: ReflectiveRuntimeStage,

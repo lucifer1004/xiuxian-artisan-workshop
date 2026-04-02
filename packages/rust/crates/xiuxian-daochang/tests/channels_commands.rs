@@ -28,7 +28,7 @@
     clippy::single_match_else,
     clippy::assigning_clones
 )]
-use omni_agent::test_support::{
+use xiuxian_daochang::test_support::{
     ResumeContextCommand, SessionAdminAction, SessionFeedbackDirection, SessionInjectionAction,
     SessionPartitionMode, is_reset_context_command, parse_background_prompt, parse_help_command,
     parse_job_status_command, parse_jobs_summary_command, parse_resume_context_command,

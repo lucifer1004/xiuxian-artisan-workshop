@@ -5,8 +5,6 @@ pub enum EmbeddingBackendKind {
     Http,
     /// OpenAI-compatible `/v1/embeddings` endpoint.
     OpenAiHttp,
-    /// In-process `mistralrs` SDK embedding runtime.
-    MistralSdk,
     /// `litellm-rs` in-process provider path.
     LiteLlmRs,
 }
@@ -18,7 +16,6 @@ impl EmbeddingBackendKind {
         match self {
             Self::Http => "http",
             Self::OpenAiHttp => "openai_http",
-            Self::MistralSdk => "mistral_sdk",
             Self::LiteLlmRs => "litellm_rs",
         }
     }
@@ -45,14 +42,6 @@ pub fn parse_embedding_backend_kind(raw: Option<&str>) -> Option<EmbeddingBacken
         || normalized == "openai"
     {
         return Some(EmbeddingBackendKind::OpenAiHttp);
-    }
-
-    if normalized == "mistral_sdk"
-        || normalized == "mistral-sdk"
-        || normalized == "mistral_inproc"
-        || normalized == "mistral-inproc"
-    {
-        return Some(EmbeddingBackendKind::MistralSdk);
     }
 
     if normalized == "litellm_rs"

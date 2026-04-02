@@ -35,7 +35,6 @@ impl ZhenfaToolBridge {
             deps.manifestation_manager.as_ref().map(Arc::clone),
             deps.link_graph_index.as_ref().map(Arc::clone),
             deps.skill_vfs_resolver.as_ref().map(Arc::clone),
-            deps.embedding_client.as_ref().map(Arc::clone),
             deps.memory_store.as_ref().map(Arc::clone),
         );
         internal::ZhenfaToolBridge::from_xiuxian_config(config, &internal_deps)
