@@ -1,36 +1,30 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, Float64Array, StringArray, UInt64Array};
-use arrow::datatypes::{DataType, Field, Schema};
+use async_trait::async_trait;
+#[cfg(test)]
 use axum::Json;
+#[cfg(test)]
 use axum::extract::{Query, State};
-use axum::response::Response;
+use xiuxian_vector::{
+    LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema, LanceStringArray,
+    LanceUInt64Array,
+};
+use xiuxian_wendao_runtime::transport::AstSearchFlightRouteProvider;
 
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
-use crate::gateway::studio::search::handlers::arrow_transport::{
-    arrow_payload_response, build_arrow_search_ipc, encode_json,
-};
+use crate::gateway::studio::search::project_scope::project_metadata_for_path;
 use crate::gateway::studio::types::{AstSearchHit, AstSearchResponse, UiProjectConfig};
 
-use super::super::project_scope::project_metadata_for_path;
 use super::queries::AstSearchQuery;
 
+#[cfg(test)]
 pub async fn search_ast(
     State(state): State<Arc<GatewayState>>,
     Query(query): Query<AstSearchQuery>,
 ) -> Result<Json<AstSearchResponse>, StudioApiError> {
     let response = load_ast_search_response(state.as_ref(), query).await?;
     Ok(Json(response))
-}
-
-pub async fn search_ast_hits_arrow(
-    State(state): State<Arc<GatewayState>>,
-    Query(query): Query<AstSearchQuery>,
-) -> Result<Response, StudioApiError> {
-    let response = load_ast_search_response(state.as_ref(), query).await?;
-    ast_hits_arrow_response(&response.hits)
-        .map_err(|error| StudioApiError::internal("SEARCH_AST_HITS_ARROW_FAILED", error, None))
 }
 
 pub(crate) async fn load_ast_search_response(
@@ -83,74 +77,134 @@ pub(crate) async fn load_ast_search_response(
     })
 }
 
-pub(crate) fn ast_hits_arrow_response(hits: &[AstSearchHit]) -> Result<Response, String> {
-    encode_ast_hits_ipc(hits).map(arrow_payload_response)
+pub(crate) struct StudioAstSearchFlightRouteProvider {
+    state: Arc<GatewayState>,
 }
 
-fn encode_ast_hits_ipc(hits: &[AstSearchHit]) -> Result<Vec<u8>, String> {
-    let names: Vec<&str> = hits.iter().map(|hit| hit.name.as_str()).collect();
-    let signatures: Vec<&str> = hits.iter().map(|hit| hit.signature.as_str()).collect();
-    let paths: Vec<&str> = hits.iter().map(|hit| hit.path.as_str()).collect();
-    let languages: Vec<&str> = hits.iter().map(|hit| hit.language.as_str()).collect();
-    let crate_names: Vec<&str> = hits.iter().map(|hit| hit.crate_name.as_str()).collect();
-    let project_names: Vec<Option<&str>> =
-        hits.iter().map(|hit| hit.project_name.as_deref()).collect();
-    let root_labels: Vec<Option<&str>> = hits.iter().map(|hit| hit.root_label.as_deref()).collect();
-    let node_kinds: Vec<Option<&str>> = hits.iter().map(|hit| hit.node_kind.as_deref()).collect();
-    let owner_titles: Vec<Option<&str>> =
-        hits.iter().map(|hit| hit.owner_title.as_deref()).collect();
-    let navigation_targets_json: Vec<String> = hits
+impl StudioAstSearchFlightRouteProvider {
+    pub(crate) fn new(state: Arc<GatewayState>) -> Self {
+        Self { state }
+    }
+}
+
+impl std::fmt::Debug for StudioAstSearchFlightRouteProvider {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("StudioAstSearchFlightRouteProvider")
+            .finish_non_exhaustive()
+    }
+}
+
+#[async_trait]
+impl AstSearchFlightRouteProvider for StudioAstSearchFlightRouteProvider {
+    async fn ast_search_batch(
+        &self,
+        query_text: &str,
+        limit: usize,
+    ) -> Result<LanceRecordBatch, String> {
+        let response = load_ast_search_response(
+            self.state.as_ref(),
+            AstSearchQuery {
+                q: Some(query_text.to_string()),
+                limit: Some(limit),
+            },
+        )
+        .await
+        .map_err(|error| {
+            error
+                .error
+                .details
+                .clone()
+                .unwrap_or_else(|| format!("{}: {}", error.code(), error.error.message))
+        })?;
+        build_ast_hits_flight_batch(response.hits.as_slice())
+    }
+}
+
+fn build_ast_hits_flight_batch(hits: &[AstSearchHit]) -> Result<LanceRecordBatch, String> {
+    let names = hits.iter().map(|hit| hit.name.as_str()).collect::<Vec<_>>();
+    let signatures = hits
         .iter()
-        .map(|hit| encode_json(&hit.navigation_target))
-        .collect::<Result<_, _>>()?;
+        .map(|hit| hit.signature.as_str())
+        .collect::<Vec<_>>();
+    let paths = hits.iter().map(|hit| hit.path.as_str()).collect::<Vec<_>>();
+    let languages = hits
+        .iter()
+        .map(|hit| hit.language.as_str())
+        .collect::<Vec<_>>();
+    let crate_names = hits
+        .iter()
+        .map(|hit| hit.crate_name.as_str())
+        .collect::<Vec<_>>();
+    let project_names = hits
+        .iter()
+        .map(|hit| hit.project_name.as_deref())
+        .collect::<Vec<_>>();
+    let root_labels = hits
+        .iter()
+        .map(|hit| hit.root_label.as_deref())
+        .collect::<Vec<_>>();
+    let node_kinds = hits
+        .iter()
+        .map(|hit| hit.node_kind.as_deref())
+        .collect::<Vec<_>>();
+    let owner_titles = hits
+        .iter()
+        .map(|hit| hit.owner_title.as_deref())
+        .collect::<Vec<_>>();
+    let navigation_targets_json = hits
+        .iter()
+        .map(|hit| serde_json::to_string(&hit.navigation_target).map_err(|error| error.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
 
-    let schema = Schema::new(vec![
-        Field::new("name", DataType::Utf8, false),
-        Field::new("signature", DataType::Utf8, false),
-        Field::new("path", DataType::Utf8, false),
-        Field::new("language", DataType::Utf8, false),
-        Field::new("crateName", DataType::Utf8, false),
-        Field::new("projectName", DataType::Utf8, true),
-        Field::new("rootLabel", DataType::Utf8, true),
-        Field::new("nodeKind", DataType::Utf8, true),
-        Field::new("ownerTitle", DataType::Utf8, true),
-        Field::new("navigationTargetJson", DataType::Utf8, false),
-        Field::new("lineStart", DataType::UInt64, false),
-        Field::new("lineEnd", DataType::UInt64, false),
-        Field::new("score", DataType::Float64, false),
-    ]);
-
-    let columns: Vec<ArrayRef> = vec![
-        Arc::new(StringArray::from(names)),
-        Arc::new(StringArray::from(signatures)),
-        Arc::new(StringArray::from(paths)),
-        Arc::new(StringArray::from(languages)),
-        Arc::new(StringArray::from(crate_names)),
-        Arc::new(StringArray::from(project_names)),
-        Arc::new(StringArray::from(root_labels)),
-        Arc::new(StringArray::from(node_kinds)),
-        Arc::new(StringArray::from(owner_titles)),
-        Arc::new(StringArray::from(
-            navigation_targets_json
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-        )),
-        Arc::new(UInt64Array::from(
-            hits.iter()
-                .map(|hit| hit.line_start as u64)
-                .collect::<Vec<_>>(),
-        )),
-        Arc::new(UInt64Array::from(
-            hits.iter()
-                .map(|hit| hit.line_end as u64)
-                .collect::<Vec<_>>(),
-        )),
-        Arc::new(Float64Array::from(
-            hits.iter().map(|hit| hit.score).collect::<Vec<_>>(),
-        )),
-    ];
-    build_arrow_search_ipc(schema, columns)
+    LanceRecordBatch::try_new(
+        Arc::new(LanceSchema::new(vec![
+            LanceField::new("name", LanceDataType::Utf8, false),
+            LanceField::new("signature", LanceDataType::Utf8, false),
+            LanceField::new("path", LanceDataType::Utf8, false),
+            LanceField::new("language", LanceDataType::Utf8, false),
+            LanceField::new("crateName", LanceDataType::Utf8, false),
+            LanceField::new("projectName", LanceDataType::Utf8, true),
+            LanceField::new("rootLabel", LanceDataType::Utf8, true),
+            LanceField::new("nodeKind", LanceDataType::Utf8, true),
+            LanceField::new("ownerTitle", LanceDataType::Utf8, true),
+            LanceField::new("navigationTargetJson", LanceDataType::Utf8, false),
+            LanceField::new("lineStart", LanceDataType::UInt64, false),
+            LanceField::new("lineEnd", LanceDataType::UInt64, false),
+            LanceField::new("score", LanceDataType::Float64, false),
+        ])),
+        vec![
+            Arc::new(LanceStringArray::from(names)),
+            Arc::new(LanceStringArray::from(signatures)),
+            Arc::new(LanceStringArray::from(paths)),
+            Arc::new(LanceStringArray::from(languages)),
+            Arc::new(LanceStringArray::from(crate_names)),
+            Arc::new(LanceStringArray::from(project_names)),
+            Arc::new(LanceStringArray::from(root_labels)),
+            Arc::new(LanceStringArray::from(node_kinds)),
+            Arc::new(LanceStringArray::from(owner_titles)),
+            Arc::new(LanceStringArray::from(
+                navigation_targets_json
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(LanceUInt64Array::from(
+                hits.iter()
+                    .map(|hit| hit.line_start as u64)
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(LanceUInt64Array::from(
+                hits.iter()
+                    .map(|hit| hit.line_end as u64)
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(LanceFloat64Array::from(
+                hits.iter().map(|hit| hit.score).collect::<Vec<_>>(),
+            )),
+        ],
+    )
+    .map_err(|error| format!("failed to build AST-search Flight batch: {error}"))
 }
 
 fn enrich_ast_hit(
@@ -194,48 +248,58 @@ fn ast_hit_score(hit: &AstSearchHit) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
+    use std::fs;
+    use tempfile::tempdir;
+    use xiuxian_wendao_runtime::transport::AstSearchFlightRouteProvider;
 
-    use crate::gateway::studio::types::StudioNavigationTarget;
-    use arrow::ipc::reader::StreamReader;
+    use crate::gateway::studio::search::build_symbol_index;
+    use crate::gateway::studio::search::handlers::tests::test_studio_state;
+    use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
 
-    #[test]
-    fn search_ast_arrow_roundtrip_preserves_markdown_fields() {
-        let hits = vec![AstSearchHit {
-            name: "IndexTask".to_string(),
-            signature: "- [ ] IndexTask".to_string(),
-            path: "docs/index.md".to_string(),
-            language: "markdown".to_string(),
-            crate_name: "kernel".to_string(),
-            project_name: Some("kernel".to_string()),
-            root_label: Some("kernel".to_string()),
-            node_kind: Some("task".to_string()),
-            owner_title: Some("Index".to_string()),
-            navigation_target: StudioNavigationTarget {
-                path: "kernel/docs/index.md".to_string(),
-                category: "knowledge".to_string(),
-                project_name: Some("kernel".to_string()),
-                root_label: Some("kernel".to_string()),
-                line: Some(12),
-                line_end: Some(14),
-                column: Some(1),
-            },
-            line_start: 12,
-            line_end: 14,
-            score: 0.88,
-        }];
+    #[tokio::test]
+    async fn studio_ast_flight_provider_materializes_ast_batches() {
+        let temp_dir = tempdir().expect("AST provider tempdir should build");
+        let source_dir = temp_dir.path().join("packages/rust/crates/demo/src");
+        fs::create_dir_all(&source_dir).expect("AST provider source dir should build");
+        fs::write(
+            source_dir.join("lib.rs"),
+            "pub struct AlphaService;\npub fn alpha_handler() {}\n",
+        )
+        .expect("AST provider source fixture should write");
 
-        let encoded = encode_ast_hits_ipc(&hits).expect("ast hit arrow encoding should succeed");
-        let reader = StreamReader::try_new(Cursor::new(encoded), None)
-            .expect("ast hit stream reader should open");
-        let batches = reader
-            .collect::<Result<Vec<_>, _>>()
-            .expect("ast hit stream should decode");
-        assert_eq!(batches.len(), 1);
-        let batch = &batches[0];
-        assert_eq!(batch.num_rows(), 1);
-        assert!(batch.column_by_name("nodeKind").is_some());
-        assert!(batch.column_by_name("ownerTitle").is_some());
-        assert!(batch.column_by_name("navigationTargetJson").is_some());
+        let mut studio = test_studio_state();
+        studio.project_root = temp_dir.path().to_path_buf();
+        studio.config_root = temp_dir.path().to_path_buf();
+        studio.set_ui_config(UiConfig {
+            projects: vec![UiProjectConfig {
+                name: "kernel".to_string(),
+                root: ".".to_string(),
+                dirs: vec!["packages".to_string()],
+            }],
+            repo_projects: Vec::new(),
+        });
+        let warmed_index = build_symbol_index(
+            studio.project_root.as_path(),
+            studio.config_root.as_path(),
+            studio.configured_projects().as_slice(),
+        );
+        studio.symbol_index_coordinator.set_ready_index_for_test(
+            studio.configured_projects().as_slice(),
+            Arc::clone(&studio.symbol_index),
+            warmed_index,
+        );
+
+        let provider = StudioAstSearchFlightRouteProvider::new(Arc::new(GatewayState {
+            index: None,
+            signal_tx: None,
+            studio: Arc::new(studio),
+        }));
+
+        let batch = provider
+            .ast_search_batch("alpha", 5)
+            .await
+            .expect("dedicated AST provider should accept AST requests");
+
+        assert!(batch.num_rows() >= 1);
     }
 }

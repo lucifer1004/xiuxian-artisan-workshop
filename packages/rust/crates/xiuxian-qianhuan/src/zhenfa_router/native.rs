@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
-use xiuxian_wendao::{SkillVfsResolver, WendaoResourceUri};
+use xiuxian_wendao::skill_vfs::{SkillVfsResolver, WendaoResourceUri};
 use xiuxian_zhenfa::{
     INVALID_PARAMS_CODE, JsonRpcErrorObject, ZhenfaContext, ZhenfaError, zhenfa_tool,
 };

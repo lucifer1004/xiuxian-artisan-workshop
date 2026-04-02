@@ -1,6 +1,7 @@
 //! Discord channel adapter with shared control-command authorization policy.
 
 mod auth;
+mod constructor;
 mod policy;
 mod policy_builders;
 mod recipient_admin;

@@ -5,14 +5,15 @@ use tokio::time::MissedTickBehavior;
 
 use crate::agent::Agent;
 use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
+use crate::channels::telegram::runtime::jobs::{
+    handle_inbound_message_with_interrupt, push_background_completion,
+};
 use crate::channels::telegram::runtime::telemetry::{
     emit_runtime_snapshot, snapshot_interval_from_env,
 };
 use crate::channels::telegram::runtime_config::TelegramRuntimeConfig;
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::{JobCompletion, JobManager};
-
-use super::super::jobs::{handle_inbound_message_with_interrupt, push_background_completion};
 
 pub(super) async fn run_polling_event_loop(
     inbound_rx: &mut mpsc::Receiver<ChannelMessage>,
@@ -57,7 +58,7 @@ pub(super) async fn run_polling_event_loop(
                 let Some(completion) = maybe_completion else {
                     continue;
                 };
-                push_background_completion(channel_for_send, completion).await;
+                push_background_completion(channel_for_send, agent, completion).await;
             }
             _ = tokio::signal::ctrl_c() => {
                 println!("Shutting down...");
@@ -68,7 +69,13 @@ pub(super) async fn run_polling_event_loop(
                     let _ = interval.tick().await;
                 }
             }, if snapshot_tick.is_some() => {
-                emit_runtime_snapshot("polling", inbound_tx, foreground_tx, runtime_config);
+                emit_runtime_snapshot(
+                    "polling",
+                    inbound_tx,
+                    foreground_tx,
+                    runtime_config,
+                    agent.downstream_admission_runtime_snapshot(),
+                );
             }
         }
     }

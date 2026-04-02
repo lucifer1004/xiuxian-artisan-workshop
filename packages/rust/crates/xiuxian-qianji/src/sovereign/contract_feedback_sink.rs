@@ -3,7 +3,8 @@
 use async_trait::async_trait;
 use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
-use xiuxian_wendao::{KnowledgeEntry, KnowledgeStorage};
+use xiuxian_wendao::storage::KnowledgeStorage;
+use xiuxian_wendao::types::KnowledgeEntry;
 
 /// Sink trait for persisting contract-feedback knowledge entries.
 #[async_trait]
@@ -123,7 +124,7 @@ mod tests {
         ContractFeedbackKnowledgeSink, InMemoryContractFeedbackSink,
         KnowledgeStorageContractFeedbackSink,
     };
-    use xiuxian_wendao::{KnowledgeCategory, KnowledgeEntry};
+    use xiuxian_wendao::types::{KnowledgeCategory, KnowledgeEntry};
 
     fn test_entry(id: &str) -> KnowledgeEntry {
         KnowledgeEntry::new(

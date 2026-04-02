@@ -22,14 +22,64 @@ pub use resolve::{
     resolve_link_graph_coactivation_runtime, resolve_link_graph_related_runtime,
 };
 use xiuxian_wendao_core::capabilities::PluginCapabilityBinding;
+use xiuxian_wendao_runtime::transport::RerankScoreWeights;
 
 pub(crate) use resolve::resolve_link_graph_retrieval_policy_runtime;
 pub use settings::{set_link_graph_config_home_override, set_link_graph_wendao_config_override};
+
+/// File-backed runtime settings that can influence the Flight rerank host.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LinkGraphRerankFlightRuntimeSettings {
+    /// Schema version from retrieval policy config, if configured.
+    pub schema_version: Option<String>,
+    /// Score weights from retrieval policy config, if configured.
+    pub score_weights: Option<RerankScoreWeights>,
+}
 
 /// Resolve the current retrieval rerank binding through the generic plugin-runtime model.
 #[must_use]
 pub fn resolve_link_graph_rerank_binding() -> Option<PluginCapabilityBinding> {
     resolve_link_graph_retrieval_policy_runtime().rerank_binding()
+}
+
+/// Resolve the current runtime-owned rerank score weights from Wendao
+/// retrieval policy settings.
+#[must_use]
+pub fn resolve_link_graph_rerank_score_weights() -> Option<RerankScoreWeights> {
+    let runtime = resolve_link_graph_retrieval_policy_runtime();
+    let defaults = RerankScoreWeights::default();
+    let vector_weight = runtime.julia_rerank.vector_weight;
+    let similarity_weight = runtime.julia_rerank.similarity_weight;
+
+    if vector_weight.is_none() && similarity_weight.is_none() {
+        return None;
+    }
+
+    RerankScoreWeights::new(
+        vector_weight.unwrap_or(defaults.vector_weight),
+        similarity_weight.unwrap_or(defaults.semantic_weight),
+    )
+    .ok()
+}
+
+/// Resolve the current rerank-side schema version from Wendao retrieval
+/// policy settings.
+#[must_use]
+pub fn resolve_link_graph_rerank_schema_version() -> Option<String> {
+    resolve_link_graph_retrieval_policy_runtime()
+        .julia_rerank
+        .schema_version
+        .filter(|value| !value.trim().is_empty())
+}
+
+/// Resolve the current file-backed Flight rerank host settings from Wendao
+/// retrieval policy configuration.
+#[must_use]
+pub fn resolve_link_graph_rerank_flight_runtime_settings() -> LinkGraphRerankFlightRuntimeSettings {
+    LinkGraphRerankFlightRuntimeSettings {
+        schema_version: resolve_link_graph_rerank_schema_version(),
+        score_weights: resolve_link_graph_rerank_score_weights(),
+    }
 }
 
 /// Resolve the current compatibility deployment artifact from Wendao runtime configuration.

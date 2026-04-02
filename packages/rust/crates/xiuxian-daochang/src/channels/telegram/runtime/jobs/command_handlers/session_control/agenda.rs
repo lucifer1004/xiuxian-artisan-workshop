@@ -4,8 +4,9 @@ use crate::agent::Agent;
 use crate::channels::telegram::commands::is_agenda_command;
 use crate::channels::traits::{Channel, ChannelMessage};
 
-use super::super::super::observability::send_with_observability;
-use super::EVENT_TELEGRAM_COMMAND_AGENDA_REPLIED;
+use crate::channels::telegram::runtime::jobs::observability::send_with_observability;
+
+use super::events::EVENT_TELEGRAM_COMMAND_AGENDA_REPLIED;
 
 pub(in crate::channels::telegram::runtime::jobs) async fn try_handle_agenda_command(
     msg: &ChannelMessage,

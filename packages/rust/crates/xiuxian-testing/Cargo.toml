@@ -3,7 +3,7 @@ name = "xiuxian-testing"
 version.workspace = true
 edition.workspace = true
 description = "Shared testing utilities and scenario framework for xiuxian crates"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 

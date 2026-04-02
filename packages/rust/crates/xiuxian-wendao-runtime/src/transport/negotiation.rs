@@ -1,17 +1,12 @@
-use xiuxian_vector::{ArrowTransportClient, ArrowTransportConfig, EngineRecordBatch};
+use xiuxian_vector::EngineRecordBatch;
 use xiuxian_wendao_core::{capabilities::PluginCapabilityBinding, transport::PluginTransportKind};
 
-use super::client::{
-    build_arrow_flight_transport_client_from_binding, build_arrow_transport_client_from_binding,
-};
+use super::client::build_arrow_flight_transport_client_from_binding;
 use super::flight::ArrowFlightTransportClient;
 
 /// Canonical runtime transport preference order for plugin capability bindings.
-pub const CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER: [PluginTransportKind; 3] = [
-    PluginTransportKind::ArrowFlight,
-    PluginTransportKind::ArrowIpcHttp,
-    PluginTransportKind::LocalProcessArrowIpc,
-];
+pub const CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER: [PluginTransportKind; 1] =
+    [PluginTransportKind::ArrowFlight];
 
 /// Negotiated runtime transport selection for one plugin client.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,15 +19,15 @@ pub struct NegotiatedTransportSelection {
     pub fallback_reason: Option<String>,
 }
 
-/// Runtime-owned Arrow transport client paired with its negotiated selection metadata.
+/// Runtime-owned Flight transport client paired with its negotiated selection metadata.
 #[derive(Clone)]
-pub struct NegotiatedArrowTransportClient {
-    client: RuntimeArrowTransportClient,
+pub struct NegotiatedFlightTransportClient {
+    client: ArrowFlightTransportClient,
     selection: NegotiatedTransportSelection,
 }
 
-impl NegotiatedArrowTransportClient {
-    fn new(client: RuntimeArrowTransportClient, selection: NegotiatedTransportSelection) -> Self {
+impl NegotiatedFlightTransportClient {
+    fn new(client: ArrowFlightTransportClient, selection: NegotiatedTransportSelection) -> Self {
         Self { client, selection }
     }
 
@@ -42,31 +37,16 @@ impl NegotiatedArrowTransportClient {
         &self.selection
     }
 
-    /// Return the Arrow IPC-over-HTTP config when that transport was selected.
-    #[must_use]
-    pub fn arrow_ipc_http_config(&self) -> Option<&ArrowTransportConfig> {
-        match &self.client {
-            RuntimeArrowTransportClient::ArrowIpcHttp(client) => Some(client.config()),
-            RuntimeArrowTransportClient::ArrowFlight(_) => None,
-        }
-    }
-
     /// Return the configured Arrow Flight base URL when that transport was selected.
     #[must_use]
     pub fn flight_base_url(&self) -> Option<&str> {
-        match &self.client {
-            RuntimeArrowTransportClient::ArrowIpcHttp(_) => None,
-            RuntimeArrowTransportClient::ArrowFlight(client) => Some(client.base_url()),
-        }
+        Some(self.client.base_url())
     }
 
     /// Return the configured Arrow Flight route when that transport was selected.
     #[must_use]
     pub fn flight_route(&self) -> Option<&str> {
-        match &self.client {
-            RuntimeArrowTransportClient::ArrowIpcHttp(_) => None,
-            RuntimeArrowTransportClient::ArrowFlight(client) => Some(client.route()),
-        }
+        Some(self.client.route())
     }
 
     /// Process one engine batch through the negotiated runtime transport.
@@ -79,36 +59,34 @@ impl NegotiatedArrowTransportClient {
         &self,
         batch: &EngineRecordBatch,
     ) -> Result<Vec<EngineRecordBatch>, String> {
-        match &self.client {
-            RuntimeArrowTransportClient::ArrowIpcHttp(client) => client
-                .process_batch(batch)
-                .await
-                .map_err(|error| format!("Arrow IPC transport failed: {error}")),
-            RuntimeArrowTransportClient::ArrowFlight(client) => client.process_batch(batch).await,
-        }
+        self.client.process_batch(batch).await
     }
-}
 
-#[derive(Clone)]
-enum RuntimeArrowTransportClient {
-    ArrowIpcHttp(ArrowTransportClient),
-    ArrowFlight(ArrowFlightTransportClient),
+    /// Process multiple engine batches through the negotiated runtime transport.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the negotiated client cannot send the request or
+    /// decode the response.
+    pub async fn process_batches(
+        &self,
+        batches: &[EngineRecordBatch],
+    ) -> Result<Vec<EngineRecordBatch>, String> {
+        self.client.process_batches(batches).await
+    }
 }
 
 /// Negotiate the preferred runtime transport client from a set of candidate bindings.
 ///
-/// The runtime currently prefers `ArrowFlight`, then `ArrowIpcHttp`, then
-/// `LocalProcessArrowIpc`. Only `ArrowIpcHttp` is materializable into a live
-/// client today, so higher-preference kinds deterministically fall back when a
-/// lower-preference compatible binding is present.
+/// The runtime negotiates only `ArrowFlight`.
 ///
 /// # Errors
 ///
 /// Returns an error when the candidate set contains configured bindings but no
 /// binding can be materialized into a supported runtime transport client.
-pub fn negotiate_arrow_transport_client_from_bindings(
+pub fn negotiate_flight_transport_client_from_bindings(
     bindings: &[PluginCapabilityBinding],
-) -> Result<Option<NegotiatedArrowTransportClient>, String> {
+) -> Result<Option<NegotiatedFlightTransportClient>, String> {
     if bindings.is_empty() {
         return Ok(None);
     }
@@ -121,9 +99,9 @@ pub fn negotiate_arrow_transport_client_from_bindings(
     let mut saw_material_failure = false;
 
     for (_, binding) in ordered {
-        match build_runtime_arrow_transport_client_from_binding(binding) {
+        match build_runtime_flight_transport_client_from_binding(binding) {
             Ok(Some(client)) => {
-                return Ok(Some(NegotiatedArrowTransportClient::new(
+                return Ok(Some(NegotiatedFlightTransportClient::new(
                     client,
                     NegotiatedTransportSelection {
                         selected_transport: binding.transport,
@@ -163,35 +141,23 @@ pub fn negotiate_arrow_transport_client_from_bindings(
     Ok(None)
 }
 
-fn build_runtime_arrow_transport_client_from_binding(
+fn build_runtime_flight_transport_client_from_binding(
     binding: &PluginCapabilityBinding,
-) -> Result<Option<RuntimeArrowTransportClient>, String> {
-    match binding.transport {
-        PluginTransportKind::ArrowFlight => {
-            build_arrow_flight_transport_client_from_binding(binding)
-                .map(|client| client.map(RuntimeArrowTransportClient::ArrowFlight))
-        }
-        PluginTransportKind::ArrowIpcHttp => build_arrow_transport_client_from_binding(binding)
-            .map(|client| client.map(RuntimeArrowTransportClient::ArrowIpcHttp)),
-        PluginTransportKind::LocalProcessArrowIpc => Err(
-            "LocalProcessArrowIpc is not yet materializable on the runtime negotiation seam"
-                .to_string(),
-        ),
-    }
+) -> Result<Option<ArrowFlightTransportClient>, String> {
+    build_arrow_flight_transport_client_from_binding(binding)
 }
 
 const fn transport_preference_rank(kind: PluginTransportKind) -> usize {
     match kind {
         PluginTransportKind::ArrowFlight => 0,
-        PluginTransportKind::ArrowIpcHttp => 1,
-        PluginTransportKind::LocalProcessArrowIpc => 2,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER, negotiate_arrow_transport_client_from_bindings,
+        CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER,
+        negotiate_flight_transport_client_from_bindings,
     };
     use xiuxian_wendao_core::{
         capabilities::{ContractVersion, PluginCapabilityBinding, PluginProviderSelector},
@@ -225,17 +191,13 @@ mod tests {
     fn canonical_transport_preference_order_is_flight_first() {
         assert_eq!(
             CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER,
-            [
-                PluginTransportKind::ArrowFlight,
-                PluginTransportKind::ArrowIpcHttp,
-                PluginTransportKind::LocalProcessArrowIpc,
-            ]
+            [PluginTransportKind::ArrowFlight]
         );
     }
 
     #[test]
     fn negotiation_selects_arrow_flight_when_binding_is_materializable() {
-        let negotiated = negotiate_arrow_transport_client_from_bindings(&[sample_binding(
+        let negotiated = negotiate_flight_transport_client_from_bindings(&[sample_binding(
             PluginTransportKind::ArrowFlight,
             Some("http://127.0.0.1:18080"),
             "/flight",
@@ -250,53 +212,35 @@ mod tests {
         assert_eq!(negotiated.selection().fallback_from, None);
         assert_eq!(negotiated.flight_base_url(), Some("http://127.0.0.1:18080"));
         assert_eq!(negotiated.flight_route(), Some("/flight"));
-        assert!(negotiated.arrow_ipc_http_config().is_none());
     }
 
     #[test]
-    fn negotiation_falls_back_to_arrow_ipc_when_flight_binding_is_incomplete() {
-        let negotiated = negotiate_arrow_transport_client_from_bindings(&[
-            sample_binding(
-                PluginTransportKind::ArrowFlight,
-                Some("http://127.0.0.1:18080"),
-                "",
-            ),
-            sample_binding(
-                PluginTransportKind::ArrowIpcHttp,
-                Some("http://127.0.0.1:18081"),
-                "/arrow-ipc",
-            ),
-        ])
-        .unwrap_or_else(|error| panic!("transport negotiation should succeed: {error}"))
-        .unwrap_or_else(|| panic!("transport negotiation should select a fallback client"));
+    fn negotiation_reports_flight_materialization_errors_without_ipc_fallback() {
+        let result = negotiate_flight_transport_client_from_bindings(&[sample_binding(
+            PluginTransportKind::ArrowFlight,
+            Some("http://127.0.0.1:18080"),
+            "",
+        )]);
 
-        let selection = negotiated.selection();
-        let config = negotiated
-            .arrow_ipc_http_config()
-            .unwrap_or_else(|| panic!("fallback should produce an Arrow IPC client"));
-        assert_eq!(
-            selection.selected_transport,
-            PluginTransportKind::ArrowIpcHttp
-        );
-        assert_eq!(
-            selection.fallback_from,
-            Some(PluginTransportKind::ArrowFlight)
-        );
+        let error = match result {
+            Ok(value) => panic!(
+                "incomplete Flight bindings should now fail directly: {value_present}",
+                value_present = value.is_some()
+            ),
+            Err(error) => error,
+        };
+
         assert!(
-            selection
-                .fallback_reason
-                .as_deref()
-                .unwrap_or_default()
-                .contains("ArrowFlight"),
-            "expected fallback reason to mention ArrowFlight: {selection:?}"
+            error.contains(
+                "Arrow Flight client construction requires a route-backed FlightDescriptor path"
+            ),
+            "expected Flight materialization error, got: {error}"
         );
-        assert_eq!(config.base_url(), "http://127.0.0.1:18081");
-        assert_eq!(config.route(), "/arrow-ipc");
     }
 
     #[test]
     fn negotiation_returns_none_when_candidate_bindings_are_unconfigured() {
-        let negotiated = negotiate_arrow_transport_client_from_bindings(&[sample_binding(
+        let negotiated = negotiate_flight_transport_client_from_bindings(&[sample_binding(
             PluginTransportKind::ArrowFlight,
             None,
             "/flight",

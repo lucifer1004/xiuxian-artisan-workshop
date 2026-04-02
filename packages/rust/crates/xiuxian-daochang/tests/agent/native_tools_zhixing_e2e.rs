@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use xiuxian_daochang::{Agent, AgentConfig, ToolServerEntry, set_config_home_override};
-use xiuxian_wendao::{Entity, EntityType};
+use xiuxian_wendao::entity::{Entity, EntityType};
 use xiuxian_zhixing::{ATTR_JOURNAL_CARRYOVER, ATTR_TIMER_SCHEDULED};
 
 #[derive(Clone)]

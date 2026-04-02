@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
-use crate::agent::Agent;
-use crate::channels::telegram::commands::is_stop_command;
-use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
-use crate::channels::traits::{Channel, ChannelMessage};
-
-use super::super::super::observability::send_with_observability;
 use super::{
     EVENT_TELEGRAM_COMMAND_SESSION_STOP_IDLE_REPLIED, EVENT_TELEGRAM_COMMAND_SESSION_STOP_REPLIED,
 };
+use crate::agent::Agent;
+use crate::channels::telegram::commands::is_stop_command;
+use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
+use crate::channels::telegram::runtime::jobs::observability::send_with_observability;
+use crate::channels::traits::{Channel, ChannelMessage};
 
 pub(in crate::channels::telegram::runtime::jobs) async fn try_handle_stop_command(
     msg: &ChannelMessage,

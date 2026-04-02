@@ -5,12 +5,16 @@ use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
 use xiuxian_macros::env_non_empty;
 
+use crate::channels::telegram::channel::TelegramChannel;
+use crate::channels::telegram::channel::error::TelegramApiError;
 use crate::config::load_runtime_settings;
 use crate::env_parse::resolve_valkey_url_env;
 
 const TELEGRAM_SEND_GATE_KEY_PREFIX_ENV: &str =
     "OMNI_AGENT_TELEGRAM_SEND_RATE_LIMIT_GATE_KEY_PREFIX";
 const DEFAULT_SEND_GATE_KEY_PREFIX: &str = "xiuxian-daochang:telegram:send-gate";
+const TELEGRAM_SEND_GATE_SPREAD_SLOT_MS: u64 = 50;
+const TELEGRAM_SEND_GATE_MAX_SPREAD_SLOTS: u32 = 8;
 
 #[derive(Debug, Default)]
 pub(super) struct TelegramSendRateLimitGateState {
@@ -283,6 +287,114 @@ return ttl
         let mut guard = self.connection.write().await;
         *guard = None;
     }
+}
+
+impl TelegramChannel {
+    pub(in crate::channels::telegram::channel) async fn wait_for_send_rate_limit_gate(
+        &self,
+        method: &str,
+        request_kind: &str,
+    ) {
+        let delay = match &self.send_rate_limit_backend {
+            TelegramSendRateLimitBackend::Memory => {
+                resolve_memory_gate_delay(&self.send_rate_limit_gate).await
+            }
+            TelegramSendRateLimitBackend::Valkey(backend) => {
+                match backend.current_window_with_spread_slot().await {
+                    Ok(Some((ttl, slot))) => Some(ttl + spread_slot_delay(slot)),
+                    Ok(None) => None,
+                    Err(error) => {
+                        tracing::warn!(
+                            event = "telegram.send_gate.valkey.read_failed",
+                            method,
+                            request_kind,
+                            error = %error,
+                            "failed to read telegram send gate window from valkey"
+                        );
+                        resolve_memory_gate_delay(&self.send_rate_limit_gate).await
+                    }
+                }
+            }
+        };
+
+        if let Some(delay) = delay.filter(|delay| !delay.is_zero()) {
+            tracing::debug!(
+                method,
+                request_kind,
+                delay_ms = delay.as_millis(),
+                "telegram send gate delaying outbound request"
+            );
+            tokio::time::sleep(delay).await;
+        }
+    }
+
+    pub(in crate::channels::telegram::channel) async fn update_send_rate_limit_gate_from_error(
+        &self,
+        error: &TelegramApiError,
+        delay: Duration,
+        method: &str,
+        request_kind: &str,
+    ) {
+        if delay.is_zero() {
+            return;
+        }
+
+        if let TelegramSendRateLimitBackend::Valkey(backend) = &self.send_rate_limit_backend
+            && let Err(store_error) = backend.extend_window(delay).await
+        {
+            tracing::warn!(
+                event = "telegram.send_gate.valkey.extend_failed",
+                method,
+                request_kind,
+                error = %store_error,
+                "failed to extend telegram send gate window in valkey"
+            );
+        }
+
+        let mut gate = self.send_rate_limit_gate.lock().await;
+        let next_until = Instant::now() + delay;
+        let should_replace = match gate.until {
+            Some(current_until) => current_until < next_until,
+            None => true,
+        };
+        if should_replace {
+            gate.until = Some(next_until);
+            gate.spread_slots_issued = 0;
+        }
+
+        tracing::debug!(
+            method,
+            request_kind,
+            delay_ms = delay.as_millis(),
+            rate_limited = error.is_rate_limited(),
+            "telegram send gate window updated"
+        );
+    }
+}
+
+async fn resolve_memory_gate_delay(
+    gate: &tokio::sync::Mutex<TelegramSendRateLimitGateState>,
+) -> Option<Duration> {
+    let mut gate = gate.lock().await;
+    let now = Instant::now();
+    let until = match gate.until {
+        Some(until) if until > now => until,
+        Some(_) => {
+            gate.until = None;
+            gate.spread_slots_issued = 0;
+            return None;
+        }
+        None => return None,
+    };
+    let slot = gate
+        .spread_slots_issued
+        .min(TELEGRAM_SEND_GATE_MAX_SPREAD_SLOTS);
+    gate.spread_slots_issued = gate.spread_slots_issued.saturating_add(1);
+    Some(until.saturating_duration_since(now) + spread_slot_delay(u64::from(slot)))
+}
+
+fn spread_slot_delay(slot: u64) -> Duration {
+    Duration::from_millis(slot.saturating_mul(TELEGRAM_SEND_GATE_SPREAD_SLOT_MS))
 }
 
 fn non_empty_env(name: &str) -> Option<String> {

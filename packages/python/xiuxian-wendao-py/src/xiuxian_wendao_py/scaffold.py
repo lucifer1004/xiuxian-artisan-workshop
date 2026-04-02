@@ -47,7 +47,7 @@ class WendaoAnalyzerPluginManifest:
     def render_toml(self) -> str:
         """Render the plugin manifest in a stable TOML layout."""
         lines = [
-            '[plugin]',
+            "[plugin]",
             f'plugin_id = "{self.plugin_id}"',
             f'capability_id = "{self.capability_id}"',
             f'provider = "{self.provider}"',
@@ -165,7 +165,9 @@ def _normalize_sample_template(
 ) -> WendaoSampleTemplate:
     """Normalize one template input to the canonical enum form."""
 
-    return template if isinstance(template, WendaoSampleTemplate) else WendaoSampleTemplate(template)
+    return (
+        template if isinstance(template, WendaoSampleTemplate) else WendaoSampleTemplate(template)
+    )
 
 
 def validate_rows_against_template(
@@ -384,7 +386,7 @@ def scaffold_analyzer_plugin(
         ),
         f"src/{package_import}/__init__.py": "\n".join(
             [
-                f'from .{entry_module.split(".")[0]} import {entry_callable}',
+                f"from .{entry_module.split('.')[0]} import {entry_callable}",
                 "",
                 f'__all__ = ["{entry_callable}"]',
                 "",
@@ -527,24 +529,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)
 
-    defaults = (
-        profile_defaults(WendaoAnalyzerProfile(args.profile))
-        if args.profile
-        else None
-    )
+    defaults = profile_defaults(WendaoAnalyzerProfile(args.profile)) if args.profile else None
     profile = WendaoAnalyzerProfile(args.profile) if args.profile else None
-    capability_id = args.capability_id or (
-        str(defaults["capability_id"]) if defaults else None
-    )
+    capability_id = args.capability_id or (str(defaults["capability_id"]) if defaults else None)
     route = args.route or (str(defaults["route"]) if defaults else None)
     sample_template = (
         WendaoSampleTemplate(args.sample_template)
         if args.sample_template
-        else (
-            defaults["sample_template"]
-            if defaults
-            else WendaoSampleTemplate.DOCS_RETRIEVAL
-        )
+        else (defaults["sample_template"] if defaults else WendaoSampleTemplate.DOCS_RETRIEVAL)
     )
     if capability_id is None:
         parser.error("--capability-id is required when --profile is not provided")

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::path::Path;
 use xiuxian_qianhuan::persona::PersonaProfile;
-use xiuxian_wendao::{WendaoResourceUri, parse_frontmatter};
+use xiuxian_wendao::enhancer::parse_frontmatter;
+use xiuxian_wendao::skill_vfs::WendaoResourceUri;
 
 pub(super) fn persona_profile_from_markdown(uri: &str, markdown: &str) -> PersonaProfile {
     let frontmatter = parse_frontmatter(markdown);

@@ -1,4 +1,12 @@
-use super::*;
+use anyhow::Result;
+
+use crate::agent::memory::{RecalledEpisodeCandidate, apply_recall_credit};
+use crate::agent::memory_recall_feedback::{
+    RECALL_FEEDBACK_SOURCE_COMMAND, RecallOutcome, ToolExecutionSummary, resolve_feedback_outcome,
+    update_feedback_bias,
+};
+use crate::agent::{Agent, SessionRecallFeedbackDirection, SessionRecallFeedbackUpdate};
+use crate::observability::SessionEvent;
 
 impl Agent {
     /// Clear session history for a session.
@@ -64,6 +72,33 @@ impl Agent {
             return bias;
         }
         0.0
+    }
+
+    pub(in crate::agent) async fn load_memory_recall_feedback_bias(
+        &self,
+        session_id: &str,
+    ) -> Option<f32> {
+        self.memory_store
+            .as_ref()
+            .and_then(|store| store.recall_feedback_bias(session_id))
+    }
+
+    pub(in crate::agent) async fn persist_memory_recall_feedback_bias(
+        &self,
+        session_id: &str,
+        bias: f32,
+    ) {
+        if let Some(store) = self.memory_store.as_ref() {
+            store.set_recall_feedback_bias(session_id, bias);
+        }
+        self.persist_memory_recall_feedback_bias_atomic(session_id, bias, "feedback_update");
+    }
+
+    pub(in crate::agent) async fn clear_memory_recall_feedback_bias(&self, session_id: &str) {
+        if let Some(store) = self.memory_store.as_ref() {
+            store.clear_recall_feedback_bias(session_id);
+        }
+        self.clear_memory_recall_feedback_bias_atomic(session_id, "feedback_clear");
     }
 
     pub(in crate::agent) async fn update_recall_feedback(

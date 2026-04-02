@@ -3,21 +3,23 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use axum::body::Body;
 use axum::body::to_bytes;
 use axum::extract::State;
-use axum::http::StatusCode;
-use axum::routing::{Router, get};
+use axum::http::{Request, StatusCode};
+use axum::routing::Router;
 use tokio::sync::mpsc;
-use xiuxian_wendao::gateway::openapi::paths as openapi_paths;
+use tower::ServiceExt;
 use xiuxian_zhenfa::ZhenfaSignal;
 
 use crate::execute::gateway::{
     command::{
-        gateway_listen_backlog_with_lookup, gateway_studio_concurrency_limit_with_lookup,
+        GATEWAY_FLIGHT_SERVICE_AXUM_PATH, build_gateway_router, gateway_listen_backlog_with_lookup,
+        gateway_studio_concurrency_limit_with_lookup,
         gateway_studio_request_timeout_secs_with_lookup,
     },
     config::{get_webhook_from_config, resolve_port, resolve_webhook_config},
-    health::{gateway_health_response, health},
+    health::gateway_health_response,
     registry::build_plugin_registry,
     shared::{AppState, DEFAULT_PORT},
     status::{notify_status, stats},
@@ -293,15 +295,51 @@ async fn test_stats_endpoint_no_index() {
 async fn test_notify_status_endpoint() {
     let (tx, _rx) = mpsc::unbounded_channel();
     let state = app_state(Some(tx));
+    let expected_bootstrap_background_indexing =
+        state.studio.bootstrap_background_indexing_enabled();
+    let expected_bootstrap_background_indexing_mode =
+        state.studio.bootstrap_background_indexing_mode();
     let result = notify_status(State(state)).await;
     assert_eq!(result.0["notification_worker"], "active");
+    assert_eq!(
+        result.0["studio_bootstrap_background_indexing_enabled"],
+        serde_json::json!(expected_bootstrap_background_indexing)
+    );
+    assert_eq!(
+        result.0["studio_bootstrap_background_indexing_mode"],
+        expected_bootstrap_background_indexing_mode
+    );
+    assert_eq!(
+        result.0["studio_bootstrap_background_indexing_deferred_activation_observed"],
+        serde_json::json!(false)
+    );
+    assert!(result.0["studio_bootstrap_background_indexing_deferred_activation_at"].is_null());
+    assert!(result.0["studio_bootstrap_background_indexing_deferred_activation_source"].is_null());
 }
 
 #[tokio::test]
 async fn test_notify_status_no_channel() {
     let state = app_state(None);
+    let expected_bootstrap_background_indexing =
+        state.studio.bootstrap_background_indexing_enabled();
+    let expected_bootstrap_background_indexing_mode =
+        state.studio.bootstrap_background_indexing_mode();
     let result = notify_status(State(state)).await;
     assert_eq!(result.0["notification_worker"], "inactive");
+    assert_eq!(
+        result.0["studio_bootstrap_background_indexing_enabled"],
+        serde_json::json!(expected_bootstrap_background_indexing)
+    );
+    assert_eq!(
+        result.0["studio_bootstrap_background_indexing_mode"],
+        expected_bootstrap_background_indexing_mode
+    );
+    assert_eq!(
+        result.0["studio_bootstrap_background_indexing_deferred_activation_observed"],
+        serde_json::json!(false)
+    );
+    assert!(result.0["studio_bootstrap_background_indexing_deferred_activation_at"].is_null());
+    assert!(result.0["studio_bootstrap_background_indexing_deferred_activation_source"].is_null());
 }
 
 #[tokio::test]
@@ -309,11 +347,8 @@ async fn test_gateway_server_bind() {
     // Test that we can create the router and bind to a port
     let (tx, _rx) = mpsc::unbounded_channel();
     let app_state = app_state(Some(tx));
-    let app: Router<Arc<AppState>> = Router::new()
-        .route(openapi_paths::API_HEALTH_AXUM_PATH, get(health))
-        .route(openapi_paths::API_STATS_AXUM_PATH, get(stats))
-        .route(openapi_paths::API_NOTIFY_AXUM_PATH, get(notify_status))
-        .with_state(app_state);
+    let app: Router = build_gateway_router(app_state, 32, std::time::Duration::from_secs(15))
+        .unwrap_or_else(|error| panic!("gateway router should build: {error}"));
 
     // Bind to a random available port
     let addr = SocketAddr::from(([127, 0, 0, 1], 0));
@@ -322,6 +357,29 @@ async fn test_gateway_server_bind() {
 
     // Prevent unused variable warning
     let _ = app;
+}
+
+#[cfg(feature = "julia")]
+#[tokio::test]
+async fn test_gateway_router_mounts_flight_service_on_same_listener() {
+    let router = build_gateway_router(app_state(None), 32, std::time::Duration::from_secs(15))
+        .unwrap_or_else(|error| panic!("gateway router should build: {error}"));
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/arrow.flight.protocol.FlightService/GetFlightInfo")
+                .body(Body::empty())
+                .unwrap_or_else(|error| panic!("request should build: {error}")),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("router should answer Flight requests: {error}"));
+
+    assert_eq!(
+        GATEWAY_FLIGHT_SERVICE_AXUM_PATH,
+        "/arrow.flight.protocol.FlightService/{*grpc_method}"
+    );
+    assert_ne!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[test]

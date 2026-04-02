@@ -5,14 +5,17 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio::time::MissedTickBehavior;
 
-use super::super::channel::DiscordControlCommandPolicy;
-use super::DiscordRuntimeConfig;
-use super::foreground::build_foreground_runtime;
-use super::ingress::{
-    DiscordIngressApp, build_discord_ingress_app_with_partition_and_control_command_policy,
-};
-use super::telemetry::{emit_runtime_snapshot, snapshot_interval_from_env};
 use crate::agent::Agent;
+use crate::channels::discord::channel::DiscordControlCommandPolicy;
+use crate::channels::discord::runtime::DiscordRuntimeConfig;
+use crate::channels::discord::runtime::foreground::build_foreground_runtime;
+use crate::channels::discord::runtime::ingress::{
+    DiscordIngressApp, DiscordIngressBuildRequest,
+    build_discord_ingress_app_with_partition_and_control_command_policy,
+};
+use crate::channels::discord::runtime::telemetry::{
+    emit_runtime_snapshot, snapshot_interval_from_env,
+};
 use crate::channels::traits::{Channel, ChannelMessage};
 
 /// Parameters to run Discord HTTP ingress runtime.
@@ -57,19 +60,22 @@ pub async fn run_discord_ingress(
         inbound_queue_capacity,
         turn_timeout_secs,
         foreground_max_in_flight_messages,
+        foreground_queue_mode,
     } = runtime_config;
 
     let (tx, mut inbound_rx) = mpsc::channel::<ChannelMessage>(inbound_queue_capacity);
     let inbound_snapshot_tx = tx.clone();
     let ingress = build_discord_ingress_app_with_partition_and_control_command_policy(
-        bot_token,
-        allowed_users,
-        allowed_guilds,
-        control_command_policy,
-        &ingress_path,
-        secret_token,
-        session_partition,
-        tx,
+        DiscordIngressBuildRequest {
+            bot_token,
+            allowed_users,
+            allowed_guilds,
+            control_command_policy,
+            ingress_path,
+            secret_token,
+            session_partition,
+            tx,
+        },
     )?;
     let DiscordIngressApp { app, channel, path } = ingress;
     let channel_for_send: Arc<dyn Channel> = channel.clone();
@@ -78,6 +84,7 @@ pub async fn run_discord_ingress(
         channel_for_send,
         turn_timeout_secs,
         foreground_max_in_flight_messages,
+        foreground_queue_mode,
     );
     let mut snapshot_tick = snapshot_interval_from_env().map(|period| {
         let mut interval = tokio::time::interval(period);
@@ -101,7 +108,7 @@ pub async fn run_discord_ingress(
     println!("Discord ingress listening on {bind_addr}{path} (Ctrl+C to stop)");
     println!("Discord session partition: {}", channel.session_partition());
     println!(
-        "Discord foreground config: inbound_queue={inbound_queue_capacity} max_in_flight={foreground_max_in_flight_messages} timeout={turn_timeout_secs}s"
+        "Discord foreground config: inbound_queue={inbound_queue_capacity} max_in_flight={foreground_max_in_flight_messages} timeout={turn_timeout_secs}s queue_mode={foreground_queue_mode}"
     );
     println!("Background commands: /bg <prompt>, /job <id> [json], /jobs [json]");
     println!(
@@ -135,6 +142,7 @@ pub async fn run_discord_ingress(
                     &inbound_snapshot_tx,
                     inbound_queue_capacity,
                     &foreground_snapshot,
+                    runtime.admission_runtime_snapshot(),
                 );
             }
             _ = tokio::signal::ctrl_c() => {

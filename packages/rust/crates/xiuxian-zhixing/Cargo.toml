@@ -3,7 +3,7 @@ name = "xiuxian-zhixing"
 version.workspace = true
 edition.workspace = true
 description = "AI-driven Agenda and Journaling system for the Xiuxian ecosystem (Zhixing-Heyi)"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 

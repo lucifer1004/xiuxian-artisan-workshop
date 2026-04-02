@@ -3,7 +3,7 @@ name = "xiuxian-vector"
 version.workspace = true
 edition.workspace = true
 description = "High-performance embedded vector database using LanceDB"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 
@@ -51,7 +51,6 @@ anyhow = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
-toml = { workspace = true }
 # SIMD-accelerated JSON for hot-path metadata parsing (writer_impl)
 simd-json = "0.13"
 sha2 = { workspace = true }
@@ -75,14 +74,11 @@ rayon = { workspace = true }
 
 # Logging
 log = { workspace = true }
-reqwest = { workspace = true }
-url = "2.5.7"
 
 # Time for cleanup_old_versions (Lance API)
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-axum = { workspace = true }
 lance = { workspace = true }
 xiuxian-testing = { path = "../xiuxian-testing" }
 tempfile = { workspace = true }

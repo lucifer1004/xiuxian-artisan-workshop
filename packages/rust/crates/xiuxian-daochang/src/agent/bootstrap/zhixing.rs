@@ -17,7 +17,7 @@ use std::sync::Arc;
 use xiuxian_qianhuan::{
     ManifestationInterface, ManifestationManager, MemoryTemplateRecord, PersonaProfile,
 };
-use xiuxian_wendao::WendaoResourceUri;
+use xiuxian_wendao::skill_vfs::{WendaoResourceUri, embedded_resource_text_from_wendao_uri};
 use xiuxian_zhixing::{ReminderQueueSettings, ReminderQueueStore, ReminderSignal, ZhixingHeyi};
 
 const XIUXIAN_WENDAO_NOTEBOOK_PATH_ENV: &str = "XIUXIAN_WENDAO_NOTEBOOK_PATH";
@@ -325,9 +325,7 @@ pub(crate) fn load_skill_templates_from_embedded_registry(
                     "template link `{link_uri}` for id `{id}` must use semantic URI `wendao://skills/<name>/references/<entity>`"
                 ));
             }
-            let Some(content) =
-                xiuxian_wendao::embedded_resource_text_from_wendao_uri(link_uri.as_str())
-            else {
+            let Some(content) = embedded_resource_text_from_wendao_uri(link_uri.as_str()) else {
                 return Err(format!(
                     "linked template URI `{link_uri}` for id `{id}` not found in embedded zhixing resources"
                 ));

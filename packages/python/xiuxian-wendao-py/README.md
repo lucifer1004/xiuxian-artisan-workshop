@@ -20,6 +20,42 @@ The default architecture is:
 4. Python falls back to Arrow IPC.
 5. Python does not depend on in-process Rust bindings.
 
+Package positioning:
+
+1. `xiuxian-wendao-py` is a typed Python access layer for Rust-owned Wendao
+   transport contracts.
+2. `xiuxian-wendao-py` should be treated as the Python-side analogue of
+   `.data/WendaoArrow`: it owns Arrow/Flight transport helpers and typed
+   contract access, not analyzer logic.
+3. a future sibling package such as `xiuxian-wendao-analyzer` should depend on
+   `xiuxian-wendao-py` and own Python-local analyzer strategies, scientific
+   ecosystem integration, and analyzer runtime configuration.
+4. downstream users who want to build custom analyzers over Arrow tables
+   should depend on `xiuxian-wendao-py` directly as the shared Python
+   substrate.
+5. `repo-search` and `rerank` support in this package mean Python can call the
+   Rust-owned Flight routes with stable request and response shapes.
+6. `repo-search` and `rerank` do not make this package a Python-local search
+   or scoring runtime.
+7. new semantics should be owned by Rust first and then surfaced here as thin
+   typed transport helpers.
+
+Related package-boundary RFC:
+
+- [Python Wendao Analyzer Package Boundary](../../../docs/rfcs/2026-03-31-python-wendao-analyzer-package-rfc.md)
+
+Transitional note:
+
+- the current `analyzer.py`, `plugin.py`, and `scaffold.py` surfaces remain
+  available for authoring compatibility, but new Python-local analyzer
+  strategy work should move toward the planned `xiuxian-wendao-analyzer`
+  sibling package instead of expanding `xiuxian-wendao-py`.
+- transport and typed contract access remain first-class here; analyzer
+  strategy growth does not.
+- the planned analyzer package is expected to reuse the typed transport entry
+  points from `xiuxian_wendao_py.transport` instead of rebuilding raw
+  Arrow/Flight request assembly.
+
 ## Quick Start
 
 ```python
@@ -125,6 +161,14 @@ and responses carry the canonical columns:
 - `doc_id`
 - `path`
 - `title`
+- `best_section`
+- `match_reason`
+- `navigation_path`
+- `navigation_category`
+- `navigation_line`
+- `navigation_line_end`
+- `hierarchy`
+- `tags`
 - `score`
 - `language`
 
@@ -136,6 +180,11 @@ hand-parse raw Arrow tables or hand-assemble repo-search request metadata for
 the common repo-search case. The live Rust query route now rejects blank query
 text and non-positive limits instead of treating `/search/repos/main` as a
 parameterless read.
+The same response contract now also carries stable backend-owned evidence
+fields, `best_section`, `match_reason`, `navigation_*`, `hierarchy`, and
+`tags`, so analyzers can inspect the strongest matching section, the concrete
+editor-navigation landing point, and the path-derived hierarchy without
+reverse-engineering search semantics from path or score alone.
 
 The same package now also exposes the stable rerank request columns:
 
@@ -152,6 +201,11 @@ all `embedding` and `query_embedding` vectors share one fixed dimension before
 the batch is converted into Arrow fixed-size-list columns. On the Rust side,
 the same exchange route now also expects a rerank-dimension metadata header,
 and the Python typed helper path attaches that header automatically. The live
+route now also supports `top_k` as a stable rerank response-limit header, and
+the Python typed helper path can request top-ranked truncation without manual
+Flight metadata assembly. Malformed raw `top_k` headers are rejected by the
+live Rust host with the same invalid-argument path exposed to direct Flight
+clients. The live
 Rust route now also validates the first non-empty exchange schema frame, so
 manual `exchange_query_table(...)` callers must still satisfy the stable
 rerank schema if they target `/rerank/flight` directly. That schema validation
@@ -172,15 +226,95 @@ semantics instead of only transport integrity.
 The rerank route now also publishes a stable response contract with columns:
 
 - `doc_id`
+- `vector_score`
+- `semantic_score`
 - `final_score`
 - `rank`
 
 and Python exposes `WendaoRerankResultRow`, `parse_rerank_response_rows()`,
 and `exchange_rerank_result_rows()` so downstream analyzer authors do not need
 to hand-parse rerank outputs from generic Arrow tables.
-That response contract is now also backed by shared Rust-owned validation, not
-just request-side validation. The transport contract now validates rerank
-response schema and batch semantics for:
+The same rerank response contract now also exposes the raw vector score and
+the normalized semantic score that feed the shared Rust scorer, so downstream
+analyzers can inspect why one candidate outranked another instead of only
+seeing the blended `final_score`.
+That rerank scorer is no longer fixed at one transport-local blend. The Rust
+runtime now exposes a shared `RerankScoreWeights` policy with a default
+`0.4 / 0.6` vector/semantic split, and both `wendao_flight_server` and
+`wendao_search_flight_server` now accept runtime overrides through:
+
+- `WENDAO_RERANK_VECTOR_WEIGHT`
+- `WENDAO_RERANK_SEMANTIC_WEIGHT`
+
+The live Python↔Rust smoke now proves that changing those env vars changes the
+returned `final_score`, ordering, and `rank` on the real Flight host without
+changing the typed Python request surface.
+On the `xiuxian-wendao` host path, the same weight policy now also resolves
+through Wendao retrieval runtime config, so
+`link_graph.retrieval.julia_rerank.vector_weight` and
+`link_graph.retrieval.julia_rerank.similarity_weight` can drive the Flight
+rerank scorer without relying only on process-local env overrides. The real
+Python↔Rust host smoke now covers both paths:
+
+- env-driven weight overrides
+- workspace `wendao.toml`-driven weight overrides
+- when both are present, `wendao.toml` wins over env
+  The same real host path now also resolves the expected Flight schema version
+  from `link_graph.retrieval.julia_rerank.schema_version` in workspace
+  `wendao.toml`, so the live host can track retrieval-policy schema changes
+  without requiring a process-local positional override. The
+  `wendao_search_flight_server` binary now accepts an explicit
+  `--schema-version=<value>` CLI override when a host needs to pin schema
+  expectations directly.
+
+Current runtime host settings contract:
+
+- [Wendao Flight Runtime Host Settings Contract](../../../docs/contracts/wendao-flight-runtime-host-settings-contract.md)
+
+This keeps `wendao.toml` as the normal workspace-owned source of truth for the
+SearchPlane-backed host, while explicit CLI schema pinning remains available
+for bounded host bring-up and test control across both current Flight hosts.
+
+## Arrow Flight Support Matrix
+
+The current `xiuxian-wendao-py` Arrow Flight surface is treated as follows.
+
+| Surface                         | Current support                                                                                                                            | Real-host validation                                                       | Status               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | -------------------- |
+| `repo-search` request contract  | typed request helpers for query text, `limit`, `language_filters`, `path_prefixes`, `title_filters`, `tag_filters`, and `filename_filters` | validated against `wendao_search_flight_server`                            | stable               |
+| `repo-search` response contract | typed rows for `doc_id`, `path`, `title`, `best_section`, `match_reason`, `navigation_*`, `hierarchy`, `tags`, `score`, and `language`     | validated against runtime and real search hosts                            | operationally closed |
+| `rerank` request contract       | typed rows for `doc_id`, `vector_score`, `embedding`, `query_embedding`, plus optional `top_k`                                             | validated against `wendao_flight_server` and `wendao_search_flight_server` | stable               |
+| `rerank` response contract      | typed rows for `doc_id`, `vector_score`, `semantic_score`, `final_score`, and `rank`                                                       | validated against runtime and real search hosts                            | stable               |
+| `rerank top_k` semantics        | omitted by default; positive values act as an upper bound; blank, zero, and malformed values are rejected                                  | validated on both current Flight hosts                                     | stable               |
+| runtime host settings           | promoted knobs are `rerank weights`, `schema version`, and `rerank dimension` only                                                         | governed by the shared runtime host settings contract                      | temporarily closed   |
+
+Not currently treated as active gaps:
+
+- additional repo-search response fields without new analyzer-facing value
+- additional runtime host knobs without shared runtime-policy semantics
+- more `top_k` edge-case expansion beyond the current upper-bound and rejection contract
+
+This means the current Arrow Flight line is no longer blocked on basic support.
+The remaining work should favor new analyzer-facing query or rerank semantics
+instead of more transport-edge hardening on already-closed surfaces.
+
+Interpretation rule:
+
+- `rerank` support in this package should be read as "typed Python access to a
+  Rust-owned `/rerank/flight` contract", not "Python implements rerank
+  behavior locally".
+- future official Python analyzer logic should live in a sibling package such
+  as `xiuxian-wendao-analyzer`, with `xiuxian-wendao-py` kept as the shared
+  transport substrate for any downstream analyzer package.
+  The runtime-owned host now also accepts explicit rerank-dimension pinning
+  through `--rerank-dimension=<n>`, and that knob is now governed by the shared
+  runtime host settings contract as:
+  `explicit CLI override > positional arg > default`.
+  The SearchPlane-backed host now follows the same rerank-dimension precedence:
+  `explicit CLI override > positional arg > default`.
+  That response contract is now also backed by shared Rust-owned validation, not
+  just request-side validation. The transport contract now validates rerank
+  response schema and batch semantics for:
 
 - non-empty response batches
 - non-blank and unique `doc_id`
@@ -301,6 +435,9 @@ the exact-case row scores higher than the folded-only row on the same typed
 Flight query. The stable repo-search response contract now also carries one
 read-side evidence field, `best_section`, so Python consumers can inspect the
 backend-selected line/snippet context without reparsing raw Arrow batches.
+The same response contract now also carries stable `tags`, so analyzers can
+consume backend-owned classification and match semantics directly from Arrow
+rows instead of reconstructing them from request filters or frontend JSON.
 The same request contract now also carries optional filename filters through
 `x-wendao-repo-search-filename-filters`. Python can pass those filters through
 `repo_search_request(..., filename_filters=(...))`, and the real host now

@@ -7,7 +7,7 @@ use serenity::client::{Context, EventHandler};
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
-use super::super::super::channel::DiscordChannel;
+use crate::channels::discord::channel::DiscordChannel;
 use crate::channels::traits::ChannelMessage;
 
 const DISCORD_INBOUND_SEND_TIMEOUT_SECS: u64 = 2;

@@ -5,7 +5,7 @@ use crate::error::QianjiError;
 use crate::scheduler::QianjiScheduler;
 use std::sync::Arc;
 use xiuxian_qianhuan::{orchestrator::ThousandFacesOrchestrator, persona::PersonaRegistry};
-use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::link_graph::LinkGraphIndex;
 
 pub(super) fn compile_scheduler(
     manifest_toml: &str,

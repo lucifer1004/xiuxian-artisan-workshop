@@ -247,14 +247,14 @@ async fn search_knowledge_requires_query() {
 async fn search_intent_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
-    let result = search_intent(
-        State(Arc::clone(&fixture.state)),
-        Query(SearchQuery {
+    let result = load_intent_search_response_with_metadata(
+        fixture.state.studio.as_ref(),
+        SearchQuery {
             q: Some("   ".to_string()),
             intent: Some("debug_lookup".to_string()),
             limit: None,
             repo: None,
-        }),
+        },
     )
     .await;
 
@@ -367,32 +367,32 @@ async fn search_intent_returns_payload() {
     publish_knowledge_section_index(&fixture.state).await;
     publish_local_symbol_index(&fixture.state).await;
 
-    let result = search_intent(
-        State(fixture.state),
-        Query(SearchQuery {
+    let result = load_intent_search_response_with_metadata(
+        fixture.state.studio.as_ref(),
+        SearchQuery {
             q: Some("alpha_handler".to_string()),
             limit: Some(5),
             intent: Some("debug_lookup".to_string()),
             repo: None,
-        }),
+        },
     )
     .await;
 
-    let Ok(response) = result else {
+    let Ok((response, _metadata)) = result else {
         panic!("expected intent search request to succeed");
     };
 
     assert_studio_json_snapshot(
         "search_intent_payload",
         json!({
-            "query": response.0.query,
-            "hitCount": response.0.hit_count,
-            "selectedMode": response.0.selected_mode,
-            "searchMode": response.0.search_mode,
-            "intent": response.0.intent,
-            "intentConfidence": response.0.intent_confidence.map(round_f64),
-            "graphConfidenceScore": response.0.graph_confidence_score.map(round_f64),
-            "hits": response.0.hits.into_iter().map(|hit| {
+            "query": response.query,
+            "hitCount": response.hit_count,
+            "selectedMode": response.selected_mode,
+            "searchMode": response.search_mode,
+            "intent": response.intent,
+            "intentConfidence": response.intent_confidence.map(round_f64),
+            "graphConfidenceScore": response.graph_confidence_score.map(round_f64),
+            "hits": response.hits.into_iter().map(|hit| {
                 json!({
                     "stem": hit.stem,
                     "title": hit.title,
@@ -467,31 +467,29 @@ async fn search_intent_includes_repo_content_hits_for_code_biased_intent() {
             attempt_count: 1,
         });
 
-    let result = search_intent(
-        State(Arc::clone(&fixture.state)),
-        Query(SearchQuery {
+    let result = load_intent_search_response_with_metadata(
+        fixture.state.studio.as_ref(),
+        SearchQuery {
             q: Some("lang:julia reexport".to_string()),
             limit: Some(5),
             intent: Some("debug_lookup".to_string()),
             repo: Some("valid".to_string()),
-        }),
+        },
     )
     .await;
 
-    let Ok(response) = result else {
+    let Ok((response, _metadata)) = result else {
         panic!("expected repo-backed intent search request to succeed");
     };
 
-    assert_eq!(response.0.selected_mode.as_deref(), Some("intent_hybrid"));
+    assert_eq!(response.selected_mode.as_deref(), Some("intent_hybrid"));
     assert!(
         response
-            .0
             .hits
             .iter()
             .any(|hit| hit.doc_type.as_deref() == Some("file") && hit.path == "src/ValidPkg.jl"),
         "expected repo content hit in intent response: {:?}",
         response
-            .0
             .hits
             .iter()
             .map(|hit| (&hit.path, &hit.doc_type))
@@ -629,15 +627,15 @@ async fn search_knowledge_uses_project_scoped_display_paths_for_duplicate_roots(
 async fn search_attachments_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
-    let result = search_attachments(
-        State(Arc::clone(&fixture.state)),
-        Query(AttachmentSearchQuery {
+    let result = load_attachment_search_response_from_studio(
+        fixture.state.studio.as_ref(),
+        AttachmentSearchQuery {
             q: Some("   ".to_string()),
             limit: None,
             ext: Vec::new(),
             kind: Vec::new(),
             case_sensitive: false,
-        }),
+        },
     )
     .await;
 
@@ -668,15 +666,15 @@ async fn search_attachments_returns_payload() {
     });
     publish_attachment_index(&fixture.state).await;
 
-    let result = search_attachments(
-        State(Arc::clone(&fixture.state)),
-        Query(AttachmentSearchQuery {
+    let result = load_attachment_search_response_from_studio(
+        fixture.state.studio.as_ref(),
+        AttachmentSearchQuery {
             q: Some("topology".to_string()),
             limit: Some(10),
             ext: Vec::new(),
             kind: Vec::new(),
             case_sensitive: false,
-        }),
+        },
     )
     .await;
 
@@ -687,10 +685,10 @@ async fn search_attachments_returns_payload() {
     assert_studio_json_snapshot(
         "search_attachments_payload",
         json!({
-            "query": response.0.query,
-            "hitCount": response.0.hit_count,
-            "selectedScope": response.0.selected_scope,
-            "hits": response.0.hits.into_iter().map(|hit| {
+            "query": response.query,
+            "hitCount": response.hit_count,
+            "selectedScope": response.selected_scope,
+            "hits": response.hits.into_iter().map(|hit| {
                 json!({
                     "path": hit.path,
                     "sourceId": hit.source_id,
@@ -725,15 +723,15 @@ async fn search_attachments_waits_for_initial_index_publication() {
         repo_projects: Vec::new(),
     });
 
-    let result = search_attachments(
-        State(Arc::clone(&fixture.state)),
-        Query(AttachmentSearchQuery {
+    let result = load_attachment_search_response_from_studio(
+        fixture.state.studio.as_ref(),
+        AttachmentSearchQuery {
             q: Some("topology".to_string()),
             limit: Some(10),
             ext: Vec::new(),
             kind: Vec::new(),
             case_sensitive: false,
-        }),
+        },
     )
     .await;
 
@@ -741,93 +739,7 @@ async fn search_attachments_waits_for_initial_index_publication() {
         panic!("expected cold-start attachment search request to succeed");
     };
 
-    assert!(response.0.hit_count >= 1);
-}
-
-#[tokio::test]
-async fn search_attachments_hits_arrow_returns_arrow_payload() {
-    let fixture = make_state_with_docs(vec![(
-        "docs/alpha.md",
-        "# Alpha\n\n![Topology](assets/topology.png)\n\n[Spec](files/spec.pdf)\n",
-    )]);
-    fixture.state.studio.set_ui_config(UiConfig {
-        projects: vec![UiProjectConfig {
-            name: "kernel".to_string(),
-            root: ".".to_string(),
-            dirs: vec!["docs".to_string()],
-        }],
-        repo_projects: Vec::new(),
-    });
-    publish_attachment_index(&fixture.state).await;
-
-    let result = search_attachments_hits_arrow(
-        State(Arc::clone(&fixture.state)),
-        Query(AttachmentSearchQuery {
-            q: Some("topology".to_string()),
-            limit: Some(10),
-            ext: vec!["png".to_string()],
-            kind: vec!["image".to_string()],
-            case_sensitive: false,
-        }),
-    )
-    .await;
-
-    let Ok(response) = result else {
-        panic!("expected attachment Arrow search request to succeed");
-    };
-
-    assert_eq!(response.status(), axum::http::StatusCode::OK);
-    assert_eq!(
-        response
-            .headers()
-            .get(axum::http::header::CONTENT_TYPE)
-            .and_then(|value| value.to_str().ok()),
-        Some(crate::gateway::studio::router::retrieval_arrow::RETRIEVAL_ARROW_CONTENT_TYPE),
-    );
-
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("attachment Arrow response body should decode");
-    let reader =
-        arrow::ipc::reader::StreamReader::try_new(std::io::Cursor::new(body.to_vec()), None)
-            .expect("attachment Arrow stream reader should open");
-    let batches = reader
-        .collect::<Result<Vec<_>, _>>()
-        .expect("attachment Arrow stream should decode");
-    assert_eq!(batches.len(), 1);
-    let batch = &batches[0];
-    assert_eq!(batch.num_rows(), 1);
-
-    let attachment_names = batch
-        .column_by_name("attachmentName")
-        .expect("attachmentName column")
-        .as_any()
-        .downcast_ref::<arrow::array::StringArray>()
-        .expect("attachmentName should be utf8");
-    assert_eq!(attachment_names.value(0), "topology.png");
-
-    let names = batch
-        .column_by_name("name")
-        .expect("name column")
-        .as_any()
-        .downcast_ref::<arrow::array::StringArray>()
-        .expect("name should be utf8");
-    assert_eq!(names.value(0), "topology.png");
-
-    let navigation_targets = batch
-        .column_by_name("navigationTargetJson")
-        .expect("navigationTargetJson column")
-        .as_any()
-        .downcast_ref::<arrow::array::StringArray>()
-        .expect("navigationTargetJson should be utf8");
-    let parsed_navigation: serde_json::Value = serde_json::from_str(navigation_targets.value(0))
-        .expect("navigation target json should parse");
-    assert_eq!(
-        parsed_navigation
-            .get("path")
-            .and_then(serde_json::Value::as_str),
-        Some("docs/alpha.md"),
-    );
+    assert!(response.hit_count >= 1);
 }
 
 #[tokio::test]
@@ -846,15 +758,15 @@ async fn search_attachments_respects_extension_and_kind_filters() {
     });
     publish_attachment_index(&fixture.state).await;
 
-    let result = search_attachments(
-        State(Arc::clone(&fixture.state)),
-        Query(AttachmentSearchQuery {
+    let result = load_attachment_search_response_from_studio(
+        fixture.state.studio.as_ref(),
+        AttachmentSearchQuery {
             q: Some("spec".to_string()),
             limit: Some(10),
             ext: vec!["pdf".to_string()],
             kind: vec!["pdf".to_string()],
             case_sensitive: false,
-        }),
+        },
     )
     .await;
 
@@ -862,10 +774,10 @@ async fn search_attachments_respects_extension_and_kind_filters() {
         panic!("expected filtered attachment search request to succeed");
     };
 
-    assert_eq!(response.0.hit_count, 1);
-    assert_eq!(response.0.hits[0].attachment_name, "spec.pdf");
-    assert_eq!(response.0.hits[0].attachment_ext, "pdf");
-    assert_eq!(response.0.hits[0].kind, "pdf");
+    assert_eq!(response.hit_count, 1);
+    assert_eq!(response.hits[0].attachment_name, "spec.pdf");
+    assert_eq!(response.hits[0].attachment_ext, "pdf");
+    assert_eq!(response.hits[0].kind, "pdf");
 }
 
 #[tokio::test]
@@ -1510,12 +1422,12 @@ async fn search_definition_can_resolve_markdown_heading_hits() {
 async fn search_references_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
-    let result = search_references(
-        State(Arc::clone(&fixture.state)),
-        Query(ReferenceSearchQuery {
+    let result = load_reference_search_response(
+        fixture.state.as_ref(),
+        ReferenceSearchQuery {
             q: Some("   ".to_string()),
             limit: None,
-        }),
+        },
     )
     .await;
 
@@ -1541,12 +1453,12 @@ async fn search_references_returns_payload() {
     ]);
     publish_reference_occurrence_index(&fixture.state).await;
 
-    let result = search_references(
-        State(fixture.state),
-        Query(ReferenceSearchQuery {
+    let result = load_reference_search_response(
+        fixture.state.as_ref(),
+        ReferenceSearchQuery {
             q: Some("AlphaService".to_string()),
             limit: Some(10),
-        }),
+        },
     )
     .await;
 
@@ -1557,10 +1469,10 @@ async fn search_references_returns_payload() {
     assert_studio_json_snapshot(
         "search_references_payload",
         json!({
-            "query": response.0.query,
-            "hitCount": response.0.hit_count,
-            "selectedScope": response.0.selected_scope,
-            "hits": response.0.hits.into_iter().map(|hit| {
+            "query": response.query,
+            "hitCount": response.hit_count,
+            "selectedScope": response.selected_scope,
+            "hits": response.hits.into_iter().map(|hit| {
                 json!({
                     "name": hit.name,
                     "path": hit.path,
@@ -1594,12 +1506,12 @@ async fn search_references_waits_for_initial_index_publication() {
         "pub struct AlphaService {\n    ready: bool,\n}\n\npub fn alpha_handler() {\n    let _service = AlphaService { ready: true };\n}\n",
     )]);
 
-    let result = search_references(
-        State(Arc::clone(&fixture.state)),
-        Query(ReferenceSearchQuery {
+    let result = load_reference_search_response(
+        fixture.state.as_ref(),
+        ReferenceSearchQuery {
             q: Some("AlphaService".to_string()),
             limit: Some(10),
-        }),
+        },
     )
     .await;
 
@@ -1607,19 +1519,19 @@ async fn search_references_waits_for_initial_index_publication() {
         panic!("expected cold-start reference search request to succeed");
     };
 
-    assert!(response.0.hit_count >= 1);
+    assert!(response.hit_count >= 1);
 }
 
 #[tokio::test]
 async fn search_symbols_requires_query() {
     let fixture = make_state_with_docs(Vec::new());
 
-    let result = search_symbols(
-        State(Arc::clone(&fixture.state)),
-        Query(SymbolSearchQuery {
+    let result = load_symbol_search_response(
+        fixture.state.as_ref(),
+        SymbolSearchQuery {
             q: Some("   ".to_string()),
             limit: None,
-        }),
+        },
     )
     .await;
 
@@ -1662,12 +1574,12 @@ async fn search_symbols_returns_payload() {
             warmed_index,
         );
 
-    let result = search_symbols(
-        State(fixture.state),
-        Query(SymbolSearchQuery {
+    let result = load_symbol_search_response(
+        fixture.state.as_ref(),
+        SymbolSearchQuery {
             q: Some("alpha".to_string()),
             limit: Some(10),
-        }),
+        },
     )
     .await;
 
@@ -1678,12 +1590,12 @@ async fn search_symbols_returns_payload() {
     assert_studio_json_snapshot(
         "search_symbols_payload",
         json!({
-            "query": response.0.query,
-            "hitCount": response.0.hit_count,
-            "selectedScope": response.0.selected_scope,
-            "partial": response.0.partial,
-            "indexingState": response.0.indexing_state,
-            "hits": response.0.hits.into_iter().map(|hit| {
+            "query": response.query,
+            "hitCount": response.hit_count,
+            "selectedScope": response.selected_scope,
+            "partial": response.partial,
+            "indexingState": response.indexing_state,
+            "hits": response.hits.into_iter().map(|hit| {
                 json!({
                     "name": hit.name,
                     "kind": hit.kind,
@@ -1731,12 +1643,12 @@ async fn search_symbols_returns_pending_payload_while_index_is_warming() {
             },
         );
 
-    let result = search_symbols(
-        State(Arc::clone(&fixture.state)),
-        Query(SymbolSearchQuery {
+    let result = load_symbol_search_response(
+        fixture.state.as_ref(),
+        SymbolSearchQuery {
             q: Some("pending".to_string()),
             limit: Some(10),
-        }),
+        },
     )
     .await;
 
@@ -1744,10 +1656,10 @@ async fn search_symbols_returns_pending_payload_while_index_is_warming() {
         panic!("expected pending symbol search request to succeed");
     };
 
-    assert_eq!(response.0.hit_count, 0);
-    assert!(response.0.partial);
-    assert_eq!(response.0.indexing_state.as_deref(), Some("indexing"));
-    assert!(response.0.hits.is_empty());
+    assert_eq!(response.hit_count, 0);
+    assert!(response.partial);
+    assert_eq!(response.indexing_state.as_deref(), Some("indexing"));
+    assert!(response.hits.is_empty());
 }
 
 #[tokio::test]
@@ -1786,12 +1698,12 @@ async fn search_symbols_respects_glob_dir_filters() {
             warmed_index,
         );
 
-    let result = search_symbols(
-        State(Arc::clone(&fixture.state)),
-        Query(SymbolSearchQuery {
+    let result = load_symbol_search_response(
+        fixture.state.as_ref(),
+        SymbolSearchQuery {
             q: Some("GlobFilteredSymbol".to_string()),
             limit: Some(10),
-        }),
+        },
     )
     .await;
 
@@ -1800,7 +1712,6 @@ async fn search_symbols_respects_glob_dir_filters() {
     };
 
     let hit_paths = response
-        .0
         .hits
         .iter()
         .map(|hit| hit.path.as_str())

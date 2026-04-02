@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
-use futures::StreamExt;
 use redis::Client as ValkeyClient;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -276,9 +275,7 @@ struct ToolRuntimeJsonRpcNotification<P> {
 struct ToolRuntimeJsonRpcResponse<R> {
     jsonrpc: String,
     id: Value,
-    #[serde(default)]
     result: Option<R>,
-    #[serde(default)]
     error: Option<ToolRuntimeJsonRpcError>,
 }
 
@@ -355,6 +352,7 @@ impl ToolRuntimeSessionClient {
                     .await?;
             let session_id = initialize_response
                 .session_id
+                .clone()
                 .ok_or_else(|| anyhow!("tool runtime initialize did not return a session id"))?;
             let initialize_result: ToolRuntimeInitializeResult =
                 decode_rpc_result(initialize_response, 0, "initialize")?;
@@ -517,11 +515,14 @@ impl ToolClientPool {
 
         let timeout_secs = self.config.tool_timeout_secs.max(1);
         let list = self
-            .call_with_retry("tools/list", timeout_secs, |service| async move {
-                service
-                    .list_tools(params.clone())
-                    .await
-                    .map_err(|error| anyhow!("tools/list failed: {error}"))
+            .call_with_retry("tools/list", timeout_secs, |service| {
+                let params = params.clone();
+                async move {
+                    service
+                        .list_tools(params)
+                        .await
+                        .map_err(|error| anyhow!("tools/list failed: {error}"))
+                }
             })
             .await?;
         if params.is_none() {
@@ -546,11 +547,15 @@ impl ToolClientPool {
 
         let timeout_secs = self.config.tool_timeout_secs.max(1);
         let result = self
-            .call_with_retry("tools/call", timeout_secs, |service| async move {
-                service
-                    .call_tool(name.clone(), arguments.clone())
-                    .await
-                    .map_err(|error| anyhow!("tools/call failed: {error}"))
+            .call_with_retry("tools/call", timeout_secs, |service| {
+                let name = name.clone();
+                let arguments = arguments.clone();
+                async move {
+                    service
+                        .call_tool(name, arguments)
+                        .await
+                        .map_err(|error| anyhow!("tools/call failed: {error}"))
+                }
             })
             .await?;
 
@@ -807,21 +812,16 @@ async fn parse_first_sse_message(
     response: reqwest::Response,
     method: &'static str,
 ) -> Result<Value> {
-    let mut stream = response.bytes_stream();
-    let mut buffer = String::new();
-    while let Some(chunk) = stream.next().await {
-        let chunk =
-            chunk.with_context(|| format!("read tool runtime {method} SSE response chunk"))?;
-        buffer.push_str(&String::from_utf8_lossy(&chunk));
-        if let Some(message) = try_parse_sse_message(&buffer)
-            .with_context(|| format!("decode tool runtime {method} SSE response"))?
-        {
-            return Ok(message);
-        }
-    }
-    Err(anyhow!(
-        "tool runtime {method} SSE response ended before a JSON-RPC message arrived"
-    ))
+    let payload = response
+        .bytes()
+        .await
+        .with_context(|| format!("read tool runtime {method} SSE response body"))?;
+    let buffer = String::from_utf8_lossy(&payload);
+    try_parse_sse_message(&buffer)
+        .with_context(|| format!("decode tool runtime {method} SSE response"))?
+        .ok_or_else(|| {
+            anyhow!("tool runtime {method} SSE response ended before a JSON-RPC message arrived")
+        })
 }
 
 fn try_parse_sse_message(buffer: &str) -> Result<Option<Value>> {

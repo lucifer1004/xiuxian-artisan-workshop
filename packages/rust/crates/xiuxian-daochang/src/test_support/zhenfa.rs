@@ -5,7 +5,8 @@ use std::sync::Arc;
 use serde_json::Value;
 use xiuxian_memory_engine::EpisodeStore;
 use xiuxian_qianhuan::ManifestationManager;
-use xiuxian_wendao::{LinkGraphIndex, SkillVfsResolver};
+use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::skill_vfs::SkillVfsResolver;
 use xiuxian_zhenfa::{ZhenfaOrchestratorHooks, ZhenfaSignalSink};
 
 use crate::agent::zhenfa as internal;

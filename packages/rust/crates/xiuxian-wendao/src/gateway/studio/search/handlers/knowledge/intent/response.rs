@@ -39,6 +39,7 @@ pub(crate) fn merge_intent_hits(
         knowledge_hit_count,
         local_symbol_hit_count,
         repo_hit_count,
+        transport: repo_merge.transport,
         partial: source_hits.knowledge_indexing
             || source_hits.local_symbol_indexing
             || !repo_merge.pending_repos.is_empty()

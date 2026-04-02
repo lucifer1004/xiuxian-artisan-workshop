@@ -20,7 +20,7 @@ pub(super) async fn connect_tool_pool_if_configured(
 
     let strict_startup = config.tool_strict_startup;
     let connect_config = startup_connect_config(config, strict_startup);
-    match connect_tool_pool(url, connect_config).await {
+    match connect_tool_pool(url, connect_config.clone()).await {
         Ok(pool) => Ok(Some(pool)),
         Err(error) if strict_startup => Err(error).with_context(|| {
             format!(

@@ -3,7 +3,7 @@ use super::constants::{ATTR_JOURNAL_CARRYOVER, ATTR_TIMER_REMINDED, ATTR_TIMER_S
 use crate::Result;
 use crate::journal::JournalEntry;
 use serde_json::json;
-use xiuxian_wendao::{Entity, EntityType};
+use xiuxian_wendao::entity::{Entity, EntityType};
 
 const TASK_TITLE_LIMIT: usize = 30;
 const TASK_TITLE_PREFIX: usize = 27;

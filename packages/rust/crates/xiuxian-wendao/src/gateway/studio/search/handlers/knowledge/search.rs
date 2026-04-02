@@ -2,9 +2,13 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Query, State};
+use xiuxian_wendao_runtime::transport::SearchFlightRouteResponse;
 
-use super::super::queries::SearchQuery;
 use crate::gateway::studio::router::{GatewayState, StudioApiError, StudioState};
+use crate::gateway::studio::search::handlers::knowledge::intent::flight::{
+    search_hit_batch_from_hits, search_response_flight_app_metadata,
+};
+use crate::gateway::studio::search::handlers::queries::SearchQuery;
 use crate::gateway::studio::types::SearchResponse;
 use crate::search_plane::{SearchCorpusKind, SearchPlaneCacheTtl};
 
@@ -35,7 +39,7 @@ pub async fn search_knowledge(
     Ok(Json(response))
 }
 
-async fn build_knowledge_search_response(
+pub(crate) async fn build_knowledge_search_response(
     studio: &StudioState,
     query_text: &str,
     limit: usize,
@@ -87,4 +91,33 @@ async fn build_knowledge_search_response(
             .await;
     }
     Ok(response)
+}
+
+pub(crate) async fn load_knowledge_search_flight_response(
+    studio: Arc<StudioState>,
+    query_text: &str,
+    limit: usize,
+) -> Result<SearchFlightRouteResponse, StudioApiError> {
+    let response = build_knowledge_search_response(
+        studio.as_ref(),
+        query_text,
+        limit,
+        Some("semantic_lookup".to_string()),
+    )
+    .await?;
+    let batch = search_hit_batch_from_hits(&response.hits).map_err(|error| {
+        StudioApiError::internal(
+            "SEARCH_KNOWLEDGE_FLIGHT_BATCH_FAILED",
+            "Failed to materialize knowledge hits through the Flight-backed provider",
+            Some(error),
+        )
+    })?;
+    let app_metadata = search_response_flight_app_metadata(&response).map_err(|error| {
+        StudioApiError::internal(
+            "SEARCH_KNOWLEDGE_FLIGHT_METADATA_FAILED",
+            "Failed to encode knowledge Flight app metadata",
+            Some(error),
+        )
+    })?;
+    Ok(SearchFlightRouteResponse::new(batch).with_app_metadata(app_metadata))
 }

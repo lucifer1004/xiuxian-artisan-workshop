@@ -68,40 +68,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 xiuxian-vector/
 ├── src/lib.rs                # Main exports / module wiring
-├── src/arrow_transport/      # Generic Arrow IPC codec + HTTP client
+├── src/arrow_codec.rs        # Generic Arrow IPC codec + metadata helpers
 ├── src/ops/                  # Core CRUD + admin + writer operations
 ├── src/search/               # search_optimized + hybrid fusion + search_fts
 ├── src/keyword/              # keyword backend abstraction (Tantivy / Lance FTS)
 └── tests/                    # snapshots + data-layer + perf guard
 ```
 
-## Arrow Transport
-
-`xiuxian-vector` now owns the generic Arrow IPC substrate used to speak to
-external processors such as the standalone Julia `WendaoArrow` package. The
-crate exposes:
-
-- `encode_record_batch_ipc` and `decode_record_batches_ipc` for generic Arrow stream handling
-- `ArrowTransportClient` for HTTP roundtrips against a WendaoArrow-compatible endpoint
-- `ArrowTransportConfig::from_toml_str(...)` for `[gateway.arrow_transport]` config loading
-
-`ArrowTransportClient` now treats `x-wendao-schema-version` as a required
-response header on both `/health` and Arrow IPC responses. A missing or
-mismatched schema header is treated as a protocol error.
-
-The transport test surface now also verifies that request-side Arrow schema
-metadata survives a full `ArrowTransportClient` roundtrip, so additive context
-such as `trace_id` can be forwarded to WendaoArrow-compatible processors
-without changing the core column contract.
-
-For callers that need to add or overwrite request metadata without rebuilding
-Arrow schemas by hand, the transport surface now also exposes
-`attach_record_batch_metadata(...)`, `attach_record_batch_trace_id(...)`, plus
-the canonical metadata key constants
-`ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY` and
-`ARROW_TRANSPORT_TRACE_ID_METADATA_KEY`.
-
 ## Arrow Ownership Boundary
+
+`xiuxian-vector` no longer exposes an Arrow-over-HTTP transport client. The
+crate keeps only generic Arrow batch helpers on the public surface:
+
+- `encode_record_batch_ipc` / `encode_record_batches_ipc`
+- `decode_record_batches_ipc`
+- `attach_record_batch_metadata`
+- `attach_record_batch_trace_id`
 
 `xiuxian-vector` intentionally has two Arrow surfaces:
 

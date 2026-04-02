@@ -3,15 +3,30 @@
 use serde_json::json;
 use std::sync::Arc;
 use tempfile::tempdir;
-use xiuxian_qianhuan::MockManifestation;
+use xiuxian_qianhuan::ManifestationInterface;
 use xiuxian_qianji::{BootcampLlmMode, BootcampRunOptions, BootcampVfsMount, run_scenario};
-use xiuxian_wendao::Entity;
-use xiuxian_wendao::EntityType;
+use xiuxian_wendao::entity::{Entity, EntityType};
 use xiuxian_wendao::graph::KnowledgeGraph;
 use xiuxian_zhixing::ATTR_JOURNAL_CARRYOVER;
 use xiuxian_zhixing::RESOURCES;
 use xiuxian_zhixing::ZhixingHeyi;
 use xiuxian_zhixing::storage::MarkdownStorage;
+
+struct EchoManifestation;
+
+impl ManifestationInterface for EchoManifestation {
+    fn render_template(
+        &self,
+        _template_name: &str,
+        data: serde_json::Value,
+    ) -> anyhow::Result<String> {
+        Ok(data.to_string())
+    }
+
+    fn inject_context(&self, state_context: &str) -> String {
+        state_context.to_string()
+    }
+}
 
 #[tokio::test]
 async fn test_strict_teacher_blocker() -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -31,7 +46,7 @@ async fn test_strict_teacher_blocker() -> std::result::Result<(), Box<dyn std::e
 
     let tmp = tempdir()?;
     let storage = Arc::new(MarkdownStorage::new(tmp.path().to_path_buf()));
-    let manifestation = Arc::new(MockManifestation);
+    let manifestation = Arc::new(EchoManifestation);
 
     let heyi = ZhixingHeyi::new(
         graph.clone(),
@@ -49,7 +64,7 @@ async fn test_strict_teacher_blocker() -> std::result::Result<(), Box<dyn std::e
     }
 
     // Strict teacher blocks task creation path.
-    let add_result = heyi.add_task("Try to bypass blocker", None, None).await;
+    let add_result = heyi.add_task("Try to bypass blocker", None).await;
     assert!(add_result.is_err());
 
     // Strict teacher blocks agenda view path.

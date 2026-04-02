@@ -10,4 +10,4 @@ mod tests;
 
 #[cfg(test)]
 pub(crate) use helpers::supported_code_kinds;
-pub use types::{GatewayState, StudioState};
+pub use types::{GatewayState, StudioBootstrapBackgroundIndexingTelemetry, StudioState};

@@ -9,8 +9,8 @@ use crate::link_graph::models::{
 use crate::link_graph::models::{QuantumAnchorHit, QuantumSemanticSearchRequest};
 #[cfg(feature = "julia")]
 use crate::link_graph::plugin_runtime::{
-    NegotiatedArrowTransportClient, NegotiatedTransportSelection,
-    negotiate_arrow_transport_client_from_bindings,
+    NegotiatedFlightTransportClient, NegotiatedTransportSelection,
+    negotiate_flight_transport_client_from_bindings,
 };
 use crate::link_graph::{OpenAiCompatibleSemanticIgnition, VectorStoreSemanticIgnition};
 #[cfg(feature = "julia")]
@@ -20,8 +20,11 @@ use std::cmp::Ordering;
 #[cfg(feature = "julia")]
 use std::collections::BTreeMap;
 #[cfg(feature = "julia")]
-use xiuxian_vector::{ARROW_TRANSPORT_TRACE_ID_METADATA_KEY, attach_record_batch_metadata};
+use xiuxian_vector::attach_record_batch_metadata;
 use xiuxian_wendao_core::capabilities::PluginCapabilityBinding;
+use xiuxian_wendao_runtime::transport::{
+    DEFAULT_FLIGHT_SCHEMA_VERSION, FLIGHT_SCHEMA_VERSION_METADATA_KEY, FLIGHT_TRACE_ID_METADATA_KEY,
+};
 
 #[cfg(feature = "julia")]
 pub(super) async fn apply_vector_store_plugin_rerank(
@@ -71,7 +74,11 @@ pub(super) async fn apply_vector_store_plugin_rerank(
         })
         .collect::<Vec<_>>();
     let request_batch = match build_vector_store_plugin_rerank_request_batch(
-        ignition, request, &anchors, query_text,
+        ignition,
+        request,
+        &anchors,
+        query_text,
+        plugin_rerank_request_schema_version(binding),
     )
     .await
     {
@@ -181,21 +188,26 @@ pub(super) async fn apply_openai_plugin_rerank(
             vector_score: context.vector_score,
         })
         .collect::<Vec<_>>();
-    let request_batch =
-        match build_openai_plugin_rerank_request_batch(ignition, request, &anchors, query_text)
-            .await
-        {
-            Ok(batch) => batch,
-            Err(error) => {
-                return Some(build_plugin_rerank_telemetry(
-                    Some(transport.selection()),
-                    false,
-                    0,
-                    Vec::new(),
-                    Some(error),
-                ));
-            }
-        };
+    let request_batch = match build_openai_plugin_rerank_request_batch(
+        ignition,
+        request,
+        &anchors,
+        query_text,
+        plugin_rerank_request_schema_version(binding),
+    )
+    .await
+    {
+        Ok(batch) => batch,
+        Err(error) => {
+            return Some(build_plugin_rerank_telemetry(
+                Some(transport.selection()),
+                false,
+                0,
+                Vec::new(),
+                Some(error),
+            ));
+        }
+    };
     let response_batches = match transport.process_batch(&request_batch).await {
         Ok(batches) => batches,
         Err(error) => {
@@ -260,8 +272,8 @@ pub(super) async fn apply_openai_plugin_rerank(
 #[cfg(feature = "julia")]
 pub(super) fn build_plugin_rerank_transport_client(
     binding: &PluginCapabilityBinding,
-) -> Result<Option<NegotiatedArrowTransportClient>, String> {
-    negotiate_arrow_transport_client_from_bindings(std::slice::from_ref(binding))
+) -> Result<Option<NegotiatedFlightTransportClient>, String> {
+    negotiate_flight_transport_client_from_bindings(std::slice::from_ref(binding))
 }
 
 #[cfg(feature = "julia")]
@@ -270,12 +282,13 @@ async fn build_vector_store_plugin_rerank_request_batch(
     request: QuantumSemanticSearchRequest<'_>,
     anchors: &[QuantumAnchorHit],
     query_text: &str,
+    schema_version: &str,
 ) -> Result<RecordBatch, String> {
     let batch = ignition
         .build_plugin_rerank_request_batch(request, anchors)
         .await
         .map_err(|error| format!("failed to build Julia rerank request batch: {error}"))?;
-    attach_plugin_rerank_request_trace_id(batch, query_text)
+    attach_plugin_rerank_request_metadata(batch, query_text, schema_version)
 }
 
 #[cfg(feature = "julia")]
@@ -284,12 +297,13 @@ async fn build_openai_plugin_rerank_request_batch(
     request: QuantumSemanticSearchRequest<'_>,
     anchors: &[QuantumAnchorHit],
     query_text: &str,
+    schema_version: &str,
 ) -> Result<RecordBatch, String> {
     let batch = ignition
         .build_plugin_rerank_request_batch(request, anchors)
         .await
         .map_err(|error| format!("failed to build Julia rerank request batch: {error}"))?;
-    attach_plugin_rerank_request_trace_id(batch, query_text)
+    attach_plugin_rerank_request_metadata(batch, query_text, schema_version)
 }
 
 #[cfg(feature = "julia")]
@@ -375,18 +389,25 @@ pub(super) fn collect_plugin_rerank_trace_ids(
 }
 
 #[cfg(feature = "julia")]
-pub(super) fn attach_plugin_rerank_request_trace_id(
+pub(super) fn attach_plugin_rerank_request_metadata(
     batch: RecordBatch,
     query_text: &str,
+    schema_version: &str,
 ) -> Result<RecordBatch, String> {
     attach_record_batch_metadata(
         &batch,
-        [(
-            ARROW_TRANSPORT_TRACE_ID_METADATA_KEY,
-            plugin_rerank_request_trace_id(query_text),
-        )],
+        [
+            (
+                FLIGHT_TRACE_ID_METADATA_KEY,
+                plugin_rerank_request_trace_id(query_text),
+            ),
+            (
+                FLIGHT_SCHEMA_VERSION_METADATA_KEY,
+                schema_version.to_string(),
+            ),
+        ],
     )
-    .map_err(|error| format!("failed to attach Julia rerank trace metadata: {error}"))
+    .map_err(|error| format!("failed to attach Julia rerank request metadata: {error}"))
 }
 
 #[cfg(feature = "julia")]
@@ -400,5 +421,15 @@ pub(super) fn plugin_rerank_request_trace_id(query_text: &str) -> String {
         "julia-rerank:query".to_string()
     } else {
         format!("julia-rerank:{normalized}")
+    }
+}
+
+#[cfg(feature = "julia")]
+fn plugin_rerank_request_schema_version(binding: &PluginCapabilityBinding) -> &str {
+    let schema_version = binding.contract_version.0.trim();
+    if schema_version.is_empty() {
+        DEFAULT_FLIGHT_SCHEMA_VERSION
+    } else {
+        schema_version
     }
 }

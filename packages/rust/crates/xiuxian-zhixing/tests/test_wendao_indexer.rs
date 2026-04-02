@@ -4,11 +4,10 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use tempfile::tempdir;
-use xiuxian_wendao::IncrementalSyncPolicy;
-use xiuxian_wendao::Relation;
-use xiuxian_wendao::RelationType;
-use xiuxian_wendao::ZhixingWendaoIndexer;
+use xiuxian_wendao::entity::{Entity, Relation, RelationType};
 use xiuxian_wendao::graph::KnowledgeGraph;
+use xiuxian_wendao::skill_vfs::zhixing::ZhixingWendaoIndexer;
+use xiuxian_wendao::sync::IncrementalSyncPolicy;
 use xiuxian_zhixing::ATTR_JOURNAL_CARRYOVER;
 use xiuxian_zhixing::ATTR_TIMER_REMINDED;
 use xiuxian_zhixing::ATTR_TIMER_SCHEDULED;
@@ -241,7 +240,7 @@ fn test_indexer_injects_embedded_skill_reference_graph()
     Ok(())
 }
 
-fn assert_skill_metadata(skill_entity: &xiuxian_wendao::Entity) {
+fn assert_skill_metadata(skill_entity: &Entity) {
     for key in ["routing_keywords", "intents"] {
         assert!(
             skill_entity.metadata.contains_key(key),

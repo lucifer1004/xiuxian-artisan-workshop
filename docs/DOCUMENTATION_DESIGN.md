@@ -6,7 +6,7 @@ metadata:
 
 # Documentation Design Specification (DFS-2026)
 
-> **Authority:** CyberXiuXian Artisan Studio  
+> **Authority:** CyberXiuXian Artisan workshop
 > **Standard:** DFS-2026 (Filesystem-Based Documentation Hierarchy)  
 > **Status:** Ratified
 

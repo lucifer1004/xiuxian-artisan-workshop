@@ -2,12 +2,42 @@
 pub const WENDAO_SCHEMA_VERSION_HEADER: &str = "x-wendao-schema-version";
 /// Canonical rerank-embedding dimension metadata header for Wendao Flight exchange requests.
 pub const WENDAO_RERANK_DIMENSION_HEADER: &str = "x-wendao-rerank-embedding-dimension";
+/// Canonical rerank top-k metadata header for Wendao Flight exchange requests.
+#[cfg(feature = "julia")]
+pub const WENDAO_RERANK_TOP_K_HEADER: &str = "x-wendao-rerank-top-k";
+/// Canonical rerank minimum-final-score metadata header for Wendao Flight exchange requests.
+#[cfg(feature = "julia")]
+pub const WENDAO_RERANK_MIN_FINAL_SCORE_HEADER: &str = "x-wendao-rerank-min-final-score";
 /// Canonical repo-search query text metadata header for Wendao Flight requests.
 pub const WENDAO_REPO_SEARCH_QUERY_HEADER: &str = "x-wendao-repo-search-query";
 /// Canonical repo-search result-limit metadata header for Wendao Flight requests.
 pub const WENDAO_REPO_SEARCH_LIMIT_HEADER: &str = "x-wendao-repo-search-limit";
+/// Canonical generic search query text metadata header for Wendao Flight requests.
+pub const WENDAO_SEARCH_QUERY_HEADER: &str = "x-wendao-search-query";
+/// Canonical generic search result-limit metadata header for Wendao Flight requests.
+pub const WENDAO_SEARCH_LIMIT_HEADER: &str = "x-wendao-search-limit";
+/// Canonical generic search intent metadata header for Wendao Flight requests.
+pub const WENDAO_SEARCH_INTENT_HEADER: &str = "x-wendao-search-intent";
+/// Canonical generic search repository hint metadata header for Wendao Flight requests.
+pub const WENDAO_SEARCH_REPO_HEADER: &str = "x-wendao-search-repo";
+/// Canonical analysis path metadata header for Wendao Flight requests.
+pub const WENDAO_ANALYSIS_PATH_HEADER: &str = "x-wendao-analysis-path";
+/// Canonical analysis repository metadata header for Wendao Flight requests.
+pub const WENDAO_ANALYSIS_REPO_HEADER: &str = "x-wendao-analysis-repo";
+/// Canonical analysis line-hint metadata header for Wendao Flight requests.
+pub const WENDAO_ANALYSIS_LINE_HEADER: &str = "x-wendao-analysis-line";
+/// Canonical attachment-search extension-filter metadata header for Wendao Flight requests.
+pub const WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER: &str =
+    "x-wendao-attachment-search-ext-filters";
+/// Canonical attachment-search kind-filter metadata header for Wendao Flight requests.
+pub const WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER: &str =
+    "x-wendao-attachment-search-kind-filters";
+/// Canonical attachment-search case-sensitive metadata header for Wendao Flight requests.
+pub const WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER: &str =
+    "x-wendao-attachment-search-case-sensitive";
 /// Canonical repo-search language-filter metadata header for Wendao Flight requests.
-pub const WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER: &str = "x-wendao-repo-search-language-filters";
+pub const WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER: &str =
+    "x-wendao-repo-search-language-filters";
 /// Canonical repo-search path-prefix metadata header for Wendao Flight requests.
 pub const WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER: &str = "x-wendao-repo-search-path-prefixes";
 /// Canonical repo-search title-filter metadata header for Wendao Flight requests.
@@ -19,8 +49,24 @@ pub const WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER: &str =
     "x-wendao-repo-search-filename-filters";
 /// Stable route for the repo-search query contract.
 pub const REPO_SEARCH_ROUTE: &str = "/search/repos/main";
-/// Stable route for the rerank exchange contract.
-pub const RERANK_EXCHANGE_ROUTE: &str = "/rerank/flight";
+/// Stable route for the search-intent contract.
+pub const SEARCH_INTENT_ROUTE: &str = "/search/intent";
+/// Stable route for the general knowledge-search contract.
+pub const SEARCH_KNOWLEDGE_ROUTE: &str = "/search/knowledge";
+/// Stable route for the search-attachments contract.
+pub const SEARCH_ATTACHMENTS_ROUTE: &str = "/search/attachments";
+/// Stable route for the search-AST contract.
+pub const SEARCH_AST_ROUTE: &str = "/search/ast";
+/// Stable route for the search-references contract.
+pub const SEARCH_REFERENCES_ROUTE: &str = "/search/references";
+/// Stable route for the search-symbols contract.
+pub const SEARCH_SYMBOLS_ROUTE: &str = "/search/symbols";
+/// Stable route for the markdown analysis contract.
+pub const ANALYSIS_MARKDOWN_ROUTE: &str = "/analysis/markdown";
+/// Stable route for the code-AST analysis contract.
+pub const ANALYSIS_CODE_AST_ROUTE: &str = "/analysis/code-ast";
+/// Stable route for the rerank contract.
+pub const RERANK_ROUTE: &str = "/rerank";
 /// Stable default result limit for repo-search requests.
 pub const REPO_SEARCH_DEFAULT_LIMIT: usize = 10;
 /// Canonical rerank request `doc_id` column.
@@ -33,6 +79,10 @@ pub const RERANK_REQUEST_EMBEDDING_COLUMN: &str = "embedding";
 pub const RERANK_REQUEST_QUERY_EMBEDDING_COLUMN: &str = "query_embedding";
 /// Canonical rerank response `doc_id` column.
 pub const RERANK_RESPONSE_DOC_ID_COLUMN: &str = "doc_id";
+/// Canonical rerank response raw vector-score column.
+pub const RERANK_RESPONSE_VECTOR_SCORE_COLUMN: &str = "vector_score";
+/// Canonical rerank response semantic-score column.
+pub const RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN: &str = "semantic_score";
 /// Canonical rerank response `final_score` column.
 pub const RERANK_RESPONSE_FINAL_SCORE_COLUMN: &str = "final_score";
 /// Canonical rerank response `rank` column.
@@ -45,6 +95,20 @@ pub const REPO_SEARCH_PATH_COLUMN: &str = "path";
 pub const REPO_SEARCH_TITLE_COLUMN: &str = "title";
 /// Canonical repo-search response `best_section` column.
 pub const REPO_SEARCH_BEST_SECTION_COLUMN: &str = "best_section";
+/// Canonical repo-search response `match_reason` column.
+pub const REPO_SEARCH_MATCH_REASON_COLUMN: &str = "match_reason";
+/// Canonical repo-search response navigation-path column.
+pub const REPO_SEARCH_NAVIGATION_PATH_COLUMN: &str = "navigation_path";
+/// Canonical repo-search response navigation-category column.
+pub const REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN: &str = "navigation_category";
+/// Canonical repo-search response navigation-line column.
+pub const REPO_SEARCH_NAVIGATION_LINE_COLUMN: &str = "navigation_line";
+/// Canonical repo-search response navigation-line-end column.
+pub const REPO_SEARCH_NAVIGATION_LINE_END_COLUMN: &str = "navigation_line_end";
+/// Canonical repo-search response hierarchy column.
+pub const REPO_SEARCH_HIERARCHY_COLUMN: &str = "hierarchy";
+/// Canonical repo-search response `tags` column.
+pub const REPO_SEARCH_TAGS_COLUMN: &str = "tags";
 /// Canonical repo-search response `score` column.
 pub const REPO_SEARCH_SCORE_COLUMN: &str = "score";
 /// Canonical repo-search response `language` column.
@@ -58,6 +122,81 @@ use arrow_array::{
 use arrow_schema::{DataType, Schema};
 #[cfg(feature = "julia")]
 use std::collections::HashSet;
+
+/// One scored rerank candidate produced by the shared Rust-owned scorer.
+#[cfg(feature = "julia")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RerankScoredCandidate {
+    /// Stable candidate identifier carried through the rerank request.
+    pub doc_id: String,
+    /// Raw vector score from the rerank request.
+    pub vector_score: f64,
+    /// Semantic score derived from cosine similarity and normalized into `[0, 1]`.
+    pub semantic_score: f64,
+    /// Final blended rerank score.
+    pub final_score: f64,
+}
+
+/// Shared runtime-owned rerank score weights.
+#[cfg(feature = "julia")]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RerankScoreWeights {
+    /// Weight applied to the inbound `vector_score`.
+    pub vector_weight: f64,
+    /// Weight applied to the derived `semantic_score`.
+    pub semantic_weight: f64,
+}
+
+#[cfg(feature = "julia")]
+impl Default for RerankScoreWeights {
+    fn default() -> Self {
+        Self {
+            vector_weight: 0.4,
+            semantic_weight: 0.6,
+        }
+    }
+}
+
+#[cfg(feature = "julia")]
+impl RerankScoreWeights {
+    /// Construct one validated rerank score-weight policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when either weight is non-finite, negative, or when
+    /// both weights sum to zero.
+    pub fn new(vector_weight: f64, semantic_weight: f64) -> Result<Self, String> {
+        if !vector_weight.is_finite() {
+            return Err("rerank vector_weight must be finite".to_string());
+        }
+        if !semantic_weight.is_finite() {
+            return Err("rerank semantic_weight must be finite".to_string());
+        }
+        if vector_weight < 0.0 {
+            return Err("rerank vector_weight must be greater than or equal to zero".to_string());
+        }
+        if semantic_weight < 0.0 {
+            return Err("rerank semantic_weight must be greater than or equal to zero".to_string());
+        }
+        let total = vector_weight + semantic_weight;
+        if total <= 0.0 {
+            return Err("rerank score weights must sum to greater than zero".to_string());
+        }
+        Ok(Self {
+            vector_weight,
+            semantic_weight,
+        })
+    }
+
+    /// Return the normalized score weights whose sum is exactly `1.0`.
+    pub fn normalized(self) -> Self {
+        let total = self.vector_weight + self.semantic_weight;
+        Self {
+            vector_weight: self.vector_weight / total,
+            semantic_weight: self.semantic_weight / total,
+        }
+    }
+}
 
 /// Normalize one route into the canonical leading-slash Flight form.
 ///
@@ -145,6 +284,69 @@ pub fn validate_repo_search_request(
         if filename_filter.trim().is_empty() {
             return Err("repo search filename filters must not contain blank values".to_string());
         }
+    }
+    Ok(())
+}
+
+/// Validate the stable attachment-search request contract.
+///
+/// # Errors
+///
+/// Returns an error when the attachment-search query text is blank, the
+/// requested limit is zero, or any declared extension/kind filter is blank.
+pub fn validate_attachment_search_request(
+    query_text: &str,
+    limit: usize,
+    ext_filters: &[String],
+    kind_filters: &[String],
+) -> Result<(), String> {
+    validate_repo_search_request(query_text, limit, &[], &[], &[], &[], &[])?;
+    for ext_filter in ext_filters {
+        if ext_filter.trim().is_empty() {
+            return Err(
+                "attachment search extension filters must not contain blank values".to_string(),
+            );
+        }
+    }
+    for kind_filter in kind_filters {
+        if kind_filter.trim().is_empty() {
+            return Err("attachment search kind filters must not contain blank values".to_string());
+        }
+    }
+    Ok(())
+}
+
+/// Validate the stable markdown analysis request contract.
+///
+/// # Errors
+///
+/// Returns an error when the repository-relative path is blank.
+pub fn validate_markdown_analysis_request(path: &str) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("markdown analysis path must not be blank".to_string());
+    }
+    Ok(())
+}
+
+/// Validate the stable code-AST analysis request contract.
+///
+/// # Errors
+///
+/// Returns an error when the repository-relative path is blank, when the repo
+/// identifier is blank, or when the optional line hint is zero.
+pub fn validate_code_ast_analysis_request(
+    path: &str,
+    repo_id: &str,
+    line_hint: Option<usize>,
+) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("code AST analysis path must not be blank".to_string());
+    }
+    if repo_id.trim().is_empty() {
+        return Err("code AST analysis repo must not be blank".to_string());
+    }
+    if matches!(line_hint, Some(0)) {
+        return Err("code AST analysis line hint must be greater than zero".to_string());
     }
     Ok(())
 }
@@ -287,8 +489,30 @@ pub fn validate_rerank_request_batch(
 pub fn score_rerank_request_batch(
     batch: &RecordBatch,
     expected_dimension: usize,
-) -> Result<Vec<(String, f64)>, String> {
+) -> Result<Vec<RerankScoredCandidate>, String> {
+    score_rerank_request_batch_with_weights(
+        batch,
+        expected_dimension,
+        RerankScoreWeights::default(),
+    )
+}
+
+/// Score one validated rerank request batch with explicit runtime-owned
+/// rerank weights.
+///
+/// # Errors
+///
+/// Returns an error when the request batch fails validation, when any
+/// embedding/query vector has zero norm, or when the weights are invalid.
+#[cfg(feature = "julia")]
+pub fn score_rerank_request_batch_with_weights(
+    batch: &RecordBatch,
+    expected_dimension: usize,
+    weights: RerankScoreWeights,
+) -> Result<Vec<RerankScoredCandidate>, String> {
     validate_rerank_request_batch(batch, expected_dimension)?;
+    let weights =
+        RerankScoreWeights::new(weights.vector_weight, weights.semantic_weight)?.normalized();
 
     let doc_ids = batch
         .column_by_name(RERANK_REQUEST_DOC_ID_COLUMN)
@@ -326,9 +550,16 @@ pub fn score_rerank_request_batch(
         let embedding = fixed_size_list_row_values(embeddings, row_index)?;
         let query_embedding = fixed_size_list_row_values(query_embeddings, row_index)?;
         let cosine = cosine_similarity(&embedding, &query_embedding, row_index)?;
+        let vector_score = f64::from(vector_scores.value(row_index));
         let semantic_score = (cosine + 1.0) / 2.0;
-        let final_score = 0.4 * f64::from(vector_scores.value(row_index)) + 0.6 * semantic_score;
-        scored_candidates.push((doc_ids.value(row_index).to_string(), final_score));
+        let final_score =
+            weights.vector_weight * vector_score + weights.semantic_weight * semantic_score;
+        scored_candidates.push(RerankScoredCandidate {
+            doc_id: doc_ids.value(row_index).to_string(),
+            vector_score,
+            semantic_score,
+            final_score,
+        });
     }
 
     Ok(scored_candidates)
@@ -348,6 +579,28 @@ pub fn validate_rerank_response_schema(schema: &Schema) -> Result<(), String> {
     if !matches!(doc_id.data_type(), DataType::Utf8) {
         return Err(format!(
             "rerank response column `{RERANK_RESPONSE_DOC_ID_COLUMN}` must be Utf8"
+        ));
+    }
+
+    let vector_score = schema
+        .field_with_name(RERANK_RESPONSE_VECTOR_SCORE_COLUMN)
+        .map_err(|_| {
+            format!("missing rerank response column `{RERANK_RESPONSE_VECTOR_SCORE_COLUMN}`")
+        })?;
+    if !matches!(vector_score.data_type(), DataType::Float64) {
+        return Err(format!(
+            "rerank response column `{RERANK_RESPONSE_VECTOR_SCORE_COLUMN}` must be Float64"
+        ));
+    }
+
+    let semantic_score = schema
+        .field_with_name(RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN)
+        .map_err(|_| {
+            format!("missing rerank response column `{RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN}`")
+        })?;
+    if !matches!(semantic_score.data_type(), DataType::Float64) {
+        return Err(format!(
+            "rerank response column `{RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN}` must be Float64"
         ));
     }
 
@@ -378,14 +631,14 @@ pub fn validate_rerank_response_schema(schema: &Schema) -> Result<(), String> {
 ///
 /// # Errors
 ///
-/// Returns an error when the rerank response batch is empty, contains blank or
-/// duplicate document IDs, contains non-finite or out-of-range final scores,
+/// Returns an error when the rerank response batch contains blank or duplicate
+/// document IDs, contains non-finite or out-of-range final scores,
 /// or contains non-positive or duplicate rank values.
 #[cfg(feature = "julia")]
 pub fn validate_rerank_response_batch(batch: &RecordBatch) -> Result<(), String> {
     validate_rerank_response_schema(batch.schema().as_ref())?;
     if batch.num_rows() == 0 {
-        return Err("rerank response batch must contain at least one row".to_string());
+        return Ok(());
     }
 
     let doc_ids = batch
@@ -405,6 +658,50 @@ pub fn validate_rerank_response_batch(batch: &RecordBatch) -> Result<(), String>
         if !seen_doc_ids.insert(doc_id.to_string()) {
             return Err(format!(
                 "rerank response column `{RERANK_RESPONSE_DOC_ID_COLUMN}` must be unique across one batch; row {row_index} duplicates `{doc_id}`"
+            ));
+        }
+    }
+
+    let vector_scores = batch
+        .column_by_name(RERANK_RESPONSE_VECTOR_SCORE_COLUMN)
+        .and_then(|column| column.as_any().downcast_ref::<Float64Array>())
+        .ok_or_else(|| {
+            format!(
+                "rerank response column `{RERANK_RESPONSE_VECTOR_SCORE_COLUMN}` must decode as Float64"
+            )
+        })?;
+    for row_index in 0..batch.num_rows() {
+        let score = vector_scores.value(row_index);
+        if !score.is_finite() {
+            return Err(format!(
+                "rerank response column `{RERANK_RESPONSE_VECTOR_SCORE_COLUMN}` must contain finite values; row {row_index} is {score}"
+            ));
+        }
+        if !(0.0..=1.0).contains(&score) {
+            return Err(format!(
+                "rerank response column `{RERANK_RESPONSE_VECTOR_SCORE_COLUMN}` must stay within inclusive range [0.0, 1.0]; row {row_index} is {score}"
+            ));
+        }
+    }
+
+    let semantic_scores = batch
+        .column_by_name(RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN)
+        .and_then(|column| column.as_any().downcast_ref::<Float64Array>())
+        .ok_or_else(|| {
+            format!(
+                "rerank response column `{RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN}` must decode as Float64"
+            )
+        })?;
+    for row_index in 0..batch.num_rows() {
+        let score = semantic_scores.value(row_index);
+        if !score.is_finite() {
+            return Err(format!(
+                "rerank response column `{RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN}` must contain finite values; row {row_index} is {score}"
+            ));
+        }
+        if !(0.0..=1.0).contains(&score) {
+            return Err(format!(
+                "rerank response column `{RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN}` must stay within inclusive range [0.0, 1.0]; row {row_index} is {score}"
             ));
         }
     }
@@ -531,15 +828,24 @@ fn cosine_similarity(left: &[f32], right: &[f32], row_index: usize) -> Result<f6
 #[cfg(test)]
 mod tests {
     use super::{
-        REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN,
-        REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_ROUTE, REPO_SEARCH_SCORE_COLUMN,
-        REPO_SEARCH_TITLE_COLUMN, RERANK_EXCHANGE_ROUTE, RERANK_REQUEST_DOC_ID_COLUMN,
-        RERANK_REQUEST_EMBEDDING_COLUMN, RERANK_REQUEST_QUERY_EMBEDDING_COLUMN,
-        RERANK_REQUEST_VECTOR_SCORE_COLUMN, RERANK_RESPONSE_DOC_ID_COLUMN,
-        RERANK_RESPONSE_FINAL_SCORE_COLUMN, RERANK_RESPONSE_RANK_COLUMN,
+        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, REPO_SEARCH_DEFAULT_LIMIT,
+        REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_PATH_COLUMN,
+        REPO_SEARCH_ROUTE, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN,
+        RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
+        RERANK_REQUEST_QUERY_EMBEDDING_COLUMN, RERANK_REQUEST_VECTOR_SCORE_COLUMN,
+        RERANK_RESPONSE_DOC_ID_COLUMN, RERANK_RESPONSE_FINAL_SCORE_COLUMN,
+        RERANK_RESPONSE_RANK_COLUMN, RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
+        RERANK_RESPONSE_VECTOR_SCORE_COLUMN, RERANK_ROUTE, SEARCH_AST_ROUTE,
+        SEARCH_ATTACHMENTS_ROUTE, SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE,
+        SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
+        WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
+        WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER,
+        WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER, WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER,
         WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER, WENDAO_REPO_SEARCH_LIMIT_HEADER,
         WENDAO_REPO_SEARCH_QUERY_HEADER, WENDAO_RERANK_DIMENSION_HEADER,
-        WENDAO_SCHEMA_VERSION_HEADER, flight_descriptor_path, normalize_flight_route,
+        WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER,
+        flight_descriptor_path, normalize_flight_route, validate_attachment_search_request,
+        validate_code_ast_analysis_request, validate_markdown_analysis_request,
         validate_repo_search_request,
     };
 
@@ -562,8 +868,33 @@ mod tests {
             WENDAO_RERANK_DIMENSION_HEADER,
             "x-wendao-rerank-embedding-dimension"
         );
+        assert_eq!(WENDAO_SEARCH_QUERY_HEADER, "x-wendao-search-query");
+        assert_eq!(WENDAO_SEARCH_LIMIT_HEADER, "x-wendao-search-limit");
+        assert_eq!(WENDAO_ANALYSIS_PATH_HEADER, "x-wendao-analysis-path");
+        assert_eq!(WENDAO_ANALYSIS_REPO_HEADER, "x-wendao-analysis-repo");
+        assert_eq!(WENDAO_ANALYSIS_LINE_HEADER, "x-wendao-analysis-line");
+        assert_eq!(
+            WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER,
+            "x-wendao-attachment-search-ext-filters"
+        );
+        assert_eq!(
+            WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER,
+            "x-wendao-attachment-search-kind-filters"
+        );
+        assert_eq!(
+            WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER,
+            "x-wendao-attachment-search-case-sensitive"
+        );
         assert_eq!(REPO_SEARCH_ROUTE, "/search/repos/main");
-        assert_eq!(RERANK_EXCHANGE_ROUTE, "/rerank/flight");
+        assert_eq!(SEARCH_INTENT_ROUTE, "/search/intent");
+        assert_eq!(SEARCH_KNOWLEDGE_ROUTE, "/search/knowledge");
+        assert_eq!(SEARCH_ATTACHMENTS_ROUTE, "/search/attachments");
+        assert_eq!(SEARCH_AST_ROUTE, "/search/ast");
+        assert_eq!(SEARCH_REFERENCES_ROUTE, "/search/references");
+        assert_eq!(SEARCH_SYMBOLS_ROUTE, "/search/symbols");
+        assert_eq!(ANALYSIS_MARKDOWN_ROUTE, "/analysis/markdown");
+        assert_eq!(ANALYSIS_CODE_AST_ROUTE, "/analysis/code-ast");
+        assert_eq!(RERANK_ROUTE, "/rerank");
         assert_eq!(REPO_SEARCH_DEFAULT_LIMIT, 10);
         assert_eq!(REPO_SEARCH_DOC_ID_COLUMN, "doc_id");
         assert_eq!(REPO_SEARCH_PATH_COLUMN, "path");
@@ -575,6 +906,8 @@ mod tests {
         assert_eq!(RERANK_REQUEST_EMBEDDING_COLUMN, "embedding");
         assert_eq!(RERANK_REQUEST_QUERY_EMBEDDING_COLUMN, "query_embedding");
         assert_eq!(RERANK_RESPONSE_DOC_ID_COLUMN, "doc_id");
+        assert_eq!(RERANK_RESPONSE_VECTOR_SCORE_COLUMN, "vector_score");
+        assert_eq!(RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN, "semantic_score");
         assert_eq!(RERANK_RESPONSE_FINAL_SCORE_COLUMN, "final_score");
         assert_eq!(RERANK_RESPONSE_RANK_COLUMN, "rank");
     }
@@ -585,10 +918,7 @@ mod tests {
             normalize_flight_route("search/repos/main").as_deref(),
             Ok("/search/repos/main")
         );
-        assert_eq!(
-            normalize_flight_route("/rerank/flight").as_deref(),
-            Ok("/rerank/flight")
-        );
+        assert_eq!(normalize_flight_route("/rerank").as_deref(), Ok("/rerank"));
     }
 
     #[test]
@@ -608,31 +938,54 @@ mod tests {
             ])
         );
         assert_eq!(
-            flight_descriptor_path(RERANK_EXCHANGE_ROUTE),
-            Ok(vec!["rerank".to_string(), "flight".to_string()])
+            flight_descriptor_path(SEARCH_INTENT_ROUTE),
+            Ok(vec!["search".to_string(), "intent".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(SEARCH_KNOWLEDGE_ROUTE),
+            Ok(vec!["search".to_string(), "knowledge".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(SEARCH_ATTACHMENTS_ROUTE),
+            Ok(vec!["search".to_string(), "attachments".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(SEARCH_AST_ROUTE),
+            Ok(vec!["search".to_string(), "ast".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(SEARCH_REFERENCES_ROUTE),
+            Ok(vec!["search".to_string(), "references".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(SEARCH_SYMBOLS_ROUTE),
+            Ok(vec!["search".to_string(), "symbols".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(ANALYSIS_MARKDOWN_ROUTE),
+            Ok(vec!["analysis".to_string(), "markdown".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(ANALYSIS_CODE_AST_ROUTE),
+            Ok(vec!["analysis".to_string(), "code-ast".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(RERANK_ROUTE),
+            Ok(vec!["rerank".to_string()])
         );
     }
 
     #[test]
     fn repo_search_request_validation_accepts_stable_request() {
         assert!(
-            validate_repo_search_request("rerank rust traits", 25, &[], &[], &[], &[], &[])
-                .is_ok()
+            validate_repo_search_request("rerank rust traits", 25, &[], &[], &[], &[], &[]).is_ok()
         );
     }
 
     #[test]
     fn repo_search_request_validation_rejects_blank_query_text() {
         assert_eq!(
-            validate_repo_search_request(
-                "   ",
-                REPO_SEARCH_DEFAULT_LIMIT,
-                &[],
-                &[],
-                &[],
-                &[],
-                &[],
-            ),
+            validate_repo_search_request("   ", REPO_SEARCH_DEFAULT_LIMIT, &[], &[], &[], &[], &[],),
             Err("repo search query text must not be blank".to_string())
         );
     }
@@ -642,6 +995,79 @@ mod tests {
         assert_eq!(
             validate_repo_search_request("rerank rust traits", 0, &[], &[], &[], &[], &[]),
             Err("repo search limit must be greater than zero".to_string())
+        );
+    }
+
+    #[test]
+    fn attachment_search_request_validation_accepts_stable_request() {
+        assert!(
+            validate_attachment_search_request(
+                "screenshot",
+                REPO_SEARCH_DEFAULT_LIMIT,
+                &["png".to_string()],
+                &["image".to_string()],
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn attachment_search_request_validation_rejects_blank_extension_filters() {
+        assert_eq!(
+            validate_attachment_search_request(
+                "screenshot",
+                REPO_SEARCH_DEFAULT_LIMIT,
+                &["png".to_string(), "   ".to_string()],
+                &[],
+            ),
+            Err("attachment search extension filters must not contain blank values".to_string())
+        );
+    }
+
+    #[test]
+    fn attachment_search_request_validation_rejects_blank_kind_filters() {
+        assert_eq!(
+            validate_attachment_search_request(
+                "screenshot",
+                REPO_SEARCH_DEFAULT_LIMIT,
+                &[],
+                &["image".to_string(), "   ".to_string()],
+            ),
+            Err("attachment search kind filters must not contain blank values".to_string())
+        );
+    }
+
+    #[test]
+    fn markdown_analysis_request_validation_accepts_stable_request() {
+        assert!(validate_markdown_analysis_request("docs/analysis.md").is_ok());
+    }
+
+    #[test]
+    fn markdown_analysis_request_validation_rejects_blank_path() {
+        assert_eq!(
+            validate_markdown_analysis_request("   "),
+            Err("markdown analysis path must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn code_ast_analysis_request_validation_accepts_stable_request() {
+        assert!(validate_code_ast_analysis_request("src/lib.jl", "demo", Some(7)).is_ok());
+    }
+
+    #[test]
+    fn code_ast_analysis_request_validation_rejects_blank_repo() {
+        assert_eq!(
+            validate_code_ast_analysis_request("src/lib.jl", "   ", Some(7)),
+            Err("code AST analysis repo must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn code_ast_analysis_request_validation_rejects_zero_line_hint() {
+        assert_eq!(
+            validate_code_ast_analysis_request("src/lib.jl", "demo", Some(0)),
+            Err("code AST analysis line hint must be greater than zero".to_string())
         );
     }
 
@@ -1128,10 +1554,93 @@ mod tests {
             super::score_rerank_request_batch(&batch, 3).expect("rerank scoring should succeed");
 
         assert_eq!(scored.len(), 2);
-        assert_eq!(scored[0].0, "doc-0");
-        assert!((scored[0].1 - 0.8).abs() < 1e-6);
-        assert_eq!(scored[1].0, "doc-1");
-        assert!((scored[1].1 - 0.62).abs() < 1e-6);
+        assert_eq!(scored[0].doc_id, "doc-0");
+        assert!((scored[0].vector_score - 0.5).abs() < 1e-6);
+        assert!((scored[0].semantic_score - 1.0).abs() < 1e-6);
+        assert!((scored[0].final_score - 0.8).abs() < 1e-6);
+        assert_eq!(scored[1].doc_id, "doc-1");
+        assert!((scored[1].vector_score - 0.8).abs() < 1e-6);
+        assert!((scored[1].semantic_score - 0.5).abs() < 1e-6);
+        assert!((scored[1].final_score - 0.62).abs() < 1e-6);
+    }
+
+    #[cfg(feature = "julia")]
+    #[test]
+    fn rerank_score_weights_normalize_runtime_policy() {
+        let weights = super::RerankScoreWeights::new(2.0, 3.0).expect("weights should validate");
+        let normalized = weights.normalized();
+
+        assert!((normalized.vector_weight - 0.4).abs() < 1e-6);
+        assert!((normalized.semantic_weight - 0.6).abs() < 1e-6);
+    }
+
+    #[cfg(feature = "julia")]
+    #[test]
+    fn rerank_score_weights_reject_zero_sum_policy() {
+        let error =
+            super::RerankScoreWeights::new(0.0, 0.0).expect_err("zero-sum weights should fail");
+        assert_eq!(error, "rerank score weights must sum to greater than zero");
+    }
+
+    #[cfg(feature = "julia")]
+    #[test]
+    fn score_rerank_request_batch_with_weights_respects_runtime_policy() {
+        use arrow_array::types::Float32Type;
+        use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
+        use arrow_schema::{DataType, Field, Schema};
+        use std::sync::Arc;
+
+        let schema = Arc::new(Schema::new(vec![
+            Field::new(RERANK_REQUEST_DOC_ID_COLUMN, DataType::Utf8, false),
+            Field::new(RERANK_REQUEST_VECTOR_SCORE_COLUMN, DataType::Float32, false),
+            Field::new(
+                RERANK_REQUEST_EMBEDDING_COLUMN,
+                DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 3),
+                false,
+            ),
+            Field::new(
+                RERANK_REQUEST_QUERY_EMBEDDING_COLUMN,
+                DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 3),
+                false,
+            ),
+        ]));
+        let batch = RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(StringArray::from(vec!["doc-0", "doc-1"])),
+                Arc::new(Float32Array::from(vec![0.5_f32, 0.8_f32])),
+                Arc::new(
+                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                        vec![
+                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                            Some(vec![Some(0.0_f32), Some(1.0_f32), Some(0.0_f32)]),
+                        ],
+                        3,
+                    ),
+                ),
+                Arc::new(
+                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                        vec![
+                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                        ],
+                        3,
+                    ),
+                ),
+            ],
+        )
+        .expect("record batch should build");
+
+        let scored = super::score_rerank_request_batch_with_weights(
+            &batch,
+            3,
+            super::RerankScoreWeights::new(0.9, 0.1).expect("weights should validate"),
+        )
+        .expect("rerank scoring should succeed");
+
+        assert!((scored[0].final_score - 0.55).abs() < 1e-6);
+        assert!((scored[1].final_score - 0.77).abs() < 1e-6);
+        assert!(scored[1].final_score > scored[0].final_score);
     }
 
     #[cfg(feature = "julia")]
@@ -1141,6 +1650,16 @@ mod tests {
 
         let schema = Schema::new(vec![
             Field::new(RERANK_RESPONSE_DOC_ID_COLUMN, DataType::Utf8, false),
+            Field::new(
+                RERANK_RESPONSE_VECTOR_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
+            Field::new(
+                RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
             Field::new(RERANK_RESPONSE_FINAL_SCORE_COLUMN, DataType::Float64, false),
             Field::new(RERANK_RESPONSE_RANK_COLUMN, DataType::Int32, false),
         ]);
@@ -1155,6 +1674,16 @@ mod tests {
 
         let schema = Schema::new(vec![
             Field::new(RERANK_RESPONSE_DOC_ID_COLUMN, DataType::Utf8, false),
+            Field::new(
+                RERANK_RESPONSE_VECTOR_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
+            Field::new(
+                RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
             Field::new(RERANK_RESPONSE_FINAL_SCORE_COLUMN, DataType::Float64, false),
             Field::new(RERANK_RESPONSE_RANK_COLUMN, DataType::UInt32, false),
         ]);
@@ -1174,6 +1703,16 @@ mod tests {
 
         let schema = Arc::new(Schema::new(vec![
             Field::new(RERANK_RESPONSE_DOC_ID_COLUMN, DataType::Utf8, false),
+            Field::new(
+                RERANK_RESPONSE_VECTOR_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
+            Field::new(
+                RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
             Field::new(RERANK_RESPONSE_FINAL_SCORE_COLUMN, DataType::Float64, false),
             Field::new(RERANK_RESPONSE_RANK_COLUMN, DataType::Int32, false),
         ]));
@@ -1181,6 +1720,8 @@ mod tests {
             schema,
             vec![
                 Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
+                Arc::new(Float64Array::from(vec![0.91_f64, 0.82_f64])),
+                Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
                 Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
                 Arc::new(Int32Array::from(vec![1_i32, 2_i32])),
             ],
@@ -1199,6 +1740,16 @@ mod tests {
 
         let schema = Arc::new(Schema::new(vec![
             Field::new(RERANK_RESPONSE_DOC_ID_COLUMN, DataType::Utf8, false),
+            Field::new(
+                RERANK_RESPONSE_VECTOR_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
+            Field::new(
+                RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
             Field::new(RERANK_RESPONSE_FINAL_SCORE_COLUMN, DataType::Float64, false),
             Field::new(RERANK_RESPONSE_RANK_COLUMN, DataType::Int32, false),
         ]));
@@ -1206,6 +1757,8 @@ mod tests {
             schema,
             vec![
                 Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
+                Arc::new(Float64Array::from(vec![0.91_f64, 0.82_f64])),
+                Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
                 Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
                 Arc::new(Int32Array::from(vec![1_i32, 1_i32])),
             ],
@@ -1230,6 +1783,16 @@ mod tests {
 
         let schema = Arc::new(Schema::new(vec![
             Field::new(RERANK_RESPONSE_DOC_ID_COLUMN, DataType::Utf8, false),
+            Field::new(
+                RERANK_RESPONSE_VECTOR_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
+            Field::new(
+                RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
+                DataType::Float64,
+                false,
+            ),
             Field::new(RERANK_RESPONSE_FINAL_SCORE_COLUMN, DataType::Float64, false),
             Field::new(RERANK_RESPONSE_RANK_COLUMN, DataType::Int32, false),
         ]));
@@ -1237,6 +1800,8 @@ mod tests {
             schema,
             vec![
                 Arc::new(StringArray::from(vec!["doc-1"])),
+                Arc::new(Float64Array::from(vec![0.9_f64])),
+                Arc::new(Float64Array::from(vec![0.95_f64])),
                 Arc::new(Float64Array::from(vec![1.2_f64])),
                 Arc::new(Int32Array::from(vec![1_i32])),
             ],

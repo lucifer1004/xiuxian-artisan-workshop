@@ -165,7 +165,7 @@ fn append_vector_ipc_column(
 }
 
 fn record_batch_to_ipc_bytes(batch: &arrow::record_batch::RecordBatch) -> Result<Vec<u8>, String> {
-    crate::arrow_transport::encode_record_batch_ipc(batch).map_err(|error| error.to_string())
+    crate::arrow_codec::encode_record_batch_ipc(batch).map_err(|error| error.to_string())
 }
 
 /// Encode search results as Arrow IPC stream bytes (single `RecordBatch`).

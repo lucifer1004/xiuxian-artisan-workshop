@@ -17,6 +17,10 @@ use ops::DatasetCacheConfig;
 // ============================================================================
 
 pub use arrow::record_batch::RecordBatch as EngineRecordBatch;
+pub use arrow_codec::{
+    attach_record_batch_metadata, attach_record_batch_trace_id, decode_record_batches_ipc,
+    encode_record_batch_ipc, encode_record_batches_ipc,
+};
 pub use lance::deps::arrow_array::ListArray as LanceListArray;
 pub use lance::deps::arrow_array::builder::{
     ListBuilder as LanceListBuilder, StringBuilder as LanceStringBuilder,
@@ -50,15 +54,6 @@ pub use xiuxian_skills::skills::{
 // Module Declarations
 // ============================================================================
 
-pub use arrow_transport::{
-    ARROW_TRANSPORT_CONTENT_TYPE, ARROW_TRANSPORT_DEFAULT_BASE_URL,
-    ARROW_TRANSPORT_DEFAULT_HEALTH_ROUTE, ARROW_TRANSPORT_DEFAULT_ROUTE,
-    ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION, ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY,
-    ARROW_TRANSPORT_TRACE_ID_METADATA_KEY, ArrowTransportClient, ArrowTransportConfig,
-    ArrowTransportConfigError, ArrowTransportError, attach_record_batch_metadata,
-    attach_record_batch_trace_id, decode_record_batches_ipc, encode_record_batch_ipc,
-    encode_record_batches_ipc,
-};
 pub use error::VectorStoreError;
 pub use keyword::{
     HybridSearchResult, KEYWORD_WEIGHT, KeywordIndex, KeywordSearchBackend, RRF_K, SEMANTIC_WEIGHT,
@@ -92,7 +87,6 @@ pub use skill::{ToolSearchOptions, ToolSearchRequest, ToolSearchResult};
 // Module Declarations
 // ============================================================================
 
-pub mod arrow_transport;
 pub mod batch;
 pub mod error;
 pub mod index;
@@ -106,6 +100,7 @@ pub mod search_engine;
 pub mod skill;
 pub mod test_support;
 
+mod arrow_codec;
 #[path = "search/search_impl/mod.rs"]
 mod search_impl;
 

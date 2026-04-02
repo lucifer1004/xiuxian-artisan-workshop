@@ -5,10 +5,6 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum PluginTransportKind {
     /// Apache Arrow Flight RPC.
-    ArrowFlight,
-    /// Arrow IPC over HTTP.
     #[default]
-    ArrowIpcHttp,
-    /// Local process invocation with Arrow IPC exchange.
-    LocalProcessArrowIpc,
+    ArrowFlight,
 }

@@ -1,9 +1,11 @@
 mod helpers;
-mod intent;
+pub(crate) mod intent;
 mod merge;
 mod search;
 
 #[cfg(test)]
 pub use intent::build_intent_search_response;
-pub use intent::{search_intent, search_intent_hits_arrow};
+#[cfg(test)]
+pub(crate) use intent::load_intent_search_response_with_metadata;
+pub(crate) use search::load_knowledge_search_flight_response;
 pub use search::search_knowledge;

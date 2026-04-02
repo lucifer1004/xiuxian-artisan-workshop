@@ -6,7 +6,7 @@ metadata:
 
 # Quadrilateral Cognitive Architecture: The CyberXiuXian Artisan Whitepaper (2026 Ultimate Edition)
 
-> **Authority:** CyberXiuXian Artisan Studio  
+> **Authority:** CyberXiuXian Artisan workshop
 > **Status:** Production-Hardened Core & Verified  
 > **Architecture:** Quadrilateral (Wendao, Memory, Qianhuan, Omega)  
 > **Philosophy:** "Intelligence-Knowledge Decoupling" via Topological Memory and MemRL.

@@ -35,9 +35,92 @@ Unlike Obsidian's flat structure, Wendao builds a recursive **Semantic Tree** of
 
 Fuses fuzzy **Vector Search** (semantic intuition) with precise **Graph Diffusion** (logical reasoning). Using a neurobiologically inspired **PPR algorithm** (Personalized PageRank), Wendao finds not just "similar" text, but "logically relevant" knowledge clusters.
 
-### 3. Apache Arrow IPC
+### 3. Apache Arrow Flight
 
 Built on top of the **Arrow Data Ecosystem**. Knowledge flows through the engine as columnar memory batches. This ensures **Zero-copy** overhead during retrieval, re-ranking, and injection, making it capable of handling millions of nodes at sub-millisecond latency.
+
+The business boundary is now pure Arrow Flight. The outward HTTP business
+surfaces `/api/search/{intent,attachments,references,symbols,ast}` and
+`/api/analysis/{markdown,code-ast}` are retired.
+
+The canonical business contracts are:
+
+- `/search/intent`
+- `/search/attachments`
+- `/search/references`
+- `/search/symbols`
+- `/search/ast`
+- `/analysis/markdown`
+- `/analysis/code-ast`
+
+The stable runtime metadata keys are:
+
+- `x-wendao-search-query`
+- `x-wendao-search-limit`
+- `x-wendao-analysis-path`
+- `x-wendao-analysis-repo`
+- `x-wendao-analysis-line`
+
+The bundled OpenAPI artifact now keeps only the JSON control plane for these
+families. The semantic Flight search contract is pinned by
+`tests/snapshots/gateway/studio/search_flight_service_route_contracts.snap`.
+`/api/ui/capabilities` no longer advertises a browser search Arrow transport,
+because there is no remaining browser-facing search Arrow business surface.
+
+The same `analysis/` folder is now also split by lane internally:
+
+- `analysis/service/markdown.rs`
+- `analysis/service/code_ast.rs`
+- `analysis/types/markdown.rs`
+- `analysis/types/code_ast.rs`
+
+This keeps the canonical Flight routes unchanged while removing the remaining
+mixed `service.rs` and `types.rs` internals.
+
+The old `analysis_exports.rs` forwarding hop is also gone now. Handler-level
+barrels re-export the canonical analysis routes directly from the `analysis`
+feature folder instead of bouncing through a second legacy file.
+
+The same cleanup pattern has now started on the remaining handler families:
+the old `capabilities_exports.rs` forwarding hop is gone, and
+`handlers/mod.rs` re-exports `get_ui_capabilities` and `get_plugin_artifact`
+directly from the `capabilities` feature folder.
+
+The same is now true for UI config: `ui_config_exports.rs` is gone, and
+`handlers/mod.rs` re-exports `get_ui_config` / `set_ui_config` directly from
+the `ui_config` handler module without changing the outward route names.
+
+The same cleanup now also covers VFS: `vfs_exports.rs` is gone, and
+`handlers/mod.rs` re-exports `vfs_root_entries`, `vfs_scan`, `vfs_cat`,
+`vfs_resolve`, and `vfs_entry` directly from the `vfs` handler module. During
+that cleanup, the checked-in bundled OpenAPI artifact was also brought back
+into sync with the declared route inventory by restoring the generic plugin
+artifact inspection path.
+
+The same direct re-export pattern now also covers graph handlers:
+`graph_exports.rs` is gone, and `handlers/mod.rs` re-exports
+`graph_neighbors`, `node_neighbors`, and `topology_3d` directly from the
+`graph` feature folder.
+
+Current fit audit for the remaining search-family Flight contracts is explicit:
+
+- `references`: fits the generic Flight search seam (`query + limit`)
+- `symbols`: fits the generic Flight search seam (`query + limit`)
+- `attachments`: does not fit the generic seam because it requires `ext`,
+  `kind`, and `case_sensitive`, so it now uses its own dedicated attachment
+  Flight provider seam instead
+- `ast`: not a clean generic-seam candidate; it is tied to the local
+  symbol-index path, so the canonical surface is the dedicated Flight route
+  `/search/ast` backed by its own AST provider seam
+
+That audit result is now reflected in the runtime substrate. The generic
+Flight search matcher no longer claims `/search/attachments` or `/search/ast`.
+`xiuxian-wendao-runtime` now exposes a dedicated attachment-search Flight
+contract with explicit metadata headers for `ext`, `kind`, and
+`case_sensitive`, plus a separate `AttachmentSearchFlightRouteProvider`
+boundary, and a separate `AstSearchFlightRouteProvider` boundary for the
+local symbol-index path. The semantic search contract is now locked by the
+Studio Flight snapshot suite rather than by browser Arrow IPC routes.
 
 ---
 
@@ -62,11 +145,11 @@ Wendao is physically grounded in cutting-edge RAG research:
 
 `xiuxian-wendao` now exposes a thin Julia-facing service adapter for the
 WendaoArrow transport contract. The core crate keeps the existing synchronous
-repository analyzer trait unchanged, while `analyzers::fetch_julia_arrow_score_rows_for_repository`
+repository analyzer trait unchanged, while `analyzers::fetch_julia_flight_score_rows_for_repository`
 provides an explicit async entrypoint for:
 
-- resolving repository-configured Julia Arrow transport settings
-- executing the Arrow IPC HTTP roundtrip
+- resolving repository-configured Julia Flight transport settings
+- executing the Arrow Flight roundtrip
 - validating the WendaoArrow `v1` response contract
 - materializing `doc_id`, `analyzer_score`, and `final_score` into typed Rust rows
 
@@ -475,7 +558,17 @@ docs handler clusters instead of stopping at repo-analysis search alone. The
 docs handler surface is now fully closed over one shared docs-service seam, and
 its shared query-param and route surfaces now both follow the same
 feature-folder rule. The internal docs service layer and router export seam now
-follow it too.
+follow it too. The last legacy `docs_exports.rs` barrel is gone as well, so the
+outward docs handler surface now binds directly to the `docs::planner` and
+`docs::projection` feature folders without an extra forwarding hop. The same is
+now true for repository handlers: `repo_exports.rs` is gone, and the outward
+repository handler surface binds directly to `handlers/repo/mod.rs`. The router
+test surface now also pins this cleanup state: `gateway/studio/router/tests`
+contains a regression test that fails if any legacy `handlers/*_exports.rs`
+files reappear. The shared OpenAPI inventory now has the same kind of guard:
+`gateway/openapi/paths/shared/tests.rs` fails if retired Flight-only HTTP paths
+such as `/api/search/ast` or `/api/analysis/*` ever re-enter the stable route
+inventory.
 
 ---
 

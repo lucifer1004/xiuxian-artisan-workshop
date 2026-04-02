@@ -6,7 +6,7 @@ metadata:
 
 # Standard: Filesystem-Based Documentation Hierarchy (DFS-2026)
 
-> **Authority:** CyberXiuXian Artisan Studio  
+> **Authority:** CyberXiuXian Artisan workshop
 > **Purpose:** To eliminate documentation entropy and provide a deterministic path-based indexing system for both Humans and LLMs.
 
 ## 1. Hierarchy Specification

@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::super::Agent;
+use crate::agent::Agent;
 
 impl Agent {
     #[doc(hidden)]

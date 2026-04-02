@@ -92,7 +92,7 @@ pub(super) async fn process_foreground_message(
         }
     };
     let sanitized_reply = sanitize_reply_for_send(&raw_reply);
-    let reply = normalize_task_id_only_reply(agent.as_ref(), sanitized_reply);
+    let reply = normalize_task_id_only_reply(sanitized_reply);
 
     match channel.send(&reply, &msg.recipient).await {
         Ok(()) => tracing::info!(r#"→ Bot: "{preview}""#, preview = log_preview(&reply)),
@@ -100,7 +100,7 @@ pub(super) async fn process_foreground_message(
     }
 
     // NATIVE INTEGRATION: Trigger library-level sync instead of calling binary
-    if let Some(ref heyi) = agent.get_heyi() {
+    if let Some(heyi) = agent.get_heyi() {
         match heyi.sync_from_disk() {
             Ok(summary) => {
                 tracing::debug!(
@@ -140,30 +140,14 @@ pub(super) fn extract_task_id_only_reply(reply: &str) -> Option<&str> {
     }
 }
 
-fn normalize_task_id_only_reply(agent: &Agent, reply: String) -> String {
+fn normalize_task_id_only_reply(reply: String) -> String {
     let Some(task_id) = extract_task_id_only_reply(&reply) else {
         return reply;
     };
-    let Some(heyi) = agent.get_heyi() else {
-        return reply;
-    };
-    match heyi.render_task_add_response_from_id(task_id) {
-        Ok(rendered) => {
-            tracing::info!(
-                event = "telegram.foreground.reply.normalized",
-                task_id,
-                "normalized bare task id reply to structured task confirmation"
-            );
-            rendered
-        }
-        Err(error) => {
-            tracing::warn!(
-                event = "telegram.foreground.reply.normalize_failed",
-                task_id,
-                error = %error,
-                "failed to normalize bare task id reply"
-            );
-            reply
-        }
-    }
+    tracing::info!(
+        event = "telegram.foreground.reply.normalized",
+        task_id,
+        "normalized bare task id reply to stable task confirmation"
+    );
+    format!("Task recorded: {task_id}")
 }

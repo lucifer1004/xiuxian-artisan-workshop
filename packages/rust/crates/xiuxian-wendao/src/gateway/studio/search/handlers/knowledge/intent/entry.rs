@@ -1,9 +1,5 @@
-use std::sync::Arc;
-
-use axum::Json;
-use axum::extract::{Query, State};
-
-use crate::gateway::studio::router::{GatewayState, StudioApiError, StudioState};
+use crate::gateway::studio::router::{StudioApiError, StudioState};
+#[cfg(test)]
 use crate::gateway::studio::search::handlers::code_search::search::build_code_search_response;
 use crate::gateway::studio::search::handlers::knowledge::helpers::{
     intent_candidate_limit, is_code_biased_intent,
@@ -14,53 +10,17 @@ use crate::gateway::studio::search::handlers::knowledge::intent::response::{
     build_intent_response, merge_intent_hits, missing_intent_config, missing_intent_config_error,
 };
 use crate::gateway::studio::search::handlers::knowledge::intent::sources::search_intent_sources;
+use crate::gateway::studio::search::handlers::knowledge::intent::types::IntentSearchTransportMetadata;
+#[cfg(test)]
 use crate::gateway::studio::search::handlers::queries::SearchQuery;
 use crate::gateway::studio::types::SearchResponse;
 use crate::search_plane::SearchPlaneCacheTtl;
 
-pub async fn search_intent(
-    State(state): State<Arc<GatewayState>>,
-    Query(query): Query<SearchQuery>,
-) -> Result<Json<SearchResponse>, StudioApiError> {
-    let raw_query = query.q.unwrap_or_default();
-    let query_text = raw_query.trim();
-    let intent = query.intent.clone().unwrap_or_default();
-    let limit = query.limit.unwrap_or(10).max(1);
-
-    if query_text.is_empty() {
-        return Err(StudioApiError::bad_request(
-            "MISSING_QUERY",
-            "Intent search requires a non-empty query",
-        ));
-    }
-
-    if intent == "code_search" {
-        let response = build_code_search_response(
-            state.studio.as_ref(),
-            raw_query,
-            query.repo.as_deref(),
-            limit,
-        )
-        .await?;
-        return Ok(Json(response));
-    }
-
-    let response = build_intent_search_response(
-        state.studio.as_ref(),
-        raw_query.as_str(),
-        query_text,
-        query.repo.as_deref(),
-        limit,
-        (!intent.is_empty()).then_some(intent),
-    )
-    .await?;
-    Ok(Json(response))
-}
-
-pub(crate) async fn load_intent_search_response(
+#[cfg(test)]
+pub(crate) async fn load_intent_search_response_with_metadata(
     studio: &StudioState,
     query: SearchQuery,
-) -> Result<SearchResponse, StudioApiError> {
+) -> Result<(SearchResponse, IntentSearchTransportMetadata), StudioApiError> {
     let raw_query = query.q.unwrap_or_default();
     let query_text = raw_query.trim();
     let intent = query.intent.clone().unwrap_or_default();
@@ -74,10 +34,12 @@ pub(crate) async fn load_intent_search_response(
     }
 
     if intent == "code_search" {
-        return build_code_search_response(studio, raw_query, query.repo.as_deref(), limit).await;
+        return build_code_search_response(studio, raw_query, query.repo.as_deref(), limit)
+            .await
+            .map(|response| (response, IntentSearchTransportMetadata::default()));
     }
 
-    build_intent_search_response(
+    build_intent_search_response_with_metadata(
         studio,
         raw_query.as_str(),
         query_text,
@@ -88,6 +50,8 @@ pub(crate) async fn load_intent_search_response(
     .await
 }
 
+#[cfg(test)]
+#[cfg_attr(not(any(test, feature = "julia")), allow(dead_code))]
 pub async fn build_intent_search_response(
     studio: &StudioState,
     raw_query: &str,
@@ -96,6 +60,21 @@ pub async fn build_intent_search_response(
     limit: usize,
     intent: Option<String>,
 ) -> Result<SearchResponse, StudioApiError> {
+    build_intent_search_response_with_metadata(
+        studio, raw_query, query_text, repo_hint, limit, intent,
+    )
+    .await
+    .map(|(response, _)| response)
+}
+
+pub(crate) async fn build_intent_search_response_with_metadata(
+    studio: &StudioState,
+    raw_query: &str,
+    query_text: &str,
+    repo_hint: Option<&str>,
+    limit: usize,
+    intent: Option<String>,
+) -> Result<(SearchResponse, IntentSearchTransportMetadata), StudioApiError> {
     let index_state = ensure_intent_indices(studio)?;
     let candidate_limit = intent_candidate_limit(limit);
     let intent_ref = intent.as_deref();
@@ -116,7 +95,7 @@ pub async fn build_intent_search_response(
             .cache_get_json::<SearchResponse>(cache_key)
             .await
     {
-        return Ok(cached);
+        return Ok((cached, IntentSearchTransportMetadata::default()));
     }
     let source_hits =
         search_intent_sources(studio, query_text, candidate_limit, &index_state).await?;
@@ -138,6 +117,7 @@ pub async fn build_intent_search_response(
         return Err(missing_intent_config_error());
     }
 
+    let transport = merged.transport.clone();
     let response = build_intent_response(query_text, limit, intent, merged);
     if !response.partial
         && let Some(cache_key) = cache_key.as_ref()
@@ -147,5 +127,5 @@ pub async fn build_intent_search_response(
             .cache_set_json(cache_key, SearchPlaneCacheTtl::HotQuery, &response)
             .await;
     }
-    Ok(response)
+    Ok((response, transport))
 }

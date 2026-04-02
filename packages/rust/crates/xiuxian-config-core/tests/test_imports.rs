@@ -3,7 +3,8 @@
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use xiuxian_config_core::{
-    ConfigCascadeSpec, load_toml_value_with_imports, resolve_and_merge_toml_with_paths,
+    ConfigCascadeSpec, ConfigCoreError, load_toml_value_with_imports,
+    resolve_and_merge_toml_with_paths,
 };
 
 fn write_text(path: &Path, content: &str) {
@@ -71,6 +72,66 @@ default_provider = "embedded"
         string_at(&value, &["llm", "default_provider"]),
         Some("embedded")
     );
+}
+
+#[test]
+fn load_toml_value_with_imports_rejects_invalid_import_shapes() {
+    let (_temp, root) = temp_workspace();
+    let config_path = root.join("config.toml");
+
+    write_text(
+        config_path.as_path(),
+        r#"
+imports = "base.toml"
+"#,
+    );
+
+    let error = load_toml_value_with_imports(config_path.as_path())
+        .expect_err("expected invalid imports error");
+
+    match error {
+        ConfigCoreError::InvalidImports { path, message } => {
+            assert_eq!(path, config_path.display().to_string());
+            assert!(message.contains("array"));
+        }
+        other => panic!("expected InvalidImports, got {other}"),
+    }
+}
+
+#[test]
+fn load_toml_value_with_imports_detects_cycles() {
+    let (_temp, root) = temp_workspace();
+
+    write_text(
+        root.join("a.toml").as_path(),
+        r#"
+imports = ["b.toml"]
+
+[a]
+name = "alpha"
+"#,
+    );
+    write_text(
+        root.join("b.toml").as_path(),
+        r#"
+imports = ["a.toml"]
+
+[b]
+name = "beta"
+"#,
+    );
+
+    let error = load_toml_value_with_imports(root.join("a.toml").as_path())
+        .expect_err("expected import cycle error");
+
+    match error {
+        ConfigCoreError::ImportCycle { chain } => {
+            assert!(chain.contains("a.toml"));
+            assert!(chain.contains("b.toml"));
+            assert!(chain.contains("->"));
+        }
+        other => panic!("expected ImportCycle, got {other}"),
+    }
 }
 
 #[test]

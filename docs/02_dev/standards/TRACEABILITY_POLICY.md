@@ -8,10 +8,10 @@ tags:
 saliency_base: 6.8
 decay_rate: 0.03
 metadata:
-  title: "Standard: Engineering Traceability Policy (CyberXiuXian Artisan Studio)"
+  title: "Standard: Engineering Traceability Policy (CyberXiuXian Artisan workshop)"
 ---
 
-# Standard: Engineering Traceability Policy (CyberXiuXian Artisan Studio)
+# Standard: Engineering Traceability Policy (CyberXiuXian Artisan workshop)
 
 > **Basis:** _HMAS Taxonomy (2025)_ and _Requirement-to-Prompt Standards (2025)_.
 > **Version:** 2026.Q1

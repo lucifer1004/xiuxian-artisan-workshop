@@ -17,7 +17,7 @@ fn load_ui_config_from_wendao_toml_accepts_inline_repo_plugin_config() -> TestRe
 root = "."
 plugins = [
   "julia",
-  { id = "julia", arrow_transport = { base_url = "http://127.0.0.1:8080" } }
+  { id = "julia", flight_transport = { base_url = "http://127.0.0.1:8815" } }
 ]
 "#,
     )?;
@@ -39,7 +39,7 @@ fn persist_ui_config_to_wendao_toml_preserves_inline_repo_plugin_config() -> Tes
 root = "."
 plugins = [
   "julia",
-  { id = "julia", arrow_transport = { base_url = "http://127.0.0.1:8080", route = "/arrow-ipc" } }
+  { id = "julia", flight_transport = { base_url = "http://127.0.0.1:8815", route = "/rerank" } }
 ]
 "#,
     )?;
@@ -73,7 +73,7 @@ plugins = [
     assert!(matches!(
         &project.plugins[1],
         WendaoTomlPluginEntry::Config(config)
-            if config.id == "julia" && config.extra.contains_key("arrow_transport")
+            if config.id == "julia" && config.extra.contains_key("flight_transport")
     ));
     Ok(())
 }

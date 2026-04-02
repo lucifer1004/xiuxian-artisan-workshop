@@ -6,7 +6,8 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use xiuxian_memory_engine::{EpisodeStore, ValkeyMemoryStateStore};
 use xiuxian_qianhuan::ManifestationManager;
-use xiuxian_wendao::{LinkGraphIndex, SkillVfsResolver};
+use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::skill_vfs::SkillVfsResolver;
 use xiuxian_zhenfa::{
     ZhenfaContext, ZhenfaError, ZhenfaOrchestrator, ZhenfaRegistry, ZhenfaSignal, ZhenfaSignalSink,
     ZhenfaTool,

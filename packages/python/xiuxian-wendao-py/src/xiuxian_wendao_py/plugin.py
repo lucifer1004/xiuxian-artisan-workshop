@@ -24,8 +24,6 @@ class PluginTransportKind(StrEnum):
     """Transport kinds aligned to the Rust plugin-runtime contract."""
 
     ARROW_FLIGHT = "arrow_flight"
-    ARROW_IPC_HTTP = "arrow_ipc_http"
-    LOCAL_PROCESS_ARROW_IPC = "local_process_arrow_ipc"
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,9 +87,7 @@ def load_plugin_manifest(path: str | Path) -> dict[str, object]:
     """Load one scaffolded plugin manifest from disk."""
 
     manifest_path = Path(path)
-    return validate_plugin_manifest(
-        tomllib.loads(manifest_path.read_text(encoding="utf-8"))
-    )
+    return validate_plugin_manifest(tomllib.loads(manifest_path.read_text(encoding="utf-8")))
 
 
 def validate_plugin_manifest(manifest: Mapping[str, object]) -> dict[str, object]:
@@ -147,9 +143,7 @@ def validate_plugin_manifest(manifest: Mapping[str, object]) -> dict[str, object
         if summary is not None and not isinstance(summary, str):
             raise TypeError("starter.summary must be a string when provided")
         if tags is not None:
-            if not isinstance(tags, (list, tuple)) or not all(
-                isinstance(tag, str) for tag in tags
-            ):
+            if not isinstance(tags, (list, tuple)) or not all(isinstance(tag, str) for tag in tags):
                 raise TypeError("starter.tags must be a list or tuple of strings")
 
     return dict(manifest)
@@ -182,7 +176,9 @@ def load_manifest_entrypoint(
 ) -> Any:
     """Load the analyzer callable referenced by a scaffolded manifest."""
 
-    loaded_manifest = load_plugin_manifest(manifest) if isinstance(manifest, (str, Path)) else manifest
+    loaded_manifest = (
+        load_plugin_manifest(manifest) if isinstance(manifest, (str, Path)) else manifest
+    )
     if not isinstance(manifest, (str, Path)):
         loaded_manifest = validate_plugin_manifest(loaded_manifest)
     entrypoint = _entrypoint_section(loaded_manifest)
@@ -335,7 +331,11 @@ def plugin_from_manifest(
 ) -> WendaoAnalyzerPlugin:
     """Build one runtime analyzer plugin from a scaffolded manifest."""
 
-    loaded_manifest = load_plugin_manifest(manifest) if isinstance(manifest, (str, Path)) else validate_plugin_manifest(manifest)
+    loaded_manifest = (
+        load_plugin_manifest(manifest)
+        if isinstance(manifest, (str, Path))
+        else validate_plugin_manifest(manifest)
+    )
     plugin_section = loaded_manifest.get("plugin")
     if not isinstance(plugin_section, Mapping):
         raise TypeError("plugin manifest must contain a [plugin] mapping")

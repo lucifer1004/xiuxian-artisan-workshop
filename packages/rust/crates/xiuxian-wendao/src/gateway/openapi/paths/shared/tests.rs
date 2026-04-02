@@ -5,6 +5,14 @@ use crate::gateway::openapi::paths::{
     API_UI_PLUGIN_ARTIFACT_OPENAPI_PATH, WENDAO_GATEWAY_ROUTE_CONTRACTS,
 };
 
+const RETIRED_SEARCH_AST_OPENAPI_PATH: &str = "/api/search/ast";
+const RETIRED_SEARCH_INTENT_OPENAPI_PATH: &str = "/api/search/intent";
+const RETIRED_SEARCH_ATTACHMENTS_OPENAPI_PATH: &str = "/api/search/attachments";
+const RETIRED_SEARCH_REFERENCES_OPENAPI_PATH: &str = "/api/search/references";
+const RETIRED_SEARCH_SYMBOLS_OPENAPI_PATH: &str = "/api/search/symbols";
+const RETIRED_ANALYSIS_MARKDOWN_OPENAPI_PATH: &str = "/api/analysis/markdown";
+const RETIRED_ANALYSIS_CODE_AST_OPENAPI_PATH: &str = "/api/analysis/code-ast";
+
 #[test]
 fn route_inventory_keeps_core_endpoints() {
     let openapi_paths = WENDAO_GATEWAY_ROUTE_CONTRACTS
@@ -26,6 +34,43 @@ fn route_inventory_paths_are_unique() {
         .collect::<BTreeSet<_>>();
 
     assert_eq!(openapi_paths.len(), WENDAO_GATEWAY_ROUTE_CONTRACTS.len());
+}
+
+#[test]
+fn route_inventory_omits_retired_flight_only_http_paths() {
+    let openapi_paths = WENDAO_GATEWAY_ROUTE_CONTRACTS
+        .iter()
+        .map(|route| route.openapi_path)
+        .collect::<BTreeSet<_>>();
+
+    assert!(
+        !openapi_paths.contains(RETIRED_SEARCH_INTENT_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired intent HTTP search path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_SEARCH_ATTACHMENTS_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired attachment HTTP search path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_SEARCH_AST_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired AST HTTP search path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_SEARCH_REFERENCES_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired references HTTP search path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_SEARCH_SYMBOLS_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired symbols HTTP search path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_ANALYSIS_MARKDOWN_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired markdown HTTP analysis path"
+    );
+    assert!(
+        !openapi_paths.contains(RETIRED_ANALYSIS_CODE_AST_OPENAPI_PATH),
+        "stable shared route inventory must not re-expose retired code-AST HTTP analysis path"
+    );
 }
 
 #[test]

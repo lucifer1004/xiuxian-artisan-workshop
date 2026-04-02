@@ -1,6 +1,5 @@
 ---
 source: packages/rust/crates/xiuxian-wendao/src/gateway/studio/test_support.rs
-assertion_line: 9
 expression: value
 ---
 {
@@ -11,6 +10,11 @@ expression: value
   "maxConcurrency": 0,
   "queued": 0,
   "ready": 0,
+  "studioBootstrapBackgroundIndexingDeferredActivationAt": null,
+  "studioBootstrapBackgroundIndexingDeferredActivationObserved": false,
+  "studioBootstrapBackgroundIndexingDeferredActivationSource": null,
+  "studioBootstrapBackgroundIndexingEnabled": false,
+  "studioBootstrapBackgroundIndexingMode": "deferred",
   "syncConcurrencyLimit": 0,
   "syncing": 0,
   "targetConcurrency": 0,

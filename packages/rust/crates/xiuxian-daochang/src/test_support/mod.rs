@@ -12,7 +12,6 @@ mod managed_parser;
 mod managed_runtime;
 mod memory_credit;
 mod memory_feedback;
-mod memory_metrics;
 mod memory_recall;
 mod memory_recall_state;
 mod memory_stream_consumer;

@@ -12,7 +12,8 @@ use xiuxian_testing::{
     AdvisoryAuditExecutor, CollectionContext, ContractKnowledgeBatch, ContractReport,
     ContractRunConfig, ContractSuite, ContractSuiteRunner,
 };
-use xiuxian_wendao::{KnowledgeEntry, WendaoContractFeedbackAdapter};
+use xiuxian_wendao::contract_feedback::WendaoContractFeedbackAdapter;
+use xiuxian_wendao::types::KnowledgeEntry;
 
 #[cfg(feature = "llm")]
 use crate::executors::formal_audit::{QianjiAdvisoryAuditExecutor, QianjiLlmAdvisoryAuditExecutor};

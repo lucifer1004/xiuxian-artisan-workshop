@@ -1,36 +1,18 @@
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, Float64Array, StringArray, UInt64Array};
-use arrow::datatypes::{DataType, Field, Schema};
-use axum::Json;
-use axum::extract::{Query, State};
-use axum::response::Response;
+use async_trait::async_trait;
+use xiuxian_vector::{
+    LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema, LanceStringArray,
+    LanceUInt64Array,
+};
 
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
-use crate::gateway::studio::search::handlers::arrow_transport::{
-    arrow_payload_response, build_arrow_search_ipc, encode_json,
-};
 use crate::gateway::studio::types::{ReferenceSearchHit, ReferenceSearchResponse};
+use xiuxian_wendao_runtime::transport::{
+    SEARCH_REFERENCES_ROUTE, SearchFlightRouteProvider, SearchFlightRouteResponse,
+};
 
 use super::queries::ReferenceSearchQuery;
-
-pub async fn search_references(
-    State(state): State<Arc<GatewayState>>,
-    Query(query): Query<ReferenceSearchQuery>,
-) -> Result<Json<ReferenceSearchResponse>, StudioApiError> {
-    let response = load_reference_search_response(state.as_ref(), query).await?;
-    Ok(Json(response))
-}
-
-pub async fn search_references_hits_arrow(
-    State(state): State<Arc<GatewayState>>,
-    Query(query): Query<ReferenceSearchQuery>,
-) -> Result<Response, StudioApiError> {
-    let response = load_reference_search_response(state.as_ref(), query).await?;
-    reference_hits_arrow_response(&response.hits).map_err(|error| {
-        StudioApiError::internal("SEARCH_REFERENCE_HITS_ARROW_FAILED", error, None)
-    })
-}
 
 pub(crate) async fn load_reference_search_response(
     state: &GatewayState,
@@ -61,110 +43,141 @@ pub(crate) async fn load_reference_search_response(
     })
 }
 
-pub(crate) fn reference_hits_arrow_response(
-    hits: &[ReferenceSearchHit],
-) -> Result<Response, String> {
-    encode_reference_hits_ipc(hits).map(arrow_payload_response)
+struct ReferenceSearchFlightRouteProvider {
+    state: Arc<GatewayState>,
 }
 
-fn encode_reference_hits_ipc(hits: &[ReferenceSearchHit]) -> Result<Vec<u8>, String> {
-    let names: Vec<&str> = hits.iter().map(|hit| hit.name.as_str()).collect();
-    let paths: Vec<&str> = hits.iter().map(|hit| hit.path.as_str()).collect();
-    let languages: Vec<&str> = hits.iter().map(|hit| hit.language.as_str()).collect();
-    let crate_names: Vec<&str> = hits.iter().map(|hit| hit.crate_name.as_str()).collect();
-    let project_names: Vec<Option<&str>> =
-        hits.iter().map(|hit| hit.project_name.as_deref()).collect();
-    let root_labels: Vec<Option<&str>> = hits.iter().map(|hit| hit.root_label.as_deref()).collect();
-    let navigation_targets_json: Vec<String> = hits
-        .iter()
-        .map(|hit| encode_json(&hit.navigation_target))
-        .collect::<Result<_, _>>()?;
-    let line_texts: Vec<&str> = hits.iter().map(|hit| hit.line_text.as_str()).collect();
-
-    let schema = Schema::new(vec![
-        Field::new("name", DataType::Utf8, false),
-        Field::new("path", DataType::Utf8, false),
-        Field::new("language", DataType::Utf8, false),
-        Field::new("crateName", DataType::Utf8, false),
-        Field::new("projectName", DataType::Utf8, true),
-        Field::new("rootLabel", DataType::Utf8, true),
-        Field::new("navigationTargetJson", DataType::Utf8, false),
-        Field::new("line", DataType::UInt64, false),
-        Field::new("column", DataType::UInt64, false),
-        Field::new("lineText", DataType::Utf8, false),
-        Field::new("score", DataType::Float64, false),
-    ]);
-
-    let columns: Vec<ArrayRef> = vec![
-        Arc::new(StringArray::from(names)),
-        Arc::new(StringArray::from(paths)),
-        Arc::new(StringArray::from(languages)),
-        Arc::new(StringArray::from(crate_names)),
-        Arc::new(StringArray::from(project_names)),
-        Arc::new(StringArray::from(root_labels)),
-        Arc::new(StringArray::from(
-            navigation_targets_json
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-        )),
-        Arc::new(UInt64Array::from(
-            hits.iter().map(|hit| hit.line as u64).collect::<Vec<_>>(),
-        )),
-        Arc::new(UInt64Array::from(
-            hits.iter().map(|hit| hit.column as u64).collect::<Vec<_>>(),
-        )),
-        Arc::new(StringArray::from(line_texts)),
-        Arc::new(Float64Array::from(
-            hits.iter().map(|hit| hit.score).collect::<Vec<_>>(),
-        )),
-    ];
-    build_arrow_search_ipc(schema, columns)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Cursor;
-
-    use crate::gateway::studio::types::StudioNavigationTarget;
-    use arrow::ipc::reader::StreamReader;
-
-    #[test]
-    fn search_reference_arrow_roundtrip_preserves_navigation_target() {
-        let hits = vec![ReferenceSearchHit {
-            name: "solve".to_string(),
-            path: "src/pkg.jl".to_string(),
-            language: "julia".to_string(),
-            crate_name: "pkg".to_string(),
-            project_name: Some("pkg".to_string()),
-            root_label: Some("pkg".to_string()),
-            navigation_target: StudioNavigationTarget {
-                path: "pkg/src/pkg.jl".to_string(),
-                category: "repo_code".to_string(),
-                project_name: Some("pkg".to_string()),
-                root_label: Some("pkg".to_string()),
-                line: Some(42),
-                line_end: Some(42),
-                column: Some(5),
-            },
-            line: 42,
-            column: 5,
-            line_text: "solve(x)".to_string(),
-            score: 0.87,
-        }];
-
-        let encoded =
-            encode_reference_hits_ipc(&hits).expect("reference hit arrow encoding should succeed");
-        let reader = StreamReader::try_new(Cursor::new(encoded), None)
-            .expect("reference hit stream reader should open");
-        let batches = reader
-            .collect::<Result<Vec<_>, _>>()
-            .expect("reference hit stream should decode");
-        assert_eq!(batches.len(), 1);
-        let batch = &batches[0];
-        assert_eq!(batch.num_rows(), 1);
-        assert!(batch.column_by_name("navigationTargetJson").is_some());
-        assert!(batch.column_by_name("lineText").is_some());
+impl std::fmt::Debug for ReferenceSearchFlightRouteProvider {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ReferenceSearchFlightRouteProvider")
     }
+}
+
+#[async_trait]
+impl SearchFlightRouteProvider for ReferenceSearchFlightRouteProvider {
+    async fn search_batch(
+        &self,
+        route: &str,
+        query_text: &str,
+        limit: usize,
+        _intent: Option<&str>,
+        _repo_hint: Option<&str>,
+    ) -> Result<SearchFlightRouteResponse, String> {
+        if route != SEARCH_REFERENCES_ROUTE {
+            return Err(format!("unsupported reference Flight route: {route}"));
+        }
+        let response = load_reference_search_response(
+            self.state.as_ref(),
+            ReferenceSearchQuery {
+                q: Some(query_text.to_string()),
+                limit: Some(limit),
+            },
+        )
+        .await
+        .map_err(|error| {
+            error
+                .error
+                .details
+                .clone()
+                .unwrap_or_else(|| format!("{}: {}", error.code(), error.error.message))
+        })?;
+        build_reference_hits_flight_batch(&response.hits).map(SearchFlightRouteResponse::new)
+    }
+}
+
+pub(crate) async fn load_reference_search_response_flight_batch(
+    state: Arc<GatewayState>,
+    query: ReferenceSearchQuery,
+) -> Result<LanceRecordBatch, StudioApiError> {
+    let raw_query = query.q.clone().unwrap_or_default();
+    let query_text = raw_query.trim();
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Reference search requires a non-empty query",
+        ));
+    }
+
+    let provider = ReferenceSearchFlightRouteProvider { state };
+    provider
+        .search_batch(
+            SEARCH_REFERENCES_ROUTE,
+            query_text,
+            query.limit.unwrap_or(20).max(1),
+            None,
+            None,
+        )
+        .await
+        .map(|response| response.batch)
+        .map_err(|error| {
+            StudioApiError::internal(
+                "SEARCH_REFERENCE_FLIGHT_BRIDGE_FAILED",
+                "Failed to materialize reference hits through the Flight-backed provider",
+                Some(error),
+            )
+        })
+}
+
+fn build_reference_hits_flight_batch(
+    hits: &[ReferenceSearchHit],
+) -> Result<LanceRecordBatch, String> {
+    let names = hits.iter().map(|hit| hit.name.clone()).collect::<Vec<_>>();
+    let paths = hits.iter().map(|hit| hit.path.clone()).collect::<Vec<_>>();
+    let languages = hits
+        .iter()
+        .map(|hit| hit.language.clone())
+        .collect::<Vec<_>>();
+    let crate_names = hits
+        .iter()
+        .map(|hit| hit.crate_name.clone())
+        .collect::<Vec<_>>();
+    let project_names = hits
+        .iter()
+        .map(|hit| hit.project_name.clone().unwrap_or_default())
+        .collect::<Vec<_>>();
+    let root_labels = hits
+        .iter()
+        .map(|hit| hit.root_label.clone().unwrap_or_default())
+        .collect::<Vec<_>>();
+    let navigation_targets_json = hits
+        .iter()
+        .map(|hit| serde_json::to_string(&hit.navigation_target).map_err(|error| error.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let lines = hits.iter().map(|hit| hit.line as u64).collect::<Vec<_>>();
+    let columns = hits.iter().map(|hit| hit.column as u64).collect::<Vec<_>>();
+    let line_texts = hits
+        .iter()
+        .map(|hit| hit.line_text.clone())
+        .collect::<Vec<_>>();
+    let scores = hits.iter().map(|hit| hit.score).collect::<Vec<_>>();
+
+    LanceRecordBatch::try_new(
+        Arc::new(LanceSchema::new(vec![
+            LanceField::new("name", LanceDataType::Utf8, false),
+            LanceField::new("path", LanceDataType::Utf8, false),
+            LanceField::new("language", LanceDataType::Utf8, false),
+            LanceField::new("crateName", LanceDataType::Utf8, false),
+            LanceField::new("projectName", LanceDataType::Utf8, false),
+            LanceField::new("rootLabel", LanceDataType::Utf8, false),
+            LanceField::new("navigationTargetJson", LanceDataType::Utf8, false),
+            LanceField::new("line", LanceDataType::UInt64, false),
+            LanceField::new("column", LanceDataType::UInt64, false),
+            LanceField::new("lineText", LanceDataType::Utf8, false),
+            LanceField::new("score", LanceDataType::Float64, false),
+        ])),
+        vec![
+            Arc::new(LanceStringArray::from(names)),
+            Arc::new(LanceStringArray::from(paths)),
+            Arc::new(LanceStringArray::from(languages)),
+            Arc::new(LanceStringArray::from(crate_names)),
+            Arc::new(LanceStringArray::from(project_names)),
+            Arc::new(LanceStringArray::from(root_labels)),
+            Arc::new(LanceStringArray::from(navigation_targets_json)),
+            Arc::new(LanceUInt64Array::from(lines)),
+            Arc::new(LanceUInt64Array::from(columns)),
+            Arc::new(LanceStringArray::from(line_texts)),
+            Arc::new(LanceFloat64Array::from(scores)),
+        ],
+    )
+    .map_err(|error| error.to_string())
 }

@@ -1,5 +1,5 @@
 use super::rerank::{
-    apply_plugin_rerank_scores, attach_plugin_rerank_request_trace_id,
+    apply_plugin_rerank_scores, attach_plugin_rerank_request_metadata,
     build_plugin_rerank_telemetry, build_plugin_rerank_transport_client,
     collect_plugin_rerank_trace_ids, plugin_rerank_request_trace_id,
 };
@@ -76,7 +76,7 @@ fn apply_plugin_rerank_scores_overwrites_saliency_and_resorts_contexts() {
 fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
     let binding = build_rerank_provider_binding(&LinkGraphCompatRerankRuntimeConfig {
         base_url: Some("http://127.0.0.1:8090".to_string()),
-        route: Some("/custom-ipc".to_string()),
+        route: Some("/custom-rerank".to_string()),
         health_route: Some("/healthz".to_string()),
         schema_version: Some("v1".to_string()),
         timeout_secs: Some(15),
@@ -89,19 +89,13 @@ fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
     let client = build_plugin_rerank_transport_client(&binding)
         .expect("config should be valid")
         .expect("base url should enable transport");
-    let config = client
-        .arrow_ipc_http_config()
-        .expect("runtime overrides should still select Arrow IPC");
 
     assert_eq!(
         client.selection().selected_transport,
-        PluginTransportKind::ArrowIpcHttp
+        PluginTransportKind::ArrowFlight
     );
-    assert_eq!(config.base_url(), "http://127.0.0.1:8090");
-    assert_eq!(config.route(), "/custom-ipc");
-    assert_eq!(config.health_route(), "/healthz");
-    assert_eq!(config.schema_version(), "v1");
-    assert_eq!(config.timeout().as_secs(), 15);
+    assert_eq!(client.flight_base_url(), Some("http://127.0.0.1:8090"));
+    assert_eq!(client.flight_route(), Some("/custom-rerank"));
 }
 
 #[test]
@@ -130,7 +124,6 @@ fn build_plugin_rerank_transport_client_accepts_arrow_flight_bindings() {
     );
     assert_eq!(client.flight_base_url(), Some("http://127.0.0.1:18080"));
     assert_eq!(client.flight_route(), Some("/rerank/flight"));
-    assert!(client.arrow_ipc_http_config().is_none());
 }
 
 #[test]
@@ -177,12 +170,9 @@ fn collect_plugin_rerank_trace_ids_deduplicates_non_empty_values() {
 fn build_plugin_rerank_telemetry_carries_transport_selection_and_fallback() {
     let telemetry = build_plugin_rerank_telemetry(
         Some(&NegotiatedTransportSelection {
-            selected_transport: PluginTransportKind::ArrowIpcHttp,
-            fallback_from: Some(PluginTransportKind::ArrowFlight),
-            fallback_reason: Some(
-                "preferred transport ArrowFlight is unavailable because the binding has no base_url"
-                    .to_string(),
-            ),
+            selected_transport: PluginTransportKind::ArrowFlight,
+            fallback_from: None,
+            fallback_reason: None,
         }),
         true,
         2,
@@ -194,16 +184,10 @@ fn build_plugin_rerank_telemetry_carries_transport_selection_and_fallback() {
     assert_eq!(telemetry.response_row_count, 2);
     assert_eq!(
         telemetry.selected_transport,
-        Some(PluginTransportKind::ArrowIpcHttp)
-    );
-    assert_eq!(
-        telemetry.fallback_from,
         Some(PluginTransportKind::ArrowFlight)
     );
-    assert_eq!(
-        telemetry.fallback_reason.as_deref(),
-        Some("preferred transport ArrowFlight is unavailable because the binding has no base_url")
-    );
+    assert_eq!(telemetry.fallback_from, None);
+    assert_eq!(telemetry.fallback_reason, None);
     assert_eq!(telemetry.trace_ids, vec!["trace-123".to_string()]);
     assert_eq!(telemetry.error, None);
 }
@@ -218,7 +202,7 @@ fn plugin_rerank_request_trace_id_normalizes_query_text() {
 }
 
 #[test]
-fn attach_plugin_rerank_request_trace_id_sets_schema_metadata() {
+fn attach_plugin_rerank_request_metadata_sets_schema_metadata() {
     let batch = RecordBatch::try_new(
         Arc::new(Schema::new(vec![Field::new(
             "doc_id",
@@ -230,10 +214,17 @@ fn attach_plugin_rerank_request_trace_id_sets_schema_metadata() {
     .expect("batch");
 
     let traced_batch =
-        attach_plugin_rerank_request_trace_id(batch, "alpha signal").expect("metadata");
+        attach_plugin_rerank_request_metadata(batch, "alpha signal", "v1").expect("metadata");
 
     assert_eq!(
         traced_batch.schema().metadata().get("trace_id"),
         Some(&"julia-rerank:alpha_signal".to_string())
+    );
+    assert_eq!(
+        traced_batch
+            .schema()
+            .metadata()
+            .get("wendao.schema_version"),
+        Some(&"v1".to_string())
     );
 }

@@ -3,7 +3,7 @@ name = "xiuxian-memory-engine"
 version.workspace = true
 edition.workspace = true
 description = "Self-evolving memory engine with Q-Learning and Two-Phase Search"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 

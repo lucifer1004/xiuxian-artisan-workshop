@@ -5,7 +5,8 @@ use crate::agent::memory_state::MemoryStateBackend;
 use crate::agent::zhenfa::{ZhenfaRuntimeDeps, ZhenfaToolBridge};
 use crate::config::XiuxianConfig;
 use xiuxian_memory_engine::EpisodeStore;
-use xiuxian_wendao::{LinkGraphIndex, SkillVfsResolver};
+use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::skill_vfs::SkillVfsResolver;
 
 use super::service_mount::{ServiceMountCatalog, ServiceMountMeta};
 use super::zhixing::ZhixingRuntimeBundle;

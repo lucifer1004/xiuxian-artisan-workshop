@@ -1,28 +1,35 @@
 use std::collections::BTreeMap;
+#[cfg(test)]
 use std::time::Duration;
 
 use crate::search_plane::{RepoSearchAvailability, RepoSearchPublicationState, SearchPlaneService};
 
-use super::types::{
-    ParsedCodeSearchQuery, ParsedRepoCodeSearchQuery, RepoSearchDispatch, RepoSearchTarget,
-};
+#[cfg(test)]
+use super::types::ParsedCodeSearchQuery;
+use super::types::{ParsedRepoCodeSearchQuery, RepoSearchDispatch, RepoSearchTarget};
 
+#[cfg(test)]
 const DEFAULT_REPO_WIDE_CODE_SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(test)]
 const DEFAULT_REPO_WIDE_PER_REPO_ENTITY_RESULT_LIMIT: usize = 12;
+#[cfg(test)]
 const DEFAULT_REPO_WIDE_PER_REPO_CONTENT_RESULT_LIMIT: usize = 4;
 
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct RepoSearchResultLimits {
     pub(crate) entity_limit: usize,
     pub(crate) content_limit: usize,
 }
 
+#[cfg(test)]
 pub(crate) fn repo_wide_code_search_timeout(repo_hint: Option<&str>) -> Option<Duration> {
     repo_hint
         .is_none()
         .then_some(DEFAULT_REPO_WIDE_CODE_SEARCH_TIMEOUT)
 }
 
+#[cfg(test)]
 pub(crate) fn repo_search_result_limits(
     repo_hint: Option<&str>,
     limit: usize,
@@ -106,6 +113,7 @@ pub(crate) fn parse_repo_code_search_query(query: &str) -> ParsedRepoCodeSearchQ
     spec
 }
 
+#[cfg(test)]
 pub(crate) fn parse_code_search_query(
     query: &str,
     repo_hint: Option<&str>,
@@ -148,6 +156,7 @@ pub(crate) fn parse_code_search_query(
     parsed
 }
 
+#[cfg(test)]
 pub(crate) fn infer_repo_hint_from_query<'a, I>(
     parsed: &ParsedCodeSearchQuery,
     repo_ids: I,
@@ -175,6 +184,7 @@ where
     Some(first.to_string())
 }
 
+#[cfg(test)]
 fn normalize_repo_search_seed(value: &str) -> String {
     let mut normalized = value.trim().to_ascii_lowercase();
     if normalized.ends_with(".jl") {

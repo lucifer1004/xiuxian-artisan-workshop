@@ -18,6 +18,11 @@ expression: value
       "updatedAt": "[updated-at]"
     }
   ],
+  "studioBootstrapBackgroundIndexingDeferredActivationAt": null,
+  "studioBootstrapBackgroundIndexingDeferredActivationObserved": false,
+  "studioBootstrapBackgroundIndexingDeferredActivationSource": null,
+  "studioBootstrapBackgroundIndexingEnabled": false,
+  "studioBootstrapBackgroundIndexingMode": "deferred",
   "syncConcurrencyLimit": 1,
   "syncing": 0,
   "targetConcurrency": 1,

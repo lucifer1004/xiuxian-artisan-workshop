@@ -8,10 +8,10 @@ tags:
 saliency_base: 6.8
 decay_rate: 0.03
 metadata:
-  title: "Template: Knowledge Ingestion (CyberXiuXian Artisan Studio)"
+  title: "Template: Knowledge Ingestion (CyberXiuXian Artisan workshop)"
 ---
 
-# Template: Knowledge Ingestion (CyberXiuXian Artisan Studio)
+# Template: Knowledge Ingestion (CyberXiuXian Artisan workshop)
 
 > **Basis:** _HippoRAG Schema-less KG Integration (2025)_.
 > **Version:** 2026.Q1

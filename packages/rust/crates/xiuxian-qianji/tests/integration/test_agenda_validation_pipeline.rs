@@ -18,8 +18,8 @@ use xiuxian_qianji::{
     FlowInstruction, QianjiApp, QianjiEngine, QianjiManifest, QianjiMechanism, QianjiOutput,
     QianjiScheduler, manifest_declares_qianhuan_bindings, manifest_requires_llm,
 };
-use xiuxian_wendao::LinkGraphIndex;
-use xiuxian_wendao::embedded_resource_text_from_wendao_uri;
+use xiuxian_wendao::link_graph::LinkGraphIndex;
+use xiuxian_wendao::skill_vfs::embedded_resource_text_from_wendao_uri;
 
 const AGENDA_VALIDATION_WORKFLOW_URI: &str =
     "wendao://skills/agenda-management/references/agenda_flow.toml";

@@ -7,11 +7,11 @@ use std::fs;
 use std::sync::Arc;
 use tempfile::tempdir;
 use xiuxian_qianhuan::ManifestationInterface;
-use xiuxian_wendao::Entity;
-use xiuxian_wendao::EntityType;
+use xiuxian_wendao::entity::{Entity, EntityType};
 use xiuxian_wendao::graph::KnowledgeGraph;
 use xiuxian_zhixing::ATTR_TIMER_REMINDED;
 use xiuxian_zhixing::ATTR_TIMER_SCHEDULED;
+use xiuxian_zhixing::ReminderSignal;
 use xiuxian_zhixing::ZhixingHeyi;
 use xiuxian_zhixing::storage::MarkdownStorage;
 
@@ -255,7 +255,8 @@ fn test_sync_from_disk_indexes_notebook_into_wendao_graph()
 }
 
 #[tokio::test]
-async fn test_add_task_normalizes_local_time_input() -> std::result::Result<(), Box<dyn Error>> {
+async fn test_add_task_preserves_scheduled_input_on_heyi_surface()
+-> std::result::Result<(), Box<dyn Error>> {
     let graph = Arc::new(KnowledgeGraph::new());
     let tmp = tempdir()?;
     let storage = Arc::new(MarkdownStorage::new(tmp.path().to_path_buf()));
@@ -272,7 +273,6 @@ async fn test_add_task_normalizes_local_time_input() -> std::result::Result<(), 
         .add_task(
             "Normalize local time",
             Some("2026-02-25 10:09 PM".to_string()),
-            None,
         )
         .await?;
 
@@ -281,16 +281,15 @@ async fn test_add_task_normalizes_local_time_input() -> std::result::Result<(), 
         task.metadata
             .get(ATTR_TIMER_SCHEDULED)
             .and_then(serde_json::Value::as_str)
-            == Some("2026-02-26T06:09:00+00:00")
+            == Some("2026-02-25 10:09 PM")
     });
     assert!(has_expected_schedule);
-    assert!(response.contains("2026-02-25 10:09 PM"));
-    assert!(!response.contains("2026-02-26T06:09:00+00:00"));
+    assert!(response.contains("Normalize local time"));
     Ok(())
 }
 
 #[tokio::test]
-async fn test_add_task_rejects_invalid_time_without_persisting_state()
+async fn test_add_task_accepts_unparsed_scheduled_input_on_heyi_surface()
 -> std::result::Result<(), Box<dyn Error>> {
     let graph = Arc::new(KnowledgeGraph::new());
     let tmp = tempdir()?;
@@ -305,70 +304,58 @@ async fn test_add_task_rejects_invalid_time_without_persisting_state()
     )?;
 
     let marker = "Reject invalid time marker";
-    let result = heyi
-        .add_task(marker, Some("blorp-not-a-time".to_string()), None)
-        .await;
+    let response = heyi
+        .add_task(marker, Some("blorp-not-a-time".to_string()))
+        .await?;
+    assert!(response.contains(marker));
 
-    let error = result.expect_err("invalid time should fail before persistence");
-    assert!(error.to_string().contains("unsupported scheduled time"));
-    assert!(graph.get_entities_by_type("OTHER(Task)").is_empty());
-
-    let date_str = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let journal_path = tmp.path().join("journal").join(format!("{date_str}.md"));
-    assert!(
-        !journal_path.exists(),
-        "invalid scheduled time must not create a journal note at {}",
-        journal_path.display()
-    );
-
-    let rendered = heyi.render_agenda()?;
-    assert!(
-        !rendered.contains(marker),
-        "invalid task marker must not leak into agenda rendering: {rendered}"
+    let tasks = graph.get_entities_by_type("OTHER(Task)");
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(
+        tasks[0]
+            .metadata
+            .get(ATTR_TIMER_SCHEDULED)
+            .and_then(serde_json::Value::as_str),
+        Some("blorp-not-a-time")
     );
 
     Ok(())
 }
 
 #[test]
-fn test_render_task_add_response_from_id_uses_task_metadata()
+fn test_render_reminder_notice_markdown_uses_live_signal_fields()
 -> std::result::Result<(), Box<dyn Error>> {
-    let graph = Arc::new(KnowledgeGraph::new());
     let tmp = tempdir()?;
     let storage = Arc::new(MarkdownStorage::new(tmp.path().to_path_buf()));
     let manifestation = Arc::new(EchoManifestation);
     let heyi = ZhixingHeyi::new(
-        Arc::clone(&graph),
+        Arc::new(KnowledgeGraph::new()),
         manifestation,
         storage,
         "test".to_string(),
         "America/Los_Angeles",
     )?;
 
-    let task_id = "task:render-from-id";
-    let mut entity = Entity::new(
-        task_id.to_string(),
-        "验证知行提醒模板".to_string(),
-        EntityType::Other("Task".to_string()),
-        "检查角色注入文案是否出现并且可读".to_string(),
-    );
-    entity.metadata.insert(
-        ATTR_TIMER_SCHEDULED.to_string(),
-        json!("2026-02-26T08:50:00+00:00"),
-    );
-    graph.add_entity(entity)?;
-
-    let rendered = heyi.render_task_add_response_from_id(task_id)?;
+    let rendered = heyi.render_reminder_notice_markdown(&ReminderSignal {
+        task_id: "task:render-from-id".to_string(),
+        title: "验证知行提醒模板".to_string(),
+        task_brief: Some("检查角色注入文案是否出现并且可读".to_string()),
+        scheduled_at: Some("2026-02-26T08:50:00+00:00".to_string()),
+        recipient: Some("llm:test".to_string()),
+    })?;
     let payload: serde_json::Value = serde_json::from_str(&rendered)?;
-    assert_eq!(payload["task_title"], json!("验证知行提醒模板"));
+    assert_eq!(payload["task_title_mdv2"], json!("验证知行提醒模板"));
     assert_eq!(
-        payload["task_detail"],
+        payload["task_brief_mdv2"],
         json!("检查角色注入文案是否出现并且可读")
     );
-    assert_eq!(payload["task_id"], json!(task_id));
-    assert_eq!(payload["reminder_lead_minutes"], json!(15));
+    assert_eq!(payload["task_id_mdv2"], json!("task:render-from-id"));
+    assert_eq!(
+        payload["qianhuan"]["state_context"],
+        json!("SUCCESS_STREAK")
+    );
     assert!(
-        payload["scheduled_local"]
+        payload["scheduled_local_mdv2"]
             .as_str()
             .is_some_and(|value| value.contains("2026-02-26 12:50 AM")),
         "expected local time in rendered payload: {payload}"

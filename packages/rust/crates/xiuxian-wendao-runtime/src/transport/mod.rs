@@ -1,7 +1,11 @@
 #[cfg(feature = "julia")]
 mod client;
 #[cfg(feature = "julia")]
+mod contract;
+#[cfg(feature = "julia")]
 mod flight;
+#[cfg(feature = "julia")]
+mod host_settings;
 #[cfg(feature = "julia")]
 mod negotiation;
 mod query_contract;
@@ -9,30 +13,58 @@ mod query_contract;
 mod server;
 
 #[cfg(feature = "julia")]
-pub use client::build_arrow_transport_client_from_binding;
+pub use contract::{
+    DEFAULT_FLIGHT_BASE_URL, DEFAULT_FLIGHT_SCHEMA_VERSION, DEFAULT_FLIGHT_TIMEOUT_SECS,
+    FLIGHT_SCHEMA_VERSION_METADATA_KEY, FLIGHT_TRACE_ID_METADATA_KEY, resolve_flight_timeout,
+    validate_flight_schema_version, validate_flight_timeout_secs,
+};
+#[cfg(feature = "julia")]
+pub use host_settings::{
+    EffectiveRerankFlightHostSettings, ParsedRerankFlightHostOverrides,
+    rerank_score_weights_from_env, resolve_effective_rerank_flight_host_settings,
+    split_rerank_flight_host_overrides,
+};
 #[cfg(feature = "julia")]
 pub use negotiation::{
-    CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER, NegotiatedArrowTransportClient,
-    NegotiatedTransportSelection, negotiate_arrow_transport_client_from_bindings,
+    CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER, NegotiatedFlightTransportClient,
+    NegotiatedTransportSelection, negotiate_flight_transport_client_from_bindings,
 };
 pub use query_contract::{
-    REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN,
-    REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_ROUTE,
-    REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN,
-    RERANK_EXCHANGE_ROUTE, RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
+    ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, REPO_SEARCH_BEST_SECTION_COLUMN,
+    REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_HIERARCHY_COLUMN,
+    REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,
+    REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN, REPO_SEARCH_NAVIGATION_LINE_COLUMN,
+    REPO_SEARCH_NAVIGATION_LINE_END_COLUMN, REPO_SEARCH_NAVIGATION_PATH_COLUMN,
+    REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_ROUTE, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TAGS_COLUMN,
+    REPO_SEARCH_TITLE_COLUMN, RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
     RERANK_REQUEST_QUERY_EMBEDDING_COLUMN, RERANK_REQUEST_VECTOR_SCORE_COLUMN,
     RERANK_RESPONSE_DOC_ID_COLUMN, RERANK_RESPONSE_FINAL_SCORE_COLUMN, RERANK_RESPONSE_RANK_COLUMN,
-    WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER, WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER, WENDAO_REPO_SEARCH_LIMIT_HEADER,
+    RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN, RERANK_RESPONSE_VECTOR_SCORE_COLUMN, RERANK_ROUTE,
+    SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE,
+    SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
+    WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
+    WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER, WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER,
+    WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER, WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER,
+    WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER, WENDAO_REPO_SEARCH_LIMIT_HEADER,
     WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER, WENDAO_REPO_SEARCH_QUERY_HEADER,
     WENDAO_REPO_SEARCH_TAG_FILTERS_HEADER, WENDAO_REPO_SEARCH_TITLE_FILTERS_HEADER,
-    WENDAO_RERANK_DIMENSION_HEADER,
-    WENDAO_SCHEMA_VERSION_HEADER, flight_descriptor_path, normalize_flight_route,
+    WENDAO_RERANK_DIMENSION_HEADER, WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_INTENT_HEADER,
+    WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER, WENDAO_SEARCH_REPO_HEADER,
+    flight_descriptor_path, normalize_flight_route, validate_attachment_search_request,
+    validate_code_ast_analysis_request, validate_markdown_analysis_request,
     validate_repo_search_request,
 };
 #[cfg(feature = "julia")]
 pub use query_contract::{
-    score_rerank_request_batch, validate_rerank_request_batch, validate_rerank_request_schema,
-    validate_rerank_response_batch, validate_rerank_response_schema,
+    RerankScoreWeights, RerankScoredCandidate, score_rerank_request_batch,
+    score_rerank_request_batch_with_weights, validate_rerank_request_batch,
+    validate_rerank_request_schema, validate_rerank_response_batch,
+    validate_rerank_response_schema,
 };
 #[cfg(feature = "julia")]
-pub use server::{RepoSearchFlightRouteProvider, RerankFlightRouteHandler, WendaoFlightService};
+pub use server::{
+    AstSearchFlightRouteProvider, AttachmentSearchFlightRouteProvider,
+    CodeAstAnalysisFlightRouteProvider, MarkdownAnalysisFlightRouteProvider,
+    RepoSearchFlightRouteProvider, RerankFlightRouteHandler, SearchFlightRouteProvider,
+    SearchFlightRouteResponse, WendaoFlightService,
+};

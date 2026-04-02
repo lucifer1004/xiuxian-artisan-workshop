@@ -8,8 +8,8 @@ use super::media::{parse_attachment_markers, parse_path_only_attachment};
 use super::outbound_text::normalize_telegram_outbound_text;
 use super::send_types::PreparedCaption;
 use helpers::{
-    PreparedChunk, assert_chunk_limit, prepare_chunks, split_chunks_with_guard,
-    warn_chunk_payload_fallbacks,
+    PreparedChunk, assert_chunk_limit, prepare_chunks, should_prefer_html_chunk,
+    split_chunks_with_guard, warn_chunk_payload_fallbacks,
 };
 
 impl TelegramChannel {
@@ -89,6 +89,79 @@ impl TelegramChannel {
             }
         }
         Ok(())
+    }
+
+    async fn send_single_chunk(
+        &self,
+        chat_id: &str,
+        thread_id: Option<&str>,
+        chunk: &PreparedChunk,
+        force_plain: bool,
+    ) -> anyhow::Result<()> {
+        if force_plain {
+            return self
+                .send_plain_chunk(chat_id, thread_id, &chunk.plain_text)
+                .await;
+        }
+
+        let prefer_html =
+            should_prefer_html_chunk(&chunk.plain_text, chunk.markdown_chars, chunk.html_chars);
+        if prefer_html {
+            return match self
+                .send_message_with_mode(chat_id, thread_id, &chunk.html_text, Some("HTML"))
+                .await
+            {
+                Ok(()) => Ok(()),
+                Err(error) if error.should_retry_without_parse_mode() => {
+                    self.send_plain_chunk(chat_id, thread_id, &chunk.plain_text)
+                        .await
+                }
+                Err(error) => Err(anyhow::anyhow!("Telegram sendMessage failed: {error}")),
+            };
+        }
+
+        match self
+            .send_message_with_mode(
+                chat_id,
+                thread_id,
+                &chunk.markdown_v2_text,
+                Some("MarkdownV2"),
+            )
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(error) if error.should_retry_without_parse_mode() => {
+                tracing::warn!(
+                    error = %error,
+                    "Telegram MarkdownV2 chunk failed; retrying with fallback format"
+                );
+                match self
+                    .send_message_with_mode(chat_id, thread_id, &chunk.html_text, Some("HTML"))
+                    .await
+                {
+                    Ok(()) => Ok(()),
+                    Err(html_error) if html_error.should_retry_without_parse_mode() => {
+                        self.send_plain_chunk(chat_id, thread_id, &chunk.plain_text)
+                            .await
+                    }
+                    Err(html_error) => {
+                        Err(anyhow::anyhow!("Telegram sendMessage failed: {html_error}"))
+                    }
+                }
+            }
+            Err(error) => Err(anyhow::anyhow!("Telegram sendMessage failed: {error}")),
+        }
+    }
+
+    async fn send_plain_chunk(
+        &self,
+        chat_id: &str,
+        thread_id: Option<&str>,
+        text: &str,
+    ) -> anyhow::Result<()> {
+        self.send_message_with_mode(chat_id, thread_id, text, None)
+            .await
+            .map_err(|error| anyhow::anyhow!("Telegram sendMessage failed: {error}"))
     }
 
     async fn send_truncation_notice(

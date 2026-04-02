@@ -41,7 +41,7 @@ pub use julia_transport::{
     JuliaArrowRequestRow, JuliaArrowScoreRow, PluginArrowRequestRow, PluginArrowScoreRow,
     build_julia_arrow_request_batch, build_plugin_arrow_request_batch,
     decode_julia_arrow_score_rows, decode_plugin_arrow_score_rows,
-    fetch_julia_arrow_score_rows_for_repository, fetch_plugin_arrow_score_rows_for_repository,
+    fetch_julia_flight_score_rows_for_repository, fetch_plugin_arrow_score_rows_for_repository,
 };
 
 pub(crate) use projection::build_repo_projected_page_search_with_artifacts;

@@ -6,7 +6,7 @@ metadata:
 
 # Specification: Xiuxian-Qianhuan Dynamic Orchestration (2026)
 
-> **Authority:** CyberXiuXian Artisan Studio  
+> **Authority:** CyberXiuXian Artisan workshop
 > **Goal:** Implement the "Thousand Faces" engine for dynamic persona and knowledge injection.
 > **Basis:** _Agent-G (2025)_, _Contextual Snapshotted Memory (2025)_, and _MIPROv2 (2025)_.
 

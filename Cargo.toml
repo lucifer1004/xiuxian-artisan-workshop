@@ -42,7 +42,7 @@ members = [
 [workspace.package]
 version = "0.1.1"
 edition = "2024"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 description = "CyberXiuXian Artisan Workshop - High-performance Agentic OS with Rust Core"

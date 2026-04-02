@@ -269,7 +269,8 @@ mod tests {
     use std::sync::Arc;
     use uuid::Uuid;
     use xiuxian_qianhuan::ManifestationManager;
-    use xiuxian_wendao::{Entity, EntityType, KnowledgeGraph};
+    use xiuxian_wendao::entity::{Entity, EntityType};
+    use xiuxian_wendao::graph::KnowledgeGraph;
 
     fn build_test_heyi(
         embedded_templates: &[(&str, &str)],

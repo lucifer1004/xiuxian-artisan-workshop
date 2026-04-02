@@ -10,7 +10,7 @@ use crate::link_graph::{
 use crate::set_link_graph_wendao_config_override;
 use std::fs;
 use xiuxian_wendao_julia::compatibility::link_graph::{
-    JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_PLUGIN_ID,
+    DEFAULT_JULIA_RERANK_FLIGHT_ROUTE, JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_PLUGIN_ID,
 };
 
 #[test]
@@ -111,7 +111,7 @@ fn export_plugin_artifact_from_rpc_params_returns_toml() {
         &config_path,
         r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:18080"
-route = "/arrow-ipc"
+route = "/rerank"
 schema_version = "v1"
 service_mode = "stream"
 "#,
@@ -126,7 +126,7 @@ service_mode = "stream"
     }))
     .expect("export generic toml");
     assert!(rendered.contains("artifact_schema_version = \"v1\""));
-    assert!(rendered.contains("route = \"/arrow-ipc\""));
+    assert!(rendered.contains(&format!("route = \"{DEFAULT_JULIA_RERANK_FLIGHT_ROUTE}\"")));
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn export_plugin_artifact_from_rpc_params_returns_json() {
         &config_path,
         r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:18080"
-route = "/arrow-ipc"
+route = "/rerank"
 schema_version = "v1"
 service_mode = "stream"
 "#,
@@ -153,7 +153,9 @@ service_mode = "stream"
     }))
     .expect("export generic json");
     assert!(rendered.contains("\"artifact_schema_version\": \"v1\""));
-    assert!(rendered.contains("\"route\": \"/arrow-ipc\""));
+    assert!(rendered.contains(&format!(
+        "\"route\": \"{DEFAULT_JULIA_RERANK_FLIGHT_ROUTE}\""
+    )));
 }
 
 #[test]
@@ -164,7 +166,7 @@ fn export_plugin_artifact_from_rpc_params_writes_json_file() {
         &config_path,
         r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:18080"
-route = "/arrow-ipc"
+route = "/rerank"
 schema_version = "v1"
 service_mode = "stream"
 "#,

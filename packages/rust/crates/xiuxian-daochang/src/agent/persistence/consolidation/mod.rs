@@ -1,5 +1,17 @@
-#[allow(clippy::wildcard_imports)]
-use super::*;
+use std::sync::Arc;
+use std::time::Instant;
+
+use anyhow::Result;
+use xiuxian_memory_engine::{Episode, EpisodeStore};
+
+use crate::agent::Agent;
+use crate::agent::consolidation::{
+    build_consolidated_summary_text, now_unix_ms, summarise_drained_turns,
+};
+use crate::observability::SessionEvent;
+use crate::session::SessionSummarySegment;
+
+use super::persist_memory_state;
 
 struct ConsolidationSummaryPayload {
     intent: String,

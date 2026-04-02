@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use xiuxian_llm::web::{SpiderBridge, WebContext};
-use xiuxian_wendao::{SpiderPagePayload, SpiderWendaoBridge, canonical_web_uri};
+use xiuxian_wendao::ingress::{SpiderPagePayload, SpiderWendaoBridge, canonical_web_uri};
 
 use super::macros::define_native_tool;
 

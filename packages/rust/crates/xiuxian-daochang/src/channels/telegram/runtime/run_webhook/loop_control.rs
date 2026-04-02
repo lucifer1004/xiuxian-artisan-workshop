@@ -6,10 +6,12 @@ use tokio::sync::mpsc;
 use crate::agent::Agent;
 use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
+use crate::channels::telegram::runtime::jobs::{
+    handle_inbound_message_with_interrupt, push_background_completion,
+};
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::{JobCompletion, JobManager};
 
-use super::super::jobs::{handle_inbound_message_with_interrupt, push_background_completion};
 use super::server::drain_finished_webhook_server;
 
 pub(super) async fn run_webhook_event_loop(
@@ -47,7 +49,7 @@ pub(super) async fn run_webhook_event_loop(
                 let Some(completion) = maybe_completion else {
                     continue;
                 };
-                push_background_completion(channel_for_send, completion).await;
+                push_background_completion(channel_for_send, agent, completion).await;
             }
             _ = tokio::signal::ctrl_c() => {
                 println!("Shutting down...");

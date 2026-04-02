@@ -6,6 +6,7 @@ pub struct SearchQuery {
     pub q: Option<String>,
     #[serde(default)]
     pub intent: Option<String>,
+    #[cfg(test)]
     #[serde(default)]
     pub repo: Option<String>,
     #[serde(default)]

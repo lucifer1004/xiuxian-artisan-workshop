@@ -7,7 +7,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use xiuxian_qianhuan::{ManifestationInterface, PersonaProfile};
 use xiuxian_wendao::graph::KnowledgeGraph;
-use xiuxian_wendao::{IncrementalSyncPolicy, ZhixingIndexSummary, ZhixingWendaoIndexer};
+use xiuxian_wendao::skill_vfs::zhixing::{ZhixingIndexSummary, ZhixingWendaoIndexer};
+use xiuxian_wendao::sync::IncrementalSyncPolicy;
 
 /// Integration of Zhi (Knowledge) and Xing (Action) - the Heyi orchestrator.
 pub struct ZhixingHeyi {

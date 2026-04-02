@@ -9,6 +9,7 @@ use xiuxian_vector::VectorStore;
 use xiuxian_wendao::{
     LinkGraphIndex, LinkGraphSearchOptions, set_link_graph_wendao_config_override,
 };
+use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_RERANK_FLIGHT_ROUTE;
 
 use crate::support::wendaoarrow_official_examples::spawn_wendaoarrow_stream_metadata_service;
 
@@ -61,12 +62,13 @@ table_name = "wendao_semantic_docs"
 
 [link_graph.retrieval.julia_rerank]
 base_url = "{}"
-route = "/arrow-ipc"
+route = "{}"
 schema_version = "v1"
 timeout_secs = 10
 "#,
             vector_store_path.to_string_lossy(),
             server_base_url,
+            DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
         ),
     )?;
     let config_path_string = config_path.to_string_lossy().to_string();
@@ -88,7 +90,9 @@ timeout_secs = 10
             .julia_rerank
             .as_ref()
             .map(|telemetry| telemetry.applied),
-        Some(true)
+        Some(true),
+        "unexpected Julia rerank telemetry: {:?}",
+        payload.julia_rerank
     );
     assert_eq!(
         payload

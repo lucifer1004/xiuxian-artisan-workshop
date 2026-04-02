@@ -12,7 +12,7 @@ pub use artifact::{
 pub use launch::{LinkGraphJuliaAnalyzerLaunchManifest, LinkGraphJuliaAnalyzerServiceDescriptor};
 pub use paths::{
     DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH,
-    DEFAULT_JULIA_ANALYZER_PACKAGE_DIR,
+    DEFAULT_JULIA_ANALYZER_PACKAGE_DIR, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
 };
 pub use runtime::{LinkGraphJuliaRerankRuntimeConfig, build_rerank_provider_binding};
 pub use selectors::{

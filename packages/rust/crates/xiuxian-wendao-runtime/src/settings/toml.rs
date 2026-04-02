@@ -6,6 +6,10 @@ use xiuxian_config_core::{
 };
 
 /// Merge runtime TOML settings with cascading support.
+///
+/// Both embedded defaults and explicit user overrides resolve recursive
+/// `imports` relative to their physical source file when a source path is
+/// available.
 #[must_use]
 pub fn merged_toml_settings(
     namespace: &str,
@@ -91,7 +95,18 @@ fn toml_value_to_yaml(value: &toml::Value) -> Value {
 mod tests {
     use super::merged_toml_settings_with_override;
     use crate::settings::get_setting_string;
+    use serde_yaml::Value;
     use std::fs;
+
+    fn yaml_value_at<'a>(value: &'a Value, dotted_key: &str) -> Option<&'a Value> {
+        let mut cursor = value;
+        for segment in dotted_key.split('.') {
+            let mapping = cursor.as_mapping()?;
+            let key = Value::String(segment.to_string());
+            cursor = mapping.get(&key)?;
+        }
+        Some(cursor)
+    }
 
     #[test]
     fn merged_toml_settings_with_override_prefers_user_config() {
@@ -117,5 +132,50 @@ mode = "user"
             get_setting_string(&settings, "link_graph.retrieval.mode"),
             Some("user".to_string())
         );
+    }
+
+    #[test]
+    fn merged_toml_settings_with_override_resolves_imports() {
+        let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+        let shared_path = temp.path().join("shared.toml");
+        let user_path = temp.path().join("wendao.toml");
+
+        fs::write(
+            &shared_path,
+            r#"[link_graph.retrieval]
+candidate_multiplier = 4
+"#,
+        )
+        .unwrap_or_else(|error| panic!("write shared config: {error}"));
+        fs::write(
+            &user_path,
+            r#"
+imports = ["shared.toml"]
+
+[link_graph.retrieval]
+mode = "user"
+"#,
+        )
+        .unwrap_or_else(|error| panic!("write user config: {error}"));
+
+        let settings = merged_toml_settings_with_override(
+            "link_graph",
+            r#"[link_graph.retrieval]
+mode = "embedded"
+"#,
+            "/nonexistent/embedded-wendao.toml",
+            "wendao.toml",
+            Some(user_path),
+        );
+
+        assert_eq!(
+            get_setting_string(&settings, "link_graph.retrieval.mode"),
+            Some("user".to_string())
+        );
+        let candidate_multiplier =
+            yaml_value_at(&settings, "link_graph.retrieval.candidate_multiplier")
+                .cloned()
+                .and_then(|value| serde_yaml::from_value::<i64>(value).ok());
+        assert_eq!(candidate_multiplier, Some(4));
     }
 }

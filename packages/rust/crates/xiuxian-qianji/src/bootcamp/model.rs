@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use xiuxian_qianhuan::{orchestrator::ThousandFacesOrchestrator, persona::PersonaRegistry};
-use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::link_graph::LinkGraphIndex;
 
 /// Runtime report returned by the Qianji laboratory API.
 #[derive(Debug, Clone)]

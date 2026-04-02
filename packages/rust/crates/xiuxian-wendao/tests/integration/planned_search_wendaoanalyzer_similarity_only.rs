@@ -10,7 +10,8 @@ use xiuxian_wendao::{
     LinkGraphIndex, LinkGraphSearchOptions, set_link_graph_wendao_config_override,
 };
 use xiuxian_wendao_julia::compatibility::link_graph::{
-    DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, LinkGraphJuliaRerankRuntimeConfig,
+    DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
+    LinkGraphJuliaRerankRuntimeConfig,
 };
 
 use crate::support::wendaoarrow_official_examples::{
@@ -64,7 +65,7 @@ table_name = "wendao_semantic_docs"
 
 [link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:0"
-route = "/arrow-ipc"
+route = "{}"
 schema_version = "v1"
 timeout_secs = 10
 service_mode = "stream"
@@ -72,6 +73,7 @@ analyzer_config_path = "{}"
 analyzer_strategy = "similarity_only"
 "#,
             vector_store_path.to_string_lossy(),
+            DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
             DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH,
         ),
     )?;
@@ -105,7 +107,7 @@ table_name = "wendao_semantic_docs"
 
 [link_graph.retrieval.julia_rerank]
 base_url = "{}"
-route = "/arrow-ipc"
+route = "{}"
 schema_version = "v1"
 timeout_secs = 10
 service_mode = "stream"
@@ -114,6 +116,7 @@ analyzer_strategy = "similarity_only"
 "#,
             vector_store_path.to_string_lossy(),
             server_base_url,
+            DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
             DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH,
         ),
     )?;

@@ -6,7 +6,8 @@ use crate::Result;
 use chrono::Utc;
 use serde_json::json;
 use std::fs;
-use xiuxian_wendao::{LinkGraphHit, LinkGraphIndex, LinkGraphSearchOptions};
+use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::link_graph::{LinkGraphHit, LinkGraphSearchOptions};
 
 const JOURNAL_INCLUDE_PATH: &str = "journal/";
 const AGENDA_SEARCH_LIMIT: usize = 8;

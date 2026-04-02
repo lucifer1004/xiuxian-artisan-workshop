@@ -1,6 +1,6 @@
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
-use xiuxian_wendao::{Entity, EntityType, Relation, RelationType};
+use xiuxian_wendao::entity::{Entity, EntityType, Relation, RelationType};
 
 pub(super) fn build_promotion_entity(context: &Value, decision: &str) -> Entity {
     let query = context

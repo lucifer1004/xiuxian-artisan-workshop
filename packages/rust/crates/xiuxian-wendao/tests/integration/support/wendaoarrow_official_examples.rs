@@ -11,7 +11,7 @@ use xiuxian_wendao_julia::compatibility::link_graph::{
 pub(crate) async fn spawn_wendaoarrow_stream_scoring_service() -> (String, WendaoArrowServiceGuard)
 {
     spawn_wendaoarrow_official_example(
-        "run_stream_scoring_server.sh",
+        "run_stream_scoring_flight_server.sh",
         "spawn WendaoArrow stream scoring service",
     )
     .await
@@ -20,7 +20,7 @@ pub(crate) async fn spawn_wendaoarrow_stream_scoring_service() -> (String, Wenda
 pub(crate) async fn spawn_wendaoarrow_stream_metadata_service() -> (String, WendaoArrowServiceGuard)
 {
     spawn_wendaoarrow_official_example(
-        "run_stream_metadata_server.sh",
+        "run_stream_metadata_flight_server.sh",
         "spawn WendaoArrow stream metadata service",
     )
     .await

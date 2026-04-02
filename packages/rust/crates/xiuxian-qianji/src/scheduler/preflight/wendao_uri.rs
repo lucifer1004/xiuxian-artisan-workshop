@@ -1,7 +1,9 @@
 use super::mounts::runtime_wendao_mounts;
 use std::fs;
 use std::path::{Path, PathBuf};
-use xiuxian_wendao::{SkillVfsResolver, WendaoResourceUri, embedded_resource_text_from_wendao_uri};
+use xiuxian_wendao::skill_vfs::{
+    SkillVfsResolver, WendaoResourceUri, embedded_resource_text_from_wendao_uri,
+};
 use xiuxian_zhenfa::ZhenfaTransmuter;
 
 /// Resolve one `wendao://` URI and delegate validation/refinement to Zhenfa.

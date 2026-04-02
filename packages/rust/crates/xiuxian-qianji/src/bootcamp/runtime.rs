@@ -1,7 +1,7 @@
 use crate::error::QianjiError;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::link_graph::LinkGraphIndex;
 
 pub(super) fn unix_timestamp_millis() -> Result<u128, QianjiError> {
     SystemTime::now()

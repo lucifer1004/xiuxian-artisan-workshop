@@ -1,7 +1,7 @@
 use super::BootcampVfsMount;
 use crate::contracts::QianjiManifest;
 use crate::error::QianjiError;
-use xiuxian_wendao::{WendaoResourceUri, embedded_resource_text_from_wendao_uri};
+use xiuxian_wendao::skill_vfs::{WendaoResourceUri, embedded_resource_text_from_wendao_uri};
 
 pub(super) fn parse_manifest(manifest_toml: &str) -> Result<QianjiManifest, QianjiError> {
     toml::from_str(manifest_toml)

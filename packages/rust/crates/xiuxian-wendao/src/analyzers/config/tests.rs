@@ -19,7 +19,7 @@ root = "repos/sample"
 refresh = "manual"
 plugins = [
   "julia",
-  { id = "julia", arrow_transport = { base_url = "http://127.0.0.1:8080", route = "/arrow-ipc", timeout_secs = 15 } }
+  { id = "julia", flight_transport = { base_url = "http://127.0.0.1:8815", route = "/rerank", timeout_secs = 15 } }
 ]
 "#,
     )?;
@@ -37,9 +37,9 @@ plugins = [
             RepositoryPluginConfig::Config {
                 id: "julia".to_string(),
                 options: json!({
-                    "arrow_transport": {
-                        "base_url": "http://127.0.0.1:8080",
-                        "route": "/arrow-ipc",
+                    "flight_transport": {
+                        "base_url": "http://127.0.0.1:8815",
+                        "route": "/rerank",
                         "timeout_secs": 15,
                     }
                 }),
@@ -59,7 +59,7 @@ fn load_repo_intelligence_config_rejects_empty_inline_plugin_id() -> TestResult 
         &config_path,
         r#"[link_graph.projects.sample]
 root = "repos/sample"
-plugins = [{ id = "   ", arrow_transport = { base_url = "http://127.0.0.1:8080" } }]
+plugins = [{ id = "   ", flight_transport = { base_url = "http://127.0.0.1:8815" } }]
 "#,
     )?;
 

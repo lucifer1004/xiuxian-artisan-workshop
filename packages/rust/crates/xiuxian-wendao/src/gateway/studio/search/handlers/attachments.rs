@@ -1,39 +1,18 @@
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, Float64Array, StringArray};
-use arrow::datatypes::{DataType, Field, Schema};
-use axum::Json;
-use axum::extract::{Query, State};
-use axum::response::Response;
+use async_trait::async_trait;
+use xiuxian_vector::{
+    LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema, LanceStringArray,
+};
+use xiuxian_wendao_runtime::transport::AttachmentSearchFlightRouteProvider;
 
 use super::queries::AttachmentSearchQuery;
-use crate::gateway::studio::router::{GatewayState, StudioApiError};
-use crate::gateway::studio::search::handlers::arrow_transport::{
-    arrow_payload_response, build_arrow_search_ipc, encode_optional_json,
-};
+use crate::gateway::studio::router::{StudioApiError, StudioState};
 use crate::gateway::studio::types::{AttachmentSearchHit, AttachmentSearchResponse};
 use crate::link_graph::LinkGraphAttachmentKind;
 
-pub async fn search_attachments(
-    State(state): State<Arc<GatewayState>>,
-    Query(query): Query<AttachmentSearchQuery>,
-) -> Result<Json<AttachmentSearchResponse>, StudioApiError> {
-    let response = load_attachment_search_response(state.as_ref(), query).await?;
-    Ok(Json(response))
-}
-
-pub async fn search_attachments_hits_arrow(
-    State(state): State<Arc<GatewayState>>,
-    Query(query): Query<AttachmentSearchQuery>,
-) -> Result<Response, StudioApiError> {
-    let response = load_attachment_search_response(state.as_ref(), query).await?;
-    attachment_hits_arrow_response(&response.hits).map_err(|error| {
-        StudioApiError::internal("SEARCH_ATTACHMENT_HITS_ARROW_FAILED", error, None)
-    })
-}
-
-pub(crate) async fn load_attachment_search_response(
-    state: &GatewayState,
+pub(crate) async fn load_attachment_search_response_from_studio(
+    studio: &StudioState,
     query: AttachmentSearchQuery,
 ) -> Result<AttachmentSearchResponse, StudioApiError> {
     let raw_query = query.q.unwrap_or_default();
@@ -57,9 +36,8 @@ pub(crate) async fn load_attachment_search_response(
         .iter()
         .map(|value| LinkGraphAttachmentKind::from_alias(value))
         .collect::<Vec<_>>();
-    state.studio.ensure_attachment_index_ready().await?;
-    let hits = state
-        .studio
+    studio.ensure_attachment_index_ready().await?;
+    let hits = studio
         .search_attachment_hits(
             query_text,
             limit,
@@ -77,123 +55,218 @@ pub(crate) async fn load_attachment_search_response(
     })
 }
 
-pub(crate) fn attachment_hits_arrow_response(
-    hits: &[AttachmentSearchHit],
-) -> Result<Response, String> {
-    encode_attachment_hits_ipc(hits).map(arrow_payload_response)
+pub(crate) struct StudioAttachmentSearchFlightRouteProvider {
+    studio: Arc<StudioState>,
 }
 
-fn encode_attachment_hits_ipc(hits: &[AttachmentSearchHit]) -> Result<Vec<u8>, String> {
-    let names: Vec<&str> = hits.iter().map(|hit| hit.name.as_str()).collect();
-    let paths: Vec<&str> = hits.iter().map(|hit| hit.path.as_str()).collect();
-    let source_ids: Vec<&str> = hits.iter().map(|hit| hit.source_id.as_str()).collect();
-    let source_stems: Vec<&str> = hits.iter().map(|hit| hit.source_stem.as_str()).collect();
-    let source_titles: Vec<&str> = hits.iter().map(|hit| hit.source_title.as_str()).collect();
-    let navigation_targets_json: Vec<Option<String>> = hits
+impl StudioAttachmentSearchFlightRouteProvider {
+    #[must_use]
+    pub(crate) fn new(studio: Arc<StudioState>) -> Self {
+        Self { studio }
+    }
+}
+
+impl std::fmt::Debug for StudioAttachmentSearchFlightRouteProvider {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("StudioAttachmentSearchFlightRouteProvider")
+            .finish_non_exhaustive()
+    }
+}
+
+#[async_trait]
+impl AttachmentSearchFlightRouteProvider for StudioAttachmentSearchFlightRouteProvider {
+    async fn attachment_search_batch(
+        &self,
+        query_text: &str,
+        limit: usize,
+        ext_filters: &std::collections::HashSet<String>,
+        kind_filters: &std::collections::HashSet<String>,
+        case_sensitive: bool,
+    ) -> Result<LanceRecordBatch, String> {
+        let mut ext = ext_filters.iter().cloned().collect::<Vec<_>>();
+        ext.sort();
+        let mut kind = kind_filters.iter().cloned().collect::<Vec<_>>();
+        kind.sort();
+        let response = load_attachment_search_response_from_studio(
+            self.studio.as_ref(),
+            AttachmentSearchQuery {
+                q: Some(query_text.to_string()),
+                limit: Some(limit),
+                ext,
+                kind,
+                case_sensitive,
+            },
+        )
+        .await
+        .map_err(|error| {
+            error
+                .error
+                .details
+                .clone()
+                .unwrap_or_else(|| format!("{}: {}", error.code(), error.error.message))
+        })?;
+        build_attachment_hits_flight_batch(&response.hits)
+    }
+}
+
+fn build_attachment_hits_flight_batch(
+    hits: &[AttachmentSearchHit],
+) -> Result<LanceRecordBatch, String> {
+    let names = hits.iter().map(|hit| hit.name.clone()).collect::<Vec<_>>();
+    let paths = hits.iter().map(|hit| hit.path.clone()).collect::<Vec<_>>();
+    let source_ids = hits
         .iter()
-        .map(|hit| encode_optional_json(Some(&hit.navigation_target)))
-        .collect::<Result<_, _>>()?;
-    let source_paths: Vec<&str> = hits.iter().map(|hit| hit.source_path.as_str()).collect();
-    let attachment_ids: Vec<&str> = hits.iter().map(|hit| hit.attachment_id.as_str()).collect();
-    let attachment_paths: Vec<&str> = hits
+        .map(|hit| hit.source_id.clone())
+        .collect::<Vec<_>>();
+    let source_stems = hits
         .iter()
-        .map(|hit| hit.attachment_path.as_str())
-        .collect();
-    let attachment_names: Vec<&str> = hits
+        .map(|hit| hit.source_stem.clone())
+        .collect::<Vec<_>>();
+    let source_titles = hits
         .iter()
-        .map(|hit| hit.attachment_name.as_str())
-        .collect();
-    let attachment_exts: Vec<&str> = hits.iter().map(|hit| hit.attachment_ext.as_str()).collect();
-    let kinds: Vec<&str> = hits.iter().map(|hit| hit.kind.as_ref()).collect();
-    let vision_snippets: Vec<Option<&str>> = hits
+        .map(|hit| hit.source_title.clone())
+        .collect::<Vec<_>>();
+    let navigation_targets_json = hits
+        .iter()
+        .map(|hit| serde_json::to_string(&hit.navigation_target).map_err(|error| error.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let source_paths = hits
+        .iter()
+        .map(|hit| hit.source_path.clone())
+        .collect::<Vec<_>>();
+    let attachment_ids = hits
+        .iter()
+        .map(|hit| hit.attachment_id.clone())
+        .collect::<Vec<_>>();
+    let attachment_paths = hits
+        .iter()
+        .map(|hit| hit.attachment_path.clone())
+        .collect::<Vec<_>>();
+    let attachment_names = hits
+        .iter()
+        .map(|hit| hit.attachment_name.clone())
+        .collect::<Vec<_>>();
+    let attachment_exts = hits
+        .iter()
+        .map(|hit| hit.attachment_ext.clone())
+        .collect::<Vec<_>>();
+    let kinds = hits.iter().map(|hit| hit.kind.clone()).collect::<Vec<_>>();
+    let scores = hits.iter().map(|hit| hit.score).collect::<Vec<_>>();
+    let vision_snippets = hits
         .iter()
         .map(|hit| hit.vision_snippet.as_deref())
-        .collect();
+        .collect::<Vec<_>>();
 
-    let schema = Schema::new(vec![
-        Field::new("name", DataType::Utf8, false),
-        Field::new("path", DataType::Utf8, false),
-        Field::new("sourceId", DataType::Utf8, false),
-        Field::new("sourceStem", DataType::Utf8, false),
-        Field::new("sourceTitle", DataType::Utf8, false),
-        Field::new("navigationTargetJson", DataType::Utf8, true),
-        Field::new("sourcePath", DataType::Utf8, false),
-        Field::new("attachmentId", DataType::Utf8, false),
-        Field::new("attachmentPath", DataType::Utf8, false),
-        Field::new("attachmentName", DataType::Utf8, false),
-        Field::new("attachmentExt", DataType::Utf8, false),
-        Field::new("kind", DataType::Utf8, false),
-        Field::new("score", DataType::Float64, false),
-        Field::new("visionSnippet", DataType::Utf8, true),
-    ]);
-
-    let columns: Vec<ArrayRef> = vec![
-        Arc::new(StringArray::from(names)),
-        Arc::new(StringArray::from(paths)),
-        Arc::new(StringArray::from(source_ids)),
-        Arc::new(StringArray::from(source_stems)),
-        Arc::new(StringArray::from(source_titles)),
-        Arc::new(StringArray::from(navigation_targets_json)),
-        Arc::new(StringArray::from(source_paths)),
-        Arc::new(StringArray::from(attachment_ids)),
-        Arc::new(StringArray::from(attachment_paths)),
-        Arc::new(StringArray::from(attachment_names)),
-        Arc::new(StringArray::from(attachment_exts)),
-        Arc::new(StringArray::from(kinds)),
-        Arc::new(Float64Array::from(
-            hits.iter().map(|hit| hit.score).collect::<Vec<_>>(),
-        )),
-        Arc::new(StringArray::from(vision_snippets)),
-    ];
-    build_arrow_search_ipc(schema, columns)
+    LanceRecordBatch::try_new(
+        Arc::new(LanceSchema::new(vec![
+            LanceField::new("name", LanceDataType::Utf8, false),
+            LanceField::new("path", LanceDataType::Utf8, false),
+            LanceField::new("sourceId", LanceDataType::Utf8, false),
+            LanceField::new("sourceStem", LanceDataType::Utf8, false),
+            LanceField::new("sourceTitle", LanceDataType::Utf8, false),
+            LanceField::new("navigationTargetJson", LanceDataType::Utf8, true),
+            LanceField::new("sourcePath", LanceDataType::Utf8, false),
+            LanceField::new("attachmentId", LanceDataType::Utf8, false),
+            LanceField::new("attachmentPath", LanceDataType::Utf8, false),
+            LanceField::new("attachmentName", LanceDataType::Utf8, false),
+            LanceField::new("attachmentExt", LanceDataType::Utf8, false),
+            LanceField::new("kind", LanceDataType::Utf8, false),
+            LanceField::new("score", LanceDataType::Float64, false),
+            LanceField::new("visionSnippet", LanceDataType::Utf8, true),
+        ])),
+        vec![
+            Arc::new(LanceStringArray::from(names)),
+            Arc::new(LanceStringArray::from(paths)),
+            Arc::new(LanceStringArray::from(source_ids)),
+            Arc::new(LanceStringArray::from(source_stems)),
+            Arc::new(LanceStringArray::from(source_titles)),
+            Arc::new(LanceStringArray::from(
+                navigation_targets_json
+                    .iter()
+                    .map(|value| Some(value.as_str()))
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(LanceStringArray::from(source_paths)),
+            Arc::new(LanceStringArray::from(attachment_ids)),
+            Arc::new(LanceStringArray::from(attachment_paths)),
+            Arc::new(LanceStringArray::from(attachment_names)),
+            Arc::new(LanceStringArray::from(attachment_exts)),
+            Arc::new(LanceStringArray::from(kinds)),
+            Arc::new(LanceFloat64Array::from(scores)),
+            Arc::new(LanceStringArray::from(vision_snippets)),
+        ],
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
+    use xiuxian_wendao_runtime::transport::AttachmentSearchFlightRouteProvider;
 
-    use crate::gateway::studio::types::StudioNavigationTarget;
-    use arrow::ipc::reader::StreamReader;
+    #[tokio::test]
+    async fn studio_attachment_search_flight_provider_uses_attachment_contract() {
+        let project_root = tempfile::tempdir().expect("attachment provider tempdir should build");
+        std::fs::create_dir_all(project_root.path().join("docs/assets"))
+            .expect("attachment provider docs asset dir should build");
+        std::fs::write(
+            project_root.path().join("docs/alpha.md"),
+            "# Alpha\n\n![Topology](assets/topology.png)\n",
+        )
+        .expect("attachment provider source doc should write");
 
-    #[test]
-    fn search_attachment_arrow_roundtrip_preserves_navigation_and_snippet() {
-        let hits = vec![AttachmentSearchHit {
-            name: "topology.png".to_string(),
-            path: "kernel/docs/attachments/topology-owner.md".to_string(),
-            source_id: "note:topology-owner".to_string(),
-            source_stem: "topology-owner".to_string(),
-            source_title: "Topology Owner".to_string(),
-            navigation_target: StudioNavigationTarget {
-                path: "kernel/docs/attachments/topology-owner.md".to_string(),
-                category: "knowledge".to_string(),
-                project_name: Some("kernel".to_string()),
-                root_label: Some("kernel".to_string()),
-                line: Some(8),
-                line_end: Some(12),
-                column: Some(1),
-            },
-            source_path: "kernel/docs/attachments/topology-owner.md".to_string(),
-            attachment_id: "attachment:topology-owner:diagram".to_string(),
-            attachment_path: "kernel/docs/assets/topology.png".to_string(),
-            attachment_name: "topology.png".to_string(),
-            attachment_ext: "png".to_string(),
-            kind: "image".to_string(),
-            score: 0.91,
-            vision_snippet: Some("A topology diagram".to_string()),
-        }];
+        let mut studio = crate::gateway::studio::search::handlers::tests::test_studio_state();
+        studio.project_root = project_root.path().to_path_buf();
+        studio.config_root = project_root.path().to_path_buf();
+        studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+            projects: vec![crate::gateway::studio::types::UiProjectConfig {
+                name: "kernel".to_string(),
+                root: ".".to_string(),
+                dirs: vec!["docs".to_string()],
+            }],
+            repo_projects: Vec::new(),
+        });
+        let studio = Arc::new(studio);
+        let fingerprint = format!(
+            "test:attachment:{}",
+            blake3::hash(
+                format!(
+                    "{}:{}:{}",
+                    studio.project_root.display(),
+                    studio.config_root.display(),
+                    studio.configured_projects().len()
+                )
+                .as_bytes()
+            )
+            .to_hex()
+        );
+        studio
+            .search_plane
+            .publish_attachments_from_projects(
+                studio.project_root.as_path(),
+                studio.config_root.as_path(),
+                &studio.configured_projects(),
+                fingerprint.as_str(),
+            )
+            .await
+            .expect("attachment provider index should publish");
 
-        let encoded = encode_attachment_hits_ipc(&hits)
-            .expect("attachment hit arrow encoding should succeed");
-        let reader = StreamReader::try_new(Cursor::new(encoded), None)
-            .expect("attachment hit stream reader should open");
-        let batches = reader
-            .collect::<Result<Vec<_>, _>>()
-            .expect("attachment hit stream should decode");
-        assert_eq!(batches.len(), 1);
-        let batch = &batches[0];
+        let provider = StudioAttachmentSearchFlightRouteProvider::new(studio);
+
+        let batch = provider
+            .attachment_search_batch(
+                "topology",
+                5,
+                &["png".to_string()].into_iter().collect(),
+                &["image".to_string()].into_iter().collect(),
+                false,
+            )
+            .await
+            .expect("attachment provider should build a batch");
+
         assert_eq!(batch.num_rows(), 1);
+        assert!(batch.column_by_name("attachmentPath").is_some());
         assert!(batch.column_by_name("navigationTargetJson").is_some());
-        assert!(batch.column_by_name("visionSnippet").is_some());
     }
 }

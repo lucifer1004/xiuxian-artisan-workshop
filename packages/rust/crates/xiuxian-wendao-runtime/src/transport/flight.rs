@@ -14,7 +14,7 @@ use xiuxian_vector::{
 };
 
 use super::query_contract::{
-    RERANK_EXCHANGE_ROUTE, RERANK_REQUEST_EMBEDDING_COLUMN, WENDAO_RERANK_DIMENSION_HEADER,
+    RERANK_REQUEST_EMBEDDING_COLUMN, RERANK_ROUTE, WENDAO_RERANK_DIMENSION_HEADER,
     WENDAO_SCHEMA_VERSION_HEADER, flight_descriptor_path, normalize_flight_route,
 };
 
@@ -190,7 +190,7 @@ fn rerank_dimension_header(
     route: &str,
     request_batches: &[LanceRecordBatch],
 ) -> Result<Option<String>, String> {
-    if route != RERANK_EXCHANGE_ROUTE {
+    if route != RERANK_ROUTE {
         return Ok(None);
     }
 
@@ -215,8 +215,7 @@ mod tests {
     use super::ArrowFlightTransportClient;
     use crate::transport::{
         REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_PATH_COLUMN,
-        REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN, RERANK_EXCHANGE_ROUTE,
-        WendaoFlightService,
+        REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN, RERANK_ROUTE, WendaoFlightService,
     };
     use std::sync::Arc;
     use std::time::Duration;
@@ -269,7 +268,7 @@ mod tests {
 
         let client = ArrowFlightTransportClient::new(
             format!("http://{address}"),
-            RERANK_EXCHANGE_ROUTE,
+            RERANK_ROUTE,
             "v2",
             Duration::from_secs(5),
         )
@@ -353,6 +352,14 @@ mod tests {
             .column_by_name("doc_id")
             .and_then(|column| column.as_any().downcast_ref::<StringArray>())
             .unwrap_or_else(|| panic!("response doc_id column should decode as Utf8"));
+        let vector_scores = lance_response_batches[0]
+            .column_by_name("vector_score")
+            .and_then(|column| column.as_any().downcast_ref::<Float64Array>())
+            .unwrap_or_else(|| panic!("response vector_score column should decode as Float64"));
+        let semantic_scores = lance_response_batches[0]
+            .column_by_name("semantic_score")
+            .and_then(|column| column.as_any().downcast_ref::<Float64Array>())
+            .unwrap_or_else(|| panic!("response semantic_score column should decode as Float64"));
         let final_scores = lance_response_batches[0]
             .column_by_name("final_score")
             .and_then(|column| column.as_any().downcast_ref::<Float64Array>())
@@ -363,12 +370,16 @@ mod tests {
             .unwrap_or_else(|| panic!("response rank column should decode as Int32"));
         assert_eq!(doc_ids.value(0), "doc-0");
         assert_eq!(doc_ids.value(1), "doc-1");
+        assert!((vector_scores.value(0) - 0.5).abs() < 1e-6);
+        assert!((vector_scores.value(1) - 0.8).abs() < 1e-6);
+        assert!((semantic_scores.value(0) - 1.0).abs() < 1e-6);
+        assert!((semantic_scores.value(1) - 0.5).abs() < 1e-6);
         assert!((final_scores.value(0) - 0.8).abs() < 1e-6);
         assert!((final_scores.value(1) - 0.62).abs() < 1e-6);
         assert_eq!(ranks.value(0), 1);
         assert_eq!(ranks.value(1), 2);
         assert_eq!(client.base_url(), format!("http://{address}"));
-        assert_eq!(client.route(), RERANK_EXCHANGE_ROUTE);
+        assert_eq!(client.route(), RERANK_ROUTE);
         assert_eq!(client.schema_version(), "v2");
         assert_eq!(client.timeout().as_secs(), 5);
 

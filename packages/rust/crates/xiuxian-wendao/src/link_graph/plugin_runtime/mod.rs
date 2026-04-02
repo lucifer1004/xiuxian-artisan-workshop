@@ -16,10 +16,14 @@ pub use artifacts::{
 pub use compat::build_rerank_provider_binding;
 #[cfg(feature = "julia")]
 pub use transport::{
-    CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER, NegotiatedArrowTransportClient,
+    CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER, NegotiatedFlightTransportClient,
     NegotiatedTransportSelection, SearchPlaneRepoSearchFlightRouteProvider,
-    bootstrap_sample_repo_search_content, build_arrow_transport_client_from_binding,
-    build_search_plane_flight_service, negotiate_arrow_transport_client_from_bindings,
+    bootstrap_sample_repo_search_content, build_search_plane_flight_service,
+    build_search_plane_flight_service_with_weights, build_search_plane_studio_flight_service,
+    build_search_plane_studio_flight_service_for_roots,
+    build_search_plane_studio_flight_service_for_roots_with_weights,
+    build_search_plane_studio_flight_service_with_weights,
+    negotiate_flight_transport_client_from_bindings,
 };
 pub use xiuxian_wendao_core::artifacts::{
     PluginArtifactPayload, PluginArtifactSelector, PluginLaunchSpec,

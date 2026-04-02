@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import TYPE_CHECKING, Mapping
 
 from .config import (
     WENDAO_RERANK_DIMENSION_HEADER,
+    WENDAO_RERANK_MIN_FINAL_SCORE_HEADER,
+    WENDAO_RERANK_TOP_K_HEADER,
     WENDAO_SCHEMA_VERSION_HEADER,
     WendaoTransportConfig,
 )
@@ -20,8 +23,8 @@ from .query import (
     parse_repo_search_rows,
     repo_search_metadata,
     repo_search_query,
-    rerank_embedding_dimension,
     rerank_exchange_query,
+    rerank_request_metadata,
 )
 
 if TYPE_CHECKING:
@@ -197,9 +200,7 @@ class WendaoTransportClient:
     ):
         """Read and parse stable repo-search rows."""
 
-        return parse_repo_search_rows(
-            self.read_repo_search_table(request, **connect_kwargs)
-        )
+        return parse_repo_search_rows(self.read_repo_search_table(request, **connect_kwargs))
 
     def exchange_table(
         self,
@@ -241,45 +242,73 @@ class WendaoTransportClient:
         table,
         *,
         embedding_dimension: int | None = None,
+        top_k: int | None = None,
+        min_final_score: float | None = None,
         **connect_kwargs: object,
     ):
         """Round-trip one typed rerank request table through the stable route."""
-
+        extra_metadata: dict[str, str] | None = None
+        if embedding_dimension is not None:
+            extra_metadata = {WENDAO_RERANK_DIMENSION_HEADER: str(embedding_dimension)}
+        if top_k is not None:
+            if top_k <= 0:
+                raise ValueError("rerank top_k must be greater than zero")
+            extra_metadata = dict(extra_metadata or {})
+            extra_metadata[WENDAO_RERANK_TOP_K_HEADER] = str(top_k)
+        if min_final_score is not None:
+            if not math.isfinite(min_final_score):
+                raise ValueError("rerank min_final_score must be finite")
+            if not 0.0 <= min_final_score <= 1.0:
+                raise ValueError(
+                    "rerank min_final_score must stay within inclusive range [0.0, 1.0]"
+                )
+            extra_metadata = dict(extra_metadata or {})
+            extra_metadata[WENDAO_RERANK_MIN_FINAL_SCORE_HEADER] = str(min_final_score)
         return self.exchange_query_table(
             rerank_exchange_query(),
             table,
-            extra_metadata=(
-                {
-                    WENDAO_RERANK_DIMENSION_HEADER: str(embedding_dimension),
-                }
-                if embedding_dimension is not None
-                else None
-            ),
+            extra_metadata=extra_metadata,
             **connect_kwargs,
         )
 
     def exchange_rerank_rows(
         self,
         rows: list[WendaoRerankRequestRow],
+        *,
+        top_k: int | None = None,
+        min_final_score: float | None = None,
         **connect_kwargs: object,
     ):
         """Build and send one typed rerank request through the stable route."""
-
+        metadata = rerank_request_metadata(
+            rows,
+            top_k=top_k,
+            min_final_score=min_final_score,
+        )
         return self.exchange_rerank_table(
             build_rerank_request_table(rows),
-            embedding_dimension=rerank_embedding_dimension(rows),
+            embedding_dimension=int(metadata[WENDAO_RERANK_DIMENSION_HEADER]),
+            top_k=top_k,
+            min_final_score=min_final_score,
             **connect_kwargs,
         )
 
     def exchange_rerank_result_rows(
         self,
         rows: list[WendaoRerankRequestRow],
+        *,
+        top_k: int | None = None,
+        min_final_score: float | None = None,
         **connect_kwargs: object,
     ):
         """Build, send, and parse one typed rerank request through the stable route."""
-
         return parse_rerank_response_rows(
-            self.exchange_rerank_rows(rows, **connect_kwargs)
+            self.exchange_rerank_rows(
+                rows,
+                top_k=top_k,
+                min_final_score=min_final_score,
+                **connect_kwargs,
+            )
         )
 
 

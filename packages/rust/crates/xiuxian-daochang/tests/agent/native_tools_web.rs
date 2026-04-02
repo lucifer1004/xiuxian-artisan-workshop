@@ -11,7 +11,8 @@ use tempfile::tempdir;
 use tokio::net::TcpListener;
 use xiuxian_daochang::{NativeTool, NativeToolCallContext, SpiderCrawlTool};
 use xiuxian_qianhuan::MockManifestation;
-use xiuxian_wendao::{KnowledgeGraph, SpiderWendaoBridge, canonical_web_uri};
+use xiuxian_wendao::graph::KnowledgeGraph;
+use xiuxian_wendao::ingress::{SpiderWendaoBridge, canonical_web_uri};
 use xiuxian_zhixing::{ZhixingHeyi, storage::MarkdownStorage};
 
 #[derive(Clone)]

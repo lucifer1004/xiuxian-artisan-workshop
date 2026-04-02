@@ -10,9 +10,8 @@ use xiuxian_qianji::contract_feedback::{
 };
 use xiuxian_qianji::sovereign::InMemoryContractFeedbackSink;
 use xiuxian_testing::{ContractExecutionMode, ContractRunConfig};
-use xiuxian_wendao::{
-    KnowledgeCategory, gateway::openapi::load_bundled_wendao_gateway_openapi_document,
-};
+use xiuxian_wendao::gateway::openapi::load_bundled_wendao_gateway_openapi_document;
+use xiuxian_wendao::types::KnowledgeCategory;
 
 fn must_ok<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> T {
     result.unwrap_or_else(|error| panic!("{context}: {error}"))

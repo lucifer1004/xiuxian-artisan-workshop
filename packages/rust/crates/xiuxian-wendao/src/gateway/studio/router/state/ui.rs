@@ -20,6 +20,7 @@ impl StudioState {
 
     pub(crate) fn ui_capabilities(&self) -> UiCapabilities {
         let ui_config = self.ui_config();
+        let bootstrap_background_indexing = self.bootstrap_background_indexing_telemetry();
         let mut seen_repositories = HashSet::new();
         let supported_repositories = ui_config
             .repo_projects
@@ -43,10 +44,20 @@ impl StudioState {
             languages: supported_languages,
             repositories: supported_repositories,
             kinds: supported_code_kinds(),
+            studio_bootstrap_background_indexing_enabled: bootstrap_background_indexing.enabled(),
+            studio_bootstrap_background_indexing_mode: bootstrap_background_indexing
+                .mode()
+                .to_string(),
+            studio_bootstrap_background_indexing_deferred_activation_observed:
+                bootstrap_background_indexing.deferred_activation_observed(),
         }
     }
 
     pub(crate) fn set_ui_config(&self, config: UiConfig) {
+        self.apply_ui_config(config, true);
+    }
+
+    pub(crate) fn apply_ui_config(&self, config: UiConfig, eager_background_indexing: bool) {
         let sanitized_projects = sanitize_projects(config.projects);
         let sanitized_repo_projects = sanitize_repo_projects(config.repo_projects);
         let mut guard = self
@@ -81,10 +92,12 @@ impl StudioState {
         *vfs_guard = None;
         drop(vfs_guard);
 
-        self.symbol_index_coordinator
-            .sync_projects(self.configured_projects(), Arc::clone(&self.symbol_index));
-        self.repo_index
-            .sync_repositories(configured_repositories(self));
+        if eager_background_indexing {
+            self.symbol_index_coordinator
+                .sync_projects(self.configured_projects(), Arc::clone(&self.symbol_index));
+            self.repo_index
+                .sync_repositories(configured_repositories(self));
+        }
     }
 
     pub(crate) fn set_ui_config_and_persist(&self, config: UiConfig) -> Result<(), String> {

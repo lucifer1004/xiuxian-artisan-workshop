@@ -3,7 +3,7 @@ name = "xiuxian-wendao-julia"
 version.workspace = true
 edition.workspace = true
 description = "External Julia Repo Intelligence plugin for xiuxian-wendao"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 
@@ -16,13 +16,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true, features = ["clock"] }
 xiuxian-wendao-core = { path = "../xiuxian-wendao-core" }
+xiuxian-wendao-runtime = { path = "../xiuxian-wendao-runtime", features = ["julia"] }
 xiuxian-ast = { path = "../xiuxian-ast", features = ["julia"] }
 xiuxian-vector = { path = "../xiuxian-vector" }
 
 [dev-dependencies]
-axum = { workspace = true }
-arrow-ipc = { workspace = true }
-reqwest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
 tempfile = { workspace = true }
 insta = { workspace = true }

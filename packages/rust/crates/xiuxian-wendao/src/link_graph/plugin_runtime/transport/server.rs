@@ -4,15 +4,22 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use xiuxian_vector::{
-    LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema, LanceStringArray,
+    LanceDataType, LanceField, LanceFloat64Array, LanceInt32Array, LanceListArray,
+    LanceListBuilder, LanceRecordBatch, LanceSchema, LanceStringArray, LanceStringBuilder,
 };
 use xiuxian_wendao_runtime::transport::{
-    REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN,
-    REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN,
-    RepoSearchFlightRouteProvider, WendaoFlightService,
+    REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_HIERARCHY_COLUMN,
+    REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,
+    REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN, REPO_SEARCH_NAVIGATION_LINE_COLUMN,
+    REPO_SEARCH_NAVIGATION_LINE_END_COLUMN, REPO_SEARCH_NAVIGATION_PATH_COLUMN,
+    REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TAGS_COLUMN,
+    REPO_SEARCH_TITLE_COLUMN, RepoSearchFlightRouteProvider, RerankScoreWeights,
+    WendaoFlightService,
 };
 
 use crate::gateway::studio::repo_index::RepoCodeDocument;
+use crate::gateway::studio::router::{GatewayState, StudioState};
+use crate::gateway::studio::search::handlers::build_studio_search_flight_service_with_repo_provider;
 use crate::gateway::studio::types::SearchHit;
 use crate::search_plane::SearchPlaneService;
 
@@ -78,7 +85,11 @@ impl RepoSearchFlightRouteProvider for SearchPlaneRepoSearchFlightRouteProvider 
                 )
             })?;
         if !path_prefixes.is_empty() {
-            hits.retain(|hit| path_prefixes.iter().any(|prefix| hit.path.starts_with(prefix)));
+            hits.retain(|hit| {
+                path_prefixes
+                    .iter()
+                    .any(|prefix| hit.path.starts_with(prefix))
+            });
         }
         if !title_filters.is_empty() {
             hits.retain(|hit| {
@@ -107,9 +118,9 @@ impl RepoSearchFlightRouteProvider for SearchPlaneRepoSearchFlightRouteProvider 
         if !filename_filters.is_empty() {
             hits.retain(|hit| {
                 let normalized_stem = hit.stem.to_ascii_lowercase();
-                filename_filters.iter().any(|filter| {
-                    normalized_stem == filter.to_ascii_lowercase()
-                })
+                filename_filters
+                    .iter()
+                    .any(|filter| normalized_stem == filter.to_ascii_lowercase())
             });
         }
         repo_search_batch_from_hits(&hits)
@@ -129,11 +140,165 @@ pub fn build_search_plane_flight_service(
     expected_schema_version: impl Into<String>,
     rerank_dimension: usize,
 ) -> Result<WendaoFlightService, String> {
+    build_search_plane_flight_service_with_weights(
+        search_plane,
+        repo_id,
+        expected_schema_version,
+        rerank_dimension,
+        RerankScoreWeights::default(),
+    )
+}
+
+/// Build one runtime-owned Flight service from the Wendao search plane with
+/// explicit rerank score weights.
+///
+/// # Errors
+///
+/// Returns an error when the repo identifier is blank or when the runtime
+/// Flight service cannot be constructed for the requested schema version,
+/// rerank dimension, and rerank score weights.
+pub fn build_search_plane_flight_service_with_weights(
+    search_plane: Arc<SearchPlaneService>,
+    repo_id: impl Into<String>,
+    expected_schema_version: impl Into<String>,
+    rerank_dimension: usize,
+    rerank_weights: RerankScoreWeights,
+) -> Result<WendaoFlightService, String> {
     let provider = Arc::new(SearchPlaneRepoSearchFlightRouteProvider::new(
         search_plane,
         repo_id,
     )?);
-    WendaoFlightService::new_with_provider(expected_schema_version, provider, rerank_dimension)
+    WendaoFlightService::new_with_provider(
+        expected_schema_version,
+        provider,
+        rerank_dimension,
+        rerank_weights,
+    )
+}
+
+/// Build one runtime-owned Flight service from the Wendao search plane and the
+/// current Studio-owned semantic search providers.
+///
+/// # Errors
+///
+/// Returns an error when the repo identifier is blank or when the runtime
+/// Flight service cannot be constructed for the requested schema version and
+/// rerank dimension.
+pub fn build_search_plane_studio_flight_service(
+    search_plane: Arc<SearchPlaneService>,
+    repo_id: impl Into<String>,
+    gateway_state: Arc<GatewayState>,
+    expected_schema_version: impl Into<String>,
+    rerank_dimension: usize,
+) -> Result<WendaoFlightService, String> {
+    build_search_plane_studio_flight_service_with_weights(
+        search_plane,
+        repo_id,
+        gateway_state,
+        expected_schema_version,
+        rerank_dimension,
+        RerankScoreWeights::default(),
+    )
+}
+
+/// Build one runtime-owned Flight service from the Wendao search plane and the
+/// current Studio-owned semantic search providers with explicit rerank weights.
+///
+/// # Errors
+///
+/// Returns an error when the repo identifier is blank or when the runtime
+/// Flight service cannot be constructed for the requested schema version,
+/// rerank dimension, and rerank score weights.
+pub fn build_search_plane_studio_flight_service_with_weights(
+    search_plane: Arc<SearchPlaneService>,
+    repo_id: impl Into<String>,
+    gateway_state: Arc<GatewayState>,
+    expected_schema_version: impl Into<String>,
+    rerank_dimension: usize,
+    rerank_weights: RerankScoreWeights,
+) -> Result<WendaoFlightService, String> {
+    let provider = Arc::new(SearchPlaneRepoSearchFlightRouteProvider::new(
+        search_plane,
+        repo_id,
+    )?);
+    build_studio_search_flight_service_with_repo_provider(
+        expected_schema_version,
+        provider,
+        gateway_state,
+        rerank_dimension,
+        rerank_weights,
+    )
+}
+
+/// Build one runtime-owned Flight service from the Wendao search plane and one
+/// Studio bootstrap state resolved from explicit project/config roots.
+///
+/// # Errors
+///
+/// Returns an error when the plugin registry cannot be bootstrapped, when the
+/// repo identifier is blank, or when the runtime Flight service cannot be
+/// constructed for the requested schema version and rerank dimension.
+pub fn build_search_plane_studio_flight_service_for_roots(
+    search_plane: Arc<SearchPlaneService>,
+    repo_id: impl Into<String>,
+    project_root: std::path::PathBuf,
+    config_root: std::path::PathBuf,
+    expected_schema_version: impl Into<String>,
+    rerank_dimension: usize,
+) -> Result<WendaoFlightService, String> {
+    build_search_plane_studio_flight_service_for_roots_with_weights(
+        search_plane,
+        repo_id,
+        project_root,
+        config_root,
+        expected_schema_version,
+        rerank_dimension,
+        RerankScoreWeights::default(),
+    )
+}
+
+/// Build one runtime-owned Flight service from the Wendao search plane and one
+/// Studio bootstrap state resolved from explicit project/config roots with
+/// explicit rerank score weights.
+///
+/// # Errors
+///
+/// Returns an error when the plugin registry cannot be bootstrapped, when the
+/// repo identifier is blank, or when the runtime Flight service cannot be
+/// constructed for the requested schema version, rerank dimension, and rerank
+/// score weights.
+pub fn build_search_plane_studio_flight_service_for_roots_with_weights(
+    search_plane: Arc<SearchPlaneService>,
+    repo_id: impl Into<String>,
+    project_root: std::path::PathBuf,
+    config_root: std::path::PathBuf,
+    expected_schema_version: impl Into<String>,
+    rerank_dimension: usize,
+    rerank_weights: RerankScoreWeights,
+) -> Result<WendaoFlightService, String> {
+    let plugin_registry = Arc::new(
+        crate::analyzers::bootstrap_builtin_registry()
+            .map_err(|error| format!("bootstrap registry: {error}"))?,
+    );
+    let studio = StudioState::new_with_bootstrap_ui_config_for_roots_and_search_plane(
+        plugin_registry,
+        project_root,
+        config_root,
+        search_plane.as_ref().clone(),
+    );
+    let gateway_state = Arc::new(GatewayState {
+        index: None,
+        signal_tx: None,
+        studio: Arc::new(studio),
+    });
+    build_search_plane_studio_flight_service_with_weights(
+        search_plane,
+        repo_id,
+        gateway_state,
+        expected_schema_version,
+        rerank_dimension,
+        rerank_weights,
+    )
 }
 
 /// Seed one minimal repo-content sample into the search plane for Flight smoke
@@ -254,6 +419,58 @@ fn repo_search_batch_from_hits(hits: &[SearchHit]) -> Result<LanceRecordBatch, S
         .iter()
         .map(|hit| hit.best_section.clone().unwrap_or_default())
         .collect::<Vec<_>>();
+    let match_reasons = hits
+        .iter()
+        .map(|hit| hit.match_reason.clone().unwrap_or_default())
+        .collect::<Vec<_>>();
+    let navigation_paths = hits
+        .iter()
+        .map(|hit| {
+            hit.navigation_target
+                .as_ref()
+                .map(|target| target.path.clone())
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    let navigation_categories = hits
+        .iter()
+        .map(|hit| {
+            hit.navigation_target
+                .as_ref()
+                .map(|target| target.category.clone())
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    let navigation_lines = hits
+        .iter()
+        .map(|hit| {
+            hit.navigation_target
+                .as_ref()
+                .and_then(|target| target.line)
+                .map_or(0_i32, |value| value as i32)
+        })
+        .collect::<Vec<_>>();
+    let navigation_line_ends = hits
+        .iter()
+        .map(|hit| {
+            hit.navigation_target
+                .as_ref()
+                .and_then(|target| target.line_end)
+                .map_or(0_i32, |value| value as i32)
+        })
+        .collect::<Vec<_>>();
+    let hierarchy_rows = hits
+        .iter()
+        .map(|hit| {
+            hit.hierarchy
+                .as_ref()
+                .map_or_else(|| &[][..], Vec::as_slice)
+        })
+        .collect::<Vec<_>>();
+    let tag_rows = hits
+        .iter()
+        .map(|hit| hit.tags.as_slice())
+        .collect::<Vec<_>>();
     let scores = hits.iter().map(|hit| hit.score).collect::<Vec<_>>();
     let languages = hits
         .iter()
@@ -266,6 +483,37 @@ fn repo_search_batch_from_hits(hits: &[SearchHit]) -> Result<LanceRecordBatch, S
             LanceField::new(REPO_SEARCH_PATH_COLUMN, LanceDataType::Utf8, false),
             LanceField::new(REPO_SEARCH_TITLE_COLUMN, LanceDataType::Utf8, false),
             LanceField::new(REPO_SEARCH_BEST_SECTION_COLUMN, LanceDataType::Utf8, false),
+            LanceField::new(REPO_SEARCH_MATCH_REASON_COLUMN, LanceDataType::Utf8, false),
+            LanceField::new(
+                REPO_SEARCH_NAVIGATION_PATH_COLUMN,
+                LanceDataType::Utf8,
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN,
+                LanceDataType::Utf8,
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_NAVIGATION_LINE_COLUMN,
+                LanceDataType::Int32,
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_NAVIGATION_LINE_END_COLUMN,
+                LanceDataType::Int32,
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_HIERARCHY_COLUMN,
+                LanceDataType::List(Arc::new(LanceField::new("item", LanceDataType::Utf8, true))),
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_TAGS_COLUMN,
+                LanceDataType::List(Arc::new(LanceField::new("item", LanceDataType::Utf8, true))),
+                false,
+            ),
             LanceField::new(REPO_SEARCH_SCORE_COLUMN, LanceDataType::Float64, false),
             LanceField::new(REPO_SEARCH_LANGUAGE_COLUMN, LanceDataType::Utf8, false),
         ])),
@@ -274,11 +522,29 @@ fn repo_search_batch_from_hits(hits: &[SearchHit]) -> Result<LanceRecordBatch, S
             Arc::new(LanceStringArray::from(paths)),
             Arc::new(LanceStringArray::from(titles)),
             Arc::new(LanceStringArray::from(best_sections)),
+            Arc::new(LanceStringArray::from(match_reasons)),
+            Arc::new(LanceStringArray::from(navigation_paths)),
+            Arc::new(LanceStringArray::from(navigation_categories)),
+            Arc::new(LanceInt32Array::from(navigation_lines)),
+            Arc::new(LanceInt32Array::from(navigation_line_ends)),
+            Arc::new(build_utf8_list_array(&hierarchy_rows)),
+            Arc::new(build_utf8_list_array(&tag_rows)),
             Arc::new(LanceFloat64Array::from(scores)),
             Arc::new(LanceStringArray::from(languages)),
         ],
     )
     .map_err(|error| format!("failed to build repo-search Flight batch: {error}"))
+}
+
+fn build_utf8_list_array(rows: &[&[String]]) -> LanceListArray {
+    let mut builder = LanceListBuilder::new(LanceStringBuilder::new());
+    for row in rows {
+        for value in *row {
+            builder.values().append_value(value);
+        }
+        builder.append(true);
+    }
+    builder.finish()
 }
 
 fn repo_search_doc_id_from_hit(hit: &SearchHit) -> String {
@@ -321,18 +587,31 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
+    use arrow_flight::FlightDescriptor;
+    use arrow_flight::flight_service_server::FlightService;
     use tempfile::tempdir;
+    use tonic::Request;
     use xiuxian_vector::{LanceFloat64Array, LanceStringArray};
 
     use super::{
         SearchPlaneRepoSearchFlightRouteProvider, bootstrap_sample_repo_search_content,
-        build_search_plane_flight_service,
+        build_search_plane_flight_service, build_search_plane_studio_flight_service,
+        build_search_plane_studio_flight_service_for_roots,
     };
+    use crate::analyzers::bootstrap_builtin_registry;
     use crate::gateway::studio::repo_index::RepoCodeDocument;
+    use crate::gateway::studio::router::{GatewayState, StudioState};
+    use crate::gateway::studio::search::build_symbol_index;
+    use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
     use crate::search_plane::{
         SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
     };
-    use xiuxian_wendao_runtime::transport::RepoSearchFlightRouteProvider;
+    use xiuxian_wendao_runtime::transport::{
+        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, RepoSearchFlightRouteProvider,
+        SEARCH_SYMBOLS_ROUTE, WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_PATH_HEADER,
+        WENDAO_ANALYSIS_REPO_HEADER, WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_LIMIT_HEADER,
+        WENDAO_SEARCH_QUERY_HEADER, flight_descriptor_path,
+    };
 
     fn repo_document(path: &str, language: &str, contents: &str) -> RepoCodeDocument {
         RepoCodeDocument {
@@ -342,6 +621,78 @@ mod tests {
             size_bytes: u64::try_from(contents.len()).expect("document length should fit"),
             modified_unix_ms: 10,
         }
+    }
+
+    fn populate_search_headers(
+        metadata: &mut tonic::metadata::MetadataMap,
+        query: &str,
+        limit: usize,
+    ) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_SEARCH_QUERY_HEADER,
+            query
+                .parse()
+                .unwrap_or_else(|error| panic!("query metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_SEARCH_LIMIT_HEADER,
+            limit
+                .to_string()
+                .parse()
+                .unwrap_or_else(|error| panic!("limit metadata: {error}")),
+        );
+    }
+
+    fn populate_markdown_analysis_headers(metadata: &mut tonic::metadata::MetadataMap, path: &str) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_ANALYSIS_PATH_HEADER,
+            path.parse()
+                .unwrap_or_else(|error| panic!("analysis path metadata: {error}")),
+        );
+    }
+
+    fn populate_code_ast_analysis_headers(
+        metadata: &mut tonic::metadata::MetadataMap,
+        path: &str,
+        repo_id: &str,
+        line_hint: Option<usize>,
+    ) {
+        populate_markdown_analysis_headers(metadata, path);
+        metadata.insert(
+            WENDAO_ANALYSIS_REPO_HEADER,
+            repo_id
+                .parse()
+                .unwrap_or_else(|error| panic!("analysis repo metadata: {error}")),
+        );
+        if let Some(line_hint) = line_hint {
+            metadata.insert(
+                WENDAO_ANALYSIS_LINE_HEADER,
+                line_hint
+                    .to_string()
+                    .parse()
+                    .unwrap_or_else(|error| panic!("analysis line metadata: {error}")),
+            );
+        }
+    }
+
+    fn test_studio_state(search_plane_root: PathBuf) -> StudioState {
+        StudioState::new_with_bootstrap_ui_config_and_search_plane_root(
+            Arc::new(
+                bootstrap_builtin_registry()
+                    .unwrap_or_else(|error| panic!("bootstrap registry: {error}")),
+            ),
+            search_plane_root,
+        )
     }
 
     #[tokio::test]
@@ -402,6 +753,268 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn build_search_plane_studio_flight_service_accepts_runtime_studio_providers() {
+        let temp_dir = tempdir().expect("temp dir should build");
+        let project_root = temp_dir.path().join("project");
+        let storage_root = temp_dir.path().join("storage");
+        std::fs::create_dir_all(project_root.join("packages/rust/crates/demo/src"))
+            .expect("project fixture dirs should build");
+        std::fs::write(
+            project_root.join("packages/rust/crates/demo/src/lib.rs"),
+            "pub struct AlphaService;\npub fn alpha_handler() {}\n",
+        )
+        .expect("project fixture file should write");
+
+        let mut studio = test_studio_state(project_root.join("studio-search-plane"));
+        studio.project_root = project_root.clone();
+        studio.config_root = project_root.clone();
+        studio.set_ui_config(UiConfig {
+            projects: vec![UiProjectConfig {
+                name: "kernel".to_string(),
+                root: ".".to_string(),
+                dirs: vec!["packages".to_string()],
+            }],
+            repo_projects: Vec::new(),
+        });
+        let warmed_index = build_symbol_index(
+            studio.project_root.as_path(),
+            studio.config_root.as_path(),
+            studio.configured_projects().as_slice(),
+        );
+        studio.symbol_index_coordinator.set_ready_index_for_test(
+            studio.configured_projects().as_slice(),
+            Arc::clone(&studio.symbol_index),
+            warmed_index,
+        );
+        let state = Arc::new(GatewayState {
+            index: None,
+            signal_tx: None,
+            studio: Arc::new(studio),
+        });
+
+        let search_plane = Arc::new(SearchPlaneService::with_paths(
+            project_root,
+            storage_root,
+            SearchManifestKeyspace::new("xiuxian:test:search-plane-studio-flight-service"),
+            SearchMaintenancePolicy::default(),
+        ));
+        let flight_service =
+            build_search_plane_studio_flight_service(search_plane, "alpha/repo", state, "v2", 3)
+                .expect("studio flight service should build");
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(SEARCH_SYMBOLS_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_search_headers(request.metadata_mut(), "alpha", 5);
+
+        let response = flight_service
+            .get_flight_info(request)
+            .await
+            .expect("studio flight service should resolve symbols route");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("symbols route should emit one ticket");
+
+        assert_eq!(ticket, SEARCH_SYMBOLS_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_search_plane_studio_flight_service_for_roots_accepts_runtime_studio_providers() {
+        let temp_dir = tempdir().expect("temp dir should build");
+        let project_root = temp_dir.path().join("project");
+        let storage_root = temp_dir.path().join("storage");
+        std::fs::create_dir_all(project_root.join("packages/rust/crates/demo/src"))
+            .expect("project fixture dirs should build");
+        std::fs::write(
+            project_root.join("packages/rust/crates/demo/src/lib.rs"),
+            "pub struct AlphaService;\npub fn alpha_handler() {}\n",
+        )
+        .expect("project fixture file should write");
+        std::fs::write(
+            project_root.join("wendao.toml"),
+            r#"
+[link_graph.projects.kernel]
+root = "."
+dirs = ["packages"]
+"#,
+        )
+        .expect("wendao.toml should write");
+
+        let search_plane = Arc::new(SearchPlaneService::with_paths(
+            project_root.clone(),
+            storage_root,
+            SearchManifestKeyspace::new("xiuxian:test:search-plane-studio-flight-service-roots"),
+            SearchMaintenancePolicy::default(),
+        ));
+        let flight_service = build_search_plane_studio_flight_service_for_roots(
+            search_plane,
+            "alpha/repo",
+            project_root.clone(),
+            project_root.clone(),
+            "v2",
+            3,
+        )
+        .expect("studio flight service should build from roots");
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(SEARCH_SYMBOLS_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_search_headers(request.metadata_mut(), "alpha", 5);
+
+        let response = flight_service
+            .get_flight_info(request)
+            .await
+            .expect("studio flight service should resolve symbols route");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("symbols route should emit one ticket");
+
+        assert_eq!(ticket, SEARCH_SYMBOLS_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_search_plane_studio_flight_service_for_roots_accepts_markdown_analysis_routes() {
+        let temp_dir = tempdir().expect("temp dir should build");
+        let project_root = temp_dir.path().join("project");
+        let storage_root = temp_dir.path().join("storage");
+        std::fs::create_dir_all(project_root.join("docs")).expect("project docs dir should build");
+        std::fs::write(
+            project_root.join("docs/analysis.md"),
+            "# Analysis Kernel\n\n## Inputs\n- [ ] Parse markdown\n",
+        )
+        .expect("project markdown fixture should write");
+        std::fs::write(
+            project_root.join("wendao.toml"),
+            r#"
+[link_graph.projects.kernel]
+root = "."
+dirs = ["docs"]
+"#,
+        )
+        .expect("wendao.toml should write");
+
+        let search_plane = Arc::new(SearchPlaneService::with_paths(
+            project_root.clone(),
+            storage_root,
+            SearchManifestKeyspace::new(
+                "xiuxian:test:flight-search-plane-studio-flight-service-roots-markdown",
+            ),
+            SearchMaintenancePolicy::default(),
+        ));
+        let flight_service = build_search_plane_studio_flight_service_for_roots(
+            search_plane,
+            "alpha/repo",
+            project_root.clone(),
+            project_root.clone(),
+            "v2",
+            3,
+        )
+        .expect("studio flight service should build from roots");
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(ANALYSIS_MARKDOWN_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_markdown_analysis_headers(request.metadata_mut(), "docs/analysis.md");
+
+        let response = flight_service
+            .get_flight_info(request)
+            .await
+            .expect("studio flight service should resolve markdown analysis route");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("markdown analysis route should emit one ticket");
+
+        assert_eq!(ticket, ANALYSIS_MARKDOWN_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_search_plane_studio_flight_service_for_roots_accepts_code_ast_analysis_routes() {
+        let temp_dir = tempdir().expect("temp dir should build");
+        let project_root = temp_dir.path().join("project");
+        let storage_root = temp_dir.path().join("storage");
+        std::fs::create_dir_all(project_root.join("repo/src"))
+            .expect("project repo dir should build");
+        git2::Repository::init(project_root.join("repo"))
+            .expect("analysis repo fixture should initialize");
+        std::fs::write(
+            project_root.join("repo/Project.toml"),
+            "name = \"Demo\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+        )
+        .expect("Project.toml should write");
+        std::fs::write(
+            project_root.join("repo/src/lib.jl"),
+            "module Demo\nexport solve\nsolve(x) = x + 1\nend\n",
+        )
+        .expect("source fixture should write");
+        std::fs::write(
+            project_root.join("wendao.toml"),
+            r#"
+[link_graph.projects.kernel]
+root = "."
+dirs = ["docs"]
+
+[link_graph.projects.demo]
+root = "repo"
+plugins = ["julia"]
+"#,
+        )
+        .expect("wendao.toml should write");
+
+        let search_plane = Arc::new(SearchPlaneService::with_paths(
+            project_root.clone(),
+            storage_root,
+            SearchManifestKeyspace::new(
+                "xiuxian:test:flight-search-plane-studio-flight-service-roots-code-ast",
+            ),
+            SearchMaintenancePolicy::default(),
+        ));
+        let flight_service = build_search_plane_studio_flight_service_for_roots(
+            search_plane,
+            "alpha/repo",
+            project_root.clone(),
+            project_root.clone(),
+            "v2",
+            3,
+        )
+        .expect("studio flight service should build from roots");
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(ANALYSIS_CODE_AST_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_code_ast_analysis_headers(request.metadata_mut(), "src/lib.jl", "demo", Some(3));
+
+        let response = flight_service
+            .get_flight_info(request)
+            .await
+            .expect("studio flight service should resolve code AST analysis route");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("code AST analysis route should emit one ticket");
+
+        assert_eq!(ticket, ANALYSIS_CODE_AST_ROUTE);
+    }
+
+    #[tokio::test]
     async fn search_plane_repo_search_provider_applies_language_filters() {
         let temp_dir = tempdir().expect("temp dir should build");
         let project_root = temp_dir.path().join("project");
@@ -418,8 +1031,9 @@ mod tests {
             .await
             .expect("sample bootstrap should publish repo content");
 
-        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
-            .expect("provider should build");
+        let provider =
+            SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
+                .expect("provider should build");
         let batch = provider
             .repo_search_batch(
                 "alpha",
@@ -815,7 +1429,11 @@ mod tests {
 
         assert_eq!(search_hits.len(), 1);
         assert_eq!(search_hits[0].path, "src/search.rs");
-        assert!(flight_hits.iter().any(|hit| hit.path == "src/flight_search.rs"));
+        assert!(
+            flight_hits
+                .iter()
+                .any(|hit| hit.path == "src/flight_search.rs")
+        );
     }
 
     #[tokio::test]

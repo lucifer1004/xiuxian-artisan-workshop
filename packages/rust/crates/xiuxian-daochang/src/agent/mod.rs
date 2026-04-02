@@ -42,8 +42,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 
 use xiuxian_memory_engine::EpisodeStore;
-use xiuxian_qianhuan::{InjectionPolicy, InjectionSnapshot};
+use xiuxian_qianhuan::{HotReloadDriver, InjectionPolicy, InjectionSnapshot, ManifestationManager};
 use xiuxian_tokenizer::count_tokens;
+use xiuxian_zhixing::ZhixingHeyi;
 
 use crate::config::AgentConfig;
 use crate::contracts::{
@@ -115,6 +116,10 @@ pub struct SessionRecallFeedbackUpdate {
 pub struct Agent {
     config: AgentConfig,
     session: SessionStore,
+    /// Idle timeout before session context is auto-reset.
+    session_reset_idle_timeout_ms: Option<u64>,
+    /// Last-activity timestamp by logical session id.
+    session_last_activity_unix_ms: Arc<RwLock<HashMap<String, u64>>>,
     /// When set, session history is bounded; context built from recent turns.
     bounded_session: Option<BoundedSessionStore>,
     /// When set (and window enabled), consolidation stores episodes into omni-memory.
@@ -125,6 +130,8 @@ pub struct Agent {
     memory_state_load_status: MemoryStateLoadStatus,
     /// Embedding client for semantic memory recall/store.
     embedding_client: Option<EmbeddingClient>,
+    /// Stateful timeout/cooldown guard for memory embedding requests.
+    embedding_runtime: Option<Arc<xiuxian_llm::embedding::runtime::EmbeddingRuntime>>,
     /// Most recent context-budget report by logical session id.
     context_budget_snapshots: Arc<RwLock<HashMap<String, SessionContextBudgetSnapshot>>>,
     /// Process-level memory recall metrics snapshot (for diagnostics dashboards).
@@ -137,6 +144,18 @@ pub struct Agent {
     reflection_policy_hints: Arc<RwLock<HashMap<String, PolicyHintDirective>>>,
     /// Counter used by periodic memory decay policy.
     memory_decay_turn_counter: Arc<AtomicU64>,
+    /// Native in-process tool registry.
+    native_tools: Arc<NativeToolRegistry>,
+    /// Optional manifestation manager mounted by the Zhixing/Qianhuan runtime.
+    manifestation_manager: Option<Arc<ManifestationManager>>,
+    /// Optional Zhixing-Heyi runtime mounted into the agent.
+    heyi: Option<Arc<ZhixingHeyi>>,
+    /// Optional in-process Zhenfa tool bridge.
+    zhenfa_tools: Option<Arc<crate::agent::zhenfa::ZhenfaToolBridge>>,
+    /// Downstream saturation admission policy.
+    downstream_admission_policy: admission::DownstreamAdmissionPolicy,
+    /// Downstream saturation admission metrics.
+    downstream_admission_metrics: admission::DownstreamAdmissionMetrics,
     /// Per-attempt timeout for memory embedding requests.
     memory_embed_timeout: Duration,
     /// Cooldown window after an embedding timeout to avoid repeated long waits.
@@ -146,6 +165,8 @@ pub struct Agent {
     llm: LlmClient,
     tool_runtime: Option<crate::ToolClientPool>,
     memory_stream_consumer_task: Option<tokio::task::JoinHandle<()>>,
+    _hot_reload_driver: Option<HotReloadDriver>,
+    service_mount_records: Arc<RwLock<Vec<crate::agent::bootstrap::ServiceMountRecord>>>,
 }
 
 impl Drop for Agent {
@@ -153,5 +174,12 @@ impl Drop for Agent {
         if let Some(task) = self.memory_stream_consumer_task.take() {
             task.abort();
         }
+    }
+}
+
+impl Agent {
+    #[must_use]
+    pub fn get_heyi(&self) -> Option<Arc<ZhixingHeyi>> {
+        self.heyi.as_ref().map(Arc::clone)
     }
 }

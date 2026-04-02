@@ -3,7 +3,8 @@ use crate::set_link_graph_wendao_config_override;
 use serial_test::serial;
 use std::fs;
 use xiuxian_wendao_julia::compatibility::link_graph::{
-    DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH, JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_PLUGIN_ID,
+    DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
+    JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_PLUGIN_ID,
 };
 
 #[test]
@@ -62,7 +63,7 @@ fn render_plugin_artifact_toml_uses_runtime_config() {
         &config_path,
         r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:8088"
-route = "/arrow-ipc"
+route = "/rerank"
 schema_version = "v1"
 service_mode = "stream"
 analyzer_strategy = "similarity_only"
@@ -93,7 +94,7 @@ fn render_plugin_artifact_json_uses_runtime_config() {
         &config_path,
         r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:8088"
-route = "/arrow-ipc"
+route = "/rerank"
 schema_version = "v1"
 service_mode = "stream"
 analyzer_strategy = "similarity_only"
@@ -109,7 +110,9 @@ analyzer_strategy = "similarity_only"
     assert!(rendered.contains("\"artifact_schema_version\": \"v1\""));
     assert!(rendered.contains("\"generated_at\": "));
     assert!(rendered.contains("\"base_url\": \"http://127.0.0.1:8088\""));
-    assert!(rendered.contains("\"route\": \"/arrow-ipc\""));
+    assert!(rendered.contains(&format!(
+        "\"route\": \"{DEFAULT_JULIA_RERANK_FLIGHT_ROUTE}\""
+    )));
     assert!(rendered.contains(&format!(
         "\"launcher_path\": \"{DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH}\""
     )));
@@ -124,7 +127,7 @@ fn render_plugin_artifact_uses_selected_format() {
         &config_path,
         r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:8088"
-route = "/arrow-ipc"
+route = "/rerank"
 schema_version = "v1"
 service_mode = "stream"
 "#,
@@ -139,7 +142,9 @@ service_mode = "stream"
         .expect("render generic plugin artifact");
 
     assert!(rendered.contains("\"artifact_schema_version\": \"v1\""));
-    assert!(rendered.contains("\"route\": \"/arrow-ipc\""));
+    assert!(rendered.contains(&format!(
+        "\"route\": \"{DEFAULT_JULIA_RERANK_FLIGHT_ROUTE}\""
+    )));
 }
 
 #[test]
@@ -151,7 +156,7 @@ fn export_plugin_artifact_writes_json_file_when_requested() {
         &config_path,
         r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:8088"
-route = "/arrow-ipc"
+route = "/rerank"
 schema_version = "v1"
 service_mode = "stream"
 "#,
@@ -174,5 +179,7 @@ service_mode = "stream"
     assert!(message.contains(JULIA_DEPLOYMENT_ARTIFACT_ID));
     let written = fs::read_to_string(&output_path).expect("read written json");
     assert!(written.contains("\"artifact_schema_version\": \"v1\""));
-    assert!(written.contains("\"route\": \"/arrow-ipc\""));
+    assert!(written.contains(&format!(
+        "\"route\": \"{DEFAULT_JULIA_RERANK_FLIGHT_ROUTE}\""
+    )));
 }

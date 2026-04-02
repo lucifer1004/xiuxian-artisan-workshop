@@ -11,12 +11,14 @@ use crate::gateway::studio::search::handlers::code_search::{
     search::{search_repo_content_hits, search_repo_entity_hits},
     types::RepoSearchTarget,
 };
+use crate::gateway::studio::search::handlers::knowledge::intent::IntentSearchTransportMetadata;
 use crate::gateway::studio::types::SearchHit;
 use crate::search_plane::SearchPlaneService;
 
 #[derive(Debug, Default)]
 pub(super) struct RepoIntentMerge {
     pub(super) hits: Vec<SearchHit>,
+    pub(super) transport: IntentSearchTransportMetadata,
     pub(super) pending_repos: Vec<String>,
     pub(super) skipped_repos: Vec<String>,
 }
@@ -53,6 +55,14 @@ pub(super) async fn build_repo_intent_merge(
         repo_search_parallelism(&studio.search_plane, dispatch.searchable_repos.len()),
     );
     let merge = RepoIntentMerge {
+        transport: IntentSearchTransportMetadata {
+            #[cfg(test)]
+            repo_content_transport: dispatch
+                .searchable_repos
+                .iter()
+                .any(|target| target.publication_state.content_published)
+                .then_some("flight_contract"),
+        },
         hits: search_repo_intent_hits_buffered(
             studio.search_plane.clone(),
             dispatch.searchable_repos,

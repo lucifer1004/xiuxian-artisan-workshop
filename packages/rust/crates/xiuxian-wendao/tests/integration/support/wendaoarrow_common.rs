@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::Duration;
 
+use tokio::net::TcpStream;
 use tokio::time::sleep;
-use xiuxian_vector::{ArrowTransportClient, ArrowTransportConfig};
 
 pub(crate) struct WendaoArrowServiceGuard {
     child: Child,
@@ -39,17 +39,20 @@ impl Drop for WendaoArrowServiceGuard {
 }
 
 pub(crate) async fn wait_for_health(base_url: &str) {
-    let client = ArrowTransportClient::new(ArrowTransportConfig::new(base_url.to_string()))
-        .unwrap_or_else(|error| panic!("build WendaoArrow health client: {error}"));
+    let socket_addr = base_url
+        .strip_prefix("http://")
+        .or_else(|| base_url.strip_prefix("https://"))
+        .unwrap_or(base_url)
+        .to_string();
 
     for _ in 0..50 {
-        if client.check_health().await.is_ok() {
+        if TcpStream::connect(&socket_addr).await.is_ok() {
             return;
         }
         sleep(Duration::from_millis(200)).await;
     }
 
-    panic!("real WendaoArrow service did not become healthy in time");
+    panic!("real WendaoArrow Flight service did not become ready in time");
 }
 
 pub(crate) fn reserve_test_port() -> u16 {

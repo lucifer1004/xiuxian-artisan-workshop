@@ -68,7 +68,7 @@ pub mod search;
 pub mod search_plane;
 pub mod storage;
 pub mod sync;
-mod types;
+pub mod types;
 mod valkey_common;
 
 // ---------------------------------------------------------------------------

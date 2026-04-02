@@ -8,10 +8,10 @@ tags:
 saliency_base: 6.8
 decay_rate: 0.03
 metadata:
-  title: "Standard: LLM Reading Guide (CyberXiuXian Artisan Studio)"
+  title: "Standard: LLM Reading Guide (CyberXiuXian Artisan workshop)"
 ---
 
-# Standard: LLM Reading Guide (CyberXiuXian Artisan Studio)
+# Standard: LLM Reading Guide (CyberXiuXian Artisan workshop)
 
 > **Basis:** _GRAG (2025)_, _HippoRAG (2025)_, and _llms.txt_ proposal.
 > **Version:** 2026.Q1

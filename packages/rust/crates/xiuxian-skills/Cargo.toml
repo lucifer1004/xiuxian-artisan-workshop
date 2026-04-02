@@ -3,7 +3,7 @@ name = "xiuxian-skills"
 version.workspace = true
 edition.workspace = true
 description = "Unified skill scanner for markdown metadata and command discovery"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 

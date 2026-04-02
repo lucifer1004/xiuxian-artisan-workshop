@@ -13,7 +13,7 @@ metadata:
 
 # Integrated Architecture Audit Checklist (2026)
 
-> **Authority:** CyberXiuXian Artisan Studio  
+> **Authority:** CyberXiuXian Artisan workshop
 > **Goal:** Track validation, implementation, and performance with LinkGraph-first execution.
 
 > **Primary Track:** `xiuxian-wendao` LinkGraph engine (`packages/rust/crates/xiuxian-wendao`).  

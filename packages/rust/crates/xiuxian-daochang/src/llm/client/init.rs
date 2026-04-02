@@ -160,6 +160,23 @@ fn log_deepseek_vision_startup_probe(trigger: &'static str) {
                 );
             }
         }
+        DeepseekRuntime::RemoteHttp { base_url } => {
+            tracing::info!(
+                event = "agent.llm.vision.deepseek.startup_probe",
+                status = "enabled_remote_http",
+                trigger,
+                base_url = %base_url,
+                "DeepSeek OCR startup probe finished: remote runtime enabled"
+            );
+            tracing::info!(
+                event = "agent.llm.vision.deepseek.startup_prewarm",
+                status = "scheduled",
+                trigger,
+                base_url = %base_url,
+                "DeepSeek OCR startup prewarm scheduled against remote runtime"
+            );
+            spawn_deepseek_startup_prewarm(trigger, base_url, Arc::clone(&runtime));
+        }
         DeepseekRuntime::Disabled { reason } => {
             tracing::warn!(
                 event = "agent.llm.vision.deepseek.startup_probe",

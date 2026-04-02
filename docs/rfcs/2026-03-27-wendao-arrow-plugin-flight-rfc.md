@@ -31,6 +31,30 @@ This RFC proposes a **protocol-first plugin architecture** for Wendao in which:
 
 This RFC rejects a Rust-trait-centric plugin architecture as the primary extension surface for Wendao. The correct stable boundary is a language-neutral Arrow contract, not a Rust ABI or a workspace-local registration trick.
 
+## 1.1 Boundary Override (2026-04-01)
+
+By explicit operator direction, the active architectural target is now stricter
+than this RFC's original `Flight-first + Arrow IPC fallback` stance.
+
+The boundary override is:
+
+1. stable interactive Wendao query, retrieval, repo, docs, planner, status,
+   and config surfaces should target high-performance-first `Arrow Flight` as
+   the desired external contract
+2. `JSON` remains the control surface for process liveness/bootstrap,
+   operator config/status/control, and static manifest or artifact inspection
+   until a dedicated Flight control-plane replacement lands
+3. `ArrowIpcHttp` and local-process IPC remain transitional compatibility debt,
+   but are not part of the formal target boundary
+4. no new long-term Wendao business surface should be justified as JSON-first
+   once this override is active
+
+This is a governed override to the older fallback stance, not an accidental
+drift. Implementation should therefore classify current surfaces into two
+formal classes, `Arrow Flight` business surface and `JSON` control surface,
+while tracking current IPC paths only as migration debt rather than
+continuing to expand them as if they were stable target contracts.
+
 ## 2. Motivation
 
 Wendao already has a clear technical center of gravity:

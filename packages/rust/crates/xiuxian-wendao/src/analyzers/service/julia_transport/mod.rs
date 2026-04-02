@@ -8,7 +8,7 @@ mod tests;
 
 #[cfg(feature = "julia")]
 pub use fetch::{
-    fetch_julia_arrow_score_rows_for_repository, fetch_plugin_arrow_score_rows_for_repository,
+    fetch_julia_flight_score_rows_for_repository, fetch_plugin_arrow_score_rows_for_repository,
 };
 #[cfg(feature = "julia")]
 pub use request::{

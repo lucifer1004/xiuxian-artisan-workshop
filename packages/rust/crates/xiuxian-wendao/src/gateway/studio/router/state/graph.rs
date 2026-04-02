@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::gateway::studio::router::error::StudioApiError;
 use crate::gateway::studio::router::state::helpers::graph_include_dirs;
 use crate::gateway::studio::router::state::types::{GatewayState, StudioState};
-use crate::gateway::studio::symbol_index::SymbolIndexStatus;
+use crate::gateway::studio::symbol_index::{SymbolIndexPhase, SymbolIndexStatus};
 use crate::gateway::studio::types::SearchIndexStatusResponse;
 use crate::link_graph::LinkGraphIndex;
 use crate::unified_symbol::UnifiedSymbolIndex;
@@ -83,6 +83,12 @@ impl StudioState {
                 "UI_CONFIG_REQUIRED",
                 "Studio symbol search requires configured link_graph.projects",
             ));
+        }
+
+        let current_status = self.symbol_index_coordinator.status();
+        let current_index = self.current_symbol_index();
+        if current_index.is_none() && matches!(current_status.phase, SymbolIndexPhase::Idle) {
+            self.record_deferred_bootstrap_background_indexing_activation("symbol_index_status");
         }
 
         self.symbol_index_coordinator

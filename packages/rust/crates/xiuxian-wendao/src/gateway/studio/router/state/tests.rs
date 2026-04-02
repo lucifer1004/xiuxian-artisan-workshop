@@ -1,4 +1,6 @@
+use crate::gateway::studio::router::StudioState;
 use crate::gateway::studio::router::state::helpers::{graph_include_dirs, supported_code_kinds};
+use crate::gateway::studio::router::state::lifecycle::gateway_bootstrap_background_indexing_with_lookup;
 use crate::gateway::studio::types::UiProjectConfig;
 
 #[test]
@@ -36,4 +38,42 @@ fn graph_include_dirs_deduplicates_normalized_paths() {
     );
 
     assert_eq!(include_dirs, vec!["docs".to_string(), "src".to_string()]);
+}
+
+#[test]
+fn gateway_bootstrap_background_indexing_defaults_to_disabled() {
+    assert!(!gateway_bootstrap_background_indexing_with_lookup(&|_| {
+        None
+    }));
+    assert!(!gateway_bootstrap_background_indexing_with_lookup(&|_| {
+        Some("invalid".to_string())
+    }));
+    assert!(!gateway_bootstrap_background_indexing_with_lookup(&|_| {
+        Some("false".to_string())
+    }));
+}
+
+#[test]
+fn gateway_bootstrap_background_indexing_accepts_truthy_env_values() {
+    assert!(gateway_bootstrap_background_indexing_with_lookup(&|_| {
+        Some("true".to_string())
+    }));
+    assert!(gateway_bootstrap_background_indexing_with_lookup(&|_| {
+        Some(" YES ".to_string())
+    }));
+    assert!(gateway_bootstrap_background_indexing_with_lookup(&|_| {
+        Some("1".to_string())
+    }));
+}
+
+#[test]
+fn bootstrap_background_indexing_telemetry_reports_default_deferred_state() {
+    let studio = StudioState::new();
+    let telemetry = studio.bootstrap_background_indexing_telemetry();
+
+    assert!(!telemetry.enabled());
+    assert_eq!(telemetry.mode(), "deferred");
+    assert!(!telemetry.deferred_activation_observed());
+    assert_eq!(telemetry.deferred_activation_at(), None);
+    assert_eq!(telemetry.deferred_activation_source(), None);
 }

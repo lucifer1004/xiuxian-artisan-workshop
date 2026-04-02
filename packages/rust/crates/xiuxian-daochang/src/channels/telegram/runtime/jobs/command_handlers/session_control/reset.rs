@@ -1,16 +1,15 @@
 use std::sync::Arc;
 
-use crate::agent::Agent;
-use crate::channels::telegram::commands::is_reset_context_command;
-use crate::channels::traits::{Channel, ChannelMessage};
-
-use super::super::super::observability::send_with_observability;
-use super::super::super::replies::format_control_command_admin_required;
 use super::{
     EVENT_TELEGRAM_COMMAND_CONTROL_ADMIN_REQUIRED_REPLIED,
     EVENT_TELEGRAM_COMMAND_SESSION_RESET_REPLIED,
     EVENT_TELEGRAM_COMMAND_SESSION_RESET_SNAPSHOT_STATE,
 };
+use crate::agent::Agent;
+use crate::channels::telegram::commands::is_reset_context_command;
+use crate::channels::telegram::runtime::jobs::observability::send_with_observability;
+use crate::channels::telegram::runtime::jobs::replies::format_control_command_admin_required;
+use crate::channels::traits::{Channel, ChannelMessage};
 
 pub(in crate::channels::telegram::runtime::jobs) async fn try_handle_reset_context_command(
     msg: &ChannelMessage,

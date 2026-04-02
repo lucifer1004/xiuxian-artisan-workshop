@@ -14,13 +14,12 @@ use xiuxian_wendao::gateway::studio::perf_support::{
 
 use crate::performance::support::gateway::{
     GatewayPerfCaseDiagnostics, REPO_EXAMPLE_SEARCH_CASE, REPO_MODULE_SEARCH_CASE,
-    REPO_PROJECTED_PAGE_SEARCH_CASE, REPO_SYMBOL_SEARCH_CASE, STUDIO_CODE_SEARCH_CASE,
-    STUDIO_SEARCH_INDEX_STATUS_CASE, assert_gateway_perf_budget_with_diagnostics,
-    attach_gateway_perf_diagnostics, describe_gateway_perf_case_diagnostics,
-    describe_maintenance_summary, describe_query_telemetry_scopes,
-    describe_repo_index_status_payload, describe_repo_read_pressure,
-    describe_search_index_status_payload, formal_gateway_perf_budget, formal_gateway_perf_config,
-    maintenance_summary, query_telemetry_scope, repo_read_pressure,
+    REPO_PROJECTED_PAGE_SEARCH_CASE, REPO_SYMBOL_SEARCH_CASE, STUDIO_SEARCH_INDEX_STATUS_CASE,
+    assert_gateway_perf_budget_with_diagnostics, attach_gateway_perf_diagnostics,
+    describe_gateway_perf_case_diagnostics, describe_maintenance_summary,
+    describe_query_telemetry_scopes, describe_repo_index_status_payload,
+    describe_repo_read_pressure, describe_search_index_status_payload, formal_gateway_perf_budget,
+    formal_gateway_perf_config, maintenance_summary, query_telemetry_scope, repo_read_pressure,
 };
 
 const SUITE: &str = "xiuxian-wendao/perf-gateway";
@@ -33,13 +32,9 @@ const REPO_EXAMPLE_SEARCH_URI: &str =
     "/api/repo/example-search?repo=gateway-sync&query=solve&limit=5";
 const REPO_PROJECTED_PAGE_SEARCH_URI: &str =
     "/api/repo/projected-page-search?repo=gateway-sync&query=solve&limit=5";
-const STUDIO_CODE_SEARCH_URI: &str =
-    "/api/search/intent?intent=code_search&repo=gateway-sync&q=solve&limit=5";
 const STUDIO_SEARCH_INDEX_STATUS_URI: &str = "/api/search/index/status";
 const REPO_INDEX_STATUS_URI: &str = "/api/repo/index/status";
-const REAL_WORKSPACE_CODE_SEARCH_CASE: &str = "studio_code_search_real_workspace_sample";
 const REAL_WORKSPACE_REPO_INDEX_STATUS_CASE: &str = "repo_index_status_real_workspace_sample";
-const REAL_WORKSPACE_DEFAULT_QUERY: &str = "solve";
 const REAL_WORKSPACE_DEFAULT_MIN_REPOS: u64 = 150;
 
 fn real_workspace_perf_config() -> PerfRunConfig {
@@ -51,27 +46,12 @@ fn real_workspace_perf_config() -> PerfRunConfig {
     }
 }
 
-fn real_workspace_query() -> String {
-    std::env::var("XIUXIAN_WENDAO_GATEWAY_PERF_WORKSPACE_QUERY")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| REAL_WORKSPACE_DEFAULT_QUERY.to_string())
-}
-
 fn real_workspace_min_repos() -> u64 {
     std::env::var("XIUXIAN_WENDAO_GATEWAY_PERF_MIN_REPO_COUNT")
         .ok()
         .and_then(|raw| raw.trim().parse::<u64>().ok())
         .filter(|value| *value > 0)
         .unwrap_or(REAL_WORKSPACE_DEFAULT_MIN_REPOS)
-}
-
-fn real_workspace_code_search_uri() -> String {
-    format!(
-        "/api/search/intent?intent=code_search&q={}&limit=20",
-        real_workspace_query().replace(' ', "+")
-    )
 }
 
 async fn request_status(router: axum::Router, uri: &str) -> Result<StatusCode> {
@@ -224,59 +204,9 @@ async fn assert_real_workspace_repo_index_status_sample(
     Ok(())
 }
 
-async fn assert_real_workspace_code_search_sample(fixture: &GatewayPerfFixture) -> Result<()> {
-    let workspace_uri = real_workspace_code_search_uri();
-    let mut report = run_async_budget(
-        REAL_WORKSPACE_SUITE,
-        REAL_WORKSPACE_CODE_SEARCH_CASE,
-        &real_workspace_perf_config(),
-        || {
-            let router = fixture.router();
-            let uri = workspace_uri.clone();
-            async move {
-                let (status, payload) = request_json(router, uri.as_str()).await?;
-                if status != StatusCode::OK {
-                    return Err(anyhow!("unexpected status {status} for {uri}"));
-                }
-                let hit_count = payload["hitCount"]
-                    .as_u64()
-                    .ok_or_else(|| anyhow!("code search hitCount should be u64"))?;
-                if hit_count == 0 {
-                    return Err(anyhow!(
-                        "real-workspace code search should return at least one hit for query `{}`",
-                        real_workspace_query()
-                    ));
-                }
-                Ok::<_, anyhow::Error>(())
-            }
-        },
-    )
-    .await;
-    let diagnostics = collect_gateway_case_diagnostics_with_repo_read_pressure(
-        fixture,
-        workspace_uri.as_str(),
-        BTreeMap::from([("workspaceQuery".to_string(), real_workspace_query())]),
-    )
-    .await;
-    attach_gateway_perf_diagnostics(&mut report, &diagnostics);
-    if report.summary.error_rate > 0.0 {
-        return Err(anyhow!(
-            "real-workspace code-search perf sample recorded error_rate={}; diagnostics={}",
-            report.summary.error_rate,
-            describe_gateway_perf_case_diagnostics(&diagnostics)
-        ));
-    }
-    Ok(())
-}
-
 #[test]
 fn real_workspace_min_repos_defaults_to_large_fixture_floor() {
     assert_eq!(real_workspace_min_repos(), REAL_WORKSPACE_DEFAULT_MIN_REPOS);
-}
-
-#[test]
-fn real_workspace_code_search_uri_uses_default_query() {
-    assert!(real_workspace_code_search_uri().contains("q=solve"));
 }
 
 #[tokio::test]
@@ -308,12 +238,12 @@ async fn collect_gateway_case_diagnostics_with_repo_read_pressure_records_gate_s
         .await?;
     let diagnostics = collect_gateway_case_diagnostics_with_repo_read_pressure(
         &fixture,
-        STUDIO_CODE_SEARCH_URI,
+        REPO_SYMBOL_SEARCH_URI,
         BTreeMap::from([("workspaceQuery".to_string(), "solve".to_string())]),
     )
     .await;
 
-    assert_eq!(diagnostics.uri, STUDIO_CODE_SEARCH_URI);
+    assert_eq!(diagnostics.uri, REPO_SYMBOL_SEARCH_URI);
     assert!(diagnostics.search_index.contains("repoRead="));
     assert!(diagnostics.repo_index.contains("total="));
     assert_eq!(
@@ -361,13 +291,6 @@ async fn repo_projected_page_search_perf_gate_reports_warm_cache_latency_formal_
         REPO_PROJECTED_PAGE_SEARCH_URI,
     )
     .await
-}
-
-#[tokio::test]
-#[file_serial(formal_gateway_search_perf)]
-async fn studio_code_search_perf_gate_reports_warm_cache_latency_formal_gate() -> Result<()> {
-    let fixture = prepare_gateway_perf_fixture().await?;
-    assert_status_perf_case(&fixture, STUDIO_CODE_SEARCH_CASE, STUDIO_CODE_SEARCH_URI).await
 }
 
 #[tokio::test]
@@ -592,6 +515,5 @@ async fn search_index_status_perf_gate_reports_query_telemetry_summary_formal_ga
 #[file_serial(formal_gateway_search_perf)]
 async fn gateway_perf_reports_real_workspace_scale_real_workspace() -> Result<()> {
     let fixture = prepare_gateway_real_workspace_perf_fixture().await?;
-    assert_real_workspace_repo_index_status_sample(&fixture).await?;
-    assert_real_workspace_code_search_sample(&fixture).await
+    assert_real_workspace_repo_index_status_sample(&fixture).await
 }

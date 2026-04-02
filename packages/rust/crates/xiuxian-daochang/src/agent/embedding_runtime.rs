@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::Agent;
 pub(crate) use xiuxian_llm::embedding::runtime::EMBEDDING_SOURCE_UNAVAILABLE;
 pub(crate) use xiuxian_llm::embedding::runtime::MemoryEmbeddingErrorKind;
@@ -24,7 +22,7 @@ impl Agent {
             self.record_memory_embedding_unavailable_metric().await;
             return Err(MemoryEmbeddingErrorKind::Unavailable);
         };
-        let Some(client) = self.embedding_client.as_ref().map(Arc::clone) else {
+        let Some(client) = self.embedding_client.as_ref() else {
             self.record_memory_embedding_unavailable_metric().await;
             return Err(MemoryEmbeddingErrorKind::Unavailable);
         };

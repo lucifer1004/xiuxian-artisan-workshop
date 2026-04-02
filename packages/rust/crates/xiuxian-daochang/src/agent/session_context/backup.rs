@@ -2,10 +2,90 @@ use crate::observability::SessionEvent;
 use crate::session::ChatMessage;
 use anyhow::Result;
 
-use super::types::{SessionContextBackup, SessionContextBackupMetadata};
+use super::types::{
+    SessionContextBackup, SessionContextBackupMetadata, SessionContextSnapshotInfo,
+};
 use super::{Agent, SessionContextStats, backup_metadata_session_id, now_unix_ms};
 
 impl Agent {
+    pub async fn reset_context_window(&self, session_id: &str) -> Result<SessionContextStats> {
+        let backup = self.capture_session_backup(session_id).await?;
+        let stats = backup.stats();
+        if backup.is_empty() {
+            self.clear_session(session_id).await?;
+            return Ok(stats);
+        }
+
+        let backup_session_id = super::backup_session_id(session_id);
+        self.store_session_backup(&backup_session_id, &backup)
+            .await?;
+        self.store_backup_metadata(session_id, stats).await?;
+        self.clear_session(session_id).await?;
+        Ok(stats)
+    }
+
+    pub async fn resume_context_window(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<SessionContextStats>> {
+        let backup_session_id = super::backup_session_id(session_id);
+        let backup = self.capture_session_backup(&backup_session_id).await?;
+        if backup.is_empty() {
+            self.clear_backup_metadata(session_id).await?;
+            return Ok(None);
+        }
+
+        let stats = backup.stats();
+        self.restore_session_backup(session_id, backup).await?;
+        self.clear_session(&backup_session_id).await?;
+        self.clear_backup_metadata(session_id).await?;
+        Ok(Some(stats))
+    }
+
+    pub async fn peek_context_window_backup(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<SessionContextSnapshotInfo>> {
+        let backup_session_id = super::backup_session_id(session_id);
+        let backup = self.capture_session_backup(&backup_session_id).await?;
+        let metadata = self.load_backup_metadata(session_id).await?;
+        if backup.is_empty() && metadata.is_none() {
+            return Ok(None);
+        }
+
+        let stats = backup.stats();
+        let saved_at_unix_ms = metadata.as_ref().map(|snapshot| snapshot.saved_at_unix_ms);
+        let saved_age_secs = saved_at_unix_ms.map(|saved_at| {
+            now_unix_ms()
+                .saturating_sub(saved_at)
+                .checked_div(1000)
+                .unwrap_or(0)
+        });
+        Ok(Some(SessionContextSnapshotInfo {
+            messages: metadata
+                .as_ref()
+                .map_or(stats.messages, |snapshot| snapshot.messages),
+            summary_segments: metadata
+                .as_ref()
+                .map_or(stats.summary_segments, |snapshot| snapshot.summary_segments),
+            saved_at_unix_ms,
+            saved_age_secs,
+        }))
+    }
+
+    pub async fn drop_context_window_backup(&self, session_id: &str) -> Result<bool> {
+        let backup_session_id = super::backup_session_id(session_id);
+        let backup = self.capture_session_backup(&backup_session_id).await?;
+        let metadata = self.load_backup_metadata(session_id).await?;
+        if backup.is_empty() && metadata.is_none() {
+            return Ok(false);
+        }
+
+        self.clear_session(&backup_session_id).await?;
+        self.clear_backup_metadata(session_id).await?;
+        Ok(true)
+    }
+
     pub(super) async fn capture_session_backup(
         &self,
         session_id: &str,

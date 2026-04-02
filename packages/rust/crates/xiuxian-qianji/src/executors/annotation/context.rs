@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use xiuxian_qianhuan::orchestrator::ThousandFacesOrchestrator;
 use xiuxian_qianhuan::persona::{PersonaProfile, PersonaRegistry};
-use xiuxian_wendao::WendaoResourceUri;
+use xiuxian_wendao::skill_vfs::WendaoResourceUri;
 
 /// Mechanism responsible for transmuting raw facts into persona-aligned context snapshots.
 pub struct ContextAnnotator {

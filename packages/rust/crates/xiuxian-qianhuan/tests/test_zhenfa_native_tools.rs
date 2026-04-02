@@ -6,7 +6,8 @@ use std::path::Path;
 
 use serde_json::json;
 use tempfile::TempDir;
-use xiuxian_wendao::{LinkGraphIndex, WendaoSearchTool};
+use xiuxian_wendao::link_graph::LinkGraphIndex;
+use xiuxian_wendao::zhenfa_router::WendaoSearchTool;
 use xiuxian_zhenfa::{ZhenfaContext, ZhenfaTool};
 
 fn search_tool() -> WendaoSearchTool {

@@ -6,7 +6,7 @@ metadata:
 
 # Specification: xiuxian-qianji (千机)
 
-> **Authority:** CyberXiuXian Artisan Studio  
+> **Authority:** CyberXiuXian Artisan workshop
 > **Mission:** Building a High-Performance, Probabilistic, and Formally Verified Workflow Engine in Rust.
 > **Status:** Full-Spectrum Logic Enclosure / TOML-Driven.
 

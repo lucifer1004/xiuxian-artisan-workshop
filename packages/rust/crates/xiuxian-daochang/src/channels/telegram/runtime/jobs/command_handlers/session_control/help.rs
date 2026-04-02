@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
-use crate::channels::telegram::commands::parse_help_command;
-use crate::channels::traits::{Channel, ChannelMessage};
-
-use super::super::super::observability::send_with_observability;
-use super::super::super::replies::{format_slash_help, format_slash_help_json};
 use super::{
     EVENT_TELEGRAM_COMMAND_SLASH_HELP_JSON_REPLIED, EVENT_TELEGRAM_COMMAND_SLASH_HELP_REPLIED,
 };
+use crate::channels::telegram::commands::parse_help_command;
+use crate::channels::telegram::runtime::jobs::observability::send_with_observability;
+use crate::channels::telegram::runtime::jobs::replies::{
+    format_slash_help, format_slash_help_json,
+};
+use crate::channels::traits::{Channel, ChannelMessage};
 
 pub(in crate::channels::telegram::runtime::jobs) async fn try_handle_help_command(
     msg: &ChannelMessage,

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 from .config import (
     WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER,
     REPO_SEARCH_DEFAULT_LIMIT,
+    WENDAO_RERANK_DIMENSION_HEADER,
+    WENDAO_RERANK_MIN_FINAL_SCORE_HEADER,
+    WENDAO_RERANK_TOP_K_HEADER,
     WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER,
     WENDAO_REPO_SEARCH_LIMIT_HEADER,
     WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER,
@@ -21,6 +25,13 @@ REPO_SEARCH_DOC_ID_COLUMN = "doc_id"
 REPO_SEARCH_PATH_COLUMN = "path"
 REPO_SEARCH_TITLE_COLUMN = "title"
 REPO_SEARCH_BEST_SECTION_COLUMN = "best_section"
+REPO_SEARCH_MATCH_REASON_COLUMN = "match_reason"
+REPO_SEARCH_NAVIGATION_PATH_COLUMN = "navigation_path"
+REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN = "navigation_category"
+REPO_SEARCH_NAVIGATION_LINE_COLUMN = "navigation_line"
+REPO_SEARCH_NAVIGATION_LINE_END_COLUMN = "navigation_line_end"
+REPO_SEARCH_HIERARCHY_COLUMN = "hierarchy"
+REPO_SEARCH_TAGS_COLUMN = "tags"
 REPO_SEARCH_SCORE_COLUMN = "score"
 REPO_SEARCH_LANGUAGE_COLUMN = "language"
 RERANK_REQUEST_DOC_ID_COLUMN = "doc_id"
@@ -28,6 +39,8 @@ RERANK_REQUEST_VECTOR_SCORE_COLUMN = "vector_score"
 RERANK_REQUEST_EMBEDDING_COLUMN = "embedding"
 RERANK_REQUEST_QUERY_EMBEDDING_COLUMN = "query_embedding"
 RERANK_RESPONSE_DOC_ID_COLUMN = "doc_id"
+RERANK_RESPONSE_VECTOR_SCORE_COLUMN = "vector_score"
+RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN = "semantic_score"
 RERANK_RESPONSE_FINAL_SCORE_COLUMN = "final_score"
 RERANK_RESPONSE_RANK_COLUMN = "rank"
 REPO_SEARCH_COLUMNS = (
@@ -35,6 +48,13 @@ REPO_SEARCH_COLUMNS = (
     REPO_SEARCH_PATH_COLUMN,
     REPO_SEARCH_TITLE_COLUMN,
     REPO_SEARCH_BEST_SECTION_COLUMN,
+    REPO_SEARCH_MATCH_REASON_COLUMN,
+    REPO_SEARCH_NAVIGATION_PATH_COLUMN,
+    REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN,
+    REPO_SEARCH_NAVIGATION_LINE_COLUMN,
+    REPO_SEARCH_NAVIGATION_LINE_END_COLUMN,
+    REPO_SEARCH_HIERARCHY_COLUMN,
+    REPO_SEARCH_TAGS_COLUMN,
     REPO_SEARCH_SCORE_COLUMN,
     REPO_SEARCH_LANGUAGE_COLUMN,
 )
@@ -46,6 +66,8 @@ RERANK_REQUEST_COLUMNS = (
 )
 RERANK_RESPONSE_COLUMNS = (
     RERANK_RESPONSE_DOC_ID_COLUMN,
+    RERANK_RESPONSE_VECTOR_SCORE_COLUMN,
+    RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
     RERANK_RESPONSE_FINAL_SCORE_COLUMN,
     RERANK_RESPONSE_RANK_COLUMN,
 )
@@ -91,6 +113,13 @@ class WendaoRepoSearchResultRow:
     path: str
     title: str
     best_section: str
+    match_reason: str
+    navigation_path: str
+    navigation_category: str
+    navigation_line: int
+    navigation_line_end: int
+    hierarchy: tuple[str, ...]
+    tags: tuple[str, ...]
     score: float
     language: str
 
@@ -123,6 +152,8 @@ class WendaoRerankResultRow:
     """Typed row for the stable Wendao rerank response contract."""
 
     doc_id: str
+    vector_score: float
+    semantic_score: float
     final_score: float
     rank: int
 
@@ -167,9 +198,7 @@ def validate_repo_search_table(table) -> None:
 
     missing = [column for column in REPO_SEARCH_COLUMNS if column not in table.column_names]
     if missing:
-        raise ValueError(
-            "repo search table is missing required columns: " + ", ".join(missing)
-        )
+        raise ValueError("repo search table is missing required columns: " + ", ".join(missing))
 
 
 def validate_repo_search_request(request: WendaoRepoSearchRequest) -> None:
@@ -238,9 +267,7 @@ def normalized_repo_search_filename_filters(
     """Return sorted unique filename filters for one repo-search request."""
 
     validate_repo_search_request(request)
-    return tuple(
-        sorted({filename_filter.strip() for filename_filter in request.filename_filters})
-    )
+    return tuple(sorted({filename_filter.strip() for filename_filter in request.filename_filters}))
 
 
 def repo_search_metadata(request: WendaoRepoSearchRequest) -> dict[str, str]:
@@ -273,9 +300,7 @@ def validate_rerank_request_table(table) -> None:
 
     missing = [column for column in RERANK_REQUEST_COLUMNS if column not in table.column_names]
     if missing:
-        raise ValueError(
-            "rerank request table is missing required columns: " + ", ".join(missing)
-        )
+        raise ValueError("rerank request table is missing required columns: " + ", ".join(missing))
 
 
 def validate_rerank_response_table(table) -> None:
@@ -283,9 +308,7 @@ def validate_rerank_response_table(table) -> None:
 
     missing = [column for column in RERANK_RESPONSE_COLUMNS if column not in table.column_names]
     if missing:
-        raise ValueError(
-            "rerank response table is missing required columns: " + ", ".join(missing)
-        )
+        raise ValueError("rerank response table is missing required columns: " + ", ".join(missing))
 
 
 def rerank_embedding_dimension(rows: list[WendaoRerankRequestRow]) -> int:
@@ -298,9 +321,7 @@ def rerank_embedding_dimension(rows: list[WendaoRerankRequestRow]) -> int:
         raise ValueError("rerank request embeddings must have at least one dimension")
     first_query_dimension = len(rows[0].query_embedding)
     if first_query_dimension != first_dimension:
-        raise ValueError(
-            "rerank request query embedding dimension must match embedding dimension"
-        )
+        raise ValueError("rerank request query embedding dimension must match embedding dimension")
     for index, row in enumerate(rows[1:], start=1):
         if len(row.embedding) != first_dimension:
             raise ValueError(
@@ -313,6 +334,48 @@ def rerank_embedding_dimension(rows: list[WendaoRerankRequestRow]) -> int:
                 f"row {index} has dimension {len(row.query_embedding)} instead of {first_dimension}"
             )
     return first_dimension
+
+
+def validate_rerank_top_k(top_k: int | None) -> int | None:
+    """Validate one optional rerank response limit."""
+
+    if top_k is None:
+        return None
+    if top_k <= 0:
+        raise ValueError("rerank top_k must be greater than zero")
+    return top_k
+
+
+def validate_rerank_min_final_score(min_final_score: float | None) -> float | None:
+    """Validate one optional rerank final-score threshold."""
+
+    if min_final_score is None:
+        return None
+    if not math.isfinite(min_final_score):
+        raise ValueError("rerank min_final_score must be finite")
+    if not 0.0 <= min_final_score <= 1.0:
+        raise ValueError("rerank min_final_score must stay within inclusive range [0.0, 1.0]")
+    return min_final_score
+
+
+def rerank_request_metadata(
+    rows: list[WendaoRerankRequestRow],
+    *,
+    top_k: int | None = None,
+    min_final_score: float | None = None,
+) -> dict[str, str]:
+    """Build Flight metadata for one typed rerank request."""
+
+    metadata = {
+        WENDAO_RERANK_DIMENSION_HEADER: str(rerank_embedding_dimension(rows)),
+    }
+    validated_top_k = validate_rerank_top_k(top_k)
+    if validated_top_k is not None:
+        metadata[WENDAO_RERANK_TOP_K_HEADER] = str(validated_top_k)
+    validated_min_final_score = validate_rerank_min_final_score(min_final_score)
+    if validated_min_final_score is not None:
+        metadata[WENDAO_RERANK_MIN_FINAL_SCORE_HEADER] = str(validated_min_final_score)
+    return metadata
 
 
 def build_rerank_request_table(rows: list[WendaoRerankRequestRow]):
@@ -356,6 +419,13 @@ def parse_repo_search_rows(table) -> list[WendaoRepoSearchResultRow]:
             path=str(row[REPO_SEARCH_PATH_COLUMN]),
             title=str(row[REPO_SEARCH_TITLE_COLUMN]),
             best_section=str(row[REPO_SEARCH_BEST_SECTION_COLUMN]),
+            match_reason=str(row[REPO_SEARCH_MATCH_REASON_COLUMN]),
+            navigation_path=str(row[REPO_SEARCH_NAVIGATION_PATH_COLUMN]),
+            navigation_category=str(row[REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN]),
+            navigation_line=int(row[REPO_SEARCH_NAVIGATION_LINE_COLUMN]),
+            navigation_line_end=int(row[REPO_SEARCH_NAVIGATION_LINE_END_COLUMN]),
+            hierarchy=tuple(str(value) for value in row[REPO_SEARCH_HIERARCHY_COLUMN]),
+            tags=tuple(str(value) for value in row[REPO_SEARCH_TAGS_COLUMN]),
             score=float(row[REPO_SEARCH_SCORE_COLUMN]),
             language=str(row[REPO_SEARCH_LANGUAGE_COLUMN]),
         )
@@ -371,6 +441,8 @@ def parse_rerank_response_rows(table) -> list[WendaoRerankResultRow]:
     return [
         WendaoRerankResultRow(
             doc_id=str(row[RERANK_RESPONSE_DOC_ID_COLUMN]),
+            vector_score=float(row[RERANK_RESPONSE_VECTOR_SCORE_COLUMN]),
+            semantic_score=float(row[RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN]),
             final_score=float(row[RERANK_RESPONSE_FINAL_SCORE_COLUMN]),
             rank=int(row[RERANK_RESPONSE_RANK_COLUMN]),
         )
@@ -383,6 +455,13 @@ __all__ = [
     "REPO_SEARCH_BEST_SECTION_COLUMN",
     "REPO_SEARCH_DEFAULT_LIMIT",
     "REPO_SEARCH_DOC_ID_COLUMN",
+    "REPO_SEARCH_MATCH_REASON_COLUMN",
+    "REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN",
+    "REPO_SEARCH_HIERARCHY_COLUMN",
+    "REPO_SEARCH_NAVIGATION_LINE_COLUMN",
+    "REPO_SEARCH_NAVIGATION_LINE_END_COLUMN",
+    "REPO_SEARCH_NAVIGATION_PATH_COLUMN",
+    "REPO_SEARCH_TAGS_COLUMN",
     "WENDAO_REPO_SEARCH_LIMIT_HEADER",
     "WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER",
     "WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER",
@@ -390,6 +469,8 @@ __all__ = [
     "WENDAO_REPO_SEARCH_QUERY_HEADER",
     "WENDAO_REPO_SEARCH_TAG_FILTERS_HEADER",
     "WENDAO_REPO_SEARCH_TITLE_FILTERS_HEADER",
+    "WENDAO_RERANK_MIN_FINAL_SCORE_HEADER",
+    "WENDAO_RERANK_TOP_K_HEADER",
     "REPO_SEARCH_LANGUAGE_COLUMN",
     "REPO_SEARCH_PATH_COLUMN",
     "REPO_SEARCH_ROUTE",
@@ -405,6 +486,8 @@ __all__ = [
     "RERANK_RESPONSE_DOC_ID_COLUMN",
     "RERANK_RESPONSE_FINAL_SCORE_COLUMN",
     "RERANK_RESPONSE_RANK_COLUMN",
+    "RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN",
+    "RERANK_RESPONSE_VECTOR_SCORE_COLUMN",
     "WendaoFlightRouteQuery",
     "WendaoRepoSearchRequest",
     "WendaoRepoSearchResultRow",
@@ -418,7 +501,10 @@ __all__ = [
     "repo_search_request",
     "rerank_exchange_query",
     "rerank_embedding_dimension",
+    "rerank_request_metadata",
     "validate_repo_search_request",
+    "validate_rerank_min_final_score",
+    "validate_rerank_top_k",
     "normalized_repo_search_language_filters",
     "normalized_repo_search_filename_filters",
     "normalized_repo_search_path_prefixes",

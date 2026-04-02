@@ -1,6 +1,10 @@
 use crate::agent::Agent;
+use crate::agent::admission::{DownstreamAdmissionMetrics, DownstreamAdmissionPolicy};
+use crate::agent::bootstrap::native_tools::mount_native_tool_cauldron;
+use crate::agent::bootstrap::service_mount::ServiceMountCatalog;
 use crate::agent::memory_state::{MemoryStateBackend, MemoryStateLoadStatus};
 use crate::config::AgentConfig;
+use crate::config::load_runtime_settings;
 use crate::embedding::EmbeddingClient;
 use crate::llm::LlmClient;
 use crate::observability::SessionEvent;
@@ -11,6 +15,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
+use xiuxian_llm::embedding::runtime::EmbeddingRuntime;
 use xiuxian_memory_engine::{EpisodeStore, StoreConfig};
 
 impl Agent {
@@ -56,6 +61,10 @@ impl Agent {
             crate::agent::tool_startup::connect_tool_pool_if_configured(&config).await?;
         let (memory_store, memory_state_backend, memory_state_load_status) =
             init_memory_backends(&config)?;
+        let session_reset_idle_timeout_ms = load_runtime_settings()
+            .session
+            .reset_idle_timeout_mins
+            .map(|minutes| minutes.saturating_mul(60_000));
 
         let embedding_client = config.memory.as_ref().map(|memory_cfg| {
             let base_url = memory_cfg
@@ -97,15 +106,27 @@ impl Agent {
             0,
             crate::agent::MAX_MEMORY_EMBED_COOLDOWN_MS,
         );
+        let embedding_runtime = config.memory.as_ref().map(|_| {
+            Arc::new(EmbeddingRuntime::new(
+                memory_embed_timeout,
+                memory_embed_timeout_cooldown,
+            ))
+        });
+        let mut native_tools = crate::agent::native_tools::registry::NativeToolRegistry::new();
+        let mut service_mounts = ServiceMountCatalog::new();
+        mount_native_tool_cauldron(None, None, &mut native_tools, &mut service_mounts);
 
         Ok(Self {
             config,
             session,
+            session_reset_idle_timeout_ms,
+            session_last_activity_unix_ms: Arc::new(RwLock::new(HashMap::new())),
             bounded_session,
             memory_store,
             memory_state_backend,
             memory_state_load_status,
             embedding_client,
+            embedding_runtime,
             context_budget_snapshots: Arc::new(RwLock::new(HashMap::new())),
             memory_recall_metrics: Arc::new(RwLock::new(
                 crate::agent::memory_recall_metrics::MemoryRecallMetricsState::default(),
@@ -114,12 +135,20 @@ impl Agent {
             system_prompt_injection: Arc::new(RwLock::new(HashMap::new())),
             reflection_policy_hints: Arc::new(RwLock::new(HashMap::new())),
             memory_decay_turn_counter: Arc::new(AtomicU64::new(0)),
+            native_tools: Arc::new(native_tools),
+            manifestation_manager: None,
+            heyi: None,
+            zhenfa_tools: None,
+            downstream_admission_policy: DownstreamAdmissionPolicy::from_env(),
+            downstream_admission_metrics: DownstreamAdmissionMetrics::default(),
             memory_embed_timeout,
             memory_embed_timeout_cooldown,
             memory_embed_timeout_cooldown_until_ms: AtomicU64::new(0),
             llm,
             tool_runtime,
             memory_stream_consumer_task,
+            _hot_reload_driver: None,
+            service_mount_records: Arc::new(RwLock::new(Vec::new())),
         })
     }
 }

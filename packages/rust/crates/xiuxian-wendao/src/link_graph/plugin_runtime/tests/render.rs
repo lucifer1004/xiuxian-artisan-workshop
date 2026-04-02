@@ -14,7 +14,7 @@ fn render_plugin_artifact_toml_renders_julia_deployment_payload()
         &config_path,
         r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:8088"
-route = "/arrow-ipc"
+route = "/rerank"
 schema_version = "v1"
 "#,
     )?;
@@ -24,8 +24,8 @@ schema_version = "v1"
         .expect("rendered artifact");
     assert!(rendered.contains("plugin_id = \"xiuxian-wendao-julia\""));
     assert!(rendered.contains("artifact_id = \"deployment\""));
-    assert!(rendered.contains("route = \"/arrow-ipc\""));
-    assert!(rendered.contains("selected_transport = \"arrow_ipc_http\""));
+    assert!(rendered.contains("route = \"/rerank\""));
+    assert!(rendered.contains("selected_transport = \"arrow_flight\""));
 
     Ok(())
 }

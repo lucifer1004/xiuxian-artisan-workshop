@@ -1,9 +1,9 @@
 use anyhow::Result;
 
+use crate::agent::Agent;
+use crate::agent::session_context::now_unix_ms;
 use crate::observability::SessionEvent;
 use crate::session::{ChatMessage, SessionSummarySegment};
-
-use super::super::{Agent, now_unix_ms};
 
 const IDLE_SESSION_RESET_NOTICE: &str = "Previous session expired due to inactivity.";
 const SESSION_RESET_NOTICE_NAME: &str = "session_reset_notice";

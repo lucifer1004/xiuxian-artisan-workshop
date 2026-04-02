@@ -2,7 +2,6 @@
 
 mod config;
 mod core;
-mod local;
 mod types;
 mod valkey;
 

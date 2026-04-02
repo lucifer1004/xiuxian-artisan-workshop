@@ -204,7 +204,7 @@ Its execution contract is:
 - keep repo gateway search on the current analyzer path for this slice instead of migrating onto `search_plane`
 - add reusable analyzer-derived `RepositorySearchArtifacts` and per-endpoint query caches so `/api/repo/module-search`, `/api/repo/symbol-search`, `/api/repo/example-search`, and `/api/repo/projected-page-search` stop rebuilding Tantivy indexes per request
 - upgrade the shared Tantivy search layer toward multi-field exact/prefix/fuzzy recall, code-aware tokenization, lightweight hit rehydration, and bounded rescoring
-- preserve the current repo gateway HTTP contracts and Studio `/api/search/intent?intent=code_search` behavior while aligning them with the upgraded shared search assumptions
+- preserve the current repo gateway HTTP contracts while aligning semantic search assumptions with the canonical Flight contract `/search/intent`
 - finish with a gateway-level async performance suite that exercises the four repo-search endpoints plus Studio code search in warm-cache steady state
 
 Initial execution for that slice is now landed:
@@ -222,10 +222,9 @@ Initial execution for that slice is now landed:
   `RepositorySearchArtifacts` once per cached analysis identity and then reuse
   those search indexes plus a second-layer query-result cache for repeated
   requests
-- Studio `/api/search/intent?intent=code_search` stayed on the current
-  `search_plane` path, but the gateway perf suite now exercises it alongside
-  the four repo-search endpoints so the warm-cache steady-state contract is
-  recorded in the same place
+- the semantic search lane stayed on the current `search_plane` path for that
+  slice, but the long-term contract is now the Flight route `/search/intent`
+  rather than a Studio HTTP search endpoint
 - the blocking modularity regressions in
   `src/search_plane/service/tests/mod.rs` and
   `src/zhenfa_router/native/semantic_check/docs_governance/tests/mod.rs` were

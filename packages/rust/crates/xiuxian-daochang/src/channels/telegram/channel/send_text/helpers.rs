@@ -1,8 +1,14 @@
 use pulldown_cmark::{Event, Options, Parser, Tag};
 
-use super::super::chunking::{decorate_chunk_for_telegram, split_message_for_telegram};
-use super::super::constants::{TELEGRAM_MAX_AUTO_TEXT_CHUNKS, TELEGRAM_MAX_MESSAGE_LENGTH};
-use super::super::markdown::{markdown_to_telegram_html, markdown_to_telegram_markdown_v2};
+use crate::channels::telegram::channel::chunking::{
+    decorate_chunk_for_telegram, split_message_for_telegram,
+};
+use crate::channels::telegram::channel::constants::{
+    TELEGRAM_MAX_AUTO_TEXT_CHUNKS, TELEGRAM_MAX_MESSAGE_LENGTH,
+};
+use crate::channels::telegram::channel::markdown::{
+    markdown_to_telegram_html, markdown_to_telegram_markdown_v2,
+};
 
 pub(super) struct PreparedChunk {
     pub(super) plain_text: String,

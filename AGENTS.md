@@ -70,6 +70,11 @@ To prevent context bloating and "hallucination spirals," all Agents MUST follow 
 | `PRJ_INTERNAL_SKILLS_DIR` | `internal_skills`                  | Core "Divine Siddhis" metadata.                       |
 | `PRJ_RUNTIME_DIR`         | `.run`                             | Runtime state (logs, PID files, sockets).             |
 
+The table above lists the default repo-relative names. In the exported project
+environment (for example through `direnv exec .`), the `PRJ_*` variables are
+materialized as absolute paths. Prefer using the exported env var directly
+instead of prepending `PRJ_ROOT` again.
+
 ## 7. Protocol Hygiene & Message Integrity
 
 - **The Integrity Chain**: Every `role: "tool"` message MUST be preceded by an `assistant` message declaring the corresponding `tool_calls`.

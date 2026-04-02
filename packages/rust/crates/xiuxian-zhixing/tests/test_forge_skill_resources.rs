@@ -1,7 +1,8 @@
 //! Embedded Forge skill resource registry tests.
 
-use xiuxian_wendao::{
-    WendaoResourceRegistry, embedded_resource_text_from_wendao_uri, embedded_skill_links_for_id,
+use xiuxian_wendao::enhancer::WendaoResourceRegistry;
+use xiuxian_wendao::skill_vfs::{
+    embedded_resource_text_from_wendao_uri, embedded_skill_links_for_id,
 };
 use xiuxian_zhixing::RESOURCES;
 

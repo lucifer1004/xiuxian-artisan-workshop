@@ -8,8 +8,8 @@
 #[cfg(feature = "julia")]
 pub use xiuxian_wendao_julia::{
     JULIA_ARROW_RESPONSE_SCHEMA_VERSION, JuliaRepoIntelligencePlugin,
-    build_julia_arrow_transport_client, process_julia_arrow_batches,
-    process_julia_arrow_batches_for_repository, register_into as register_julia_plugin,
+    build_julia_flight_transport_client, process_julia_flight_batches,
+    process_julia_flight_batches_for_repository, register_into as register_julia_plugin,
     validate_julia_arrow_response_batches,
 };
 

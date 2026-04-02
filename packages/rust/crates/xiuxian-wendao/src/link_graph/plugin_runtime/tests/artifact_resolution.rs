@@ -15,7 +15,7 @@ fn resolve_plugin_artifact_resolves_julia_deployment_payload()
         &config_path,
         r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:8088"
-route = "/arrow-ipc"
+route = "/rerank"
 health_route = "/healthz"
 schema_version = "v1"
 timeout_secs = 15
@@ -38,7 +38,7 @@ service_mode = "stream"
     );
     assert_eq!(
         artifact.selected_transport,
-        Some(PluginTransportKind::ArrowIpcHttp)
+        Some(PluginTransportKind::ArrowFlight)
     );
     assert_eq!(artifact.fallback_from, None);
     assert_eq!(artifact.fallback_reason, None);

@@ -80,4 +80,4 @@ let result = scheduler.run(initial_context).await?;
 
 ## License
 
-Apache-2.0 - Developed with artisan precision by **CyberXiuXian Artisan Studio**.
+Apache-2.0 - Developed with artisan precision by **CyberXiuXian Artisan workshop**.

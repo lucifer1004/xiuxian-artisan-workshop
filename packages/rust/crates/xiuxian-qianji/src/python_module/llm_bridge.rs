@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use crate::scheduler::QianjiScheduler;
 use xiuxian_llm::llm::OpenAIClient;
 use xiuxian_qianhuan::{orchestrator::ThousandFacesOrchestrator, persona::PersonaRegistry};
-use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::link_graph::LinkGraphIndex;
 
 use super::runtime::{create_tokio_runtime, serialize_json_result};
 

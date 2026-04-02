@@ -1,13 +1,12 @@
 #![cfg(test)]
 
-use axum::body::Bytes;
-use axum::routing::post;
-use axum::{Router, serve};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::time::Duration;
+
 use serde_json::json;
-use tokio::net::TcpListener;
-use xiuxian_vector::{
-    ARROW_TRANSPORT_CONTENT_TYPE, decode_record_batches_ipc, encode_record_batches_ipc,
-};
+use tokio::net::TcpStream;
+use tokio::time::sleep;
 
 use super::*;
 use crate::analyzers::config::{
@@ -143,24 +142,12 @@ fn decode_plugin_arrow_score_rows_rejects_missing_columns() {
 
 #[tokio::test]
 async fn fetch_plugin_arrow_score_rows_for_repository_roundtrips_remote_scores() {
-    let app = Router::new().route(
-        "/arrow-ipc",
-        post(|body: Bytes| async move {
-            let request_batches =
-                decode_record_batches_ipc(&body).expect("request batches should decode");
-            assert_eq!(request_batches.len(), 1);
-
-            let payload = encode_record_batches_ipc(&[response_batch()]).expect("response payload");
-            (
-                [
-                    ("content-type", ARROW_TRANSPORT_CONTENT_TYPE),
-                    ("x-wendao-schema-version", "v1"),
-                ],
-                payload,
-            )
-        }),
-    );
-    let base_url = spawn_test_server(app).await;
+    let port = reserve_test_port();
+    let base_url = format!("http://127.0.0.1:{port}");
+    let _service = spawn_real_wendaoarrow_service(port);
+    wait_for_service_ready(&base_url)
+        .await
+        .expect("real WendaoArrow Flight service should become ready");
     let repository = RegisteredRepository {
         id: "demo".to_string(),
         path: None,
@@ -170,9 +157,9 @@ async fn fetch_plugin_arrow_score_rows_for_repository_roundtrips_remote_scores()
         plugins: vec![RepositoryPluginConfig::Config {
             id: "julia".to_string(),
             options: json!({
-                "arrow_transport": {
+                "flight_transport": {
                     "base_url": base_url,
-                    "route": "/arrow-ipc",
+                    "route": "/rerank",
                     "schema_version": "v1"
                 }
             }),
@@ -184,14 +171,78 @@ async fn fetch_plugin_arrow_score_rows_for_repository_roundtrips_remote_scores()
         .expect("transport should succeed");
 
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows.get("doc-1").map(|row| row.final_score), Some(0.95));
+    assert_eq!(rows.get("doc-1").map(|row| row.analyzer_score), Some(0.3));
+    assert_eq!(rows.get("doc-1").map(|row| row.final_score), Some(0.3));
 }
 
-async fn spawn_test_server(app: Router) -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener");
-    let address = listener.local_addr().expect("local addr");
-    tokio::spawn(async move {
-        serve(listener, app).await.expect("server should run");
-    });
-    format!("http://{address}")
+struct ChildGuard {
+    child: Child,
+}
+
+impl ChildGuard {
+    fn new(child: Child) -> Self {
+        Self { child }
+    }
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        if let Ok(None) = self.child.try_wait() {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+}
+
+fn reserve_test_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|listener| listener.local_addr())
+        .map(|address| address.port())
+        .unwrap_or_else(|error| panic!("reserve test port: {error}"))
+}
+
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../../")
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("resolve repo root: {error}"))
+}
+
+fn wendaoarrow_script(name: &str) -> PathBuf {
+    repo_root()
+        .join(".data/WendaoArrow/scripts")
+        .join(name)
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("resolve WendaoArrow script `{name}`: {error}"))
+}
+
+fn spawn_real_wendaoarrow_service(port: u16) -> ChildGuard {
+    let script = wendaoarrow_script("run_stream_scoring_flight_server.sh");
+    let child = Command::new("bash")
+        .arg(script)
+        .arg("--port")
+        .arg(port.to_string())
+        .current_dir(repo_root())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap_or_else(|error| panic!("spawn real WendaoArrow service: {error}"));
+    ChildGuard::new(child)
+}
+
+async fn wait_for_service_ready(base_url: &str) -> Result<(), String> {
+    let socket_addr = base_url
+        .strip_prefix("http://")
+        .or_else(|| base_url.strip_prefix("https://"))
+        .unwrap_or(base_url)
+        .to_string();
+
+    for _ in 0..150 {
+        if TcpStream::connect(&socket_addr).await.is_ok() {
+            return Ok(());
+        }
+        sleep(Duration::from_millis(200)).await;
+    }
+
+    Err("real Julia Flight service did not become ready in time".to_string())
 }

@@ -11,7 +11,6 @@ use crate::channels::telegram::runtime::dispatch::ForegroundInterruptController;
 use crate::channels::traits::{Channel, ChannelMessage};
 use crate::jobs::{JobCompletion, JobManager};
 
-#[allow(dead_code)]
 pub(in crate::channels::telegram::runtime) fn log_preview(s: &str) -> String {
     observability::log_preview(s)
 }
@@ -59,7 +58,8 @@ pub(in crate::channels::telegram::runtime) async fn handle_inbound_message_with_
 
 pub(in crate::channels::telegram::runtime) async fn push_background_completion(
     channel: &Arc<dyn Channel>,
+    agent: &Arc<Agent>,
     completion: JobCompletion,
 ) {
-    background_completion::push_background_completion(channel, completion).await;
+    background_completion::push_background_completion(channel, agent, completion).await;
 }

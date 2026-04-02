@@ -3,7 +3,7 @@ name = "xiuxian-wendao"
 version.workspace = true
 edition.workspace = true
 description = "High-performance knowledge and link-graph runtime with Valkey-first storage"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 default-run = "wendao"
@@ -100,6 +100,7 @@ unicode-normalization = "0.1"
 arrow = { workspace = true }
 arrow-flight = "57.3.0"
 tonic = { version = "0.14.5", default-features = false, features = ["transport"] }
+tonic-web = "0.14"
 
 # Graph algorithms
 petgraph = { workspace = true }

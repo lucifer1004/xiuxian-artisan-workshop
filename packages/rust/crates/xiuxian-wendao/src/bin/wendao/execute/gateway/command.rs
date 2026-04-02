@@ -5,12 +5,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+#[cfg(feature = "julia")]
+use arrow_flight::flight_service_server::FlightServiceServer;
 use axum::Json;
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
+#[cfg(feature = "julia")]
+use axum::routing::any_service;
 use axum::routing::{Router, get};
 use log::info;
 use tokio::sync::mpsc;
+#[cfg(feature = "julia")]
+use tonic_web::GrpcWebLayer;
+#[cfg(feature = "julia")]
+use tower::Layer;
 use tower::{BoxError, ServiceBuilder};
 
 use crate::execute::gateway::{
@@ -23,6 +31,15 @@ use crate::execute::gateway::{
 use crate::types::{Cli, GatewayArgs, GatewayCommand, GatewayStartArgs};
 use xiuxian_wendao::LinkGraphIndex;
 use xiuxian_wendao::gateway::{openapi::paths as openapi_paths, studio::studio_routes};
+#[cfg(feature = "julia")]
+use xiuxian_wendao::link_graph::plugin_runtime::build_search_plane_studio_flight_service_with_weights;
+#[cfg(feature = "julia")]
+use xiuxian_wendao::link_graph::resolve_link_graph_rerank_flight_runtime_settings;
+#[cfg(feature = "julia")]
+use xiuxian_wendao_runtime::transport::{
+    EffectiveRerankFlightHostSettings, rerank_score_weights_from_env,
+    resolve_effective_rerank_flight_host_settings as resolve_runtime_effective_rerank_flight_host_settings,
+};
 use xiuxian_zhenfa::{NotificationService, ZhenfaSignal, notification_worker};
 
 const GATEWAY_LISTEN_BACKLOG_ENV: &str = "XIUXIAN_WENDAO_GATEWAY_LISTEN_BACKLOG";
@@ -39,6 +56,11 @@ const MAX_GATEWAY_STUDIO_CONCURRENCY_LIMIT: usize = 128;
 const DEFAULT_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 15;
 const MIN_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 5;
 const MAX_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 60;
+pub(crate) const GATEWAY_FLIGHT_SERVICE_AXUM_PATH: &str =
+    "/arrow.flight.protocol.FlightService/{*grpc_method}";
+const DEFAULT_GATEWAY_SEARCH_FLIGHT_REPO_ID: &str = "alpha/repo";
+#[cfg(feature = "julia")]
+const DEFAULT_GATEWAY_SEARCH_FLIGHT_RERANK_DIMENSION: usize = 3;
 
 /// Handle the gateway command.
 pub(crate) async fn handle(
@@ -96,19 +118,11 @@ async fn handle_start(
     let studio_request_timeout = gateway_studio_request_timeout();
 
     // 3. Build the Axum router
-    let studio_app = studio_routes().layer(
-        ServiceBuilder::new()
-            .layer(HandleErrorLayer::new(handle_gateway_service_error))
-            .load_shed()
-            .timeout(studio_request_timeout)
-            .concurrency_limit(studio_concurrency_limit),
-    );
-    let app = Router::new()
-        .route(openapi_paths::API_HEALTH_AXUM_PATH, get(health))
-        .route(openapi_paths::API_STATS_AXUM_PATH, get(stats))
-        .route(openapi_paths::API_NOTIFY_AXUM_PATH, get(notify_status))
-        .merge(studio_app)
-        .with_state(app_state);
+    let app = build_gateway_router(
+        app_state.clone(),
+        studio_concurrency_limit,
+        studio_request_timeout,
+    )?;
 
     // 4. Start the server
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -130,12 +144,74 @@ async fn handle_start(
         "  - GET {}  - Notification service status",
         openapi_paths::API_NOTIFY_AXUM_PATH
     );
+    #[cfg(feature = "julia")]
+    info!(
+        "  - POST {}  - Arrow Flight business plane",
+        GATEWAY_FLIGHT_SERVICE_AXUM_PATH
+    );
 
     let socket = tokio::net::TcpSocket::new_v4()?;
     socket.set_reuseaddr(true)?;
     socket.bind(addr)?;
     let listener = socket.listen(listen_backlog)?;
     Ok(axum::serve(listener, app).await?)
+}
+
+pub(crate) fn build_gateway_router(
+    app_state: Arc<AppState>,
+    studio_concurrency_limit: usize,
+    studio_request_timeout: Duration,
+) -> Result<Router> {
+    let studio_app = studio_routes().layer(
+        ServiceBuilder::new()
+            .layer(HandleErrorLayer::new(handle_gateway_service_error))
+            .load_shed()
+            .timeout(studio_request_timeout)
+            .concurrency_limit(studio_concurrency_limit),
+    );
+    let app = Router::new()
+        .route(openapi_paths::API_HEALTH_AXUM_PATH, get(health))
+        .route(openapi_paths::API_STATS_AXUM_PATH, get(stats))
+        .route(openapi_paths::API_NOTIFY_AXUM_PATH, get(notify_status))
+        .merge(studio_app)
+        .with_state(app_state.clone());
+
+    #[cfg(feature = "julia")]
+    let app = mount_gateway_flight_service(app, app_state)?;
+
+    Ok(app)
+}
+
+#[cfg(feature = "julia")]
+fn mount_gateway_flight_service(app: Router, app_state: Arc<AppState>) -> Result<Router> {
+    let effective_settings = resolve_gateway_effective_search_host_settings()?;
+    let flight_service = build_search_plane_studio_flight_service_with_weights(
+        Arc::new(app_state.studio.search_plane_service()),
+        DEFAULT_GATEWAY_SEARCH_FLIGHT_REPO_ID,
+        app_state,
+        effective_settings.expected_schema_version,
+        effective_settings.rerank_dimension,
+        effective_settings.rerank_weights,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let flight_service = GrpcWebLayer::new().layer(FlightServiceServer::new(flight_service));
+    Ok(app.route(
+        GATEWAY_FLIGHT_SERVICE_AXUM_PATH,
+        any_service(flight_service),
+    ))
+}
+
+#[cfg(feature = "julia")]
+fn resolve_gateway_effective_search_host_settings() -> Result<EffectiveRerankFlightHostSettings> {
+    let file_backed_settings = resolve_link_graph_rerank_flight_runtime_settings();
+    Ok(resolve_runtime_effective_rerank_flight_host_settings(
+        None,
+        None,
+        file_backed_settings.schema_version,
+        file_backed_settings.score_weights,
+        DEFAULT_GATEWAY_SEARCH_FLIGHT_RERANK_DIMENSION,
+        rerank_score_weights_from_env().map_err(anyhow::Error::msg)?,
+    ))
 }
 
 async fn handle_gateway_service_error(error: BoxError) -> (StatusCode, Json<serde_json::Value>) {

@@ -7,8 +7,9 @@ use crate::agent::native_tools::registry::NativeToolRegistry;
 use crate::agent::native_tools::spider::SpiderCrawlTool;
 use crate::agent::native_tools::zhixing::{AgendaViewTool, JournalRecordTool, TaskAddTool};
 use xiuxian_skills::{InternalSkillNativeAliasSpec, InternalSkillWorkflowType};
+use xiuxian_wendao::ingress::SpiderWendaoBridge;
+use xiuxian_wendao::skill_vfs::SkillVfsResolver;
 use xiuxian_wendao::skill_vfs::internal_authority::AuthorizedInternalSkillNativeAliasScan;
-use xiuxian_wendao::{SkillVfsResolver, SpiderWendaoBridge};
 use xiuxian_zhixing::ZhixingHeyi;
 
 pub(in crate::agent::bootstrap) fn mount_native_tool_cauldron(

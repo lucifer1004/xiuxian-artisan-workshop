@@ -9,6 +9,8 @@ from .mode import WendaoTransportMode
 
 WENDAO_SCHEMA_VERSION_HEADER = "x-wendao-schema-version"
 WENDAO_RERANK_DIMENSION_HEADER = "x-wendao-rerank-embedding-dimension"
+WENDAO_RERANK_TOP_K_HEADER = "x-wendao-rerank-top-k"
+WENDAO_RERANK_MIN_FINAL_SCORE_HEADER = "x-wendao-rerank-min-final-score"
 WENDAO_REPO_SEARCH_QUERY_HEADER = "x-wendao-repo-search-query"
 WENDAO_REPO_SEARCH_LIMIT_HEADER = "x-wendao-repo-search-limit"
 WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER = "x-wendao-repo-search-language-filters"
@@ -76,6 +78,8 @@ class WendaoTransportConfig:
 __all__ = [
     "REPO_SEARCH_DEFAULT_LIMIT",
     "WENDAO_RERANK_DIMENSION_HEADER",
+    "WENDAO_RERANK_MIN_FINAL_SCORE_HEADER",
+    "WENDAO_RERANK_TOP_K_HEADER",
     "WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER",
     "WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER",
     "WENDAO_REPO_SEARCH_LIMIT_HEADER",

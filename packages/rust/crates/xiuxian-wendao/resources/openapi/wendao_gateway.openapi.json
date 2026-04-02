@@ -261,87 +261,6 @@
         }
       }
     },
-    "/api/search/intent": {
-      "get": {
-        "operationId": "studioSearchKnowledgeIntent",
-        "tags": ["studio-search"],
-        "summary": "Search knowledge with intent",
-        "description": "Run ranked knowledge search with explicit intent hints and return intent metadata.",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "description": "Search query text.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "intent",
-            "in": "query",
-            "required": false,
-            "description": "Optional semantic intent label.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "description": "Maximum number of hits to return.",
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Ranked intent-aware knowledge search results."
-          },
-          "400": {
-            "description": "The search query was missing or invalid."
-          }
-        }
-      }
-    },
-    "/api/search/attachments": {
-      "get": {
-        "operationId": "studioSearchAttachments",
-        "tags": ["studio-search"],
-        "summary": "Search attachments",
-        "description": "Search indexed attachment metadata across the current studio scope.",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "description": "Attachment search query text.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "description": "Maximum number of hits to return.",
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Attachment search results."
-          },
-          "400": {
-            "description": "The attachment search query was missing or invalid."
-          }
-        }
-      }
-    },
     "/api/search/index/status": {
       "get": {
         "operationId": "studioSearchIndexStatus",
@@ -354,33 +273,6 @@
           },
           "500": {
             "description": "The gateway failed while computing the search-plane index status."
-          }
-        }
-      }
-    },
-    "/api/search/ast": {
-      "get": {
-        "operationId": "studioSearchAst",
-        "tags": ["studio-search"],
-        "summary": "Search AST observations",
-        "description": "Search AST-backed observations across indexed project sources.",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "description": "AST search query text.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "AST search results."
-          },
-          "400": {
-            "description": "The AST search query was missing or invalid."
           }
         }
       }
@@ -412,60 +304,6 @@
         }
       }
     },
-    "/api/search/references": {
-      "get": {
-        "operationId": "studioSearchReferences",
-        "tags": ["studio-search"],
-        "summary": "Search references",
-        "description": "Return code or document references for the requested identifier in the current studio scope.",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "description": "Identifier or symbol to search for.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reference search results."
-          },
-          "400": {
-            "description": "The reference search query was missing or invalid."
-          }
-        }
-      }
-    },
-    "/api/search/symbols": {
-      "get": {
-        "operationId": "studioSearchSymbols",
-        "tags": ["studio-search"],
-        "summary": "Search symbols",
-        "description": "Search indexed source symbols across the configured studio projects.",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "description": "Symbol search query text.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Symbol search results."
-          },
-          "400": {
-            "description": "The symbol search query was missing or invalid."
-          }
-        }
-      }
-    },
     "/api/search/autocomplete": {
       "get": {
         "operationId": "studioSearchAutocomplete",
@@ -489,81 +327,6 @@
           },
           "400": {
             "description": "The autocomplete prefix was missing or invalid."
-          }
-        }
-      }
-    },
-    "/api/analysis/markdown": {
-      "get": {
-        "operationId": "studioMarkdownAnalysis",
-        "tags": ["studio-analysis"],
-        "summary": "Analyze Markdown structure",
-        "description": "Return the structural Markdown analysis payload used by the studio explorer and graph views.",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "query",
-            "required": true,
-            "description": "Repository-relative path to the Markdown file.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Markdown analysis payload with nodes, edges, and projections."
-          },
-          "400": {
-            "description": "Requested Markdown input is missing, invalid, or outside the configured studio scope."
-          }
-        }
-      }
-    },
-    "/api/analysis/code-ast": {
-      "get": {
-        "operationId": "studioCodeAstAnalysis",
-        "tags": ["studio-analysis"],
-        "summary": "Analyze code AST projections",
-        "description": "Return the code AST nodes, edges, and projection summaries for a repository source file in the current studio scope.",
-        "parameters": [
-          {
-            "name": "path",
-            "in": "query",
-            "required": true,
-            "description": "Repository-relative path to the source file.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "repo",
-            "in": "query",
-            "required": true,
-            "description": "Repository identifier registered in the current studio session.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "line",
-            "in": "query",
-            "required": false,
-            "description": "Optional 1-based line hint used to focus one AST node in the response.",
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Code AST analysis payload with nodes, edges, and projections."
-          },
-          "400": {
-            "description": "Requested code AST input is missing, invalid, or outside the configured studio scope."
-          },
-          "500": {
-            "description": "Gateway failed to analyze the requested code file."
           }
         }
       }
@@ -649,6 +412,67 @@
         }
       }
     },
+    "/api/ui/plugins/{plugin_id}/artifacts/{artifact_id}": {
+      "get": {
+        "operationId": "studioGetPluginArtifact",
+        "tags": ["studio-config"],
+        "summary": "Inspect generic plugin artifact",
+        "description": "Return the currently resolved generic plugin artifact for the selected plugin and artifact identifier. The default response is structured JSON; pass `format=toml` to inspect the same artifact as a TOML document.",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "required": true,
+            "description": "Plugin identifier for artifact selection.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "artifact_id",
+            "in": "path",
+            "required": true,
+            "description": "Artifact identifier to inspect for the selected plugin.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "Optional response format for plugin artifact inspection.",
+            "schema": {
+              "type": "string",
+              "enum": ["json", "toml"],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved plugin artifact in the requested inspection format.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "pluginId": "xiuxian-wendao-julia",
+                  "artifactId": "deployment",
+                  "schemaVersion": "v1",
+                  "baseUrl": "http://127.0.0.1:18080",
+                  "route": "/rerank"
+                }
+              },
+              "text/plain": {
+                "example": "plugin_id = \"xiuxian-wendao-julia\"\nartifact_id = \"deployment\"\nschema_version = \"v1\"\nbase_url = \"http://127.0.0.1:18080\"\nroute = \"/rerank\"\n"
+              }
+            }
+          },
+          "500": {
+            "description": "Gateway failed to resolve or render the selected plugin artifact."
+          }
+        }
+      }
+    },
     "/api/ui/julia-deployment-artifact": {
       "get": {
         "operationId": "studioGetJuliaDeploymentArtifact",
@@ -677,8 +501,8 @@
                   "artifactSchemaVersion": "v1",
                   "generatedAt": "2026-03-27T16:00:00+00:00",
                   "baseUrl": "http://127.0.0.1:18080",
-                  "route": "/arrow-ipc",
-                  "healthRoute": "/health",
+                  "route": "/rerank",
+                  "healthRoute": "/healthz",
                   "schemaVersion": "v1",
                   "timeoutSecs": 30,
                   "launch": {
@@ -693,7 +517,7 @@
                 }
               },
               "text/plain": {
-                "example": "artifact_schema_version = \"v1\"\ngenerated_at = \"2026-03-27T16:00:00+00:00\"\nbase_url = \"http://127.0.0.1:18080\"\nroute = \"/arrow-ipc\"\nhealth_route = \"/health\"\nschema_version = \"v1\"\ntimeout_secs = 30\n\n[launch]\nlauncher_path = \".data/WendaoAnalyzer/scripts/run_analyzer_service.sh\"\nargs = [\"--service-mode\", \"stream\", \"--analyzer-strategy\", \"linear_blend\"]\n"
+                "example": "artifact_schema_version = \"v1\"\ngenerated_at = \"2026-03-27T16:00:00+00:00\"\nbase_url = \"http://127.0.0.1:18080\"\nroute = \"/rerank\"\nhealth_route = \"/healthz\"\nschema_version = \"v1\"\ntimeout_secs = 30\n\n[launch]\nlauncher_path = \".data/WendaoAnalyzer/scripts/run_analyzer_service.sh\"\nargs = [\"--service-mode\", \"stream\", \"--analyzer-strategy\", \"linear_blend\"]\n"
               }
             }
           },

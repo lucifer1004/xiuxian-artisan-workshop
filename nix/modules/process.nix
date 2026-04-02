@@ -97,8 +97,12 @@ in
 
             HTTP_STATUS="$(printf '%s\n' "$RESPONSE" | awk 'NR == 1 { print $2; exit }')"
             ACTUAL_PID="$(printf '%s\n' "$RESPONSE" | awk -F': ' 'tolower($1) == "x-wendao-process-id" { gsub(/[[:space:]\r]/, "", $2); print $2; exit }')"
+            FLIGHT_STATUS="$(
+              curl -sS --max-time 2 -o /dev/null -w '%{http_code}' -X POST \
+                "http://127.0.0.1:$PORT/arrow.flight.protocol.FlightService/GetFlightInfo"
+            )" || exit 1
 
-            if [ "$HTTP_STATUS" != "200" ] || [ -z "$ACTUAL_PID" ] || [ "$ACTUAL_PID" != "$EXPECTED_PID" ]; then
+            if [ "$HTTP_STATUS" != "200" ] || [ -z "$ACTUAL_PID" ] || [ "$ACTUAL_PID" != "$EXPECTED_PID" ] || [ "$FLIGHT_STATUS" = "404" ] || [ "$FLIGHT_STATUS" = "000" ]; then
               exit 1
             fi
           '';

@@ -1,9 +1,11 @@
-use super::super::super::zhixing::{ZhixingRuntimeBundle, resolve_project_root};
-use super::super::constants::{
+use crate::agent::bootstrap::hot_reload::constants::{
     DEFAULT_WENDAO_INCREMENTAL_EXTENSIONS, DEFAULT_WENDAO_WATCH_PATTERNS,
     HOT_RELOAD_TARGET_WENDAO_INDEX, TARGET_ID_WENDAO_INDEX,
 };
-use super::registration::{PreparedHotReloadTarget, RegisteredHotReloadTarget, summarize_paths};
+use crate::agent::bootstrap::hot_reload::registration::{
+    PreparedHotReloadTarget, RegisteredHotReloadTarget, summarize_paths,
+};
+use crate::agent::bootstrap::zhixing::{ZhixingRuntimeBundle, resolve_project_root};
 use crate::config::XiuxianConfig;
 use anyhow::anyhow;
 use std::path::{Path, PathBuf};
@@ -12,7 +14,7 @@ use xiuxian_qianhuan::{
     HotReloadInvocation, HotReloadTarget, resolve_hot_reload_watch_extensions,
     resolve_hot_reload_watch_patterns,
 };
-use xiuxian_wendao::IncrementalSyncPolicy;
+use xiuxian_wendao::sync::IncrementalSyncPolicy;
 
 pub(in crate::agent::bootstrap::hot_reload) fn prepare_wendao_index_target(
     runtime_bundle: &ZhixingRuntimeBundle,

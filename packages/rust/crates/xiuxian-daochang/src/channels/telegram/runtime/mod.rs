@@ -51,10 +51,10 @@ pub(crate) async fn test_handle_inbound_message_with_interrupt(
 
 pub(crate) async fn test_push_background_completion(
     channel: &Arc<dyn Channel>,
-    _agent: &Arc<Agent>,
+    agent: &Arc<Agent>,
     completion: crate::jobs::JobCompletion,
 ) {
-    jobs::push_background_completion(channel, completion).await;
+    jobs::push_background_completion(channel, agent, completion).await;
 }
 
 pub(crate) fn test_resolve_snapshot_interval_secs<F>(lookup: F) -> Option<u64>

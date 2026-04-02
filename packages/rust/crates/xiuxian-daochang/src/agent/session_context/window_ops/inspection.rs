@@ -1,7 +1,7 @@
-use crate::observability::SessionEvent;
 use anyhow::Result;
 
-use super::super::{Agent, SessionContextMode, SessionContextWindowInfo};
+use crate::agent::{Agent, SessionContextMode, SessionContextWindowInfo};
+use crate::observability::SessionEvent;
 
 impl Agent {
     /// Inspect active context window counters for this session.

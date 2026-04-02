@@ -13,8 +13,9 @@ use xiuxian_llm::llm::{ChatRequest, LlmClient, LlmResult};
 use xiuxian_memory_engine::{EpisodeStore, StoreConfig};
 use xiuxian_qianhuan::{PersonaRegistry, orchestrator::ThousandFacesOrchestrator};
 use xiuxian_qianji::{QianjiApp, QianjiLlmClient};
-use xiuxian_wendao::embedded_resource_text_from_wendao_uri;
-use xiuxian_wendao::{LinkGraphIndex, zhenfa_router::WendaoSearchTool};
+use xiuxian_wendao::link_graph::LinkGraphIndex;
+use xiuxian_wendao::skill_vfs::embedded_resource_text_from_wendao_uri;
+use xiuxian_wendao::zhenfa_router::WendaoSearchTool;
 use xiuxian_zhenfa::{
     ZhenfaContext, ZhenfaError, ZhenfaOrchestrator, ZhenfaOrchestratorHooks, ZhenfaRegistry,
     ZhenfaSignal, ZhenfaSignalSink, ZhenfaTool,

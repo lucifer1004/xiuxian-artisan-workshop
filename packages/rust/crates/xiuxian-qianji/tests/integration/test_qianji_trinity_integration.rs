@@ -12,7 +12,7 @@ use xiuxian_qianhuan::{orchestrator::ThousandFacesOrchestrator, persona::Persona
 use xiuxian_qianji::executors::annotation::ContextAnnotator;
 use xiuxian_qianji::executors::calibration::SynapseCalibrator;
 use xiuxian_qianji::{QianjiEngine, QianjiScheduler};
-use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::link_graph::LinkGraphIndex;
 
 #[tokio::test]
 async fn test_qianji_trinity_integration() {

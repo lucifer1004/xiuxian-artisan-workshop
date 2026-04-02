@@ -20,12 +20,11 @@ pub use config::{
 };
 pub use error::{StudioApiError, map_repo_intelligence_error};
 pub use handlers::{
-    code_ast, code_ast_retrieval_arrow, doc_coverage, docs_family_cluster, docs_family_context,
-    docs_family_search, docs_navigation, docs_navigation_search, docs_page, docs_planner_item,
-    docs_planner_queue, docs_planner_rank, docs_planner_search, docs_planner_workset,
-    docs_projected_gap_report, docs_retrieval, docs_retrieval_context, docs_retrieval_hit,
-    docs_search, example_search, get_plugin_artifact, get_ui_config, graph_neighbors, markdown,
-    markdown_retrieval_arrow, module_search, node_neighbors, overview, projected_page,
+    doc_coverage, docs_family_cluster, docs_family_context, docs_family_search, docs_navigation,
+    docs_navigation_search, docs_page, docs_planner_item, docs_planner_queue, docs_planner_rank,
+    docs_planner_search, docs_planner_workset, docs_projected_gap_report, docs_retrieval,
+    docs_retrieval_context, docs_retrieval_hit, docs_search, example_search, get_plugin_artifact,
+    get_ui_config, graph_neighbors, module_search, node_neighbors, overview, projected_page,
     projected_page_family_cluster, projected_page_family_context, projected_page_family_search,
     projected_page_index_node, projected_page_index_tree, projected_page_index_tree_search,
     projected_page_index_trees, projected_page_navigation, projected_page_navigation_search,
@@ -38,7 +37,7 @@ pub use routes::{studio_router, studio_routes};
 pub use sanitization::{
     sanitize_path_like, sanitize_path_list, sanitize_projects, sanitize_repo_projects,
 };
-pub use state::{GatewayState, StudioState};
+pub use state::{GatewayState, StudioBootstrapBackgroundIndexingTelemetry, StudioState};
 
 #[cfg(test)]
 mod tests;

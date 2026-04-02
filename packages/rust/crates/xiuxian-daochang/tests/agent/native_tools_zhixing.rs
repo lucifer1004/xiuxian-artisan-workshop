@@ -14,8 +14,11 @@ use xiuxian_qianhuan::{
     ManifestationManager, MemoryPersonaRecord, MemoryTemplateRecord, MockManifestation,
     PersonaRegistry,
 };
+use xiuxian_wendao::enhancer::markdown_config::{
+    MarkdownConfigBlock, extract_markdown_config_blocks,
+};
+use xiuxian_wendao::entity::{Entity, EntityType};
 use xiuxian_wendao::graph::KnowledgeGraph;
-use xiuxian_wendao::{Entity, EntityType, MarkdownConfigBlock, extract_markdown_config_blocks};
 use xiuxian_zhixing::{
     ATTR_JOURNAL_CARRYOVER, ATTR_TIMER_RECIPIENT, ATTR_TIMER_REMINDED, ATTR_TIMER_SCHEDULED,
     ZhixingHeyi, storage::MarkdownStorage,

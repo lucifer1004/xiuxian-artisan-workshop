@@ -3,13 +3,13 @@ use std::sync::Arc;
 use arrow::array::{FixedSizeListArray, Float32Array, Float64Array, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
-use xiuxian_vector::{
-    ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION, ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY,
-    attach_record_batch_metadata, attach_record_batch_trace_id,
-};
+use xiuxian_vector::{attach_record_batch_metadata, attach_record_batch_trace_id};
 use xiuxian_wendao_core::repo_intelligence::{
-    JULIA_ARROW_ANALYZER_SCORE_COLUMN, JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_FINAL_SCORE_COLUMN,
-    julia_arrow_request_schema, julia_arrow_response_schema,
+    JULIA_ARROW_DOC_ID_COLUMN, JULIA_ARROW_FINAL_SCORE_COLUMN, julia_arrow_request_schema,
+    julia_arrow_response_schema,
+};
+use xiuxian_wendao_runtime::transport::{
+    DEFAULT_FLIGHT_SCHEMA_VERSION, FLIGHT_SCHEMA_VERSION_METADATA_KEY,
 };
 pub(crate) fn response_batch_without_trace_id() -> RecordBatch {
     RecordBatch::try_new(
@@ -35,21 +35,9 @@ pub(crate) fn response_batch_with_duplicates() -> RecordBatch {
     .expect("duplicate response batch")
 }
 
-pub(crate) fn response_batch() -> RecordBatch {
-    RecordBatch::try_new(
-        julia_arrow_response_schema(false),
-        vec![
-            Arc::new(StringArray::from(vec!["doc-a"])),
-            Arc::new(Float64Array::from(vec![0.6_f64])),
-            Arc::new(Float64Array::from(vec![0.9_f64])),
-        ],
-    )
-    .expect("response batch")
-}
-
 pub(crate) fn request_batch() -> RecordBatch {
     let vector_dim = 2;
-    RecordBatch::try_new(
+    let batch = RecordBatch::try_new(
         julia_arrow_request_schema(vector_dim),
         vec![
             Arc::new(StringArray::from(vec!["doc-a", "doc-b"])),
@@ -64,33 +52,19 @@ pub(crate) fn request_batch() -> RecordBatch {
             )),
         ],
     )
-    .expect("request batch")
+    .expect("request batch");
+    attach_record_batch_metadata(
+        &batch,
+        [(
+            FLIGHT_SCHEMA_VERSION_METADATA_KEY,
+            DEFAULT_FLIGHT_SCHEMA_VERSION,
+        )],
+    )
+    .expect("attach request schema metadata")
 }
 
 pub(crate) fn request_batch_with_trace_id(trace_id: &str) -> RecordBatch {
-    let batch = request_batch();
-    attach_record_batch_metadata(
-        &attach_record_batch_trace_id(&batch, trace_id).expect("attach trace metadata"),
-        [(
-            ARROW_TRANSPORT_SCHEMA_VERSION_METADATA_KEY,
-            ARROW_TRANSPORT_DEFAULT_SCHEMA_VERSION,
-        )],
-    )
-    .expect("attach request metadata")
-}
-
-pub(crate) fn invalid_response_missing_final_batch() -> RecordBatch {
-    RecordBatch::try_new(
-        Arc::new(Schema::new(vec![
-            Field::new(JULIA_ARROW_DOC_ID_COLUMN, DataType::Utf8, false),
-            Field::new(JULIA_ARROW_ANALYZER_SCORE_COLUMN, DataType::Float64, false),
-        ])),
-        vec![
-            Arc::new(StringArray::from(vec!["doc-a"])),
-            Arc::new(Float64Array::from(vec![0.6_f64])),
-        ],
-    )
-    .expect("invalid response batch")
+    attach_record_batch_trace_id(&request_batch(), trace_id).expect("attach trace metadata")
 }
 
 pub(crate) fn invalid_response_missing_analyzer_score_batch() -> RecordBatch {

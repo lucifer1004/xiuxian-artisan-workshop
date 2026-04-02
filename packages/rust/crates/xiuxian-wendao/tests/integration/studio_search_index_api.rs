@@ -39,6 +39,20 @@ async fn search_index_status_endpoint_returns_idle_corpora_snapshot() -> TestRes
     assert_eq!(payload["total"], Value::from(6));
     assert_eq!(payload["compactionPending"], Value::from(0));
     assert_eq!(payload["degraded"], Value::from(0));
+    assert_eq!(
+        payload["studioBootstrapBackgroundIndexingEnabled"],
+        Value::from(false)
+    );
+    assert_eq!(
+        payload["studioBootstrapBackgroundIndexingMode"],
+        Value::from("deferred")
+    );
+    assert_eq!(
+        payload["studioBootstrapBackgroundIndexingDeferredActivationObserved"],
+        Value::from(false)
+    );
+    assert!(payload["studioBootstrapBackgroundIndexingDeferredActivationAt"].is_null());
+    assert!(payload["studioBootstrapBackgroundIndexingDeferredActivationSource"].is_null());
     assert!(
         payload
             .get("queryTelemetrySummary")

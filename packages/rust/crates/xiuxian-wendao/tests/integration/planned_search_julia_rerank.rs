@@ -1,6 +1,6 @@
 #![cfg(feature = "julia")]
 
-//! Integration tests for planned-search Julia rerank over WendaoArrow IPC.
+//! Integration tests for planned-search Julia rerank over WendaoArrow Flight.
 
 use axum::routing::post;
 use axum::{Json, Router};
@@ -11,6 +11,7 @@ use xiuxian_vector::VectorStore;
 use xiuxian_wendao::{
     LinkGraphIndex, LinkGraphSearchOptions, set_link_graph_wendao_config_override,
 };
+use xiuxian_wendao_julia::compatibility::link_graph::DEFAULT_JULIA_RERANK_FLIGHT_ROUTE;
 
 use crate::support::wendaoarrow_custom_service::{
     WendaoArrowScoreRow, spawn_wendaoarrow_custom_scoring_service,
@@ -80,13 +81,14 @@ embedding_model = "glm-5"
 
 [link_graph.retrieval.julia_rerank]
 base_url = "{}"
-route = "/arrow-ipc"
+route = "{}"
 schema_version = "v1"
 timeout_secs = 10
 "#,
             vector_store_path.to_string_lossy(),
             embedding_base_url,
             server_base_url,
+            DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
         ),
     )?;
     let config_path_string = config_path.to_string_lossy().to_string();
@@ -108,7 +110,9 @@ timeout_secs = 10
             .julia_rerank
             .as_ref()
             .map(|telemetry| telemetry.applied),
-        Some(true)
+        Some(true),
+        "unexpected Julia rerank telemetry: {:?}",
+        payload.julia_rerank
     );
     assert_eq!(
         payload

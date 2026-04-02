@@ -24,6 +24,10 @@ Replace Studio request-path search hot spots with a background-built search plan
 ## Current Slice
 
 - foundation for corpus status, epoch publication, and single-flight builds is landed
+- `/api/analysis/markdown` and `/api/analysis/code-ast` are no longer active
+  HTTP business surfaces; the bundled gateway route surface now removes them
+  outright and keeps `/analysis/markdown` plus `/analysis/code-ast` as
+  Flight-only business contracts
 - `analyzers/config.rs` is now split into `analyzers/config/` with dedicated types, TOML schema, parse, load, and tests modules, while the repo-intelligence config surface remains unchanged; the next bounded target is `search/tantivy/index.rs`
 - `search/tantivy/index.rs` is now split into `search/tantivy/index/` with dedicated core, exact, prefix, fuzzy, and helper modules, while the shared Tantivy search surface remains unchanged; the next bounded target is `analyzers/service/helpers/tests.rs`
 - `analyzers/service/helpers/tests.rs` is now split into `analyzers/service/helpers/tests/` with dedicated fixture and themed assertion modules, while the helpers test surface remains unchanged; the next bounded target is `search_plane/local_symbol/query/shared.rs`
@@ -196,7 +200,7 @@ Replace Studio request-path search hot spots with a background-built search plan
 - the staged-delete predicate ceiling is now deliberately conservative at `100` paths per batch, trading a few extra delete calls for lower DataFusion SQL parsing pressure during large branch switches or repo refresh bursts
 - the proposed pure `merge_insert` rewrite was explicitly rejected for the current incremental model. Deleted-path correctness still depends on reusing the last published table as the mutation base, so the production-safe path remains `clone + batched delete + merge_insert`
 - version cleanup is now closer to epoch reality too. `xiuxian-vector::VectorStore::compact(...)` no longer relies on a coarse seven-day cleanup window; it compacts first and then asks Lance to retain only the most recent two table versions, which bounds post-mutation version drift without pretending that old epoch-local history is still a live reader requirement
-- gateway realism now has a dedicated benchmark-and-audit module. `scripts/benchmark_wendao_gateway_openapi.ts` remains the thin CLI entrypoint, while `scripts/wendao_gateway_openapi_benchmark.ts` validates the full bundled OpenAPI artifact, benchmarks repo-scale `/api/repo/index/status`, `/api/repo/sync?mode=status`, `/api/search/index/status`, and `/api/search/intent?intent=code_search` traffic against real repo ids from `.data/wendao-frontend/wendao.toml`, smoke-probes the remaining safe GET routes with discovered repo/page/node/gap/VFS seeds, runs sustained high-concurrency hot-path stress suites, and writes timestamped TOML reports under `.data/wendao-frontend/.benchmark/`
+- gateway realism now has a dedicated benchmark-and-audit module. `scripts/benchmark_wendao_gateway_openapi.ts` remains the thin CLI entrypoint, while `scripts/wendao_gateway_openapi_benchmark.ts` validates the bundled OpenAPI control surface, benchmarks repo-scale `/api/repo/index/status`, `/api/repo/sync?mode=status`, and `/api/search/index/status` traffic against real repo ids from `.data/wendao-frontend/wendao.toml`, smoke-probes the remaining safe GET control routes with discovered repo/page/node/gap/VFS seeds, runs sustained high-concurrency hot-path stress suites, and writes timestamped TOML reports under `.data/wendao-frontend/.benchmark/`
 - Studio shutdown now explicitly tears down the queue-backed repo maintenance runtime too. `SearchPlaneService::stop_repo_maintenance()` rejects new repo maintenance work, clears queued and in-flight waiter state, aborts any active repo-maintenance worker, and is called from `StudioState::stop_background_services()` next to `repo_index.stop()` and `symbol_index_coordinator.stop()`
 - shutdown semantics are now locked by targeted regressions: one test proves shutdown clears waiters and releases the worker handle, and another proves repo prewarm can no longer fall back to inline execution after shutdown has started
 - local corpus maintenance now has the same shutdown boundary. `SearchPlaneService::stop_local_maintenance()` marks local maintenance as shutting down, aborts in-flight local compaction handles, clears the running-compaction runtime, and `stop_background_maintenance()` now shuts down both local and repo maintenance from the Studio stop path
@@ -229,10 +233,9 @@ Replace Studio request-path search hot spots with a background-built search plan
 - local-symbol hits now persist `project_name` and `root_label` directly from the configured scope that produced the file, so partitioned reads preserve Studio navigation metadata without a request-path re-enrichment pass
 - repo compaction queue now also has an explicit ordering rule. After same-repo stale replacement, `PublishThreshold` outranks `RowDeltaRatio`, and within the same reason smaller `row_count` is inserted ahead of larger work so repo maintenance can clear smaller urgent compactions sooner without lying about `queue_position`
 - checkout lock pressure tolerance is now configurable. Managed checkout lock acquisition resolves `XIUXIAN_WENDAO_CHECKOUT_LOCK_MAX_WAIT_SECS`, defaults to `20s`, and keeps the existing stale-lock reclamation path, which raises the concurrency ceiling for repo-intelligence requests without changing lock ownership semantics
-- the bundled gateway OpenAPI contract now accurately declares the required `path` query parameter for `GET /api/analysis/markdown`, and the document test suite now locks both markdown-analysis and code-AST required query params so future drift is caught by tests instead of benchmark failures
+- the bundled gateway OpenAPI contract now omits the retired `/api/analysis/markdown`, `/api/analysis/code-ast`, and `/api/search/ast` HTTP business paths entirely, so the checked-in document matches the pure Flight boundary instead of preserving compatibility shims
 - `search_definition` now inherits the resolver defaults again instead of pinning `ExactOnly` and disabling Markdown hits in the handler, so the endpoint can fall back to fuzzy symbol matches and Markdown heading resolution when exact symbol lookup misses
-- the gateway benchmark-and-audit module now discovers a real local Markdown file for smoke coverage, records that `markdown_file_path` in the TOML report discovery section, and sends a valid `GET /api/analysis/markdown?path=...` request during OpenAPI smoke coverage instead of a guaranteed bad request
-- the gateway benchmark-and-audit module now also discovers a dedicated local-symbol `definition_query` from live `/api/search/ast` hits and records it in the TOML discovery block, so `/api/search/definition` smoke coverage no longer reuses the repo/package query and no longer reports the old false-negative `q=ADTypes` `404`
+- the gateway benchmark-and-audit posture is now aligned with the pure Flight boundary: retired HTTP business routes under `/api/analysis/*` and `/api/search/ast` are no longer part of the outward gateway contract and must be validated through Flight-native coverage instead of HTTP smoke requests
 - the gateway benchmark transport is now hardened for local loopback pressure runs on this host. The CLI no longer depends on Undici `fetch`, and it explicitly binds `localAddress` for loopback targets when issuing `node:http` / `node:https` requests so repeated benchmark traffic against `127.0.0.1` does not fail with local `EADDRNOTAVAIL`
 - with that transport fix in place, the refreshed `96`-concurrency / `60s` pressure report cleared the old markdown contract failure entirely. The remaining benchmark failures are now all honest `INDEX_NOT_READY` responses for unpublished local corpora rather than malformed smoke requests
 - with the later definition-seed correction in place, the refreshed steady-state `96`-concurrency / `60s` report at `.data/wendao-frontend/.benchmark/wendao_gateway_openapi_2026_03_25T06_21_30_057Z.toml` now records `62 passed / 0 failed / 2 skipped`, which removes the last benchmark-only false negative from the bundled OpenAPI smoke surface
@@ -550,6 +553,27 @@ Replace Studio request-path search hot spots with a background-built search plan
   default `15s`, clamped to `5..60s`). Heavy studio routes now shed as
   `503 GATEWAY_OVERLOADED` or `504 GATEWAY_TIMEOUT` earlier, while health,
   stats, and notify endpoints remain outside that envelope
+- the next startup-pressure hotfix moved one layer earlier than load shedding:
+  bootstrap `wendao.toml` apply no longer eagerly starts repo/symbol
+  background indexing by default, and the remaining bootstrap policy is now
+  exposed through `/api/notify`, `/api/search/index/status`, and
+  `/api/repo/index/status`, plus the UI-facing `/api/ui/capabilities`, as
+  `studioBootstrapBackgroundIndexing*` telemetry
+- that same bootstrap-indexing telemetry now also records the first deferred
+  activation boundary as `studioBootstrapBackgroundIndexingDeferredActivation*`.
+  `/api/notify`, `/api/search/index/status`, and `/api/repo/index/status` now
+  all surface that state. The current real lazy-start source is
+  `symbol_index_status`; repo-status surfaces only mirror that gateway-level
+  state and do not imply repo sync is implicitly started on read
+- the three status surfaces now assemble that bootstrap-indexing telemetry from
+  one shared `StudioState` snapshot helper instead of hand-reading the same
+  fields in three separate handlers, which keeps notify/search/repo status
+  payloads aligned without changing any external JSON keys
+- that shared helper now also emits a coarse summary flag,
+  `studioBootstrapBackgroundIndexingDeferredActivationObserved`, and the
+  UI-facing `/api/ui/capabilities` surface exposes the same boolean so clients
+  no longer need to infer "has lazy activation happened yet" from nullable
+  timestamp/source fields
 - focused gateway execution regressions now cover both the tightened
   concurrency clamp and the new studio timeout parser, alongside the existing
   bind/listener checks

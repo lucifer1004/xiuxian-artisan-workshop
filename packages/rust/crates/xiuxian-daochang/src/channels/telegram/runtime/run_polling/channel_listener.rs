@@ -4,9 +4,9 @@ use anyhow::{Result, ensure};
 use tokio::sync::mpsc;
 
 use crate::channels::telegram::TelegramControlCommandPolicy;
+use crate::channels::telegram::channel::TelegramChannel;
+use crate::channels::telegram::session_partition::TelegramSessionPartition;
 use crate::channels::traits::{Channel, ChannelMessage};
-
-use super::super::super::channel::TelegramChannel;
 
 type PollingListenerRuntime = (
     Arc<TelegramChannel>,
@@ -34,7 +34,7 @@ pub(super) fn start_polling_listener(
             allowed_users,
             allowed_groups,
             control_command_policy,
-            super::super::super::session_partition::TelegramSessionPartition::from_env(),
+            TelegramSessionPartition::from_env(),
         ),
     );
     let channel_for_send: Arc<dyn Channel> = channel.clone();

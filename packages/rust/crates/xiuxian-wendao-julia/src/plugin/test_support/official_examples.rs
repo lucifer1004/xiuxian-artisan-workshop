@@ -1,21 +1,26 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+use tokio::net::TcpStream;
 use tokio::time::sleep;
-use xiuxian_vector::ArrowTransportClient;
 
 use super::common::{
     ChildGuard, repo_root, reserve_test_port, wendaoanalyzer_script, wendaoarrow_script,
 };
 
 pub(crate) fn spawn_real_wendaoarrow_service(port: u16) -> ChildGuard {
-    let script = wendaoarrow_script("run_stream_scoring_server.sh");
+    let script = wendaoarrow_script("run_stream_scoring_flight_server.sh");
     spawn_example_script(script, port, "spawn real WendaoArrow service")
 }
 
 pub(crate) fn spawn_real_wendaoarrow_metadata_service(port: u16) -> ChildGuard {
-    let script = wendaoarrow_script("run_stream_metadata_server.sh");
+    let script = wendaoarrow_script("run_stream_metadata_flight_server.sh");
     spawn_example_script(script, port, "spawn real WendaoArrow metadata service")
+}
+
+pub(crate) fn spawn_real_wendaoarrow_bad_response_service(port: u16) -> ChildGuard {
+    let script = wendaoarrow_script("run_stream_scoring_bad_response_flight_server.sh");
+    spawn_example_script(script, port, "spawn real WendaoArrow bad-response service")
 }
 
 pub(crate) fn spawn_real_wendaoanalyzer_linear_blend_service(port: u16) -> ChildGuard {
@@ -40,21 +45,27 @@ fn spawn_example_script(script: std::path::PathBuf, port: u16, error_context: &s
     ChildGuard::new(child)
 }
 
-pub(crate) async fn wait_for_health(client: &ArrowTransportClient) -> Result<(), String> {
-    wait_for_health_with_attempts(client, 50).await
+pub(crate) async fn wait_for_service_ready(base_url: &str) -> Result<(), String> {
+    wait_for_service_ready_with_attempts(base_url, 150).await
 }
 
-pub(crate) async fn wait_for_health_with_attempts(
-    client: &ArrowTransportClient,
+pub(crate) async fn wait_for_service_ready_with_attempts(
+    base_url: &str,
     attempts: usize,
 ) -> Result<(), String> {
+    let socket_addr = base_url
+        .strip_prefix("http://")
+        .or_else(|| base_url.strip_prefix("https://"))
+        .unwrap_or(base_url)
+        .to_string();
+
     for _ in 0..attempts {
-        if client.check_health().await.is_ok() {
+        if TcpStream::connect(&socket_addr).await.is_ok() {
             return Ok(());
         }
         sleep(Duration::from_millis(200)).await;
     }
-    Err("real WendaoArrow service did not become healthy in time".to_string())
+    Err("real Julia Flight service did not become ready in time".to_string())
 }
 
 pub(crate) fn reserve_real_service_port() -> u16 {

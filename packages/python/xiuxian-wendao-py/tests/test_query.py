@@ -7,12 +7,21 @@ from xiuxian_wendao_py.transport import (
     REPO_SEARCH_BEST_SECTION_COLUMN,
     REPO_SEARCH_DEFAULT_LIMIT,
     REPO_SEARCH_COLUMNS,
+    REPO_SEARCH_HIERARCHY_COLUMN,
+    REPO_SEARCH_MATCH_REASON_COLUMN,
+    REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN,
+    REPO_SEARCH_NAVIGATION_LINE_COLUMN,
+    REPO_SEARCH_NAVIGATION_LINE_END_COLUMN,
+    REPO_SEARCH_NAVIGATION_PATH_COLUMN,
+    REPO_SEARCH_TAGS_COLUMN,
     REPO_SEARCH_ROUTE,
     RERANK_EXCHANGE_ROUTE,
     RERANK_REQUEST_COLUMNS,
     RERANK_REQUEST_EMBEDDING_COLUMN,
     RERANK_REQUEST_QUERY_EMBEDDING_COLUMN,
     RERANK_RESPONSE_COLUMNS,
+    RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
+    RERANK_RESPONSE_VECTOR_SCORE_COLUMN,
     WENDAO_REPO_SEARCH_FILENAME_FILTERS_HEADER,
     WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER,
     WENDAO_REPO_SEARCH_LIMIT_HEADER,
@@ -20,6 +29,8 @@ from xiuxian_wendao_py.transport import (
     WENDAO_REPO_SEARCH_QUERY_HEADER,
     WENDAO_REPO_SEARCH_TAG_FILTERS_HEADER,
     WENDAO_REPO_SEARCH_TITLE_FILTERS_HEADER,
+    WENDAO_RERANK_MIN_FINAL_SCORE_HEADER,
+    WENDAO_RERANK_TOP_K_HEADER,
     WendaoRepoSearchRequest,
     WendaoRepoSearchResultRow,
     WendaoRerankRequestRow,
@@ -38,8 +49,11 @@ from xiuxian_wendao_py.transport import (
     rerank_exchange_query,
     rerank_embedding_dimension,
     validate_repo_search_request,
+    rerank_request_metadata,
+    validate_rerank_min_final_score,
     validate_rerank_response_table,
     validate_rerank_request_table,
+    validate_rerank_top_k,
     validate_repo_search_table,
 )
 
@@ -54,7 +68,10 @@ def test_repo_search_query_uses_stable_route_and_ticket() -> None:
 def test_validate_repo_search_table_rejects_missing_columns() -> None:
     table = pa.table({"doc_id": ["doc-1"], "path": ["src/lib.rs"]})
 
-    with pytest.raises(ValueError, match="title, best_section, score, language"):
+    with pytest.raises(
+        ValueError,
+        match="title, best_section, match_reason, navigation_path, navigation_category, navigation_line, navigation_line_end, hierarchy, tags, score, language",
+    ):
         validate_repo_search_table(table)
 
 
@@ -203,6 +220,13 @@ def test_parse_repo_search_rows_builds_typed_rows() -> None:
             "path": ["src/lib.rs"],
             "title": ["Repo Search Result"],
             "best_section": ["12: Repo Search Result section"],
+            "match_reason": ["repo_content_search"],
+            "navigation_path": ["alpha/repo/src/lib.rs"],
+            "navigation_category": ["repo_code"],
+            "navigation_line": [12],
+            "navigation_line_end": [12],
+            "hierarchy": [["src", "lib.rs"]],
+            "tags": [["code", "file", "lang:rust"]],
             "score": [0.91],
             "language": ["rust"],
         }
@@ -216,11 +240,29 @@ def test_parse_repo_search_rows_builds_typed_rows() -> None:
             path="src/lib.rs",
             title="Repo Search Result",
             best_section="12: Repo Search Result section",
+            match_reason="repo_content_search",
+            navigation_path="alpha/repo/src/lib.rs",
+            navigation_category="repo_code",
+            navigation_line=12,
+            navigation_line_end=12,
+            hierarchy=("src", "lib.rs"),
+            tags=("code", "file", "lang:rust"),
             score=0.91,
             language="rust",
         )
     ]
     assert rows[0].best_section == str(table[REPO_SEARCH_BEST_SECTION_COLUMN][0].as_py())
+    assert rows[0].match_reason == str(table[REPO_SEARCH_MATCH_REASON_COLUMN][0].as_py())
+    assert rows[0].navigation_path == str(table[REPO_SEARCH_NAVIGATION_PATH_COLUMN][0].as_py())
+    assert rows[0].navigation_category == str(
+        table[REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN][0].as_py()
+    )
+    assert rows[0].navigation_line == int(table[REPO_SEARCH_NAVIGATION_LINE_COLUMN][0].as_py())
+    assert rows[0].navigation_line_end == int(
+        table[REPO_SEARCH_NAVIGATION_LINE_END_COLUMN][0].as_py()
+    )
+    assert rows[0].hierarchy == tuple(table[REPO_SEARCH_HIERARCHY_COLUMN][0].as_py())
+    assert rows[0].tags == tuple(table[REPO_SEARCH_TAGS_COLUMN][0].as_py())
     assert tuple(table.column_names) == REPO_SEARCH_COLUMNS
 
 
@@ -257,9 +299,7 @@ def test_build_rerank_request_table_builds_stable_columns() -> None:
     )
 
     assert tuple(table.column_names) == RERANK_REQUEST_COLUMNS
-    assert table.schema.field(RERANK_REQUEST_EMBEDDING_COLUMN).type == pa.list_(
-        pa.float32(), 3
-    )
+    assert table.schema.field(RERANK_REQUEST_EMBEDDING_COLUMN).type == pa.list_(pa.float32(), 3)
     assert table.schema.field(RERANK_REQUEST_QUERY_EMBEDDING_COLUMN).type == pa.list_(
         pa.float32(), 3
     )
@@ -290,14 +330,84 @@ def test_build_rerank_request_table_builds_stable_columns() -> None:
 def test_validate_rerank_response_table_rejects_missing_columns() -> None:
     table = pa.table({"doc_id": ["doc-1"], "final_score": [0.97]})
 
-    with pytest.raises(ValueError, match="rank"):
+    with pytest.raises(ValueError, match="vector_score, semantic_score, rank"):
         validate_rerank_response_table(table)
+
+
+def test_validate_rerank_top_k_rejects_zero() -> None:
+    with pytest.raises(ValueError, match="rerank top_k must be greater than zero"):
+        validate_rerank_top_k(0)
+
+
+def test_validate_rerank_top_k_rejects_negative_values() -> None:
+    with pytest.raises(ValueError, match="rerank top_k must be greater than zero"):
+        validate_rerank_top_k(-1)
+
+
+def test_validate_rerank_min_final_score_rejects_out_of_range_values() -> None:
+    with pytest.raises(
+        ValueError,
+        match=r"rerank min_final_score must stay within inclusive range \[0.0, 1.0\]",
+    ):
+        validate_rerank_min_final_score(1.2)
+
+
+def test_rerank_request_metadata_includes_dimension_and_top_k() -> None:
+    metadata = rerank_request_metadata(
+        [
+            WendaoRerankRequestRow(
+                doc_id="doc-1",
+                vector_score=0.91,
+                embedding=(0.1, 0.2, 0.3),
+                query_embedding=(0.4, 0.5, 0.6),
+            )
+        ],
+        top_k=1,
+    )
+
+    assert metadata["x-wendao-rerank-embedding-dimension"] == "3"
+    assert metadata[WENDAO_RERANK_TOP_K_HEADER] == "1"
+
+
+def test_rerank_request_metadata_includes_min_final_score() -> None:
+    metadata = rerank_request_metadata(
+        [
+            WendaoRerankRequestRow(
+                doc_id="doc-1",
+                vector_score=0.91,
+                embedding=(0.1, 0.2, 0.3),
+                query_embedding=(0.4, 0.5, 0.6),
+            )
+        ],
+        min_final_score=0.75,
+    )
+
+    assert metadata["x-wendao-rerank-embedding-dimension"] == "3"
+    assert metadata[WENDAO_RERANK_MIN_FINAL_SCORE_HEADER] == "0.75"
+
+
+def test_rerank_request_metadata_omits_top_k_when_not_requested() -> None:
+    metadata = rerank_request_metadata(
+        [
+            WendaoRerankRequestRow(
+                doc_id="doc-1",
+                vector_score=0.91,
+                embedding=(0.1, 0.2, 0.3),
+                query_embedding=(0.4, 0.5, 0.6),
+            )
+        ]
+    )
+
+    assert metadata["x-wendao-rerank-embedding-dimension"] == "3"
+    assert WENDAO_RERANK_TOP_K_HEADER not in metadata
 
 
 def test_parse_rerank_response_rows_builds_typed_rows() -> None:
     table = pa.table(
         {
             "doc_id": ["doc-1"],
+            "vector_score": [0.91],
+            "semantic_score": [0.95],
             "final_score": [0.97],
             "rank": [1],
         }
@@ -308,10 +418,14 @@ def test_parse_rerank_response_rows_builds_typed_rows() -> None:
     assert rows == [
         WendaoRerankResultRow(
             doc_id="doc-1",
+            vector_score=0.91,
+            semantic_score=0.95,
             final_score=0.97,
             rank=1,
         )
     ]
+    assert rows[0].vector_score == float(table[RERANK_RESPONSE_VECTOR_SCORE_COLUMN][0].as_py())
+    assert rows[0].semantic_score == float(table[RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN][0].as_py())
     assert tuple(table.column_names) == RERANK_RESPONSE_COLUMNS
 
 

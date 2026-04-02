@@ -11,7 +11,6 @@ pub(crate) const REPO_MODULE_SEARCH_CASE: &str = "repo_module_search_formal";
 pub(crate) const REPO_SYMBOL_SEARCH_CASE: &str = "repo_symbol_search_formal";
 pub(crate) const REPO_EXAMPLE_SEARCH_CASE: &str = "repo_example_search_formal";
 pub(crate) const REPO_PROJECTED_PAGE_SEARCH_CASE: &str = "repo_projected_page_search_formal";
-pub(crate) const STUDIO_CODE_SEARCH_CASE: &str = "studio_code_search_formal";
 pub(crate) const STUDIO_SEARCH_INDEX_STATUS_CASE: &str = "studio_search_index_status_formal";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -171,13 +170,6 @@ fn linux_perf_budget(case: &str) -> PerfBudget {
             min_throughput_qps: Some(450.0),
             max_error_rate: Some(0.001),
         },
-        STUDIO_CODE_SEARCH_CASE => PerfBudget {
-            max_p50_latency_ms: None,
-            max_p95_latency_ms: Some(8.5),
-            max_p99_latency_ms: None,
-            min_throughput_qps: Some(135.0),
-            max_error_rate: Some(0.001),
-        },
         STUDIO_SEARCH_INDEX_STATUS_CASE => PerfBudget {
             max_p50_latency_ms: None,
             max_p95_latency_ms: Some(0.3),
@@ -217,13 +209,6 @@ fn local_perf_budget(case: &str) -> PerfBudget {
             max_p95_latency_ms: Some(1.5),
             max_p99_latency_ms: None,
             min_throughput_qps: Some(700.0),
-            max_error_rate: Some(0.001),
-        },
-        STUDIO_CODE_SEARCH_CASE => PerfBudget {
-            max_p50_latency_ms: None,
-            max_p95_latency_ms: Some(10.0),
-            max_p99_latency_ms: None,
-            min_throughput_qps: Some(100.0),
             max_error_rate: Some(0.001),
         },
         STUDIO_SEARCH_INDEX_STATUS_CASE => PerfBudget {

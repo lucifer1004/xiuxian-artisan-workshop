@@ -46,14 +46,16 @@ def test_manifest_renders_stable_toml() -> None:
     assert 'transport = "arrow_flight"' in rendered
     assert 'route = "/search/repos/main"' in rendered
     assert 'health_route = "/healthz"' in rendered
-    assert '[entrypoint]' in rendered
+    assert "[entrypoint]" in rendered
     assert 'module = "analyzer"' in rendered
     assert 'callable = "analyze"' in rendered
     assert "[starter]" in rendered
     assert 'profile = "repo_search"' in rendered
     assert 'sample_template = "repo_search"' in rendered
     assert 'display_name = "Repo Search Analyzer"' in rendered
-    assert 'summary = "Analyze repository search rows from Wendao Arrow Flight queries."' in rendered
+    assert (
+        'summary = "Analyze repository search rows from Wendao Arrow Flight queries."' in rendered
+    )
     assert 'tags = ["repo_search", "search", "arrow_flight"]' in rendered
 
 
@@ -82,19 +84,51 @@ def test_scaffold_analyzer_plugin_generates_minimal_project_files() -> None:
     assert "def analyze(table: pa.Table, context)" in files["src/acme_repo_search/analyzer.py"]
     assert "manifest_path = project_root / 'plugin.toml'" in files["src/acme_repo_search/cli.py"]
     assert "manifest = load_plugin_manifest(manifest_path)" in files["src/acme_repo_search/cli.py"]
-    assert "default_route = str(plugin_config.get('route', ''))" in files["src/acme_repo_search/cli.py"]
-    assert "route = os.environ.get('WENDAO_ROUTE', default_route)" in files["src/acme_repo_search/cli.py"]
-    assert "bundled_sample = Path(__file__).resolve().parents[2] / 'sample_rows.json'" in files["src/acme_repo_search/cli.py"]
-    assert 'sample_json = os.environ.get("WENDAO_SAMPLE_JSON")' in files["src/acme_repo_search/cli.py"]
-    assert 'mock_flight = os.environ.get("WENDAO_MOCK_FLIGHT", "").lower() in {"1", "true", "yes"}' in files["src/acme_repo_search/cli.py"]
+    assert (
+        "default_route = str(plugin_config.get('route', ''))"
+        in files["src/acme_repo_search/cli.py"]
+    )
+    assert (
+        "route = os.environ.get('WENDAO_ROUTE', default_route)"
+        in files["src/acme_repo_search/cli.py"]
+    )
+    assert (
+        "bundled_sample = Path(__file__).resolve().parents[2] / 'sample_rows.json'"
+        in files["src/acme_repo_search/cli.py"]
+    )
+    assert (
+        'sample_json = os.environ.get("WENDAO_SAMPLE_JSON")' in files["src/acme_repo_search/cli.py"]
+    )
+    assert (
+        'mock_flight = os.environ.get("WENDAO_MOCK_FLIGHT", "").lower() in {"1", "true", "yes"}'
+        in files["src/acme_repo_search/cli.py"]
+    )
     assert 'sample_template = "docs_retrieval"' in files["src/acme_repo_search/cli.py"]
-    assert "sample_path = Path(sample_json) if sample_json else bundled_sample" in files["src/acme_repo_search/cli.py"]
-    assert "validate_rows_against_template(rows, sample_template)" in files["src/acme_repo_search/cli.py"]
-    assert "rows = json.loads(sample_path.read_text(encoding='utf-8'))" in files["src/acme_repo_search/cli.py"]
-    assert "analyzer = load_manifest_entrypoint(manifest, project_root=project_root)" in files["src/acme_repo_search/cli.py"]
-    assert "result = run_analyzer_with_mock_rows(analyzer, rows, query)" in files["src/acme_repo_search/cli.py"]
-    assert "plugin = plugin_from_manifest(manifest, project_root=project_root)" in files["src/acme_repo_search/cli.py"]
-    assert 'result = plugin.run(client, query)' in files["src/acme_repo_search/cli.py"]
+    assert (
+        "sample_path = Path(sample_json) if sample_json else bundled_sample"
+        in files["src/acme_repo_search/cli.py"]
+    )
+    assert (
+        "validate_rows_against_template(rows, sample_template)"
+        in files["src/acme_repo_search/cli.py"]
+    )
+    assert (
+        "rows = json.loads(sample_path.read_text(encoding='utf-8'))"
+        in files["src/acme_repo_search/cli.py"]
+    )
+    assert (
+        "analyzer = load_manifest_entrypoint(manifest, project_root=project_root)"
+        in files["src/acme_repo_search/cli.py"]
+    )
+    assert (
+        "result = run_analyzer_with_mock_rows(analyzer, rows, query)"
+        in files["src/acme_repo_search/cli.py"]
+    )
+    assert (
+        "plugin = plugin_from_manifest(manifest, project_root=project_root)"
+        in files["src/acme_repo_search/cli.py"]
+    )
+    assert "result = plugin.run(client, query)" in files["src/acme_repo_search/cli.py"]
     assert '"id": "doc-1"' in files["sample_rows.json"]
     assert '"language": "markdown"' in files["sample_rows.json"]
     assert '"titles": titles' in files["src/acme_repo_search/analyzer.py"]
@@ -267,8 +301,16 @@ def test_write_scaffold_project_writes_files_to_disk(tmp_path: Path) -> None:
         "src/acme_repo_search/analyzer.py",
         "src/acme_repo_search/cli.py",
     }
-    assert (tmp_path / "acme-repo-search" / "plugin.toml").read_text(encoding="utf-8").startswith("[plugin]\n")
-    assert (tmp_path / "acme-repo-search" / "sample_rows.json").read_text(encoding="utf-8").startswith("[\n")
+    assert (
+        (tmp_path / "acme-repo-search" / "plugin.toml")
+        .read_text(encoding="utf-8")
+        .startswith("[plugin]\n")
+    )
+    assert (
+        (tmp_path / "acme-repo-search" / "sample_rows.json")
+        .read_text(encoding="utf-8")
+        .startswith("[\n")
+    )
 
 
 def test_write_scaffold_project_rejects_existing_files_without_overwrite(tmp_path: Path) -> None:
@@ -347,7 +389,7 @@ def test_scaffold_main_uses_profile_defaults_without_capability_or_route(tmp_pat
 
     assert 'capability_id = "repo_search"' in plugin_toml
     assert 'route = "/search/repos/main"' in plugin_toml
-    assert '[starter]' in plugin_toml
+    assert "[starter]" in plugin_toml
     assert 'profile = "repo_search"' in plugin_toml
     assert 'sample_template = "repo_search"' in plugin_toml
     assert 'display_name = "Repo Search Analyzer"' in plugin_toml
@@ -419,9 +461,9 @@ def test_scaffolded_project_cli_uses_manifest_route_as_single_source_of_truth(
     )
     manifest_path = project_root / "plugin.toml"
     manifest_path.write_text(
-        manifest_path
-        .read_text(encoding="utf-8")
-        .replace('/search/repos/main', '/search/repos/manifest-driven'),
+        manifest_path.read_text(encoding="utf-8").replace(
+            "/search/repos/main", "/search/repos/manifest-driven"
+        ),
         encoding="utf-8",
     )
 

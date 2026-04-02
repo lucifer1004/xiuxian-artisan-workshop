@@ -2,10 +2,10 @@ use std::path::Path;
 
 use reqwest::multipart::{Form, Part};
 
-use super::super::TelegramChannel;
-use super::super::constants::TELEGRAM_SEND_MAX_RETRIES;
-use super::super::error::TelegramApiError;
-use super::super::send_types::{MediaGroupFilePart, PreparedCaption};
+use crate::channels::telegram::channel::TelegramChannel;
+use crate::channels::telegram::channel::constants::TELEGRAM_SEND_MAX_RETRIES;
+use crate::channels::telegram::channel::error::TelegramApiError;
+use crate::channels::telegram::channel::send_types::{MediaGroupFilePart, PreparedCaption};
 
 #[derive(Clone, Copy)]
 struct MediaFileUpload<'a> {
@@ -200,7 +200,7 @@ impl TelegramChannel {
             .multipart(form)
             .send()
             .await
-            .map_err(|error| TelegramApiError::from_reqwest(&error))?;
+            .map_err(TelegramApiError::from_reqwest)?;
         Self::validate_telegram_response(response).await
     }
 
@@ -275,7 +275,7 @@ impl TelegramChannel {
             .multipart(form)
             .send()
             .await
-            .map_err(|error| TelegramApiError::from_reqwest(&error))?;
+            .map_err(TelegramApiError::from_reqwest)?;
         Self::validate_telegram_response(response).await
     }
 }

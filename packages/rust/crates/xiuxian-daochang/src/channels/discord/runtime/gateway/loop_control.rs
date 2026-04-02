@@ -1,7 +1,7 @@
 use tokio::sync::mpsc;
 
-use super::super::foreground::DiscordForegroundRuntime;
-use super::super::telemetry::emit_runtime_snapshot;
+use crate::channels::discord::runtime::foreground::DiscordForegroundRuntime;
+use crate::channels::discord::runtime::telemetry::emit_runtime_snapshot;
 use crate::channels::traits::ChannelMessage;
 use crate::jobs::JobCompletion;
 
@@ -43,6 +43,7 @@ pub(super) async fn drive_gateway_runtime_loop(
                     inbound_snapshot_tx,
                     inbound_queue_capacity,
                     &foreground_snapshot,
+                    runtime.admission_runtime_snapshot(),
                 );
             }
             _ = tokio::signal::ctrl_c() => {
@@ -50,7 +51,7 @@ pub(super) async fn drive_gateway_runtime_loop(
                 shutdown_requested = true;
                 break;
             }
-            result = gateway_task => {
+            result = &mut *gateway_task => {
                 match result {
                     Ok(Ok(())) => tracing::warn!("discord gateway client exited"),
                     Ok(Err(error)) => tracing::error!("discord gateway client failed: {error}"),

@@ -34,7 +34,7 @@ impl RedisSessionBackend {
     {
         let mut last_err: Option<anyhow::Error> = None;
         for attempt in 0..2 {
-            let mut conn_guard = self.connection.lock().await;
+            let mut conn_guard = self.connection.write().await;
             self.ensure_connection(&mut conn_guard).await?;
             let conn = conn_guard
                 .as_mut()
@@ -83,7 +83,7 @@ impl RedisSessionBackend {
     {
         let mut last_err: Option<anyhow::Error> = None;
         for attempt in 0..2 {
-            let mut conn_guard = self.connection.lock().await;
+            let mut conn_guard = self.connection.write().await;
             self.ensure_connection(&mut conn_guard).await?;
             let conn = conn_guard
                 .as_mut()

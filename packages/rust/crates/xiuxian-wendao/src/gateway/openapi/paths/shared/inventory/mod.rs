@@ -1,6 +1,5 @@
 //! Stable route inventory for the Wendao gateway surface.
 
-mod analysis;
 mod core;
 mod docs;
 mod graph;
@@ -32,16 +31,10 @@ pub const WENDAO_GATEWAY_ROUTE_CONTRACTS: &[RouteContract] = route_contracts![
     graph::[NEIGHBORS, GRAPH_NEIGHBORS, TOPOLOGY_3D],
     search::[
         SEARCH,
-        SEARCH_INTENT,
-        SEARCH_ATTACHMENTS,
-        SEARCH_AST,
         SEARCH_DEFINITION,
-        SEARCH_REFERENCES,
-        SEARCH_SYMBOLS,
         SEARCH_AUTOCOMPLETE,
         SEARCH_INDEX_STATUS
     ],
-    analysis::[ANALYSIS_MARKDOWN, ANALYSIS_CODE_AST],
     docs::[
         PROJECTED_GAP_REPORT,
         PLANNER_ITEM,

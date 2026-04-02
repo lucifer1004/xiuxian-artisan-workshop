@@ -6,11 +6,11 @@ use serenity::client::Client;
 use tokio::sync::mpsc;
 use tokio::time::MissedTickBehavior;
 
-use super::super::channel::{DiscordChannel, DiscordControlCommandPolicy};
-use super::DiscordRuntimeConfig;
-use super::foreground::build_foreground_runtime;
-use super::telemetry::snapshot_interval_from_env;
 use crate::agent::Agent;
+use crate::channels::discord::channel::{DiscordChannel, DiscordControlCommandPolicy};
+use crate::channels::discord::runtime::DiscordRuntimeConfig;
+use crate::channels::discord::runtime::foreground::build_foreground_runtime;
+use crate::channels::discord::runtime::telemetry::snapshot_interval_from_env;
 use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::channels::traits::{Channel, ChannelMessage};
 

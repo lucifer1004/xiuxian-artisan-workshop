@@ -29,7 +29,7 @@ mod tests {
     fn legacy_julia_binding_builder_shims_to_provider_binding() {
         let runtime = LinkGraphJuliaRerankRuntimeConfig {
             base_url: Some("http://127.0.0.1:8088".to_string()),
-            route: Some("/arrow-ipc".to_string()),
+            route: Some("/rerank".to_string()),
             health_route: Some("/healthz".to_string()),
             schema_version: Some("v1".to_string()),
             timeout_secs: Some(15),

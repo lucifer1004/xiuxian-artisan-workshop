@@ -2,6 +2,7 @@
 
 use xiuxian_macros::env_non_empty;
 
+use crate::channels::managed_runtime::ForegroundQueueMode;
 use crate::config::{TelegramSettings, load_runtime_settings};
 
 const DEFAULT_INBOUND_QUEUE_CAPACITY: usize = 100;
@@ -16,6 +17,8 @@ pub struct TelegramRuntimeConfig {
     pub inbound_queue_capacity: usize,
     /// Foreground processing queue capacity.
     pub foreground_queue_capacity: usize,
+    /// Foreground queue mode for same-session inbound messages.
+    pub foreground_queue_mode: ForegroundQueueMode,
     /// Maximum number of in-flight foreground messages.
     pub foreground_max_in_flight_messages: usize,
     /// Foreground turn timeout in seconds.
@@ -27,6 +30,7 @@ impl Default for TelegramRuntimeConfig {
         Self {
             inbound_queue_capacity: DEFAULT_INBOUND_QUEUE_CAPACITY,
             foreground_queue_capacity: DEFAULT_FOREGROUND_QUEUE_CAPACITY,
+            foreground_queue_mode: ForegroundQueueMode::Queue,
             foreground_max_in_flight_messages: DEFAULT_FOREGROUND_MAX_IN_FLIGHT_MESSAGES,
             foreground_turn_timeout_secs: DEFAULT_FOREGROUND_TURN_TIMEOUT_SECS,
         }
@@ -66,6 +70,12 @@ impl TelegramRuntimeConfig {
                 "OMNI_AGENT_TELEGRAM_FOREGROUND_QUEUE_CAPACITY",
                 settings.and_then(|s| s.foreground_queue_capacity),
                 defaults.foreground_queue_capacity,
+            ),
+            foreground_queue_mode: resolve_foreground_queue_mode(
+                &lookup,
+                "OMNI_AGENT_TELEGRAM_FOREGROUND_QUEUE_MODE",
+                settings.and_then(|s| s.foreground_queue_mode.as_deref()),
+                defaults.foreground_queue_mode,
             ),
             foreground_max_in_flight_messages: resolve_usize(
                 &lookup,
@@ -139,4 +149,36 @@ where
         }
         None => default,
     }
+}
+
+fn resolve_foreground_queue_mode<F>(
+    lookup: &F,
+    name: &str,
+    setting_value: Option<&str>,
+    default: ForegroundQueueMode,
+) -> ForegroundQueueMode
+where
+    F: Fn(&str) -> Option<String>,
+{
+    if let Some(raw) = lookup(name) {
+        if let Some(mode) = ForegroundQueueMode::parse(raw.as_str()) {
+            return mode;
+        }
+        tracing::warn!(
+            env_var = %name,
+            value = %raw,
+            "invalid runtime config env value; using settings/default"
+        );
+    }
+    if let Some(raw) = setting_value {
+        if let Some(mode) = ForegroundQueueMode::parse(raw) {
+            return mode;
+        }
+        tracing::warn!(
+            setting = %name,
+            value = %raw,
+            "invalid runtime config settings value; using default"
+        );
+    }
+    default
 }

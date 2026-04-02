@@ -41,7 +41,6 @@ mod tests {
         load_bundled_wendao_gateway_openapi_document,
     };
     use crate::gateway::openapi::paths::{
-        API_ANALYSIS_CODE_AST_OPENAPI_PATH, API_ANALYSIS_MARKDOWN_OPENAPI_PATH,
         API_UI_CONFIG_OPENAPI_PATH, WENDAO_GATEWAY_ROUTE_CONTRACTS,
     };
 
@@ -178,38 +177,90 @@ mod tests {
         );
     }
 
-    fn has_required_query_param(operation: &Value, name: &str) -> bool {
-        operation
-            .get("parameters")
-            .and_then(Value::as_array)
-            .is_some_and(|parameters| {
-                parameters.iter().any(|parameter| {
-                    parameter.get("name").and_then(Value::as_str) == Some(name)
-                        && parameter.get("in").and_then(Value::as_str) == Some("query")
-                        && parameter.get("required").and_then(Value::as_bool) == Some(true)
-                })
-            })
+    #[test]
+    fn bundled_gateway_openapi_document_declares_rerank_plugin_artifact_examples() {
+        let document = load_bundled_wendao_gateway_openapi_document()
+            .unwrap_or_else(|error| panic!("bundled gateway OpenAPI should parse: {error}"));
+        let get = &document["paths"]["/api/ui/plugins/{plugin_id}/artifacts/{artifact_id}"]["get"];
+
+        assert_eq!(
+            get["responses"]["200"]["content"]["application/json"]["example"]["route"].as_str(),
+            Some("/rerank")
+        );
+        assert_eq!(
+            get["responses"]["200"]["content"]["text/plain"]["example"].as_str(),
+            Some(
+                "plugin_id = \"xiuxian-wendao-julia\"\nartifact_id = \"deployment\"\nschema_version = \"v1\"\nbase_url = \"http://127.0.0.1:18080\"\nroute = \"/rerank\"\n"
+            )
+        );
     }
 
     #[test]
-    fn bundled_gateway_openapi_document_declares_required_markdown_analysis_query_params() {
+    fn bundled_gateway_openapi_document_declares_rerank_julia_deployment_artifact_examples() {
         let document = load_bundled_wendao_gateway_openapi_document()
             .unwrap_or_else(|error| panic!("bundled gateway OpenAPI should parse: {error}"));
+        let get = &document["paths"]["/api/ui/julia-deployment-artifact"]["get"];
 
-        let markdown_get = &document["paths"][API_ANALYSIS_MARKDOWN_OPENAPI_PATH]["get"];
-        assert!(
-            has_required_query_param(markdown_get, "path"),
-            "GET /api/analysis/markdown should declare required query parameter `path`"
+        assert_eq!(
+            get["responses"]["200"]["content"]["application/json"]["example"]["route"].as_str(),
+            Some("/rerank")
         );
+        assert_eq!(
+            get["responses"]["200"]["content"]["application/json"]["example"]["healthRoute"]
+                .as_str(),
+            Some("/healthz")
+        );
+        assert_eq!(
+            get["responses"]["200"]["content"]["text/plain"]["example"].as_str(),
+            Some(
+                "artifact_schema_version = \"v1\"\ngenerated_at = \"2026-03-27T16:00:00+00:00\"\nbase_url = \"http://127.0.0.1:18080\"\nroute = \"/rerank\"\nhealth_route = \"/healthz\"\nschema_version = \"v1\"\ntimeout_secs = 30\n\n[launch]\nlauncher_path = \".data/WendaoAnalyzer/scripts/run_analyzer_service.sh\"\nargs = [\"--service-mode\", \"stream\", \"--analyzer-strategy\", \"linear_blend\"]\n"
+            )
+        );
+    }
 
-        let code_ast_get = &document["paths"][API_ANALYSIS_CODE_AST_OPENAPI_PATH]["get"];
+    #[test]
+    fn bundled_gateway_openapi_document_omits_flight_only_http_paths() {
+        let document = load_bundled_wendao_gateway_openapi_document()
+            .unwrap_or_else(|error| panic!("bundled gateway OpenAPI should parse: {error}"));
+        let Some(paths) = document.get("paths").and_then(Value::as_object) else {
+            panic!("bundled gateway OpenAPI should contain a `paths` object");
+        };
+
         assert!(
-            has_required_query_param(code_ast_get, "path"),
-            "GET /api/analysis/code-ast should declare required query parameter `path`"
+            !paths.contains_key("/api/search/intent"),
+            "bundled gateway OpenAPI must not expose the retired intent HTTP path"
         );
         assert!(
-            has_required_query_param(code_ast_get, "repo"),
-            "GET /api/analysis/code-ast should declare required query parameter `repo`"
+            !paths.contains_key("/api/search/attachments"),
+            "bundled gateway OpenAPI must not expose the retired attachments HTTP path"
+        );
+        assert!(
+            !paths.contains_key("/api/search/references"),
+            "bundled gateway OpenAPI must not expose the retired references HTTP path"
+        );
+        assert!(
+            !paths.contains_key("/api/search/symbols"),
+            "bundled gateway OpenAPI must not expose the retired symbols HTTP path"
+        );
+        assert!(
+            !paths.contains_key("/api/search/ast"),
+            "bundled gateway OpenAPI must not expose the retired AST HTTP path"
+        );
+        assert!(
+            !paths.contains_key("/api/analysis/markdown"),
+            "bundled gateway OpenAPI must not expose the retired markdown HTTP path"
+        );
+        assert!(
+            !paths.contains_key("/api/analysis/code-ast"),
+            "bundled gateway OpenAPI must not expose the retired code-ast HTTP path"
+        );
+        assert!(
+            !paths.contains_key("/api/analysis/markdown/retrieval-arrow"),
+            "bundled gateway OpenAPI must not expose the retired markdown retrieval-arrow path"
+        );
+        assert!(
+            !paths.contains_key("/api/analysis/code-ast/retrieval-arrow"),
+            "bundled gateway OpenAPI must not expose the retired code-ast retrieval-arrow path"
         );
     }
 }

@@ -740,6 +740,14 @@ fn log_ocr_runtime_status(runtime: &DeepseekRuntime) -> bool {
             );
             true
         }
+        DeepseekRuntime::RemoteHttp { base_url } => {
+            tracing::info!(
+                event = "agent.llm.vision.deepseek.ocr.runtime_ready_remote_http",
+                base_url = %base_url,
+                "DeepSeek OCR runtime is configured via shared HTTP gateway"
+            );
+            true
+        }
     }
 }
 
@@ -801,8 +809,11 @@ async fn run_refinement_task(
 ) -> Option<Option<String>> {
     let prepared_width = prepared.width;
     let prepared_height = prepared.height;
+    let runtime_handle = tokio::runtime::Handle::current();
     match execute_ocr_blocking_task(timeout_config.duration, move || {
-        Ok(infer_deepseek_ocr_truth(runtime.as_ref(), &prepared)?)
+        runtime_handle
+            .block_on(infer_deepseek_ocr_truth(runtime.as_ref(), &prepared, None))
+            .map_err(anyhow::Error::from)
     })
     .await
     {

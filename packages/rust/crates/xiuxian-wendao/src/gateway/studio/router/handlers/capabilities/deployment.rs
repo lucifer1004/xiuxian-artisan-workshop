@@ -108,7 +108,7 @@ mod tests {
             &config_path,
             r#"[link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:18080"
-route = "/arrow-ipc"
+route = "/rerank"
 schema_version = "v1"
 service_mode = "stream"
 "#,
@@ -147,6 +147,6 @@ service_mode = "stream"
         assert_eq!(artifact.plugin_id, "xiuxian-wendao-julia");
         assert_eq!(artifact.artifact_id, "deployment");
         assert_eq!(artifact.schema_version.as_deref(), Some("v1"));
-        assert_eq!(artifact.route.as_deref(), Some("/arrow-ipc"));
+        assert_eq!(artifact.route.as_deref(), Some("/rerank"));
     }
 }

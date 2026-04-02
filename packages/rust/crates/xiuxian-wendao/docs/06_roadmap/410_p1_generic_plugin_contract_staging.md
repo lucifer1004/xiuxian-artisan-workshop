@@ -4,8 +4,14 @@
 :ID: wendao-p1-generic-plugin-contract-staging
 :PARENT: [[index]]
 :TAGS: roadmap, migration, plugins, core, runtime, contracts, p1
-:STATUS: ACTIVE
+:STATUS: SUPERSEDED
 :END:
+
+> Historical staging note. The active transport/runtime truth now lives in
+> `409_core_runtime_plugin_surface_inventory.md` and
+> `412_core_runtime_plugin_program.md`. This document remains only as the
+> Phase-1 migration record and has been updated so its examples do not conflict
+> with the current Flight-only plugin transport contract.
 
 ## Mission
 
@@ -125,8 +131,6 @@ pub struct ContractVersion(pub String);
 
 pub enum PluginTransportKind {
     ArrowFlight,
-    ArrowIpcHttp,
-    LocalProcessArrowIpc,
 }
 
 pub struct PluginTransportDescriptor {
@@ -225,8 +229,8 @@ The current retrieval runtime shape:
 
 ```toml
 [link_graph.retrieval.julia_rerank]
-base_url = "http://127.0.0.1:8080"
-route = "/arrow-ipc"
+base_url = "http://127.0.0.1:8815"
+route = "/rerank"
 ```
 
 Should stage toward:
@@ -235,11 +239,11 @@ Should stage toward:
 [link_graph.retrieval.rerank]
 provider = "xiuxian-wendao-julia"
 contract_version = "v1"
-transport = "arrow_ipc_http"
+transport = "arrow_flight"
 
 [link_graph.retrieval.rerank.endpoint]
-base_url = "http://127.0.0.1:8080"
-route = "/arrow-ipc"
+base_url = "http://127.0.0.1:8815"
+route = "/rerank"
 health_route = "/healthz"
 timeout_secs = 15
 ```

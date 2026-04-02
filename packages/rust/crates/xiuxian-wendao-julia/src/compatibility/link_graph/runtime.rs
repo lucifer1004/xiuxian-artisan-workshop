@@ -12,15 +12,15 @@ use super::artifact::{
 use super::launch::{
     LinkGraphJuliaAnalyzerLaunchManifest, LinkGraphJuliaAnalyzerServiceDescriptor,
 };
-use super::paths::DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH;
+use super::paths::{DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE};
 use super::selectors::{julia_deployment_artifact_selector, julia_rerank_provider_selector};
 
-/// Runtime knobs for remote Julia rerank over Arrow IPC.
+/// Runtime knobs for remote Julia rerank over Arrow Flight.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LinkGraphJuliaRerankRuntimeConfig {
     /// Base URL for the WendaoArrow-compatible Julia service.
     pub base_url: Option<String>,
-    /// Arrow IPC request route.
+    /// Arrow Flight request route.
     pub route: Option<String>,
     /// Health-check route.
     pub health_route: Option<String>,
@@ -41,6 +41,12 @@ pub struct LinkGraphJuliaRerankRuntimeConfig {
 }
 
 impl LinkGraphJuliaRerankRuntimeConfig {
+    fn resolved_route(&self) -> String {
+        self.route
+            .clone()
+            .unwrap_or_else(|| DEFAULT_JULIA_RERANK_FLIGHT_ROUTE.to_string())
+    }
+
     /// Return whether the legacy Julia rerank runtime carries any configured provider inputs.
     #[must_use]
     pub fn is_configured(&self) -> bool {
@@ -89,7 +95,7 @@ impl LinkGraphJuliaRerankRuntimeConfig {
             generated_at: Utc::now().to_rfc3339(),
             endpoint: Some(PluginTransportEndpoint {
                 base_url: self.base_url.clone(),
-                route: self.route.clone(),
+                route: Some(self.resolved_route()),
                 health_route: self.health_route.clone(),
                 timeout_secs: self.timeout_secs,
             }),
@@ -142,12 +148,12 @@ pub fn build_rerank_provider_binding(
         selector: julia_rerank_provider_selector(),
         endpoint: PluginTransportEndpoint {
             base_url: runtime.base_url.clone(),
-            route: runtime.route.clone(),
+            route: Some(runtime.resolved_route()),
             health_route: runtime.health_route.clone(),
             timeout_secs: runtime.timeout_secs,
         },
         launch: Some(runtime.plugin_launch_spec()),
-        transport: PluginTransportKind::ArrowIpcHttp,
+        transport: PluginTransportKind::ArrowFlight,
         contract_version: ContractVersion(
             runtime
                 .schema_version

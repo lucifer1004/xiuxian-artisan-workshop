@@ -28,6 +28,12 @@ pub struct UiCapabilities {
     /// Supported code filter kinds reported by the gateway capability surface.
     #[serde(rename = "supportedKinds")]
     pub kinds: Vec<String>,
+    /// Whether bootstrap-time background indexing is enabled during gateway startup.
+    pub studio_bootstrap_background_indexing_enabled: bool,
+    /// Stable mode label for bootstrap-time background indexing during gateway startup.
+    pub studio_bootstrap_background_indexing_mode: String,
+    /// Whether deferred bootstrap indexing has been lazily activated since process boot.
+    pub studio_bootstrap_background_indexing_deferred_activation_observed: bool,
 }
 
 /// Studio-visible generic plugin launch manifest.
@@ -54,16 +60,12 @@ impl From<PluginLaunchSpec> for UiPluginLaunchSpec {
 #[serde(rename_all = "snake_case")]
 pub enum UiPluginTransportKind {
     ArrowFlight,
-    ArrowIpcHttp,
-    LocalProcessArrowIpc,
 }
 
 impl From<PluginTransportKind> for UiPluginTransportKind {
     fn from(value: PluginTransportKind) -> Self {
         match value {
             PluginTransportKind::ArrowFlight => Self::ArrowFlight,
-            PluginTransportKind::ArrowIpcHttp => Self::ArrowIpcHttp,
-            PluginTransportKind::LocalProcessArrowIpc => Self::LocalProcessArrowIpc,
         }
     }
 }
@@ -147,7 +149,7 @@ mod tests {
             generated_at: "2026-03-27T12:00:00Z".to_string(),
             endpoint: Some(PluginTransportEndpoint {
                 base_url: Some("http://127.0.0.1:8088".to_string()),
-                route: Some("/arrow-ipc".to_string()),
+                route: Some("/rerank".to_string()),
                 health_route: Some("/healthz".to_string()),
                 timeout_secs: Some(15),
             }),
@@ -156,12 +158,9 @@ mod tests {
                 launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
                 args: vec!["--service-mode".to_string(), "stream".to_string()],
             }),
-            selected_transport: Some(PluginTransportKind::ArrowIpcHttp),
-            fallback_from: Some(PluginTransportKind::ArrowFlight),
-            fallback_reason: Some(
-                "preferred transport ArrowFlight is unavailable because the binding has no base_url"
-                    .to_string(),
-            ),
+            selected_transport: Some(PluginTransportKind::ArrowFlight),
+            fallback_from: None,
+            fallback_reason: None,
         };
 
         assert_eq!(
@@ -172,7 +171,7 @@ mod tests {
                 artifact_schema_version: "v1".to_string(),
                 generated_at: "2026-03-27T12:00:00Z".to_string(),
                 base_url: Some("http://127.0.0.1:8088".to_string()),
-                route: Some("/arrow-ipc".to_string()),
+                route: Some("/rerank".to_string()),
                 health_route: Some("/healthz".to_string()),
                 timeout_secs: Some(15),
                 schema_version: Some("v1".to_string()),
@@ -180,12 +179,9 @@ mod tests {
                     launcher_path: DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH.to_string(),
                     args: vec!["--service-mode".to_string(), "stream".to_string()],
                 }),
-                selected_transport: Some(UiPluginTransportKind::ArrowIpcHttp),
-                fallback_from: Some(UiPluginTransportKind::ArrowFlight),
-                fallback_reason: Some(
-                    "preferred transport ArrowFlight is unavailable because the binding has no base_url"
-                        .to_string(),
-                ),
+                selected_transport: Some(UiPluginTransportKind::ArrowFlight),
+                fallback_from: None,
+                fallback_reason: None,
             }
         );
     }

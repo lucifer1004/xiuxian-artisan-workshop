@@ -1,6 +1,6 @@
-use super::super::TelegramChannel;
-use super::super::constants::TELEGRAM_SEND_MAX_RETRIES;
-use super::super::error::TelegramApiError;
+use crate::channels::telegram::channel::TelegramChannel;
+use crate::channels::telegram::channel::constants::TELEGRAM_SEND_MAX_RETRIES;
+use crate::channels::telegram::channel::error::TelegramApiError;
 
 impl TelegramChannel {
     pub(in crate::channels::telegram::channel) async fn send_message_with_mode(
@@ -74,7 +74,7 @@ impl TelegramChannel {
             .json(body)
             .send()
             .await
-            .map_err(|error| TelegramApiError::from_reqwest(&error))?;
+            .map_err(TelegramApiError::from_reqwest)?;
         Self::validate_telegram_response(response).await
     }
 }

@@ -21,7 +21,7 @@ pub struct LinkGraphJuliaDeploymentArtifact {
     pub generated_at: String,
     /// Resolved Julia service base URL.
     pub base_url: Option<String>,
-    /// Arrow IPC route expected by the service.
+    /// Arrow Flight route expected by the service.
     pub route: Option<String>,
     /// Health-check route expected by the service.
     pub health_route: Option<String>,

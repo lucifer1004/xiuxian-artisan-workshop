@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use super::super::Agent;
+use crate::agent::Agent;
+use crate::agent::native_tools::registry::NativeToolCallContext;
+
 use super::diagnostics::{
     log_tool_dispatch_error, log_tool_dispatch_error_with_detail, log_tool_dispatch_success,
     log_tool_dispatch_timeout, log_tool_dispatch_timeout_with_detail, tool_timeout_error_output,
@@ -46,9 +48,8 @@ impl Agent {
     ) -> Option<ToolCallOutput> {
         let native_tool = self.native_tools.get(name)?;
         let timeout_secs = self.config.tool_timeout_secs.max(1);
-        let context = super::super::native_tools::registry::NativeToolCallContext {
+        let context = NativeToolCallContext {
             session_id: session_id.map(ToString::to_string),
-            tool_call_id: tool_call_id.map(ToString::to_string),
         };
         let call_result = tokio::time::timeout(
             Duration::from_secs(timeout_secs),

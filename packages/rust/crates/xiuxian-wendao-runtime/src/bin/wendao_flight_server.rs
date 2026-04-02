@@ -8,24 +8,40 @@ use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use xiuxian_vector::{
-    LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema, LanceStringArray,
+    LanceDataType, LanceField, LanceFloat64Array, LanceInt32Array, LanceListArray,
+    LanceListBuilder, LanceRecordBatch, LanceSchema, LanceStringArray, LanceStringBuilder,
 };
 use xiuxian_wendao_runtime::transport::{
-    REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_PATH_COLUMN,
-    REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN, WendaoFlightService,
+    EffectiveRerankFlightHostSettings, REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_DOC_ID_COLUMN,
+    REPO_SEARCH_HIERARCHY_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,
+    REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN, REPO_SEARCH_NAVIGATION_LINE_COLUMN,
+    REPO_SEARCH_NAVIGATION_LINE_END_COLUMN, REPO_SEARCH_NAVIGATION_PATH_COLUMN,
+    REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TAGS_COLUMN,
+    REPO_SEARCH_TITLE_COLUMN, WendaoFlightService, rerank_score_weights_from_env,
+    resolve_effective_rerank_flight_host_settings, split_rerank_flight_host_overrides,
 };
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let bind_addr = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "127.0.0.1:0".to_string());
-    let expected_schema_version = std::env::args().nth(2).unwrap_or_else(|| "v2".to_string());
-    let rerank_dimension = std::env::args()
-        .nth(3)
+    let mut args = std::env::args().skip(1);
+    let bind_addr = args.next().unwrap_or_else(|| "127.0.0.1:0".to_string());
+    let parsed_overrides = split_rerank_flight_host_overrides(args)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    let mut positional_args = parsed_overrides.positional_args.into_iter();
+    let positional_rerank_dimension = positional_args
+        .next()
         .map(|value| value.parse::<usize>())
         .transpose()?
         .unwrap_or(3);
+    let effective_settings: EffectiveRerankFlightHostSettings =
+        resolve_effective_rerank_flight_host_settings(
+            parsed_overrides.schema_version_override,
+            parsed_overrides.rerank_dimension_override,
+            None,
+            None,
+            positional_rerank_dimension,
+            rerank_score_weights_from_env().map_err(io::Error::other)?,
+        );
 
     let listener = TcpListener::bind(bind_addr).await?;
     let address = listener.local_addr()?;
@@ -34,6 +50,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             LanceField::new(REPO_SEARCH_DOC_ID_COLUMN, LanceDataType::Utf8, false),
             LanceField::new(REPO_SEARCH_PATH_COLUMN, LanceDataType::Utf8, false),
             LanceField::new(REPO_SEARCH_TITLE_COLUMN, LanceDataType::Utf8, false),
+            LanceField::new(REPO_SEARCH_BEST_SECTION_COLUMN, LanceDataType::Utf8, false),
+            LanceField::new(REPO_SEARCH_MATCH_REASON_COLUMN, LanceDataType::Utf8, false),
+            LanceField::new(
+                REPO_SEARCH_NAVIGATION_PATH_COLUMN,
+                LanceDataType::Utf8,
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN,
+                LanceDataType::Utf8,
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_NAVIGATION_LINE_COLUMN,
+                LanceDataType::Int32,
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_NAVIGATION_LINE_END_COLUMN,
+                LanceDataType::Int32,
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_HIERARCHY_COLUMN,
+                LanceDataType::List(Arc::new(LanceField::new("item", LanceDataType::Utf8, true))),
+                false,
+            ),
+            LanceField::new(
+                REPO_SEARCH_TAGS_COLUMN,
+                LanceDataType::List(Arc::new(LanceField::new("item", LanceDataType::Utf8, true))),
+                false,
+            ),
             LanceField::new(REPO_SEARCH_SCORE_COLUMN, LanceDataType::Float64, false),
             LanceField::new(REPO_SEARCH_LANGUAGE_COLUMN, LanceDataType::Utf8, false),
         ])),
@@ -41,6 +89,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arc::new(LanceStringArray::from(vec!["doc-1"])),
             Arc::new(LanceStringArray::from(vec!["src/lib.rs"])),
             Arc::new(LanceStringArray::from(vec!["Repo Search Result"])),
+            Arc::new(LanceStringArray::from(vec!["symbol"])),
+            Arc::new(LanceStringArray::from(vec!["static_sample"])),
+            Arc::new(LanceStringArray::from(vec!["src/lib.rs"])),
+            Arc::new(LanceStringArray::from(vec!["file"])),
+            Arc::new(LanceInt32Array::from(vec![1_i32])),
+            Arc::new(LanceInt32Array::from(vec![1_i32])),
+            Arc::new(build_utf8_list_array(&[&[
+                "src".to_string(),
+                "lib.rs".to_string(),
+            ]])),
+            Arc::new(build_utf8_list_array(&[&["lang:rust".to_string()]])),
             Arc::new(LanceFloat64Array::from(vec![0.91_f64])),
             Arc::new(LanceStringArray::from(vec!["rust"])),
         ],
@@ -48,10 +107,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(io::stdout(), "READY http://{address}")?;
     io::stdout().flush()?;
 
-    let service = WendaoFlightService::new(
-        expected_schema_version,
+    let service = WendaoFlightService::new_with_weights(
+        effective_settings.expected_schema_version,
         query_response_batch,
-        rerank_dimension,
+        effective_settings.rerank_dimension,
+        effective_settings.rerank_weights,
     )?;
 
     Server::builder()
@@ -60,4 +120,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     Ok(())
+}
+
+fn build_utf8_list_array(rows: &[&[String]]) -> LanceListArray {
+    let mut builder = LanceListBuilder::new(LanceStringBuilder::new());
+    for row in rows {
+        for value in *row {
+            builder.values().append_value(value);
+        }
+        builder.append(true);
+    }
+    builder.finish()
 }

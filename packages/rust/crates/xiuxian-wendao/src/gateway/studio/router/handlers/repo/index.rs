@@ -4,14 +4,27 @@ use axum::{
     Json,
     extract::{Query, State},
 };
+use serde::Serialize;
 
 use crate::gateway::studio::repo_index::{RepoIndexRequest, RepoIndexStatusResponse};
 use crate::gateway::studio::router::handlers::repo::command_service::{
     run_repo_index, run_repo_index_status,
 };
-use crate::gateway::studio::router::{GatewayState, StudioApiError};
+use crate::gateway::studio::router::{
+    GatewayState, StudioApiError, StudioBootstrapBackgroundIndexingTelemetry,
+};
 
 use super::query::RepoIndexStatusApiQuery;
+
+/// Repo-index status payload enriched with bootstrap-indexing telemetry.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoIndexStatusEnvelope {
+    #[serde(flatten)]
+    status: RepoIndexStatusResponse,
+    #[serde(flatten)]
+    telemetry: StudioBootstrapBackgroundIndexingTelemetry,
+}
 
 /// Repo index enqueue endpoint.
 ///
@@ -34,6 +47,10 @@ pub async fn repo_index(
 pub async fn repo_index_status(
     Query(query): Query<RepoIndexStatusApiQuery>,
     State(state): State<Arc<GatewayState>>,
-) -> Result<Json<RepoIndexStatusResponse>, StudioApiError> {
-    Ok(Json(run_repo_index_status(&state, query.repo.as_deref())))
+) -> Result<Json<RepoIndexStatusEnvelope>, StudioApiError> {
+    let telemetry = state.studio.bootstrap_background_indexing_telemetry();
+    Ok(Json(RepoIndexStatusEnvelope {
+        status: run_repo_index_status(&state, query.repo.as_deref()),
+        telemetry,
+    }))
 }

@@ -1,5 +1,5 @@
-use super::super::TelegramChannel;
-use super::super::identity::parse_recipient_target;
+use crate::channels::telegram::channel::TelegramChannel;
+use crate::channels::telegram::channel::identity::parse_recipient_target;
 
 impl TelegramChannel {
     pub(in crate::channels::telegram::channel) async fn send_chat_action(

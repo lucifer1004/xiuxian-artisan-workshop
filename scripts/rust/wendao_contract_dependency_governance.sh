@@ -12,7 +12,7 @@ require_command() {
 }
 
 resolve_semver_baseline_rev() {
-  if [[ -n "${WENDAO_CORE_SEMVER_BASELINE_REV:-}" ]]; then
+  if [[ -n ${WENDAO_CORE_SEMVER_BASELINE_REV:-} ]]; then
     printf '%s\n' "${WENDAO_CORE_SEMVER_BASELINE_REV}"
     return 0
   fi
@@ -67,19 +67,18 @@ run_machete_wendao() {
     set -e
 
     case "${status}" in
-      0)
-        ;;
-      1)
-        findings=1
-        ;;
-      *)
-        printf 'error: cargo-machete failed for %s with exit code %s\n' "${crate_path}" "${status}" >&2
-        return "${status}"
-        ;;
+    0) ;;
+    1)
+      findings=1
+      ;;
+    *)
+      printf 'error: cargo-machete failed for %s with exit code %s\n' "${crate_path}" "${status}" >&2
+      return "${status}"
+      ;;
     esac
   done
 
-  if [[ "${findings}" -eq 1 ]]; then
+  if [[ ${findings} -eq 1 ]]; then
     printf 'cargo-machete reported advisory findings in the Wendao migration cluster\n'
   fi
 }
@@ -119,7 +118,7 @@ run_udeps_wendao() {
 
   printf '%s\n' "${output}"
 
-  if [[ "${status}" -eq 0 ]]; then
+  if [[ ${status} -eq 0 ]]; then
     return 0
   fi
 
@@ -133,17 +132,17 @@ run_udeps_wendao() {
 }
 
 case "${1:-}" in
-  semver-core)
-    run_semver_core
-    ;;
-  machete-wendao)
-    run_machete_wendao
-    ;;
-  udeps-wendao)
-    run_udeps_wendao
-    ;;
-  *)
-    printf 'usage: %s {semver-core|machete-wendao|udeps-wendao}\n' "${0##*/}" >&2
-    exit 1
-    ;;
+semver-core)
+  run_semver_core
+  ;;
+machete-wendao)
+  run_machete_wendao
+  ;;
+udeps-wendao)
+  run_udeps_wendao
+  ;;
+*)
+  printf 'usage: %s {semver-core|machete-wendao|udeps-wendao}\n' "${0##*/}" >&2
+  exit 1
+  ;;
 esac

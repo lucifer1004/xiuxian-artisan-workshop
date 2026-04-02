@@ -114,9 +114,9 @@ mod tests {
             artifact_schema_version: ContractVersion("v1".to_string()),
             generated_at: "2026-03-28T12:00:00Z".to_string(),
             endpoint: Some(PluginTransportEndpoint {
-                base_url: Some("http://127.0.0.1:8080".to_string()),
-                route: Some("/arrow-ipc".to_string()),
-                health_route: Some("/health".to_string()),
+                base_url: Some("http://127.0.0.1:8815".to_string()),
+                route: Some("/rerank".to_string()),
+                health_route: Some("/healthz".to_string()),
                 timeout_secs: Some(30),
             }),
             schema_version: Some("v1".to_string()),
@@ -124,12 +124,9 @@ mod tests {
                 launcher_path: ".data/WendaoAnalyzer/scripts/run.sh".to_string(),
                 args: vec!["--stdio".to_string()],
             }),
-            selected_transport: Some(PluginTransportKind::ArrowIpcHttp),
-            fallback_from: Some(PluginTransportKind::ArrowFlight),
-            fallback_reason: Some(
-                "preferred transport ArrowFlight is unavailable because the binding has no base_url"
-                    .to_string(),
-            ),
+            selected_transport: Some(PluginTransportKind::ArrowFlight),
+            fallback_from: None,
+            fallback_reason: None,
         };
 
         let toml = payload
@@ -140,8 +137,9 @@ mod tests {
             .expect("payload should serialize to JSON");
 
         assert!(toml.contains("wendao-julia"));
-        assert!(toml.contains("selected_transport = \"arrow_ipc_http\""));
+        assert!(toml.contains("selected_transport = \"arrow_flight\""));
+        assert!(toml.contains("route = \"/rerank\""));
         assert!(json.contains("\"deployment\""));
-        assert!(json.contains("\"fallback_reason\""));
+        assert!(!json.contains("\"fallback_reason\""));
     }
 }

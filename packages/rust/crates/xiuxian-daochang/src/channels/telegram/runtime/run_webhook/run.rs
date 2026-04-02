@@ -2,19 +2,24 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use super::super::console::{print_foreground_config, print_managed_commands_help};
-use super::super::dispatch::start_telegram_runtime;
-use super::super::webhook::TelegramWebhookControlPolicyBuildRequest;
-use super::super::webhook::build_telegram_webhook_app_with_control_command_policy;
-use super::loop_control;
-use super::secret;
-use super::server;
 use crate::agent::Agent;
 use crate::channels::telegram::TelegramCommandAdminRule;
 use crate::channels::telegram::TelegramControlCommandPolicy;
 use crate::channels::telegram::idempotency::WebhookDedupConfig;
+use crate::channels::telegram::runtime::console::{
+    print_foreground_config, print_managed_commands_help,
+};
+use crate::channels::telegram::runtime::dispatch::start_telegram_runtime;
+use crate::channels::telegram::runtime::{
+    TelegramWebhookControlPolicyBuildRequest,
+    build_telegram_webhook_app_with_control_command_policy,
+};
 use crate::channels::telegram::runtime_config::TelegramRuntimeConfig;
 use crate::channels::traits::Channel;
+
+use super::loop_control;
+use super::secret;
+use super::server;
 
 /// Full webhook run request with legacy admin-user and command-rule inputs.
 pub struct TelegramWebhookRunRequest {
@@ -121,7 +126,6 @@ pub async fn run_telegram_webhook_with_control_command_policy(
     let secret_token = secret::normalize_secret_token(secret_token)?;
     let runtime_config = TelegramRuntimeConfig::from_env();
     let (tx, mut inbound_rx) = tokio::sync::mpsc::channel(runtime_config.inbound_queue_capacity);
-    let inbound_snapshot_tx = tx.clone();
     let webhook = build_telegram_webhook_app_with_control_command_policy(
         TelegramWebhookControlPolicyBuildRequest {
             bot_token,
@@ -149,7 +153,11 @@ pub async fn run_telegram_webhook_with_control_command_policy(
         foreground_dispatcher,
         job_manager,
         mut completion_rx,
-    ) = start_telegram_runtime(&agent, &channel_for_send, runtime_config)?;
+    ) = start_telegram_runtime(
+        Arc::clone(&agent),
+        Arc::clone(&channel_for_send),
+        runtime_config,
+    )?;
 
     println!("Telegram webhook listening on {bind_addr}{path} (Ctrl+C to stop)");
     let backend_name = dedup_config.backend_name();

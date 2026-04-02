@@ -5,11 +5,12 @@ use xiuxian_wendao_core::{
 
 use super::{
     DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH,
-    DEFAULT_JULIA_DEPLOYMENT_ARTIFACT_SCHEMA_VERSION, JULIA_DEPLOYMENT_ARTIFACT_ID,
-    JULIA_PLUGIN_ID, JULIA_RERANK_CAPABILITY_ID, LinkGraphJuliaAnalyzerLaunchManifest,
-    LinkGraphJuliaAnalyzerServiceDescriptor, LinkGraphJuliaDeploymentArtifact,
-    LinkGraphJuliaRerankRuntimeConfig, build_rerank_provider_binding,
-    julia_deployment_artifact_selector, julia_rerank_provider_selector,
+    DEFAULT_JULIA_DEPLOYMENT_ARTIFACT_SCHEMA_VERSION, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
+    JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_PLUGIN_ID, JULIA_RERANK_CAPABILITY_ID,
+    LinkGraphJuliaAnalyzerLaunchManifest, LinkGraphJuliaAnalyzerServiceDescriptor,
+    LinkGraphJuliaDeploymentArtifact, LinkGraphJuliaRerankRuntimeConfig,
+    build_rerank_provider_binding, julia_deployment_artifact_selector,
+    julia_rerank_provider_selector,
 };
 
 #[test]
@@ -72,7 +73,7 @@ fn deployment_artifact_round_trips_plugin_artifact_payload() {
         artifact_schema_version: "v1".to_string(),
         generated_at: "2026-03-28T12:34:56Z".to_string(),
         base_url: Some("http://127.0.0.1:8080".to_string()),
-        route: Some("/arrow-ipc".to_string()),
+        route: Some(DEFAULT_JULIA_RERANK_FLIGHT_ROUTE.to_string()),
         health_route: Some("/health".to_string()),
         schema_version: Some("v1".to_string()),
         timeout_secs: Some(15),
@@ -98,7 +99,7 @@ fn deployment_artifact_round_trips_plugin_artifact_payload() {
         generated_at: payload.generated_at,
         endpoint: Some(PluginTransportEndpoint {
             base_url: Some("http://127.0.0.1:8080".to_string()),
-            route: Some("/arrow-ipc".to_string()),
+            route: Some(DEFAULT_JULIA_RERANK_FLIGHT_ROUTE.to_string()),
             health_route: Some("/health".to_string()),
             timeout_secs: Some(15),
         }),
@@ -121,7 +122,7 @@ fn deployment_artifact_round_trips_plugin_artifact_payload() {
 fn runtime_config_builds_provider_binding_and_artifact_payload() {
     let runtime = LinkGraphJuliaRerankRuntimeConfig {
         base_url: Some("http://127.0.0.1:8088".to_string()),
-        route: Some("/arrow-ipc".to_string()),
+        route: Some(DEFAULT_JULIA_RERANK_FLIGHT_ROUTE.to_string()),
         health_route: Some("/healthz".to_string()),
         schema_version: Some("v1".to_string()),
         timeout_secs: Some(15),
@@ -140,7 +141,7 @@ fn runtime_config_builds_provider_binding_and_artifact_payload() {
     );
     assert_eq!(
         binding.transport,
-        xiuxian_wendao_core::transport::PluginTransportKind::ArrowIpcHttp
+        xiuxian_wendao_core::transport::PluginTransportKind::ArrowFlight
     );
     assert_eq!(
         binding.launch.expect("launch").launcher_path,
@@ -153,6 +154,9 @@ fn runtime_config_builds_provider_binding_and_artifact_payload() {
         DEFAULT_JULIA_DEPLOYMENT_ARTIFACT_SCHEMA_VERSION
     );
     assert_eq!(artifact.base_url.as_deref(), Some("http://127.0.0.1:8088"));
-    assert_eq!(artifact.route.as_deref(), Some("/arrow-ipc"));
+    assert_eq!(
+        artifact.route.as_deref(),
+        Some(DEFAULT_JULIA_RERANK_FLIGHT_ROUTE)
+    );
     assert_eq!(artifact.health_route.as_deref(), Some("/healthz"));
 }

@@ -6,6 +6,8 @@ use crate::gateway::studio::repo_index::{
 };
 use crate::gateway::studio::search::handlers::code_search::search::build_repo_content_search_hits;
 use crate::gateway::studio::search::handlers::knowledge::build_intent_search_response;
+use crate::gateway::studio::search::handlers::knowledge::load_intent_search_response_with_metadata;
+use crate::gateway::studio::search::handlers::queries::SearchQuery;
 use crate::gateway::studio::search::handlers::tests::{
     publish_repo_content_chunk_index, publish_repo_entity_index, sample_repo_analysis,
     test_studio_state,
@@ -94,6 +96,75 @@ async fn build_intent_search_response_includes_repo_content_hits_for_debug_looku
             .map(|hit| (&hit.path, &hit.doc_type))
             .collect::<Vec<_>>()
     );
+}
+
+#[tokio::test]
+async fn load_intent_search_response_reports_repo_content_flight_transport_metadata() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let valid_repo = temp.path().join("ValidPkg");
+    fs::create_dir_all(valid_repo.join("src"))
+        .unwrap_or_else(|error| panic!("create valid src: {error}"));
+    fs::write(
+        valid_repo.join("Project.toml"),
+        "name = \"ValidPkg\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+    )
+    .unwrap_or_else(|error| panic!("write project: {error}"));
+
+    let studio = test_studio_state();
+    studio.set_ui_config(crate::gateway::studio::types::UiConfig {
+        projects: Vec::new(),
+        repo_projects: vec![crate::gateway::studio::types::UiRepoProjectConfig {
+            id: "valid".to_string(),
+            root: Some(valid_repo.display().to_string()),
+            url: None,
+            git_ref: None,
+            refresh: None,
+            plugins: vec!["julia".to_string()],
+        }],
+    });
+    let snapshot = Arc::new(RepoIndexSnapshot {
+        repo_id: "valid".to_string(),
+        analysis: Arc::new(crate::analyzers::RepositoryAnalysisOutput::default()),
+    });
+    publish_repo_content_chunk_index(
+        &studio,
+        "valid",
+        vec![RepoCodeDocument {
+            path: "src/ValidPkg.jl".to_string(),
+            language: Some("julia".to_string()),
+            contents: Arc::<str>::from(
+                "module ValidPkg\nusing Reexport\n@reexport using ModelingToolkit\nend\n",
+            ),
+            size_bytes: 62,
+            modified_unix_ms: 0,
+        }],
+    )
+    .await;
+    studio.repo_index.set_snapshot_for_test(&snapshot);
+    studio.repo_index.set_status_for_test(RepoIndexEntryStatus {
+        repo_id: "valid".to_string(),
+        phase: RepoIndexPhase::Ready,
+        queue_position: None,
+        last_error: None,
+        last_revision: Some("abc123".to_string()),
+        updated_at: Some("2026-03-22T00:00:00Z".to_string()),
+        attempt_count: 1,
+    });
+
+    let (response, metadata) = load_intent_search_response_with_metadata(
+        &studio,
+        SearchQuery {
+            q: Some("lang:julia reexport".to_string()),
+            intent: Some("debug_lookup".to_string()),
+            repo: Some("valid".to_string()),
+            limit: Some(10),
+        },
+    )
+    .await
+    .unwrap_or_else(|error| panic!("intent search response with metadata: {error:?}"));
+
+    assert_eq!(response.selected_mode.as_deref(), Some("intent_hybrid"));
+    assert_eq!(metadata.repo_content_transport, Some("flight_contract"));
 }
 
 #[tokio::test]

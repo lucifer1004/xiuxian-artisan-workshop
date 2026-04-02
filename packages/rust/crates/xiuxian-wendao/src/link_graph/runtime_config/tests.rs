@@ -1,7 +1,9 @@
 use super::{
     export_link_graph_compat_deployment_artifact_toml, resolve_link_graph_agentic_runtime,
     resolve_link_graph_coactivation_runtime, resolve_link_graph_compat_deployment_artifact,
-    resolve_link_graph_rerank_binding, resolve_link_graph_retrieval_policy_runtime,
+    resolve_link_graph_rerank_binding, resolve_link_graph_rerank_flight_runtime_settings,
+    resolve_link_graph_rerank_schema_version, resolve_link_graph_rerank_score_weights,
+    resolve_link_graph_retrieval_policy_runtime,
 };
 use crate::link_graph::runtime_config::constants::DEFAULT_LINK_GRAPH_JULIA_DEPLOYMENT_ARTIFACT_SCHEMA_VERSION;
 use crate::link_graph::runtime_config::models::LinkGraphSemanticIgnitionBackend;
@@ -168,7 +170,7 @@ mode = "hybrid"
 
 [link_graph.retrieval.julia_rerank]
 base_url = "http://127.0.0.1:8088"
-route = "/arrow-ipc"
+route = "/rerank"
 health_route = "/healthz"
 schema_version = "v1"
 timeout_secs = 15
@@ -189,7 +191,7 @@ similarity_weight = 0.8
         runtime.julia_rerank.base_url.as_deref(),
         Some("http://127.0.0.1:8088")
     );
-    assert_eq!(runtime.julia_rerank.route.as_deref(), Some("/arrow-ipc"));
+    assert_eq!(runtime.julia_rerank.route.as_deref(), Some("/rerank"));
     assert_eq!(
         runtime.julia_rerank.health_route.as_deref(),
         Some("/healthz")
@@ -207,6 +209,21 @@ similarity_weight = 0.8
     );
     assert_eq!(runtime.julia_rerank.vector_weight, Some(0.2));
     assert_eq!(runtime.julia_rerank.similarity_weight, Some(0.8));
+    let score_weights =
+        resolve_link_graph_rerank_score_weights().expect("score weights should resolve");
+    assert!((score_weights.vector_weight - 0.2).abs() < f64::EPSILON);
+    assert!((score_weights.semantic_weight - 0.8).abs() < f64::EPSILON);
+    assert_eq!(
+        resolve_link_graph_rerank_schema_version().as_deref(),
+        Some("v1")
+    );
+    let flight_settings = resolve_link_graph_rerank_flight_runtime_settings();
+    assert_eq!(flight_settings.schema_version.as_deref(), Some("v1"));
+    let flight_weights = flight_settings
+        .score_weights
+        .expect("flight score weights should resolve");
+    assert!((flight_weights.vector_weight - 0.2).abs() < f64::EPSILON);
+    assert!((flight_weights.semantic_weight - 0.8).abs() < f64::EPSILON);
 
     let descriptor = runtime.julia_rerank.analyzer_service_descriptor();
     let provider_descriptor = runtime.julia_rerank.provider_launch_descriptor();
@@ -255,7 +272,7 @@ similarity_weight = 0.8
     assert_eq!(artifact_payload.artifact_id, artifact_selector.artifact_id);
     DateTime::parse_from_rfc3339(&artifact.generated_at)?;
     assert_eq!(artifact.base_url.as_deref(), Some("http://127.0.0.1:8088"));
-    assert_eq!(artifact.route.as_deref(), Some("/arrow-ipc"));
+    assert_eq!(artifact.route.as_deref(), Some("/rerank"));
     assert_eq!(artifact.health_route.as_deref(), Some("/healthz"));
     assert_eq!(artifact.schema_version.as_deref(), Some("v1"));
     assert_eq!(artifact.timeout_secs, Some(15));
@@ -280,7 +297,11 @@ similarity_weight = 0.8
         binding.endpoint.base_url.as_deref(),
         Some("http://127.0.0.1:8088")
     );
-    assert_eq!(binding.endpoint.route.as_deref(), Some("/arrow-ipc"));
+    assert_eq!(binding.endpoint.route.as_deref(), Some("/rerank"));
+    assert_eq!(
+        binding.transport,
+        xiuxian_wendao_core::transport::PluginTransportKind::ArrowFlight
+    );
     assert_eq!(binding.endpoint.health_route.as_deref(), Some("/healthz"));
     assert_eq!(binding.endpoint.timeout_secs, Some(15));
     assert_eq!(binding.contract_version.0, "v1");
@@ -331,7 +352,7 @@ fn test_compat_deployment_artifact_writes_toml_file() -> Result<(), Box<dyn std:
             .to_string(),
         generated_at: "2026-03-27T16:00:00+00:00".to_string(),
         base_url: Some("http://127.0.0.1:18080".to_string()),
-        route: Some("/arrow-ipc".to_string()),
+        route: Some("/rerank".to_string()),
         health_route: Some("/health".to_string()),
         schema_version: Some("v1".to_string()),
         timeout_secs: Some(15),
@@ -374,7 +395,7 @@ fn test_compat_deployment_artifact_writes_json_file() -> Result<(), Box<dyn std:
             .to_string(),
         generated_at: "2026-03-27T16:00:00+00:00".to_string(),
         base_url: Some("http://127.0.0.1:18080".to_string()),
-        route: Some("/arrow-ipc".to_string()),
+        route: Some("/rerank".to_string()),
         health_route: Some("/health".to_string()),
         schema_version: Some("v1".to_string()),
         timeout_secs: Some(15),

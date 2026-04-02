@@ -13158,6 +13158,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic-web"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29453d84de05f4f1b573db22e6f9f6c95c189a6089a440c9a098aa9dea009299"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "pin-project",
+ "tokio-stream",
+ "tonic",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
 name = "tower"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15550,7 +15568,6 @@ dependencies = [
  "arrow-string 57.3.0",
  "arrow-string 58.1.0",
  "async-trait",
- "axum",
  "chrono",
  "dashmap 7.0.0-rc2",
  "datafusion 53.0.0",
@@ -15568,7 +15585,6 @@ dependencies = [
  "parquet",
  "rand 0.8.5",
  "rayon",
- "reqwest 0.13.2",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -15578,8 +15594,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "toml 0.8.23",
- "url",
  "xiuxian-io",
  "xiuxian-lance",
  "xiuxian-skills",
@@ -15631,6 +15645,7 @@ dependencies = [
  "tokio-stream",
  "toml 0.8.23",
  "tonic",
+ "tonic-web",
  "tower",
  "unicode-normalization",
  "url",
@@ -15671,12 +15686,9 @@ name = "xiuxian-wendao-julia"
 version = "0.1.1"
 dependencies = [
  "arrow 58.1.0",
- "arrow-ipc 58.1.0",
- "axum",
  "chrono",
  "insta",
  "regex",
- "reqwest 0.13.2",
  "serde",
  "serde_json",
  "tempfile",
@@ -15686,6 +15698,7 @@ dependencies = [
  "xiuxian-ast",
  "xiuxian-vector",
  "xiuxian-wendao-core",
+ "xiuxian-wendao-runtime",
 ]
 
 [[package]]

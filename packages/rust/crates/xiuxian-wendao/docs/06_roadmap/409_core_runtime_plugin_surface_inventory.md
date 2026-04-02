@@ -39,6 +39,131 @@ The active alignment bundle requires:
 The historical ownership map remains below, but the document's primary job is
 now to keep late-`M6` outward reality synchronized across the active docs.
 
+## Pure Arrow Flight Boundary Classification (2026-04-01)
+
+The active operator boundary is now intentionally simpler than the older
+`Flight-first + Arrow IPC fallback` story.
+
+Formal surface classes:
+
+1. `Arrow Flight` business surface
+   - high-performance-first query, retrieval, analysis, docs, planner, repo,
+     graph, and VFS business contracts
+2. `JSON` control surface
+   - process liveness/bootstrap, operator config/status/control, and static
+     artifact inspection
+
+The current Stage-A classification snapshot is:
+
+| Formal class            | Current live family                                                                                                                                                                                      | Current physical transport reality                                                                         | Migration interpretation                                                                                   |
+| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| `Arrow Flight` business | canonical Flight `/search/*` and `/analysis/*`, plus the existing docs/repo/vfs/graph business families                                                                                                  | semantic search and analysis are already Flight-only; broader docs/repo/vfs/graph migration remains staged | these families are target business surfaces and should be migrated toward Flight rather than grown as JSON |
+| `JSON` control          | `/api/notify`, `/api/ui/config`, `/api/ui/capabilities`, `GET /api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`, `POST /api/repo/index`, `GET /api/repo/index/status`, `GET /api/search/index/status` | JSON is already the current live contract                                                                  | these stay on the control plane unless a later RFC explicitly promotes them into Flight business scope     |
+
+Retirement debt ledger:
+
+1. the old `/api/search/*/hits-arrow` browser route family is retired, and the
+   unified `/api/search/{intent,attachments,references,symbols}` HTTP business
+   routes are now removed from the outward gateway surface as well
+2. the old `/api/analysis/*/retrieval-arrow` mirror family is retired, and the
+   old `/api/analysis/markdown` plus `/api/analysis/code-ast` HTTP business
+   routes are now removed entirely from the outward gateway surface
+3. `ArrowFlight` is now the only active transport vocabulary carried by the
+   current runtime-owned plugin contract
+
+Current concrete Flight replacement reality:
+
+1. the runtime query-contract tree already owns
+   `REPO_SEARCH_ROUTE = /search/repos/main`
+2. the runtime query-contract tree now also owns
+   `SEARCH_INTENT_ROUTE`, `SEARCH_KNOWLEDGE_ROUTE`,
+   `SEARCH_ATTACHMENTS_ROUTE`, `SEARCH_AST_ROUTE`,
+   `SEARCH_REFERENCES_ROUTE`, and `SEARCH_SYMBOLS_ROUTE`
+3. the runtime query-contract tree now also owns
+   `ANALYSIS_MARKDOWN_ROUTE` and `ANALYSIS_CODE_AST_ROUTE`
+4. the runtime query-contract tree already owns `RERANK_ROUTE = /rerank`
+5. `/search/repos/main` and `/rerank` already have concrete runtime service
+   seams
+6. the first bounded semantic search/analysis service-materialization slice
+   now exists in `xiuxian-wendao-runtime/src/transport/server.rs` via
+   `SearchFlightRouteProvider`, shared
+   `WENDAO_SEARCH_QUERY_HEADER` / `WENDAO_SEARCH_LIMIT_HEADER` metadata, and
+   `WendaoFlightService::new_with_route_providers(...)`
+7. the first concrete Studio-backed provider slice now exists in
+   `src/gateway/studio/search/handlers/knowledge/intent/flight.rs` via
+   `StudioIntentSearchFlightRouteProvider`, which materializes the semantic
+   `/search/intent` route into a Studio-owned Arrow batch shaped like the
+   current intent `hits-arrow` payload
+8. the semantic search contract is now snapshot-locked in
+   `tests/snapshots/gateway/studio/search_flight_service_route_contracts.snap`,
+   which records `/search/intent`, `/search/knowledge`,
+   `/search/attachments`, `/search/references`, `/search/symbols`, and
+   `/search/ast` as the current active Flight search family
+9. the old `/api/search/ast` HTTP business route has now been removed
+   entirely; `src/gateway/studio/search/handlers/ast.rs` remains only as the
+   Studio-owned provider-backed batch seam for the canonical Flight route
+   `/search/ast`
+10. one bounded host-side aggregate dispatch seam now also exists in
+    `src/gateway/studio/search/handlers/flight.rs`, where
+    `StudioSearchFlightRouteProvider` multiplexes
+    `SEARCH_INTENT_ROUTE`, `SEARCH_KNOWLEDGE_ROUTE`,
+    `SEARCH_REFERENCES_ROUTE`, `SEARCH_SYMBOLS_ROUTE`, and `SEARCH_AST_ROUTE`
+    onto one shared Studio-owned Flight provider contract
+11. the general knowledge materialization seam now also exists in
+    `src/gateway/studio/search/handlers/knowledge/search.rs`, where
+    `load_knowledge_search_response_flight_batch(...)` reuses the shared
+    `SearchHit` Arrow batch shape for the canonical `/search/knowledge`
+    contract
+12. one bounded host-side service-builder seam now also exists in
+    `src/gateway/studio/search/handlers/flight.rs` and
+    `src/link_graph/plugin_runtime/transport/server.rs`, where
+    `build_studio_search_flight_service_with_repo_provider(...)` and
+    `build_search_plane_studio_flight_service(...)` materialize one
+    `WendaoFlightService` with repo-search, aggregate semantic search,
+    attachment, AST, markdown-analysis, and code-AST-analysis providers
+13. active Flight service wiring is now landed for the dedicated
+    `wendao_search_flight_server` binary, so the remaining retirement debt is
+    fallback/runtime compatibility transport seams rather than missing
+    binary-side analysis activation
+14. the dedicated `src/bin/wendao_search_flight_server.rs` binary now also
+    consumes the roots-based Studio builder through
+    `build_search_plane_studio_flight_service_for_roots_with_weights(...)`,
+    which makes semantic search-family and analysis-family Flight serving
+    active in the dedicated binary without depending on outward search or
+    analysis HTTP business-route mirrors
+15. that dedicated Flight binary is now browser-consumable too:
+    `src/bin/wendao_search_flight_server.rs` enables
+    `tonic_web::GrpcWebLayer` with `accept_http1(true)`, so browser-side
+    gRPC-web clients can consume the semantic Flight contracts directly
+16. `.data/wendao-frontend` now owns a real pure-Flight knowledge-search path:
+    `wendao.toml` carries `[search_flight]`, the Rspack dev server proxies
+    `/arrow.flight.protocol.FlightService/*`, and
+    `src/api/flightSearchTransport.ts` plus the generated Arrow Flight client
+    now consume the canonical `/search/knowledge` contract
+17. live end-to-end proof now exists in
+    `.data/wendao-frontend/src/api/liveGateway.test.ts`, which exercises:
+    local config push into the gateway, graph resolution from the gateway, and
+    pure Flight knowledge search against the dedicated Flight server
+18. the next in-crate retirement slice is now also complete: the dead local
+    Arrow IPC helper modules
+    `src/gateway/studio/search/handlers/arrow_transport.rs` and
+    `src/gateway/studio/search/handlers/knowledge/intent/arrow.rs` are gone,
+    and the attachments/references/symbols helper roundtrip tests are retired,
+    so the semantic search contract is pinned only by the shared Flight
+    snapshot instead of duplicated local IPC helper coverage
+19. the next test-graph retirement slice is now also complete: the old
+    semantic-search HTTP wrapper shells used only by unit tests are gone, and
+    the search unit suite now proves intent/attachments/references/symbols
+    through the active response seams directly instead of through retired HTTP
+    wrapper functions
+
+Bounded Stage-A retirement mapping:
+
+| IPC debt family                                                                    | Current physical owner                                                                                                                                      | Concrete Flight replacement today                 | Governed next move                                                                                               |
+| :--------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------- |
+| retired `/api/search/{intent,attachments,references,symbols}` HTTP business routes | `src/gateway/studio/search/handlers/{attachments,references,symbols}.rs` plus `src/gateway/studio/search/handlers/knowledge/intent/{arrow,entry,flight}.rs` | `/search/{intent,attachments,references,symbols}` | keep only as provider/materialization seams and remove downstream HTTP assumptions                               |
+| retired non-Flight plugin transport vocabulary                                     | `xiuxian-wendao-core` transport contract plus runtime/studio mirrors                                                                                        | complete                                          | remove retired variants from the active public type system and keep Flight as the only live plugin transport     |
+
 ## Classification Rules
 
 This inventory uses the following target owners:
@@ -93,26 +218,23 @@ The current late-`M6` outward story is therefore:
 The `Phase-7 Stage A` inventory resolves the live transport surface as
 follows:
 
-| Surface                              | Current owner                 | Stage-A finding                                                                                                                                                             | Phase-7 implication                                                                                                                                      |
-| :----------------------------------- | :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Generic transport contract           | `xiuxian-wendao-core`         | `PluginCapabilityBinding` carries `endpoint`, `transport`, and `contract_version`; `PluginTransportKind` declares `ArrowFlight`, `ArrowIpcHttp`, and `LocalProcessArrowIpc` | negotiation policy should stay generic and contract-first                                                                                                |
-| Runtime transport construction       | `xiuxian-wendao-runtime`      | `src/transport/client.rs` owns `build_arrow_transport_client_from_binding(...)`, which currently materializes `ArrowIpcHttp` only                                           | `Stage B` should add preference/selection logic here instead of in host gateway code                                                                     |
-| Host Arrow response encoding         | `xiuxian-wendao` host gateway | `src/gateway/studio/search/handlers/arrow_transport.rs` only serializes local Arrow payload responses                                                                       | this seam is not the negotiation owner and should stay out of transport-policy growth                                                                    |
-| Outward transport inspection payload | `xiuxian-wendao` Studio types | `UiPluginArtifact` now exposes `base_url`, `route`, `health_route`, `timeout_secs`, `schema_version`, `selected_transport`, `fallback_from`, and `fallback_reason`         | `Stage C` is complete for the outward inspection family                                                                                                   |
+| Surface                              | Current owner                 | Stage-A finding                                                                                                                                                             | Phase-7 implication                                                                   |
+| :----------------------------------- | :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------ |
+| Generic transport contract           | `xiuxian-wendao-core`         | `PluginCapabilityBinding` carries `endpoint`, `transport`, and `contract_version`; `PluginTransportKind` is now `ArrowFlight`-only                                            | the public plugin transport contract is now Flight-only                               |
+| Runtime transport construction       | `xiuxian-wendao-runtime`      | `src/transport/flight.rs` and `src/transport/negotiation.rs` materialize `ArrowFlight` directly                                                                                  | runtime negotiation is Flight-only on the live materialization path                   |
+| Host Arrow response encoding         | `xiuxian-wendao` host gateway | `src/gateway/studio/search/handlers/arrow_transport.rs` only serializes local Arrow payload responses                                                                       | this seam is not the negotiation owner and should stay out of transport-policy growth |
+| Outward transport inspection payload | `xiuxian-wendao` Studio types | `UiPluginArtifact` now exposes `base_url`, `route`, `health_route`, `timeout_secs`, `schema_version`, `selected_transport`, `fallback_from`, and `fallback_reason`          | `Stage C` is complete for the outward inspection family                               |
 
-The canonical Phase-7 transport preference order is now fixed as:
+The canonical Phase-7 runtime negotiation order is now fixed as:
 
 1. `ArrowFlight`
-2. `ArrowIpcHttp`
-3. `LocalProcessArrowIpc`
 
 Interpretation:
 
 1. `ArrowFlight` is the preferred runtime negotiation result where a provider
    and host path can support it
-2. `ArrowIpcHttp` is the bounded compatibility fallback
-3. `LocalProcessArrowIpc` remains reserved for explicitly managed local
-   provider paths rather than generic remote negotiation
+2. the retired non-Flight transport variants are no longer part of the active
+   public plugin transport contract
 
 Current Stage-B implementation status:
 
@@ -129,10 +251,8 @@ Current Stage-B implementation status:
    reusing `xiuxian-vector`'s existing
    `engine_batches_to_lance_batches(...)` and
    `lance_batches_to_engine_batches(...)` conversion seam
-6. when both `ArrowFlight` and `ArrowIpcHttp` candidates are present, the
-   runtime now selects supported `ArrowFlight` bindings first and falls back
-   deterministically to `ArrowIpcHttp` only when the preferred binding is
-   incomplete
+6. when generic bindings advertise retired transport kinds, the runtime now
+   rejects them explicitly and keeps the live materialization path Flight-only
 7. `Phase-7 Stage B` is complete: runtime policy and Flight materialization
    now live on the LanceDB Arrow line
 8. `Phase-7 Stage C` is complete: outward inspection payloads and rerank
@@ -255,6 +375,58 @@ Current Stage-C status:
     touched session tests to `xiuxian_daochang`; the current compile front
     now starts deeper in `test_support/*`, `lib.rs`, and `agent/*`
     private-module exposure consumed by `test_support/*`
+19. the following bounded crate-health slice has now repaired the
+    `Agent` / session-alignment bundle by restoring the live `Agent`
+    owner fields, wiring `agent/bootstrap/memory.rs` back onto the current
+    crate-owned tool/admission/embedding seams, restoring the recall-bias and
+    session-backup wrappers, and rebinding the touched imports to
+    `crate::...`; the current compile front now starts in
+    `agent/tool_startup.rs`, `session/redis_backend/executor.rs`, and
+    `test_support/memory_metrics.rs` before deeper channel/runtime drift
+20. the following bounded crate-health slice has now repaired that next
+    compile-front bundle too by cloning the startup connect config at the
+    tool-pool call boundary, aligning
+    `session/redis_backend/executor.rs` to the current `RwLock` connection
+    owner, and moving the memory-recall metric helper methods onto the live
+    `agent/memory_recall_metrics.rs` owner seam while retiring the dead
+    `test_support/memory_metrics.rs` shim; the current compile front now
+    starts deeper in
+    `channels/discord/runtime/managed/handlers/command_dispatch/session/budget.rs`,
+    `tool_runtime/bridge.rs`, `llm/*`, and the remaining Discord/Telegram
+    runtime drift
+21. the following bounded crate-health slice has now repaired that next
+    compile-front bundle too by rebinding the touched Discord budget handler
+    to `crate::...` owner imports and reference-based snapshot formatting,
+    aligning `tool_runtime/bridge.rs` to the live `reqwest` response seam
+    and touched JSON-RPC/result ownership while retaining connect
+    diagnostics, and restoring the touched `llm/*` surface to the live
+    `max_tokens` plus `DeepseekRuntime::RemoteHttp` shape; the current
+    compile front now starts deeper in Discord runtime gateway/run ownership
+    and Telegram send/runtime drift
+22. the following bounded crate-health slice has now repaired that
+    Discord/Telegram runtime bundle too by restoring the live Discord
+    channel constructor owner, borrowing the live gateway join handle,
+    wiring the current admission snapshot into gateway/run telemetry,
+    restoring Telegram send-rate gate plus chunk-send helpers, moving
+    `SessionGate` acquire/drop ownership onto the shared type seam, and
+    rebasing the touched runtime/router files from `super::super::...` to
+    crate-owned imports; the current compile front no longer stops in
+    Discord runtime gateway/run ownership or Telegram send/runtime drift and
+    now starts deeper in `gateway/http/*`, `agent/injection/*`,
+    `agent/native_tools/zhixing.rs`, `agent/zhenfa/bridge.rs`, Telegram
+    ACL/settings, Telegram session-memory reply shaping, and the remaining
+    test-support seams
+
+Scope correction:
+
+1. the `xiuxian-daochang` crate-health notes above are retained as workspace
+   history only
+2. they are not the authoritative next move for this Wendao outward-surface
+   inventory unless they directly unblock a Wendao-owned host surface
+3. the authoritative next in-program move is now `Phase 9 Stage A`:
+   inventory the remaining live consumers that still depend on monolith-era
+   `xiuxian-wendao` owner seams instead of `xiuxian-wendao-core` or
+   `xiuxian-wendao-runtime`
 
 ## Historical Ownership Inventory
 
@@ -728,45 +900,319 @@ The outward-alignment bundle and exit review are complete when:
 6. `Phase-8 Stage C` has landed the first bounded lane bundle and the
    explicit `Phase 8` gate decision is now `go`
 
-## Current Remediation Front
+## Phase-9 Consumer Reality Inventory
 
-The active post-`Phase 8` work is no longer contract/governance setup. It is
-bounded `xiuxian-daochang` crate-health remediation.
+The authoritative post-`Phase 8` inventory is no longer adjunct
+`xiuxian-daochang` remediation. It is the Wendao-owned `Phase 9` consumer
+cutover baseline.
 
-The latest three landed slices retired the first telegram/discord internal
-visibility and re-export drift bundle, the stale `llm/*` import/owner
-drift bundle, and the duplicate `runtime_agent_factory/*` owner bundle from
-the compile front. The next live owner-drift front now starts in:
+Current dependency reality:
 
-1. `xiuxian-daochang/src/agent/bootstrap/zhixing.rs`
-2. `xiuxian-daochang/src/agent/turn_execution/react_loop/*`
-3. `xiuxian-daochang/src/session/bounded_store/window_ops/*`
-4. deeper `xiuxian-daochang/src/agent/*` lifecycle and tool/session drift
-5. residual channel/runtime API drift under `xiuxian-daochang/src/channels/*`
+1. live monolith-era `xiuxian-wendao` direct dependencies still exist in
+   `xiuxian-qianji`, `xiuxian-zhixing`, and `xiuxian-daochang`
+2. `xiuxian-qianhuan` still carries an optional monolith dependency
+3. `xiuxian-wendao-modelica` already uses `xiuxian-wendao-core` for
+   production code, but still retains a monolith dev-dependency for
+   integration tests
+4. no surveyed sibling consumer crate currently imports
+   `xiuxian_wendao_core::...` or `xiuxian_wendao_runtime::...` directly in
+   Rust source
 
-That next bounded slice is now also closed for the `zhixing` reminder/bootstrap
-surface: reminder queue backfill, queue-aware reminder polling, and reminder
-notice rendering now live on `xiuxian-zhixing::ZhixingHeyi`, and the host
-bootstrap no longer owns parallel reminder logic. The active next front is
-now:
+Current source-level concentration:
 
-1. `xiuxian-daochang/src/agent/turn_execution/react_loop/*`
-2. `xiuxian-daochang/src/session/bounded_store/window_ops/*`
-3. deeper `xiuxian-daochang/src/agent/*` lifecycle and tool/session drift
-4. residual channel/runtime API drift under `xiuxian-daochang/src/channels/*`
+1. `xiuxian-qianji` still depends on monolith exports for `LinkGraphIndex`,
+   graph document types, and later cutover families beyond the now-cleared
+   resource/VFS and contract-feedback / knowledge-entry seams
+2. `xiuxian-qianhuan` no longer carries root-qualified source imports for the
+   cleared resource/VFS family, but it still keeps the optional monolith
+   dependency for later contraction work
+3. `xiuxian-daochang` still depends on monolith exports for
+   `LinkGraphIndex` and related host helpers
+4. `xiuxian-zhixing` still depends on monolith exports for repo-intelligence
+   and graph-facing types such as `LinkGraphIndex`, `LinkGraphHit`,
+   `KnowledgeGraph`, `Entity`, and related repo-intelligence owners
 
-That next bounded slice is now closed for the
-`agent/turn_execution/react_loop/*` surface too. The touched scope now uses
-explicit crate-owned imports instead of wildcard or deep relative imports,
-the live tool-dispatch call sites match current runtime signatures, and the
-`turn_store` owner seam is mounted again so the react loop can see the live
-append-turn path. The active next front is now:
+First bounded cutover candidate:
 
-1. `xiuxian-daochang/src/agent/persistence/turn_store/*`
-2. `xiuxian-daochang/src/agent/session_context/window_ops/*`
-3. `xiuxian-daochang/src/session/bounded_store/window_ops/*`
-4. deeper `xiuxian-daochang/src/agent/*` lifecycle and tool/session drift
-5. residual channel/runtime API drift under `xiuxian-daochang/src/channels/*`
+1. the resource/VFS family:
+   - `SkillVfsResolver`
+   - `WendaoResourceUri`
+   - `embedded_resource_text_from_wendao_uri`
+   - `WendaoResourceRegistry`
+2. this family is physically concentrated under `src/skill_vfs/` and
+   `src/enhancer/resource_registry/`
+3. this family is still re-exported broadly from `src/lib.rs`
+4. this family is consumed by multiple sibling crates, which makes it the
+   best first Stage-B cutover slice
+
+Current Stage-B progress:
+
+1. the first resource/VFS source-consumer cutover slice is now landed across
+   `xiuxian-qianhuan`, `xiuxian-qianji`, and `xiuxian-daochang`
+2. those source consumers now import from the owner seams instead of from the
+   monolith crate root:
+   - `xiuxian_wendao::skill_vfs::*`
+   - `xiuxian_wendao::enhancer::WendaoResourceRegistry`
+3. the follow-up test-consumer slice for this family is now landed too
+4. root-qualified imports for this family are now cleared across the touched
+   `src/` and `tests/` scope
+5. the same family is now also cleared for Wendao's own internal unit-test
+   consumer surface
+6. the next bounded ingress/spider consumer slice is now also landed across
+   `xiuxian-daochang` source and test consumers
+7. those touched consumers now use the owner seam
+   `xiuxian_wendao::ingress::{SpiderPagePayload, SpiderWendaoBridge,
+canonical_web_uri}`
+8. root-qualified imports for that ingress family are now cleared across the
+   workspace `packages/**` Rust source and test scope
+9. the targeted `xiuxian-daochang --test agent_suite --no-run` probe remains
+   blocked only by deeper pre-existing compile failures outside the touched
+   ingress files
+10. the next bounded incremental-sync policy slice is now also landed across
+    `xiuxian-daochang`, `xiuxian-zhixing`, and Wendao's own unit-test
+    consumer surface
+11. those touched consumers now use the owner seam
+    `xiuxian_wendao::sync::IncrementalSyncPolicy`
+12. root-qualified imports for `IncrementalSyncPolicy` are now cleared across
+    the workspace `packages/**` Rust source and test scope
+13. bounded verification is clean on that seam:
+    `xiuxian-zhixing --lib` and
+    `xiuxian-wendao --test xiuxian-testing-gate --no-run` pass, while
+    `xiuxian-daochang --lib` and
+    `xiuxian-zhixing --test test_wendao_indexer --no-run` remain blocked
+    only by deeper pre-existing drift outside this family
+14. the next bounded Zhixing indexer family slice is now also landed across
+    `xiuxian-zhixing` source and test consumers
+15. those touched consumers now use the owner seam
+    `xiuxian_wendao::skill_vfs::zhixing::{ZhixingIndexSummary,
+ZhixingWendaoIndexer}`
+16. the owner seam now also carries the embedded skill-reference counters in
+    `ZhixingIndexSummary`, which removes the existing downstream summary-field
+    drift on the main indexer path
+17. root-qualified imports for `ZhixingIndexSummary` and
+    `ZhixingWendaoIndexer` are now cleared across the workspace `packages/**`
+    Rust source and test scope
+18. bounded verification is clean on that seam:
+    `xiuxian-zhixing --lib`,
+    `xiuxian-zhixing --test test_wendao_indexer --no-run`, and
+    `xiuxian-wendao --test xiuxian-testing-gate --no-run` pass, while
+    `xiuxian-zhixing --tests --no-run` and `xiuxian-daochang --lib`
+    remain blocked only by deeper pre-existing drift outside this family
+19. the next bounded contract-feedback / knowledge-entry slice is now also
+    landed across `xiuxian-qianji` source and test consumers
+20. those touched consumers now use the owner seams:
+    `xiuxian_wendao::contract_feedback::WendaoContractFeedbackAdapter`,
+    `xiuxian_wendao::storage::KnowledgeStorage`, and
+    `xiuxian_wendao::types::{KnowledgeCategory, KnowledgeEntry}`
+21. the slice exposed one bounded visibility seam in the host crate:
+    `xiuxian-wendao/src/lib.rs` now exports `pub mod types;` so the owner
+    path is physically reachable without relying on the crate-root alias
+22. root-qualified imports for `KnowledgeEntry`, `KnowledgeStorage`,
+    `WendaoContractFeedbackAdapter`, and `KnowledgeCategory` are now cleared
+    across the touched `xiuxian-qianji` `src/` and `tests/` scope
+23. bounded verification is clean on that seam:
+    `xiuxian-qianji --lib`,
+    `xiuxian-qianji --tests --no-run`, and
+    `xiuxian-wendao --test xiuxian-testing-gate --no-run` pass
+24. the next bounded graph-primitive slice is now also landed across the
+    touched `xiuxian-qianji` and `xiuxian-zhixing` source/test consumers
+25. those touched consumers now use the owner seams:
+    `xiuxian_wendao::entity::{Entity, EntityType, Relation, RelationType}`
+    and `xiuxian_wendao::graph::KnowledgeGraph`
+26. the touched `xiuxian-zhixing/tests/test_strict_teacher.rs` seam also now
+    matches the current live APIs by using a local `ManifestationInterface`
+    stub and the current `ZhixingHeyi::add_task(title, scheduled_at)`
+    signature
+27. root-qualified imports for `Entity`, `EntityType`, `Relation`,
+    `RelationType`, and root-braced `KnowledgeGraph` are now cleared across
+    the touched `xiuxian-qianji` / `xiuxian-zhixing` scope, while explicit
+    `xiuxian_wendao::graph::KnowledgeGraph` owner imports remain by design
+28. bounded verification is clean on that seam:
+    `xiuxian-qianji --lib`,
+    `xiuxian-zhixing --lib`,
+    `xiuxian-zhixing --test test_strict_teacher --no-run`, and
+    `xiuxian-zhixing --test test_wendao_indexer --no-run` pass
+29. the residual `xiuxian-zhixing/tests/test_heyi.rs` tail is now also
+    compile-aligned to the same owner seams and to the current live
+    `ZhixingHeyi` API signatures
+30. bounded compile verification on that residual tail is clean:
+    `xiuxian-zhixing --test test_heyi --no-run` passes
+31. an attempted full `xiuxian-zhixing --test test_heyi` run still fails on
+    deeper pre-existing reminder/agenda/task behavior drift in that Zhixing
+    test surface, not on the owner-path cutover itself
+32. the next bounded markdown-config slice is now also landed on the
+    `MarkdownConfigBlock / extract_markdown_config_blocks` family
+33. the host owner seam now has the minimum required visibility:
+    `xiuxian-wendao/src/enhancer/mod.rs` now exports
+    `pub mod markdown_config;`
+34. the touched consumer in
+    `xiuxian-daochang/tests/agent/native_tools_zhixing.rs` now uses the
+    owner seam
+    `xiuxian_wendao::enhancer::markdown_config::{MarkdownConfigBlock,
+extract_markdown_config_blocks}`
+35. root-qualified imports for that markdown-config family are now cleared
+    across the workspace `packages/**` Rust source and test scope
+36. bounded verification is clean on the Wendao-owned seam:
+    `xiuxian-wendao --test xiuxian-testing-gate --no-run` passes, and the
+    workspace grep for root-qualified `MarkdownConfigBlock` /
+    `extract_markdown_config_blocks` imports is clean
+37. the affected-package `xiuxian-daochang --test agent_suite --no-run`
+    probe still fails, but the compile front remains in deeper pre-existing
+    `gateway/http`, `agent/injection`, Telegram ACL, and session-memory
+    drift outside this markdown-config cutover
+38. the natural next Stage-B follow-up is still the next bounded consumer
+    family; crate-root re-export contraction belongs to `Stage C`
+39. the next bounded `Stage B` slice is now also landed on the residual
+    graph-primitive tail in `xiuxian-daochang` test consumers
+40. the touched `xiuxian-daochang` tests now use owner seams instead of
+    crate-root graph primitives:
+    - `xiuxian_wendao::entity::{Entity, EntityType}`
+    - `xiuxian_wendao::graph::KnowledgeGraph`
+41. the touched files are:
+    - `xiuxian-daochang/tests/agent/native_tools_zhixing.rs`
+    - `xiuxian-daochang/tests/agent/native_tools_zhixing_e2e.rs`
+    - `xiuxian-daochang/tests/agent/native_tools_web.rs`
+42. bounded verification for this residual tail is clean on the owner-path
+    seam:
+    - `xiuxian-wendao --test xiuxian-testing-gate --no-run` passes
+    - grep for crate-root `Entity` / `EntityType` / `KnowledgeGraph`
+      imports in the touched files is clean
+43. the affected-package `xiuxian-daochang --test agent_suite --no-run`
+    probe still fails, but the compile front remains in deeper pre-existing
+    `gateway/http`, `agent/injection`, `agent/native_tools/zhixing`,
+    `agent/zhenfa/bridge`, Telegram ACL, and session-memory drift outside
+    this residual graph-primitive cutover
+44. the natural next Stage-B follow-up is still another small bounded
+    consumer family, not a broad `LinkGraphIndex` cut
+45. the next bounded `Stage B` slice is now also landed on the
+    `parse_frontmatter / embedded_discover_canonical_uris` family in
+    `xiuxian-qianji`
+46. the touched consumers now use owner seams instead of crate-root imports:
+    - `xiuxian_wendao::enhancer::parse_frontmatter`
+    - `xiuxian_wendao::skill_vfs::embedded_discover_canonical_uris`
+47. the touched files are:
+    - `xiuxian-qianji/src/executors/annotation/persona_markdown.rs`
+    - `xiuxian-qianji/src/scheduler/preflight/query.rs`
+48. bounded verification for this family is clean:
+    - `xiuxian-qianji --lib` passes
+    - `xiuxian-qianji --tests --no-run` passes
+    - workspace grep for crate-root `parse_frontmatter` /
+      `embedded_discover_canonical_uris` imports across sibling consumers is
+      clean
+49. the natural next Stage-B follow-up is still another small bounded
+    consumer family that stays off a broad `LinkGraphIndex` cut
+50. the next bounded `Stage B` slice is now also landed on the
+    `LinkGraphHit / LinkGraphSearchOptions` family in `xiuxian-zhixing`
+51. the touched consumer now uses the owner seam instead of crate-root
+    imports:
+    - `xiuxian_wendao::link_graph::{LinkGraphHit, LinkGraphSearchOptions}`
+52. the touched file is:
+    - `xiuxian-zhixing/src/heyi/agenda_render.rs`
+53. bounded verification for this family is clean on the library seam:
+    - `xiuxian-zhixing --lib` passes
+    - sibling-consumer grep for crate-root `LinkGraphHit` /
+      `LinkGraphSearchOptions` imports is clean
+54. an attempted `xiuxian-zhixing --tests --no-run` still fails, but the
+    compile front is in pre-existing `tests/test_storage_markdown.rs`
+    crate-path drift outside this owner-path cutover
+55. the natural next Stage-B follow-up is still another small bounded
+    consumer family that stays off a broad `LinkGraphIndex` cut
+56. the next bounded `Stage B` slice is now also landed on the
+    `WendaoSearchTool` family across sibling test consumers
+57. the touched consumers now use the owner seam instead of crate-root
+    imports:
+    - `xiuxian_wendao::zhenfa_router::WendaoSearchTool`
+58. the touched files are:
+    - `xiuxian-qianhuan/tests/test_zhenfa_native_tools.rs`
+    - `xiuxian-daochang/tests/scenario_adversarial_evolution.rs`
+59. bounded verification for this family is clean on the positive consumer
+    path:
+    - `xiuxian-qianhuan --test test_zhenfa_native_tools --features zhenfa-router --no-run`
+      passes
+    - sibling-consumer grep for crate-root `WendaoSearchTool` imports is
+      clean
+60. the affected-package
+    `xiuxian-daochang --test scenario_adversarial_evolution --no-run`
+    probe still fails, but the compile front remains in deeper pre-existing
+    `gateway/http`, `agent/injection`, `agent/native_tools/zhixing`,
+    `agent/zhenfa/bridge`, Telegram ACL, and session-memory drift outside
+    this owner-path cutover
+61. the natural next Stage-B follow-up is still another small bounded
+    consumer family that stays off a broad `LinkGraphIndex` cut
+62. the next bounded `Stage B` slice is now also landed on the residual
+    resource/VFS test tail in `xiuxian-zhixing`
+63. the touched tests now use owner seams instead of crate-root imports:
+    - `xiuxian_wendao::enhancer::WendaoResourceRegistry`
+    - `xiuxian_wendao::skill_vfs::{...}`
+64. the touched files are:
+    - `xiuxian-zhixing/tests/test_forge_skill_resources.rs`
+    - `xiuxian-zhixing/tests/test_wendao_skill_resources.rs`
+65. bounded verification for this residual tail is clean:
+    - `xiuxian-zhixing --test test_forge_skill_resources --no-run` passes
+    - `xiuxian-zhixing --test test_wendao_skill_resources --no-run` passes
+    - sibling-consumer grep for crate-root resource/VFS imports in this
+      family is clean
+66. the natural next Stage-B follow-up is still another small bounded
+    consumer family that stays off a broad `LinkGraphIndex` cut
+67. the next bounded `Stage B` slice is now also landed on a test-only
+    `LinkGraphIndex` leaf for the native-search scenario consumers
+68. the touched tests now use the owner seam instead of the crate-root import:
+    - `xiuxian_wendao::link_graph::LinkGraphIndex`
+69. the touched files are:
+    - `xiuxian-qianhuan/tests/test_zhenfa_native_tools.rs`
+    - `xiuxian-daochang/tests/scenario_adversarial_evolution.rs`
+70. bounded verification for this test-only leaf is clean on the positive
+    consumer path:
+    - `xiuxian-qianhuan --test test_zhenfa_native_tools --features zhenfa-router --no-run`
+      passes
+    - grep for crate-root `LinkGraphIndex` imports in the touched files is
+      clean
+71. the affected-package
+    `xiuxian-daochang --test scenario_adversarial_evolution --no-run`
+    probe still fails, but the compile front remains in deeper pre-existing
+    `gateway/http`, `agent/injection`, `agent/native_tools/zhixing`,
+    `agent/zhenfa/bridge`, Telegram ACL, and session-memory drift outside
+    this test-only owner-path cutover
+72. the natural next Stage-B follow-up is still another small bounded
+    consumer family, and this slice does not authorize a broad
+    `LinkGraphIndex` cut
+73. the next bounded `Stage B` slice is now also landed on a residual
+    `xiuxian-qianji` integration-test `LinkGraphIndex` leaf
+74. the touched files now use the owner seam instead of the crate-root import:
+    - `xiuxian-qianji/tests/integration/test_qianji_qianhuan_binding.rs`
+    - `xiuxian-qianji/tests/integration/test_agenda_validation_pipeline.rs`
+    - `xiuxian-qianji/tests/integration/test_qianji_trinity_integration.rs`
+    - `xiuxian_wendao::link_graph::LinkGraphIndex`
+75. these files are not currently wired as active `[[test]]` targets in
+    `xiuxian-qianji/Cargo.toml`, so exact `cargo test --test ... --no-run`
+    probes are physically unavailable for this leaf
+76. bounded verification is still clean at the touched-file and active-package
+    level:
+    - grep for crate-root `LinkGraphIndex` imports in the touched files is
+      clean
+    - `xiuxian-qianji --tests --no-run` passes
+77. this is explicitly not a family-complete `LinkGraphIndex` migration:
+    residual root-qualified `LinkGraphIndex` imports still exist elsewhere in
+    `xiuxian-qianji` source and tests
+78. the natural next Stage-B follow-up is still another small bounded
+    consumer family rather than a broad `LinkGraphIndex` cut
+79. the next bounded `Stage B` slice is now also landed on the
+    `xiuxian-qianji` app/runtime boot surfaces
+80. the touched files now use the owner seam instead of the crate-root import:
+    - `xiuxian-qianji/src/app/qianji_app.rs`
+    - `xiuxian-qianji/src/app/build.rs`
+    - `xiuxian-qianji/src/bootcamp/model.rs`
+    - `xiuxian-qianji/src/bootcamp/runtime.rs`
+    - `xiuxian-qianji/src/bin/qianji.rs`
+    - `xiuxian-qianji/src/python_module/llm_bridge.rs`
+    - `xiuxian_wendao::link_graph::LinkGraphIndex`
+81. bounded verification for this bundle is clean:
+    - touched-file grep for crate-root `LinkGraphIndex` imports is clean
+    - `xiuxian-qianji --lib` passes
+    - `xiuxian-qianji --bin qianji --features llm` passes
+    - `xiuxian-qianji --lib --features pyo3,llm` passes
+82. the natural next Stage-B follow-up is still another small bounded
+    consumer family rather than a broad `LinkGraphIndex` cut
 
 :RELATIONS:
 :LINKS: [[index]], [[06_roadmap/404_repo_intelligence_for_sciml_and_msl]], [[06_roadmap/405_large_rust_modularization]], [[docs/rfcs/2026-03-27-wendao-core-runtime-plugin-migration-rfc.md]], [[.data/blueprints/wendao_arrow_plugin_core_runtime_migration.md]]

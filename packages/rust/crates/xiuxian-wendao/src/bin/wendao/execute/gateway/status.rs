@@ -27,9 +27,18 @@ pub(crate) async fn notify_status(State(state): State<Arc<AppState>>) -> Json<se
     let has_signal_channel = state.signal_tx.is_some();
     let webhook_url =
         std::env::var("WENDAO_WEBHOOK_URL").unwrap_or_else(|_| "not configured".to_string());
+    let telemetry = state.studio.bootstrap_background_indexing_telemetry();
 
     Json(json!({
         "notification_worker": if has_signal_channel { "active" } else { "inactive" },
+        "studio_bootstrap_background_indexing_enabled": telemetry.enabled(),
+        "studio_bootstrap_background_indexing_mode": telemetry.mode(),
+        "studio_bootstrap_background_indexing_deferred_activation_observed": telemetry
+            .deferred_activation_observed(),
+        "studio_bootstrap_background_indexing_deferred_activation_at": telemetry
+            .deferred_activation_at(),
+        "studio_bootstrap_background_indexing_deferred_activation_source": telemetry
+            .deferred_activation_source(),
         "webhook_configured": !webhook_url.is_empty(),
         "webhook_url": if webhook_url.is_empty() { serde_json::Value::Null } else { json!(webhook_url) }
     }))

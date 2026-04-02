@@ -1,49 +1,55 @@
-use std::io::Cursor;
 use std::sync::Arc;
 
-use arrow::array::{StringArray, UInt64Array};
+#[cfg(test)]
+use std::io::Cursor;
+
+#[cfg(test)]
 use arrow::datatypes::{DataType, Field, Schema};
+#[cfg(test)]
 use arrow::ipc::writer::StreamWriter;
-use arrow::record_batch::RecordBatch;
-use axum::http::{
-    HeaderMap, HeaderValue,
-    header::{CONTENT_TYPE, HeaderName},
+#[cfg(test)]
+use xiuxian_vector::lance_batch_to_engine_batch;
+use xiuxian_vector::{
+    LanceDataType, LanceField, LanceRecordBatch, LanceSchema, LanceStringArray, LanceUInt64Array,
 };
-use axum::response::{IntoResponse, Response};
 
 use crate::gateway::studio::types::{RetrievalChunk, RetrievalChunkSurface};
 
-pub(crate) const RETRIEVAL_ARROW_CONTENT_TYPE: &str = "application/vnd.apache.arrow.stream";
-pub(crate) const RETRIEVAL_ARROW_SCHEMA_VERSION: &str = "v1";
-pub(crate) const RETRIEVAL_ARROW_SCHEMA_VERSION_HEADER: &str = "x-wendao-schema-version";
-
-pub(crate) fn encode_retrieval_chunks_ipc(chunks: &[RetrievalChunk]) -> Result<Vec<u8>, String> {
-    let owner_ids: Vec<&str> = chunks.iter().map(|chunk| chunk.owner_id.as_str()).collect();
-    let chunk_ids: Vec<&str> = chunks.iter().map(|chunk| chunk.chunk_id.as_str()).collect();
-    let semantic_types: Vec<&str> = chunks
+pub(crate) fn build_retrieval_chunks_flight_batch(
+    chunks: &[RetrievalChunk],
+) -> Result<LanceRecordBatch, String> {
+    let owner_ids = chunks
         .iter()
-        .map(|chunk| chunk.semantic_type.as_str())
-        .collect();
-    let fingerprints: Vec<&str> = chunks
+        .map(|chunk| chunk.owner_id.clone())
+        .collect::<Vec<_>>();
+    let chunk_ids = chunks
         .iter()
-        .map(|chunk| chunk.fingerprint.as_str())
-        .collect();
-    let token_estimates: Vec<u64> = chunks
+        .map(|chunk| chunk.chunk_id.clone())
+        .collect::<Vec<_>>();
+    let semantic_types = chunks
+        .iter()
+        .map(|chunk| chunk.semantic_type.clone())
+        .collect::<Vec<_>>();
+    let fingerprints = chunks
+        .iter()
+        .map(|chunk| chunk.fingerprint.clone())
+        .collect::<Vec<_>>();
+    let token_estimates = chunks
         .iter()
         .map(|chunk| {
             u64::try_from(chunk.token_estimate)
                 .map_err(|_| "tokenEstimate exceeds u64 range".to_string())
         })
-        .collect::<Result<_, _>>()?;
-    let display_labels: Vec<Option<&str>> = chunks
+        .collect::<Result<Vec<u64>, _>>()?;
+    let display_labels = chunks
         .iter()
-        .map(|chunk| chunk.display_label.as_deref())
-        .collect();
-    let excerpts: Vec<Option<&str>> = chunks
+        .map(|chunk| chunk.display_label.clone())
+        .collect::<Vec<_>>();
+    let excerpts = chunks
         .iter()
-        .map(|chunk| chunk.excerpt.as_deref())
-        .collect();
-    let line_starts: Vec<Option<u64>> = chunks
+        .map(|chunk| chunk.excerpt.clone())
+        .collect::<Vec<_>>();
+    let line_starts = chunks
         .iter()
         .map(|chunk| {
             chunk
@@ -53,8 +59,8 @@ pub(crate) fn encode_retrieval_chunks_ipc(chunks: &[RetrievalChunk]) -> Result<V
                 })
                 .transpose()
         })
-        .collect::<Result<_, _>>()?;
-    let line_ends: Vec<Option<u64>> = chunks
+        .collect::<Result<Vec<Option<u64>>, _>>()?;
+    let line_ends = chunks
         .iter()
         .map(|chunk| {
             chunk
@@ -64,12 +70,50 @@ pub(crate) fn encode_retrieval_chunks_ipc(chunks: &[RetrievalChunk]) -> Result<V
                 })
                 .transpose()
         })
-        .collect::<Result<_, _>>()?;
-    let surfaces: Vec<Option<&str>> = chunks
+        .collect::<Result<Vec<Option<u64>>, _>>()?;
+    let surfaces = chunks
         .iter()
-        .map(|chunk| chunk.surface.map(retrieval_surface_label))
-        .collect();
+        .map(|chunk| {
+            chunk
+                .surface
+                .map(retrieval_surface_label)
+                .map(ToString::to_string)
+        })
+        .collect::<Vec<_>>();
 
+    LanceRecordBatch::try_new(
+        Arc::new(LanceSchema::new(vec![
+            LanceField::new("ownerId", LanceDataType::Utf8, false),
+            LanceField::new("chunkId", LanceDataType::Utf8, false),
+            LanceField::new("semanticType", LanceDataType::Utf8, false),
+            LanceField::new("fingerprint", LanceDataType::Utf8, false),
+            LanceField::new("tokenEstimate", LanceDataType::UInt64, false),
+            LanceField::new("displayLabel", LanceDataType::Utf8, true),
+            LanceField::new("excerpt", LanceDataType::Utf8, true),
+            LanceField::new("lineStart", LanceDataType::UInt64, true),
+            LanceField::new("lineEnd", LanceDataType::UInt64, true),
+            LanceField::new("surface", LanceDataType::Utf8, true),
+        ])),
+        vec![
+            Arc::new(LanceStringArray::from(owner_ids)),
+            Arc::new(LanceStringArray::from(chunk_ids)),
+            Arc::new(LanceStringArray::from(semantic_types)),
+            Arc::new(LanceStringArray::from(fingerprints)),
+            Arc::new(LanceUInt64Array::from(token_estimates)),
+            Arc::new(LanceStringArray::from(display_labels)),
+            Arc::new(LanceStringArray::from(excerpts)),
+            Arc::new(LanceUInt64Array::from(line_starts)),
+            Arc::new(LanceUInt64Array::from(line_ends)),
+            Arc::new(LanceStringArray::from(surfaces)),
+        ],
+    )
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+pub(crate) fn encode_retrieval_chunks_ipc(chunks: &[RetrievalChunk]) -> Result<Vec<u8>, String> {
+    let batch = build_retrieval_chunks_flight_batch(chunks)?;
+    let engine_batch = lance_batch_to_engine_batch(&batch).map_err(|error| error.to_string())?;
     let schema = Schema::new(vec![
         Field::new("ownerId", DataType::Utf8, false),
         Field::new("chunkId", DataType::Utf8, false),
@@ -82,48 +126,16 @@ pub(crate) fn encode_retrieval_chunks_ipc(chunks: &[RetrievalChunk]) -> Result<V
         Field::new("lineEnd", DataType::UInt64, true),
         Field::new("surface", DataType::Utf8, true),
     ]);
-
-    let batch = RecordBatch::try_new(
-        Arc::new(schema.clone()),
-        vec![
-            Arc::new(StringArray::from(owner_ids)),
-            Arc::new(StringArray::from(chunk_ids)),
-            Arc::new(StringArray::from(semantic_types)),
-            Arc::new(StringArray::from(fingerprints)),
-            Arc::new(UInt64Array::from(token_estimates)),
-            Arc::new(StringArray::from(display_labels)),
-            Arc::new(StringArray::from(excerpts)),
-            Arc::new(UInt64Array::from(line_starts)),
-            Arc::new(UInt64Array::from(line_ends)),
-            Arc::new(StringArray::from(surfaces)),
-        ],
-    )
-    .map_err(|error| error.to_string())?;
-
     let mut buffer = Cursor::new(Vec::new());
     {
         let mut writer =
             StreamWriter::try_new(&mut buffer, &schema).map_err(|error| error.to_string())?;
-        writer.write(&batch).map_err(|error| error.to_string())?;
+        writer
+            .write(&engine_batch)
+            .map_err(|error| error.to_string())?;
         writer.finish().map_err(|error| error.to_string())?;
     }
     Ok(buffer.into_inner())
-}
-
-pub(crate) fn retrieval_chunks_arrow_response(
-    chunks: &[RetrievalChunk],
-) -> Result<Response, String> {
-    let payload = encode_retrieval_chunks_ipc(chunks)?;
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static(RETRIEVAL_ARROW_CONTENT_TYPE),
-    );
-    headers.insert(
-        HeaderName::from_static(RETRIEVAL_ARROW_SCHEMA_VERSION_HEADER),
-        HeaderValue::from_static(RETRIEVAL_ARROW_SCHEMA_VERSION),
-    );
-    Ok((headers, payload).into_response())
 }
 
 const fn retrieval_surface_label(surface: RetrievalChunkSurface) -> &'static str {

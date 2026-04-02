@@ -573,6 +573,26 @@ async fn repo_index_status_endpoint_returns_status_payload() -> TestResult {
     let (status, payload) =
         request_json(router, "/api/repo/index/status?repo=gateway-sync").await?;
     assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingEnabled"),
+        Some(&Value::Bool(false))
+    );
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingMode"),
+        Some(&Value::String("deferred".to_string()))
+    );
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingDeferredActivationObserved"),
+        Some(&Value::Bool(false))
+    );
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingDeferredActivationAt"),
+        Some(&Value::Null)
+    );
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingDeferredActivationSource"),
+        Some(&Value::Null)
+    );
     assert_studio_json_snapshot("repo_index_status_endpoint_json", payload);
     Ok(())
 }
@@ -603,6 +623,26 @@ async fn repo_index_status_endpoint_executes_over_external_modelica_plugin_path(
     )
     .await?;
     assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingEnabled"),
+        Some(&Value::Bool(false))
+    );
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingMode"),
+        Some(&Value::String("deferred".to_string()))
+    );
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingDeferredActivationObserved"),
+        Some(&Value::Bool(false))
+    );
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingDeferredActivationAt"),
+        Some(&Value::Null)
+    );
+    assert_eq!(
+        payload.get("studioBootstrapBackgroundIndexingDeferredActivationSource"),
+        Some(&Value::Null)
+    );
     assert_eq!(payload.get("total").and_then(Value::as_u64), Some(1));
     let repos = payload
         .get("repos")
@@ -4402,6 +4442,8 @@ fn gateway_state_for_project_with_options(
         studio: Arc::new(StudioState {
             project_root: project_root.to_path_buf(),
             config_root,
+            bootstrap_background_indexing: false,
+            bootstrap_background_indexing_deferred_activation: Arc::new(RwLock::new(None)),
             ui_config: Arc::new(RwLock::new(ui_config)),
             graph_index: Arc::new(RwLock::new(None)),
             symbol_index: Arc::new(RwLock::new(None)),

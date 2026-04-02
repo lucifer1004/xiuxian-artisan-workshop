@@ -6,7 +6,7 @@ metadata:
 
 # Guide: LinkGraph Precision Code Adaptation (2026)
 
-> **Authority:** CyberXiuXian Artisan Studio  
+> **Authority:** CyberXiuXian Artisan workshop
 > **Goal:** Document the exact code changes required to align the `link_graph` package with HippoRAG, GRAG, and HMAS research.
 > **Key Research Context:** [Agent-G](../../.data/research/papers/AgentG_2501.txt), [ContextSnap](../../.data/research/papers/ContextSnap_2502.txt), [HippoRAG](../../.data/research/papers/HippoRAG_2405.14831.txt).
 

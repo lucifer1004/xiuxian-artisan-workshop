@@ -6,7 +6,7 @@ use xiuxian_wendao_runtime::artifacts::{
     resolve_plugin_artifact_for_selector_with, resolve_plugin_artifact_with,
 };
 #[cfg(feature = "julia")]
-use xiuxian_wendao_runtime::transport::negotiate_arrow_transport_client_from_bindings;
+use xiuxian_wendao_runtime::transport::negotiate_flight_transport_client_from_bindings;
 
 /// Resolve one plugin artifact through the current runtime compatibility layer.
 #[must_use]
@@ -45,7 +45,7 @@ fn attach_plugin_artifact_transport_diagnostics(
         return artifact;
     };
 
-    match negotiate_arrow_transport_client_from_bindings(std::slice::from_ref(binding)) {
+    match negotiate_flight_transport_client_from_bindings(std::slice::from_ref(binding)) {
         Ok(Some(transport)) => {
             let selection = transport.selection();
             artifact.selected_transport = Some(selection.selected_transport);

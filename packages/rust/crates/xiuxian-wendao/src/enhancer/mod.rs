@@ -10,7 +10,7 @@
 //! structural analysis at Rust-native speed.
 
 mod frontmatter;
-mod markdown_config;
+pub mod markdown_config;
 mod pipeline;
 mod relations;
 mod resource_registry;

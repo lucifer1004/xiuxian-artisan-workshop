@@ -31,7 +31,32 @@ async fn repo_content_search_hits_find_matching_julia_source_lines() {
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].doc_type.as_deref(), Some("file"));
     assert_eq!(hits[0].path, "src/BaseModelica.jl");
+    assert_eq!(hits[0].title.as_deref(), Some("src/BaseModelica.jl"));
     assert_eq!(hits[0].match_reason.as_deref(), Some("repo_content_search"));
+    assert!(
+        hits[0].tags.iter().any(|tag| tag == "kind:file"),
+        "expected flight-backed repo-content bridge to preserve `kind:file`: {:?}",
+        hits[0].tags
+    );
+    assert!(
+        hits[0].tags.iter().any(|tag| tag == "lang:julia"),
+        "expected flight-backed repo-content bridge to preserve `lang:julia`: {:?}",
+        hits[0].tags
+    );
+    assert_eq!(
+        hits[0]
+            .navigation_target
+            .as_ref()
+            .map(|target| target.path.as_str()),
+        Some("sciml/src/BaseModelica.jl")
+    );
+    assert_eq!(
+        hits[0]
+            .navigation_target
+            .as_ref()
+            .map(|target| target.category.as_str()),
+        Some("repo_code")
+    );
     assert_eq!(
         hits[0]
             .navigation_target

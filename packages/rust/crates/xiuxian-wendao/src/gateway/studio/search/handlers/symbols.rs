@@ -1,41 +1,24 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, Float64Array, StringArray, UInt64Array};
-use arrow::datatypes::{DataType, Field, Schema};
-use axum::Json;
-use axum::extract::{Query, State};
-use axum::response::Response;
+use async_trait::async_trait;
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use xiuxian_vector::{
+    LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema, LanceStringArray,
+    LanceUInt64Array,
+};
+use xiuxian_wendao_runtime::transport::{
+    SEARCH_SYMBOLS_ROUTE, SearchFlightRouteProvider, SearchFlightRouteResponse,
+};
 
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
-use crate::gateway::studio::search::handlers::arrow_transport::{
-    arrow_payload_response, build_arrow_search_ipc, encode_json,
-};
 use crate::gateway::studio::symbol_index::SymbolIndexPhase;
 use crate::gateway::studio::types::{
     StudioNavigationTarget, SymbolSearchHit, SymbolSearchResponse, UiProjectConfig,
 };
 
-use super::super::project_scope::project_metadata_for_path;
 use super::queries::SymbolSearchQuery;
-
-pub async fn search_symbols(
-    State(state): State<Arc<GatewayState>>,
-    Query(query): Query<SymbolSearchQuery>,
-) -> Result<Json<SymbolSearchResponse>, StudioApiError> {
-    let response = load_symbol_search_response(state.as_ref(), query).await?;
-    Ok(Json(response))
-}
-
-pub async fn search_symbols_hits_arrow(
-    State(state): State<Arc<GatewayState>>,
-    Query(query): Query<SymbolSearchQuery>,
-) -> Result<Response, StudioApiError> {
-    let response = load_symbol_search_response(state.as_ref(), query).await?;
-    symbol_hits_arrow_response(&response.hits)
-        .map_err(|error| StudioApiError::internal("SEARCH_SYMBOL_HITS_ARROW_FAILED", error, None))
-}
+use crate::gateway::studio::search::project_scope::project_metadata_for_path;
 
 pub(crate) async fn load_symbol_search_response(
     state: &GatewayState,
@@ -105,64 +88,156 @@ pub(crate) async fn load_symbol_search_response(
     })
 }
 
-pub(crate) fn symbol_hits_arrow_response(hits: &[SymbolSearchHit]) -> Result<Response, String> {
-    encode_symbol_hits_ipc(hits).map(arrow_payload_response)
+pub(crate) struct StudioSymbolSearchFlightRouteProvider {
+    state: Arc<GatewayState>,
 }
 
-fn encode_symbol_hits_ipc(hits: &[SymbolSearchHit]) -> Result<Vec<u8>, String> {
-    let names: Vec<&str> = hits.iter().map(|hit| hit.name.as_str()).collect();
-    let kinds: Vec<&str> = hits.iter().map(|hit| hit.kind.as_str()).collect();
-    let paths: Vec<&str> = hits.iter().map(|hit| hit.path.as_str()).collect();
-    let lines: Vec<u64> = hits.iter().map(|hit| hit.line as u64).collect();
-    let locations: Vec<&str> = hits.iter().map(|hit| hit.location.as_str()).collect();
-    let languages: Vec<&str> = hits.iter().map(|hit| hit.language.as_str()).collect();
-    let sources: Vec<&str> = hits.iter().map(|hit| hit.source.as_str()).collect();
-    let crate_names: Vec<&str> = hits.iter().map(|hit| hit.crate_name.as_str()).collect();
-    let project_names: Vec<Option<&str>> =
-        hits.iter().map(|hit| hit.project_name.as_deref()).collect();
-    let root_labels: Vec<Option<&str>> = hits.iter().map(|hit| hit.root_label.as_deref()).collect();
-    let navigation_targets_json: Vec<String> = hits
+impl std::fmt::Debug for StudioSymbolSearchFlightRouteProvider {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("StudioSymbolSearchFlightRouteProvider")
+            .finish_non_exhaustive()
+    }
+}
+
+#[async_trait]
+impl SearchFlightRouteProvider for StudioSymbolSearchFlightRouteProvider {
+    async fn search_batch(
+        &self,
+        route: &str,
+        query_text: &str,
+        limit: usize,
+        _intent: Option<&str>,
+        _repo_hint: Option<&str>,
+    ) -> Result<SearchFlightRouteResponse, String> {
+        if route != SEARCH_SYMBOLS_ROUTE {
+            return Err(format!(
+                "studio symbol Flight provider only supports route `{SEARCH_SYMBOLS_ROUTE}`, got `{route}`"
+            ));
+        }
+        let response = load_symbol_search_response(
+            self.state.as_ref(),
+            SymbolSearchQuery {
+                q: Some(query_text.to_string()),
+                limit: Some(limit),
+            },
+        )
+        .await
+        .map_err(|error| {
+            error
+                .error
+                .details
+                .clone()
+                .unwrap_or_else(|| format!("{}: {}", error.code(), error.error.message))
+        })?;
+        build_symbol_hits_flight_batch(&response.hits).map(SearchFlightRouteResponse::new)
+    }
+}
+
+pub(crate) async fn load_symbol_search_response_flight_batch(
+    state: Arc<GatewayState>,
+    query: SymbolSearchQuery,
+) -> Result<LanceRecordBatch, StudioApiError> {
+    let raw_query = query.q.clone().unwrap_or_default();
+    let query_text = raw_query.trim();
+    if query_text.is_empty() {
+        return Err(StudioApiError::bad_request(
+            "MISSING_QUERY",
+            "Symbol search requires a non-empty query",
+        ));
+    }
+
+    let provider = StudioSymbolSearchFlightRouteProvider { state };
+    provider
+        .search_batch(
+            SEARCH_SYMBOLS_ROUTE,
+            query_text,
+            query.limit.unwrap_or(20).max(1),
+            None,
+            None,
+        )
+        .await
+        .map(|response| response.batch)
+        .map_err(|error| {
+            StudioApiError::internal(
+                "SEARCH_SYMBOL_FLIGHT_BRIDGE_FAILED",
+                "Failed to materialize symbol hits through the Flight-backed provider",
+                Some(error),
+            )
+        })
+}
+
+fn build_symbol_hits_flight_batch(hits: &[SymbolSearchHit]) -> Result<LanceRecordBatch, String> {
+    let names = hits.iter().map(|hit| hit.name.as_str()).collect::<Vec<_>>();
+    let kinds = hits.iter().map(|hit| hit.kind.as_str()).collect::<Vec<_>>();
+    let paths = hits.iter().map(|hit| hit.path.as_str()).collect::<Vec<_>>();
+    let lines = hits.iter().map(|hit| hit.line as u64).collect::<Vec<_>>();
+    let locations = hits
         .iter()
-        .map(|hit| encode_json(&hit.navigation_target))
-        .collect::<Result<_, _>>()?;
+        .map(|hit| hit.location.as_str())
+        .collect::<Vec<_>>();
+    let languages = hits
+        .iter()
+        .map(|hit| hit.language.as_str())
+        .collect::<Vec<_>>();
+    let sources = hits
+        .iter()
+        .map(|hit| hit.source.as_str())
+        .collect::<Vec<_>>();
+    let crate_names = hits
+        .iter()
+        .map(|hit| hit.crate_name.as_str())
+        .collect::<Vec<_>>();
+    let project_names = hits
+        .iter()
+        .map(|hit| hit.project_name.as_deref())
+        .collect::<Vec<_>>();
+    let root_labels = hits
+        .iter()
+        .map(|hit| hit.root_label.as_deref())
+        .collect::<Vec<_>>();
+    let navigation_targets_json = hits
+        .iter()
+        .map(|hit| serde_json::to_string(&hit.navigation_target).map_err(|error| error.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let scores = hits.iter().map(|hit| hit.score).collect::<Vec<_>>();
 
-    let schema = Schema::new(vec![
-        Field::new("name", DataType::Utf8, false),
-        Field::new("kind", DataType::Utf8, false),
-        Field::new("path", DataType::Utf8, false),
-        Field::new("line", DataType::UInt64, false),
-        Field::new("location", DataType::Utf8, false),
-        Field::new("language", DataType::Utf8, false),
-        Field::new("source", DataType::Utf8, false),
-        Field::new("crateName", DataType::Utf8, false),
-        Field::new("projectName", DataType::Utf8, true),
-        Field::new("rootLabel", DataType::Utf8, true),
-        Field::new("navigationTargetJson", DataType::Utf8, false),
-        Field::new("score", DataType::Float64, false),
-    ]);
-
-    let columns: Vec<ArrayRef> = vec![
-        Arc::new(StringArray::from(names)),
-        Arc::new(StringArray::from(kinds)),
-        Arc::new(StringArray::from(paths)),
-        Arc::new(UInt64Array::from(lines)),
-        Arc::new(StringArray::from(locations)),
-        Arc::new(StringArray::from(languages)),
-        Arc::new(StringArray::from(sources)),
-        Arc::new(StringArray::from(crate_names)),
-        Arc::new(StringArray::from(project_names)),
-        Arc::new(StringArray::from(root_labels)),
-        Arc::new(StringArray::from(
-            navigation_targets_json
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-        )),
-        Arc::new(Float64Array::from(
-            hits.iter().map(|hit| hit.score).collect::<Vec<_>>(),
-        )),
-    ];
-    build_arrow_search_ipc(schema, columns)
+    LanceRecordBatch::try_new(
+        Arc::new(LanceSchema::new(vec![
+            LanceField::new("name", LanceDataType::Utf8, false),
+            LanceField::new("kind", LanceDataType::Utf8, false),
+            LanceField::new("path", LanceDataType::Utf8, false),
+            LanceField::new("line", LanceDataType::UInt64, false),
+            LanceField::new("location", LanceDataType::Utf8, false),
+            LanceField::new("language", LanceDataType::Utf8, false),
+            LanceField::new("source", LanceDataType::Utf8, false),
+            LanceField::new("crateName", LanceDataType::Utf8, false),
+            LanceField::new("projectName", LanceDataType::Utf8, true),
+            LanceField::new("rootLabel", LanceDataType::Utf8, true),
+            LanceField::new("navigationTargetJson", LanceDataType::Utf8, false),
+            LanceField::new("score", LanceDataType::Float64, false),
+        ])),
+        vec![
+            Arc::new(LanceStringArray::from(names)),
+            Arc::new(LanceStringArray::from(kinds)),
+            Arc::new(LanceStringArray::from(paths)),
+            Arc::new(LanceUInt64Array::from(lines)),
+            Arc::new(LanceStringArray::from(locations)),
+            Arc::new(LanceStringArray::from(languages)),
+            Arc::new(LanceStringArray::from(sources)),
+            Arc::new(LanceStringArray::from(crate_names)),
+            Arc::new(LanceStringArray::from(project_names)),
+            Arc::new(LanceStringArray::from(root_labels)),
+            Arc::new(LanceStringArray::from(
+                navigation_targets_json
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(LanceFloat64Array::from(scores)),
+        ],
+    )
+    .map_err(|error| format!("failed to build symbol-search Flight batch: {error}"))
 }
 
 fn symbol_search_hit(
@@ -249,46 +324,29 @@ fn is_glob_pattern(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
 
-    use arrow::ipc::reader::StreamReader;
+    use xiuxian_wendao_runtime::transport::{SEARCH_INTENT_ROUTE, SearchFlightRouteProvider};
 
-    #[test]
-    fn search_symbol_arrow_roundtrip_preserves_navigation_target() {
-        let hits = vec![SymbolSearchHit {
-            name: "solve".to_string(),
-            kind: "function".to_string(),
-            path: "src/pkg.jl".to_string(),
-            line: 42,
-            location: "src/pkg.jl:42".to_string(),
-            language: "julia".to_string(),
-            source: "project".to_string(),
-            crate_name: "pkg".to_string(),
-            project_name: Some("pkg".to_string()),
-            root_label: Some("pkg".to_string()),
-            navigation_target: StudioNavigationTarget {
-                path: "pkg/src/pkg.jl".to_string(),
-                category: "repo_code".to_string(),
-                project_name: Some("pkg".to_string()),
-                root_label: Some("pkg".to_string()),
-                line: Some(42),
-                line_end: Some(42),
-                column: Some(1),
-            },
-            score: 0.91,
-        }];
+    use crate::gateway::studio::search::handlers::tests::test_studio_state;
 
-        let encoded =
-            encode_symbol_hits_ipc(&hits).expect("symbol hit arrow encoding should succeed");
-        let reader = StreamReader::try_new(Cursor::new(encoded), None)
-            .expect("symbol hit stream reader should open");
-        let batches = reader
-            .collect::<Result<Vec<_>, _>>()
-            .expect("symbol hit stream should decode");
-        assert_eq!(batches.len(), 1);
-        let batch = &batches[0];
-        assert_eq!(batch.num_rows(), 1);
-        assert!(batch.column_by_name("navigationTargetJson").is_some());
-        assert!(batch.column_by_name("crateName").is_some());
+    #[tokio::test]
+    async fn studio_symbol_flight_provider_rejects_non_symbol_routes() {
+        let provider = StudioSymbolSearchFlightRouteProvider {
+            state: Arc::new(GatewayState {
+                index: None,
+                signal_tx: None,
+                studio: Arc::new(test_studio_state()),
+            }),
+        };
+
+        let error = provider
+            .search_batch(SEARCH_INTENT_ROUTE, "alpha", 5, None, None)
+            .await
+            .expect_err("non-symbol route should be rejected");
+
+        assert!(
+            error.contains(SEARCH_SYMBOLS_ROUTE),
+            "unexpected error: {error}"
+        );
     }
 }

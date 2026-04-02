@@ -33,7 +33,7 @@ use xiuxian_testing::{
     AdvisoryAuditPolicy, CollectionContext, ContractReport, ContractRunConfig, FindingSeverity,
     NoopAdvisoryAuditExecutor,
 };
-use xiuxian_wendao::LinkGraphIndex;
+use xiuxian_wendao::link_graph::LinkGraphIndex;
 
 const DEFAULT_CONTRACT_FEEDBACK_TABLE_NAME: &str = "contract_feedback";
 const REST_DOCS_PACK_ID: &str = "rest_docs";

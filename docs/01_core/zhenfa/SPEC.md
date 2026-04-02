@@ -16,7 +16,7 @@ metadata:
 
 # Xiuxian-Zhenfa (阵法): The Matrix Gateway
 
-> **Authority:** CyberXiuXian Artisan Studio  
+> **Authority:** CyberXiuXian Artisan workshop
 > **Status:** Architecture Evolution (Native-First, 2026)  
 > **Mission:** Provide a zero-copy, high-performance execution hub for LLM-native tool calls.
 

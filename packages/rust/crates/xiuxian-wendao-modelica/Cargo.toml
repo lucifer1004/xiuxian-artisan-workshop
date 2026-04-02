@@ -3,7 +3,7 @@ name = "xiuxian-wendao-modelica"
 version.workspace = true
 edition.workspace = true
 description = "External Modelica Repo Intelligence plugin for xiuxian-wendao"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 

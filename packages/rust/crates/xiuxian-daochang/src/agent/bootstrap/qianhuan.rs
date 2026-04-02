@@ -3,7 +3,7 @@ use crate::config::XiuxianConfig;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use xiuxian_qianhuan::{PersonaProfile, PersonaProvider, PersonaRegistry};
-use xiuxian_wendao::WendaoResourceRegistry;
+use xiuxian_wendao::enhancer::WendaoResourceRegistry;
 
 const PERSONA_CONFIG_TYPE: &str = "persona";
 

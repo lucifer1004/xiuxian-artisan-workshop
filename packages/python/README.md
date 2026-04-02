@@ -53,6 +53,11 @@ Retained Python code now ships under direct top-level packages:
 - `xiuxian_tracer`
 - `xiuxian_wendao_py`
 
+An analyzer-layer sibling package is now scaffolded under
+`packages/python/xiuxian-wendao-analyzer/`, but it is still intentionally
+outside the retained transport-substrate set until analyzer implementation
+actually lands there.
+
 ## Removed Surface
 
 The historical Python runtime-center architecture is gone. This includes the

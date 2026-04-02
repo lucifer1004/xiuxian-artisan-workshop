@@ -3,7 +3,7 @@ name = "xiuxian-wendao-runtime"
 version.workspace = true
 edition.workspace = true
 description = "Runtime-owned host behavior for xiuxian-wendao extraction"
-authors = ["CyberXiuXian Artisan Studio"]
+authors = ["CyberXiuXian Artisan workshop"]
 license = "Apache-2.0"
 publish = false
 

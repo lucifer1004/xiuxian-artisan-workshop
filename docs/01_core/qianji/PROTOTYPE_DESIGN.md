@@ -82,5 +82,5 @@ For full indexing support in **Wendao**, this document and all subsequent Qianji
 ---
 
 _Status: DRAFT (V1.0)_
-_Author: CyberXiuXian Artisan Studio_
+_Author: CyberXiuXian Artisan workshop_
 _Reference: Ralph-Workflow Research Artifact, Auditor's Codex_

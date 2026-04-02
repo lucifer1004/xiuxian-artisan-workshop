@@ -37,6 +37,7 @@ impl LlmClient {
         let body = ChatCompletionRequest {
             model: self.model.clone(),
             messages,
+            max_tokens: self.inference_max_tokens,
             tool_choice: tools.as_ref().map(|_| "auto".to_string()),
             tools,
         };

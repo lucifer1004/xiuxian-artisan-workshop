@@ -1,12 +1,12 @@
 //! Search backend integration for Studio API.
 
-mod arrow_transport;
 mod ast;
 mod attachments;
 mod autocomplete;
 #[path = "code_search/mod.rs"]
 mod code_search;
 mod definition;
+mod flight;
 mod index;
 mod knowledge;
 mod queries;
@@ -16,21 +16,29 @@ mod symbols;
 #[cfg(test)]
 mod test_prelude;
 
-pub use ast::{search_ast, search_ast_hits_arrow};
-pub use attachments::{search_attachments, search_attachments_hits_arrow};
+#[cfg(test)]
+pub use ast::search_ast;
+#[cfg(test)]
+pub(crate) use attachments::load_attachment_search_response_from_studio;
 pub use autocomplete::search_autocomplete;
 pub use definition::search_definition;
+#[cfg(feature = "julia")]
+pub(crate) use flight::build_studio_search_flight_service_with_repo_provider;
 #[cfg(test)]
 pub use index::build_ast_index;
 pub use index::build_symbol_index;
-pub use knowledge::{search_intent, search_intent_hits_arrow, search_knowledge};
-pub use references::{search_references, search_references_hits_arrow};
+#[cfg(test)]
+pub(crate) use knowledge::load_intent_search_response_with_metadata;
+pub use knowledge::search_knowledge;
+#[cfg(test)]
+pub(crate) use references::load_reference_search_response;
 pub use status::search_index_status;
-pub use symbols::{search_symbols, search_symbols_hits_arrow};
+#[cfg(test)]
+pub(crate) use symbols::load_symbol_search_response;
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/gateway/studio/search.rs"]
 mod studio_search_tests;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
