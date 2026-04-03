@@ -20,7 +20,7 @@ use super::response::{JuliaArrowScoreRow, PluginArrowScoreRow, decode_plugin_arr
 /// # Errors
 ///
 /// Returns [`RepoIntelligenceError`] when the remote roundtrip fails or the
-/// decoded response cannot be materialized into the WendaoArrow `v1` score row
+/// decoded response cannot be materialized into the `WendaoArrow` `v1` score row
 /// contract.
 #[cfg(feature = "julia")]
 pub async fn fetch_plugin_arrow_score_rows_for_repository(
@@ -36,7 +36,7 @@ pub async fn fetch_plugin_arrow_score_rows_for_repository(
 /// # Errors
 ///
 /// Returns [`RepoIntelligenceError`] when the remote roundtrip fails or the
-/// decoded response cannot be materialized into the WendaoArrow `v1` score row
+/// decoded response cannot be materialized into the `WendaoArrow` `v1` score row
 /// contract.
 #[cfg(feature = "julia")]
 pub async fn fetch_julia_flight_score_rows_for_repository(

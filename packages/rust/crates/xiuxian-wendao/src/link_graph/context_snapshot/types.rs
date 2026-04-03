@@ -1,6 +1,7 @@
 use crate::link_graph::models::{QuantumAnchorHit, QuantumContext, QuantumFusionOptions};
 use crate::schemas::LINK_GRAPH_QUANTUM_CONTEXT_SNAPSHOT_V1;
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -71,7 +72,6 @@ impl QuantumContextSnapshot {
 pub(crate) fn quantum_context_snapshot_schema_fingerprint() -> &'static str {
     LINK_GRAPH_QUANTUM_CONTEXT_SNAPSHOT_SCHEMA_FINGERPRINT.get_or_init(|| {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        use std::hash::{Hash, Hasher};
 
         LINK_GRAPH_QUANTUM_CONTEXT_SNAPSHOT_V1.hash(&mut hasher);
         format!("{:016x}", hasher.finish())

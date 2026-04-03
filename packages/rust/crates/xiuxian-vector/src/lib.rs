@@ -27,6 +27,7 @@ pub use lance::deps::arrow_array::builder::{
 };
 pub use lance::deps::arrow_array::{
     Array as LanceArray, ArrayRef as LanceArrayRef, BooleanArray as LanceBooleanArray,
+    FixedSizeListArray as LanceFixedSizeListArray, Float32Array as LanceFloat32Array,
     Float64Array as LanceFloat64Array, Int32Array as LanceInt32Array,
     RecordBatch as LanceRecordBatch, StringArray as LanceStringArray,
     UInt32Array as LanceUInt32Array, UInt64Array as LanceUInt64Array,

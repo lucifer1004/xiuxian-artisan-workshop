@@ -127,7 +127,7 @@ impl SearchPlaneService {
         Arc::clone(&self.coordinator)
     }
 
-    /// Shared DataFusion search-engine context for Parquet-backed search-plane reads.
+    /// Shared `DataFusion` search-engine context for Parquet-backed search-plane reads.
     #[must_use]
     pub(crate) fn search_engine(&self) -> &xiuxian_vector::SearchEngineContext {
         &self.search_engine

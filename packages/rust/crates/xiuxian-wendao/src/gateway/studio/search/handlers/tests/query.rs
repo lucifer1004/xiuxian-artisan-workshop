@@ -127,17 +127,17 @@ fn collect_repo_search_targets_preserves_repo_order_and_partitions_by_availabili
 
     assert_eq!(
         dispatch
-            .searchable_repos
+            .searchable
             .into_iter()
             .map(|target| target.repo_id)
             .collect::<Vec<_>>(),
         vec!["ready".to_string()]
     );
     assert_eq!(
-        dispatch.pending_repos,
+        dispatch.pending,
         vec!["pending".to_string(), "implicit-pending".to_string()]
     );
-    assert_eq!(dispatch.skipped_repos, vec!["skipped".to_string()]);
+    assert_eq!(dispatch.skipped, vec!["skipped".to_string()]);
 }
 
 #[test]

@@ -73,19 +73,19 @@ fn collect_candidates(
             continue;
         }
 
-        let Some(normalized) = candidate_score(
-            query.query_lower,
-            entity_kind_value,
-            name_folded.value(row),
-            qualified_name_folded.value(row),
-            path_folded.value(row),
-            signature_folded.value(row),
-            summary_folded.value(row),
-            related_symbols_folded.value(row),
-            related_modules_folded.value(row),
-            query.import_package_filter,
-            query.import_module_filter,
-        ) else {
+        let Some(normalized) = candidate_score(&CandidateScoreInputs {
+            query_lower: query.query_lower,
+            entity_kind: entity_kind_value,
+            name_folded: name_folded.value(row),
+            qualified_name_folded: qualified_name_folded.value(row),
+            path_folded: path_folded.value(row),
+            signature_folded: signature_folded.value(row),
+            summary_folded: summary_folded.value(row),
+            related_symbols_folded: related_symbols_folded.value(row),
+            related_modules_folded: related_modules_folded.value(row),
+            import_package_filter: query.import_package_filter,
+            import_module_filter: query.import_module_filter,
+        }) else {
             continue;
         };
 
@@ -107,6 +107,20 @@ fn collect_candidates(
     }
 
     Ok(())
+}
+
+struct CandidateScoreInputs<'a> {
+    query_lower: &'a str,
+    entity_kind: &'a str,
+    name_folded: &'a str,
+    qualified_name_folded: &'a str,
+    path_folded: &'a str,
+    signature_folded: &'a str,
+    summary_folded: &'a str,
+    related_symbols_folded: &'a str,
+    related_modules_folded: &'a str,
+    import_package_filter: Option<&'a str>,
+    import_module_filter: Option<&'a str>,
 }
 
 fn build_repo_entity_stage1_sql(
@@ -201,38 +215,30 @@ pub(crate) fn compare_candidates(
         .then_with(|| left.name.cmp(&right.name))
 }
 
-fn candidate_score(
-    query_lower: &str,
-    entity_kind: &str,
-    name_folded: &str,
-    qualified_name_folded: &str,
-    path_folded: &str,
-    signature_folded: &str,
-    summary_folded: &str,
-    related_symbols_folded: &str,
-    related_modules_folded: &str,
-    import_package_filter: Option<&str>,
-    import_module_filter: Option<&str>,
-) -> Option<f64> {
-    match entity_kind {
-        "module" => module_match_score(query_lower, qualified_name_folded, path_folded)
-            .map(|score| normalized_rank_score(score, MODULE_BUCKETS)),
+fn candidate_score(inputs: &CandidateScoreInputs<'_>) -> Option<f64> {
+    match inputs.entity_kind {
+        "module" => module_match_score(
+            inputs.query_lower,
+            inputs.qualified_name_folded,
+            inputs.path_folded,
+        )
+        .map(|score| normalized_rank_score(score, MODULE_BUCKETS)),
         "symbol" => symbol_match_score(
-            query_lower,
-            name_folded,
-            qualified_name_folded,
-            path_folded,
-            signature_folded,
+            inputs.query_lower,
+            inputs.name_folded,
+            inputs.qualified_name_folded,
+            inputs.path_folded,
+            inputs.signature_folded,
         )
         .map(|score| normalized_rank_score(score, SYMBOL_BUCKETS)),
         "example" => {
-            let related_symbols = split_folded_values(related_symbols_folded);
-            let related_modules = split_folded_values(related_modules_folded);
+            let related_symbols = split_folded_values(inputs.related_symbols_folded);
+            let related_modules = split_folded_values(inputs.related_modules_folded);
             example_match_score(
-                query_lower,
-                name_folded,
-                path_folded,
-                summary_folded,
+                inputs.query_lower,
+                inputs.name_folded,
+                inputs.path_folded,
+                inputs.summary_folded,
                 related_symbols.as_slice(),
                 related_modules.as_slice(),
             )
@@ -242,14 +248,18 @@ fn candidate_score(
             let import = crate::analyzers::ImportRecord {
                 repo_id: String::new(),
                 module_id: String::new(),
-                import_name: name_folded.to_string(),
-                target_package: summary_folded.to_string(),
-                source_module: signature_folded.to_string(),
+                import_name: inputs.name_folded.to_string(),
+                target_package: inputs.summary_folded.to_string(),
+                source_module: inputs.signature_folded.to_string(),
                 kind: crate::analyzers::ImportKind::Symbol,
                 resolved_id: None,
             };
-            import_match_score(import_package_filter, import_module_filter, &import)
-                .map(|score| normalized_rank_score(score, IMPORT_BUCKETS))
+            import_match_score(
+                inputs.import_package_filter,
+                inputs.import_module_filter,
+                &import,
+            )
+            .map(|score| normalized_rank_score(score, IMPORT_BUCKETS))
         }
         _ => None,
     }
@@ -293,8 +303,7 @@ fn candidate_kind_priority(entity_kind: &str) -> u8 {
     match entity_kind {
         "symbol" => 3,
         "module" => 2,
-        "example" => 1,
-        "import" => 1,
+        "example" | "import" => 1,
         _ => 0,
     }
 }

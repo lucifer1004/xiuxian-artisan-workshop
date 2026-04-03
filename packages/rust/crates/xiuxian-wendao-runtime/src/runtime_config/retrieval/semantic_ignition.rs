@@ -125,12 +125,10 @@ mod tests {
         LinkGraphSemanticIgnitionBackend, LinkGraphSemanticIgnitionRuntimeConfig,
         apply_semantic_ignition_runtime_config,
     };
-    use crate::settings::{merged_toml_settings, set_link_graph_wendao_config_override};
-    use serial_test::serial;
+    use crate::runtime_config::test_support;
     use std::fs;
 
     #[test]
-    #[serial]
     fn semantic_ignition_runtime_reads_override_values() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let config_path = temp.path().join("wendao.toml");
@@ -144,10 +142,8 @@ embedding_base_url = "http://127.0.0.1:11434"
 embedding_model = "glm-5"
 "#,
         )?;
-        let config_path_string = config_path.to_string_lossy().to_string();
-        set_link_graph_wendao_config_override(&config_path_string);
 
-        let settings = merged_toml_settings("link_graph", "", "", "wendao.toml");
+        let settings = test_support::load_test_settings_from_path(&config_path)?;
         let mut runtime = LinkGraphSemanticIgnitionRuntimeConfig::default();
         apply_semantic_ignition_runtime_config(&settings, &mut runtime);
         assert_eq!(

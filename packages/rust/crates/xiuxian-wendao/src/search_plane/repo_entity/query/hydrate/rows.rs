@@ -15,7 +15,7 @@ use crate::search_plane::repo_entity::query::types::{
 pub(crate) fn build_module_search_result(
     repo_id: &str,
     candidates: Vec<RepoEntityCandidate>,
-    rows: BTreeMap<String, HydratedRepoEntityRow>,
+    rows: &BTreeMap<String, HydratedRepoEntityRow>,
 ) -> Result<ModuleSearchResult, RepoEntitySearchError> {
     let mut modules = Vec::with_capacity(candidates.len());
     let mut module_hits = Vec::with_capacity(candidates.len());
@@ -58,7 +58,7 @@ pub(crate) fn build_module_search_result(
 pub(crate) fn build_symbol_search_result(
     repo_id: &str,
     candidates: Vec<RepoEntityCandidate>,
-    rows: BTreeMap<String, HydratedRepoEntityRow>,
+    rows: &BTreeMap<String, HydratedRepoEntityRow>,
 ) -> Result<SymbolSearchResult, RepoEntitySearchError> {
     let mut symbols = Vec::with_capacity(candidates.len());
     let mut symbol_hits = Vec::with_capacity(candidates.len());
@@ -119,7 +119,7 @@ pub(crate) fn build_symbol_search_result(
 pub(crate) fn build_example_search_result(
     repo_id: &str,
     candidates: Vec<RepoEntityCandidate>,
-    rows: BTreeMap<String, HydratedRepoEntityRow>,
+    rows: &BTreeMap<String, HydratedRepoEntityRow>,
 ) -> Result<ExampleSearchResult, RepoEntitySearchError> {
     let mut examples = Vec::with_capacity(candidates.len());
     let mut example_hits = Vec::with_capacity(candidates.len());
@@ -163,7 +163,7 @@ pub(crate) fn build_example_search_result(
 pub(crate) fn build_import_search_result(
     repo_id: &str,
     candidates: Vec<RepoEntityCandidate>,
-    rows: BTreeMap<String, HydratedRepoEntityRow>,
+    rows: &BTreeMap<String, HydratedRepoEntityRow>,
 ) -> Result<ImportSearchResult, RepoEntitySearchError> {
     let mut imports = Vec::with_capacity(candidates.len());
     let mut import_hits = Vec::with_capacity(candidates.len());

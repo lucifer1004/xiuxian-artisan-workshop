@@ -61,7 +61,7 @@ pub(crate) async fn run_graph_neighbors(
         state.as_ref(),
         center_path.as_str(),
         center_title.as_str(),
-        projection,
+        &projection,
     ))
 }
 
@@ -193,7 +193,7 @@ fn graph_neighbors_response_from_projection(
     state: &GatewayState,
     center_path: &str,
     center_title: &str,
-    projection: WendaoGraphProjection,
+    projection: &WendaoGraphProjection,
 ) -> GraphNeighborsResponse {
     let mut nodes = projection
         .nodes

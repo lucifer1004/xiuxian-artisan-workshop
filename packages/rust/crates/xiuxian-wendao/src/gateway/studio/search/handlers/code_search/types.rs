@@ -24,9 +24,9 @@ pub(crate) struct RepoSearchTarget {
 
 #[derive(Debug, Default)]
 pub(crate) struct RepoSearchDispatch {
-    pub(crate) searchable_repos: Vec<RepoSearchTarget>,
-    pub(crate) pending_repos: Vec<String>,
-    pub(crate) skipped_repos: Vec<String>,
+    pub(crate) searchable: Vec<RepoSearchTarget>,
+    pub(crate) pending: Vec<String>,
+    pub(crate) skipped: Vec<String>,
 }
 
 impl ParsedRepoCodeSearchQuery {

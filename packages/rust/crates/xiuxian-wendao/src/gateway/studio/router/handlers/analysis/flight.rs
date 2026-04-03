@@ -41,7 +41,7 @@ impl MarkdownAnalysisFlightRouteProvider for StudioMarkdownAnalysisFlightRoutePr
     ) -> Result<AnalysisFlightRouteResponse, String> {
         let response = load_markdown_analysis_response(self.state.as_ref(), path)
             .await
-            .map_err(|error| map_studio_api_error(error))?;
+            .map_err(|error| map_studio_api_error(&error))?;
         let batch = build_retrieval_chunks_flight_batch(response.retrieval_atoms.as_slice())?;
         let metadata = serde_json::to_vec(&serde_json::json!({
             "path": response.path,
@@ -89,7 +89,7 @@ impl CodeAstAnalysisFlightRouteProvider for StudioCodeAstAnalysisFlightRouteProv
         let response =
             load_code_ast_analysis_response(self.state.as_ref(), path, repo_id, line_hint)
                 .await
-                .map_err(|error| map_studio_api_error(error))?;
+                .map_err(|error| map_studio_api_error(&error))?;
         let batch = build_retrieval_chunks_flight_batch(response.retrieval_atoms.as_slice())?;
         let metadata = serde_json::to_vec(&serde_json::json!({
             "repoId": response.repo_id,
@@ -108,7 +108,7 @@ impl CodeAstAnalysisFlightRouteProvider for StudioCodeAstAnalysisFlightRouteProv
     }
 }
 
-fn map_studio_api_error(error: StudioApiError) -> String {
+fn map_studio_api_error(error: &StudioApiError) -> String {
     error
         .error
         .details

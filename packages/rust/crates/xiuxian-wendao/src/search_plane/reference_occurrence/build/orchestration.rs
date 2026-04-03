@@ -48,7 +48,7 @@ pub(crate) fn ensure_reference_occurrence_index_started(
                     build_config_root.as_path(),
                     &build_projects,
                     active_epoch,
-                    previous_fingerprints,
+                    &previous_fingerprints,
                 )
             })
             .await;
@@ -131,7 +131,7 @@ pub(crate) async fn publish_reference_occurrences_from_projects(
         config_root,
         projects,
         None,
-        std::collections::BTreeMap::new(),
+        &std::collections::BTreeMap::new(),
     );
     match write_reference_occurrence_epoch(service, &lease, &plan).await {
         Ok(write) => {

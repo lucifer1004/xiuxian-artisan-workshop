@@ -1,6 +1,8 @@
 mod discovery;
 mod entry;
 mod graph_structural;
+pub(crate) mod graph_structural_exchange;
+mod graph_structural_projection;
 mod graph_structural_transport;
 mod linking;
 mod project;
@@ -35,6 +37,45 @@ pub use graph_structural::{
     validate_graph_structural_rerank_request_schema,
     validate_graph_structural_rerank_response_batch,
     validate_graph_structural_rerank_response_schema,
+};
+pub use graph_structural_exchange::{
+    GraphStructuralFilterRequestRow, GraphStructuralFilterScoreRow,
+    GraphStructuralRerankRequestRow, GraphStructuralRerankScoreRow,
+    build_graph_structural_filter_request_batch, build_graph_structural_rerank_request_batch,
+    decode_graph_structural_filter_score_rows, decode_graph_structural_rerank_score_rows,
+    fetch_graph_structural_filter_rows_for_repository,
+    fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository,
+    fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates,
+    fetch_graph_structural_rerank_rows_for_repository,
+};
+pub use graph_structural_projection::{
+    GraphStructuralCandidateSubgraph, GraphStructuralFilterConstraint,
+    GraphStructuralKeywordOverlapCandidateInputs, GraphStructuralKeywordOverlapPairInputs,
+    GraphStructuralKeywordOverlapPairRequestInputs, GraphStructuralKeywordOverlapPairRerankInputs,
+    GraphStructuralKeywordOverlapQueryInputs, GraphStructuralKeywordOverlapRawCandidateInputs,
+    GraphStructuralKeywordTagQueryInputs, GraphStructuralNodeMetadataInputs,
+    GraphStructuralPairCandidateInputs, GraphStructuralQueryAnchor, GraphStructuralQueryContext,
+    GraphStructuralRerankSignals, build_graph_structural_filter_request_row,
+    build_graph_structural_keyword_overlap_candidate_inputs,
+    build_graph_structural_keyword_overlap_pair_candidate_inputs,
+    build_graph_structural_keyword_overlap_pair_candidate_inputs_from_raw,
+    build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs,
+    build_graph_structural_keyword_overlap_pair_request_input,
+    build_graph_structural_keyword_overlap_pair_rerank_request_batch,
+    build_graph_structural_keyword_overlap_pair_rerank_request_batch_from_inputs,
+    build_graph_structural_keyword_overlap_pair_rerank_request_batch_from_metadata,
+    build_graph_structural_keyword_overlap_pair_rerank_request_batch_from_raw_candidates,
+    build_graph_structural_keyword_overlap_pair_rerank_request_row,
+    build_graph_structural_keyword_overlap_pair_rerank_request_row_from_metadata,
+    build_graph_structural_keyword_overlap_query_inputs,
+    build_graph_structural_keyword_overlap_raw_candidate_inputs,
+    build_graph_structural_keyword_tag_pair_rerank_request_row,
+    build_graph_structural_keyword_tag_query_context,
+    build_graph_structural_keyword_tag_rerank_signals,
+    build_graph_structural_pair_candidate_inputs, build_graph_structural_pair_candidate_subgraph,
+    build_graph_structural_pair_filter_request_row, build_graph_structural_pair_rerank_request_row,
+    build_graph_structural_rerank_request_row, graph_structural_pair_candidate_id,
+    graph_structural_shared_tag_anchors,
 };
 pub use graph_structural_transport::{
     build_graph_structural_flight_transport_client, process_graph_structural_flight_batches,

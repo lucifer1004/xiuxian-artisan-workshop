@@ -166,17 +166,14 @@ impl SearchPlaneService {
                     runtime.worker_handle = None;
                     break;
                 }
-                match runtime.compaction_queue.pop_front() {
-                    Some(queued) => {
-                        runtime.active_compaction = Some(queued.task.corpus);
-                        queued.task
-                    }
-                    None => {
-                        runtime.active_compaction = None;
-                        runtime.worker_running = false;
-                        runtime.worker_handle = None;
-                        break;
-                    }
+                if let Some(queued) = runtime.compaction_queue.pop_front() {
+                    runtime.active_compaction = Some(queued.task.corpus);
+                    queued.task
+                } else {
+                    runtime.active_compaction = None;
+                    runtime.worker_running = false;
+                    runtime.worker_handle = None;
+                    break;
                 }
             };
             let corpus = task.corpus;

@@ -102,6 +102,10 @@ pub fn retrieval_result_columns() -> Vec<String> {
 }
 
 /// Convert retrieval rows into a canonical Arrow record batch.
+///
+/// # Errors
+///
+/// Returns an error when the canonical retrieval batch cannot be materialized.
 pub fn retrieval_rows_to_record_batch(
     rows: &[RetrievalRow],
 ) -> Result<RecordBatch, VectorStoreError> {
@@ -180,6 +184,11 @@ pub fn retrieval_rows_to_record_batch(
 }
 
 /// Decode retrieval rows from a canonical Arrow record batch.
+///
+/// # Errors
+///
+/// Returns an error when one of the canonical retrieval columns is missing or
+/// has an unexpected Arrow type.
 pub fn retrieval_rows_from_record_batch(
     batch: &RecordBatch,
 ) -> Result<Vec<RetrievalRow>, VectorStoreError> {
@@ -235,6 +244,12 @@ pub fn retrieval_rows_from_record_batch(
 }
 
 /// Project payload columns from a retrieval batch and optionally filter by candidate id.
+///
+/// # Errors
+///
+/// Returns an error when the source batch cannot be decoded through the
+/// canonical retrieval schema or when unsupported projection columns are
+/// requested.
 pub fn payload_fetch_record_batch(
     batch: &RecordBatch,
     columns: &[String],
@@ -263,117 +278,97 @@ fn projected_retrieval_rows_to_record_batch(
     let mut arrays = Vec::<ArrayRef>::with_capacity(columns.len());
 
     for column in columns {
-        match column.as_str() {
-            RETRIEVAL_ID_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_ID_COLUMN, DataType::Utf8, false));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| Some(row.id.as_str()))
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_PATH_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_PATH_COLUMN, DataType::Utf8, false));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| Some(row.path.as_str()))
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_REPO_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_REPO_COLUMN, DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| row.repo.as_deref())
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_TITLE_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_TITLE_COLUMN, DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| row.title.as_deref())
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_SCORE_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_SCORE_COLUMN, DataType::Float64, true));
-                arrays.push(Arc::new(Float64Array::from(
-                    rows.iter().map(|row| row.score).collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_SOURCE_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_SOURCE_COLUMN, DataType::Utf8, false));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| Some(row.source.as_str()))
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_SNIPPET_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_SNIPPET_COLUMN, DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| row.snippet.as_deref())
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_DOC_TYPE_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_DOC_TYPE_COLUMN, DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| row.doc_type.as_deref())
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_MATCH_REASON_COLUMN => {
-                fields.push(Field::new(
-                    RETRIEVAL_MATCH_REASON_COLUMN,
-                    DataType::Utf8,
-                    true,
-                ));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| row.match_reason.as_deref())
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_BEST_SECTION_COLUMN => {
-                fields.push(Field::new(
-                    RETRIEVAL_BEST_SECTION_COLUMN,
-                    DataType::Utf8,
-                    true,
-                ));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| row.best_section.as_deref())
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_LANGUAGE_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_LANGUAGE_COLUMN, DataType::Utf8, true));
-                arrays.push(Arc::new(StringArray::from(
-                    rows.iter()
-                        .map(|row| row.language.as_deref())
-                        .collect::<Vec<_>>(),
-                )));
-            }
-            RETRIEVAL_LINE_COLUMN => {
-                fields.push(Field::new(RETRIEVAL_LINE_COLUMN, DataType::UInt64, true));
-                arrays.push(Arc::new(UInt64Array::from(
-                    rows.iter().map(|row| row.line).collect::<Vec<_>>(),
-                )));
-            }
-            other => {
-                return Err(VectorStoreError::General(format!(
-                    "unsupported retrieval payload column `{other}`"
-                )));
-            }
-        }
+        let (field, array) = projected_retrieval_column(rows, column.as_str())?;
+        fields.push(field);
+        arrays.push(array);
     }
 
     RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays)
         .map_err(|error| VectorStoreError::General(format!("project retrieval batch: {error}")))
+}
+
+fn projected_retrieval_column(
+    rows: &[RetrievalRow],
+    column: &str,
+) -> Result<(Field, ArrayRef), VectorStoreError> {
+    match column {
+        RETRIEVAL_ID_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_ID_COLUMN,
+            false,
+            rows.iter().map(|row| Some(row.id.as_str())).collect(),
+        )),
+        RETRIEVAL_PATH_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_PATH_COLUMN,
+            false,
+            rows.iter().map(|row| Some(row.path.as_str())).collect(),
+        )),
+        RETRIEVAL_REPO_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_REPO_COLUMN,
+            true,
+            rows.iter().map(|row| row.repo.as_deref()).collect(),
+        )),
+        RETRIEVAL_TITLE_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_TITLE_COLUMN,
+            true,
+            rows.iter().map(|row| row.title.as_deref()).collect(),
+        )),
+        RETRIEVAL_SCORE_COLUMN => Ok((
+            Field::new(RETRIEVAL_SCORE_COLUMN, DataType::Float64, true),
+            Arc::new(Float64Array::from(
+                rows.iter().map(|row| row.score).collect::<Vec<_>>(),
+            )),
+        )),
+        RETRIEVAL_SOURCE_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_SOURCE_COLUMN,
+            false,
+            rows.iter().map(|row| Some(row.source.as_str())).collect(),
+        )),
+        RETRIEVAL_SNIPPET_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_SNIPPET_COLUMN,
+            true,
+            rows.iter().map(|row| row.snippet.as_deref()).collect(),
+        )),
+        RETRIEVAL_DOC_TYPE_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_DOC_TYPE_COLUMN,
+            true,
+            rows.iter().map(|row| row.doc_type.as_deref()).collect(),
+        )),
+        RETRIEVAL_MATCH_REASON_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_MATCH_REASON_COLUMN,
+            true,
+            rows.iter().map(|row| row.match_reason.as_deref()).collect(),
+        )),
+        RETRIEVAL_BEST_SECTION_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_BEST_SECTION_COLUMN,
+            true,
+            rows.iter().map(|row| row.best_section.as_deref()).collect(),
+        )),
+        RETRIEVAL_LANGUAGE_COLUMN => Ok(projected_utf8_column(
+            RETRIEVAL_LANGUAGE_COLUMN,
+            true,
+            rows.iter().map(|row| row.language.as_deref()).collect(),
+        )),
+        RETRIEVAL_LINE_COLUMN => Ok((
+            Field::new(RETRIEVAL_LINE_COLUMN, DataType::UInt64, true),
+            Arc::new(UInt64Array::from(
+                rows.iter().map(|row| row.line).collect::<Vec<_>>(),
+            )),
+        )),
+        other => Err(VectorStoreError::General(format!(
+            "unsupported retrieval payload column `{other}`"
+        ))),
+    }
+}
+
+fn projected_utf8_column(
+    name: &'static str,
+    nullable: bool,
+    values: Vec<Option<&str>>,
+) -> (Field, ArrayRef) {
+    (
+        Field::new(name, DataType::Utf8, nullable),
+        Arc::new(StringArray::from(values)),
+    )
 }
 
 fn required_string_column<'a>(

@@ -41,13 +41,12 @@ impl VfsResolveFlightRouteProvider for StudioVfsResolveFlightRouteProvider {
         &self,
         path: &str,
     ) -> Result<VfsResolveFlightRouteResponse, Status> {
-        load_vfs_resolve_flight_response(Arc::clone(&self.studio), path)
-            .await
+        load_vfs_resolve_flight_response(self.studio.as_ref(), path)
             .map_err(studio_api_error_to_tonic_status)
     }
 }
 
-pub(crate) async fn build_vfs_resolve_response(
+pub(crate) fn build_vfs_resolve_response(
     studio: &StudioState,
     path: &str,
 ) -> Result<StudioNavigationTarget, StudioApiError> {
@@ -61,11 +60,11 @@ pub(crate) async fn build_vfs_resolve_response(
     Ok(resolve_navigation_target(studio, path))
 }
 
-pub(crate) async fn load_vfs_resolve_flight_response(
-    studio: Arc<StudioState>,
+pub(crate) fn load_vfs_resolve_flight_response(
+    studio: &StudioState,
     path: &str,
 ) -> Result<VfsResolveFlightRouteResponse, StudioApiError> {
-    let response = build_vfs_resolve_response(studio.as_ref(), path).await?;
+    let response = build_vfs_resolve_response(studio, path)?;
     let batch = vfs_navigation_target_batch(&response).map_err(|error| {
         StudioApiError::internal(
             "VFS_RESOLVE_FLIGHT_BATCH_FAILED",
@@ -163,7 +162,6 @@ mod tests {
         });
 
         let target = build_vfs_resolve_response(&state, "docs/index.md")
-            .await
             .unwrap_or_else(|error| panic!("build VFS resolve response: {error:?}"));
 
         assert_eq!(target.path, "main/docs/index.md");
@@ -173,7 +171,6 @@ mod tests {
     #[tokio::test]
     async fn build_vfs_resolve_response_rejects_blank_path() {
         let error = build_vfs_resolve_response(&StudioState::new(), "   ")
-            .await
             .expect_err("blank path should fail");
         assert_eq!(error.error.code, "MISSING_PATH");
     }

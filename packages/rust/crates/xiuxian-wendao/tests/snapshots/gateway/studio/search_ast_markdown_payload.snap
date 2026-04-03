@@ -8,14 +8,14 @@ expression: value
     {
       "crateName": "docs",
       "language": "markdown",
-      "lineEnd": 3,
+      "lineEnd": 5,
       "lineStart": 3,
       "name": "AST Search",
       "navigationTarget": {
         "category": "doc",
         "column": null,
         "line": 3,
-        "lineEnd": 3,
+        "lineEnd": 5,
         "path": "docs/03_features/204_gateway_api_contracts.md",
         "projectName": "kernel",
         "rootLabel": "docs"

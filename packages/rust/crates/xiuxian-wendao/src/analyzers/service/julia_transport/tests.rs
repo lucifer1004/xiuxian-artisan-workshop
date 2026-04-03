@@ -210,7 +210,7 @@ fn repo_root() -> PathBuf {
 
 fn wendaoarrow_script(name: &str) -> PathBuf {
     repo_root()
-        .join(".data/WendaoArrow/scripts")
+        .join(".data/WendaoArrow.jl/scripts")
         .join(name)
         .canonicalize()
         .unwrap_or_else(|error| panic!("resolve WendaoArrow script `{name}`: {error}"))

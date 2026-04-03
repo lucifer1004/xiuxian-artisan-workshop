@@ -49,12 +49,10 @@ pub fn resolve_link_graph_index_runtime_with_settings(
 #[cfg(test)]
 mod tests {
     use super::resolve_link_graph_index_runtime_with_settings;
-    use crate::settings::{merged_toml_settings, set_link_graph_wendao_config_override};
-    use serial_test::serial;
+    use crate::runtime_config::test_support;
     use std::fs;
 
     #[test]
-    #[serial]
     fn resolve_index_runtime_filters_hidden_excludes_and_uses_auto_candidates()
     -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
@@ -69,10 +67,8 @@ include_dirs_auto_candidates = ["src", "docs", "missing"]
 exclude_dirs = [".git", "target", "target"]
 "#,
         )?;
-        let config_path_string = config_path.to_string_lossy().to_string();
-        set_link_graph_wendao_config_override(&config_path_string);
 
-        let settings = merged_toml_settings("link_graph", "", "", "wendao.toml");
+        let settings = test_support::load_test_settings_from_path(&config_path)?;
         let runtime = resolve_link_graph_index_runtime_with_settings(temp.path(), &settings);
         assert_eq!(
             runtime.include_dirs,

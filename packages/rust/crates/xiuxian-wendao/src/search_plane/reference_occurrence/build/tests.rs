@@ -59,7 +59,7 @@ fn plan_reference_occurrence_build_only_reparses_changed_files() {
         project_root,
         &projects,
         None,
-        BTreeMap::new(),
+        &BTreeMap::new(),
     );
     assert_eq!(first.base_epoch, None);
     assert!(
@@ -87,7 +87,7 @@ fn plan_reference_occurrence_build_only_reparses_changed_files() {
         project_root,
         &projects,
         Some(7),
-        first.file_fingerprints.clone(),
+        &first.file_fingerprints,
     );
     assert_eq!(second.base_epoch, Some(7));
     assert_eq!(

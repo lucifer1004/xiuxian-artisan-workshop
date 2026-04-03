@@ -21,7 +21,9 @@ use crate::query_core::operators::{
     ColumnMaskOp, ColumnMaskPredicate, GraphDirection, GraphNeighborsOp, PayloadFetchOp,
     RetrievalCorpus, VectorSearchOp,
 };
-use crate::query_core::service::{query_graph_neighbors_projection, query_repo_code_relation};
+use crate::query_core::service::{
+    RepoCodeQueryRequest, query_graph_neighbors_projection, query_repo_code_relation,
+};
 use crate::query_core::telemetry::InMemoryWendaoExplainSink;
 use crate::query_core::{
     WendaoBackendKind, WendaoExplainEvent, WendaoOperatorKind, WendaoQueryCoreError,
@@ -442,8 +444,7 @@ async fn query_repo_code_relation_prefers_repo_entity_corpus() {
         .expect("publish repo content");
 
     let telemetry = Arc::new(InMemoryWendaoExplainSink::new());
-    let result = query_repo_code_relation(
-        &service,
+    let query = RepoCodeQueryRequest::new(
         "alpha/repo",
         "reexport",
         &HashSet::new(),
@@ -451,10 +452,10 @@ async fn query_repo_code_relation_prefers_repo_entity_corpus() {
         true,
         true,
         10,
-        Some(telemetry.clone()),
-    )
-    .await
-    .expect("query repo code relation");
+    );
+    let result = query_repo_code_relation(&service, &query, Some(telemetry.clone()))
+        .await
+        .expect("query repo code relation");
 
     assert_eq!(result.corpus, RetrievalCorpus::RepoEntity);
     assert!(result.relation.row_count() > 0);
@@ -499,8 +500,7 @@ async fn query_repo_code_relation_falls_back_to_repo_content_when_entity_lane_is
         .expect("publish repo content");
 
     let telemetry = Arc::new(InMemoryWendaoExplainSink::new());
-    let result = query_repo_code_relation(
-        &service,
+    let query = RepoCodeQueryRequest::new(
         "alpha/repo",
         "@reexport",
         &HashSet::new(),
@@ -508,10 +508,10 @@ async fn query_repo_code_relation_falls_back_to_repo_content_when_entity_lane_is
         false,
         true,
         10,
-        Some(telemetry.clone()),
-    )
-    .await
-    .expect("query repo code relation");
+    );
+    let result = query_repo_code_relation(&service, &query, Some(telemetry.clone()))
+        .await
+        .expect("query repo code relation");
 
     assert_eq!(result.corpus, RetrievalCorpus::RepoContent);
     assert_eq!(result.relation.row_count(), 1);

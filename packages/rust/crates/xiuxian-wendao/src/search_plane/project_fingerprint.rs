@@ -221,8 +221,9 @@ fn project_files(
                 .modified()
                 .ok()
                 .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
-                .map(|duration| (duration.as_secs(), duration.subsec_nanos()))
-                .unwrap_or((0, 0));
+                .map_or((0, 0), |duration| {
+                    (duration.as_secs(), duration.subsec_nanos())
+                });
 
             files
                 .entry(normalized_path.clone())

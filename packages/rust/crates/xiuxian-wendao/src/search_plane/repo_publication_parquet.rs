@@ -35,7 +35,7 @@ pub(crate) async fn rewrite_repo_publication_parquet(
 
     if !replaced_paths.is_empty() {
         let mut filtered_batches = Vec::with_capacity(output_batches.len());
-        for batch in output_batches {
+        for batch in &output_batches {
             if let Some(filtered) =
                 filter_batch_excluding_paths(batch, path_column, replaced_paths)?
             {
@@ -84,7 +84,7 @@ async fn load_repo_publication_parquet_batches(
 }
 
 fn filter_batch_excluding_paths(
-    batch: EngineRecordBatch,
+    batch: &EngineRecordBatch,
     path_column: &str,
     replaced_paths: &BTreeSet<String>,
 ) -> Result<Option<EngineRecordBatch>, VectorStoreError> {
@@ -146,7 +146,7 @@ fn filter_batch_excluding_paths(
             )));
         }
     };
-    let filtered = filter_record_batch(&batch, &keep_mask)?;
+    let filtered = filter_record_batch(batch, &keep_mask)?;
     if filtered.num_rows() == 0 {
         Ok(None)
     } else {

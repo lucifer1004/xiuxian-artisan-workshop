@@ -154,10 +154,13 @@ async fn ui_capabilities_reports_builtin_plugin_languages() {
         .map(std::string::ToString::to_string)
         .collect::<Vec<_>>();
     let studio = StudioState::new_with_bootstrap_ui_config(Arc::new(registry));
-    studio.set_ui_config(UiConfig {
-        projects: Vec::new(),
-        repo_projects: vec![repo_project("kernel"), repo_project("sciml")],
-    });
+    studio.apply_ui_config(
+        UiConfig {
+            projects: Vec::new(),
+            repo_projects: vec![repo_project("kernel"), repo_project("sciml")],
+        },
+        false,
+    );
     let state = Arc::new(GatewayState {
         index: None,
         signal_tx: None,

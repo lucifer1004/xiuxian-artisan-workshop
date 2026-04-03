@@ -105,10 +105,13 @@ lance-index = "3.0.1"
 lance-linalg = "3.0.1"
 
 # Arrow IPC for analytics and DataFusion execution
-arrow = "58.0.1"
-arrow-ipc = "58.0.1"
-arrow-string = "58.0.1"
-parquet = "58.0.1"
+arrow = { version = "58.1.0", features = ["ffi"] }
+arrow-array = { version = "58.1.0", features = ["ffi"] }
+arrow-flight = "58.1.0"
+arrow-ipc = "58.1.0"
+arrow-schema = { version = "58.1.0", features = ["ffi"] }
+arrow-string = "58.1.0"
+parquet = "58.1.0"
 datafusion = "53.0.0"
 
 # Redis cache and session backend

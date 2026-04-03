@@ -69,8 +69,13 @@ fn plan_local_symbol_build_only_reparses_changed_files() {
         dirs: vec![".".to_string()],
     }];
 
-    let first =
-        plan_local_symbol_build(project_root, project_root, &projects, None, BTreeMap::new());
+    let first = plan_local_symbol_build(
+        project_root,
+        project_root,
+        &projects,
+        None,
+        &BTreeMap::new(),
+    );
     assert_eq!(first.base_epoch, None);
     assert_eq!(count_changed_hits(&first), 2);
 
@@ -83,7 +88,7 @@ fn plan_local_symbol_build_only_reparses_changed_files() {
         project_root,
         &projects,
         Some(7),
-        first.file_fingerprints.clone(),
+        &first.file_fingerprints,
     );
     assert_eq!(second.base_epoch, Some(7));
     let changed_partition = only_partition(&second);

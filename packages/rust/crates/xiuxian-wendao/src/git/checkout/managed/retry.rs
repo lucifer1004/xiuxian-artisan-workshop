@@ -1,7 +1,9 @@
 use std::thread;
 use std::time::Duration;
 
-use git2::{AutotagOption, FetchOptions, Repository, build::RepoBuilder};
+use git2::{AutotagOption, Direction, FetchOptions, RemoteHead, Repository, build::RepoBuilder};
+
+use crate::analyzers::config::RepositoryRef;
 
 const MANAGED_REMOTE_RETRY_ATTEMPTS: usize = 3;
 const MANAGED_GIT_OPEN_RETRY_ATTEMPTS: usize = 5;
@@ -40,6 +42,13 @@ pub(crate) fn fetch_origin_with_retry(repository: &Repository) -> Result<(), git
     retry_remote_operation(|| fetch_origin_once(repository))
 }
 
+pub(crate) fn probe_remote_target_revision_with_retry(
+    repository: &Repository,
+    git_ref: Option<&RepositoryRef>,
+) -> Result<Option<String>, git2::Error> {
+    retry_remote_operation(|| probe_remote_target_revision_once(repository, git_ref))
+}
+
 pub(crate) fn clone_bare_with_retry(
     upstream_url: &str,
     mirror_root: &std::path::Path,
@@ -69,6 +78,71 @@ fn retry_remote_operation<T>(
             }
         }
     }
+}
+
+fn probe_remote_target_revision_once(
+    repository: &Repository,
+    git_ref: Option<&RepositoryRef>,
+) -> Result<Option<String>, git2::Error> {
+    let mut remote = repository.find_remote("origin")?;
+    let connection = remote.connect_auth(Direction::Fetch, None, None)?;
+    let default_branch = connection
+        .default_branch()
+        .ok()
+        .and_then(|name| name.as_str().map(str::to_string));
+    let heads = connection.list()?;
+    Ok(remote_target_revision_from_heads(
+        heads,
+        git_ref,
+        default_branch.as_deref(),
+    ))
+}
+
+fn remote_target_revision_from_heads(
+    heads: &[RemoteHead<'_>],
+    git_ref: Option<&RepositoryRef>,
+    default_branch: Option<&str>,
+) -> Option<String> {
+    match git_ref {
+        Some(RepositoryRef::Branch(branch)) => {
+            remote_ref_revision(heads, format!("refs/heads/{branch}").as_str())
+        }
+        Some(RepositoryRef::Tag(tag)) => {
+            remote_ref_revision(heads, format!("refs/tags/{tag}").as_str())
+        }
+        Some(RepositoryRef::Commit(sha)) => Some(sha.clone()),
+        None => remote_default_branch_revision(heads, default_branch),
+    }
+}
+
+fn remote_default_branch_revision(
+    heads: &[RemoteHead<'_>],
+    default_branch: Option<&str>,
+) -> Option<String> {
+    if let Some(default_branch) = default_branch
+        && let Some(revision) = remote_ref_revision(heads, default_branch)
+    {
+        return Some(revision);
+    }
+
+    if let Some(head) = heads.iter().find(|head| head.name() == "HEAD") {
+        if let Some(target) = head.symref_target()
+            && let Some(revision) = remote_ref_revision(heads, target)
+        {
+            return Some(revision);
+        }
+        return Some(head.oid().to_string());
+    }
+
+    remote_ref_revision(heads, "refs/heads/main")
+        .or_else(|| remote_ref_revision(heads, "refs/heads/master"))
+}
+
+fn remote_ref_revision(heads: &[RemoteHead<'_>], ref_name: &str) -> Option<String> {
+    heads
+        .iter()
+        .find(|head| head.name() == ref_name)
+        .map(|head| head.oid().to_string())
 }
 
 pub(crate) fn open_bare_with_retry(path: &std::path::Path) -> Result<Repository, git2::Error> {
@@ -110,7 +184,7 @@ fn retry_delay_for_attempt(attempt: usize) -> Duration {
     }
 }
 
-fn is_retryable_remote_error_message(message: &str) -> bool {
+pub(crate) fn is_retryable_remote_error_message(message: &str) -> bool {
     let lower = message.to_ascii_lowercase();
     [
         "can't assign requested address",

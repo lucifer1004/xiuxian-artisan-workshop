@@ -34,8 +34,13 @@ fn plan_knowledge_section_build_only_reparses_changed_notes() {
         dirs: vec![".".to_string()],
     }];
 
-    let first =
-        plan_knowledge_section_build(project_root, project_root, &projects, None, BTreeMap::new());
+    let first = plan_knowledge_section_build(
+        project_root,
+        project_root,
+        &projects,
+        None,
+        &BTreeMap::new(),
+    );
     assert_eq!(first.base_epoch, None);
     assert!(
         first
@@ -62,7 +67,7 @@ fn plan_knowledge_section_build_only_reparses_changed_notes() {
         project_root,
         &projects,
         Some(7),
-        first.file_fingerprints.clone(),
+        &first.file_fingerprints,
     );
     assert_eq!(second.base_epoch, Some(7));
     assert_eq!(

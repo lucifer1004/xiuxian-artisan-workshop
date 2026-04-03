@@ -60,7 +60,7 @@ impl SearchCorpusKind {
     /// The current search-plane read path is fully DataFusion/Parquet backed for all corpora,
     /// so these legacy Lance indices are now dead write-time cost and should stay disabled.
     #[must_use]
-    pub const fn requires_legacy_lance_indices(self) -> bool {
+    pub const fn requires_legacy_lance_indices() -> bool {
         false
     }
 
@@ -85,7 +85,7 @@ mod tests {
     fn datafusion_cutover_corpora_no_longer_require_legacy_lance_indices() {
         for corpus in SearchCorpusKind::ALL {
             assert!(
-                !corpus.requires_legacy_lance_indices(),
+                !SearchCorpusKind::requires_legacy_lance_indices(),
                 "{corpus} should not build legacy Lance indices after the DataFusion cutover"
             );
         }

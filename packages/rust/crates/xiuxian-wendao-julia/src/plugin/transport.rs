@@ -27,7 +27,7 @@ use crate::compatibility::link_graph::{
 const JULIA_PLUGIN_ID: &str = "julia";
 const FLIGHT_TRANSPORT_KEY: &str = "flight_transport";
 const DEFAULT_JULIA_HEALTH_ROUTE: &str = "/healthz";
-/// Baseline WendaoArrow response contract version enforced by this crate.
+/// Baseline `WendaoArrow` response contract version enforced by this crate.
 pub const JULIA_ARROW_RESPONSE_SCHEMA_VERSION: &str = DEFAULT_FLIGHT_SCHEMA_VERSION;
 
 /// Build a Julia Flight transport client from repository plugin config.
@@ -194,9 +194,9 @@ fn attach_schema_version_metadata(
     })
 }
 
-fn resolve_transport_options<'a>(
-    repository: &'a RegisteredRepository,
-) -> Result<Option<&'a Value>, RepoIntelligenceError> {
+fn resolve_transport_options(
+    repository: &RegisteredRepository,
+) -> Result<Option<&Value>, RepoIntelligenceError> {
     for plugin in &repository.plugins {
         let RepositoryPluginConfig::Config { id, options } = plugin else {
             continue;
@@ -231,7 +231,7 @@ fn contains_transport_keys(value: &Value) -> bool {
     .any(|key| object.contains_key(*key))
 }
 
-/// Validate a WendaoArrow `v1` Julia analyzer response batch set.
+/// Validate a `WendaoArrow` `v1` Julia analyzer response batch set.
 ///
 /// # Errors
 ///
@@ -438,8 +438,8 @@ mod tests {
             Err(error) => panic!("expected nested config to build successfully: {error}"),
         };
 
-        assert_eq!(client.flight_base_url(), Some("http://127.0.0.1:8081"));
-        assert_eq!(client.flight_route(), Some("/analysis"));
+        assert_eq!(client.flight_base_url(), "http://127.0.0.1:8081");
+        assert_eq!(client.flight_route(), "/analysis");
         assert_eq!(
             client.selection().selected_transport,
             PluginTransportKind::ArrowFlight

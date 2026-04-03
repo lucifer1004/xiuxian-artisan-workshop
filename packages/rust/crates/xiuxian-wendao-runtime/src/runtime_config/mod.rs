@@ -2,6 +2,8 @@ mod constants;
 mod models;
 mod resolve;
 mod retrieval;
+#[cfg(test)]
+pub(crate) mod test_support;
 
 pub use constants::{
     DEFAULT_LINK_GRAPH_CANDIDATE_MULTIPLIER, DEFAULT_LINK_GRAPH_COACTIVATION_ALPHA_SCALE,

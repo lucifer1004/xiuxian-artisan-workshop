@@ -167,6 +167,12 @@ impl StudioState {
     }
 }
 
+impl Default for StudioState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn gateway_bootstrap_background_indexing() -> bool {
     gateway_bootstrap_background_indexing_with_lookup(&|key| std::env::var(key).ok())
 }
@@ -177,11 +183,10 @@ pub(crate) fn gateway_bootstrap_background_indexing_with_lookup(
     lookup(GATEWAY_BOOTSTRAP_BACKGROUND_INDEXING_ENV)
         .as_deref()
         .map(str::trim)
-        .map(|raw| {
+        .is_some_and(|raw| {
             raw == "1"
                 || raw.eq_ignore_ascii_case("true")
                 || raw.eq_ignore_ascii_case("yes")
                 || raw.eq_ignore_ascii_case("on")
         })
-        .unwrap_or(false)
 }

@@ -17,7 +17,7 @@ expression: value
       "title": "alpha_handler"
     },
     {
-      "bestSection": "Alpha",
+      "bestSection": null,
       "docType": null,
       "matchReason": "knowledge_section_search",
       "path": "alpha.md",

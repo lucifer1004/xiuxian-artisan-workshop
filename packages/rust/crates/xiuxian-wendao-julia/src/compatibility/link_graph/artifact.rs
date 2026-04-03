@@ -25,7 +25,7 @@ pub struct LinkGraphJuliaDeploymentArtifact {
     pub route: Option<String>,
     /// Health-check route expected by the service.
     pub health_route: Option<String>,
-    /// WendaoArrow schema version expected by Rust.
+    /// `WendaoArrow` schema version expected by Rust.
     pub schema_version: Option<String>,
     /// Optional request timeout in seconds.
     pub timeout_secs: Option<u64>,
@@ -119,7 +119,7 @@ impl From<PluginArtifactPayload> for LinkGraphJuliaDeploymentArtifact {
             base_url,
             route,
             health_route,
-            schema_version: value.schema_version.or_else(|| {
+            schema_version: value.schema_version.or({
                 Some(match value.artifact_schema_version {
                     ContractVersion(version) => version,
                 })

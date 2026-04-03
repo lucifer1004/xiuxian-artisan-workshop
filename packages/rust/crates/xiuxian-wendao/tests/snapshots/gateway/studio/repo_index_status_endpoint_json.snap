@@ -7,7 +7,7 @@ expression: value
   "checking": 0,
   "failed": 0,
   "indexing": 0,
-  "maxConcurrency": 15,
+  "maxConcurrency": 1,
   "queued": 1,
   "ready": 0,
   "repos": [
@@ -15,10 +15,10 @@ expression: value
       "attemptCount": 0,
       "phase": "queued",
       "repoId": "gateway-sync",
-      "updatedAt": "2026-04-02T07:24:56.788133+00:00"
+      "updatedAt": "[updated-at]"
     }
   ],
-  "studioBootstrapBackgroundIndexingDeferredActivationAt": "2026-04-02T07:24:56.787849+00:00",
+  "studioBootstrapBackgroundIndexingDeferredActivationAt": "[activation-at]",
   "studioBootstrapBackgroundIndexingDeferredActivationObserved": true,
   "studioBootstrapBackgroundIndexingDeferredActivationSource": "repo_index_status",
   "studioBootstrapBackgroundIndexingEnabled": false,

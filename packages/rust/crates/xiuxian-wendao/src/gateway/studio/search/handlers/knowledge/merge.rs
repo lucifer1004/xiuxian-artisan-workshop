@@ -48,30 +48,28 @@ pub(super) async fn build_repo_intent_merge(
         .await;
     let dispatch = collect_repo_search_targets(repo_ids, &publication_states);
     studio.search_plane.record_repo_search_dispatch(
-        dispatch.pending_repos.len()
-            + dispatch.skipped_repos.len()
-            + dispatch.searchable_repos.len(),
-        dispatch.searchable_repos.len(),
-        repo_search_parallelism(&studio.search_plane, dispatch.searchable_repos.len()),
+        dispatch.pending.len() + dispatch.skipped.len() + dispatch.searchable.len(),
+        dispatch.searchable.len(),
+        repo_search_parallelism(&studio.search_plane, dispatch.searchable.len()),
     );
     let merge = RepoIntentMerge {
         transport: IntentSearchTransportMetadata {
             #[cfg(test)]
             repo_content_transport: dispatch
-                .searchable_repos
+                .searchable
                 .iter()
                 .any(|target| target.publication_state.content_published)
                 .then_some("flight_contract"),
         },
         hits: search_repo_intent_hits_buffered(
             studio.search_plane.clone(),
-            dispatch.searchable_repos,
+            dispatch.searchable,
             raw_query,
             limit,
         )
         .await?,
-        pending_repos: dispatch.pending_repos,
-        skipped_repos: dispatch.skipped_repos,
+        pending_repos: dispatch.pending,
+        skipped_repos: dispatch.skipped,
     };
 
     Ok(merge)

@@ -99,7 +99,7 @@ fn plan_repo_entity_build_only_rewrites_changed_files() {
         &first_documents,
         Some("rev-1"),
         None,
-        BTreeMap::new(),
+        &BTreeMap::new(),
     );
     let previous_publication = match first_plan.action {
         RepoEntityBuildAction::ReplaceAll { ref table_name, .. } => {
@@ -130,7 +130,7 @@ fn plan_repo_entity_build_only_rewrites_changed_files() {
         &second_documents,
         Some("rev-2"),
         Some(&previous_publication),
-        first_plan.file_fingerprints.clone(),
+        &first_plan.file_fingerprints,
     );
 
     match second_plan.action {
@@ -185,7 +185,7 @@ fn plan_repo_entity_build_reuses_table_for_revision_only_refresh() {
         &documents,
         Some("rev-2"),
         Some(&publication),
-        file_fingerprints,
+        &file_fingerprints,
     );
 
     match plan.action {

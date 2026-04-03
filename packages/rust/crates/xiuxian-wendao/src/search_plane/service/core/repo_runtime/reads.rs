@@ -173,7 +173,9 @@ impl SearchPlaneService {
             let mut changed_records = Vec::new();
             let mut records = BTreeMap::new();
             for (key, record) in current {
-                let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
+                let (record, changed) = self
+                    .recover_persisted_repo_corpus_record_for_reads(record)
+                    .await;
                 if changed {
                     changed_records.push(record.clone());
                 }
@@ -198,7 +200,9 @@ impl SearchPlaneService {
         if let Some(snapshot) = self.cache.get_repo_corpus_snapshot().await {
             let mut records = BTreeMap::new();
             for record in snapshot.records {
-                let (record, _) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
+                let (record, _) = self
+                    .recover_persisted_repo_corpus_record_for_reads(record)
+                    .await;
                 records.insert((record.corpus, record.repo_id.clone()), record);
             }
             *self
@@ -210,7 +214,9 @@ impl SearchPlaneService {
         if let Some(snapshot) = self.load_local_repo_corpus_snapshot() {
             let mut records = BTreeMap::new();
             for record in snapshot.records {
-                let (record, _) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
+                let (record, _) = self
+                    .recover_persisted_repo_corpus_record_for_reads(record)
+                    .await;
                 records.insert((record.corpus, record.repo_id.clone()), record);
             }
             *self
@@ -228,7 +234,9 @@ impl SearchPlaneService {
         repo_id: &str,
     ) -> Option<SearchRepoCorpusRecord> {
         if let Some(record) = self.cached_repo_corpus_record(corpus, repo_id) {
-            let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
+            let (record, changed) = self
+                .recover_persisted_repo_corpus_record_for_reads(record)
+                .await;
             if changed {
                 self.repo_corpus_records
                     .write()
@@ -239,7 +247,9 @@ impl SearchPlaneService {
             return Some(record);
         }
         if let Some(record) = self.cache.get_repo_corpus_record(corpus, repo_id).await {
-            let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
+            let (record, changed) = self
+                .recover_persisted_repo_corpus_record_for_reads(record)
+                .await;
             self.repo_corpus_records
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -250,7 +260,9 @@ impl SearchPlaneService {
             return Some(record);
         }
         if let Some(record) = self.load_local_repo_corpus_record(corpus, repo_id) {
-            let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
+            let (record, changed) = self
+                .recover_persisted_repo_corpus_record_for_reads(record)
+                .await;
             self.repo_corpus_records
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -266,7 +278,9 @@ impl SearchPlaneService {
             .get(&(corpus, repo_id.to_string()))
             .cloned()
         {
-            let (record, changed) = self.recover_persisted_repo_corpus_record_for_reads(record).await;
+            let (record, changed) = self
+                .recover_persisted_repo_corpus_record_for_reads(record)
+                .await;
             self.repo_corpus_records
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)

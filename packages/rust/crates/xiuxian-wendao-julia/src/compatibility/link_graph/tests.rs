@@ -7,11 +7,11 @@ use super::{
     DEFAULT_JULIA_ANALYZER_EXAMPLE_CONFIG_PATH, DEFAULT_JULIA_ANALYZER_LAUNCHER_PATH,
     DEFAULT_JULIA_DEPLOYMENT_ARTIFACT_SCHEMA_VERSION, DEFAULT_JULIA_RERANK_FLIGHT_ROUTE,
     JULIA_DEPLOYMENT_ARTIFACT_ID, JULIA_GRAPH_STRUCTURAL_CAPABILITY_ID, JULIA_PLUGIN_ID,
-    JULIA_RERANK_CAPABILITY_ID,
-    LinkGraphJuliaAnalyzerLaunchManifest, LinkGraphJuliaAnalyzerServiceDescriptor,
-    LinkGraphJuliaDeploymentArtifact, LinkGraphJuliaRerankRuntimeConfig,
-    build_rerank_provider_binding, julia_deployment_artifact_selector,
-    julia_graph_structural_provider_selector, julia_rerank_provider_selector,
+    JULIA_RERANK_CAPABILITY_ID, LinkGraphJuliaAnalyzerLaunchManifest,
+    LinkGraphJuliaAnalyzerServiceDescriptor, LinkGraphJuliaDeploymentArtifact,
+    LinkGraphJuliaRerankRuntimeConfig, build_rerank_provider_binding,
+    julia_deployment_artifact_selector, julia_graph_structural_provider_selector,
+    julia_rerank_provider_selector,
 };
 
 #[test]

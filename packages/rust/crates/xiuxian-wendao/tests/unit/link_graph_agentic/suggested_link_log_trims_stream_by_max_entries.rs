@@ -9,7 +9,7 @@ fn test_suggested_link_log_trims_stream_by_max_entries() -> Result<(), Box<dyn s
 
     for idx in 0..3 {
         let _ = valkey_suggested_link_log_with_valkey(
-            LinkGraphSuggestedLinkRequest {
+            &LinkGraphSuggestedLinkRequest {
                 source_id: format!("docs/source-{idx}.md"),
                 target_id: format!("docs/target-{idx}.md"),
                 relation: "related_to".to_string(),

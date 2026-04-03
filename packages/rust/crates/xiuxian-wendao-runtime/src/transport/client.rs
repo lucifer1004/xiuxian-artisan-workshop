@@ -97,9 +97,8 @@ mod tests {
             },
             ..sample_binding(Some("http://127.0.0.1:18080"))
         });
-        let error = match result {
-            Ok(_) => panic!("Arrow Flight construction should require an explicit route"),
-            Err(error) => error,
+        let Err(error) = result else {
+            panic!("Arrow Flight construction should require an explicit route");
         };
 
         assert!(error.contains("FlightDescriptor"));

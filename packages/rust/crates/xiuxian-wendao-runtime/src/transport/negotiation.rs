@@ -37,16 +37,16 @@ impl NegotiatedFlightTransportClient {
         &self.selection
     }
 
-    /// Return the configured Arrow Flight base URL when that transport was selected.
+    /// Return the configured Arrow Flight base URL.
     #[must_use]
-    pub fn flight_base_url(&self) -> Option<&str> {
-        Some(self.client.base_url())
+    pub fn flight_base_url(&self) -> &str {
+        self.client.base_url()
     }
 
-    /// Return the configured Arrow Flight route when that transport was selected.
+    /// Return the configured Arrow Flight route.
     #[must_use]
-    pub fn flight_route(&self) -> Option<&str> {
-        Some(self.client.route())
+    pub fn flight_route(&self) -> &str {
+        self.client.route()
     }
 
     /// Process one engine batch through the negotiated runtime transport.
@@ -210,8 +210,8 @@ mod tests {
             PluginTransportKind::ArrowFlight
         );
         assert_eq!(negotiated.selection().fallback_from, None);
-        assert_eq!(negotiated.flight_base_url(), Some("http://127.0.0.1:18080"));
-        assert_eq!(negotiated.flight_route(), Some("/flight"));
+        assert_eq!(negotiated.flight_base_url(), "http://127.0.0.1:18080");
+        assert_eq!(negotiated.flight_route(), "/flight");
     }
 
     #[test]
@@ -231,9 +231,15 @@ mod tests {
         };
 
         assert!(
-            error.contains(
-                "Arrow Flight client construction requires a route-backed FlightDescriptor path"
-            ),
+            error.contains("preferred transport ArrowFlight is unavailable"),
+            "expected transport negotiation failure context, got: {error}"
+        );
+        assert!(
+            error.contains("failed to construct Arrow Flight client"),
+            "expected Arrow Flight client construction error, got: {error}"
+        );
+        assert!(
+            error.contains("at least one descriptor segment"),
             "expected Flight materialization error, got: {error}"
         );
     }

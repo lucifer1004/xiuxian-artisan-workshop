@@ -150,12 +150,11 @@ impl SearchPlaneService {
         F: FnOnce(&mut SearchRepoPublicationRecord, &mut SearchMaintenanceStatus),
     {
         let key = (task.corpus, task.repo_id.clone());
-        let mut record = match self
+        let Some(mut record) = self
             .repo_corpus_record_for_reads(task.corpus, task.repo_id.as_str())
             .await
-        {
-            Some(record) => record,
-            None => return false,
+        else {
+            return false;
         };
         let Some(publication) = record.publication.as_mut() else {
             return false;

@@ -21,7 +21,7 @@ fn julia_arrow_vector_item_field() -> Arc<Field> {
     Arc::new(Field::new("item", DataType::Float32, true))
 }
 
-/// One request row for the WendaoArrow `v1` plugin rerank contract.
+/// One request row for the `WendaoArrow` `v1` plugin rerank contract.
 #[cfg(feature = "julia")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct PluginArrowRequestRow {
@@ -33,7 +33,7 @@ pub struct PluginArrowRequestRow {
     pub embedding: Vec<f32>,
 }
 
-/// Build one WendaoArrow `v1` plugin request batch from typed Rust rows.
+/// Build one `WendaoArrow` `v1` plugin request batch from typed Rust rows.
 ///
 /// The request batch contains `doc_id`, `vector_score`, `embedding`, and
 /// `query_embedding`, with the query vector repeated per row.

@@ -76,14 +76,14 @@ pub fn analyze_registered_repository_cached_bundle_with_registry(
     }
 
     let valkey_cache = ValkeyAnalysisCache::new()?;
-    if let Some(ref cache) = valkey_cache {
-        if let Some(cached) = cache.get(&cache_key) {
-            store_cached_repository_analysis(cache_key.clone(), &cached)?;
-            return Ok(CachedRepositoryAnalysis {
-                cache_key,
-                analysis: cached,
-            });
-        }
+    if let Some(ref cache) = valkey_cache
+        && let Some(cached) = cache.get(&cache_key)
+    {
+        store_cached_repository_analysis(cache_key.clone(), &cached)?;
+        return Ok(CachedRepositoryAnalysis {
+            cache_key,
+            analysis: cached,
+        });
     }
 
     Err(RepoIntelligenceError::PendingRepositoryIndex {

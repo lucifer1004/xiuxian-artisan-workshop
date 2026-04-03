@@ -243,6 +243,10 @@ mod repo_projected_retrieval_context;
 mod repo_projected_retrieval_hit;
 
 #[cfg(not(feature = "performance"))]
+#[path = "unit/link_graph_agentic/mod.rs"]
+mod link_graph_agentic;
+
+#[cfg(not(feature = "performance"))]
 #[path = "integration/repo_projection_inputs.rs"]
 mod repo_projection_inputs;
 

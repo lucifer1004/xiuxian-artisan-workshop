@@ -144,6 +144,8 @@ pub fn rerank_score_weights_from_env() -> Result<RerankScoreWeights, String> {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Display;
+
     use super::{
         EffectiveRerankFlightHostSettings, ParsedRerankFlightHostOverrides,
         rerank_score_weights_from_env, resolve_effective_rerank_flight_host_settings,
@@ -151,15 +153,28 @@ mod tests {
     };
     use crate::transport::RerankScoreWeights;
 
+    fn must_ok<T, E: Display>(result: Result<T, E>, context: &str) -> T {
+        result.unwrap_or_else(|error| panic!("{context}: {error}"))
+    }
+
+    fn must_err<T, E>(result: Result<T, E>, context: &str) -> E {
+        match result {
+            Ok(_) => panic!("{context}"),
+            Err(error) => error,
+        }
+    }
+
     #[test]
     fn split_rerank_flight_host_overrides_extracts_flags() {
-        let overrides: ParsedRerankFlightHostOverrides = split_rerank_flight_host_overrides(vec![
-            "--schema-version=v8".to_string(),
-            "--rerank-dimension=4".to_string(),
-            "alpha/repo".to_string(),
-            "3".to_string(),
-        ])
-        .expect("host-setting flags should parse");
+        let overrides: ParsedRerankFlightHostOverrides = must_ok(
+            split_rerank_flight_host_overrides(vec![
+                "--schema-version=v8".to_string(),
+                "--rerank-dimension=4".to_string(),
+                "alpha/repo".to_string(),
+                "3".to_string(),
+            ]),
+            "host-setting flags should parse",
+        );
 
         assert_eq!(overrides.schema_version_override.as_deref(), Some("v8"));
         assert_eq!(overrides.rerank_dimension_override, Some(4));
@@ -171,33 +186,41 @@ mod tests {
 
     #[test]
     fn split_rerank_flight_host_overrides_rejects_blank_schema_version() {
-        let error = split_rerank_flight_host_overrides(vec!["--schema-version=".to_string()])
-            .expect_err("blank schema-version should fail");
+        let error = must_err(
+            split_rerank_flight_host_overrides(vec!["--schema-version=".to_string()]),
+            "blank schema-version should fail",
+        );
 
         assert_eq!(error, "--schema-version must not be blank");
     }
 
     #[test]
     fn split_rerank_flight_host_overrides_rejects_zero_dimension() {
-        let error = split_rerank_flight_host_overrides(vec!["--rerank-dimension=0".to_string()])
-            .expect_err("zero rerank dimension should fail");
+        let error = must_err(
+            split_rerank_flight_host_overrides(vec!["--rerank-dimension=0".to_string()]),
+            "zero rerank dimension should fail",
+        );
 
         assert_eq!(error, "--rerank-dimension must be greater than zero");
     }
 
     #[test]
     fn resolve_effective_rerank_flight_host_settings_applies_precedence() {
-        let fallback_weights =
-            RerankScoreWeights::new(0.4, 0.6).expect("fallback weights should validate");
-        let file_backed_weights =
-            RerankScoreWeights::new(0.9, 0.1).expect("file-backed weights should validate");
+        let fallback_weights = must_ok(
+            RerankScoreWeights::new(0.4, 0.6),
+            "fallback weights should validate",
+        );
+        let file_backed_weights = must_ok(
+            RerankScoreWeights::new(0.9, 0.1),
+            "file-backed weights should validate",
+        );
 
         let settings: EffectiveRerankFlightHostSettings =
             resolve_effective_rerank_flight_host_settings(
                 Some("v8".to_string()),
                 Some(4),
                 Some("v9".to_string()),
-                Some(file_backed_weights.clone()),
+                Some(file_backed_weights),
                 3,
                 fallback_weights,
             );
@@ -209,7 +232,10 @@ mod tests {
 
     #[test]
     fn rerank_score_weights_from_env_defaults_when_unset() {
-        let weights = rerank_score_weights_from_env().expect("default env weights should resolve");
+        let weights = must_ok(
+            rerank_score_weights_from_env(),
+            "default env weights should resolve",
+        );
 
         assert_eq!(weights, RerankScoreWeights::default());
     }

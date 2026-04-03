@@ -8,7 +8,7 @@ fn test_suggested_link_log_roundtrip() -> Result<(), Box<dyn std::error::Error>>
     }
 
     let entry = valkey_suggested_link_log_with_valkey(
-        LinkGraphSuggestedLinkRequest {
+        &LinkGraphSuggestedLinkRequest {
             source_id: "docs/a.md".to_string(),
             target_id: "docs/b.md".to_string(),
             relation: "implements".to_string(),

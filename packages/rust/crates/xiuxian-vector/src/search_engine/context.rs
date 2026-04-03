@@ -29,7 +29,7 @@ impl SearchEnginePartitionColumn {
     }
 }
 
-/// Project-scoped DataFusion execution context for Wendao search-plane reads.
+/// Project-scoped `DataFusion` execution context for Wendao search-plane reads.
 #[derive(Clone)]
 pub struct SearchEngineContext {
     session: Arc<SessionContext>,
@@ -50,7 +50,7 @@ impl SearchEngineContext {
         Self::new_with_config(config)
     }
 
-    /// Create a new search-engine context from an existing DataFusion session config.
+    /// Create a new search-engine context from an existing `DataFusion` session config.
     #[must_use]
     pub fn new_with_config(config: SessionConfig) -> Self {
         Self {
@@ -58,7 +58,7 @@ impl SearchEngineContext {
         }
     }
 
-    /// Access the underlying DataFusion session.
+    /// Access the underlying `DataFusion` session.
     #[must_use]
     pub fn session(&self) -> &SessionContext {
         self.session.as_ref()
@@ -68,7 +68,7 @@ impl SearchEngineContext {
     ///
     /// # Errors
     ///
-    /// Returns an error when the table path is unreadable or DataFusion rejects the registration.
+    /// Returns an error when the table path is unreadable or `DataFusion` rejects the registration.
     pub async fn register_parquet_table(
         &self,
         table_name: &str,
@@ -91,7 +91,7 @@ impl SearchEngineContext {
     ///
     /// # Errors
     ///
-    /// Returns an error when the table path is unreadable or DataFusion rejects the registration.
+    /// Returns an error when the table path is unreadable or `DataFusion` rejects the registration.
     pub async fn ensure_parquet_table_registered(
         &self,
         table_name: &str,
@@ -105,7 +105,7 @@ impl SearchEngineContext {
             .await
     }
 
-    /// Resolve a registered table as a DataFusion dataframe.
+    /// Resolve a registered table as a `DataFusion` dataframe.
     ///
     /// # Errors
     ///
@@ -124,7 +124,7 @@ impl SearchEngineContext {
         self.collect_dataframe(dataframe).await
     }
 
-    /// Collect a DataFusion dataframe into Arrow batches.
+    /// Collect a `DataFusion` dataframe into Arrow batches.
     ///
     /// # Errors
     ///

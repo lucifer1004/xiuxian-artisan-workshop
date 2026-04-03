@@ -115,14 +115,14 @@ impl OpenAiCompatibleSemanticIgnition {
         Ok(vector)
     }
 
-    /// Build a WendaoArrow `v1` plugin rerank request batch for one
+    /// Build a `WendaoArrow` `v1` plugin rerank request batch for one
     /// OpenAI-compatible semantic-ignition result set.
     ///
     /// # Errors
     ///
     /// Returns [`OpenAiCompatibleJuliaRequestError`] when the effective
     /// query vector cannot be resolved, candidate embeddings cannot be fetched,
-    /// or the WendaoArrow request batch cannot be assembled.
+    /// or the `WendaoArrow` request batch cannot be assembled.
     #[cfg(feature = "julia")]
     pub async fn build_plugin_rerank_request_batch(
         &self,
@@ -178,7 +178,7 @@ impl OpenAiCompatibleSemanticIgnition {
     ///
     /// Returns [`OpenAiCompatiblePluginRerankRequestError`] when the effective
     /// query vector cannot be resolved, candidate embeddings cannot be fetched,
-    /// or the WendaoArrow request batch cannot be assembled.
+    /// or the `WendaoArrow` request batch cannot be assembled.
     #[cfg(feature = "julia")]
     pub async fn build_julia_rerank_request_batch(
         &self,
@@ -209,7 +209,7 @@ pub enum OpenAiCompatibleSemanticIgnitionError {
 }
 
 /// Error returned when OpenAI-compatible semantic ignition cannot assemble one
-/// WendaoArrow plugin rerank request batch.
+/// `WendaoArrow` plugin rerank request batch.
 #[cfg(feature = "julia")]
 #[derive(Debug, Error)]
 pub enum OpenAiCompatiblePluginRerankRequestError {
@@ -225,7 +225,7 @@ pub enum OpenAiCompatiblePluginRerankRequestError {
         /// Anchor id that could not be resolved into a stored embedding row.
         anchor_id: String,
     },
-    /// WendaoArrow request batch construction failed.
+    /// `WendaoArrow` request batch construction failed.
     #[error("failed to build plugin rerank request batch")]
     Build(#[source] RepoIntelligenceError),
 }

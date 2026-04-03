@@ -13,8 +13,8 @@ use xiuxian_wendao_runtime::transport::{
     REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN, REPO_SEARCH_NAVIGATION_LINE_COLUMN,
     REPO_SEARCH_NAVIGATION_LINE_END_COLUMN, REPO_SEARCH_NAVIGATION_PATH_COLUMN,
     REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TAGS_COLUMN,
-    REPO_SEARCH_TITLE_COLUMN, RepoSearchFlightRouteProvider, RerankScoreWeights,
-    WendaoFlightService,
+    REPO_SEARCH_TITLE_COLUMN, RepoSearchFlightRequest, RepoSearchFlightRouteProvider,
+    RerankScoreWeights, WendaoFlightService,
 };
 
 use crate::gateway::studio::repo_index::RepoCodeDocument;
@@ -66,17 +66,16 @@ impl SearchPlaneRepoSearchFlightRouteProvider {
 impl RepoSearchFlightRouteProvider for SearchPlaneRepoSearchFlightRouteProvider {
     async fn repo_search_batch(
         &self,
-        query_text: &str,
-        limit: usize,
-        language_filters: &HashSet<String>,
-        path_prefixes: &HashSet<String>,
-        title_filters: &HashSet<String>,
-        tag_filters: &HashSet<String>,
-        filename_filters: &HashSet<String>,
+        request: &RepoSearchFlightRequest,
     ) -> Result<LanceRecordBatch, String> {
         let mut hits = self
             .search_plane
-            .search_repo_content_chunks(&self.repo_id, query_text, language_filters, limit)
+            .search_repo_content_chunks(
+                &self.repo_id,
+                request.query_text.as_str(),
+                &request.language_filters,
+                request.limit,
+            )
             .await
             .map_err(|error| {
                 format!(
@@ -84,41 +83,45 @@ impl RepoSearchFlightRouteProvider for SearchPlaneRepoSearchFlightRouteProvider 
                     self.repo_id
                 )
             })?;
-        if !path_prefixes.is_empty() {
+        if !request.path_prefixes.is_empty() {
             hits.retain(|hit| {
-                path_prefixes
+                request
+                    .path_prefixes
                     .iter()
                     .any(|prefix| hit.path.starts_with(prefix))
             });
         }
-        if !title_filters.is_empty() {
+        if !request.title_filters.is_empty() {
             hits.retain(|hit| {
                 let title = hit
                     .title
                     .clone()
                     .unwrap_or_else(|| hit.path.clone())
                     .to_ascii_lowercase();
-                title_filters
+                request
+                    .title_filters
                     .iter()
                     .any(|filter| title.contains(filter.to_ascii_lowercase().as_str()))
             });
         }
-        if !tag_filters.is_empty() {
+        if !request.tag_filters.is_empty() {
             hits.retain(|hit| {
                 let normalized_tags = hit
                     .tags
                     .iter()
                     .map(|tag| tag.to_ascii_lowercase())
                     .collect::<HashSet<_>>();
-                tag_filters
+                request
+                    .tag_filters
                     .iter()
                     .any(|filter| normalized_tags.contains(&filter.to_ascii_lowercase()))
             });
         }
-        if !filename_filters.is_empty() {
+        if !request.filename_filters.is_empty() {
             hits.retain(|hit| {
                 let normalized_stem = hit.stem.to_ascii_lowercase();
-                filename_filters
+                request
+                    .filename_filters
                     .iter()
                     .any(|filter| normalized_stem == filter.to_ascii_lowercase())
             });
@@ -405,135 +408,147 @@ pub async fn bootstrap_sample_repo_search_content(
         })
 }
 
-fn repo_search_batch_from_hits(hits: &[SearchHit]) -> Result<LanceRecordBatch, String> {
-    let doc_ids = hits
-        .iter()
-        .map(repo_search_doc_id_from_hit)
-        .collect::<Vec<_>>();
-    let paths = hits.iter().map(|hit| hit.path.clone()).collect::<Vec<_>>();
-    let titles = hits
-        .iter()
-        .map(|hit| hit.title.clone().unwrap_or_else(|| hit.path.clone()))
-        .collect::<Vec<_>>();
-    let best_sections = hits
-        .iter()
-        .map(|hit| hit.best_section.clone().unwrap_or_default())
-        .collect::<Vec<_>>();
-    let match_reasons = hits
-        .iter()
-        .map(|hit| hit.match_reason.clone().unwrap_or_default())
-        .collect::<Vec<_>>();
-    let navigation_paths = hits
-        .iter()
-        .map(|hit| {
-            hit.navigation_target
-                .as_ref()
-                .map(|target| target.path.clone())
-                .unwrap_or_default()
-        })
-        .collect::<Vec<_>>();
-    let navigation_categories = hits
-        .iter()
-        .map(|hit| {
-            hit.navigation_target
-                .as_ref()
-                .map(|target| target.category.clone())
-                .unwrap_or_default()
-        })
-        .collect::<Vec<_>>();
-    let navigation_lines = hits
-        .iter()
-        .map(|hit| {
-            hit.navigation_target
-                .as_ref()
-                .and_then(|target| target.line)
-                .map_or(0_i32, |value| value as i32)
-        })
-        .collect::<Vec<_>>();
-    let navigation_line_ends = hits
-        .iter()
-        .map(|hit| {
-            hit.navigation_target
-                .as_ref()
-                .and_then(|target| target.line_end)
-                .map_or(0_i32, |value| value as i32)
-        })
-        .collect::<Vec<_>>();
-    let hierarchy_rows = hits
-        .iter()
-        .map(|hit| {
-            hit.hierarchy
-                .as_ref()
-                .map_or_else(|| &[][..], Vec::as_slice)
-        })
-        .collect::<Vec<_>>();
-    let tag_rows = hits
-        .iter()
-        .map(|hit| hit.tags.as_slice())
-        .collect::<Vec<_>>();
-    let scores = hits.iter().map(|hit| hit.score).collect::<Vec<_>>();
-    let languages = hits
-        .iter()
-        .map(repo_search_language_from_hit)
-        .collect::<Vec<_>>();
+struct RepoSearchBatchColumns<'a> {
+    doc_ids: Vec<String>,
+    paths: Vec<String>,
+    titles: Vec<String>,
+    best_sections: Vec<String>,
+    match_reasons: Vec<String>,
+    navigation_paths: Vec<String>,
+    navigation_categories: Vec<String>,
+    navigation_lines: Vec<i32>,
+    navigation_line_ends: Vec<i32>,
+    hierarchy_rows: Vec<&'a [String]>,
+    tag_rows: Vec<&'a [String]>,
+    scores: Vec<f64>,
+    languages: Vec<String>,
+}
 
+impl<'a> RepoSearchBatchColumns<'a> {
+    fn from_hits(hits: &'a [SearchHit]) -> Result<Self, String> {
+        Ok(Self {
+            doc_ids: hits
+                .iter()
+                .map(repo_search_doc_id_from_hit)
+                .collect::<Vec<_>>(),
+            paths: hits.iter().map(|hit| hit.path.clone()).collect::<Vec<_>>(),
+            titles: hits
+                .iter()
+                .map(|hit| hit.title.clone().unwrap_or_else(|| hit.path.clone()))
+                .collect::<Vec<_>>(),
+            best_sections: hits
+                .iter()
+                .map(|hit| hit.best_section.clone().unwrap_or_default())
+                .collect::<Vec<_>>(),
+            match_reasons: hits
+                .iter()
+                .map(|hit| hit.match_reason.clone().unwrap_or_default())
+                .collect::<Vec<_>>(),
+            navigation_paths: hits
+                .iter()
+                .map(repo_search_navigation_path_from_hit)
+                .collect::<Vec<_>>(),
+            navigation_categories: hits
+                .iter()
+                .map(repo_search_navigation_category_from_hit)
+                .collect::<Vec<_>>(),
+            navigation_lines: hits
+                .iter()
+                .map(|hit| repo_search_navigation_line_from_hit(hit, "line"))
+                .collect::<Result<Vec<_>, _>>()?,
+            navigation_line_ends: hits
+                .iter()
+                .map(|hit| repo_search_navigation_line_from_hit(hit, "line_end"))
+                .collect::<Result<Vec<_>, _>>()?,
+            hierarchy_rows: hits
+                .iter()
+                .map(|hit| {
+                    hit.hierarchy
+                        .as_ref()
+                        .map_or_else(|| &[][..], Vec::as_slice)
+                })
+                .collect::<Vec<_>>(),
+            tag_rows: hits
+                .iter()
+                .map(|hit| hit.tags.as_slice())
+                .collect::<Vec<_>>(),
+            scores: hits.iter().map(|hit| hit.score).collect::<Vec<_>>(),
+            languages: hits
+                .iter()
+                .map(repo_search_language_from_hit)
+                .collect::<Vec<_>>(),
+        })
+    }
+}
+
+fn repo_search_batch_from_hits(hits: &[SearchHit]) -> Result<LanceRecordBatch, String> {
+    build_repo_search_batch(RepoSearchBatchColumns::from_hits(hits)?)
+}
+
+fn build_repo_search_batch(
+    columns: RepoSearchBatchColumns<'_>,
+) -> Result<LanceRecordBatch, String> {
     LanceRecordBatch::try_new(
-        Arc::new(LanceSchema::new(vec![
-            LanceField::new(REPO_SEARCH_DOC_ID_COLUMN, LanceDataType::Utf8, false),
-            LanceField::new(REPO_SEARCH_PATH_COLUMN, LanceDataType::Utf8, false),
-            LanceField::new(REPO_SEARCH_TITLE_COLUMN, LanceDataType::Utf8, false),
-            LanceField::new(REPO_SEARCH_BEST_SECTION_COLUMN, LanceDataType::Utf8, false),
-            LanceField::new(REPO_SEARCH_MATCH_REASON_COLUMN, LanceDataType::Utf8, false),
-            LanceField::new(
-                REPO_SEARCH_NAVIGATION_PATH_COLUMN,
-                LanceDataType::Utf8,
-                false,
-            ),
-            LanceField::new(
-                REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN,
-                LanceDataType::Utf8,
-                false,
-            ),
-            LanceField::new(
-                REPO_SEARCH_NAVIGATION_LINE_COLUMN,
-                LanceDataType::Int32,
-                false,
-            ),
-            LanceField::new(
-                REPO_SEARCH_NAVIGATION_LINE_END_COLUMN,
-                LanceDataType::Int32,
-                false,
-            ),
-            LanceField::new(
-                REPO_SEARCH_HIERARCHY_COLUMN,
-                LanceDataType::List(Arc::new(LanceField::new("item", LanceDataType::Utf8, true))),
-                false,
-            ),
-            LanceField::new(
-                REPO_SEARCH_TAGS_COLUMN,
-                LanceDataType::List(Arc::new(LanceField::new("item", LanceDataType::Utf8, true))),
-                false,
-            ),
-            LanceField::new(REPO_SEARCH_SCORE_COLUMN, LanceDataType::Float64, false),
-            LanceField::new(REPO_SEARCH_LANGUAGE_COLUMN, LanceDataType::Utf8, false),
-        ])),
+        Arc::new(repo_search_batch_schema()),
         vec![
-            Arc::new(LanceStringArray::from(doc_ids)),
-            Arc::new(LanceStringArray::from(paths)),
-            Arc::new(LanceStringArray::from(titles)),
-            Arc::new(LanceStringArray::from(best_sections)),
-            Arc::new(LanceStringArray::from(match_reasons)),
-            Arc::new(LanceStringArray::from(navigation_paths)),
-            Arc::new(LanceStringArray::from(navigation_categories)),
-            Arc::new(LanceInt32Array::from(navigation_lines)),
-            Arc::new(LanceInt32Array::from(navigation_line_ends)),
-            Arc::new(build_utf8_list_array(&hierarchy_rows)),
-            Arc::new(build_utf8_list_array(&tag_rows)),
-            Arc::new(LanceFloat64Array::from(scores)),
-            Arc::new(LanceStringArray::from(languages)),
+            Arc::new(LanceStringArray::from(columns.doc_ids)),
+            Arc::new(LanceStringArray::from(columns.paths)),
+            Arc::new(LanceStringArray::from(columns.titles)),
+            Arc::new(LanceStringArray::from(columns.best_sections)),
+            Arc::new(LanceStringArray::from(columns.match_reasons)),
+            Arc::new(LanceStringArray::from(columns.navigation_paths)),
+            Arc::new(LanceStringArray::from(columns.navigation_categories)),
+            Arc::new(LanceInt32Array::from(columns.navigation_lines)),
+            Arc::new(LanceInt32Array::from(columns.navigation_line_ends)),
+            Arc::new(build_utf8_list_array(&columns.hierarchy_rows)),
+            Arc::new(build_utf8_list_array(&columns.tag_rows)),
+            Arc::new(LanceFloat64Array::from(columns.scores)),
+            Arc::new(LanceStringArray::from(columns.languages)),
         ],
     )
     .map_err(|error| format!("failed to build repo-search Flight batch: {error}"))
+}
+
+fn repo_search_batch_schema() -> LanceSchema {
+    LanceSchema::new(vec![
+        LanceField::new(REPO_SEARCH_DOC_ID_COLUMN, LanceDataType::Utf8, false),
+        LanceField::new(REPO_SEARCH_PATH_COLUMN, LanceDataType::Utf8, false),
+        LanceField::new(REPO_SEARCH_TITLE_COLUMN, LanceDataType::Utf8, false),
+        LanceField::new(REPO_SEARCH_BEST_SECTION_COLUMN, LanceDataType::Utf8, false),
+        LanceField::new(REPO_SEARCH_MATCH_REASON_COLUMN, LanceDataType::Utf8, false),
+        LanceField::new(
+            REPO_SEARCH_NAVIGATION_PATH_COLUMN,
+            LanceDataType::Utf8,
+            false,
+        ),
+        LanceField::new(
+            REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN,
+            LanceDataType::Utf8,
+            false,
+        ),
+        LanceField::new(
+            REPO_SEARCH_NAVIGATION_LINE_COLUMN,
+            LanceDataType::Int32,
+            false,
+        ),
+        LanceField::new(
+            REPO_SEARCH_NAVIGATION_LINE_END_COLUMN,
+            LanceDataType::Int32,
+            false,
+        ),
+        LanceField::new(
+            REPO_SEARCH_HIERARCHY_COLUMN,
+            LanceDataType::List(Arc::new(LanceField::new("item", LanceDataType::Utf8, true))),
+            false,
+        ),
+        LanceField::new(
+            REPO_SEARCH_TAGS_COLUMN,
+            LanceDataType::List(Arc::new(LanceField::new("item", LanceDataType::Utf8, true))),
+            false,
+        ),
+        LanceField::new(REPO_SEARCH_SCORE_COLUMN, LanceDataType::Float64, false),
+        LanceField::new(REPO_SEARCH_LANGUAGE_COLUMN, LanceDataType::Utf8, false),
+    ])
 }
 
 fn build_utf8_list_array(rows: &[&[String]]) -> LanceListArray {
@@ -554,6 +569,51 @@ fn repo_search_doc_id_from_hit(hit: &SearchHit) -> String {
     } else {
         stem.to_string()
     }
+}
+
+fn repo_search_navigation_path_from_hit(hit: &SearchHit) -> String {
+    hit.navigation_target
+        .as_ref()
+        .map(|target| target.path.clone())
+        .unwrap_or_default()
+}
+
+fn repo_search_navigation_category_from_hit(hit: &SearchHit) -> String {
+    hit.navigation_target
+        .as_ref()
+        .map(|target| target.category.clone())
+        .unwrap_or_default()
+}
+
+fn repo_search_navigation_line_from_hit(hit: &SearchHit, field_name: &str) -> Result<i32, String> {
+    let line = match field_name {
+        "line" => hit
+            .navigation_target
+            .as_ref()
+            .and_then(|target| target.line),
+        "line_end" => hit
+            .navigation_target
+            .as_ref()
+            .and_then(|target| target.line_end),
+        _ => {
+            return Err(format!(
+                "unsupported repo-search navigation field `{field_name}`"
+            ));
+        }
+    };
+    repo_search_navigation_line_to_i32(hit.path.as_str(), field_name, line)
+}
+
+fn repo_search_navigation_line_to_i32(
+    path: &str,
+    field_name: &str,
+    line: Option<usize>,
+) -> Result<i32, String> {
+    line.map_or(Ok(0_i32), |value| {
+        i32::try_from(value).map_err(|_| {
+            format!("repo-search Flight hit `{path}` {field_name} `{value}` exceeds i32 range")
+        })
+    })
 }
 
 fn repo_search_language_from_hit(hit: &SearchHit) -> String {
@@ -602,15 +662,17 @@ mod tests {
     use crate::gateway::studio::repo_index::RepoCodeDocument;
     use crate::gateway::studio::router::{GatewayState, StudioState};
     use crate::gateway::studio::search::build_symbol_index;
-    use crate::gateway::studio::types::{UiConfig, UiProjectConfig};
+    use crate::gateway::studio::types::{
+        SearchHit, StudioNavigationTarget, UiConfig, UiProjectConfig,
+    };
     use crate::search_plane::{
         SearchMaintenancePolicy, SearchManifestKeyspace, SearchPlaneService,
     };
     use xiuxian_wendao_runtime::transport::{
-        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, RepoSearchFlightRouteProvider,
-        SEARCH_SYMBOLS_ROUTE, WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_PATH_HEADER,
-        WENDAO_ANALYSIS_REPO_HEADER, WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_LIMIT_HEADER,
-        WENDAO_SEARCH_QUERY_HEADER, flight_descriptor_path,
+        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, RepoSearchFlightRequest,
+        RepoSearchFlightRouteProvider, SEARCH_SYMBOLS_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
+        WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER, WENDAO_SCHEMA_VERSION_HEADER,
+        WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER, flight_descriptor_path,
     };
 
     fn repo_document(path: &str, language: &str, contents: &str) -> RepoCodeDocument {
@@ -620,6 +682,26 @@ mod tests {
             contents: Arc::<str>::from(contents),
             size_bytes: u64::try_from(contents.len()).expect("document length should fit"),
             modified_unix_ms: 10,
+        }
+    }
+
+    fn repo_search_request(
+        query_text: &str,
+        limit: usize,
+        language_filters: HashSet<String>,
+        path_prefixes: HashSet<String>,
+        title_filters: HashSet<String>,
+        tag_filters: HashSet<String>,
+        filename_filters: HashSet<String>,
+    ) -> RepoSearchFlightRequest {
+        RepoSearchFlightRequest {
+            query_text: query_text.to_string(),
+            limit,
+            language_filters,
+            path_prefixes,
+            title_filters,
+            tag_filters,
+            filename_filters,
         }
     }
 
@@ -721,15 +803,15 @@ mod tests {
         let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), repo_id)
             .expect("provider should build");
         let batch = provider
-            .repo_search_batch(
+            .repo_search_batch(&repo_search_request(
                 "alpha",
                 5,
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-            )
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+            ))
             .await
             .expect("provider should materialize one search batch");
 
@@ -925,7 +1007,7 @@ dirs = ["docs"]
                 .unwrap_or_else(|error| panic!("descriptor path: {error}")),
         );
         let mut request = Request::new(descriptor);
-        populate_markdown_analysis_headers(request.metadata_mut(), "docs/analysis.md");
+        populate_markdown_analysis_headers(request.metadata_mut(), "kernel/docs/analysis.md");
 
         let response = flight_service
             .get_flight_info(request)
@@ -1035,15 +1117,15 @@ plugins = ["julia"]
             SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
                 .expect("provider should build");
         let batch = provider
-            .repo_search_batch(
+            .repo_search_batch(&repo_search_request(
                 "alpha",
                 10,
-                &HashSet::from(["markdown".to_string()]),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-            )
+                HashSet::from(["markdown".to_string()]),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+            ))
             .await
             .expect("provider should materialize one markdown-filtered search batch");
 
@@ -1082,15 +1164,15 @@ plugins = ["julia"]
             SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
                 .expect("provider should build");
         let batch = provider
-            .repo_search_batch(
+            .repo_search_batch(&repo_search_request(
                 "flightbridgetoken",
                 10,
-                &HashSet::new(),
-                &HashSet::from(["src/flight".to_string()]),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-            )
+                HashSet::new(),
+                HashSet::from(["src/flight".to_string()]),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+            ))
             .await
             .expect("provider should materialize one path-filtered search batch");
 
@@ -1124,15 +1206,15 @@ plugins = ["julia"]
             SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
                 .expect("provider should build");
         let batch = provider
-            .repo_search_batch(
+            .repo_search_batch(&repo_search_request(
                 "alpha",
                 10,
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::from(["readme".to_string()]),
-                &HashSet::new(),
-                &HashSet::new(),
-            )
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::from(["readme".to_string()]),
+                HashSet::new(),
+                HashSet::new(),
+            ))
             .await
             .expect("provider should materialize one title-filtered search batch");
 
@@ -1171,15 +1253,15 @@ plugins = ["julia"]
             SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
                 .expect("provider should build");
         let batch = provider
-            .repo_search_batch(
+            .repo_search_batch(&repo_search_request(
                 "alpha",
                 10,
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::from(["lang:markdown".to_string()]),
-                &HashSet::new(),
-            )
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::from(["lang:markdown".to_string()]),
+                HashSet::new(),
+            ))
             .await
             .expect("provider should materialize one tag-filtered search batch");
 
@@ -1218,15 +1300,15 @@ plugins = ["julia"]
             SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
                 .expect("provider should build");
         let batch = provider
-            .repo_search_batch(
+            .repo_search_batch(&repo_search_request(
                 "searchonlytoken",
                 10,
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::from(["match:exact".to_string()]),
-                &HashSet::new(),
-            )
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::from(["match:exact".to_string()]),
+                HashSet::new(),
+            ))
             .await
             .expect("provider should materialize one exact-match-tagged search batch");
 
@@ -1260,15 +1342,15 @@ plugins = ["julia"]
             SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
                 .expect("provider should build");
         let batch = provider
-            .repo_search_batch(
+            .repo_search_batch(&repo_search_request(
                 "CamelBridgeToken",
                 2,
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-            )
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+            ))
             .await
             .expect("provider should materialize one exact-ranked search batch");
 
@@ -1308,15 +1390,15 @@ plugins = ["julia"]
             SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
                 .expect("provider should build");
         let batch = provider
-            .repo_search_batch(
+            .repo_search_batch(&repo_search_request(
                 "alpha",
                 10,
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::new(),
-                &HashSet::from(["readme.md".to_string()]),
-            )
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::from(["readme.md".to_string()]),
+            ))
             .await
             .expect("provider should materialize one filename-filtered search batch");
 
@@ -1372,6 +1454,45 @@ plugins = ["julia"]
             .expect("flight service should build");
 
         let _ = flight_service;
+    }
+
+    #[test]
+    fn repo_search_batch_from_hits_rejects_navigation_lines_outside_i32_range() {
+        let overflow_line = usize::try_from(i32::MAX).expect("i32::MAX should fit usize") + 1;
+        let hits = vec![SearchHit {
+            stem: "lib.rs".to_string(),
+            title: None,
+            path: "src/lib.rs".to_string(),
+            doc_type: None,
+            tags: Vec::new(),
+            score: 1.0,
+            best_section: None,
+            match_reason: None,
+            hierarchical_uri: None,
+            hierarchy: None,
+            saliency_score: None,
+            audit_status: None,
+            verification_state: None,
+            implicit_backlinks: None,
+            implicit_backlink_items: None,
+            navigation_target: Some(StudioNavigationTarget {
+                path: "src/lib.rs".to_string(),
+                category: "symbol".to_string(),
+                project_name: None,
+                root_label: None,
+                line: Some(overflow_line),
+                line_end: None,
+                column: None,
+            }),
+        }];
+
+        let error = super::repo_search_batch_from_hits(&hits)
+            .expect_err("out-of-range navigation lines should fail");
+
+        assert_eq!(
+            error,
+            format!("repo-search Flight hit `src/lib.rs` line `{overflow_line}` exceeds i32 range")
+        );
     }
 
     #[tokio::test]

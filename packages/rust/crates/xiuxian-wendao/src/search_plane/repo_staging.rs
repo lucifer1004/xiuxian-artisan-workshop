@@ -26,21 +26,48 @@ pub(crate) struct RepoStagedMutationPlan<T> {
     pub(crate) action: RepoStagedMutationAction<T>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RepoStagedMutationConfig<'a> {
+    pub(crate) repo_id: &'a str,
+    pub(crate) table_name_prefix: &'a str,
+    pub(crate) corpus: SearchCorpusKind,
+    pub(crate) extractor_version: u32,
+    pub(crate) source_revision: Option<&'a str>,
+    pub(crate) previous_publication: Option<&'a SearchRepoPublicationRecord>,
+    pub(crate) previous_fingerprints: &'a BTreeMap<String, SearchFileFingerprint>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RepoStagedMutationPayload<T> {
+    pub(crate) file_fingerprints: BTreeMap<String, SearchFileFingerprint>,
+    pub(crate) replace_payload: T,
+    pub(crate) changed_payload: T,
+    pub(crate) changed_paths: BTreeSet<String>,
+    pub(crate) deleted_paths: BTreeSet<String>,
+}
+
 #[must_use]
 pub(crate) fn plan_repo_staged_mutation<T>(
-    repo_id: &str,
-    table_name_prefix: &str,
-    corpus: SearchCorpusKind,
-    extractor_version: u32,
-    source_revision: Option<&str>,
-    previous_publication: Option<&SearchRepoPublicationRecord>,
-    previous_fingerprints: BTreeMap<String, SearchFileFingerprint>,
-    file_fingerprints: BTreeMap<String, SearchFileFingerprint>,
-    replace_payload: T,
-    changed_payload: T,
-    changed_paths: BTreeSet<String>,
-    deleted_paths: BTreeSet<String>,
+    config: RepoStagedMutationConfig<'_>,
+    payload: RepoStagedMutationPayload<T>,
 ) -> RepoStagedMutationPlan<T> {
+    let RepoStagedMutationConfig {
+        repo_id,
+        table_name_prefix,
+        corpus,
+        extractor_version,
+        source_revision,
+        previous_publication,
+        previous_fingerprints,
+    } = config;
+    let RepoStagedMutationPayload {
+        file_fingerprints,
+        replace_payload,
+        changed_payload,
+        changed_paths,
+        deleted_paths,
+    } = payload;
+
     let Some(previous_publication) = previous_publication else {
         return RepoStagedMutationPlan {
             file_fingerprints: file_fingerprints.clone(),
@@ -58,7 +85,7 @@ pub(crate) fn plan_repo_staged_mutation<T>(
         };
     };
 
-    if previous_fingerprints == file_fingerprints {
+    if previous_fingerprints == &file_fingerprints {
         return RepoStagedMutationPlan {
             file_fingerprints,
             action: if previous_publication.source_revision.as_deref() == source_revision {

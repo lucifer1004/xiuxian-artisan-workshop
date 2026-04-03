@@ -39,7 +39,7 @@ pub(crate) async fn publish_repo_entities(
         current_record
             .as_ref()
             .and_then(|record| record.publication.as_ref()),
-        previous_fingerprints,
+        &previous_fingerprints,
     );
 
     match &plan.action {

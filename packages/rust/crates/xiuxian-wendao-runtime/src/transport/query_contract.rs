@@ -20,6 +20,8 @@ pub const WENDAO_SEARCH_LIMIT_HEADER: &str = "x-wendao-search-limit";
 pub const WENDAO_SEARCH_INTENT_HEADER: &str = "x-wendao-search-intent";
 /// Canonical generic search repository hint metadata header for Wendao Flight requests.
 pub const WENDAO_SEARCH_REPO_HEADER: &str = "x-wendao-search-repo";
+/// Canonical SQL query text metadata header for Wendao Flight requests.
+pub const WENDAO_SQL_QUERY_HEADER: &str = "x-wendao-sql-query";
 /// Canonical definition-resolution query metadata header for Wendao Flight requests.
 pub const WENDAO_DEFINITION_QUERY_HEADER: &str = "x-wendao-definition-query";
 /// Canonical definition-resolution source-path metadata header for Wendao Flight requests.
@@ -89,6 +91,8 @@ pub const SEARCH_SYMBOLS_ROUTE: &str = "/search/symbols";
 pub const SEARCH_DEFINITION_ROUTE: &str = "/search/definition";
 /// Stable route for the autocomplete contract.
 pub const SEARCH_AUTOCOMPLETE_ROUTE: &str = "/search/autocomplete";
+/// Stable route for the read-only SQL query contract.
+pub const QUERY_SQL_ROUTE: &str = "/query/sql";
 /// Stable route for the VFS navigation-resolution contract.
 pub const VFS_RESOLVE_ROUTE: &str = "/vfs/resolve";
 /// Stable route for the graph-neighbors contract.
@@ -159,6 +163,10 @@ use arrow_array::{
 #[cfg(feature = "julia")]
 use arrow_schema::{DataType, Schema};
 #[cfg(feature = "julia")]
+use datafusion::sql::parser::{DFParser, Statement as DataFusionStatement};
+#[cfg(feature = "julia")]
+use datafusion::sql::sqlparser::ast::Statement as SqlStatement;
+#[cfg(feature = "julia")]
 use std::collections::HashSet;
 
 /// One scored rerank candidate produced by the shared Rust-owned scorer.
@@ -227,6 +235,7 @@ impl RerankScoreWeights {
     }
 
     /// Return the normalized score weights whose sum is exactly `1.0`.
+    #[must_use]
     pub fn normalized(self) -> Self {
         let total = self.vector_weight + self.semantic_weight;
         Self {
@@ -391,6 +400,39 @@ pub fn validate_autocomplete_request(prefix: &str, limit: usize) -> Result<(), S
         return Err("autocomplete prefix must not be blank".to_string());
     }
     Ok(())
+}
+
+/// Validate the stable read-only SQL request contract.
+///
+/// # Errors
+///
+/// Returns an error when the query text is blank, parses as multiple
+/// statements, or resolves to anything other than one read-only `SELECT`-style
+/// query statement.
+#[cfg(feature = "julia")]
+pub fn validate_sql_query_request(query_text: &str) -> Result<(), String> {
+    let normalized_query = query_text.trim();
+    if normalized_query.is_empty() {
+        return Err("SQL query text must not be blank".to_string());
+    }
+
+    let mut statements = DFParser::parse_sql(normalized_query)
+        .map_err(|error| format!("failed to parse SQL query text: {error}"))?;
+    if statements.len() != 1 {
+        return Err("SQL query text must contain exactly one statement".to_string());
+    }
+
+    let statement = statements
+        .pop_front()
+        .ok_or_else(|| "SQL query text must contain exactly one statement".to_string())?;
+    match statement {
+        DataFusionStatement::Statement(statement)
+            if matches!(statement.as_ref(), SqlStatement::Query(_)) =>
+        {
+            Ok(())
+        }
+        _ => Err("SQL query text must be a read-only query statement".to_string()),
+    }
 }
 
 /// Validate the stable VFS navigation-resolution request contract.
@@ -681,7 +723,7 @@ pub fn score_rerank_request_batch_with_weights(
         let query_embedding = fixed_size_list_row_values(query_embeddings, row_index)?;
         let cosine = cosine_similarity(&embedding, &query_embedding, row_index)?;
         let vector_score = f64::from(vector_scores.value(row_index));
-        let semantic_score = (cosine + 1.0) / 2.0;
+        let semantic_score = f64::midpoint(cosine, 1.0);
         let final_score =
             weights.vector_weight * vector_score + weights.semantic_weight * semantic_score;
         scored_candidates.push(RerankScoredCandidate {
@@ -771,6 +813,15 @@ pub fn validate_rerank_response_batch(batch: &RecordBatch) -> Result<(), String>
         return Ok(());
     }
 
+    validate_rerank_response_doc_ids(batch)?;
+    validate_rerank_response_score_column(batch, RERANK_RESPONSE_VECTOR_SCORE_COLUMN)?;
+    validate_rerank_response_score_column(batch, RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN)?;
+    validate_rerank_response_score_column(batch, RERANK_RESPONSE_FINAL_SCORE_COLUMN)?;
+    validate_rerank_response_ranks(batch)
+}
+
+#[cfg(feature = "julia")]
+fn validate_rerank_response_doc_ids(batch: &RecordBatch) -> Result<(), String> {
     let doc_ids = batch
         .column_by_name(RERANK_RESPONSE_DOC_ID_COLUMN)
         .and_then(|column| column.as_any().downcast_ref::<StringArray>())
@@ -791,73 +842,36 @@ pub fn validate_rerank_response_batch(batch: &RecordBatch) -> Result<(), String>
             ));
         }
     }
+    Ok(())
+}
 
-    let vector_scores = batch
-        .column_by_name(RERANK_RESPONSE_VECTOR_SCORE_COLUMN)
+#[cfg(feature = "julia")]
+fn validate_rerank_response_score_column(
+    batch: &RecordBatch,
+    column_name: &'static str,
+) -> Result<(), String> {
+    let scores = batch
+        .column_by_name(column_name)
         .and_then(|column| column.as_any().downcast_ref::<Float64Array>())
-        .ok_or_else(|| {
-            format!(
-                "rerank response column `{RERANK_RESPONSE_VECTOR_SCORE_COLUMN}` must decode as Float64"
-            )
-        })?;
+        .ok_or_else(|| format!("rerank response column `{column_name}` must decode as Float64"))?;
     for row_index in 0..batch.num_rows() {
-        let score = vector_scores.value(row_index);
+        let score = scores.value(row_index);
         if !score.is_finite() {
             return Err(format!(
-                "rerank response column `{RERANK_RESPONSE_VECTOR_SCORE_COLUMN}` must contain finite values; row {row_index} is {score}"
+                "rerank response column `{column_name}` must contain finite values; row {row_index} is {score}"
             ));
         }
         if !(0.0..=1.0).contains(&score) {
             return Err(format!(
-                "rerank response column `{RERANK_RESPONSE_VECTOR_SCORE_COLUMN}` must stay within inclusive range [0.0, 1.0]; row {row_index} is {score}"
+                "rerank response column `{column_name}` must stay within inclusive range [0.0, 1.0]; row {row_index} is {score}"
             ));
         }
     }
+    Ok(())
+}
 
-    let semantic_scores = batch
-        .column_by_name(RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<Float64Array>())
-        .ok_or_else(|| {
-            format!(
-                "rerank response column `{RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN}` must decode as Float64"
-            )
-        })?;
-    for row_index in 0..batch.num_rows() {
-        let score = semantic_scores.value(row_index);
-        if !score.is_finite() {
-            return Err(format!(
-                "rerank response column `{RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN}` must contain finite values; row {row_index} is {score}"
-            ));
-        }
-        if !(0.0..=1.0).contains(&score) {
-            return Err(format!(
-                "rerank response column `{RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN}` must stay within inclusive range [0.0, 1.0]; row {row_index} is {score}"
-            ));
-        }
-    }
-
-    let final_scores = batch
-        .column_by_name(RERANK_RESPONSE_FINAL_SCORE_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<Float64Array>())
-        .ok_or_else(|| {
-            format!(
-                "rerank response column `{RERANK_RESPONSE_FINAL_SCORE_COLUMN}` must decode as Float64"
-            )
-        })?;
-    for row_index in 0..batch.num_rows() {
-        let score = final_scores.value(row_index);
-        if !score.is_finite() {
-            return Err(format!(
-                "rerank response column `{RERANK_RESPONSE_FINAL_SCORE_COLUMN}` must contain finite values; row {row_index} is {score}"
-            ));
-        }
-        if !(0.0..=1.0).contains(&score) {
-            return Err(format!(
-                "rerank response column `{RERANK_RESPONSE_FINAL_SCORE_COLUMN}` must stay within inclusive range [0.0, 1.0]; row {row_index} is {score}"
-            ));
-        }
-    }
-
+#[cfg(feature = "julia")]
+fn validate_rerank_response_ranks(batch: &RecordBatch) -> Result<(), String> {
     let ranks = batch
         .column_by_name(RERANK_RESPONSE_RANK_COLUMN)
         .and_then(|column| column.as_any().downcast_ref::<Int32Array>())
@@ -878,7 +892,6 @@ pub fn validate_rerank_response_batch(batch: &RecordBatch) -> Result<(), String>
             ));
         }
     }
-
     Ok(())
 }
 
@@ -957,12 +970,16 @@ fn cosine_similarity(left: &[f32], right: &[f32], row_index: usize) -> Result<f6
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Display;
+
+    #[cfg(feature = "julia")]
+    use super::validate_sql_query_request;
     use super::{
         ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_DEFAULT_HOPS,
-        GRAPH_NEIGHBORS_DEFAULT_LIMIT, GRAPH_NEIGHBORS_ROUTE, REPO_SEARCH_DEFAULT_LIMIT,
-        REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_PATH_COLUMN,
-        REPO_SEARCH_ROUTE, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN,
-        RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
+        GRAPH_NEIGHBORS_DEFAULT_LIMIT, GRAPH_NEIGHBORS_ROUTE, QUERY_SQL_ROUTE,
+        REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN,
+        REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_ROUTE, REPO_SEARCH_SCORE_COLUMN,
+        REPO_SEARCH_TITLE_COLUMN, RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
         RERANK_REQUEST_QUERY_EMBEDDING_COLUMN, RERANK_REQUEST_VECTOR_SCORE_COLUMN,
         RERANK_RESPONSE_DOC_ID_COLUMN, RERANK_RESPONSE_FINAL_SCORE_COLUMN,
         RERANK_RESPONSE_RANK_COLUMN, RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
@@ -979,12 +996,25 @@ mod tests {
         WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER, WENDAO_REPO_SEARCH_LIMIT_HEADER,
         WENDAO_REPO_SEARCH_QUERY_HEADER, WENDAO_RERANK_DIMENSION_HEADER,
         WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER,
-        WENDAO_VFS_PATH_HEADER, flight_descriptor_path, normalize_flight_route,
-        validate_attachment_search_request, validate_autocomplete_request,
+        WENDAO_SQL_QUERY_HEADER, WENDAO_VFS_PATH_HEADER, flight_descriptor_path,
+        normalize_flight_route, validate_attachment_search_request, validate_autocomplete_request,
         validate_code_ast_analysis_request, validate_definition_request,
         validate_graph_neighbors_request, validate_markdown_analysis_request,
         validate_repo_search_request, validate_vfs_resolve_request,
     };
+
+    #[cfg(feature = "julia")]
+    fn must_ok<T, E: Display>(result: Result<T, E>, context: &str) -> T {
+        result.unwrap_or_else(|error| panic!("{context}: {error}"))
+    }
+
+    #[cfg(feature = "julia")]
+    fn must_err<T, E>(result: Result<T, E>, context: &str) -> E {
+        match result {
+            Ok(_) => panic!("{context}"),
+            Err(error) => error,
+        }
+    }
 
     #[test]
     fn query_contract_exposes_stable_routes_and_header() {
@@ -1007,6 +1037,7 @@ mod tests {
         );
         assert_eq!(WENDAO_SEARCH_QUERY_HEADER, "x-wendao-search-query");
         assert_eq!(WENDAO_SEARCH_LIMIT_HEADER, "x-wendao-search-limit");
+        assert_eq!(WENDAO_SQL_QUERY_HEADER, "x-wendao-sql-query");
         assert_eq!(WENDAO_DEFINITION_QUERY_HEADER, "x-wendao-definition-query");
         assert_eq!(WENDAO_DEFINITION_PATH_HEADER, "x-wendao-definition-path");
         assert_eq!(WENDAO_DEFINITION_LINE_HEADER, "x-wendao-definition-line");
@@ -1047,6 +1078,7 @@ mod tests {
         assert_eq!(SEARCH_SYMBOLS_ROUTE, "/search/symbols");
         assert_eq!(SEARCH_DEFINITION_ROUTE, "/search/definition");
         assert_eq!(SEARCH_AUTOCOMPLETE_ROUTE, "/search/autocomplete");
+        assert_eq!(QUERY_SQL_ROUTE, "/query/sql");
         assert_eq!(VFS_RESOLVE_ROUTE, "/vfs/resolve");
         assert_eq!(GRAPH_NEIGHBORS_ROUTE, "/graph/neighbors");
         assert_eq!(ANALYSIS_MARKDOWN_ROUTE, "/analysis/markdown");
@@ -1127,6 +1159,10 @@ mod tests {
         assert_eq!(
             flight_descriptor_path(SEARCH_AUTOCOMPLETE_ROUTE),
             Ok(vec!["search".to_string(), "autocomplete".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(QUERY_SQL_ROUTE),
+            Ok(vec!["query".to_string(), "sql".to_string()])
         );
         assert_eq!(
             flight_descriptor_path(VFS_RESOLVE_ROUTE),
@@ -1265,6 +1301,39 @@ mod tests {
         assert_eq!(
             validate_autocomplete_request("   ", 5),
             Err("autocomplete prefix must not be blank".to_string())
+        );
+    }
+
+    #[cfg(feature = "julia")]
+    #[test]
+    fn sql_query_request_validation_accepts_read_only_query() {
+        assert!(validate_sql_query_request("SELECT doc_id FROM repo_entity").is_ok());
+    }
+
+    #[cfg(feature = "julia")]
+    #[test]
+    fn sql_query_request_validation_rejects_blank_query() {
+        assert_eq!(
+            validate_sql_query_request("   "),
+            Err("SQL query text must not be blank".to_string())
+        );
+    }
+
+    #[cfg(feature = "julia")]
+    #[test]
+    fn sql_query_request_validation_rejects_multiple_statements() {
+        assert_eq!(
+            validate_sql_query_request("SELECT 1; SELECT 2"),
+            Err("SQL query text must contain exactly one statement".to_string())
+        );
+    }
+
+    #[cfg(feature = "julia")]
+    #[test]
+    fn sql_query_request_validation_rejects_non_query_statement() {
+        assert_eq!(
+            validate_sql_query_request("CREATE VIEW demo AS SELECT 1"),
+            Err("SQL query text must be a read-only query statement".to_string())
         );
     }
 
@@ -1543,32 +1612,34 @@ mod tests {
                 false,
             ),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
-                Arc::new(Float32Array::from(vec![0.9_f32, 0.8_f32])),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)]),
-                            Some(vec![Some(0.4_f32), Some(0.5_f32), Some(0.6_f32)]),
-                        ],
-                        3,
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
+                    Arc::new(Float32Array::from(vec![0.9_f32, 0.8_f32])),
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)]),
+                                Some(vec![Some(0.4_f32), Some(0.5_f32), Some(0.6_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
-                            Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
-                        ],
-                        3,
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
+                                Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-            ],
-        )
-        .expect("record batch should build");
+                ],
+            ),
+            "record batch should build",
+        );
 
         assert!(super::validate_rerank_request_batch(&batch, 3).is_ok());
     }
@@ -1595,26 +1666,28 @@ mod tests {
                 false,
             ),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec![" "])),
-                Arc::new(Float32Array::from(vec![0.9_f32])),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)])],
-                        3,
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec![" "])),
+                    Arc::new(Float32Array::from(vec![0.9_f32])),
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)])],
+                            3,
+                        ),
                     ),
-                ),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)])],
-                        3,
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)])],
+                            3,
+                        ),
                     ),
-                ),
-            ],
-        )
-        .expect("record batch should build");
+                ],
+            ),
+            "record batch should build",
+        );
 
         assert_eq!(
             super::validate_rerank_request_batch(&batch, 3),
@@ -1647,32 +1720,34 @@ mod tests {
                 false,
             ),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1", "doc-1"])),
-                Arc::new(Float32Array::from(vec![0.9_f32, 0.8_f32])),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)]),
-                            Some(vec![Some(0.4_f32), Some(0.5_f32), Some(0.6_f32)]),
-                        ],
-                        3,
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-1", "doc-1"])),
+                    Arc::new(Float32Array::from(vec![0.9_f32, 0.8_f32])),
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)]),
+                                Some(vec![Some(0.4_f32), Some(0.5_f32), Some(0.6_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
-                            Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
-                        ],
-                        3,
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
+                                Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-            ],
-        )
-        .expect("record batch should build");
+                ],
+            ),
+            "record batch should build",
+        );
 
         assert_eq!(
             super::validate_rerank_request_batch(&batch, 3),
@@ -1705,26 +1780,28 @@ mod tests {
                 false,
             ),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1"])),
-                Arc::new(Float32Array::from(vec![1.2_f32])),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)])],
-                        3,
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-1"])),
+                    Arc::new(Float32Array::from(vec![1.2_f32])),
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)])],
+                            3,
+                        ),
                     ),
-                ),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)])],
-                        3,
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)])],
+                            3,
+                        ),
                     ),
-                ),
-            ],
-        )
-        .expect("record batch should build");
+                ],
+            ),
+            "record batch should build",
+        );
 
         assert_eq!(
             super::validate_rerank_request_batch(&batch, 3),
@@ -1757,32 +1834,34 @@ mod tests {
                 false,
             ),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
-                Arc::new(Float32Array::from(vec![0.9_f32, 0.8_f32])),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)]),
-                            Some(vec![Some(0.4_f32), Some(0.5_f32), Some(0.6_f32)]),
-                        ],
-                        3,
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
+                    Arc::new(Float32Array::from(vec![0.9_f32, 0.8_f32])),
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(0.1_f32), Some(0.2_f32), Some(0.3_f32)]),
+                                Some(vec![Some(0.4_f32), Some(0.5_f32), Some(0.6_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
-                            Some(vec![Some(1.0_f32), Some(1.1_f32), Some(1.2_f32)]),
-                        ],
-                        3,
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(0.7_f32), Some(0.8_f32), Some(0.9_f32)]),
+                                Some(vec![Some(1.0_f32), Some(1.1_f32), Some(1.2_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-            ],
-        )
-        .expect("record batch should build");
+                ],
+            ),
+            "record batch should build",
+        );
 
         assert_eq!(
             super::validate_rerank_request_batch(&batch, 3),
@@ -1815,35 +1894,39 @@ mod tests {
                 false,
             ),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-0", "doc-1"])),
-                Arc::new(Float32Array::from(vec![0.5_f32, 0.8_f32])),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
-                            Some(vec![Some(0.0_f32), Some(1.0_f32), Some(0.0_f32)]),
-                        ],
-                        3,
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-0", "doc-1"])),
+                    Arc::new(Float32Array::from(vec![0.5_f32, 0.8_f32])),
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                                Some(vec![Some(0.0_f32), Some(1.0_f32), Some(0.0_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
-                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
-                        ],
-                        3,
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-            ],
-        )
-        .expect("record batch should build");
+                ],
+            ),
+            "record batch should build",
+        );
 
-        let scored =
-            super::score_rerank_request_batch(&batch, 3).expect("rerank scoring should succeed");
+        let scored = must_ok(
+            super::score_rerank_request_batch(&batch, 3),
+            "rerank scoring should succeed",
+        );
 
         assert_eq!(scored.len(), 2);
         assert_eq!(scored[0].doc_id, "doc-0");
@@ -1859,7 +1942,10 @@ mod tests {
     #[cfg(feature = "julia")]
     #[test]
     fn rerank_score_weights_normalize_runtime_policy() {
-        let weights = super::RerankScoreWeights::new(2.0, 3.0).expect("weights should validate");
+        let weights = must_ok(
+            super::RerankScoreWeights::new(2.0, 3.0),
+            "weights should validate",
+        );
         let normalized = weights.normalized();
 
         assert!((normalized.vector_weight - 0.4).abs() < 1e-6);
@@ -1869,8 +1955,10 @@ mod tests {
     #[cfg(feature = "julia")]
     #[test]
     fn rerank_score_weights_reject_zero_sum_policy() {
-        let error =
-            super::RerankScoreWeights::new(0.0, 0.0).expect_err("zero-sum weights should fail");
+        let error = must_err(
+            super::RerankScoreWeights::new(0.0, 0.0),
+            "zero-sum weights should fail",
+        );
         assert_eq!(error, "rerank score weights must sum to greater than zero");
     }
 
@@ -1896,39 +1984,46 @@ mod tests {
                 false,
             ),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-0", "doc-1"])),
-                Arc::new(Float32Array::from(vec![0.5_f32, 0.8_f32])),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
-                            Some(vec![Some(0.0_f32), Some(1.0_f32), Some(0.0_f32)]),
-                        ],
-                        3,
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-0", "doc-1"])),
+                    Arc::new(Float32Array::from(vec![0.5_f32, 0.8_f32])),
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                                Some(vec![Some(0.0_f32), Some(1.0_f32), Some(0.0_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-                Arc::new(
-                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        vec![
-                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
-                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
-                        ],
-                        3,
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                            vec![
+                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                            ],
+                            3,
+                        ),
                     ),
-                ),
-            ],
-        )
-        .expect("record batch should build");
+                ],
+            ),
+            "record batch should build",
+        );
 
-        let scored = super::score_rerank_request_batch_with_weights(
-            &batch,
-            3,
-            super::RerankScoreWeights::new(0.9, 0.1).expect("weights should validate"),
-        )
-        .expect("rerank scoring should succeed");
+        let scored = must_ok(
+            super::score_rerank_request_batch_with_weights(
+                &batch,
+                3,
+                must_ok(
+                    super::RerankScoreWeights::new(0.9, 0.1),
+                    "weights should validate",
+                ),
+            ),
+            "rerank scoring should succeed",
+        );
 
         assert!((scored[0].final_score - 0.55).abs() < 1e-6);
         assert!((scored[1].final_score - 0.77).abs() < 1e-6);
@@ -2008,17 +2103,19 @@ mod tests {
             Field::new(RERANK_RESPONSE_FINAL_SCORE_COLUMN, DataType::Float64, false),
             Field::new(RERANK_RESPONSE_RANK_COLUMN, DataType::Int32, false),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
-                Arc::new(Float64Array::from(vec![0.91_f64, 0.82_f64])),
-                Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
-                Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
-                Arc::new(Int32Array::from(vec![1_i32, 2_i32])),
-            ],
-        )
-        .expect("record batch should build");
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
+                    Arc::new(Float64Array::from(vec![0.91_f64, 0.82_f64])),
+                    Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
+                    Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
+                    Arc::new(Int32Array::from(vec![1_i32, 2_i32])),
+                ],
+            ),
+            "record batch should build",
+        );
 
         assert!(super::validate_rerank_response_batch(&batch).is_ok());
     }
@@ -2045,17 +2142,19 @@ mod tests {
             Field::new(RERANK_RESPONSE_FINAL_SCORE_COLUMN, DataType::Float64, false),
             Field::new(RERANK_RESPONSE_RANK_COLUMN, DataType::Int32, false),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
-                Arc::new(Float64Array::from(vec![0.91_f64, 0.82_f64])),
-                Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
-                Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
-                Arc::new(Int32Array::from(vec![1_i32, 1_i32])),
-            ],
-        )
-        .expect("record batch should build");
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-1", "doc-2"])),
+                    Arc::new(Float64Array::from(vec![0.91_f64, 0.82_f64])),
+                    Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
+                    Arc::new(Float64Array::from(vec![0.97_f64, 0.91_f64])),
+                    Arc::new(Int32Array::from(vec![1_i32, 1_i32])),
+                ],
+            ),
+            "record batch should build",
+        );
 
         assert_eq!(
             super::validate_rerank_response_batch(&batch),
@@ -2088,17 +2187,19 @@ mod tests {
             Field::new(RERANK_RESPONSE_FINAL_SCORE_COLUMN, DataType::Float64, false),
             Field::new(RERANK_RESPONSE_RANK_COLUMN, DataType::Int32, false),
         ]));
-        let batch = RecordBatch::try_new(
-            schema,
-            vec![
-                Arc::new(StringArray::from(vec!["doc-1"])),
-                Arc::new(Float64Array::from(vec![0.9_f64])),
-                Arc::new(Float64Array::from(vec![0.95_f64])),
-                Arc::new(Float64Array::from(vec![1.2_f64])),
-                Arc::new(Int32Array::from(vec![1_i32])),
-            ],
-        )
-        .expect("record batch should build");
+        let batch = must_ok(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    Arc::new(StringArray::from(vec!["doc-1"])),
+                    Arc::new(Float64Array::from(vec![0.9_f64])),
+                    Arc::new(Float64Array::from(vec![0.95_f64])),
+                    Arc::new(Float64Array::from(vec![1.2_f64])),
+                    Arc::new(Int32Array::from(vec![1_i32])),
+                ],
+            ),
+            "record batch should build",
+        );
 
         assert_eq!(
             super::validate_rerank_response_batch(&batch),

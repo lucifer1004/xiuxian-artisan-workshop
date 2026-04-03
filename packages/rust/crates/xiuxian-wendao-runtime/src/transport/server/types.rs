@@ -26,6 +26,72 @@ pub(super) type ActionResultStream =
 pub(super) type FlightInfoStream = Pin<Box<dyn Stream<Item = Result<FlightInfo, Status>> + Send>>;
 pub(super) type ActionTypeStream = Pin<Box<dyn Stream<Item = Result<ActionType, Status>> + Send>>;
 
+/// Runtime-owned repo-search request decoded from Arrow Flight metadata.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoSearchFlightRequest {
+    /// Stable query text sent through the Flight route.
+    pub query_text: String,
+    /// Maximum number of rows requested from the provider.
+    pub limit: usize,
+    /// Optional language filters.
+    pub language_filters: std::collections::HashSet<String>,
+    /// Optional path-prefix filters.
+    pub path_prefixes: std::collections::HashSet<String>,
+    /// Optional title filters.
+    pub title_filters: std::collections::HashSet<String>,
+    /// Optional tag filters.
+    pub tag_filters: std::collections::HashSet<String>,
+    /// Optional filename filters.
+    pub filename_filters: std::collections::HashSet<String>,
+}
+
+/// Runtime-owned route-provider bundle used to build one Flight service.
+#[derive(Debug, Clone)]
+pub struct WendaoFlightRouteProviders {
+    /// Mandatory repo-search provider.
+    pub repo_search: Arc<dyn RepoSearchFlightRouteProvider>,
+    /// Optional generic search-family provider.
+    pub search: Option<Arc<dyn SearchFlightRouteProvider>>,
+    /// Optional attachment-search provider.
+    pub attachment_search: Option<Arc<dyn AttachmentSearchFlightRouteProvider>>,
+    /// Optional AST-search provider.
+    pub ast_search: Option<Arc<dyn AstSearchFlightRouteProvider>>,
+    /// Optional definition provider.
+    pub definition: Option<Arc<dyn DefinitionFlightRouteProvider>>,
+    /// Optional autocomplete provider.
+    pub autocomplete: Option<Arc<dyn AutocompleteFlightRouteProvider>>,
+    /// Optional markdown-analysis provider.
+    pub markdown_analysis: Option<Arc<dyn MarkdownAnalysisFlightRouteProvider>>,
+    /// Optional code-AST-analysis provider.
+    pub code_ast_analysis: Option<Arc<dyn CodeAstAnalysisFlightRouteProvider>>,
+    /// Optional VFS-resolve provider.
+    pub vfs_resolve: Option<Arc<dyn VfsResolveFlightRouteProvider>>,
+    /// Optional graph-neighbors provider.
+    pub graph_neighbors: Option<Arc<dyn GraphNeighborsFlightRouteProvider>>,
+    /// Optional SQL provider.
+    pub sql: Option<Arc<dyn SqlFlightRouteProvider>>,
+}
+
+impl WendaoFlightRouteProviders {
+    /// Create one route-provider bundle with the mandatory repo-search provider.
+    #[must_use]
+    pub fn new(repo_search_provider: Arc<dyn RepoSearchFlightRouteProvider>) -> Self {
+        Self {
+            repo_search: repo_search_provider,
+            search: None,
+            attachment_search: None,
+            ast_search: None,
+            definition: None,
+            autocomplete: None,
+            markdown_analysis: None,
+            code_ast_analysis: None,
+            vfs_resolve: None,
+            graph_neighbors: None,
+            sql: None,
+        }
+    }
+}
+
 /// Runtime-owned generic search-family Flight payload.
 #[derive(Debug, Clone)]
 pub struct SearchFlightRouteResponse {
@@ -95,6 +161,33 @@ impl AutocompleteFlightRouteResponse {
     pub fn new(batch: LanceRecordBatch) -> Self {
         Self {
             batch,
+            app_metadata: Vec::new(),
+        }
+    }
+
+    /// Attach application metadata that should flow through `FlightInfo`.
+    #[must_use]
+    pub fn with_app_metadata(mut self, app_metadata: impl Into<Vec<u8>>) -> Self {
+        self.app_metadata = app_metadata.into();
+        self
+    }
+}
+
+/// Runtime-owned SQL Flight payload.
+#[derive(Debug, Clone)]
+pub struct SqlFlightRouteResponse {
+    /// Arrow batches returned by the provider.
+    pub batches: Vec<LanceRecordBatch>,
+    /// Optional application metadata returned through `FlightInfo.app_metadata`.
+    pub app_metadata: Vec<u8>,
+}
+
+impl SqlFlightRouteResponse {
+    /// Create one SQL Flight payload without application metadata.
+    #[must_use]
+    pub fn new(batches: Vec<LanceRecordBatch>) -> Self {
+        Self {
+            batches,
             app_metadata: Vec::new(),
         }
     }
@@ -199,13 +292,7 @@ pub trait RepoSearchFlightRouteProvider: std::fmt::Debug + Send + Sync {
     /// materialized for the current runtime host.
     async fn repo_search_batch(
         &self,
-        query_text: &str,
-        limit: usize,
-        language_filters: &std::collections::HashSet<String>,
-        path_prefixes: &std::collections::HashSet<String>,
-        title_filters: &std::collections::HashSet<String>,
-        tag_filters: &std::collections::HashSet<String>,
-        filename_filters: &std::collections::HashSet<String>,
+        request: &RepoSearchFlightRequest,
     ) -> Result<LanceRecordBatch, String>;
 }
 
@@ -261,6 +348,18 @@ pub trait AutocompleteFlightRouteProvider: std::fmt::Debug + Send + Sync {
         prefix: &str,
         limit: usize,
     ) -> Result<AutocompleteFlightRouteResponse, Status>;
+}
+
+/// Runtime-owned provider contract for stable read-only SQL Flight reads.
+#[async_trait]
+pub trait SqlFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable SQL response batch sequence.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested SQL payload cannot be materialized
+    /// for the current runtime host.
+    async fn sql_query_batches(&self, query_text: &str) -> Result<SqlFlightRouteResponse, String>;
 }
 
 /// Runtime-owned provider contract for stable VFS navigation-resolution Flight
@@ -373,13 +472,7 @@ pub(super) struct StaticRepoSearchFlightRouteProvider {
 impl RepoSearchFlightRouteProvider for StaticRepoSearchFlightRouteProvider {
     async fn repo_search_batch(
         &self,
-        _query_text: &str,
-        _limit: usize,
-        _language_filters: &std::collections::HashSet<String>,
-        _path_prefixes: &std::collections::HashSet<String>,
-        _title_filters: &std::collections::HashSet<String>,
-        _tag_filters: &std::collections::HashSet<String>,
-        _filename_filters: &std::collections::HashSet<String>,
+        _request: &RepoSearchFlightRequest,
     ) -> Result<LanceRecordBatch, String> {
         Ok(self.batch.clone())
     }

@@ -33,11 +33,9 @@ pub(super) async fn apply_vector_store_plugin_rerank(
     query_text: &str,
     query_vector: &[f32],
     retrieval_plan: &LinkGraphRetrievalPlanRecord,
-    contexts: &mut Vec<QuantumContext>,
+    contexts: &mut [QuantumContext],
 ) -> Option<LinkGraphJuliaRerankTelemetry> {
-    let Some(binding) = binding else {
-        return None;
-    };
+    let binding = binding?;
 
     if query_vector.is_empty() || contexts.is_empty() {
         return Some(LinkGraphJuliaRerankTelemetry {
@@ -134,7 +132,7 @@ pub(super) async fn apply_vector_store_plugin_rerank(
     _query_text: &str,
     _query_vector: &[f32],
     _retrieval_plan: &LinkGraphRetrievalPlanRecord,
-    _contexts: &mut Vec<QuantumContext>,
+    _contexts: &mut [QuantumContext],
 ) -> Option<LinkGraphJuliaRerankTelemetry> {
     binding
         .and_then(|binding| binding.endpoint.base_url.as_ref())
@@ -160,11 +158,9 @@ pub(super) async fn apply_openai_plugin_rerank(
     binding: Option<&PluginCapabilityBinding>,
     query_text: &str,
     retrieval_plan: &LinkGraphRetrievalPlanRecord,
-    contexts: &mut Vec<QuantumContext>,
+    contexts: &mut [QuantumContext],
 ) -> Option<LinkGraphJuliaRerankTelemetry> {
-    let Some(binding) = binding else {
-        return None;
-    };
+    let binding = binding?;
     if binding.endpoint.base_url.is_none() || contexts.is_empty() {
         return None;
     }
@@ -249,7 +245,7 @@ pub(super) async fn apply_openai_plugin_rerank(
     binding: Option<&PluginCapabilityBinding>,
     _query_text: &str,
     _retrieval_plan: &LinkGraphRetrievalPlanRecord,
-    _contexts: &mut Vec<QuantumContext>,
+    _contexts: &mut [QuantumContext],
 ) -> Option<LinkGraphJuliaRerankTelemetry> {
     binding
         .and_then(|binding| binding.endpoint.base_url.as_ref())
@@ -288,7 +284,7 @@ async fn build_vector_store_plugin_rerank_request_batch(
         .build_plugin_rerank_request_batch(request, anchors)
         .await
         .map_err(|error| format!("failed to build Julia rerank request batch: {error}"))?;
-    attach_plugin_rerank_request_metadata(batch, query_text, schema_version)
+    attach_plugin_rerank_request_metadata(&batch, query_text, schema_version)
 }
 
 #[cfg(feature = "julia")]
@@ -303,7 +299,7 @@ async fn build_openai_plugin_rerank_request_batch(
         .build_plugin_rerank_request_batch(request, anchors)
         .await
         .map_err(|error| format!("failed to build Julia rerank request batch: {error}"))?;
-    attach_plugin_rerank_request_metadata(batch, query_text, schema_version)
+    attach_plugin_rerank_request_metadata(&batch, query_text, schema_version)
 }
 
 #[cfg(feature = "julia")]
@@ -390,12 +386,12 @@ pub(super) fn collect_plugin_rerank_trace_ids(
 
 #[cfg(feature = "julia")]
 pub(super) fn attach_plugin_rerank_request_metadata(
-    batch: RecordBatch,
+    batch: &RecordBatch,
     query_text: &str,
     schema_version: &str,
 ) -> Result<RecordBatch, String> {
     attach_record_batch_metadata(
-        &batch,
+        batch,
         [
             (
                 FLIGHT_TRACE_ID_METADATA_KEY,

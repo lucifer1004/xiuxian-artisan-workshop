@@ -1,63 +1,55 @@
 use super::super::super::super::{LinkGraphIndex, parse_search_query};
 use super::policy::{LinkGraphPolicyDecision, evaluate_link_graph_policy};
+use super::types::{PlannedPayloadBuildContext, PlannedPayloadSearchRequest};
 use crate::link_graph::agentic::{LinkGraphSuggestedLink, LinkGraphSuggestedLinkState};
 use crate::link_graph::runtime_config::resolve_link_graph_agentic_runtime;
 use crate::link_graph::valkey_suggested_link_recent_latest;
 use crate::link_graph::{
     LinkGraphCcsAudit, LinkGraphDirection, LinkGraphDisplayHit, LinkGraphHit,
-    LinkGraphPlannedSearchPayload, LinkGraphPromotedOverlayTelemetry, ParsedLinkGraphQuery,
+    LinkGraphPlannedSearchPayload, ParsedLinkGraphQuery,
 };
 use std::collections::HashMap;
 
 impl LinkGraphIndex {
     pub(in crate::link_graph::index::search::plan) async fn search_planned_payload_with_agentic_core_async(
         &self,
-        query: &str,
-        query_vector: &[f32],
-        limit: usize,
-        base_options: crate::link_graph::LinkGraphSearchOptions,
-        include_provisional: Option<bool>,
-        provisional_limit: Option<usize>,
-        promoted_overlay: Option<LinkGraphPromotedOverlayTelemetry>,
+        request: PlannedPayloadSearchRequest,
     ) -> LinkGraphPlannedSearchPayload {
-        let mut payload = self.search_planned_payload_with_agentic_core_sync(
-            query,
-            limit,
-            base_options,
-            include_provisional,
-            provisional_limit,
-            promoted_overlay,
-            (!query_vector.is_empty()).then(|| query_vector.to_vec()),
-        );
-        self.enrich_planned_payload_with_quantum_contexts(&mut payload, query_vector)
-            .await;
+        let query_vector_override = request.build_context.query_vector_override.clone();
+        let mut payload = self.search_planned_payload_with_agentic_core_sync(request);
+        self.enrich_planned_payload_with_quantum_contexts(
+            &mut payload,
+            query_vector_override.as_deref().unwrap_or(&[]),
+        )
+        .await;
         payload
     }
 
     pub(in crate::link_graph::index::search::plan) fn search_planned_payload_with_agentic_core_sync(
         &self,
-        query: &str,
-        limit: usize,
-        base_options: crate::link_graph::LinkGraphSearchOptions,
-        include_provisional: Option<bool>,
-        provisional_limit: Option<usize>,
-        promoted_overlay: Option<LinkGraphPromotedOverlayTelemetry>,
-        query_vector_override: Option<Vec<f32>>,
+        request: PlannedPayloadSearchRequest,
     ) -> LinkGraphPlannedSearchPayload {
-        let parsed = parse_search_query(query, base_options);
+        let PlannedPayloadSearchRequest {
+            query,
+            limit,
+            base_options,
+            include_provisional,
+            provisional_limit,
+            build_context,
+        } = request;
+        let parsed = parse_search_query(&query, base_options);
         let effective_limit = parsed.limit_override.unwrap_or(limit);
 
         if let Some(direct_id) = parsed.direct_id.as_deref() {
             let rows = self.execute_direct_id_lookup(direct_id, effective_limit, &parsed.options);
             let policy = evaluate_link_graph_policy(&rows, effective_limit);
             return self.build_planned_payload(
+                build_context,
                 parsed,
                 rows,
                 policy,
                 Vec::new(),
                 None,
-                promoted_overlay,
-                query_vector_override,
             );
         }
 
@@ -74,13 +66,12 @@ impl LinkGraphIndex {
         let policy = evaluate_link_graph_policy(&rows, effective_limit);
 
         self.build_planned_payload(
+            build_context,
             parsed,
             rows,
             policy,
             provisional_suggestions,
             provisional_error,
-            promoted_overlay,
-            query_vector_override,
         )
     }
 
@@ -130,13 +121,12 @@ impl LinkGraphIndex {
 
     fn build_planned_payload(
         &self,
+        build_context: PlannedPayloadBuildContext,
         parsed: ParsedLinkGraphQuery,
         rows: Vec<LinkGraphHit>,
         policy: LinkGraphPolicyDecision,
         provisional_suggestions: Vec<LinkGraphSuggestedLink>,
         provisional_error: Option<String>,
-        promoted_overlay: Option<LinkGraphPromotedOverlayTelemetry>,
-        query_vector_override: Option<Vec<f32>>,
     ) -> LinkGraphPlannedSearchPayload {
         let hit_count = rows.len();
         let section_hit_count = rows
@@ -178,11 +168,11 @@ impl LinkGraphIndex {
             results: rows,
             provisional_suggestions,
             provisional_error,
-            promoted_overlay,
+            promoted_overlay: build_context.promoted_overlay,
             ccs_audit,
             semantic_ignition: None,
             julia_rerank: None,
-            query_vector: query_vector_override,
+            query_vector: build_context.query_vector_override,
             quantum_contexts: Vec::new(),
         }
     }

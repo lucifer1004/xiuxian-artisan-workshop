@@ -182,7 +182,7 @@ enum EitherString<'a> {
     Utf8View(&'a arrow::array::StringViewArray),
 }
 
-impl<'a> EitherString<'a> {
+impl EitherString<'_> {
     fn value(&self, row: usize) -> &str {
         match self {
             Self::Utf8(column) => column.value(row),

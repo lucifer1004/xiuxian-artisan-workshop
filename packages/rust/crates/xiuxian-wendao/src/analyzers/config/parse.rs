@@ -63,7 +63,25 @@ pub(crate) fn parse_repository_ref(value: &str) -> Option<RepositoryRef> {
         return None;
     }
 
+    if let Some(reference) = parse_prefixed_repository_ref(trimmed, "branch:") {
+        return Some(RepositoryRef::Branch(reference));
+    }
+    if let Some(reference) = parse_prefixed_repository_ref(trimmed, "tag:") {
+        return Some(RepositoryRef::Tag(reference));
+    }
+    if let Some(reference) = parse_prefixed_repository_ref(trimmed, "commit:") {
+        return Some(RepositoryRef::Commit(reference));
+    }
+
     Some(RepositoryRef::Branch(trimmed.to_string()))
+}
+
+fn parse_prefixed_repository_ref(value: &str, prefix: &str) -> Option<String> {
+    value
+        .strip_prefix(prefix)
+        .map(str::trim)
+        .filter(|reference| !reference.is_empty())
+        .map(str::to_string)
 }
 
 pub(crate) fn parse_refresh_policy(value: Option<&str>) -> RepositoryRefreshPolicy {

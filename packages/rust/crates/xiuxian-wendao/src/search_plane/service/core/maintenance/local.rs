@@ -91,10 +91,8 @@ impl SearchPlaneService {
             } else {
                 projected_columns.join(", ")
             };
-            let query = format!(
-                "SELECT {projection} FROM {} LIMIT {}",
-                engine_table_name, PREWARM_ROW_LIMIT
-            );
+            let query =
+                format!("SELECT {projection} FROM {engine_table_name} LIMIT {PREWARM_ROW_LIMIT}");
             let _ = self.search_engine.sql_batches(query.as_str()).await?;
             return Ok(());
         }

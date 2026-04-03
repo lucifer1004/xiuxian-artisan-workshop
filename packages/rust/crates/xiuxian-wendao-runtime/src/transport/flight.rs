@@ -8,17 +8,14 @@ use arrow_schema::DataType;
 use futures::{TryStreamExt, stream};
 use tokio::sync::Mutex;
 use tonic::transport::Endpoint;
-use xiuxian_vector::{
-    EngineRecordBatch, LanceRecordBatch, engine_batches_to_lance_batches,
-    lance_batches_to_engine_batches,
-};
+use xiuxian_vector::EngineRecordBatch;
 
 use super::query_contract::{
     RERANK_REQUEST_EMBEDDING_COLUMN, RERANK_ROUTE, WENDAO_RERANK_DIMENSION_HEADER,
     WENDAO_SCHEMA_VERSION_HEADER, flight_descriptor_path, normalize_flight_route,
 };
 
-/// Lazy Arrow Flight client aligned to the Lance/Arrow-57 transport line.
+/// Lazy Arrow Flight client aligned to the workspace Arrow Flight transport line.
 #[derive(Clone)]
 pub(crate) struct ArrowFlightTransportClient {
     base_url: String,
@@ -101,8 +98,7 @@ impl ArrowFlightTransportClient {
     /// # Errors
     ///
     /// Returns an error when the request cannot be converted onto the
-    /// Lance/Arrow-57 transport line, when the Flight request fails, or when
-    /// the response cannot be converted back into engine batches.
+    /// workspace Arrow Flight transport line or when the Flight request fails.
     pub(crate) async fn process_batch(
         &self,
         batch: &EngineRecordBatch,
@@ -115,8 +111,7 @@ impl ArrowFlightTransportClient {
     /// # Errors
     ///
     /// Returns an error when the request cannot be converted onto the
-    /// Lance/Arrow-57 transport line, when the Flight request fails, or when
-    /// the response cannot be converted back into engine batches.
+    /// workspace Arrow Flight transport line or when the Flight request fails.
     pub(crate) async fn process_batches(
         &self,
         batches: &[EngineRecordBatch],
@@ -125,18 +120,13 @@ impl ArrowFlightTransportClient {
             return Err("Arrow Flight request batches cannot be empty".to_string());
         }
 
-        let request_batches = engine_batches_to_lance_batches(batches).map_err(|error| {
-            format!("failed to convert engine batches onto the Lance Arrow line: {error}")
-        })?;
-        let rerank_dimension_header =
-            rerank_dimension_header(self.route.as_str(), &request_batches)?;
+        let rerank_dimension_header = rerank_dimension_header(self.route.as_str(), batches)?;
+        let request_batches = batches.to_vec();
         let request_stream = FlightDataEncoderBuilder::new()
             .with_flight_descriptor(Some(flight_descriptor(self.route.as_str())))
-            .build(stream::iter(
-                request_batches
-                    .into_iter()
-                    .map(Ok::<LanceRecordBatch, arrow_flight::error::FlightError>),
-            ));
+            .build(stream::iter(request_batches.into_iter().map(
+                Ok::<EngineRecordBatch, arrow_flight::error::FlightError>,
+            )));
 
         let response = {
             let mut client = self.client.lock().await;
@@ -161,21 +151,23 @@ impl ArrowFlightTransportClient {
                 *client = Some(flight_client);
             }
 
-            client
-                .as_mut()
-                .expect("flight client initialized above")
+            let Some(flight_client) = client.as_mut() else {
+                return Err(
+                    "Arrow Flight client initialization unexpectedly returned no client"
+                        .to_string(),
+                );
+            };
+            flight_client
                 .do_exchange(request_stream)
                 .await
                 .map_err(|error| format!("Arrow Flight request failed: {error}"))?
         };
 
         let response_batches = response
-            .try_collect::<Vec<LanceRecordBatch>>()
+            .try_collect::<Vec<EngineRecordBatch>>()
             .await
             .map_err(|error| format!("failed to decode Arrow Flight response: {error}"))?;
-        lance_batches_to_engine_batches(&response_batches).map_err(|error| {
-            format!("failed to convert Arrow Flight response onto the engine Arrow line: {error}")
-        })
+        Ok(response_batches)
     }
 }
 
@@ -188,7 +180,7 @@ fn flight_descriptor(route: &str) -> FlightDescriptor {
 
 fn rerank_dimension_header(
     route: &str,
-    request_batches: &[LanceRecordBatch],
+    request_batches: &[EngineRecordBatch],
 ) -> Result<Option<String>, String> {
     if route != RERANK_ROUTE {
         return Ok(None);
@@ -220,16 +212,67 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use arrow_array::types::Float32Type;
-    use arrow_array::{FixedSizeListArray, Float32Array, Float64Array, Int32Array, StringArray};
     use arrow_flight::flight_service_server::FlightServiceServer;
     use tokio::net::TcpListener;
     use tokio_stream::wrappers::TcpListenerStream;
     use tonic::transport::Server;
     use xiuxian_vector::{
-        LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema,
-        engine_batches_to_lance_batches, lance_batch_to_engine_batch,
+        EngineRecordBatch, LanceDataType, LanceField, LanceFloat64Array,
+        LanceFloat64Array as Float64Array, LanceInt32Array as Int32Array, LanceRecordBatch,
+        LanceSchema, LanceStringArray as StringArray, engine_batches_to_lance_batches,
     };
+
+    fn build_rerank_request_batch() -> EngineRecordBatch {
+        use arrow_array::types::Float32Type;
+        use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
+        use arrow_schema::{DataType, Field, Schema};
+
+        RecordBatch::try_new(
+            Arc::new(Schema::new(vec![
+                Field::new("doc_id", DataType::Utf8, false),
+                Field::new("vector_score", DataType::Float32, false),
+                Field::new(
+                    "embedding",
+                    DataType::FixedSizeList(
+                        Arc::new(Field::new("item", DataType::Float32, true)),
+                        3,
+                    ),
+                    false,
+                ),
+                Field::new(
+                    "query_embedding",
+                    DataType::FixedSizeList(
+                        Arc::new(Field::new("item", DataType::Float32, true)),
+                        3,
+                    ),
+                    false,
+                ),
+            ])),
+            vec![
+                Arc::new(StringArray::from(vec!["doc-0", "doc-1"])),
+                Arc::new(Float32Array::from(vec![0.5_f32, 0.8_f32])),
+                Arc::new(
+                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                        vec![
+                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                            Some(vec![Some(0.0_f32), Some(1.0_f32), Some(0.0_f32)]),
+                        ],
+                        3,
+                    ),
+                ),
+                Arc::new(
+                    FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                        vec![
+                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                            Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
+                        ],
+                        3,
+                    ),
+                ),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("request batch should build: {error}"))
+    }
 
     #[tokio::test]
     async fn flight_transport_client_roundtrips_batches_over_lance_arrow_line() {
@@ -273,70 +316,7 @@ mod tests {
             Duration::from_secs(5),
         )
         .unwrap_or_else(|error| panic!("flight client should build: {error}"));
-        let request_batch = lance_batch_to_engine_batch(
-            &LanceRecordBatch::try_new(
-                Arc::new(xiuxian_vector::LanceSchema::new(vec![
-                    xiuxian_vector::LanceField::new(
-                        "doc_id",
-                        xiuxian_vector::LanceDataType::Utf8,
-                        false,
-                    ),
-                    xiuxian_vector::LanceField::new(
-                        "vector_score",
-                        xiuxian_vector::LanceDataType::Float32,
-                        false,
-                    ),
-                    xiuxian_vector::LanceField::new(
-                        "embedding",
-                        xiuxian_vector::LanceDataType::FixedSizeList(
-                            Arc::new(xiuxian_vector::LanceField::new(
-                                "item",
-                                xiuxian_vector::LanceDataType::Float32,
-                                true,
-                            )),
-                            3,
-                        ),
-                        false,
-                    ),
-                    xiuxian_vector::LanceField::new(
-                        "query_embedding",
-                        xiuxian_vector::LanceDataType::FixedSizeList(
-                            Arc::new(xiuxian_vector::LanceField::new(
-                                "item",
-                                xiuxian_vector::LanceDataType::Float32,
-                                true,
-                            )),
-                            3,
-                        ),
-                        false,
-                    ),
-                ])),
-                vec![
-                    Arc::new(StringArray::from(vec!["doc-0", "doc-1"])),
-                    Arc::new(Float32Array::from(vec![0.5_f32, 0.8_f32])),
-                    Arc::new(
-                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                            vec![
-                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
-                                Some(vec![Some(0.0_f32), Some(1.0_f32), Some(0.0_f32)]),
-                            ],
-                            3,
-                        ),
-                    ),
-                    Arc::new(
-                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                            vec![
-                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
-                                Some(vec![Some(1.0_f32), Some(0.0_f32), Some(0.0_f32)]),
-                            ],
-                            3,
-                        ),
-                    ),
-                ],
-            )
-            .unwrap_or_else(|error| panic!("request batch should build: {error}")),
-        )
-        .unwrap_or_else(|error| panic!("request batch should convert onto engine Arrow: {error}"));
+        let request_batch = build_rerank_request_batch();
         let response_batches = client
             .process_batch(&request_batch)
             .await

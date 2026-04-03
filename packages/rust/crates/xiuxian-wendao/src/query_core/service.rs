@@ -1,7 +1,8 @@
 //! Thin query-core facade helpers for internal Wendao callers.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::future::Future;
+use std::hash::BuildHasher;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -38,6 +39,104 @@ pub struct RepoCodeQueryRelation {
 type RepoEntityQueryFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, WendaoQueryCoreError>> + Send + 'a>>;
 
+/// Immutable repo-scoped retrieval parameters for one query-core lookup.
+#[derive(Clone, Debug, Default)]
+pub struct RepoRetrievalQuery {
+    /// Stable repo identifier.
+    pub repo_id: String,
+    /// User-provided search term.
+    pub search_term: String,
+    /// Optional language filters.
+    pub language_filters: BTreeSet<String>,
+    /// Optional kind filters.
+    pub kind_filters: BTreeSet<String>,
+    /// Maximum number of rows to return.
+    pub limit: usize,
+}
+
+impl RepoRetrievalQuery {
+    /// Build one repo-scoped retrieval query from generic set-like filters.
+    pub fn new<LS, KS>(
+        repo_id: impl Into<String>,
+        search_term: impl Into<String>,
+        language_filters: &HashSet<String, LS>,
+        kind_filters: &HashSet<String, KS>,
+        limit: usize,
+    ) -> Self
+    where
+        LS: BuildHasher,
+        KS: BuildHasher,
+    {
+        Self {
+            repo_id: repo_id.into(),
+            search_term: search_term.into(),
+            language_filters: language_filters.iter().cloned().collect::<BTreeSet<_>>(),
+            kind_filters: kind_filters.iter().cloned().collect::<BTreeSet<_>>(),
+            limit,
+        }
+    }
+
+    fn language_filter_set(&self) -> HashSet<String> {
+        self.language_filters
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>()
+    }
+
+    fn kind_filter_set(&self) -> HashSet<String> {
+        self.kind_filters.iter().cloned().collect::<HashSet<_>>()
+    }
+}
+
+/// Repo-code lane policy that decides which corpora may execute.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RepoCodeQueryPolicy {
+    /// Whether the repo-entity lane may execute first.
+    pub allow_entity: bool,
+    /// Whether the repo-content lane may execute as fallback.
+    pub allow_content: bool,
+}
+
+/// Combined repo-code query-core request.
+#[derive(Clone, Debug, Default)]
+pub struct RepoCodeQueryRequest {
+    /// Shared repo-scoped retrieval parameters.
+    pub query: RepoRetrievalQuery,
+    /// Repo-code lane routing policy.
+    pub policy: RepoCodeQueryPolicy,
+}
+
+impl RepoCodeQueryRequest {
+    /// Build one repo-code request from set-like filters and lane policy.
+    pub fn new<LS, KS>(
+        repo_id: impl Into<String>,
+        search_term: impl Into<String>,
+        language_filters: &HashSet<String, LS>,
+        kind_filters: &HashSet<String, KS>,
+        allow_entity: bool,
+        allow_content: bool,
+        limit: usize,
+    ) -> Self
+    where
+        LS: BuildHasher,
+        KS: BuildHasher,
+    {
+        Self {
+            query: RepoRetrievalQuery::new(
+                repo_id,
+                search_term,
+                language_filters,
+                kind_filters,
+                limit,
+            ),
+            policy: RepoCodeQueryPolicy {
+                allow_entity,
+                allow_content,
+            },
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 /// Typed contract for one repo-entity fast-path query surface.
 pub struct RepoEntityTypedResultsContract<T> {
@@ -52,10 +151,7 @@ pub struct RepoEntityTypedResultsContract<T> {
 /// Returns [`WendaoQueryCoreError`] when the retrieval adapter or execution layer fails.
 pub async fn query_repo_content_relation(
     search_plane: &SearchPlaneService,
-    repo_id: &str,
-    search_term: &str,
-    language_filters: &HashSet<String>,
-    limit: usize,
+    query: &RepoRetrievalQuery,
     explain_sink: Option<Arc<dyn WendaoExplainSink>>,
 ) -> Result<WendaoRelation, WendaoQueryCoreError> {
     let ctx = build_repo_content_context(search_plane, explain_sink);
@@ -63,15 +159,15 @@ pub async fn query_repo_content_relation(
         &ctx,
         &VectorSearchOp {
             corpus: RetrievalCorpus::RepoContent,
-            repo_id: repo_id.to_string(),
-            search_term: search_term.to_string(),
-            language_filters: language_filters.clone(),
+            repo_id: query.repo_id.clone(),
+            search_term: query.search_term.clone(),
+            language_filters: query.language_filter_set(),
             kind_filters: HashSet::new(),
-            limit,
+            limit: query.limit,
         },
     )
     .await?;
-    finalize_repo_retrieval_relation(&ctx, repo_id, relation, limit).await
+    finalize_repo_retrieval_relation(&ctx, query.repo_id.as_str(), relation, query.limit).await
 }
 
 /// Execute a repo-scoped code query through the entity-first, content-fallback policy.
@@ -81,33 +177,19 @@ pub async fn query_repo_content_relation(
 /// Returns [`WendaoQueryCoreError`] when the retrieval adapter or execution layer fails.
 pub async fn query_repo_code_relation(
     search_plane: &SearchPlaneService,
-    repo_id: &str,
-    search_term: &str,
-    language_filters: &HashSet<String>,
-    kind_filters: &HashSet<String>,
-    allow_entity: bool,
-    allow_content: bool,
-    limit: usize,
+    request: &RepoCodeQueryRequest,
     explain_sink: Option<Arc<dyn WendaoExplainSink>>,
 ) -> Result<RepoCodeQueryRelation, WendaoQueryCoreError> {
-    if allow_entity {
-        let entity_relation = query_repo_entity_relation(
-            search_plane,
-            repo_id,
-            search_term,
-            language_filters,
-            kind_filters,
-            limit,
-            explain_sink.clone(),
-        )
-        .await?;
+    if request.policy.allow_entity {
+        let entity_relation =
+            query_repo_entity_relation(search_plane, &request.query, explain_sink.clone()).await?;
         if entity_relation.row_count() > 0 {
             return Ok(RepoCodeQueryRelation {
                 corpus: RetrievalCorpus::RepoEntity,
                 relation: entity_relation,
             });
         }
-        if !allow_content {
+        if !request.policy.allow_content {
             return Ok(RepoCodeQueryRelation {
                 corpus: RetrievalCorpus::RepoEntity,
                 relation: entity_relation,
@@ -115,23 +197,17 @@ pub async fn query_repo_code_relation(
         }
     }
 
-    let content_allowed = kind_filters.is_empty() || kind_filters.contains("file");
-    if !allow_content || !content_allowed {
+    let content_allowed =
+        request.query.kind_filters.is_empty() || request.query.kind_filters.contains("file");
+    if !request.policy.allow_content || !content_allowed {
         return Ok(RepoCodeQueryRelation {
             corpus: RetrievalCorpus::RepoEntity,
             relation: WendaoRelation::new(xiuxian_vector::retrieval_result_schema(), Vec::new()),
         });
     }
 
-    let content_relation = query_repo_content_relation(
-        search_plane,
-        repo_id,
-        search_term,
-        language_filters,
-        limit,
-        explain_sink,
-    )
-    .await?;
+    let content_relation =
+        query_repo_content_relation(search_plane, &request.query, explain_sink).await?;
     Ok(RepoCodeQueryRelation {
         corpus: RetrievalCorpus::RepoContent,
         relation: content_relation,
@@ -145,11 +221,7 @@ pub async fn query_repo_code_relation(
 /// Returns [`WendaoQueryCoreError`] when the retrieval adapter or execution layer fails.
 pub async fn query_repo_entity_relation(
     search_plane: &SearchPlaneService,
-    repo_id: &str,
-    search_term: &str,
-    language_filters: &HashSet<String>,
-    kind_filters: &HashSet<String>,
-    limit: usize,
+    query: &RepoRetrievalQuery,
     explain_sink: Option<Arc<dyn WendaoExplainSink>>,
 ) -> Result<WendaoRelation, WendaoQueryCoreError> {
     let ctx = build_repo_content_context(search_plane, explain_sink);
@@ -157,15 +229,15 @@ pub async fn query_repo_entity_relation(
         &ctx,
         &VectorSearchOp {
             corpus: RetrievalCorpus::RepoEntity,
-            repo_id: repo_id.to_string(),
-            search_term: search_term.to_string(),
-            language_filters: language_filters.clone(),
-            kind_filters: kind_filters.clone(),
-            limit,
+            repo_id: query.repo_id.clone(),
+            search_term: query.search_term.clone(),
+            language_filters: query.language_filter_set(),
+            kind_filters: query.kind_filter_set(),
+            limit: query.limit,
         },
     )
     .await?;
-    finalize_repo_retrieval_relation(&ctx, repo_id, relation, limit).await
+    finalize_repo_retrieval_relation(&ctx, query.repo_id.as_str(), relation, query.limit).await
 }
 
 /// Execute a repo-entity module query when publication is ready.

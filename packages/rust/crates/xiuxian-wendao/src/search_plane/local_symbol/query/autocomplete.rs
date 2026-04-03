@@ -46,7 +46,7 @@ pub(crate) async fn autocomplete_local_symbols(
     )
     .await?;
     let mut suggestions = execution.suggestions;
-    suggestions.sort_by(|left, right| compare_suggestions(left, right));
+    suggestions.sort_by(compare_suggestions);
     suggestions.truncate(limit);
     service.record_query_telemetry(
         SearchCorpusKind::LocalSymbol,

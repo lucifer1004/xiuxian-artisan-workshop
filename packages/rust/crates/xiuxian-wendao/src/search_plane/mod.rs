@@ -36,6 +36,8 @@ pub(crate) use project_fingerprint::{
 };
 pub(crate) use reference_occurrence::ReferenceOccurrenceSearchError;
 #[cfg(test)]
+pub(crate) use reference_occurrence::{reference_occurrence_batches, reference_occurrence_schema};
+#[cfg(test)]
 pub(crate) use repo_entity::publish_repo_entities;
 pub(crate) use repo_entity::{
     search_repo_entity_example_results, search_repo_entity_import_results,

@@ -570,7 +570,7 @@ async fn repo_index_status_endpoint_returns_status_payload() -> TestResult {
     write_default_repo_config(temp.path(), &repo_dir, "gateway-sync")?;
     let router = studio_router(gateway_state_for_project(temp.path()));
 
-    let (status, payload) =
+    let (status, mut payload) =
         request_json(router, "/api/repo/index/status?repo=gateway-sync").await?;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -597,6 +597,7 @@ async fn repo_index_status_endpoint_returns_status_payload() -> TestResult {
         Some(&Value::String("repo_index_status".to_string()))
     );
     assert_eq!(payload.get("total").and_then(Value::as_u64), Some(1));
+    redact_repo_index_payload(&mut payload);
     assert_studio_json_snapshot("repo_index_status_endpoint_json", payload);
     Ok(())
 }
@@ -4709,6 +4710,9 @@ fn redact_repo_sync_payload(value: &mut Value) {
 }
 
 fn redact_repo_index_payload(value: &mut Value) {
+    if let Some(max_concurrency) = value.get_mut("maxConcurrency") {
+        *max_concurrency = Value::Number(1.into());
+    }
     if let Some(repos) = value.get_mut("repos").and_then(Value::as_array_mut) {
         for repo in repos {
             if let Some(updated_at) = repo.get_mut("updatedAt") {

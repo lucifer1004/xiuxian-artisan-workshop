@@ -463,15 +463,15 @@ dependencies = [
 
 [[package]]
 name = "arrow-flight"
-version = "57.3.0"
+version = "58.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58c5b083668e6230eae3eab2fc4b5fb989974c845d0aa538dde61a4327c78675"
+checksum = "302b2e036335f3f04d65dad3f74ff1f2aae6dc671d6aa04dc6b61193761e16fb"
 dependencies = [
- "arrow-array 57.3.0",
- "arrow-buffer 57.3.0",
- "arrow-cast 57.3.0",
- "arrow-ipc 57.3.0",
- "arrow-schema 57.3.0",
+ "arrow-array 58.1.0",
+ "arrow-buffer 58.1.0",
+ "arrow-cast 58.1.0",
+ "arrow-ipc 58.1.0",
+ "arrow-schema 58.1.0",
  "base64 0.22.1",
  "bytes",
  "futures",
@@ -630,6 +630,7 @@ version = "58.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c30a1365d7a7dc50cc847e54154e6af49e4c4b0fddc9f607b687f29212082743"
 dependencies = [
+ "bitflags 2.10.0",
  "serde_core",
  "serde_json",
 ]
@@ -12757,7 +12758,6 @@ dependencies = [
  "arrow 58.1.0",
  "arrow-ipc 57.3.0",
  "arrow-ipc 58.1.0",
- "arrow-string 57.3.0",
  "arrow-string 58.1.0",
  "async-trait",
  "chrono",
@@ -12911,15 +12911,15 @@ dependencies = [
 name = "xiuxian-wendao-runtime"
 version = "0.1.1"
 dependencies = [
- "arrow-array 57.3.0",
+ "arrow-array 58.1.0",
  "arrow-flight",
- "arrow-schema 57.3.0",
+ "arrow-schema 58.1.0",
  "async-trait",
+ "datafusion 53.0.0",
  "futures",
  "serde",
  "serde_json",
  "serde_yaml",
- "serial_test",
  "tempfile",
  "tokio",
  "tokio-stream",

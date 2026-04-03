@@ -24,7 +24,7 @@ pub struct LinkGraphJuliaRerankRuntimeConfig {
     pub route: Option<String>,
     /// Health-check route.
     pub health_route: Option<String>,
-    /// WendaoArrow schema version expected by the runtime.
+    /// `WendaoArrow` schema version expected by the runtime.
     pub schema_version: Option<String>,
     /// Optional request timeout in seconds.
     pub timeout_secs: Option<u64>,

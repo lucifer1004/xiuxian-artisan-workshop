@@ -85,6 +85,7 @@ instead of prepending `PRJ_ROOT` again.
 - **Split by complexity, not line count**: Split modules handling multiple concerns regardless of file size.
 - **Feature Folder-First (Rust)**: For medium/complex Rust features, create a dedicated feature folder (for example `session/cache/` or `graph/query/`) instead of expanding a single flat file. Prefer one folder per feature boundary, with sub-modules organized by responsibility.
 - **Namespace reflects intent**: Sub-module names should map to the feature (e.g. `graph/query.rs`).
+- **Avoid hierarchical naming redundancy**: Do not repeat parent namespace terms in child folder, file, type, or module names unless the repetition disambiguates a real collision. Prefer `graph/query/plan.rs` over `graph/query/query_plan.rs`.
 - **`mod.rs` is interface-only**: Re-export sub-modules only. No implementation logic.
 - **Visibility Control**: Use `pub(crate)` for internal communication; limit `pub` to public surfaces.
 

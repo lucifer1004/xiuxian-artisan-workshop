@@ -109,17 +109,15 @@ pub(crate) async fn build_code_search_response_with_budget(
         .await;
     let dispatch = collect_repo_search_targets(repo_ids, &publication_states);
     studio.search_plane.record_repo_search_dispatch(
-        dispatch.pending_repos.len()
-            + dispatch.skipped_repos.len()
-            + dispatch.searchable_repos.len(),
-        dispatch.searchable_repos.len(),
-        repo_search_parallelism(&studio.search_plane, dispatch.searchable_repos.len()),
+        dispatch.pending.len() + dispatch.skipped.len() + dispatch.searchable.len(),
+        dispatch.searchable.len(),
+        repo_search_parallelism(&studio.search_plane, dispatch.searchable.len()),
     );
-    let pending_repos = dispatch.pending_repos;
-    let skipped_repos = dispatch.skipped_repos;
+    let pending_repos = dispatch.pending;
+    let skipped_repos = dispatch.skipped;
     let buffered = search_repo_code_hits_buffered(
         studio.search_plane.clone(),
-        dispatch.searchable_repos,
+        dispatch.searchable,
         raw_query.as_str(),
         repo_search_result_limits(effective_repo_hint, limit),
         effective_repo_wide_budget,

@@ -1,4 +1,4 @@
-/// Default WendaoArrow package directory relative to the repository root.
+/// Default `WendaoArrow` package directory relative to the repository root.
 pub const DEFAULT_JULIA_ARROW_PACKAGE_DIR: &str = ".data/WendaoArrow.jl";
 
 /// Default Julia analyzer package directory relative to the repository root.

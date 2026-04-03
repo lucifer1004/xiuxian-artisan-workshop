@@ -11,6 +11,8 @@ mod index;
 mod knowledge;
 mod queries;
 mod references;
+#[cfg(feature = "julia")]
+mod sql;
 mod status;
 mod symbols;
 #[cfg(test)]

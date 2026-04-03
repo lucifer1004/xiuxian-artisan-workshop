@@ -81,7 +81,7 @@ pub fn wendao_plugin_artifact(
     _ctx: &ZhenfaContext,
     args: WendaoPluginArtifactArgs,
 ) -> Result<String, ZhenfaError> {
-    export_plugin_artifact(args)
+    export_plugin_artifact(&args)
 }
 
 /// Render the resolved plugin artifact as TOML.
@@ -131,7 +131,7 @@ pub fn render_plugin_artifact(
 /// # Errors
 ///
 /// Returns a [`ZhenfaError`] when serialization or file writing fails.
-pub fn export_plugin_artifact(args: WendaoPluginArtifactArgs) -> Result<String, ZhenfaError> {
+pub fn export_plugin_artifact(args: &WendaoPluginArtifactArgs) -> Result<String, ZhenfaError> {
     let selector = args.selector()?;
 
     if let Some(output_path) = args.output_path.as_deref() {

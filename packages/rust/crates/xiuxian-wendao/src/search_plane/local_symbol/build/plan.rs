@@ -15,7 +15,7 @@ pub(crate) fn plan_local_symbol_build(
     config_root: &Path,
     projects: &[UiProjectConfig],
     active_epoch: Option<u64>,
-    previous_fingerprints: BTreeMap<String, SearchFileFingerprint>,
+    previous_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
 ) -> LocalSymbolBuildPlan {
     let scanned_files = scan_symbol_project_files(project_root, config_root, projects);
     let file_fingerprints = scanned_files
@@ -56,7 +56,7 @@ pub(crate) fn plan_local_symbol_build(
             .replaced_paths
             .insert(file.normalized_path.clone());
     }
-    for (path, previous_fingerprint) in &previous_fingerprints {
+    for (path, previous_fingerprint) in previous_fingerprints {
         let current_fingerprint = file_fingerprints.get(path.as_str());
         if current_fingerprint.is_none() {
             if let Some(partition_id) = previous_fingerprint.partition_id.as_deref() {

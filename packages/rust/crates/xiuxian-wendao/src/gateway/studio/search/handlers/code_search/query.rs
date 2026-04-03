@@ -61,15 +61,15 @@ pub(crate) fn collect_repo_search_targets(
             },
         );
         if publication_state.is_searchable() {
-            dispatch.searchable_repos.push(RepoSearchTarget {
+            dispatch.searchable.push(RepoSearchTarget {
                 repo_id,
                 publication_state,
             });
             continue;
         }
         match publication_state.availability {
-            RepoSearchAvailability::Skipped => dispatch.skipped_repos.push(repo_id),
-            RepoSearchAvailability::Pending => dispatch.pending_repos.push(repo_id),
+            RepoSearchAvailability::Skipped => dispatch.skipped.push(repo_id),
+            RepoSearchAvailability::Pending => dispatch.pending.push(repo_id),
             RepoSearchAvailability::Searchable => {}
         }
     }

@@ -38,7 +38,7 @@ pub fn export_plugin_artifact_from_rpc_params(params: Value) -> Result<String, J
         ))
     })?;
 
-    export_plugin_artifact(request).map_err(|error: xiuxian_zhenfa::ZhenfaError| {
+    export_plugin_artifact(&request).map_err(|error: xiuxian_zhenfa::ZhenfaError| {
         JsonRpcErrorObject::new(
             INTERNAL_ERROR_CODE,
             "wendao plugin artifact export failed",

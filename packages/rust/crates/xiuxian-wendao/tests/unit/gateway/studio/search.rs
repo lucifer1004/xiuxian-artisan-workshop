@@ -1472,8 +1472,7 @@ async fn search_symbols_requires_query() {
             q: Some("   ".to_string()),
             limit: None,
         },
-    )
-    .await;
+    );
 
     let Err(error) = result else {
         panic!("expected missing-query symbol search to fail");
@@ -1520,8 +1519,7 @@ async fn search_symbols_returns_payload() {
             q: Some("alpha".to_string()),
             limit: Some(10),
         },
-    )
-    .await;
+    );
 
     let Ok(response) = result else {
         panic!("expected symbol search request to succeed");
@@ -1589,8 +1587,7 @@ async fn search_symbols_returns_pending_payload_while_index_is_warming() {
             q: Some("pending".to_string()),
             limit: Some(10),
         },
-    )
-    .await;
+    );
 
     let Ok(response) = result else {
         panic!("expected pending symbol search request to succeed");
@@ -1644,8 +1641,7 @@ async fn search_symbols_respects_glob_dir_filters() {
             q: Some("GlobFilteredSymbol".to_string()),
             limit: Some(10),
         },
-    )
-    .await;
+    );
 
     let Ok(response) = result else {
         panic!("expected glob-filtered symbol search to succeed");

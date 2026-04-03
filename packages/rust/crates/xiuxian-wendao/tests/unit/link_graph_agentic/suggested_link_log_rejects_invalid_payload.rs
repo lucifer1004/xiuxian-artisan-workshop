@@ -4,7 +4,7 @@ use super::*;
 fn test_suggested_link_log_rejects_invalid_payload() {
     let prefix = unique_prefix();
     let result = valkey_suggested_link_log_with_valkey(
-        LinkGraphSuggestedLinkRequest {
+        &LinkGraphSuggestedLinkRequest {
             source_id: String::new(),
             target_id: "docs/b.md".to_string(),
             relation: "related_to".to_string(),

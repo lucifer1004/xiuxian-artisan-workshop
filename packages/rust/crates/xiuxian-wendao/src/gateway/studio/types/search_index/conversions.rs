@@ -1,6 +1,6 @@
-use super::definitions::*;
+use super::definitions as search_index;
 
-impl From<crate::search_plane::SearchPlanePhase> for SearchIndexPhase {
+impl From<crate::search_plane::SearchPlanePhase> for search_index::SearchIndexPhase {
     fn from(value: crate::search_plane::SearchPlanePhase) -> Self {
         match value {
             crate::search_plane::SearchPlanePhase::Idle => Self::Idle,
@@ -12,7 +12,7 @@ impl From<crate::search_plane::SearchPlanePhase> for SearchIndexPhase {
     }
 }
 
-impl From<crate::search_plane::SearchCorpusIssueCode> for SearchIndexIssueCode {
+impl From<crate::search_plane::SearchCorpusIssueCode> for search_index::SearchIndexIssueCode {
     fn from(value: crate::search_plane::SearchCorpusIssueCode) -> Self {
         match value {
             crate::search_plane::SearchCorpusIssueCode::PublishedManifestMissing => {
@@ -29,7 +29,7 @@ impl From<crate::search_plane::SearchCorpusIssueCode> for SearchIndexIssueCode {
     }
 }
 
-impl From<crate::search_plane::SearchCorpusIssueFamily> for SearchIndexIssueFamily {
+impl From<crate::search_plane::SearchCorpusIssueFamily> for search_index::SearchIndexIssueFamily {
     fn from(value: crate::search_plane::SearchCorpusIssueFamily) -> Self {
         match value {
             crate::search_plane::SearchCorpusIssueFamily::Manifest => Self::Manifest,
@@ -40,7 +40,7 @@ impl From<crate::search_plane::SearchCorpusIssueFamily> for SearchIndexIssueFami
     }
 }
 
-impl From<&crate::search_plane::SearchCorpusIssue> for SearchIndexIssue {
+impl From<&crate::search_plane::SearchCorpusIssue> for search_index::SearchIndexIssue {
     fn from(value: &crate::search_plane::SearchCorpusIssue) -> Self {
         Self {
             code: value.code.into(),
@@ -53,7 +53,9 @@ impl From<&crate::search_plane::SearchCorpusIssue> for SearchIndexIssue {
     }
 }
 
-impl From<&crate::search_plane::SearchCorpusIssueSummary> for SearchIndexIssueSummary {
+impl From<&crate::search_plane::SearchCorpusIssueSummary>
+    for search_index::SearchIndexIssueSummary
+{
     fn from(value: &crate::search_plane::SearchCorpusIssueSummary) -> Self {
         Self {
             family: value.family.into(),
@@ -64,7 +66,9 @@ impl From<&crate::search_plane::SearchCorpusIssueSummary> for SearchIndexIssueSu
     }
 }
 
-impl From<crate::search_plane::SearchCorpusStatusSeverity> for SearchIndexStatusSeverity {
+impl From<crate::search_plane::SearchCorpusStatusSeverity>
+    for search_index::SearchIndexStatusSeverity
+{
     fn from(value: crate::search_plane::SearchCorpusStatusSeverity) -> Self {
         match value {
             crate::search_plane::SearchCorpusStatusSeverity::Info => Self::Info,
@@ -74,7 +78,7 @@ impl From<crate::search_plane::SearchCorpusStatusSeverity> for SearchIndexStatus
     }
 }
 
-impl From<crate::search_plane::SearchCorpusStatusAction> for SearchIndexStatusAction {
+impl From<crate::search_plane::SearchCorpusStatusAction> for search_index::SearchIndexStatusAction {
     fn from(value: crate::search_plane::SearchCorpusStatusAction) -> Self {
         match value {
             crate::search_plane::SearchCorpusStatusAction::Wait => Self::Wait,
@@ -85,7 +89,9 @@ impl From<crate::search_plane::SearchCorpusStatusAction> for SearchIndexStatusAc
     }
 }
 
-impl From<crate::search_plane::SearchCorpusStatusReasonCode> for SearchIndexStatusReasonCode {
+impl From<crate::search_plane::SearchCorpusStatusReasonCode>
+    for search_index::SearchIndexStatusReasonCode
+{
     fn from(value: crate::search_plane::SearchCorpusStatusReasonCode) -> Self {
         match value {
             crate::search_plane::SearchCorpusStatusReasonCode::WarmingUp => Self::WarmingUp,
@@ -112,7 +118,9 @@ impl From<crate::search_plane::SearchCorpusStatusReasonCode> for SearchIndexStat
     }
 }
 
-impl From<&crate::search_plane::SearchCorpusStatusReason> for SearchIndexStatusReason {
+impl From<&crate::search_plane::SearchCorpusStatusReason>
+    for search_index::SearchIndexStatusReason
+{
     fn from(value: &crate::search_plane::SearchCorpusStatusReason) -> Self {
         Self {
             code: value.code.into(),
@@ -123,7 +131,9 @@ impl From<&crate::search_plane::SearchCorpusStatusReason> for SearchIndexStatusR
     }
 }
 
-impl From<&crate::search_plane::SearchMaintenanceStatus> for SearchIndexMaintenanceStatus {
+impl From<&crate::search_plane::SearchMaintenanceStatus>
+    for search_index::SearchIndexMaintenanceStatus
+{
     fn from(value: &crate::search_plane::SearchMaintenanceStatus) -> Self {
         Self {
             prewarm_running: value.prewarm_running,
@@ -144,7 +154,9 @@ impl From<&crate::search_plane::SearchMaintenanceStatus> for SearchIndexMaintena
     }
 }
 
-impl From<&crate::search_plane::SearchRepoReadPressure> for SearchIndexRepoReadPressure {
+impl From<&crate::search_plane::SearchRepoReadPressure>
+    for search_index::SearchIndexRepoReadPressure
+{
     fn from(value: &crate::search_plane::SearchRepoReadPressure) -> Self {
         Self {
             budget: value.budget,
@@ -158,7 +170,9 @@ impl From<&crate::search_plane::SearchRepoReadPressure> for SearchIndexRepoReadP
     }
 }
 
-impl From<crate::search_plane::SearchQueryTelemetrySource> for SearchIndexQueryTelemetrySource {
+impl From<crate::search_plane::SearchQueryTelemetrySource>
+    for search_index::SearchIndexQueryTelemetrySource
+{
     fn from(value: crate::search_plane::SearchQueryTelemetrySource) -> Self {
         match value {
             crate::search_plane::SearchQueryTelemetrySource::Scan => Self::Scan,
@@ -170,7 +184,7 @@ impl From<crate::search_plane::SearchQueryTelemetrySource> for SearchIndexQueryT
     }
 }
 
-impl From<&crate::search_plane::SearchQueryTelemetry> for SearchIndexQueryTelemetry {
+impl From<&crate::search_plane::SearchQueryTelemetry> for search_index::SearchIndexQueryTelemetry {
     fn from(value: &crate::search_plane::SearchQueryTelemetry) -> Self {
         Self {
             captured_at: value.captured_at.clone(),
@@ -191,7 +205,7 @@ impl From<&crate::search_plane::SearchQueryTelemetry> for SearchIndexQueryTeleme
     }
 }
 
-impl From<&crate::search_plane::SearchCorpusStatus> for SearchCorpusIndexStatus {
+impl From<&crate::search_plane::SearchCorpusStatus> for search_index::SearchCorpusIndexStatus {
     fn from(value: &crate::search_plane::SearchCorpusStatus) -> Self {
         Self {
             corpus: value.corpus.to_string(),
@@ -207,20 +221,24 @@ impl From<&crate::search_plane::SearchCorpusStatus> for SearchCorpusIndexStatus 
             build_finished_at: value.build_finished_at.clone(),
             updated_at: value.updated_at.clone(),
             last_error: value.last_error.clone(),
-            issues: value.issues.iter().map(SearchIndexIssue::from).collect(),
+            issues: value
+                .issues
+                .iter()
+                .map(search_index::SearchIndexIssue::from)
+                .collect(),
             issue_summary: value
                 .issue_summary
                 .as_ref()
-                .map(SearchIndexIssueSummary::from),
+                .map(search_index::SearchIndexIssueSummary::from),
             status_reason: value
                 .status_reason
                 .as_ref()
-                .map(SearchIndexStatusReason::from),
+                .map(search_index::SearchIndexStatusReason::from),
             last_query_telemetry: value
                 .last_query_telemetry
                 .as_ref()
-                .map(SearchIndexQueryTelemetry::from),
-            maintenance: SearchIndexMaintenanceStatus::from(&value.maintenance),
+                .map(search_index::SearchIndexQueryTelemetry::from),
+            maintenance: search_index::SearchIndexMaintenanceStatus::from(&value.maintenance),
         }
     }
 }

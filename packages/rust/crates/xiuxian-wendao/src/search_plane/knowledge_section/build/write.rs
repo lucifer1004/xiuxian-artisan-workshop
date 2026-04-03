@@ -109,7 +109,7 @@ pub(crate) async fn publish_knowledge_sections_from_projects(
         }
     };
     let plan =
-        plan_knowledge_section_build(project_root, config_root, projects, None, BTreeMap::new());
+        plan_knowledge_section_build(project_root, config_root, projects, None, &BTreeMap::new());
     match write_knowledge_section_epoch(service, &lease, &plan).await {
         Ok(write) => {
             let prewarm_columns = projected_columns();

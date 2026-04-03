@@ -130,7 +130,7 @@ Host may still own:
 Current source boundary:
 
 - Julia-specific env-var defaults
-- `.data/WendaoArrow` and `.data/WendaoAnalyzer` package path conventions
+- `.data/WendaoArrow.jl` and `.data/WendaoAnalyzer.jl` package path conventions
 - Julia launch defaults that are currently host-side
 
 Target `xiuxian-wendao-julia` ownership:
@@ -243,7 +243,8 @@ Current implementation status:
    `runtime_config/constants.rs`
 9. the host runtime/tests and integration fixtures now consume those
    Julia-owned path defaults instead of embedding raw
-   `.data/WendaoAnalyzer/...` literals across the touched `M4` seams
+   `.data/WendaoAnalyzer.jl/...` or `.data/WendaoArrow.jl/...` literals
+   across the touched `M4` seams
 10. `xiuxian-wendao-julia::compatibility::link_graph` now also owns
     `LinkGraphJuliaRerankRuntimeConfig` and its provider-binding / launch /
     artifact normalization methods through `runtime.rs`
@@ -256,6 +257,105 @@ Current implementation status:
     batch validation live in `xiuxian-wendao-julia`, while
     `xiuxian-wendao-runtime` stays limited to reusable Flight client and route
     normalization helpers
+13. the next graph-search dispatch layer now follows that same rule too:
+    Julia-specific repository option parsing for `graph_structural_transport`,
+    graph-structural route-kind defaults, and request or response dispatch
+    helpers live in `xiuxian-wendao-julia` instead of being reintroduced into
+    `xiuxian-wendao-runtime`
+14. the typed graph-search exchange surface now follows that rule as well:
+    request-row structs, response-row structs, Arrow batch builders, Arrow
+    batch decoders, and repository-scoped fetch helpers for structural rerank
+    or constraint filter live in `xiuxian-wendao-julia`, while
+    `xiuxian-wendao` keeps at most a thin plugin consumption seam
+15. the semantic projection layer above those row types now also follows the
+    same rule: normalized query-anchor DTOs, candidate-subgraph DTOs, rerank
+    signal DTOs, and filter-constraint DTOs for graph-structural requests live
+    in `xiuxian-wendao-julia` so the host does not have to manually align
+    request-list columns
+16. the current host-side proof also follows that rule: a real
+    `LinkGraphIndex` agentic-expansion pair is projected into
+    Julia-owned graph-structural DTOs and a validated request batch from a
+    test-only consumption seam, without adding a second production adapter to
+    `xiuxian-wendao`
+17. the pair-specific projection helpers above that proof now also follow the
+    same rule: stable pair candidate id normalization, pair candidate-subgraph
+    construction, and pair-to-request-row projection live in
+    `xiuxian-wendao-julia`, so the host no longer rebuilds two-node candidate
+    ids or candidate-subgraph wrappers by hand
+18. the next simple request-semantics layer also follows that same rule:
+    keyword-or-tag query-context builders and binary keyword-or-tag rerank
+    signal builders live in `xiuxian-wendao-julia`, so the host no longer
+    manually constructs those anchors or maps boolean plane matches to staged
+    score columns
+19. the convenience layer above those helpers now also follows that same rule:
+    combined keyword-or-tag pair-rerank request-row builders live in
+    `xiuxian-wendao-julia`, so the host no longer manually composes
+    `query context -> rerank signals -> pair rerank row` in sequence
+20. the shared-tag overlap discovery step now also follows that same rule:
+    normalized shared-tag anchor extraction and overlap-aware combined
+    pair-rerank helpers live in `xiuxian-wendao-julia`, so the host no longer
+    computes tag overlap before calling the plugin-owned request builder
+21. the next metadata projection seam now also follows that same rule:
+    plugin-owned node-metadata input bundles and a metadata-aware overlap
+    helper live in `xiuxian-wendao-julia`, so the host no longer threads raw
+    tag vectors directly into the staged request-row builder
+22. the next row-to-batch assembly seam now also follows that same rule:
+    scored metadata-aware rerank input bundles and a metadata-aware rerank
+    batch helper live in `xiuxian-wendao-julia`, so the host no longer builds
+    `Vec<GraphStructuralRerankRequestRow>` before Arrow batch materialization
+23. the next higher-level candidate-input seam now also follows that same
+    rule: single-bundle keyword-overlap request inputs and a candidate-input
+    batch helper live in `xiuxian-wendao-julia`, so the host no longer
+    composes query-input, metadata-input, pair-input, and scored-rerank-input
+    bundles by hand for each pair
+24. the next shared-query and candidate-bundle seam now also follows that
+    same rule: one shared keyword-overlap query bundle, one plugin-owned
+    per-pair candidate bundle, and the query-plus-candidate batch helper live
+    in
+    `xiuxian-wendao-julia`, so the host no longer constructs higher-level
+    request-input bundles by hand before staging the Arrow batch
+25. the next repository-fetch seam now also follows that same rule: the
+    query-plus-candidate rerank fetch helper lives in
+    `xiuxian-wendao-julia`, so a host caller with those plugin-owned DTOs no
+    longer needs to materialize Arrow batches before dispatching the
+    repository-configured structural-rerank request, and the host only
+    re-exports that helper through its thin language seam; the bounded host
+    proof now calls that public helper directly instead of stopping at batch
+    projection, and it imports the graph-structural surface through
+    `xiuxian_wendao::analyzers::languages`
+26. the next raw-to-candidate staging seam now also follows that same rule:
+    `build_graph_structural_keyword_overlap_candidate_inputs(...)` lives in
+    `xiuxian-wendao-julia`, so the host no longer manually constructs
+    `GraphStructuralNodeMetadataInputs`,
+    `GraphStructuralKeywordOverlapCandidateInputs` before calling the
+    plugin-owned request-batch or repository-fetch helpers
+27. the next raw-to-query staging seam now also follows that same rule:
+    `build_graph_structural_keyword_overlap_query_inputs(...)` lives in
+    `xiuxian-wendao-julia`, so the host no longer manually constructs
+    `GraphStructuralKeywordOverlapQueryInputs` before calling the plugin-owned
+    request-batch or repository-fetch helpers
+28. the next raw-to-pair staging seam now also follows that same rule:
+    `build_graph_structural_pair_candidate_inputs(...)` lives in
+    `xiuxian-wendao-julia`, so the host no longer manually constructs
+    `GraphStructuralPairCandidateInputs` before calling the plugin-owned
+    request-batch or repository-fetch helpers
+29. the next raw pair-metadata-to-candidate staging seam now also follows
+    that same rule:
+    `build_graph_structural_keyword_overlap_pair_candidate_inputs_from_raw(...)`
+    lives in `xiuxian-wendao-julia`, so the host no longer manually composes
+    `build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(...)`
+    and `build_graph_structural_keyword_overlap_candidate_inputs(...)` before
+    calling the plugin-owned request-batch or repository-fetch helpers
+30. the next raw-candidate collection batch or fetch seam now also follows
+    that same rule:
+    `GraphStructuralKeywordOverlapRawCandidateInputs`,
+    `build_graph_structural_keyword_overlap_raw_candidate_inputs(...)`,
+    `build_graph_structural_keyword_overlap_pair_rerank_request_batch_from_raw_candidates(...)`,
+    and
+    `fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(...)`
+    live in `xiuxian-wendao-julia`, so the host no longer manually normalizes
+    each raw candidate before calling the plugin-owned request-batch or
+    repository-fetch helpers
 
 ## Compatibility Plan
 

@@ -29,17 +29,17 @@ pub fn build_code_ast_analysis_response(
 
     // Convert modules to nodes
     for module in &analysis.modules {
-        let line = Some(1usize);
+        let line = 1usize;
         nodes.push(CodeAstNode {
             id: module.module_id.clone(),
             label: module.qualified_name.clone(),
             kind: CodeAstNodeKind::Module,
             path: Some(module.path.clone()),
-            line,
+            line: Some(line),
         });
         let content = format!("{}|{}", module.qualified_name, module.path);
-        let declaration_locator = format!("l{}", line.unwrap_or(0));
-        let symbol_locator = format!("{}-l{}", module.qualified_name, line.unwrap_or(0));
+        let declaration_locator = format!("l{line}");
+        let symbol_locator = format!("{}-l{line}", module.qualified_name);
         retrieval_atoms.push(build_code_ast_retrieval_atom(
             module.module_id.as_str(),
             module.path.as_str(),
@@ -110,14 +110,14 @@ pub fn build_code_ast_analysis_response(
         ));
     }
 
-    if let Some(primary_symbol) = focus_symbol_for_blocks(line_hint, analysis, path.as_str()) {
-        if let Some(content) = source_content {
-            retrieval_atoms.extend(build_code_block_retrieval_atoms(
-                path.as_str(),
-                primary_symbol.line_start,
-                content,
-            ));
-        }
+    if let Some(primary_symbol) = focus_symbol_for_blocks(line_hint, analysis, path.as_str())
+        && let Some(content) = source_content
+    {
+        retrieval_atoms.extend(build_code_block_retrieval_atoms(
+            path.as_str(),
+            primary_symbol.line_start,
+            content,
+        ));
     }
 
     // Convert relations to edges

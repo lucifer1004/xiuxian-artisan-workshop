@@ -141,7 +141,7 @@ impl SearchRepoPublicationRecord {
             .unwrap_or_else(|| build_repo_publication_epoch(self.publication_id.as_str()))
     }
 
-    /// Whether this publication is readable by the new DataFusion execution engine.
+    /// Whether this publication is readable by the new `DataFusion` execution engine.
     #[must_use]
     pub fn is_datafusion_readable(&self) -> bool {
         matches!(self.storage_format, SearchPublicationStorageFormat::Parquet)

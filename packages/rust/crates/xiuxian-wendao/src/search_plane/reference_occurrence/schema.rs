@@ -18,7 +18,7 @@ const COLUMN_COLUMN: &str = "column";
 const COLUMN_LINE_TEXT: &str = "line_text";
 const COLUMN_HIT_JSON: &str = "hit_json";
 
-pub(super) fn reference_occurrence_schema() -> Arc<LanceSchema> {
+pub(crate) fn reference_occurrence_schema() -> Arc<LanceSchema> {
     Arc::new(LanceSchema::new(vec![
         LanceField::new(COLUMN_ID, LanceDataType::Utf8, false),
         LanceField::new(COLUMN_NAME, LanceDataType::Utf8, false),
@@ -31,7 +31,7 @@ pub(super) fn reference_occurrence_schema() -> Arc<LanceSchema> {
     ]))
 }
 
-pub(super) fn reference_occurrence_batches(
+pub(crate) fn reference_occurrence_batches(
     hits: &[ReferenceSearchHit],
 ) -> Result<Vec<LanceRecordBatch>, VectorStoreError> {
     hits.chunks(CHUNK_SIZE)

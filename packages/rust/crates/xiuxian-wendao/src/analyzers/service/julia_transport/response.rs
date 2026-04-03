@@ -17,7 +17,7 @@ use super::schema::{
     JULIA_ARROW_TRACE_ID_COLUMN,
 };
 
-/// One typed row materialized from the WendaoArrow plugin response contract.
+/// One typed row materialized from the `WendaoArrow` plugin response contract.
 #[cfg(feature = "julia")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct PluginArrowScoreRow {
@@ -36,7 +36,7 @@ pub struct PluginArrowScoreRow {
 /// # Errors
 ///
 /// Returns [`RepoIntelligenceError`] when the response batch shape does not
-/// match the WendaoArrow `v1` response contract.
+/// match the `WendaoArrow` `v1` response contract.
 #[cfg(feature = "julia")]
 pub fn decode_plugin_arrow_score_rows(
     batches: &[RecordBatch],
@@ -110,7 +110,7 @@ pub type JuliaArrowScoreRow = PluginArrowScoreRow;
 /// # Errors
 ///
 /// Returns [`RepoIntelligenceError`] when the response batch shape does not
-/// match the WendaoArrow `v1` response contract.
+/// match the `WendaoArrow` `v1` response contract.
 #[cfg(feature = "julia")]
 pub fn decode_julia_arrow_score_rows(
     batches: &[RecordBatch],

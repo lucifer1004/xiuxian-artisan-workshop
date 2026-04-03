@@ -24,7 +24,7 @@ fn test_suggested_link_decide_promoted_with_audit() -> Result<(), Box<dyn std::e
     }
 
     let entry = valkey_suggested_link_log_with_valkey(
-        LinkGraphSuggestedLinkRequest {
+        &LinkGraphSuggestedLinkRequest {
             source_id: "docs/a.md".to_string(),
             target_id: "docs/b.md".to_string(),
             relation: "implements".to_string(),
@@ -41,7 +41,7 @@ fn test_suggested_link_decide_promoted_with_audit() -> Result<(), Box<dyn std::e
     .map_err(|err| err.to_string())?;
 
     let result = valkey_suggested_link_decide_with_valkey(
-        LinkGraphSuggestedLinkDecisionRequest {
+        &LinkGraphSuggestedLinkDecisionRequest {
             suggestion_id: entry.suggestion_id.clone(),
             target_state: LinkGraphSuggestedLinkState::Promoted,
             decided_by: "omega-gate".to_string(),

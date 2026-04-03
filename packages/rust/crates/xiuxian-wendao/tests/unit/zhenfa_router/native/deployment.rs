@@ -166,7 +166,7 @@ service_mode = "stream"
     set_link_graph_wendao_config_override(&config_path_string);
 
     let output_path = temp.path().join("exports").join("plugin-artifact.json");
-    let message = export_plugin_artifact(WendaoPluginArtifactArgs {
+    let message = export_plugin_artifact(&WendaoPluginArtifactArgs {
         plugin_id: JULIA_PLUGIN_ID.to_string(),
         artifact_id: JULIA_DEPLOYMENT_ARTIFACT_ID.to_string(),
         output_format: WendaoPluginArtifactOutputFormat::Json,

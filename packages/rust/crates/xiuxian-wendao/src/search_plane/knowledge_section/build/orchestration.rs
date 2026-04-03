@@ -53,7 +53,7 @@ pub(crate) fn ensure_knowledge_section_index_started(
                         build_config_root.as_path(),
                         &build_projects,
                         active_epoch,
-                        previous_fingerprints,
+                        &previous_fingerprints,
                     )
                 })
                 .await;
@@ -117,7 +117,7 @@ pub(super) fn plan_knowledge_section_build(
     config_root: &Path,
     projects: &[UiProjectConfig],
     active_epoch: Option<u64>,
-    previous_fingerprints: BTreeMap<String, SearchFileFingerprint>,
+    previous_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
 ) -> KnowledgeSectionBuildPlan {
     let scanned_files = scan_note_project_files(project_root, config_root, projects);
     let file_fingerprints = scanned_files

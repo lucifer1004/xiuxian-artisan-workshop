@@ -98,7 +98,7 @@ rayon = "1.11"
 unicode-normalization = "0.1"
 
 arrow = { workspace = true }
-arrow-flight = "57.3.0"
+arrow-flight = { workspace = true }
 tonic = { version = "0.14.5", default-features = false, features = ["transport"] }
 tonic-web = "0.14"
 

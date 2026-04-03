@@ -29,7 +29,7 @@ pub enum VectorStoreError {
     #[error("Arrow engine error: {0}")]
     ArrowEngine(#[from] arrow::error::ArrowError),
 
-    /// DataFusion error
+    /// `DataFusion` error
     #[error("DataFusion error: {0}")]
     DataFusion(#[from] DataFusionError),
 

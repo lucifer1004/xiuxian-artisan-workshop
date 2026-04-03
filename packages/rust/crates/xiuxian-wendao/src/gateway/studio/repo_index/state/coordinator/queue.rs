@@ -11,6 +11,7 @@ use crate::gateway::studio::repo_index::state::task::{RepoIndexTask, RepoIndexTa
 
 impl RepoIndexCoordinator {
     pub(crate) fn sync_repositories(&self, repositories: Vec<RegisteredRepository>) -> Vec<String> {
+        self.hydrate_repositories_from_search_plane(repositories.as_slice());
         let active_ids = repositories
             .iter()
             .map(|repository| repository.id.clone())

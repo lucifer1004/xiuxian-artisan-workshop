@@ -7,7 +7,7 @@ use crate::gateway::studio::types::{
     AnalysisNodeKind, MarkdownRetrievalAtom, RetrievalChunkSurface,
 };
 
-impl<'a> MarkdownCompiler<'a> {
+impl MarkdownCompiler<'_> {
     pub(crate) fn finalize_section_ranges(&mut self) {
         let document_end = self.content.lines().count().max(1);
         let section_indexes = self
@@ -23,8 +23,7 @@ impl<'a> MarkdownCompiler<'a> {
             let next_line_start = section_indexes
                 .get(position + 1)
                 .and_then(|next_index| self.nodes.get(*next_index))
-                .map(|node| node.line_start)
-                .unwrap_or(document_end + 1);
+                .map_or(document_end + 1, |node| node.line_start);
             let current_line_start = self.nodes[index].line_start;
             self.nodes[index].line_end = next_line_start.saturating_sub(1).max(current_line_start);
         }

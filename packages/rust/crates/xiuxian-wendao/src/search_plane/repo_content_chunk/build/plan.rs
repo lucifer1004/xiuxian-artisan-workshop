@@ -4,6 +4,7 @@ use crate::gateway::studio::repo_index::RepoCodeDocument;
 use crate::search_plane::repo_content_chunk::build::types::{
     REPO_CONTENT_CHUNK_EXTRACTOR_VERSION, RepoContentChunkBuildPlan,
 };
+use crate::search_plane::repo_staging::{RepoStagedMutationConfig, RepoStagedMutationPayload};
 use crate::search_plane::{
     SearchCorpusKind, SearchFileFingerprint, SearchPlaneService, plan_repo_staged_mutation,
 };
@@ -13,7 +14,7 @@ pub(crate) fn plan_repo_content_chunk_build(
     documents: &[RepoCodeDocument],
     source_revision: Option<&str>,
     previous_publication: Option<&crate::search_plane::SearchRepoPublicationRecord>,
-    previous_fingerprints: BTreeMap<String, SearchFileFingerprint>,
+    previous_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
 ) -> RepoContentChunkBuildPlan {
     let file_fingerprints = documents
         .iter()
@@ -47,18 +48,22 @@ pub(crate) fn plan_repo_content_chunk_build(
         .collect::<BTreeSet<_>>();
 
     plan_repo_staged_mutation(
-        repo_id,
-        SearchPlaneService::repo_content_chunk_table_name(repo_id).as_str(),
-        SearchCorpusKind::RepoContentChunk,
-        REPO_CONTENT_CHUNK_EXTRACTOR_VERSION,
-        source_revision,
-        previous_publication,
-        previous_fingerprints,
-        file_fingerprints,
-        documents.to_vec(),
-        changed_documents,
-        changed_paths,
-        deleted_paths,
+        RepoStagedMutationConfig {
+            repo_id,
+            table_name_prefix: SearchPlaneService::repo_content_chunk_table_name(repo_id).as_str(),
+            corpus: SearchCorpusKind::RepoContentChunk,
+            extractor_version: REPO_CONTENT_CHUNK_EXTRACTOR_VERSION,
+            source_revision,
+            previous_publication,
+            previous_fingerprints,
+        },
+        RepoStagedMutationPayload {
+            file_fingerprints,
+            replace_payload: documents.to_vec(),
+            changed_payload: changed_documents,
+            changed_paths,
+            deleted_paths,
+        },
     )
 }
 

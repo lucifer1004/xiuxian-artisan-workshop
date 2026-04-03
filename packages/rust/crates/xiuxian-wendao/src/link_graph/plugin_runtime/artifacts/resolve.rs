@@ -50,7 +50,9 @@ fn attach_plugin_artifact_transport_diagnostics(
             let selection = transport.selection();
             artifact.selected_transport = Some(selection.selected_transport);
             artifact.fallback_from = selection.fallback_from;
-            artifact.fallback_reason = selection.fallback_reason.clone();
+            artifact
+                .fallback_reason
+                .clone_from(&selection.fallback_reason);
         }
         Ok(None) => {
             artifact.fallback_from = Some(binding.transport);

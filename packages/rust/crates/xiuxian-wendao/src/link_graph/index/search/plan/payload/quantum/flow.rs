@@ -24,6 +24,13 @@ type SemanticIgnitionOutcome = Result<
     String,
 >;
 
+struct QuantumContextRuntimeRequest<'a> {
+    query_text: &'a str,
+    query_vector: &'a [f32],
+    retrieval_plan: &'a LinkGraphRetrievalPlanRecord,
+    rerank_binding: Option<&'a PluginCapabilityBinding>,
+}
+
 impl LinkGraphIndex {
     pub(crate) async fn enrich_planned_payload_with_quantum_contexts(
         &self,
@@ -74,10 +81,12 @@ impl LinkGraphIndex {
                 self.quantum_contexts_from_vector_store_runtime(
                     store,
                     table_name,
-                    payload.query.as_str(),
-                    query_vector,
-                    retrieval_plan,
-                    rerank_binding.as_ref(),
+                    QuantumContextRuntimeRequest {
+                        query_text: payload.query.as_str(),
+                        query_vector,
+                        retrieval_plan,
+                        rerank_binding: rerank_binding.as_ref(),
+                    },
                 )
                 .await
             }
@@ -86,10 +95,12 @@ impl LinkGraphIndex {
                     store,
                     &runtime.semantic_ignition,
                     table_name,
-                    payload.query.as_str(),
-                    query_vector,
-                    retrieval_plan,
-                    rerank_binding.as_ref(),
+                    QuantumContextRuntimeRequest {
+                        query_text: payload.query.as_str(),
+                        query_vector,
+                        retrieval_plan,
+                        rerank_binding: rerank_binding.as_ref(),
+                    },
                 )
                 .await
             }
@@ -102,19 +113,16 @@ impl LinkGraphIndex {
         &self,
         store: VectorStore,
         table_name: &str,
-        query_text: &str,
-        query_vector: &[f32],
-        retrieval_plan: &LinkGraphRetrievalPlanRecord,
-        rerank_binding: Option<&PluginCapabilityBinding>,
+        request: QuantumContextRuntimeRequest<'_>,
     ) -> SemanticIgnitionOutcome {
         let ignition = VectorStoreSemanticIgnition::new(store, table_name);
         let backend_name = ignition.backend_name().to_string();
         let mut contexts = self
             .quantum_contexts_from_retrieval_plan(
                 &ignition,
-                Some(query_text),
-                query_vector,
-                Some(retrieval_plan),
+                Some(request.query_text),
+                request.query_vector,
+                Some(request.retrieval_plan),
                 None,
                 &QuantumFusionOptions::default(),
             )
@@ -122,10 +130,10 @@ impl LinkGraphIndex {
             .map_err(|error| error.to_string())?;
         let telemetry = apply_vector_store_plugin_rerank(
             &ignition,
-            rerank_binding,
-            query_text,
-            query_vector,
-            retrieval_plan,
+            request.rerank_binding,
+            request.query_text,
+            request.query_vector,
+            request.retrieval_plan,
             &mut contexts,
         )
         .await;
@@ -137,10 +145,7 @@ impl LinkGraphIndex {
         store: VectorStore,
         config: &LinkGraphSemanticIgnitionRuntimeConfig,
         table_name: &str,
-        query_text: &str,
-        query_vector: &[f32],
-        retrieval_plan: &LinkGraphRetrievalPlanRecord,
-        rerank_binding: Option<&PluginCapabilityBinding>,
+        request: QuantumContextRuntimeRequest<'_>,
     ) -> SemanticIgnitionOutcome {
         let Some(embedding_base_url) = config.embedding_base_url.as_deref() else {
             return Err(
@@ -157,9 +162,9 @@ impl LinkGraphIndex {
         let mut contexts = self
             .quantum_contexts_from_retrieval_plan(
                 &ignition,
-                Some(query_text),
-                query_vector,
-                Some(retrieval_plan),
+                Some(request.query_text),
+                request.query_vector,
+                Some(request.retrieval_plan),
                 None,
                 &QuantumFusionOptions::default(),
             )
@@ -167,9 +172,9 @@ impl LinkGraphIndex {
             .map_err(|error| error.to_string())?;
         let telemetry = apply_openai_plugin_rerank(
             &ignition,
-            rerank_binding,
-            query_text,
-            retrieval_plan,
+            request.rerank_binding,
+            request.query_text,
+            request.retrieval_plan,
             &mut contexts,
         )
         .await;

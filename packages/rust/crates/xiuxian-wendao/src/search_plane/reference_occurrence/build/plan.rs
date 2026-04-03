@@ -15,7 +15,7 @@ pub(crate) fn plan_reference_occurrence_build(
     config_root: &Path,
     projects: &[UiProjectConfig],
     active_epoch: Option<u64>,
-    previous_fingerprints: BTreeMap<String, SearchFileFingerprint>,
+    previous_fingerprints: &BTreeMap<String, SearchFileFingerprint>,
 ) -> ReferenceOccurrenceBuildPlan {
     let scanned_files = scan_source_project_files(project_root, config_root, projects);
     let file_fingerprints = scanned_files

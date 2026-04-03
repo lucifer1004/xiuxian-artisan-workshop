@@ -28,7 +28,8 @@ pub use operators::{
     RetrievalCorpus, VectorSearchOp,
 };
 pub use service::{
-    RepoCodeQueryRelation, RepoEntityTypedResultsContract, query_graph_neighbors_projection,
+    RepoCodeQueryPolicy, RepoCodeQueryRelation, RepoCodeQueryRequest,
+    RepoEntityTypedResultsContract, RepoRetrievalQuery, query_graph_neighbors_projection,
     query_graph_neighbors_relation, query_repo_code_relation, query_repo_content_relation,
     query_repo_entity_example_results_if_published, query_repo_entity_import_results_if_published,
     query_repo_entity_module_results_if_published, query_repo_entity_relation,

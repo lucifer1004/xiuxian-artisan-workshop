@@ -17,7 +17,7 @@ use crate::gateway::studio::types::{
 use super::queries::SymbolSearchQuery;
 use crate::gateway::studio::search::project_scope::project_metadata_for_path;
 
-pub(crate) async fn load_symbol_search_response(
+pub(crate) fn load_symbol_search_response(
     state: &GatewayState,
     query: SymbolSearchQuery,
 ) -> Result<SymbolSearchResponse, StudioApiError> {
@@ -85,11 +85,11 @@ pub(crate) async fn load_symbol_search_response(
     })
 }
 
-pub(crate) async fn load_symbol_search_flight_response(
-    state: Arc<GatewayState>,
+pub(crate) fn load_symbol_search_flight_response(
+    state: &GatewayState,
     query: SymbolSearchQuery,
 ) -> Result<SearchFlightRouteResponse, StudioApiError> {
-    let response = load_symbol_search_response(state.as_ref(), query).await?;
+    let response = load_symbol_search_response(state, query)?;
     let app_metadata = serde_json::to_vec(&response).map_err(|error| {
         StudioApiError::internal(
             "SEARCH_SYMBOL_FLIGHT_METADATA_ENCODE_FAILED",

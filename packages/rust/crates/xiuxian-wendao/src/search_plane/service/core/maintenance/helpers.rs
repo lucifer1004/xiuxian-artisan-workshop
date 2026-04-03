@@ -20,7 +20,7 @@ pub(super) fn repo_active_epoch(
             record
                 .publication
                 .as_ref()
-                .map(|publication| publication.active_epoch_value())
+                .map(crate::search_plane::SearchRepoPublicationRecord::active_epoch_value)
         })
         .collect::<Vec<_>>();
     if publication_epochs.is_empty() {

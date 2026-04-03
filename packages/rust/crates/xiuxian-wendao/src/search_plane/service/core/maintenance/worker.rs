@@ -45,17 +45,14 @@ impl SearchPlaneService {
                     runtime.worker_handle = None;
                     break;
                 }
-                match runtime.queue.pop_front() {
-                    Some(queued) => {
-                        runtime.active_task = Some(queued.task.task_key());
-                        queued
-                    }
-                    None => {
-                        runtime.active_task = None;
-                        runtime.worker_running = false;
-                        runtime.worker_handle = None;
-                        break;
-                    }
+                if let Some(queued) = runtime.queue.pop_front() {
+                    runtime.active_task = Some(queued.task.task_key());
+                    queued
+                } else {
+                    runtime.active_task = None;
+                    runtime.worker_running = false;
+                    runtime.worker_handle = None;
+                    break;
                 }
             };
             let task_key = queued.task.task_key();
@@ -68,7 +65,7 @@ impl SearchPlaneService {
             {
                 self.complete_repo_maintenance_task(
                     &task_key,
-                    Err("failed to mark repo compaction as running".to_string()),
+                    &Err("failed to mark repo compaction as running".to_string()),
                 );
                 continue;
             }
@@ -80,7 +77,7 @@ impl SearchPlaneService {
                 self.stop_repo_prewarm(task.corpus, task.repo_id.as_str())
                     .await;
             }
-            self.complete_repo_maintenance_task(&task_key, result);
+            self.complete_repo_maintenance_task(&task_key, &result);
         }
     }
 
@@ -98,7 +95,7 @@ impl SearchPlaneService {
             Err(_) => {
                 self.complete_repo_maintenance_task(
                     task_key,
-                    Err("repo maintenance worker dropped before completing task".to_string()),
+                    &Err("repo maintenance worker dropped before completing task".to_string()),
                 );
                 Err(VectorStoreError::General(
                     "repo maintenance worker dropped before completing task".to_string(),
@@ -110,7 +107,7 @@ impl SearchPlaneService {
     pub(crate) fn complete_repo_maintenance_task(
         &self,
         task_key: &RepoMaintenanceTaskKey,
-        result: RepoMaintenanceTaskResult,
+        result: &RepoMaintenanceTaskResult,
     ) {
         let waiters = {
             let mut runtime = self

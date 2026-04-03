@@ -23,7 +23,7 @@ use crate::analyzers::records::{
     DocRecord, ExampleRecord, ModuleRecord, RelationKind, RelationRecord, RepoSymbolKind,
     RepositoryRecord, SymbolRecord,
 };
-use crate::gateway::studio::types::SearchBacklinkItem;
+use crate::gateway::studio::types::{SearchBacklinkItem, SearchHit};
 
 #[test]
 fn projected_columns_and_accessors_match_the_schema_layout() {
@@ -134,6 +134,34 @@ fn rows_from_analysis_preserve_structured_symbol_payload_fields() {
     assert!(symbol_row.projection_page_ids.contains(
         &"repo:BaseModelica:projection:reference:symbol:symbol:BaseModelica.solve".to_string()
     ));
+}
+
+#[test]
+fn rows_from_analysis_builds_example_rows_with_projected_hit_payload() {
+    let rows = rows_from_analysis("BaseModelica", &sample_analysis()).unwrap();
+    let example_row = rows
+        .iter()
+        .find(|row| row.id == "example:BaseModelica.solve")
+        .unwrap();
+    let hit: SearchHit = serde_json::from_str(example_row.hit_json.as_str()).unwrap();
+
+    assert_eq!(example_row.entity_kind, "example");
+    assert_eq!(example_row.line_start, Some(1));
+    assert_eq!(example_row.line_end, None);
+    assert_eq!(
+        example_row.hierarchical_uri.as_deref(),
+        Some(
+            "wendao://repo/msl/BaseModelica/examples/examples:solve.jl/example:BaseModelica.solve"
+        )
+    );
+    assert_eq!(hit.doc_type.as_deref(), Some("example"));
+    assert_eq!(hit.match_reason.as_deref(), Some("repo_example_search"));
+    assert_eq!(
+        hit.navigation_target
+            .as_ref()
+            .map(|target| target.path.as_str()),
+        Some("BaseModelica/examples/solve.jl")
+    );
 }
 
 #[test]

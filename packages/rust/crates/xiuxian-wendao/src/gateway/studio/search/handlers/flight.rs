@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use xiuxian_wendao_runtime::transport::{
     RepoSearchFlightRouteProvider, RerankScoreWeights, SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE,
     SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE, SearchFlightRouteProvider,
-    SearchFlightRouteResponse, WendaoFlightService,
+    SearchFlightRouteResponse, WendaoFlightRouteProviders, WendaoFlightService,
 };
 #[cfg(not(feature = "julia"))]
 use xiuxian_wendao_runtime::transport::{
@@ -29,6 +29,8 @@ use super::knowledge::intent::flight::load_intent_search_flight_response;
 use super::knowledge::load_knowledge_search_flight_response;
 use super::queries::{ReferenceSearchQuery, SymbolSearchQuery};
 use super::references::load_reference_search_flight_response;
+#[cfg(feature = "julia")]
+use super::sql::StudioSqlFlightRouteProvider;
 use super::symbols::load_symbol_search_flight_response;
 
 /// Studio-backed aggregate Flight provider for the currently-aligned semantic
@@ -103,13 +105,12 @@ impl SearchFlightRouteProvider for StudioSearchFlightRouteProvider {
                 )
             }),
             SEARCH_SYMBOLS_ROUTE => load_symbol_search_flight_response(
-                Arc::clone(&self.state),
+                self.state.as_ref(),
                 SymbolSearchQuery {
                     q: Some(query_text.to_string()),
                     limit: Some(limit),
                 },
             )
-            .await
             .map_err(|error| {
                 format!(
                     "studio aggregate Flight provider failed to build symbol response for `{query_text}`: {error:?}"
@@ -126,40 +127,45 @@ impl SearchFlightRouteProvider for StudioSearchFlightRouteProvider {
 pub(crate) fn build_studio_search_flight_service_with_repo_provider(
     expected_schema_version: impl Into<String>,
     repo_search_provider: Arc<dyn RepoSearchFlightRouteProvider>,
-    state: Arc<GatewayState>,
+    state: impl Into<Arc<GatewayState>>,
     rerank_dimension: usize,
     rerank_weights: RerankScoreWeights,
 ) -> Result<WendaoFlightService, String> {
-    WendaoFlightService::new_with_route_providers(
+    let state = state.into();
+    let mut route_providers = WendaoFlightRouteProviders::new(repo_search_provider);
+    route_providers.search = Some(Arc::new(StudioSearchFlightRouteProvider::new(Arc::clone(
+        &state,
+    ))));
+    route_providers.attachment_search = Some(Arc::new(
+        StudioAttachmentSearchFlightRouteProvider::new(Arc::clone(&state.studio)),
+    ));
+    route_providers.ast_search = Some(Arc::new(StudioAstSearchFlightRouteProvider::new(
+        Arc::clone(&state),
+    )));
+    route_providers.definition = Some(Arc::new(StudioDefinitionFlightRouteProvider::new(
+        Arc::clone(&state.studio),
+    )));
+    route_providers.autocomplete = Some(Arc::new(StudioAutocompleteFlightRouteProvider::new(
+        Arc::clone(&state.studio),
+    )));
+    route_providers.markdown_analysis = Some(Arc::new(
+        StudioMarkdownAnalysisFlightRouteProvider::new(Arc::clone(&state)),
+    ));
+    route_providers.code_ast_analysis = Some(Arc::new(
+        StudioCodeAstAnalysisFlightRouteProvider::new(Arc::clone(&state)),
+    ));
+    route_providers.vfs_resolve = Some(Arc::new(StudioVfsResolveFlightRouteProvider::new(
+        Arc::clone(&state.studio),
+    )));
+    route_providers.graph_neighbors = Some(Arc::new(StudioGraphNeighborsFlightRouteProvider::new(
+        Arc::clone(&state),
+    )));
+    route_providers.sql = Some(Arc::new(StudioSqlFlightRouteProvider::new(
+        state.studio.search_plane_service(),
+    )));
+    WendaoFlightService::new_with_route_providers_and_sql(
         expected_schema_version,
-        repo_search_provider,
-        Some(Arc::new(StudioSearchFlightRouteProvider::new(Arc::clone(
-            &state,
-        )))),
-        Some(Arc::new(StudioAttachmentSearchFlightRouteProvider::new(
-            Arc::clone(&state.studio),
-        ))),
-        Some(Arc::new(StudioAstSearchFlightRouteProvider::new(
-            Arc::clone(&state),
-        ))),
-        Some(Arc::new(StudioDefinitionFlightRouteProvider::new(
-            Arc::clone(&state.studio),
-        ))),
-        Some(Arc::new(StudioAutocompleteFlightRouteProvider::new(
-            Arc::clone(&state.studio),
-        ))),
-        Some(Arc::new(StudioMarkdownAnalysisFlightRouteProvider::new(
-            Arc::clone(&state),
-        ))),
-        Some(Arc::new(StudioCodeAstAnalysisFlightRouteProvider::new(
-            Arc::clone(&state),
-        ))),
-        Some(Arc::new(StudioVfsResolveFlightRouteProvider::new(
-            Arc::clone(&state.studio),
-        ))),
-        Some(Arc::new(StudioGraphNeighborsFlightRouteProvider::new(
-            Arc::clone(&state),
-        ))),
+        route_providers,
         rerank_dimension,
         rerank_weights,
     )
@@ -242,7 +248,7 @@ mod tests {
             projects: vec![UiProjectConfig {
                 name: "kernel".to_string(),
                 root: ".".to_string(),
-                dirs: vec!["packages".to_string()],
+                dirs: vec!["docs".to_string(), "packages".to_string()],
             }],
             repo_projects: Vec::new(),
         });
@@ -703,13 +709,7 @@ mod tests {
     impl RepoSearchFlightRouteProvider for RecordingRepoSearchProvider {
         async fn repo_search_batch(
             &self,
-            query_text: &str,
-            limit: usize,
-            _language_filters: &std::collections::HashSet<String>,
-            _path_prefixes: &std::collections::HashSet<String>,
-            _title_filters: &std::collections::HashSet<String>,
-            _tag_filters: &std::collections::HashSet<String>,
-            _filename_filters: &std::collections::HashSet<String>,
+            request: &xiuxian_wendao_runtime::transport::RepoSearchFlightRequest,
         ) -> Result<LanceRecordBatch, String> {
             LanceRecordBatch::try_new(
                 Arc::new(LanceSchema::new(vec![
@@ -718,7 +718,8 @@ mod tests {
                 ])),
                 vec![
                     Arc::new(LanceStringArray::from(vec![format!(
-                        "repo:{query_text}:{limit}"
+                        "repo:{}:{}",
+                        request.query_text, request.limit
                     )])) as _,
                     Arc::new(LanceFloat64Array::from(vec![0.99_f64])) as _,
                 ],
@@ -1243,7 +1244,7 @@ mod tests {
                 .unwrap_or_else(|error| panic!("descriptor path: {error}")),
         );
         let mut request = Request::new(descriptor);
-        populate_markdown_analysis_headers(request.metadata_mut(), "docs/analysis.md");
+        populate_markdown_analysis_headers(request.metadata_mut(), "kernel/docs/analysis.md");
 
         let response = service
             .get_flight_info(request)

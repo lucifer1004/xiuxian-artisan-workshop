@@ -64,10 +64,10 @@ fn collect_segments(
     for (offset, raw_line) in content_lines.iter().enumerate().skip(body_start_index) {
         let absolute_line = offset + 1;
         if raw_line.trim().is_empty() {
-            if let Some(segment) = current.take() {
-                if !segment.lines.is_empty() {
-                    segments.push(segment);
-                }
+            if let Some(segment) = current.take()
+                && !segment.lines.is_empty()
+            {
+                segments.push(segment);
             }
             continue;
         }
@@ -81,10 +81,10 @@ fn collect_segments(
         segment.end = absolute_line;
     }
 
-    if let Some(segment) = current.take() {
-        if !segment.lines.is_empty() {
-            segments.push(segment);
-        }
+    if let Some(segment) = current.take()
+        && !segment.lines.is_empty()
+    {
+        segments.push(segment);
     }
 
     segments
@@ -229,7 +229,7 @@ pub(crate) fn build_code_block_retrieval_atoms(
                 path,
                 CodeAstRetrievalAtomScope::Block,
                 block_semantic_type(kind),
-                format!("l{}-l{}", start, end).as_str(),
+                format!("l{start}-l{end}").as_str(),
                 excerpt.as_str(),
             )
             .with_lines(start, end);
@@ -237,8 +237,7 @@ pub(crate) fn build_code_block_retrieval_atoms(
                 kind,
                 segments
                     .first()
-                    .map(|segment| segment.lines.as_slice())
-                    .unwrap_or(&[]),
+                    .map_or(&[], |segment| segment.lines.as_slice()),
             ));
             atom.excerpt = Some(excerpt);
             atom

@@ -1,3 +1,4 @@
+mod hydration;
 mod lifecycle;
 mod queue;
 mod runtime;

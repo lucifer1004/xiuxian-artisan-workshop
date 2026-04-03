@@ -38,6 +38,7 @@ fn clear_prefix(prefix: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+mod expansion;
 mod suggested_link_decide_promoted_with_audit;
 mod suggested_link_decide_rejects_invalid_transition;
 mod suggested_link_log_rejects_invalid_payload;

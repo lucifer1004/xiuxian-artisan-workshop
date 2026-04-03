@@ -41,7 +41,7 @@ impl SearchPlaneService {
         {
             self.complete_repo_maintenance_task(
                 &task_key,
-                Err("stale repo maintenance claim without queued or active worker".to_string()),
+                &Err("stale repo maintenance claim without queued or active worker".to_string()),
             );
             return self.run_repo_maintenance_task(task).await;
         }

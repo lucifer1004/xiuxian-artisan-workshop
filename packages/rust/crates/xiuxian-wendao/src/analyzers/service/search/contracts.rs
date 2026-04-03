@@ -13,14 +13,19 @@ use super::{
     build_module_search_with_artifacts, build_symbol_search_with_artifacts,
 };
 
+type FallbackQueryBuilder<Q> = dyn Fn(String, String, usize) -> Q + Send + Sync;
+type FallbackQueryText<Q> = dyn Fn(&Q) -> String + Send + Sync;
+type FallbackQueryLimit<Q> = dyn Fn(&Q) -> usize + Send + Sync;
+type FallbackResultBuilder<Q, T> =
+    dyn Fn(&Q, &RepositoryAnalysisOutput, &RepositorySearchArtifacts) -> T + Send + Sync;
+
 pub(crate) struct RepoAnalysisFallbackContract<Q, T> {
     pub(crate) scope: &'static str,
     pub(crate) fuzzy_options: FuzzySearchOptions,
-    pub(crate) build_query: Arc<dyn Fn(String, String, usize) -> Q + Send + Sync>,
-    pub(crate) query_text: Arc<dyn Fn(&Q) -> String + Send + Sync>,
-    pub(crate) query_limit: Arc<dyn Fn(&Q) -> usize + Send + Sync>,
-    pub(crate) build_result:
-        Arc<dyn Fn(&Q, &RepositoryAnalysisOutput, &RepositorySearchArtifacts) -> T + Send + Sync>,
+    pub(crate) build_query: Arc<FallbackQueryBuilder<Q>>,
+    pub(crate) query_text: Arc<FallbackQueryText<Q>>,
+    pub(crate) query_limit: Arc<FallbackQueryLimit<Q>>,
+    pub(crate) build_result: Arc<FallbackResultBuilder<Q, T>>,
 }
 
 pub(crate) fn canonical_import_query_text(query: &ImportSearchQuery) -> String {

@@ -35,7 +35,7 @@ pub fn persist_ui_config_to_wendao_toml(
     for project in &config.projects {
         let mut entry = existing_projects.remove(&project.name).unwrap_or_default();
         entry.root = Some(project.root.clone());
-        entry.dirs = project.dirs.clone();
+        entry.dirs.clone_from(&project.dirs);
         projects.insert(project.name.clone(), entry);
     }
     for repo in &config.repo_projects {

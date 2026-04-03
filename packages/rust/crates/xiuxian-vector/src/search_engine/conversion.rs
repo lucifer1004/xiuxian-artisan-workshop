@@ -3,8 +3,8 @@ use std::io::Cursor;
 use arrow::record_batch::RecordBatch as EngineRecordBatch;
 use arrow_ipc::reader::StreamReader as EngineStreamReader;
 use arrow_ipc::writer::StreamWriter as EngineStreamWriter;
-use arrow_ipc_compat::reader::StreamReader as LanceStreamReader;
-use arrow_ipc_compat::writer::StreamWriter as LanceStreamWriter;
+use lance_arrow_ipc::reader::StreamReader as LanceStreamReader;
+use lance_arrow_ipc::writer::StreamWriter as LanceStreamWriter;
 
 use crate::{LanceRecordBatch, VectorStoreError};
 
@@ -48,7 +48,7 @@ fn encode_lance_batches(batches: &[LanceRecordBatch]) -> Result<Vec<u8>, VectorS
     Ok(buffer.into_inner())
 }
 
-/// Convert a Lance/Arrow-57 record batch into a DataFusion/Arrow-58 record batch.
+/// Convert a Lance-owned record batch into a workspace Arrow/DataFusion record batch.
 ///
 /// # Errors
 ///
@@ -64,7 +64,7 @@ pub fn lance_batch_to_engine_batch(
     })
 }
 
-/// Convert multiple Lance/Arrow-57 batches into DataFusion/Arrow-58 batches.
+/// Convert multiple Lance-owned batches into workspace Arrow/DataFusion batches.
 ///
 /// # Errors
 ///
@@ -78,7 +78,7 @@ pub fn lance_batches_to_engine_batches(
     decode_engine_batches(&encode_lance_batches(batches)?)
 }
 
-/// Convert a DataFusion/Arrow-58 batch into a Lance/Arrow-57 batch.
+/// Convert a workspace Arrow/DataFusion batch into a Lance-owned record batch.
 ///
 /// # Errors
 ///
@@ -94,7 +94,7 @@ pub fn engine_batch_to_lance_batch(
     })
 }
 
-/// Convert multiple DataFusion/Arrow-58 batches into Lance/Arrow-57 batches.
+/// Convert multiple workspace Arrow/DataFusion batches into Lance-owned batches.
 ///
 /// # Errors
 ///

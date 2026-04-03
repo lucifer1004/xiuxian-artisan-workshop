@@ -7,14 +7,18 @@ use arrow::array::{ArrayRef, StringArray, StringViewArray};
 use arrow::datatypes::DataType;
 use xiuxian_vector::{
     EngineRecordBatch, LanceDataType, LanceField, LanceRecordBatch, LanceSchema, LanceStringArray,
-    SearchEngineContext, lance_batch_to_engine_batch, write_lance_batches_to_parquet_file,
+    SearchEngineContext, engine_batch_to_lance_batch, lance_batch_to_engine_batch,
+    write_lance_batches_to_parquet_file,
 };
 
 fn local_symbol_schema() -> Arc<LanceSchema> {
-    Arc::new(LanceSchema::new(vec![
-        LanceField::new("id", LanceDataType::Utf8, false),
-        LanceField::new("name", LanceDataType::Utf8, false),
-    ]))
+    Arc::new(LanceSchema::new_with_metadata(
+        vec![
+            LanceField::new("id", LanceDataType::Utf8, false),
+            LanceField::new("name", LanceDataType::Utf8, false),
+        ],
+        std::collections::HashMap::from([("domain".to_string(), "local_symbol".to_string())]),
+    ))
 }
 
 fn local_symbol_batch(rows: &[(&str, &str)], schema: Arc<LanceSchema>) -> Result<LanceRecordBatch> {
@@ -58,6 +62,23 @@ fn rows_from_engine_batch(batch: &EngineRecordBatch) -> Vec<(String, String)> {
         .collect()
 }
 
+fn rows_from_lance_batch(batch: &LanceRecordBatch) -> Vec<(String, String)> {
+    let ids = batch
+        .column(0)
+        .as_any()
+        .downcast_ref::<LanceStringArray>()
+        .expect("id column should decode as LanceStringArray");
+    let names = batch
+        .column(1)
+        .as_any()
+        .downcast_ref::<LanceStringArray>()
+        .expect("name column should decode as LanceStringArray");
+
+    (0..batch.num_rows())
+        .map(|row| (ids.value(row).to_string(), names.value(row).to_string()))
+        .collect()
+}
+
 #[test]
 fn lance_batches_round_trip_into_engine_batches() -> Result<()> {
     let schema = local_symbol_schema();
@@ -71,6 +92,39 @@ fn lance_batches_round_trip_into_engine_batches() -> Result<()> {
             ("sym-1".to_string(), "AlphaSymbol".to_string()),
             ("sym-2".to_string(), "BetaSymbol".to_string()),
         ]
+    );
+    assert_eq!(
+        engine_batch
+            .schema()
+            .metadata()
+            .get("domain")
+            .map(String::as_str),
+        Some("local_symbol")
+    );
+    Ok(())
+}
+
+#[test]
+fn engine_batches_round_trip_back_into_lance_batches() -> Result<()> {
+    let schema = local_symbol_schema();
+    let batch = local_symbol_batch(&[("sym-1", "AlphaSymbol"), ("sym-2", "BetaSymbol")], schema)?;
+    let engine_batch = lance_batch_to_engine_batch(&batch)?;
+    let lance_batch = engine_batch_to_lance_batch(&engine_batch)?;
+
+    assert_eq!(
+        rows_from_lance_batch(&lance_batch),
+        vec![
+            ("sym-1".to_string(), "AlphaSymbol".to_string()),
+            ("sym-2".to_string(), "BetaSymbol".to_string()),
+        ]
+    );
+    assert_eq!(
+        lance_batch
+            .schema()
+            .metadata()
+            .get("domain")
+            .map(String::as_str),
+        Some("local_symbol")
     );
     Ok(())
 }

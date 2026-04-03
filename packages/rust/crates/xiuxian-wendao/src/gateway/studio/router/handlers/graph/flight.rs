@@ -71,14 +71,14 @@ pub(crate) async fn build_graph_neighbors_response(
             "`nodeId` is required",
         ));
     }
-    Ok(run_graph_neighbors(
+    run_graph_neighbors(
         state,
         node_id,
         parse_direction(Some(direction)),
         normalize_hops(Some(hops)),
         normalize_limit(Some(limit)),
     )
-    .await?)
+    .await
 }
 
 pub(crate) async fn load_graph_neighbors_flight_response(

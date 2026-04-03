@@ -51,7 +51,7 @@ pub(crate) fn ensure_local_symbol_index_started(
                     build_config_root.as_path(),
                     &build_projects,
                     active_epoch,
-                    previous_fingerprints,
+                    &previous_fingerprints,
                 )
             })
             .await;

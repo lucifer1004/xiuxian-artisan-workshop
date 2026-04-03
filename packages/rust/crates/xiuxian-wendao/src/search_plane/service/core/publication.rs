@@ -122,6 +122,14 @@ impl SearchPlaneService {
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .remove(&(corpus, repo_id.to_string()));
+            let _ = fs::remove_file(self.repo_corpus_record_json_path(corpus, repo_id));
+        }
+        let corpus_snapshot = self.current_repo_corpus_snapshot_record();
+        let snapshot_is_empty = corpus_snapshot.records.is_empty();
+        if snapshot_is_empty {
+            let _ = fs::remove_file(self.repo_corpus_snapshot_json_path());
+        } else {
+            self.persist_local_repo_corpus_snapshot(&corpus_snapshot);
         }
         self.clear_repo_maintenance_for_repo(repo_id);
         #[cfg(test)]
@@ -129,7 +137,6 @@ impl SearchPlaneService {
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             let cache = self.cache.clone();
             let repo_id = repo_id.to_string();
-            let corpus_snapshot = self.current_repo_corpus_snapshot_record();
             handle.spawn(async move {
                 cache
                     .delete_repo_corpus_record(SearchCorpusKind::RepoEntity, repo_id.as_str())
@@ -149,7 +156,7 @@ impl SearchPlaneService {
                         repo_id.as_str(),
                     )
                     .await;
-                if corpus_snapshot.records.is_empty() {
+                if snapshot_is_empty {
                     cache.delete_repo_corpus_snapshot().await;
                 } else {
                     cache.set_repo_corpus_snapshot(&corpus_snapshot).await;
@@ -164,10 +171,7 @@ impl SearchPlaneService {
         corpus: SearchCorpusKind,
         repo_id: &str,
     ) -> bool {
-        self.repo_corpus_record_for_reads(corpus, repo_id)
-            .await
-            .and_then(|record| record.publication)
-            .is_some()
+        self.cached_repo_publication(corpus, repo_id).is_some()
     }
 
     pub(crate) async fn search_repo_entities(

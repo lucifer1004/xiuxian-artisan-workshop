@@ -94,8 +94,8 @@ fn build_plugin_rerank_transport_client_honors_runtime_overrides() {
         client.selection().selected_transport,
         PluginTransportKind::ArrowFlight
     );
-    assert_eq!(client.flight_base_url(), Some("http://127.0.0.1:8090"));
-    assert_eq!(client.flight_route(), Some("/custom-rerank"));
+    assert_eq!(client.flight_base_url(), "http://127.0.0.1:8090");
+    assert_eq!(client.flight_route(), "/custom-rerank");
 }
 
 #[test]
@@ -122,8 +122,8 @@ fn build_plugin_rerank_transport_client_accepts_arrow_flight_bindings() {
         client.selection().selected_transport,
         PluginTransportKind::ArrowFlight
     );
-    assert_eq!(client.flight_base_url(), Some("http://127.0.0.1:18080"));
-    assert_eq!(client.flight_route(), Some("/rerank"));
+    assert_eq!(client.flight_base_url(), "http://127.0.0.1:18080");
+    assert_eq!(client.flight_route(), "/rerank");
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn attach_plugin_rerank_request_metadata_sets_schema_metadata() {
     .expect("batch");
 
     let traced_batch =
-        attach_plugin_rerank_request_metadata(batch, "alpha signal", "v1").expect("metadata");
+        attach_plugin_rerank_request_metadata(&batch, "alpha signal", "v1").expect("metadata");
 
     assert_eq!(
         traced_batch.schema().metadata().get("trace_id"),

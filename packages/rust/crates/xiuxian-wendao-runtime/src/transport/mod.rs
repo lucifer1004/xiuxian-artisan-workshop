@@ -29,11 +29,13 @@ pub use negotiation::{
     CANONICAL_PLUGIN_TRANSPORT_PREFERENCE_ORDER, NegotiatedFlightTransportClient,
     NegotiatedTransportSelection, negotiate_flight_transport_client_from_bindings,
 };
+#[cfg(feature = "julia")]
+pub use query_contract::validate_sql_query_request;
 pub use query_contract::{
     ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_DEFAULT_HOPS,
-    GRAPH_NEIGHBORS_DEFAULT_LIMIT, GRAPH_NEIGHBORS_ROUTE, REPO_SEARCH_BEST_SECTION_COLUMN,
-    REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_HIERARCHY_COLUMN,
-    REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,
+    GRAPH_NEIGHBORS_DEFAULT_LIMIT, GRAPH_NEIGHBORS_ROUTE, QUERY_SQL_ROUTE,
+    REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN,
+    REPO_SEARCH_HIERARCHY_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,
     REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN, REPO_SEARCH_NAVIGATION_LINE_COLUMN,
     REPO_SEARCH_NAVIGATION_LINE_END_COLUMN, REPO_SEARCH_NAVIGATION_PATH_COLUMN,
     REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_ROUTE, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TAGS_COLUMN,
@@ -55,8 +57,8 @@ pub use query_contract::{
     WENDAO_REPO_SEARCH_TAG_FILTERS_HEADER, WENDAO_REPO_SEARCH_TITLE_FILTERS_HEADER,
     WENDAO_RERANK_DIMENSION_HEADER, WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_INTENT_HEADER,
     WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER, WENDAO_SEARCH_REPO_HEADER,
-    WENDAO_VFS_PATH_HEADER, flight_descriptor_path, normalize_flight_route,
-    validate_attachment_search_request, validate_autocomplete_request,
+    WENDAO_SQL_QUERY_HEADER, WENDAO_VFS_PATH_HEADER, flight_descriptor_path,
+    normalize_flight_route, validate_attachment_search_request, validate_autocomplete_request,
     validate_code_ast_analysis_request, validate_definition_request,
     validate_graph_neighbors_request, validate_markdown_analysis_request,
     validate_repo_search_request, validate_vfs_resolve_request,
@@ -75,7 +77,20 @@ pub use server::{
     CodeAstAnalysisFlightRouteProvider, DefinitionFlightRouteProvider,
     DefinitionFlightRouteResponse, GraphNeighborsFlightRouteProvider,
     GraphNeighborsFlightRouteResponse, MarkdownAnalysisFlightRouteProvider,
-    RepoSearchFlightRouteProvider, RerankFlightRouteHandler, SearchFlightRouteProvider,
-    SearchFlightRouteResponse, VfsResolveFlightRouteProvider, VfsResolveFlightRouteResponse,
-    WendaoFlightService,
+    RepoSearchFlightRequest, RepoSearchFlightRouteProvider, RerankFlightRouteHandler,
+    SearchFlightRouteProvider, SearchFlightRouteResponse, SqlFlightRouteProvider,
+    SqlFlightRouteResponse, VfsResolveFlightRouteProvider, VfsResolveFlightRouteResponse,
+    WendaoFlightRouteProviders, WendaoFlightService,
+};
+
+#[cfg(all(feature = "julia", test))]
+pub(crate) use query_contract::WENDAO_RERANK_TOP_K_HEADER;
+#[cfg(all(feature = "julia", test))]
+pub(crate) use server::{
+    is_search_family_route, validate_attachment_search_request_metadata,
+    validate_autocomplete_request_metadata, validate_code_ast_analysis_request_metadata,
+    validate_definition_request_metadata, validate_graph_neighbors_request_metadata,
+    validate_markdown_analysis_request_metadata, validate_rerank_top_k_header,
+    validate_search_request_metadata, validate_sql_request_metadata,
+    validate_vfs_resolve_request_metadata,
 };

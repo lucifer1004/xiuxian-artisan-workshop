@@ -9,19 +9,6 @@ fn setting_value_to_string(value: &Value) -> Option<String> {
     }
 }
 
-fn setting_value_to_bool(value: &Value) -> Option<bool> {
-    match value {
-        Value::Bool(flag) => Some(*flag),
-        Value::String(text) => match text.trim().to_lowercase().as_str() {
-            "1" | "true" | "yes" | "on" => Some(true),
-            "0" | "false" | "no" | "off" => Some(false),
-            _ => None,
-        },
-        Value::Number(number) => number.as_i64().map(|v| v != 0),
-        _ => None,
-    }
-}
-
 fn get_setting_value<'a>(settings: &'a Value, dotted_key: &str) -> Option<&'a Value> {
     let mut cursor = settings;
     for segment in dotted_key.split('.') {
@@ -41,37 +28,4 @@ pub(in crate::link_graph::runtime_config) fn get_setting_string(
     dotted_key: &str,
 ) -> Option<String> {
     get_setting_value(settings, dotted_key).and_then(setting_value_to_string)
-}
-
-pub(in crate::link_graph::runtime_config) fn get_setting_bool(
-    settings: &Value,
-    dotted_key: &str,
-) -> Option<bool> {
-    get_setting_value(settings, dotted_key).and_then(setting_value_to_bool)
-}
-
-pub(in crate::link_graph::runtime_config) fn get_setting_string_list(
-    settings: &Value,
-    dotted_key: &str,
-) -> Vec<String> {
-    let Some(value) = get_setting_value(settings, dotted_key) else {
-        return Vec::new();
-    };
-    match value {
-        Value::String(single) => {
-            let text = single.trim();
-            if text.is_empty() {
-                Vec::new()
-            } else {
-                vec![text.to_string()]
-            }
-        }
-        Value::Sequence(items) => items
-            .iter()
-            .filter_map(setting_value_to_string)
-            .map(|item| item.trim().to_string())
-            .filter(|item| !item.is_empty())
-            .collect(),
-        _ => Vec::new(),
-    }
 }

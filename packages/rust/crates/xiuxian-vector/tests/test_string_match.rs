@@ -12,7 +12,7 @@ fn string_contains_mask_marks_matching_rows() -> Result<()> {
         None,
     ]);
 
-    let mask = string_contains_mask(&values, "reexport")?;
+    let mask = string_contains_mask(&values, "reexport");
 
     assert_eq!(mask.len(), 4);
     assert!(!mask.is_null(0));
@@ -32,7 +32,7 @@ fn string_contains_mask_supports_code_punctuation_needles() -> Result<()> {
         "using ModelingToolkit",
     ]);
 
-    let mask = string_contains_mask(&values, "src/BaseModelica.jl")?;
+    let mask = string_contains_mask(&values, "src/BaseModelica.jl");
 
     assert_eq!(mask.len(), 2);
     assert!(mask.value(0));

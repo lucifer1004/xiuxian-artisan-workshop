@@ -13,8 +13,7 @@ use xiuxian_wendao_runtime::transport::{
 };
 
 use super::graph_structural::{
-    GRAPH_STRUCTURAL_FILTER_ROUTE, GRAPH_STRUCTURAL_RERANK_ROUTE, GraphStructuralRouteKind,
-    JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION, validate_graph_structural_filter_request_batch,
+    GraphStructuralRouteKind, validate_graph_structural_filter_request_batch,
     validate_graph_structural_filter_response_batch,
     validate_graph_structural_rerank_request_batch,
     validate_graph_structural_rerank_response_batch,
@@ -65,9 +64,8 @@ pub fn validate_graph_structural_request_batches(
     batches: &[RecordBatch],
 ) -> Result<(), RepoIntelligenceError> {
     for batch in batches {
-        validate_graph_structural_request_batch(route_kind, batch).map_err(|error| {
-            graph_structural_contract_error(route_kind, "request", error)
-        })?;
+        validate_graph_structural_request_batch(route_kind, batch)
+            .map_err(|error| graph_structural_contract_error(route_kind, "request", error))?;
     }
     Ok(())
 }
@@ -83,9 +81,8 @@ pub fn validate_graph_structural_response_batches(
     batches: &[RecordBatch],
 ) -> Result<(), RepoIntelligenceError> {
     for batch in batches {
-        validate_graph_structural_response_batch(route_kind, batch).map_err(|error| {
-            graph_structural_contract_error(route_kind, "response", error)
-        })?;
+        validate_graph_structural_response_batch(route_kind, batch)
+            .map_err(|error| graph_structural_contract_error(route_kind, "response", error))?;
     }
     Ok(())
 }
@@ -151,9 +148,7 @@ fn build_graph_structural_flight_transport_binding(
     repository: &RegisteredRepository,
     route_kind: GraphStructuralRouteKind,
 ) -> Result<Option<PluginCapabilityBinding>, RepoIntelligenceError> {
-    let Some(options) =
-        resolve_graph_structural_transport_options(repository, route_kind)?
-    else {
+    let Some(options) = resolve_graph_structural_transport_options(repository, route_kind)? else {
         return Ok(None);
     };
 
@@ -162,27 +157,27 @@ fn build_graph_structural_flight_transport_binding(
     }
 
     let route = match options.route {
-        Some(route) => normalize_flight_route(route).map_err(|error| {
-            RepoIntelligenceError::ConfigLoad {
+        Some(route) => {
+            normalize_flight_route(route).map_err(|error| RepoIntelligenceError::ConfigLoad {
                 message: format!(
                     "repo `{}` Julia graph-structural route `{}` is invalid: {error}",
                     repository.id,
                     route_kind.route()
                 ),
-            }
-        })?,
+            })?
+        }
         None => route_kind.route().to_string(),
     };
     let health_route = match options.health_route {
-        Some(route) => normalize_flight_route(route).map_err(|error| {
-            RepoIntelligenceError::ConfigLoad {
+        Some(route) => {
+            normalize_flight_route(route).map_err(|error| RepoIntelligenceError::ConfigLoad {
                 message: format!(
                     "repo `{}` Julia graph-structural health_route for `{}` is invalid: {error}",
                     repository.id,
                     route_kind.route()
                 ),
-            }
-        })?,
+            })?
+        }
         None => DEFAULT_JULIA_HEALTH_ROUTE.to_string(),
     };
     let schema_version = match options.schema_version {
@@ -213,7 +208,11 @@ fn build_graph_structural_flight_transport_binding(
     Ok(Some(PluginCapabilityBinding {
         selector: julia_graph_structural_provider_selector(),
         endpoint: PluginTransportEndpoint {
-            base_url: Some(options.base_url.unwrap_or_else(|| DEFAULT_FLIGHT_BASE_URL.to_string())),
+            base_url: Some(
+                options
+                    .base_url
+                    .unwrap_or_else(|| DEFAULT_FLIGHT_BASE_URL.to_string()),
+            ),
             route: Some(route),
             health_route: Some(health_route),
             timeout_secs: Some(timeout_secs),
@@ -230,7 +229,10 @@ fn attach_graph_structural_schema_version_metadata(
 ) -> Result<RecordBatch, RepoIntelligenceError> {
     attach_record_batch_metadata(
         batch,
-        [(FLIGHT_SCHEMA_VERSION_METADATA_KEY, route_kind.schema_version())],
+        [(
+            FLIGHT_SCHEMA_VERSION_METADATA_KEY,
+            route_kind.schema_version(),
+        )],
     )
     .map_err(|error| RepoIntelligenceError::AnalysisFailed {
         message: format!(
@@ -326,53 +328,39 @@ fn resolve_graph_structural_transport_options(
         };
 
         return Ok(Some(GraphStructuralTransportOptions {
-            enabled: first_some(
-                route_override.and_then(|value| bool_option(value, "enabled", repository).transpose()),
-                bool_option(transport, "enabled", repository).transpose(),
-            )?,
-            base_url: first_some(
-                route_override
-                    .and_then(|value| string_option(value, "base_url", repository).transpose()),
-                string_option(transport, "base_url", repository).transpose(),
-            )?,
-            route: first_some(
-                route_override.and_then(|value| string_option(value, "route", repository).transpose()),
-                string_option(transport, "route", repository).transpose(),
-            )?,
-            health_route: first_some(
-                route_override
-                    .and_then(|value| string_option(value, "health_route", repository).transpose()),
-                string_option(transport, "health_route", repository).transpose(),
-            )?,
-            schema_version: first_some(
-                route_override
-                    .and_then(|value| string_option(value, "schema_version", repository).transpose()),
-                string_option(transport, "schema_version", repository).transpose(),
-            )?,
-            timeout_secs: first_some(
-                route_override
-                    .and_then(|value| u64_option(value, "timeout_secs", repository).transpose()),
-                u64_option(transport, "timeout_secs", repository).transpose(),
-            )?,
+            enabled: route_override
+                .map(|value| bool_option(value, "enabled", repository))
+                .transpose()?
+                .flatten()
+                .or(bool_option(transport, "enabled", repository)?),
+            base_url: route_override
+                .map(|value| string_option(value, "base_url", repository))
+                .transpose()?
+                .flatten()
+                .or(string_option(transport, "base_url", repository)?),
+            route: route_override
+                .map(|value| string_option(value, "route", repository))
+                .transpose()?
+                .flatten()
+                .or(string_option(transport, "route", repository)?),
+            health_route: route_override
+                .map(|value| string_option(value, "health_route", repository))
+                .transpose()?
+                .flatten()
+                .or(string_option(transport, "health_route", repository)?),
+            schema_version: route_override
+                .map(|value| string_option(value, "schema_version", repository))
+                .transpose()?
+                .flatten()
+                .or(string_option(transport, "schema_version", repository)?),
+            timeout_secs: route_override
+                .map(|value| u64_option(value, "timeout_secs", repository))
+                .transpose()?
+                .flatten()
+                .or(u64_option(transport, "timeout_secs", repository)?),
         }));
     }
 
-    Ok(None)
-}
-
-fn first_some<T>(
-    primary: Option<Result<Option<T>, RepoIntelligenceError>>,
-    fallback: Option<Result<Option<T>, RepoIntelligenceError>>,
-) -> Result<Option<T>, RepoIntelligenceError> {
-    if let Some(primary) = primary {
-        let primary = primary?;
-        if primary.is_some() {
-            return Ok(primary);
-        }
-    }
-    if let Some(fallback) = fallback {
-        return fallback;
-    }
     Ok(None)
 }
 
@@ -467,30 +455,34 @@ impl GraphStructuralRouteKind {
 mod tests {
     use std::sync::Arc;
 
-    use arrow::array::{BooleanArray, Float64Array, Int32Array, ListArray, StringArray};
+    use arrow::array::{
+        BooleanArray, Float64Array, Int32Array, ListArray, ListBuilder, StringArray, StringBuilder,
+    };
     use arrow::datatypes::{DataType, Field, Schema};
     use arrow::record_batch::RecordBatch;
-    use xiuxian_wendao_core::repo_intelligence::RepositoryPluginConfig;
+    use xiuxian_wendao_core::{
+        repo_intelligence::RepositoryPluginConfig, transport::PluginTransportKind,
+    };
     use xiuxian_wendao_runtime::transport::FLIGHT_SCHEMA_VERSION_METADATA_KEY;
 
     use super::{
-        build_graph_structural_flight_transport_client,
-        validate_graph_structural_request_batches, validate_graph_structural_response_batches,
+        build_graph_structural_flight_transport_client, validate_graph_structural_request_batches,
+        validate_graph_structural_response_batches,
     };
-    use crate::compatibility::link_graph::julia_graph_structural_provider_selector;
     use crate::plugin::graph_structural::{
         GRAPH_STRUCTURAL_ACCEPTED_COLUMN, GRAPH_STRUCTURAL_ANCHOR_PLANES_COLUMN,
         GRAPH_STRUCTURAL_ANCHOR_VALUES_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_EDGE_KINDS_COLUMN,
         GRAPH_STRUCTURAL_CANDIDATE_ID_COLUMN, GRAPH_STRUCTURAL_CANDIDATE_NODE_IDS_COLUMN,
         GRAPH_STRUCTURAL_CONSTRAINT_KIND_COLUMN, GRAPH_STRUCTURAL_DEPENDENCY_SCORE_COLUMN,
         GRAPH_STRUCTURAL_EDGE_CONSTRAINT_KINDS_COLUMN, GRAPH_STRUCTURAL_EXPLANATION_COLUMN,
-        GRAPH_STRUCTURAL_FEASIBLE_COLUMN, GRAPH_STRUCTURAL_FINAL_SCORE_COLUMN,
-        GRAPH_STRUCTURAL_KEYWORD_SCORE_COLUMN, GRAPH_STRUCTURAL_PIN_ASSIGNMENT_COLUMN,
-        GRAPH_STRUCTURAL_QUERY_ID_COLUMN, GRAPH_STRUCTURAL_QUERY_MAX_LAYERS_COLUMN,
-        GRAPH_STRUCTURAL_REQUIRED_BOUNDARY_SIZE_COLUMN, GRAPH_STRUCTURAL_RETRIEVAL_LAYER_COLUMN,
-        GRAPH_STRUCTURAL_SEMANTIC_SCORE_COLUMN, GRAPH_STRUCTURAL_STRUCTURAL_SCORE_COLUMN,
-        GRAPH_STRUCTURAL_TAG_SCORE_COLUMN, GraphStructuralRouteKind,
-        JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION,
+        GRAPH_STRUCTURAL_FEASIBLE_COLUMN, GRAPH_STRUCTURAL_FILTER_ROUTE,
+        GRAPH_STRUCTURAL_FINAL_SCORE_COLUMN, GRAPH_STRUCTURAL_KEYWORD_SCORE_COLUMN,
+        GRAPH_STRUCTURAL_PIN_ASSIGNMENT_COLUMN, GRAPH_STRUCTURAL_QUERY_ID_COLUMN,
+        GRAPH_STRUCTURAL_QUERY_MAX_LAYERS_COLUMN, GRAPH_STRUCTURAL_REJECTION_REASON_COLUMN,
+        GRAPH_STRUCTURAL_REQUIRED_BOUNDARY_SIZE_COLUMN, GRAPH_STRUCTURAL_RERANK_ROUTE,
+        GRAPH_STRUCTURAL_RETRIEVAL_LAYER_COLUMN, GRAPH_STRUCTURAL_SEMANTIC_SCORE_COLUMN,
+        GRAPH_STRUCTURAL_STRUCTURAL_SCORE_COLUMN, GRAPH_STRUCTURAL_TAG_SCORE_COLUMN,
+        GraphStructuralRouteKind, JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION,
     };
     use xiuxian_wendao_core::repo_intelligence::RegisteredRepository;
 
@@ -506,7 +498,9 @@ mod tests {
             &repository,
             GraphStructuralRouteKind::StructuralRerank,
         )
-        .expect("missing graph-structural config should be ignored");
+        .unwrap_or_else(|error| {
+            panic!("missing graph-structural config should be ignored: {error}")
+        });
         assert!(client.is_none());
     }
 
@@ -531,21 +525,14 @@ mod tests {
             &repository,
             GraphStructuralRouteKind::StructuralRerank,
         )
-        .expect("graph-structural config should parse")
-        .expect("graph-structural client");
+        .unwrap_or_else(|error| panic!("graph-structural config should parse: {error}"))
+        .unwrap_or_else(|| panic!("graph-structural client should exist"));
 
-        assert_eq!(client.flight_base_url(), Some("http://127.0.0.1:9101"));
+        assert_eq!(client.flight_base_url(), "http://127.0.0.1:9101");
+        assert_eq!(client.flight_route(), GRAPH_STRUCTURAL_RERANK_ROUTE);
         assert_eq!(
-            client.flight_route(),
-            Some(GRAPH_STRUCTURAL_RERANK_ROUTE)
-        );
-        assert_eq!(
-            client.selection().selected_binding.selector,
-            julia_graph_structural_provider_selector()
-        );
-        assert_eq!(
-            client.selection().selected_binding.contract_version.0,
-            JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION
+            client.selection().selected_transport,
+            PluginTransportKind::ArrowFlight
         );
     }
 
@@ -577,25 +564,17 @@ mod tests {
             &repository,
             GraphStructuralRouteKind::StructuralRerank,
         )
-        .expect("rerank config should parse")
-        .expect("rerank client");
+        .unwrap_or_else(|error| panic!("rerank config should parse: {error}"))
+        .unwrap_or_else(|| panic!("rerank client should exist"));
         let filter_client = build_graph_structural_flight_transport_client(
             &repository,
             GraphStructuralRouteKind::ConstraintFilter,
         )
-        .expect("filter config should parse")
-        .expect("filter client");
+        .unwrap_or_else(|error| panic!("filter config should parse: {error}"))
+        .unwrap_or_else(|| panic!("filter client should exist"));
 
-        assert_eq!(rerank_client.flight_route(), Some(GRAPH_STRUCTURAL_RERANK_ROUTE));
-        assert_eq!(
-            rerank_client.selection().selected_binding.contract_version.0,
-            "v0-custom"
-        );
-        assert_eq!(filter_client.flight_route(), Some(GRAPH_STRUCTURAL_FILTER_ROUTE));
-        assert_eq!(
-            filter_client.selection().selected_binding.contract_version.0,
-            JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION
-        );
+        assert_eq!(rerank_client.flight_route(), GRAPH_STRUCTURAL_RERANK_ROUTE);
+        assert_eq!(filter_client.flight_route(), GRAPH_STRUCTURAL_FILTER_ROUTE);
     }
 
     #[test]
@@ -620,7 +599,7 @@ mod tests {
             &repository,
             GraphStructuralRouteKind::ConstraintFilter,
         )
-        .expect("disabled route-specific config should parse");
+        .unwrap_or_else(|error| panic!("disabled route-specific config should parse: {error}"));
         assert!(client.is_none());
     }
 
@@ -641,11 +620,12 @@ mod tests {
             ..RegisteredRepository::default()
         };
 
-        let error = build_graph_structural_flight_transport_client(
+        let Err(error) = build_graph_structural_flight_transport_client(
             &repository,
             GraphStructuralRouteKind::ConstraintFilter,
-        )
-        .expect_err("invalid timeout type must fail");
+        ) else {
+            panic!("invalid timeout type must fail");
+        };
         assert!(
             error
                 .to_string()
@@ -702,7 +682,7 @@ mod tests {
             GraphStructuralRouteKind::ConstraintFilter,
             &[structural_rerank_response_batch()],
         )
-        .expect_err("wrong response shape must fail");
+        .unwrap_err();
         assert!(
             error
                 .to_string()
@@ -744,8 +724,8 @@ mod tests {
                 Arc::new(list_utf8_array(vec![vec!["depends_on"]])),
             ],
         )
-        .expect("structural rerank request batch");
-        attach_schema_metadata(batch)
+        .unwrap_or_else(|error| panic!("structural rerank request batch: {error}"));
+        attach_schema_metadata(&batch)
     }
 
     fn constraint_filter_request_batch() -> RecordBatch {
@@ -777,8 +757,8 @@ mod tests {
                 Arc::new(list_utf8_array(vec![vec!["depends_on"]])),
             ],
         )
-        .expect("constraint filter request batch");
-        attach_schema_metadata(batch)
+        .unwrap_or_else(|error| panic!("constraint filter request batch: {error}"));
+        attach_schema_metadata(&batch)
     }
 
     fn structural_rerank_response_batch() -> RecordBatch {
@@ -800,7 +780,7 @@ mod tests {
                 Arc::new(StringArray::from(vec!["structural rerank accepted"])),
             ],
         )
-        .expect("structural rerank response batch")
+        .unwrap_or_else(|error| panic!("structural rerank response batch: {error}"))
     }
 
     fn constraint_filter_response_batch() -> RecordBatch {
@@ -810,7 +790,7 @@ mod tests {
                 bool_field(GRAPH_STRUCTURAL_ACCEPTED_COLUMN),
                 float64_field(GRAPH_STRUCTURAL_STRUCTURAL_SCORE_COLUMN),
                 list_utf8_field(GRAPH_STRUCTURAL_PIN_ASSIGNMENT_COLUMN),
-                utf8_field("rejection_reason"),
+                utf8_field(GRAPH_STRUCTURAL_REJECTION_REASON_COLUMN),
             ])),
             vec![
                 Arc::new(StringArray::from(vec!["candidate-a"])),
@@ -820,21 +800,17 @@ mod tests {
                 Arc::new(StringArray::from(vec![""])),
             ],
         )
-        .expect("constraint filter response batch")
+        .unwrap_or_else(|error| panic!("constraint filter response batch: {error}"))
     }
 
-    fn attach_schema_metadata(batch: RecordBatch) -> RecordBatch {
+    fn attach_schema_metadata(batch: &RecordBatch) -> RecordBatch {
         let metadata = std::collections::HashMap::from([(
             FLIGHT_SCHEMA_VERSION_METADATA_KEY.to_string(),
             JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION.to_string(),
         )]);
-        let schema = Arc::new(
-            batch.schema()
-                .as_ref()
-                .clone()
-                .with_metadata(metadata),
-        );
-        RecordBatch::try_new(schema, batch.columns().to_vec()).expect("schema metadata batch")
+        let schema = Arc::new(batch.schema().as_ref().clone().with_metadata(metadata));
+        RecordBatch::try_new(schema, batch.columns().to_vec())
+            .unwrap_or_else(|error| panic!("schema metadata batch: {error}"))
     }
 
     fn utf8_field(name: &str) -> Field {
@@ -862,10 +838,13 @@ mod tests {
     }
 
     fn list_utf8_array(values: Vec<Vec<&str>>) -> ListArray {
-        ListArray::from_iter_primitive::<arrow::datatypes::Int32Type, _, _>(
-            values
-                .into_iter()
-                .map(|row| Some(row.into_iter().map(Some))),
-        )
+        let mut builder = ListBuilder::new(StringBuilder::new());
+        for row in values {
+            for value in row {
+                builder.values().append_value(value);
+            }
+            builder.append(true);
+        }
+        builder.finish()
     }
 }

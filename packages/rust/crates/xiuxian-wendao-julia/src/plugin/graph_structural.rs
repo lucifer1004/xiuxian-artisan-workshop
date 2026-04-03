@@ -131,7 +131,11 @@ impl GraphStructuralRouteKind {
     /// Return the staged schema version for this graph-structural exchange kind.
     #[must_use]
     pub fn schema_version(self) -> &'static str {
-        JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION
+        match self {
+            Self::StructuralRerank | Self::ConstraintFilter => {
+                JULIA_GRAPH_STRUCTURAL_SCHEMA_VERSION
+            }
+        }
     }
 
     /// Return the canonical request columns for this graph-structural exchange kind.

@@ -9,7 +9,7 @@ fn test_suggested_link_decide_rejects_invalid_transition() -> Result<(), Box<dyn
     }
 
     let entry = valkey_suggested_link_log_with_valkey(
-        LinkGraphSuggestedLinkRequest {
+        &LinkGraphSuggestedLinkRequest {
             source_id: "docs/x.md".to_string(),
             target_id: "docs/y.md".to_string(),
             relation: "related_to".to_string(),
@@ -26,7 +26,7 @@ fn test_suggested_link_decide_rejects_invalid_transition() -> Result<(), Box<dyn
     .map_err(|err| err.clone())?;
 
     let invalid = valkey_suggested_link_decide_with_valkey(
-        LinkGraphSuggestedLinkDecisionRequest {
+        &LinkGraphSuggestedLinkDecisionRequest {
             suggestion_id: entry.suggestion_id.clone(),
             target_state: LinkGraphSuggestedLinkState::Provisional,
             decided_by: "omega-gate".to_string(),
@@ -41,7 +41,7 @@ fn test_suggested_link_decide_rejects_invalid_transition() -> Result<(), Box<dyn
     assert!(invalid.is_err());
 
     let first_decision = valkey_suggested_link_decide_with_valkey(
-        LinkGraphSuggestedLinkDecisionRequest {
+        &LinkGraphSuggestedLinkDecisionRequest {
             suggestion_id: entry.suggestion_id.clone(),
             target_state: LinkGraphSuggestedLinkState::Rejected,
             decided_by: "omega-gate".to_string(),
@@ -60,7 +60,7 @@ fn test_suggested_link_decide_rejects_invalid_transition() -> Result<(), Box<dyn
     );
 
     let second_decision = valkey_suggested_link_decide_with_valkey(
-        LinkGraphSuggestedLinkDecisionRequest {
+        &LinkGraphSuggestedLinkDecisionRequest {
             suggestion_id: entry.suggestion_id,
             target_state: LinkGraphSuggestedLinkState::Promoted,
             decided_by: "omega-gate".to_string(),

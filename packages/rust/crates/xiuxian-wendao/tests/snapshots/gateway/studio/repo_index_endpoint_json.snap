@@ -7,7 +7,7 @@ expression: value
   "checking": 0,
   "failed": 0,
   "indexing": 0,
-  "maxConcurrency": 15,
+  "maxConcurrency": 1,
   "queued": 1,
   "ready": 0,
   "repos": [

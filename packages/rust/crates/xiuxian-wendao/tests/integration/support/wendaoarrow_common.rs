@@ -71,7 +71,7 @@ pub(crate) fn repo_root() -> PathBuf {
 
 pub(crate) fn wendaoarrow_package_dir() -> PathBuf {
     repo_root()
-        .join(".data/WendaoArrow")
+        .join(".data/WendaoArrow.jl")
         .canonicalize()
         .unwrap_or_else(|error| panic!("resolve WendaoArrow package dir: {error}"))
 }

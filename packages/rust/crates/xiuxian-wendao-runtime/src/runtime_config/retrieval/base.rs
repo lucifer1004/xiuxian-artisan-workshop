@@ -110,14 +110,11 @@ pub fn resolve_link_graph_retrieval_base_runtime_with_settings(
 mod tests {
     use super::resolve_link_graph_retrieval_base_runtime_with_settings;
     use crate::runtime_config::{
-        LinkGraphSemanticIgnitionBackend, LinkGraphSemanticIgnitionRuntimeConfig,
+        LinkGraphSemanticIgnitionBackend, LinkGraphSemanticIgnitionRuntimeConfig, test_support,
     };
-    use crate::settings::{merged_toml_settings, set_link_graph_wendao_config_override};
-    use serial_test::serial;
     use std::fs;
 
     #[test]
-    #[serial]
     fn retrieval_base_runtime_reads_override_values() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let config_path = temp.path().join("wendao.toml");
@@ -135,15 +132,13 @@ backend = "openai-compatible"
 embedding_model = "glm-5"
 "#,
         )?;
-        let config_path_string = config_path.to_string_lossy().to_string();
-        set_link_graph_wendao_config_override(&config_path_string);
 
-        let settings = merged_toml_settings("link_graph", "", "", "wendao.toml");
+        let settings = test_support::load_test_settings_from_path(&config_path)?;
         let runtime = resolve_link_graph_retrieval_base_runtime_with_settings(&settings);
         assert_eq!(runtime.candidate_multiplier, 3);
         assert_eq!(runtime.max_sources, 5);
         assert_eq!(runtime.hybrid_min_hits, 4);
-        assert_eq!(runtime.hybrid_min_top_score, 0.6);
+        assert!((runtime.hybrid_min_top_score - 0.6).abs() < 1e-12);
         assert_eq!(runtime.graph_rows_per_source, 9);
         assert_eq!(
             runtime.semantic_ignition,

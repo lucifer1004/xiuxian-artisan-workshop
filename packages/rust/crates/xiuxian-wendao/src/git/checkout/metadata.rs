@@ -4,11 +4,38 @@ use std::path::Path;
 
 use chrono::Utc;
 use git2::{Oid, Repository};
+use serde::{Deserialize, Serialize};
 
 use crate::analyzers::config::RepositoryRef;
 use crate::analyzers::query::RepoSyncDriftState;
 
 use super::LocalCheckoutMetadata;
+
+const MANAGED_REMOTE_PROBE_STATE_FILE: &str = "xiuxian-upstream-probe-state.json";
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ManagedRemoteProbeStatus {
+    #[default]
+    Success,
+    RetryableFailure,
+    Failure,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct ManagedRemoteProbeState {
+    pub(crate) checked_at: String,
+    #[serde(default)]
+    pub(crate) status: ManagedRemoteProbeStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) target_revision: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) error_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) last_success_checked_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) last_success_target_revision: Option<String>,
+}
 
 /// Discovers metadata from a local checkout path.
 #[must_use]
@@ -133,4 +160,144 @@ pub(super) fn discover_last_fetched_at(mirror_root: &Path) -> Option<String> {
         .filter_map(|metadata| metadata.modified().ok())
         .max()
         .map(|modified| chrono::DateTime::<Utc>::from(modified).to_rfc3339())
+}
+
+pub(crate) fn discover_managed_remote_probe_state(
+    mirror_root: &Path,
+) -> Option<ManagedRemoteProbeState> {
+    let payload = fs::read(mirror_root.join(MANAGED_REMOTE_PROBE_STATE_FILE)).ok()?;
+    serde_json::from_slice(&payload).ok()
+}
+
+pub(crate) fn record_managed_remote_probe_state(
+    mirror_root: &Path,
+    target_revision: Option<&str>,
+) -> std::io::Result<()> {
+    let checked_at = Utc::now().to_rfc3339();
+    let target_revision = target_revision.map(str::to_string);
+    let payload = ManagedRemoteProbeState {
+        checked_at: checked_at.clone(),
+        status: ManagedRemoteProbeStatus::Success,
+        target_revision: target_revision.clone(),
+        error_message: None,
+        last_success_checked_at: Some(checked_at),
+        last_success_target_revision: target_revision,
+    };
+    write_managed_remote_probe_state(mirror_root, &payload)
+}
+
+pub(crate) fn record_managed_remote_probe_failure(
+    mirror_root: &Path,
+    error_message: &str,
+    retryable: bool,
+) -> std::io::Result<()> {
+    let (last_success_checked_at, last_success_target_revision) =
+        discover_managed_remote_probe_state(mirror_root).map_or((None, None), |state| match state
+            .status
+        {
+            ManagedRemoteProbeStatus::Success => (Some(state.checked_at), state.target_revision),
+            ManagedRemoteProbeStatus::RetryableFailure | ManagedRemoteProbeStatus::Failure => (
+                state.last_success_checked_at,
+                state.last_success_target_revision,
+            ),
+        });
+    let payload = ManagedRemoteProbeState {
+        checked_at: Utc::now().to_rfc3339(),
+        status: if retryable {
+            ManagedRemoteProbeStatus::RetryableFailure
+        } else {
+            ManagedRemoteProbeStatus::Failure
+        },
+        target_revision: None,
+        error_message: Some(error_message.to_string()),
+        last_success_checked_at,
+        last_success_target_revision,
+    };
+    write_managed_remote_probe_state(mirror_root, &payload)
+}
+
+pub(crate) fn clear_managed_remote_probe_state(mirror_root: &Path) -> std::io::Result<()> {
+    match fs::remove_file(mirror_root.join(MANAGED_REMOTE_PROBE_STATE_FILE)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn write_managed_remote_probe_state(
+    mirror_root: &Path,
+    payload: &ManagedRemoteProbeState,
+) -> std::io::Result<()> {
+    let payload = serde_json::to_vec(&payload)
+        .map_err(|error| std::io::Error::other(format!("encode probe state: {error}")))?;
+    fs::write(mirror_root.join(MANAGED_REMOTE_PROBE_STATE_FILE), payload)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ManagedRemoteProbeStatus, clear_managed_remote_probe_state,
+        discover_managed_remote_probe_state, record_managed_remote_probe_failure,
+        record_managed_remote_probe_state,
+    };
+
+    #[test]
+    fn managed_remote_probe_state_round_trips() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        record_managed_remote_probe_state(temp.path(), Some("rev-1")).expect("record probe state");
+
+        let state = discover_managed_remote_probe_state(temp.path()).expect("discover probe state");
+        assert!(chrono::DateTime::parse_from_rfc3339(state.checked_at.as_str()).is_ok());
+        assert_eq!(state.status, ManagedRemoteProbeStatus::Success);
+        assert_eq!(state.target_revision.as_deref(), Some("rev-1"));
+        assert_eq!(state.error_message, None);
+        assert_eq!(
+            state.last_success_checked_at.as_deref(),
+            Some(state.checked_at.as_str())
+        );
+        assert_eq!(state.last_success_target_revision.as_deref(), Some("rev-1"));
+    }
+
+    #[test]
+    fn managed_remote_probe_failure_round_trips() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        record_managed_remote_probe_failure(temp.path(), "operation timed out", true)
+            .expect("record probe failure");
+
+        let state = discover_managed_remote_probe_state(temp.path()).expect("discover probe state");
+        assert!(chrono::DateTime::parse_from_rfc3339(state.checked_at.as_str()).is_ok());
+        assert_eq!(state.status, ManagedRemoteProbeStatus::RetryableFailure);
+        assert_eq!(state.target_revision, None);
+        assert_eq!(state.error_message.as_deref(), Some("operation timed out"));
+        assert_eq!(state.last_success_checked_at, None);
+        assert_eq!(state.last_success_target_revision, None);
+    }
+
+    #[test]
+    fn managed_remote_probe_failure_preserves_last_success_marker() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        record_managed_remote_probe_state(temp.path(), Some("rev-1")).expect("record probe state");
+        let success_state =
+            discover_managed_remote_probe_state(temp.path()).expect("discover success state");
+
+        record_managed_remote_probe_failure(temp.path(), "operation timed out", true)
+            .expect("record probe failure");
+
+        let state = discover_managed_remote_probe_state(temp.path()).expect("discover probe state");
+        assert_eq!(state.status, ManagedRemoteProbeStatus::RetryableFailure);
+        assert_eq!(
+            state.last_success_checked_at.as_deref(),
+            Some(success_state.checked_at.as_str())
+        );
+        assert_eq!(state.last_success_target_revision.as_deref(), Some("rev-1"));
+    }
+
+    #[test]
+    fn clear_managed_remote_probe_state_removes_sidecar() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        record_managed_remote_probe_state(temp.path(), Some("rev-1")).expect("record probe state");
+        clear_managed_remote_probe_state(temp.path()).expect("clear probe state");
+
+        assert_eq!(discover_managed_remote_probe_state(temp.path()), None);
+    }
 }

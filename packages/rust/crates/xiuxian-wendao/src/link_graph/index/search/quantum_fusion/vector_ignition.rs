@@ -44,7 +44,7 @@ impl VectorStoreSemanticIgnition {
         self
     }
 
-    /// Build a WendaoArrow `v1` plugin rerank request batch for the provided
+    /// Build a `WendaoArrow` `v1` plugin rerank request batch for the provided
     /// anchors.
     ///
     /// The request reuses `anchor_id` as the stable `doc_id` field because the
@@ -54,7 +54,7 @@ impl VectorStoreSemanticIgnition {
     ///
     /// Returns [`VectorStoreJuliaRequestError`] when candidate
     /// embeddings cannot
-    /// be fetched from the vector store or the WendaoArrow request batch cannot
+    /// be fetched from the vector store or the `WendaoArrow` request batch cannot
     /// be assembled.
     #[cfg(feature = "julia")]
     pub async fn build_plugin_rerank_request_batch(
@@ -107,7 +107,7 @@ impl VectorStoreSemanticIgnition {
     ///
     /// Returns [`VectorStorePluginRerankRequestError`] when candidate
     /// embeddings cannot
-    /// be fetched from the vector store or the WendaoArrow request batch cannot
+    /// be fetched from the vector store or the `WendaoArrow` request batch cannot
     /// be assembled.
     #[cfg(feature = "julia")]
     pub async fn build_julia_rerank_request_batch(
@@ -121,7 +121,7 @@ impl VectorStoreSemanticIgnition {
 }
 
 /// Error returned when the vector-backed semantic ignition cannot assemble one
-/// WendaoArrow plugin rerank request batch.
+/// `WendaoArrow` plugin rerank request batch.
 #[cfg(feature = "julia")]
 #[derive(Debug, Error)]
 pub enum VectorStorePluginRerankRequestError {
@@ -134,7 +134,7 @@ pub enum VectorStorePluginRerankRequestError {
         /// Anchor id that could not be resolved into a stored embedding row.
         anchor_id: String,
     },
-    /// WendaoArrow request batch construction failed.
+    /// `WendaoArrow` request batch construction failed.
     #[error("failed to build plugin rerank request batch")]
     Build(#[source] RepoIntelligenceError),
 }

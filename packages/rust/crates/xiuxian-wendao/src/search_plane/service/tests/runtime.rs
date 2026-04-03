@@ -179,5 +179,8 @@ async fn stale_repo_runtime_refresh_does_not_override_newer_generation() {
         )
         .await;
 
-    assert_eq!(repo_phase(&service, "fresh/repo"), Some(RepoIndexPhase::Ready));
+    assert_eq!(
+        repo_phase(&service, "fresh/repo"),
+        Some(RepoIndexPhase::Ready)
+    );
 }

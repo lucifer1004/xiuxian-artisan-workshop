@@ -27,8 +27,7 @@ xiuxian-lance = { path = "../xiuxian-lance" }
 arrow = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-string = { workspace = true }
-arrow_ipc_compat = { package = "arrow-ipc", version = "57.3.0" }
-arrow_string_compat = { package = "arrow-string", version = "57.3.0" }
+lance_arrow_ipc = { package = "arrow-ipc", version = "57.0.0" }
 parquet = { workspace = true }
 datafusion = { workspace = true }
 

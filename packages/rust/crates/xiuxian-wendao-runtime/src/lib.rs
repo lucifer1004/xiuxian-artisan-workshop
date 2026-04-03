@@ -8,3 +8,6 @@ pub mod runtime_config;
 pub mod settings;
 /// Transport negotiation and client-construction helpers.
 pub mod transport;
+
+#[cfg(test)]
+mod tests;

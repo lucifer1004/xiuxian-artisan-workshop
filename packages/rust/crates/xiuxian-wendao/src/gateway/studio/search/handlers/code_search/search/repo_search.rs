@@ -11,14 +11,16 @@ use crate::gateway::studio::search::handlers::code_search::query::parse_repo_cod
 use crate::gateway::studio::search::handlers::code_search::types::RepoSearchTarget;
 use crate::gateway::studio::types::{SearchHit, StudioNavigationTarget};
 use crate::link_graph::plugin_runtime::SearchPlaneRepoSearchFlightRouteProvider;
-use crate::query_core::{InMemoryWendaoExplainSink, query_repo_entity_relation};
+use crate::query_core::{
+    InMemoryWendaoExplainSink, RepoRetrievalQuery, query_repo_entity_relation,
+};
 #[cfg(test)]
-use crate::query_core::{RetrievalCorpus, query_repo_code_relation};
+use crate::query_core::{RepoCodeQueryRequest, RetrievalCorpus, query_repo_code_relation};
 use crate::search_plane::{
     SearchCorpusKind, SearchPlaneService, SearchQueryTelemetry, SearchQueryTelemetrySource,
 };
 use chrono::Utc;
-use xiuxian_wendao_runtime::transport::RepoSearchFlightRouteProvider;
+use xiuxian_wendao_runtime::transport::{RepoSearchFlightRequest, RepoSearchFlightRouteProvider};
 
 /// Search repo entity rows for a repo-scoped code query.
 ///
@@ -36,23 +38,22 @@ pub(crate) async fn search_repo_entity_hits(
         return Ok(Vec::new());
     };
     let explain_sink = Arc::new(InMemoryWendaoExplainSink::new());
-    let relation = query_repo_entity_relation(
-        search_plane,
+    let query = RepoRetrievalQuery::new(
         repo_id,
         search_term,
         &parsed.language_filters,
         &parsed.kind_filters,
         limit,
-        Some(explain_sink.clone()),
-    )
-    .await
-    .map_err(|error| {
-        StudioApiError::internal(
-            "REPO_ENTITY_SEARCH_FAILED",
-            "Failed to query repo entity search plane",
-            Some(error.to_string()),
-        )
-    })?;
+    );
+    let relation = query_repo_entity_relation(search_plane, &query, Some(explain_sink.clone()))
+        .await
+        .map_err(|error| {
+            StudioApiError::internal(
+                "REPO_ENTITY_SEARCH_FAILED",
+                "Failed to query repo entity search plane",
+                Some(error.to_string()),
+            )
+        })?;
     record_query_core_telemetry(
         search_plane,
         SearchCorpusKind::RepoEntity,
@@ -109,15 +110,15 @@ async fn search_repo_content_hits_via_flight_contract(
         )
     })?;
     let batch = provider
-        .repo_search_batch(
-            search_term,
+        .repo_search_batch(&RepoSearchFlightRequest {
+            query_text: search_term.to_string(),
             limit,
-            &parsed.language_filters,
-            &std::collections::HashSet::new(),
-            &std::collections::HashSet::new(),
-            &std::collections::HashSet::new(),
-            &std::collections::HashSet::new(),
-        )
+            language_filters: parsed.language_filters.clone(),
+            path_prefixes: std::collections::HashSet::new(),
+            title_filters: std::collections::HashSet::new(),
+            tag_filters: std::collections::HashSet::new(),
+            filename_filters: std::collections::HashSet::new(),
+        })
         .await
         .map_err(|error| {
             StudioApiError::internal(
@@ -158,8 +159,7 @@ pub(crate) async fn search_repo_code_hits(
     } else {
         per_repo_limits.content_limit
     };
-    let result = query_repo_code_relation(
-        search_plane,
+    let query = RepoCodeQueryRequest::new(
         target.repo_id.as_str(),
         search_term,
         &parsed.language_filters,
@@ -167,16 +167,16 @@ pub(crate) async fn search_repo_code_hits(
         target.publication_state.entity_published,
         target.publication_state.content_published,
         query_limit,
-        Some(explain_sink.clone()),
-    )
-    .await
-    .map_err(|error| {
-        StudioApiError::internal(
-            "REPO_CODE_SEARCH_FAILED",
-            "Failed to query repo code search through query core",
-            Some(error.to_string()),
-        )
-    })?;
+    );
+    let result = query_repo_code_relation(search_plane, &query, Some(explain_sink.clone()))
+        .await
+        .map_err(|error| {
+            StudioApiError::internal(
+                "REPO_CODE_SEARCH_FAILED",
+                "Failed to query repo code search through query core",
+                Some(error.to_string()),
+            )
+        })?;
 
     let corpus = match result.corpus {
         RetrievalCorpus::RepoEntity => SearchCorpusKind::RepoEntity,
@@ -247,14 +247,14 @@ fn query_relation_to_search_hits(
     for batch in relation.batches() {
         let rows = xiuxian_vector::retrieval_rows_from_record_batch(batch)?;
         hits.extend(
-            rows.into_iter()
+            rows.iter()
                 .map(|row| retrieval_row_to_search_hit(repo_id, row)),
         );
     }
     Ok(hits)
 }
 
-fn retrieval_row_to_search_hit(repo_id: &str, row: xiuxian_vector::RetrievalRow) -> SearchHit {
+fn retrieval_row_to_search_hit(repo_id: &str, row: &xiuxian_vector::RetrievalRow) -> SearchHit {
     let doc_type = row.doc_type.clone().or_else(|| Some("file".to_string()));
     let kind_tag = doc_type.clone().unwrap_or_else(|| "unknown".to_string());
     let mut tags = vec![
@@ -312,123 +312,74 @@ fn retrieval_row_to_search_hit(repo_id: &str, row: xiuxian_vector::RetrievalRow)
     }
 }
 
-fn decode_repo_search_flight_batch_to_search_hits(
-    repo_id: &str,
-    batch: &LanceRecordBatch,
-) -> Result<Vec<SearchHit>, String> {
-    use xiuxian_wendao_runtime::transport::{
-        REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_HIERARCHY_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN,
-        REPO_SEARCH_MATCH_REASON_COLUMN, REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN,
-        REPO_SEARCH_NAVIGATION_LINE_COLUMN, REPO_SEARCH_NAVIGATION_LINE_END_COLUMN,
-        REPO_SEARCH_NAVIGATION_PATH_COLUMN, REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_SCORE_COLUMN,
-        REPO_SEARCH_TAGS_COLUMN, REPO_SEARCH_TITLE_COLUMN,
-    };
+struct RepoSearchFlightColumns<'a> {
+    paths: &'a LanceStringArray,
+    titles: &'a LanceStringArray,
+    best_sections: &'a LanceStringArray,
+    match_reasons: &'a LanceStringArray,
+    navigation_paths: &'a LanceStringArray,
+    navigation_categories: &'a LanceStringArray,
+    navigation_lines: &'a LanceInt32Array,
+    navigation_line_ends: &'a LanceInt32Array,
+    hierarchies: &'a LanceListArray,
+    tags: &'a LanceListArray,
+    scores: &'a xiuxian_vector::LanceFloat64Array,
+    languages: &'a LanceStringArray,
+}
 
-    let paths = batch
-        .column_by_name(REPO_SEARCH_PATH_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_PATH_COLUMN}` string column"))?;
-    let titles = batch
-        .column_by_name(REPO_SEARCH_TITLE_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_TITLE_COLUMN}` string column"))?;
-    let best_sections = batch
-        .column_by_name(REPO_SEARCH_BEST_SECTION_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_BEST_SECTION_COLUMN}` string column"))?;
-    let match_reasons = batch
-        .column_by_name(REPO_SEARCH_MATCH_REASON_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_MATCH_REASON_COLUMN}` string column"))?;
-    let navigation_paths = batch
-        .column_by_name(REPO_SEARCH_NAVIGATION_PATH_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_NAVIGATION_PATH_COLUMN}` string column"))?;
-    let navigation_categories = batch
-        .column_by_name(REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-        .ok_or_else(|| {
-            format!("missing `{REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN}` string column")
-        })?;
-    let navigation_lines = batch
-        .column_by_name(REPO_SEARCH_NAVIGATION_LINE_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceInt32Array>())
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_NAVIGATION_LINE_COLUMN}` int32 column"))?;
-    let navigation_line_ends = batch
-        .column_by_name(REPO_SEARCH_NAVIGATION_LINE_END_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceInt32Array>())
-        .ok_or_else(|| {
-            format!("missing `{REPO_SEARCH_NAVIGATION_LINE_END_COLUMN}` int32 column")
-        })?;
-    let hierarchies = batch
-        .column_by_name(REPO_SEARCH_HIERARCHY_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceListArray>())
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_HIERARCHY_COLUMN}` list column"))?;
-    let tags = batch
-        .column_by_name(REPO_SEARCH_TAGS_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceListArray>())
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_TAGS_COLUMN}` list column"))?;
-    let scores = batch
-        .column_by_name(REPO_SEARCH_SCORE_COLUMN)
-        .and_then(|column| {
-            column
-                .as_any()
-                .downcast_ref::<xiuxian_vector::LanceFloat64Array>()
+impl<'a> RepoSearchFlightColumns<'a> {
+    fn from_batch(batch: &'a LanceRecordBatch) -> Result<Self, String> {
+        use xiuxian_wendao_runtime::transport::{
+            REPO_SEARCH_BEST_SECTION_COLUMN, REPO_SEARCH_HIERARCHY_COLUMN,
+            REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_MATCH_REASON_COLUMN,
+            REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN, REPO_SEARCH_NAVIGATION_LINE_COLUMN,
+            REPO_SEARCH_NAVIGATION_LINE_END_COLUMN, REPO_SEARCH_NAVIGATION_PATH_COLUMN,
+            REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TAGS_COLUMN,
+            REPO_SEARCH_TITLE_COLUMN,
+        };
+
+        Ok(Self {
+            paths: repo_search_string_column(batch, REPO_SEARCH_PATH_COLUMN)?,
+            titles: repo_search_string_column(batch, REPO_SEARCH_TITLE_COLUMN)?,
+            best_sections: repo_search_string_column(batch, REPO_SEARCH_BEST_SECTION_COLUMN)?,
+            match_reasons: repo_search_string_column(batch, REPO_SEARCH_MATCH_REASON_COLUMN)?,
+            navigation_paths: repo_search_string_column(batch, REPO_SEARCH_NAVIGATION_PATH_COLUMN)?,
+            navigation_categories: repo_search_string_column(
+                batch,
+                REPO_SEARCH_NAVIGATION_CATEGORY_COLUMN,
+            )?,
+            navigation_lines: repo_search_int32_column(batch, REPO_SEARCH_NAVIGATION_LINE_COLUMN)?,
+            navigation_line_ends: repo_search_int32_column(
+                batch,
+                REPO_SEARCH_NAVIGATION_LINE_END_COLUMN,
+            )?,
+            hierarchies: repo_search_list_column(batch, REPO_SEARCH_HIERARCHY_COLUMN)?,
+            tags: repo_search_list_column(batch, REPO_SEARCH_TAGS_COLUMN)?,
+            scores: repo_search_float64_column(batch, REPO_SEARCH_SCORE_COLUMN)?,
+            languages: repo_search_string_column(batch, REPO_SEARCH_LANGUAGE_COLUMN)?,
         })
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_SCORE_COLUMN}` float64 column"))?;
-    let languages = batch
-        .column_by_name(REPO_SEARCH_LANGUAGE_COLUMN)
-        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
-        .ok_or_else(|| format!("missing `{REPO_SEARCH_LANGUAGE_COLUMN}` string column"))?;
+    }
 
-    let row_count = batch.num_rows();
-    let mut hits = Vec::with_capacity(row_count);
-    for index in 0..row_count {
-        let path = paths.value(index).to_string();
-        let title = non_empty(titles.value(index));
-        let best_section = non_empty(best_sections.value(index));
-        let match_reason = non_empty(match_reasons.value(index));
-        let language = non_empty(languages.value(index));
-        let path_hierarchy = utf8_list_value(hierarchies, index)?;
-        let tag_values = utf8_list_value(tags, index)?;
-        let line = positive_int32_to_usize(navigation_lines.value(index));
-        let line_end = positive_int32_to_usize(navigation_line_ends.value(index));
-        let navigation_path = non_empty(navigation_paths.value(index));
-        let navigation_category = non_empty(navigation_categories.value(index));
+    fn hit_at(&self, repo_id: &str, index: usize) -> Result<SearchHit, String> {
+        let path = self.paths.value(index).to_string();
+        let title = non_empty(self.titles.value(index));
+        let best_section = non_empty(self.best_sections.value(index));
+        let match_reason = non_empty(self.match_reasons.value(index));
+        let language = non_empty(self.languages.value(index));
+        let path_hierarchy = utf8_list_value(self.hierarchies, index)?;
+        let tag_values = utf8_list_value(self.tags, index)?;
+        let line = positive_int32_to_usize(self.navigation_lines.value(index));
+        let line_end = positive_int32_to_usize(self.navigation_line_ends.value(index));
+        let navigation_path = non_empty(self.navigation_paths.value(index));
+        let navigation_category = non_empty(self.navigation_categories.value(index));
 
-        let mut normalized_tags = tag_values;
-        if let Some(language_value) = language.as_ref()
-            && !normalized_tags
-                .iter()
-                .any(|tag| tag.eq_ignore_ascii_case(format!("lang:{language_value}").as_str()))
-        {
-            normalized_tags.push(language_value.clone());
-            normalized_tags.push(format!("lang:{language_value}"));
-        }
-        if !normalized_tags.iter().any(|tag| tag == "code") {
-            normalized_tags.push("code".to_string());
-        }
-        if !normalized_tags.iter().any(|tag| tag == "file") {
-            normalized_tags.push("file".to_string());
-        }
-        if !normalized_tags.iter().any(|tag| tag == "kind:file") {
-            normalized_tags.push("kind:file".to_string());
-        }
-        if !normalized_tags.iter().any(|tag| tag == repo_id) {
-            normalized_tags.push(repo_id.to_string());
-        }
-
-        hits.push(SearchHit {
-            stem: Path::new(path.as_str())
-                .file_name()
-                .and_then(|value| value.to_str())
-                .unwrap_or(path.as_str())
-                .to_string(),
+        Ok(SearchHit {
+            stem: repo_search_hit_stem(path.as_str()),
             title: title.or_else(|| Some(path.clone())),
             path,
             doc_type: Some("file".to_string()),
-            tags: normalized_tags,
-            score: scores.value(index),
+            tags: normalize_repo_search_tags(repo_id, tag_values, language.as_deref()),
+            score: self.scores.value(index),
             best_section,
             match_reason,
             hierarchical_uri: None,
@@ -447,10 +398,18 @@ fn decode_repo_search_flight_batch_to_search_hits(
                 line_end,
                 column: None,
             }),
-        });
+        })
     }
+}
 
-    Ok(hits)
+fn decode_repo_search_flight_batch_to_search_hits(
+    repo_id: &str,
+    batch: &LanceRecordBatch,
+) -> Result<Vec<SearchHit>, String> {
+    let columns = RepoSearchFlightColumns::from_batch(batch)?;
+    (0..batch.num_rows())
+        .map(|index| columns.hit_at(repo_id, index))
+        .collect()
 }
 
 fn non_empty(value: &str) -> Option<String> {
@@ -459,13 +418,16 @@ fn non_empty(value: &str) -> Option<String> {
 }
 
 fn positive_int32_to_usize(value: i32) -> Option<usize> {
-    (value > 0).then(|| value as usize)
+    if value <= 0 {
+        return None;
+    }
+    usize::try_from(u32::try_from(value).ok()?).ok()
 }
 
 fn utf8_list_value(array: &LanceListArray, index: usize) -> Result<Vec<String>, String> {
     let offsets = array.value_offsets();
-    let start = offsets[index] as usize;
-    let end = offsets[index + 1] as usize;
+    let start = offset_i32_to_usize(offsets[index])?;
+    let end = offset_i32_to_usize(offsets[index + 1])?;
     let strings = array
         .values()
         .as_any()
@@ -474,6 +436,94 @@ fn utf8_list_value(array: &LanceListArray, index: usize) -> Result<Vec<String>, 
     Ok((start..end)
         .map(|inner| strings.value(inner).to_string())
         .collect())
+}
+
+fn repo_search_string_column<'a>(
+    batch: &'a LanceRecordBatch,
+    column_name: &str,
+) -> Result<&'a LanceStringArray, String> {
+    batch
+        .column_by_name(column_name)
+        .and_then(|column| column.as_any().downcast_ref::<LanceStringArray>())
+        .ok_or_else(|| format!("missing `{column_name}` string column"))
+}
+
+fn repo_search_int32_column<'a>(
+    batch: &'a LanceRecordBatch,
+    column_name: &str,
+) -> Result<&'a LanceInt32Array, String> {
+    batch
+        .column_by_name(column_name)
+        .and_then(|column| column.as_any().downcast_ref::<LanceInt32Array>())
+        .ok_or_else(|| format!("missing `{column_name}` int32 column"))
+}
+
+fn repo_search_list_column<'a>(
+    batch: &'a LanceRecordBatch,
+    column_name: &str,
+) -> Result<&'a LanceListArray, String> {
+    batch
+        .column_by_name(column_name)
+        .and_then(|column| column.as_any().downcast_ref::<LanceListArray>())
+        .ok_or_else(|| format!("missing `{column_name}` list column"))
+}
+
+fn repo_search_float64_column<'a>(
+    batch: &'a LanceRecordBatch,
+    column_name: &str,
+) -> Result<&'a xiuxian_vector::LanceFloat64Array, String> {
+    batch
+        .column_by_name(column_name)
+        .and_then(|column| {
+            column
+                .as_any()
+                .downcast_ref::<xiuxian_vector::LanceFloat64Array>()
+        })
+        .ok_or_else(|| format!("missing `{column_name}` float64 column"))
+}
+
+fn repo_search_hit_stem(path: &str) -> String {
+    Path::new(path)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(path)
+        .to_string()
+}
+
+fn normalize_repo_search_tags(
+    repo_id: &str,
+    mut tags: Vec<String>,
+    language: Option<&str>,
+) -> Vec<String> {
+    if let Some(language_value) = language
+        && !tags
+            .iter()
+            .any(|tag| tag.eq_ignore_ascii_case(format!("lang:{language_value}").as_str()))
+    {
+        tags.push(language_value.to_string());
+        tags.push(format!("lang:{language_value}"));
+    }
+    if !tags.iter().any(|tag| tag == "code") {
+        tags.push("code".to_string());
+    }
+    if !tags.iter().any(|tag| tag == "file") {
+        tags.push("file".to_string());
+    }
+    if !tags.iter().any(|tag| tag == "kind:file") {
+        tags.push("kind:file".to_string());
+    }
+    if !tags.iter().any(|tag| tag == repo_id) {
+        tags.push(repo_id.to_string());
+    }
+    tags
+}
+
+fn offset_i32_to_usize(value: i32) -> Result<usize, String> {
+    usize::try_from(
+        u32::try_from(value)
+            .map_err(|_| format!("repo-search list offset must be non-negative, got {value}"))?,
+    )
+    .map_err(|_| format!("repo-search list offset is too large: {value}"))
 }
 
 fn infer_code_language(path: &str) -> Option<String> {
@@ -538,4 +588,50 @@ fn record_query_core_telemetry(
             dropped_candidate_count: 0,
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use xiuxian_vector::{LanceInt32Array, LanceListBuilder, LanceStringBuilder};
+
+    use super::{offset_i32_to_usize, positive_int32_to_usize, utf8_list_value};
+
+    #[test]
+    fn positive_int32_to_usize_rejects_non_positive_values() {
+        assert_eq!(positive_int32_to_usize(-1), None);
+        assert_eq!(positive_int32_to_usize(0), None);
+        assert_eq!(positive_int32_to_usize(7), Some(7));
+    }
+
+    #[test]
+    fn offset_i32_to_usize_rejects_negative_offsets() {
+        assert!(offset_i32_to_usize(-1).is_err());
+        assert_eq!(offset_i32_to_usize(3).unwrap(), 3);
+    }
+
+    #[test]
+    fn utf8_list_value_reads_values_for_one_row() {
+        let mut builder = LanceListBuilder::new(LanceStringBuilder::new());
+        builder.values().append_value("alpha");
+        builder.values().append_value("beta");
+        builder.append(true);
+        builder.values().append_value("gamma");
+        builder.append(true);
+        let array = builder.finish();
+
+        assert_eq!(
+            utf8_list_value(&array, 0).unwrap(),
+            vec!["alpha".to_string(), "beta".to_string()]
+        );
+        assert_eq!(
+            utf8_list_value(&array, 1).unwrap(),
+            vec!["gamma".to_string()]
+        );
+    }
+
+    #[test]
+    fn offset_i32_to_usize_accepts_int32_builder_offsets() {
+        let offsets = LanceInt32Array::from(vec![0, 2, 3]);
+        assert_eq!(offset_i32_to_usize(offsets.value(1)).unwrap(), 2);
+    }
 }

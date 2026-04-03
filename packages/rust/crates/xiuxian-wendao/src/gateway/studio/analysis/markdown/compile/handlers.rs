@@ -8,7 +8,7 @@ use crate::gateway::studio::analysis::markdown::compile::utils::{
 use crate::gateway::studio::analysis::markdown::text::collect_plain_text;
 use crate::gateway::studio::types::{AnalysisEdgeKind, AnalysisNode, AnalysisNodeKind};
 
-impl<'a> MarkdownCompiler<'a> {
+impl MarkdownCompiler<'_> {
     pub(crate) fn handle_heading<'b>(&mut self, node: &'b AstNode<'b>, level: usize) {
         while self
             .section_stack

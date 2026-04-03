@@ -77,7 +77,7 @@ pub(crate) async fn search_repo_entity_module_results(
     let result = build_module_search_result(
         repo_id,
         prepared.candidates,
-        load_hydrated_rows_by_id(
+        &load_hydrated_rows_by_id(
             service.search_engine(),
             prepared.engine_table_name.as_str(),
             ids.as_slice(),
@@ -125,7 +125,7 @@ pub(crate) async fn search_repo_entity_symbol_results(
     let result = build_symbol_search_result(
         repo_id,
         prepared.candidates,
-        load_hydrated_rows_by_id(
+        &load_hydrated_rows_by_id(
             service.search_engine(),
             prepared.engine_table_name.as_str(),
             ids.as_slice(),
@@ -173,7 +173,7 @@ pub(crate) async fn search_repo_entity_example_results(
     let result = build_example_search_result(
         repo_id,
         prepared.candidates,
-        load_hydrated_rows_by_id(
+        &load_hydrated_rows_by_id(
             service.search_engine(),
             prepared.engine_table_name.as_str(),
             ids.as_slice(),
@@ -220,7 +220,7 @@ pub(crate) async fn search_repo_entity_import_results(
     let result = build_import_search_result(
         query.repo_id.as_str(),
         prepared.candidates,
-        load_hydrated_rows_by_id(
+        &load_hydrated_rows_by_id(
             service.search_engine(),
             prepared.engine_table_name.as_str(),
             ids.as_slice(),
@@ -274,7 +274,7 @@ fn empty_import_search_result(repo_id: &str) -> ImportSearchResult {
 fn build_module_search_result(
     repo_id: &str,
     candidates: Vec<crate::search_plane::repo_entity::query::types::RepoEntityCandidate>,
-    rows: std::collections::BTreeMap<
+    rows: &std::collections::BTreeMap<
         String,
         crate::search_plane::repo_entity::query::types::HydratedRepoEntityRow,
     >,
@@ -287,7 +287,7 @@ fn build_module_search_result(
 fn build_symbol_search_result(
     repo_id: &str,
     candidates: Vec<crate::search_plane::repo_entity::query::types::RepoEntityCandidate>,
-    rows: std::collections::BTreeMap<
+    rows: &std::collections::BTreeMap<
         String,
         crate::search_plane::repo_entity::query::types::HydratedRepoEntityRow,
     >,
@@ -300,7 +300,7 @@ fn build_symbol_search_result(
 fn build_example_search_result(
     repo_id: &str,
     candidates: Vec<crate::search_plane::repo_entity::query::types::RepoEntityCandidate>,
-    rows: std::collections::BTreeMap<
+    rows: &std::collections::BTreeMap<
         String,
         crate::search_plane::repo_entity::query::types::HydratedRepoEntityRow,
     >,

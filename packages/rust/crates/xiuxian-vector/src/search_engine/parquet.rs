@@ -46,7 +46,7 @@ pub fn write_lance_batches_to_parquet_file(
 }
 
 impl VectorStore {
-    /// Export a Lance-backed columnar table into a Parquet file for DataFusion reads.
+    /// Export a Lance-backed columnar table into a Parquet file for `DataFusion` reads.
     ///
     /// # Errors
     ///

@@ -9,7 +9,7 @@ pub(crate) fn compile_markdown_ir(path: &str, content: &str) -> CompiledDocument
     MarkdownCompiler::new(path, content).compile()
 }
 
-impl<'a> MarkdownCompiler<'a> {
+impl MarkdownCompiler<'_> {
     pub(crate) fn compile(mut self) -> CompiledDocument {
         let arena = Arena::new();
         let root = parse_document(&arena, self.content, &markdown_options());

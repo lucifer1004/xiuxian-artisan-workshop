@@ -1,3 +1,4 @@
+mod bootstrap;
 mod helpers;
 mod reads;
 mod sync;

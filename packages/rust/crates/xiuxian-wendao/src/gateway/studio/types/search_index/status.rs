@@ -1,34 +1,36 @@
 use std::collections::BTreeMap;
 
-use super::definitions::*;
+use super::definitions as search_index;
 
-impl From<&crate::search_plane::SearchPlaneStatusSnapshot> for SearchIndexStatusResponse {
+impl From<&crate::search_plane::SearchPlaneStatusSnapshot>
+    for search_index::SearchIndexStatusResponse
+{
     fn from(value: &crate::search_plane::SearchPlaneStatusSnapshot) -> Self {
         let corpora = value
             .corpora
             .iter()
-            .map(SearchCorpusIndexStatus::from)
+            .map(search_index::SearchCorpusIndexStatus::from)
             .collect::<Vec<_>>();
         let total = corpora.len();
         let idle = corpora
             .iter()
-            .filter(|status| matches!(status.phase, SearchIndexPhase::Idle))
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Idle))
             .count();
         let indexing = corpora
             .iter()
-            .filter(|status| matches!(status.phase, SearchIndexPhase::Indexing))
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Indexing))
             .count();
         let ready = corpora
             .iter()
-            .filter(|status| matches!(status.phase, SearchIndexPhase::Ready))
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Ready))
             .count();
         let failed = corpora
             .iter()
-            .filter(|status| matches!(status.phase, SearchIndexPhase::Failed))
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Failed))
             .count();
         let degraded = corpora
             .iter()
-            .filter(|status| matches!(status.phase, SearchIndexPhase::Degraded))
+            .filter(|status| matches!(status.phase, search_index::SearchIndexPhase::Degraded))
             .count();
         let compaction_pending = corpora
             .iter()
@@ -40,7 +42,7 @@ impl From<&crate::search_plane::SearchPlaneStatusSnapshot> for SearchIndexStatus
         let repo_read_pressure = value
             .repo_read_pressure
             .as_ref()
-            .map(SearchIndexRepoReadPressure::from);
+            .map(search_index::SearchIndexRepoReadPressure::from);
         Self {
             total,
             idle,
@@ -59,8 +61,8 @@ impl From<&crate::search_plane::SearchPlaneStatusSnapshot> for SearchIndexStatus
 }
 
 fn summarize_response_status_reason(
-    corpora: &[SearchCorpusIndexStatus],
-) -> Option<SearchIndexAggregateStatusReason> {
+    corpora: &[search_index::SearchCorpusIndexStatus],
+) -> Option<search_index::SearchIndexAggregateStatusReason> {
     let reasons = corpora
         .iter()
         .filter_map(|status| status.status_reason.as_ref())
@@ -81,7 +83,7 @@ fn summarize_response_status_reason(
         .filter(|reason| reason.readable)
         .count();
     let blocking_corpus_count = affected_corpus_count.saturating_sub(readable_corpus_count);
-    Some(SearchIndexAggregateStatusReason {
+    Some(search_index::SearchIndexAggregateStatusReason {
         code: primary.code,
         severity: primary.severity,
         action: primary.action,
@@ -92,8 +94,8 @@ fn summarize_response_status_reason(
 }
 
 fn summarize_response_query_telemetry(
-    corpora: &[SearchCorpusIndexStatus],
-) -> Option<SearchIndexAggregateQueryTelemetry> {
+    corpora: &[search_index::SearchCorpusIndexStatus],
+) -> Option<search_index::SearchIndexAggregateQueryTelemetry> {
     let telemetry = corpora
         .iter()
         .filter_map(|status| status.last_query_telemetry.as_ref())
@@ -123,8 +125,8 @@ fn summarize_response_query_telemetry(
 }
 
 fn summarize_response_maintenance(
-    corpora: &[SearchCorpusIndexStatus],
-) -> Option<SearchIndexAggregateMaintenanceSummary> {
+    corpora: &[search_index::SearchCorpusIndexStatus],
+) -> Option<search_index::SearchIndexAggregateMaintenanceSummary> {
     let prewarm_running_count = corpora
         .iter()
         .filter(|status| status.maintenance.prewarm_running)
@@ -170,7 +172,7 @@ fn summarize_response_maintenance(
         return None;
     }
 
-    Some(SearchIndexAggregateMaintenanceSummary {
+    Some(search_index::SearchIndexAggregateMaintenanceSummary {
         prewarm_running_count,
         prewarm_queued_corpus_count,
         max_prewarm_queue_depth,
@@ -191,26 +193,26 @@ fn max_optional_u64(left: Option<u64>, right: Option<u64>) -> Option<u64> {
     }
 }
 
-fn response_reason_severity_priority(severity: SearchIndexStatusSeverity) -> u8 {
+fn response_reason_severity_priority(severity: search_index::SearchIndexStatusSeverity) -> u8 {
     match severity {
-        SearchIndexStatusSeverity::Error => 0,
-        SearchIndexStatusSeverity::Warning => 1,
-        SearchIndexStatusSeverity::Info => 2,
+        search_index::SearchIndexStatusSeverity::Error => 0,
+        search_index::SearchIndexStatusSeverity::Warning => 1,
+        search_index::SearchIndexStatusSeverity::Info => 2,
     }
 }
 
-fn response_reason_code_priority(code: SearchIndexStatusReasonCode) -> u8 {
+fn response_reason_code_priority(code: search_index::SearchIndexStatusReasonCode) -> u8 {
     match code {
-        SearchIndexStatusReasonCode::PublishedManifestMissing => 0,
-        SearchIndexStatusReasonCode::BuildFailed => 1,
-        SearchIndexStatusReasonCode::PublishedRevisionMissing => 2,
-        SearchIndexStatusReasonCode::PublishedRevisionMismatch => 3,
-        SearchIndexStatusReasonCode::RepoIndexFailed => 4,
-        SearchIndexStatusReasonCode::WarmingUp => 5,
-        SearchIndexStatusReasonCode::Prewarming => 6,
-        SearchIndexStatusReasonCode::Refreshing => 7,
-        SearchIndexStatusReasonCode::Compacting => 8,
-        SearchIndexStatusReasonCode::CompactionPending => 9,
+        search_index::SearchIndexStatusReasonCode::PublishedManifestMissing => 0,
+        search_index::SearchIndexStatusReasonCode::BuildFailed => 1,
+        search_index::SearchIndexStatusReasonCode::PublishedRevisionMissing => 2,
+        search_index::SearchIndexStatusReasonCode::PublishedRevisionMismatch => 3,
+        search_index::SearchIndexStatusReasonCode::RepoIndexFailed => 4,
+        search_index::SearchIndexStatusReasonCode::WarmingUp => 5,
+        search_index::SearchIndexStatusReasonCode::Prewarming => 6,
+        search_index::SearchIndexStatusReasonCode::Refreshing => 7,
+        search_index::SearchIndexStatusReasonCode::Compacting => 8,
+        search_index::SearchIndexStatusReasonCode::CompactionPending => 9,
     }
 }
 
@@ -234,19 +236,19 @@ struct QueryTelemetryAccumulator {
 }
 
 impl QueryTelemetryAccumulator {
-    fn observe(&mut self, entry: &SearchIndexQueryTelemetry) {
+    fn observe(&mut self, entry: &search_index::SearchIndexQueryTelemetry) {
         self.corpus_count = self.corpus_count.saturating_add(1);
         if self.latest_captured_at.as_str() < entry.captured_at.as_str() {
-            self.latest_captured_at = entry.captured_at.clone();
+            self.latest_captured_at.clone_from(&entry.captured_at);
         }
         match entry.source {
-            SearchIndexQueryTelemetrySource::Scan => {
+            search_index::SearchIndexQueryTelemetrySource::Scan => {
                 self.scan_count = self.scan_count.saturating_add(1);
             }
-            SearchIndexQueryTelemetrySource::Fts => {
+            search_index::SearchIndexQueryTelemetrySource::Fts => {
                 self.fts_count = self.fts_count.saturating_add(1);
             }
-            SearchIndexQueryTelemetrySource::FtsFallbackScan => {
+            search_index::SearchIndexQueryTelemetrySource::FtsFallbackScan => {
                 self.fts_fallback_scan_count = self.fts_fallback_scan_count.saturating_add(1);
             }
         }
@@ -272,9 +274,9 @@ impl QueryTelemetryAccumulator {
 
     fn into_aggregate(
         self,
-        scopes: Vec<SearchIndexQueryTelemetryScopeSummary>,
-    ) -> SearchIndexAggregateQueryTelemetry {
-        SearchIndexAggregateQueryTelemetry {
+        scopes: Vec<search_index::SearchIndexQueryTelemetryScopeSummary>,
+    ) -> search_index::SearchIndexAggregateQueryTelemetry {
+        search_index::SearchIndexAggregateQueryTelemetry {
             corpus_count: self.corpus_count,
             latest_captured_at: self.latest_captured_at,
             scan_count: self.scan_count,
@@ -294,8 +296,11 @@ impl QueryTelemetryAccumulator {
         }
     }
 
-    fn into_scope_summary(self, scope: String) -> SearchIndexQueryTelemetryScopeSummary {
-        SearchIndexQueryTelemetryScopeSummary {
+    fn into_scope_summary(
+        self,
+        scope: String,
+    ) -> search_index::SearchIndexQueryTelemetryScopeSummary {
+        search_index::SearchIndexQueryTelemetryScopeSummary {
             scope,
             corpus_count: self.corpus_count,
             latest_captured_at: self.latest_captured_at,
