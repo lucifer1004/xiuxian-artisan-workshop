@@ -17,9 +17,20 @@ use crate::gateway::studio::router::GatewayState;
 use crate::gateway::studio::router::handlers::analysis::{
     StudioCodeAstAnalysisFlightRouteProvider, StudioMarkdownAnalysisFlightRouteProvider,
 };
-use crate::gateway::studio::router::handlers::graph::StudioGraphNeighborsFlightRouteProvider;
+use crate::gateway::studio::router::handlers::graph::{
+    StudioGraphNeighborsFlightRouteProvider, StudioTopology3dFlightRouteProvider,
+};
+use crate::gateway::studio::router::handlers::repo::{
+    StudioRefineDocFlightRouteProvider, StudioRepoDocCoverageFlightRouteProvider,
+    StudioRepoIndexFlightRouteProvider, StudioRepoIndexStatusFlightRouteProvider,
+    StudioRepoOverviewFlightRouteProvider, StudioRepoProjectedPageIndexTreeFlightRouteProvider,
+    StudioRepoSyncFlightRouteProvider,
+};
 #[cfg(feature = "julia")]
-use crate::gateway::studio::vfs::StudioVfsResolveFlightRouteProvider;
+use crate::gateway::studio::vfs::{
+    StudioVfsContentFlightRouteProvider, StudioVfsResolveFlightRouteProvider,
+    StudioVfsScanFlightRouteProvider,
+};
 
 use super::ast::StudioAstSearchFlightRouteProvider;
 use super::attachments::StudioAttachmentSearchFlightRouteProvider;
@@ -154,10 +165,40 @@ pub(crate) fn build_studio_search_flight_service_with_repo_provider(
     route_providers.code_ast_analysis = Some(Arc::new(
         StudioCodeAstAnalysisFlightRouteProvider::new(Arc::clone(&state)),
     ));
+    route_providers.repo_overview = Some(Arc::new(StudioRepoOverviewFlightRouteProvider::new(
+        Arc::clone(&state),
+    )));
+    route_providers.repo_index = Some(Arc::new(StudioRepoIndexFlightRouteProvider::new(
+        Arc::clone(&state),
+    )));
+    route_providers.repo_index_status = Some(Arc::new(
+        StudioRepoIndexStatusFlightRouteProvider::new(Arc::clone(&state)),
+    ));
+    route_providers.repo_sync = Some(Arc::new(StudioRepoSyncFlightRouteProvider::new(
+        Arc::clone(&state),
+    )));
+    route_providers.repo_doc_coverage = Some(Arc::new(
+        StudioRepoDocCoverageFlightRouteProvider::new(Arc::clone(&state)),
+    ));
+    route_providers.repo_projected_page_index_tree = Some(Arc::new(
+        StudioRepoProjectedPageIndexTreeFlightRouteProvider::new(Arc::clone(&state)),
+    ));
+    route_providers.refine_doc = Some(Arc::new(StudioRefineDocFlightRouteProvider::new(
+        Arc::clone(&state),
+    )));
+    route_providers.vfs_content = Some(Arc::new(StudioVfsContentFlightRouteProvider::new(
+        Arc::clone(&state.studio),
+    )));
+    route_providers.vfs_scan = Some(Arc::new(StudioVfsScanFlightRouteProvider::new(Arc::clone(
+        &state.studio,
+    ))));
     route_providers.vfs_resolve = Some(Arc::new(StudioVfsResolveFlightRouteProvider::new(
         Arc::clone(&state.studio),
     )));
     route_providers.graph_neighbors = Some(Arc::new(StudioGraphNeighborsFlightRouteProvider::new(
+        Arc::clone(&state),
+    )));
+    route_providers.topology_3d = Some(Arc::new(StudioTopology3dFlightRouteProvider::new(
         Arc::clone(&state),
     )));
     route_providers.sql = Some(Arc::new(StudioSqlFlightRouteProvider::new(
@@ -190,20 +231,30 @@ mod tests {
         LanceDataType, LanceField, LanceFloat64Array, LanceRecordBatch, LanceSchema,
     };
     use xiuxian_wendao_runtime::transport::{
-        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_ROUTE,
-        RepoSearchFlightRouteProvider, RerankScoreWeights, SEARCH_AST_ROUTE,
+        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, ANALYSIS_REFINE_DOC_ROUTE,
+        ANALYSIS_REPO_DOC_COVERAGE_ROUTE, ANALYSIS_REPO_INDEX_ROUTE,
+        ANALYSIS_REPO_INDEX_STATUS_ROUTE, ANALYSIS_REPO_OVERVIEW_ROUTE,
+        ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE, ANALYSIS_REPO_SYNC_ROUTE,
+        GRAPH_NEIGHBORS_ROUTE, RepoSearchFlightRouteProvider, RerankScoreWeights, SEARCH_AST_ROUTE,
         SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE, SEARCH_DEFINITION_ROUTE,
         SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE, SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE,
-        SearchFlightRouteProvider, VFS_RESOLVE_ROUTE, WENDAO_ANALYSIS_LINE_HEADER,
-        WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
-        WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER,
+        SearchFlightRouteProvider, TOPOLOGY_3D_ROUTE, VFS_CONTENT_ROUTE, VFS_RESOLVE_ROUTE,
+        VFS_SCAN_ROUTE, WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_PATH_HEADER,
+        WENDAO_ANALYSIS_REPO_HEADER, WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER,
         WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER, WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER,
         WENDAO_AUTOCOMPLETE_LIMIT_HEADER, WENDAO_AUTOCOMPLETE_PREFIX_HEADER,
         WENDAO_DEFINITION_LINE_HEADER, WENDAO_DEFINITION_PATH_HEADER,
         WENDAO_DEFINITION_QUERY_HEADER, WENDAO_GRAPH_DIRECTION_HEADER, WENDAO_GRAPH_HOPS_HEADER,
-        WENDAO_GRAPH_LIMIT_HEADER, WENDAO_GRAPH_NODE_ID_HEADER, WENDAO_SCHEMA_VERSION_HEADER,
-        WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER, WENDAO_VFS_PATH_HEADER,
-        WendaoFlightService, flight_descriptor_path,
+        WENDAO_GRAPH_LIMIT_HEADER, WENDAO_GRAPH_NODE_ID_HEADER, WENDAO_REFINE_DOC_ENTITY_ID_HEADER,
+        WENDAO_REFINE_DOC_REPO_HEADER, WENDAO_REFINE_DOC_USER_HINTS_HEADER,
+        WENDAO_REPO_DOC_COVERAGE_MODULE_HEADER, WENDAO_REPO_DOC_COVERAGE_REPO_HEADER,
+        WENDAO_REPO_INDEX_REFRESH_HEADER, WENDAO_REPO_INDEX_REPO_HEADER,
+        WENDAO_REPO_INDEX_REQUEST_ID_HEADER, WENDAO_REPO_INDEX_STATUS_REPO_HEADER,
+        WENDAO_REPO_OVERVIEW_REPO_HEADER, WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_PAGE_ID_HEADER,
+        WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_REPO_HEADER, WENDAO_REPO_SYNC_MODE_HEADER,
+        WENDAO_REPO_SYNC_REPO_HEADER, WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_LIMIT_HEADER,
+        WENDAO_SEARCH_QUERY_HEADER, WENDAO_VFS_PATH_HEADER, WendaoFlightService,
+        flight_descriptor_path,
     };
 
     use super::{
@@ -626,6 +677,22 @@ mod tests {
         );
     }
 
+    fn populate_vfs_content_headers(metadata: &mut MetadataMap, path: &str) {
+        populate_vfs_resolve_headers(metadata, path);
+    }
+
+    fn populate_schema_headers(metadata: &mut MetadataMap) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+    }
+
+    fn populate_vfs_scan_headers(metadata: &mut MetadataMap) {
+        populate_schema_headers(metadata);
+    }
+
     fn populate_graph_neighbors_headers(
         metadata: &mut MetadataMap,
         node_id: &str,
@@ -633,11 +700,7 @@ mod tests {
         hops: usize,
         limit: usize,
     ) {
-        metadata.insert(
-            WENDAO_SCHEMA_VERSION_HEADER,
-            "v2".parse()
-                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
-        );
+        populate_schema_headers(metadata);
         metadata.insert(
             WENDAO_GRAPH_NODE_ID_HEADER,
             node_id
@@ -663,6 +726,10 @@ mod tests {
                 .parse()
                 .unwrap_or_else(|error| panic!("graph limit metadata: {error}")),
         );
+    }
+
+    fn populate_topology_3d_headers(metadata: &mut MetadataMap) {
+        populate_schema_headers(metadata);
     }
 
     fn populate_markdown_analysis_headers(metadata: &mut MetadataMap, path: &str) {
@@ -698,6 +765,167 @@ mod tests {
                     .to_string()
                     .parse()
                     .unwrap_or_else(|error| panic!("analysis line metadata: {error}")),
+            );
+        }
+    }
+
+    fn populate_repo_doc_coverage_headers(
+        metadata: &mut MetadataMap,
+        repo_id: &str,
+        module_id: Option<&str>,
+    ) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_REPO_DOC_COVERAGE_REPO_HEADER,
+            repo_id
+                .parse()
+                .unwrap_or_else(|error| panic!("repo doc coverage repo metadata: {error}")),
+        );
+        if let Some(module_id) = module_id {
+            metadata.insert(
+                WENDAO_REPO_DOC_COVERAGE_MODULE_HEADER,
+                module_id
+                    .parse()
+                    .unwrap_or_else(|error| panic!("repo doc coverage module metadata: {error}")),
+            );
+        }
+    }
+
+    fn populate_repo_overview_headers(metadata: &mut MetadataMap, repo_id: &str) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse().expect("schema version metadata should parse"),
+        );
+        metadata.insert(
+            WENDAO_REPO_OVERVIEW_REPO_HEADER,
+            repo_id
+                .parse()
+                .expect("repo overview repo metadata should parse"),
+        );
+    }
+
+    fn populate_repo_index_headers(
+        metadata: &mut MetadataMap,
+        repo_id: Option<&str>,
+        refresh: bool,
+    ) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse().expect("schema version metadata should parse"),
+        );
+        if let Some(repo_id) = repo_id {
+            metadata.insert(
+                WENDAO_REPO_INDEX_REPO_HEADER,
+                repo_id
+                    .parse()
+                    .expect("repo index repo metadata should parse"),
+            );
+        }
+        metadata.insert(
+            WENDAO_REPO_INDEX_REFRESH_HEADER,
+            if refresh { "true" } else { "false" }
+                .parse()
+                .expect("repo index refresh metadata should parse"),
+        );
+        metadata.insert(
+            WENDAO_REPO_INDEX_REQUEST_ID_HEADER,
+            "repo-index-test-request"
+                .parse()
+                .expect("repo index request id metadata should parse"),
+        );
+    }
+
+    fn populate_repo_index_status_headers(metadata: &mut MetadataMap, repo_id: Option<&str>) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse().expect("schema version metadata should parse"),
+        );
+        if let Some(repo_id) = repo_id {
+            metadata.insert(
+                WENDAO_REPO_INDEX_STATUS_REPO_HEADER,
+                repo_id
+                    .parse()
+                    .expect("repo index status repo metadata should parse"),
+            );
+        }
+    }
+
+    fn populate_repo_sync_headers(metadata: &mut MetadataMap, repo_id: &str, mode: Option<&str>) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse().expect("schema version metadata should parse"),
+        );
+        metadata.insert(
+            WENDAO_REPO_SYNC_REPO_HEADER,
+            repo_id
+                .parse()
+                .expect("repo sync repo metadata should parse"),
+        );
+        if let Some(mode) = mode {
+            metadata.insert(
+                WENDAO_REPO_SYNC_MODE_HEADER,
+                mode.parse().expect("repo sync mode metadata should parse"),
+            );
+        }
+    }
+
+    fn populate_repo_projected_page_index_tree_headers(
+        metadata: &mut MetadataMap,
+        repo_id: &str,
+        page_id: &str,
+    ) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_REPO_HEADER,
+            repo_id.parse().unwrap_or_else(|error| {
+                panic!("repo projected page-index tree repo metadata: {error}")
+            }),
+        );
+        metadata.insert(
+            WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_PAGE_ID_HEADER,
+            page_id.parse().unwrap_or_else(|error| {
+                panic!("repo projected page-index tree page metadata: {error}")
+            }),
+        );
+    }
+
+    fn populate_refine_doc_headers(
+        metadata: &mut MetadataMap,
+        repo_id: &str,
+        entity_id: &str,
+        user_hints_base64: Option<&str>,
+    ) {
+        metadata.insert(
+            WENDAO_SCHEMA_VERSION_HEADER,
+            "v2".parse()
+                .unwrap_or_else(|error| panic!("schema metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_REFINE_DOC_REPO_HEADER,
+            repo_id
+                .parse()
+                .unwrap_or_else(|error| panic!("refine doc repo metadata: {error}")),
+        );
+        metadata.insert(
+            WENDAO_REFINE_DOC_ENTITY_ID_HEADER,
+            entity_id
+                .parse()
+                .unwrap_or_else(|error| panic!("refine doc entity metadata: {error}")),
+        );
+        if let Some(user_hints_base64) = user_hints_base64 {
+            metadata.insert(
+                WENDAO_REFINE_DOC_USER_HINTS_HEADER,
+                user_hints_base64
+                    .parse()
+                    .unwrap_or_else(|error| panic!("refine doc user hints metadata: {error}")),
             );
         }
     }
@@ -907,6 +1135,37 @@ mod tests {
         })
     }
 
+    async fn snapshot_vfs_content_route_contract(
+        service: &WendaoFlightService,
+        path: &str,
+    ) -> serde_json::Value {
+        let descriptor_path = flight_descriptor_path(VFS_CONTENT_ROUTE)
+            .unwrap_or_else(|error| panic!("descriptor path: {error}"));
+        let mut request = Request::new(FlightDescriptor::new_path(descriptor_path.clone()));
+        populate_vfs_content_headers(request.metadata_mut(), path);
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .unwrap_or_else(|error| panic!("VFS content route should resolve: {error}"));
+        let flight_info = response.into_inner();
+        let ticket = flight_info
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .unwrap_or_else(|| panic!("VFS content route should emit one ticket"));
+
+        json!({
+            "route": VFS_CONTENT_ROUTE,
+            "descriptorPath": descriptor_path,
+            "path": path,
+            "ticket": ticket,
+            "endpointCount": flight_info.endpoint.len(),
+            "schemaLength": flight_info.schema.len(),
+        })
+    }
+
     async fn snapshot_graph_neighbors_route_contract(
         service: &WendaoFlightService,
         node_id: &str,
@@ -938,6 +1197,62 @@ mod tests {
             "direction": direction,
             "hops": hops,
             "limit": limit,
+            "ticket": ticket,
+            "endpointCount": flight_info.endpoint.len(),
+            "schemaLength": flight_info.schema.len(),
+        })
+    }
+
+    async fn snapshot_vfs_scan_route_contract(service: &WendaoFlightService) -> serde_json::Value {
+        let descriptor_path = flight_descriptor_path(VFS_SCAN_ROUTE)
+            .unwrap_or_else(|error| panic!("descriptor path: {error}"));
+        let mut request = Request::new(FlightDescriptor::new_path(descriptor_path.clone()));
+        populate_vfs_scan_headers(request.metadata_mut());
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .unwrap_or_else(|error| panic!("VFS scan route should resolve: {error}"));
+        let flight_info = response.into_inner();
+        let ticket = flight_info
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .unwrap_or_else(|| panic!("VFS scan route should emit one ticket"));
+
+        json!({
+            "route": VFS_SCAN_ROUTE,
+            "descriptorPath": descriptor_path,
+            "ticket": ticket,
+            "endpointCount": flight_info.endpoint.len(),
+            "schemaLength": flight_info.schema.len(),
+        })
+    }
+
+    async fn snapshot_topology_3d_route_contract(
+        service: &WendaoFlightService,
+    ) -> serde_json::Value {
+        let descriptor_path = flight_descriptor_path(TOPOLOGY_3D_ROUTE)
+            .unwrap_or_else(|error| panic!("descriptor path: {error}"));
+        let mut request = Request::new(FlightDescriptor::new_path(descriptor_path.clone()));
+        populate_topology_3d_headers(request.metadata_mut());
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .unwrap_or_else(|error| panic!("topology-3d route should resolve: {error}"));
+        let flight_info = response.into_inner();
+        let ticket = flight_info
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .unwrap_or_else(|| panic!("topology-3d route should emit one ticket"));
+
+        json!({
+            "route": TOPOLOGY_3D_ROUTE,
+            "descriptorPath": descriptor_path,
             "ticket": ticket,
             "endpointCount": flight_info.endpoint.len(),
             "schemaLength": flight_info.schema.len(),
@@ -1208,7 +1523,7 @@ mod tests {
                 .unwrap_or_else(|error| panic!("descriptor path: {error}")),
         );
         let mut request = Request::new(descriptor);
-        populate_vfs_resolve_headers(request.metadata_mut(), "docs/index.md");
+        populate_vfs_resolve_headers(request.metadata_mut(), "kernel/docs/index.md");
 
         let response = service
             .get_flight_info(request)
@@ -1223,6 +1538,78 @@ mod tests {
             .expect("VFS resolve route should emit one ticket");
 
         assert_eq!(ticket, VFS_RESOLVE_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_vfs_content_routes() {
+        let fixture = make_gateway_state_with_docs(&[(
+            "docs/index.md",
+            "# Index\n\n- [Overview](overview.md)\n",
+        )]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(VFS_CONTENT_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_vfs_content_headers(request.metadata_mut(), "kernel/docs/index.md");
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("VFS content route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("VFS content route should emit one ticket");
+
+        assert_eq!(ticket, VFS_CONTENT_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_vfs_scan_routes() {
+        let fixture = make_gateway_state_with_docs(&[(
+            "docs/index.md",
+            "# Index\n\n- [Overview](overview.md)\n",
+        )]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(VFS_SCAN_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_vfs_scan_headers(request.metadata_mut());
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("VFS scan route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("VFS scan route should emit one ticket");
+
+        assert_eq!(ticket, VFS_SCAN_ROUTE);
     }
 
     #[tokio::test]
@@ -1304,6 +1691,324 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn build_studio_search_flight_service_wires_repo_overview_routes() {
+        let fixture = make_gateway_state_with_repo(&[
+            (
+                "Project.toml",
+                "name = \"Demo\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+            ),
+            ("README.md", "# Demo\n\nPackage docs.\n"),
+            (
+                "docs/solve.md",
+                "# solve\n\nDocument the exported function.\n",
+            ),
+            (
+                "src/lib.jl",
+                "module Demo\nexport solve\n\"solve docs\"\nsolve(x) = x + 1\nend\n",
+            ),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(ANALYSIS_REPO_OVERVIEW_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_repo_overview_headers(request.metadata_mut(), "demo");
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("repo overview route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("repo overview route should emit one ticket");
+
+        assert_eq!(ticket, ANALYSIS_REPO_OVERVIEW_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_repo_index_routes() {
+        let fixture = make_gateway_state_with_repo(&[
+            (
+                "Project.toml",
+                "name = \"Demo\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+            ),
+            (
+                "src/lib.jl",
+                "module Demo\nexport solve\nsolve(x) = x + 1\nend\n",
+            ),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(ANALYSIS_REPO_INDEX_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_repo_index_headers(request.metadata_mut(), Some("demo"), true);
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("repo index route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("repo index route should emit one ticket");
+
+        assert_eq!(ticket, ANALYSIS_REPO_INDEX_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_repo_index_status_routes() {
+        let fixture = make_gateway_state_with_repo(&[
+            (
+                "Project.toml",
+                "name = \"Demo\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+            ),
+            (
+                "src/lib.jl",
+                "module Demo\nexport solve\nsolve(x) = x + 1\nend\n",
+            ),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(ANALYSIS_REPO_INDEX_STATUS_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_repo_index_status_headers(request.metadata_mut(), Some("demo"));
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("repo index status route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("repo index status route should emit one ticket");
+
+        assert_eq!(ticket, ANALYSIS_REPO_INDEX_STATUS_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_repo_sync_routes() {
+        let fixture = make_gateway_state_with_repo(&[
+            (
+                "Project.toml",
+                "name = \"Demo\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+            ),
+            (
+                "src/lib.jl",
+                "module Demo\nexport solve\nsolve(x) = x + 1\nend\n",
+            ),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(ANALYSIS_REPO_SYNC_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_repo_sync_headers(request.metadata_mut(), "demo", Some("status"));
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("repo sync route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("repo sync route should emit one ticket");
+
+        assert_eq!(ticket, ANALYSIS_REPO_SYNC_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_repo_doc_coverage_routes() {
+        let fixture = make_gateway_state_with_repo(&[
+            (
+                "Project.toml",
+                "name = \"Demo\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+            ),
+            ("README.md", "# Demo\n\nPackage docs.\n"),
+            (
+                "docs/solve.md",
+                "# solve\n\nDocument the exported function.\n",
+            ),
+            (
+                "src/lib.jl",
+                "module Demo\nexport solve\n\"solve docs\"\nsolve(x) = x + 1\nend\n",
+            ),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(ANALYSIS_REPO_DOC_COVERAGE_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_repo_doc_coverage_headers(request.metadata_mut(), "demo", None);
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("repo doc coverage route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("repo doc coverage route should emit one ticket");
+
+        assert_eq!(ticket, ANALYSIS_REPO_DOC_COVERAGE_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_repo_projected_page_index_tree_routes() {
+        let fixture = make_gateway_state_with_repo(&[
+            (
+                "Project.toml",
+                "name = \"Demo\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+            ),
+            ("README.md", "# Demo\n\nPackage docs.\n"),
+            (
+                "docs/solve.md",
+                "# solve\n\nDocument the exported function.\n",
+            ),
+            (
+                "src/lib.jl",
+                "module Demo\nexport solve\n\"solve docs\"\nsolve(x) = x + 1\nend\n",
+            ),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_repo_projected_page_index_tree_headers(
+            request.metadata_mut(),
+            "demo",
+            "repo:demo:projection:reference:doc:repo:demo:doc:docs/solve.md",
+        );
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("repo projected page-index tree route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("repo projected page-index tree route should emit one ticket");
+
+        assert_eq!(ticket, ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_refine_doc_routes() {
+        let fixture = make_gateway_state_with_repo(&[
+            (
+                "Project.toml",
+                "name = \"Demo\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n",
+            ),
+            (
+                "src/lib.jl",
+                "module Demo\nexport solve\n\"solve docs\"\nsolve(x) = x + 1\nend\n",
+            ),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(ANALYSIS_REFINE_DOC_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_refine_doc_headers(
+            request.metadata_mut(),
+            "demo",
+            "repo:demo:symbol:Demo.solve",
+            None,
+        );
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("refine-doc route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("refine-doc route should emit one ticket");
+
+        assert_eq!(ticket, ANALYSIS_REFINE_DOC_ROUTE);
+    }
+
+    #[tokio::test]
     async fn build_studio_search_flight_service_wires_graph_neighbors_routes() {
         let fixture = make_gateway_state_with_docs(&[
             ("docs/alpha.md", "# Alpha\n\nSee [[beta]].\n"),
@@ -1343,6 +2048,42 @@ mod tests {
             .expect("graph-neighbors route should emit one ticket");
 
         assert_eq!(ticket, GRAPH_NEIGHBORS_ROUTE);
+    }
+
+    #[tokio::test]
+    async fn build_studio_search_flight_service_wires_topology_3d_routes() {
+        let fixture = make_gateway_state_with_docs(&[
+            ("docs/alpha.md", "# Alpha\n\nSee [[beta]].\n"),
+            ("docs/beta.md", "# Beta\n\nBody.\n"),
+        ]);
+        let service = build_studio_search_flight_service_with_repo_provider(
+            "v2",
+            Arc::new(RecordingRepoSearchProvider),
+            Arc::clone(&fixture.state),
+            3,
+            RerankScoreWeights::default(),
+        )
+        .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
+        let descriptor = FlightDescriptor::new_path(
+            flight_descriptor_path(TOPOLOGY_3D_ROUTE)
+                .unwrap_or_else(|error| panic!("descriptor path: {error}")),
+        );
+        let mut request = Request::new(descriptor);
+        populate_topology_3d_headers(request.metadata_mut());
+
+        let response = service
+            .get_flight_info(request)
+            .await
+            .expect("topology-3d route should resolve through studio builder");
+        let ticket = response
+            .into_inner()
+            .endpoint
+            .first()
+            .and_then(|endpoint| endpoint.ticket.as_ref())
+            .map(|ticket| String::from_utf8_lossy(&ticket.ticket.to_vec()).into_owned())
+            .expect("topology-3d route should emit one ticket");
+
+        assert_eq!(ticket, TOPOLOGY_3D_ROUTE);
     }
 
     #[tokio::test]
@@ -1390,7 +2131,9 @@ mod tests {
         .unwrap_or_else(|error| panic!("build studio flight service: {error}"));
 
         let snapshot = json!([
-            snapshot_vfs_resolve_route_contract(&service, "docs/alpha.md").await,
+            snapshot_vfs_resolve_route_contract(&service, "kernel/docs/alpha.md").await,
+            snapshot_vfs_content_route_contract(&service, "kernel/docs/alpha.md").await,
+            snapshot_vfs_scan_route_contract(&service).await,
             snapshot_graph_neighbors_route_contract(
                 &service,
                 "kernel/docs/alpha.md",
@@ -1399,6 +2142,7 @@ mod tests {
                 20,
             )
             .await,
+            snapshot_topology_3d_route_contract(&service).await,
         ]);
         assert_studio_flight_snapshot("workspace_flight_service_route_contracts", snapshot);
     }

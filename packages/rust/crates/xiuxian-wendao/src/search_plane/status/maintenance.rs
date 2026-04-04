@@ -2,6 +2,46 @@ use serde::{Deserialize, Serialize};
 
 use crate::search_plane::coordinator::SearchCompactionReason;
 
+/// Transparent bool wrapper for the queued-compaction fairness-aging state.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SearchMaintenanceQueueAged(bool);
+
+impl SearchMaintenanceQueueAged {
+    /// Returns whether enqueue-time fairness aging has already promoted the task.
+    #[must_use]
+    pub const fn is_aged(self) -> bool {
+        self.0
+    }
+}
+
+impl From<bool> for SearchMaintenanceQueueAged {
+    fn from(value: bool) -> Self {
+        Self(value)
+    }
+}
+
+impl std::ops::BitOrAssign for SearchMaintenanceQueueAged {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+impl std::ops::BitOrAssign<bool> for SearchMaintenanceQueueAged {
+    fn bitor_assign(&mut self, rhs: bool) {
+        self.0 |= rhs;
+    }
+}
+
+impl std::ops::Not for SearchMaintenanceQueueAged {
+    type Output = bool;
+
+    fn not(self) -> Self::Output {
+        !self.0
+    }
+}
+
 /// Heuristics for deciding when background compaction should be scheduled.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SearchMaintenancePolicy {
@@ -112,7 +152,7 @@ pub struct SearchMaintenanceStatus {
     pub compaction_queue_position: Option<u32>,
     #[serde(default)]
     /// Whether enqueue-time fairness aging has already promoted this queued compaction task.
-    pub compaction_queue_aged: bool,
+    pub compaction_queue_aged: SearchMaintenanceQueueAged,
     /// Whether the coordinator should schedule a compact/optimize run.
     pub compaction_pending: bool,
     /// Number of publishes observed since the last successful compaction.

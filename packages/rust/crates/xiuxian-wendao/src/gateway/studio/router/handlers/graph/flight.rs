@@ -3,8 +3,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tonic::Status;
 use xiuxian_vector::{
-    LanceBooleanArray, LanceDataType, LanceField, LanceInt32Array, LanceRecordBatch, LanceSchema,
-    LanceStringArray,
+    LanceArrayRef, LanceBooleanArray, LanceDataType, LanceField, LanceInt32Array, LanceRecordBatch,
+    LanceSchema, LanceStringArray,
 };
 use xiuxian_wendao_runtime::transport::{
     GraphNeighborsFlightRouteProvider, GraphNeighborsFlightRouteResponse,
@@ -102,123 +102,91 @@ pub(crate) async fn load_graph_neighbors_flight_response(
 pub(crate) fn graph_neighbors_response_batch(
     response: &GraphNeighborsResponse,
 ) -> Result<LanceRecordBatch, String> {
+    let rows = graph_neighbors_rows(response);
+    let columns = graph_neighbors_response_columns(&rows)?;
+    LanceRecordBatch::try_new(graph_neighbors_response_schema(), columns)
+        .map_err(|error| format!("failed to build graph-neighbors Flight batch: {error}"))
+}
+
+fn graph_neighbors_rows(response: &GraphNeighborsResponse) -> Vec<FlightGraphRow> {
     let node_rows = response.nodes.iter().map(FlightGraphRow::from_node);
     let link_rows = response.links.iter().map(FlightGraphRow::from_link);
-    let rows = node_rows.chain(link_rows).collect::<Vec<_>>();
+    node_rows.chain(link_rows).collect()
+}
 
-    LanceRecordBatch::try_new(
-        Arc::new(LanceSchema::new(vec![
-            LanceField::new("rowType", LanceDataType::Utf8, false),
-            LanceField::new("nodeId", LanceDataType::Utf8, true),
-            LanceField::new("nodeLabel", LanceDataType::Utf8, true),
-            LanceField::new("nodePath", LanceDataType::Utf8, true),
-            LanceField::new("nodeType", LanceDataType::Utf8, true),
-            LanceField::new("nodeIsCenter", LanceDataType::Boolean, true),
-            LanceField::new("nodeDistance", LanceDataType::Int32, true),
-            LanceField::new("navigationPath", LanceDataType::Utf8, true),
-            LanceField::new("navigationCategory", LanceDataType::Utf8, true),
-            LanceField::new("navigationProjectName", LanceDataType::Utf8, true),
-            LanceField::new("navigationRootLabel", LanceDataType::Utf8, true),
-            LanceField::new("navigationLine", LanceDataType::Int32, true),
-            LanceField::new("navigationLineEnd", LanceDataType::Int32, true),
-            LanceField::new("navigationColumn", LanceDataType::Int32, true),
-            LanceField::new("linkSource", LanceDataType::Utf8, true),
-            LanceField::new("linkTarget", LanceDataType::Utf8, true),
-            LanceField::new("linkDirection", LanceDataType::Utf8, true),
-            LanceField::new("linkDistance", LanceDataType::Int32, true),
-        ])),
-        vec![
-            Arc::new(LanceStringArray::from(
-                rows.iter().map(|row| row.row_type).collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.node_id.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.node_label.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.node_path.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.node_type.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceBooleanArray::from(
-                rows.iter()
-                    .map(|row| row.node_is_center)
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceInt32Array::from(
-                rows.iter()
-                    .map(|row| row.node_distance.map(usize_to_i32).transpose())
-                    .collect::<Result<Vec<_>, _>>()?,
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.navigation_path.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.navigation_category.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.navigation_project_name.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.navigation_root_label.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceInt32Array::from(
-                rows.iter()
-                    .map(|row| row.navigation_line.map(usize_to_i32).transpose())
-                    .collect::<Result<Vec<_>, _>>()?,
-            )),
-            Arc::new(LanceInt32Array::from(
-                rows.iter()
-                    .map(|row| row.navigation_line_end.map(usize_to_i32).transpose())
-                    .collect::<Result<Vec<_>, _>>()?,
-            )),
-            Arc::new(LanceInt32Array::from(
-                rows.iter()
-                    .map(|row| row.navigation_column.map(usize_to_i32).transpose())
-                    .collect::<Result<Vec<_>, _>>()?,
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.link_source.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.link_target.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceStringArray::from(
-                rows.iter()
-                    .map(|row| row.link_direction.as_deref())
-                    .collect::<Vec<_>>(),
-            )),
-            Arc::new(LanceInt32Array::from(
-                rows.iter()
-                    .map(|row| row.link_distance.map(usize_to_i32).transpose())
-                    .collect::<Result<Vec<_>, _>>()?,
-            )),
-        ],
-    )
-    .map_err(|error| format!("failed to build graph-neighbors Flight batch: {error}"))
+fn graph_neighbors_response_schema() -> Arc<LanceSchema> {
+    Arc::new(LanceSchema::new(vec![
+        LanceField::new("rowType", LanceDataType::Utf8, false),
+        LanceField::new("nodeId", LanceDataType::Utf8, true),
+        LanceField::new("nodeLabel", LanceDataType::Utf8, true),
+        LanceField::new("nodePath", LanceDataType::Utf8, true),
+        LanceField::new("nodeType", LanceDataType::Utf8, true),
+        LanceField::new("nodeIsCenter", LanceDataType::Boolean, true),
+        LanceField::new("nodeDistance", LanceDataType::Int32, true),
+        LanceField::new("navigationPath", LanceDataType::Utf8, true),
+        LanceField::new("navigationCategory", LanceDataType::Utf8, true),
+        LanceField::new("navigationProjectName", LanceDataType::Utf8, true),
+        LanceField::new("navigationRootLabel", LanceDataType::Utf8, true),
+        LanceField::new("navigationLine", LanceDataType::Int32, true),
+        LanceField::new("navigationLineEnd", LanceDataType::Int32, true),
+        LanceField::new("navigationColumn", LanceDataType::Int32, true),
+        LanceField::new("linkSource", LanceDataType::Utf8, true),
+        LanceField::new("linkTarget", LanceDataType::Utf8, true),
+        LanceField::new("linkDirection", LanceDataType::Utf8, true),
+        LanceField::new("linkDistance", LanceDataType::Int32, true),
+    ]))
+}
+
+fn graph_neighbors_response_columns(rows: &[FlightGraphRow]) -> Result<Vec<LanceArrayRef>, String> {
+    Ok(vec![
+        Arc::new(LanceStringArray::from(
+            rows.iter().map(|row| row.row_type).collect::<Vec<_>>(),
+        )),
+        graph_neighbors_string_column(rows, |row| row.node_id.as_deref()),
+        graph_neighbors_string_column(rows, |row| row.node_label.as_deref()),
+        graph_neighbors_string_column(rows, |row| row.node_path.as_deref()),
+        graph_neighbors_string_column(rows, |row| row.node_type.as_deref()),
+        Arc::new(LanceBooleanArray::from(
+            rows.iter()
+                .map(|row| row.node_is_center)
+                .collect::<Vec<_>>(),
+        )),
+        graph_neighbors_int32_column(rows, |row| row.node_distance)?,
+        graph_neighbors_string_column(rows, |row| row.navigation_path.as_deref()),
+        graph_neighbors_string_column(rows, |row| row.navigation_category.as_deref()),
+        graph_neighbors_string_column(rows, |row| row.navigation_project_name.as_deref()),
+        graph_neighbors_string_column(rows, |row| row.navigation_root_label.as_deref()),
+        graph_neighbors_int32_column(rows, |row| row.navigation_line)?,
+        graph_neighbors_int32_column(rows, |row| row.navigation_line_end)?,
+        graph_neighbors_int32_column(rows, |row| row.navigation_column)?,
+        graph_neighbors_string_column(rows, |row| row.link_source.as_deref()),
+        graph_neighbors_string_column(rows, |row| row.link_target.as_deref()),
+        graph_neighbors_string_column(rows, |row| row.link_direction.as_deref()),
+        graph_neighbors_int32_column(rows, |row| row.link_distance)?,
+    ])
+}
+
+fn graph_neighbors_string_column<F>(rows: &[FlightGraphRow], accessor: F) -> LanceArrayRef
+where
+    F: Fn(&FlightGraphRow) -> Option<&str>,
+{
+    Arc::new(LanceStringArray::from(
+        rows.iter().map(accessor).collect::<Vec<_>>(),
+    ))
+}
+
+fn graph_neighbors_int32_column<F>(
+    rows: &[FlightGraphRow],
+    accessor: F,
+) -> Result<LanceArrayRef, String>
+where
+    F: Fn(&FlightGraphRow) -> Option<usize>,
+{
+    Ok(Arc::new(LanceInt32Array::from(
+        rows.iter()
+            .map(|row| accessor(row).map(usize_to_i32).transpose())
+            .collect::<Result<Vec<_>, _>>()?,
+    )))
 }
 
 #[derive(Debug, Clone)]

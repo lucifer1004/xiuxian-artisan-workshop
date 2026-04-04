@@ -142,7 +142,7 @@ impl From<&crate::search_plane::SearchMaintenanceStatus>
             compaction_running: value.compaction_running,
             compaction_queue_depth: value.compaction_queue_depth,
             compaction_queue_position: value.compaction_queue_position,
-            compaction_queue_aged: value.compaction_queue_aged,
+            compaction_queue_aged: value.compaction_queue_aged.is_aged().into(),
             compaction_pending: value.compaction_pending,
             publish_count_since_compaction: value.publish_count_since_compaction,
             last_prewarmed_at: value.last_prewarmed_at.clone(),

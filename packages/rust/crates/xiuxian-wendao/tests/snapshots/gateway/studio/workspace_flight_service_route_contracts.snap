@@ -9,10 +9,31 @@ expression: value
       "resolve"
     ],
     "endpointCount": 1,
-    "path": "docs/alpha.md",
+    "path": "kernel/docs/alpha.md",
     "route": "/vfs/resolve",
     "schemaLength": 448,
     "ticket": "/vfs/resolve"
+  },
+  {
+    "descriptorPath": [
+      "vfs",
+      "content"
+    ],
+    "endpointCount": 1,
+    "path": "kernel/docs/alpha.md",
+    "route": "/vfs/content",
+    "schemaLength": 320,
+    "ticket": "/vfs/content"
+  },
+  {
+    "descriptorPath": [
+      "vfs",
+      "scan"
+    ],
+    "endpointCount": 1,
+    "route": "/vfs/scan",
+    "schemaLength": 768,
+    "ticket": "/vfs/scan"
   },
   {
     "descriptorPath": [
@@ -27,5 +48,15 @@ expression: value
     "route": "/graph/neighbors",
     "schemaLength": 1088,
     "ticket": "/graph/neighbors"
+  },
+  {
+    "descriptorPath": [
+      "topology",
+      "3d"
+    ],
+    "endpointCount": 1,
+    "route": "/topology/3d",
+    "schemaLength": 1088,
+    "ticket": "/topology/3d"
   }
 ]

@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use crate::analyzers::{RefineEntityDocRequest, RefineEntityDocResponse};
+use crate::analyzers::{
+    RefineEntityDocRequest, RefineEntityDocResponse, RepoSyncMode, RepoSyncQuery, RepoSyncResult,
+    repo_sync_for_registered_repository,
+};
 use crate::gateway::studio::repo_index::{RepoIndexRequest, RepoIndexStatusResponse};
 use crate::gateway::studio::router::handlers::repo::shared::{
-    repo_index_repositories, with_repo_analysis,
+    repo_index_repositories, with_repo_analysis, with_repository,
 };
 use crate::gateway::studio::router::{GatewayState, StudioApiError};
 
@@ -33,6 +36,28 @@ pub(crate) fn run_repo_index_status(
     repo: Option<&str>,
 ) -> RepoIndexStatusResponse {
     state.studio.repo_index_status(repo)
+}
+
+pub(crate) async fn run_repo_sync(
+    state: Arc<GatewayState>,
+    repo_id: String,
+    mode: RepoSyncMode,
+) -> Result<RepoSyncResult, StudioApiError> {
+    with_repository(
+        Arc::clone(&state),
+        repo_id.clone(),
+        "REPO_SYNC_PANIC",
+        "Repo sync task failed unexpectedly",
+        !matches!(mode, RepoSyncMode::Status),
+        move |repository, cwd| {
+            repo_sync_for_registered_repository(
+                &RepoSyncQuery { repo_id, mode },
+                &repository,
+                cwd.as_path(),
+            )
+        },
+    )
+    .await
 }
 
 pub(crate) async fn run_refine_entity_doc(

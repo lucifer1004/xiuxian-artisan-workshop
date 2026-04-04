@@ -58,7 +58,6 @@ const MIN_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 5;
 const MAX_GATEWAY_STUDIO_REQUEST_TIMEOUT_SECS: u64 = 60;
 pub(crate) const GATEWAY_FLIGHT_SERVICE_AXUM_PATH: &str =
     "/arrow.flight.protocol.FlightService/{*grpc_method}";
-const DEFAULT_GATEWAY_SEARCH_FLIGHT_REPO_ID: &str = "alpha/repo";
 #[cfg(feature = "julia")]
 const DEFAULT_GATEWAY_SEARCH_FLIGHT_RERANK_DIMENSION: usize = 3;
 
@@ -187,7 +186,6 @@ fn mount_gateway_flight_service(app: Router, app_state: Arc<AppState>) -> Result
     let effective_settings = resolve_gateway_effective_search_host_settings()?;
     let flight_service = build_search_plane_studio_flight_service_with_weights(
         Arc::new(app_state.studio.search_plane_service()),
-        DEFAULT_GATEWAY_SEARCH_FLIGHT_REPO_ID,
         app_state,
         effective_settings.expected_schema_version,
         effective_settings.rerank_dimension,

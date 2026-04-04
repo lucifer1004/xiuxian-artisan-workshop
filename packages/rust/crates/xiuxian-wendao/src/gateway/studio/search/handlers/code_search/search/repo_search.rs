@@ -98,19 +98,17 @@ async fn search_repo_content_hits_via_flight_contract(
     if !parsed.kind_filters.is_empty() && !parsed.kind_filters.contains("file") {
         return Ok(Vec::new());
     }
-    let provider = SearchPlaneRepoSearchFlightRouteProvider::new(
-        Arc::new(search_plane.clone()),
-        repo_id.to_string(),
-    )
-    .map_err(|error| {
-        StudioApiError::internal(
-            "REPO_CONTENT_SEARCH_BRIDGE_BUILD_FAILED",
-            "Failed to build repo content Flight-backed provider",
-            Some(error),
-        )
-    })?;
+    let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::new(search_plane.clone()))
+        .map_err(|error| {
+            StudioApiError::internal(
+                "REPO_CONTENT_SEARCH_BRIDGE_BUILD_FAILED",
+                "Failed to build repo content Flight-backed provider",
+                Some(error),
+            )
+        })?;
     let batch = provider
         .repo_search_batch(&RepoSearchFlightRequest {
+            repo_id: repo_id.to_string(),
             query_text: search_term.to_string(),
             limit,
             language_filters: parsed.language_filters.clone(),

@@ -1,3 +1,5 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+
 /// Canonical schema-version metadata header for Wendao Flight requests.
 pub const WENDAO_SCHEMA_VERSION_HEADER: &str = "x-wendao-schema-version";
 /// Canonical rerank-embedding dimension metadata header for Wendao Flight exchange requests.
@@ -12,6 +14,42 @@ pub const WENDAO_RERANK_MIN_FINAL_SCORE_HEADER: &str = "x-wendao-rerank-min-fina
 pub const WENDAO_REPO_SEARCH_QUERY_HEADER: &str = "x-wendao-repo-search-query";
 /// Canonical repo-search result-limit metadata header for Wendao Flight requests.
 pub const WENDAO_REPO_SEARCH_LIMIT_HEADER: &str = "x-wendao-repo-search-limit";
+/// Canonical repo-search repository metadata header for Wendao Flight requests.
+pub const WENDAO_REPO_SEARCH_REPO_HEADER: &str = "x-wendao-repo-search-repo";
+/// Canonical repo-doc-coverage repository metadata header for Wendao Flight requests.
+pub const WENDAO_REPO_DOC_COVERAGE_REPO_HEADER: &str = "x-wendao-repo-doc-coverage-repo";
+/// Canonical repo-overview repository metadata header for Wendao Flight requests.
+pub const WENDAO_REPO_OVERVIEW_REPO_HEADER: &str = "x-wendao-repo-overview-repo";
+/// Canonical repo-index repository metadata header for Wendao Flight requests.
+pub const WENDAO_REPO_INDEX_REPO_HEADER: &str = "x-wendao-repo-index-repo";
+/// Canonical repo-index refresh metadata header for Wendao Flight requests.
+pub const WENDAO_REPO_INDEX_REFRESH_HEADER: &str = "x-wendao-repo-index-refresh";
+/// Canonical repo-index request identifier metadata header for Wendao Flight
+/// requests.
+pub const WENDAO_REPO_INDEX_REQUEST_ID_HEADER: &str = "x-wendao-repo-index-request-id";
+/// Canonical repo-index-status repository metadata header for Wendao Flight requests.
+pub const WENDAO_REPO_INDEX_STATUS_REPO_HEADER: &str = "x-wendao-repo-index-status-repo";
+/// Canonical repo-sync repository metadata header for Wendao Flight requests.
+pub const WENDAO_REPO_SYNC_REPO_HEADER: &str = "x-wendao-repo-sync-repo";
+/// Canonical repo-sync mode metadata header for Wendao Flight requests.
+pub const WENDAO_REPO_SYNC_MODE_HEADER: &str = "x-wendao-repo-sync-mode";
+/// Canonical repo-doc-coverage module metadata header for Wendao Flight requests.
+pub const WENDAO_REPO_DOC_COVERAGE_MODULE_HEADER: &str = "x-wendao-repo-doc-coverage-module";
+/// Canonical projected page-index tree repository metadata header for Wendao
+/// Flight requests.
+pub const WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_REPO_HEADER: &str =
+    "x-wendao-repo-projected-page-index-tree-repo";
+/// Canonical projected page-index tree page metadata header for Wendao Flight
+/// requests.
+pub const WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_PAGE_ID_HEADER: &str =
+    "x-wendao-repo-projected-page-index-tree-page-id";
+/// Canonical refine-doc repository metadata header for Wendao Flight requests.
+pub const WENDAO_REFINE_DOC_REPO_HEADER: &str = "x-wendao-refine-doc-repo";
+/// Canonical refine-doc entity identifier metadata header for Wendao Flight
+/// requests.
+pub const WENDAO_REFINE_DOC_ENTITY_ID_HEADER: &str = "x-wendao-refine-doc-entity-id";
+/// Canonical refine-doc user hints metadata header for Wendao Flight requests.
+pub const WENDAO_REFINE_DOC_USER_HINTS_HEADER: &str = "x-wendao-refine-doc-user-hints-b64";
 /// Canonical generic search query text metadata header for Wendao Flight requests.
 pub const WENDAO_SEARCH_QUERY_HEADER: &str = "x-wendao-search-query";
 /// Canonical generic search result-limit metadata header for Wendao Flight requests.
@@ -95,12 +133,33 @@ pub const SEARCH_AUTOCOMPLETE_ROUTE: &str = "/search/autocomplete";
 pub const QUERY_SQL_ROUTE: &str = "/query/sql";
 /// Stable route for the VFS navigation-resolution contract.
 pub const VFS_RESOLVE_ROUTE: &str = "/vfs/resolve";
+/// Stable route for the VFS content-read contract.
+pub const VFS_CONTENT_ROUTE: &str = "/vfs/content";
+/// Stable route for the VFS scan contract.
+pub const VFS_SCAN_ROUTE: &str = "/vfs/scan";
 /// Stable route for the graph-neighbors contract.
 pub const GRAPH_NEIGHBORS_ROUTE: &str = "/graph/neighbors";
+/// Stable route for the 3D topology contract.
+pub const TOPOLOGY_3D_ROUTE: &str = "/topology/3d";
 /// Stable route for the markdown analysis contract.
 pub const ANALYSIS_MARKDOWN_ROUTE: &str = "/analysis/markdown";
 /// Stable route for the code-AST analysis contract.
 pub const ANALYSIS_CODE_AST_ROUTE: &str = "/analysis/code-ast";
+/// Stable route for the repo doc-coverage analysis contract.
+pub const ANALYSIS_REPO_DOC_COVERAGE_ROUTE: &str = "/analysis/repo-doc-coverage";
+/// Stable route for the repo overview analysis contract.
+pub const ANALYSIS_REPO_OVERVIEW_ROUTE: &str = "/analysis/repo-overview";
+/// Stable route for the repo index analysis contract.
+pub const ANALYSIS_REPO_INDEX_ROUTE: &str = "/analysis/repo-index";
+/// Stable route for the repo index-status analysis contract.
+pub const ANALYSIS_REPO_INDEX_STATUS_ROUTE: &str = "/analysis/repo-index-status";
+/// Stable route for the repo sync analysis contract.
+pub const ANALYSIS_REPO_SYNC_ROUTE: &str = "/analysis/repo-sync";
+/// Stable route for the repo projected page-index tree analysis contract.
+pub const ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE: &str =
+    "/analysis/repo-projected-page-index-tree";
+/// Stable route for the refine-doc analysis contract.
+pub const ANALYSIS_REFINE_DOC_ROUTE: &str = "/analysis/refine-doc";
 /// Stable route for the rerank contract.
 pub const RERANK_ROUTE: &str = "/rerank";
 /// Stable default result limit for repo-search requests.
@@ -447,6 +506,18 @@ pub fn validate_vfs_resolve_request(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Validate the stable VFS content-read request contract.
+///
+/// # Errors
+///
+/// Returns an error when the path is blank.
+pub fn validate_vfs_content_request(path: &str) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("VFS content requires a non-empty path".to_string());
+    }
+    Ok(())
+}
+
 /// Validate and normalize the stable graph-neighbors request contract.
 ///
 /// # Errors
@@ -521,6 +592,177 @@ pub fn validate_code_ast_analysis_request(
         return Err("code AST analysis line hint must be greater than zero".to_string());
     }
     Ok(())
+}
+
+/// Validate the stable repo overview request contract.
+///
+/// # Errors
+///
+/// Returns an error when the repository identifier is blank.
+pub fn validate_repo_overview_request(repo_id: &str) -> Result<String, String> {
+    let normalized_repo_id = repo_id.trim();
+    if normalized_repo_id.is_empty() {
+        return Err("repo overview repo must not be blank".to_string());
+    }
+    Ok(normalized_repo_id.to_string())
+}
+
+/// Validate the stable repo index-status request contract.
+///
+/// # Errors
+///
+/// This validator currently does not produce contract-local errors.
+pub fn validate_repo_index_status_request(repo_id: Option<&str>) -> Result<Option<String>, String> {
+    Ok(repo_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string))
+}
+
+/// Validate the stable repo index request contract.
+///
+/// # Errors
+///
+/// Returns an error when the optional refresh flag is not a canonical boolean
+/// or when the request identifier is blank.
+pub fn validate_repo_index_request(
+    repo_id: Option<&str>,
+    refresh: Option<&str>,
+    request_id: &str,
+) -> Result<(Option<String>, bool, String), String> {
+    let normalized_repo_id = repo_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    let normalized_refresh = match refresh
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("false")
+    {
+        "true" => true,
+        "false" => false,
+        other => return Err(format!("unsupported repo index refresh flag `{other}`")),
+    };
+    let normalized_request_id = request_id.trim();
+    if normalized_request_id.is_empty() {
+        return Err("repo index request id must not be blank".to_string());
+    }
+    Ok((
+        normalized_repo_id,
+        normalized_refresh,
+        normalized_request_id.to_string(),
+    ))
+}
+
+/// Validate the stable repo sync request contract.
+///
+/// # Errors
+///
+/// Returns an error when the repository identifier is blank or when the sync
+/// mode is unsupported.
+pub fn validate_repo_sync_request(
+    repo_id: &str,
+    mode: Option<&str>,
+) -> Result<(String, String), String> {
+    let normalized_repo_id = repo_id.trim();
+    if normalized_repo_id.is_empty() {
+        return Err("repo sync repo must not be blank".to_string());
+    }
+    let normalized_mode = match mode
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("ensure")
+    {
+        "ensure" | "refresh" | "status" => mode
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("ensure")
+            .to_string(),
+        other => return Err(format!("unsupported repo sync mode `{other}`")),
+    };
+    Ok((normalized_repo_id.to_string(), normalized_mode))
+}
+
+/// Validate the stable repo doc-coverage request contract.
+///
+/// # Errors
+///
+/// Returns an error when the repository identifier is blank.
+pub fn validate_repo_doc_coverage_request(
+    repo_id: &str,
+    module_id: Option<&str>,
+) -> Result<(String, Option<String>), String> {
+    let normalized_repo_id = repo_id.trim();
+    if normalized_repo_id.is_empty() {
+        return Err("repo doc coverage repo must not be blank".to_string());
+    }
+    let normalized_module_id = module_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    Ok((normalized_repo_id.to_string(), normalized_module_id))
+}
+
+/// Validate the stable projected page-index tree request contract.
+///
+/// # Errors
+///
+/// Returns an error when the repository identifier or page identifier is
+/// blank.
+pub fn validate_repo_projected_page_index_tree_request(
+    repo_id: &str,
+    page_id: &str,
+) -> Result<(String, String), String> {
+    let normalized_repo_id = repo_id.trim();
+    if normalized_repo_id.is_empty() {
+        return Err("repo projected page-index tree repo must not be blank".to_string());
+    }
+    let normalized_page_id = page_id.trim();
+    if normalized_page_id.is_empty() {
+        return Err("repo projected page-index tree page id must not be blank".to_string());
+    }
+    Ok((
+        normalized_repo_id.to_string(),
+        normalized_page_id.to_string(),
+    ))
+}
+
+/// Validate the stable refine-doc request contract.
+///
+/// # Errors
+///
+/// Returns an error when the repository identifier or entity identifier is
+/// blank, or when the optional Base64-encoded user hints cannot be decoded
+/// into valid UTF-8.
+pub fn validate_refine_doc_request(
+    repo_id: &str,
+    entity_id: &str,
+    user_hints_base64: Option<&str>,
+) -> Result<(String, String, Option<String>), String> {
+    let normalized_repo_id = repo_id.trim();
+    if normalized_repo_id.is_empty() {
+        return Err("refine doc repo must not be blank".to_string());
+    }
+    let normalized_entity_id = entity_id.trim();
+    if normalized_entity_id.is_empty() {
+        return Err("refine doc entity_id must not be blank".to_string());
+    }
+    let normalized_user_hints = user_hints_base64
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            let decoded = BASE64_STANDARD
+                .decode(value)
+                .map_err(|error| format!("refine doc user_hints must be valid Base64: {error}"))?;
+            String::from_utf8(decoded)
+                .map_err(|error| format!("refine doc user_hints must be valid UTF-8: {error}"))
+        })
+        .transpose()?;
+    Ok((
+        normalized_repo_id.to_string(),
+        normalized_entity_id.to_string(),
+        normalized_user_hints,
+    ))
 }
 
 /// Validate the stable rerank request schema for one expected embedding dimension.
@@ -970,37 +1212,53 @@ fn cosine_similarity(left: &[f32], right: &[f32], row_index: usize) -> Result<f6
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "julia")]
     use std::fmt::Display;
 
     #[cfg(feature = "julia")]
     use super::validate_sql_query_request;
     use super::{
-        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_DEFAULT_HOPS,
-        GRAPH_NEIGHBORS_DEFAULT_LIMIT, GRAPH_NEIGHBORS_ROUTE, QUERY_SQL_ROUTE,
-        REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN, REPO_SEARCH_LANGUAGE_COLUMN,
-        REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_ROUTE, REPO_SEARCH_SCORE_COLUMN,
-        REPO_SEARCH_TITLE_COLUMN, RERANK_REQUEST_DOC_ID_COLUMN, RERANK_REQUEST_EMBEDDING_COLUMN,
-        RERANK_REQUEST_QUERY_EMBEDDING_COLUMN, RERANK_REQUEST_VECTOR_SCORE_COLUMN,
-        RERANK_RESPONSE_DOC_ID_COLUMN, RERANK_RESPONSE_FINAL_SCORE_COLUMN,
-        RERANK_RESPONSE_RANK_COLUMN, RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN,
-        RERANK_RESPONSE_VECTOR_SCORE_COLUMN, RERANK_ROUTE, SEARCH_AST_ROUTE,
-        SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE, SEARCH_DEFINITION_ROUTE,
-        SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE, SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE,
-        VFS_RESOLVE_ROUTE, WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_PATH_HEADER,
-        WENDAO_ANALYSIS_REPO_HEADER, WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER,
+        ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, ANALYSIS_REFINE_DOC_ROUTE,
+        ANALYSIS_REPO_DOC_COVERAGE_ROUTE, ANALYSIS_REPO_INDEX_ROUTE,
+        ANALYSIS_REPO_INDEX_STATUS_ROUTE, ANALYSIS_REPO_OVERVIEW_ROUTE,
+        ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE, ANALYSIS_REPO_SYNC_ROUTE,
+        GRAPH_NEIGHBORS_DEFAULT_HOPS, GRAPH_NEIGHBORS_DEFAULT_LIMIT, GRAPH_NEIGHBORS_ROUTE,
+        QUERY_SQL_ROUTE, REPO_SEARCH_DEFAULT_LIMIT, REPO_SEARCH_DOC_ID_COLUMN,
+        REPO_SEARCH_LANGUAGE_COLUMN, REPO_SEARCH_PATH_COLUMN, REPO_SEARCH_ROUTE,
+        REPO_SEARCH_SCORE_COLUMN, REPO_SEARCH_TITLE_COLUMN, RERANK_REQUEST_DOC_ID_COLUMN,
+        RERANK_REQUEST_EMBEDDING_COLUMN, RERANK_REQUEST_QUERY_EMBEDDING_COLUMN,
+        RERANK_REQUEST_VECTOR_SCORE_COLUMN, RERANK_RESPONSE_DOC_ID_COLUMN,
+        RERANK_RESPONSE_FINAL_SCORE_COLUMN, RERANK_RESPONSE_RANK_COLUMN,
+        RERANK_RESPONSE_SEMANTIC_SCORE_COLUMN, RERANK_RESPONSE_VECTOR_SCORE_COLUMN, RERANK_ROUTE,
+        SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE,
+        SEARCH_DEFINITION_ROUTE, SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE,
+        SEARCH_REFERENCES_ROUTE, SEARCH_SYMBOLS_ROUTE, VFS_CONTENT_ROUTE, VFS_RESOLVE_ROUTE,
+        WENDAO_ANALYSIS_LINE_HEADER, WENDAO_ANALYSIS_PATH_HEADER, WENDAO_ANALYSIS_REPO_HEADER,
+        WENDAO_ATTACHMENT_SEARCH_CASE_SENSITIVE_HEADER,
         WENDAO_ATTACHMENT_SEARCH_EXT_FILTERS_HEADER, WENDAO_ATTACHMENT_SEARCH_KIND_FILTERS_HEADER,
         WENDAO_AUTOCOMPLETE_LIMIT_HEADER, WENDAO_AUTOCOMPLETE_PREFIX_HEADER,
         WENDAO_DEFINITION_LINE_HEADER, WENDAO_DEFINITION_PATH_HEADER,
         WENDAO_DEFINITION_QUERY_HEADER, WENDAO_GRAPH_DIRECTION_HEADER, WENDAO_GRAPH_HOPS_HEADER,
-        WENDAO_GRAPH_LIMIT_HEADER, WENDAO_GRAPH_NODE_ID_HEADER,
+        WENDAO_GRAPH_LIMIT_HEADER, WENDAO_GRAPH_NODE_ID_HEADER, WENDAO_REFINE_DOC_ENTITY_ID_HEADER,
+        WENDAO_REFINE_DOC_REPO_HEADER, WENDAO_REFINE_DOC_USER_HINTS_HEADER,
+        WENDAO_REPO_DOC_COVERAGE_MODULE_HEADER, WENDAO_REPO_DOC_COVERAGE_REPO_HEADER,
+        WENDAO_REPO_INDEX_REFRESH_HEADER, WENDAO_REPO_INDEX_REPO_HEADER,
+        WENDAO_REPO_INDEX_REQUEST_ID_HEADER, WENDAO_REPO_INDEX_STATUS_REPO_HEADER,
+        WENDAO_REPO_OVERVIEW_REPO_HEADER, WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_PAGE_ID_HEADER,
+        WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_REPO_HEADER,
         WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER, WENDAO_REPO_SEARCH_LIMIT_HEADER,
-        WENDAO_REPO_SEARCH_QUERY_HEADER, WENDAO_RERANK_DIMENSION_HEADER,
+        WENDAO_REPO_SEARCH_QUERY_HEADER, WENDAO_REPO_SEARCH_REPO_HEADER,
+        WENDAO_REPO_SYNC_MODE_HEADER, WENDAO_REPO_SYNC_REPO_HEADER, WENDAO_RERANK_DIMENSION_HEADER,
         WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_LIMIT_HEADER, WENDAO_SEARCH_QUERY_HEADER,
         WENDAO_SQL_QUERY_HEADER, WENDAO_VFS_PATH_HEADER, flight_descriptor_path,
         normalize_flight_route, validate_attachment_search_request, validate_autocomplete_request,
         validate_code_ast_analysis_request, validate_definition_request,
         validate_graph_neighbors_request, validate_markdown_analysis_request,
-        validate_repo_search_request, validate_vfs_resolve_request,
+        validate_refine_doc_request, validate_repo_doc_coverage_request,
+        validate_repo_index_request, validate_repo_index_status_request,
+        validate_repo_overview_request, validate_repo_projected_page_index_tree_request,
+        validate_repo_search_request, validate_repo_sync_request, validate_vfs_content_request,
+        validate_vfs_resolve_request,
     };
 
     #[cfg(feature = "julia")]
@@ -1026,6 +1284,34 @@ mod tests {
         assert_eq!(
             WENDAO_REPO_SEARCH_LIMIT_HEADER,
             "x-wendao-repo-search-limit"
+        );
+        assert_eq!(WENDAO_REPO_SEARCH_REPO_HEADER, "x-wendao-repo-search-repo");
+        assert_eq!(
+            WENDAO_REPO_DOC_COVERAGE_REPO_HEADER,
+            "x-wendao-repo-doc-coverage-repo"
+        );
+        assert_eq!(
+            WENDAO_REPO_DOC_COVERAGE_MODULE_HEADER,
+            "x-wendao-repo-doc-coverage-module"
+        );
+        assert_eq!(WENDAO_REPO_INDEX_REPO_HEADER, "x-wendao-repo-index-repo");
+        assert_eq!(
+            WENDAO_REPO_INDEX_REFRESH_HEADER,
+            "x-wendao-repo-index-refresh"
+        );
+        assert_eq!(
+            WENDAO_REPO_INDEX_REQUEST_ID_HEADER,
+            "x-wendao-repo-index-request-id"
+        );
+        assert_eq!(WENDAO_REPO_SYNC_REPO_HEADER, "x-wendao-repo-sync-repo");
+        assert_eq!(WENDAO_REPO_SYNC_MODE_HEADER, "x-wendao-repo-sync-mode");
+        assert_eq!(
+            WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_REPO_HEADER,
+            "x-wendao-repo-projected-page-index-tree-repo"
+        );
+        assert_eq!(
+            WENDAO_REPO_PROJECTED_PAGE_INDEX_TREE_PAGE_ID_HEADER,
+            "x-wendao-repo-projected-page-index-tree-page-id"
         );
         assert_eq!(
             WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER,
@@ -1080,9 +1366,16 @@ mod tests {
         assert_eq!(SEARCH_AUTOCOMPLETE_ROUTE, "/search/autocomplete");
         assert_eq!(QUERY_SQL_ROUTE, "/query/sql");
         assert_eq!(VFS_RESOLVE_ROUTE, "/vfs/resolve");
+        assert_eq!(VFS_CONTENT_ROUTE, "/vfs/content");
         assert_eq!(GRAPH_NEIGHBORS_ROUTE, "/graph/neighbors");
         assert_eq!(ANALYSIS_MARKDOWN_ROUTE, "/analysis/markdown");
         assert_eq!(ANALYSIS_CODE_AST_ROUTE, "/analysis/code-ast");
+        assert_eq!(ANALYSIS_REPO_INDEX_ROUTE, "/analysis/repo-index");
+        assert_eq!(ANALYSIS_REPO_SYNC_ROUTE, "/analysis/repo-sync");
+        assert_eq!(
+            ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE,
+            "/analysis/repo-projected-page-index-tree"
+        );
         assert_eq!(RERANK_ROUTE, "/rerank");
         assert_eq!(REPO_SEARCH_DEFAULT_LIMIT, 10);
         assert_eq!(GRAPH_NEIGHBORS_DEFAULT_HOPS, 2);
@@ -1169,6 +1462,10 @@ mod tests {
             Ok(vec!["vfs".to_string(), "resolve".to_string()])
         );
         assert_eq!(
+            flight_descriptor_path(VFS_CONTENT_ROUTE),
+            Ok(vec!["vfs".to_string(), "content".to_string()])
+        );
+        assert_eq!(
             flight_descriptor_path(GRAPH_NEIGHBORS_ROUTE),
             Ok(vec!["graph".to_string(), "neighbors".to_string()])
         );
@@ -1179,6 +1476,21 @@ mod tests {
         assert_eq!(
             flight_descriptor_path(ANALYSIS_CODE_AST_ROUTE),
             Ok(vec!["analysis".to_string(), "code-ast".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(ANALYSIS_REPO_INDEX_ROUTE),
+            Ok(vec!["analysis".to_string(), "repo-index".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(ANALYSIS_REPO_SYNC_ROUTE),
+            Ok(vec!["analysis".to_string(), "repo-sync".to_string()])
+        );
+        assert_eq!(
+            flight_descriptor_path(ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE),
+            Ok(vec![
+                "analysis".to_string(),
+                "repo-projected-page-index-tree".to_string()
+            ])
         );
         assert_eq!(
             flight_descriptor_path(RERANK_ROUTE),
@@ -1251,6 +1563,71 @@ mod tests {
     #[test]
     fn markdown_analysis_request_validation_accepts_stable_request() {
         assert!(validate_markdown_analysis_request("docs/analysis.md").is_ok());
+    }
+
+    #[test]
+    fn repo_doc_coverage_route_constant_is_stable() {
+        assert_eq!(
+            ANALYSIS_REPO_DOC_COVERAGE_ROUTE,
+            "/analysis/repo-doc-coverage"
+        );
+    }
+
+    #[test]
+    fn repo_overview_route_constant_and_header_are_stable() {
+        assert_eq!(ANALYSIS_REPO_OVERVIEW_ROUTE, "/analysis/repo-overview");
+        assert_eq!(
+            WENDAO_REPO_OVERVIEW_REPO_HEADER,
+            "x-wendao-repo-overview-repo"
+        );
+    }
+
+    #[test]
+    fn repo_index_status_route_constant_and_header_are_stable() {
+        assert_eq!(
+            ANALYSIS_REPO_INDEX_STATUS_ROUTE,
+            "/analysis/repo-index-status"
+        );
+        assert_eq!(
+            WENDAO_REPO_INDEX_STATUS_REPO_HEADER,
+            "x-wendao-repo-index-status-repo"
+        );
+    }
+
+    #[test]
+    fn repo_index_route_constants_and_headers_are_stable() {
+        assert_eq!(ANALYSIS_REPO_INDEX_ROUTE, "/analysis/repo-index");
+        assert_eq!(WENDAO_REPO_INDEX_REPO_HEADER, "x-wendao-repo-index-repo");
+        assert_eq!(
+            WENDAO_REPO_INDEX_REFRESH_HEADER,
+            "x-wendao-repo-index-refresh"
+        );
+        assert_eq!(
+            WENDAO_REPO_INDEX_REQUEST_ID_HEADER,
+            "x-wendao-repo-index-request-id"
+        );
+    }
+
+    #[test]
+    fn repo_projected_page_index_tree_route_constant_is_stable() {
+        assert_eq!(
+            ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE,
+            "/analysis/repo-projected-page-index-tree"
+        );
+    }
+
+    #[test]
+    fn refine_doc_route_constant_and_headers_are_stable() {
+        assert_eq!(ANALYSIS_REFINE_DOC_ROUTE, "/analysis/refine-doc");
+        assert_eq!(WENDAO_REFINE_DOC_REPO_HEADER, "x-wendao-refine-doc-repo");
+        assert_eq!(
+            WENDAO_REFINE_DOC_ENTITY_ID_HEADER,
+            "x-wendao-refine-doc-entity-id"
+        );
+        assert_eq!(
+            WENDAO_REFINE_DOC_USER_HINTS_HEADER,
+            "x-wendao-refine-doc-user-hints-b64"
+        );
     }
 
     #[test]
@@ -1351,6 +1728,19 @@ mod tests {
     }
 
     #[test]
+    fn vfs_content_request_validation_accepts_stable_request() {
+        assert!(validate_vfs_content_request("main/docs/index.md").is_ok());
+    }
+
+    #[test]
+    fn vfs_content_request_validation_rejects_blank_path() {
+        assert_eq!(
+            validate_vfs_content_request("   "),
+            Err("VFS content requires a non-empty path".to_string())
+        );
+    }
+
+    #[test]
     fn graph_neighbors_request_validation_accepts_canonical_request() {
         assert_eq!(
             validate_graph_neighbors_request(
@@ -1430,6 +1820,209 @@ mod tests {
             validate_code_ast_analysis_request("src/lib.jl", "demo", Some(0)),
             Err("code AST analysis line hint must be greater than zero".to_string())
         );
+    }
+
+    #[test]
+    fn repo_doc_coverage_request_validation_accepts_stable_request() {
+        assert_eq!(
+            validate_repo_doc_coverage_request("gateway-sync", Some("GatewaySyncPkg")),
+            Ok((
+                "gateway-sync".to_string(),
+                Some("GatewaySyncPkg".to_string()),
+            ))
+        );
+        assert_eq!(
+            validate_repo_doc_coverage_request("gateway-sync", Some("   ")),
+            Ok(("gateway-sync".to_string(), None))
+        );
+    }
+
+    #[test]
+    fn repo_overview_request_validation_accepts_stable_request() {
+        assert_eq!(
+            validate_repo_overview_request("gateway-sync"),
+            Ok("gateway-sync".to_string())
+        );
+    }
+
+    #[test]
+    fn repo_index_status_request_validation_accepts_stable_request() {
+        assert_eq!(
+            validate_repo_index_status_request(Some("gateway-sync")),
+            Ok(Some("gateway-sync".to_string()))
+        );
+        assert_eq!(validate_repo_index_status_request(Some("   ")), Ok(None));
+        assert_eq!(validate_repo_index_status_request(None), Ok(None));
+    }
+
+    #[test]
+    fn repo_index_request_validation_accepts_stable_request() {
+        assert_eq!(
+            validate_repo_index_request(Some("gateway-sync"), Some("true"), "req-123"),
+            Ok((
+                Some("gateway-sync".to_string()),
+                true,
+                "req-123".to_string()
+            ))
+        );
+        assert_eq!(
+            validate_repo_index_request(Some("   "), None, "req-456"),
+            Ok((None, false, "req-456".to_string()))
+        );
+    }
+
+    #[test]
+    fn repo_sync_request_validation_accepts_stable_request() {
+        assert_eq!(
+            validate_repo_sync_request("gateway-sync", Some("status")),
+            Ok(("gateway-sync".to_string(), "status".to_string()))
+        );
+        assert_eq!(
+            validate_repo_sync_request("gateway-sync", Some("   ")),
+            Ok(("gateway-sync".to_string(), "ensure".to_string()))
+        );
+        assert_eq!(
+            validate_repo_sync_request("gateway-sync", None),
+            Ok(("gateway-sync".to_string(), "ensure".to_string()))
+        );
+    }
+
+    #[test]
+    fn repo_overview_request_validation_rejects_blank_repo() {
+        assert_eq!(
+            validate_repo_overview_request("   "),
+            Err("repo overview repo must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn repo_doc_coverage_request_validation_rejects_blank_repo() {
+        assert_eq!(
+            validate_repo_doc_coverage_request("   ", Some("GatewaySyncPkg")),
+            Err("repo doc coverage repo must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn repo_sync_request_validation_rejects_blank_repo() {
+        assert_eq!(
+            validate_repo_sync_request("   ", Some("status")),
+            Err("repo sync repo must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn repo_sync_request_validation_rejects_invalid_mode() {
+        assert_eq!(
+            validate_repo_sync_request("gateway-sync", Some("bogus")),
+            Err("unsupported repo sync mode `bogus`".to_string())
+        );
+    }
+
+    #[test]
+    fn repo_index_request_validation_rejects_invalid_refresh_flag() {
+        assert_eq!(
+            validate_repo_index_request(Some("gateway-sync"), Some("bogus"), "req-123"),
+            Err("unsupported repo index refresh flag `bogus`".to_string())
+        );
+    }
+
+    #[test]
+    fn repo_index_request_validation_rejects_blank_request_id() {
+        assert_eq!(
+            validate_repo_index_request(Some("gateway-sync"), Some("false"), "   "),
+            Err("repo index request id must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn repo_projected_page_index_tree_request_validation_accepts_stable_request() {
+        assert_eq!(
+            validate_repo_projected_page_index_tree_request(
+                "gateway-sync",
+                "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md"
+            ),
+            Ok((
+                "gateway-sync".to_string(),
+                "repo:gateway-sync:projection:reference:doc:repo:gateway-sync:doc:docs/solve.md"
+                    .to_string(),
+            ))
+        );
+    }
+
+    #[test]
+    fn repo_projected_page_index_tree_request_validation_rejects_blank_repo() {
+        assert_eq!(
+            validate_repo_projected_page_index_tree_request("   ", "repo:gateway-sync:page"),
+            Err("repo projected page-index tree repo must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn repo_projected_page_index_tree_request_validation_rejects_blank_page_id() {
+        assert_eq!(
+            validate_repo_projected_page_index_tree_request("gateway-sync", "   "),
+            Err("repo projected page-index tree page id must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn refine_doc_request_validation_accepts_base64_user_hints() {
+        assert_eq!(
+            validate_refine_doc_request(
+                "gateway-sync",
+                "repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                Some("RXhwbGFpbiB0aGlzIGVudHJ5cG9pbnQ="),
+            ),
+            Ok((
+                "gateway-sync".to_string(),
+                "repo:gateway-sync:symbol:GatewaySyncPkg.solve".to_string(),
+                Some("Explain this entrypoint".to_string()),
+            ))
+        );
+        assert_eq!(
+            validate_refine_doc_request(
+                "gateway-sync",
+                "repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                Some("   "),
+            ),
+            Ok((
+                "gateway-sync".to_string(),
+                "repo:gateway-sync:symbol:GatewaySyncPkg.solve".to_string(),
+                None,
+            ))
+        );
+    }
+
+    #[test]
+    fn refine_doc_request_validation_rejects_blank_repo() {
+        assert_eq!(
+            validate_refine_doc_request(
+                "   ",
+                "repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+                None,
+            ),
+            Err("refine doc repo must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn refine_doc_request_validation_rejects_blank_entity_id() {
+        assert_eq!(
+            validate_refine_doc_request("gateway-sync", "   ", None),
+            Err("refine doc entity_id must not be blank".to_string())
+        );
+    }
+
+    #[test]
+    fn refine_doc_request_validation_rejects_invalid_base64_user_hints() {
+        let error = validate_refine_doc_request(
+            "gateway-sync",
+            "repo:gateway-sync:symbol:GatewaySyncPkg.solve",
+            Some("%%%"),
+        )
+        .expect_err("invalid base64 user hints should fail");
+        assert!(error.starts_with("refine doc user_hints must be valid Base64:"));
     }
 
     #[test]

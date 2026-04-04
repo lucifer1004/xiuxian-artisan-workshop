@@ -6,6 +6,7 @@ use tokio::time::sleep;
 
 use super::common::{
     ChildGuard, repo_root, reserve_test_port, wendaoanalyzer_script, wendaoarrow_script,
+    wendaosearch_package_dir, wendaosearch_script,
 };
 
 pub(crate) fn spawn_real_wendaoarrow_service(port: u16) -> ChildGuard {
@@ -30,6 +31,36 @@ pub(crate) fn spawn_real_wendaoanalyzer_linear_blend_service(port: u16) -> Child
         port,
         "spawn real WendaoAnalyzer linear blend service",
     )
+}
+
+pub(crate) fn spawn_real_wendaosearch_demo_structural_rerank_service(port: u16) -> ChildGuard {
+    let script = wendaosearch_script("run_search_service.jl");
+    let child = Command::new("direnv")
+        .arg("exec")
+        .arg(".")
+        .arg("julia")
+        .arg(format!(
+            "--project={}",
+            wendaosearch_package_dir().display()
+        ))
+        .arg(script)
+        .arg("--route-name")
+        .arg("structural_rerank")
+        .arg("--mode")
+        .arg("demo")
+        .arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(port.to_string())
+        .current_dir(repo_root())
+        .env("JULIA_LOAD_PATH", "@:@stdlib")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap_or_else(|error| {
+            panic!("spawn real WendaoSearch structural-rerank service: {error}")
+        });
+    ChildGuard::new(child)
 }
 
 fn spawn_example_script(script: std::path::PathBuf, port: u16, error_context: &str) -> ChildGuard {

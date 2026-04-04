@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::gateway::studio::repo_index::RepoIndexStatusResponse;
-use crate::gateway::studio::router::config::persist_ui_config_to_wendao_toml;
 use crate::gateway::studio::router::repository::configured_repositories;
 use crate::gateway::studio::router::sanitization::{sanitize_projects, sanitize_repo_projects};
 use crate::gateway::studio::router::state::helpers::supported_code_kinds;
@@ -130,11 +129,6 @@ impl StudioState {
 
         self.ensure_repo_background_indexing_started("repo_index_status");
         self.repo_index.status_response(repo)
-    }
-
-    pub(crate) fn set_ui_config_and_persist(&self, config: UiConfig) -> Result<(), String> {
-        self.set_ui_config(config);
-        persist_ui_config_to_wendao_toml(self.config_root.as_path(), &self.ui_config())
     }
 
     pub(crate) fn configured_projects(&self) -> Vec<UiProjectConfig> {

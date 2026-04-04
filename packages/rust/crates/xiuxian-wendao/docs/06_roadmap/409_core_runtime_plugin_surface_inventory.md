@@ -61,10 +61,15 @@ vocabulary such as `ArrowIpcHttp` or `LocalProcessArrowIpc`.
 
 The current Stage-A classification snapshot is:
 
-| Formal class            | Current live family                                                                                                                                                                                      | Current physical transport reality                                                                         | Migration interpretation                                                                                   |
-| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
-| `Arrow Flight` business | canonical Flight `/search/*` and `/analysis/*`, plus the existing docs/repo/vfs/graph business families                                                                                                  | semantic search and analysis are already Flight-only; broader docs/repo/vfs/graph migration remains staged | these families are target business surfaces and should be migrated toward Flight rather than grown as JSON |
-| `JSON` control          | `/api/notify`, `/api/ui/config`, `/api/ui/capabilities`, `GET /api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`, `POST /api/repo/index`, `GET /api/repo/index/status`, `GET /api/search/index/status` | JSON is already the current live contract                                                                  | these stay on the control plane unless a later RFC explicitly promotes them into Flight business scope     |
+| Formal class            | Current live family                                                                                                                                | Current physical transport reality                                                                         | Migration interpretation                                                                                   |
+| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| `Arrow Flight` business | canonical Flight `/search/*` and `/analysis/*`, plus the existing docs/repo/vfs/graph business families                                            | semantic search and analysis are already Flight-only; broader docs/repo/vfs/graph migration remains staged | these families are target business surfaces and should be migrated toward Flight rather than grown as JSON |
+| `JSON` control          | `/api/notify`, `/api/ui/config`, `/api/ui/capabilities`, `GET /api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`, `GET /api/search/index/status` | JSON is already the current live contract                                                                  | these stay on the control plane unless a later RFC explicitly promotes them into Flight business scope     |
+
+`POST /api/ui/config` is now explicitly runtime-only within that control
+surface. The frontend may synchronize effective UI config into the live
+gateway process for VFS/graph/search bootstrap and retry flows, but that
+control route no longer owns rewriting workspace `wendao.toml` on disk.
 
 Retirement debt ledger:
 
@@ -184,8 +189,116 @@ Current concrete Flight replacement reality:
     outward router and bundled OpenAPI surface, backend `node_neighbors`
     handler/type residue is deleted, frontend `NodeNeighbors` client residue is
     deleted, and `/graph/neighbors` remains the only live graph-neighbor read
-    surface while `/api/topology/3d` and `/api/vfs*` stay queued as separate
-    bounded utility slices
+    surface while the later workspace utility cuts for scan/topology were
+    still queued as separate bounded slices at that point in the migration
+23. the next bounded repo-facing Flight cut is now also landed for code
+    content search: `REPO_SEARCH_ROUTE = /repo/search` is no longer pinned to a
+    fixed gateway repo id, the runtime request contract now carries
+    `x-wendao-repo-search-repo`, and `.data/wendao-frontend` consumes that
+    same-origin Flight route through `src/api/flightRepoSearchTransport.ts`
+    for the repo-aware `all`/`code` lane while the remaining repo-intelligence
+    `doc` facet stays on its existing JSON surface as a later bounded
+    retirement slice
+24. the next frontend integration cut on top of that route is now also landed:
+    the default repo-aware `all` / `code` interface no longer fans out to the
+    repo-intelligence `module`, `symbol`, or `example` JSON endpoints when no
+    explicit repo facet is active, so the main repo-aware search interface now
+    stays on repo-content Flight plus Flight-backed references while explicit
+    facet requests remain the only repo-facing JSON retirement debt
+25. the next explicit-facet retirement slice is now also landed for
+    `symbol`: `.data/wendao-frontend` now reuses repo-search Flight plus
+    `tag_filters = ["kind:<value>"]` for repo-aware symbol queries, so the
+    repo-intelligence symbol endpoint is no longer on the active
+    `kind:function` / `kind:method` / `kind:struct` search path
+26. the next explicit-facet retirement slice is now also landed for
+    `module`: `.data/wendao-frontend` now reuses repo-search Flight plus
+    `tag_filters = ["kind:module"]` for repo-aware module queries, and the
+    repo-overview fallback now retries that same Flight route instead of
+    calling `/api/repo/module-search`
+27. the next explicit-facet retirement slice is now also landed for
+    `example`: `.data/wendao-frontend` now reuses repo-search Flight plus
+    `tag_filters = ["kind:example"]` for repo-aware example queries, and the
+    repo-overview fallback now retries that same Flight route instead of
+    calling `/api/repo/example-search`
+28. `doc` is now Flight-backed too, but it intentionally stays on the
+    dedicated `/analysis/repo-doc-coverage` contract instead of repo-search
+    hits; that route carries doc rows in Arrow plus coverage summary metadata
+    and the optional `module` filter, retiring the last repo-facing JSON seam
+29. the next workspace-preview cut is now also landed for raw content:
+    `VFS_CONTENT_ROUTE = /vfs/content` is runtime-owned in the query contract,
+    `VfsContentFlightRouteProvider` is now part of
+    `WendaoFlightService::new_with_route_providers(...)`, the Studio-backed
+    owner seam lives in `src/gateway/studio/vfs/flight_content.rs`, the
+    shared workspace Flight snapshot now locks canonical `project/path`
+    inputs for both `/vfs/resolve` and `/vfs/content`, and
+    `.data/wendao-frontend` now routes `api.getVfsContent(...)` through
+    same-origin Flight instead of the older `/api/vfs/cat` helper
+30. the next document-command cut is now also landed for refine-doc:
+    `ANALYSIS_REFINE_DOC_ROUTE = /analysis/refine-doc` is runtime-owned in the
+    shared query contract, `RefineDocFlightRouteProvider` is now part of the
+    Studio-backed Flight builder, and `.data/wendao-frontend` now routes
+    `api.refineEntityDoc(...)` through `src/api/flightRefineEntityDocTransport.ts`
+    instead of the older `/api/repo/refine-entity-doc` helper. After this
+    slice, the active frontend search/preview/refine lane is Flight-first and
+    the remaining `/api/` debt is concentrated in control-plane and
+    non-hot-path utility surfaces.
+31. the next frontend utility cleanup is now also landed for VFS scans:
+    `.data/wendao-frontend/src/components/panels/VfsSidebar/VfsSidebar.tsx`
+    no longer bypasses the API layer with a direct `/api/vfs/scan` fetch and
+    now consumes `api.scanVfs()` instead. This does not create a new Flight
+    contract, but it centralizes the remaining non-Flight control-plane debt
+    under `src/api/*` so production component code no longer owns raw `/api/`
+    calls on the active studio surface.
+32. the next repo-analysis status cut is now also landed for repo overview:
+    `ANALYSIS_REPO_OVERVIEW_ROUTE = /analysis/repo-overview` is runtime-owned
+    in the shared query contract, `RepoOverviewFlightRouteProvider` is now
+    part of the Studio-backed Flight builder, and `.data/wendao-frontend` now
+    routes `api.getRepoOverview(...)` through
+    `src/api/flightRepoOverviewTransport.ts` instead of `/api/repo/overview`.
+33. the next repo-analysis status cut is now also landed for repo index
+    status: `ANALYSIS_REPO_INDEX_STATUS_ROUTE = /analysis/repo-index-status`
+    is runtime-owned in the shared query contract,
+    `RepoIndexStatusFlightRouteProvider` is now part of the Studio-backed
+    Flight builder, and `.data/wendao-frontend` now routes
+    `api.getRepoIndexStatus(...)` through
+    `src/api/flightRepoIndexStatusTransport.ts` instead of
+    `/api/repo/index/status`. After this slice, the remaining active repo-aware
+    JSON debt is reduced to repo sync rather than search, preview, refine-doc,
+    doc coverage, repo overview, or repo index status.
+34. the next repo-analysis status cut is now also landed for repo sync:
+    `ANALYSIS_REPO_SYNC_ROUTE = /analysis/repo-sync` is runtime-owned in the
+    shared query contract, `RepoSyncFlightRouteProvider` is now part of the
+    Studio-backed Flight builder, and `.data/wendao-frontend` now routes
+    `api.getRepoSync(...)` through `src/api/flightRepoSyncTransport.ts`
+    instead of `/api/repo/sync`. After this slice, the active repo-aware
+    frontend lane is Flight-first across search, preview, refine-doc, repo
+    overview, repo index status, and repo sync; the remaining `/api/` debt is
+    now limited to control-plane and utility routes rather than active
+    repo-aware business flows.
+35. the next workspace utility cut is now also landed for VFS scan:
+    `VFS_SCAN_ROUTE = /vfs/scan` is runtime-owned in the shared query
+    contract, `VfsScanFlightRouteProvider` is now part of the Studio-backed
+    Flight builder, and `.data/wendao-frontend` now routes `api.scanVfs()`
+    through `src/api/flightWorkspaceTransport.ts` instead of the older
+    `/api/vfs/scan` helper surface.
+36. the next graph utility cut is now also landed for topology:
+    `TOPOLOGY_3D_ROUTE = /topology/3d` is runtime-owned in the shared query
+    contract, `Topology3dFlightRouteProvider` is now part of the
+    Studio-backed Flight builder, and `.data/wendao-frontend` now routes
+    `api.get3DTopology()` through `src/api/flightGraphTransport.ts` instead of
+    the older `/api/topology/3d` helper surface.
+37. the next repo service-state cut is now also landed for repo index
+    mutation: `ANALYSIS_REPO_INDEX_ROUTE = /analysis/repo-index` is runtime-owned
+    in the shared query contract, `RepoIndexFlightRouteProvider` is now part
+    of the Studio-backed Flight builder, and `.data/wendao-frontend` now
+    routes `api.enqueueRepoIndex(...)` through
+    `src/api/flightRepoIndexTransport.ts` instead of `POST /api/repo/index`.
+    The command contract also carries an explicit request id so repeated
+    enqueue operations do not reuse cached route payloads. After this slice,
+    the remaining active frontend non-Flight surface is intentionally limited
+    to control-plane routes such as health, UI config/capabilities, and Julia
+    deployment artifact inspection. `.data/wendao-frontend` now groups those
+    retained JSON routes under `src/api/controlPlane/*`.
 
 Bounded Stage-A retirement mapping:
 
@@ -220,13 +333,13 @@ This inventory also uses the following structural rule:
 
 The current live outward surfaces are:
 
-| Outward family                        | Canonical surface                                                                                              | Current late-`M6` status                                                                                            | Compatibility note                                                   |
-| :------------------------------------ | :------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------- |
-| Generic artifact inspection           | `wendao.plugin_artifact`, `GET /api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`                            | canonical and live                                                                                                  | Julia-named outward artifact surfaces are retired from the host      |
-| Studio docs gateway family            | `/api/docs/*`                                                                                                  | external Modelica proof now covers docs-facing search, retrieval, navigation, family, gap-report, and planner peers | no host-owned language-specific route family remains in this surface |
-| Studio repo query/projection family   | `/api/repo/overview`, `/api/repo/*search`, `/api/repo/doc-coverage`, `/api/repo/sync`, `/api/repo/projected-*` | external Modelica proof now covers repo-facing query, projection, reopen, and navigation peers                      | additive proof stays on generic host surfaces                        |
-| Studio repo service-state family      | `POST /api/repo/index`, `GET /api/repo/index/status`                                                           | `Stage A` is complete; the external Modelica path now covers the remaining service-state bundle                     | bounded local helper reuse only; no dead-code suppressions added     |
-| Remaining Julia compatibility imports | `xiuxian_wendao_julia::compatibility::link_graph::*`                                                           | package-owned only                                                                                                  | host crate-root compatibility shims are retired                      |
+| Outward family                        | Canonical surface                                                                                              | Current late-`M6` status                                                                                                         | Compatibility note                                                   |
+| :------------------------------------ | :------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------- |
+| Generic artifact inspection           | `wendao.plugin_artifact`, `GET /api/ui/plugins/{plugin_id}/artifacts/{artifact_id}`                            | canonical and live                                                                                                               | Julia-named outward artifact surfaces are retired from the host      |
+| Studio docs gateway family            | `/api/docs/*`                                                                                                  | external Modelica proof now covers docs-facing search, retrieval, navigation, family, gap-report, and planner peers              | no host-owned language-specific route family remains in this surface |
+| Studio repo query/projection family   | `/api/repo/overview`, `/api/repo/*search`, `/api/repo/doc-coverage`, `/api/repo/sync`, `/api/repo/projected-*` | external Modelica proof now covers repo-facing query, projection, reopen, and navigation peers                                   | additive proof stays on generic host surfaces                        |
+| Studio repo service-state family      | `/analysis/repo-index`, `/analysis/repo-index-status`                                                          | `Stage A` is complete; the active Studio repo service-state bundle now stays on Flight while JSON compatibility remains optional | bounded local helper reuse only; no dead-code suppressions added     |
+| Remaining Julia compatibility imports | `xiuxian_wendao_julia::compatibility::link_graph::*`                                                           | package-owned only                                                                                                               | host crate-root compatibility shims are retired                      |
 
 The current late-`M6` outward story is therefore:
 

@@ -1,10 +1,12 @@
 use super::ValkeyAnalysisCache;
 use super::runtime::resolve_valkey_analysis_cache_runtime_with_lookup;
 use super::storage::{
-    decode_analysis_payload, encode_analysis_payload, stable_revision, valkey_analysis_key,
+    decode_analysis_payload, decode_search_query_payload, encode_analysis_payload,
+    encode_search_query_payload, stable_revision, valkey_analysis_key, valkey_search_query_key,
 };
-use crate::analyzers::cache::RepositoryAnalysisCacheKey;
+use crate::analyzers::cache::{RepositoryAnalysisCacheKey, RepositorySearchQueryCacheKey};
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
+use crate::search::FuzzySearchOptions;
 
 fn sample_cache_key(repo_id: &str) -> RepositoryAnalysisCacheKey {
     RepositoryAnalysisCacheKey {
@@ -15,6 +17,17 @@ fn sample_cache_key(repo_id: &str) -> RepositoryAnalysisCacheKey {
         tracking_revision: Some("tracking-1".to_string()),
         plugin_ids: vec!["plugin-a".to_string()],
     }
+}
+
+fn sample_query_cache_key(repo_id: &str) -> RepositorySearchQueryCacheKey {
+    RepositorySearchQueryCacheKey::new(
+        &sample_cache_key(repo_id),
+        "repo.projected-page-search",
+        "solve",
+        Some("reference".to_string()),
+        FuzzySearchOptions::document_search(),
+        5,
+    )
 }
 
 #[test]
@@ -113,4 +126,33 @@ fn cache_roundtrip_uses_test_shadow_when_no_live_client_is_bound() {
         .unwrap_or_else(|| panic!("cached analysis should load"));
 
     assert_eq!(loaded, analysis);
+}
+
+#[test]
+fn search_query_payload_roundtrip_preserves_value() {
+    let key = sample_query_cache_key("query-payload-roundtrip");
+    let payload = encode_search_query_payload(&key, &vec!["projected-hit".to_string()])
+        .unwrap_or_else(|| panic!("payload should encode"));
+    let decoded = decode_search_query_payload::<Vec<String>>(&key, payload.as_str())
+        .unwrap_or_else(|| panic!("payload should decode"));
+
+    assert_eq!(decoded, vec!["projected-hit".to_string()]);
+    assert!(
+        valkey_search_query_key(&key, "xiuxian:test:repo-analysis").is_some(),
+        "query cache key should exist when revision is stable"
+    );
+}
+
+#[test]
+fn search_query_cache_roundtrip_uses_test_shadow_when_no_live_client_is_bound() {
+    let cache = ValkeyAnalysisCache::for_tests("xiuxian:test:repo-analysis", Some(60));
+    let key = sample_query_cache_key("query-shadow-roundtrip");
+    let value = vec!["projected-hit".to_string()];
+
+    cache.set_query_result(&key, &value);
+    let loaded = cache
+        .get_query_result::<Vec<String>>(&key)
+        .unwrap_or_else(|| panic!("cached query result should load"));
+
+    assert_eq!(loaded, value);
 }

@@ -1,14 +1,17 @@
 use std::sync::Arc;
 
+use axum::Json;
 use axum::body::to_bytes;
 use axum::extract::{Path, Query, State};
 
 use crate::analyzers::bootstrap_builtin_registry;
+use crate::analyzers::registry::PluginRegistry;
 use crate::gateway::studio::repo_index::RepoIndexPhase;
 use crate::gateway::studio::router::tests::repo_project;
 use crate::gateway::studio::router::{GatewayState, StudioState};
 use crate::gateway::studio::symbol_index::SymbolIndexPhase;
 use crate::gateway::studio::types::{UiConfig, UiPluginArtifact, UiProjectConfig, VfsScanResult};
+use crate::search_plane::SearchPlaneService;
 use crate::set_link_graph_wendao_config_override;
 use crate::unified_symbol::UnifiedSymbolIndex;
 use chrono::DateTime;
@@ -108,6 +111,61 @@ async fn set_ui_config_still_eagerly_enqueues_background_indexes() {
     assert_ne!(
         studio.symbol_index_coordinator.status().phase,
         SymbolIndexPhase::Idle
+    );
+}
+
+#[tokio::test]
+async fn set_ui_config_handler_updates_runtime_without_overwriting_wendao_toml() {
+    let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let project_root = temp.path().join("project");
+    let config_root = temp.path().join("config");
+    fs::create_dir_all(project_root.as_path())
+        .unwrap_or_else(|error| panic!("create project root: {error}"));
+    fs::create_dir_all(config_root.as_path())
+        .unwrap_or_else(|error| panic!("create config root: {error}"));
+
+    let config_path = config_root.join("wendao.toml");
+    let original_toml = r#"[gateway]
+bind = "127.0.0.1:9517"
+runtime_note = "keep-me"
+
+[link_graph.projects.kernel]
+root = "."
+dirs = ["docs"]
+"#;
+    fs::write(&config_path, original_toml).unwrap_or_else(|error| panic!("write config: {error}"));
+
+    let studio = StudioState::new_with_bootstrap_ui_config_for_roots_and_search_plane(
+        Arc::new(PluginRegistry::new()),
+        project_root.clone(),
+        config_root.clone(),
+        SearchPlaneService::new(project_root),
+    );
+    let state = Arc::new(GatewayState {
+        index: None,
+        signal_tx: None,
+        studio: Arc::new(studio),
+    });
+    let pushed_config = UiConfig {
+        projects: vec![UiProjectConfig {
+            name: "main".to_string(),
+            root: ".".to_string(),
+            dirs: vec!["docs".to_string(), "src".to_string()],
+        }],
+        repo_projects: Vec::new(),
+    };
+
+    let response = crate::gateway::studio::router::handlers::set_ui_config(
+        State(Arc::clone(&state)),
+        Json(pushed_config.clone()),
+    )
+    .await;
+
+    assert_eq!(response.0, pushed_config);
+    assert_eq!(state.studio.ui_config(), pushed_config);
+    assert_eq!(
+        fs::read_to_string(&config_path).unwrap_or_else(|error| panic!("read config: {error}")),
+        original_toml
     );
 }
 

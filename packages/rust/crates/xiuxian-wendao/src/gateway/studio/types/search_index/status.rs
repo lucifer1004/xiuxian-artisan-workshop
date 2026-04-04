@@ -159,7 +159,7 @@ fn summarize_response_maintenance(
         .count();
     let aged_compaction_queue_count = corpora
         .iter()
-        .filter(|status| status.maintenance.compaction_queue_aged)
+        .filter(|status| status.maintenance.compaction_queue_aged.is_aged())
         .count();
 
     if prewarm_running_count == 0

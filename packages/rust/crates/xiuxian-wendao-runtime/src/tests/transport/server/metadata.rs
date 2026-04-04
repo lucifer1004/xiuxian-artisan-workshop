@@ -1,19 +1,27 @@
 use crate::transport::{
-    ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_ROUTE, SEARCH_AST_ROUTE,
-    SEARCH_ATTACHMENTS_ROUTE, SEARCH_INTENT_ROUTE, SEARCH_KNOWLEDGE_ROUTE, VFS_RESOLVE_ROUTE,
-    is_search_family_route, validate_attachment_search_request_metadata,
-    validate_autocomplete_request_metadata, validate_code_ast_analysis_request_metadata,
-    validate_definition_request_metadata, validate_graph_neighbors_request_metadata,
-    validate_markdown_analysis_request_metadata, validate_search_request_metadata,
-    validate_sql_request_metadata, validate_vfs_resolve_request_metadata,
+    ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, ANALYSIS_REPO_DOC_COVERAGE_ROUTE,
+    ANALYSIS_REPO_INDEX_STATUS_ROUTE, ANALYSIS_REPO_OVERVIEW_ROUTE, ANALYSIS_REPO_SYNC_ROUTE,
+    GRAPH_NEIGHBORS_ROUTE, SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_INTENT_ROUTE,
+    SEARCH_KNOWLEDGE_ROUTE, VFS_CONTENT_ROUTE, VFS_RESOLVE_ROUTE, is_search_family_route,
+    validate_attachment_search_request_metadata, validate_autocomplete_request_metadata,
+    validate_code_ast_analysis_request_metadata, validate_definition_request_metadata,
+    validate_graph_neighbors_request_metadata, validate_markdown_analysis_request_metadata,
+    validate_repo_doc_coverage_request_metadata, validate_repo_index_status_request_metadata,
+    validate_repo_overview_request_metadata, validate_repo_search_request_metadata,
+    validate_repo_sync_request_metadata, validate_search_request_metadata,
+    validate_sql_request_metadata, validate_vfs_content_request_metadata,
+    validate_vfs_resolve_request_metadata,
 };
 
 use super::assertions::{must_err, must_ok};
 use super::request_headers::{
     build_attachment_search_metadata, build_autocomplete_metadata,
     build_code_ast_analysis_metadata, build_definition_metadata, build_graph_neighbors_metadata,
-    build_markdown_analysis_metadata, build_search_metadata, build_sql_metadata,
-    build_vfs_resolve_metadata, populate_schema_and_search_headers_with_hints,
+    build_markdown_analysis_metadata, build_repo_doc_coverage_metadata,
+    build_repo_index_status_metadata, build_repo_overview_metadata, build_repo_search_metadata,
+    build_repo_sync_metadata, build_search_metadata, build_sql_metadata,
+    build_vfs_content_metadata, build_vfs_resolve_metadata,
+    populate_schema_and_search_headers_with_hints,
 };
 
 #[test]
@@ -81,6 +89,38 @@ fn validate_search_request_metadata_rejects_zero_limit() {
 }
 
 #[test]
+fn validate_repo_search_request_metadata_accepts_repo_and_filters() {
+    let metadata =
+        build_repo_search_metadata("gateway-sync", "solve", "5", Some("julia"), Some("src/"));
+
+    let request = must_ok(
+        validate_repo_search_request_metadata(&metadata),
+        "stable repo-search metadata should validate",
+    );
+
+    assert_eq!(request.repo_id, "gateway-sync");
+    assert_eq!(request.query_text, "solve");
+    assert_eq!(request.limit, 5);
+    assert!(request.language_filters.contains("julia"));
+    assert!(request.path_prefixes.contains("src/"));
+}
+
+#[test]
+fn validate_repo_search_request_metadata_rejects_blank_repo() {
+    let metadata = build_repo_search_metadata("   ", "solve", "5", None, None);
+
+    let error: tonic::Status = must_err(
+        validate_repo_search_request_metadata(&metadata),
+        "blank repo-search repo should fail",
+    );
+
+    assert_eq!(
+        error.message(),
+        "repo search header `x-wendao-repo-search-repo` must not be blank"
+    );
+}
+
+#[test]
 fn validate_markdown_analysis_request_metadata_accepts_stable_request() {
     let metadata = build_markdown_analysis_metadata("docs/analysis.md");
 
@@ -102,6 +142,151 @@ fn validate_markdown_analysis_request_metadata_rejects_blank_path() {
     );
 
     assert_eq!(error.message(), "markdown analysis path must not be blank");
+}
+
+#[test]
+fn validate_repo_doc_coverage_request_metadata_accepts_stable_request() {
+    let metadata = build_repo_doc_coverage_metadata("gateway-sync", Some("GatewaySyncPkg"));
+
+    let (repo_id, module_id) = must_ok(
+        validate_repo_doc_coverage_request_metadata(&metadata),
+        "stable repo doc coverage metadata should validate",
+    );
+
+    assert_eq!(repo_id, "gateway-sync");
+    assert_eq!(module_id.as_deref(), Some("GatewaySyncPkg"));
+}
+
+#[test]
+fn validate_repo_overview_request_metadata_accepts_stable_request() {
+    let metadata = build_repo_overview_metadata("gateway-sync");
+
+    let repo_id = must_ok(
+        validate_repo_overview_request_metadata(&metadata),
+        "stable repo overview metadata should validate",
+    );
+
+    assert_eq!(repo_id, "gateway-sync");
+}
+
+#[test]
+fn validate_repo_index_status_request_metadata_accepts_stable_request() {
+    let metadata = build_repo_index_status_metadata(Some("gateway-sync"));
+
+    let repo_id = must_ok(
+        validate_repo_index_status_request_metadata(&metadata),
+        "stable repo index status metadata should validate",
+    );
+
+    assert_eq!(repo_id.as_deref(), Some("gateway-sync"));
+
+    let metadata = build_repo_index_status_metadata(None);
+    let repo_id = must_ok(
+        validate_repo_index_status_request_metadata(&metadata),
+        "unfiltered repo index status metadata should validate",
+    );
+    assert_eq!(repo_id, None);
+}
+
+#[test]
+fn validate_repo_sync_request_metadata_accepts_stable_request() {
+    let metadata = build_repo_sync_metadata("gateway-sync", Some("status"));
+
+    let (repo_id, mode) = must_ok(
+        validate_repo_sync_request_metadata(&metadata),
+        "stable repo sync metadata should validate",
+    );
+
+    assert_eq!(repo_id, "gateway-sync");
+    assert_eq!(mode, "status");
+
+    let metadata = build_repo_sync_metadata("gateway-sync", None);
+    let (repo_id, mode) = must_ok(
+        validate_repo_sync_request_metadata(&metadata),
+        "repo sync metadata without explicit mode should validate",
+    );
+    assert_eq!(repo_id, "gateway-sync");
+    assert_eq!(mode, "ensure");
+}
+
+#[test]
+fn validate_repo_overview_request_metadata_rejects_blank_repo() {
+    let metadata = build_repo_overview_metadata("   ");
+
+    let error = must_err(
+        validate_repo_overview_request_metadata(&metadata),
+        "blank repo overview repo should fail",
+    );
+
+    assert_eq!(error.message(), "repo overview repo must not be blank");
+}
+
+#[test]
+fn validate_repo_doc_coverage_request_metadata_rejects_blank_repo() {
+    let metadata = build_repo_doc_coverage_metadata("   ", Some("GatewaySyncPkg"));
+
+    let error = must_err(
+        validate_repo_doc_coverage_request_metadata(&metadata),
+        "blank repo doc coverage repo should fail",
+    );
+
+    assert_eq!(error.message(), "repo doc coverage repo must not be blank");
+}
+
+#[test]
+fn validate_repo_sync_request_metadata_rejects_blank_repo() {
+    let metadata = build_repo_sync_metadata("   ", Some("status"));
+
+    let error = must_err(
+        validate_repo_sync_request_metadata(&metadata),
+        "blank repo sync repo should fail",
+    );
+
+    assert_eq!(error.message(), "repo sync repo must not be blank");
+}
+
+#[test]
+fn validate_repo_sync_request_metadata_rejects_invalid_mode() {
+    let metadata = build_repo_sync_metadata("gateway-sync", Some("bogus"));
+
+    let error = must_err(
+        validate_repo_sync_request_metadata(&metadata),
+        "invalid repo sync mode should fail",
+    );
+
+    assert_eq!(error.message(), "unsupported repo sync mode `bogus`");
+}
+
+#[test]
+fn analysis_routes_do_not_alias_search_family_contracts() {
+    assert!(!is_search_family_route(ANALYSIS_REPO_DOC_COVERAGE_ROUTE));
+    assert!(!is_search_family_route(ANALYSIS_REPO_INDEX_STATUS_ROUTE));
+    assert!(!is_search_family_route(ANALYSIS_REPO_OVERVIEW_ROUTE));
+    assert!(!is_search_family_route(ANALYSIS_REPO_SYNC_ROUTE));
+}
+
+#[test]
+fn validate_vfs_content_request_metadata_accepts_stable_request() {
+    let metadata = build_vfs_content_metadata("main/docs/index.md");
+
+    let path = must_ok(
+        validate_vfs_content_request_metadata(&metadata),
+        "stable VFS content metadata should validate",
+    );
+
+    assert_eq!(path, "main/docs/index.md");
+}
+
+#[test]
+fn validate_vfs_content_request_metadata_rejects_blank_path() {
+    let metadata = build_vfs_content_metadata("   ");
+
+    let error = must_err(
+        validate_vfs_content_request_metadata(&metadata),
+        "blank VFS content path should fail",
+    );
+
+    assert_eq!(error.message(), "VFS content requires a non-empty path");
 }
 
 #[test]
@@ -366,7 +551,10 @@ fn search_family_route_matcher_accepts_semantic_business_routes() {
     assert!(!is_search_family_route(SEARCH_ATTACHMENTS_ROUTE));
     assert!(!is_search_family_route(SEARCH_AST_ROUTE));
     assert!(!is_search_family_route(VFS_RESOLVE_ROUTE));
+    assert!(!is_search_family_route(VFS_CONTENT_ROUTE));
     assert!(!is_search_family_route(GRAPH_NEIGHBORS_ROUTE));
     assert!(!is_search_family_route(ANALYSIS_MARKDOWN_ROUTE));
     assert!(!is_search_family_route(ANALYSIS_CODE_AST_ROUTE));
+    assert!(!is_search_family_route(ANALYSIS_REPO_DOC_COVERAGE_ROUTE));
+    assert!(!is_search_family_route(ANALYSIS_REPO_OVERVIEW_ROUTE));
 }

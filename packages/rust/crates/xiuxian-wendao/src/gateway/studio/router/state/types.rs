@@ -24,44 +24,47 @@ pub(crate) struct DeferredBootstrapBackgroundIndexingActivation {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StudioBootstrapBackgroundIndexingTelemetry {
-    studio_bootstrap_background_indexing_enabled: bool,
-    studio_bootstrap_background_indexing_mode: &'static str,
-    studio_bootstrap_background_indexing_deferred_activation_observed: bool,
-    studio_bootstrap_background_indexing_deferred_activation_at: Option<String>,
-    studio_bootstrap_background_indexing_deferred_activation_source: Option<String>,
+    #[serde(rename = "studioBootstrapBackgroundIndexingEnabled")]
+    enabled: bool,
+    #[serde(rename = "studioBootstrapBackgroundIndexingMode")]
+    mode: &'static str,
+    #[serde(rename = "studioBootstrapBackgroundIndexingDeferredActivationObserved")]
+    deferred_activation_observed: bool,
+    #[serde(rename = "studioBootstrapBackgroundIndexingDeferredActivationAt")]
+    deferred_activation_at: Option<String>,
+    #[serde(rename = "studioBootstrapBackgroundIndexingDeferredActivationSource")]
+    deferred_activation_source: Option<String>,
 }
 
 impl StudioBootstrapBackgroundIndexingTelemetry {
     /// Returns whether bootstrap-time background indexing is enabled.
     #[must_use]
     pub fn enabled(&self) -> bool {
-        self.studio_bootstrap_background_indexing_enabled
+        self.enabled
     }
 
     /// Returns the stable bootstrap-time background-indexing mode label.
     #[must_use]
     pub fn mode(&self) -> &'static str {
-        self.studio_bootstrap_background_indexing_mode
+        self.mode
     }
 
     /// Returns whether deferred bootstrap indexing has been lazily activated since boot.
     #[must_use]
     pub fn deferred_activation_observed(&self) -> bool {
-        self.studio_bootstrap_background_indexing_deferred_activation_observed
+        self.deferred_activation_observed
     }
 
     /// Returns the first deferred bootstrap-indexing activation timestamp, if any.
     #[must_use]
     pub fn deferred_activation_at(&self) -> Option<&str> {
-        self.studio_bootstrap_background_indexing_deferred_activation_at
-            .as_deref()
+        self.deferred_activation_at.as_deref()
     }
 
     /// Returns the source that first activated deferred bootstrap indexing, if any.
     #[must_use]
     pub fn deferred_activation_source(&self) -> Option<&str> {
-        self.studio_bootstrap_background_indexing_deferred_activation_source
-            .as_deref()
+        self.deferred_activation_source.as_deref()
     }
 }
 
@@ -117,14 +120,11 @@ impl StudioState {
         let deferred_activation_source =
             self.bootstrap_background_indexing_deferred_activation_source();
         StudioBootstrapBackgroundIndexingTelemetry {
-            studio_bootstrap_background_indexing_enabled: self
-                .bootstrap_background_indexing_enabled(),
-            studio_bootstrap_background_indexing_mode: self.bootstrap_background_indexing_mode(),
-            studio_bootstrap_background_indexing_deferred_activation_observed:
-                deferred_activation_at.is_some(),
-            studio_bootstrap_background_indexing_deferred_activation_at: deferred_activation_at,
-            studio_bootstrap_background_indexing_deferred_activation_source:
-                deferred_activation_source,
+            enabled: self.bootstrap_background_indexing_enabled(),
+            mode: self.bootstrap_background_indexing_mode(),
+            deferred_activation_observed: deferred_activation_at.is_some(),
+            deferred_activation_at,
+            deferred_activation_source,
         }
     }
 

@@ -12,6 +12,13 @@ mod refine;
 mod retrieval;
 pub(super) mod shared;
 
+pub(crate) use analysis::StudioRefineDocFlightRouteProvider;
+pub(crate) use analysis::StudioRepoDocCoverageFlightRouteProvider;
+pub(crate) use analysis::StudioRepoIndexFlightRouteProvider;
+pub(crate) use analysis::StudioRepoIndexStatusFlightRouteProvider;
+pub(crate) use analysis::StudioRepoOverviewFlightRouteProvider;
+pub(crate) use analysis::StudioRepoProjectedPageIndexTreeFlightRouteProvider;
+pub(crate) use analysis::StudioRepoSyncFlightRouteProvider;
 pub use analysis::{
     doc_coverage, example_search, import_search, module_search, overview, symbol_search, sync,
 };

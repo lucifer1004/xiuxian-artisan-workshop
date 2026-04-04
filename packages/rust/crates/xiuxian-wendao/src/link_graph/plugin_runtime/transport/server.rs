@@ -27,14 +27,12 @@ use crate::search_plane::SearchPlaneService;
 #[derive(Clone)]
 pub struct SearchPlaneRepoSearchFlightRouteProvider {
     search_plane: Arc<SearchPlaneService>,
-    repo_id: String,
 }
 
 impl std::fmt::Debug for SearchPlaneRepoSearchFlightRouteProvider {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("SearchPlaneRepoSearchFlightRouteProvider")
-            .field("repo_id", &self.repo_id)
             .finish_non_exhaustive()
     }
 }
@@ -44,21 +42,9 @@ impl SearchPlaneRepoSearchFlightRouteProvider {
     ///
     /// # Errors
     ///
-    /// Returns an error when the repo identifier is blank.
-    pub fn new(
-        search_plane: Arc<SearchPlaneService>,
-        repo_id: impl Into<String>,
-    ) -> Result<Self, String> {
-        let repo_id = repo_id.into();
-        if repo_id.trim().is_empty() {
-            return Err(
-                "search-plane repo-search Flight provider repo_id must not be blank".to_string(),
-            );
-        }
-        Ok(Self {
-            search_plane,
-            repo_id,
-        })
+    /// Returns an error when the provider cannot be built.
+    pub fn new(search_plane: Arc<SearchPlaneService>) -> Result<Self, String> {
+        Ok(Self { search_plane })
     }
 }
 
@@ -68,10 +54,16 @@ impl RepoSearchFlightRouteProvider for SearchPlaneRepoSearchFlightRouteProvider 
         &self,
         request: &RepoSearchFlightRequest,
     ) -> Result<LanceRecordBatch, String> {
+        let repo_id = request.repo_id.trim();
+        if repo_id.is_empty() {
+            return Err(
+                "search-plane repo-search Flight request repo_id must not be blank".to_string(),
+            );
+        }
         let mut hits = self
             .search_plane
             .search_repo_content_chunks(
-                &self.repo_id,
+                repo_id,
                 request.query_text.as_str(),
                 &request.language_filters,
                 request.limit,
@@ -80,7 +72,7 @@ impl RepoSearchFlightRouteProvider for SearchPlaneRepoSearchFlightRouteProvider 
             .map_err(|error| {
                 format!(
                     "search-plane repo-search Flight provider failed for repo `{}`: {error}",
-                    self.repo_id
+                    repo_id
                 )
             })?;
         if !request.path_prefixes.is_empty() {
@@ -134,18 +126,15 @@ impl RepoSearchFlightRouteProvider for SearchPlaneRepoSearchFlightRouteProvider 
 ///
 /// # Errors
 ///
-/// Returns an error when the repo identifier is blank or when the runtime
-/// Flight service cannot be constructed for the requested schema version and
-/// rerank dimension.
+/// Returns an error when the runtime Flight service cannot be constructed for
+/// the requested schema version and rerank dimension.
 pub fn build_search_plane_flight_service(
     search_plane: Arc<SearchPlaneService>,
-    repo_id: impl Into<String>,
     expected_schema_version: impl Into<String>,
     rerank_dimension: usize,
 ) -> Result<WendaoFlightService, String> {
     build_search_plane_flight_service_with_weights(
         search_plane,
-        repo_id,
         expected_schema_version,
         rerank_dimension,
         RerankScoreWeights::default(),
@@ -157,20 +146,15 @@ pub fn build_search_plane_flight_service(
 ///
 /// # Errors
 ///
-/// Returns an error when the repo identifier is blank or when the runtime
-/// Flight service cannot be constructed for the requested schema version,
-/// rerank dimension, and rerank score weights.
+/// Returns an error when the runtime Flight service cannot be constructed for
+/// the requested schema version, rerank dimension, and rerank score weights.
 pub fn build_search_plane_flight_service_with_weights(
     search_plane: Arc<SearchPlaneService>,
-    repo_id: impl Into<String>,
     expected_schema_version: impl Into<String>,
     rerank_dimension: usize,
     rerank_weights: RerankScoreWeights,
 ) -> Result<WendaoFlightService, String> {
-    let provider = Arc::new(SearchPlaneRepoSearchFlightRouteProvider::new(
-        search_plane,
-        repo_id,
-    )?);
+    let provider = Arc::new(SearchPlaneRepoSearchFlightRouteProvider::new(search_plane)?);
     WendaoFlightService::new_with_provider(
         expected_schema_version,
         provider,
@@ -184,19 +168,16 @@ pub fn build_search_plane_flight_service_with_weights(
 ///
 /// # Errors
 ///
-/// Returns an error when the repo identifier is blank or when the runtime
-/// Flight service cannot be constructed for the requested schema version and
-/// rerank dimension.
+/// Returns an error when the runtime Flight service cannot be constructed for
+/// the requested schema version and rerank dimension.
 pub fn build_search_plane_studio_flight_service(
     search_plane: Arc<SearchPlaneService>,
-    repo_id: impl Into<String>,
     gateway_state: Arc<GatewayState>,
     expected_schema_version: impl Into<String>,
     rerank_dimension: usize,
 ) -> Result<WendaoFlightService, String> {
     build_search_plane_studio_flight_service_with_weights(
         search_plane,
-        repo_id,
         gateway_state,
         expected_schema_version,
         rerank_dimension,
@@ -209,21 +190,16 @@ pub fn build_search_plane_studio_flight_service(
 ///
 /// # Errors
 ///
-/// Returns an error when the repo identifier is blank or when the runtime
-/// Flight service cannot be constructed for the requested schema version,
-/// rerank dimension, and rerank score weights.
+/// Returns an error when the runtime Flight service cannot be constructed for
+/// the requested schema version, rerank dimension, and rerank score weights.
 pub fn build_search_plane_studio_flight_service_with_weights(
     search_plane: Arc<SearchPlaneService>,
-    repo_id: impl Into<String>,
     gateway_state: Arc<GatewayState>,
     expected_schema_version: impl Into<String>,
     rerank_dimension: usize,
     rerank_weights: RerankScoreWeights,
 ) -> Result<WendaoFlightService, String> {
-    let provider = Arc::new(SearchPlaneRepoSearchFlightRouteProvider::new(
-        search_plane,
-        repo_id,
-    )?);
+    let provider = Arc::new(SearchPlaneRepoSearchFlightRouteProvider::new(search_plane)?);
     build_studio_search_flight_service_with_repo_provider(
         expected_schema_version,
         provider,
@@ -238,12 +214,11 @@ pub fn build_search_plane_studio_flight_service_with_weights(
 ///
 /// # Errors
 ///
-/// Returns an error when the plugin registry cannot be bootstrapped, when the
-/// repo identifier is blank, or when the runtime Flight service cannot be
-/// constructed for the requested schema version and rerank dimension.
+/// Returns an error when the plugin registry cannot be bootstrapped or when the
+/// runtime Flight service cannot be constructed for the requested schema
+/// version and rerank dimension.
 pub fn build_search_plane_studio_flight_service_for_roots(
     search_plane: Arc<SearchPlaneService>,
-    repo_id: impl Into<String>,
     project_root: std::path::PathBuf,
     config_root: std::path::PathBuf,
     expected_schema_version: impl Into<String>,
@@ -251,7 +226,6 @@ pub fn build_search_plane_studio_flight_service_for_roots(
 ) -> Result<WendaoFlightService, String> {
     build_search_plane_studio_flight_service_for_roots_with_weights(
         search_plane,
-        repo_id,
         project_root,
         config_root,
         expected_schema_version,
@@ -266,13 +240,11 @@ pub fn build_search_plane_studio_flight_service_for_roots(
 ///
 /// # Errors
 ///
-/// Returns an error when the plugin registry cannot be bootstrapped, when the
-/// repo identifier is blank, or when the runtime Flight service cannot be
-/// constructed for the requested schema version, rerank dimension, and rerank
-/// score weights.
+/// Returns an error when the plugin registry cannot be bootstrapped or when the
+/// runtime Flight service cannot be constructed for the requested schema
+/// version, rerank dimension, and rerank score weights.
 pub fn build_search_plane_studio_flight_service_for_roots_with_weights(
     search_plane: Arc<SearchPlaneService>,
-    repo_id: impl Into<String>,
     project_root: std::path::PathBuf,
     config_root: std::path::PathBuf,
     expected_schema_version: impl Into<String>,
@@ -296,7 +268,6 @@ pub fn build_search_plane_studio_flight_service_for_roots_with_weights(
     });
     build_search_plane_studio_flight_service_with_weights(
         search_plane,
-        repo_id,
         gateway_state,
         expected_schema_version,
         rerank_dimension,
@@ -686,6 +657,7 @@ mod tests {
     }
 
     fn repo_search_request(
+        repo_id: &str,
         query_text: &str,
         limit: usize,
         language_filters: HashSet<String>,
@@ -695,6 +667,7 @@ mod tests {
         filename_filters: HashSet<String>,
     ) -> RepoSearchFlightRequest {
         RepoSearchFlightRequest {
+            repo_id: repo_id.to_string(),
             query_text: query_text.to_string(),
             limit,
             language_filters,
@@ -800,10 +773,11 @@ mod tests {
             .await
             .expect("repo content publication should succeed");
 
-        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), repo_id)
+        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service))
             .expect("provider should build");
         let batch = provider
             .repo_search_batch(&repo_search_request(
+                repo_id,
                 "alpha",
                 5,
                 HashSet::new(),
@@ -880,9 +854,8 @@ mod tests {
             SearchManifestKeyspace::new("xiuxian:test:search-plane-studio-flight-service"),
             SearchMaintenancePolicy::default(),
         ));
-        let flight_service =
-            build_search_plane_studio_flight_service(search_plane, "alpha/repo", state, "v2", 3)
-                .expect("studio flight service should build");
+        let flight_service = build_search_plane_studio_flight_service(search_plane, state, "v2", 3)
+            .expect("studio flight service should build");
         let descriptor = FlightDescriptor::new_path(
             flight_descriptor_path(SEARCH_SYMBOLS_ROUTE)
                 .unwrap_or_else(|error| panic!("descriptor path: {error}")),
@@ -935,7 +908,6 @@ dirs = ["packages"]
         ));
         let flight_service = build_search_plane_studio_flight_service_for_roots(
             search_plane,
-            "alpha/repo",
             project_root.clone(),
             project_root.clone(),
             "v2",
@@ -995,7 +967,6 @@ dirs = ["docs"]
         ));
         let flight_service = build_search_plane_studio_flight_service_for_roots(
             search_plane,
-            "alpha/repo",
             project_root.clone(),
             project_root.clone(),
             "v2",
@@ -1067,7 +1038,6 @@ plugins = ["julia"]
         ));
         let flight_service = build_search_plane_studio_flight_service_for_roots(
             search_plane,
-            "alpha/repo",
             project_root.clone(),
             project_root.clone(),
             "v2",
@@ -1113,11 +1083,11 @@ plugins = ["julia"]
             .await
             .expect("sample bootstrap should publish repo content");
 
-        let provider =
-            SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
-                .expect("provider should build");
+        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service))
+            .expect("provider should build");
         let batch = provider
             .repo_search_batch(&repo_search_request(
+                "alpha/repo",
                 "alpha",
                 10,
                 HashSet::from(["markdown".to_string()]),
@@ -1160,11 +1130,11 @@ plugins = ["julia"]
             .await
             .expect("sample bootstrap should publish repo content");
 
-        let provider =
-            SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
-                .expect("provider should build");
+        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service))
+            .expect("provider should build");
         let batch = provider
             .repo_search_batch(&repo_search_request(
+                "alpha/repo",
                 "flightbridgetoken",
                 10,
                 HashSet::new(),
@@ -1202,11 +1172,11 @@ plugins = ["julia"]
             .await
             .expect("sample bootstrap should publish repo content");
 
-        let provider =
-            SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
-                .expect("provider should build");
+        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service))
+            .expect("provider should build");
         let batch = provider
             .repo_search_batch(&repo_search_request(
+                "alpha/repo",
                 "alpha",
                 10,
                 HashSet::new(),
@@ -1249,11 +1219,11 @@ plugins = ["julia"]
             .await
             .expect("sample bootstrap should publish repo content");
 
-        let provider =
-            SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
-                .expect("provider should build");
+        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service))
+            .expect("provider should build");
         let batch = provider
             .repo_search_batch(&repo_search_request(
+                "alpha/repo",
                 "alpha",
                 10,
                 HashSet::new(),
@@ -1296,11 +1266,11 @@ plugins = ["julia"]
             .await
             .expect("sample bootstrap should publish repo content");
 
-        let provider =
-            SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
-                .expect("provider should build");
+        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service))
+            .expect("provider should build");
         let batch = provider
             .repo_search_batch(&repo_search_request(
+                "alpha/repo",
                 "searchonlytoken",
                 10,
                 HashSet::new(),
@@ -1338,11 +1308,11 @@ plugins = ["julia"]
             .await
             .expect("sample bootstrap should publish repo content");
 
-        let provider =
-            SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
-                .expect("provider should build");
+        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service))
+            .expect("provider should build");
         let batch = provider
             .repo_search_batch(&repo_search_request(
+                "alpha/repo",
                 "CamelBridgeToken",
                 2,
                 HashSet::new(),
@@ -1386,11 +1356,11 @@ plugins = ["julia"]
             .await
             .expect("sample bootstrap should publish repo content");
 
-        let provider =
-            SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service), "alpha/repo")
-                .expect("provider should build");
+        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(Arc::clone(&service))
+            .expect("provider should build");
         let batch = provider
             .repo_search_batch(&repo_search_request(
+                "alpha/repo",
                 "alpha",
                 10,
                 HashSet::new(),
@@ -1416,8 +1386,8 @@ plugins = ["julia"]
         assert_eq!(doc_ids.value(0), "README.md");
     }
 
-    #[test]
-    fn search_plane_repo_search_provider_rejects_blank_repo_id() {
+    #[tokio::test]
+    async fn search_plane_repo_search_provider_rejects_blank_repo_id() {
         let temp_dir = tempdir().expect("temp dir should build");
         let project_root = temp_dir.path().join("project");
         let storage_root = temp_dir.path().join("storage");
@@ -1429,11 +1399,24 @@ plugins = ["julia"]
             SearchManifestKeyspace::new("xiuxian:test:flight-search-plane-provider-blank"),
             SearchMaintenancePolicy::default(),
         ));
-        let error = SearchPlaneRepoSearchFlightRouteProvider::new(service, "   ")
+        let provider = SearchPlaneRepoSearchFlightRouteProvider::new(service)
+            .expect("provider should build without a fixed repo id");
+        let error = provider
+            .repo_search_batch(&repo_search_request(
+                "   ",
+                "alpha",
+                5,
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+                HashSet::new(),
+            ))
+            .await
             .expect_err("blank repo id should fail");
         assert_eq!(
             error,
-            "search-plane repo-search Flight provider repo_id must not be blank"
+            "search-plane repo-search Flight request repo_id must not be blank"
         );
     }
 
@@ -1450,7 +1433,7 @@ plugins = ["julia"]
             SearchManifestKeyspace::new("xiuxian:test:flight-search-plane-service"),
             SearchMaintenancePolicy::default(),
         ));
-        let flight_service = build_search_plane_flight_service(service, "alpha/repo", "v2", 3)
+        let flight_service = build_search_plane_flight_service(service, "v2", 3)
             .expect("flight service should build");
 
         let _ = flight_service;

@@ -7,6 +7,11 @@ use crate::transport::{
     WENDAO_AUTOCOMPLETE_PREFIX_HEADER, WENDAO_DEFINITION_LINE_HEADER,
     WENDAO_DEFINITION_PATH_HEADER, WENDAO_DEFINITION_QUERY_HEADER, WENDAO_GRAPH_DIRECTION_HEADER,
     WENDAO_GRAPH_HOPS_HEADER, WENDAO_GRAPH_LIMIT_HEADER, WENDAO_GRAPH_NODE_ID_HEADER,
+    WENDAO_REPO_DOC_COVERAGE_MODULE_HEADER, WENDAO_REPO_DOC_COVERAGE_REPO_HEADER,
+    WENDAO_REPO_INDEX_STATUS_REPO_HEADER, WENDAO_REPO_OVERVIEW_REPO_HEADER,
+    WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER, WENDAO_REPO_SEARCH_LIMIT_HEADER,
+    WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER, WENDAO_REPO_SEARCH_QUERY_HEADER,
+    WENDAO_REPO_SEARCH_REPO_HEADER, WENDAO_REPO_SYNC_MODE_HEADER, WENDAO_REPO_SYNC_REPO_HEADER,
     WENDAO_SCHEMA_VERSION_HEADER, WENDAO_SEARCH_INTENT_HEADER, WENDAO_SEARCH_LIMIT_HEADER,
     WENDAO_SEARCH_QUERY_HEADER, WENDAO_SEARCH_REPO_HEADER, WENDAO_SQL_QUERY_HEADER,
     WENDAO_VFS_PATH_HEADER,
@@ -20,9 +25,55 @@ pub(super) fn build_search_metadata(query_text: &str, limit: &str) -> MetadataMa
     metadata
 }
 
+pub(super) fn build_repo_search_metadata(
+    repo_id: &str,
+    query_text: &str,
+    limit: &str,
+    language_filters: Option<&str>,
+    path_prefixes: Option<&str>,
+) -> MetadataMap {
+    let mut metadata = MetadataMap::new();
+    populate_schema_and_repo_search_headers(
+        &mut metadata,
+        repo_id,
+        query_text,
+        limit,
+        language_filters,
+        path_prefixes,
+    );
+    metadata
+}
+
 pub(super) fn build_markdown_analysis_metadata(path: &str) -> MetadataMap {
     let mut metadata = MetadataMap::new();
     populate_schema_and_markdown_analysis_headers(&mut metadata, path);
+    metadata
+}
+
+pub(super) fn build_repo_doc_coverage_metadata(
+    repo_id: &str,
+    module_id: Option<&str>,
+) -> MetadataMap {
+    let mut metadata = MetadataMap::new();
+    populate_schema_and_repo_doc_coverage_headers(&mut metadata, repo_id, module_id);
+    metadata
+}
+
+pub(super) fn build_repo_overview_metadata(repo_id: &str) -> MetadataMap {
+    let mut metadata = MetadataMap::new();
+    populate_schema_and_repo_overview_headers(&mut metadata, repo_id);
+    metadata
+}
+
+pub(super) fn build_repo_index_status_metadata(repo_id: Option<&str>) -> MetadataMap {
+    let mut metadata = MetadataMap::new();
+    populate_schema_and_repo_index_status_headers(&mut metadata, repo_id);
+    metadata
+}
+
+pub(super) fn build_repo_sync_metadata(repo_id: &str, mode: Option<&str>) -> MetadataMap {
+    let mut metadata = MetadataMap::new();
+    populate_schema_and_repo_sync_headers(&mut metadata, repo_id, mode);
     metadata
 }
 
@@ -51,6 +102,12 @@ pub(super) fn build_sql_metadata(query_text: &str) -> MetadataMap {
 pub(super) fn build_vfs_resolve_metadata(path: &str) -> MetadataMap {
     let mut metadata = MetadataMap::new();
     populate_schema_and_vfs_resolve_headers(&mut metadata, path);
+    metadata
+}
+
+pub(super) fn build_vfs_content_metadata(path: &str) -> MetadataMap {
+    let mut metadata = MetadataMap::new();
+    populate_schema_and_vfs_content_headers(&mut metadata, path);
     metadata
 }
 
@@ -102,6 +159,50 @@ pub(super) fn populate_schema_and_search_headers(
     populate_schema_and_search_headers_with_hints(metadata, query_text, limit, None, None);
 }
 
+pub(super) fn populate_schema_and_repo_search_headers(
+    metadata: &mut MetadataMap,
+    repo_id: &str,
+    query_text: &str,
+    limit: &str,
+    language_filters: Option<&str>,
+    path_prefixes: Option<&str>,
+) {
+    metadata.insert(
+        WENDAO_SCHEMA_VERSION_HEADER,
+        metadata_value("v2", "schema version metadata should parse"),
+    );
+    metadata.insert(
+        WENDAO_REPO_SEARCH_REPO_HEADER,
+        metadata_value(repo_id, "repo-search repo metadata should parse"),
+    );
+    metadata.insert(
+        WENDAO_REPO_SEARCH_QUERY_HEADER,
+        metadata_value(query_text, "repo-search query metadata should parse"),
+    );
+    metadata.insert(
+        WENDAO_REPO_SEARCH_LIMIT_HEADER,
+        metadata_value(limit, "repo-search limit metadata should parse"),
+    );
+    if let Some(language_filters) = language_filters {
+        metadata.insert(
+            WENDAO_REPO_SEARCH_LANGUAGE_FILTERS_HEADER,
+            metadata_value(
+                language_filters,
+                "repo-search language filters metadata should parse",
+            ),
+        );
+    }
+    if let Some(path_prefixes) = path_prefixes {
+        metadata.insert(
+            WENDAO_REPO_SEARCH_PATH_PREFIXES_HEADER,
+            metadata_value(
+                path_prefixes,
+                "repo-search path prefixes metadata should parse",
+            ),
+        );
+    }
+}
+
 pub(super) fn populate_schema_and_search_headers_with_hints(
     metadata: &mut MetadataMap,
     query_text: &str,
@@ -131,6 +232,75 @@ pub(super) fn populate_schema_and_search_headers_with_hints(
         metadata.insert(
             WENDAO_SEARCH_REPO_HEADER,
             metadata_value(repo_hint, "search-family repo metadata should parse"),
+        );
+    }
+}
+
+pub(super) fn populate_schema_and_repo_doc_coverage_headers(
+    metadata: &mut MetadataMap,
+    repo_id: &str,
+    module_id: Option<&str>,
+) {
+    metadata.insert(
+        WENDAO_SCHEMA_VERSION_HEADER,
+        metadata_value("v2", "schema version metadata should parse"),
+    );
+    metadata.insert(
+        WENDAO_REPO_DOC_COVERAGE_REPO_HEADER,
+        metadata_value(repo_id, "repo doc coverage repo metadata should parse"),
+    );
+    if let Some(module_id) = module_id {
+        metadata.insert(
+            WENDAO_REPO_DOC_COVERAGE_MODULE_HEADER,
+            metadata_value(module_id, "repo doc coverage module metadata should parse"),
+        );
+    }
+}
+
+pub(super) fn populate_schema_and_repo_overview_headers(metadata: &mut MetadataMap, repo_id: &str) {
+    metadata.insert(
+        WENDAO_SCHEMA_VERSION_HEADER,
+        metadata_value("v2", "schema version metadata should parse"),
+    );
+    metadata.insert(
+        WENDAO_REPO_OVERVIEW_REPO_HEADER,
+        metadata_value(repo_id, "repo overview repo metadata should parse"),
+    );
+}
+
+pub(super) fn populate_schema_and_repo_index_status_headers(
+    metadata: &mut MetadataMap,
+    repo_id: Option<&str>,
+) {
+    metadata.insert(
+        WENDAO_SCHEMA_VERSION_HEADER,
+        metadata_value("v2", "schema version metadata should parse"),
+    );
+    if let Some(repo_id) = repo_id {
+        metadata.insert(
+            WENDAO_REPO_INDEX_STATUS_REPO_HEADER,
+            metadata_value(repo_id, "repo index status repo metadata should parse"),
+        );
+    }
+}
+
+pub(super) fn populate_schema_and_repo_sync_headers(
+    metadata: &mut MetadataMap,
+    repo_id: &str,
+    mode: Option<&str>,
+) {
+    metadata.insert(
+        WENDAO_SCHEMA_VERSION_HEADER,
+        metadata_value("v2", "schema version metadata should parse"),
+    );
+    metadata.insert(
+        WENDAO_REPO_SYNC_REPO_HEADER,
+        metadata_value(repo_id, "repo sync repo metadata should parse"),
+    );
+    if let Some(mode) = mode {
+        metadata.insert(
+            WENDAO_REPO_SYNC_MODE_HEADER,
+            metadata_value(mode, "repo sync mode metadata should parse"),
         );
     }
 }
@@ -253,6 +423,17 @@ pub(super) fn populate_schema_and_vfs_resolve_headers(metadata: &mut MetadataMap
     metadata.insert(
         WENDAO_VFS_PATH_HEADER,
         metadata_value(path, "VFS resolve path metadata should parse"),
+    );
+}
+
+pub(super) fn populate_schema_and_vfs_content_headers(metadata: &mut MetadataMap, path: &str) {
+    metadata.insert(
+        WENDAO_SCHEMA_VERSION_HEADER,
+        metadata_value("v2", "schema version metadata should parse"),
+    );
+    metadata.insert(
+        WENDAO_VFS_PATH_HEADER,
+        metadata_value(path, "VFS content path metadata should parse"),
     );
 }
 

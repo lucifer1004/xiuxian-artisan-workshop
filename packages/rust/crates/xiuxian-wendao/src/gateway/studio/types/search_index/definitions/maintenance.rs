@@ -1,6 +1,35 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+/// Transparent bool wrapper for queued-compaction fairness aging in Studio responses.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+#[specta(transparent)]
+pub struct SearchIndexMaintenanceQueueAged(bool);
+
+impl SearchIndexMaintenanceQueueAged {
+    /// Returns whether the queued compaction has already crossed the fairness-aging guard.
+    #[must_use]
+    pub const fn is_aged(self) -> bool {
+        self.0
+    }
+}
+
+impl From<bool> for SearchIndexMaintenanceQueueAged {
+    fn from(value: bool) -> Self {
+        Self(value)
+    }
+}
+
+impl std::ops::Not for SearchIndexMaintenanceQueueAged {
+    type Output = bool;
+
+    fn not(self) -> Self::Output {
+        !self.0
+    }
+}
+
 /// Response-level summary derived from per-corpus maintenance state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -70,7 +99,7 @@ pub struct SearchIndexMaintenanceStatus {
     pub compaction_queue_position: Option<u32>,
     #[serde(default)]
     /// Whether enqueue-time fairness aging has already promoted this queued compaction task.
-    pub compaction_queue_aged: bool,
+    pub compaction_queue_aged: SearchIndexMaintenanceQueueAged,
     /// Whether the corpus should be compacted in the background.
     pub compaction_pending: bool,
     /// Number of publishes since the last compact.

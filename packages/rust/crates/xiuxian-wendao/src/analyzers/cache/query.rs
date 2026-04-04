@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::{Mutex, OnceLock};
 
 use crate::analyzers::cache::RepositorySearchQueryCacheKey;
+use crate::analyzers::cache::ValkeyAnalysisCache;
 use crate::analyzers::errors::RepoIntelligenceError;
 
 type RepositorySearchQueryCache = BTreeMap<RepositorySearchQueryCacheKey, serde_json::Value>;
@@ -21,9 +22,9 @@ pub fn load_cached_repository_search_result<T>(
     key: &RepositorySearchQueryCacheKey,
 ) -> Result<Option<T>, RepoIntelligenceError>
 where
-    T: serde::de::DeserializeOwned,
+    T: serde::de::DeserializeOwned + serde::Serialize,
 {
-    repository_search_query_cache()
+    if let Some(value) = repository_search_query_cache()
         .lock()
         .map_err(|_| RepoIntelligenceError::AnalysisFailed {
             message: "repository search query cache lock is poisoned".to_string(),
@@ -35,7 +36,28 @@ where
                 message: format!("failed to decode cached repository search payload: {error}"),
             })
         })
-        .transpose()
+        .transpose()?
+    {
+        return Ok(Some(value));
+    }
+
+    let Some(valkey_cache) = ValkeyAnalysisCache::new()? else {
+        return Ok(None);
+    };
+    let Some(value) = valkey_cache.get_query_result(key) else {
+        return Ok(None);
+    };
+    let encoded =
+        serde_json::to_value(&value).map_err(|error| RepoIntelligenceError::AnalysisFailed {
+            message: format!("failed to encode cached repository search payload: {error}"),
+        })?;
+    repository_search_query_cache()
+        .lock()
+        .map_err(|_| RepoIntelligenceError::AnalysisFailed {
+            message: "repository search query cache lock is poisoned".to_string(),
+        })?
+        .insert(key.clone(), encoded);
+    Ok(Some(value))
 }
 
 /// Stores a repo-search payload in the query-result cache.
@@ -60,6 +82,10 @@ where
             message: "repository search query cache lock is poisoned".to_string(),
         })
         .map(|mut cache| {
-            cache.insert(key, encoded);
-        })
+            cache.insert(key.clone(), encoded);
+        })?;
+    if let Some(valkey_cache) = ValkeyAnalysisCache::new()? {
+        valkey_cache.set_query_result(&key, value);
+    }
+    Ok(())
 }

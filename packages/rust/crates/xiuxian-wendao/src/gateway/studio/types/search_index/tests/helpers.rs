@@ -50,7 +50,7 @@ pub(super) fn compacting_local_symbol_status() -> SearchCorpusStatus {
         compaction_running: true,
         compaction_queue_depth: 0,
         compaction_queue_position: None,
-        compaction_queue_aged: false,
+        compaction_queue_aged: false.into(),
         compaction_pending: true,
         publish_count_since_compaction: 3,
         last_prewarmed_at: None,

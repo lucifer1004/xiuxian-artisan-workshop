@@ -679,8 +679,14 @@ mod tests {
 
     use crate::{
         build_graph_structural_keyword_overlap_pair_candidate_inputs_from_raw,
+        build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs,
         build_graph_structural_keyword_overlap_query_inputs,
         build_graph_structural_keyword_overlap_raw_candidate_inputs,
+        graph_structural_pair_candidate_id,
+        julia_plugin_test_support::official_examples::{
+            reserve_real_service_port, spawn_real_wendaosearch_demo_structural_rerank_service,
+            wait_for_service_ready_with_attempts,
+        },
     };
 
     use super::{
@@ -866,14 +872,18 @@ mod tests {
             ),
             &[
                 build_graph_structural_keyword_overlap_pair_candidate_inputs_from_raw(
-                    "node-1",
-                    "node-2",
-                    vec!["depends_on".to_string()],
-                    vec!["alpha".to_string(), "core".to_string()],
-                    vec!["core".to_string()],
-                    0.7,
-                    0.6,
-                    true,
+                    build_graph_structural_keyword_overlap_raw_candidate_inputs(
+                        build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
+                            "node-1",
+                            "node-2",
+                            vec!["depends_on".to_string()],
+                            vec!["alpha".to_string(), "core".to_string()],
+                            vec!["core".to_string()],
+                        ),
+                        0.7,
+                        0.6,
+                        true,
+                    ),
                 ),
             ],
         )
@@ -911,11 +921,13 @@ mod tests {
                     vec!["depends_on".to_string()],
                 ),
                 &[build_graph_structural_keyword_overlap_raw_candidate_inputs(
-                    "node-1",
-                    "node-2",
-                    vec!["depends_on".to_string()],
-                    vec!["alpha".to_string(), "core".to_string()],
-                    vec!["core".to_string()],
+                    build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
+                        "node-1",
+                        "node-2",
+                        vec!["depends_on".to_string()],
+                        vec!["alpha".to_string(), "core".to_string()],
+                        vec!["core".to_string()],
+                    ),
                     0.7,
                     0.6,
                     true,
@@ -966,6 +978,87 @@ mod tests {
             error.to_string().contains("/graph/structural/filter"),
             "unexpected error: {error}"
         );
+    }
+
+    #[tokio::test]
+    async fn fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_against_real_wendaosearch_demo_service()
+     {
+        let port = reserve_real_service_port();
+        let base_url = format!("http://127.0.0.1:{port}");
+        let mut service = spawn_real_wendaosearch_demo_structural_rerank_service(port);
+        let repository = RegisteredRepository {
+            id: "demo".to_string(),
+            path: None,
+            url: None,
+            git_ref: None,
+            refresh: RepositoryRefreshPolicy::Fetch,
+            plugins: vec![RepositoryPluginConfig::Config {
+                id: "julia".to_string(),
+                options: serde_json::json!({
+                    "graph_structural_transport": {
+                        "base_url": base_url,
+                        "structural_rerank": {
+                            "route": "/graph/structural/rerank",
+                            "schema_version": "v0-draft"
+                        }
+                    }
+                }),
+            }],
+        };
+
+        wait_for_service_ready_with_attempts(&format!("http://127.0.0.1:{port}"), 600)
+            .await
+            .unwrap_or_else(|error| {
+                panic!("wait for real WendaoSearch structural Flight service: {error}")
+            });
+
+        let rows =
+            fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(
+                &repository,
+                &build_graph_structural_keyword_overlap_query_inputs(
+                    "query-live",
+                    0,
+                    2,
+                    vec!["alpha".to_string()],
+                    vec!["depends_on".to_string()],
+                ),
+                &[build_graph_structural_keyword_overlap_raw_candidate_inputs(
+                    build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
+                        "node-1",
+                        "node-2",
+                        vec!["depends_on".to_string()],
+                        vec!["alpha".to_string(), "core".to_string()],
+                        vec!["core".to_string()],
+                    ),
+                    0.7,
+                    0.6,
+                    true,
+                )],
+            )
+            .await
+            .unwrap_or_else(|error| {
+                panic!("real WendaoSearch graph-structural rerank should succeed: {error}")
+            });
+
+        let candidate_id = graph_structural_pair_candidate_id("node-1", "node-2")
+            .expect("stable pair candidate id");
+        let row = rows
+            .get(&candidate_id)
+            .unwrap_or_else(|| panic!("missing candidate `{candidate_id}` in live response"));
+        assert_eq!(row.candidate_id, candidate_id);
+        assert!(row.feasible);
+        assert!((row.structural_score - 0.935).abs() < 1e-12);
+        assert!((row.final_score - 1.035).abs() < 1e-12);
+        assert_eq!(
+            row.pin_assignment,
+            vec!["node-1".to_string(), "node-2".to_string()]
+        );
+        assert_eq!(
+            row.explanation,
+            "demo feasible candidate with 2 nodes and 1 edge kinds"
+        );
+
+        service.kill();
     }
 
     fn rerank_response_batch() -> RecordBatch {

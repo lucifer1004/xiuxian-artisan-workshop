@@ -201,6 +201,12 @@ repository-fetch dispatch.
 That bounded host-side proof now also exercises that public fetch helper
 directly and confirms that the missing-transport failure still resolves through
 the Julia-owned structural-rerank route instead of a host-local adapter layer.
+This crate now also has a plugin-owned live loopback for that same fetch seam:
+the `graph_structural_exchange` test module launches the real
+`.data/WendaoSearch.jl/scripts/run_search_service.jl` entrypoint in demo mode,
+waits for `/graph/structural/rerank` to accept Flight connections, and proves
+`fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates(...)`
+can decode a live structural-rerank response without any host-side adapter.
 
 The transport client now sends `x-wendao-schema-version` and defaults to the
 `v1` WendaoArrow contract unless the repository plugin config overrides
@@ -247,6 +253,7 @@ That means:
 - `direnv exec . cargo test -p xiuxian-wendao-julia graph_structural_projection --lib`
 - `direnv exec . cargo test -p xiuxian-wendao-julia process_julia_flight_batches_against_real_wendaoarrow_service --lib`
 - `direnv exec . cargo test -p xiuxian-wendao-julia real_wendaoarrow_metadata_example_roundtrip_decodes_trace_id_column --lib`
+- `direnv exec . cargo test -p xiuxian-wendao-julia fetch_graph_structural_keyword_overlap_pair_rerank_rows_for_repository_from_raw_candidates_against_real_wendaosearch_demo_service --lib`
 - `direnv exec . cargo check -p xiuxian-wendao-julia --lib`
 - `direnv exec . cargo test -p xiuxian-wendao --test xiuxian-testing-gate test_agentic_expansion_pair_projects_into_julia_graph_structural_request`
 - `direnv exec . cargo test -p xiuxian-wendao --test xiuxian-testing-gate test_agentic_expansion_pair_uses_julia_graph_structural_fetch_helper`
@@ -272,3 +279,7 @@ fixture.
 The corresponding test support is now split under `src/plugin/test_support/`
 into shared child/path helpers and official-example helpers, mirroring the
 same semantic split used by `xiuxian-wendao` integration support.
+That official-example layer now includes a real `WendaoSearch.jl` structural
+demo launcher as well, so plugin-owned graph-structural fetch helpers can be
+proven against a live Search child service without moving route logic back
+into `xiuxian-wendao`.

@@ -1,11 +1,14 @@
 #[cfg(test)]
 use std::collections::BTreeMap;
 
-use crate::analyzers::cache::RepositoryAnalysisCacheKey;
+use crate::analyzers::cache::{RepositoryAnalysisCacheKey, RepositorySearchQueryCacheKey};
 use crate::analyzers::plugin::RepositoryAnalysisOutput;
 
 use super::runtime::{ValkeyAnalysisCacheRuntime, resolve_valkey_analysis_cache_runtime};
-use super::storage::{decode_analysis_payload, encode_analysis_payload, valkey_analysis_key};
+use super::storage::{
+    decode_analysis_payload, decode_search_query_payload, encode_analysis_payload,
+    encode_search_query_payload, valkey_analysis_key, valkey_search_query_key,
+};
 
 #[derive(Debug, Clone)]
 pub struct ValkeyAnalysisCache {
@@ -61,6 +64,72 @@ impl ValkeyAnalysisCache {
             return;
         };
         let Some(payload) = encode_analysis_payload(cache_key, analysis) else {
+            return;
+        };
+        #[cfg(test)]
+        if self.runtime.client.is_none() {
+            self.shadow
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(storage_key, payload);
+            return;
+        }
+        let Some(client) = self.runtime.client.as_ref() else {
+            return;
+        };
+        let Ok(mut connection) = client.get_connection() else {
+            return;
+        };
+        if let Some(ttl_seconds) = self.runtime.ttl_seconds {
+            let _ = redis::cmd("SETEX")
+                .arg(&storage_key)
+                .arg(ttl_seconds)
+                .arg(&payload)
+                .query::<()>(&mut connection);
+            return;
+        }
+        let _ = redis::cmd("SET")
+            .arg(&storage_key)
+            .arg(&payload)
+            .query::<()>(&mut connection);
+    }
+
+    /// Retrieves a cached repo-search endpoint payload.
+    #[must_use]
+    pub fn get_query_result<T>(&self, cache_key: &RepositorySearchQueryCacheKey) -> Option<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let storage_key = valkey_search_query_key(cache_key, self.runtime.key_prefix.as_str())?;
+        #[cfg(test)]
+        if self.runtime.client.is_none() {
+            return self
+                .shadow
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&storage_key)
+                .and_then(|payload| decode_search_query_payload(cache_key, payload));
+        }
+        let client = self.runtime.client.as_ref()?;
+        let mut connection = client.get_connection().ok()?;
+        let payload = redis::cmd("GET")
+            .arg(&storage_key)
+            .query::<Option<String>>(&mut connection)
+            .ok()??;
+        decode_search_query_payload(cache_key, payload.as_str())
+    }
+
+    /// Stores one repo-search endpoint payload in the cache.
+    pub fn set_query_result<T>(&self, cache_key: &RepositorySearchQueryCacheKey, value: &T)
+    where
+        T: serde::Serialize,
+    {
+        let Some(storage_key) =
+            valkey_search_query_key(cache_key, self.runtime.key_prefix.as_str())
+        else {
+            return;
+        };
+        let Some(payload) = encode_search_query_payload(cache_key, value) else {
             return;
         };
         #[cfg(test)]

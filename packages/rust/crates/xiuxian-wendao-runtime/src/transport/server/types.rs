@@ -29,6 +29,8 @@ pub(super) type ActionTypeStream = Pin<Box<dyn Stream<Item = Result<ActionType, 
 /// Runtime-owned repo-search request decoded from Arrow Flight metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoSearchFlightRequest {
+    /// Repository identifier scoped by the caller.
+    pub repo_id: String,
     /// Stable query text sent through the Flight route.
     pub query_text: String,
     /// Maximum number of rows requested from the provider.
@@ -64,10 +66,31 @@ pub struct WendaoFlightRouteProviders {
     pub markdown_analysis: Option<Arc<dyn MarkdownAnalysisFlightRouteProvider>>,
     /// Optional code-AST-analysis provider.
     pub code_ast_analysis: Option<Arc<dyn CodeAstAnalysisFlightRouteProvider>>,
+    /// Optional repo-overview analysis provider.
+    pub repo_overview: Option<Arc<dyn RepoOverviewFlightRouteProvider>>,
+    /// Optional repo-index analysis provider.
+    pub repo_index: Option<Arc<dyn RepoIndexFlightRouteProvider>>,
+    /// Optional repo-index-status analysis provider.
+    pub repo_index_status: Option<Arc<dyn RepoIndexStatusFlightRouteProvider>>,
+    /// Optional repo-sync analysis provider.
+    pub repo_sync: Option<Arc<dyn RepoSyncFlightRouteProvider>>,
+    /// Optional repo-doc-coverage analysis provider.
+    pub repo_doc_coverage: Option<Arc<dyn RepoDocCoverageFlightRouteProvider>>,
+    /// Optional projected page-index tree analysis provider.
+    pub repo_projected_page_index_tree:
+        Option<Arc<dyn RepoProjectedPageIndexTreeFlightRouteProvider>>,
+    /// Optional refine-doc analysis provider.
+    pub refine_doc: Option<Arc<dyn RefineDocFlightRouteProvider>>,
+    /// Optional VFS-content provider.
+    pub vfs_content: Option<Arc<dyn VfsContentFlightRouteProvider>>,
+    /// Optional VFS-scan provider.
+    pub vfs_scan: Option<Arc<dyn VfsScanFlightRouteProvider>>,
     /// Optional VFS-resolve provider.
     pub vfs_resolve: Option<Arc<dyn VfsResolveFlightRouteProvider>>,
     /// Optional graph-neighbors provider.
     pub graph_neighbors: Option<Arc<dyn GraphNeighborsFlightRouteProvider>>,
+    /// Optional topology-3d provider.
+    pub topology_3d: Option<Arc<dyn Topology3dFlightRouteProvider>>,
     /// Optional SQL provider.
     pub sql: Option<Arc<dyn SqlFlightRouteProvider>>,
 }
@@ -85,8 +108,18 @@ impl WendaoFlightRouteProviders {
             autocomplete: None,
             markdown_analysis: None,
             code_ast_analysis: None,
+            repo_overview: None,
+            repo_index: None,
+            repo_index_status: None,
+            repo_sync: None,
+            repo_doc_coverage: None,
+            repo_projected_page_index_tree: None,
+            refine_doc: None,
+            vfs_content: None,
+            vfs_scan: None,
             vfs_resolve: None,
             graph_neighbors: None,
+            topology_3d: None,
             sql: None,
         }
     }
@@ -227,6 +260,60 @@ impl VfsResolveFlightRouteResponse {
     }
 }
 
+/// Runtime-owned VFS content-read Flight payload.
+#[derive(Debug, Clone)]
+pub struct VfsContentFlightRouteResponse {
+    /// Arrow batch returned by the provider.
+    pub batch: LanceRecordBatch,
+    /// Optional application metadata returned through `FlightInfo.app_metadata`.
+    pub app_metadata: Vec<u8>,
+}
+
+impl VfsContentFlightRouteResponse {
+    /// Create one VFS content-read Flight payload without application metadata.
+    #[must_use]
+    pub fn new(batch: LanceRecordBatch) -> Self {
+        Self {
+            batch,
+            app_metadata: Vec::new(),
+        }
+    }
+
+    /// Attach application metadata that should flow through `FlightInfo`.
+    #[must_use]
+    pub fn with_app_metadata(mut self, app_metadata: impl Into<Vec<u8>>) -> Self {
+        self.app_metadata = app_metadata.into();
+        self
+    }
+}
+
+/// Runtime-owned VFS scan Flight payload.
+#[derive(Debug, Clone)]
+pub struct VfsScanFlightRouteResponse {
+    /// Arrow batch returned by the provider.
+    pub batch: LanceRecordBatch,
+    /// Optional application metadata returned through `FlightInfo.app_metadata`.
+    pub app_metadata: Vec<u8>,
+}
+
+impl VfsScanFlightRouteResponse {
+    /// Create one VFS scan Flight payload without application metadata.
+    #[must_use]
+    pub fn new(batch: LanceRecordBatch) -> Self {
+        Self {
+            batch,
+            app_metadata: Vec::new(),
+        }
+    }
+
+    /// Attach application metadata that should flow through `FlightInfo`.
+    #[must_use]
+    pub fn with_app_metadata(mut self, app_metadata: impl Into<Vec<u8>>) -> Self {
+        self.app_metadata = app_metadata.into();
+        self
+    }
+}
+
 /// Runtime-owned graph-neighbors Flight payload.
 #[derive(Debug, Clone)]
 pub struct GraphNeighborsFlightRouteResponse {
@@ -238,6 +325,33 @@ pub struct GraphNeighborsFlightRouteResponse {
 
 impl GraphNeighborsFlightRouteResponse {
     /// Create one graph-neighbors Flight payload without application metadata.
+    #[must_use]
+    pub fn new(batch: LanceRecordBatch) -> Self {
+        Self {
+            batch,
+            app_metadata: Vec::new(),
+        }
+    }
+
+    /// Attach application metadata that should flow through `FlightInfo`.
+    #[must_use]
+    pub fn with_app_metadata(mut self, app_metadata: impl Into<Vec<u8>>) -> Self {
+        self.app_metadata = app_metadata.into();
+        self
+    }
+}
+
+/// Runtime-owned topology-3d Flight payload.
+#[derive(Debug, Clone)]
+pub struct Topology3dFlightRouteResponse {
+    /// Arrow batch returned by the provider.
+    pub batch: LanceRecordBatch,
+    /// Optional application metadata returned through `FlightInfo.app_metadata`.
+    pub app_metadata: Vec<u8>,
+}
+
+impl Topology3dFlightRouteResponse {
+    /// Create one topology-3d Flight payload without application metadata.
     #[must_use]
     pub fn new(batch: LanceRecordBatch) -> Self {
         Self {
@@ -378,6 +492,33 @@ pub trait VfsResolveFlightRouteProvider: std::fmt::Debug + Send + Sync {
     ) -> Result<VfsResolveFlightRouteResponse, Status>;
 }
 
+/// Runtime-owned provider contract for stable VFS content Flight reads.
+#[async_trait]
+pub trait VfsContentFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable VFS content batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed Flight status when the requested VFS content payload
+    /// cannot be materialized for the current runtime host.
+    async fn read_vfs_content_batch(
+        &self,
+        path: &str,
+    ) -> Result<VfsContentFlightRouteResponse, Status>;
+}
+
+/// Runtime-owned provider contract for stable VFS scan Flight reads.
+#[async_trait]
+pub trait VfsScanFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable VFS scan response batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed Flight status when the requested VFS scan payload
+    /// cannot be materialized for the current runtime host.
+    async fn scan_vfs_batch(&self) -> Result<VfsScanFlightRouteResponse, Status>;
+}
+
 /// Runtime-owned provider contract for stable graph-neighbors Flight reads.
 #[async_trait]
 pub trait GraphNeighborsFlightRouteProvider: std::fmt::Debug + Send + Sync {
@@ -394,6 +535,18 @@ pub trait GraphNeighborsFlightRouteProvider: std::fmt::Debug + Send + Sync {
         hops: usize,
         limit: usize,
     ) -> Result<GraphNeighborsFlightRouteResponse, Status>;
+}
+
+/// Runtime-owned provider contract for stable topology-3d Flight reads.
+#[async_trait]
+pub trait Topology3dFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable topology-3d response batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed Flight status when the requested topology payload
+    /// cannot be materialized for the current runtime host.
+    async fn topology_3d_batch(&self) -> Result<Topology3dFlightRouteResponse, Status>;
 }
 
 /// Runtime-owned provider contract for stable attachment-search Flight reads.
@@ -461,6 +614,118 @@ pub trait CodeAstAnalysisFlightRouteProvider: std::fmt::Debug + Send + Sync {
         repo_id: &str,
         line_hint: Option<usize>,
     ) -> Result<AnalysisFlightRouteResponse, String>;
+}
+
+/// Runtime-owned provider contract for stable repo doc-coverage Flight reads.
+#[async_trait]
+pub trait RepoOverviewFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable repo overview response batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested repo overview payload cannot be
+    /// materialized for the current runtime host.
+    async fn repo_overview_batch(
+        &self,
+        repo_id: &str,
+    ) -> Result<AnalysisFlightRouteResponse, String>;
+}
+
+/// Runtime-owned provider contract for stable repo index Flight commands.
+#[async_trait]
+pub trait RepoIndexFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable repo index response batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested repo index payload cannot be
+    /// materialized for the current runtime host.
+    async fn repo_index_batch(
+        &self,
+        repo_id: Option<&str>,
+        refresh: bool,
+    ) -> Result<AnalysisFlightRouteResponse, String>;
+}
+
+/// Runtime-owned provider contract for stable repo index-status Flight reads.
+#[async_trait]
+pub trait RepoIndexStatusFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable repo index-status response batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested repo index-status payload cannot be
+    /// materialized for the current runtime host.
+    async fn repo_index_status_batch(
+        &self,
+        repo_id: Option<&str>,
+    ) -> Result<AnalysisFlightRouteResponse, String>;
+}
+
+/// Runtime-owned provider contract for stable repo sync Flight reads.
+#[async_trait]
+pub trait RepoSyncFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable repo sync response batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested repo sync payload cannot be
+    /// materialized for the current runtime host.
+    async fn repo_sync_batch(
+        &self,
+        repo_id: &str,
+        mode: &str,
+    ) -> Result<AnalysisFlightRouteResponse, String>;
+}
+
+/// Runtime-owned provider contract for stable repo doc-coverage Flight reads.
+#[async_trait]
+pub trait RepoDocCoverageFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable repo doc-coverage response batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the requested repo doc-coverage payload cannot be
+    /// materialized for the current runtime host.
+    async fn repo_doc_coverage_batch(
+        &self,
+        repo_id: &str,
+        module_id: Option<&str>,
+    ) -> Result<AnalysisFlightRouteResponse, String>;
+}
+
+/// Runtime-owned provider contract for stable projected page-index tree Flight
+/// reads.
+#[async_trait]
+pub trait RepoProjectedPageIndexTreeFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable projected page-index tree response batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed Flight status when the requested projected page-index
+    /// tree payload cannot be materialized for the current runtime host.
+    async fn repo_projected_page_index_tree_batch(
+        &self,
+        repo_id: &str,
+        page_id: &str,
+    ) -> Result<AnalysisFlightRouteResponse, Status>;
+}
+
+/// Runtime-owned provider contract for stable refine-doc Flight reads.
+#[async_trait]
+pub trait RefineDocFlightRouteProvider: std::fmt::Debug + Send + Sync {
+    /// Resolve one stable refine-doc response batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed Flight status when the requested refine-doc payload
+    /// cannot be materialized for the current runtime host.
+    async fn refine_doc_batch(
+        &self,
+        repo_id: &str,
+        entity_id: &str,
+        user_hints: Option<&str>,
+    ) -> Result<AnalysisFlightRouteResponse, Status>;
 }
 
 #[derive(Debug, Clone)]

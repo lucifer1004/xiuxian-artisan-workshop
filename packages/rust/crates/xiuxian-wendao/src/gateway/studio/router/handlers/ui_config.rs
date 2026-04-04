@@ -16,25 +16,11 @@ pub async fn get(State(state): State<Arc<GatewayState>>) -> Result<Json<UiConfig
     Ok(Json(state.studio.ui_config()))
 }
 
-/// Sets and persists the UI configuration.
-///
-/// # Errors
-///
-/// Returns an error when persisting the updated configuration into
-/// `wendao.toml` fails.
+/// Sets the live UI configuration for the current gateway process.
 pub async fn set(
     State(state): State<Arc<GatewayState>>,
     Json(config_value): Json<UiConfig>,
-) -> Result<Json<UiConfig>, StudioApiError> {
-    state
-        .studio
-        .set_ui_config_and_persist(config_value)
-        .map_err(|details| {
-            StudioApiError::internal(
-                "UI_CONFIG_PERSIST_FAILED",
-                "Failed to persist UI config into wendao.toml",
-                Some(details),
-            )
-        })?;
-    Ok(Json(state.studio.ui_config()))
+) -> Json<UiConfig> {
+    state.studio.set_ui_config(config_value);
+    Json(state.studio.ui_config())
 }

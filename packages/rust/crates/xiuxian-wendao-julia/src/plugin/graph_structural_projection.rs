@@ -1772,14 +1772,18 @@ mod tests {
     #[test]
     fn build_graph_structural_keyword_overlap_pair_candidate_inputs_from_raw_composes() {
         let candidate = build_graph_structural_keyword_overlap_pair_candidate_inputs_from_raw(
-            "node-left",
-            "node-right",
-            vec!["semantic_similar".to_string()],
-            vec!["alpha".to_string(), "core".to_string()],
-            vec!["core".to_string()],
-            0.6,
-            0.2,
-            true,
+            build_graph_structural_keyword_overlap_raw_candidate_inputs(
+                build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
+                    "node-left",
+                    "node-right",
+                    vec!["semantic_similar".to_string()],
+                    vec!["alpha".to_string(), "core".to_string()],
+                    vec!["core".to_string()],
+                ),
+                0.6,
+                0.2,
+                true,
+            ),
         );
 
         assert_eq!(
@@ -1805,11 +1809,13 @@ mod tests {
     #[test]
     fn build_graph_structural_keyword_overlap_raw_candidate_inputs_composes() {
         let candidate = build_graph_structural_keyword_overlap_raw_candidate_inputs(
-            "node-left",
-            "node-right",
-            vec!["semantic_similar".to_string()],
-            vec!["alpha".to_string(), "core".to_string()],
-            vec!["core".to_string()],
+            build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
+                "node-left",
+                "node-right",
+                vec!["semantic_similar".to_string()],
+                vec!["alpha".to_string(), "core".to_string()],
+                vec!["core".to_string()],
+            ),
             0.6,
             0.2,
             true,
@@ -1818,11 +1824,13 @@ mod tests {
         assert_eq!(
             candidate,
             GraphStructuralKeywordOverlapRawCandidateInputs::new(
-                "node-left",
-                "node-right",
-                vec!["semantic_similar".to_string()],
-                vec!["alpha".to_string(), "core".to_string()],
-                vec!["core".to_string()],
+                build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
+                    "node-left",
+                    "node-right",
+                    vec!["semantic_similar".to_string()],
+                    vec!["alpha".to_string(), "core".to_string()],
+                    vec!["core".to_string()],
+                ),
                 0.6,
                 0.2,
                 true,
@@ -1913,11 +1921,13 @@ mod tests {
                     Vec::new(),
                 ),
                 &[build_graph_structural_keyword_overlap_raw_candidate_inputs(
-                    "node-left",
-                    "node-right",
-                    Vec::new(),
-                    vec!["alpha".to_string(), "core".to_string()],
-                    vec!["core".to_string(), "graph".to_string()],
+                    build_graph_structural_keyword_overlap_pair_candidate_metadata_inputs(
+                        "node-left",
+                        "node-right",
+                        Vec::new(),
+                        vec!["alpha".to_string(), "core".to_string()],
+                        vec!["core".to_string(), "graph".to_string()],
+                    ),
                     0.7,
                     0.0,
                     true,

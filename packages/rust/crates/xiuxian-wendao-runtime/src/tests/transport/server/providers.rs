@@ -12,9 +12,11 @@ use crate::transport::{
     CodeAstAnalysisFlightRouteProvider, DefinitionFlightRouteProvider,
     DefinitionFlightRouteResponse, GraphNeighborsFlightRouteProvider,
     GraphNeighborsFlightRouteResponse, MarkdownAnalysisFlightRouteProvider,
-    RepoSearchFlightRequest, RepoSearchFlightRouteProvider, SearchFlightRouteProvider,
-    SearchFlightRouteResponse, SqlFlightRouteProvider, SqlFlightRouteResponse,
-    VfsResolveFlightRouteProvider, VfsResolveFlightRouteResponse,
+    RepoDocCoverageFlightRouteProvider, RepoIndexStatusFlightRouteProvider,
+    RepoOverviewFlightRouteProvider, RepoSearchFlightRequest, RepoSearchFlightRouteProvider,
+    RepoSyncFlightRouteProvider, SearchFlightRouteProvider, SearchFlightRouteResponse,
+    SqlFlightRouteProvider, SqlFlightRouteResponse, VfsContentFlightRouteProvider,
+    VfsContentFlightRouteResponse, VfsResolveFlightRouteProvider, VfsResolveFlightRouteResponse,
 };
 
 type SearchRequestRecord = (String, String, usize, Option<String>, Option<String>);
@@ -24,6 +26,11 @@ type GraphNeighborsRequestRecord = (String, String, usize, usize);
 type AttachmentSearchRequestRecord = (String, usize, Vec<String>, Vec<String>, bool);
 type AstSearchRequestRecord = (String, usize);
 type CodeAstAnalysisRequestRecord = (String, String, Option<usize>);
+type RepoOverviewRequestRecord = String;
+type RepoIndexStatusRequestRecord = Option<String>;
+type RepoSyncRequestRecord = (String, String);
+type RepoDocCoverageRequestRecord = (String, Option<String>);
+type VfsContentRequestRecord = String;
 
 fn lock_or_panic<'a, T>(mutex: &'a Mutex<T>, context: &str) -> std::sync::MutexGuard<'a, T> {
     mutex.lock().unwrap_or_else(|_| panic!("{context}"))
@@ -359,6 +366,64 @@ impl VfsResolveFlightRouteProvider for RecordingVfsResolveProvider {
 }
 
 #[derive(Debug, Default)]
+pub(super) struct RecordingVfsContentProvider {
+    request: Mutex<Option<VfsContentRequestRecord>>,
+    call_count: Mutex<usize>,
+}
+
+impl RecordingVfsContentProvider {
+    pub(super) fn recorded_request(&self) -> Option<VfsContentRequestRecord> {
+        lock_or_panic(&self.request, "VFS content provider record should lock").clone()
+    }
+
+    pub(super) fn call_count(&self) -> usize {
+        *lock_or_panic(
+            &self.call_count,
+            "VFS content provider call count should lock",
+        )
+    }
+}
+
+#[async_trait]
+impl VfsContentFlightRouteProvider for RecordingVfsContentProvider {
+    async fn read_vfs_content_batch(
+        &self,
+        path: &str,
+    ) -> Result<VfsContentFlightRouteResponse, tonic::Status> {
+        *lock_or_panic(&self.request, "VFS content provider record should lock") =
+            Some(path.to_string());
+        *lock_or_panic(
+            &self.call_count,
+            "VFS content provider call count should lock",
+        ) += 1;
+        let batch = LanceRecordBatch::try_new(
+            Arc::new(LanceSchema::new(vec![
+                LanceField::new("path", LanceDataType::Utf8, false),
+                LanceField::new("contentType", LanceDataType::Utf8, false),
+                LanceField::new("content", LanceDataType::Utf8, false),
+                LanceField::new("modified", LanceDataType::Int32, false),
+            ])),
+            vec![
+                Arc::new(StringArray::from(vec![path.to_string()])),
+                Arc::new(StringArray::from(vec!["text/plain".to_string()])),
+                Arc::new(StringArray::from(vec![format!("content:{path}")])),
+                Arc::new(LanceInt32Array::from(vec![7])),
+            ],
+        )
+        .map_err(|error| tonic::Status::internal(error.to_string()))?;
+        Ok(VfsContentFlightRouteResponse::new(batch).with_app_metadata(
+            serde_json::json!({
+                "path": path,
+                "contentType": "text/plain",
+                "modified": 7,
+            })
+            .to_string()
+            .into_bytes(),
+        ))
+    }
+}
+
+#[derive(Debug, Default)]
 pub(super) struct RecordingGraphNeighborsProvider {
     request: Mutex<Option<GraphNeighborsRequestRecord>>,
     call_count: Mutex<usize>,
@@ -647,6 +712,340 @@ impl CodeAstAnalysisFlightRouteProvider for RecordingCodeAstAnalysisProvider {
                 "projections": [],
                 "focusNodeId": line_hint.map(|line| format!("line:{line}")),
                 "diagnostics": [],
+            })
+            .to_string()
+            .into_bytes(),
+        ))
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct RecordingRepoOverviewProvider {
+    request: Mutex<Option<RepoOverviewRequestRecord>>,
+    call_count: Mutex<usize>,
+}
+
+impl RecordingRepoOverviewProvider {
+    pub(super) fn recorded_request(&self) -> Option<RepoOverviewRequestRecord> {
+        lock_or_panic(&self.request, "repo overview provider record should lock").clone()
+    }
+}
+
+#[async_trait]
+impl RepoOverviewFlightRouteProvider for RecordingRepoOverviewProvider {
+    async fn repo_overview_batch(
+        &self,
+        repo_id: &str,
+    ) -> Result<AnalysisFlightRouteResponse, String> {
+        *lock_or_panic(&self.request, "repo overview provider record should lock") =
+            Some(repo_id.to_string());
+        *lock_or_panic(
+            &self.call_count,
+            "repo overview provider call count should lock",
+        ) += 1;
+        let batch = LanceRecordBatch::try_new(
+            Arc::new(LanceSchema::new(vec![
+                LanceField::new("repoId", LanceDataType::Utf8, false),
+                LanceField::new("displayName", LanceDataType::Utf8, false),
+                LanceField::new("revision", LanceDataType::Utf8, true),
+                LanceField::new("moduleCount", LanceDataType::Int32, false),
+                LanceField::new("symbolCount", LanceDataType::Int32, false),
+                LanceField::new("exampleCount", LanceDataType::Int32, false),
+                LanceField::new("docCount", LanceDataType::Int32, false),
+                LanceField::new("hierarchicalUri", LanceDataType::Utf8, true),
+            ])),
+            vec![
+                Arc::new(StringArray::from(vec![repo_id.to_string()])),
+                Arc::new(StringArray::from(vec!["Gateway Sync".to_string()])),
+                Arc::new(StringArray::from(vec![Some("rev:123".to_string())])),
+                Arc::new(LanceInt32Array::from(vec![3])),
+                Arc::new(LanceInt32Array::from(vec![8])),
+                Arc::new(LanceInt32Array::from(vec![2])),
+                Arc::new(LanceInt32Array::from(vec![5])),
+                Arc::new(StringArray::from(vec![Some(format!("repo://{repo_id}"))])),
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(AnalysisFlightRouteResponse::new(batch).with_app_metadata(
+            serde_json::json!({
+                "repoId": repo_id,
+                "displayName": "Gateway Sync",
+                "revision": "rev:123",
+                "moduleCount": 3,
+                "symbolCount": 8,
+                "exampleCount": 2,
+                "docCount": 5,
+                "hierarchicalUri": format!("repo://{repo_id}"),
+                "hierarchy": ["repo", repo_id],
+            })
+            .to_string()
+            .into_bytes(),
+        ))
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct RecordingRepoIndexStatusProvider {
+    request: Mutex<Option<RepoIndexStatusRequestRecord>>,
+    call_count: Mutex<usize>,
+}
+
+impl RecordingRepoIndexStatusProvider {
+    pub(super) fn recorded_request(&self) -> Option<RepoIndexStatusRequestRecord> {
+        lock_or_panic(
+            &self.request,
+            "repo index status provider record should lock",
+        )
+        .clone()
+    }
+}
+
+#[async_trait]
+impl RepoIndexStatusFlightRouteProvider for RecordingRepoIndexStatusProvider {
+    async fn repo_index_status_batch(
+        &self,
+        repo_id: Option<&str>,
+    ) -> Result<AnalysisFlightRouteResponse, String> {
+        *lock_or_panic(
+            &self.request,
+            "repo index status provider record should lock",
+        ) = Some(repo_id.map(ToString::to_string));
+        *lock_or_panic(
+            &self.call_count,
+            "repo index status provider call count should lock",
+        ) += 1;
+        let batch = LanceRecordBatch::try_new(
+            Arc::new(LanceSchema::new(vec![
+                LanceField::new("total", LanceDataType::Int32, false),
+                LanceField::new("queued", LanceDataType::Int32, false),
+                LanceField::new("checking", LanceDataType::Int32, false),
+                LanceField::new("syncing", LanceDataType::Int32, false),
+                LanceField::new("indexing", LanceDataType::Int32, false),
+                LanceField::new("ready", LanceDataType::Int32, false),
+                LanceField::new("unsupported", LanceDataType::Int32, false),
+                LanceField::new("failed", LanceDataType::Int32, false),
+                LanceField::new("targetConcurrency", LanceDataType::Int32, false),
+                LanceField::new("maxConcurrency", LanceDataType::Int32, false),
+                LanceField::new("syncConcurrencyLimit", LanceDataType::Int32, false),
+                LanceField::new("currentRepoId", LanceDataType::Utf8, true),
+                LanceField::new("reposJson", LanceDataType::Utf8, false),
+            ])),
+            vec![
+                Arc::new(LanceInt32Array::from(vec![3])),
+                Arc::new(LanceInt32Array::from(vec![1])),
+                Arc::new(LanceInt32Array::from(vec![0])),
+                Arc::new(LanceInt32Array::from(vec![1])),
+                Arc::new(LanceInt32Array::from(vec![1])),
+                Arc::new(LanceInt32Array::from(vec![1])),
+                Arc::new(LanceInt32Array::from(vec![0])),
+                Arc::new(LanceInt32Array::from(vec![0])),
+                Arc::new(LanceInt32Array::from(vec![2])),
+                Arc::new(LanceInt32Array::from(vec![4])),
+                Arc::new(LanceInt32Array::from(vec![1])),
+                Arc::new(StringArray::from(vec![repo_id.map(ToString::to_string)])),
+                Arc::new(StringArray::from(vec![
+                    serde_json::json!([
+                        {
+                            "repoId": repo_id.unwrap_or("gateway-sync"),
+                            "phase": "ready",
+                            "lastRevision": "rev:123",
+                            "attemptCount": 2,
+                        },
+                        {
+                            "repoId": "kernel",
+                            "phase": "queued",
+                            "queuePosition": 1,
+                            "attemptCount": 0,
+                        }
+                    ])
+                    .to_string(),
+                ])),
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(AnalysisFlightRouteResponse::new(batch).with_app_metadata(
+            serde_json::json!({
+                "total": 3,
+                "queued": 1,
+                "checking": 0,
+                "syncing": 1,
+                "indexing": 1,
+                "ready": 1,
+                "unsupported": 0,
+                "failed": 0,
+                "targetConcurrency": 2,
+                "maxConcurrency": 4,
+                "syncConcurrencyLimit": 1,
+                "currentRepoId": repo_id,
+            })
+            .to_string()
+            .into_bytes(),
+        ))
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct RecordingRepoSyncProvider {
+    request: Mutex<Option<RepoSyncRequestRecord>>,
+    call_count: Mutex<usize>,
+}
+
+impl RecordingRepoSyncProvider {
+    pub(super) fn recorded_request(&self) -> Option<RepoSyncRequestRecord> {
+        lock_or_panic(&self.request, "repo sync provider record should lock").clone()
+    }
+}
+
+#[async_trait]
+impl RepoSyncFlightRouteProvider for RecordingRepoSyncProvider {
+    async fn repo_sync_batch(
+        &self,
+        repo_id: &str,
+        mode: &str,
+    ) -> Result<AnalysisFlightRouteResponse, String> {
+        *lock_or_panic(&self.request, "repo sync provider record should lock") =
+            Some((repo_id.to_string(), mode.to_string()));
+        *lock_or_panic(
+            &self.call_count,
+            "repo sync provider call count should lock",
+        ) += 1;
+        let batch = LanceRecordBatch::try_new(
+            Arc::new(LanceSchema::new(vec![
+                LanceField::new("repoId", LanceDataType::Utf8, false),
+                LanceField::new("mode", LanceDataType::Utf8, false),
+                LanceField::new("sourceKind", LanceDataType::Utf8, false),
+                LanceField::new("refresh", LanceDataType::Utf8, false),
+                LanceField::new("mirrorState", LanceDataType::Utf8, false),
+                LanceField::new("checkoutState", LanceDataType::Utf8, false),
+                LanceField::new("revision", LanceDataType::Utf8, true),
+                LanceField::new("checkoutPath", LanceDataType::Utf8, false),
+                LanceField::new("mirrorPath", LanceDataType::Utf8, true),
+                LanceField::new("checkedAt", LanceDataType::Utf8, false),
+                LanceField::new("lastFetchedAt", LanceDataType::Utf8, true),
+                LanceField::new("upstreamUrl", LanceDataType::Utf8, true),
+                LanceField::new("healthState", LanceDataType::Utf8, false),
+                LanceField::new("stalenessState", LanceDataType::Utf8, false),
+                LanceField::new("driftState", LanceDataType::Utf8, false),
+                LanceField::new("statusSummaryJson", LanceDataType::Utf8, false),
+            ])),
+            vec![
+                Arc::new(StringArray::from(vec![repo_id.to_string()])),
+                Arc::new(StringArray::from(vec![mode.to_string()])),
+                Arc::new(StringArray::from(vec!["managed_remote".to_string()])),
+                Arc::new(StringArray::from(vec!["auto".to_string()])),
+                Arc::new(StringArray::from(vec!["validated".to_string()])),
+                Arc::new(StringArray::from(vec!["reused".to_string()])),
+                Arc::new(StringArray::from(vec![Some("rev:123".to_string())])),
+                Arc::new(StringArray::from(vec![format!("/tmp/{repo_id}")])),
+                Arc::new(StringArray::from(vec![Some(format!(
+                    "/tmp/{repo_id}.mirror"
+                ))])),
+                Arc::new(StringArray::from(vec!["2026-04-03T19:15:00Z".to_string()])),
+                Arc::new(StringArray::from(vec![Some(
+                    "2026-04-03T19:10:00Z".to_string(),
+                )])),
+                Arc::new(StringArray::from(vec![Some(
+                    "https://example.com/repo.git".to_string(),
+                )])),
+                Arc::new(StringArray::from(vec!["healthy".to_string()])),
+                Arc::new(StringArray::from(vec!["fresh".to_string()])),
+                Arc::new(StringArray::from(vec!["in_sync".to_string()])),
+                Arc::new(StringArray::from(vec![
+                    serde_json::json!({
+                        "healthState": "healthy",
+                        "driftState": "in_sync",
+                        "attentionRequired": false,
+                    })
+                    .to_string(),
+                ])),
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(AnalysisFlightRouteResponse::new(batch).with_app_metadata(
+            serde_json::json!({
+                "repoId": repo_id,
+                "mode": mode,
+                "sourceKind": "managed_remote",
+                "refresh": "auto",
+                "mirrorState": "validated",
+                "checkoutState": "reused",
+                "revision": "rev:123",
+                "checkoutPath": format!("/tmp/{repo_id}"),
+                "mirrorPath": format!("/tmp/{repo_id}.mirror"),
+                "checkedAt": "2026-04-03T19:15:00Z",
+                "lastFetchedAt": "2026-04-03T19:10:00Z",
+                "upstreamUrl": "https://example.com/repo.git",
+                "healthState": "healthy",
+                "stalenessState": "fresh",
+                "driftState": "in_sync",
+                "statusSummary": {
+                    "healthState": "healthy",
+                    "driftState": "in_sync",
+                    "attentionRequired": false,
+                },
+            })
+            .to_string()
+            .into_bytes(),
+        ))
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct RecordingRepoDocCoverageProvider {
+    request: Mutex<Option<RepoDocCoverageRequestRecord>>,
+    call_count: Mutex<usize>,
+}
+
+impl RecordingRepoDocCoverageProvider {
+    pub(super) fn recorded_request(&self) -> Option<RepoDocCoverageRequestRecord> {
+        lock_or_panic(
+            &self.request,
+            "repo doc coverage provider record should lock",
+        )
+        .clone()
+    }
+}
+
+#[async_trait]
+impl RepoDocCoverageFlightRouteProvider for RecordingRepoDocCoverageProvider {
+    async fn repo_doc_coverage_batch(
+        &self,
+        repo_id: &str,
+        module_id: Option<&str>,
+    ) -> Result<AnalysisFlightRouteResponse, String> {
+        *lock_or_panic(
+            &self.request,
+            "repo doc coverage provider record should lock",
+        ) = Some((repo_id.to_string(), module_id.map(ToString::to_string)));
+        *lock_or_panic(
+            &self.call_count,
+            "repo doc coverage provider call count should lock",
+        ) += 1;
+        let batch = LanceRecordBatch::try_new(
+            Arc::new(LanceSchema::new(vec![
+                LanceField::new("repoId", LanceDataType::Utf8, false),
+                LanceField::new("docId", LanceDataType::Utf8, false),
+                LanceField::new("title", LanceDataType::Utf8, false),
+                LanceField::new("path", LanceDataType::Utf8, false),
+                LanceField::new("format", LanceDataType::Utf8, true),
+            ])),
+            vec![
+                Arc::new(StringArray::from(vec![repo_id.to_string()])),
+                Arc::new(StringArray::from(vec![format!("doc:{repo_id}")])),
+                Arc::new(StringArray::from(vec!["Repo Doc".to_string()])),
+                Arc::new(StringArray::from(vec!["docs/index.md".to_string()])),
+                Arc::new(StringArray::from(vec![Some("markdown".to_string())])),
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(AnalysisFlightRouteResponse::new(batch).with_app_metadata(
+            serde_json::json!({
+                "repoId": repo_id,
+                "moduleId": module_id,
+                "coveredSymbols": 3,
+                "uncoveredSymbols": 1,
+                "hierarchicalUri": format!("repo://{repo_id}/docs"),
+                "hierarchy": ["repo", repo_id],
             })
             .to_string()
             .into_bytes(),

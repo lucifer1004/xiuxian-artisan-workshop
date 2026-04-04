@@ -300,6 +300,13 @@ rust-wendao-performance-gate` expands into
   repository/revision/plugin-scoped key, so cached repo gateway paths can
   recover a ready analyzer snapshot after process restart when stable revision
   identity is available
+- that same Wendao-owned Valkey boundary now also persists repo-search
+  query-result payloads under full `RepositorySearchQueryCacheKey` identity,
+  including endpoint, query, filter, fuzzy-search options, and limit. Hot
+  `module`, `symbol`, `example`, `import`, and `projected page` reads can
+  therefore recover after process restart without first rebuilding the same
+  ranked response from scratch when the analysis snapshot identity has not
+  changed
 - that Valkey runtime is now explicitly Wendao-owned and sync-bound:
   `XIUXIAN_WENDAO_ANALYZER_VALKEY_URL` is the canonical repo-analysis cache
   endpoint, `VALKEY_URL` / `REDIS_URL` remain generic fallback inputs, and

@@ -3,18 +3,25 @@ use std::sync::Arc;
 use tonic::Status;
 
 use crate::transport::query_contract::{
-    ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, GRAPH_NEIGHBORS_ROUTE, QUERY_SQL_ROUTE,
-    REPO_SEARCH_ROUTE, SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE,
-    SEARCH_DEFINITION_ROUTE, VFS_RESOLVE_ROUTE,
+    ANALYSIS_CODE_AST_ROUTE, ANALYSIS_MARKDOWN_ROUTE, ANALYSIS_REFINE_DOC_ROUTE,
+    ANALYSIS_REPO_DOC_COVERAGE_ROUTE, ANALYSIS_REPO_INDEX_ROUTE, ANALYSIS_REPO_INDEX_STATUS_ROUTE,
+    ANALYSIS_REPO_OVERVIEW_ROUTE, ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE,
+    ANALYSIS_REPO_SYNC_ROUTE, GRAPH_NEIGHBORS_ROUTE, QUERY_SQL_ROUTE, REPO_SEARCH_ROUTE,
+    SEARCH_AST_ROUTE, SEARCH_ATTACHMENTS_ROUTE, SEARCH_AUTOCOMPLETE_ROUTE, SEARCH_DEFINITION_ROUTE,
+    TOPOLOGY_3D_ROUTE, VFS_CONTENT_ROUTE, VFS_RESOLVE_ROUTE, VFS_SCAN_ROUTE,
 };
 
 use super::super::request_metadata::{
     is_search_family_route, join_sorted_set, validate_attachment_search_request_metadata,
     validate_autocomplete_request_metadata, validate_code_ast_analysis_request_metadata,
     validate_definition_request_metadata, validate_graph_neighbors_request_metadata,
-    validate_markdown_analysis_request_metadata, validate_repo_search_request_metadata,
+    validate_markdown_analysis_request_metadata, validate_refine_doc_request_metadata,
+    validate_repo_doc_coverage_request_metadata, validate_repo_index_request_metadata,
+    validate_repo_index_status_request_metadata, validate_repo_overview_request_metadata,
+    validate_repo_projected_page_index_tree_request_metadata,
+    validate_repo_search_request_metadata, validate_repo_sync_request_metadata,
     validate_search_request_metadata, validate_sql_request_metadata,
-    validate_vfs_resolve_request_metadata,
+    validate_vfs_content_request_metadata, validate_vfs_resolve_request_metadata,
 };
 use super::core::WendaoFlightService;
 use super::payload::FlightRoutePayload;
@@ -27,12 +34,13 @@ impl WendaoFlightService {
         if route == REPO_SEARCH_ROUTE {
             let request = validate_repo_search_request_metadata(metadata)?;
             Ok(format!(
-                "{route}|{query_text:?}|{limit}|{}|{}|{}|{}|{}",
+                "{route}|{repo_id:?}|{query_text:?}|{limit}|{}|{}|{}|{}|{}",
                 join_sorted_set(&request.language_filters),
                 join_sorted_set(&request.path_prefixes),
                 join_sorted_set(&request.title_filters),
                 join_sorted_set(&request.tag_filters),
                 join_sorted_set(&request.filename_filters),
+                repo_id = request.repo_id,
                 query_text = request.query_text,
                 limit = request.limit,
             ))
@@ -65,16 +73,45 @@ impl WendaoFlightService {
         } else if route == VFS_RESOLVE_ROUTE {
             let path = validate_vfs_resolve_request_metadata(metadata)?;
             Ok(format!("{route}|{path:?}"))
+        } else if route == VFS_CONTENT_ROUTE {
+            let path = validate_vfs_content_request_metadata(metadata)?;
+            Ok(format!("{route}|{path:?}"))
+        } else if route == VFS_SCAN_ROUTE {
+            Ok(route.to_string())
         } else if route == GRAPH_NEIGHBORS_ROUTE {
             let (node_id, direction, hops, limit) =
                 validate_graph_neighbors_request_metadata(metadata)?;
             Ok(format!("{route}|{node_id:?}|{direction:?}|{hops}|{limit}"))
+        } else if route == TOPOLOGY_3D_ROUTE {
+            Ok(route.to_string())
         } else if route == ANALYSIS_MARKDOWN_ROUTE {
             let path = validate_markdown_analysis_request_metadata(metadata)?;
             Ok(format!("{route}|{path:?}"))
         } else if route == ANALYSIS_CODE_AST_ROUTE {
             let (path, repo_id, line_hint) = validate_code_ast_analysis_request_metadata(metadata)?;
             Ok(format!("{route}|{path:?}|{repo_id:?}|{line_hint:?}"))
+        } else if route == ANALYSIS_REPO_OVERVIEW_ROUTE {
+            let repo_id = validate_repo_overview_request_metadata(metadata)?;
+            Ok(format!("{route}|{repo_id:?}"))
+        } else if route == ANALYSIS_REPO_INDEX_ROUTE {
+            let (repo_id, refresh, request_id) = validate_repo_index_request_metadata(metadata)?;
+            Ok(format!("{route}|{repo_id:?}|{refresh}|{request_id:?}"))
+        } else if route == ANALYSIS_REPO_INDEX_STATUS_ROUTE {
+            let repo_id = validate_repo_index_status_request_metadata(metadata)?;
+            Ok(format!("{route}|{repo_id:?}"))
+        } else if route == ANALYSIS_REPO_SYNC_ROUTE {
+            let (repo_id, mode) = validate_repo_sync_request_metadata(metadata)?;
+            Ok(format!("{route}|{repo_id:?}|{mode:?}"))
+        } else if route == ANALYSIS_REPO_DOC_COVERAGE_ROUTE {
+            let (repo_id, module_id) = validate_repo_doc_coverage_request_metadata(metadata)?;
+            Ok(format!("{route}|{repo_id:?}|{module_id:?}"))
+        } else if route == ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE {
+            let (repo_id, page_id) =
+                validate_repo_projected_page_index_tree_request_metadata(metadata)?;
+            Ok(format!("{route}|{repo_id:?}|{page_id:?}"))
+        } else if route == ANALYSIS_REFINE_DOC_ROUTE {
+            let (repo_id, entity_id, user_hints) = validate_refine_doc_request_metadata(metadata)?;
+            Ok(format!("{route}|{repo_id:?}|{entity_id:?}|{user_hints:?}"))
         } else if is_search_family_route(route) {
             let (query_text, limit, intent, repo_hint) =
                 validate_search_request_metadata(metadata)?;
@@ -107,12 +144,33 @@ impl WendaoFlightService {
             self.read_sql_payload(route, metadata).await
         } else if route == VFS_RESOLVE_ROUTE {
             self.read_vfs_resolve_payload(route, metadata).await
+        } else if route == VFS_CONTENT_ROUTE {
+            self.read_vfs_content_payload(route, metadata).await
+        } else if route == VFS_SCAN_ROUTE {
+            self.read_vfs_scan_payload(route).await
         } else if route == GRAPH_NEIGHBORS_ROUTE {
             self.read_graph_neighbors_payload(route, metadata).await
+        } else if route == TOPOLOGY_3D_ROUTE {
+            self.read_topology_3d_payload(route).await
         } else if route == ANALYSIS_MARKDOWN_ROUTE {
             self.read_markdown_analysis_payload(route, metadata).await
         } else if route == ANALYSIS_CODE_AST_ROUTE {
             self.read_code_ast_analysis_payload(route, metadata).await
+        } else if route == ANALYSIS_REPO_OVERVIEW_ROUTE {
+            self.read_repo_overview_payload(route, metadata).await
+        } else if route == ANALYSIS_REPO_INDEX_ROUTE {
+            self.read_repo_index_payload(route, metadata).await
+        } else if route == ANALYSIS_REPO_INDEX_STATUS_ROUTE {
+            self.read_repo_index_status_payload(route, metadata).await
+        } else if route == ANALYSIS_REPO_SYNC_ROUTE {
+            self.read_repo_sync_payload(route, metadata).await
+        } else if route == ANALYSIS_REPO_DOC_COVERAGE_ROUTE {
+            self.read_repo_doc_coverage_payload(route, metadata).await
+        } else if route == ANALYSIS_REPO_PROJECTED_PAGE_INDEX_TREE_ROUTE {
+            self.read_repo_projected_page_index_tree_payload(route, metadata)
+                .await
+        } else if route == ANALYSIS_REFINE_DOC_ROUTE {
+            self.read_refine_doc_payload(route, metadata).await
         } else if is_search_family_route(route) {
             self.read_search_family_payload(route, metadata).await
         } else {
@@ -253,6 +311,25 @@ impl WendaoFlightService {
             })
     }
 
+    async fn read_vfs_content_payload(
+        &self,
+        route: &str,
+        metadata: &tonic::metadata::MetadataMap,
+    ) -> Result<FlightRoutePayload, Status> {
+        let path = validate_vfs_content_request_metadata(metadata)?;
+        let provider = self.vfs_content_provider.as_ref().ok_or_else(|| {
+            Status::unimplemented(format!(
+                "VFS content Flight route `{route}` is not configured for this runtime host"
+            ))
+        })?;
+        provider
+            .read_vfs_content_batch(path.as_str())
+            .await
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
+    }
+
     async fn read_graph_neighbors_payload(
         &self,
         route: &str,
@@ -271,6 +348,28 @@ impl WendaoFlightService {
             .and_then(|response| {
                 FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
             })
+    }
+
+    async fn read_vfs_scan_payload(&self, route: &str) -> Result<FlightRoutePayload, Status> {
+        let provider = self.vfs_scan_provider.as_ref().ok_or_else(|| {
+            Status::unimplemented(format!(
+                "VFS scan Flight route `{route}` is not configured for this runtime host"
+            ))
+        })?;
+        provider.scan_vfs_batch().await.and_then(|response| {
+            FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+        })
+    }
+
+    async fn read_topology_3d_payload(&self, route: &str) -> Result<FlightRoutePayload, Status> {
+        let provider = self.topology_3d_provider.as_ref().ok_or_else(|| {
+            Status::unimplemented(format!(
+                "topology-3d Flight route `{route}` is not configured for this runtime host"
+            ))
+        })?;
+        provider.topology_3d_batch().await.and_then(|response| {
+            FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+        })
     }
 
     async fn read_markdown_analysis_payload(
@@ -308,6 +407,148 @@ impl WendaoFlightService {
             .code_ast_analysis_batch(path.as_str(), repo_id.as_str(), line_hint)
             .await
             .map_err(Status::internal)
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
+    }
+
+    async fn read_repo_overview_payload(
+        &self,
+        route: &str,
+        metadata: &tonic::metadata::MetadataMap,
+    ) -> Result<FlightRoutePayload, Status> {
+        let repo_id = validate_repo_overview_request_metadata(metadata)?;
+        let provider = self.repo_overview_provider.as_ref().ok_or_else(|| {
+            Status::unimplemented(format!(
+                "repo overview Flight route `{route}` is not configured for this runtime host"
+            ))
+        })?;
+        provider
+            .repo_overview_batch(repo_id.as_str())
+            .await
+            .map_err(Status::internal)
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
+    }
+
+    async fn read_repo_index_payload(
+        &self,
+        route: &str,
+        metadata: &tonic::metadata::MetadataMap,
+    ) -> Result<FlightRoutePayload, Status> {
+        let (repo_id, refresh, _request_id) = validate_repo_index_request_metadata(metadata)?;
+        let provider = self.repo_index_provider.as_ref().ok_or_else(|| {
+            Status::unimplemented(format!(
+                "repo index Flight route `{route}` is not configured for this runtime host"
+            ))
+        })?;
+        provider
+            .repo_index_batch(repo_id.as_deref(), refresh)
+            .await
+            .map_err(Status::internal)
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
+    }
+
+    async fn read_repo_index_status_payload(
+        &self,
+        route: &str,
+        metadata: &tonic::metadata::MetadataMap,
+    ) -> Result<FlightRoutePayload, Status> {
+        let repo_id = validate_repo_index_status_request_metadata(metadata)?;
+        let provider = self.repo_index_status_provider.as_ref().ok_or_else(|| {
+            Status::unimplemented(format!(
+                "repo index status Flight route `{route}` is not configured for this runtime host"
+            ))
+        })?;
+        provider
+            .repo_index_status_batch(repo_id.as_deref())
+            .await
+            .map_err(Status::internal)
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
+    }
+
+    async fn read_repo_sync_payload(
+        &self,
+        route: &str,
+        metadata: &tonic::metadata::MetadataMap,
+    ) -> Result<FlightRoutePayload, Status> {
+        let (repo_id, mode) = validate_repo_sync_request_metadata(metadata)?;
+        let provider = self.repo_sync_provider.as_ref().ok_or_else(|| {
+            Status::unimplemented(format!(
+                "repo sync Flight route `{route}` is not configured for this runtime host"
+            ))
+        })?;
+        provider
+            .repo_sync_batch(repo_id.as_str(), mode.as_str())
+            .await
+            .map_err(Status::internal)
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
+    }
+
+    async fn read_repo_doc_coverage_payload(
+        &self,
+        route: &str,
+        metadata: &tonic::metadata::MetadataMap,
+    ) -> Result<FlightRoutePayload, Status> {
+        let (repo_id, module_id) = validate_repo_doc_coverage_request_metadata(metadata)?;
+        let provider = self.repo_doc_coverage_provider.as_ref().ok_or_else(|| {
+            Status::unimplemented(format!(
+                "repo doc coverage Flight route `{route}` is not configured for this runtime host"
+            ))
+        })?;
+        provider
+            .repo_doc_coverage_batch(repo_id.as_str(), module_id.as_deref())
+            .await
+            .map_err(Status::internal)
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
+    }
+
+    async fn read_repo_projected_page_index_tree_payload(
+        &self,
+        route: &str,
+        metadata: &tonic::metadata::MetadataMap,
+    ) -> Result<FlightRoutePayload, Status> {
+        let (repo_id, page_id) =
+            validate_repo_projected_page_index_tree_request_metadata(metadata)?;
+        let provider = self
+            .repo_projected_page_index_tree_provider
+            .as_ref()
+            .ok_or_else(|| {
+                Status::unimplemented(format!(
+                    "repo projected page-index tree Flight route `{route}` is not configured for this runtime host"
+                ))
+            })?;
+        provider
+            .repo_projected_page_index_tree_batch(repo_id.as_str(), page_id.as_str())
+            .await
+            .and_then(|response| {
+                FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
+            })
+    }
+
+    async fn read_refine_doc_payload(
+        &self,
+        route: &str,
+        metadata: &tonic::metadata::MetadataMap,
+    ) -> Result<FlightRoutePayload, Status> {
+        let (repo_id, entity_id, user_hints) = validate_refine_doc_request_metadata(metadata)?;
+        let provider = self.refine_doc_provider.as_ref().ok_or_else(|| {
+            Status::unimplemented(format!(
+                "refine-doc Flight route `{route}` is not configured for this runtime host"
+            ))
+        })?;
+        provider
+            .refine_doc_batch(repo_id.as_str(), entity_id.as_str(), user_hints.as_deref())
+            .await
             .and_then(|response| {
                 FlightRoutePayload::try_with_app_metadata(response.batch, response.app_metadata)
             })
